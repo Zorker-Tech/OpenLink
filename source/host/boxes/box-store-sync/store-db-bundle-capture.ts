@@ -79,7 +79,7 @@ export interface StoreDbBundleCaptureOptions {
   readonly transfer: Pick<BoxStoreTransfer, "hasDiskSpaceForLargeObject">;
   readonly largeObjectThreshold: number;
   readonly snapshotUpload: StoreDbSnapshotUpload;
-  vacuumInto?: ((args: { srcPath: string; destPath: string }) => Promise<void>) | undefined;
+  vacuumInto?: ((input: { srcPath: string; destPath: string }) => Promise<void>) | undefined;
   getWriteGeneration?: ((dbPath: string) => number) | undefined;
   readonly storeDbCaptures: Map<string, StoreDbCaptureSignature>;
 }
@@ -104,21 +104,21 @@ export class StoreDbBundleCapture {
   private readonly transfer: Pick<BoxStoreTransfer, "hasDiskSpaceForLargeObject">;
   private readonly largeObjectThreshold: number;
   private readonly snapshotUpload: StoreDbSnapshotUpload;
-  private readonly vacuumInto: (args: { srcPath: string; destPath: string }) => Promise<void>;
+  private readonly vacuumInto: (input: { srcPath: string; destPath: string }) => Promise<void>;
   private readonly getWriteGeneration: (dbPath: string) => number;
   private readonly storeDbCaptures: Map<string, StoreDbCaptureSignature>;
   private readonly agentDbCaptureQueues = new Map<string, Promise<void>>();
 
-  constructor(args: StoreDbBundleCaptureOptions) {
-    this.now = args.now;
-    this.log = args.log;
-    this.manifestStore = args.manifestStore;
-    this.transfer = args.transfer;
-    this.largeObjectThreshold = args.largeObjectThreshold;
-    this.snapshotUpload = args.snapshotUpload;
-    this.vacuumInto = args.vacuumInto ?? ((vacuumArgs) => args.snapshotUpload.runVacuumOffThread(vacuumArgs));
-    this.getWriteGeneration = args.getWriteGeneration ?? getSlateAgentDbWriteGeneration;
-    this.storeDbCaptures = args.storeDbCaptures;
+  constructor(input: StoreDbBundleCaptureOptions) {
+    this.now = input.now;
+    this.log = input.log;
+    this.manifestStore = input.manifestStore;
+    this.transfer = input.transfer;
+    this.largeObjectThreshold = input.largeObjectThreshold;
+    this.snapshotUpload = input.snapshotUpload;
+    this.vacuumInto = input.vacuumInto ?? ((vacuumInput) => input.snapshotUpload.runVacuumOffThread(vacuumInput));
+    this.getWriteGeneration = input.getWriteGeneration ?? getSlateAgentDbWriteGeneration;
+    this.storeDbCaptures = input.storeDbCaptures;
   }
 
   elapsedDurationMs(startedAt: number): number {
@@ -136,79 +136,79 @@ export class StoreDbBundleCapture {
 
   /**
    * One agent's bundle, queued behind any capture already running for that agent: two captures of the same files would
-   * fight over the same temporary names and the same manifest entries.
+   * fight over the same temporary directoryNames and the same manifest entries.
    */
-  async captureAgentDbBundle(args: CaptureAgentDbBundleOptions): Promise<boolean> {
-    const previous = this.agentDbCaptureQueues.get(args.agentId);
-    const queuedAt = previous == null ? undefined : this.now();
-    const operation = (previous ?? Promise.resolve()).then(() => {
-      if (queuedAt != null) args.captureTrace.queueDurationMs += this.elapsedDurationMs(queuedAt);
-      return this.captureAgentDbBundleUnlocked(args);
+  async captureAgentDbBundle(input: CaptureAgentDbBundleOptions): Promise<boolean> {
+    const predecessor = this.agentDbCaptureQueues.get(input.agentId);
+    const queuedAtMs = predecessor == null ? undefined : this.now();
+    const queuedOperation = (predecessor ?? Promise.resolve()).then(() => {
+      if (queuedAtMs != null) input.captureTrace.queueDurationMs += this.elapsedDurationMs(queuedAtMs);
+      return this.captureAgentDbBundleUnlocked(input);
     });
-    const tail = operation.then(
+    const queueTail = queuedOperation.then(
       () => {},
       () => {},
     );
-    this.agentDbCaptureQueues.set(args.agentId, tail);
+    this.agentDbCaptureQueues.set(input.agentId, queueTail);
     try {
-      return await operation;
+      return await queuedOperation;
     } finally {
-      if (this.agentDbCaptureQueues.get(args.agentId) === tail) this.agentDbCaptureQueues.delete(args.agentId);
+      if (this.agentDbCaptureQueues.get(input.agentId) === queueTail) this.agentDbCaptureQueues.delete(input.agentId);
     }
   }
 
-  private async captureAgentDbBundleUnlocked(args: CaptureAgentDbBundleOptions): Promise<boolean> {
-    const initialIdentity = await this.agentDbBundleIdentity(args);
-    if (initialIdentity == null) {
-      recordStoreDbCaptureFailure(args.captureTrace, "capture");
+  private async captureAgentDbBundleUnlocked(input: CaptureAgentDbBundleOptions): Promise<boolean> {
+    const firstIdentity = await this.agentDbBundleIdentity(input);
+    if (firstIdentity == null) {
+      recordStoreDbCaptureFailure(input.captureTrace, "capture");
       return false;
     }
     // The capture writes into a copy of the manifest, so a bundle that turns out to be inconsistent leaves nothing behind.
-    const stagedManifest = new Map(args.manifest);
-    let complete = true;
-    for (const target of args.targets) {
-      args.summary.filesScanned += 1;
+    const stagedEntries = new Map(input.manifest);
+    let allCaptured = true;
+    for (const target of input.targets) {
+      input.summary.filesScanned += 1;
       try {
-        const fileStat = await stat(target.absPath);
-        const result = await this.captureAgentSqliteDb(args.storeId, stagedManifest, target.relPath, target.absPath, fileStat);
-        args.captureTrace.captureDurationMs += result.captureDurationMs;
-        args.captureTrace.blobUploadDurationMs += result.blobUploadDurationMs;
-        if (result.failurePhase != null) recordStoreDbCaptureFailure(args.captureTrace, result.failurePhase);
-        tallyFileOutcome(args.summary, result.outcome, target.effectiveSize);
-        if (result.outcome === "error" || result.outcome === "oversize") complete = false;
+        const fileStats = await stat(target.absPath);
+        const captureResult = await this.captureAgentSqliteDb(input.storeId, stagedEntries, target.relPath, target.absPath, fileStats);
+        input.captureTrace.captureDurationMs += captureResult.captureDurationMs;
+        input.captureTrace.blobUploadDurationMs += captureResult.blobUploadDurationMs;
+        if (captureResult.failurePhase != null) recordStoreDbCaptureFailure(input.captureTrace, captureResult.failurePhase);
+        tallyFileOutcome(input.summary, captureResult.outcome, target.effectiveSize);
+        if (captureResult.outcome === "error" || captureResult.outcome === "oversize") allCaptured = false;
       } catch (error) {
         this.log(`agent db ${target.relPath} capture failed: ${errorMessage(error)}`);
-        args.summary.failures += 1;
-        recordStoreDbCaptureFailure(args.captureTrace, "capture");
-        complete = false;
+        input.summary.failures += 1;
+        recordStoreDbCaptureFailure(input.captureTrace, "capture");
+        allCaptured = false;
       }
     }
-    if (!complete) return false;
+    if (!allCaptured) return false;
     // The files moved while the snapshots were taken: what was captured is not the bundle, so it is not committed.
-    if ((await this.agentDbBundleIdentity(args)) !== initialIdentity) {
-      recordStoreDbCaptureFailure(args.captureTrace, "capture");
+    if ((await this.agentDbBundleIdentity(input)) !== firstIdentity) {
+      recordStoreDbCaptureFailure(input.captureTrace, "capture");
       return false;
     }
 
     // A database that is absent both now and in the manifest must still agree with what the capture staged for it.
-    if (initialIdentity.includes(":absent-tracked")) {
-      for (const target of args.targets) {
-        const staged = stagedManifest.get(target.relPath);
-        const current = args.manifest.get(target.relPath);
-        const contentEqual =
-          staged != null && current != null && isBoxStoreManifestFileEntry(staged) && isBoxStoreManifestFileEntry(current) && staged.sha === current.sha && staged.size === current.size;
-        if (!contentEqual) {
-          recordStoreDbCaptureFailure(args.captureTrace, "capture");
+    if (firstIdentity.includes(":absent-tracked")) {
+      for (const target of input.targets) {
+        const staged = stagedEntries.get(target.relPath);
+        const currentWal = input.manifest.get(target.relPath);
+        const entryMatches =
+          staged != null && currentWal != null && isBoxStoreManifestFileEntry(staged) && isBoxStoreManifestFileEntry(currentWal) && staged.sha === currentWal.sha && staged.size === currentWal.size;
+        if (!entryMatches) {
+          recordStoreDbCaptureFailure(input.captureTrace, "capture");
           return false;
         }
       }
     }
 
-    for (const target of args.targets) {
-      const entry = stagedManifest.get(target.relPath);
-      if (entry == null) continue;
-      // An entry that changed is remembered as uncommitted until the manifest write lands.
-      if (this.manifestStore.setManifestEntry(args.manifest, target.relPath, entry)) this.manifestStore.uncommittedStoreDbEntries.set(target.relPath, entry);
+    for (const target of input.targets) {
+      const manifestEntry = stagedEntries.get(target.relPath);
+      if (manifestEntry == null) continue;
+      // An manifestEntry that changed is remembered as uncommitted until the manifest write lands.
+      if (this.manifestStore.setManifestEntry(input.manifest, target.relPath, manifestEntry)) this.manifestStore.uncommittedStoreDbEntries.set(target.relPath, manifestEntry);
     }
     return true;
   }
@@ -217,86 +217,86 @@ export class StoreDbBundleCapture {
    * What the agent's databases look like right now, as one string: null when they cannot be trusted (a pending recovery, a
    * stat error that is not "absent", or a file whose presence disagrees with the manifest).
    */
-  async agentDbBundleIdentity(args: Pick<CaptureAgentDbBundleOptions, "agentDir" | "relPrefix" | "agentId" | "targets" | "manifest">): Promise<string | null> {
-    if (await this.agentHasPendingDbRecovery(args.agentDir)) return null;
-    const targetPaths = new Set(args.targets.map((target) => target.relPath));
-    const identities: string[] = [];
+  async agentDbBundleIdentity(input: Pick<CaptureAgentDbBundleOptions, "agentDir" | "relPrefix" | "agentId" | "targets" | "manifest">): Promise<string | null> {
+    if (await this.agentHasPendingDbRecovery(input.agentDir)) return null;
+    const expectedPaths = new Set(input.targets.map((target) => target.relPath));
+    const identityParts: string[] = [];
     for (const basename of AGENT_STORE_DB_BASENAMES) {
-      const relPath = `${args.relPrefix}/agents/${args.agentId}/${basename}`;
-      let fileStat: Stats | undefined;
+      const relPath = `${input.relPrefix}/agents/${input.agentId}/${basename}`;
+      let fileStats: Stats | undefined;
       try {
-        fileStat = await stat(join(args.agentDir, basename));
+        fileStats = await stat(join(input.agentDir, basename));
       } catch (error) {
         if (findSystemErrno(error) !== "ENOENT") return null;
       }
-      const present = fileStat != null;
-      if (present !== targetPaths.has(relPath)) return null;
-      identities.push(fileStat == null ? `${basename}:${args.manifest.has(relPath) ? "absent-tracked" : "absent"}` : `${basename}:${fileStat.dev}:${fileStat.ino}:${fileStat.mode & 0o777}`);
+      const present = fileStats != null;
+      if (present !== expectedPaths.has(relPath)) return null;
+      identityParts.push(fileStats == null ? `${basename}:${input.manifest.has(relPath) ? "absent-tracked" : "absent"}` : `${basename}:${fileStats.dev}:${fileStats.ino}:${fileStats.mode & 0o777}`);
     }
-    return identities.join("|");
+    return identityParts.join("|");
   }
 
   /** A database being rebuilt or recovered is not a database to capture: its own marker files say so. */
   async agentHasPendingDbRecovery(agentDir: string): Promise<boolean> {
-    let names: string[];
+    let directoryNames: string[];
     try {
-      names = await readdir(agentDir);
+      directoryNames = await readdir(agentDir);
     } catch {
       return true;
     }
-    for (const name of names) {
-      if (name === "conversation-blobs.db.pending" || (name.startsWith("conversation-blobs.db.corrupt-") && (name.endsWith(".intent") || name.endsWith(".pending")))) return true;
+    for (const directoryName of directoryNames) {
+      if (directoryName === "conversation-blobs.db.pending" || (directoryName.startsWith("conversation-blobs.db.corrupt-") && (directoryName.endsWith(".intent") || directoryName.endsWith(".pending")))) return true;
     }
     return false;
   }
 
-  /** One database: skip if it is already durable, refuse if there is no room, otherwise vacuum and upload. */
-  async captureAgentSqliteDb(storeId: string, manifest: BoxManifestMap, relPath: string, absPath: string, fileStat: Stats): Promise<CaptureAgentSqliteDbResult> {
+  /** One database: skip if it is already manifestDurable, refuse if there is no room, otherwise vacuum and upload. */
+  async captureAgentSqliteDb(storeId: string, manifest: BoxManifestMap, relPath: string, absPath: string, fileStats: Stats): Promise<CaptureAgentSqliteDbResult> {
     const captureStartedAt = this.now();
-    if (await this.isAgentDbDurablyCaptured(relPath, absPath, fileStat, manifest)) {
+    if (await this.isAgentDbDurablyCaptured(relPath, absPath, fileStats, manifest)) {
       return { outcome: "unchanged", bytesUploaded: 0, blobUploadDurationMs: 0, captureDurationMs: this.elapsedDurationMs(captureStartedAt) };
     }
-    if (fileStat.size >= this.largeObjectThreshold && !(await this.transfer.hasDiskSpaceForLargeObject(absPath, fileStat.size))) {
-      this.log(`insufficient disk space for ${relPath} VACUUM snapshot (${fileStat.size}B needed x${LARGE_OBJECT_FREE_SPACE_FACTOR}); deferring to a later cycle`);
+    if (fileStats.size >= this.largeObjectThreshold && !(await this.transfer.hasDiskSpaceForLargeObject(absPath, fileStats.size))) {
+      this.log(`insufficient disk space for ${relPath} VACUUM snapshot (${fileStats.size}B needed x${LARGE_OBJECT_FREE_SPACE_FACTOR}); deferring to a later cycle`);
       return { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture", captureDurationMs: this.elapsedDurationMs(captureStartedAt) };
     }
 
-    // Everything the "already durable" answer will need later is read *before* the snapshot: after it, the file may have
+    // Everything the "already manifestDurable" answer will need later is read *before* the snapshot: after it, the file may have
     // moved on, and a signature taken then would describe something that was not captured.
-    const previousCapture = this.storeDbCaptures.get(relPath);
-    const capturedGeneration = this.agentDbWriteGeneration({ relPath, absPath });
-    const capturedWalRef = (await this.readWalStat(absPath)) ?? { size: -1, mtimeMs: -1 };
-    const capturedMainStat = await stat(absPath).catch((error) => {
+    const priorSignature = this.storeDbCaptures.get(relPath);
+    const generationAtCapture = this.agentDbWriteGeneration({ relPath, absPath });
+    const walAtCapture = (await this.readWalStat(absPath)) ?? { size: -1, mtimeMs: -1 };
+    const mainStatAtCapture = await stat(absPath).catch((error) => {
       if (findSystemErrno(error) !== "ENOENT") this.log(`store.db ${relPath} pre-snapshot stat failed: ${errorMessage(error)}`);
       return undefined;
     });
-    const tmpPath = `${absPath}${BOX_STORE_SNAPSHOT_TMP_SUFFIX}${randomBytes(8).toString("hex")}`;
-    let result: SnapshotUploadResult;
+    const tempPath = `${absPath}${BOX_STORE_SNAPSHOT_TMP_SUFFIX}${randomBytes(8).toString("hex")}`;
+    let captureResult: SnapshotUploadResult;
     try {
-      await this.vacuumInto({ srcPath: absPath, destPath: tmpPath });
-      result = await this.snapshotUpload.uploadAgentDbSnapshot(storeId, manifest, relPath, tmpPath, fileStat.mode);
+      await this.vacuumInto({ srcPath: absPath, destPath: tempPath });
+      captureResult = await this.snapshotUpload.uploadAgentDbSnapshot(storeId, manifest, relPath, tempPath, fileStats.mode);
     } catch (error) {
       this.log(`store.db ${relPath} snapshot failed; uncaptured: ${errorMessage(error)}`);
-      if (this.storeDbCaptures.get(relPath) === previousCapture) this.storeDbCaptures.delete(relPath);
-      result = { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture" };
+      if (this.storeDbCaptures.get(relPath) === priorSignature) this.storeDbCaptures.delete(relPath);
+      captureResult = { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture" };
     } finally {
-      await this.snapshotUpload.discardSnapshotTemp({ tmpPath, label: relPath });
+      await this.snapshotUpload.discardSnapshotTemp({ tmpPath: tempPath, label: relPath });
     }
 
-    const outcome: FileOutcome = result.outcome;
+    const fileOutcome: FileOutcome = captureResult.outcome;
     // Only the capture that still owns the signature may write it: a concurrent capture that already replaced it is newer.
-    if (this.storeDbCaptures.get(relPath) === previousCapture) {
-      if (outcome === "uploaded" || outcome === "unchanged") {
-        const entry = manifest.get(relPath);
-        if (entry != null && isBoxStoreManifestFileEntry(entry) && capturedMainStat != null && capturedWalRef.size >= 0) {
+    if (this.storeDbCaptures.get(relPath) === priorSignature) {
+      if (fileOutcome === "uploaded" || fileOutcome === "unchanged") {
+        const manifestEntry = manifest.get(relPath);
+        if (manifestEntry != null && isBoxStoreManifestFileEntry(manifestEntry) && mainStatAtCapture != null && walAtCapture.size >= 0) {
           this.storeDbCaptures.set(relPath, {
-            writeGeneration: capturedGeneration,
-            mtimeMs: capturedMainStat.mtimeMs,
-            size: capturedMainStat.size,
-            sha: entry.sha,
-            mode: fileStat.mode & 0o777,
-            walSize: capturedWalRef.size,
-            walMtimeMs: capturedWalRef.mtimeMs,
+            writeGeneration: generationAtCapture,
+            mtimeMs: mainStatAtCapture.mtimeMs,
+            size: mainStatAtCapture.size,
+            sha: manifestEntry.sha,
+            mode: fileStats.mode & 0o777,
+            walSize: walAtCapture.size,
+            walMtimeMs: walAtCapture.mtimeMs,
           });
         } else {
           this.storeDbCaptures.delete(relPath);
@@ -305,50 +305,50 @@ export class StoreDbBundleCapture {
         this.storeDbCaptures.delete(relPath);
       }
     }
-    return { ...result, captureDurationMs: Math.max(0, this.elapsedDurationMs(captureStartedAt) - result.blobUploadDurationMs) };
+    return { ...captureResult, captureDurationMs: Math.max(0, this.elapsedDurationMs(captureStartedAt) - captureResult.blobUploadDurationMs) };
   }
 
   /** The write-ahead log as it is now: absent means zero bytes and zero mtime, unreadable means unknown (null). */
   async readWalStat(dbPath: string): Promise<{ size: number; mtimeMs: number } | null> {
     try {
-      const wal = await stat(`${dbPath}-wal`);
-      return { size: wal.size, mtimeMs: wal.mtimeMs };
+      const walStats = await stat(`${dbPath}-wal`);
+      return { size: walStats.size, mtimeMs: walStats.mtimeMs };
     } catch (error) {
       if (findSystemErrno(error) === "ENOENT") return { size: 0, mtimeMs: 0 };
       return null;
     }
   }
 
-  /** Whether the log has taken no new frames since the reference: an empty log always has, an unknown one never has. */
+  /** Whether the log has taken no new frames since the referenceWal: an empty log always has, an unknown one never has. */
   async walHasNoNewFramesSince(dbPath: string, ref: { size: number; mtimeMs: number }): Promise<boolean> {
     if (ref.size < 0) return false;
-    const current = await this.readWalStat(dbPath);
-    if (current === null) return false;
-    if (current.size === 0) return true;
-    return current.size === ref.size && current.mtimeMs === ref.mtimeMs;
+    const currentWal = await this.readWalStat(dbPath);
+    if (currentWal === null) return false;
+    if (currentWal.size === 0) return true;
+    return currentWal.size === ref.size && currentWal.mtimeMs === ref.mtimeMs;
   }
 
   /** Already durable: the signature and the manifest entry agree, and the database has not been written since. */
-  async isAgentDbDurablyCaptured(relPath: string, absPath: string, fileStat: Stats, manifest: BoxManifestMap): Promise<boolean> {
-    const cached = this.storeDbCaptures.get(relPath);
-    const durable = manifest.get(relPath);
-    if (cached == null || durable == null || !isBoxStoreManifestFileEntry(durable)) return false;
-    if (cached.writeGeneration !== this.agentDbWriteGeneration({ relPath, absPath })) return false;
-    if (cached.mtimeMs !== fileStat.mtimeMs || cached.size !== fileStat.size) return false;
-    if (cached.sha !== durable.sha || cached.mode !== (fileStat.mode & 0o777)) return false;
-    if (durable.mode !== undefined && durable.mode !== cached.mode) return false;
-    return await this.walHasNoNewFramesSince(absPath, { size: cached.walSize, mtimeMs: cached.walMtimeMs });
+  async isAgentDbDurablyCaptured(relPath: string, absPath: string, fileStats: Stats, manifest: BoxManifestMap): Promise<boolean> {
+    const cachedSignature = this.storeDbCaptures.get(relPath);
+    const manifestDurable = manifest.get(relPath);
+    if (cachedSignature == null || manifestDurable == null || !isBoxStoreManifestFileEntry(manifestDurable)) return false;
+    if (cachedSignature.writeGeneration !== this.agentDbWriteGeneration({ relPath, absPath })) return false;
+    if (cachedSignature.mtimeMs !== fileStats.mtimeMs || cachedSignature.size !== fileStats.size) return false;
+    if (cachedSignature.sha !== manifestDurable.sha || cachedSignature.mode !== (fileStats.mode & 0o777)) return false;
+    if (manifestDurable.mode !== undefined && manifestDurable.mode !== cachedSignature.mode) return false;
+    return await this.walHasNoNewFramesSince(absPath, { size: cachedSignature.walSize, mtimeMs: cachedSignature.walMtimeMs });
   }
 
   /** A write generation only exists for a store database; any other file in the bundle is generation 0. */
-  agentDbWriteGeneration(args: { relPath: string; absPath: string }): number {
-    return args.relPath.endsWith("/store.db") ? this.getWriteGeneration(args.absPath) : 0;
+  agentDbWriteGeneration(input: { relPath: string; absPath: string }): number {
+    return input.relPath.endsWith("/store.db") ? this.getWriteGeneration(input.absPath) : 0;
   }
 
-  /** Whether this sweep can call the snapshot durable: captured in this sweep, or durable from an earlier one. */
-  async isAgentDbSnapshotDurable(relPath: string, absPath: string, fileStat: Stats, manifest: BoxManifestMap, capturedThisSweep: ReadonlySet<string>): Promise<boolean> {
-    const entry: BoxStoreManifestEntry | undefined = manifest.get(relPath);
-    if (capturedThisSweep.has(relPath) && entry != null && isBoxStoreManifestFileEntry(entry)) return true;
-    return this.isAgentDbDurablyCaptured(relPath, absPath, fileStat, manifest);
+  /** Whether this sweep can call the snapshot manifestDurable: captured in this sweep, or manifestDurable from an earlier one. */
+  async isAgentDbSnapshotDurable(relPath: string, absPath: string, fileStats: Stats, manifest: BoxManifestMap, capturedThisSweep: ReadonlySet<string>): Promise<boolean> {
+    const manifestEntry: BoxStoreManifestEntry | undefined = manifest.get(relPath);
+    if (capturedThisSweep.has(relPath) && manifestEntry != null && isBoxStoreManifestFileEntry(manifestEntry)) return true;
+    return this.isAgentDbDurablyCaptured(relPath, absPath, fileStats, manifest);
   }
 }
