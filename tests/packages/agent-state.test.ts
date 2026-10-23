@@ -404,3 +404,19 @@ test("a restore keeps its read paths, plans, skipped-prompt flag and agent-type 
   assert.equal(withoutBlobs.handle.skippedRootPromptBlobs, true)
 })
 
+
+test("self-summary suppression becomes due at the recorded token count", () => {
+  const harnessed = harness()
+  // Nothing recorded: nothing to suppress yet.
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(0), false)
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(1_000_000), false)
+  // Once a failed input limit is recorded, the suppression is due from that count onwards.
+  harnessed.handle.setSelfSummaryInputLimitFailureTokenCount(10)
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(9), false)
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(10), true)
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(11), true)
+  // Clearing the record makes it due again, not suppressed.
+  harnessed.handle.clearSelfSummaryInputLimitFailureTokenCount()
+  assert.equal(harnessed.handle.shouldSuppressSelfSummaryAfterInputLimitFailure(1_000_000), false)
+})
+
