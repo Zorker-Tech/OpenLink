@@ -130,111 +130,111 @@ export interface ResolveSubagentModelArgs {
  * subagent running on a model nobody chose is worse than a call the model has to re-issue.
  */
 export async function resolveSubagentModel(
-  args: ResolveSubagentModelArgs,
+  input: ResolveSubagentModelArgs,
 ): Promise<string> {
   const {
-    subagentConfig,
-    requestedModel,
-    parentModelId,
+    subagentConfig: config,
+    requestedModel: requested,
+    parentModelId: parentId,
     enableExploreParentModelInheritance = false,
-    forceModelId,
-    subagentModelForcePolicy,
-    parentMaxMode,
-    subagentModels,
-    isModelBlocked,
-    isModelValid = () => true,
-    compareModelCosts,
-    requiresMaxMode,
-  } = args
-  const userRequestedModelId = subagentConfig.userRequestedModelId
-  const forceDefaultModel = subagentConfig.forceDefaultModel === true
-  const isExploreSubagent = getSubagentTypeName(subagentConfig.subagent_type) === "explore"
-  const allowedModelSlugs = [...subagentModels.modelsBySlug.keys()].sort()
-  const allowedModelSlugList =
-    allowedModelSlugs.length > 0 ? allowedModelSlugs.map((slug) => `- ${slug}`).join("\n") : "- (none)"
-  const invalidRequestedModelError = (requestedModelValue: string, reason?: string) =>
-    `Invalid model selection "${requestedModelValue}". ${reason ?? "Model could not be resolved to a valid subagent model."}\nAllowed model slugs:\n${allowedModelSlugList}\n\nThe \`model\` parameter is optional. If omitted, the subagent uses the same model as the parent agent.`
-  const noUsableModelError = () =>
-    `No usable model is available for this subagent. The parent model "${parentModelId}" is blocked or unavailable, and no configured subagent default can be used.\nAllowed model slugs:\n${allowedModelSlugList}\n\nChoose a supported model with the \`model\` parameter or omit this subagent call.`
-  const parentIsGenericbaseModel = parentModelId.toLowerCase().startsWith("genericbase-")
-  const parentIsAutoModel = ["default", "premium", "auto-low", "auto-medium", "auto-high"].includes(parentModelId.toLowerCase())
-  const configuredDefaultModelIds = new Set((subagentConfig.defaultModelIds ?? []).map(canonicalSubagentComposerSlug))
-  const isMaxModeCompatible = async (modelId: string) =>
-    requiresMaxMode === undefined || parentMaxMode || !(await requiresMaxMode(modelId))
+    forceModelId: forcedId,
+    subagentModelForcePolicy: forcePolicy,
+    parentMaxMode: parentMax,
+    subagentModels: catalogue,
+    isModelBlocked: blocked,
+    isModelValid: valid = () => true,
+    compareModelCosts: compareCosts,
+    requiresMaxMode: requiresMax,
+  } = input
+  const userModelId = config.userRequestedModelId
+  const defaultsForced = config.forceDefaultModel === true
+  const exploring = getSubagentTypeName(config.subagent_type) === "explore"
+  const slugs = [...catalogue.modelsBySlug.keys()].sort()
+  const slugList =
+    slugs.length > 0 ? slugs.map((slug) => `- ${slug}`).join("\n") : "- (none)"
+  const badModelError = (requestedModelValue: string, reason?: string) =>
+    `Invalid model selection "${requestedModelValue}". ${reason ?? "Model could not be resolved to a valid subagent model."}\nAllowed model slugs:\n${slugList}\n\nThe \`model\` parameter is optional. If omitted, the subagent uses the same model as the parent agent.`
+  const noModelError = () =>
+    `No usable model is available for this subagent. The parent model "${parentId}" is blocked or unavailable, and no configured subagent default can be used.\nAllowed model slugs:\n${slugList}\n\nChoose a supported model with the \`model\` parameter or omit this subagent call.`
+  const genericParent = parentId.toLowerCase().startsWith("genericbase-")
+  const autoParent = ["default", "premium", "auto-low", "auto-medium", "auto-high"].includes(parentId.toLowerCase())
+  const configuredDefaults = new Set((config.defaultModelIds ?? []).map(canonicalSubagentComposerSlug))
+  const maxCompatible = async (modelId: string) =>
+    requiresMax === undefined || parentMax || !(await requiresMax(modelId))
   // Whether the parent's model can be used at all is asked more than once, and its answer cannot change.
-  let parentModelUsable: Promise<boolean> | undefined
-  const isParentModelUsable = () =>
-    (parentModelUsable ??= (async () => !isModelBlocked(parentModelId) && await isMaxModeCompatible(parentModelId))())
-  const logCandidate = (candidateModelId: string): string => {
+  let parentUsable: Promise<boolean> | undefined
+  const isParentUsable = () =>
+    (parentUsable ??= (async () => !blocked(parentId) && await maxCompatible(parentId))())
+  const asLogged = (candidateModelId: string): string => {
     const canonicalCandidateModelId = canonicalSubagentComposerSlug(candidateModelId)
     // A placeholder parent model cannot be handed to a subagent, so a default of the same family keeps it.
-    const preserveGenericbase = parentIsGenericbaseModel &&
-      (isComposerSubagentDefaultId(canonicalCandidateModelId) || configuredDefaultModelIds.has(canonicalCandidateModelId))
-    return preserveGenericbase ? parentModelId : candidateModelId
+    const keepPlaceholder = genericParent &&
+      (isComposerSubagentDefaultId(canonicalCandidateModelId) || configuredDefaults.has(canonicalCandidateModelId))
+    return keepPlaceholder ? parentId : candidateModelId
   }
   // An "auto" parent with nothing requested means the subagent simply runs on what the parent runs on.
-  if (parentIsAutoModel && userRequestedModelId === undefined && requestedModel === undefined &&
-      (subagentConfig.defaultModelIds?.length ?? 0) === 0 && await isParentModelUsable()) {
-    return parentModelId
+  if (autoParent && userModelId === undefined && requested === undefined &&
+      (config.defaultModelIds?.length ?? 0) === 0 && await isParentUsable()) {
+    return parentId
   }
   const forcedModelId = await tryResolveForcedSubagentModel({
-    subagentModelForcePolicy,
-    forceModelId,
-    userRequestedModelId,
-    isModelBlocked,
-    isModelValid,
-    isMaxModeCompatible,
-    logForcedModel: ({ candidateModelId }) => logCandidate(candidateModelId),
+    subagentModelForcePolicy: forcePolicy,
+    forceModelId: forcedId,
+    userRequestedModelId: userModelId,
+    isModelBlocked: blocked,
+    isModelValid: valid,
+    isMaxModeCompatible: maxCompatible,
+    logForcedModel: ({ candidateModelId }) => asLogged(candidateModelId),
   })
   if (forcedModelId !== undefined) return forcedModelId
-  // A pinned model that is not usable cannot be worked around: there is nothing else to run on.
-  if (subagentModelForcePolicy === SubagentModelForcePolicy.ParentPin && forceModelId !== undefined) {
-    throw new ToolCallArgParseError(noUsableModelError())
+  // A pinned model that is not usableRequested cannot be worked around: there is nothing else to run on.
+  if (forcePolicy === SubagentModelForcePolicy.ParentPin && forcedId !== undefined) {
+    throw new ToolCallArgParseError(noModelError())
   }
-  const requestedModelIsInherit = requestedModel?.trim().toLowerCase() === "inherit"
-  let resolvedRequestedModelId: string | undefined
-  if (requestedModel !== undefined && !requestedModelIsInherit) {
-    const trimmed = requestedModel.trim()
-    if (trimmed.length === 0) {
-      throw new ToolCallArgParseError(invalidRequestedModelError(requestedModel, "Model must be a non-empty string when provided."))
+  const wantsInherit = requested?.trim().toLowerCase() === "inherit"
+  let resolvedRequested: string | undefined
+  if (requested !== undefined && !wantsInherit) {
+    const trimmedRequested = requested.trim()
+    if (trimmedRequested.length === 0) {
+      throw new ToolCallArgParseError(badModelError(requested, "Model must be a non-empty string when provided."))
     }
     // Naming the parent's model is always allowed, even when it is not in the catalogue.
-    const matchesParent = !parentIsAutoModel && trimmed === parentModelId
-    const requestedId = matchesParent ? parentModelId : resolveTaskArgToSubagentComposerSlug(trimmed, subagentModels.modelsBySlug)
-    const usable = requestedId !== undefined && (matchesParent || isModelValid(requestedId)) && !isModelBlocked(requestedId) && await isMaxModeCompatible(requestedId)
+    const namesParent = !autoParent && trimmedRequested === parentId
+    const candidateId = namesParent ? parentId : resolveTaskArgToSubagentComposerSlug(trimmedRequested, catalogue.modelsBySlug)
+    const usableRequested = candidateId !== undefined && (namesParent || valid(candidateId)) && !blocked(candidateId) && await maxCompatible(candidateId)
     // "fast" is the one alias that is tolerated even when it resolves to nothing usable.
-    if (!usable && trimmed.toLowerCase() !== "fast") {
-      throw new ToolCallArgParseError(invalidRequestedModelError(trimmed))
+    if (!usableRequested && trimmedRequested.toLowerCase() !== "fast") {
+      throw new ToolCallArgParseError(badModelError(trimmedRequested))
     }
-    if (usable) resolvedRequestedModelId = requestedId
+    if (usableRequested) resolvedRequested = candidateId
   }
-  if (requestedModel !== undefined && resolvedRequestedModelId !== undefined && !forceDefaultModel) {
-    return logCandidate(resolvedRequestedModelId)
+  if (requested !== undefined && resolvedRequested !== undefined && !defaultsForced) {
+    return asLogged(resolvedRequested)
   }
-  if (subagentConfig.inheritParentModel === true && await isParentModelUsable()) return parentModelId
-  if (userRequestedModelId !== undefined && !isModelBlocked(userRequestedModelId) && await isMaxModeCompatible(userRequestedModelId)) {
-    if (isModelValid(userRequestedModelId)) return logCandidate(userRequestedModelId)
+  if (config.inheritParentModel === true && await isParentUsable()) return parentId
+  if (userModelId !== undefined && !blocked(userModelId) && await maxCompatible(userModelId)) {
+    if (valid(userModelId)) return asLogged(userModelId)
     // A user default that is not a real model still beats nothing: the parent's model is the fallback.
-    if (await isParentModelUsable()) return parentModelId
+    if (await isParentUsable()) return parentId
   }
   // An explore subagent is the one place where inheriting the parent's model is preferred over the
   // catalogue's default, because exploring is meant to be cheap and the parent is already loaded.
-  if (enableExploreParentModelInheritance && isExploreSubagent && !isComposerSubagentDefaultId(parentModelId) &&
-      subagentModels.modelsBySlug.has(parentModelId) && !isModelBlocked(parentModelId) && isModelValid(parentModelId) && await isMaxModeCompatible(parentModelId)) {
-    return parentModelId
+  if (enableExploreParentModelInheritance && exploring && !isComposerSubagentDefaultId(parentId) &&
+      catalogue.modelsBySlug.has(parentId) && !blocked(parentId) && valid(parentId) && await maxCompatible(parentId)) {
+    return parentId
   }
-  if (subagentConfig.defaultModelIds !== undefined && subagentConfig.defaultModelIds.length > 0) {
-    const defaultCandidates = isExploreSubagent && subagentConfig.defaultModelIds.length > 1
-      ? orderedExploreSubagentComposerIds([...subagentConfig.defaultModelIds], parentModelId, compareModelCosts)
-      : subagentConfig.defaultModelIds
-    for (const modelId of defaultCandidates) {
+  if (config.defaultModelIds !== undefined && config.defaultModelIds.length > 0) {
+    const candidates = exploring && config.defaultModelIds.length > 1
+      ? orderedExploreSubagentComposerIds([...config.defaultModelIds], parentId, compareCosts)
+      : config.defaultModelIds
+    for (const modelId of candidates) {
       // Exploring on a model that costs more than the parent's defeats the point of delegating it.
-      if (isExploreSubagent && compareModelCosts(modelId, parentModelId) > 0) continue
-      if (isModelValid(modelId) && !isModelBlocked(modelId) && await isMaxModeCompatible(modelId)) return logCandidate(modelId)
+      if (exploring && compareCosts(modelId, parentId) > 0) continue
+      if (valid(modelId) && !blocked(modelId) && await maxCompatible(modelId)) return asLogged(modelId)
     }
   }
-  if (await isParentModelUsable()) return parentModelId
-  throw new ToolCallArgParseError(noUsableModelError())
+  if (await isParentUsable()) return parentId
+  throw new ToolCallArgParseError(noModelError())
 }
 
 export function getEffectiveReadonlyForSubagent(
@@ -258,19 +258,19 @@ export function createUserMessageAction(
   useAskMode: boolean,
   selectedContext: SelectedContext | undefined,
 ): ConversationAction {
-  const reminderGenerator = subagentConfig.systemReminder
+  const reminder = subagentConfig.systemReminder
   // A reminder that never varies is written once rather than generated for every message.
-  const staticSystemReminder =
-    reminderGenerator !== undefined && reminderGenerator.length === 0
-      ? reminderGenerator()
+  const staticReminder =
+    reminder !== undefined && reminder.length === 0
+      ? reminder()
       : undefined
   const userMessage = new UserMessage({
     text: prompt,
     messageId,
     mode: useAskMode ? AgentMode.ASK : AgentMode.AGENT,
     ...(selectedContext !== undefined ? { selectedContext } : {}),
-    ...(staticSystemReminder !== undefined && staticSystemReminder !== ""
-      ? { subagentSystemReminder: staticSystemReminder }
+    ...(staticReminder !== undefined && staticReminder !== ""
+      ? { subagentSystemReminder: staticReminder }
       : {}),
   })
   return new ConversationAction({
@@ -289,57 +289,57 @@ export interface ConversationBlobStore {
 /** The last thing the subagent said, found by walking its turns backwards. */
 export async function extractLastAssistantMessage(
   ctx: Context,
-  newTurns: readonly Uint8Array[],
+  turnIds: readonly Uint8Array[],
   blobStore: ConversationBlobStore,
 ): Promise<string | undefined> {
-  for (let index = newTurns.length - 1; index >= 0; index -= 1) {
-    const turnBlob = await blobStore.getBlob(ctx, newTurns[index]!)
-    if (turnBlob === undefined) {
+  for (let index = turnIds.length - 1; index >= 0; index -= 1) {
+    const turnBytes = await blobStore.getBlob(ctx, turnIds[index]!)
+    if (turnBytes === undefined) {
       continue
     }
-    const turnStructure = ConversationTurnStructure.fromBinary(turnBlob)
-    if (turnStructure.turn.case !== "agentConversationTurn") {
+    const turnValue = ConversationTurnStructure.fromBinary(turnBytes)
+    if (turnValue.turn.case !== "agentConversationTurn") {
       continue
     }
     const steps = await collectConversationStepsFromStepBlobIds({
       ctx,
-      stepBlobIds: turnStructure.turn.value.steps,
+      stepBlobIds: turnValue.turn.value.steps,
       blobStore,
     })
-    for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
-      const step = steps[stepIndex]!
-      if (step.message.case === "assistantMessage") {
-        return step.message.value.text
+    for (let position = steps.length - 1; position >= 0; position -= 1) {
+      const stepValue = steps[position]!
+      if (stepValue.message.case === "assistantMessage") {
+        return stepValue.message.value.text
       }
     }
   }
   return undefined
 }
 
-/** A step whose blob is gone is left out rather than treated as an empty step. */
-export async function collectConversationStepsFromStepBlobIds(args: {
+/** A stepValue whose blob is gone is left out rather than treated as an empty stepValue. */
+export async function collectConversationStepsFromStepBlobIds(input: {
   readonly ctx: Context
   readonly stepBlobIds: readonly Uint8Array[]
   readonly blobStore: ConversationBlobStore
 }): Promise<ConversationStep[]> {
   const stepBlobs = await Promise.all(
-    args.stepBlobIds.map((stepBlobId) => args.blobStore.getBlob(args.ctx, stepBlobId)),
+    input.stepBlobIds.map((stepBlobId) => input.blobStore.getBlob(input.ctx, stepBlobId)),
   )
   return stepBlobs
     .filter((stepBlob): stepBlob is Uint8Array => stepBlob !== undefined)
     .map((stepBlob) => ConversationStep.fromBinary(stepBlob))
 }
 
-export async function collectConversationTurnStructures(args: {
+export async function collectConversationTurnStructures(input: {
   readonly ctx: Context
   readonly turns: readonly Uint8Array[]
   readonly blobStore: ConversationBlobStore
 }): Promise<Array<ConversationTurnStructure | undefined>> {
-  const turnBlobs = await Promise.all(
-    args.turns.map((turnBlobId) => args.blobStore.getBlob(args.ctx, turnBlobId)),
+  const turnBytes = await Promise.all(
+    input.turns.map((turnBlobId) => input.blobStore.getBlob(input.ctx, turnBlobId)),
   )
-  return turnBlobs.map((turnBlob) =>
-    turnBlob === undefined ? undefined : ConversationTurnStructure.fromBinary(turnBlob),
+  return turnBytes.map((turnBytes) =>
+    turnBytes === undefined ? undefined : ConversationTurnStructure.fromBinary(turnBytes),
   )
 }
 
@@ -350,11 +350,11 @@ export async function collectConversationStepsWithToolCallCount(
 ): Promise<{ readonly conversationSteps: ConversationStep[]; readonly toolCallCount: number }> {
   const turnStructures = await collectConversationTurnStructures({ ctx, turns, blobStore })
   const stepsByTurn = await Promise.all(
-    turnStructures.map((turnStructure) =>
-      turnStructure?.turn.case === "agentConversationTurn"
+    turnStructures.map((turnValue) =>
+      turnValue?.turn.case === "agentConversationTurn"
         ? collectConversationStepsFromStepBlobIds({
             ctx,
-            stepBlobIds: turnStructure.turn.value.steps,
+            stepBlobIds: turnValue.turn.value.steps,
             blobStore,
           })
         : [],
@@ -363,7 +363,7 @@ export async function collectConversationStepsWithToolCallCount(
   const conversationSteps = stepsByTurn.flat()
   return {
     conversationSteps,
-    toolCallCount: conversationSteps.filter((step) => step.message.case === "toolCall").length,
+    toolCallCount: conversationSteps.filter((stepValue) => stepValue.message.case === "toolCall").length,
   }
 }
 
@@ -391,9 +391,9 @@ export function taskEnvironmentToProto(
 
 /** Where a placement runs, as the protocol spells it: only this machine is local. */
 export function targetMachineToEnvironment(
-  target: TaskTargetMachine,
+  placement: TaskTargetMachine,
 ): SubagentExecutionEnvironment {
-  return target.type === "same_machine"
+  return placement.type === "same_machine"
     ? SubagentExecutionEnvironment.LOCAL
     : SubagentExecutionEnvironment.CLOUD
 }
@@ -404,9 +404,9 @@ export type ClientSubagentPlacement = {
 }
 
 export function toClientSubagentPlacement(
-  target: TaskTargetMachine,
+  placement: TaskTargetMachine,
 ): ClientSubagentPlacement {
-  switch (target.type) {
+  switch (placement.type) {
     case "same_machine":
       return {
         environment: SubagentExecutionEnvironment.LOCAL,
@@ -415,7 +415,7 @@ export function toClientSubagentPlacement(
     case "new_cloud_vm":
       return {
         environment: SubagentExecutionEnvironment.CLOUD,
-        cloudBaseBranch: target.base_branch,
+        cloudBaseBranch: placement.base_branch,
       }
     case "self_hosted_worker":
     case "self_hosted_pool":
@@ -428,13 +428,13 @@ export function toClientSubagentPlacement(
 
 /** The older pair of environment fields, read into the placement they describe. */
 export function targetMachineFromLegacyArgs(
-  args: LegacyTaskTargetArgs,
+  input: LegacyTaskTargetArgs,
 ): TaskTargetMachine {
-  if (args.environment !== "cloud") {
+  if (input.environment !== "cloud") {
     return { type: "same_machine" }
   }
-  const baseBranch = args.cloud_base_branch?.trim()
-  const buildId = args.cloud_requested_environment_build_id?.trim()
+  const baseBranch = input.cloud_base_branch?.trim()
+  const buildId = input.cloud_requested_environment_build_id?.trim()
   return {
     type: "new_cloud_vm",
     ...(baseBranch !== undefined && baseBranch.length > 0
@@ -446,8 +446,8 @@ export function targetMachineFromLegacyArgs(
   }
 }
 
-export function targetMachineToProto(target: TaskTargetMachine): TargetMachine {
-  switch (target.type) {
+export function targetMachineToProto(placement: TaskTargetMachine): TargetMachine {
+  switch (placement.type) {
     case "same_machine":
       return new TargetMachine({
         machine: {
@@ -460,11 +460,11 @@ export function targetMachineToProto(target: TaskTargetMachine): TargetMachine {
         machine: {
           case: "newCloudVm",
           value: new NewCloudVmTarget({
-            ...(target.environment_build_id !== undefined
-              ? { environmentBuildId: target.environment_build_id }
+            ...(placement.environment_build_id !== undefined
+              ? { environmentBuildId: placement.environment_build_id }
               : {}),
-            ...(target.base_branch !== undefined
-              ? { baseBranch: target.base_branch }
+            ...(placement.base_branch !== undefined
+              ? { baseBranch: placement.base_branch }
               : {}),
           }),
         },
@@ -473,7 +473,7 @@ export function targetMachineToProto(target: TaskTargetMachine): TargetMachine {
       return new TargetMachine({
         machine: {
           case: "selfHostedWorker",
-          value: new SelfHostedWorkerTarget({ workerId: target.worker_id }),
+          value: new SelfHostedWorkerTarget({ workerId: placement.worker_id }),
         },
       })
     case "self_hosted_pool":
@@ -481,8 +481,8 @@ export function targetMachineToProto(target: TaskTargetMachine): TargetMachine {
         machine: {
           case: "selfHostedPool",
           value: new SelfHostedPoolTarget({
-            ...(target.pool !== undefined ? { pool: target.pool } : {}),
-            labels: Object.entries(target.labels ?? {}).map(
+            ...(placement.pool !== undefined ? { pool: placement.pool } : {}),
+            labels: Object.entries(placement.labels ?? {}).map(
               ([key, value]) => new SelfHostedWorkerLabel({ key, value }),
             ),
           }),
@@ -492,37 +492,37 @@ export function targetMachineToProto(target: TaskTargetMachine): TargetMachine {
 }
 
 export function targetMachineFromProto(
-  proto: TargetMachine | undefined,
+  wire: TargetMachine | undefined,
 ): TaskTargetMachine | undefined {
-  switch (proto?.machine.case) {
+  switch (wire?.machine.case) {
     case "sameMachine":
       return { type: "same_machine" }
     case "newCloudVm":
       return {
         type: "new_cloud_vm",
-        ...(proto.machine.value.environmentBuildId !== undefined
-          ? { environment_build_id: proto.machine.value.environmentBuildId }
+        ...(wire.machine.value.environmentBuildId !== undefined
+          ? { environment_build_id: wire.machine.value.environmentBuildId }
           : {}),
-        ...(proto.machine.value.baseBranch !== undefined
-          ? { base_branch: proto.machine.value.baseBranch }
+        ...(wire.machine.value.baseBranch !== undefined
+          ? { base_branch: wire.machine.value.baseBranch }
           : {}),
       }
     case "selfHostedWorker":
       return {
         type: "self_hosted_worker",
-        worker_id: proto.machine.value.workerId,
+        worker_id: wire.machine.value.workerId,
       }
     case "selfHostedPool":
       return {
         type: "self_hosted_pool",
-        ...(proto.machine.value.pool !== undefined
-          ? { pool: proto.machine.value.pool }
+        ...(wire.machine.value.pool !== undefined
+          ? { pool: wire.machine.value.pool }
           : {}),
         // Labels are a map here and a list on the wire, and an empty list is no map at all.
-        ...(proto.machine.value.labels.length > 0
+        ...(wire.machine.value.labels.length > 0
           ? {
               labels: Object.fromEntries(
-                proto.machine.value.labels.map((label) => [label.key, label.value]),
+                wire.machine.value.labels.map((label) => [label.key, label.value]),
               ),
             }
           : {}),
@@ -541,55 +541,55 @@ export type CloudSubagentPersistedStateArgs = {
 
 /** What a cloud subagent's state has to carry for it to be found and resumed later. */
 export function buildCloudSubagentPersistedState(
-  args: CloudSubagentPersistedStateArgs,
+  input: CloudSubagentPersistedStateArgs,
 ): SubagentPersistedState {
   return new SubagentPersistedState({
     environment: SubagentExecutionEnvironment.CLOUD,
     cloudSubagent: new CloudSubagentReference({
-      bcId: args.bcId,
-      ...(args.transcriptPath !== undefined
-        ? { transcriptPath: args.transcriptPath }
+      bcId: input.bcId,
+      ...(input.transcriptPath !== undefined
+        ? { transcriptPath: input.transcriptPath }
         : {}),
     }),
-    ...(args.modelId !== undefined ? { modelId: args.modelId } : {}),
-    machine: targetMachineToProto(args.machine),
+    ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
+    machine: targetMachineToProto(input.machine),
   })
 }
 
 /** A placement given both ways is ambiguous, and guessing which one was meant would place work wrongly. */
 export function assertMachineAndLegacyArgsNotBothSet(
-  args: TaskTargetValidationArgs,
+  input: TaskTargetValidationArgs,
 ): void {
-  if (args.machine === undefined) {
+  if (input.machine === undefined) {
     return
   }
-  const conflictingKeys: readonly (keyof LegacyTaskTargetArgs)[] = [
+  const conflictKeys: readonly (keyof LegacyTaskTargetArgs)[] = [
     "environment",
     "cloud_base_branch",
     "cloud_requested_environment_build_id",
   ]
-  const conflicting = conflictingKeys.filter((key) => args[key] !== undefined)
-  if (conflicting.length > 0) {
+  const conflicts = conflictKeys.filter((key) => input[key] !== undefined)
+  if (conflicts.length > 0) {
     throw new ToolCallArgParseError(
-      `Invalid arguments:\nmachine replaces ${conflicting.join(", ")}; specify machine alone.`,
+      `Invalid arguments:\nmachine replaces ${conflicts.join(", ")}; specify machine alone.`,
     )
   }
 }
 
 export function assertCloudOnlyTaskArgsAllowed(
-  args: LegacyTaskTargetArgs,
+  input: LegacyTaskTargetArgs,
 ): void {
-  const hasCloudBaseBranch =
-    args.cloud_base_branch !== undefined && args.cloud_base_branch.trim().length > 0
-  if (hasCloudBaseBranch && args.environment !== "cloud") {
+  const branchGiven =
+    input.cloud_base_branch !== undefined && input.cloud_base_branch.trim().length > 0
+  if (branchGiven && input.environment !== "cloud") {
     throw new ToolCallArgParseError(
       "Invalid arguments:\ncloud_base_branch may only be specified when environment equals cloud.",
     )
   }
-  const hasRequestedBuild =
-    args.cloud_requested_environment_build_id !== undefined &&
-    args.cloud_requested_environment_build_id.trim().length > 0
-  if (hasRequestedBuild && args.environment !== "cloud") {
+  const buildGiven =
+    input.cloud_requested_environment_build_id !== undefined &&
+    input.cloud_requested_environment_build_id.trim().length > 0
+  if (buildGiven && input.environment !== "cloud") {
     throw new ToolCallArgParseError(
       "Invalid arguments:\ncloud_requested_environment_build_id may only be specified when environment equals cloud.",
     )
