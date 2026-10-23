@@ -112,8 +112,8 @@ export interface Summarizer {
   getMetricsModelLabel(): string
   summarize(
     ctx: Context,
-    messages: readonly RedactedCoreMessage[],
-    options: SummarizerRunOptions,
+    messageList: readonly RedactedCoreMessage[],
+    settings: SummarizerRunOptions,
   ): Promise<SummarizationResult>
 }
 
@@ -156,8 +156,8 @@ export interface SummarizationStateHandler extends ProjectConversationState {
   tokenDetailsStaleAfterSummarization: boolean
   setBackgroundSummarizationState(
     info: BackgroundSummarizationPromiseInfo,
-    messages: readonly RedactedCoreMessage[],
-    cancellationToken: { cancelled: boolean },
+    messageList: readonly RedactedCoreMessage[],
+    cancelSignal: { cancelled: boolean },
   ): void
   setBackgroundSummarizationHasCompleted(generationDurationMs: number): void
   clearBackgroundSummarizationState(): void
@@ -174,7 +174,7 @@ export interface SummarizationStateHandler extends ProjectConversationState {
 export interface SummarizationPromptExecutor {
   getMessages(): readonly RedactedCoreMessage[]
   clearMessages(): void
-  appendMessages(messages: readonly RedactedCoreMessage[]): void
+  appendMessages(messageList: readonly RedactedCoreMessage[]): void
 }
 
 export interface SummarizationInteractionListener {
@@ -222,8 +222,8 @@ export interface HandleSummarizationOptions {
 }
 
 export type SelfSummarizerFactory = (
-  stateHandler: SummarizationStateHandler,
-  interactionListener: SummarizationInteractionListener,
+  agentState: SummarizationStateHandler,
+  updateListener: SummarizationInteractionListener,
   tools: unknown[],
   extraT: unknown,
   descriptionProps: Record<string, unknown> | undefined,
@@ -231,7 +231,7 @@ export type SelfSummarizerFactory = (
 
 const logger = createLogger("@slate/agent")
 
-function countMessageKinds(messages: readonly {
+function countMessageKinds(messageList: readonly {
   readonly role: string
   readonly content: unknown
 }[]): {
@@ -246,21 +246,21 @@ function countMessageKinds(messages: readonly {
   let assistantMessages = 0
   let toolMessages = 0
   let toolCalls = 0
-  for (const message of messages) {
-    switch (message.role) {
+  for (const transcriptMessage of messageList) {
+    switch (transcriptMessage.role) {
       case "user": userMessages++; break
       case "system": systemMessages++; break
       case "assistant":
         assistantMessages++
-        if (Array.isArray(message.content)) {
-          for (const part of message.content) {
+        if (Array.isArray(transcriptMessage.content)) {
+          for (const part of transcriptMessage.content) {
             if (part.type === "tool-call") toolCalls++
           }
         }
         break
       case "tool": toolMessages++; break
       // A role nobody defined is a bug in the caller, so it is raised rather than counted.
-      default: throw new Error(`Unknown message role: ${String(message)}`)
+      default: throw new Error(`Unknown message role: ${String(transcriptMessage)}`)
     }
   }
   return { userMessages, systemMessages, assistantMessages, toolMessages, toolCalls }
@@ -268,19 +268,19 @@ function countMessageKinds(messages: readonly {
 
 /** Two messages are the same message when they serialize to the same bytes, which is what a prefix check needs. */
 function messagesEqualByValue(
-  redactedMessage: RedactedCoreMessage,
-  plainMessage: CoreMessageLike | undefined,
+  storedMessage: RedactedCoreMessage,
+  liveMessage: CoreMessageLike | undefined,
 ): boolean {
-  if (plainMessage === undefined || redactedMessage.role !== plainMessage.role) return false
-  const unwrappedMessage = fromRedactedCoreMessage(
-    redactedMessage,
+  if (liveMessage === undefined || storedMessage.role !== liveMessage.role) return false
+  const plainBody = fromRedactedCoreMessage(
+    storedMessage,
     PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
   )
-  const aBytes = coreMessageSerde.serialize(unwrappedMessage)
-  const bBytes = coreMessageSerde.serialize(plainMessage)
-  if (aBytes.length !== bBytes.length) return false
-  for (let i = 0; i < aBytes.length; i++) {
-    if (aBytes[i] !== bBytes[i]) return false
+  const storedBytes = coreMessageSerde.serialize(plainBody)
+  const liveBytes = coreMessageSerde.serialize(liveMessage)
+  if (storedBytes.length !== liveBytes.length) return false
+  for (let i = 0; i < storedBytes.length; i++) {
+    if (storedBytes[i] !== liveBytes[i]) return false
   }
   return true
 }
@@ -332,78 +332,78 @@ export class SummarizationOrchestrator {
   ) {}
 
   /** How many tokens a self-summary may take, from the model's window unless a limit was set. */
-  resolveSummaryTokenLimit(maxTokens: number, evalOverrideLimit: number | undefined): number | undefined {
-    if (evalOverrideLimit !== undefined) return evalOverrideLimit
+  resolveSummaryTokenLimit(maxTokens: number, evalLimit: number | undefined): number | undefined {
+    if (evalLimit !== undefined) return evalLimit
     if (this.selfSummaryTokenLimit !== undefined) return this.selfSummaryTokenLimit
     if (maxTokens > 0) return Math.floor(maxTokens * SELF_SUMMARY_CONTEXT_WINDOW_FRACTION)
     return undefined
   }
 
   shouldStartBackgroundSummarization(
-    tokenDetails: SummarizationTokenDetails,
-    messages: readonly RedactedCoreMessage[],
+    tokenUsage: SummarizationTokenDetails,
+    messageList: readonly RedactedCoreMessage[],
     ctx?: Context,
   ): boolean {
     // A platform run may force summarization at a token count of its own choosing.
-    const evalMaxTokensBeforeSummarization = ctx !== undefined
+    const evalMaxTokens = ctx !== undefined
       ? EVAL_ENFORCED_MAX_TOKENS_BEFORE_SUMMARIZATION(ctx)
       : undefined
     if (
       ctx !== undefined &&
-      evalMaxTokensBeforeSummarization !== undefined &&
-      tokenDetails.usedTokens >= evalMaxTokensBeforeSummarization
+      evalMaxTokens !== undefined &&
+      tokenUsage.usedTokens >= evalMaxTokens
     ) {
       logger.info(ctx, "[summarization] using eval override for max tokens before summarization", {
-        evalMaxTokensBeforeSummarization,
-        usedTokens: tokenDetails.usedTokens,
-        maxTokens: tokenDetails.maxTokens,
+        evalMaxTokens,
+        usedTokens: tokenUsage.usedTokens,
+        maxTokens: tokenUsage.maxTokens,
       })
       return true
     }
-    const evalOverrideLimit = ctx !== undefined
+    const evalLimit = ctx !== undefined
       ? EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT(ctx)
       : undefined
-    const bgResult = this.backgroundSummarizationProps && shouldStartBackgroundSummarization(
-      tokenDetails.usedTokens,
-      tokenDetails.maxTokens,
+    const backgroundWanted = this.backgroundSummarizationProps && shouldStartBackgroundSummarization(
+      tokenUsage.usedTokens,
+      tokenUsage.maxTokens,
       this.backgroundSummarizationProps,
     )
-    const selfResult = this.selfSummarizerFactory &&
+    const selfWanted = this.selfSummarizerFactory &&
       (this.canUseSelfSummaryNow?.() ?? true) &&
       shouldPerformSelfSummary(
-        messages as Parameters<typeof shouldPerformSelfSummary>[0],
-        tokenDetails,
+        messageList as Parameters<typeof shouldPerformSelfSummary>[0],
+        tokenUsage,
         ctx,
-        this.resolveSummaryTokenLimit(tokenDetails.maxTokens, evalOverrideLimit),
+        this.resolveSummaryTokenLimit(tokenUsage.maxTokens, evalLimit),
       )
-    return Boolean(bgResult || selfResult)
+    return Boolean(backgroundWanted || selfWanted)
   }
 
   /** A self-summary needs the tools and the extra request state a self-summarizing turn would have. */
-  canUseSelfSummary(options: HandleSummarizationOptions): boolean {
+  canUseSelfSummary(settings: HandleSummarizationOptions): boolean {
     return this.selfSummarizerFactory !== undefined &&
       (this.canUseSelfSummaryNow?.() ?? true) &&
-      options.tools !== undefined &&
-      options.extraT !== undefined
+      settings.tools !== undefined &&
+      settings.extraT !== undefined
   }
 
   getSummarizer(
-    stateHandler: SummarizationStateHandler,
-    interactionListener: SummarizationInteractionListener,
+    agentState: SummarizationStateHandler,
+    updateListener: SummarizationInteractionListener,
     config: SummarizationOrchestratorConfig,
-    options: HandleSummarizationOptions,
+    settings: HandleSummarizationOptions,
   ): Summarizer {
-    if (options.forceExternalModel) {
+    if (settings.forceExternalModel) {
       config.onExternalSummarizationStart?.()
       return this.externalSummarizer
     }
-    if (this.canUseSelfSummary(options)) {
+    if (this.canUseSelfSummary(settings)) {
       return this.selfSummarizerFactory!(
-        stateHandler,
-        interactionListener,
-        options.tools!,
-        options.extraT,
-        options.descriptionProps,
+        agentState,
+        updateListener,
+        settings.tools!,
+        settings.extraT,
+        settings.descriptionProps,
       )
     }
     config.onExternalSummarizationStart?.()
@@ -411,299 +411,299 @@ export class SummarizationOrchestrator {
   }
 
   async handleSummarization(
-    parentCtx: Context,
-    stateHandler: SummarizationStateHandler,
-    rootPromptExecutor: SummarizationPromptExecutor,
-    interactionListener: SummarizationInteractionListener,
+    outerCtx: Context,
+    agentState: SummarizationStateHandler,
+    conversationExecutor: SummarizationPromptExecutor,
+    updateListener: SummarizationInteractionListener,
     config: SummarizationOrchestratorConfig,
-    requestContext: SummarizationRequestContext,
-    options: HandleSummarizationOptions,
+    requestSettings: SummarizationRequestContext,
+    settings: HandleSummarizationOptions,
   ): Promise<RedactedString | undefined> {
-    using spanContext = createSpan(parentCtx.withName("handleSummarization"))
+    using spanContext = createSpan(outerCtx.withName("handleSummarization"))
     const ctx = spanContext.ctx
-    const { lastMode, isRootProject } = await resolveProjectConversationContext(ctx, stateHandler)
-    if (isRootProject) stateHandler.isRootProjectConversation = true
-    const modePrompt = processModeSystemReminder(
-      lastMode ?? stateHandler.mode ?? AgentMode.AGENT,
+    const { lastMode, isRootProject } = await resolveProjectConversationContext(ctx, agentState)
+    if (isRootProject) agentState.isRootProjectConversation = true
+    const modeSystemPrompt = processModeSystemReminder(
+      lastMode ?? agentState.mode ?? AgentMode.AGENT,
       config,
-      requestContext,
+      requestSettings,
       undefined,
       { isUserTurn: false },
     )
     // A project conversation is reminded what it is being compacted into, since the reminder is not a
     // message and would otherwise be lost with the messages it is attached to.
-    const projectRootPrompt = stateHandler.isRootProjectConversation
+    const rootProjectPrompt = agentState.isRootProjectConversation
       ? `<system_reminder>\n${formatProjectCompactionPrompt({
           promptText: config.projectPromptTextGenerator?.()!,
-          sendMessageEnabled: isProjectSendMessageEnabled(stateHandler),
+          sendMessageEnabled: isProjectSendMessageEnabled(agentState),
           coordinatorToolsEnabled: config.featureFlags?.cloudCoordinatorToolsEnabled === true,
         })}\n</system_reminder>`
       : undefined
-    const allMessages = rootPromptExecutor.getMessages()
-    const unredAllMessages = fromRedactedCoreMessages(
-      allMessages,
+    const conversationMessages = conversationExecutor.getMessages()
+    const plainMessages = fromRedactedCoreMessages(
+      conversationMessages,
       PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
     )
     // Without the system message there is nothing to compact against, so this is a caller's bug.
-    if (!allMessages.find(message => message.role === "system")) {
+    if (!conversationMessages.find(transcriptMessage => transcriptMessage.role === "system")) {
       logger.warn(ctx, "Compaction skipped due to missing system message", {
-        summarization: { allMessagesCount: allMessages.length },
+        summarization: { allMessagesCount: conversationMessages.length },
       })
       throw new Error("No system prompt found")
     }
-    const { messagesForSummarization } = prepareMessagesForCompaction(allMessages)
-    const summarizer = this.getSummarizer(stateHandler, interactionListener, config, options)
-    let summarizerModelId = summarizer.getMetricsModelLabel()
-    let summarizationLogFields = {
-      summarizationMode: options.backgroundSummarizationMode,
-      triggerReason: options.triggerReason,
-      model: summarizerModelId,
+    const { messagesForSummarization: summarizationInput } = prepareMessagesForCompaction(conversationMessages)
+    const summarizer = this.getSummarizer(agentState, updateListener, config, settings)
+    let modelLabel = summarizer.getMetricsModelLabel()
+    let logFields = {
+      summarizationMode: settings.backgroundSummarizationMode,
+      triggerReason: settings.triggerReason,
+      model: modelLabel,
     }
-    const strategy = options.fullSummarization ? "v5NalFull" : "v5NalPartial"
-    const triggerReason = options.triggerReason
+    const strategy = settings.fullSummarization ? "v5NalFull" : "v5NalPartial"
+    const triggerReason = settings.triggerReason
     const isClientAtLeast1Point731 = "true"
-    let summarizerType: "external" | "self" = options.forceExternalModel === true ||
-        !this.canUseSelfSummary(options)
+    let summarizerType: "external" | "self" = settings.forceExternalModel === true ||
+        !this.canUseSelfSummary(settings)
       ? "external"
       : "self"
-    let useInProgressBackgroundSummarization = false
+    let reuseInFlight = false
     if (
-      stateHandler.backgroundSummarizationPromiseInfo !== null &&
-      stateHandler.messagesUndergoingSummarization !== null
+      agentState.backgroundSummarizationPromiseInfo !== null &&
+      agentState.messagesUndergoingSummarization !== null
     ) {
       // A summary already underway is only usable while the conversation still starts with the messages it
       // was started for; anything else would summarize a conversation that no longer exists.
-      const storedMessages = stateHandler.messagesUndergoingSummarization
-      const prefixValid = storedMessages.every((message, index) =>
-        messagesEqualByValue(message, unredAllMessages[index])
+      const inFlightMessages = agentState.messagesUndergoingSummarization
+      const prefixMatches = inFlightMessages.every((transcriptMessage, index) =>
+        messagesEqualByValue(transcriptMessage, plainMessages[index])
       )
-      if (prefixValid) {
-        summarizerModelId = stateHandler.backgroundSummarizationPromiseInfo.modelId
-        summarizerType = stateHandler.backgroundSummarizationPromiseInfo.summarizerType
-        summarizationLogFields = { ...summarizationLogFields, model: summarizerModelId }
+      if (prefixMatches) {
+        modelLabel = agentState.backgroundSummarizationPromiseInfo.modelId
+        summarizerType = agentState.backgroundSummarizationPromiseInfo.summarizerType
+        logFields = { ...logFields, model: modelLabel }
         logger.info(ctx, "Summarization with valid prefix is already underway.", {
           summarization: {
-            ...summarizationLogFields,
-            messagesInCurrentSummarizeRequestCount: messagesForSummarization.length,
-            messagesAlreadyUndergoingSummarizationCount: storedMessages.length,
+            ...logFields,
+            messagesInCurrentSummarizeRequestCount: summarizationInput.length,
+            messagesAlreadyUndergoingSummarizationCount: inFlightMessages.length,
           },
         })
-        useInProgressBackgroundSummarization = true
+        reuseInFlight = true
       } else {
         logger.info(ctx, "Summarization prefix invalid. Clearing in-progress state.", {
           summarization: {
-            ...summarizationLogFields,
-            messagesInCurrentSummarizeRequestCount: messagesForSummarization.length,
-            messagesAlreadyUndergoingSummarizationCount: storedMessages.length,
+            ...logFields,
+            messagesInCurrentSummarizeRequestCount: summarizationInput.length,
+            messagesAlreadyUndergoingSummarizationCount: inFlightMessages.length,
           },
         })
         if (
-          options.backgroundSummarizationMode ===
+          settings.backgroundSummarizationMode ===
             BackgroundSummarizationMode.BackgroundAndPersistIfCompleted
         ) {
           logger.warn(ctx, "Clearing state in mode BackgroundAndPersistIfCompleted", {
             summarization: {
-              ...summarizationLogFields,
-              messagesInCurrentSummarizeRequestCount: messagesForSummarization.length,
-              messagesAlreadyUndergoingSummarizationCount: storedMessages.length,
+              ...logFields,
+              messagesInCurrentSummarizeRequestCount: summarizationInput.length,
+              messagesAlreadyUndergoingSummarizationCount: inFlightMessages.length,
             },
           })
         }
         backgroundSummarizationDiscarded.increment(ctx, 1, {
           reason: "prefix_invalid",
-          model: stateHandler.backgroundSummarizationPromiseInfo.modelId,
+          model: agentState.backgroundSummarizationPromiseInfo.modelId,
         })
-        stateHandler.clearBackgroundSummarizationState()
+        agentState.clearBackgroundSummarizationState()
       }
     }
-    if (!useInProgressBackgroundSummarization) {
+    if (!reuseInFlight) {
       if (
-        options.backgroundSummarizationMode ===
+        settings.backgroundSummarizationMode ===
           BackgroundSummarizationMode.WaitForCompletionIfStarted
       ) {
         logger.info(
           ctx,
           "No in-flight background summarization in WaitForCompletionIfStarted mode. Returning without starting one.",
-          { summarization: { ...summarizationLogFields, messagesInCurrentSummarizeRequestCount: messagesForSummarization.length } },
+          { summarization: { ...logFields, messagesInCurrentSummarizeRequestCount: summarizationInput.length } },
         )
         return undefined
       }
       if (
-        options.backgroundSummarizationMode ===
+        settings.backgroundSummarizationMode ===
           BackgroundSummarizationMode.BackgroundAndPersistIfCompleted
       ) {
         logger.warn(
           ctx,
           "Starting summarization in BackgroundAndPersistIfCompleted mode which should only be called for a completed summarization",
-          { summarization: { ...summarizationLogFields, messagesInCurrentSummarizeRequestCount: messagesForSummarization.length } },
+          { summarization: { ...logFields, messagesInCurrentSummarizeRequestCount: summarizationInput.length } },
         )
       }
-      const cancellationToken = { cancelled: false }
-      const summarizationPromise = (async (): Promise<SummarizationResult> => {
-        const generationStart = performance.now()
+      const cancelSignal = { cancelled: false }
+      const backgroundPromise = (async (): Promise<SummarizationResult> => {
+        const generationStartMs = performance.now()
         try {
           logger.info(ctx, "Starting new background summarization", {
             summarization: {
-              ...summarizationLogFields,
-              messagesToSummarizeCount: messagesForSummarization.length,
-              summarizerModel: summarizerModelId,
-              summarizationMode: options.backgroundSummarizationMode,
-              triggerReason: options.triggerReason,
+              ...logFields,
+              messagesToSummarizeCount: summarizationInput.length,
+              summarizerModel: modelLabel,
+              summarizationMode: settings.backgroundSummarizationMode,
+              triggerReason: settings.triggerReason,
             },
           })
-          backgroundSummarizationStarted.increment(ctx, 1, { model: summarizerModelId })
-          const todoItems = await Promise.all(stateHandler.todos.map(todoRef => todoRef.get(ctx)))
-          const todoContent = formatTodosForSummarization(todoItems)
+          backgroundSummarizationStarted.increment(ctx, 1, { model: modelLabel })
+          const todoEntries = await Promise.all(agentState.todos.map(todoRef => todoRef.get(ctx)))
+          const todoText = formatTodosForSummarization(todoEntries)
           // The transcript pointer is only worth carrying when the folder is known and this is not a
           // background agent, whose conversation nobody is reading.
-          const includeTranscriptInSummary = config.enableTranscriptInSummary === true &&
-            requestContext.env?.agentTranscriptsFolder !== undefined &&
+          const shouldIncludeTranscript = config.enableTranscriptInSummary === true &&
+            requestSettings.env?.agentTranscriptsFolder !== undefined &&
             config.agentType !== AgentType.BACKGROUND
-          const result = await summarizer.summarize(ctx, allMessages, {
-            fullSummarization: options.fullSummarization,
-            currentPlan: options.currentPlan,
-            modePrompt,
-            projectRootPrompt,
-            agentTranscriptsFolder: includeTranscriptInSummary
-              ? requestContext.env?.agentTranscriptsFolder
+          const summarizationOutcome = await summarizer.summarize(ctx, conversationMessages, {
+            fullSummarization: settings.fullSummarization,
+            currentPlan: settings.currentPlan,
+            modePrompt: modeSystemPrompt,
+            projectRootPrompt: rootProjectPrompt,
+            agentTranscriptsFolder: shouldIncludeTranscript
+              ? requestSettings.env?.agentTranscriptsFolder
               : undefined,
             conversationId: config.conversationId,
-            automationTriggerContext: options.automationTriggerContext,
-            todoContent,
-            backgroundSummarizationMode: options.backgroundSummarizationMode,
-            triggerReason: options.triggerReason,
+            automationTriggerContext: settings.automationTriggerContext,
+            todoContent: todoText,
+            backgroundSummarizationMode: settings.backgroundSummarizationMode,
+            triggerReason: settings.triggerReason,
             // Only a run that is going to wait is allowed to retry an output-token failure, since a
             // background one has nobody waiting for the retry.
             enableRetryOutputTokenLimit:
-              options.backgroundSummarizationMode === BackgroundSummarizationMode.WaitForCompletion
+              settings.backgroundSummarizationMode === BackgroundSummarizationMode.WaitForCompletion
                 ? true
                 : undefined,
-            cancellationToken,
-            contextWindowTokens: stateHandler.tokenDetails.maxTokens,
+            cancellationToken: cancelSignal,
+            contextWindowTokens: agentState.tokenDetails.maxTokens,
           })
-          const generationDuration = performance.now() - generationStart
-          summarizationGenerationTime.histogram(ctx, generationDuration, {
+          const generationElapsedMs = performance.now() - generationStartMs
+          summarizationGenerationTime.histogram(ctx, generationElapsedMs, {
             strategy,
             triggerReason,
-            model: summarizerModelId,
+            model: modelLabel,
             summarizerType,
             outcome: "success",
             isClientAtLeast1Point731,
           })
-          stateHandler.setBackgroundSummarizationHasCompleted(generationDuration)
+          agentState.setBackgroundSummarizationHasCompleted(generationElapsedMs)
           logger.info(ctx, "Background summarization completed", {
-            summarization: { ...summarizationLogFields, messagesToSummarizeCount: messagesForSummarization.length },
+            summarization: { ...logFields, messagesToSummarizeCount: summarizationInput.length },
           })
-          return result
+          return summarizationOutcome
         } catch (error) {
-          const generationDuration = performance.now() - generationStart
-          const errorKind = getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType
-          summarizationGenerationTime.histogram(ctx, generationDuration, {
+          const generationElapsedMs = performance.now() - generationStartMs
+          const failureKind = getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType
+          summarizationGenerationTime.histogram(ctx, generationElapsedMs, {
             strategy,
             triggerReason,
-            model: summarizerModelId,
+            model: modelLabel,
             summarizerType,
             outcome: "error",
             isClientAtLeast1Point731,
           })
           logger.error(ctx, "Background summarization failed, clearing state", error, {
-            summarization: summarizationLogFields,
+            summarization: logFields,
           })
           // A self-summary that did not fit is remembered, so the next attempt does not try again at the
           // same size.
           if (
             summarizerType === "self" &&
-            (errorKind === "InputTokenLimitError" || errorKind === "InputTooLargeError")
+            (failureKind === "InputTokenLimitError" || failureKind === "InputTooLargeError")
           ) {
-            stateHandler.setSelfSummaryInputLimitFailureTokenCount(stateHandler.tokenDetails.usedTokens)
+            agentState.setSelfSummaryInputLimitFailureTokenCount(agentState.tokenDetails.usedTokens)
           }
-          stateHandler.clearBackgroundSummarizationState()
+          agentState.clearBackgroundSummarizationState()
           throw error
         }
       })()
-      stateHandler.setBackgroundSummarizationState({
-        promise: summarizationPromise,
-        modelId: summarizerModelId,
+      agentState.setBackgroundSummarizationState({
+        promise: backgroundPromise,
+        modelId: modelLabel,
         summarizerType,
-        startInvocationId: options.currentInvocationId,
-        startUsedTokens: stateHandler.tokenDetails.usedTokens,
-        startMaxTokens: stateHandler.tokenDetails.maxTokens,
-      }, allMessages, cancellationToken)
+        startInvocationId: settings.currentInvocationId,
+        startUsedTokens: agentState.tokenDetails.usedTokens,
+        startMaxTokens: agentState.tokenDetails.maxTokens,
+      }, conversationMessages, cancelSignal)
     }
 
-    switch (options.backgroundSummarizationMode) {
+    switch (settings.backgroundSummarizationMode) {
       case BackgroundSummarizationMode.Background:
         logger.info(ctx, "Background summarization in progress in Background mode. Returning without awaiting completion.", {
-          summarization: summarizationLogFields,
+          summarization: logFields,
         })
         return undefined
       case BackgroundSummarizationMode.BackgroundAndPersistIfCompleted:
         // This mode is only reached once the caller knows the summary is done, so not being done is a
         // contradiction rather than a reason to wait.
-        if (!stateHandler.backgroundSummarizationHasCompleted) {
-          logger.info(ctx, "Background summarization is not completed yet in BackgroundAndPersistIfCompleted mode. REturning without awaiting completion.", { summarization: summarizationLogFields })
+        if (!agentState.backgroundSummarizationHasCompleted) {
+          logger.info(ctx, "Background summarization is not completed yet in BackgroundAndPersistIfCompleted mode. REturning without awaiting completion.", { summarization: logFields })
           return undefined
         }
-        logger.info(ctx, "Background summarization has completed in BackgroundAndPersistIfCompleted mode. Going to persist summary.", { summarization: summarizationLogFields })
+        logger.info(ctx, "Background summarization has completed in BackgroundAndPersistIfCompleted mode. Going to persist summary.", { summarization: logFields })
         break
       case BackgroundSummarizationMode.WaitForCompletion:
-        logger.info(ctx, stateHandler.backgroundSummarizationHasCompleted
+        logger.info(ctx, agentState.backgroundSummarizationHasCompleted
           ? "Background summarization has completed in WaitForCompletion mode. Going to persist summary."
-          : "Background summarization is not completed in WaitForCompletion mode. Going to wait for completion and then persist summary.", { summarization: summarizationLogFields })
+          : "Background summarization is not completed in WaitForCompletion mode. Going to wait for completion and then persist summary.", { summarization: logFields })
         break
       case BackgroundSummarizationMode.WaitForCompletionIfStarted:
-        logger.info(ctx, stateHandler.backgroundSummarizationHasCompleted
+        logger.info(ctx, agentState.backgroundSummarizationHasCompleted
           ? "In-flight background summarization has completed in WaitForCompletionIfStarted mode. Going to persist summary."
-          : "In-flight background summarization is not completed in WaitForCompletionIfStarted mode. Going to wait for completion and then persist summary.", { summarization: summarizationLogFields })
+          : "In-flight background summarization is not completed in WaitForCompletionIfStarted mode. Going to wait for completion and then persist summary.", { summarization: logFields })
         break
-      default: throw new Error(`Unknown background summarization mode: ${String(options.backgroundSummarizationMode)}`)
+      default: throw new Error(`Unknown background summarization mode: ${String(settings.backgroundSummarizationMode)}`)
     }
 
     const { contextWindowSize, contextTokens, contextUsagePercent } = getContextUsageInfo(
-      stateHandler.tokenDetails,
+      agentState.tokenDetails,
     )
-    const isFirstCompaction = stateHandler.summaryArchives.length === 0 &&
-      stateHandler.selfSummaryCount === 0
-    const hookTrigger = options.triggerReason === "force_option" ||
-        options.triggerReason === "force_dev_testing"
+    const isFirstCompaction = agentState.summaryArchives.length === 0 &&
+      agentState.selfSummaryCount === 0
+    const hookMode = settings.triggerReason === "force_option" ||
+        settings.triggerReason === "force_dev_testing"
       ? "manual"
       : "auto"
-    let hookMessage: string | undefined
+    let lifecycleHookMessage: string | undefined
     if (
       config.enableExecuteHookExec &&
-      isHookStepConfigured(requestContext.hooksConfig?.configuredSteps, "preCompact")
+      isHookStepConfigured(requestSettings.hooksConfig?.configuredSteps, "preCompact")
     ) {
       try {
-        using span = createSpan(ctx.withName("agent.lifecycleHook.preCompact"))
-        const hookCtx = span.ctx
-        const remoteHookExecutor = options.resourceAccessor.get(hookExecutorResource)
-        if (remoteHookExecutor) {
-          const hookArgs = new ExecuteHookArgs({
+        using hookSpan = createSpan(ctx.withName("agent.lifecycleHook.preCompact"))
+        const hookContext = hookSpan.ctx
+        const hookExecutorInstance = settings.resourceAccessor.get(hookExecutorResource)
+        if (hookExecutorInstance) {
+          const hookRequest = new ExecuteHookArgs({
             request: new ExecuteHookRequest({
               request: {
                 case: "preCompact",
                 value: new PreCompactRequestQuery({
-                  trigger: hookTrigger,
+                  trigger: hookMode,
                   contextUsagePercent,
                   contextTokens: BigInt(contextTokens),
                   contextWindowSize: BigInt(contextWindowSize),
-                  messageCount: allMessages.length,
-                  messagesToCompact: messagesForSummarization.length,
+                  messageCount: conversationMessages.length,
+                  messagesToCompact: summarizationInput.length,
                   isFirstCompaction,
                   conversationId: getConversationId(ctx)!,
                   generationId: getRequestId(ctx)!,
-                  model: summarizerModelId,
+                  model: modelLabel,
                 }),
               },
             }),
           })
-          const result = await remoteHookExecutor.execute(hookCtx, hookArgs)
-          if (result.response?.response.case === "preCompact") {
-            const userMessage = result.response.response.value.userMessage
+          const summarizationOutcome = await hookExecutorInstance.execute(hookContext, hookRequest)
+          if (summarizationOutcome.response?.response.case === "preCompact") {
+            const userMessage = summarizationOutcome.response.response.value.userMessage
             if (userMessage) {
-              hookMessage = userMessage
-              logger.info(hookCtx, "[summarization] preCompact hook message", {
-                summarization: { userMessage: hookMessage },
+              lifecycleHookMessage = userMessage
+              logger.info(hookContext, "[summarization] preCompact hook message", {
+                summarization: { userMessage: lifecycleHookMessage },
               })
             }
           }
@@ -717,15 +717,15 @@ export class SummarizationOrchestrator {
     }
 
     try {
-      await interactionListener.sendUpdate(
+      await updateListener.sendUpdate(
         ctx,
         RedactedUpdates.summaryStarted(PrivacyMode.UNSPECIFIED),
       )
-      const beforeSummarize = performance.now()
-      const messagesSummarized = stateHandler.messagesUndergoingSummarization!
-      const backgroundInfo = stateHandler.backgroundSummarizationPromiseInfo!
-      const backgroundSummarizationModelId = backgroundInfo.modelId
-      const result = await backgroundInfo.promise
+      const persistStartedAt = performance.now()
+      const inFlightSnapshot = agentState.messagesUndergoingSummarization!
+      const inFlightInfo = agentState.backgroundSummarizationPromiseInfo!
+      const inFlightModelLabel = inFlightInfo.modelId
+      const summarizationOutcome = await inFlightInfo.promise
       const {
         messagesActuallySummarized,
         newSummaryMessage,
@@ -734,136 +734,136 @@ export class SummarizationOrchestrator {
         summary,
         fullReplacementMessages,
         onPersisted,
-      } = result
-      const summarizationDuration = performance.now() - beforeSummarize
-      const hadAbortError = result.errorKind?.toLowerCase()?.includes("abort") === true
+      } = summarizationOutcome
+      const persistWaitMs = performance.now() - persistStartedAt
+      const abortedFailure = summarizationOutcome.errorKind?.toLowerCase()?.includes("abort") === true
       // A summary that failed while nobody was waiting is dropped rather than adopted: the conversation it
       // describes is still there, and a failed summary is not an improvement on it.
       if (
         this.backgroundSummarizationProps?.discardOnError !== false &&
-        result.hadError &&
+        summarizationOutcome.hadError &&
         (
-          options.backgroundSummarizationMode !== BackgroundSummarizationMode.WaitForCompletion &&
-            options.backgroundSummarizationMode !== BackgroundSummarizationMode.WaitForCompletionIfStarted ||
-          hadAbortError
+          settings.backgroundSummarizationMode !== BackgroundSummarizationMode.WaitForCompletion &&
+            settings.backgroundSummarizationMode !== BackgroundSummarizationMode.WaitForCompletionIfStarted ||
+          abortedFailure
         )
       ) {
-        stateHandler.clearBackgroundSummarizationState()
+        agentState.clearBackgroundSummarizationState()
         backgroundSummarizationDiscarded.increment(ctx, 1, {
-          reason: hadAbortError ? "abort_error" : "summarization_error",
-          model: backgroundSummarizationModelId,
+          reason: abortedFailure ? "abort_error" : "summarization_error",
+          model: inFlightModelLabel,
         })
         logger.warn(ctx, "Discarding background summarization due to generation error", {
-          summarization: { ...summarizationLogFields, errorKind: result.errorKind ?? "unknown" },
+          summarization: { ...logFields, errorKind: summarizationOutcome.errorKind ?? "unknown" },
         })
         return undefined
       }
-      const redactedCoreMessageSerde = createRedactedCoreMessageSerde(stateHandler.getPrivacyMode())
+      const messageSerde = createRedactedCoreMessageSerde(agentState.getPrivacyMode())
       // The tail is what was in the window but not summarized; a negative one means the summary covered more
       // than the window did, which is clamped rather than trusted.
-      const rawWindowTail = messagesForSummarization.length - messagesActuallySummarized.length
-      if (rawWindowTail < 0) {
+      const windowTailDelta = summarizationInput.length - messagesActuallySummarized.length
+      if (windowTailDelta < 0) {
         logger.warn(ctx, "Clamping negative windowTail during compaction", {
           summarization: {
-            messagesForSummarizationCount: messagesForSummarization.length,
+            messagesForSummarizationCount: summarizationInput.length,
             messagesActuallySummarizedCount: messagesActuallySummarized.length,
-            rawWindowTail,
+            windowTailDelta,
           },
         })
       }
       // Every summarized message is written to the blob store so the archive can point at it, and a carrier
       // message is skipped since it is itself a summary.
-      const summarizedMessages = await Promise.all(
+      const archiveBlobIds = await Promise.all(
         messagesActuallySummarized
-          .filter(message => !(message.providerOptions as {
+          .filter(transcriptMessage => !(transcriptMessage.providerOptions as {
             readonly cursor?: { readonly isSummary?: unknown } | undefined
           } | undefined)?.cursor?.isSummary)
-          .map(async message => {
-            const serializedMessage = redactedCoreMessageSerde.serialize(message)
-            const blobId = await getBlobId(serializedMessage)
-            await stateHandler.getBlobStore().setBlob(ctx, blobId, serializedMessage)
+          .map(async transcriptMessage => {
+            const serializedBytes = messageSerde.serialize(transcriptMessage)
+            const blobId = await getBlobId(serializedBytes)
+            await agentState.getBlobStore().setBlob(ctx, blobId, serializedBytes)
             return blobId
           }),
       )
-      const serializedSummaryMessage = redactedCoreMessageSerde.serialize(newSummaryMessage)
-      const summaryMessageBlobId = await getBlobId(serializedSummaryMessage)
-      await stateHandler.getBlobStore().setBlob(ctx, summaryMessageBlobId, serializedSummaryMessage)
-      stateHandler.pushSummaryArchive(createRedactedConversationSummaryArchive(
-        stateHandler.getPrivacyMode(),
+      const carrierBytes = messageSerde.serialize(newSummaryMessage)
+      const carrierBlobId = await getBlobId(carrierBytes)
+      await agentState.getBlobStore().setBlob(ctx, carrierBlobId, carrierBytes)
+      agentState.pushSummaryArchive(createRedactedConversationSummaryArchive(
+        agentState.getPrivacyMode(),
         {
-          summarizedMessages,
+          summarizedMessages: archiveBlobIds,
           summary: summary.summary,
-          summaryMessage: summaryMessageBlobId,
-          windowTail: Math.max(0, rawWindowTail),
+          summaryMessage: carrierBlobId,
+          windowTail: Math.max(0, windowTailDelta),
         },
       ))
       const generationDurationMsBeforeClear =
-        stateHandler.backgroundSummarizationGenerationDurationMs
-      stateHandler.clearBackgroundSummarizationState()
-      stateHandler.tokenDetailsStaleAfterSummarization = true
+        agentState.backgroundSummarizationGenerationDurationMs
+      agentState.clearBackgroundSummarizationState()
+      agentState.tokenDetailsStaleAfterSummarization = true
       // A named agent's self document is refreshed in the replacement messages, since it describes the agent
       // and the summary is now what the agent knows about itself.
-      const replacementMessages = config.getNamedAgentSelfDocument !== undefined
+      const replacementList = config.getNamedAgentSelfDocument !== undefined
         ? await refreshNamedAgentSelfDocumentInMessages(
             ctx,
             fullReplacementMessages,
             config.getNamedAgentSelfDocument,
-            stateHandler.getPrivacyMode(),
+            agentState.getPrivacyMode(),
           )
         : fullReplacementMessages
-      rootPromptExecutor.clearMessages()
-      rootPromptExecutor.appendMessages(replacementMessages)
+      conversationExecutor.clearMessages()
+      conversationExecutor.appendMessages(replacementList)
       // What arrived while the summary was being written is kept, which is the point of summarizing in the
       // background rather than at the end.
-      const messagesNotSummarized = allMessages.slice(messagesSummarized.length)
-      rootPromptExecutor.appendMessages(messagesNotSummarized)
-      stateHandler.retainCompletedAskQuestionReceipts(
-        collectLiveAskQuestionOriginalIds(rootPromptExecutor.getMessages()),
+      const postSummaryMessages = conversationMessages.slice(inFlightSnapshot.length)
+      conversationExecutor.appendMessages(postSummaryMessages)
+      agentState.retainCompletedAskQuestionReceipts(
+        collectLiveAskQuestionOriginalIds(conversationExecutor.getMessages()),
       )
-      const persistedEstimatedTokens = estimateTokenCount(replacementMessages) +
-        estimateTokenCount(messagesNotSummarized)
-      const model = summarizerModelId
-      const additionalMessagesStats = countMessageKinds(messagesNotSummarized)
+      const persistedTokenEstimate = estimateTokenCount(replacementList) +
+        estimateTokenCount(postSummaryMessages)
+      const model = modelLabel
+      const postSummaryKinds = countMessageKinds(postSummaryMessages)
       logger.info(ctx, "Persisted completed summarization", {
         summarization: {
-          ...summarizationLogFields,
-          messagesSummarizedCount: messagesSummarized.length,
-          messagesNotSummarizedCount: messagesNotSummarized.length,
-          additionalMessagesUserCount: additionalMessagesStats.userMessages,
-          additionalMessagesSystemCount: additionalMessagesStats.systemMessages,
-          additionalMessagesAssistantCount: additionalMessagesStats.assistantMessages,
-          additionalMessagesToolMessageCount: additionalMessagesStats.toolMessages,
-          additionalMessagesToolCallCount: additionalMessagesStats.toolCalls,
-          persistedEstimatedTokens,
-          hadError: result.hadError === true,
-          errorKind: result.hadError === true ? result.errorKind ?? "unknown" : "none",
+          ...logFields,
+          messagesSummarizedCount: inFlightSnapshot.length,
+          messagesNotSummarizedCount: postSummaryMessages.length,
+          additionalMessagesUserCount: postSummaryKinds.userMessages,
+          additionalMessagesSystemCount: postSummaryKinds.systemMessages,
+          additionalMessagesAssistantCount: postSummaryKinds.assistantMessages,
+          additionalMessagesToolMessageCount: postSummaryKinds.toolMessages,
+          additionalMessagesToolCallCount: postSummaryKinds.toolCalls,
+          persistedTokenEstimate,
+          hadError: summarizationOutcome.hadError === true,
+          errorKind: summarizationOutcome.hadError === true ? summarizationOutcome.errorKind ?? "unknown" : "none",
           model,
         },
       })
       backgroundSummarizationPersisted.increment(ctx, 1, {
-        hadError: result.hadError === true ? "true" : "false",
-        errorKind: result.hadError === true ? result.errorKind ?? "unknown" : "none",
-        model: backgroundSummarizationModelId,
+        hadError: summarizationOutcome.hadError === true ? "true" : "false",
+        errorKind: summarizationOutcome.hadError === true ? summarizationOutcome.errorKind ?? "unknown" : "none",
+        model: inFlightModelLabel,
       })
-      backgroundSummarizationPersistedEstimatedTokens.histogram(ctx, persistedEstimatedTokens, {
-        model: backgroundSummarizationModelId,
+      backgroundSummarizationPersistedEstimatedTokens.histogram(ctx, persistedTokenEstimate, {
+        model: inFlightModelLabel,
       })
-      const additionalMetricRows = [
-        [additionalMessagesStats.userMessages, "user_message"],
-        [additionalMessagesStats.systemMessages, "system_message"],
-        [additionalMessagesStats.assistantMessages, "assistant_message"],
-        [additionalMessagesStats.toolMessages, "tool_message"],
-        [additionalMessagesStats.toolCalls, "tool_call"],
+      const metricRows = [
+        [postSummaryKinds.userMessages, "user_message"],
+        [postSummaryKinds.systemMessages, "system_message"],
+        [postSummaryKinds.assistantMessages, "assistant_message"],
+        [postSummaryKinds.toolMessages, "tool_message"],
+        [postSummaryKinds.toolCalls, "tool_call"],
       ] as const
-      for (const [value, kind] of additionalMetricRows) {
+      for (const [value, kind] of metricRows) {
         backgroundSummarizationPersistedAdditionalMessages.histogram(ctx, value, {
-          model: backgroundSummarizationModelId,
+          model: inFlightModelLabel,
           kind,
         })
       }
-      stateHandler.clearSelfSummaryInputLimitFailureTokenCount()
+      agentState.clearSelfSummaryInputLimitFailureTokenCount()
       onPersisted?.()
-      summarizationTime.histogram(ctx, summarizationDuration, {
+      summarizationTime.histogram(ctx, persistWaitMs, {
         strategy,
         triggerReason,
         model,
@@ -874,76 +874,76 @@ export class SummarizationOrchestrator {
       if (generationDurationMsBeforeClear !== null) {
         backgroundSummarizationTimeSavedMs.histogram(
           ctx,
-          Math.max(0, generationDurationMsBeforeClear - summarizationDuration),
-          { model: backgroundSummarizationModelId },
+          Math.max(0, generationDurationMsBeforeClear - persistWaitMs),
+          { model: inFlightModelLabel },
         )
       }
       summarizationCounter.increment(ctx, 1, {
         strategy,
         requestedStrategy: strategy,
         triggerReason,
-        isToolCall: options.isToolCall === true ? "true" : "false",
+        isToolCall: settings.isToolCall === true ? "true" : "false",
         model,
         summarizerType,
         isClientAtLeast1Point731,
         ...getClientVersionMetricTagsFromContext(ctx),
       })
-      const summarizedStats = countMessageKinds(messagesActuallySummarized)
+      const summarizedKinds = countMessageKinds(messagesActuallySummarized)
       const eventTracker = getAgentEventTracker(ctx)
       eventTracker.trackSummarizationTriggered(ctx, {
-        userMessageCountBeforeSummarization: summarizedStats.userMessages,
-        toolCallCountBeforeSummarization: summarizedStats.toolCalls,
+        userMessageCountBeforeSummarization: summarizedKinds.userMessages,
+        toolCallCountBeforeSummarization: summarizedKinds.toolCalls,
         summaryLengthInChars: summary.summary.length,
-        summarizationModelId: backgroundSummarizationModelId,
+        summarizationModelId: inFlightModelLabel,
         mainModelId: config.modelId,
         summarizerType,
-        summarizationStartInvocationId: backgroundInfo.startInvocationId,
-        summarizationPersistInvocationId: options.currentInvocationId,
-        triggerTokensUsed: backgroundInfo.startUsedTokens,
-        triggerTokensMax: backgroundInfo.startMaxTokens,
-        additionalMessagesCount: messagesNotSummarized.length,
-        additionalUserMessageCount: additionalMessagesStats.userMessages,
-        additionalSystemMessageCount: additionalMessagesStats.systemMessages,
-        additionalAssistantMessageCount: additionalMessagesStats.assistantMessages,
-        additionalToolMessageCount: additionalMessagesStats.toolMessages,
-        additionalToolCallCount: additionalMessagesStats.toolCalls,
+        summarizationStartInvocationId: inFlightInfo.startInvocationId,
+        summarizationPersistInvocationId: settings.currentInvocationId,
+        triggerTokensUsed: inFlightInfo.startUsedTokens,
+        triggerTokensMax: inFlightInfo.startMaxTokens,
+        additionalMessagesCount: postSummaryMessages.length,
+        additionalUserMessageCount: postSummaryKinds.userMessages,
+        additionalSystemMessageCount: postSummaryKinds.systemMessages,
+        additionalAssistantMessageCount: postSummaryKinds.assistantMessages,
+        additionalToolMessageCount: postSummaryKinds.toolMessages,
+        additionalToolCallCount: postSummaryKinds.toolCalls,
       })
       // What the conversation is now, as opposed to what was summarized: the carrier message, any other
       // carrier, the preserved tail, and everything that arrived afterwards.
-      const gradingTailMessages = [...preservedOriginalTailMessages, ...messagesNotSummarized]
-      const preservedTailMessageSet = new Set(preservedOriginalTailMessages)
-      const preservedTailIndices = new Set(
-        fullReplacementMessages.flatMap((message, index) =>
-          preservedTailMessageSet.has(message) ? [index] : []
+      const gradingTail = [...preservedOriginalTailMessages, ...postSummaryMessages]
+      const preservedTailSet = new Set(preservedOriginalTailMessages)
+      const preservedTailPositions = new Set(
+        fullReplacementMessages.flatMap((transcriptMessage, index) =>
+          preservedTailSet.has(transcriptMessage) ? [index] : []
         ),
       )
-      const effectiveContextMessages = [
-        ...replacementMessages.filter((message, index) =>
-          message === newSummaryMessage ||
-          (message.providerOptions as {
+      const gradingContext = [
+        ...replacementList.filter((transcriptMessage, index) =>
+          transcriptMessage === newSummaryMessage ||
+          (transcriptMessage.providerOptions as {
             readonly cursor?: { readonly isSummary?: unknown } | undefined
           } | undefined)?.cursor?.isSummary === true ||
-          preservedTailIndices.has(index)
+          preservedTailPositions.has(index)
         ),
-        ...messagesNotSummarized,
+        ...postSummaryMessages,
       ]
       eventTracker.trackSummarizationPersistedForQualityGrading?.(ctx, {
         preSummarizationMessages: messagesActuallySummarized,
         modelSummaryText: summary.summary.safeTransform(() => rawSummary.text),
         persistedSummaryMessage: newSummaryMessage,
-        effectiveContextMessages,
-        preservedTailMessages: gradingTailMessages,
+        gradingContext,
+        preservedTailMessages: gradingTail,
         summarizerType,
-        summarizationHadError: result.hadError === true,
-        summarizationErrorKind: result.hadError === true ? result.errorKind ?? "unknown" : undefined,
-        summarizationModelId: backgroundSummarizationModelId,
+        summarizationHadError: summarizationOutcome.hadError === true,
+        summarizationErrorKind: summarizationOutcome.hadError === true ? summarizationOutcome.errorKind ?? "unknown" : undefined,
+        summarizationModelId: inFlightModelLabel,
         mainModelId: config.modelId,
-        summarizationStartInvocationId: backgroundInfo.startInvocationId,
-        summarizationPersistInvocationId: options.currentInvocationId,
+        summarizationStartInvocationId: inFlightInfo.startInvocationId,
+        summarizationPersistInvocationId: settings.currentInvocationId,
       })
       if (
         config.enableTranscriptInSummary === true &&
-        requestContext.env?.agentTranscriptsFolder !== undefined &&
+        requestSettings.env?.agentTranscriptsFolder !== undefined &&
         config.agentType !== AgentType.BACKGROUND
       ) {
         logger.info(ctx, "Summary includes transcript pointer", {
@@ -954,10 +954,10 @@ export class SummarizationOrchestrator {
     } finally {
       // The turn is told the summary finished whether or not it did, since a listener waiting for an update
       // must not be left waiting.
-      await interactionListener.sendUpdate(
+      await updateListener.sendUpdate(
         ctx,
         toRedactedInteractionUpdate(
-          Updates.summaryCompleted(hookMessage as SummaryCompletedHookMessage),
+          Updates.summaryCompleted(lifecycleHookMessage as SummaryCompletedHookMessage),
           PrivacyMode.UNSPECIFIED,
         ),
       )
