@@ -1,7 +1,7 @@
 /** A conversation's run, from the moment it starts to the moment it is put away.
 
- * One run per agent at a time, through the platform's own scheduler where it is enabled and through a chain of promises
- * where it is not; the turn count, the activity the user sees, whether the agent is composing or retrying, and what is
+ * One run per subject at a time, through the platform's own runScheduler where it is enabled and through a chain of promises
+ * where it is not; the turn count, the activity the user sees, whether the subject is composing or retrying, and what is
  * reported about the turn are all kept here. A run that never finishes is bounded by the watchdog the environment sets. */
 import {
   areAgentActivitiesEqual,
@@ -113,24 +113,24 @@ export class RunLifecycle {
   }
 
   async recordRequestId(
-    requestId: string,
-    session: any,
+    requestKey: string,
+    conversation: any,
     source?: string,
   ): Promise<void> {
-    if (session == null) return;
+    if (conversation == null) return;
     try {
-      session.db.recordRequestId(
-        requestId,
+      conversation.db.recordRequestId(
+        requestKey,
         Date.now(),
-        this.tm.turnRuntime.activeRequestPrompts.get(session.id),
-        source ?? this.tm.turnRuntime.activeRequestSources.get(session.id),
+        this.tm.turnRuntime.activeRequestPrompts.get(conversation.id),
+        source ?? this.tm.turnRuntime.activeRequestSources.get(conversation.id),
       );
-      await this.tm.roster.emitAgentUpdate(session.id);
+      await this.tm.roster.emitAgentUpdate(conversation.id);
     } catch {}
   }
 
-  trackTurnRequestId(sessionId: string, requestId: string): void {
-    const trimmed = requestId.trim();
+  trackTurnRequestId(sessionId: string, requestKey: string): void {
+    const trimmed = requestKey.trim();
     if (trimmed.length === 0) return;
     const ids = this.turnRequestIdsBySession.get(sessionId);
     if (ids == null)
@@ -138,26 +138,26 @@ export class RunLifecycle {
     else ids.add(trimmed);
   }
 
-  reportTurnUsage(session: any, usage: unknown): void {
-    const requestIds = this.turnRequestIdsBySession.get(session.id);
-    this.turnRequestIdsBySession.delete(session.id);
-    const turnEndedSeq = (this.turnEndedSeqBySession.get(session.id) ?? 0) + 1;
-    this.turnEndedSeqBySession.set(session.id, turnEndedSeq);
+  reportTurnUsage(conversation: any, tokenUsage: unknown): void {
+    const turnRequestIds = this.turnRequestIdsBySession.get(conversation.id);
+    this.turnRequestIdsBySession.delete(conversation.id);
+    const endedSequence = (this.turnEndedSeqBySession.get(conversation.id) ?? 0) + 1;
+    this.turnEndedSeqBySession.set(conversation.id, endedSequence);
     this.tm.telemetry.reportTurnUsage({
-      conversationId: session.id,
+      conversationId: conversation.id,
       source:
-        this.tm.turnRuntime.activeRequestSources.get(session.id) ?? "turn",
-      usage,
-      requestId: requestIds?.values().next().value,
-      requestIdCount: requestIds?.size ?? 0,
-      turnEndedSeq,
+        this.tm.turnRuntime.activeRequestSources.get(conversation.id) ?? "turn",
+      usage: tokenUsage,
+      requestId: turnRequestIds?.values().next().value,
+      requestIdCount: turnRequestIds?.size ?? 0,
+      turnEndedSeq: endedSequence,
     });
   }
 
   enqueueExclusiveRun(
     agentId: string,
     task: () => Promise<void>,
-    options: {
+    settings: {
       lane: RunLane;
       source: string;
       acceptedAtMs?: number;
@@ -165,7 +165,7 @@ export class RunLifecycle {
     },
   ): Promise<void> {
     if (this.runScheduler != null)
-      return this.runScheduler.enqueue(agentId, task, options);
+      return this.runScheduler.enqueue(agentId, task, settings);
     const previous = this.runChains.get(agentId) ?? Promise.resolve();
     const result = previous.then(() => {
       this.tm.sendPipeline.sendAttachmentBatchIds.delete(agentId);
@@ -186,181 +186,181 @@ export class RunLifecycle {
   getRunQueueDiagnostics(): readonly unknown[] {
     if (this.runScheduler == null) return [];
     const now = Date.now();
-    const byAgent = new Map<string, Record<string, unknown>>();
+    const perAgent = new Map<string, Record<string, unknown>>();
     for (const queue of this.runScheduler.getDiagnostics())
-      byAgent.set(queue.agentId as string, { ...queue, ackOutstanding: false });
-    for (const obligation of this.tm.ackObligationStore?.list() ?? []) {
-      const existing = byAgent.get(obligation.agentId) ?? {
-        agentId: obligation.agentId,
+      perAgent.set(queue.agentId as string, { ...queue, ackOutstanding: false });
+    for (const ackObligation of this.tm.ackObligationStore?.list() ?? []) {
+      const existingRow = perAgent.get(ackObligation.agentId) ?? {
+        agentId: ackObligation.agentId,
         depthUser: 0,
         depthAgent: 0,
         depthBackground: 0,
         depthTotal: 0,
         ackOutstanding: false,
       };
-      byAgent.set(obligation.agentId, {
-        ...existing,
+      perAgent.set(ackObligation.agentId, {
+        ...existingRow,
         ackOutstanding: true,
-        ackAgeMs: now - obligation.createdAtMs,
-        ackCoalescedCount: obligation.coalescedCount,
+        ackAgeMs: now - ackObligation.createdAtMs,
+        ackCoalescedCount: ackObligation.coalescedCount,
       });
     }
-    return [...byAgent.values()];
+    return [...perAgent.values()];
   }
 
   beginSessionRun(
-    session: any,
-    options?: { isGroupMemberTurn?: boolean },
+    conversation: any,
+    settings?: { isGroupMemberTurn?: boolean },
   ): void {
-    const inFlight = this.inFlightRunCounts.get(session) ?? 0;
-    if (inFlight === 0) this.runWindowStartedAt.set(session, Date.now());
-    if (options?.isGroupMemberTurn !== true)
+    const activeCount = this.inFlightRunCounts.get(conversation) ?? 0;
+    if (activeCount === 0) this.runWindowStartedAt.set(conversation, Date.now());
+    if (settings?.isGroupMemberTurn !== true)
       this.turnWorthyBeginCounts.set(
-        session,
-        (this.turnWorthyBeginCounts.get(session) ?? 0) + 1,
+        conversation,
+        (this.turnWorthyBeginCounts.get(conversation) ?? 0) + 1,
       );
-    this.inFlightRunCounts.set(session, inFlight + 1);
-    this.tm.sessions.liveSessions.set(session.id, session);
-    this.activeRunSession = session;
-    void this.tm.roster.emitAgentUpdate(session.id);
+    this.inFlightRunCounts.set(conversation, activeCount + 1);
+    this.tm.sessions.liveSessions.set(conversation.id, conversation);
+    this.activeRunSession = conversation;
+    void this.tm.roster.emitAgentUpdate(conversation.id);
   }
 
-  endSessionRun(session: any): void {
-    this.setSessionComposing(session.id, false);
-    this.setSessionRetrying(session.id, false);
-    this.setSessionActivity(session.id, undefined);
-    this.sessionActivityHolds.delete(session.id);
-    const remaining = (this.inFlightRunCounts.get(session) ?? 1) - 1;
-    if (remaining > 0) {
-      this.inFlightRunCounts.set(session, remaining);
+  endSessionRun(conversation: any): void {
+    this.setSessionComposing(conversation.id, false);
+    this.setSessionRetrying(conversation.id, false);
+    this.setSessionActivity(conversation.id, undefined);
+    this.sessionActivityHolds.delete(conversation.id);
+    const restCount = (this.inFlightRunCounts.get(conversation) ?? 1) - 1;
+    if (restCount > 0) {
+      this.inFlightRunCounts.set(conversation, restCount);
       return;
     }
-    this.inFlightRunCounts.delete(session);
-    this.recordTurnCompleted(session);
-    this.tm.turnRuntime.activeRequestPrompts.delete(session.id);
-    this.tm.turnRuntime.activeRequestSources.delete(session.id);
-    this.turnRequestIdsBySession.delete(session.id);
-    this.turnEndedSeqBySession.delete(session.id);
-    this.tm.sendPipeline.sendAttachmentBatchIds.delete(session.id);
-    if (this.activeRunSession === session) this.activeRunSession = null;
-    this.tm.ackObligations.scheduleAckRedriveAfterIdle(session.id);
-    void this.retireSession(session);
-    void this.tm.roster.emitAgentUpdate(session.id);
+    this.inFlightRunCounts.delete(conversation);
+    this.recordTurnCompleted(conversation);
+    this.tm.turnRuntime.activeRequestPrompts.delete(conversation.id);
+    this.tm.turnRuntime.activeRequestSources.delete(conversation.id);
+    this.turnRequestIdsBySession.delete(conversation.id);
+    this.turnEndedSeqBySession.delete(conversation.id);
+    this.tm.sendPipeline.sendAttachmentBatchIds.delete(conversation.id);
+    if (this.activeRunSession === conversation) this.activeRunSession = null;
+    this.tm.ackObligations.scheduleAckRedriveAfterIdle(conversation.id);
+    void this.retireSession(conversation);
+    void this.tm.roster.emitAgentUpdate(conversation.id);
   }
 
-  recordTurnCompleted(session: any): void {
-    const startedAt = this.runWindowStartedAt.get(session);
-    this.runWindowStartedAt.delete(session);
-    const turnWorthyBegins = this.turnWorthyBeginCounts.get(session) ?? 0;
-    this.turnWorthyBeginCounts.delete(session);
-    if (turnWorthyBegins === 0) return;
+  recordTurnCompleted(conversation: any): void {
+    const windowStart = this.runWindowStartedAt.get(conversation);
+    this.runWindowStartedAt.delete(conversation);
+    const worthyBegins = this.turnWorthyBeginCounts.get(conversation) ?? 0;
+    this.turnWorthyBeginCounts.delete(conversation);
+    if (worthyBegins === 0) return;
     this.tm.productAnalytics.trackEvent("slate.turn.completed", {
-      agent_id: session.id,
+      agent_id: conversation.id,
       source:
-        this.tm.turnRuntime.activeRequestSources.get(session.id) ?? "turn",
-      is_group: this.tm.groupChat.isGroupSession(session),
-      duration_ms: startedAt == null ? 0 : Date.now() - startedAt,
+        this.tm.turnRuntime.activeRequestSources.get(conversation.id) ?? "turn",
+      is_group: this.tm.groupChat.isGroupSession(conversation),
+      duration_ms: windowStart == null ? 0 : Date.now() - windowStart,
     });
   }
 
-  async retireSession(session: any): Promise<void> {
-    if (session == null) return;
-    const pending = this.tm.sessions.pendingSessionOpens.get(session.id);
-    const ownsPendingOpen =
-      pending != null &&
-      (await this.tm.sessions.settledOpen(pending)) === session;
+  async retireSession(conversation: any): Promise<void> {
+    if (conversation == null) return;
+    const pendingOpen = this.tm.sessions.pendingSessionOpens.get(conversation.id);
+    const ownsPending =
+      pendingOpen != null &&
+      (await this.tm.sessions.settledOpen(pendingOpen)) === conversation;
     if (
-      session === this.tm.sessions.activeSession ||
-      this.inFlightRunCounts.has(session)
+      conversation === this.tm.sessions.activeSession ||
+      this.inFlightRunCounts.has(conversation)
     )
       return;
-    if (this.tm.sessions.liveSessions.get(session.id) === session) {
+    if (this.tm.sessions.liveSessions.get(conversation.id) === conversation) {
       this.tm.runnerRegistry.runners
-        .get(session.id)
+        .get(conversation.id)
         ?.expireAutoReviewApprovals();
-      this.tm.sessions.liveSessions.delete(session.id);
-      this.tm.runnerRegistry.runners.delete(session.id);
+      this.tm.sessions.liveSessions.delete(conversation.id);
+      this.tm.runnerRegistry.runners.delete(conversation.id);
     }
     if (
-      ownsPendingOpen &&
-      this.tm.sessions.pendingSessionOpens.get(session.id) === pending
+      ownsPending &&
+      this.tm.sessions.pendingSessionOpens.get(conversation.id) === pendingOpen
     )
-      this.tm.sessions.pendingSessionOpens.delete(session.id);
-    await session.agentStore.dispose();
-    session.db.close();
+      this.tm.sessions.pendingSessionOpens.delete(conversation.id);
+    await conversation.agentStore.dispose();
+    conversation.db.close();
   }
 
   runningAgentIds(): Set<string> {
     return new Set(
-      [...this.inFlightRunCounts.keys()].map((session) => session.id),
+      [...this.inFlightRunCounts.keys()].map((conversation) => conversation.id),
     );
   }
   liveRunningAgentIds(): Set<string> {
-    const running = this.runningAgentIds();
+    const runningSet = this.runningAgentIds();
     for (const agentId of this.tm.roster.liveSubagentParentIds())
-      running.add(agentId);
-    return running;
+      runningSet.add(agentId);
+    return runningSet;
   }
 
   withRunStates<T extends Record<string, any>>(agents: readonly T[]): T[] {
-    const running = this.runningAgentIds();
-    const subagentParents = this.tm.roster.liveSubagentParentIds();
-    return agents.map((agent) => {
-      const isRunningTurn = running.has(agent.id);
-      const isRunning = isRunningTurn || subagentParents.has(agent.id);
-      const isComposingMessage =
-        isRunning && this.composingMessageSessionIds.has(agent.id);
-      const isRetrying = isRunning && this.retryingSessionIds.has(agent.id);
+    const runningSet = this.runningAgentIds();
+    const parentSet = this.tm.roster.liveSubagentParentIds();
+    return agents.map((subject) => {
+      const turnInFlight = runningSet.has(subject.id);
+      const isRunning = turnInFlight || parentSet.has(subject.id);
+      const composing =
+        isRunning && this.composingMessageSessionIds.has(subject.id);
+      const retrying = isRunning && this.retryingSessionIds.has(subject.id);
       const currentActivity = isRunning
-        ? this.sessionActivities.get(agent.id)
+        ? this.sessionActivities.get(subject.id)
         : undefined;
       const activeRemoteMemberId = isRunning
-        ? this.tm.groupChat.remoteTurnMemberIdsByRoom.get(agent.id)
+        ? this.tm.groupChat.remoteTurnMemberIdsByRoom.get(subject.id)
         : undefined;
       if (
-        agent.isRunning === isRunning &&
-        (agent.isRunningTurn ?? false) === isRunningTurn &&
-        agent.isComposingMessage === isComposingMessage &&
-        (agent.isRetrying ?? false) === isRetrying &&
-        areAgentActivitiesEqual(agent.currentActivity, currentActivity) &&
-        agent.activeRemoteMemberId === activeRemoteMemberId
+        subject.isRunning === isRunning &&
+        (subject.isRunningTurn ?? false) === turnInFlight &&
+        subject.isComposingMessage === composing &&
+        (subject.isRetrying ?? false) === retrying &&
+        areAgentActivitiesEqual(subject.currentActivity, currentActivity) &&
+        subject.activeRemoteMemberId === activeRemoteMemberId
       )
-        return agent;
+        return subject;
       return {
-        ...agent,
+        ...subject,
         isRunning,
-        isRunningTurn,
-        isComposingMessage,
-        isRetrying,
+        isRunningTurn: turnInFlight,
+        isComposingMessage: composing,
+        isRetrying: retrying,
         currentActivity,
         activeRemoteMemberId,
       };
     });
   }
 
-  setSessionComposing(sessionId: string, isComposing: boolean): void {
-    const had = this.composingMessageSessionIds.has(sessionId);
-    if (had === isComposing) return;
-    if (isComposing) this.composingMessageSessionIds.add(sessionId);
+  setSessionComposing(sessionId: string, wantsComposing: boolean): void {
+    const wasComposing = this.composingMessageSessionIds.has(sessionId);
+    if (wasComposing === wantsComposing) return;
+    if (wantsComposing) this.composingMessageSessionIds.add(sessionId);
     else this.composingMessageSessionIds.delete(sessionId);
     void this.tm.roster.emitAgentUpdate(sessionId);
   }
-  setSessionRetrying(sessionId: string, isRetrying: boolean): void {
-    const had = this.retryingSessionIds.has(sessionId);
-    if (had === isRetrying) return;
-    if (isRetrying) this.retryingSessionIds.add(sessionId);
+  setSessionRetrying(sessionId: string, retrying: boolean): void {
+    const wasComposing = this.retryingSessionIds.has(sessionId);
+    if (wasComposing === retrying) return;
+    if (retrying) this.retryingSessionIds.add(sessionId);
     else this.retryingSessionIds.delete(sessionId);
     void this.tm.roster.emitAgentUpdate(sessionId);
   }
-  trackRetryingFromUpdate(update: ActivityUpdate, session: any): void {
-    if (update.type === "retrying") {
-      const runEpoch = this.tm.turnRuntime.activeTurnEpochs.get(session.id);
+  trackRetryingFromUpdate(nextUpdate: ActivityUpdate, conversation: any): void {
+    if (nextUpdate.type === "retrying") {
+      const runEpoch = this.tm.turnRuntime.activeTurnEpochs.get(conversation.id);
       if (
         runEpoch !== undefined &&
-        runEpoch !== this.tm.sendPipeline.currentTurnEpoch(session)
+        runEpoch !== this.tm.sendPipeline.currentTurnEpoch(conversation)
       )
         return;
-      this.setSessionRetrying(session.id, true);
+      this.setSessionRetrying(conversation.id, true);
     } else if (
       [
         "text-delta",
@@ -368,9 +368,9 @@ export class RunLifecycle {
         "tool-call",
         "send-message",
         "turn-ended",
-      ].includes(update.type)
+      ].includes(nextUpdate.type)
     )
-      this.setSessionRetrying(session.id, false);
+      this.setSessionRetrying(conversation.id, false);
   }
   setSessionActivity(
     sessionId: string,
@@ -384,50 +384,50 @@ export class RunLifecycle {
     else this.sessionActivities.set(sessionId, activity);
     void this.tm.roster.emitAgentUpdate(sessionId);
   }
-  trackActivityFromUpdate(update: ActivityUpdate, sessionId: string): void {
-    const prior =
+  trackActivityFromUpdate(nextUpdate: ActivityUpdate, sessionId: string): void {
+    const previousHold =
       this.sessionActivityHolds.get(sessionId) ??
       INITIAL_NAMED_ACTIVITY_HOLD_STATE;
-    const { transition, state } = resolveNamedActivityHold(
-      update,
-      prior,
+    const { transition: activityChange, state: holdState } = resolveNamedActivityHold(
+      nextUpdate,
+      previousHold,
       Date.now(),
       NAMED_ACTIVITY_MAX_HOLD_MS,
     );
-    if (state === INITIAL_NAMED_ACTIVITY_HOLD_STATE)
+    if (holdState === INITIAL_NAMED_ACTIVITY_HOLD_STATE)
       this.sessionActivityHolds.delete(sessionId);
-    else this.sessionActivityHolds.set(sessionId, state);
-    this.applyActivityTransition(sessionId, transition);
+    else this.sessionActivityHolds.set(sessionId, holdState);
+    this.applyActivityTransition(sessionId, activityChange);
   }
   applyActivityTransition(
     sessionId: string,
-    transition: ActivityTransition,
+    activityChange: ActivityTransition,
   ): void {
-    if (transition.type !== "keep")
+    if (activityChange.type !== "keep")
       this.setSessionActivity(
         sessionId,
-        transition.type === "set" ? transition.activity : undefined,
+        activityChange.type === "set" ? activityChange.activity : undefined,
       );
   }
-  trackComposingFromUpdate(update: ActivityUpdate, sessionId: string): void {
+  trackComposingFromUpdate(nextUpdate: ActivityUpdate, sessionId: string): void {
     if (
-      update.type === "tool-call" &&
-      update.name === SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME
+      nextUpdate.type === "tool-call" &&
+      nextUpdate.name === SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME
     )
-      this.setSessionComposing(sessionId, update.status === "pending");
-    else if (update.type === "send-message" || update.type === "turn-ended")
+      this.setSessionComposing(sessionId, nextUpdate.status === "pending");
+    else if (nextUpdate.type === "send-message" || nextUpdate.type === "turn-ended")
       this.setSessionComposing(sessionId, false);
   }
-  closeSessionWhenIdle(session: any): void {
-    if (!this.inFlightRunCounts.has(session)) session.db.close();
+  closeSessionWhenIdle(conversation: any): void {
+    if (!this.inFlightRunCounts.has(conversation)) conversation.db.close();
   }
-  watchActiveSession(session: any): void {
+  watchActiveSession(conversation: any): void {
     this.tm.memory.setActiveAgent({
-      agentId: session.id,
-      store: session.memory,
+      agentId: conversation.id,
+      store: conversation.memory,
     });
-    this.tm.automationRuntime.watchSessionAutomations(session);
-    this.tm.workflowCommands.watchSessionWorkflows(session);
-    this.tm.roster.watchSessionProfile(session);
+    this.tm.automationRuntime.watchSessionAutomations(conversation);
+    this.tm.workflowCommands.watchSessionWorkflows(conversation);
+    this.tm.roster.watchSessionProfile(conversation);
   }
 }
