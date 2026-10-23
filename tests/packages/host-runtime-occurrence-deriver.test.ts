@@ -177,6 +177,17 @@ describe("deriving what a conversation holds", () => {
     }
   });
 
+  it("refuses a step that changed kind and a tool call whose input changed", async () => {
+    const kindTurns = new Map([["turn-0", agentTurn("user-0", ["step-tool"])], ["turn-changed", agentTurn("user-0", ["step-text"])]]);
+    const kindSteps = new Map<string, unknown>([["step-tool", { case: "tool", name: "Grep", input: {} }], ["step-text", { case: "assistant", text: "one" }]]);
+    const kindDeriver = createTranscriptOccurrenceDeriver(codec(kindTurns, kindSteps, new Map([["user-0", { text: "hello" }]])).value as never);
+    await assert.rejects(() => kindDeriver.derive({}, storeOf(), checkpoint(bytes("turn-0")) as never, checkpoint(bytes("turn-changed")) as never, true), { message: "durable conversation step changed kind" });
+    const inputTurns = new Map([["turn-0", agentTurn("user-0", ["step-tool"])], ["turn-changed", agentTurn("user-0", ["step-tool-changed"])]]);
+    const inputSteps = new Map<string, unknown>([["step-tool", { case: "tool", name: "Grep", input: { pattern: "x" } }], ["step-tool-changed", { case: "tool", name: "Grep", input: { pattern: "y" } }]]);
+    const inputDeriver = createTranscriptOccurrenceDeriver(codec(inputTurns, inputSteps, new Map([["user-0", { text: "hello" }]])).value as never);
+    await assert.rejects(() => inputDeriver.derive({}, storeOf(), checkpoint(bytes("turn-0")) as never, checkpoint(bytes("turn-changed")) as never, true), { message: "durable tool call changed after checkpoint" });
+  });
+
   it("derives the rest of a tool call that was already recorded, without saying it was used again", async () => {
     const turns = new Map([["turn-0", agentTurn("user-0", ["step-0"])], ["turn-0-with-result", agentTurn("user-0", ["step-0-with-result"])]]);
     const steps = new Map<string, unknown>([
@@ -188,4 +199,60 @@ describe("deriving what a conversation holds", () => {
     // Only the answer is new: the call itself was already read.
     assert.deepEqual(derived.occurrences.map((occurrence) => occurrence.id), ["turn:0:step:0:tool-result"]);
   });
+
+  it("reads the user words from their own blob and strips hidden thinking from the agent answer", async () => {
+    const turns = new Map([["turn-0", agentTurn("user-with-blob", ["step-think", "step-empty"])]]);
+    const steps = new Map<string, unknown>([
+      ["step-think", { case: "assistant", text: "<THINK>plan</THINK>the answer" }],
+      ["step-empty", { case: "assistant", text: "   " }],
+    ]);
+    const users = new Map([["user-with-blob", { text: "", textBlobId: bytes("user-blob") }]]);
+    const deriver = createTranscriptOccurrenceDeriver(codec(turns, steps, users).value as never);
+    const derived = await deriver.initial({}, storeOf(), checkpoint(bytes("turn-0")) as never);
+    assert.deepEqual(derived.map((occurrence) => occurrence.id), ["turn:0:user", "turn:0:step:0:text"]);
+    assert.deepEqual(JSON.parse(derived[0]!.line), { role: "user", message: { content: [{ type: "text", text: "user-blob" }] } });
+    assert.deepEqual(JSON.parse(derived[1]!.line), { role: "assistant", message: { content: [{ type: "text", text: "the answer" }] } });
+  });
+
+  it("refuses a shell turn and names a blob that is missing", async () => {
+    const shell = createTranscriptOccurrenceDeriver(codec(new Map([["turn-shell", { case: "shell" }]]), new Map()).value as never);
+    await assert.rejects(() => shell.initial({}, storeOf(), checkpoint(bytes("turn-shell")) as never), { message: "Slate does not support shell conversation turns" });
+    const full = new Map([["turn-0", agentTurn("user-0", ["step-0"])]]);
+    const steps = new Map([["step-0", { case: "assistant", text: "one" }]]);
+    const users = new Map([["user-0", { text: "hello" }]]);
+    const deriver = createTranscriptOccurrenceDeriver(codec(full, steps, users).value as never);
+    await assert.rejects(() => deriver.initial({}, storeOf(["turn-0"]), checkpoint(bytes("turn-0")) as never), { message: "missing conversation-turn blob while deriving transcript checkpoint" });
+    await assert.rejects(() => deriver.initial({}, storeOf(["user-0"]), checkpoint(bytes("turn-0")) as never), { message: "missing user-message blob while deriving transcript checkpoint" });
+    await assert.rejects(() => deriver.initial({}, storeOf(["step-0"]), checkpoint(bytes("turn-0")) as never), { message: "missing conversation-step blob while deriving transcript checkpoint" });
+  });
+
+  it("holds a thinking step back while its turn is still being written", async () => {
+    const turns = new Map([["turn-0", agentTurn("user-0", ["step-think"])]]);
+    const steps = new Map([["step-think", { case: "thinking", text: "still thinking" }]]);
+    const deriver = createTranscriptOccurrenceDeriver(codec(turns, steps, new Map([["user-0", { text: "hello" }]])).value as never);
+    const writing = await deriver.derive({}, storeOf(), checkpoint() as never, checkpoint(bytes("turn-0")) as never, false);
+    assert.deepEqual(writing.occurrences.map((occurrence) => occurrence.id), ["turn:0:user"]);
+    assert.deepEqual(writing.deferredStep, { turnIndex: 0, stepIndex: 0 });
+    const finished = await deriver.derive({}, storeOf(), checkpoint(bytes("turn-0")) as never, checkpoint(bytes("turn-0")) as never, true, writing.deferredStep);
+    assert.deepEqual(finished.occurrences.map((occurrence) => occurrence.id), ["turn:0:step:0:text"]);
+    assert.equal(finished.deferredStep, undefined);
+  });
+
+  it("refuses a codec that cannot decode a step", () => {
+    assert.throws(() => createTranscriptOccurrenceDeriver({ decodeTurn: () => ({ case: undefined }), decodeUserMessage: () => ({ text: "" }) } as never), { name: "TypeError", message: "generated transcript occurrence codec is incomplete" });
+  });
+
+  it("names the role each tool line is written as, and skips a step it does not know", async () => {
+    const turns = new Map([["turn-0", agentTurn("user-0", ["step-use", "step-other"])]]);
+    const steps = new Map<string, unknown>([
+      ["step-use", { case: "tool", name: "Grep", input: { pattern: "x" }, result: { hits: 1 } }],
+      ["step-other", { case: "unknown-kind" }],
+    ]);
+    const deriver = createTranscriptOccurrenceDeriver(codec(turns, steps, new Map([["user-0", { text: "hello" }]])).value as never);
+    const derived = await deriver.initial({}, storeOf(), checkpoint(bytes("turn-0")) as never);
+    assert.deepEqual(derived.map((occurrence) => occurrence.id), ["turn:0:user", "turn:0:step:0:tool-use", "turn:0:step:0:tool-result"]);
+    assert.equal(JSON.parse(derived[1]!.line).role, "assistant");
+    assert.equal(JSON.parse(derived[2]!.line).role, "tool");
+  });
 });
+
