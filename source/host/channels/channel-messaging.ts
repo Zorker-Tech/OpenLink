@@ -52,7 +52,7 @@ export function buildChannelOutboundMessage(
 ): ChannelOutboundMessage | null {
   if (message.type === "text") {
     const text = message as Extract<ChannelOutboundInput, { type: "text" }>;
-    const image = (text.images ?? []).find((entry) => entry.url.length > 0);
+    const image = (text.images ?? []).find((candidate) => candidate.url.length > 0);
     if (image != null) {
       return {
         kind: "attachment",
@@ -84,29 +84,29 @@ export interface ChannelConnectionSummary {
   readonly detail?: string | null;
 }
 
-function describeConnection(connection: ChannelConnectionSummary): string {
-  const manifest = findConnectorManifest(connection.platform);
-  const platformName = manifest?.displayName ?? connection.platform;
+function linkLineOf(connection: ChannelConnectionSummary): string {
+  const connector = findConnectorManifest(connection.platform);
+  const connectorName = connector?.displayName ?? connection.platform;
   const detail =
     connection.status === "error" && connection.detail != null
       ? ` (${connection.detail})`
       : "";
-  return `- ${platformName} "${connection.label}" [${connection.status}]${detail}. Address people on it as ${connection.platform}:<chat id>`;
+  return `- ${connectorName} "${connection.label}" [${connection.status}]${detail}. Address people on it as ${connection.platform}:<chat id>`;
 }
 
 export function renderChannelsSystemPrompt(
   manifests: readonly ConnectorManifest[],
-  connections: readonly ChannelConnectionSummary[],
-  location: string | null | undefined,
+  linkedChannels: readonly ChannelConnectionSummary[],
+  folder: string | null | undefined,
 ): string {
-  if (location == null) return "";
-  if (!hasChannelsToShow(manifests, connections)) return "";
+  if (folder == null) return "";
+  if (!hasChannelsToShow(manifests, linkedChannels)) return "";
   const available = manifests.filter(
-    (manifest) => manifest.availability === "available",
+    (connector) => connector.availability === "available",
   );
-  const lines = [
+  const outputLines = [
     "Channels: outside messaging surfaces you can talk on, beyond this Slate chat.",
-    `Each connected channel lives in a subfolder at ${location} holding a ${CHANNEL_CONFIG_FILENAME}. That file holds only a label, never a credential; the secret is kept in a separate store you cannot read. To disconnect one, prefer the update_state tool (target "channel", action "disconnect", the platform); a background connector notices and closes the live connection within a few seconds.`,
+    `Each connected channel lives in a subfolder at ${folder} holding a ${CHANNEL_CONFIG_FILENAME}. That file holds only a label, never a credential; the secret is kept in a separate store you cannot read. To disconnect one, prefer the update_state tool (target "channel", action "disconnect", the platform); a background connector notices and closes the live connection within a few seconds.`,
     "Never ask the user to paste a token, API key, or password into the chat, and never write one into a file: that would persist it in the transcript or somewhere you can read it back. To collect any credential, send a SendMessage of type secret-request (connector + field + a clear label). The user types it into a masked field and the value goes straight to the secret store; you only learn that it was provided, never the value. You do not need the credential to check status; never cat the connection file expecting one.",
     "Every conversation on a channel has an address shaped like platform:chat (e.g. slack:C12345). An address names one chat; that is all routing needs.",
     `INBOUND: when someone messages you on a connected channel, you are woken with a hidden message that opens with the cue ${CHANNEL_INBOUND_WAKE_CUE} and names the source address and sender. That is a real person reaching out on that platform, not the user typing in this app. Reply to them on that same channel by calling SendMessage with a channel target set to their address; if you instead omit the channel, your message goes to this in-app Slate chat (the user at their desk), not to them.`,
@@ -116,31 +116,31 @@ export function renderChannelsSystemPrompt(
     "A channel only carries text and attachments, never the in-app widget or slate-agent cards (those render only in this app), so degrade them to text when the conversation is on a channel: ask a multiple-choice question as plain text with the options as a numbered list and tell them to reply with their choice; reference a Slate cloud agent as a plain https://slate.invalid/agents/<bcId> link instead of a card; and for an attachment pass either a local file:// path or an https URL: the file is uploaded to the platform so they receive the real image or file, never a path.",
     "Platforms you can connect:",
   ];
-  for (const manifest of available) {
-    lines.push(`- ${manifest.displayName}: ${manifest.blurb}`);
-    for (const guideLine of manifest.connectGuide.split("\n")) {
-      lines.push(`  ${guideLine}`);
+  for (const connector of available) {
+    outputLines.push(`- ${connector.displayName}: ${connector.blurb}`);
+    for (const guideLine of connector.connectGuide.split("\n")) {
+      outputLines.push(`  ${guideLine}`);
     }
   }
   const comingSoon = manifests.filter(
-    (manifest) => manifest.availability === "coming-soon",
+    (connector) => connector.availability === "coming-soon",
   );
   if (comingSoon.length > 0) {
-    lines.push(
+    outputLines.push(
       `Coming soon (not connectable yet): ${comingSoon
-        .map((manifest) => manifest.displayName)
+        .map((connector) => connector.displayName)
         .join(", ")}.`,
     );
   }
-  if (connections.length > 0) {
-    lines.push("Currently connected:");
-    for (const connection of connections) lines.push(describeConnection(connection));
+  if (linkedChannels.length > 0) {
+    outputLines.push("Currently connected:");
+    for (const connection of linkedChannels) outputLines.push(linkLineOf(connection));
   } else {
-    lines.push(
+    outputLines.push(
       "No channels connected yet. Offer to connect one when it would help the user reach people where they already are.",
     );
   }
-  return lines.join("\n");
+  return outputLines.join("\n");
 }
 
 export interface ChannelReaction {
@@ -165,43 +165,43 @@ export function formatChannelReactionSummary(reaction: ChannelReaction): string 
 export function buildChannelInboundWakePrompt(
   envelopes: readonly ChannelInboundEnvelope[],
 ): string {
-  const grouped = new Map<string, ChannelInboundEnvelope[]>();
+  const byAddress = new Map<string, ChannelInboundEnvelope[]>();
   for (const envelope of envelopes) {
     const key = formatChannelAddress(envelope.address);
-    const bucket = grouped.get(key) ?? [];
-    bucket.push(envelope);
-    grouped.set(key, bucket);
+    const messages = byAddress.get(key) ?? [];
+    messages.push(envelope);
+    byAddress.set(key, messages);
   }
-  const blocks: string[] = [];
-  for (const [addressToken, bucket] of grouped) {
-    const [head] = bucket;
-    if (head == null) continue;
-    const platform = findConnectorManifest(head.address.platform);
-    const platformName = platform?.displayName ?? head.address.platform;
-    const transcript = bucket
+  const sections: string[] = [];
+  for (const [addressToken, messages] of byAddress) {
+    const [firstEnvelope] = messages;
+    if (firstEnvelope == null) continue;
+    const platform = findConnectorManifest(firstEnvelope.address.platform);
+    const connectorName = platform?.displayName ?? firstEnvelope.address.platform;
+    const transcript = messages
       .map((envelope) =>
         envelope.reaction != null
           ? `  ${envelope.sender} ${formatChannelReactionSummary(envelope.reaction)}`
           : `  ${envelope.sender}: ${envelope.text}`,
       )
       .join("\n");
-    blocks.push(`On ${platformName}, from ${addressToken}:\n${transcript}`);
+    sections.push(`On ${connectorName}, from ${addressToken}:\n${transcript}`);
   }
-  const hasMessage = envelopes.some((envelope) => envelope.reaction == null);
-  const plural = envelopes.length === 1 ? "" : "s";
-  const opening = hasMessage
-    ? `${CHANNEL_INBOUND_WAKE_CUE} New message${plural} on a channel you are connected to.`
-    : `${CHANNEL_INBOUND_WAKE_CUE} New reaction${plural} on a channel you are connected to.`;
-  const closing = hasMessage
+  const hasPlainMessage = envelopes.some((envelope) => envelope.reaction == null);
+  const countSuffix = envelopes.length === 1 ? "" : "s";
+  const headline = hasPlainMessage
+    ? `${CHANNEL_INBOUND_WAKE_CUE} New message${countSuffix} on a channel you are connected to.`
+    : `${CHANNEL_INBOUND_WAKE_CUE} New reaction${countSuffix} on a channel you are connected to.`;
+  const tail = hasPlainMessage
     ? "Reply to them by calling SendMessage with the channel target set to the address shown above. Open with a quick one-line acknowledgement first, then send progress and the result as separate messages as they happen, never one long message at the end. Keep each message short: this is a messaging app, so reply in brief, chat-style messages (lead with the answer, a sentence or two), not long ones. Keep working the rest of your task too, but do not leave them hanging."
     : "You don't need to reply; act on a reaction only if it's useful (e.g. acknowledge, adjust, or continue). If you do choose to respond, use SendMessage with the channel target shown above.";
   return [
-    opening,
+    headline,
     "This is activity from someone on an outside platform, not the user typing in this app.",
     "",
-    blocks.join("\n\n"),
+    sections.join("\n\n"),
     "",
-    closing,
+    tail,
   ].join("\n");
 }
 
@@ -210,21 +210,21 @@ export function humanizeChannelDeliveryFailure(
   rawMessage: string,
 ): string {
   const address = parseChannelAddress(addressToken);
-  const platformName =
+  const connectorName =
     address != null
       ? (findConnectorManifest(address.platform)?.displayName ?? address.platform)
       : null;
-  const trimmed = rawMessage.trim();
-  if (address == null || /not a valid channel address/i.test(trimmed)) {
+  const stripped = rawMessage.trim();
+  if (address == null || /not a valid channel address/i.test(stripped)) {
     return `"${addressToken}" isn't a valid channel address, so that message wasn't delivered.`;
   }
-  if (trimmed === "No channel delivery mechanism is registered.") {
+  if (stripped === "No channel delivery mechanism is registered.") {
     return "Channel messaging isn't available on this computer, so that message wasn't delivered.";
   }
-  if (/no live .* connection/i.test(trimmed)) {
-    return `${platformName} isn't connected on this computer, so that message wasn't delivered. Connect ${platformName} (add its token) to send there.`;
+  if (/no live .* connection/i.test(stripped)) {
+    return `${connectorName} isn't connected on this computer, so that message wasn't delivered. Connect ${connectorName} (add its token) to send there.`;
   }
-  return `Couldn't deliver that message to ${platformName}: ${trimmed}`;
+  return `Couldn't deliver that message to ${connectorName}: ${stripped}`;
 }
 
 export interface ChannelDeliveryFailure {
@@ -233,16 +233,16 @@ export interface ChannelDeliveryFailure {
 }
 
 export function buildChannelDeliveryFailureWakePrompt(
-  failures: readonly ChannelDeliveryFailure[],
+  problems: readonly ChannelDeliveryFailure[],
 ): string {
-  const lines = failures.map(
-    (failure) => `- To ${failure.addressToken}: ${failure.reason}`,
+  const outputLines = problems.map(
+    (problem) => `- To ${problem.addressToken}: ${problem.reason}`,
   );
-  const plural = failures.length === 1 ? "" : "s";
+  const countSuffix = problems.length === 1 ? "" : "s";
   return [
     `${CHANNEL_DELIVERY_FAILED_WAKE_CUE} A message you tried to send to a channel did not go through.`,
     "This is a system notice about your own outbound send, not the user typing in this app. You may have already told the user it was sent, so correct the record.",
-    ...lines,
-    `Tell the user plainly here, in this in-app chat (a SendMessage with no channel target), that the message${plural} didn't go through and why, so they aren't left believing it was delivered. Don't silently retry the same channel; if it isn't connected, offer to help connect it.`,
+    ...outputLines,
+    `Tell the user plainly here, in this in-app chat (a SendMessage with no channel target), that the message${countSuffix} didn't go through and why, so they aren't left believing it was delivered. Don't silently retry the same channel; if it isn't connected, offer to help connect it.`,
   ].join("\n");
 }
