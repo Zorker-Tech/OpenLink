@@ -472,3 +472,57 @@ describe("binding a room to a conversation", () => {
 function assertEqualsIgnoringOrder(actual: unknown[], expected: unknown[]): void {
   assert.deepEqual([...actual].sort(), [...expected].sort());
 }
+
+// ---------------------------------------------------------------------------------------------
+// The edges a room writes and reads
+// ---------------------------------------------------------------------------------------------
+
+describe("the edges a shared room keeps", () => {
+  it("only calls a config a shared room when it names one", async () => {
+    const world = harness();
+    const rooms = new SharedRooms(world.manager as never);
+    const plainDir = join(world.root, "plain");
+    writeSlateGroupConfig(plainDir, { version: 1, memberIds: [], remoteMembers: [] } as never);
+    assert.equal(rooms.sharedRoomConfigOf({ id: "plain", dbPath: join(plainDir, "db") }), null);
+    const grouped = rooms.sharedRoomConfigOf({ id: "group-1", dbPath: join(world.root, "group-1", "db") });
+    assert.equal(grouped?.sharedRoomId, "room-7");
+  });
+
+  it("sends at most four images to a mirrored room and says what was left out", async () => {
+    const posted: unknown[] = [];
+    const world = harness({ delegate: { sendMirrorPost: async (post: { images: unknown[] }) => { posted.push(post.images.length); return { timestampMs: 1_700 }; } } });
+    const rooms = new SharedRooms(world.manager as never);
+    const images = [1, 2, 3, 4, 5].map((size) => ({ data: new Uint8Array(size), mimeType: "image/png" }));
+    await rooms.dispatchMirrorRoomSend(world.session("room-1") as never, { text: "hi", selectedImages: images, hasNonImageAttachments: false });
+    assert.deepEqual(posted, [4]);
+    assert.deepEqual(world.kinds("append-db")[0]?.slice(0, 2), ["append-db", "room-1"]);
+  });
+
+  it("tells the room's delegate about a guest's message, and starts its turn", async () => {
+    const world = harness();
+    const rooms = new SharedRooms(world.manager as never);
+    await rooms.postSharedRoomGuestMessage({ roomId: "room-7", text: "hello there", images: [], authorName: "Guest", authorAuthId: "guest-1", timestampMs: 5 });
+    assert.deepEqual(world.kinds("publish")[0]?.slice(0, 2), ["publish", "room-7"]);
+    assert.equal(world.kinds("group-turn").length, 1);
+  });
+
+  it("refuses a remote turn for a room agent, and reports only what was really sent", async () => {
+    const groupWorld = harness();
+    groupWorld.session("group-1");
+    const groupRooms = new SharedRooms(groupWorld.manager as never);
+    assert.deepEqual(await groupRooms.runRemoteRequestedMemberTurn({ agentId: "group-1", prompt: "x" }), []);
+    assert.equal(groupWorld.kinds("member-turn").length, 0);
+    const sentWorld = harness();
+    sentWorld.session("agent-9");
+    const sentManager = sentWorld.manager as unknown as Record<string, any>;
+    const sentCalls: unknown[][] = [];
+    sentManager.runnerRegistry = { runnerHooksFor: (_session: unknown, transport: unknown) => transport, wireRunnerLifecycle: (_runner: unknown, _target: unknown, id: string) => { sentCalls.push(["wire", id]); } };
+    sentManager.execution = { ...sentManager.execution, createGroupMemberRunner: (_target: unknown, hooks: { onUpdate(update: unknown): void }) => ({ run: async (_prompt: string, _options: unknown) => { hooks.onUpdate({ type: "send-message", message: { type: "text", content: "(pass)" } }); hooks.onUpdate({ type: "send-message", message: { type: "text", content: "a real answer" } }); } }) };
+    const sentRooms = new SharedRooms(sentManager as never);
+    assert.deepEqual(await sentRooms.runRemoteRequestedMemberTurn({ agentId: "agent-9", prompt: "say something", systemPrompt: "sys" }), ["a real answer"]);
+    assert.deepEqual(sentCalls.map((call) => call[0]), ["wire"]);
+    // The run is closed whether or not the member spoke.
+    assert.deepEqual(sentWorld.kinds("end-run").map((call) => call[1]), ["agent-9"]);
+  });
+});
+

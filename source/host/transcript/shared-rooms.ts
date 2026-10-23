@@ -1,6 +1,6 @@
 /** The shared rooms a conversation's transcript is mirrored into, and read back from.
 
- * What a room carries — a guest's message, an agent's answer, a picture — is turned into a transcript entry and written
+ * What a room carries — a guest's message, an agent's answer, a picture — is turned into a transcript transcriptEntry and written
  * locally as well, so the conversation a user opens shows what was said in the room; a room that is gone is reported
  * rather than left looking like a conversation that never had anything in it. */
 import { Buffer } from "node:buffer";
@@ -44,8 +44,8 @@ export function decodeAvatarDataUrl(dataUrl: string): Buffer | null {
   }
 }
 
-export function isRoomContentEntry(entry: TranscriptEntry): boolean {
-  return entry.kind === "message" || entry.kind === "send-message";
+export function isRoomContentEntry(transcriptEntry: TranscriptEntry): boolean {
+  return transcriptEntry.kind === "message" || transcriptEntry.kind === "send-message";
 }
 
 type LiveSession = any;
@@ -73,9 +73,9 @@ export class SharedRooms {
     } catch {
       return `No group found with id ${groupId}.`;
     }
-    const config = readSlateGroupConfig(dirname(roomSession.dbPath));
-    if (config == null) return `${groupId} is not a group chat.`;
-    if (!config.memberIds.includes(fromAgentId)) {
+    const roomConfig = readSlateGroupConfig(dirname(roomSession.dbPath));
+    if (roomConfig == null) return `${groupId} is not a group chat.`;
+    if (!roomConfig.memberIds.includes(fromAgentId)) {
       return "You can only post to a group you're a member of.";
     }
 
@@ -102,12 +102,40 @@ export class SharedRooms {
     this.tm.groupChat.postGroupMemberMessage(roomSession, member, message);
     const epoch = this.tm.sendPipeline.nextTurnEpoch(roomSession);
     this.tm.runLifecycle.beginSessionRun(roomSession);
+    this.startAgentTurn(roomSession, epoch);
+    return `Posted to "${groupName}". Its members will see it and reply on their own turns.`;
+  }
+
+
+  /** Writes an transcriptEntry into the transcript the user sees, or into a room that is not on screen. */
+  private publishEntry(
+    liveSession: LiveSession,
+    transcriptEntry: TranscriptEntry,
+    options: { readonly raiseActivity: boolean },
+  ): void {
+    if (this.tm.sessions.activeSession?.id === liveSession.id) {
+      this.tm.appendEntry(transcriptEntry);
+      return;
+    }
+    liveSession.db.appendTranscriptEntry(transcriptEntry);
+    if (options.raiseActivity) this.tm.sessionStore.markSessionActivity(liveSession);
+    void this.tm.roster.emitAgentUpdate(liveSession.id);
+  }
+
+  /** A liveSession's entries, read from the open transcript or from its own database. */
+  private entriesFor(liveSession: LiveSession, isActive?: boolean): TranscriptEntry[] {
+    const onScreen = isActive ?? this.tm.sessions.activeSession?.id === liveSession.id;
+    return onScreen ? getTranscript() : liveSession.db.getTranscriptEntries();
+  }
+
+  /** Starts the room's own turn for an agent, after an transcriptEntry it should answer. */
+  private startAgentTurn(liveSession: LiveSession, epoch: unknown): void {
     void this.tm.runLifecycle.enqueueExclusiveRun(
-      roomSession.id,
+      liveSession.id,
       () => {
-        this.tm.turnRuntime.activeRequestSources.set(roomSession.id, "agent");
+        this.tm.turnRuntime.activeRequestSources.set(liveSession.id, "agent");
         return this.tm.groupChat.runGroupTurn(
-          roomSession,
+          liveSession,
           epoch,
           undefined,
           "agent",
@@ -115,25 +143,24 @@ export class SharedRooms {
       },
       { lane: "agent", source: "agent" },
     );
-    return `Posted to "${groupName}". Its members will see it and reply on their own turns.`;
   }
 
-  sharedRoomConfigOf(session: LiveSession): SlateGroupConfig | null {
-    const config = readSlateGroupConfig(dirname(session.dbPath));
-    return config?.sharedRoomId == null ? null : config;
+  sharedRoomConfigOf(liveSession: LiveSession): SlateGroupConfig | null {
+    const roomConfig = readSlateGroupConfig(dirname(liveSession.dbPath));
+    return roomConfig?.sharedRoomId == null ? null : roomConfig;
   }
 
   publishSharedRoomEntryIfNeeded(
-    session: LiveSession,
-    entry: TranscriptEntry,
+    liveSession: LiveSession,
+    transcriptEntry: TranscriptEntry,
   ): void {
-    const delegate = this.tm.xuserDelegate;
-    const config = this.sharedRoomConfigOf(session);
-    if (delegate == null || config?.sharedRoomId == null) return;
-    delegate.publishRoomEntry(config.sharedRoomId, entry);
+    const xuserDelegate = this.tm.xuserDelegate;
+    const roomConfig = this.sharedRoomConfigOf(liveSession);
+    if (xuserDelegate == null || roomConfig?.sharedRoomId == null) return;
+    xuserDelegate.publishRoomEntry(roomConfig.sharedRoomId, transcriptEntry);
   }
 
-  async dispatchMirrorRoomSend(session: LiveSession, args: any): Promise<void> {
+  async dispatchMirrorRoomSend(liveSession: LiveSession, request: any): Promise<void> {
     const appendNotice = (text: string): void => {
       const notice: TranscriptEntry = {
         kind: "notice",
@@ -141,16 +168,11 @@ export class SharedRooms {
         text,
         timestampMs: Date.now(),
       };
-      if (this.tm.sessions.activeSession?.id === session.id)
-        this.tm.appendEntry(notice);
-      else {
-        session.db.appendTranscriptEntry(notice);
-        void this.tm.roster.emitAgentUpdate(session.id);
-      }
+      this.publishEntry(liveSession, notice, { raiseActivity: false });
     };
-    const remote = readSlateRemoteRoomConfig(dirname(session.dbPath));
-    const delegate = this.tm.xuserDelegate;
-    if (remote == null || delegate == null || !delegate.isEnabled()) {
+    const remote = readSlateRemoteRoomConfig(dirname(liveSession.dbPath));
+    const xuserDelegate = this.tm.xuserDelegate;
+    if (remote == null || xuserDelegate == null || !xuserDelegate.isEnabled()) {
       appendNotice(
         "This shared chat isn't connected right now, so the message wasn't delivered.",
       );
@@ -162,7 +184,7 @@ export class SharedRooms {
       );
       return;
     }
-    if (args.hasNonImageAttachments) {
+    if (request.hasNonImageAttachments) {
       appendNotice(
         "Only text and images can be sent to shared chats for now; other attachments were not delivered.",
       );
@@ -171,7 +193,7 @@ export class SharedRooms {
     const images: Array<{ base64: string; mediaType: string }> = [];
     let totalImageBytes = 0;
     let omitted = false;
-    for (const image of args.selectedImages.slice(0, 4)) {
+    for (const image of request.selectedImages.slice(0, 4)) {
       if (
         totalImageBytes + image.data.byteLength >
         SLATE_SHARED_ROOM_IMAGE_BYTES_MAX
@@ -185,32 +207,29 @@ export class SharedRooms {
         mediaType: image.mimeType ?? "image/png",
       });
     }
-    if (args.selectedImages.length > 4 || omitted) {
+    if (request.selectedImages.length > 4 || omitted) {
       appendNotice(
         "Some images were too large for the shared chat and were not delivered.",
       );
     }
     try {
-      const result = await delegate.sendMirrorPost({
+      const result = await xuserDelegate.sendMirrorPost({
         roomId: remote.roomId,
-        text: args.text,
+        text: request.text,
         images,
-        ...(args.clientNonce ? { clientNonce: args.clientNonce } : {}),
+        ...(request.clientNonce ? { clientNonce: request.clientNonce } : {}),
       });
-      if (result.timestampMs != null && args.clientNonce) {
-        const entries =
-          this.tm.sessions.activeSession?.id === session.id
-            ? getTranscript()
-            : session.db.getTranscriptEntries();
+      if (result.timestampMs != null && request.clientNonce) {
+        const entries = this.entriesFor(liveSession);
         const echo = [...entries]
           .reverse()
           .find(
-            (entry: TranscriptEntry) =>
-              entry.kind === "message" &&
-              entry.clientNonce === args.clientNonce,
+            (transcriptEntry: TranscriptEntry) =>
+              transcriptEntry.kind === "message" &&
+              transcriptEntry.clientNonce === request.clientNonce,
           );
         if (echo != null)
-          this.restampSessionEntry(session, echo.id, result.timestampMs);
+          this.restampSessionEntry(liveSession, echo.id, result.timestampMs);
       }
     } catch (error) {
       console.warn(
@@ -227,9 +246,9 @@ export class SharedRooms {
   }
 
   async findRoomAgentId(roomId: string): Promise<string | null> {
-    const bound = await this.listBoundRoomAgents(roomId);
-    if (bound.length <= 1) return bound[0]?.id ?? null;
-    return (await this.measureRoomAgents(bound)).canonical.agentId;
+    const boundAgents = await this.listBoundRoomAgents(roomId);
+    if (boundAgents.length <= 1) return boundAgents[0]?.id ?? null;
+    return (await this.measureRoomAgents(boundAgents)).canonical.agentId;
   }
 
   async listBoundRoomAgents(roomId: string): Promise<any[]> {
@@ -259,35 +278,35 @@ export class SharedRooms {
     }
   }
 
-  async measureRoomAgents(bound: readonly any[]): Promise<{
+  async measureRoomAgents(boundAgents: readonly any[]): Promise<{
     canonical: { agentId: string; entryCount: number; isRemovable: boolean };
-    measured: Array<{
+    measurements: Array<{
       agentId: string;
       entryCount: number;
       isRemovable: boolean;
     }>;
   }> {
-    const measured = [];
-    for (const agent of bound) {
+    const measurements = [];
+    for (const agent of boundAgents) {
       const entries = await this.readAgentEntries(agent.id);
-      measured.push({
+      measurements.push({
         agentId: agent.id,
         entryCount: entries?.length ?? 0,
         isRemovable: entries != null && !entries.some(isRoomContentEntry),
       });
     }
-    const canonical = measured.reduce((best, candidate) =>
+    const canonical = measurements.reduce((best, candidate) =>
       candidate.entryCount > best.entryCount ? candidate : best,
     );
-    return { canonical, measured };
+    return { canonical, measurements };
   }
 
   async resolveCanonicalRoomAgent(roomId: string): Promise<string | null> {
-    const bound = await this.listBoundRoomAgents(roomId);
-    if (bound.length <= 1) return bound[0]?.id ?? null;
-    const { canonical, measured } = await this.measureRoomAgents(bound);
+    const boundAgents = await this.listBoundRoomAgents(roomId);
+    if (boundAgents.length <= 1) return boundAgents[0]?.id ?? null;
+    const { canonical, measurements } = await this.measureRoomAgents(boundAgents);
     const removableIds: string[] = [];
-    for (const extra of measured) {
+    for (const extra of measurements) {
       if (extra.agentId === canonical.agentId) continue;
       if (!extra.isRemovable) {
         console.warn(
@@ -313,8 +332,8 @@ export class SharedRooms {
     );
   }
 
-  async ensureHostedSharedRoom(args: any): Promise<string | null> {
-    const existingId = await this.resolveCanonicalRoomAgent(args.roomId);
+  async ensureHostedSharedRoom(request: any): Promise<string | null> {
+    const existingId = await this.resolveCanonicalRoomAgent(request.roomId);
     const agents = await this.tm.sessionStore.listAgents();
     const existingIds = new Set<string>(agents.map((agent: any) => agent.id));
     const oldMembers =
@@ -334,7 +353,7 @@ export class SharedRooms {
             ],
       ),
     );
-    const remoteMembers = args.remoteMembers.map((member: any) => {
+    const remoteMembers = request.remoteMembers.map((member: any) => {
       const avatarDataUrl =
         member.avatarDataUrl ??
         storedAvatars.get(`${member.ownerAuthId}\0${member.agentId}`);
@@ -342,12 +361,12 @@ export class SharedRooms {
     });
     const binding: SlateGroupConfig = {
       version: GROUP_CONFIG_VERSION,
-      memberIds: args.localMemberIds.filter(
+      memberIds: request.localMemberIds.filter(
         (id: string) =>
           existingIds.has(id) && !this.tm.groupChat.isGroupAgentId(id),
       ),
       remoteMembers,
-      sharedRoomId: args.roomId,
+      sharedRoomId: request.roomId,
     };
     if (existingId != null) {
       writeSlateGroupConfig(
@@ -357,9 +376,9 @@ export class SharedRooms {
       await this.tm.roster.emitAgents();
       return existingId;
     }
-    if (!args.isCreationAllowed) return null;
+    if (!request.isCreationAllowed) return null;
     const created = await this.tm.createBackgroundAgent(
-      { name: args.name, description: "" },
+      { name: request.name, description: "" },
       "user",
       {
         isIntroductionSuppressed: true,
@@ -452,92 +471,84 @@ export class SharedRooms {
     const agentId = await this.tm.findRoomAgentId(roomId);
     if (agentId == null) return;
     const dir = this.tm.sessionStore.getAgentDir(agentId);
-    const config = readSlateRemoteRoomConfig(dir);
-    if (config == null || config.isRevoked === true) return;
-    writeSlateRemoteRoomConfig(dir, { ...config, isRevoked: true });
+    const roomConfig = readSlateRemoteRoomConfig(dir);
+    if (roomConfig == null || roomConfig.isRevoked === true) return;
+    writeSlateRemoteRoomConfig(dir, { ...roomConfig, isRevoked: true });
     await this.tm.roster.emitAgentUpdate(agentId);
   }
 
-  async appendSharedRoomActivityNotice(args: {
+  async appendSharedRoomActivityNotice(request: {
     roomId: string;
     text: string;
   }): Promise<void> {
-    const agentId = await this.tm.findRoomAgentId(args.roomId);
+    const agentId = await this.tm.findRoomAgentId(request.roomId);
     if (agentId == null) return;
-    let session: LiveSession;
+    let liveSession: LiveSession;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      liveSession = await this.tm.sessions.resolveBackgroundSession(agentId);
     } catch {
       return;
     }
     const notice: TranscriptEntry = {
       kind: "notice",
       id: `notice-xuser-turn-${randomUUID()}`,
-      text: args.text,
+      text: request.text,
       timestampMs: Date.now(),
     };
-    if (this.tm.sessions.activeSession?.id === session.id)
-      this.tm.appendEntry(notice);
-    else {
-      session.db.appendTranscriptEntry(notice);
-      this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
-    }
+    this.publishEntry(liveSession, notice, { raiseActivity: true });
   }
 
-  async appendMirrorRoomEntry(args: any): Promise<boolean> {
-    const agentId = await this.tm.findRoomAgentId(args.roomId);
+  async appendMirrorRoomEntry(request: any): Promise<boolean> {
+    const agentId = await this.tm.findRoomAgentId(request.roomId);
     if (agentId == null) return false;
-    let session: LiveSession;
+    let liveSession: LiveSession;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      liveSession = await this.tm.sessions.resolveBackgroundSession(agentId);
     } catch {
       return false;
     }
-    if (!this.tm.groupChat.isRemoteRoomSession(session)) return false;
-    const isActive = this.tm.sessions.activeSession?.id === session.id;
-    const entries = isActive
-      ? getTranscript()
-      : session.db.getTranscriptEntries();
-    const localId = `xu-${args.entry.entryId}`;
-    if (entries.some((entry: TranscriptEntry) => entry.id === localId))
+    if (!this.tm.groupChat.isRemoteRoomSession(liveSession)) return false;
+    const isActive = this.tm.sessions.activeSession?.id === liveSession.id;
+    const entries = this.entriesFor(liveSession, isActive);
+    const localId = `xu-${request.entry.entryId}`;
+    if (entries.some((transcriptEntry: TranscriptEntry) => transcriptEntry.id === localId))
       return true;
     if (
-      args.entry.clientNonce &&
+      request.entry.clientNonce &&
       entries.some(
-        (entry: TranscriptEntry) =>
-          entry.kind === "message" &&
-          entry.clientNonce === args.entry.clientNonce,
+        (transcriptEntry: TranscriptEntry) =>
+          transcriptEntry.kind === "message" &&
+          transcriptEntry.clientNonce === request.entry.clientNonce,
       )
     )
       return true;
 
     const images = await this.tm.sendPipeline.materializeInlineImages(
-      session,
-      args.entry.images,
+      liveSession,
+      request.entry.images,
     );
-    const entry: TranscriptEntry =
-      args.entry.kind === "human-message"
+    const transcriptEntry: TranscriptEntry =
+      request.entry.kind === "human-message"
         ? {
             kind: "message",
             id: localId,
             role: "user",
-            content: args.entry.text,
+            content: request.entry.text,
             isStreaming: false,
-            timestampMs: args.entry.timestampMs,
-            ...(args.entry.clientNonce
-              ? { clientNonce: args.entry.clientNonce }
+            timestampMs: request.entry.timestampMs,
+            ...(request.entry.clientNonce
+              ? { clientNonce: request.entry.clientNonce }
               : {}),
-            ...(args.entry.authorAuthId === args.selfAuthId
+            ...(request.entry.authorAuthId === request.selfAuthId
               ? {}
               : {
                   fromUser: {
-                    name: args.entry.authorName,
-                    ...(args.entry.authorAuthId
-                      ? { authId: args.entry.authorAuthId }
+                    name: request.entry.authorName,
+                    ...(request.entry.authorAuthId
+                      ? { authId: request.entry.authorAuthId }
                       : {}),
-                    ...(args.entry.authorAvatarUrl
-                      ? { avatarUrl: args.entry.authorAvatarUrl }
+                    ...(request.entry.authorAvatarUrl
+                      ? { avatarUrl: request.entry.authorAvatarUrl }
                       : {}),
                   },
                 }),
@@ -548,135 +559,112 @@ export class SharedRooms {
             id: localId,
             message: {
               type: "text",
-              content: args.entry.text,
+              content: request.entry.text,
               ...(images.length > 0 ? { images } : {}),
             },
-            timestampMs: args.entry.timestampMs,
+            timestampMs: request.entry.timestampMs,
             author: {
               id: formatRemoteAgentId({
-                ownerAuthId: args.entry.agentOwnerAuthId ?? "",
-                agentId: args.entry.agentId ?? "",
+                ownerAuthId: request.entry.agentOwnerAuthId ?? "",
+                agentId: request.entry.agentId ?? "",
               }),
-              name: args.entry.authorName,
+              name: request.entry.authorName,
             },
           };
-    if (isActive) this.tm.appendEntry(entry);
-    else {
-      session.db.appendTranscriptEntry(entry);
-      if (raisesUserActivity(entry))
-        this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
-    }
+    this.publishEntry(liveSession, transcriptEntry, {
+      raiseActivity: raisesUserActivity(transcriptEntry),
+    });
     return true;
   }
 
   restampSessionEntry(
-    session: LiveSession,
+    liveSession: LiveSession,
     entryId: string,
     timestampMs: number,
   ): void {
-    const stamp = (entry: TranscriptEntry): TranscriptEntry =>
-      entry.kind === "message" || entry.kind === "send-message"
-        ? { ...entry, timestampMs }
-        : entry;
-    if (this.tm.sessions.activeSession?.id === session.id) {
+    const stamp = (transcriptEntry: TranscriptEntry): TranscriptEntry =>
+      transcriptEntry.kind === "message" || transcriptEntry.kind === "send-message"
+        ? { ...transcriptEntry, timestampMs }
+        : transcriptEntry;
+    if (this.tm.sessions.activeSession?.id === liveSession.id) {
       const updated = updateEntry(entryId, stamp);
       if (updated != null)
-        this.tm.roster.emit({ type: "updated", entry: updated });
+        this.tm.roster.emit({ type: "updated", transcriptEntry: updated });
     }
-    session.db.updateTranscriptEntry(entryId, stamp);
+    liveSession.db.updateTranscriptEntry(entryId, stamp);
   }
 
-  async restampRoomEntry(args: {
+  async restampRoomEntry(request: {
     roomId: string;
     entryId: string;
     timestampMs: number;
   }): Promise<void> {
-    const agentId = await this.tm.findRoomAgentId(args.roomId);
+    const agentId = await this.tm.findRoomAgentId(request.roomId);
     if (agentId == null) return;
     try {
-      const session = await this.tm.sessions.resolveBackgroundSession(agentId);
-      this.restampSessionEntry(session, args.entryId, args.timestampMs);
+      const liveSession = await this.tm.sessions.resolveBackgroundSession(agentId);
+      this.restampSessionEntry(liveSession, request.entryId, request.timestampMs);
     } catch {
       return;
     }
   }
 
-  async postSharedRoomGuestMessage(args: any): Promise<void> {
-    const agentId = await this.tm.findRoomAgentId(args.roomId);
+  async postSharedRoomGuestMessage(request: any): Promise<void> {
+    const agentId = await this.tm.findRoomAgentId(request.roomId);
     if (agentId == null) return;
-    let session: LiveSession;
+    let liveSession: LiveSession;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      liveSession = await this.tm.sessions.resolveBackgroundSession(agentId);
     } catch {
       return;
     }
-    if (this.sharedRoomConfigOf(session) == null) return;
-    const text = clampAgentMessage(args.text);
-    if (text.length === 0 && args.images.length === 0) return;
-    const active = this.tm.sessions.activeSession?.id === session.id;
-    const entries = active
-      ? getTranscript()
-      : session.db.getTranscriptEntries();
+    if (this.sharedRoomConfigOf(liveSession) == null) return;
+    const text = clampAgentMessage(request.text);
+    if (text.length === 0 && request.images.length === 0) return;
+    const active = this.tm.sessions.activeSession?.id === liveSession.id;
+    const entries = this.entriesFor(liveSession, active);
     if (
-      args.clientNonce &&
+      request.clientNonce &&
       entries.some(
-        (entry: TranscriptEntry) =>
-          entry.kind === "message" && entry.clientNonce === args.clientNonce,
+        (transcriptEntry: TranscriptEntry) =>
+          transcriptEntry.kind === "message" && transcriptEntry.clientNonce === request.clientNonce,
       )
     )
       return;
     const images = await this.tm.sendPipeline.materializeInlineImages(
-      session,
-      args.images,
+      liveSession,
+      request.images,
     );
-    const entry: TranscriptEntry = {
+    const transcriptEntry: TranscriptEntry = {
       kind: "message",
       id: nextEntryId(entries, "user-message"),
       role: "user",
       content: text,
       isStreaming: false,
-      timestampMs: args.timestampMs ?? Date.now(),
+      timestampMs: request.timestampMs ?? Date.now(),
       fromUser: {
-        name: args.authorName,
-        authId: args.authorAuthId,
-        ...(args.authorAvatarUrl ? { avatarUrl: args.authorAvatarUrl } : {}),
+        name: request.authorName,
+        authId: request.authorAuthId,
+        ...(request.authorAvatarUrl ? { avatarUrl: request.authorAvatarUrl } : {}),
       },
-      ...(args.clientNonce ? { clientNonce: args.clientNonce } : {}),
+      ...(request.clientNonce ? { clientNonce: request.clientNonce } : {}),
       ...(images.length > 0 ? { images } : {}),
     };
-    if (active) this.tm.appendEntry(entry);
-    else {
-      session.db.appendTranscriptEntry(entry);
-      this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
-    }
-    this.publishSharedRoomEntryIfNeeded(session, entry);
-    const epoch = this.tm.sendPipeline.nextTurnEpoch(session);
-    this.tm.runLifecycle.beginSessionRun(session);
-    void this.tm.runLifecycle.enqueueExclusiveRun(
-      session.id,
-      () => {
-        this.tm.turnRuntime.activeRequestSources.set(session.id, "agent");
-        return this.tm.groupChat.runGroupTurn(
-          session,
-          epoch,
-          undefined,
-          "agent",
-        );
-      },
-      { lane: "agent", source: "agent" },
-    );
+    this.publishEntry(liveSession, transcriptEntry, { raiseActivity: true });
+    this.publishSharedRoomEntryIfNeeded(liveSession, transcriptEntry);
+    const epoch = this.tm.sendPipeline.nextTurnEpoch(liveSession);
+    this.tm.runLifecycle.beginSessionRun(liveSession);
+    this.startAgentTurn(liveSession, epoch);
   }
 
-  async runRemoteRequestedMemberTurn(args: any): Promise<string[]> {
+  async runRemoteRequestedMemberTurn(request: any): Promise<string[]> {
     if (!this.tm.execution.canExecuteGroupMember) return [];
-    if (this.tm.groupChat.isGroupAgentId(args.agentId)) return [];
-    if (this.tm.groupChat.isRemoteRoomAgentId(args.agentId)) return [];
-    let session: LiveSession;
+    if (this.tm.groupChat.isGroupAgentId(request.agentId)) return [];
+    if (this.tm.groupChat.isRemoteRoomAgentId(request.agentId)) return [];
+    let liveSession: LiveSession;
     try {
-      session = await this.tm.groupChat.pinMemberSessionForGroupTurn(
-        args.agentId,
+      liveSession = await this.tm.groupChat.pinMemberSessionForGroupTurn(
+        request.agentId,
       );
     } catch {
       return [];
@@ -694,25 +682,25 @@ export class SharedRooms {
       lastReactionApplied: () => false,
     };
     await this.tm.runLifecycle.enqueueExclusiveRun(
-      session.id,
+      liveSession.id,
       async () => {
-        this.tm.turnRuntime.activeRequestSources.set(session.id, "agent");
+        this.tm.turnRuntime.activeRequestSources.set(liveSession.id, "agent");
         try {
           const runner = this.tm.execution.createGroupMemberRunner(
-            session,
-            this.tm.runnerRegistry.runnerHooksFor(session, transport),
-            { systemPrompt: args.systemPrompt, isSharedRoomTurn: true },
+            liveSession,
+            this.tm.runnerRegistry.runnerHooksFor(liveSession, transport),
+            { systemPrompt: request.systemPrompt, isSharedRoomTurn: true },
           );
           this.tm.runnerRegistry.wireRunnerLifecycle(
             runner,
-            session,
-            session.id,
+            liveSession,
+            liveSession.id,
           );
-          await runner.run(args.prompt, {});
+          await runner.run(request.prompt, {});
         } catch {
           return;
         } finally {
-          this.tm.runLifecycle.endSessionRun(session);
+          this.tm.runLifecycle.endSessionRun(liveSession);
         }
       },
       { lane: "background", source: "group-member" },
