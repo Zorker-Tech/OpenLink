@@ -38,12 +38,12 @@ type Any = any
 const MAX_IDLE_CONTINUATIONS_WITHOUT_TOOL_CALLS = 3
 const GOAL_NOTIFICATION_SOURCE_ATTRIBUTE = 'source="goal"'
 
-function buildGoalContinuationPrompt(options2: {
+function buildGoalContinuationPrompt(parameters: {
   readonly goalState: Any
   readonly todoWriteToolName?: string
   readonly updateGoalToolName?: string
 }): string {
-  const { goalState, todoWriteToolName, updateGoalToolName } = options2
+  const { goalState, todoWriteToolName, updateGoalToolName } = parameters
   const objective = escapePromptXmlText(goalState.objective)
   const pursuitGuidelines = buildGoalPursuitGuidelines({
     todoWriteToolName,
@@ -85,7 +85,7 @@ export class GoalContinuationActionHandler {
   }
 
   /** The names of the two tools the continuation prompt tells the model to use, as this session spells them. */
-  liveToolNames(ctx: Any, stateHandler: Any, mcpTools: Any): { todoWriteToolName: Any; updateGoalToolName: Any } {
+  currentToolNames(callContext: Any, stateHandler: Any, mcpTools: Any): { todoWriteToolName: Any; updateGoalToolName: Any } {
     const tools = this.toolsGenerator({
       resourceAccessor: this.resourceAccessor,
       stateHandler,
@@ -94,7 +94,7 @@ export class GoalContinuationActionHandler {
       repositoryInfos: [],
       blobStore: stateHandler.getBlobStore(),
       mode: stateHandler.mode ?? AgentMode.AGENT,
-      loggingContext: ctx,
+      loggingContext: callContext,
       fileOperationLockManager: new FileOperationLockManager(),
     })
     return {
@@ -103,8 +103,8 @@ export class GoalContinuationActionHandler {
     }
   }
 
-  async adaptAction(ctx: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    const conversationId = getConversationId(ctx)
+  async adaptAction(callContext: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    const conversationId = getConversationId(callContext)
     const goalState = stateHandler.goalState
     // A goal that does not belong to this conversation and session is not this turn's to continue.
     if (conversationId === undefined || !isGoalStateShapeValid(goalState, {
@@ -114,36 +114,36 @@ export class GoalContinuationActionHandler {
       return undefined
     }
     if (goalState.idleContinuationsWithoutToolCalls >= MAX_IDLE_CONTINUATIONS_WITHOUT_TOOL_CALLS) {
-      const stalled = goalState.clone()
-      stalled.status = GoalStatus.PAUSED
-      Object.assign(stalled, goalClockOnDeactivation(stalled, Date.now()))
-      stateHandler.setGoalState(stalled)
-      recordGoalTerminalTransition(ctx, {
+      const pausedGoal = goalState.clone()
+      pausedGoal.status = GoalStatus.PAUSED
+      Object.assign(pausedGoal, goalClockOnDeactivation(pausedGoal, Date.now()))
+      stateHandler.setGoalState(pausedGoal)
+      recordGoalTerminalTransition(callContext, {
         status: "paused",
         reason: "anti_spin",
         continuationCount: goalState.continuationCount,
       })
-      await onStateUpdate(ctx, await stateHandler.computeNewStructure(ctx))
+      await onStateUpdate(callContext, await stateHandler.computeNewStructure(callContext))
       return undefined
     }
-    const liveToolNames = this.liveToolNames(ctx, stateHandler, mcpTools)
-    const started = goalState.clone()
-    started.idleContinuationsWithoutToolCalls += 1
-    started.continuationCount += 1
+    const currentToolNames = this.currentToolNames(callContext, stateHandler, mcpTools)
+    const continuedGoal = goalState.clone()
+    continuedGoal.idleContinuationsWithoutToolCalls += 1
+    continuedGoal.continuationCount += 1
     // The time since the last continuation is time the goal was being worked on.
-    const nowMs2 = Date.now()
-    if (started.lastAccruedAtMs !== undefined) {
-      const spanMs = Math.max(0, nowMs2 - Number(started.lastAccruedAtMs))
-      started.activeDurationMs = (started.activeDurationMs ?? BigInt(0)) + BigInt(spanMs)
+    const currentMs = Date.now()
+    if (continuedGoal.lastAccruedAtMs !== undefined) {
+      const elapsedMs = Math.max(0, currentMs - Number(continuedGoal.lastAccruedAtMs))
+      continuedGoal.activeDurationMs = (continuedGoal.activeDurationMs ?? BigInt(0)) + BigInt(elapsedMs)
     }
-    started.lastAccruedAtMs = BigInt(nowMs2)
-    stateHandler.setGoalState(started)
-    recordGoalContinuationStarted(ctx)
-    await onStateUpdate(ctx, await stateHandler.computeNewStructure(ctx))
-    const userMessage = new UserMessage({
+    continuedGoal.lastAccruedAtMs = BigInt(currentMs)
+    stateHandler.setGoalState(continuedGoal)
+    recordGoalContinuationStarted(callContext)
+    await onStateUpdate(callContext, await stateHandler.computeNewStructure(callContext))
+    const wakeupMessage = new UserMessage({
       text: buildGoalContinuationPrompt({
         goalState,
-        ...liveToolNames,
+        ...currentToolNames,
       }),
       messageId: (0, crypto.randomUUID)(),
       // Continue in whatever mode the conversation is in; goals are not agent-mode-only.
@@ -152,67 +152,67 @@ export class GoalContinuationActionHandler {
       simulatedMsgReason: SimulatedMsgReason.GOAL_CONTINUATION,
     })
     return createRedactedUserMessageAction(stateHandler.getPrivacyMode(), {
-      userMessage: toRedactedUserMessage(userMessage, stateHandler.getPrivacyMode()),
+      userMessage: toRedactedUserMessage(wakeupMessage, stateHandler.getPrivacyMode()),
       sendToInteractionListener: true,
     })
   }
 
-  async handle(ctx: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    const adapted = await this.adaptAction(ctx, stateHandler, mcpTools, onStateUpdate)
+  async handle(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
-      return stateHandler.computeNewStructure(ctx)
+      return stateHandler.computeNewStructure(callContext)
     }
     // The turn is watched for tool calls, since only a continuation that did something clears the streak.
-    const toolCalls = new ToolCountingStateTracker()
-    const state = await this.userMessageActionHandler.handle(ctx, adapted, createToolCountingMiddleware(toolCalls)(rootPromptExecutor), stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
-    if (toolCalls.toolCallCount === 0) {
-      return state
+    const callCounter = new ToolCountingStateTracker()
+    const turnState = await this.userMessageActionHandler.handle(callContext, adapted, createToolCountingMiddleware(callCounter)(rootPromptExecutor), stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
+    if (callCounter.toolCallCount === 0) {
+      return turnState
     }
-    const cleared = await this.clearIdleContinuationStreak(ctx, stateHandler, onStateUpdate)
-    return cleared ?? state
+    const clearedStreak = await this.clearIdleContinuationStreak(callContext, stateHandler, onStateUpdate)
+    return clearedStreak ?? turnState
   }
 
   /**
    * Clear the no-tool-call streak after a continuation that actually did something. A no-op when there is
    * nothing to clear, so an ordinary working continuation does not write goal state.
    */
-  async clearIdleContinuationStreak(ctx: Any, stateHandler: Any, onStateUpdate: Any): Promise<Any> {
-    const current = stateHandler.goalState
-    if (current === undefined || current.idleContinuationsWithoutToolCalls === 0) {
+  async clearIdleContinuationStreak(callContext: Any, stateHandler: Any, onStateUpdate: Any): Promise<Any> {
+    const goalSnapshot = stateHandler.goalState
+    if (goalSnapshot === undefined || goalSnapshot.idleContinuationsWithoutToolCalls === 0) {
       return undefined
     }
-    const worked = current.clone()
-    worked.idleContinuationsWithoutToolCalls = 0
-    stateHandler.setGoalState(worked)
-    const structure = await stateHandler.computeNewStructure(ctx)
-    await onStateUpdate(ctx, structure)
-    return structure
+    const workingGoal = goalSnapshot.clone()
+    workingGoal.idleContinuationsWithoutToolCalls = 0
+    stateHandler.setGoalState(workingGoal)
+    const nextStructure = await stateHandler.computeNewStructure(callContext)
+    await onStateUpdate(callContext, nextStructure)
+    return nextStructure
   }
 
-  async handleSingleStep(ctx: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    const adapted = await this.adaptAction(ctx, stateHandler, mcpTools, onStateUpdate)
+  async handleSingleStep(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
       return {
-        state: await stateHandler.computeNewStructure(ctx),
+        state: await stateHandler.computeNewStructure(callContext),
         hasToolCall: false,
       }
     }
-    const result = await this.userMessageActionHandler.handleSingleStep(ctx, adapted, rootPromptExecutor, stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
-    if (!result.hasToolCall) {
-      return result
+    const stepResult = await this.userMessageActionHandler.handleSingleStep(callContext, adapted, rootPromptExecutor, stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
+    if (!stepResult.hasToolCall) {
+      return stepResult
     }
-    const cleared = await this.clearIdleContinuationStreak(ctx, stateHandler, onStateUpdate)
+    const clearedStreak = await this.clearIdleContinuationStreak(callContext, stateHandler, onStateUpdate)
     return {
-      ...result,
-      state: cleared ?? result.state,
+      ...stepResult,
+      state: clearedStreak ?? stepResult.state,
     }
   }
 
-  async handleModelStep(ctx: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    const adapted = await this.adaptAction(ctx, stateHandler, mcpTools, onStateUpdate)
+  async handleModelStep(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
       return {
-        state: await stateHandler.computeNewStructure(ctx),
+        state: await stateHandler.computeNewStructure(callContext),
         toolCallDescriptors: [],
         splitStepData: {
           modelResponseMessages: [],
@@ -220,14 +220,14 @@ export class GoalContinuationActionHandler {
         },
       }
     }
-    const result = await this.userMessageActionHandler.handleModelStep(ctx, adapted, rootPromptExecutor, stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
-    if (result.toolCallDescriptors.length === 0) {
-      return result
+    const stepResult = await this.userMessageActionHandler.handleModelStep(callContext, adapted, rootPromptExecutor, stateHandler, mcpTools, onStateUpdate, { isSyntheticWakeup: true })
+    if (stepResult.toolCallDescriptors.length === 0) {
+      return stepResult
     }
-    const cleared = await this.clearIdleContinuationStreak(ctx, stateHandler, onStateUpdate)
+    const clearedStreak = await this.clearIdleContinuationStreak(callContext, stateHandler, onStateUpdate)
     return {
-      ...result,
-      state: cleared ?? result.state,
+      ...stepResult,
+      state: clearedStreak ?? stepResult.state,
     }
   }
 }
