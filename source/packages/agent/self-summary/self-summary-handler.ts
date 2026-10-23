@@ -97,7 +97,7 @@ export interface SelfSummaryToolStreamExecutor {
     tools: SelfSummaryTool[],
     extra: unknown,
     onToolCall: () => Promise<void>,
-    descriptionProps: Record<string, unknown>,
+    toolDescriptionProps: Record<string, unknown>,
   ): SelfSummaryStreamResult
 }
 
@@ -126,7 +126,7 @@ export interface SelfSummaryStateHandler {
 }
 
 export interface SelfSummaryRetryOptions {
-  readonly descriptionProps?: Record<string, unknown> | undefined
+  readonly toolDescriptionProps?: Record<string, unknown> | undefined
   readonly enableRetryNoSummaryResponse?: boolean | undefined
   readonly enableReduceInputsRetry?: boolean | undefined
   readonly enableRetryUncategorizedErrors?: boolean | undefined
@@ -189,13 +189,13 @@ const selfSummaryUnexpectedToolCalls = createCounter("self_summary.unexpected_to
  * carried out, so nothing the model says here is delivered to the user.
  */
 async function executeSelfSummaryStream(
-  parentCtx: Context,
-  executor: SelfSummaryToolStreamExecutor,
+  outerCtx: Context,
+  toolExecutor: SelfSummaryToolStreamExecutor,
   stateHandler: SelfSummaryStateHandler,
-  interactionListener: RedactedInteractionListener,
+  redactedListener: RedactedInteractionListener,
   tools: SelfSummaryTool[],
   extra: unknown,
-  descriptionProps: Record<string, unknown> | undefined,
+  toolDescriptionProps: Record<string, unknown> | undefined,
 ): Promise<{
   assistantMessage: CoreMessageLike
   textContent: string
@@ -204,23 +204,23 @@ async function executeSelfSummaryStream(
   cacheReadTokens: number | undefined
   cacheWriteTokens: number | undefined
 }> {
-  using spanContext = createSpan(parentCtx.withName("executeSelfSummaryStream"))
+  using spanContext = createSpan(outerCtx.withName("executeSelfSummaryStream"))
   const ctx = spanContext.ctx
   const invocationId = getInvocationId(ctx)
-  const noOpToolCallRecorder = { recordToolCall: () => {} }
-  const noOpInteractionHandler = new InteractionHandler(
-    toUnredactedInteractionListener(interactionListener, stateHandler.getPrivacyMode()),
-    noOpToolCallRecorder,
+  const silentToolRecorder = { recordToolCall: () => {} }
+  const silentHandler = new InteractionHandler(
+    toUnredactedInteractionListener(redactedListener, stateHandler.getPrivacyMode()),
+    silentToolRecorder,
     invocationId,
   )
-  const result = executor.executeToolStream(
+  const result = toolExecutor.executeToolStream(
     ctx,
     stateHandler,
-    noOpInteractionHandler,
+    silentHandler,
     tools,
     extra,
     async () => {},
-    descriptionProps ?? buildDescriptionGeneratorProps(tools),
+    toolDescriptionProps ?? buildDescriptionGeneratorProps(tools),
   )
   result.extendedUsage.catch(error => {
     logger.error(ctx, "[self-summary] Error getting extended usage", error, { summarization: { invocationId } })
@@ -240,9 +240,9 @@ async function executeSelfSummaryStream(
   for await (const _chunk of result.fullStream) {}
   const response = await result.response
   const extendedUsage = await result.extendedUsage
-  const membershipTags = getMembershipTypeMetricTagsFromContext(ctx)
-  selfSummaryInputTokens.histogram(ctx, extendedUsage.inputTokens, membershipTags)
-  selfSummaryOutputTokens.histogram(ctx, extendedUsage.outputTokens, membershipTags)
+  const metricTags = getMembershipTypeMetricTagsFromContext(ctx)
+  selfSummaryInputTokens.histogram(ctx, extendedUsage.inputTokens, metricTags)
+  selfSummaryOutputTokens.histogram(ctx, extendedUsage.outputTokens, metricTags)
   if (response.error) throw response.error
   // The usage is the turn's usage: a self-summary is part of the conversation it summarizes.
   stateHandler.addTurnUsage({
@@ -252,17 +252,17 @@ async function executeSelfSummaryStream(
     cacheWriteTokens: extendedUsage.cacheWriteTokens,
     reasoningTokens: extendedUsage.reasoningTokens,
   })
-  let hasAnyToolCalls = false
+  let toolCallsSeen = false
   for (const message of response.messages) {
-    const hasToolCalls = message.role === "assistant" && Array.isArray(message.content) &&
+    const toolCallPart = message.role === "assistant" && Array.isArray(message.content) &&
       message.content.some(part => (part as { type?: unknown }).type === "tool-call")
-    if (hasToolCalls) {
-      hasAnyToolCalls = true
-      selfSummaryUnexpectedToolCalls.increment(ctx, 1, membershipTags)
+    if (toolCallPart) {
+      toolCallsSeen = true
+      selfSummaryUnexpectedToolCalls.increment(ctx, 1, metricTags)
     }
   }
   // A model that kept calling tools instead of summarizing has not summarized, so it is reported loudly.
-  if (hasAnyToolCalls) {
+  if (toolCallsSeen) {
     logger.error(ctx, "[self-summary] unexpected tool calls detected in summarization response", {
       summarization: { invocationId },
     })
@@ -272,14 +272,14 @@ async function executeSelfSummaryStream(
       summarization: { messageCount: response.messages.length, invocationId },
     })
   }
-  const assistantMessage = response.messages.at(-1)
-  if (assistantMessage?.role !== "assistant") throw new NoSummaryResponseError()
-  const textContent = extractTextContent(
-    toRedactedCoreMessage(assistantMessage, stateHandler.getPrivacyMode()) as SelfSummaryMessage,
+  const finalAssistant = response.messages.at(-1)
+  if (finalAssistant?.role !== "assistant") throw new NoSummaryResponseError()
+  const answerText = extractTextContent(
+    toRedactedCoreMessage(finalAssistant, stateHandler.getPrivacyMode()) as SelfSummaryMessage,
   ).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   return {
-    assistantMessage,
-    textContent,
+    assistantMessage: finalAssistant,
+    textContent: answerText,
     inputTokens: extendedUsage.inputTokens,
     outputTokens: extendedUsage.outputTokens,
     cacheReadTokens: extendedUsage.cacheReadTokens,
@@ -288,18 +288,18 @@ async function executeSelfSummaryStream(
 }
 
 /** Asking for a shorter summary means asking the same question again with that instruction appended. */
-function appendShorterOutputRetryInstruction(inputMessages: readonly CoreMessageLike[]): readonly CoreMessageLike[] {
-  const nextMessages = inputMessages.slice()
-  const promptMessage = nextMessages.at(-1)
+function appendShorterOutputRetryInstruction(sourceMessages: readonly CoreMessageLike[]): readonly CoreMessageLike[] {
+  const updatedMessages = sourceMessages.slice()
+  const lastMessage = updatedMessages.at(-1)
   // A prompt that is not a string message cannot be appended to, so the input is left as it was.
-  if (promptMessage === undefined || promptMessage.role === "tool" || typeof promptMessage.content !== "string") {
-    return inputMessages
+  if (lastMessage === undefined || lastMessage.role === "tool" || typeof lastMessage.content !== "string") {
+    return sourceMessages
   }
-  nextMessages[nextMessages.length - 1] = {
-    ...promptMessage,
-    content: `${promptMessage.content}${SHORTER_OUTPUT_RETRY_PROMPT}`,
+  updatedMessages[updatedMessages.length - 1] = {
+    ...lastMessage,
+    content: `${lastMessage.content}${SHORTER_OUTPUT_RETRY_PROMPT}`,
   }
-  return nextMessages
+  return updatedMessages
 }
 
 /**
@@ -313,129 +313,129 @@ function appendShorterOutputRetryInstruction(inputMessages: readonly CoreMessage
  * was dropped.
  */
 function reduceSelfSummaryInputMessages(
-  inputMessages: readonly CoreMessageLike[],
+  sourceMessages: readonly CoreMessageLike[],
   preservedPrefixMessageCount: number,
 ): readonly CoreMessageLike[] {
   // Nothing between the prefix and the prompt means there is nothing to drop.
-  if (inputMessages.length <= preservedPrefixMessageCount + 1) return inputMessages
-  const prefixMessages = inputMessages.slice(0, preservedPrefixMessageCount)
-  const promptMessage = inputMessages.at(-1)
-  const middleMessages = inputMessages.slice(preservedPrefixMessageCount, -1)
+  if (sourceMessages.length <= preservedPrefixMessageCount + 1) return sourceMessages
+  const keptPrefix = sourceMessages.slice(0, preservedPrefixMessageCount)
+  const lastMessage = sourceMessages.at(-1)
+  const bodyMessages = sourceMessages.slice(preservedPrefixMessageCount, -1)
   const isAssistantToolCallMessage = (message: CoreMessageLike) =>
     message.role === "assistant" && Array.isArray(message.content) &&
     message.content.some(part => (part as { type?: unknown }).type === "tool-call")
-  if (promptMessage === undefined || middleMessages.length === 0) return inputMessages
-  const toolMessageCount = middleMessages.filter(message => message.role === "tool").length
-  if (toolMessageCount > 0 && toolMessageCount / middleMessages.length >= TOOL_MESSAGE_DROP_THRESHOLD) {
-    const keptMiddleMessages = middleMessages.filter(
+  if (lastMessage === undefined || bodyMessages.length === 0) return sourceMessages
+  const toolMessageCount = bodyMessages.filter(message => message.role === "tool").length
+  if (toolMessageCount > 0 && toolMessageCount / bodyMessages.length >= TOOL_MESSAGE_DROP_THRESHOLD) {
+    const survivingMessages = bodyMessages.filter(
       message => message.role !== "tool" && !isAssistantToolCallMessage(message),
     )
-    return [...prefixMessages, ...keptMiddleMessages, promptMessage]
+    return [...keptPrefix, ...survivingMessages, lastMessage]
   }
-  if (middleMessages.length === 1) {
+  if (bodyMessages.length === 1) {
     // A single message is halved, and one too short to halve is left alone rather than emptied.
-    const onlyMessage = middleMessages[0]!
-    if (onlyMessage.role === "tool" || typeof onlyMessage.content !== "string" || onlyMessage.content.length < 2) {
-      return inputMessages
+    const singleMessage = bodyMessages[0]!
+    if (singleMessage.role === "tool" || typeof singleMessage.content !== "string" || singleMessage.content.length < 2) {
+      return sourceMessages
     }
-    const nextContent = onlyMessage.content.slice(Math.floor(onlyMessage.content.length / 2))
-    return [...prefixMessages, { ...onlyMessage, content: nextContent }, promptMessage]
+    const halvedContent = singleMessage.content.slice(Math.floor(singleMessage.content.length / 2))
+    return [...keptPrefix, { ...singleMessage, content: halvedContent }, lastMessage]
   }
-  let keptMiddleMessageStartIndex = Math.floor(middleMessages.length / 2)
+  let keptMiddleMessageStartIndex = Math.floor(bodyMessages.length / 2)
   while (
-    keptMiddleMessageStartIndex < middleMessages.length &&
-    middleMessages[keptMiddleMessageStartIndex]?.role === "tool"
+    keptMiddleMessageStartIndex < bodyMessages.length &&
+    bodyMessages[keptMiddleMessageStartIndex]?.role === "tool"
   ) {
     keptMiddleMessageStartIndex++
   }
-  const keptMiddleMessages = middleMessages.slice(keptMiddleMessageStartIndex)
-  return [...prefixMessages, ...keptMiddleMessages, promptMessage]
+  const survivingMessages = bodyMessages.slice(keptMiddleMessageStartIndex)
+  return [...keptPrefix, ...survivingMessages, lastMessage]
 }
 
 export async function executeSelfSummaryWithRetry(
-  parentCtx: Context,
-  summarizationPromptSession: SelfSummaryPromptSession,
+  outerCtx: Context,
+  promptSessionSource: SelfSummaryPromptSession,
   stateHandler: SelfSummaryStateHandler,
-  interactionListener: RedactedInteractionListener,
-  summarizationInputMessages: readonly CoreMessageLike[],
+  redactedListener: RedactedInteractionListener,
+  summarizationSource: readonly CoreMessageLike[],
   tools: SelfSummaryTool[],
   extra: unknown,
   options: SelfSummaryRetryOptions & { readonly preservedPrefixMessageCount: number },
 ): Promise<Awaited<ReturnType<typeof executeSelfSummaryStream>>> {
-  using spanContext = createSpan(parentCtx.withName("executeSelfSummaryWithRetry"))
+  using spanContext = createSpan(outerCtx.withName("executeSelfSummaryWithRetry"))
   const ctx = spanContext.ctx
-  const membershipTags = getMembershipTypeMetricTagsFromContext(ctx)
+  const metricTags = getMembershipTypeMetricTagsFromContext(ctx)
   const maxmode = getMaxModeFromContext(ctx) ? "true" : "false"
-  let currentInputMessages = summarizationInputMessages
+  let workingMessages = summarizationSource
   let requestShorterOutput = false
-  let lastErrorKind: string | undefined
+  let finalErrorKind: string | undefined
   for (let attempt = 1; attempt <= MAX_SELF_SUMMARY_RETRIES; attempt++) {
     logger.info(ctx, "[self-summary] attempt started", {
       summarization: {
         attempt,
         maxRetries: MAX_SELF_SUMMARY_RETRIES,
-        inputMessageCount: currentInputMessages.length,
+        inputMessageCount: workingMessages.length,
         requestShorterOutput,
       },
     })
-    selfSummaryTryAttempts.increment(ctx, 1, membershipTags)
+    selfSummaryTryAttempts.increment(ctx, 1, metricTags)
     try {
-      const executor = summarizationPromptSession.getExecutor()
-      executor.appendMessages(currentInputMessages)
+      const toolExecutor = promptSessionSource.getExecutor()
+      toolExecutor.appendMessages(workingMessages)
       const result = await executeSelfSummaryStream(
         ctx,
-        executor,
+        toolExecutor,
         stateHandler,
-        interactionListener,
+        redactedListener,
         tools,
         extra,
-        options.descriptionProps,
+        options.toolDescriptionProps,
       )
-      const hasContent = result.textContent.trim().length > 0
-      if (hasContent) {
+      const answerNonEmpty = result.textContent.trim().length > 0
+      if (answerNonEmpty) {
         logger.info(ctx, "[self-summary] attempt succeeded", {
           summarization: { attempt, contentLength: result.textContent.length },
         })
-        selfSummaryTrySuccess.increment(ctx, 1, membershipTags)
+        selfSummaryTrySuccess.increment(ctx, 1, metricTags)
         selfSummaryStatus.increment(ctx, 1, {
           outcome: "success",
           errorKind: "Ok",
-          ...membershipTags,
+          ...metricTags,
           maxmode,
         })
         return result
       }
       // An answer with nothing in it is a failure, not a summary of nothing.
-      const willRetry = attempt < MAX_SELF_SUMMARY_RETRIES
-      lastErrorKind = "EmptyContent"
-      selfSummaryTryFailures.increment(ctx, 1, { errorKind: "EmptyContent", ...membershipTags })
+      const retryAllowed = attempt < MAX_SELF_SUMMARY_RETRIES
+      finalErrorKind = "EmptyContent"
+      selfSummaryTryFailures.increment(ctx, 1, { errorKind: "EmptyContent", ...metricTags })
       logger.warn(ctx, "[self-summary] empty content received", {
-        summarization: { attempt, maxRetries: MAX_SELF_SUMMARY_RETRIES, willRetry },
+        summarization: { attempt, maxRetries: MAX_SELF_SUMMARY_RETRIES, retryAllowed },
       })
-      if (!willRetry) break
-      selfSummaryRetries.increment(ctx, 1, { errorKind: "EmptyContent", ...membershipTags })
+      if (!retryAllowed) break
+      selfSummaryRetries.increment(ctx, 1, { errorKind: "EmptyContent", ...metricTags })
     } catch (error) {
       const enableRetryNoSummaryResponse = options.enableRetryNoSummaryResponse ?? false
       const enableReduceInputsRetry = options.enableReduceInputsRetry ?? true
       const enableRetryUncategorizedErrors = options.enableRetryUncategorizedErrors ?? true
-      const retryDirective = getRetryDirective(error, {
+      const directive = getRetryDirective(error, {
         transientRetryDelayMs: TRANSIENT_SELF_SUMMARY_RETRY_DELAY_MS,
         enableRetryNoSummaryResponse,
         enableReduceInputsRetry,
         enableRetryUncategorizedErrors,
       })
-      const willRetry = retryDirective.shouldRetry && attempt < MAX_SELF_SUMMARY_RETRIES
-      lastErrorKind = retryDirective.errorType
-      selfSummaryTryFailures.increment(ctx, 1, { errorKind: retryDirective.errorType, ...membershipTags })
+      const retryAllowed = directive.shouldRetry && attempt < MAX_SELF_SUMMARY_RETRIES
+      finalErrorKind = directive.errorType
+      selfSummaryTryFailures.increment(ctx, 1, { errorKind: directive.errorType, ...metricTags })
       logger.error(ctx, "[self-summary] attempt failed with error", error, {
         summarization: {
           attempt,
           maxRetries: MAX_SELF_SUMMARY_RETRIES,
-          errorType: retryDirective.errorType,
-          willRetry,
-          retryDelayMs: retryDirective.retryDelayMs,
-          requestShorterOutput: retryDirective.requestShorterOutput,
-          reduceInputs: retryDirective.reduceInputs,
+          errorType: directive.errorType,
+          retryAllowed,
+          retryDelayMs: directive.retryDelayMs,
+          requestShorterOutput: directive.requestShorterOutput,
+          reduceInputs: directive.reduceInputs,
           options: {
             enableReduceInputsRetry,
             enableRetryNoSummaryResponse,
@@ -443,42 +443,42 @@ export async function executeSelfSummaryWithRetry(
           },
         },
       })
-      if (!willRetry) {
+      if (!retryAllowed) {
         selfSummaryStatus.increment(ctx, 1, {
           outcome: "failed",
-          errorKind: retryDirective.errorType,
-          ...membershipTags,
+          errorKind: directive.errorType,
+          ...metricTags,
           maxmode,
         })
         throw error
       }
-      selfSummaryRetries.increment(ctx, 1, { errorKind: retryDirective.errorType, ...membershipTags })
-      if (retryDirective.requestShorterOutput && !requestShorterOutput) {
-        currentInputMessages = appendShorterOutputRetryInstruction(currentInputMessages)
+      selfSummaryRetries.increment(ctx, 1, { errorKind: directive.errorType, ...metricTags })
+      if (directive.requestShorterOutput && !requestShorterOutput) {
+        workingMessages = appendShorterOutputRetryInstruction(workingMessages)
         requestShorterOutput = true
         logger.info(ctx, "[self-summary] retrying with shorter-output instruction", {
           summarization: { attempt, nextAttempt: attempt + 1 },
         })
       }
-      if (retryDirective.reduceInputs) {
+      if (directive.reduceInputs) {
         const nextInputMessages = reduceSelfSummaryInputMessages(
-          currentInputMessages,
+          workingMessages,
           options.preservedPrefixMessageCount,
         )
         logger.info(ctx, "[self-summary] retrying with reduced inputs", {
           summarization: {
             attempt,
-            previousInputMessageCount: currentInputMessages.length,
+            previousInputMessageCount: workingMessages.length,
             nextInputMessageCount: nextInputMessages.length,
           },
         })
-        currentInputMessages = nextInputMessages
+        workingMessages = nextInputMessages
       }
-      if (retryDirective.retryDelayMs > 0) {
+      if (directive.retryDelayMs > 0) {
         logger.info(ctx, "[self-summary] retrying after delay", {
-          summarization: { attempt, retryDelayMs: retryDirective.retryDelayMs },
+          summarization: { attempt, retryDelayMs: directive.retryDelayMs },
         })
-        await new Promise(resolve => setTimeout(resolve, retryDirective.retryDelayMs))
+        await new Promise(resolve => setTimeout(resolve, directive.retryDelayMs))
       }
     }
   }
@@ -487,8 +487,8 @@ export async function executeSelfSummaryWithRetry(
   })
   selfSummaryStatus.increment(ctx, 1, {
     outcome: "failed",
-    errorKind: lastErrorKind ?? "EmptyContent",
-    ...membershipTags,
+    errorKind: finalErrorKind ?? "EmptyContent",
+    ...metricTags,
     maxmode,
   })
   throw new Error("[self-summary] all retries exhausted without valid content")
@@ -497,7 +497,7 @@ export async function executeSelfSummaryWithRetry(
 export class SelfSummarizer {
   declare readonly promptSession: SelfSummaryPromptSession
   declare readonly stateHandler: SelfSummaryStateHandler
-  declare readonly interactionListener: RedactedInteractionListener
+  declare readonly redactedListener: RedactedInteractionListener
   declare readonly tools: SelfSummaryTool[]
   declare readonly extraT: unknown
   declare readonly modelId: string
@@ -507,7 +507,7 @@ export class SelfSummarizer {
   constructor(
     promptSession: SelfSummaryPromptSession,
     stateHandler: SelfSummaryStateHandler,
-    interactionListener: RedactedInteractionListener,
+    redactedListener: RedactedInteractionListener,
     tools: SelfSummaryTool[],
     extraT: unknown,
     modelId: string,
@@ -516,7 +516,7 @@ export class SelfSummarizer {
   ) {
     this.promptSession = promptSession
     this.stateHandler = stateHandler
-    this.interactionListener = interactionListener
+    this.redactedListener = redactedListener
     this.tools = tools
     this.extraT = extraT
     this.modelId = modelId
@@ -560,26 +560,26 @@ export class SelfSummarizer {
     if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
     // The instruction is the last message, so the model reads the conversation and then the request to
     // summarize it, which is the shape it was trained on.
-    const privacySource = partitioned.preservedTailMessages[0] ?? partitioned.userInfoMessage ?? partitioned.systemMessage
-    const summarizationInputMessages: RedactedCoreMessage[] = [
+    const privacyCarrier = partitioned.preservedTailMessages[0] ?? partitioned.userInfoMessage ?? partitioned.systemMessage
+    const summarizationSource: RedactedCoreMessage[] = [
       partitioned.systemMessage,
       ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
       ...partitioned.messagesToSummarize,
       {
-        _privacyMode: privacySource._privacyMode,
+        _privacyMode: privacyCarrier._privacyMode,
         role: "user",
         content: safeString(SELF_SUMMARIZATION_PROMPT),
         providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
       },
     ]
-    const unredact = (message: RedactedCoreMessage) =>
+    const unredactMessage = (message: RedactedCoreMessage) =>
       fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    const { assistantMessage } = await executeSelfSummaryWithRetry(
+    const { assistantMessage: finalAssistant } = await executeSelfSummaryWithRetry(
       ctx,
       this.promptSession,
       this.stateHandler,
-      this.interactionListener,
-      summarizationInputMessages.map(unredact),
+      this.redactedListener,
+      summarizationSource.map(unredactMessage),
       this.tools,
       this.extraT,
       {
@@ -589,7 +589,7 @@ export class SelfSummarizer {
       },
     )
     const summaryText = extractTextContent(
-      toRedactedCoreMessage(assistantMessage, this.stateHandler.getPrivacyMode()) as SelfSummaryMessage,
+      toRedactedCoreMessage(finalAssistant, this.stateHandler.getPrivacyMode()) as SelfSummaryMessage,
     ).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
     return { text: summaryText }
   }
@@ -599,46 +599,46 @@ export class SelfSummarizer {
     partitioned: SelfSummaryPartition,
     enrichments: SummarizationEnrichments,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
-    const totalSummariesAfter = this.stateHandler.selfSummaryCount + 1
-    const durableBlocks = renderDurableBlocks("self-summary", enrichments as DurableBlockEnrichments, {
+    const summaryNumber = this.stateHandler.selfSummaryCount + 1
+    const blocks = renderDurableBlocks("self-summary", enrichments as DurableBlockEnrichments, {
       includeTranscript: this.enableTranscriptEnrichment,
     })
     // The blocks that go in front are what the session is, and the ones that follow are what it was doing.
-    const wrappedContent = `${prependDurableBlocks("self-summary", durableBlocks)}
+    const summaryBody = `${prependDurableBlocks("self-summary", blocks)}
 
 Your conversation was summarized due to context constraints. Here is the summary of the conversation so far:
 
 <summary_content>
 ${rawSummary.text}
-</summary_content>${appendDurableBlocks("self-summary", durableBlocks)}
+</summary_content>${appendDurableBlocks("self-summary", blocks)}
 
-Total summaries generated so far for this user query: ${totalSummariesAfter}
+Total summaries generated so far for this user query: ${summaryNumber}
 
 If the task is complete, respond to the user. Otherwise, continue working on the task.`
     const lastUserQuery = partitioned.preservedTailMessages[0]
-    const privacySource = lastUserQuery ?? partitioned.userInfoMessage ?? partitioned.systemMessage
-    const summaryPrivacyMode = privacySource!._privacyMode ?? this.stateHandler.getPrivacyMode()
+    const privacyCarrier = lastUserQuery ?? partitioned.userInfoMessage ?? partitioned.systemMessage
+    const summaryPrivacyMode = privacyCarrier!._privacyMode ?? this.stateHandler.getPrivacyMode()
     return {
       message: toRedactedCoreMessage({
         role: "user",
-        content: wrappedContent,
+        content: summaryBody,
         providerOptions: { cursor: { isSummary: true } },
       }, summaryPrivacyMode),
-      summaryTextLength: wrappedContent.length,
+      summaryTextLength: summaryBody.length,
     }
   }
 
   /** The summary goes last: the preserved tail is what the model was about to answer, and it answers it. */
   assembleFinalMessages(
     partitioned: SelfSummaryPartition,
-    summaryMessage: RedactedCoreMessage,
+    summaryEntry: RedactedCoreMessage,
   ): readonly RedactedCoreMessage[] {
     if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
     return [
       partitioned.systemMessage,
       ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
       ...partitioned.preservedTailMessages,
-      summaryMessage,
+      summaryEntry,
     ]
   }
 
@@ -648,37 +648,37 @@ If the task is complete, respond to the user. Otherwise, continue working on the
     options: SummarizationPipelineOptions,
   ): Promise<Record<string, unknown>> {
     using spanContext = createSpan(ctx.withName("SelfSummarizer.summarize"))
-    const innerCtx = spanContext.ctx
+    const workCtx = spanContext.ctx
     const startTime = performance.now()
-    logger.info(innerCtx, "[self-summary] SelfSummarizer.summarize starting", {
+    logger.info(workCtx, "[self-summary] SelfSummarizer.summarize starting", {
       summarization: { messageCount: messages.length, modelId: this.modelId },
     })
     try {
-      const pipelineResult = await runSummarizationPipeline(this, innerCtx, messages, options)
-      const summaryCodeString = createRedactedString(
-        pipelineResult.rawSummary.text,
+      const pipelineOutcome = await runSummarizationPipeline(this, workCtx, messages, options)
+      const summaryCode = createRedactedString(
+        pipelineOutcome.rawSummary.text,
         DataClassification.CODE,
         "summary",
         this.stateHandler.getPrivacyMode(),
       )
-      logger.info(innerCtx, "[self-summary] SelfSummarizer.summarize completed", {
+      logger.info(workCtx, "[self-summary] SelfSummarizer.summarize completed", {
         summarization: {
-          summaryTextLength: pipelineResult.rawSummary.text.length,
-          fullReplacementMessagesCount: pipelineResult.fullReplacementMessages.length,
-          messagesActuallySummarizedCount: pipelineResult.messagesActuallySummarized.length,
+          summaryTextLength: pipelineOutcome.rawSummary.text.length,
+          fullReplacementMessagesCount: pipelineOutcome.fullReplacementMessages.length,
+          messagesActuallySummarizedCount: pipelineOutcome.messagesActuallySummarized.length,
         },
       })
       return {
-        ...pipelineResult,
-        summary: { summary: summaryCodeString },
+        ...pipelineOutcome,
+        summary: { summary: summaryCode },
         // The count is what tells the model how many times this request has been summarized.
         onPersisted: () => { this.stateHandler.incrementSelfSummaryCount() },
       }
     } finally {
       selfSummaryTimeTakenMs.histogram(
-        innerCtx,
+        workCtx,
         performance.now() - startTime,
-        getMembershipTypeMetricTagsFromContext(innerCtx),
+        getMembershipTypeMetricTagsFromContext(workCtx),
       )
     }
   }
