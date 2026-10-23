@@ -1,8 +1,10 @@
 /**
  * What the computer tool needs from the host.
  *
- * The box's desktop, its monitor and the approvals the platform applies are gathered here, so the tool asks for one
- * thing rather than reaching into the host for each.
+ * The box's desktop, its monitor, its approvals and the shell behind them are gathered here, so the tool asks for one
+ * dependency object rather than reaching into the host for each piece. Three projections come out of this module:
+ * the computer-use executor, the shell executor that carries the host's approval and audit rules, and the browser
+ * driver's identity and shell bridge.
  */
 import {
   ComputerUseAction,
@@ -39,39 +41,44 @@ import type { BrowserDriverDependencies } from "./tools/slate-browser-tools.ts";
 import type { SlateBrowserAutoReviewOptions } from "./slate-browser-auto-review.ts";
 import type { SlateComputerAutoReviewOptions } from "./slate-computer-auto-review.ts";
 
-export interface HostComputerToolProjectionInput<Context = unknown> {
+/** What the host hands the computer tool: the resource accessor and the optional hooks around it. */
+export type HostComputerToolProjectionInput<Context = unknown> = {
   readonly resourceAccessor: { get(resource: unknown): unknown };
-  readonly autoReview?: SlateComputerAutoReviewOptions;
   readonly persistImage?: (
     bytes: Uint8Array,
     mimeType: string,
   ) => Promise<{ readonly fileUrl: string } | undefined>;
   readonly isUnicodeTypingEnabled?: () => boolean;
   readonly onComputerAction?: (action: ReportedComputerAction) => void;
-}
+  readonly autoReview?: SlateComputerAutoReviewOptions;
+};
 
-export interface HostShellExecutorProjectionInput {
+/** What the host hands its shell projection: the resource accessor plus the two safety callbacks. */
+export type HostShellExecutorProjectionInput = {
   readonly resourceAccessor: { get(resource: unknown): unknown };
   readonly assertNoPendingApproval: () => void;
   readonly auditShellCommand: (command: string) => void;
-}
+};
 
+/** The shell the browser driver executes through. */
 export interface HostShellExecutor {
   execute(
     context: unknown,
-    args: HostShellArgsInput,
+    toolArgs: HostShellArgsInput,
     options?: ExecutorOptions,
   ): Promise<ShellResult>;
 }
 
-export interface HostBrowserBoxOwner<Context = unknown> {
+/** The box a browser driver drives: its readiness, its window per agent, and its file transfers. */
+export type HostBrowserBoxOwner<Context = unknown> = {
   ensureReady(context: Context, agentId: string): Promise<unknown>;
   getAgentWindowIndex(agentId: string): number | undefined;
   uploadFile(context: Context, agentId: string, path: string, bytes: Uint8Array): Promise<void>;
   downloadFile(context: Context, agentId: string, path: string): Promise<Uint8Array>;
-}
+};
 
-export interface HostBrowserDriverProjectionInput<Context = unknown> {
+/** What the host hands the browser driver: its box, its identities and the shell it runs commands through. */
+export type HostBrowserDriverProjectionInput<Context = unknown> = {
   readonly resourceAccessor: { get(resource: unknown): unknown };
   readonly box: HostBrowserBoxOwner<Context>;
   readonly getBoxId: () => string;
@@ -79,42 +86,45 @@ export interface HostBrowserDriverProjectionInput<Context = unknown> {
   readonly executeShell: HostShellExecutor;
   readonly getPersistImage?: BrowserDriverDependencies<Context>["getPersistImage"];
   readonly autoReview?: SlateBrowserAutoReviewOptions;
-}
+};
 
-type ActionValue = Readonly<Record<string, unknown>>;
+/** One action's payload read as a record, or the refusal for something that is not one. */
+type ActionPayload = Readonly<Record<string, unknown>>;
 
-function valueRecord(value: unknown, actionCase: string): ActionValue {
-  if (typeof value !== "object" || value == null || Array.isArray(value)) {
-    throw new TypeError(`computer action ${actionCase} has no value`);
+function payloadRecord(payload: unknown, wireCase: string): ActionPayload {
+  if (typeof payload !== "object" || payload == null || Array.isArray(payload)) {
+    throw new TypeError(`computer action ${wireCase} has no value`);
   }
-  return value as ActionValue;
+  return payload as ActionPayload;
 }
 
-function requiredNumber(value: unknown, field: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function finiteField(payload: unknown, field: string): number {
+  if (typeof payload !== "number" || !Number.isFinite(payload)) {
     throw new TypeError(`computer action field ${field} is not numeric`);
   }
-  return value;
+  return payload;
 }
 
-function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string") {
+function stringField(payload: unknown, field: string): string {
+  if (typeof payload !== "string") {
     throw new TypeError(`computer action field ${field} is not textual`);
   }
-  return value;
+  return payload;
 }
 
-function optionalCoordinate(value: unknown): Coordinate | undefined {
-  if (value == null) return undefined;
-  const record = valueRecord(value, "coordinate");
+/** A coordinate when the payload names one, and nothing when it does not. */
+function coordinateFrom(payload: unknown): Coordinate | undefined {
+  if (payload == null) return undefined;
+  const record = payloadRecord(payload, "coordinate");
   return new Coordinate({
-    x: requiredNumber(record.x, "coordinate.x"),
-    y: requiredNumber(record.y, "coordinate.y"),
+    x: finiteField(record.x, "coordinate.x"),
+    y: finiteField(record.y, "coordinate.y"),
   });
 }
 
-function button(value: unknown): MouseButton {
-  if (typeof value !== "string") {
+/** A mouse button name as the generated enum, or the refusal for a name it does not know. */
+function buttonFromName(payload: unknown): MouseButton {
+  if (typeof payload !== "string") {
     throw new TypeError("computer action button is not textual");
   }
   const buttons: Readonly<Record<string, MouseButton>> = {
@@ -124,13 +134,14 @@ function button(value: unknown): MouseButton {
     BACK: MouseButton.BACK,
     FORWARD: MouseButton.FORWARD,
   };
-  const result = buttons[value];
-  if (result === undefined) throw new TypeError(`unknown computer action button: ${value}`);
+  const result = buttons[payload];
+  if (result === undefined) throw new TypeError(`unknown computer action button: ${payload}`);
   return result;
 }
 
-function direction(value: unknown): ScrollDirection {
-  if (typeof value !== "string") {
+/** A scroll direction name as the generated enum, or the refusal for a name it does not know. */
+function directionFromName(payload: unknown): ScrollDirection {
+  if (typeof payload !== "string") {
     throw new TypeError("computer action direction is not textual");
   }
   const directions: Readonly<Record<string, ScrollDirection>> = {
@@ -139,215 +150,261 @@ function direction(value: unknown): ScrollDirection {
     LEFT: ScrollDirection.LEFT,
     RIGHT: ScrollDirection.RIGHT,
   };
-  const result = directions[value];
-  if (result === undefined) throw new TypeError(`unknown computer action direction: ${value}`);
+  const result = directions[payload];
+  if (result === undefined) throw new TypeError(`unknown computer action direction: ${payload}`);
   return result;
 }
 
-function generatedAction(action: ComputerProtocolAction): ComputerUseAction {
-  const actionCase = action.action.case;
-  if (actionCase === undefined) throw new TypeError("computer action has no case");
-  const value = valueRecord(action.action.value, actionCase);
-  switch (actionCase) {
-    case "mouseMove":
-      {
-        const coordinate = optionalCoordinate(value.coordinate);
-      return new ComputerUseAction({
-        action: {
-          case: "mouseMove",
-          value: new MouseMoveAction({
-            ...(coordinate === undefined ? {} : { coordinate }),
-          }),
-        },
-      });
-      }
-    case "click":
-      {
-        const coordinate = optionalCoordinate(value.coordinate);
-      return new ComputerUseAction({
-        action: {
-          case: "click",
-          value: new ClickAction({
-            ...(coordinate === undefined ? {} : { coordinate }),
-            button: button(value.button),
-            count: requiredNumber(value.count, "count"),
-            ...(value.modifierKeys == null ? {} : { modifierKeys: requiredString(value.modifierKeys, "modifierKeys") }),
-          }),
-        },
-      });
-      }
-    case "mouseDown":
-      return new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: button(value.button) }) } });
-    case "mouseUp":
-      return new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: button(value.button) }) } });
-    case "drag": {
-      if (!Array.isArray(value.path)) throw new TypeError("computer action drag path is not an array");
-      const path = value.path.map(point => {
-        const coordinate = optionalCoordinate(point);
-        if (coordinate === undefined) throw new TypeError("computer action drag path contains no coordinate");
-        return coordinate;
-      });
-      return new ComputerUseAction({
-        action: {
-          case: "drag",
-          value: new DragAction({
-            path,
-            button: button(value.button),
-            ...(value.modifierKeys == null ? {} : { modifierKeys: requiredString(value.modifierKeys, "modifierKeys") }),
-          }),
-        },
-      });
-    }
-    case "scroll":
-      {
-        const coordinate = optionalCoordinate(value.coordinate);
-      return new ComputerUseAction({
-        action: {
-          case: "scroll",
-          value: new ScrollAction({
-            ...(coordinate === undefined ? {} : { coordinate }),
-            direction: direction(value.direction),
-            amount: requiredNumber(value.amount, "amount"),
-            ...(value.modifierKeys == null ? {} : { modifierKeys: requiredString(value.modifierKeys, "modifierKeys") }),
-          }),
-        },
-      });
-      }
-    case "type":
-      return new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: requiredString(value.text, "text") }) } });
-    case "key":
-      return new ComputerUseAction({
-        action: {
-          case: "key",
-          value: new KeyAction({
-            key: requiredString(value.key, "key"),
-            ...(value.holdDurationMs == null ? {} : { holdDurationMs: requiredNumber(value.holdDurationMs, "holdDurationMs") }),
-          }),
-        },
-      });
-    case "wait":
-      return new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: requiredNumber(value.durationMs, "durationMs") }) } });
-    case "screenshot":
-      return new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction({}) } });
-    case "cursorPosition":
-      return new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction({}) } });
-    default:
-      throw new TypeError(`unsupported computer action: ${actionCase}`);
-  }
+/** The modifier keys a click, a drag or a scroll was given, when the payload carries them. */
+function carriedModifiers(payload: ActionPayload): { modifierKeys?: string } {
+  return payload.modifierKeys == null ? {} : { modifierKeys: stringField(payload.modifierKeys, "modifierKeys") };
 }
 
-export function toGeneratedComputerUseArgs(args: {
+/** One builder per action case: what the payload is read as before the generated action is created. */
+type ActionBuilder = (payload: ActionPayload) => ComputerUseAction;
+
+/** The builders for every action the protocol can name, in the case spellings the wire uses. */
+const ACTION_READERS: ReadonlyMap<string, ActionBuilder> = new Map<string, ActionBuilder>([
+  ["mouseMove", payload => {
+    const coordinate = coordinateFrom(payload.coordinate);
+    return new ComputerUseAction({
+      action: {
+        case: "mouseMove",
+        value: new MouseMoveAction({
+          ...(coordinate === undefined ? {} : { coordinate }),
+        }),
+      },
+    });
+  }],
+  ["click", payload => {
+    const coordinate = coordinateFrom(payload.coordinate);
+    return new ComputerUseAction({
+      action: {
+        case: "click",
+        value: new ClickAction({
+          ...(coordinate === undefined ? {} : { coordinate }),
+          button: buttonFromName(payload.button),
+          count: finiteField(payload.count, "count"),
+          ...carriedModifiers(payload),
+        }),
+      },
+    });
+  }],
+  ["mouseDown", payload => new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: buttonFromName(payload.button) }) } })],
+  ["mouseUp", payload => new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: buttonFromName(payload.button) }) } })],
+  ["drag", payload => {
+    if (!Array.isArray(payload.path)) throw new TypeError("computer action drag path is not an array");
+    const path = payload.path.map(point => {
+      const coordinate = coordinateFrom(point);
+      if (coordinate === undefined) throw new TypeError("computer action drag path contains no coordinate");
+      return coordinate;
+    });
+    return new ComputerUseAction({
+      action: {
+        case: "drag",
+        value: new DragAction({
+          path,
+          button: buttonFromName(payload.button),
+          ...carriedModifiers(payload),
+        }),
+      },
+    });
+  }],
+  ["scroll", payload => {
+    const coordinate = coordinateFrom(payload.coordinate);
+    return new ComputerUseAction({
+      action: {
+        case: "scroll",
+        value: new ScrollAction({
+          ...(coordinate === undefined ? {} : { coordinate }),
+          direction: directionFromName(payload.direction),
+          amount: finiteField(payload.amount, "amount"),
+          ...carriedModifiers(payload),
+        }),
+      },
+    });
+  }],
+  ["type", payload => new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: stringField(payload.text, "text") }) } })],
+  ["key", payload => new ComputerUseAction({
+    action: {
+      case: "key",
+      value: new KeyAction({
+        key: stringField(payload.key, "key"),
+        ...(payload.holdDurationMs == null ? {} : { holdDurationMs: finiteField(payload.holdDurationMs, "holdDurationMs") }),
+      }),
+    },
+  })],
+  ["wait", payload => new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: finiteField(payload.durationMs, "durationMs") }) } })],
+  ["screenshot", () => new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction({}) } })],
+  ["cursorPosition", () => new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction({}) } })],
+]);
+
+/** One protocol action as the generated computer-use action, refusing what it cannot read. */
+function toGeneratedAction(action: ComputerProtocolAction): ComputerUseAction {
+  const wireCase = action.action.case;
+  if (wireCase === undefined) throw new TypeError("computer action has no case");
+  const payload = payloadRecord(action.action.value, wireCase);
+  const build = ACTION_READERS.get(wireCase);
+  if (build === undefined) throw new TypeError(`unsupported computer action: ${wireCase}`);
+  return build(payload);
+}
+
+export function toGeneratedComputerUseArgs(toolArgs: {
   readonly toolCallId: string;
   readonly actions: readonly ComputerProtocolAction[];
   readonly bindUnmappedCharacters?: boolean;
   readonly description?: string;
 }): ComputerUseArgs {
   return new ComputerUseArgs({
-    toolCallId: args.toolCallId,
-    actions: args.actions.map(generatedAction),
-    ...(args.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: args.bindUnmappedCharacters }),
-    ...(args.description === undefined ? {} : { description: args.description }),
+    toolCallId: toolArgs.toolCallId,
+    actions: toolArgs.actions.map(toGeneratedAction),
+    ...(toolArgs.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: toolArgs.bindUnmappedCharacters }),
+    ...(toolArgs.description === undefined ? {} : { description: toolArgs.description }),
   });
 }
 
-function fromGeneratedComputerUseResult(result: GeneratedComputerUseResult): ComputerUseResult {
-  if (result.result.case === "success") {
-    const value = result.result.value;
-    return {
-      result: {
-        case: "success",
-        value: {
-          ...(value.screenshot === undefined ? {} : { screenshot: value.screenshot }),
-          ...(value.cursorPosition === undefined ? {} : { cursorPosition: { x: value.cursorPosition.x, y: value.cursorPosition.y } }),
-        },
+/** A successful generated result read as the host's success shape. */
+function readGeneratedSuccess(payload: { readonly screenshot?: string | undefined; readonly cursorPosition?: { readonly x: number; readonly y: number } | undefined }): ComputerUseResult {
+  return {
+    result: {
+      case: "success",
+      value: {
+        ...(payload.screenshot === undefined ? {} : { screenshot: payload.screenshot }),
+        ...(payload.cursorPosition === undefined ? {} : { cursorPosition: { x: payload.cursorPosition.x, y: payload.cursorPosition.y } }),
       },
-    };
-  }
-  if (result.result.case === "error") {
-    return { result: { case: "error", value: { error: result.result.value.error } } };
-  }
+    },
+  };
+}
+
+/** A generated result read as the host's shape: its success or error, or an empty result it did not name. */
+function readGeneratedResult(result: GeneratedComputerUseResult): ComputerUseResult {
+  if (result.result.case === "success") return readGeneratedSuccess(result.result.value);
+  if (result.result.case === "error") return { result: { case: "error", value: { error: result.result.value.error } } };
   return { result: { case: "" } };
 }
 
-/**
- * Projects the real per-turn remote executor and, when enabled, the live
- * generated Auto-review classifier/controller contract into the host tool.
- */
+/** The computer-use executor a turn's resource accessor carries. */
+function carriedComputerUseExecutor(resourceAccessor: { get(resource: unknown): unknown }): Executor<ComputerUseArgs, GeneratedComputerUseResult> {
+  return resourceAccessor.get(computerUseExecutorResource) as Executor<ComputerUseArgs, GeneratedComputerUseResult>;
+}
+
+/** Run one computer-use request through the turn's executor, reading the generated result back into the host's shape. */
+async function runComputerUse(
+  executor: Executor<ComputerUseArgs, GeneratedComputerUseResult>,
+  context: unknown,
+  toolArgs: Parameters<ComputerToolDependencies["execute"]>[1],
+): Promise<ComputerUseResult> {
+  return readGeneratedResult(await executor.execute(context as never, toGeneratedComputerUseArgs(toolArgs)));
+}
+
+/** The computer tool's dependencies, projected from the turn's executor and the caller's hooks. */
 export function createHostComputerToolDependencies<Context = unknown>(
-  input: HostComputerToolProjectionInput<Context>,
+  hostInput: HostComputerToolProjectionInput<Context>,
 ): ComputerToolDependencies<Context> {
-  const executor = input.resourceAccessor.get(computerUseExecutorResource) as Executor<ComputerUseArgs, GeneratedComputerUseResult>;
+  const executor = carriedComputerUseExecutor(hostInput.resourceAccessor);
   return {
-    resourceAccessor: input.resourceAccessor,
-    async execute(context, args) {
-      return fromGeneratedComputerUseResult(await executor.execute(context as never, toGeneratedComputerUseArgs(args)));
+    resourceAccessor: hostInput.resourceAccessor,
+    async execute(context, toolArgs) {
+      return runComputerUse(executor, context, toolArgs);
     },
-    getPersistImage: () => input.persistImage,
-    ...(input.isUnicodeTypingEnabled === undefined ? {} : { isUnicodeTypingEnabled: input.isUnicodeTypingEnabled }),
-    ...(input.onComputerAction === undefined ? {} : { onComputerAction: input.onComputerAction }),
-    ...(input.autoReview === undefined ? {} : { autoReview: input.autoReview }),
+    getPersistImage: () => hostInput.persistImage,
+    ...(hostInput.isUnicodeTypingEnabled === undefined ? {} : { isUnicodeTypingEnabled: hostInput.isUnicodeTypingEnabled }),
+    ...(hostInput.onComputerAction === undefined ? {} : { onComputerAction: hostInput.onComputerAction }),
+    ...(hostInput.autoReview === undefined ? {} : { autoReview: hostInput.autoReview }),
   };
 }
 
+/** The shell executor a turn's resource accessor carries. */
+function carriedShellExecutor(resourceAccessor: { get(resource: unknown): unknown }): Executor<ShellArgs, ShellResult> {
+  return resourceAccessor.get(shellExecutorResource) as Executor<ShellArgs, ShellResult>;
+}
+
+/** Run one shell request after the host's approval and audit rules have seen it. */
+async function shellThrough(
+  executor: Executor<ShellArgs, ShellResult>,
+  guards: HostShellExecutorProjectionInput,
+  context: unknown,
+  toolArgs: HostShellArgsInput,
+  options?: ExecutorOptions,
+): Promise<ShellResult> {
+  guards.assertNoPendingApproval();
+  guards.auditShellCommand(toolArgs.command);
+  return await executor.execute(context as Context, buildHostShellArgs(toolArgs), options);
+}
+
 /**
- * Projects the real box shell resource without inventing approval or audit
- * behavior. Both safety callbacks are mandatory and run before the generated
- * executor receives the caller's context and abort-bearing options.
+ * Projects the real box shell resource without inventing approval or audit behavior. Both safety callbacks are
+ * mandatory and run before the generated executor receives the caller's context and abort-bearing options.
  */
-export function createHostShellExecutor(
-  input: HostShellExecutorProjectionInput,
-): HostShellExecutor {
-  const executor = input.resourceAccessor.get(shellExecutorResource) as Executor<ShellArgs, ShellResult>;
+export function createHostShellExecutor(hostInput: HostShellExecutorProjectionInput): HostShellExecutor {
+  const executor = carriedShellExecutor(hostInput.resourceAccessor);
   return {
-    async execute(context, args, options?: ExecutorOptions) {
-      input.assertNoPendingApproval();
-      input.auditShellCommand(args.command);
-      return await executor.execute(
-        context as Context,
-        buildHostShellArgs(args),
-        options,
-      );
+    async execute(context, toolArgs, options?: ExecutorOptions) {
+      return await shellThrough(executor, hostInput, context, toolArgs, options);
     },
   };
 }
 
+/** The browser driver's window index for a conversation: the box must be ready before its window is looked up. */
+async function windowIndexOf<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context): Promise<number | undefined> {
+  const boxId = hostInput.getBoxId();
+  await hostInput.box.ensureReady(context, boxId);
+  return hostInput.box.getAgentWindowIndex(boxId);
+}
+
+/** A shell result read as the browser driver's outcome: its success fields, or its failure case. */
+function shellOutcome(result: ShellResult): { case: "success"; stdout: string; stderr: string; exitCode: number } | { case: string } {
+  if (result.result.case === "success") {
+    return {
+      case: "success",
+      stdout: result.result.value.stdout,
+      stderr: result.result.value.stderr,
+      exitCode: result.result.value.exitCode,
+    };
+  }
+  return { case: result.result.case ?? "" };
+}
+
+/** Send one file into the box for a conversation. */
+async function uploadIntoBox<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, boxId: string, path: string, bytes: Uint8Array): Promise<void> {
+  await hostInput.box.uploadFile(context, boxId, path, bytes);
+}
+
+/** Take one file out of the box for a conversation. */
+async function downloadFromBox<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, boxId: string, path: string): Promise<Uint8Array> {
+  return await hostInput.box.downloadFile(context, boxId, path);
+}
+
+/** Run one shell request through the shell projection the host supplied. */
+async function shellViaDriver<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, shellInput: HostShellArgsInput): Promise<{ case: "success"; stdout: string; stderr: string; exitCode: number } | { case: string }> {
+  return shellOutcome(await hostInput.executeShell.execute(context, shellInput));
+}
+
 /**
- * Projects the immutable browser identity contract. Window readiness is
- * checked before lookup; an unassigned window remains undefined so the
- * browser driver retains its shipped missing-view error. The transcript ID
- * is the default view identity, not a synthetic literal.
+ * Projects the immutable browser identity contract. Window readiness is checked before lookup; an unassigned window
+ * remains undefined so the browser driver retains its shipped missing-view error. The transcript ID is the default
+ * view identity, not a synthetic literal.
  */
 export function createHostBrowserDriverDependencies<Context = unknown>(
-  input: HostBrowserDriverProjectionInput<Context>,
+  hostInput: HostBrowserDriverProjectionInput<Context>,
 ): BrowserDriverDependencies<Context> {
   return {
-    resourceAccessor: input.resourceAccessor,
+    resourceAccessor: hostInput.resourceAccessor,
     async getWindowIndex(context) {
-      const boxId = input.getBoxId();
-      await input.box.ensureReady(context, boxId);
-      return input.box.getAgentWindowIndex(boxId);
+      return await windowIndexOf(hostInput, context);
     },
-    getBoxId: input.getBoxId,
-    getDefaultViewId: input.getDefaultViewId,
+    getBoxId: hostInput.getBoxId,
+    getDefaultViewId: hostInput.getDefaultViewId,
     async uploadFile(context, boxId, path, bytes) {
-      await input.box.uploadFile(context, boxId, path, bytes);
+      await uploadIntoBox(hostInput, context, boxId, path, bytes);
     },
     async downloadFile(context, boxId, path) {
-      return await input.box.downloadFile(context, boxId, path);
+      return await downloadFromBox(hostInput, context, boxId, path);
     },
     async executeShell(context, shellInput) {
-      const result = await input.executeShell.execute(context, shellInput);
-      if (result.result.case === "success") {
-        return {
-          case: "success",
-          stdout: result.result.value.stdout,
-          stderr: result.result.value.stderr,
-          exitCode: result.result.value.exitCode,
-        };
-      }
-      return { case: result.result.case ?? "" };
+      return shellViaDriver(hostInput, context, shellInput);
     },
-    ...(input.getPersistImage === undefined ? {} : { getPersistImage: input.getPersistImage }),
-    ...(input.autoReview === undefined ? {} : { autoReview: input.autoReview }),
+    ...(hostInput.getPersistImage === undefined ? {} : { getPersistImage: hostInput.getPersistImage }),
+    ...(hostInput.autoReview === undefined ? {} : { autoReview: hostInput.autoReview }),
   };
 }
