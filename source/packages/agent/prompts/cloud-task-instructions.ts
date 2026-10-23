@@ -22,7 +22,7 @@ import { Fragment, jsx, jsxs, type PromptNode } from "../../prompt-jsx/index.ts"
 const UNKNOWN_REPO_LABEL = "unknown-repo"
 const UNKNOWN_BRANCH_NAME = "unknown-branch"
 
-interface CloudTaskGitRepo {
+interface CloudRepositoryInfo {
   readonly path?: string | undefined
   readonly repoPath?: string | undefined
   readonly branchName?: string | undefined
@@ -30,136 +30,136 @@ interface CloudTaskGitRepo {
   readonly remoteUrl?: string | undefined
 }
 
-interface BranchDisplay {
+interface RepoBranchRow {
   readonly repoLabel: string
   readonly branchName: string
   readonly baseBranch?: string | undefined
 }
 
-interface BranchDisplayInfo {
-  readonly displays: BranchDisplay[]
+interface RepoBranches {
+  readonly displays: RepoBranchRow[]
   readonly hasUnknownBranch: boolean
 }
 
-interface ToolInfo {
+interface ToolInventory {
   readonly allTools: Record<string, { readonly name?: string | undefined } | undefined>
 }
 
 /** A scp-style remote is not a URL until it is rewritten as one. */
-function parseGitUrl(urlString: string): URL | null {
+function readRemoteUrl(remoteText: string): URL | null {
   try {
-    let normalizedUrl = urlString
-    if (urlString.includes("@") && !urlString.startsWith("http")) {
-      if (!urlString.startsWith("ssh://")) {
-        normalizedUrl = urlString.replace(/^([^@]+)@([^:]+):(.*)/, "ssh://$1@$2/$3")
+    let normalizedRemote = remoteText
+    if (remoteText.includes("@") && !remoteText.startsWith("http")) {
+      if (!remoteText.startsWith("ssh://")) {
+        normalizedRemote = remoteText.replace(/^([^@]+)@([^:]+):(.*)/, "ssh://$1@$2/$3")
       }
     }
-    return new URL(normalizedUrl)
+    return new URL(normalizedRemote)
   } catch {
     return null
   }
 }
 
 /** The repository's name as its host names it: an owner/repo pair, by each host's own rules. */
-function extractRepoNameFromGitUrl(upstreamUrl?: string): string | undefined {
-  if (!upstreamUrl) return undefined
-  const normalizedUpstreamUrl = upstreamUrl.replace("https///", "https://").replace("http///", "http://")
-  if (normalizedUpstreamUrl.startsWith("gitlab-remote://")) {
+function repoNameFromRemote(remoteUrl?: string): string | undefined {
+  if (!remoteUrl) return undefined
+  const cleanedUpstreamUrl = remoteUrl.replace("https///", "https://").replace("http///", "http://")
+  if (cleanedUpstreamUrl.startsWith("gitlab-remote://")) {
     try {
-      const url = new URL(normalizedUpstreamUrl)
-      const projectId = url.searchParams.get("project")
-      if (projectId) {
-        if (projectId.includes("/")) return projectId
+      const url = new URL(cleanedUpstreamUrl)
+      const projectKey = url.searchParams.get("project")
+      if (projectKey) {
+        if (projectKey.includes("/")) return projectKey
         return undefined
       }
     } catch {
       // Fall through to the ordinary git URL parser.
     }
   }
-  const url = parseGitUrl(normalizedUpstreamUrl)
+  const url = readRemoteUrl(cleanedUpstreamUrl)
   if (!url) return undefined
-  const hostname = url.hostname.toLowerCase()
-  const pathParts = url.pathname.split("/").filter(part => part.length > 0)
-  if (pathParts.length > 0 && pathParts[pathParts.length - 1]!.endsWith(".git")) {
-    pathParts[pathParts.length - 1] = pathParts[pathParts.length - 1]!.slice(0, -4)
+  const hostName = url.hostname.toLowerCase()
+  const segments = url.pathname.split("/").filter(part => part.length > 0)
+  if (segments.length > 0 && segments[segments.length - 1]!.endsWith(".git")) {
+    segments[segments.length - 1] = segments[segments.length - 1]!.slice(0, -4)
   }
-  const isAzureDevOpsHost = hostname === "dev.azure.com" ||
-    hostname === "ssh.dev.azure.com" ||
-    hostname.endsWith(".visualstudio.com")
-  if (isAzureDevOpsHost) {
-    const azurePathParts = [...pathParts]
-    if (hostname === "ssh.dev.azure.com" && azurePathParts.length > 0 && azurePathParts[0]!.toLowerCase() === "v3") {
-      azurePathParts.shift()
+  const onAzureDevOps = hostName === "dev.azure.com" ||
+    hostName === "ssh.dev.azure.com" ||
+    hostName.endsWith(".visualstudio.com")
+  if (onAzureDevOps) {
+    const azureSegments = [...segments]
+    if (hostName === "ssh.dev.azure.com" && azureSegments.length > 0 && azureSegments[0]!.toLowerCase() === "v3") {
+      azureSegments.shift()
     }
-    const filteredAzurePathParts = azurePathParts.filter(part => part.toLowerCase() !== "_git")
-    return filteredAzurePathParts.length >= 1 ? filteredAzurePathParts.join("/") : undefined
+    const keptAzureSegments = azureSegments.filter(part => part.toLowerCase() !== "_git")
+    return keptAzureSegments.length >= 1 ? keptAzureSegments.join("/") : undefined
   }
-  if (hostname.includes("github") || hostname.endsWith(".ghe.com")) {
-    return pathParts.length >= 2 ? pathParts.slice(0, 2).join("/") : undefined
+  if (hostName.includes("github") || hostName.endsWith(".ghe.com")) {
+    return segments.length >= 2 ? segments.slice(0, 2).join("/") : undefined
   }
-  if (hostname.includes("gitlab")) return pathParts.length >= 1 ? pathParts.join("/") : undefined
-  if (hostname.includes("bitbucket") || hostname.includes("stash")) {
-    if (pathParts.length >= 3 && pathParts[0]!.toLowerCase() === "scm") return pathParts.slice(1, 3).join("/")
-    if (pathParts.length >= 2) return pathParts.slice(0, 2).join("/")
+  if (hostName.includes("gitlab")) return segments.length >= 1 ? segments.join("/") : undefined
+  if (hostName.includes("bitbucket") || hostName.includes("stash")) {
+    if (segments.length >= 3 && segments[0]!.toLowerCase() === "scm") return segments.slice(1, 3).join("/")
+    if (segments.length >= 2) return segments.slice(0, 2).join("/")
     return undefined
   }
-  const isGerritHost = hostname.includes("gerrit")
-  const hasGerritPath = pathParts.length > 0 && pathParts[0]!.toLowerCase() === "gerrit"
-  if (isGerritHost || hasGerritPath) {
-    const gerritPathParts = [...pathParts]
-    if (hasGerritPath) gerritPathParts.shift()
-    if (gerritPathParts.length > 0 && gerritPathParts[0]!.toLowerCase() === "a") gerritPathParts.shift()
-    return gerritPathParts.length >= 1 ? gerritPathParts.join("/") : undefined
+  const onGerrit = hostName.includes("gerrit")
+  const gerritPrefix = segments.length > 0 && segments[0]!.toLowerCase() === "gerrit"
+  if (onGerrit || gerritPrefix) {
+    const gerritSegments = [...segments]
+    if (gerritPrefix) gerritSegments.shift()
+    if (gerritSegments.length > 0 && gerritSegments[0]!.toLowerCase() === "a") gerritSegments.shift()
+    return gerritSegments.length >= 1 ? gerritSegments.join("/") : undefined
   }
-  return pathParts.length >= 2 ? pathParts.slice(0, 2).join("/") : undefined
+  return segments.length >= 2 ? segments.slice(0, 2).join("/") : undefined
 }
 
-function getPathFromBranchInfo(repo: CloudTaskGitRepo): string | undefined {
-  return "path" in repo ? repo.path : repo.repoPath
+function branchInfoPath(repository: CloudRepositoryInfo): string | undefined {
+  return "path" in repository ? repository.path : repository.repoPath
 }
 
 /** A detached head is not a branch name to develop on, so it is reported as unknown. */
-function branchNameForPrompt(branchName?: string): string {
-  const trimmed = branchName?.trim() ?? ""
-  return trimmed === "" || trimmed === "HEAD" ? UNKNOWN_BRANCH_NAME : trimmed
+function promptBranchName(branchName?: string): string {
+  const cleanBranchName = branchName?.trim() ?? ""
+  return cleanBranchName === "" || cleanBranchName === "HEAD" ? UNKNOWN_BRANCH_NAME : cleanBranchName
 }
 
-function basenameFromPath(pathValue?: string): string | undefined {
-  const raw = pathValue?.trim() ?? ""
-  if (raw === "") return undefined
-  const parts = raw.split(/[\\/]/).filter(Boolean)
-  return parts.length > 0 ? parts[parts.length - 1] : undefined
+function lastPathSegment(rawPathValue?: string): string | undefined {
+  const pathText = rawPathValue?.trim() ?? ""
+  if (pathText === "") return undefined
+  const nameParts = pathText.split(/[\\/]/).filter(Boolean)
+  return nameParts.length > 0 ? nameParts[nameParts.length - 1] : undefined
 }
 
-function repoLabelForPrompt(repo: CloudTaskGitRepo): string {
-  return extractRepoNameFromGitUrl(repo.remoteUrl) ??
-    basenameFromPath(getPathFromBranchInfo(repo)) ??
+function promptRepoLabel(repository: CloudRepositoryInfo): string {
+  return repoNameFromRemote(repository.remoteUrl) ??
+    lastPathSegment(branchInfoPath(repository)) ??
     UNKNOWN_REPO_LABEL
 }
 
-function getBranchDisplayInfo(repos: readonly CloudTaskGitRepo[]): BranchDisplayInfo {
-  const displays = repos.map(repo => ({
-    repoLabel: repoLabelForPrompt(repo),
-    branchName: branchNameForPrompt(repo.branchName),
-    baseBranch: "baseBranch" in repo ? branchNameForPrompt(repo.baseBranch) : undefined,
+function displayInfoForRepos(repos: readonly CloudRepositoryInfo[]): RepoBranches {
+  const displays = repos.map(repository => ({
+    repoLabel: promptRepoLabel(repository),
+    branchName: promptBranchName(repository.branchName),
+    baseBranch: "baseBranch" in repository ? promptBranchName(repository.baseBranch) : undefined,
   }))
   return { displays, hasUnknownBranch: displays.some(display => display.branchName === UNKNOWN_BRANCH_NAME) }
 }
 
-function buildRepoPathLookup(gitRepos: readonly CloudTaskGitRepo[]): Map<string, string> {
-  const lookup = new Map<string, string>()
-  for (const repo of gitRepos) {
-    if (repo.path) lookup.set(repoLabelForPrompt(repo), repo.path)
+function pathByRepoName(gitRepos: readonly CloudRepositoryInfo[]): Map<string, string> {
+  const pathByRepo = new Map<string, string>()
+  for (const repository of gitRepos) {
+    if (repository.path) pathByRepo.set(promptRepoLabel(repository), repository.path)
   }
-  return lookup
+  return pathByRepo
 }
 
 /** Calendar estimates are meaningless for an agent; difficulty is described in technical terms. */
-function PlanningComplexityEstimateGuidanceListItem(): PromptNode {
+function planningEstimateGuidance(): PromptNode {
   return jsx("li", { children: "When planning or scoping work, do not estimate calendar time (e.g. days or weeks of effort). Day/week timelines are a poor fit for autonomous agents. If you need to characterize difficulty, use technical detail instead: which components or subsystems must change, how invasive the edits are, and what dependencies or risks apply." })
 }
 
-function StaleBuildGitNotice({ staleBuildGitRefs }: { readonly staleBuildGitRefs?: string | undefined }): PromptNode {
+function staleSnapshotNotice({ staleBuildGitRefs }: { readonly staleBuildGitRefs?: string | undefined }): PromptNode {
   if (staleBuildGitRefs === undefined) return null
   return jsxs(Fragment, {
     children: [
@@ -194,50 +194,50 @@ export function CloudTaskInstructions({
   toolInfo,
   staleBuildGitRefs,
 }: {
-  readonly gitRepos: readonly CloudTaskGitRepo[]
-  readonly designatedBranches?: readonly CloudTaskGitRepo[] | undefined
+  readonly gitRepos: readonly CloudRepositoryInfo[]
+  readonly designatedBranches?: readonly CloudRepositoryInfo[] | undefined
   readonly branchPrefix?: string | undefined
   readonly branchSuffix?: string | undefined
   readonly allowMultipleBranches?: boolean | undefined
   readonly preferCurrentBranchInMultiPrMode?: boolean | undefined
-  readonly toolInfo?: ToolInfo | undefined
+  readonly toolInfo?: ToolInventory | undefined
   readonly staleBuildGitRefs?: string | undefined
 }): PromptNode {
   // Which branches to name depends on the mode: designated ones win, then the current branches when the
   // run reuses them, and otherwise there is nothing to name at all.
-  const gitRepoBranchInfo = designatedBranches !== undefined && designatedBranches.length > 0
-    ? getBranchDisplayInfo(designatedBranches)
+  const branchChoice = designatedBranches !== undefined && designatedBranches.length > 0
+    ? displayInfoForRepos(designatedBranches)
     : allowMultipleBranches && preferCurrentBranchInMultiPrMode
-      ? getBranchDisplayInfo(gitRepos)
+      ? displayInfoForRepos(gitRepos)
       : allowMultipleBranches
         ? { displays: [], hasUnknownBranch: false }
-        : getBranchDisplayInfo(gitRepos)
-  const gitRepoBranchDisplays = gitRepoBranchInfo.displays
-  const hasUnknownBranch = gitRepoBranchInfo.hasUnknownBranch
+        : displayInfoForRepos(gitRepos)
+  const branchRows = branchChoice.displays
+  const unknownBranchPresent = branchChoice.hasUnknownBranch
   const managedPrToolName = toolInfo?.allTools.PR_MANAGEMENT?.name
   const hasManagedPrTool = managedPrToolName !== undefined
   const prManagementToolReference = managedPrToolName !== undefined ? `\`${managedPrToolName}\` tool` : "PR management tool"
   const currentBranchFromGitRepos = allowMultipleBranches
-    ? getBranchDisplayInfo(gitRepos).displays[0]?.branchName
+    ? displayInfoForRepos(gitRepos).displays[0]?.branchName
     : undefined
   const branchNameTemplate = branchPrefix !== undefined || branchSuffix !== undefined
     ? `${branchPrefix ?? ""}<descriptive-name>${branchSuffix ?? ""}`
     : "<branch-name>"
   const branchCreationCommand = `git checkout -b ${branchNameTemplate}`
-  const isMultiRepo = gitRepos.length > 1
+  const multiRepo = gitRepos.length > 1
   const managedPrWriteGuidance = managedPrToolName === undefined
     ? ""
-    : isMultiRepo
+    : multiRepo
       ? " Do not use `gh` to create or update pull requests. For `create_pr`, pass `action`, `title`, `body`, `branch_name`, `base_branch`, and `remote_url`. For `update_pr`, pass `action`, `remote_url`, either `branch_name` or `pr_url`, and at least one of `title`, `body`, or `base_branch`."
       : " Do not use `gh` to create or update pull requests. For `create_pr`, pass `action`, `title`, `body`, `branch_name`, and `base_branch`. For `update_pr`, pass `action`, either `branch_name` or `pr_url`, and at least one of `title`, `body`, or `base_branch`."
-  const repoPathLookup = isMultiRepo ? buildRepoPathLookup(gitRepos) : undefined
+  const repoPathLookup = multiRepo ? pathByRepoName(gitRepos) : undefined
   return jsxs("section", {
     title: "cloud_task_instructions",
     children: [
       jsx("p", { children: "As a Cloud Agent, you are helping with GitHub issues and pull requests. Your task is to complete the request described in the `user_query`." }),
-      jsx("ul", { children: jsx(PlanningComplexityEstimateGuidanceListItem, {}) }),
+      jsx("ul", { children: jsx(planningEstimateGuidance, {}) }),
       jsx("h2", { children: "Git Development Branch Requirements" }),
-      isMultiRepo && allowMultipleBranches && jsx("p", { children: "This workspace contains multiple git repositories. Each branch listed below is associated with a specific repository and local directory. Make sure to run git commands from the correct repository directory." }),
+      multiRepo && allowMultipleBranches && jsx("p", { children: "This workspace contains multiple git repositories. Each branch listed below is associated with a specific repository and local directory. Make sure to run git commands from the correct repository directory." }),
       jsx("p", {
         children: allowMultipleBranches
           ? preferCurrentBranchInMultiPrMode
@@ -245,14 +245,14 @@ export function CloudTaskInstructions({
             : `You are currently on the base branch${currentBranchFromGitRepos !== undefined && currentBranchFromGitRepos !== UNKNOWN_BRANCH_NAME ? ` \`${currentBranchFromGitRepos}\`` : ""}. Create feature branches off of it for your work${hasManagedPrTool ? ", and use it as the default `base_branch` when creating PRs" : ""} unless the user specifies differently. If this agent already has registered PR branches, they are listed here for context:`
           : "You are working on the following feature branches:",
       }),
-      gitRepoBranchDisplays.length > 0
+      branchRows.length > 0
         ? jsx("ul", {
-          children: gitRepoBranchDisplays.map(display => jsxs("li", {
+          children: branchRows.map(display => jsxs("li", {
             children: [
               allowMultipleBranches && !preferCurrentBranchInMultiPrMode
                 ? `**${display.repoLabel}**: PR branch \`${display.branchName}\``
                 : `**${display.repoLabel}**: Develop on branch \`${display.branchName}\``,
-              isMultiRepo && allowMultipleBranches && repoPathLookup?.get(display.repoLabel) !== undefined &&
+              multiRepo && allowMultipleBranches && repoPathLookup?.get(display.repoLabel) !== undefined &&
                 ` (repo directory: \`${repoPathLookup.get(display.repoLabel)}\`)`,
               display.baseBranch !== undefined && display.baseBranch !== UNKNOWN_BRANCH_NAME &&
                 ` (base branch: \`${display.baseBranch}\`)`,
@@ -266,8 +266,8 @@ export function CloudTaskInstructions({
               : `No PR branches are registered yet. Use \`${branchCreationCommand}\` to create a new branch when you need one.`
             : "No git repository info was provided in `RequestContext.git_repos`. Run `git symbolic-ref --short HEAD` to determine which branch you should develop on.",
         }),
-      hasUnknownBranch && jsx("p", {
-        children: isMultiRepo && allowMultipleBranches
+      unknownBranchPresent && jsx("p", {
+        children: multiRepo && allowMultipleBranches
           ? "If a branch name is missing or shows as `HEAD`, run `git symbolic-ref --short HEAD` in the corresponding repo directory to confirm the branch you should use."
           : "If the branch name is missing or shows as `HEAD`, run `git symbolic-ref --short HEAD` in the repo to confirm the branch you should use.",
       }),
@@ -286,7 +286,7 @@ export function CloudTaskInstructions({
                         : `**CREATE BRANCHES AS NEEDED** using normal git commands like \`${branchCreationCommand}\``,
                     branchPrefix !== undefined && ` Use the prefix \`${branchPrefix}\` for all branch names you create.`,
                     branchSuffix !== undefined && ` Append the suffix \`${branchSuffix}\` to all branch names you create.`,
-                    isMultiRepo && " When working across multiple repositories, create branches in each repo as needed.",
+                    multiRepo && " When working across multiple repositories, create branches in each repo as needed.",
                     " Always use lowercase letters in branch names — case-insensitive filesystems (macOS and Windows defaults) cannot hold two branches that differ only in casing.",
                   ],
                 }),
@@ -324,7 +324,7 @@ export function CloudTaskInstructions({
         }),
       jsx("h2", { children: "Git Operations" }),
       jsx("p", { children: "Follow these practices for git:" }),
-      jsx(StaleBuildGitNotice as unknown as (props: Record<string, unknown>) => PromptNode, { staleBuildGitRefs }),
+      jsx(staleSnapshotNotice as unknown as (props: Record<string, unknown>) => PromptNode, { staleBuildGitRefs }),
       jsx("h3", { children: "For git push:" }),
       jsx("ul", {
         children: [
