@@ -35,27 +35,27 @@ import { classifyTokenLimitErrorFromMessage } from "../chat-inference/token-limi
 import { InputTokenLimitError, OutputTokensLimitExceededError } from "../chat-inference/prompt-executor.ts";
 import { getProviderModelName } from "./model-provider-options.ts";
 
-type Loose = Record<string, any>;
-const DEFAULT_IMAGE_MIME_TYPE = "image/png";
+type LooseRecord = Record<string, any>;
+const DEFAULT_IMAGE_MIME = "image/png";
 
-export function applyToolCallArgs(toolCall: InferenceToolCall, args: unknown, explicitRawToolCallArgs?: string): void {
-  const isJsonObject = typeof args === "object" && args !== null && !Array.isArray(args);
-  if (isJsonObject) {
-    toolCall.args = Struct.fromJson(args as JsonValue);
-    if (explicitRawToolCallArgs !== undefined) toolCall.rawToolCallArgs = explicitRawToolCallArgs;
+export function applyToolCallArgs(toolCall: InferenceToolCall, value: unknown, explicitRaw?: string): void {
+  const plainObject = typeof value === "object" && value !== null && !Array.isArray(value);
+  if (plainObject) {
+    toolCall.args = Struct.fromJson(value as JsonValue);
+    if (explicitRaw !== undefined) toolCall.rawToolCallArgs = explicitRaw;
     return;
   }
-  const rawText = typeof args === "string" ? args : JSON.stringify(args);
-  if (rawText === undefined) throw new Error(`cannot represent tool call arguments of type ${typeof args} as a JSON object or raw text`);
-  toolCall.rawToolCallArgs = explicitRawToolCallArgs ?? rawText;
+  const raw = typeof value === "string" ? value : JSON.stringify(value);
+  if (raw === undefined) throw new Error(`cannot represent tool call arguments of type ${typeof value} as a JSON object or raw text`);
+  toolCall.rawToolCallArgs = explicitRaw ?? raw;
 }
 
-export function toolCallArgsFromProto(toolCall: InferenceToolCall): unknown {
-  return toolCall.args?.toJson() ?? toolCall.rawToolCallArgs ?? {};
+export function toolCallArgsFromProto(call: InferenceToolCall): unknown {
+  return call.args?.toJson() ?? call.rawToolCallArgs ?? {};
 }
 
-function roleToProto(role: unknown): InferenceMessageRole {
-  switch (role) {
+function messageRole(roleName: unknown): InferenceMessageRole {
+  switch (roleName) {
     case "user": return InferenceMessageRole.USER;
     case "assistant": return InferenceMessageRole.ASSISTANT;
     case "tool": return InferenceMessageRole.TOOL;
@@ -64,168 +64,196 @@ function roleToProto(role: unknown): InferenceMessageRole {
   }
 }
 
-function cursorOptionsToProto(cursor: unknown): InferenceCursorOptions | undefined {
-  if (!cursor || typeof cursor !== "object") return undefined;
-  const options = cursor as Loose;
-  const proto = new InferenceCursorOptions();
-  let populated = false;
-  if (typeof options.imageDescription === "string" && options.imageDescription.length > 0) {
-    proto.imageDescription = options.imageDescription;
-    populated = true;
+function cursorOptions(value: unknown): InferenceCursorOptions | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const fields = value as LooseRecord;
+  const converted = new InferenceCursorOptions();
+  let hasContent = false;
+  if (typeof fields.imageDescription === "string" && fields.imageDescription.length > 0) {
+    converted.imageDescription = fields.imageDescription;
+    hasContent = true;
   }
-  if (options.imageDescriptions !== null && typeof options.imageDescriptions === "object") {
-    for (const [key, value] of Object.entries(options.imageDescriptions as Loose)) {
+  if (fields.imageDescriptions !== null && typeof fields.imageDescriptions === "object") {
+    for (const [key, value] of Object.entries(fields.imageDescriptions as LooseRecord)) {
       const index = Number(key);
       if (Number.isInteger(index) && index >= 0 && typeof value === "string" && value.length > 0) {
-        proto.imageDescriptions[index] = value;
-        populated = true;
+        converted.imageDescriptions[index] = value;
+        hasContent = true;
       }
     }
   }
-  return populated ? proto : undefined;
+  return hasContent ? converted : undefined;
 }
 
-function providerOptionsToProto(options: unknown): InferenceProviderOptions | undefined {
-  if (!options || typeof options !== "object") return undefined;
-  const values = options as Loose;
-  const proto = new InferenceProviderOptions();
-  let populated = false;
-  if (values.anthropic?.cacheControl) {
-    proto.anthropic = new InferenceAnthropicOptions({
-      cacheControl: new InferenceCacheControl({ type: values.anthropic.cacheControl.type }),
+function providerOptions(settings: unknown): InferenceProviderOptions | undefined {
+  if (!settings || typeof settings !== "object") return undefined;
+  const fields = settings as LooseRecord;
+  const converted = new InferenceProviderOptions();
+  let hasContent = false;
+  if (fields.anthropic?.cacheControl) {
+    converted.anthropic = new InferenceAnthropicOptions({
+      cacheControl: new InferenceCacheControl({ type: fields.anthropic.cacheControl.type }),
     });
-    populated = true;
+    hasContent = true;
   }
-  const cursor = cursorOptionsToProto(values.cursor);
+  const cursor = cursorOptions(fields.cursor);
   if (cursor !== undefined) {
-    proto.cursor = cursor;
-    populated = true;
+    converted.cursor = cursor;
+    hasContent = true;
   }
-  return populated ? proto : undefined;
+  return hasContent ? converted : undefined;
 }
 
-function imageBytesToDataUrl(bytes: Uint8Array, mimeType: unknown): string {
-  const mime = typeof mimeType === "string" && mimeType.trim() !== "" ? mimeType : DEFAULT_IMAGE_MIME_TYPE;
-  return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
+function imageDataUrl(data: Uint8Array, mimeValue: unknown): string {
+  const resolvedMime = typeof mimeValue === "string" && mimeValue.trim() !== "" ? mimeValue : DEFAULT_IMAGE_MIME;
+  return `data:${resolvedMime};base64,${Buffer.from(data).toString("base64")}`;
 }
 
-function userContentPartToProto(part: Loose): InferenceContentPart {
-  const proto = new InferenceContentPart();
-  if (part.type === "text") {
-    const providerOptions = providerOptionsToProto(part.providerOptions);
-    proto.part = { case: "text", value: new InferenceTextPart({ text: part.text, ...(providerOptions === undefined ? {} : { providerOptions }) }) };
-  } else if (part.type === "image") {
-    let data = "";
-    if (typeof part.image === "string") data = part.image;
-    else if (part.image instanceof URL) data = part.image.toString();
-    else if (part.image instanceof Uint8Array) data = imageBytesToDataUrl(part.image, part.mimeType);
-    else if (part.image instanceof ArrayBuffer) data = imageBytesToDataUrl(new Uint8Array(part.image), part.mimeType);
-    const providerOptions = providerOptionsToProto(part.providerOptions);
-    proto.part = { case: "image", value: new InferenceImagePart({ data, mimeType: part.mimeType, ...(providerOptions === undefined ? {} : { providerOptions }) }) };
-  } else if (part.type === "file") {
-    proto.part = { case: "text", value: new InferenceTextPart({ text: `[File: ${part.name ?? "unnamed"}]` }) };
+
+/** A string worth carrying, or nothing at all. */
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** One reasoning part, redacted or not, with the model that produced it when it is known. */
+function reasoningPartToProto(part: LooseRecord, redacted: boolean): InferenceReasoningPart {
+    const modelName = getProviderModelName(part);
+    return redacted
+      ? new InferenceReasoningPart({ isRedacted: true, redactedData: part.data, ...(modelName === undefined ? {} : { modelName }) })
+      : new InferenceReasoningPart({ isRedacted: false, text: part.text, signature: part.signature, ...(modelName === undefined ? {} : { modelName }) });
+}
+
+/** One tool call, with the arguments the platform already normalised. */
+function toolCallToProto(part: LooseRecord): InferenceToolCall {
+    const call = new InferenceToolCall({ toolCallId: part.toolCallId, toolName: part.toolName });
+    const raw = part.providerOptions?.cursor?.rawToolCallArgs;
+    applyToolCallArgs(call, part.args, typeof raw === "string" ? raw : undefined);
+    return call;
+}
+
+/** One tool result, in the protocol's own shape. */
+function toolResultToProto(part: LooseRecord): InferenceToolResultPart {
+    const result = new InferenceToolResultPart({ toolCallId: part.toolCallId, toolName: part.toolName });
+    if (part.result !== undefined) result.result = Value.fromJson(typeof part.result === "string" ? part.result : JSON.parse(JSON.stringify(part.result)) as JsonValue);
+    if (part.isError) result.isError = true;
+    if (part.experimental_content?.length > 0) result.experimentalContent = experimentalContentParts(part.experimental_content);
+    result.providerOptions = providerOptions(part.providerOptions)!;
+    return result;
+}
+
+/** The options a part carries, as the protocol spells them, when it has any. */
+function partOptions(piece: LooseRecord): { providerOptions?: InferenceProviderOptions } {
+  const carried = providerOptions(piece.providerOptions);
+  return carried === undefined ? {} : { providerOptions: carried };
+}
+
+/** An image part's data, whether it came as a string, a URL, bytes or a buffer. */
+function imagePartData(piece: LooseRecord): string {
+  if (typeof piece.image === "string") return piece.image;
+  if (piece.image instanceof URL) return piece.image.toString();
+  if (piece.image instanceof Uint8Array) return imageDataUrl(piece.image, piece.mimeType);
+  if (piece.image instanceof ArrayBuffer) return imageDataUrl(new Uint8Array(piece.image), piece.mimeType);
+  return "";
+}
+
+function userPartToProto(piece: LooseRecord): InferenceContentPart {
+  const converted = new InferenceContentPart();
+  if (piece.type === "text") {
+    converted.part = { case: "text", value: new InferenceTextPart({ text: piece.text, ...partOptions(piece) }) };
+  } else if (piece.type === "image") {
+    converted.part = {
+      case: "image",
+      value: new InferenceImagePart({ data: imagePartData(piece), mimeType: piece.mimeType, ...partOptions(piece) }),
+    };
+  } else if (piece.type === "file") {
+    converted.part = { case: "text", value: new InferenceTextPart({ text: "[File: " + (piece.name ?? "unnamed") + "]" }) };
   } else {
-    proto.part = { case: "text", value: new InferenceTextPart({ text: "" }) };
+    converted.part = { case: "text", value: new InferenceTextPart({ text: "" }) };
   }
-  return proto;
+  return converted;
 }
 
-function toolResultExperimentalContentToProto(content: readonly Loose[]): InferenceContentPart[] {
-  return content.map((item) => new InferenceContentPart({
-    part: item.type === "image"
-      ? { case: "image", value: new InferenceImagePart({ data: item.data, mimeType: item.mimeType }) }
-      : { case: "text", value: new InferenceTextPart({ text: item.text }) },
+function experimentalContentParts(items: readonly LooseRecord[]): InferenceContentPart[] {
+  return items.map((entry) => new InferenceContentPart({
+    part: entry.type === "image"
+      ? { case: "image", value: new InferenceImagePart({ data: entry.data, mimeType: entry.mimeType }) }
+      : { case: "text", value: new InferenceTextPart({ text: entry.text }) },
   }));
 }
 
-export function coreMessageToProto(message: Loose): InferenceCoreMessage {
-  const proto = new InferenceCoreMessage({ role: roleToProto(message.role) });
-  if (message.role === "user") {
-    if (typeof message.content === "string") proto.content = { case: "text", value: message.content };
-    else if (Array.isArray(message.content)) proto.content = { case: "parts", value: new InferenceContentParts({ parts: message.content.map(userContentPartToProto) }) };
-  } else if (message.role === "assistant") {
-    const responsesMetadata = getResponsesMetadataFromProviderOptions(message);
-    if (responsesMetadata.modelProviderMessageId !== undefined) proto.modelProviderMessageId = responsesMetadata.modelProviderMessageId;
-    if (typeof responsesMetadata.openaiPhase === "string") proto.openaiPhase = responsesMetadata.openaiPhase;
-    else if (responsesMetadata.openaiPhase === null) proto.openaiPhaseNull = true;
-    if (typeof message.content === "string") proto.content = { case: "text", value: message.content };
-    else if (Array.isArray(message.content)) {
-      const text: string[] = [];
-      for (const part of message.content as Loose[]) {
-        if (part.type === "text") text.push(part.text);
-        else if (part.type === "tool-call") {
-          const call = new InferenceToolCall({ toolCallId: part.toolCallId, toolName: part.toolName });
-          const raw = part.providerOptions?.cursor?.rawToolCallArgs;
-          applyToolCallArgs(call, part.args, typeof raw === "string" ? raw : undefined);
-          proto.toolCalls.push(call);
-        } else if (part.type === "reasoning") {
-          const modelName = getProviderModelName(part);
-          proto.reasoningParts.push(new InferenceReasoningPart({ isRedacted: false, text: part.text, signature: part.signature, ...(modelName === undefined ? {} : { modelName }) }));
-        } else if (part.type === "redacted-reasoning") {
-          const modelName = getProviderModelName(part);
-          proto.reasoningParts.push(new InferenceReasoningPart({ isRedacted: true, redactedData: part.data, ...(modelName === undefined ? {} : { modelName }) }));
-        }
+export function coreMessageToProto(entry: LooseRecord): InferenceCoreMessage {
+  const converted = new InferenceCoreMessage({ role: messageRole(entry.role) });
+  if (entry.role === "user") {
+    if (typeof entry.content === "string") converted.content = { case: "text", value: entry.content };
+    else if (Array.isArray(entry.content)) converted.content = { case: "parts", value: new InferenceContentParts({ parts: entry.content.map(userPartToProto) }) };
+  } else if (entry.role === "assistant") {
+    const metadata = responsesMetadata(entry);
+    if (metadata.modelProviderMessageId !== undefined) converted.modelProviderMessageId = metadata.modelProviderMessageId;
+    if (typeof metadata.openaiPhase === "string") converted.openaiPhase = metadata.openaiPhase;
+    else if (metadata.openaiPhase === null) converted.openaiPhaseNull = true;
+    if (typeof entry.content === "string") converted.content = { case: "text", value: entry.content };
+    else if (Array.isArray(entry.content)) {
+      const textPieces: string[] = [];
+      for (const piece of entry.content as LooseRecord[]) {
+        if (piece.type === "text") textPieces.push(piece.text);
+        else if (piece.type === "tool-call") converted.toolCalls.push(toolCallToProto(piece));
+        else if (piece.type === "reasoning") converted.reasoningParts.push(reasoningPartToProto(piece, false));
+        else if (piece.type === "redacted-reasoning") converted.reasoningParts.push(reasoningPartToProto(piece, true));
       }
-      if (text.length > 0) proto.content = { case: "text", value: text.join("") };
+      if (textPieces.length > 0) converted.content = { case: "text", value: textPieces.join("") };
     }
-  } else if (message.role === "tool" && Array.isArray(message.content)) {
-    const parts = (message.content as Loose[]).filter((part) => part.type === "tool-result").map((part) => {
-      const result = new InferenceToolResultPart({ toolCallId: part.toolCallId, toolName: part.toolName });
-      if (part.result !== undefined) result.result = Value.fromJson(typeof part.result === "string" ? part.result : JSON.parse(JSON.stringify(part.result)) as JsonValue);
-      if (part.isError) result.isError = true;
-      if (part.experimental_content?.length > 0) result.experimentalContent = toolResultExperimentalContentToProto(part.experimental_content);
-      result.providerOptions = providerOptionsToProto(part.providerOptions)!;
-      return result;
-    });
-    proto.content = { case: "toolContent", value: new InferenceToolResultContent({ parts }) };
-  } else if (message.role === "system") {
-    proto.content = { case: "text", value: message.content };
+  } else if (entry.role === "tool" && Array.isArray(entry.content)) {
+    const parts = (entry.content as LooseRecord[]).filter((piece) => piece.type === "tool-result").map(toolResultToProto);
+    converted.content = { case: "toolContent", value: new InferenceToolResultContent({ parts }) };
+  } else if (entry.role === "system") {
+    converted.content = { case: "text", value: entry.content };
   }
-  return proto;
+  return converted;
 }
 
-function getResponsesMetadataFromProviderOptions(message: Loose): { modelProviderMessageId?: string; openaiPhase?: string | null } {
-  const cursorOptions = message.providerOptions?.cursor;
-  const modelProviderMessageId = cursorOptions?.modelProviderMessageId;
-  const openaiPhase = cursorOptions?.openaiPhase;
+/** The ids and phase an assistant message carries from the provider, when it has them. */
+function responsesMetadata(entry: LooseRecord): { modelProviderMessageId?: string; openaiPhase?: string | null } {
+  const cursor = entry.providerOptions?.cursor;
+  const modelProviderMessageId = cursor?.modelProviderMessageId;
+  const openaiPhase = cursor?.openaiPhase;
   return {
     ...(typeof modelProviderMessageId === "string" ? { modelProviderMessageId } : {}),
     ...(typeof openaiPhase === "string" || openaiPhase === null ? { openaiPhase } : {}),
   };
 }
 
-function agentToolToProto(tool: Loose): InferenceAgentTool {
-  const proto = new InferenceAgentTool({
-    name: tool.name,
-    description: tool.description,
-    parameters: Struct.fromJsonString(JSON.stringify(tool.parameters)),
+function agentToolDefinition(definition: LooseRecord): InferenceAgentTool {
+  const converted = new InferenceAgentTool({
+    name: definition.name,
+    description: definition.description,
+    parameters: Struct.fromJsonString(JSON.stringify(definition.parameters)),
   });
-  if (tool.customToolFormat) proto.customToolFormat = new InferenceCustomToolFormat(tool.customToolFormat);
-  return proto;
+  if (definition.customToolFormat) converted.customToolFormat = new InferenceCustomToolFormat(definition.customToolFormat);
+  return converted;
 }
 
-function namedProviderDefinedToolToProto(tool: Loose): InferenceNamedProviderDefinedTool {
-  const options = tool.options ? Struct.fromJson(tool.options as JsonValue) : undefined;
+function namedProviderToolDefinition(definition: LooseRecord): InferenceNamedProviderDefinedTool {
+  const options = definition.options ? Struct.fromJson(definition.options as JsonValue) : undefined;
   return new InferenceNamedProviderDefinedTool({
-    name: tool.name,
-    id: tool.id,
-    type: tool.type,
+    name: definition.name,
+    id: definition.id,
+    type: definition.type,
     ...(options === undefined ? {} : { options }),
   });
 }
 
-export function protoStreamErrorToError(error: InferenceStreamError): Error {
-  if (error.errorType === InferenceStreamErrorType.INPUT_TOKEN_LIMIT || error.isInputTokenLimitError) return new InputTokenLimitError(error.message);
-  if (error.errorType === InferenceStreamErrorType.OUTPUT_TOKEN_LIMIT || error.isOutputTokenLimitError) return new OutputTokensLimitExceededError(error.message);
-  return classifyTokenLimitErrorFromMessage(error.message) ?? new Error(error.message);
+export function protoStreamErrorToError(streamError: InferenceStreamError): Error {
+  if (streamError.errorType === InferenceStreamErrorType.INPUT_TOKEN_LIMIT || streamError.isInputTokenLimitError) return new InputTokenLimitError(streamError.message);
+  if (streamError.errorType === InferenceStreamErrorType.OUTPUT_TOKEN_LIMIT || streamError.isOutputTokenLimitError) return new OutputTokensLimitExceededError(streamError.message);
+  return classifyTokenLimitErrorFromMessage(streamError.message) ?? new Error(streamError.message);
 }
 
 export interface StreamRequestOptions {
-  messages: readonly Loose[];
-  requestedModel: Loose;
-  tools?: readonly Loose[];
-  providerDefinedTools?: readonly Loose[];
-  modelConfig?: Loose | undefined;
+  messages: readonly LooseRecord[];
+  requestedModel: LooseRecord;
+  tools?: readonly LooseRecord[];
+  providerDefinedTools?: readonly LooseRecord[];
+  modelConfig?: LooseRecord | undefined;
   invocationId?: string | undefined;
   conversationId?: string | undefined;
   automationId?: string | undefined;
@@ -233,29 +261,34 @@ export interface StreamRequestOptions {
   acceptedUnadvertisedToolNames?: readonly string[] | undefined;
 }
 
-export function buildStreamRequest(options: StreamRequestOptions): InferenceStreamRequest {
-  const request = new InferenceStreamRequest({
-    messages: options.messages.map(coreMessageToProto),
-    tools: (options.tools ?? []).map(agentToolToProto),
-    providerDefinedTools: (options.providerDefinedTools ?? []).map(namedProviderDefinedToolToProto),
-    acceptedUnadvertisedToolNames: [...(options.acceptedUnadvertisedToolNames ?? [])],
-    requestedModel: new InferenceRequestedModel({
-      modelId: options.requestedModel.modelId,
-      maxMode: options.requestedModel.maxMode,
-      parameters: options.requestedModel.parameters.map((parameter: Loose) => new InferenceModelParameterValue({ id: parameter.id, value: parameter.value })),
-      builtInModel: options.requestedModel.builtInModel,
-      isVariantStringRepresentation: options.requestedModel.isVariantStringRepresentation,
-    }),
+/** The model the request asks for, with its parameters as the protocol carries them. */
+function requestedModelToProto(model: LooseRecord): InferenceRequestedModel {
+  return new InferenceRequestedModel({
+    modelId: model.modelId,
+    maxMode: model.maxMode,
+    parameters: model.parameters.map((parameter: LooseRecord) => new InferenceModelParameterValue({ id: parameter.id, value: parameter.value })),
+    builtInModel: model.builtInModel,
+    isVariantStringRepresentation: model.isVariantStringRepresentation,
   });
-  if (options.invocationId) request.invocationId = options.invocationId;
-  if (options.conversationId) request.conversationId = options.conversationId;
-  if (options.automationId) request.automationId = options.automationId;
-  if (options.inferenceReason) request.inferenceReason = options.inferenceReason;
-  if (options.modelConfig) request.modelConfig = new InferenceModelConfig({
-    maxTokens: options.modelConfig.maxTokens,
-    temperature: options.modelConfig.temperature,
-    topP: options.modelConfig.topP,
-    stopSequences: options.modelConfig.stopSequences ?? [],
+}
+
+export function buildStreamRequest(settings: StreamRequestOptions): InferenceStreamRequest {
+  const streamRequest = new InferenceStreamRequest({
+    messages: settings.messages.map(coreMessageToProto),
+    tools: (settings.tools ?? []).map(agentToolDefinition),
+    providerDefinedTools: (settings.providerDefinedTools ?? []).map(namedProviderToolDefinition),
+    acceptedUnadvertisedToolNames: [...(settings.acceptedUnadvertisedToolNames ?? [])],
+    requestedModel: requestedModelToProto(settings.requestedModel),
   });
-  return request;
+  if (settings.invocationId) streamRequest.invocationId = settings.invocationId;
+  if (settings.conversationId) streamRequest.conversationId = settings.conversationId;
+  if (settings.automationId) streamRequest.automationId = settings.automationId;
+  if (settings.inferenceReason) streamRequest.inferenceReason = settings.inferenceReason;
+  if (settings.modelConfig) streamRequest.modelConfig = new InferenceModelConfig({
+    maxTokens: settings.modelConfig.maxTokens,
+    temperature: settings.modelConfig.temperature,
+    topP: settings.modelConfig.topP,
+    stopSequences: settings.modelConfig.stopSequences ?? [],
+  });
+  return streamRequest;
 }
