@@ -315,3 +315,56 @@ test("the instruction the model is given is the suggestion instruction", async (
   assert.equal(seen.length, 1)
   assert.equal(seen[0]?.role, "user")
 })
+
+test("the instruction is a marked prompt-suggestion inference", async () => {
+  const appended: Array<{ role: string; content?: unknown; providerOptions?: unknown }> = [];
+  const updates: string[] = [];
+  await requestPromptSuggestion(
+    createContext(),
+    "invocation-1",
+    "composer-2",
+    {
+      getMessages: () => [],
+      clearMessages: () => undefined,
+      appendMessages: (messages) => { for (const message of messages as unknown as Array<Record<string, unknown>>) appended.push({ role: String(message.role), content: message.content, providerOptions: message.providerOptions }); },
+      stream: () => ({ response: Promise.resolve({}), fullStream: (async function* () { yield { type: "text-delta", textDelta: "suggestion" }; })(), extendedUsage: Promise.resolve({ inputTokens: 1, cacheReadTokens: 0 }) }),
+    },
+    listenerOf(updates),
+    [],
+    undefined,
+    undefined,
+  );
+  assert.equal(appended.length, 1);
+  assert.equal(appended[0]?.role, "user");
+  assert.notEqual(appended[0]?.content, undefined);
+  assert.deepEqual(appended[0]?.providerOptions, { cursor: { inferenceReason: "prompt-suggestion", featureType: "promptSuggestion" } });
+  assert.deepEqual(updates, ["suggestion"]);
+});
+
+test("richer message content is part of the cost estimate", async () => {
+  const { estimateStringTokenCount } = await import("../../source/packages/agent/utils/token-estimate.ts");
+  const messages = toRedactedCoreMessages([
+    { role: "system", content: "ignored system" },
+    { role: "user", content: "hello world" },
+    { role: "assistant", content: [{ text: "answer" }, { toolName: "read_file" }, { args: { a: 1 } }, { result: { b: 2 } }, "plain"] },
+  ], PrivacyMode.NO_STORAGE);
+  const estimates: number[] = [];
+  await requestPromptSuggestion(
+    createContext(),
+    "invocation-1",
+    "composer-2",
+    harness({ answer: "suggestion" }).executor,
+    listenerOf([]),
+    [],
+    messages,
+    { maxInputTokenCost: 1_000_000, getModelInputCostForContext: (_model, tokens) => { estimates.push(tokens); return 0; } },
+  );
+  const expected = estimateStringTokenCount("hello world")
+    + estimateStringTokenCount("answer")
+    + estimateStringTokenCount("read_file")
+    + estimateStringTokenCount(JSON.stringify({ a: 1 }))
+    + estimateStringTokenCount(JSON.stringify({ b: 2 }))
+    + estimateStringTokenCount("plain")
+    + 20_000;
+  assert.deepEqual(estimates, [expected]);
+});

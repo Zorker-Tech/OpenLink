@@ -9,7 +9,7 @@
  * and the executor is restored afterwards whether the call succeeded or failed. And it has to fail quietly:
  * a suggestion is a convenience, so nothing about it may disturb the turn that is running.
  *
- * What comes back is a suggestion only if it looks like one. A model asked for the user's next words may
+ * What comes back is a suggestion only if it looks like one. A model asked for the user's next wordList may
  * instead continue the conversation, think out loud, or write an essay, so the first line is taken, quotes
  * are stripped, and the result is discarded if it starts as a speaker turn, contains thinking tags, is
  * longer than a suggestion, or is empty — each with its own outcome recorded, because "the model answered
@@ -29,142 +29,142 @@ import { isLargeContextModel } from "../../utils/model-markers.ts"
 
 const logger = createLogger("prompt-suggestion")
 /** A model that has nothing to suggest may say so with a tag rather than with an empty answer. */
-const SILENCE_TAG_REGEX = /<{1,2}\/?\s*silence\s*\/?>/i
-const promptSuggestionOutcome = createCounter("agent.prompt_suggestion.outcome", {
+const SILENCE_PATTERN = /<{1,2}\/?\s*silence\s*\/?>/i
+const outcomeCounter = createCounter("agent.prompt_suggestion.outcome", {
   description: "Prompt suggestion outcome by model",
   labelNames: ["model", "outcome"],
 })
 
-type RedactedMessage = ReturnType<typeof toRedactedCoreMessages>[number]
+type RedactedChatMessage = ReturnType<typeof toRedactedCoreMessages>[number]
 
-interface PromptSuggestionStreamResult {
+interface SuggestionStream {
   readonly response: Promise<unknown>
   readonly fullStream: AsyncIterable<{ readonly type: string; readonly textDelta?: string | undefined }>
   readonly extendedUsage: Promise<{ readonly inputTokens: number; readonly cacheReadTokens: number }>
 }
 
-interface PromptSuggestionExecutor {
-  getMessages(): readonly RedactedMessage[]
+interface SuggestionExecutorPort {
+  getMessages(): readonly RedactedChatMessage[]
   clearMessages(): void
-  appendMessages(messages: readonly RedactedMessage[]): void
-  stream(ctx: Context, invocationId: string, tools: readonly unknown[], options: { readonly maxTokens: number }): PromptSuggestionStreamResult
+  appendMessages(messages: readonly RedactedChatMessage[]): void
+  stream(ctx: Context, invocationId: string, tools: readonly unknown[], options: { readonly maxTokens: number }): SuggestionStream
 }
 
-interface PromptSuggestionInteractionListener {
+interface SuggestionListenerPort {
   sendUpdate(ctx: Context, update: ReturnType<typeof Updates.promptSuggestion>): Promise<void> | void
 }
 
-interface PromptSuggestionPriceOptions {
+interface PriceOptions {
   readonly maxInputTokenCost?: number | undefined
-  readonly getModelInputCostForContext?: ((model: string, estimatedTokens: number) => number) | undefined
+  readonly getModelInputCostForContext?: ((model: string, inputEstimate: number) => number) | undefined
 }
 
 /** What the conversation would cost to send, estimated from its text rather than counted by a tokenizer. */
-function countConversationHistoryTokens(messages: readonly { readonly role: string; readonly content: unknown }[]) {
+function estimateConversationCost(messages: readonly { readonly role: string; readonly content: unknown }[]) {
   let conversationHistoryTokens = 0
-  const nonSystemMessages = messages.filter(message => message.role !== "system")
-  const conversationHistoryMessageCount = nonSystemMessages.length
-  for (const message of nonSystemMessages) {
-    if (typeof message.content === "string") {
-      conversationHistoryTokens += estimateStringTokenCount(message.content)
-    } else if (Array.isArray(message.content)) {
-      for (const part of message.content) {
-        if (typeof part === "string") {
-          conversationHistoryTokens += estimateStringTokenCount(part)
-        } else if (typeof part === "object" && part !== null) {
-          if ("text" in part && typeof part.text === "string") {
-            conversationHistoryTokens += estimateStringTokenCount(part.text)
+  const participantMessages = messages.filter(transcriptMessage => transcriptMessage.role !== "system")
+  const historyMessageCount = participantMessages.length
+  for (const transcriptMessage of participantMessages) {
+    if (typeof transcriptMessage.content === "string") {
+      conversationHistoryTokens += estimateStringTokenCount(transcriptMessage.content)
+    } else if (Array.isArray(transcriptMessage.content)) {
+      for (const contentPart of transcriptMessage.content) {
+        if (typeof contentPart === "string") {
+          conversationHistoryTokens += estimateStringTokenCount(contentPart)
+        } else if (typeof contentPart === "object" && contentPart !== null) {
+          if ("text" in contentPart && typeof contentPart.text === "string") {
+            conversationHistoryTokens += estimateStringTokenCount(contentPart.text)
           }
-          if ("toolName" in part && typeof part.toolName === "string") {
-            conversationHistoryTokens += estimateStringTokenCount(part.toolName)
+          if ("toolName" in contentPart && typeof contentPart.toolName === "string") {
+            conversationHistoryTokens += estimateStringTokenCount(contentPart.toolName)
           }
-          if ("args" in part && part.args !== undefined) {
-            conversationHistoryTokens += estimateStringTokenCount(JSON.stringify(part.args)!)
+          if ("args" in contentPart && contentPart.args !== undefined) {
+            conversationHistoryTokens += estimateStringTokenCount(JSON.stringify(contentPart.args)!)
           }
-          if ("result" in part && part.result !== undefined) {
-            conversationHistoryTokens += estimateStringTokenCount(JSON.stringify(part.result)!)
+          if ("result" in contentPart && contentPart.result !== undefined) {
+            conversationHistoryTokens += estimateStringTokenCount(JSON.stringify(contentPart.result)!)
           }
         }
       }
     }
   }
-  return { conversationHistoryTokens, conversationHistoryMessageCount }
+  return { conversationHistoryTokens, historyMessageCount }
 }
 
-function countWords(text: string): number {
-  const words = text.trim().split(/\s+/)
-  return words.length > 0 && words[0] !== "" ? words.length : 0
+function wordCountOf(text: string): number {
+  const wordList = text.trim().split(/\s+/)
+  return wordList.length > 0 && wordList[0] !== "" ? wordList.length : 0
 }
 
 /** Why an answer was not usable as a suggestion, so each reason can be counted separately. */
-function extractSuggestionWithReason(
-  response: string,
-  maxWords = PROMPT_SUGGESTION_MAX_WORDS,
+function suggestionFromResponse(
+  rawResponse: string,
+  wordLimit = PROMPT_SUGGESTION_MAX_WORDS,
 ):
   | { readonly type: "empty" }
   | { readonly type: "bad_output"; readonly suggestion: string; readonly reason: "human_prefix" | "thinking_tags" }
   | { readonly type: "too_long"; readonly suggestion: string; readonly wordCount: number }
   | { readonly type: "success"; readonly suggestion: string } {
-  const trimmed = response.trim()
-  if (trimmed.length === 0) {
+  const stripped = rawResponse.trim()
+  if (stripped.length === 0) {
     return { type: "empty" }
   }
-  if (SILENCE_TAG_REGEX.test(trimmed)) {
+  if (SILENCE_PATTERN.test(stripped)) {
     return { type: "empty" }
   }
   // Only the first line is a suggestion; anything after it is the model continuing instead.
-  const firstLine = trimmed.split(/\r?\n/)[0]!.trim()
-  const unquoted = firstLine.replace(/^"(.*)"$/, "$1").trim()
-  if (unquoted.length === 0) {
+  const headline = stripped.split(/\r?\n/)[0]!.trim()
+  const candidate = headline.replace(/^"(.*)"$/, "$1").trim()
+  if (candidate.length === 0) {
     return { type: "empty" }
   }
-  if (unquoted.startsWith("Human:")) {
+  if (candidate.startsWith("Human:")) {
     return {
       type: "bad_output",
-      suggestion: unquoted,
+      suggestion: candidate,
       reason: "human_prefix",
     }
   }
-  if (/<\/?think>/.test(unquoted)) {
+  if (/<\/?think>/.test(candidate)) {
     return {
       type: "bad_output",
-      suggestion: unquoted,
+      suggestion: candidate,
       reason: "thinking_tags",
     }
   }
-  const wordCount = countWords(unquoted)
-  if (wordCount > maxWords) {
-    return { type: "too_long", suggestion: unquoted, wordCount }
+  const wordCount = wordCountOf(candidate)
+  if (wordCount > wordLimit) {
+    return { type: "too_long", suggestion: candidate, wordCount }
   }
-  return { type: "success", suggestion: unquoted }
+  return { type: "success", suggestion: candidate }
 }
 
 export async function requestPromptSuggestion(
   parentCtx: Context,
   invocationId: string,
   model: string,
-  executor: PromptSuggestionExecutor,
-  interactionListener: PromptSuggestionInteractionListener,
+  executor: SuggestionExecutorPort,
+  interactionListener: SuggestionListenerPort,
   tools: readonly unknown[],
-  messagesSnapshot: readonly RedactedMessage[] | undefined,
-  priceOptions: PromptSuggestionPriceOptions | undefined,
+  messagesSnapshot: readonly RedactedChatMessage[] | undefined,
+  priceOptions: PriceOptions | undefined,
 ): Promise<void> {
-  using spanCtxt = createSpan(parentCtx.withName("requestPromptSuggestion"))
-  const ctx = spanCtxt.ctx
-  const currentMessages = messagesSnapshot ?? executor.getMessages()
-  const maxCost = priceOptions?.maxInputTokenCost
-  const costFn = priceOptions?.getModelInputCostForContext
+  using suggestionSpan = createSpan(parentCtx.withName("requestPromptSuggestion"))
+  const ctx = suggestionSpan.ctx
+  const conversationMessages = messagesSnapshot ?? executor.getMessages()
+  const costCeiling = priceOptions?.maxInputTokenCost
+  const inputCostOf = priceOptions?.getModelInputCostForContext
   try {
     // The estimate is of the input alone, plus a fixed allowance for the instructions that go with it.
-    if (maxCost && maxCost > 0 && costFn) {
-      const unwrappedMessages = fromRedactedCoreMessages(currentMessages, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-      const { conversationHistoryTokens: rawEstimatedTokens } = countConversationHistoryTokens(unwrappedMessages)
+    if (costCeiling && costCeiling > 0 && inputCostOf) {
+      const plainMessages = fromRedactedCoreMessages(conversationMessages, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      const { conversationHistoryTokens: historyTokens } = estimateConversationCost(plainMessages)
       const SYSTEM_PROMPT_OVERHEAD_TOKENS = 2e4
-      const estimatedTokens = rawEstimatedTokens + SYSTEM_PROMPT_OVERHEAD_TOKENS
-      const inputCost = costFn(model, estimatedTokens)
-      if (inputCost > maxCost) {
-        logger.info(ctx, "Prompt suggestion skipped: model too expensive", { model, rawEstimatedTokens, estimatedTokens, inputCost, maxCost })
-        promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "skipped_expensive" })
+      const inputEstimate = historyTokens + SYSTEM_PROMPT_OVERHEAD_TOKENS
+      const estimatedCost = inputCostOf(model, inputEstimate)
+      if (estimatedCost > costCeiling) {
+        logger.info(ctx, "Prompt suggestion skipped: model too expensive", { model, historyTokens, inputEstimate, estimatedCost, costCeiling })
+        outcomeCounter.increment(ctx, 1, { model, outcome: "skipped_expensive" })
         return
       }
     }
@@ -173,10 +173,10 @@ export async function requestPromptSuggestion(
       executor.clearMessages()
       executor.appendMessages(messagesSnapshot)
     }
-    const isLargeContext = isLargeContextModel(model)
-    const userMessage = {
+    const readsLargerContext = isLargeContextModel(model)
+    const suggestionInstruction = {
       role: "user",
-      content: promptSuggestionUserMessage(isLargeContext),
+      content: promptSuggestionUserMessage(readsLargerContext),
       providerOptions: {
         cursor: {
           inferenceReason: "prompt-suggestion",
@@ -184,51 +184,51 @@ export async function requestPromptSuggestion(
         },
       },
     }
-    executor.appendMessages(toRedactedCoreMessages([userMessage], PrivacyMode.UNSPECIFIED))
+    executor.appendMessages(toRedactedCoreMessages([suggestionInstruction], PrivacyMode.UNSPECIFIED))
     try {
       // A suggestion is a sentence or two, and the model that reads more context is allowed more of them.
-      const maxTokens = isLargeContext ? 128 : 64
-      const streamResult = executor.stream(ctx, invocationId, tools, { maxTokens })
-      // The response promise is settled alongside the stream so a failure is not lost if the stream ends first.
-      const settledResponse = streamResult.response.then(() => ({ didReject: false as const }), error => ({ didReject: true as const, error }))
-      let responseText = ""
-      for await (const chunk of streamResult.fullStream) {
+      const maxTokens = readsLargerContext ? 128 : 64
+      const suggestionStream = executor.stream(ctx, invocationId, tools, { maxTokens })
+      // The rawResponse promise is settled alongside the stream so a failure is not lost if the stream ends first.
+      const settledCall = suggestionStream.response.then(() => ({ didReject: false as const }), failure => ({ didReject: true as const, failure }))
+      let answerText = ""
+      for await (const chunk of suggestionStream.fullStream) {
         if (chunk.type === "text-delta") {
-          responseText += chunk.textDelta ?? ""
+          answerText += chunk.textDelta ?? ""
         }
       }
-      const responseResult = await settledResponse
-      if (responseResult.didReject) {
-        throw responseResult.error
+      const settledResult = await settledCall
+      if (settledResult.didReject) {
+        throw settledResult.failure
       }
-      const extendedUsage = await streamResult.extendedUsage
-      const cacheHitRatio = extendedUsage.inputTokens > 0 ? (extendedUsage.cacheReadTokens / extendedUsage.inputTokens).toFixed(2) : "N/A"
-      logger.info(ctx, "Prompt suggestion completed", { inputTokens: extendedUsage.inputTokens, cacheReadTokens: extendedUsage.cacheReadTokens, cacheHitRatio })
-      const extractionResult = extractSuggestionWithReason(responseText)
-      switch (extractionResult.type) {
+      const usageReport = await suggestionStream.extendedUsage
+      const cacheRatio = usageReport.inputTokens > 0 ? (usageReport.cacheReadTokens / usageReport.inputTokens).toFixed(2) : "N/A"
+      logger.info(ctx, "Prompt suggestion completed", { inputTokens: usageReport.inputTokens, cacheReadTokens: usageReport.cacheReadTokens, cacheRatio })
+      const parsedSuggestion = suggestionFromResponse(answerText)
+      switch (parsedSuggestion.type) {
         case "success":
-          promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "suggested" })
-          await interactionListener.sendUpdate(ctx, Updates.promptSuggestion(extractionResult.suggestion))
+          outcomeCounter.increment(ctx, 1, { model, outcome: "suggested" })
+          await interactionListener.sendUpdate(ctx, Updates.promptSuggestion(parsedSuggestion.suggestion))
           break
         case "too_long":
-          logger.info(ctx, "Prompt suggestion discarded: too long", { wordCount: extractionResult.wordCount, maxWords: PROMPT_SUGGESTION_MAX_WORDS, suggestion: extractionResult.suggestion })
-          promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "too_long" })
+          logger.info(ctx, "Prompt suggestion discarded: too long", { wordCount: parsedSuggestion.wordCount, wordLimit: PROMPT_SUGGESTION_MAX_WORDS, suggestion: parsedSuggestion.suggestion })
+          outcomeCounter.increment(ctx, 1, { model, outcome: "too_long" })
           break
         case "bad_output":
-          logger.info(ctx, "Prompt suggestion discarded: bad output", { reason: extractionResult.reason, suggestion: extractionResult.suggestion })
-          promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "bad_output" })
+          logger.info(ctx, "Prompt suggestion discarded: bad output", { reason: parsedSuggestion.reason, suggestion: parsedSuggestion.suggestion })
+          outcomeCounter.increment(ctx, 1, { model, outcome: "bad_output" })
           break
         case "empty":
-          promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "no_suggestion" })
+          outcomeCounter.increment(ctx, 1, { model, outcome: "no_suggestion" })
           break
       }
-    } catch (error) {
-      promptSuggestionOutcome.increment(ctx, 1, { model, outcome: "error" })
-      logger.error(ctx, "Error during prompt suggestion request", error)
+    } catch (failure) {
+      outcomeCounter.increment(ctx, 1, { model, outcome: "failure" })
+      logger.error(ctx, "Error during prompt suggestion request", failure)
     } finally {
       // Whatever happened, the executor holds the conversation it held before.
       executor.clearMessages()
-      executor.appendMessages(currentMessages)
+      executor.appendMessages(conversationMessages)
     }
   } catch {}
 }
