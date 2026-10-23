@@ -32,53 +32,53 @@ export type CodexDirectOptions = {
   readonly instructions: string;
   readonly input: readonly Loose[];
   readonly tools?: readonly CodexDirectTool[];
-  readonly executeTool?: (tool: CodexDirectTool, args: unknown, toolCallId: string) => Promise<unknown>;
+  readonly executeTool?: (tool: CodexDirectTool, parsedArguments: unknown, toolCallId: string) => Promise<unknown>;
   readonly maxSteps?: number;
 };
 
-function record(value: unknown): Loose | null {
+function objectOf(value: unknown): Loose | null {
   return typeof value === "object" && value != null && !Array.isArray(value) ? value as Loose : null;
 }
 
-function safeJson(value: unknown): string {
-  try { return JSON.stringify(value, (_key, item) => typeof item === "bigint" ? item.toString() : item) ?? "null"; }
+function jsonTextOf(value: unknown): string {
+  try { return JSON.stringify(value, (_key, outputItem) => typeof outputItem === "bigint" ? outputItem.toString() : outputItem) ?? "null"; }
   catch (error) { return JSON.stringify({ isError: true, error: error instanceof Error ? error.message : String(error) }); }
 }
 
-async function responseError(response: Response): Promise<Error> {
-  let detail = "";
-  try { detail = (await response.text()).slice(0, 4_096).trim(); } catch {}
-  return new Error(`Codex direct request failed (${response.status}${detail.length === 0 ? "" : `: ${detail}`}).`);
+async function requestFailure(response: Response): Promise<Error> {
+  let errorBody = "";
+  try { errorBody = (await response.text()).slice(0, 4_096).trim(); } catch {}
+  return new Error(`Codex direct request failed (${response.status}${errorBody.length === 0 ? "" : `: ${errorBody}`}).`);
 }
 
-async function* sseEvents(response: Response): AsyncGenerator<Loose> {
+async function* readSseEvents(response: Response): AsyncGenerator<Loose> {
   if (response.body == null) throw new Error("Codex direct response did not include a stream.");
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+  const streamReader = response.body.getReader();
+  const textDecoder = new TextDecoder();
+  let pendingText = "";
   while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    let boundary: number;
-    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, boundary).replaceAll("\r", "");
-      buffer = buffer.slice(boundary + 2);
-      const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trimStart()).join("\n");
-      if (data.length === 0 || data === "[DONE]") continue;
-      let parsed: unknown;
-      try { parsed = JSON.parse(data); }
+    const { done, value } = await streamReader.read();
+    pendingText += textDecoder.decode(value, { stream: !done });
+    let eventBoundary: number;
+    while ((eventBoundary = pendingText.indexOf("\n\n")) !== -1) {
+      const eventBlock = pendingText.slice(0, eventBoundary).replaceAll("\r", "");
+      pendingText = pendingText.slice(eventBoundary + 2);
+      const payload = eventBlock.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trimStart()).join("\n");
+      if (payload.length === 0 || payload === "[DONE]") continue;
+      let decoded: unknown;
+      try { decoded = JSON.parse(payload); }
       catch { throw new Error("Codex direct response contained malformed SSE JSON."); }
-      const event = record(parsed);
-      if (event != null) yield event;
+      const message = objectOf(decoded);
+      if (message != null) yield message;
     }
     if (done) break;
   }
-  if (buffer.trim().length > 0 && buffer.trim() !== "data: [DONE]") throw new Error("Codex direct response ended with an incomplete SSE event.");
+  if (pendingText.trim().length > 0 && pendingText.trim() !== "data: [DONE]") throw new Error("Codex direct response ended with an incomplete SSE event.");
 }
 
-function usageOf(response: Loose): CodexDirectUsage {
-  const usage = record(response.usage) ?? {};
-  const details = record(usage.input_tokens_details) ?? {};
+function usageFrom(response: Loose): CodexDirectUsage {
+  const usage = objectOf(response.usage) ?? {};
+  const details = objectOf(usage.input_tokens_details) ?? {};
   return {
     inputTokens: Number.isFinite(usage.input_tokens) ? usage.input_tokens : 0,
     outputTokens: Number.isFinite(usage.output_tokens) ? usage.output_tokens : 0,
@@ -87,23 +87,23 @@ function usageOf(response: Loose): CodexDirectUsage {
   };
 }
 
-function addUsage(total: CodexDirectUsage, next: CodexDirectUsage): CodexDirectUsage {
+function sumUsage(runningUsage: CodexDirectUsage, addition: CodexDirectUsage): CodexDirectUsage {
   return {
-    inputTokens: total.inputTokens + next.inputTokens,
-    outputTokens: total.outputTokens + next.outputTokens,
-    cacheReadTokens: total.cacheReadTokens + next.cacheReadTokens,
-    cacheWriteTokens: total.cacheWriteTokens + next.cacheWriteTokens,
+    inputTokens: runningUsage.inputTokens + addition.inputTokens,
+    outputTokens: runningUsage.outputTokens + addition.outputTokens,
+    cacheReadTokens: runningUsage.cacheReadTokens + addition.cacheReadTokens,
+    cacheWriteTokens: runningUsage.cacheWriteTokens + addition.cacheWriteTokens,
   };
 }
 
-function toolCalls(output: readonly unknown[]): Loose[] {
-  return output.flatMap(item => {
-    const call = record(item);
-    return call?.type === "function_call" && typeof call.name === "string" && typeof call.call_id === "string" ? [call] : [];
+function functionCallsOf(output: readonly unknown[]): Loose[] {
+  return output.flatMap(outputItem => {
+    const functionCall = objectOf(outputItem);
+    return functionCall?.type === "function_call" && typeof functionCall.name === "string" && typeof functionCall.call_id === "string" ? [functionCall] : [];
   });
 }
 
-function requestTools(tools: readonly CodexDirectTool[] | undefined): Loose[] | undefined {
+function declaredToolsOf(tools: readonly CodexDirectTool[] | undefined): Loose[] | undefined {
   if (tools == null || tools.length === 0) return undefined;
   return tools.map(tool => ({
     type: "function",
@@ -115,15 +115,15 @@ function requestTools(tools: readonly CodexDirectTool[] | undefined): Loose[] | 
 }
 
 export async function* streamCodexDirectResponses(options: CodexDirectOptions): AsyncGenerator<CodexDirectEvent> {
-  const maxSteps = options.maxSteps ?? 8;
-  const toolsByName = new Map((options.tools ?? []).map(tool => [tool.name, tool]));
-  let input: Loose[] = options.input.map(item => ({ ...item }));
+  const stepLimit = options.maxSteps ?? 8;
+  const toolIndex = new Map((options.tools ?? []).map(tool => [tool.name, tool]));
+  let input: Loose[] = options.input.map(outputItem => ({ ...outputItem }));
   let text = "";
   let responseId = "";
   let usage: CodexDirectUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
-  for (let step = 0; step < maxSteps; step += 1) {
-    const declaredTools = requestTools(options.tools);
+  for (let stepIndex = 0; stepIndex < stepLimit; stepIndex += 1) {
+    const toolsPayload = declaredToolsOf(options.tools);
     const response = await options.fetch(options.endpoint, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "text/event-stream", "user-agent": "slate-router/1" },
@@ -131,59 +131,59 @@ export async function* streamCodexDirectResponses(options: CodexDirectOptions): 
         model: options.model,
         instructions: options.instructions,
         input,
-        ...(declaredTools == null ? {} : { tools: declaredTools, tool_choice: "auto", parallel_tool_calls: true }),
+        ...(toolsPayload == null ? {} : { tools: toolsPayload, tool_choice: "auto", parallel_tool_calls: true }),
         ...(options.reasoningEffort == null ? {} : { reasoning: { effort: options.reasoningEffort, summary: "auto" } }),
         include: ["reasoning.encrypted_content"],
         stream: true,
         store: false,
       }),
     });
-    if (!response.ok) throw await responseError(response);
+    if (!response.ok) throw await requestFailure(response);
 
-    let completed: Loose | null = null;
-    const observedOutput: Loose[] = [];
-    for await (const event of sseEvents(response)) {
-      if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
-        text += event.delta;
-        yield { type: "text-delta", delta: event.delta };
-      } else if (event.type === "response.output_item.done") {
-        const item = record(event.item);
-        if (item != null) observedOutput.push(item);
-      } else if (event.type === "response.completed") {
-        completed = record(event.response);
-      } else if (event.type === "response.failed" || event.type === "error") {
-        const failure = record(event.response)?.error ?? event.error ?? event;
-        throw new Error(`Codex direct response failed: ${safeJson(failure).slice(0, 4_096)}`);
+    let completionEvent: Loose | null = null;
+    const streamedItems: Loose[] = [];
+    for await (const message of readSseEvents(response)) {
+      if (message.type === "response.output_text.delta" && typeof message.delta === "string") {
+        text += message.delta;
+        yield { type: "text-delta", delta: message.delta };
+      } else if (message.type === "response.output_item.done") {
+        const outputItem = objectOf(message.outputItem);
+        if (outputItem != null) streamedItems.push(outputItem);
+      } else if (message.type === "response.completed") {
+        completionEvent = objectOf(message.response);
+      } else if (message.type === "response.failed" || message.type === "error") {
+        const failureDetail = objectOf(message.response)?.error ?? message.error ?? message;
+        throw new Error(`Codex direct response failed: ${jsonTextOf(failureDetail).slice(0, 4_096)}`);
       }
     }
-    if (completed == null) throw new Error("Codex direct response ended without response.completed.");
-    if (typeof completed.id === "string") responseId = completed.id;
-    usage = addUsage(usage, usageOf(completed));
-    const output = Array.isArray(completed.output) && completed.output.length > 0 ? completed.output : observedOutput;
-    const calls = toolCalls(output);
+    if (completionEvent == null) throw new Error("Codex direct response ended without response.completed.");
+    if (typeof completionEvent.id === "string") responseId = completionEvent.id;
+    usage = sumUsage(usage, usageFrom(completionEvent));
+    const output = Array.isArray(completionEvent.output) && completionEvent.output.length > 0 ? completionEvent.output : streamedItems;
+    const calls = functionCallsOf(output);
     if (calls.length === 0) {
       yield { type: "done", text, responseId, usage };
       return;
     }
     if (options.executeTool == null) throw new Error("Codex requested a tool but Slate did not provide an executor.");
 
-    const results: Loose[] = [];
-    for (const call of calls) {
-      const selected = toolsByName.get(call.name);
-      if (selected == null) {
-        results.push({ type: "function_call_output", call_id: call.call_id, output: safeJson({ isError: true, error: `Unknown Slate tool: ${call.name}` }) });
+    const toolResultItems: Loose[] = [];
+    for (const functionCall of calls) {
+      const selectedTool = toolIndex.get(functionCall.name);
+      if (selectedTool == null) {
+        toolResultItems.push({ type: "function_call_output", call_id: functionCall.call_id, output: jsonTextOf({ isError: true, error: `Unknown Slate tool: ${functionCall.name}` }) });
         continue;
       }
-      let args: unknown = {};
-      try { args = typeof call.arguments === "string" && call.arguments.length > 0 ? JSON.parse(call.arguments) : {}; }
-      catch { results.push({ type: "function_call_output", call_id: call.call_id, output: safeJson({ isError: true, error: "Tool arguments were not valid JSON." }) }); continue; }
+      let parsedArguments: unknown = {};
+      try { parsedArguments = typeof functionCall.arguments === "string" && functionCall.arguments.length > 0 ? JSON.parse(functionCall.arguments) : {}; }
+      catch { toolResultItems.push({ type: "function_call_output", call_id: functionCall.call_id, output: jsonTextOf({ isError: true, error: "Tool arguments were not valid JSON." }) }); continue; }
       try {
-        results.push({ type: "function_call_output", call_id: call.call_id, output: safeJson(await options.executeTool(selected, args, call.call_id)) });
+        toolResultItems.push({ type: "function_call_output", call_id: functionCall.call_id, output: jsonTextOf(await options.executeTool(selectedTool, parsedArguments, functionCall.call_id)) });
       } catch (error) {
-        results.push({ type: "function_call_output", call_id: call.call_id, output: safeJson({ isError: true, error: error instanceof Error ? error.message : String(error) }) });
+        toolResultItems.push({ type: "function_call_output", call_id: functionCall.call_id, output: jsonTextOf({ isError: true, error: error instanceof Error ? error.message : String(error) }) });
       }
     }
-    input = [...input, ...output.map(item => record(item) ?? {}), ...results];
+    input = [...input, ...output.map(outputItem => objectOf(outputItem) ?? {}), ...toolResultItems];
   }
-  throw new Error(`Codex exceeded Slate's ${maxSteps}-step tool limit.`);
+  throw new Error(`Codex exceeded Slate's ${stepLimit}-step tool limit.`);
 }
