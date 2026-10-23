@@ -133,48 +133,48 @@ import { processSelectedContext } from "./context/process-selected-context.ts"
 // remain deliberately absent and uncomposed. The
 // recovered tracking and serde helpers are private implementation details.
 
-const logger = createLogger("@slate/agent:state");
-const textDecoder = new TextDecoder();
+const stateLog = createLogger("@slate/agent:state");
+const utf8Decoder = new TextDecoder();
 
-const conversationStateRestoreDurationMs = createHistogram("agent.conversation_state.restore.duration_ms", {
+const restoreDurationHistogram = createHistogram("agent.conversation_state.restore.duration_ms", {
   description: "Wall time for fromConversationStateStructure (KV blob loads + handle setup).",
   labelNames: ["crossed_large_threshold"],
 });
-const conversationStateRestoreRootPromptMessageCount = createHistogram("agent.conversation_state.restore.root_prompt_message_count", {
+const restoreRootPromptHistogram = createHistogram("agent.conversation_state.restore.root_prompt_message_count", {
   description: "Count of root prompt message blobs loaded (one getBlob per persisted message).",
   labelNames: ["crossed_large_threshold"],
 });
-const conversationStateRestoreTurnReferenceCount = createHistogram("agent.conversation_state.restore.turn_reference_count", {
+const restoreTurnRefHistogram = createHistogram("agent.conversation_state.restore.turn_reference_count", {
   description: "Count of lazy turn references in persisted state (not materialized here).",
   labelNames: ["crossed_large_threshold"],
 });
-const conversationStateRestoreFileStatePathCount = createHistogram("agent.conversation_state.restore.file_state_path_count", {
+const restoreFilePathHistogram = createHistogram("agent.conversation_state.restore.file_state_path_count", {
   description: "Number of paths in file_states_v2.",
   labelNames: ["crossed_large_threshold"],
 });
-const conversationStateRestoreTotalBytes = createHistogram("agent.conversation_state.restore.total_restored_bytes", {
+const restoreBytesHistogram = createHistogram("agent.conversation_state.restore.total_restored_bytes", {
   description: "Bytes eagerly loaded during restore (root prompt blobs).",
   labelNames: ["crossed_large_threshold"],
 });
-const conversationStateRestorePhaseMs = createHistogram("agent.conversation_state.restore.phase_ms", {
+const restorePhaseHistogram = createHistogram("agent.conversation_state.restore.phase_ms", {
   description: "Wall time for each phase of fromConversationStateStructure (root prompt blob loads, file-state wiring, subagent state refs, other setup). Sum ≈ restore.duration_ms.",
   labelNames: ["phase", "crossed_large_threshold"],
 });
-const conversationStateRestoreBlobFetchConcurrency = createHistogram("agent.conversation_state.restore.blob_fetch_concurrency", {
+const restoreFetchConcurrencyHistogram = createHistogram("agent.conversation_state.restore.blob_fetch_concurrency", {
   description: "Effective max concurrent blob reads for this restore (agent_state_restore_config.blob_fetch_concurrency after schema validation; the 32 fallback means the console value was absent or failed to parse).",
 });
-const conversationStateComputeRootPromptMode = createCounter("agent.conversation_state.compute.root_prompt_mode", {
+const rootPromptModeCounter = createCounter("agent.conversation_state.compute.root_prompt_mode", {
   description: "Counts whether computeNewStructure rebuilt root prompt blobs or reused a persisted prefix.",
   labelNames: ["mode"],
 });
 
-const SERIALIZE_MESSAGE_SLOW_THRESHOLD_MS = 1;
-const LARGE_RESTORE_TOTAL_BYTES = 2 * 1024 * 1024;
-const LARGE_RESTORE_IMAGE_BYTES = 512 * 1024;
-const SLOW_RESTORE_DURATION_MS = 200;
-const RESTORE_BLOB_FETCH_CONCURRENCY = 32;
+const SLOW_SERIALIZE_MS = 1;
+const LARGE_RESTORE_BYTES = 2 * 1024 * 1024;
+const LARGE_RESTORE_IMAGE = 512 * 1024;
+const SLOW_RESTORE_MS = 200;
+const RESTORE_FETCH_CONCURRENCY = 32;
 
-type ConversationStateRestoreMetricValues = {
+type RestoreMetricValues = {
   context: OperationContext;
   restoreDurationMs: number;
   rootPromptPhaseMs: number;
@@ -188,7 +188,7 @@ type ConversationStateRestoreMetricValues = {
   crossedLargeThreshold: boolean;
 };
 
-function recordConversationStateRestoreMetrics({
+function recordRestoreMetrics({
   context,
   restoreDurationMs,
   rootPromptPhaseMs,
@@ -200,34 +200,34 @@ function recordConversationStateRestoreMetrics({
   rootPromptBytes,
   restoreBlobFetchConcurrency,
   crossedLargeThreshold,
-}: ConversationStateRestoreMetricValues): void {
+}: RestoreMetricValues): void {
   const largeLabel = {
     crossed_large_threshold: crossedLargeThreshold ? "true" : "false",
   };
   const namedPhasesMs = rootPromptPhaseMs + fileStatesPhaseMs + subagentStateRefsPhaseMs;
   const otherPhaseMs = Math.max(0, restoreDurationMs - namedPhasesMs);
-  conversationStateRestorePhaseMs.histogram(context, rootPromptPhaseMs, {
+  restorePhaseHistogram.histogram(context, rootPromptPhaseMs, {
     phase: "root_prompt_messages",
     ...largeLabel,
   });
-  conversationStateRestorePhaseMs.histogram(context, fileStatesPhaseMs, {
+  restorePhaseHistogram.histogram(context, fileStatesPhaseMs, {
     phase: "file_states",
     ...largeLabel,
   });
-  conversationStateRestorePhaseMs.histogram(context, subagentStateRefsPhaseMs, { phase: "subagent_state_refs", ...largeLabel });
-  conversationStateRestorePhaseMs.histogram(context, otherPhaseMs, {
+  restorePhaseHistogram.histogram(context, subagentStateRefsPhaseMs, { phase: "subagent_state_refs", ...largeLabel });
+  restorePhaseHistogram.histogram(context, otherPhaseMs, {
     phase: "other",
     ...largeLabel,
   });
-  conversationStateRestoreDurationMs.histogram(context, restoreDurationMs, largeLabel);
-  conversationStateRestoreBlobFetchConcurrency.histogram(context, restoreBlobFetchConcurrency);
-  conversationStateRestoreRootPromptMessageCount.histogram(context, rootPromptMessageCount, largeLabel);
-  conversationStateRestoreTurnReferenceCount.histogram(context, turnReferenceCount, largeLabel);
-  conversationStateRestoreFileStatePathCount.histogram(context, fileStatePathCount, largeLabel);
-  conversationStateRestoreTotalBytes.histogram(context, rootPromptBytes, largeLabel);
+  restoreDurationHistogram.histogram(context, restoreDurationMs, largeLabel);
+  restoreFetchConcurrencyHistogram.histogram(context, restoreBlobFetchConcurrency);
+  restoreRootPromptHistogram.histogram(context, rootPromptMessageCount, largeLabel);
+  restoreTurnRefHistogram.histogram(context, turnReferenceCount, largeLabel);
+  restoreFilePathHistogram.histogram(context, fileStatePathCount, largeLabel);
+  restoreBytesHistogram.histogram(context, rootPromptBytes, largeLabel);
 }
 
-function estimatePayloadBytes(payload: unknown): number {
+function payloadBytes(payload: unknown): number {
   if (typeof payload === "string") {
     return Buffer.byteLength(payload, "utf8");
   }
@@ -243,7 +243,7 @@ function estimatePayloadBytes(payload: unknown): number {
   return 0;
 }
 
-function getCoreMessageImagePayloadStats(message: { content?: unknown }): { imageBytes: number; imagePartCount: number } {
+function imagePayloadStats(message: { content?: unknown }): { imageBytes: number; imagePartCount: number } {
   const stats = { imageBytes: 0, imagePartCount: 0 };
   if (!Array.isArray(message.content)) {
     return stats;
@@ -253,13 +253,13 @@ function getCoreMessageImagePayloadStats(message: { content?: unknown }): { imag
       const image = "image" in part ? part.image : undefined;
       const data = "data" in part ? part.data : undefined;
       stats.imagePartCount++;
-      stats.imageBytes += estimatePayloadBytes(image ?? data);
+      stats.imageBytes += payloadBytes(image ?? data);
     }
   }
   return stats;
 }
 
-function isValidTimeZone(timeZone?: string): boolean {
+function validTimeZone(timeZone?: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone });
     return true;
@@ -268,17 +268,17 @@ function isValidTimeZone(timeZone?: string): boolean {
   }
 }
 
-function resolveConversationStartTimeZone(timeZone?: string): string {
-  if (timeZone && isValidTimeZone(timeZone)) {
+function startTimeZone(timeZone?: string): string {
+  if (timeZone && validTimeZone(timeZone)) {
     return timeZone;
   }
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
-function buildDateStringForTimestampMs(timestampMs: bigint, timeZone?: string): string {
+function dateStringForTimestamp(timestampMs: bigint, timeZone?: string): string {
   const timestamp = new Date(Number(timestampMs));
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: isValidTimeZone(timeZone) ? timeZone : "UTC",
+    timeZone: validTimeZone(timeZone) ? timeZone : "UTC",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -300,42 +300,42 @@ function buildDateStringForTimestampMs(timestampMs: bigint, timeZone?: string): 
   return `${year}-${month}-${day}`;
 }
 
-type SerializedBlobCacheEntry = {
+type BlobCacheEntry = {
   readonly blobId: Uint8Array;
   readonly blobData: Uint8Array;
 };
 
-const serializedMessageCache = new WeakMap<object, SerializedBlobCacheEntry>();
-const coreToRedactedMap = new WeakMap<object, object>();
-const serializedSubagentStateCache = new WeakMap<object, SerializedBlobCacheEntry>();
+const messageBlobCache = new WeakMap<object, BlobCacheEntry>();
+const plainToRedacted = new WeakMap<object, object>();
+const subagentBlobCache = new WeakMap<object, BlobCacheEntry>();
 
-type DisposableValue = {
-  [Symbol.dispose]?: (this: DisposableValue) => void;
-  [Symbol.asyncDispose]?: (this: DisposableValue) => void | Promise<void>;
+type Disposable = {
+  [Symbol.dispose]?: (this: Disposable) => void;
+  [Symbol.asyncDispose]?: (this: Disposable) => void | Promise<void>;
 };
 
-type DisposableResource = {
-  value?: DisposableValue;
-  dispose?: (this: DisposableValue) => void | Promise<void>;
+type DisposableResourceEntry = {
+  value?: Disposable;
+  dispose?: (this: Disposable) => void | Promise<void>;
   async?: boolean;
 };
 
-type DisposableEnvironment = {
-  stack: DisposableResource[];
+type DisposableEnvironmentEntry = {
+  stack: DisposableResourceEntry[];
   error: unknown;
   hasError: boolean;
 };
 
-function isDisposableValue(value: unknown): value is DisposableValue {
+function isDisposable(value: unknown): value is Disposable {
   return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
-function __addDisposableResource19(env: DisposableEnvironment, value: unknown, async: boolean): unknown {
+function addDisposableResource(env: DisposableEnvironmentEntry, value: unknown, async: boolean): unknown {
   if (value !== null && value !== undefined) {
-    if (!isDisposableValue(value)) throw new TypeError("Object expected.");
+    if (!isDisposable(value)) throw new TypeError("Object expected.");
     const disposableValue = value;
     let dispose = async ? disposableValue[Symbol.asyncDispose] : undefined;
-    let inner: ((this: DisposableValue) => void | Promise<void>) | undefined;
+    let inner: ((this: Disposable) => void | Promise<void>) | undefined;
     if (dispose === undefined) {
       if (Symbol.dispose === undefined) throw new TypeError("Symbol.dispose is not defined.");
       dispose = disposableValue[Symbol.dispose];
@@ -358,7 +358,7 @@ function __addDisposableResource19(env: DisposableEnvironment, value: unknown, a
   return value;
 }
 
-function __disposeResources19(env: DisposableEnvironment): Promise<void> | void {
+function disposeResources(env: DisposableEnvironmentEntry): Promise<void> | void {
   const SuppressedErrorConstructor = typeof SuppressedError === "function"
     ? SuppressedError
     : class extends Error {
@@ -379,7 +379,7 @@ function __disposeResources19(env: DisposableEnvironment): Promise<void> | void 
   };
   let asyncState = 0;
   const next = (): Promise<void> | void => {
-    let resource: DisposableResource | undefined;
+    let resource: DisposableResourceEntry | undefined;
     while ((resource = env.stack.pop()) !== undefined) {
       try {
         if (!resource.async && asyncState === 1) {
@@ -409,7 +409,7 @@ function __disposeResources19(env: DisposableEnvironment): Promise<void> | void 
   return next();
 }
 
-function hasInvalidXmlTextCharacter(value: string): boolean {
+function invalidXmlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
@@ -424,14 +424,14 @@ export function renderIncomingMessageIdTag(messageId?: string): string | undefin
   if (
     normalizedMessageId === undefined ||
     normalizedMessageId.length === 0 ||
-    hasInvalidXmlTextCharacter(normalizedMessageId)
+    invalidXmlCharacter(normalizedMessageId)
   ) {
     return undefined;
   }
   return `<incoming_message_id>${escapePromptXmlText(normalizedMessageId)}</incoming_message_id>`;
 }
 
-function shouldExposeIncomingMessageId(userMessage: {
+function exposeIncomingMessageId(userMessage: {
   readonly isSimulatedMsg: boolean;
   readonly simulatedMsgReason: SimulatedMsgReason;
   readonly text: string;
@@ -441,7 +441,7 @@ function shouldExposeIncomingMessageId(userMessage: {
   return isNotificationOnlyUserMessage({ role: "user", content: userMessage.text });
 }
 
-function buildDynamicToolsEnabledReminder(toolNames: {
+function dynamicToolsReminder(toolNames: {
   readonly discoveryToolName: string;
   readonly invocationToolName: string;
 }): string {
@@ -475,7 +475,7 @@ async function getPreviousRecordedDynamicToolCount(
   return undefined;
 }
 
-function decryptTurnModelMcid(
+function decryptModelMcid(
   turnHandle: AgentConversationTurnHandle,
   decryptMcidAndParams: ((encrypted: string) => string | undefined) | undefined,
 ): string | undefined {
@@ -489,35 +489,35 @@ function decryptTurnModelMcid(
   }
 }
 
-const MODEL_SWITCH_REMINDER = `<system_reminder>
+const MODEL_SWITCH_NOTICE = `<system_reminder>
 Earlier turns were produced by a different AI model. It may have called tools that are no longer available to you. Call only the tools currently defined for you, using your current schemas, and follow your own response style rather than imitating the prior model's behavior.
 </system_reminder>`;
 
-const stateSnapshotDuration = createHistogram("agent.ttft.createTurn.stateSnapshotMs", {
+const stateSnapshotHistogram = createHistogram("agent.ttft.createTurn.stateSnapshotMs", {
   description: "Time for computeNewStructure + serialize + getBlobId at the start of createAgentTurn",
   labelNames: ["overlap"],
 });
-const snapshotJoinWaitDuration = createHistogram("agent.ttft.createTurn.snapshotJoinWaitMs", {
+const snapshotJoinHistogram = createHistogram("agent.ttft.createTurn.snapshotJoinWaitMs", {
   description: "Time the overlap treatment waits for the pre-turn snapshot after selected-context processing",
 });
-const overlapSavedDuration = createHistogram("agent.ttft.createTurn.overlapSavedMs", {
+const overlapSavedHistogram = createHistogram("agent.ttft.createTurn.overlapSavedMs", {
   description: "Wall-clock pre-turn snapshot time hidden by concurrent turn preparation in the overlap treatment",
 });
-const userMessageBlobDuration = createHistogram("agent.ttft.createTurn.userMessageBlobMs", {
+const userMessageBlobHistogram = createHistogram("agent.ttft.createTurn.userMessageBlobMs", {
   description: "Time to serialize, hash, and persist the user message blob at the end of createAgentTurn",
 });
 
-function isTextPart(part: { readonly type?: string; readonly text?: string }): part is { readonly type: "text"; readonly text: string } {
+function isText(part: { readonly type?: string; readonly text?: string }): part is { readonly type: "text"; readonly text: string } {
   return part.type === "text";
 }
 
-function hasUserMessageIdTag(contentParts: readonly { readonly type?: string; readonly text?: string }[]): boolean {
+function carriesMessageIdTag(contentParts: readonly { readonly type?: string; readonly text?: string }[]): boolean {
   if (contentParts.length === 0) return false;
   const firstPart = contentParts[0]!;
-  return isTextPart(firstPart) && parseLeadingUserMessageIdTag(firstPart.text) !== undefined;
+  return isText(firstPart) && parseLeadingUserMessageIdTag(firstPart.text) !== undefined;
 }
 
-function resolvePromptReferenceId(
+function promptReferenceId(
   isMetaParentAgent: boolean,
   promptReferenceIdFromUserMessage: string | undefined,
   userMessageId: string,
@@ -527,8 +527,8 @@ function resolvePromptReferenceId(
   promptReferenceId: string | undefined;
   shouldIncludePromptReferenceIdTag: boolean;
 } {
-  const alreadyHasPromptReferenceIdTag = hasUserMessageIdTag(userContent);
-  const existingPromptReferenceIdTag = alreadyHasPromptReferenceIdTag && userContent.length > 0 && isTextPart(userContent[0]!)
+  const alreadyHasPromptReferenceIdTag = carriesMessageIdTag(userContent);
+  const existingPromptReferenceIdTag = alreadyHasPromptReferenceIdTag && userContent.length > 0 && isText(userContent[0]!)
     ? parseLeadingUserMessageIdTag(userContent[0]!.text)
     : undefined;
   const hasStructuredPromptReferenceId = promptReferenceIdFromUserMessage !== undefined && promptReferenceIdFromUserMessage.length > 0;
@@ -540,13 +540,13 @@ function resolvePromptReferenceId(
   return { hasStructuredPromptReferenceId, promptReferenceId, shouldIncludePromptReferenceIdTag };
 }
 
-function toTrackedGitRepoBranches(gitRepos: readonly GitRepoInfo[]): TrackedGitRepoBranch[] {
+function trackedGitBranches(gitRepos: readonly GitRepoInfo[]): BranchRef[] {
   return gitRepos.map((repo) => ({ repoPath: repo.path, branchName: repo.branchName }));
 }
 
-function collectTrackedGitBranchChanges(
-  previousRepos: readonly TrackedGitRepoBranch[],
-  currentRepos: readonly TrackedGitRepoBranch[],
+function trackedGitChanges(
+  previousRepos: readonly BranchRef[],
+  currentRepos: readonly BranchRef[],
 ): { repoPath: string; from: string; to: string }[] {
   if (previousRepos.length === 0 || currentRepos.length === 0) return [];
   const previousByPath = new Map(previousRepos.map((repo) => [repo.repoPath, repo.branchName]));
@@ -559,7 +559,7 @@ function collectTrackedGitBranchChanges(
   return changes;
 }
 
-function buildLegacyTrackedGitRepoBranchReminder(changes: readonly { repoPath: string; from: string; to: string }[]): string {
+function legacyGitReminder(changes: readonly { repoPath: string; from: string; to: string }[]): string {
   if (changes.length === 0) return "";
   const changedLines = changes.map((change) => `${change.repoPath} changed from ${change.from} to ${change.to}.`);
   return `<system_reminder>
@@ -569,15 +569,15 @@ Assume these branch changes were intentional and use the new branch state as the
 </system_reminder>`;
 }
 
-function buildTrackedGitRepoBranchReminder(
-  previousRepos: readonly TrackedGitRepoBranch[],
+function gitReminder(
+  previousRepos: readonly BranchRef[],
   currentGitRepos: readonly GitRepoInfo[],
   enhancedBranchChangeReminder: boolean,
 ): string {
-  const currentTracked = toTrackedGitRepoBranches(currentGitRepos);
-  const changes = collectTrackedGitBranchChanges(previousRepos, currentTracked);
+  const currentTracked = trackedGitBranches(currentGitRepos);
+  const changes = trackedGitChanges(previousRepos, currentTracked);
   if (changes.length === 0) return "";
-  if (!enhancedBranchChangeReminder) return buildLegacyTrackedGitRepoBranchReminder(changes);
+  if (!enhancedBranchChangeReminder) return legacyGitReminder(changes);
   const repoByPath = new Map(currentGitRepos.map((repo) => [repo.path, repo]));
   const bodyLines: string[] = [];
   let anyAncestor = false;
@@ -598,7 +598,7 @@ ${footer}
 </system_reminder>`;
 }
 
-type RecentlyAddedPlugin = {
+type PluginEntry = {
   readonly displayName?: string;
   readonly description?: string;
   readonly skills: readonly { readonly name: string; readonly description?: string }[];
@@ -609,7 +609,7 @@ type RecentlyAddedPlugin = {
   readonly mcpServers: readonly string[];
 };
 
-function buildRecentlyAddedPluginReminder(plugin: RecentlyAddedPlugin | undefined): string {
+function pluginReminder(plugin: PluginEntry | undefined): string {
   if (!plugin || !plugin.displayName) return "";
   const capabilities: string[] = [];
   if (plugin.skills.length) capabilities.push(`Skills:\n${plugin.skills.map((skill) => `  - ${skill.name}${skill.description ? `: ${skill.description}` : ""}`).join("\n")}`);
@@ -637,7 +637,7 @@ ${prompt}
 </system_reminder>`;
 }
 
-function buildCurrentTimestamp(timeZone?: string): string {
+function currentTimestamp(timeZone?: string): string {
   const now = new Date();
   try {
     const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -665,53 +665,53 @@ function buildCurrentTimestamp(timeZone?: string): string {
 }
 
 export function buildTimestampPrefix(timeZone?: string): string {
-  return `<timestamp>${buildCurrentTimestamp(timeZone)}</timestamp>\n`;
+  return `<timestamp>${currentTimestamp(timeZone)}</timestamp>\n`;
 }
 
-const conversationTurnStructureSerde2 = new ProtoSerde(ConversationTurnStructure);
+const turnStructureSerde = new ProtoSerde(ConversationTurnStructure);
 
-function withRedactionOptions<Redacted, Plain>(
+function serdeOptions<Redacted, Plain>(
   deserializer: (value: Redacted, purpose: PrivacyCapability, options: unknown) => Plain,
 ): (value: Redacted, purpose: PrivacyCapability) => Plain {
   return (value, purpose) => deserializer(value, purpose, undefined);
 }
 
-function createRedactedSerdes(privacyMode: PrivacyMode) {
+function createSerdes(privacyMode: PrivacyMode) {
   return {
-    shellCommand: createRedactedProtoSerde(ShellCommand, toRedactedShellCommand, withRedactionOptions(fromRedactedShellCommand), privacyMode),
-    shellOutput: createRedactedProtoSerde(ShellOutput, toRedactedShellOutput, withRedactionOptions(fromRedactedShellOutput), privacyMode),
-    userMessage: createRedactedProtoSerde(UserMessage, toRedactedUserMessage, withRedactionOptions(fromRedactedUserMessage), privacyMode),
-    conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, withRedactionOptions(fromRedactedConversationStep), privacyMode),
-    conversationSummary: createRedactedProtoSerde(ConversationSummary, toRedactedConversationSummary, withRedactionOptions(fromRedactedConversationSummary), privacyMode),
-    conversationSummaryArchive: createRedactedProtoSerde(ConversationSummaryArchive, toRedactedConversationSummaryArchive, withRedactionOptions(fromRedactedConversationSummaryArchive), privacyMode),
-    conversationPlan: createRedactedProtoSerde(ConversationPlan, toRedactedConversationPlan, withRedactionOptions(fromRedactedConversationPlan), privacyMode),
-    todoItem: createRedactedProtoSerde(TodoItem, toRedactedTodoItem, withRedactionOptions(fromRedactedTodoItem), privacyMode),
-    subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, withRedactionOptions(fromRedactedSubagentPersistedState), privacyMode),
+    shellCommand: createRedactedProtoSerde(ShellCommand, toRedactedShellCommand, serdeOptions(fromRedactedShellCommand), privacyMode),
+    shellOutput: createRedactedProtoSerde(ShellOutput, toRedactedShellOutput, serdeOptions(fromRedactedShellOutput), privacyMode),
+    userMessage: createRedactedProtoSerde(UserMessage, toRedactedUserMessage, serdeOptions(fromRedactedUserMessage), privacyMode),
+    conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, serdeOptions(fromRedactedConversationStep), privacyMode),
+    conversationSummary: createRedactedProtoSerde(ConversationSummary, toRedactedConversationSummary, serdeOptions(fromRedactedConversationSummary), privacyMode),
+    conversationSummaryArchive: createRedactedProtoSerde(ConversationSummaryArchive, toRedactedConversationSummaryArchive, serdeOptions(fromRedactedConversationSummaryArchive), privacyMode),
+    conversationPlan: createRedactedProtoSerde(ConversationPlan, toRedactedConversationPlan, serdeOptions(fromRedactedConversationPlan), privacyMode),
+    todoItem: createRedactedProtoSerde(TodoItem, toRedactedTodoItem, serdeOptions(fromRedactedTodoItem), privacyMode),
+    subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, serdeOptions(fromRedactedSubagentPersistedState), privacyMode),
     coreMessage: createRedactedCoreMessageSerde(privacyMode),
   };
 }
 
-type FileStateContentReference<Context extends OperationContext> = EagerReference<string, Context> | LazyReference<string, Context> | undefined;
-type FileStateReferenceSet<Context extends OperationContext> = {
-  content: FileStateContentReference<Context>;
-  initialContent: FileStateContentReference<Context>;
+type FileStateBlobReference<Context extends OperationContext> = EagerReference<string, Context> | LazyReference<string, Context> | undefined;
+type FileStateBlobReferences<Context extends OperationContext> = {
+  content: FileStateBlobReference<Context>;
+  initialContent: FileStateBlobReference<Context>;
 };
 
-type WorkspaceRequestContext = {
+type WorkspaceRequestShape = {
   readonly env?: {
     readonly workspacePaths?: readonly unknown[];
   };
 };
 
-function toFileStateContentReference<Context extends OperationContext>(
+function fileStateReference<Context extends OperationContext>(
   blobStore: BlobStore<Context>,
   content: string | undefined,
-): FileStateContentReference<Context> {
+): FileStateBlobReference<Context> {
   return content !== undefined ? new EagerReference(utf8Serde, blobStore, content) : undefined;
 }
 
-function recordFileStateInMap<Context extends OperationContext>(
-  fileStates: Map<string, FileStateReferenceSet<Context>>,
+function noteFileState<Context extends OperationContext>(
+  fileStates: Map<string, FileStateBlobReferences<Context>>,
   blobStore: BlobStore<Context>,
   path: string,
   content: string | undefined,
@@ -720,10 +720,10 @@ function recordFileStateInMap<Context extends OperationContext>(
 ): void {
   const existing = fileStates.get(path);
   const next = existing === undefined ? {
-    content: toFileStateContentReference(blobStore, content),
-    initialContent: toFileStateContentReference(blobStore, prevContent),
+    content: fileStateReference(blobStore, content),
+    initialContent: fileStateReference(blobStore, prevContent),
   } : {
-    content: toFileStateContentReference(blobStore, content),
+    content: fileStateReference(blobStore, content),
     initialContent: existing.initialContent,
   };
   if (skipReprioritization) {
@@ -738,7 +738,7 @@ function recordFileStateInMap<Context extends OperationContext>(
   }
 }
 
-function extractWorkspaceUris(_ctx: unknown, requestContext: WorkspaceRequestContext) {
+function workspaceUrisFrom(_ctx: unknown, requestContext: WorkspaceRequestShape) {
   const workspacePaths = requestContext.env?.workspacePaths ?? [];
   const uris: string[] = [];
   for (const workspacePath of workspacePaths) {
@@ -762,68 +762,68 @@ function extractWorkspaceUris(_ctx: unknown, requestContext: WorkspaceRequestCon
   return sortedUris.map(uri => createRedactedString(uri, DataClassification.PATH, "workspaceUri", PrivacyModes.UNSPECIFIED));
 }
 
-function normalizeNonEmptyString(value: string | null | undefined): string | undefined {
+function trimmedString(value: string | null | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized !== undefined && normalized.length > 0 ? normalized : undefined;
 }
 
-type UserMessageThreadFields = {
+type ThreadFields = {
   readonly threadId?: string;
   readonly promptReferenceId?: string;
   readonly messageId?: string;
 };
 
-function getExplicitUserMessageThreadId(userMessage: UserMessageThreadFields): string | undefined {
-  return normalizeNonEmptyString(userMessage.threadId);
+function explicitThreadId(userMessage: ThreadFields): string | undefined {
+  return trimmedString(userMessage.threadId);
 }
 
-function resolveUserMessageThreadId(userMessage: UserMessageThreadFields): string | undefined {
-  return getExplicitUserMessageThreadId(userMessage)
-    ?? normalizeNonEmptyString(userMessage.promptReferenceId)
-    ?? normalizeNonEmptyString(userMessage.messageId);
+function messageThreadId(userMessage: ThreadFields): string | undefined {
+  return explicitThreadId(userMessage)
+    ?? trimmedString(userMessage.promptReferenceId)
+    ?? trimmedString(userMessage.messageId);
 }
 
-function withUserMessageThreadId<T extends object>(userMessage: T, threadId: string): T & { threadId: string } {
+function attachThreadId<T extends object>(userMessage: T, threadId: string): T & { threadId: string } {
   return { ...userMessage, threadId };
 }
 
-type RedactedCodeStringLike = { unwrap: (purpose: PrivacyCapability) => string };
-type PossiblyRedactedCodeString = string | RedactedCodeStringLike | null | undefined;
+type RedactedCodeString = { unwrap: (purpose: PrivacyCapability) => string };
+type MaybeRedactedCodeString = string | RedactedCodeString | null | undefined;
 
-function unwrapPossiblyRedactedCodeString(value: PossiblyRedactedCodeString): string | undefined {
+function unwrapCodeString(value: MaybeRedactedCodeString): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   return typeof value === "string" ? value : value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
 }
 
-type CommunicateUpdateTurnStateLike = {
+type CommunicateStateLike = {
   readonly history?: readonly {
-    readonly step?: PossiblyRedactedCodeString;
+    readonly step?: MaybeRedactedCodeString;
     readonly messageIndex: number;
   }[];
-  readonly finalSummary?: PossiblyRedactedCodeString;
-  readonly completedSubtitle?: PossiblyRedactedCodeString;
+  readonly finalSummary?: MaybeRedactedCodeString;
+  readonly completedSubtitle?: MaybeRedactedCodeString;
 };
 
-function toCommunicateUpdateTurnState(state: CommunicateUpdateTurnStateLike): CommunicateUpdateTurnState {
+function communicateState(state: CommunicateStateLike): CommunicateUpdateTurnState {
   return new CommunicateUpdateTurnState({
     history: (state.history ?? []).map((entry) => new CommunicateUpdateHistoryEntry({
-      step: unwrapPossiblyRedactedCodeString(entry.step) ?? "",
+      step: unwrapCodeString(entry.step) ?? "",
       messageIndex: entry.messageIndex,
     })),
-    finalSummary: normalizeNonEmptyString(unwrapPossiblyRedactedCodeString(state.finalSummary))!,
-    completedSubtitle: normalizeNonEmptyString(unwrapPossiblyRedactedCodeString(state.completedSubtitle))!,
+    finalSummary: trimmedString(unwrapCodeString(state.finalSummary))!,
+    completedSubtitle: trimmedString(unwrapCodeString(state.completedSubtitle))!,
   });
 }
 
-type SubagentTrackingState = {
+type SubagentTracking = {
   readonly lastUsedTimestampMs: bigint;
   readonly subagentType?: SubagentType;
 };
 
-function computeSubagentTracking(
-  subagentStates: ReadonlyMap<string, SubagentTrackingState>,
+function subagentTracking(
+  subagentStates: ReadonlyMap<string, SubagentTracking>,
 ): {
   lastUsedSubagentId: string | undefined;
   lastSubagentByType: Map<string, string>;
@@ -853,7 +853,7 @@ function computeSubagentTracking(
   return { lastUsedSubagentId, lastSubagentByType };
 }
 
-function subagentRunStatusFromCompletionStatus(status: BackgroundTaskStatus): SubagentRunStatus {
+function runStatusFromCompletion(status: BackgroundTaskStatus): SubagentRunStatus {
   switch (status) {
     case BackgroundTaskStatus.SUCCESS:
       return SubagentRunStatus.SUCCESS;
@@ -870,7 +870,7 @@ function subagentRunStatusFromCompletionStatus(status: BackgroundTaskStatus): Su
   }
 }
 
-type RedactedCoreMessageForSerialization = {
+type SerializeMessage = {
   readonly _privacyMode: PrivacyMode;
   readonly role: string;
   readonly content: unknown;
@@ -879,45 +879,45 @@ type RedactedCoreMessageForSerialization = {
   readonly [key: string]: unknown;
 };
 
-type RedactedConversationTokenDetailsLike = {
+type TokenDetails = {
   readonly promptContextUsageTree?: Parameters<typeof persistPromptContextUsageSnapshot>[0]["usageTree"];
   readonly [key: string]: unknown;
 };
 
-type RootPromptBuilder = {
+type PromptBuilder = {
   appendMessages(messages: unknown | readonly unknown[]): void;
-  getState(): readonly RedactedCoreMessageForSerialization[];
+  getState(): readonly SerializeMessage[];
 };
-type RestoreRootPromptBuilder = RootPromptBuilder & { clearMessages(): void };
-type RedactedTextLike = { safeTransform(transform: (value: string) => string): RedactedTextLike };
-type RedactedToolCallLike = {
+type RestorePromptBuilder = PromptBuilder & { clearMessages(): void };
+type RedactedText = { safeTransform(transform: (value: string) => string): RedactedText };
+type RedactedToolCall = {
   toolCallId?: string;
   tool: { case: string | undefined };
   [key: string]: unknown;
 };
-type RedactedConversationStepLike = {
+type RedactedStep = {
   _privacyMode: PrivacyMode;
   message:
-    | { case: "assistantMessage"; value: { text: RedactedTextLike } }
-    | { case: "toolCall"; value: RedactedToolCallLike }
-    | { case: "thinkingMessage"; value: { text: RedactedTextLike; durationMs?: number } }
+    | { case: "assistantMessage"; value: { text: RedactedText } }
+    | { case: "toolCall"; value: RedactedToolCall }
+    | { case: "thinkingMessage"; value: { text: RedactedText; durationMs?: number } }
     | { case: undefined; value?: undefined };
 };
-type AgentConversationTurnSerdes = {
+type AgentTurnSerdes = {
   userMessage: Serde<any>;
   conversationStep: Serde<any>;
 };
-type ShellConversationTurnSerdes = {
+type ShellTurnSerdes = {
   shellCommand: Serde<unknown>;
   shellOutput: Serde<unknown>;
 };
-type ConversationStepReference =
-  | LazyReference<RedactedConversationStepLike, OperationContext>
-  | EagerReference<RedactedConversationStepLike, OperationContext>;
+type StepRef =
+  | LazyReference<RedactedStep, OperationContext>
+  | EagerReference<RedactedStep, OperationContext>;
 
 export class ShellConversationTurnHandle<Context extends OperationContext = OperationContext> extends Writeable<Context> {
   private readonly blobStore: BlobStore<Context>;
-  private readonly serdes: ShellConversationTurnSerdes;
+  private readonly serdes: ShellTurnSerdes;
   private turnStructure: ShellConversationTurnStructure;
   private blobId: Uint8Array | undefined;
   private dirty: boolean;
@@ -926,7 +926,7 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
 
   constructor(
     blobStore: BlobStore<Context>,
-    serdes: ShellConversationTurnSerdes,
+    serdes: ShellTurnSerdes,
     turnStructure: ShellConversationTurnStructure,
     blobId: Uint8Array | undefined = undefined,
   ) {
@@ -941,7 +941,7 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
   }
 
   serialize(): Uint8Array {
-    return conversationTurnStructureSerde2.serialize(new ConversationTurnStructure({
+    return turnStructureSerde.serialize(new ConversationTurnStructure({
       turn: { case: "shellConversationTurn", value: this.turnStructure },
     }));
   }
@@ -956,7 +956,7 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
       shellCommand: new Uint8Array(newShellCommandBlobId),
       shellOutput: new Uint8Array(newShellOutputBlobId),
     });
-    const serializedWrapper = conversationTurnStructureSerde2.serialize(new ConversationTurnStructure({
+    const serializedWrapper = turnStructureSerde.serialize(new ConversationTurnStructure({
       turn: { case: "shellConversationTurn", value: newTurnStructure },
     }));
     const newBlobId = await getBlobId(serializedWrapper);
@@ -986,22 +986,22 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
 
 export class AgentConversationTurnHandle<Context extends OperationContext = OperationContext> extends Writeable<Context> {
   private readonly blobStore: BlobStore<Context>;
-  private readonly serdes: AgentConversationTurnSerdes;
+  private readonly serdes: AgentTurnSerdes;
   private readonly privacyMode: PrivacyMode;
   private turnStructure: AgentConversationTurnStructure;
-  private readonly rootPromptBuilder: RootPromptBuilder;
+  private readonly rootPromptBuilder: PromptBuilder;
   private blobId: Uint8Array | undefined;
   private dirty: boolean;
   readonly userMessage: LazyReference<any, Context>;
-  readonly steps: ConversationStepReference[];
+  readonly steps: StepRef[];
   private readonly sendMessageStepIndices: number[];
 
   constructor(
     blobStore: BlobStore<Context>,
-    serdes: AgentConversationTurnSerdes,
+    serdes: AgentTurnSerdes,
     privacyMode: PrivacyMode,
     turnStructure: AgentConversationTurnStructure,
-    rootPromptBuilder: RootPromptBuilder,
+    rootPromptBuilder: PromptBuilder,
     blobId: Uint8Array | undefined = undefined,
   ) {
     super();
@@ -1027,7 +1027,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
   }
 
   serialize(): Uint8Array {
-    return conversationTurnStructureSerde2.serialize(new ConversationTurnStructure({
+    return turnStructureSerde.serialize(new ConversationTurnStructure({
       turn: { case: "agentConversationTurn", value: this.turnStructure },
     }));
   }
@@ -1036,7 +1036,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
     this.rootPromptBuilder.appendMessages(messages);
   }
 
-  private createToolCallStep(toolCall: RedactedToolCallLike, toolCallId?: string): RedactedConversationStepLike {
+  private createToolCallStep(toolCall: RedactedToolCall, toolCallId?: string): RedactedStep {
     const toolCallWithId = toolCallId !== undefined ? { ...toolCall, toolCallId } : toolCall;
     return {
       _privacyMode: this.privacyMode,
@@ -1044,7 +1044,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
     };
   }
 
-  recordToolCall(toolCall: RedactedToolCallLike, toolCallId?: string): void {
+  recordToolCall(toolCall: RedactedToolCall, toolCallId?: string): void {
     const redactedStep = this.createToolCallStep(toolCall, toolCallId);
     if (redactedStep.message.case === "toolCall" && redactedStep.message.value.tool.case === "sendMessageToolCall") {
       this.sendMessageStepIndices.push(this.steps.length);
@@ -1053,7 +1053,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
     this.dirty = true;
   }
 
-  async upsertToolCall(ctx: Context, toolCall: RedactedToolCallLike, toolCallId?: string): Promise<void> {
+  async upsertToolCall(ctx: Context, toolCall: RedactedToolCall, toolCallId?: string): Promise<void> {
     const redactedStep = this.createToolCallStep(toolCall, toolCallId);
     for (let index = this.steps.length - 1; index >= 0; index -= 1) {
       const step = await this.steps[index]!.get(ctx);
@@ -1078,7 +1078,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         lastStep.message.case === "thinkingMessage" &&
         !((lastStep.message.value.durationMs ?? 0) > 0)
       ) {
-        const newStep: RedactedConversationStepLike = {
+        const newStep: RedactedStep = {
           _privacyMode: this.privacyMode,
           message: {
             case: "thinkingMessage",
@@ -1087,7 +1087,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
               text: lastStep.message.value.text.safeTransform(existingText => existingText + text),
               durationMs: durationMs ?? 0,
             },
-          } as RedactedConversationStepLike["message"],
+          } as RedactedStep["message"],
         };
         lastStepReference.set(newStep);
       } else {
@@ -1100,7 +1100,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         this.steps.push(new EagerReference(
           this.serdes.conversationStep,
           this.blobStore,
-          toRedactedConversationStep(newStep, this.privacyMode) as RedactedConversationStepLike,
+          toRedactedConversationStep(newStep, this.privacyMode) as RedactedStep,
         ));
       }
     } else {
@@ -1113,7 +1113,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
       this.steps.push(new EagerReference(
         this.serdes.conversationStep,
         this.blobStore,
-        toRedactedConversationStep(newStep, this.privacyMode) as RedactedConversationStepLike,
+        toRedactedConversationStep(newStep, this.privacyMode) as RedactedStep,
       ));
     }
     this.dirty = true;
@@ -1124,7 +1124,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
       const lastStepReference = this.steps.at(-1)!;
       const lastStep = await lastStepReference.get(ctx);
       if (lastStep.message.case === "assistantMessage") {
-        const newStep: RedactedConversationStepLike = {
+        const newStep: RedactedStep = {
           _privacyMode: this.privacyMode,
           message: {
             case: "assistantMessage",
@@ -1132,7 +1132,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
               _privacyMode: this.privacyMode,
               text: lastStep.message.value.text.safeTransform(existingText => existingText + text),
             },
-          } as RedactedConversationStepLike["message"],
+          } as RedactedStep["message"],
         };
         lastStepReference.set(newStep);
       } else {
@@ -1145,7 +1145,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         this.steps.push(new EagerReference(
           this.serdes.conversationStep,
           this.blobStore,
-          toRedactedConversationStep(newStep, this.privacyMode) as RedactedConversationStepLike,
+          toRedactedConversationStep(newStep, this.privacyMode) as RedactedStep,
         ));
       }
     } else {
@@ -1158,7 +1158,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
       this.steps.push(new EagerReference(
         this.serdes.conversationStep,
         this.blobStore,
-        toRedactedConversationStep(newStep, this.privacyMode) as RedactedConversationStepLike,
+        toRedactedConversationStep(newStep, this.privacyMode) as RedactedStep,
       ));
     }
     this.dirty = true;
@@ -1182,7 +1182,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         ? { dynamicToolCount: this.turnStructure.dynamicToolCount }
         : {}),
     });
-    const serializedWrapper = conversationTurnStructureSerde2.serialize(new ConversationTurnStructure({
+    const serializedWrapper = turnStructureSerde.serialize(new ConversationTurnStructure({
       turn: { case: "agentConversationTurn", value: newInnerStructure },
     }));
     const newBlobId = await getBlobId(serializedWrapper);
@@ -1205,58 +1205,58 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
   }
 }
 
-type RedactedValue<T> = {
+type RedactedField<T> = {
   unwrap(purpose: PrivacyCapability, options?: object): T;
 };
 
-type UserMessageBlobHydrationTarget = {
+type MessageBlobTarget = {
   text: string;
   textBlobId?: Uint8Array;
   richText?: string;
   richTextBlobId?: Uint8Array;
 };
 
-type RedactedFileStateStructure = {
-  readonly content?: RedactedValue<Uint8Array>;
-  readonly initialContent?: RedactedValue<Uint8Array>;
+type FileStateBlobs = {
+  readonly content?: RedactedField<Uint8Array>;
+  readonly initialContent?: RedactedField<Uint8Array>;
 };
 
-type RedactedTrackedGitRepo = {
-  readonly repoPath: RedactedValue<string>;
+type GitRepoBlob = {
+  readonly repoPath: RedactedField<string>;
   readonly branchName: string;
 };
 
-type TrackedGitRepoBranch = {
+type BranchRef = {
   readonly repoPath: string;
   readonly branchName: string;
 };
 
-type RedactedConversationStateStructure = {
+type ConversationStateBlobs = {
   readonly _privacyMode: PrivacyMode;
   readonly rootPromptMessagesJson: readonly Uint8Array[];
   readonly turns: readonly Uint8Array[];
   readonly todos: readonly Uint8Array[];
-  readonly pendingToolCalls?: readonly RedactedValue<string>[];
-  readonly tokenDetails?: RedactedConversationTokenDetailsLike;
+  readonly pendingToolCalls?: readonly RedactedField<string>[];
+  readonly tokenDetails?: TokenDetails;
   readonly summary?: Uint8Array;
   readonly plan?: Uint8Array;
-  readonly previousWorkspaceUris: readonly RedactedValue<string>[];
+  readonly previousWorkspaceUris: readonly RedactedField<string>[];
   mode?: AgentMode;
   readonly summaryArchives: readonly Uint8Array[];
-  readonly fileStatesV2: ReadonlyMap<RedactedValue<string>, RedactedFileStateStructure>;
+  readonly fileStatesV2: ReadonlyMap<RedactedField<string>, FileStateBlobs>;
   readonly selfSummaryCount?: number;
-  readonly readPaths: readonly RedactedValue<string>[];
+  readonly readPaths: readonly RedactedField<string>[];
   readonly activeBranchName?: string;
   readonly plans?: ReadonlyMap<string, unknown>;
-  readonly trackedGitRepoBranches?: readonly RedactedTrackedGitRepo[];
+  readonly trackedGitRepoBranches?: readonly GitRepoBlob[];
   readonly agentType?: string;
   readonly communicateUpdateHistory?: readonly {
-    readonly step: RedactedValue<string>;
+    readonly step: RedactedField<string>;
     readonly messageIndex: number;
   }[];
   readonly subagentThreads?: ReadonlyMap<string, string> | Record<string, string>;
-  readonly communicateUpdateFinalSummary?: RedactedValue<string>;
-  readonly communicateUpdateCompletedSubtitle?: RedactedValue<string>;
+  readonly communicateUpdateFinalSummary?: RedactedField<string>;
+  readonly communicateUpdateCompletedSubtitle?: RedactedField<string>;
   readonly communicateUpdateStatesByParentToolCallId?: ReadonlyMap<string, unknown> | Record<string, unknown>;
   readonly subagentStates?: ReadonlyMap<string, unknown>;
   readonly subagentRunsByParentToolCallId?: ReadonlyMap<string, unknown>;
@@ -1268,7 +1268,7 @@ type RedactedConversationStateStructure = {
   readonly completedAskQuestionToolCallIds?: readonly string[];
 };
 
-type ConversationStateRestoreOptions = {
+type RestoreSettings = {
   readonly shouldTrackAgentTypeChange?: boolean;
   readonly loadRootPromptBlobs?: boolean;
   readonly restoreBlobFetchConcurrency?: number;
@@ -1276,7 +1276,7 @@ type ConversationStateRestoreOptions = {
   readonly onRootPromptImagePresence?: (presence: ReturnType<typeof computeCoreMessageImagePresence>) => void;
 };
 
-type CreateAgentTurnOptions = {
+type TurnOptions = {
   readonly isProjectKickoff?: boolean;
   readonly additionalUserTurnSystemReminder?: string;
   readonly dynamicToolCount?: number;
@@ -1286,9 +1286,9 @@ type CreateAgentTurnOptions = {
   };
 };
 
-type ProjectPromptText = NonNullable<Parameters<typeof formatProjectPrompt>[1]>["promptText"];
+type ProjectPrompt = NonNullable<Parameters<typeof formatProjectPrompt>[1]>["promptText"];
 
-type CreateAgentTurnConfig = Parameters<typeof processSelectedContext>[3] & ModeProcessingConfig & {
+type TurnConfig = Parameters<typeof processSelectedContext>[3] & ModeProcessingConfig & {
   readonly featureFlags?: NonNullable<Parameters<typeof processSelectedContext>[3]["featureFlags"]> & {
     readonly enableTrackedGitRepoState?: boolean;
     readonly glassMetaParentAgent?: boolean;
@@ -1304,37 +1304,37 @@ type CreateAgentTurnConfig = Parameters<typeof processSelectedContext>[3] & Mode
   readonly encryptedMcidAndParams?: string;
   readonly decryptMcidAndParams?: (encrypted: string) => string | undefined;
   readonly isEagerEditingModel?: boolean;
-  readonly projectPromptTextGenerator?: () => ProjectPromptText;
+  readonly projectPromptTextGenerator?: () => ProjectPrompt;
 };
 
-type CreateAgentTurnResourceAccessor = Parameters<typeof processSelectedContext>[5];
-type CreateAgentTurnRequestContext = RequestContext & ModeProcessingRequestContext;
+type TurnAccessor = Parameters<typeof processSelectedContext>[5];
+type TurnRequest = RequestContext & ModeProcessingRequestContext;
 
-type ConversationStateSerdes = ReturnType<typeof createRedactedSerdes>;
-type ConversationTurnHandle = AgentConversationTurnHandle | ShellConversationTurnHandle;
-type ConversationValueReference<Context extends OperationContext> = EagerReference<any, Context> | LazyReference<any, Context>;
-type TurnUsageDelta = {
+type CodecSet = ReturnType<typeof createSerdes>;
+type TurnUnion = AgentConversationTurnHandle | ShellConversationTurnHandle;
+type ValueRef<Context extends OperationContext> = EagerReference<any, Context> | LazyReference<any, Context>;
+type UsageDelta = {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly cacheReadTokens: number;
   readonly cacheWriteTokens: number;
   readonly reasoningTokens?: number;
 };
-type ConversationFileStateReference<Context extends OperationContext> = {
-  content: FileStateContentReference<Context>;
-  initialContent: FileStateContentReference<Context>;
+type FileStateReferencesByPath<Context extends OperationContext> = {
+  content: FileStateBlobReference<Context>;
+  initialContent: FileStateBlobReference<Context>;
 };
 
 export class ConversationStateHandle {
   blobStore: BlobStore<OperationContext>;
-  conversationStateStructure: RedactedConversationStateStructure;
-  rootPromptBuilder: RestoreRootPromptBuilder;
+  conversationStateStructure: ConversationStateBlobs;
+  rootPromptBuilder: RestorePromptBuilder;
   formattingOptions: unknown;
   modelId: string | undefined;
   agentTypeChangedFromPersistedState: boolean;
   isRootProjectConversation: boolean;
   plans: Map<string, PlanRegistryEntry>;
-  fileStates: Map<string, ConversationFileStateReference<OperationContext>>;
+  fileStates: Map<string, FileStateReferencesByPath<OperationContext>>;
   readPaths: Set<string>;
   completedAskQuestionToolCallIds: Set<string>;
   communicateUpdateHistory: CommunicateUpdateHistoryEntry[];
@@ -1345,10 +1345,10 @@ export class ConversationStateHandle {
   backgroundSummarizationGenerationDurationMs: number | null;
   backgroundSummarizationCancellationToken: unknown;
   tokenDetailsStaleAfterSummarization: boolean;
-  summaryArchives: ConversationValueReference<OperationContext>[];
+  summaryArchives: ValueRef<OperationContext>[];
   selfSummaryCount: number;
   selfSummaryInputLimitFailureTokenCount: number;
-  trackedGitRepoBranches: TrackedGitRepoBranch[];
+  trackedGitRepoBranches: BranchRef[];
   subagentStates: Map<string, SubagentPersistedState>;
   subagentRunsByParentToolCallId: Map<string, SubagentRunState>;
   subagentThreads: Map<string, string>;
@@ -1361,35 +1361,35 @@ export class ConversationStateHandle {
     cacheWriteTokens: number;
     reasoningTokens: number;
   };
-  pendingComputeStructure: Promise<RedactedConversationStateStructure> | null;
+  pendingComputeStructure: Promise<ConversationStateBlobs> | null;
   skippedRootPromptBlobs: boolean;
   originalRootPromptMessagesJson: Uint8Array[];
   rootPromptPrefixInvalidated: boolean;
   userTurnMessageIdsIndexedTurnCount: number;
   userTurnMessageIdsIndex: Set<string> | undefined;
   privacyMode: PrivacyMode;
-  serdes: ConversationStateSerdes;
+  serdes: CodecSet;
   serializeSubagentStatesAsBlobRefs: boolean;
-  restoreBlobFetchConcurrency: number;
-  previousWorkspaceUris: RedactedValue<string>[] | undefined;
+  fetchConcurrency: number;
+  previousWorkspaceUris: RedactedField<string>[] | undefined;
   mode: AgentMode | undefined;
   agentType: ReturnType<typeof parseAgentType>;
   activeBranchName: string | undefined;
   conversationStartedTimestampMs: bigint | undefined;
   conversationStartedTimeZone: string | undefined;
-  turns: ConversationValueReference<OperationContext>[];
-  todos: ConversationValueReference<OperationContext>[];
-  tokenDetails: RedactedConversationTokenDetailsLike;
-  summary: ConversationValueReference<OperationContext> | undefined;
-  plan: ConversationValueReference<OperationContext> | undefined;
+  turns: ValueRef<OperationContext>[];
+  todos: ValueRef<OperationContext>[];
+  tokenDetails: TokenDetails;
+  summary: ValueRef<OperationContext> | undefined;
+  plan: ValueRef<OperationContext> | undefined;
   communicateUpdateFinalSummary: string | undefined;
   communicateUpdateCompletedSubtitle: string | undefined;
   goalState: GoalState | undefined;
 
-  createConversationTurnHandleSerde(): Serde<ConversationTurnHandle> {
+  createConversationTurnHandleSerde(): Serde<TurnUnion> {
     return {
       deserialize: (blob) => {
-        const outer = conversationTurnStructureSerde2.deserialize(blob);
+        const outer = turnStructureSerde.deserialize(blob);
         switch (outer.turn.case) {
           case "agentConversationTurn":
             return new AgentConversationTurnHandle(this.blobStore, this.serdes, this.privacyMode, outer.turn.value, this.rootPromptBuilder);
@@ -1407,7 +1407,7 @@ export class ConversationStateHandle {
     };
   }
 
-  getRawPendingMessages(): readonly RedactedValue<string>[] | undefined {
+  getRawPendingMessages(): readonly RedactedField<string>[] | undefined {
     return this.conversationStateStructure.pendingToolCalls;
   }
 
@@ -1425,42 +1425,42 @@ export class ConversationStateHandle {
   static async fromConversationStateStructure(
     ctx: OperationContext,
     blobStore: BlobStore<OperationContext>,
-    conversationStateStructure: RedactedConversationStateStructure,
-    rootPromptBuilder: RestoreRootPromptBuilder,
+    conversationStateStructure: ConversationStateBlobs,
+    rootPromptBuilder: RestorePromptBuilder,
     formattingOptions: unknown,
     modelId: string | undefined,
     runtimeAgentType: ReturnType<typeof parseAgentType>,
-    options2?: ConversationStateRestoreOptions,
+    restoreOptions?: RestoreSettings,
   ): Promise<ConversationStateHandle> {
-    const env_1: DisposableEnvironment = { stack: [], error: undefined, hasError: false };
+    const restoreEnv: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
       const span = createSpan(ctx.withName("fromConversationStateStructure"));
-      __addDisposableResource19(env_1, span, false);
-      const restoreStart = performance.now();
-      let getBlobCount = 0;
-      const shouldTrackAgentTypeChange = options2?.shouldTrackAgentTypeChange ?? false;
-      const loadRootPromptBlobs = options2?.loadRootPromptBlobs ?? true;
-      const restoreBlobFetchConcurrency = options2?.restoreBlobFetchConcurrency ?? RESTORE_BLOB_FETCH_CONCURRENCY;
-      const serdes = createRedactedSerdes(conversationStateStructure._privacyMode);
-      let rootPromptBytes = 0;
-      let rootPromptImageBytes = 0;
-      let rootPromptImagePartCount = 0;
-      let rootPromptMessageCount = 0;
-      const rootPromptPhaseStart = performance.now();
-      if (loadRootPromptBlobs) {
-        const span2 = createSpan(span.ctx.withName("loadRootPromptMessages"));
-        const quietCtx2 = withSuppressedChildSpans(span2.ctx);
-        const rootPromptMessageLoads = await asyncMapValues(conversationStateStructure.rootPromptMessagesJson, async (blobId) => {
-          const blob = await blobStore.getBlob(quietCtx2, blobId);
-          getBlobCount++;
+      addDisposableResource(restoreEnv, span, false);
+      const restoreStartedAt = performance.now();
+      let blobFetches = 0;
+      const trackAgentTypeChange = restoreOptions?.shouldTrackAgentTypeChange ?? false;
+      const loadPromptBlobs = restoreOptions?.loadRootPromptBlobs ?? true;
+      const fetchConcurrency = restoreOptions?.restoreBlobFetchConcurrency ?? RESTORE_FETCH_CONCURRENCY;
+      const serdes = createSerdes(conversationStateStructure._privacyMode);
+      let promptBytes = 0;
+      let promptImageBytes = 0;
+      let promptImageParts = 0;
+      let promptMessages = 0;
+      const promptPhaseStart = performance.now();
+      if (loadPromptBlobs) {
+        const promptSpan = createSpan(span.ctx.withName("loadRootPromptMessages"));
+        const quietPromptCtx = withSuppressedChildSpans(promptSpan.ctx);
+        const promptLoads = await asyncMapValues(conversationStateStructure.rootPromptMessagesJson, async (blobId) => {
+          const blob = await blobStore.getBlob(quietPromptCtx, blobId);
+          blobFetches++;
           if (!blob) {
             return { kind: "missing" as const, blobIdHex: toHex(blobId) };
           }
           try {
             const message = serdes.coreMessage.deserialize(blob);
-            serializedMessageCache.set(message, { blobId, blobData: blob });
+            messageBlobCache.set(message, { blobId, blobData: blob });
             const plainMessage = fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-            const imageStats = getCoreMessageImagePayloadStats(plainMessage);
+            const imageStats = imagePayloadStats(plainMessage);
             return {
               kind: "loaded" as const,
               entry: {
@@ -1474,70 +1474,70 @@ export class ConversationStateHandle {
           } catch (error4) {
             return { kind: "failed" as const, error: error4 };
           }
-        }, { max: restoreBlobFetchConcurrency });
-        const missingRootPromptBlobIdHexes = rootPromptMessageLoads.flatMap((load2) => load2.kind === "missing" ? [load2.blobIdHex] : []);
-        if (missingRootPromptBlobIdHexes.length > 0) {
-          span2.span.setAttribute("missingBlobCount", missingRootPromptBlobIdHexes.length);
-          span2.span.end();
-          throw new BlobNotFoundError(missingRootPromptBlobIdHexes);
+        }, { max: fetchConcurrency });
+        const missingPromptBlobs = promptLoads.flatMap((load2) => load2.kind === "missing" ? [load2.blobIdHex] : []);
+        if (missingPromptBlobs.length > 0) {
+          promptSpan.span.setAttribute("missingBlobCount", missingPromptBlobs.length);
+          promptSpan.span.end();
+          throw new BlobNotFoundError(missingPromptBlobs);
         }
-        const firstFailedLoad = rootPromptMessageLoads.find((load2) => load2.kind === "failed");
-        if (firstFailedLoad !== undefined && firstFailedLoad.kind === "failed") {
-          span2.span.end();
-          throw firstFailedLoad.error;
+        const failedLoad = promptLoads.find((load2) => load2.kind === "failed");
+        if (failedLoad !== undefined && failedLoad.kind === "failed") {
+          promptSpan.span.end();
+          throw failedLoad.error;
         }
-        const rootPromptMessageEntries = rootPromptMessageLoads.flatMap((load2) => load2.kind === "loaded" ? [load2.entry] : []);
-        const rootPromptMessages = rootPromptMessageEntries.map(({ message }) => message);
-        if (options2?.onRootPromptImagePresence !== undefined) {
-          const plainRootPromptMessages = rootPromptMessageEntries.map(({ plainMessage }) => plainMessage);
-          options2.onRootPromptImagePresence(computeCoreMessageImagePresence(plainRootPromptMessages));
+        const promptEntries = promptLoads.flatMap((load2) => load2.kind === "loaded" ? [load2.entry] : []);
+        const promptValues = promptEntries.map(({ message }) => message);
+        if (restoreOptions?.onRootPromptImagePresence !== undefined) {
+          const plainPromptValues = promptEntries.map(({ plainMessage }) => plainMessage);
+          restoreOptions.onRootPromptImagePresence(computeCoreMessageImagePresence(plainPromptValues));
         }
-        rootPromptBytes = rootPromptMessageEntries.reduce((total, entry) => total + entry.blobBytes, 0);
-        rootPromptImageBytes = rootPromptMessageEntries.reduce((total, entry) => total + entry.imageBytes, 0);
-        rootPromptImagePartCount = rootPromptMessageEntries.reduce((total, entry) => total + entry.imagePartCount, 0);
-        rootPromptMessageCount = rootPromptMessages.length;
-        for (const { message, plainMessage } of rootPromptMessageEntries) {
-          coreToRedactedMap.set(plainMessage, message);
+        promptBytes = promptEntries.reduce((total, entry) => total + entry.blobBytes, 0);
+        promptImageBytes = promptEntries.reduce((total, entry) => total + entry.imageBytes, 0);
+        promptImageParts = promptEntries.reduce((total, entry) => total + entry.imagePartCount, 0);
+        promptMessages = promptValues.length;
+        for (const { message, plainMessage } of promptEntries) {
+          plainToRedacted.set(plainMessage, message);
         }
         rootPromptBuilder.clearMessages();
-        rootPromptBuilder.appendMessages(rootPromptMessages);
-        span2.span.setAttribute("getBlobCount", getBlobCount);
-        span2.span.setAttribute("rootPromptBytes", rootPromptBytes);
-        span2.span.setAttribute("rootPromptImageBytes", rootPromptImageBytes);
-        span2.span.setAttribute("rootPromptImagePartCount", rootPromptImagePartCount);
-        span2.span.end();
+        rootPromptBuilder.appendMessages(promptValues);
+        promptSpan.span.setAttribute("getBlobCount", blobFetches);
+        promptSpan.span.setAttribute("rootPromptBytes", promptBytes);
+        promptSpan.span.setAttribute("rootPromptImageBytes", promptImageBytes);
+        promptSpan.span.setAttribute("rootPromptImagePartCount", promptImageParts);
+        promptSpan.span.end();
       } else {
         rootPromptBuilder.clearMessages();
-        rootPromptMessageCount = conversationStateStructure.rootPromptMessagesJson.length;
+        promptMessages = conversationStateStructure.rootPromptMessagesJson.length;
       }
-      const rootPromptPhaseMs = performance.now() - rootPromptPhaseStart;
-      const span3 = createSpan(span.ctx.withName("loadFileStates"));
-      const quietCtx3 = withSuppressedChildSpans(span3.ctx);
-      const state = new ConversationStateHandle(blobStore, conversationStateStructure, rootPromptBuilder, formattingOptions, modelId, options2);
+      const promptPhaseMs = performance.now() - promptPhaseStart;
+      const fileSpan = createSpan(span.ctx.withName("loadFileStates"));
+      const quietFileCtx = withSuppressedChildSpans(fileSpan.ctx);
+      const state = new ConversationStateHandle(blobStore, conversationStateStructure, rootPromptBuilder, formattingOptions, modelId, restoreOptions);
       const subagentPhaseStart = performance.now();
-      await state.loadSubagentStateRefs(quietCtx3);
-      const subagentStateRefsPhaseMs = performance.now() - subagentPhaseStart;
-      state.skippedRootPromptBlobs = !loadRootPromptBlobs;
-      state.originalRootPromptMessagesJson = loadRootPromptBlobs ? [] : [...conversationStateStructure.rootPromptMessagesJson];
-      const persistedAgentType = state.agentType;
+      await state.loadSubagentStateRefs(quietFileCtx);
+      const subagentPhaseMs = performance.now() - subagentPhaseStart;
+      state.skippedRootPromptBlobs = !loadPromptBlobs;
+      state.originalRootPromptMessagesJson = loadPromptBlobs ? [] : [...conversationStateStructure.rootPromptMessagesJson];
+      const savedAgentType = state.agentType;
       if (runtimeAgentType !== undefined) {
-        state.agentTypeChangedFromPersistedState = shouldTrackAgentTypeChange && persistedAgentType !== undefined && persistedAgentType !== runtimeAgentType;
+        state.agentTypeChangedFromPersistedState = trackAgentTypeChange && savedAgentType !== undefined && savedAgentType !== runtimeAgentType;
         state.agentType = runtimeAgentType;
       }
-      const fileStateEntries = Array.from(conversationStateStructure.fileStatesV2.entries());
-      const fileStateLoadStart = performance.now();
-      for (const [pathString, fileStateStructure] of fileStateEntries) {
-        const path29 = pathString.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        const contentBlobId = fileStateStructure.content?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        const initialContentBlobId = fileStateStructure.initialContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+      const fileEntries = Array.from(conversationStateStructure.fileStatesV2.entries());
+      const fileLoadStart = performance.now();
+      for (const [pathValue, fileState] of fileEntries) {
+        const path29 = pathValue.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+        const contentBlob = fileState.content?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+        const initialBlob = fileState.initialContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
         state.fileStates.set(path29, {
-          content: contentBlobId !== undefined ? new LazyReference(utf8Serde, blobStore, contentBlobId) : undefined,
-          initialContent: initialContentBlobId !== undefined ? new LazyReference(utf8Serde, blobStore, initialContentBlobId) : undefined,
+          content: contentBlob !== undefined ? new LazyReference(utf8Serde, blobStore, contentBlob) : undefined,
+          initialContent: initialBlob !== undefined ? new LazyReference(utf8Serde, blobStore, initialBlob) : undefined,
         });
       }
-      span3.span.setAttribute("fileStatePathCount", fileStateEntries.length);
-      span3.span.end();
-      const fileStatesPhaseMs = performance.now() - fileStateLoadStart;
+      fileSpan.span.setAttribute("fileStatePathCount", fileEntries.length);
+      fileSpan.span.end();
+      const filePhaseMs = performance.now() - fileLoadStart;
       for (const path29 of conversationStateStructure.readPaths) {
         state.recordReadPath(path29);
       }
@@ -1552,54 +1552,54 @@ export class ConversationStateHandle {
       if (conversationStateStructure.goalState !== undefined) {
         state.goalState = fromRedactedGoalState(conversationStateStructure.goalState, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
       }
-      const restoreDurationMs = performance.now() - restoreStart;
-      const crossedLargeThreshold = rootPromptBytes >= LARGE_RESTORE_TOTAL_BYTES || rootPromptImageBytes >= LARGE_RESTORE_IMAGE_BYTES || restoreDurationMs >= SLOW_RESTORE_DURATION_MS;
-      recordConversationStateRestoreMetrics({
+      const restoreMs = performance.now() - restoreStartedAt;
+      const crossedLarge = promptBytes >= LARGE_RESTORE_BYTES || promptImageBytes >= LARGE_RESTORE_IMAGE || restoreMs >= SLOW_RESTORE_MS;
+      recordRestoreMetrics({
         context: span.ctx,
-        restoreDurationMs,
-        rootPromptPhaseMs,
-        fileStatesPhaseMs,
-        subagentStateRefsPhaseMs,
-        rootPromptMessageCount,
+        restoreDurationMs: restoreMs,
+        rootPromptPhaseMs: promptPhaseMs,
+        fileStatesPhaseMs: filePhaseMs,
+        subagentStateRefsPhaseMs: subagentPhaseMs,
+        rootPromptMessageCount: promptMessages,
         turnReferenceCount: conversationStateStructure.turns.length,
-        fileStatePathCount: fileStateEntries.length,
-        rootPromptBytes,
-        restoreBlobFetchConcurrency,
-        crossedLargeThreshold,
+        fileStatePathCount: fileEntries.length,
+        rootPromptBytes: promptBytes,
+        restoreBlobFetchConcurrency: fetchConcurrency,
+        crossedLargeThreshold: crossedLarge,
       });
-      if (crossedLargeThreshold) {
-        const mem = process.memoryUsage();
-        logger.warn(span.ctx, "Large conversation state restore", {
-          restoreDurationMs,
-          rootPromptBytes,
-          rootPromptImageBytes,
-          rootPromptImagePartCount,
-          rootPromptMessageCount,
+      if (crossedLarge) {
+        const memoryUsage = process.memoryUsage();
+        stateLog.warn(span.ctx, "Large conversation state restore", {
+          restoreMs,
+          promptBytes,
+          promptImageBytes,
+          promptImageParts,
+          promptMessages,
           turnReferenceCount: conversationStateStructure.turns.length,
-          fileStateCount: fileStateEntries.length,
-          rss: mem.rss,
-          heapUsed: mem.heapUsed,
-          external: mem.external,
-          arrayBuffers: mem.arrayBuffers,
+          fileStateCount: fileEntries.length,
+          rss: memoryUsage.rss,
+          heapUsed: memoryUsage.heapUsed,
+          external: memoryUsage.external,
+          arrayBuffers: memoryUsage.arrayBuffers,
         });
       }
       return state;
     } catch (e_1) {
-      env_1.error = e_1;
-      env_1.hasError = true;
+      restoreEnv.error = e_1;
+      restoreEnv.hasError = true;
       throw e_1;
     } finally {
-      __disposeResources19(env_1);
+      disposeResources(restoreEnv);
     }
   }
 
   constructor(
     blobStore: BlobStore<OperationContext>,
-    conversationStateStructure: RedactedConversationStateStructure,
-    rootPromptBuilder: RestoreRootPromptBuilder,
+    conversationStateStructure: ConversationStateBlobs,
+    rootPromptBuilder: RestorePromptBuilder,
     formattingOptions: unknown,
     modelId: string | undefined,
-    options2?: ConversationStateRestoreOptions,
+    restoreOptions?: RestoreSettings,
   ) {
     this.blobStore = blobStore;
     this.conversationStateStructure = conversationStateStructure;
@@ -1641,9 +1641,9 @@ export class ConversationStateHandle {
     this.rootPromptPrefixInvalidated = false;
     this.userTurnMessageIdsIndexedTurnCount = 0;
     this.privacyMode = this.conversationStateStructure._privacyMode;
-    this.serdes = createRedactedSerdes(this.privacyMode);
-    this.serializeSubagentStatesAsBlobRefs = options2?.serializeSubagentStatesAsBlobRefs === true;
-    this.restoreBlobFetchConcurrency = options2?.restoreBlobFetchConcurrency ?? RESTORE_BLOB_FETCH_CONCURRENCY;
+    this.serdes = createSerdes(this.privacyMode);
+    this.serializeSubagentStatesAsBlobRefs = restoreOptions?.serializeSubagentStatesAsBlobRefs === true;
+    this.fetchConcurrency = restoreOptions?.restoreBlobFetchConcurrency ?? RESTORE_FETCH_CONCURRENCY;
     this.previousWorkspaceUris = this.conversationStateStructure.previousWorkspaceUris.length > 0 ? [...this.conversationStateStructure.previousWorkspaceUris] : undefined;
     this.trackedGitRepoBranches = (this.conversationStateStructure.trackedGitRepoBranches ?? []).map((repo) => ({
       repoPath: repo.repoPath.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
@@ -1682,12 +1682,12 @@ export class ConversationStateHandle {
     const persistedSubagentThreads = this.conversationStateStructure.subagentThreads;
     if (persistedSubagentThreads instanceof Map) {
       for (const [subagentId, threadId] of persistedSubagentThreads) {
-        const normalizedThreadId = normalizeNonEmptyString(threadId);
+        const normalizedThreadId = trimmedString(threadId);
         if (normalizedThreadId !== undefined) this.subagentThreads.set(subagentId, normalizedThreadId);
       }
     } else if (persistedSubagentThreads !== undefined) {
       for (const [subagentId, threadId] of Object.entries(persistedSubagentThreads)) {
-        const normalizedThreadId = normalizeNonEmptyString(threadId);
+        const normalizedThreadId = trimmedString(threadId);
         if (normalizedThreadId !== undefined) this.subagentThreads.set(subagentId, normalizedThreadId);
       }
     }
@@ -1701,337 +1701,337 @@ export class ConversationStateHandle {
     const persistedCommunicateUpdateStatesByParentToolCallId = this.conversationStateStructure.communicateUpdateStatesByParentToolCallId;
     if (persistedCommunicateUpdateStatesByParentToolCallId instanceof Map) {
       for (const [parentToolCallId, state] of persistedCommunicateUpdateStatesByParentToolCallId) {
-        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, new CommunicateUpdateTurnState({ ...toCommunicateUpdateTurnState(state) }));
+        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, new CommunicateUpdateTurnState({ ...communicateState(state) }));
       }
     } else if (persistedCommunicateUpdateStatesByParentToolCallId !== undefined) {
       for (const [parentToolCallId, state] of Object.entries(persistedCommunicateUpdateStatesByParentToolCallId)) {
-        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, new CommunicateUpdateTurnState({ ...toCommunicateUpdateTurnState(state) }));
+        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, new CommunicateUpdateTurnState({ ...communicateState(state) }));
       }
     }
     this.computeSubagentTrackingFromTimestamps();
   }
 
   async createAgentTurn(
-    parentCtx: OperationContext,
-    userMessage: UserMessage,
-    requestContext: CreateAgentTurnRequestContext,
-    config3: CreateAgentTurnConfig,
-    resourceAccessor: CreateAgentTurnResourceAccessor | undefined,
-    options2?: CreateAgentTurnOptions,
+    parentContext: OperationContext,
+    incomingRecord: UserMessage,
+    hostContext: TurnRequest,
+    turnSettings: TurnConfig,
+    resourceAccessor: TurnAccessor | undefined,
+    restoreOptions?: TurnOptions,
   ): Promise<AgentConversationTurnHandle> {
-    const env_3: DisposableEnvironment = { stack: [], error: undefined, hasError: false };
+    const turnEnv: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
-      const span = createSpan(parentCtx.withName("createAgentTurn"));
-      __addDisposableResource19(env_3, span, false);
+      const span = createSpan(parentContext.withName("createAgentTurn"));
+      addDisposableResource(turnEnv, span, false);
       const ctx = span.ctx;
-      if (userMessage.isSimulatedMsg !== true) {
+      if (incomingRecord.isSimulatedMsg !== true) {
         this.resetSelfSummaryCount();
       }
-      const projectSubagentDetails = userMessage.projectDetails?.subagent;
-      const projectSideChatDetails = userMessage.projectDetails?.sideChat;
-      const isRootProjectMessage = userMessage.projectDetails !== undefined && projectSubagentDetails === undefined && projectSideChatDetails === undefined;
-      if (isRootProjectMessage) {
+      const projectSubagentDetails = incomingRecord.projectDetails?.subagent;
+      const projectSideChatDetails = incomingRecord.projectDetails?.sideChat;
+      const rootProjectMessage = incomingRecord.projectDetails !== undefined && projectSubagentDetails === undefined && projectSideChatDetails === undefined;
+      if (rootProjectMessage) {
         this.isRootProjectConversation = true;
       }
-      this.getOrInitializeConversationStartedDate(requestContext.env?.timeZone);
+      this.getOrInitializeConversationStartedDate(hostContext.env?.timeZone);
       const sendMessageEnabled = isProjectSendMessageEnabled(this);
-      const isProject = isRootProjectMessage;
-      const isProjectKickoff = isProject && (options2?.isProjectKickoff ?? this.turns.length === 0);
-      const projectName = isProjectKickoff ? normalizeProjectName(unwrapPossiblyRedactedCodeString(userMessage.projectDetails?.name)) : undefined;
-      const projectChildName = projectSubagentDetails !== undefined || projectSideChatDetails !== undefined
-        ? normalizeProjectName(unwrapPossiblyRedactedCodeString(userMessage.projectDetails?.name))
+      const isProject = rootProjectMessage;
+      const isProjectKickoff = isProject && (restoreOptions?.isProjectKickoff ?? this.turns.length === 0);
+      const projectLabel = isProjectKickoff ? normalizeProjectName(unwrapCodeString(incomingRecord.projectDetails?.name)) : undefined;
+      const childProjectLabel = projectSubagentDetails !== undefined || projectSideChatDetails !== undefined
+        ? normalizeProjectName(unwrapCodeString(incomingRecord.projectDetails?.name))
         : undefined;
-      const skipPreTurnStateSnapshot = config3.featureFlags?.skipPreTurnStateSnapshot === true;
-      const overlapPreTurnStateSnapshot = !skipPreTurnStateSnapshot && config3.featureFlags?.overlapPreTurnStateSnapshot === true;
-      const stateSnapshotStart = performance.now();
-      let stateSnapshotCompletedAt = stateSnapshotStart;
-      const stateBeforeMessageBlobIdPromise = skipPreTurnStateSnapshot
+      const skipSnapshot = turnSettings.featureFlags?.skipPreTurnStateSnapshot === true;
+      const overlapSnapshot = !skipSnapshot && turnSettings.featureFlags?.overlapPreTurnStateSnapshot === true;
+      const snapshotStartedAt = performance.now();
+      let snapshotFinishedAt = snapshotStartedAt;
+      const snapshotBlobPromise = skipSnapshot
         ? Promise.resolve(undefined)
         : (async (): Promise<Uint8Array> => {
-          const stateBeforeMessage = await this.computeNewStructure(ctx);
-          const stateBeforeMessageBytes = conversationStateStructureSerde.serialize(
-            fromRedactedConversationStateStructure(stateBeforeMessage, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+          const snapshotValue = await this.computeNewStructure(ctx);
+          const snapshotBytes = conversationStateStructureSerde.serialize(
+            fromRedactedConversationStateStructure(snapshotValue, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
           );
-          const stateBeforeMessageBlobId = await getBlobId(stateBeforeMessageBytes);
-          stateSnapshotCompletedAt = performance.now();
-          stateSnapshotDuration.histogram(ctx, stateSnapshotCompletedAt - stateSnapshotStart, {
-            overlap: overlapPreTurnStateSnapshot ? "true" : "false",
+          const snapshotBlobId = await getBlobId(snapshotBytes);
+          snapshotFinishedAt = performance.now();
+          stateSnapshotHistogram.histogram(ctx, snapshotFinishedAt - snapshotStartedAt, {
+            overlap: overlapSnapshot ? "true" : "false",
           });
           getBlobMetadataCallback(this.blobStore)?.({
-            blobId: stateBeforeMessageBlobId,
+            blobId: snapshotBlobId,
             blobType: { kind: "proto", typeName: "agent.v1.RedactedConversationStateStructure" },
           });
-          void this.blobStore.setBlob(ctx, stateBeforeMessageBlobId, stateBeforeMessageBytes);
-          return stateBeforeMessageBlobId;
+          void this.blobStore.setBlob(ctx, snapshotBlobId, snapshotBytes);
+          return snapshotBlobId;
         })();
-      const overlappingTurnPreparationStart = performance.now();
-      if (overlapPreTurnStateSnapshot) {
-        void stateBeforeMessageBlobIdPromise.catch(() => undefined);
+      const preparationStartedAt = performance.now();
+      if (overlapSnapshot) {
+        void snapshotBlobPromise.catch(() => undefined);
       }
-      let stateBeforeMessageBlobId: Uint8Array | undefined;
-      if (!overlapPreTurnStateSnapshot) {
-        stateBeforeMessageBlobId = await stateBeforeMessageBlobIdPromise;
+      let snapshotBlobId: Uint8Array | undefined;
+      if (!overlapSnapshot) {
+        snapshotBlobId = await snapshotBlobPromise;
       }
-      userMessage = new UserMessage({ ...userMessage });
-      if (stateBeforeMessageBlobId !== undefined) {
-        userMessage.conversationStateBlobId = new Uint8Array(stateBeforeMessageBlobId);
+      incomingRecord = new UserMessage({ ...incomingRecord });
+      if (snapshotBlobId !== undefined) {
+        incomingRecord.conversationStateBlobId = new Uint8Array(snapshotBlobId);
       }
-      if (!overlapPreTurnStateSnapshot && userMessage.projectDetails !== undefined) {
-        const nameToKeep = projectName ?? projectChildName;
-        if (nameToKeep !== undefined) {
-          userMessage.projectDetails.name = nameToKeep;
+      if (!overlapSnapshot && incomingRecord.projectDetails !== undefined) {
+        const keptName = projectLabel ?? childProjectLabel;
+        if (keptName !== undefined) {
+          incomingRecord.projectDetails.name = keptName;
         } else {
-          delete userMessage.projectDetails.name;
+          delete incomingRecord.projectDetails.name;
         }
       }
-      await this.hydrateUserMessageBlobText(ctx, userMessage);
-      const modeForContextProcessing = resolveCurrentTurnMode(this.mode, userMessage.mode);
-      const { userContent, selectedImages, selectedVideos, selectedDocuments, imageFilePaths } = await processSelectedContext(
+      await this.hydrateUserMessageBlobText(ctx, incomingRecord);
+      const turnMode = resolveCurrentTurnMode(this.mode, incomingRecord.mode);
+      const { userContent: contentParts, selectedImages, selectedVideos, selectedDocuments, imageFilePaths } = await processSelectedContext(
         ctx,
-        userMessage.selectedContext ?? new SelectedContext(),
+        incomingRecord.selectedContext ?? new SelectedContext(),
         this.blobStore,
-        config3,
-        requestContext,
+        turnSettings,
+        hostContext,
         resourceAccessor,
-        modeForContextProcessing,
+        turnMode,
         this.modelId,
-        userMessage.text,
-        userMessage.simulatedMsgReason!,
+        incomingRecord.text,
+        incomingRecord.simulatedMsgReason!,
         this.privacyMode,
       );
-      if (overlapPreTurnStateSnapshot) {
-        const snapshotJoinStart = performance.now();
-        stateBeforeMessageBlobId = await stateBeforeMessageBlobIdPromise;
-        snapshotJoinWaitDuration.histogram(ctx, performance.now() - snapshotJoinStart);
-        overlapSavedDuration.histogram(ctx, Math.max(0, Math.min(stateSnapshotCompletedAt, snapshotJoinStart) - overlappingTurnPreparationStart));
-        if (stateBeforeMessageBlobId !== undefined) {
-          userMessage.conversationStateBlobId = new Uint8Array(stateBeforeMessageBlobId);
+      if (overlapSnapshot) {
+        const joinStartedAt = performance.now();
+        snapshotBlobId = await snapshotBlobPromise;
+        snapshotJoinHistogram.histogram(ctx, performance.now() - joinStartedAt);
+        overlapSavedHistogram.histogram(ctx, Math.max(0, Math.min(snapshotFinishedAt, joinStartedAt) - preparationStartedAt));
+        if (snapshotBlobId !== undefined) {
+          incomingRecord.conversationStateBlobId = new Uint8Array(snapshotBlobId);
         }
-        if (userMessage.projectDetails !== undefined) {
-          const nameToKeep = projectName ?? projectChildName;
-          if (nameToKeep !== undefined) {
-            userMessage.projectDetails.name = nameToKeep;
+        if (incomingRecord.projectDetails !== undefined) {
+          const keptName = projectLabel ?? childProjectLabel;
+          if (keptName !== undefined) {
+            incomingRecord.projectDetails.name = keptName;
           } else {
-            delete userMessage.projectDetails.name;
+            delete incomingRecord.projectDetails.name;
           }
         }
       }
-      if (imageFilePaths.length > 0 && config3.enableImageFiles) {
-        const imageFilePathsText = `<image_files>
+      if (imageFilePaths.length > 0 && turnSettings.enableImageFiles) {
+        const imageFilesText = `<image_files>
 The following images were provided by the user and saved to the workspace for future use:
 ${imageFilePaths.map((path29, i) => `${i + 1}. ${path29}`).join("\n")}
 
 These images can be copied for use in other locations.
 </image_files>`;
-        userContent.push({ type: "text", text: imageFilePathsText });
+        contentParts.push({ type: "text", text: imageFilesText });
       }
-      let previousMode: AgentMode | undefined;
+      let priorMode: AgentMode | undefined;
       if (this.turns.length > 0) {
-        previousMode = this.mode;
+        priorMode = this.mode;
       }
-      const previousAgentType = this.hasAgentTypeChangedFromPersistedState() === true
+      const priorAgentType = this.hasAgentTypeChangedFromPersistedState() === true
         ? parseAgentType(this.conversationStateStructure.agentType)
         : this.agentType;
-      const workspaceUris = extractWorkspaceUris(parentCtx, requestContext);
+      const workspaceValues = workspaceUrisFrom(parentContext, hostContext);
       const workspaceReminder = processWorkspaceChangeReminder(
-        parentCtx,
-        workspaceUris.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+        parentContext,
+        workspaceValues.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
         this.previousWorkspaceUris?.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
         this.agentType,
-        previousAgentType,
+        priorAgentType,
       );
       if (workspaceReminder) {
-        const needsNewline = userContent.length > 0;
-        userContent.push({ type: "text", text: needsNewline ? `\n\n${workspaceReminder}` : workspaceReminder });
+        const needsNewline = contentParts.length > 0;
+        contentParts.push({ type: "text", text: needsNewline ? `\n\n${workspaceReminder}` : workspaceReminder });
       }
-      this.previousWorkspaceUris = workspaceUris.length > 0 ? [...workspaceUris] : undefined;
-      const currentTrackedGitRepoBranches = toTrackedGitRepoBranches(requestContext.gitRepos);
-      if (config3.featureFlags?.enableTrackedGitRepoState === true) {
-        const branchReminder = buildTrackedGitRepoBranchReminder(
+      this.previousWorkspaceUris = workspaceValues.length > 0 ? [...workspaceValues] : undefined;
+      const gitBranchesNow = trackedGitBranches(hostContext.gitRepos);
+      if (turnSettings.featureFlags?.enableTrackedGitRepoState === true) {
+        const gitNotice = gitReminder(
           this.trackedGitRepoBranches,
-          requestContext.gitRepos,
-          config3.featureFlags.enhancedBranchChangeReminder === true,
+          hostContext.gitRepos,
+          turnSettings.featureFlags.enhancedBranchChangeReminder === true,
         );
-        if (branchReminder) {
-          const needsNewline = userContent.length > 0;
-          userContent.push({ type: "text", text: needsNewline ? `\n\n${branchReminder}` : branchReminder });
+        if (gitNotice) {
+          const needsNewline = contentParts.length > 0;
+          contentParts.push({ type: "text", text: needsNewline ? `\n\n${gitNotice}` : gitNotice });
         }
       }
-      this.trackedGitRepoBranches = currentTrackedGitRepoBranches;
-      const currentModeForReminder = resolveCurrentTurnMode(this.mode, userMessage.mode);
-      const modeReminder = processModeSystemReminder(currentModeForReminder, config3, requestContext, previousMode);
-      const shouldSuppressFirstTurnMultitaskEnterReminderInUserContent = this.turns.length === 0 && config3.userInfoDisplayOptions?.disable !== true && currentModeForReminder === AgentMode.MULTITASK;
-      const projectSubagentStoreDir = unwrapPossiblyRedactedCodeString(projectSubagentDetails?.storeDir);
-      const projectSubagentId = getConversationId(ctx);
-      const isProjectThreadFirstMessage = options2?.isProjectKickoff ?? this.turns.length === 0;
-      const projectSubagentPrompt = projectSubagentDetails !== undefined && projectSubagentId !== undefined && isProjectThreadFirstMessage
+      this.trackedGitRepoBranches = gitBranchesNow;
+      const reminderMode = resolveCurrentTurnMode(this.mode, incomingRecord.mode);
+      const modeReminder = processModeSystemReminder(reminderMode, turnSettings, hostContext, priorMode);
+      const suppressMultitaskNotice = this.turns.length === 0 && turnSettings.userInfoDisplayOptions?.disable !== true && reminderMode === AgentMode.MULTITASK;
+      const subagentStoreDir = unwrapCodeString(projectSubagentDetails?.storeDir);
+      const subagentConversationId = getConversationId(ctx);
+      const firstThreadMessage = restoreOptions?.isProjectKickoff ?? this.turns.length === 0;
+      const subagentPrompt = projectSubagentDetails !== undefined && subagentConversationId !== undefined && firstThreadMessage
         ? (() => {
-          const projectPromptText = config3.projectPromptTextGenerator?.();
+          const projectPromptText = turnSettings.projectPromptTextGenerator?.();
           return formatProjectThreadPrompt({
-            ...(projectChildName !== undefined ? { projectName: projectChildName } : {}),
-            storeDir: projectSubagentStoreDir!,
-            subagentId: projectSubagentId,
+            ...(childProjectLabel !== undefined ? { projectLabel: childProjectLabel } : {}),
+            storeDir: subagentStoreDir!,
+            subagentId: subagentConversationId,
             ...(projectPromptText !== undefined ? { promptText: projectPromptText } : {}),
           });
         })()
-        : projectSubagentStoreDir !== undefined && projectSubagentId !== undefined
-          ? formatProjectSubagentPrompt({ storeDir: projectSubagentStoreDir, subagentId: projectSubagentId })
+        : subagentStoreDir !== undefined && subagentConversationId !== undefined
+          ? formatProjectSubagentPrompt({ storeDir: subagentStoreDir, subagentId: subagentConversationId })
           : undefined;
-      const projectSideChatStoreDir = unwrapPossiblyRedactedCodeString(projectSideChatDetails?.storeDir);
-      const projectSideChatPrompt = projectSideChatStoreDir !== undefined
+      const sideChatStoreDir = unwrapCodeString(projectSideChatDetails?.storeDir);
+      const sideChatPrompt = sideChatStoreDir !== undefined
         ? (() => {
-          const projectPromptText = config3.projectPromptTextGenerator?.();
+          const projectPromptText = turnSettings.projectPromptTextGenerator?.();
           return formatProjectSideChatPrompt({
-            ...(projectChildName !== undefined ? { projectName: projectChildName } : {}),
-            storeDir: projectSideChatStoreDir,
+            ...(childProjectLabel !== undefined ? { projectLabel: childProjectLabel } : {}),
+            storeDir: sideChatStoreDir,
             ...(projectPromptText !== undefined ? { promptText: projectPromptText } : {}),
           });
         })()
         : undefined;
-      const projectChildPrompt = projectSubagentPrompt ?? projectSideChatPrompt;
-      const projectPrompt = isProject
+      const childPrompt = subagentPrompt ?? sideChatPrompt;
+      const rootProjectPrompt = isProject
         ? (() => {
-          const projectPromptText = config3.projectPromptTextGenerator?.();
+          const projectPromptText = turnSettings.projectPromptTextGenerator?.();
           return `<system_reminder>\n${formatProjectPrompt(isProjectKickoff ? "initial" : "reminder", {
-            ...(projectName !== undefined ? { projectName } : {}),
+            ...(projectLabel !== undefined ? { projectLabel } : {}),
             ...(projectPromptText !== undefined ? { promptText: projectPromptText } : {}),
             sendMessageEnabled,
-            coordinatorToolsEnabled: config3.featureFlags?.cloudCoordinatorToolsEnabled === true,
+            coordinatorToolsEnabled: turnSettings.featureFlags?.cloudCoordinatorToolsEnabled === true,
           })}\n</system_reminder>`;
         })()
-        : projectChildPrompt !== undefined
-          ? `<system_reminder>\n${projectChildPrompt}\n</system_reminder>`
+        : childPrompt !== undefined
+          ? `<system_reminder>\n${childPrompt}\n</system_reminder>`
           : "";
-      const userTurnSystemReminder = joinUserTurnSystemReminders(
-        options2?.additionalUserTurnSystemReminder ?? "",
-        processAntiAskQuestionSystemReminder(config3),
-        shouldSuppressFirstTurnMultitaskEnterReminderInUserContent ? "" : modeReminder,
-        projectPrompt,
+      const turnReminders = joinUserTurnSystemReminders(
+        restoreOptions?.additionalUserTurnSystemReminder ?? "",
+        processAntiAskQuestionSystemReminder(turnSettings),
+        suppressMultitaskNotice ? "" : modeReminder,
+        rootProjectPrompt,
       );
-      if (userTurnSystemReminder) {
-        const needsNewline = userContent.length > 0;
-        userContent.push({ type: "text", text: needsNewline ? `\n\n${userTurnSystemReminder}` : userTurnSystemReminder });
+      if (turnReminders) {
+        const needsNewline = contentParts.length > 0;
+        contentParts.push({ type: "text", text: needsNewline ? `\n\n${turnReminders}` : turnReminders });
       }
-      const subagentReminder = userMessage.subagentSystemReminder !== undefined && userMessage.subagentSystemReminder !== ""
-        ? `<system_reminder>\n${userMessage.subagentSystemReminder}\n</system_reminder>`
+      const subagentNotice = incomingRecord.subagentSystemReminder !== undefined && incomingRecord.subagentSystemReminder !== ""
+        ? `<system_reminder>\n${incomingRecord.subagentSystemReminder}\n</system_reminder>`
         : "";
-      if (subagentReminder) {
-        const needsNewline = userContent.length > 0;
-        userContent.push({ type: "text", text: needsNewline ? `\n\n${subagentReminder}` : subagentReminder });
+      if (subagentNotice) {
+        const needsNewline = contentParts.length > 0;
+        contentParts.push({ type: "text", text: needsNewline ? `\n\n${subagentNotice}` : subagentNotice });
       }
-      const previousAgentTurn = await getPreviousAgentConversationTurn(ctx, this.turns);
-      const previousModelMcid = previousAgentTurn !== undefined ? decryptTurnModelMcid(previousAgentTurn, config3.decryptMcidAndParams) : undefined;
-      const currentModelMcid = config3.model?.mcid;
-      const skipBetweenTurnReminders = userMessage.simulatedMsgReason === SimulatedMsgReason.BACKGROUND_TASK_COMPLETION;
-      if (!skipBetweenTurnReminders && previousModelMcid !== undefined && previousModelMcid.length > 0 && currentModelMcid !== undefined && currentModelMcid.length > 0 && config3.encryptedMcidAndParams !== undefined && config3.encryptedMcidAndParams.length > 0 && previousModelMcid !== currentModelMcid) {
-        const needsNewline = userContent.length > 0;
-        userContent.push({ type: "text", text: needsNewline ? `\n\n${MODEL_SWITCH_REMINDER}` : MODEL_SWITCH_REMINDER });
+      const priorTurn = await getPreviousAgentConversationTurn(ctx, this.turns);
+      const priorModel = priorTurn !== undefined ? decryptModelMcid(priorTurn, turnSettings.decryptMcidAndParams) : undefined;
+      const newModel = turnSettings.model?.mcid;
+      const skipReminders = incomingRecord.simulatedMsgReason === SimulatedMsgReason.BACKGROUND_TASK_COMPLETION;
+      if (!skipReminders && priorModel !== undefined && priorModel.length > 0 && newModel !== undefined && newModel.length > 0 && turnSettings.encryptedMcidAndParams !== undefined && turnSettings.encryptedMcidAndParams.length > 0 && priorModel !== newModel) {
+        const needsNewline = contentParts.length > 0;
+        contentParts.push({ type: "text", text: needsNewline ? `\n\n${MODEL_SWITCH_NOTICE}` : MODEL_SWITCH_NOTICE });
       }
-      const currentDynamicToolCount = options2?.dynamicToolCount;
-      const dynamicToolMetaNames = options2?.dynamicToolMetaNames;
-      if (!skipBetweenTurnReminders && currentDynamicToolCount !== undefined && currentDynamicToolCount > 0 && dynamicToolMetaNames !== undefined) {
-        const previousDynamicToolCount = await getPreviousRecordedDynamicToolCount(ctx, this.turns);
-        if (previousDynamicToolCount === 0) {
-          const reminder = buildDynamicToolsEnabledReminder(dynamicToolMetaNames);
-          const needsNewline = userContent.length > 0;
-          userContent.push({ type: "text", text: needsNewline ? `\n\n${reminder}` : reminder });
+      const dynamicToolCount = restoreOptions?.dynamicToolCount;
+      const dynamicToolNames = restoreOptions?.dynamicToolMetaNames;
+      if (!skipReminders && dynamicToolCount !== undefined && dynamicToolCount > 0 && dynamicToolNames !== undefined) {
+        const priorDynamicToolCount = await getPreviousRecordedDynamicToolCount(ctx, this.turns);
+        if (priorDynamicToolCount === 0) {
+          const reminder = dynamicToolsReminder(dynamicToolNames);
+          const needsNewline = contentParts.length > 0;
+          contentParts.push({ type: "text", text: needsNewline ? `\n\n${reminder}` : reminder });
         }
       }
-      const recentlyAddedPluginReminder = buildRecentlyAddedPluginReminder(requestContext.recentlyAddedPlugin);
-      if (recentlyAddedPluginReminder) {
-        const needsNewline = userContent.length > 0;
-        userContent.push({ type: "text", text: needsNewline ? `\n\n${recentlyAddedPluginReminder}` : recentlyAddedPluginReminder });
+      const pluginNotice = pluginReminder(hostContext.recentlyAddedPlugin);
+      if (pluginNotice) {
+        const needsNewline = contentParts.length > 0;
+        contentParts.push({ type: "text", text: needsNewline ? `\n\n${pluginNotice}` : pluginNotice });
       }
-      const enableHookAdditionalContext = config3.featureFlags?.enableHookAdditionalContext === true;
-      const enableAgentStoreConflictNotices = config3.featureFlags?.enableAgentStoreConflictNotices === true;
-      if (enableHookAdditionalContext || enableAgentStoreConflictNotices) {
-        const contexts = enableHookAdditionalContext
-          ? userMessage.hookAdditionalContexts
-          : userMessage.hookAdditionalContexts.filter((context) => context.hookEventName === "agentStoreConflict");
-        for (const hookAdditionalContext of contexts) {
-          const hookAdditionalContextReminder = renderHookAdditionalContextSystemReminder(hookAdditionalContext.content);
-          if (hookAdditionalContextReminder) {
-            const needsNewline = userContent.length > 0;
-            userContent.push({ type: "text", text: needsNewline ? `\n\n${hookAdditionalContextReminder}` : hookAdditionalContextReminder });
+      const allHookContexts = turnSettings.featureFlags?.enableHookAdditionalContext === true;
+      const conflictNotices = turnSettings.featureFlags?.enableAgentStoreConflictNotices === true;
+      if (allHookContexts || conflictNotices) {
+        const hookContexts = allHookContexts
+          ? incomingRecord.hookAdditionalContexts
+          : incomingRecord.hookAdditionalContexts.filter((context) => context.hookEventName === "agentStoreConflict");
+        for (const hookContext of hookContexts) {
+          const hookNotice = renderHookAdditionalContextSystemReminder(hookContext.content);
+          if (hookNotice) {
+            const needsNewline = contentParts.length > 0;
+            contentParts.push({ type: "text", text: needsNewline ? `\n\n${hookNotice}` : hookNotice });
           }
         }
       }
-      const eagerEditingNote = config3.isEagerEditingModel === true
+      const eagerNote = turnSettings.isEagerEditingModel === true
         ? `<system_reminder>\nIMPORTANT: It is bad to be over-eager with making edits vs just answering the question when that is not what the user wants. Think carefully before deciding to edit.\n</system_reminder>\n`
         : "";
-      const currentTimePrefix = config3.featureFlags?.userMessageTimestamps === true ? buildTimestampPrefix(requestContext.env?.timeZone) : "";
-      const promptReferenceIdResolution = resolvePromptReferenceId(config3.featureFlags?.glassMetaParentAgent === true, userMessage.promptReferenceId, userMessage.messageId, userContent);
-      if (promptReferenceIdResolution.shouldIncludePromptReferenceIdTag && promptReferenceIdResolution.promptReferenceId !== undefined) {
-        userContent.unshift({ type: "text", text: renderUserMessageIdTag(promptReferenceIdResolution.promptReferenceId) });
+      const timePrefix = turnSettings.featureFlags?.userMessageTimestamps === true ? buildTimestampPrefix(hostContext.env?.timeZone) : "";
+      const referenceResolution = promptReferenceId(turnSettings.featureFlags?.glassMetaParentAgent === true, incomingRecord.promptReferenceId, incomingRecord.messageId, contentParts);
+      if (referenceResolution.shouldIncludePromptReferenceIdTag && referenceResolution.promptReferenceId !== undefined) {
+        contentParts.unshift({ type: "text", text: renderUserMessageIdTag(referenceResolution.promptReferenceId) });
       }
-      const incomingMessageIdTag = sendMessageEnabled && shouldExposeIncomingMessageId({
-        isSimulatedMsg: userMessage.isSimulatedMsg === true,
-        simulatedMsgReason: userMessage.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED,
-        text: userMessage.text,
-      }) ? renderIncomingMessageIdTag(userMessage.messageId) : undefined;
-      if (incomingMessageIdTag !== undefined) {
-        userContent.unshift({ type: "text", text: incomingMessageIdTag });
+      const messageIdTag = sendMessageEnabled && exposeIncomingMessageId({
+        isSimulatedMsg: incomingRecord.isSimulatedMsg === true,
+        simulatedMsgReason: incomingRecord.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED,
+        text: incomingRecord.text,
+      }) ? renderIncomingMessageIdTag(incomingRecord.messageId) : undefined;
+      if (messageIdTag !== undefined) {
+        contentParts.unshift({ type: "text", text: messageIdTag });
       }
-      const isNotificationOnlyText = isNotificationOnlyUserMessage({ role: "user", content: userMessage.text });
-      userContent.push({
+      const notificationOnly = isNotificationOnlyUserMessage({ role: "user", content: incomingRecord.text });
+      contentParts.push({
         type: "text",
-        text: isNotificationOnlyText ? `${currentTimePrefix}${userMessage.text}` : `${currentTimePrefix}<user_query>\n${eagerEditingNote}${userMessage.text}\n</user_query>`,
+        text: notificationOnly ? `${timePrefix}${incomingRecord.text}` : `${timePrefix}<user_query>\n${eagerNote}${incomingRecord.text}\n</user_query>`,
       });
-      const promptReferenceId = !promptReferenceIdResolution.hasStructuredPromptReferenceId && promptReferenceIdResolution.promptReferenceId !== undefined
-        ? promptReferenceIdResolution.promptReferenceId
-        : userMessage.promptReferenceId;
-      const threadId = resolveUserMessageThreadId({
-        ...(userMessage.threadId !== undefined ? { threadId: userMessage.threadId } : {}),
-        ...(promptReferenceId !== undefined ? { promptReferenceId } : {}),
-        messageId: userMessage.messageId,
+      const referenceTag = !referenceResolution.hasStructuredPromptReferenceId && referenceResolution.promptReferenceId !== undefined
+        ? referenceResolution.promptReferenceId
+        : incomingRecord.promptReferenceId;
+      const threadId = messageThreadId({
+        ...(incomingRecord.threadId !== undefined ? { threadId: incomingRecord.threadId } : {}),
+        ...(referenceTag !== undefined ? { promptReferenceId: referenceTag } : {}),
+        messageId: incomingRecord.messageId,
       });
-      const storedSelectedDocuments = this.privacyMode === PrivacyModes.NO_STORAGE ? [] : selectedDocuments;
-      const storedSelectedVideos = this.privacyMode === PrivacyModes.NO_STORAGE ? [] : selectedVideos;
-      userMessage = new UserMessage({
-        ...userMessage,
-        ...(promptReferenceId !== undefined ? { promptReferenceId } : {}),
+      const savedDocuments = this.privacyMode === PrivacyModes.NO_STORAGE ? [] : selectedDocuments;
+      const savedVideos = this.privacyMode === PrivacyModes.NO_STORAGE ? [] : selectedVideos;
+      incomingRecord = new UserMessage({
+        ...incomingRecord,
+        ...(referenceTag !== undefined ? { promptReferenceId: referenceTag } : {}),
         selectedContext: new SelectedContext({
-          ...userMessage.selectedContext,
-          selectedDocuments: storedSelectedDocuments,
+          ...incomingRecord.selectedContext,
+          selectedDocuments: savedDocuments,
           selectedImages,
-          selectedVideos: storedSelectedVideos,
+          selectedVideos: savedVideos,
         }),
       });
       if (threadId !== undefined) {
-        userMessage.threadId = threadId;
+        incomingRecord.threadId = threadId;
       }
-      const requestId2 = getRequestId(ctx);
+      const requestIdentifier = getRequestId(ctx);
       const message = {
         role: "user",
-        content: userContent,
-        ...(requestId2 !== undefined ? { providerOptions: { cursor: { requestId: requestId2 } } } : {}),
+        content: contentParts,
+        ...(requestIdentifier !== undefined ? { providerOptions: { cursor: { requestId: requestIdentifier } } } : {}),
       };
-      const redactedMessage = toRedactedCoreMessage(message, this.privacyMode);
-      coreToRedactedMap.set(message, redactedMessage);
-      if (userMessage.simulatedMsgReason !== SimulatedMsgReason.BACKGROUND_TASK_COMPLETION) {
-        this.rootPromptBuilder.appendMessages(redactedMessage);
+      const redactedPrompt = toRedactedCoreMessage(message, this.privacyMode);
+      plainToRedacted.set(message, redactedPrompt);
+      if (incomingRecord.simulatedMsgReason !== SimulatedMsgReason.BACKGROUND_TASK_COMPLETION) {
+        this.rootPromptBuilder.appendMessages(redactedPrompt);
       }
-      const redactedUserMessage = toRedactedUserMessage(userMessage, this.privacyMode);
-      const userMessageBlobStart = performance.now();
-      const serializedUserMessage = this.serdes.userMessage.serialize(redactedUserMessage);
-      const userMessageBlobId = await getBlobId(serializedUserMessage);
+      const redactedUser = toRedactedUserMessage(incomingRecord, this.privacyMode);
+      const userBlobStartedAt = performance.now();
+      const userBytes = this.serdes.userMessage.serialize(redactedUser);
+      const userBlobId = await getBlobId(userBytes);
       getBlobMetadataCallback(this.blobStore)?.({
-        blobId: userMessageBlobId,
+        blobId: userBlobId,
         blobType: { kind: "proto", typeName: "agent.v1.UserMessage" },
       });
-      await this.blobStore.setBlob(ctx, userMessageBlobId, serializedUserMessage);
-      userMessageBlobDuration.histogram(ctx, performance.now() - userMessageBlobStart);
-      const inner = new AgentConversationTurnStructure({
-        userMessage: new Uint8Array(userMessageBlobId),
+      await this.blobStore.setBlob(ctx, userBlobId, userBytes);
+      userMessageBlobHistogram.histogram(ctx, performance.now() - userBlobStartedAt);
+      const turnStructure = new AgentConversationTurnStructure({
+        userMessage: new Uint8Array(userBlobId),
         steps: [],
-        requestId: requestId2!,
-        encryptedModel: config3.encryptedMcidAndParams!,
-        ...(currentDynamicToolCount !== undefined ? { dynamicToolCount: currentDynamicToolCount } : {}),
+        requestId: requestIdentifier!,
+        encryptedModel: turnSettings.encryptedMcidAndParams!,
+        ...(dynamicToolCount !== undefined ? { dynamicToolCount: dynamicToolCount } : {}),
       });
-      const turn = new AgentConversationTurnHandle(this.blobStore, this.serdes, this.privacyMode, inner, this.rootPromptBuilder);
+      const turn = new AgentConversationTurnHandle(this.blobStore, this.serdes, this.privacyMode, turnStructure, this.rootPromptBuilder);
       this.turns.push(new EagerReference({
         deserialize: (blob) => {
-          const outer = conversationTurnStructureSerde2.deserialize(blob);
+          const outer = turnStructureSerde.deserialize(blob);
           if (outer.turn.case !== "agentConversationTurn") {
             throw new Error("Expected agent turn");
           }
@@ -2040,23 +2040,23 @@ These images can be copied for use in other locations.
         serialize: (value) => value.serialize(),
       }, this.blobStore, turn));
       if (this.userTurnMessageIdsIndex !== undefined) {
-        if (userMessage.messageId.length > 0) {
-          this.userTurnMessageIdsIndex.add(userMessage.messageId);
+        if (incomingRecord.messageId.length > 0) {
+          this.userTurnMessageIdsIndex.add(incomingRecord.messageId);
         }
         this.userTurnMessageIdsIndexedTurnCount = this.turns.length;
       }
       return turn;
     } catch (error) {
-      env_3.error = error;
-      env_3.hasError = true;
+      turnEnv.error = error;
+      turnEnv.hasError = true;
     } finally {
-      __disposeResources19(env_3);
+      disposeResources(turnEnv);
     }
     throw new Error("Unreachable createAgentTurn completion");
   }
 
   computeSubagentTrackingFromTimestamps(): void {
-    const result = computeSubagentTracking(this.subagentStates);
+    const result = subagentTracking(this.subagentStates);
     this.lastUsedSubagentId = result.lastUsedSubagentId;
     this.lastSubagentByType = result.lastSubagentByType;
   }
@@ -2068,7 +2068,7 @@ These images can be copied for use in other locations.
       const blob = await this.blobStore.getBlob(ctx, blobId);
       if (!blob) {
         if (!this.subagentStates.has(subagentId)) return { kind: "missing" as const, blobIdHex: toHex(blobId) };
-        logger.warn(ctx, "Subagent state ref blob not found; falling back to inline entry", { subagentId });
+        stateLog.warn(ctx, "Subagent state ref blob not found; falling back to inline entry", { subagentId });
         return { kind: "fallback" as const };
       }
       try {
@@ -2078,14 +2078,14 @@ These images can be copied for use in other locations.
       } catch (error4) {
         return { kind: "failed" as const, error: error4 };
       }
-    }, { max: this.restoreBlobFetchConcurrency });
+    }, { max: this.fetchConcurrency });
     const missingBlobIdHexes = loadedEntries.flatMap((entry) => entry.kind === "missing" ? [entry.blobIdHex] : []);
     if (missingBlobIdHexes.length > 0) throw new BlobNotFoundError(missingBlobIdHexes);
-    const firstFailedLoad = loadedEntries.find((entry) => entry.kind === "failed");
-    if (firstFailedLoad !== undefined && firstFailedLoad.kind === "failed") throw firstFailedLoad.error;
+    const failedLoad = loadedEntries.find((entry) => entry.kind === "failed");
+    if (failedLoad !== undefined && failedLoad.kind === "failed") throw failedLoad.error;
     for (const entry of loadedEntries) {
       if (entry.kind === "loaded") {
-        serializedSubagentStateCache.set(entry.state, { blobId: entry.blobId, blobData: entry.blobData });
+        subagentBlobCache.set(entry.state, { blobId: entry.blobId, blobData: entry.blobData });
         this.subagentStates.set(entry.subagentId, entry.state);
       }
     }
@@ -2101,14 +2101,14 @@ These images can be copied for use in other locations.
       if (this.conversationStartedTimeZone === undefined) {
         throw new Error("conversationStartedTimestampMs was set without conversationStartedTimeZone");
       }
-      return buildDateStringForTimestampMs(this.conversationStartedTimestampMs, this.conversationStartedTimeZone);
+      return dateStringForTimestamp(this.conversationStartedTimestampMs, this.conversationStartedTimeZone);
     }
     if (this.conversationStartedTimeZone !== undefined) {
       throw new Error("conversationStartedTimeZone was set without conversationStartedTimestampMs");
     }
     const conversationStartedTimestampMs = BigInt(Date.now());
-    const conversationStartedTimeZone = resolveConversationStartTimeZone(timeZone);
-    const conversationStartedDate = buildDateStringForTimestampMs(conversationStartedTimestampMs, conversationStartedTimeZone);
+    const conversationStartedTimeZone = startTimeZone(timeZone);
+    const conversationStartedDate = dateStringForTimestamp(conversationStartedTimestampMs, conversationStartedTimeZone);
     this.conversationStartedTimestampMs = conversationStartedTimestampMs;
     this.conversationStartedTimeZone = conversationStartedTimeZone;
     return conversationStartedDate;
@@ -2166,7 +2166,7 @@ These images can be copied for use in other locations.
   }
 
   recordFileState(path29: string, content: string | undefined, prevContent: string | undefined, skipReprioritization?: boolean): void {
-    recordFileStateInMap(this.fileStates, this.blobStore, path29, content, prevContent, skipReprioritization);
+    noteFileState(this.fileStates, this.blobStore, path29, content, prevContent, skipReprioritization);
   }
 
   async getFileState(ctx: OperationContext, path29: string): Promise<string | undefined> {
@@ -2175,27 +2175,27 @@ These images can be copied for use in other locations.
     return contentRef.get(ctx);
   }
 
-  async hydrateUserMessageBlobText(ctx: OperationContext, userMessage: UserMessageBlobHydrationTarget): Promise<void> {
+  async hydrateUserMessageBlobText(ctx: OperationContext, incomingRecord: MessageBlobTarget): Promise<void> {
     const [textBytes, richTextBytes] = await Promise.all([
-      userMessage.text.length === 0 && userMessage.textBlobId !== undefined && userMessage.textBlobId.length > 0
-        ? this.blobStore.getBlob(ctx, userMessage.textBlobId)
+      incomingRecord.text.length === 0 && incomingRecord.textBlobId !== undefined && incomingRecord.textBlobId.length > 0
+        ? this.blobStore.getBlob(ctx, incomingRecord.textBlobId)
         : Promise.resolve(undefined),
-      (userMessage.richText === undefined || userMessage.richText.length === 0) && userMessage.richTextBlobId !== undefined && userMessage.richTextBlobId.length > 0
-        ? this.blobStore.getBlob(ctx, userMessage.richTextBlobId)
+      (incomingRecord.richText === undefined || incomingRecord.richText.length === 0) && incomingRecord.richTextBlobId !== undefined && incomingRecord.richTextBlobId.length > 0
+        ? this.blobStore.getBlob(ctx, incomingRecord.richTextBlobId)
         : Promise.resolve(undefined),
     ]);
     if (textBytes !== undefined) {
-      userMessage.text = textDecoder.decode(textBytes);
-    } else if (userMessage.text.length === 0 && userMessage.textBlobId !== undefined && userMessage.textBlobId.length > 0) {
-      logger.warn(ctx, "Failed to hydrate user message text blob", {
-        textBlobIdLength: userMessage.textBlobId.length,
+      incomingRecord.text = utf8Decoder.decode(textBytes);
+    } else if (incomingRecord.text.length === 0 && incomingRecord.textBlobId !== undefined && incomingRecord.textBlobId.length > 0) {
+      stateLog.warn(ctx, "Failed to hydrate user message text blob", {
+        textBlobIdLength: incomingRecord.textBlobId.length,
       });
     }
     if (richTextBytes !== undefined) {
-      userMessage.richText = textDecoder.decode(richTextBytes);
-    } else if ((userMessage.richText === undefined || userMessage.richText.length === 0) && userMessage.richTextBlobId !== undefined && userMessage.richTextBlobId.length > 0) {
-      logger.warn(ctx, "Failed to hydrate user message rich text blob", {
-        richTextBlobIdLength: userMessage.richTextBlobId.length,
+      incomingRecord.richText = utf8Decoder.decode(richTextBytes);
+    } else if ((incomingRecord.richText === undefined || incomingRecord.richText.length === 0) && incomingRecord.richTextBlobId !== undefined && incomingRecord.richTextBlobId.length > 0) {
+      stateLog.warn(ctx, "Failed to hydrate user message rich text blob", {
+        richTextBlobIdLength: incomingRecord.richTextBlobId.length,
       });
     }
   }
@@ -2204,9 +2204,9 @@ These images can be copied for use in other locations.
     for (let i = this.turns.length - 1; i >= 0; i -= 1) {
       const turn = await this.turns[i]!.get(ctx);
       if (turn instanceof AgentConversationTurnHandle) {
-        const userMessage = await turn.userMessage.get(ctx);
-        if (userMessage.isSimulatedMsg !== true) {
-          return userMessage.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+        const incomingRecord = await turn.userMessage.get(ctx);
+        if (incomingRecord.isSimulatedMsg !== true) {
+          return incomingRecord.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
         }
       }
     }
@@ -2225,8 +2225,8 @@ These images can be copied for use in other locations.
     for (let i = this.userTurnMessageIdsIndexedTurnCount; i < this.turns.length; i += 1) {
       const turn = await this.turns[i]!.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      const messageId = userMessage.messageId;
+      const incomingRecord = await turn.userMessage.get(ctx);
+      const messageId = incomingRecord.messageId;
       if (messageId.length > 0) {
         this.userTurnMessageIdsIndex.add(messageId);
       }
@@ -2240,31 +2240,31 @@ These images can be copied for use in other locations.
   }
 
   async getUserPromptTextsByReferenceId(ctx: OperationContext): Promise<Map<string, string>> {
-    const promptTextsByReferenceId = new Map<string, string>();
-    for (const turnRef of this.turns) {
-      const turn = await turnRef.get(ctx);
+    const promptsByReference = new Map<string, string>();
+    for (const turnReference of this.turns) {
+      const turn = await turnReference.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      if (userMessage.isSimulatedMsg === true) continue;
-      const promptReferenceId = userMessage.promptReferenceId;
-      if (promptReferenceId === undefined || promptReferenceId.length === 0 || promptTextsByReferenceId.has(promptReferenceId)) continue;
-      promptTextsByReferenceId.set(promptReferenceId, userMessage.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
+      const incomingRecord = await turn.userMessage.get(ctx);
+      if (incomingRecord.isSimulatedMsg === true) continue;
+      const promptReferenceId = incomingRecord.promptReferenceId;
+      if (promptReferenceId === undefined || promptReferenceId.length === 0 || promptsByReference.has(promptReferenceId)) continue;
+      promptsByReference.set(promptReferenceId, incomingRecord.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
     }
-    return promptTextsByReferenceId;
+    return promptsByReference;
   }
 
   async resolvePromptReferenceUserMessageMatches(
     ctx: OperationContext,
-    promptReferenceIds: readonly string[],
+    referenceIds: readonly string[],
   ): Promise<{
     promptReferenceId: string;
     messageId: string;
     threadId: string;
     turnIndex: number;
   }[]> {
-    const requestedPromptReferenceIds = new Set(promptReferenceIds.filter((id) => id.length > 0));
-    if (requestedPromptReferenceIds.size === 0) return [];
-    const seenPromptReferenceIds = new Set<string>();
+    const wantedReferenceIds = new Set(referenceIds.filter((id) => id.length > 0));
+    if (wantedReferenceIds.size === 0) return [];
+    const seenReferenceIds = new Set<string>();
     const matches: {
       promptReferenceId: string;
       messageId: string;
@@ -2274,45 +2274,45 @@ These images can be copied for use in other locations.
     for (let i = 0; i < this.turns.length; i += 1) {
       const turn = await this.turns[i]!.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      if (userMessage.isSimulatedMsg === true) continue;
-      const promptReferenceId = userMessage.promptReferenceId;
+      const incomingRecord = await turn.userMessage.get(ctx);
+      if (incomingRecord.isSimulatedMsg === true) continue;
+      const promptReferenceId = incomingRecord.promptReferenceId;
       if (
         promptReferenceId === undefined ||
         promptReferenceId.length === 0 ||
-        !requestedPromptReferenceIds.has(promptReferenceId) ||
-        seenPromptReferenceIds.has(promptReferenceId)
+        !wantedReferenceIds.has(promptReferenceId) ||
+        seenReferenceIds.has(promptReferenceId)
       ) continue;
       matches.push({
         promptReferenceId,
-        messageId: userMessage.messageId,
-        threadId: resolveUserMessageThreadId(userMessage) ?? promptReferenceId,
+        messageId: incomingRecord.messageId,
+        threadId: messageThreadId(incomingRecord) ?? promptReferenceId,
         turnIndex: i,
       });
-      seenPromptReferenceIds.add(promptReferenceId);
-      if (seenPromptReferenceIds.size >= requestedPromptReferenceIds.size) break;
+      seenReferenceIds.add(promptReferenceId);
+      if (seenReferenceIds.size >= wantedReferenceIds.size) break;
     }
     return matches;
   }
 
   async reassignThreadIds(
     ctx: OperationContext,
-    sourceThreadIds: ReadonlySet<string>,
-    targetThreadId: string,
+    sourceThreads: ReadonlySet<string>,
+    targetThread: string,
   ): Promise<void> {
-    if (sourceThreadIds.size === 0 || targetThreadId.length === 0) return;
-    for (const turnRef of this.turns) {
-      const turn = await turnRef.get(ctx);
+    if (sourceThreads.size === 0 || targetThread.length === 0) return;
+    for (const turnReference of this.turns) {
+      const turn = await turnReference.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      const currentThreadId = getExplicitUserMessageThreadId(userMessage);
-      if (currentThreadId !== undefined && sourceThreadIds.has(currentThreadId) && currentThreadId !== targetThreadId) {
-        turn.setUserMessage(withUserMessageThreadId(userMessage, targetThreadId));
+      const incomingRecord = await turn.userMessage.get(ctx);
+      const currentThread = explicitThreadId(incomingRecord);
+      if (currentThread !== undefined && sourceThreads.has(currentThread) && currentThread !== targetThread) {
+        turn.setUserMessage(attachThreadId(incomingRecord, targetThread));
       }
     }
     for (const [subagentId, threadId] of this.subagentThreads) {
-      if (sourceThreadIds.has(threadId) && threadId !== targetThreadId) {
-        this.subagentThreads.set(subagentId, targetThreadId);
+      if (sourceThreads.has(threadId) && threadId !== targetThread) {
+        this.subagentThreads.set(subagentId, targetThread);
       }
     }
   }
@@ -2322,83 +2322,83 @@ These images can be copied for use in other locations.
     matches: readonly { turnIndex: number }[],
     threadId: string,
   ): Promise<void> {
-    for (const match2 of matches) {
-      const turnRef = this.turns[match2.turnIndex];
-      if (turnRef === undefined) continue;
-      const turn = await turnRef.get(ctx);
+    for (const promptMatch of matches) {
+      const turnReference = this.turns[promptMatch.turnIndex];
+      if (turnReference === undefined) continue;
+      const turn = await turnReference.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      if (getExplicitUserMessageThreadId(userMessage) === threadId) continue;
-      turn.setUserMessage(withUserMessageThreadId(userMessage, threadId));
+      const incomingRecord = await turn.userMessage.get(ctx);
+      if (explicitThreadId(incomingRecord) === threadId) continue;
+      turn.setUserMessage(attachThreadId(incomingRecord, threadId));
     }
   }
 
   async getEarliestTurnIndexByThreadId(
     ctx: OperationContext,
-    candidateThreadIds: ReadonlySet<string>,
+    threadCandidates: ReadonlySet<string>,
   ): Promise<Map<string, number>> {
-    const earliestTurnIndexByThreadId = new Map<string, number>();
-    if (candidateThreadIds.size === 0) return earliestTurnIndexByThreadId;
+    const earliestTurnByThread = new Map<string, number>();
+    if (threadCandidates.size === 0) return earliestTurnByThread;
     for (let i = 0; i < this.turns.length; i += 1) {
       const turn = await this.turns[i]!.get(ctx);
       if (!(turn instanceof AgentConversationTurnHandle)) continue;
-      const userMessage = await turn.userMessage.get(ctx);
-      const threadId = resolveUserMessageThreadId(userMessage);
-      if (threadId === undefined || !candidateThreadIds.has(threadId) || earliestTurnIndexByThreadId.has(threadId)) continue;
-      earliestTurnIndexByThreadId.set(threadId, i);
-      if (earliestTurnIndexByThreadId.size >= candidateThreadIds.size) break;
+      const incomingRecord = await turn.userMessage.get(ctx);
+      const threadId = messageThreadId(incomingRecord);
+      if (threadId === undefined || !threadCandidates.has(threadId) || earliestTurnByThread.has(threadId)) continue;
+      earliestTurnByThread.set(threadId, i);
+      if (earliestTurnByThread.size >= threadCandidates.size) break;
     }
-    return earliestTurnIndexByThreadId;
+    return earliestTurnByThread;
   }
 
   async resolveCanonicalThreadIdForPromptReferenceMatches(
     ctx: OperationContext,
     matches: readonly { readonly threadId: string; readonly turnIndex: number }[],
-    additionalThreadIds: readonly string[] = [],
+    extraThreadIds: readonly string[] = [],
   ): Promise<string | undefined> {
-    const orderedThreadIds: string[] = [];
+    const threadOrder: string[] = [];
     const addThreadId = (candidate: string | undefined): void => {
-      const threadId = normalizeNonEmptyString(candidate);
-      if (threadId === undefined || orderedThreadIds.includes(threadId)) return;
-      orderedThreadIds.push(threadId);
+      const threadId = trimmedString(candidate);
+      if (threadId === undefined || threadOrder.includes(threadId)) return;
+      threadOrder.push(threadId);
     };
-    for (const threadId of additionalThreadIds) addThreadId(threadId);
+    for (const threadId of extraThreadIds) addThreadId(threadId);
     for (const match of matches) addThreadId(match.threadId);
-    if (orderedThreadIds.length === 0) return undefined;
-    const earliestTurnIndexByThreadId = await this.getEarliestTurnIndexByThreadId(ctx, new Set(orderedThreadIds));
-    let canonicalThreadId = orderedThreadIds[0]!;
-    let canonicalTurnIndex = earliestTurnIndexByThreadId.get(canonicalThreadId) ?? Infinity;
-    for (const threadId of orderedThreadIds.slice(1)) {
-      const turnIndex = earliestTurnIndexByThreadId.get(threadId) ?? Infinity;
-      if (turnIndex < canonicalTurnIndex || (turnIndex === canonicalTurnIndex && threadId < canonicalThreadId)) {
-        canonicalThreadId = threadId;
-        canonicalTurnIndex = turnIndex;
+    if (threadOrder.length === 0) return undefined;
+    const earliestTurnByThread = await this.getEarliestTurnIndexByThreadId(ctx, new Set(threadOrder));
+    let canonicalThread = threadOrder[0]!;
+    let canonicalTurn = earliestTurnByThread.get(canonicalThread) ?? Infinity;
+    for (const threadId of threadOrder.slice(1)) {
+      const turnIndex = earliestTurnByThread.get(threadId) ?? Infinity;
+      if (turnIndex < canonicalTurn || (turnIndex === canonicalTurn && threadId < canonicalThread)) {
+        canonicalThread = threadId;
+        canonicalTurn = turnIndex;
       }
     }
-    return canonicalThreadId;
+    return canonicalThread;
   }
 
   async canonicalizePromptReferenceMatchThreads(args: {
     readonly ctx: OperationContext;
     readonly matches: readonly { readonly threadId: string; readonly turnIndex: number }[];
-    readonly canonicalThreadId: string | undefined;
-    readonly additionalThreadIds?: readonly string[];
+    readonly canonicalThread: string | undefined;
+    readonly extraThreadIds?: readonly string[];
   }): Promise<void> {
-    const { ctx, matches, canonicalThreadId, additionalThreadIds = [] } = args;
-    const normalizedCanonicalThreadId = normalizeNonEmptyString(canonicalThreadId);
-    if (normalizedCanonicalThreadId === undefined) return;
-    const sourceThreadIds = new Set<string>();
-    for (const threadId of additionalThreadIds) {
-      const normalizedThreadId = normalizeNonEmptyString(threadId);
-      if (normalizedThreadId !== undefined && normalizedThreadId !== normalizedCanonicalThreadId) {
-        sourceThreadIds.add(normalizedThreadId);
+    const { ctx, matches, canonicalThread, extraThreadIds = [] } = args;
+    const normalizedCanonical = trimmedString(canonicalThread);
+    if (normalizedCanonical === undefined) return;
+    const sourceThreads = new Set<string>();
+    for (const threadId of extraThreadIds) {
+      const normalizedThreadId = trimmedString(threadId);
+      if (normalizedThreadId !== undefined && normalizedThreadId !== normalizedCanonical) {
+        sourceThreads.add(normalizedThreadId);
       }
     }
     for (const match of matches) {
-      if (match.threadId !== normalizedCanonicalThreadId) sourceThreadIds.add(match.threadId);
+      if (match.threadId !== normalizedCanonical) sourceThreads.add(match.threadId);
     }
-    await this.reassignThreadIds(ctx, sourceThreadIds, normalizedCanonicalThreadId);
-    await this.assignPromptReferenceMatchesToThread(ctx, matches, normalizedCanonicalThreadId);
+    await this.reassignThreadIds(ctx, sourceThreads, normalizedCanonical);
+    await this.assignPromptReferenceMatchesToThread(ctx, matches, normalizedCanonical);
   }
 
   async clearTurns(): Promise<void> {
@@ -2415,41 +2415,41 @@ These images can be copied for use in other locations.
     readonly finalSummary?: string;
     readonly completedSubtitle?: string;
   }): void {
-    const historyEntry = new CommunicateUpdateHistoryEntry({
+    const loggedEntry = new CommunicateUpdateHistoryEntry({
       step: entry.step,
       messageIndex: entry.messageIndex,
     });
-    const parentToolCallId = normalizeNonEmptyString(entry.parentToolCallId);
+    const parentToolCallId = trimmedString(entry.parentToolCallId);
     if (parentToolCallId !== undefined) {
-      const existingState = this.communicateUpdateStatesByParentToolCallId.get(parentToolCallId);
-      const nextHistory = [...existingState?.history ?? [], historyEntry];
+      const knownState = this.communicateUpdateStatesByParentToolCallId.get(parentToolCallId);
+      const followingHistory = [...knownState?.history ?? [], loggedEntry];
       this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, new CommunicateUpdateTurnState({
-        history: nextHistory,
-        finalSummary: (entry.finalSummary ?? existingState?.finalSummary)!,
-        completedSubtitle: (entry.completedSubtitle ?? existingState?.completedSubtitle)!,
+        history: followingHistory,
+        finalSummary: (entry.finalSummary ?? knownState?.finalSummary)!,
+        completedSubtitle: (entry.completedSubtitle ?? knownState?.completedSubtitle)!,
       }));
       return;
     }
-    this.communicateUpdateHistory.push(historyEntry);
+    this.communicateUpdateHistory.push(loggedEntry);
     if (entry.finalSummary !== undefined) this.communicateUpdateFinalSummary = entry.finalSummary;
     if (entry.completedSubtitle !== undefined) this.communicateUpdateCompletedSubtitle = entry.completedSubtitle;
   }
 
   getNextMessageIndex(): number {
-    const loadedMessageCount = this.rootPromptBuilder.getState().length;
-    if (this.skippedRootPromptBlobs) return this.originalRootPromptMessagesJson.length + loadedMessageCount;
-    if (loadedMessageCount > 0) return loadedMessageCount;
+    const loadedMessages = this.rootPromptBuilder.getState().length;
+    if (this.skippedRootPromptBlobs) return this.originalRootPromptMessagesJson.length + loadedMessages;
+    if (loadedMessages > 0) return loadedMessages;
     return this.conversationStateStructure.rootPromptMessagesJson.length;
   }
 
   generateModeChangeContent(
     config: ModeProcessingConfig,
-    requestContext: ModeProcessingRequestContext,
-    previousMode?: AgentMode,
+    hostContext: ModeProcessingRequestContext,
+    priorMode?: AgentMode,
   ): string {
     const currentMode = this.mode;
     if (currentMode === undefined) return "";
-    return processModeSystemReminder(currentMode, config, requestContext, previousMode);
+    return processModeSystemReminder(currentMode, config, hostContext, priorMode);
   }
 
   serialize(): Uint8Array {
@@ -2458,33 +2458,33 @@ These images can be copied for use in other locations.
     );
   }
 
-  async computeNewStructure(parentCtx: OperationContext): Promise<RedactedConversationStateStructure> {
+  async computeNewStructure(parentContext: OperationContext): Promise<ConversationStateBlobs> {
     const previousPending = this.pendingComputeStructure;
-    const computation = (async (): Promise<RedactedConversationStateStructure> => {
+    const computation = (async (): Promise<ConversationStateBlobs> => {
       if (previousPending) {
         await previousPending.catch(() => undefined);
       }
-      return this.doComputeNewStructure(parentCtx);
+      return this.doComputeNewStructure(parentContext);
     })();
     this.pendingComputeStructure = computation;
     return computation;
   }
 
-  private async doComputeNewStructure(parentCtx: OperationContext): Promise<RedactedConversationStateStructure> {
-    const env_2: DisposableEnvironment = { stack: [], error: undefined, hasError: false };
+  private async doComputeNewStructure(parentContext: OperationContext): Promise<ConversationStateBlobs> {
+    const env_2: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
-      const span = createSpan(parentCtx.withName("computeNewStructure"));
-      __addDisposableResource19(env_2, span, false);
+      const span = createSpan(parentContext.withName("computeNewStructure"));
+      addDisposableResource(env_2, span, false);
       const ctx = span.ctx;
-      const quietCtx = withSuppressedChildSpans(ctx);
-      const serializeStart = performance.now();
-      let setBlobCount = 0;
-      const serializeRootPromptMessages = async (messages: readonly RedactedCoreMessageForSerialization[]): Promise<Uint8Array[]> => {
+      const quietContext = withSuppressedChildSpans(ctx);
+      const serializeStartedAt = performance.now();
+      let blobWriteCount = 0;
+      const serializeRootPromptMessages = async (messages: readonly SerializeMessage[]): Promise<Uint8Array[]> => {
         const blobIds = await Promise.all(messages.map(async (message) => {
-          const cached = serializedMessageCache.get(message);
+          const cached = messageBlobCache.get(message);
           if (cached !== undefined) {
             if (!isBlobDurable(this.blobStore, cached.blobId)) {
-              await this.blobStore.setBlob(quietCtx, cached.blobId, cached.blobData);
+              await this.blobStore.setBlob(quietContext, cached.blobId, cached.blobData);
             }
             return cached.blobId;
           }
@@ -2494,140 +2494,140 @@ These images can be copied for use in other locations.
             const start = performance.now();
             serializedMessage = this.serdes.coreMessage.serialize(message);
             const durationMs = performance.now() - start;
-            if (durationMs > SERIALIZE_MESSAGE_SLOW_THRESHOLD_MS) {
+            if (durationMs > SLOW_SERIALIZE_MS) {
               recordCompletedSpanIfParented(ctx.withName("serializeMessage.slow"), {
                 startTime: startEpochMs,
                 attributes: {
                   serializedMessageLength: serializedMessage.length,
                   durationMs,
-                  slowThresholdMs: SERIALIZE_MESSAGE_SLOW_THRESHOLD_MS,
+                  slowThresholdMs: SLOW_SERIALIZE_MS,
                 },
               }, startEpochMs + durationMs);
             }
             if (durationMs > 1e4) {
-              logger.warn(ctx, "Serializing message took more than 10 seconds", {
+              stateLog.warn(ctx, "Serializing message took more than 10 seconds", {
                 serializedMessageLength: serializedMessage.length,
                 serializationDuration: durationMs,
               });
             }
           }
           const blobId = await getBlobId(serializedMessage);
-          setBlobCount += 1;
+          blobWriteCount += 1;
           getBlobMetadataCallback(this.blobStore)?.({ blobId, blobType: { kind: "json" } });
-          await this.blobStore.setBlob(quietCtx, blobId, serializedMessage);
-          serializedMessageCache.set(message, { blobId, blobData: serializedMessage });
+          await this.blobStore.setBlob(quietContext, blobId, serializedMessage);
+          messageBlobCache.set(message, { blobId, blobData: serializedMessage });
           return blobId;
         }));
         return blobIds;
       };
-      const rootPromptMessages = this.rootPromptBuilder.getState();
+      const promptValues = this.rootPromptBuilder.getState();
       span.span.setAttribute("rootPromptBlobMode", this.skippedRootPromptBlobs ? "skipped" : "loaded");
       const newRootPromptMessagesJsonPromise = (async (): Promise<Uint8Array[]> => {
         if (!this.skippedRootPromptBlobs) {
-          conversationStateComputeRootPromptMode.increment(ctx, 1, { mode: "full" });
-          return serializeRootPromptMessages(rootPromptMessages);
+          rootPromptModeCounter.increment(ctx, 1, { mode: "full" });
+          return serializeRootPromptMessages(promptValues);
         }
         if (this.rootPromptPrefixInvalidated) {
-          conversationStateComputeRootPromptMode.increment(ctx, 1, { mode: "invalidated" });
+          rootPromptModeCounter.increment(ctx, 1, { mode: "invalidated" });
           throw new Error("Cannot compute root prompt pass-through after root prompt prefix was invalidated");
         }
-        conversationStateComputeRootPromptMode.increment(ctx, 1, { mode: "passthrough" });
-        const appendedRootPromptMessagesJson = await serializeRootPromptMessages(rootPromptMessages);
+        rootPromptModeCounter.increment(ctx, 1, { mode: "passthrough" });
+        const appendedRootPromptMessagesJson = await serializeRootPromptMessages(promptValues);
         return [...this.originalRootPromptMessagesJson, ...appendedRootPromptMessagesJson];
       })();
       const newTurnsPromise = Promise.all(this.turns.map((ref) => {
-        setBlobCount += 1;
-        return ref.writeToBlobStore(quietCtx);
+        blobWriteCount += 1;
+        return ref.writeToBlobStore(quietContext);
       }));
       const newTodosPromise = Promise.all(this.todos.map((ref) => {
-        setBlobCount += 1;
-        return ref.writeToBlobStore(quietCtx);
+        blobWriteCount += 1;
+        return ref.writeToBlobStore(quietContext);
       }));
       let newSummaryPromise: Promise<Uint8Array> | undefined;
       if (this.summary !== undefined) {
-        setBlobCount += 1;
-        newSummaryPromise = this.summary.writeToBlobStore(quietCtx);
+        blobWriteCount += 1;
+        newSummaryPromise = this.summary.writeToBlobStore(quietContext);
       }
       let newSummaryArchivesPromise: Promise<Uint8Array[]> | undefined;
       if (this.summaryArchives.length > 0) {
         newSummaryArchivesPromise = Promise.all(this.summaryArchives.map((ref) => {
-          setBlobCount += 1;
-          return ref.writeToBlobStore(quietCtx);
+          blobWriteCount += 1;
+          return ref.writeToBlobStore(quietContext);
         }));
       }
-      let newPlanPromise: Promise<Uint8Array> | undefined;
+      let planBlobPromise: Promise<Uint8Array> | undefined;
       if (this.plan !== undefined) {
-        setBlobCount += 1;
-        newPlanPromise = this.plan.writeToBlobStore(quietCtx);
+        blobWriteCount += 1;
+        planBlobPromise = this.plan.writeToBlobStore(quietContext);
       }
-      const fileStatesEntriesPromise = Promise.all(Array.from(this.fileStates.entries()).map(async ([path29, fileState]) => {
+      const fileStateEntriesPromise = Promise.all(Array.from(this.fileStates.entries()).map(async ([path29, knownState]) => {
         let contentBlobIdPromise: Promise<Uint8Array | undefined> = Promise.resolve(undefined);
-        if (fileState.content !== undefined) {
-          setBlobCount += 1;
-          contentBlobIdPromise = fileState.content.writeToBlobStore(quietCtx);
+        if (knownState.content !== undefined) {
+          blobWriteCount += 1;
+          contentBlobIdPromise = knownState.content.writeToBlobStore(quietContext);
         }
         let initialContentBlobIdPromise: Promise<Uint8Array | undefined> = Promise.resolve(undefined);
-        if (fileState.initialContent !== undefined) {
-          setBlobCount += 1;
-          initialContentBlobIdPromise = fileState.initialContent.writeToBlobStore(quietCtx);
+        if (knownState.initialContent !== undefined) {
+          blobWriteCount += 1;
+          initialContentBlobIdPromise = knownState.initialContent.writeToBlobStore(quietContext);
         }
-        const [contentBlobId, initialContentBlobId] = await Promise.all([contentBlobIdPromise, initialContentBlobIdPromise]);
-        const fileStateStructure = new FileStateStructure({
-          content: contentBlobId!,
-          initialContent: initialContentBlobId!,
+        const [contentBlob, initialBlob] = await Promise.all([contentBlobIdPromise, initialContentBlobIdPromise]);
+        const stateEntry = new FileStateStructure({
+          content: contentBlob!,
+          initialContent: initialBlob!,
         });
-        return [path29, fileStateStructure] as const;
+        return [path29, stateEntry] as const;
       }));
-      const subagentStatesObj: Record<string, SubagentPersistedState> = {};
-      const subagentStateRefsObj: Record<string, Uint8Array> = {};
-      let subagentStateRefsPromise: Promise<void> | undefined;
+      const subagentStatesRecord: Record<string, SubagentPersistedState> = {};
+      const subagentRefsRecord: Record<string, Uint8Array> = {};
+      let subagentRefsPromise: Promise<void> | undefined;
       if (this.serializeSubagentStatesAsBlobRefs) {
-        subagentStateRefsPromise = Promise.all(Array.from(this.subagentStates.entries()).map(async ([subagentId, state]) => {
-          const cached = serializedSubagentStateCache.get(state);
+        subagentRefsPromise = Promise.all(Array.from(this.subagentStates.entries()).map(async ([subagentId, state]) => {
+          const cached = subagentBlobCache.get(state);
           if (cached !== undefined) {
             if (!isBlobDurable(this.blobStore, cached.blobId)) {
-              await this.blobStore.setBlob(quietCtx, cached.blobId, cached.blobData);
+              await this.blobStore.setBlob(quietContext, cached.blobId, cached.blobData);
             }
-            subagentStateRefsObj[subagentId] = cached.blobId;
+            subagentRefsRecord[subagentId] = cached.blobId;
             return;
           }
           const serialized = this.serdes.subagentPersistedState.serialize(toRedactedSubagentPersistedState(state, this.privacyMode));
           const blobId = await getBlobId(serialized);
-          setBlobCount += 1;
+          blobWriteCount += 1;
           getBlobMetadataCallback(this.blobStore)?.({
             blobId,
             blobType: { kind: "proto", typeName: "agent.v1.SubagentPersistedState" },
           });
-          await this.blobStore.setBlob(quietCtx, blobId, serialized);
-          serializedSubagentStateCache.set(state, { blobId, blobData: serialized });
-          subagentStateRefsObj[subagentId] = blobId;
+          await this.blobStore.setBlob(quietContext, blobId, serialized);
+          subagentBlobCache.set(state, { blobId, blobData: serialized });
+          subagentRefsRecord[subagentId] = blobId;
         })).then(() => undefined);
       } else {
         for (const [subagentId, state] of this.subagentStates) {
-          subagentStatesObj[subagentId] = state;
+          subagentStatesRecord[subagentId] = state;
         }
       }
-      const subagentRunsByParentToolCallIdObj: Record<string, SubagentRunState> = {};
+      const subagentRunsRecord: Record<string, SubagentRunState> = {};
       for (const [parentToolCallId, state] of this.subagentRunsByParentToolCallId) {
-        subagentRunsByParentToolCallIdObj[parentToolCallId] = state;
+        subagentRunsRecord[parentToolCallId] = state;
       }
-      const subagentThreadsObj: Record<string, string> = {};
+      const subagentThreadsRecord: Record<string, string> = {};
       for (const [subagentId, threadId] of this.subagentThreads) {
-        subagentThreadsObj[subagentId] = threadId;
+        subagentThreadsRecord[subagentId] = threadId;
       }
-      const communicateUpdateStatesByParentToolCallIdObj: Record<string, CommunicateUpdateTurnState> = {};
+      const communicateStatesRecord: Record<string, CommunicateUpdateTurnState> = {};
       for (const [parentToolCallId, state] of this.communicateUpdateStatesByParentToolCallId) {
-        communicateUpdateStatesByParentToolCallIdObj[parentToolCallId] = new CommunicateUpdateTurnState({ ...toCommunicateUpdateTurnState(state) });
+        communicateStatesRecord[parentToolCallId] = new CommunicateUpdateTurnState({ ...communicateState(state) });
       }
-      const plansObj: Record<string, { id: string; path: string }> = {};
+      const plansRecord: Record<string, { id: string; path: string }> = {};
       for (const [planId, entry] of this.plans) {
-        plansObj[planId] = { id: entry.id, path: entry.path };
+        plansRecord[planId] = { id: entry.id, path: entry.path };
       }
-      await subagentStateRefsPromise;
+      await subagentRefsPromise;
       const rootPromptMessagesJson = await newRootPromptMessagesJsonPromise;
       const usageTree = this.tokenDetails.promptContextUsageTree;
       const promptContextUsageSnapshotBlobId = await persistPromptContextUsageSnapshot({
-        ctx: quietCtx,
+        ctx: quietContext,
         blobStore: this.blobStore,
         privacyMode: this.privacyMode,
         usageTree,
@@ -2635,13 +2635,13 @@ These images can be copied for use in other locations.
       });
       const tokenDetails = fromRedactedConversationTokenDetails(this.tokenDetails, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
       tokenDetails.promptContextUsageSnapshotBlobId = promptContextUsageSnapshotBlobId!;
-      const conversationStateInit = {
+      const stateInit = {
         rootPromptMessagesJson,
         turns: await newTurnsPromise,
         todos: await newTodosPromise,
         tokenDetails,
         summary: (await newSummaryPromise)!,
-        plan: (await newPlanPromise)!,
+        plan: (await planBlobPromise)!,
         summaryArchives: (await newSummaryArchivesPromise)!,
         previousWorkspaceUris: this.previousWorkspaceUris?.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)) ?? [],
         trackedGitRepoBranches: this.trackedGitRepoBranches.map((repo) => ({
@@ -2654,15 +2654,15 @@ These images can be copied for use in other locations.
         isRootProjectConversation: (this.isRootProjectConversation || undefined)!,
         conversationStartedTimestampMs: this.conversationStartedTimestampMs!,
         conversationStartedTimeZone: this.conversationStartedTimeZone!,
-        fileStatesV2: Object.fromEntries(await fileStatesEntriesPromise),
-        subagentStates: subagentStatesObj,
-        subagentStateRefs: subagentStateRefsObj,
-        subagentRunsByParentToolCallId: subagentRunsByParentToolCallIdObj,
-        subagentThreads: subagentThreadsObj,
+        fileStatesV2: Object.fromEntries(await fileStateEntriesPromise),
+        subagentStates: subagentStatesRecord,
+        subagentStateRefs: subagentRefsRecord,
+        subagentRunsByParentToolCallId: subagentRunsRecord,
+        subagentThreads: subagentThreadsRecord,
         selfSummaryCount: this.selfSummaryCount,
         readPaths: Array.from(this.readPaths),
         completedAskQuestionToolCallIds: Array.from(this.completedAskQuestionToolCallIds),
-        plans: plansObj,
+        plans: plansRecord,
         goalState: this.goalState!,
         communicateUpdateHistory: this.communicateUpdateHistory.map((entry) => new CommunicateUpdateHistoryEntry({
           step: entry.step,
@@ -2670,39 +2670,39 @@ These images can be copied for use in other locations.
         })),
         communicateUpdateFinalSummary: this.communicateUpdateFinalSummary!,
         communicateUpdateCompletedSubtitle: this.communicateUpdateCompletedSubtitle!,
-        communicateUpdateStatesByParentToolCallId: communicateUpdateStatesByParentToolCallIdObj,
+        communicateUpdateStatesByParentToolCallId: communicateStatesRecord,
       };
-      const newConversationStateStructure = new ConversationStateStructure(conversationStateInit);
-      const newRedactedConversationStateStructure = toRedactedConversationStateStructure(newConversationStateStructure, this.conversationStateStructure._privacyMode);
-      const serializeDurationMs = performance.now() - serializeStart;
-      span.span.setAttribute("setBlobCount", setBlobCount);
-      span.span.setAttribute("serializeDurationMs", serializeDurationMs);
-      if (setBlobCount >= 50 || serializeDurationMs >= SLOW_RESTORE_DURATION_MS) {
-        logger.debug(span.ctx, "Large conversation state serialize", {
-          serializeDurationMs,
-          setBlobCount,
-          rootPromptMessageCount: newConversationStateStructure.rootPromptMessagesJson.length,
-          turnCount: newConversationStateStructure.turns.length,
-          todoCount: newConversationStateStructure.todos.length,
-          fileStateCount: Object.keys(newConversationStateStructure.fileStatesV2).length,
-          hasSummary: newConversationStateStructure.summary !== undefined,
-          summaryArchiveCount: newConversationStateStructure.summaryArchives.length,
+      const nextStateStructure = new ConversationStateStructure(stateInit);
+      const nextRedactedState = toRedactedConversationStateStructure(nextStateStructure, this.conversationStateStructure._privacyMode);
+      const serializeMs = performance.now() - serializeStartedAt;
+      span.span.setAttribute("setBlobCount", blobWriteCount);
+      span.span.setAttribute("serializeDurationMs", serializeMs);
+      if (blobWriteCount >= 50 || serializeMs >= SLOW_RESTORE_MS) {
+        stateLog.debug(span.ctx, "Large conversation state serialize", {
+          serializeMs,
+          blobWriteCount,
+          promptMessages: nextStateStructure.rootPromptMessagesJson.length,
+          turnCount: nextStateStructure.turns.length,
+          todoCount: nextStateStructure.todos.length,
+          fileStateCount: Object.keys(nextStateStructure.fileStatesV2).length,
+          hasSummary: nextStateStructure.summary !== undefined,
+          summaryArchiveCount: nextStateStructure.summaryArchives.length,
         });
       }
-      this.conversationStateStructure = newRedactedConversationStateStructure;
-      return newRedactedConversationStateStructure;
+      this.conversationStateStructure = nextRedactedState;
+      return nextRedactedState;
     } catch (e_2) {
       env_2.error = e_2;
       env_2.hasError = true;
     } finally {
-      __disposeResources19(env_2);
+      disposeResources(env_2);
     }
     throw new Error("Unreachable computeNewStructure completion");
   }
 
   async createShellTurn(
     ctx: OperationContext,
-    shellCommand: Parameters<ConversationStateSerdes["shellCommand"]["serialize"]>[0],
+    shellCommand: Parameters<CodecSet["shellCommand"]["serialize"]>[0],
   ): Promise<ShellConversationTurnHandle> {
     const shellCommandBlob = this.serdes.shellCommand.serialize(shellCommand);
     const shellCommandBlobId = await getBlobId(shellCommandBlob);
@@ -2730,7 +2730,7 @@ These images can be copied for use in other locations.
     const turn = new ShellConversationTurnHandle(this.blobStore, this.serdes, shellTurnInner);
     this.turns.push(new EagerReference({
       deserialize: (blob) => {
-        const outer = conversationTurnStructureSerde2.deserialize(blob);
+        const outer = turnStructureSerde.deserialize(blob);
         if (outer.turn.case !== "shellConversationTurn") {
           throw new Error("Expected shell turn");
         }
@@ -2749,7 +2749,7 @@ These images can be copied for use in other locations.
     return this.privacyMode;
   }
 
-  addTurnUsage(usage: TurnUsageDelta): void {
+  addTurnUsage(usage: UsageDelta): void {
     this.turnUsage.inputTokens += usage.inputTokens;
     this.turnUsage.outputTokens += usage.outputTokens;
     this.turnUsage.cacheReadTokens += usage.cacheReadTokens;
@@ -2775,7 +2775,7 @@ These images can be copied for use in other locations.
     return usage;
   }
 
-  setTokenDetails(tokenDetails: RedactedConversationTokenDetailsLike): void {
+  setTokenDetails(tokenDetails: TokenDetails): void {
     this.tokenDetails = tokenDetails;
     this.tokenDetailsStaleAfterSummarization = false;
   }
@@ -2806,9 +2806,9 @@ These images can be copied for use in other locations.
     state: Partial<SubagentPersistedState>,
   ): void {
     const now = BigInt(Date.now());
-    const existingState = this.subagentStates.get(subagentId);
-    const createdTimestamp = existingState?.createdTimestampMs ?? now;
-    const persistedModelId = state.modelId ?? existingState?.modelId;
+    const knownState = this.subagentStates.get(subagentId);
+    const createdTimestamp = knownState?.createdTimestampMs ?? now;
+    const persistedModelId = state.modelId ?? knownState?.modelId;
     const updatedState = new SubagentPersistedState({
       ...state,
       createdTimestampMs: createdTimestamp,
@@ -2826,11 +2826,11 @@ These images can be copied for use in other locations.
     if (completion.kind !== BackgroundTaskKind.SUBAGENT || completion.reason === BackgroundTaskCompletionReason.TASK_PROGRESS) {
       return;
     }
-    const parentToolCallId = normalizeNonEmptyString(completion.toolCallId);
+    const parentToolCallId = trimmedString(completion.toolCallId);
     if (parentToolCallId === undefined) {
       return;
     }
-    const subagentId = normalizeNonEmptyString(completion.subagentId) ?? normalizeNonEmptyString(completion.taskId);
+    const subagentId = trimmedString(completion.subagentId) ?? trimmedString(completion.taskId);
     const existingRun = this.subagentRunsByParentToolCallId.get(parentToolCallId);
     const persistedSubagentState = subagentId !== undefined
       ? this.subagentStates.get(this.resolveSubagentId(subagentId) ?? subagentId)
@@ -2845,17 +2845,17 @@ These images can be copied for use in other locations.
       ? completion.reason
       : existingRun?.completionReason;
     const status = completion.status !== BackgroundTaskStatus.UNSPECIFIED
-      ? subagentRunStatusFromCompletionStatus(completion.status)
+      ? runStatusFromCompletion(completion.status)
       : existingRun?.status ?? SubagentRunStatus.UNSPECIFIED;
     this.subagentRunsByParentToolCallId.set(parentToolCallId, new SubagentRunState({
       parentToolCallId,
       subagentId: subagentId!,
       environment: persistedEnvironment ?? existingEnvironment ?? SubagentExecutionEnvironment.UNSPECIFIED,
       status,
-      title: normalizeNonEmptyString(completion.title) ?? existingRun?.title!,
-      detail: normalizeNonEmptyString(completion.detail) ?? existingRun?.detail!,
-      transcriptPath: normalizeNonEmptyString(persistedSubagentState?.cloudSubagent?.transcriptPath) ?? existingRun?.transcriptPath!,
-      outputPath: normalizeNonEmptyString(completion.outputPath) ?? existingRun?.outputPath!,
+      title: trimmedString(completion.title) ?? existingRun?.title!,
+      detail: trimmedString(completion.detail) ?? existingRun?.detail!,
+      transcriptPath: trimmedString(persistedSubagentState?.cloudSubagent?.transcriptPath) ?? existingRun?.transcriptPath!,
+      outputPath: trimmedString(completion.outputPath) ?? existingRun?.outputPath!,
       completedTimestampMs: BigInt(Date.now()),
       completionReason: completionReason!,
     }));
@@ -2896,11 +2896,11 @@ These images can be copied for use in other locations.
     }
   }
 
-  recordReadPath(path29: RedactedValue<string>): void {
+  recordReadPath(path29: RedactedField<string>): void {
     this.readPaths.add(path29.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
   }
 
-  hasReadPath(path29: RedactedValue<string>): boolean {
+  hasReadPath(path29: RedactedField<string>): boolean {
     return this.readPaths.has(path29.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
   }
 

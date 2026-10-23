@@ -291,3 +291,116 @@ test("a turn handle without a change writes nothing new", async () => {
   assert.equal(turn instanceof ShellConversationTurnHandle, true)
   assert.equal(turn instanceof AgentConversationTurnHandle, false)
 })
+// ---------------------------------------------------------------------------------------------
+// the edges the state handle keeps
+// ---------------------------------------------------------------------------------------------
+
+/** Restoring a handle through the static path, over the same fake blob store the harness uses. */
+async function restored(
+  state: ConversationStateStructure = new ConversationStateStructure({}),
+  runtimeAgentType: ReturnType<typeof import("../../source/packages/agent/state-agent-type.ts").parseAgentType> = undefined,
+  options: Record<string, unknown> = {},
+) {
+  const blobs = new Map<string, Uint8Array>()
+  const keyOf = (id: Uint8Array): string => Buffer.from(id).toString("hex")
+  const blobStore = {
+    async getBlob(_ctx: Context, blobId: Uint8Array) { return blobs.get(keyOf(blobId)) },
+    async setBlob(_ctx: Context, blobId: Uint8Array, data: Uint8Array) { blobs.set(keyOf(blobId), data) },
+    async setBlobLocallyOnly(_ctx: Context, blobId: Uint8Array, data: Uint8Array) { blobs.set(keyOf(blobId), data) },
+    async flush() {},
+  }
+  const appended: unknown[] = []
+  const builder = {
+    appendMessages(messages: unknown | readonly unknown[]) { appended.push(...(Array.isArray(messages) ? messages : [messages])) },
+    getState: () => appended,
+    clearMessages() { appended.length = 0 },
+  }
+  const handle = await ConversationStateHandle.fromConversationStateStructure(
+    createContext(),
+    blobStore as never,
+    toRedactedConversationStateStructure(state, PrivacyMode.NO_STORAGE),
+    builder as never,
+    {},
+    "composer-2",
+    runtimeAgentType,
+    options as never,
+  )
+  return { handle, appended, blobs }
+}
+
+test("a thread can be forgotten again", () => {
+  const harnessed = harness()
+  harnessed.handle.setSubagentThreadId("sub-1", "thread-1")
+  assert.equal(harnessed.handle.getSubagentThreadId("sub-1"), "thread-1")
+  harnessed.handle.setSubagentThreadId("sub-1", undefined)
+  assert.equal(harnessed.handle.getSubagentThreadId("sub-1"), undefined)
+})
+
+test("the next message index counts the messages already loaded", () => {
+  const harnessed = harness()
+  harnessed.builder.appendMessages([{ role: "user", content: "one" }, { role: "user", content: "two" }])
+  assert.equal(harnessed.handle.getNextMessageIndex(), 2)
+  harnessed.handle.clearTurns()
+  assert.equal(harnessed.handle.getNextMessageIndex(), 2)
+})
+
+test("a large-context model is the kind this handle calls dsv3", () => {
+  const small = harness()
+  assert.equal(small.handle.isDsv3(), false)
+  const large = new ConversationStateHandle(
+    (small.handle as unknown as { blobStore: unknown }).blobStore as never,
+    (small.handle as unknown as { conversationStateStructure: unknown }).conversationStateStructure as never,
+    small.builder as never,
+    {},
+    "dsv3-composer",
+  )
+  assert.equal(large.isDsv3(), true)
+})
+
+test("the active branch name is kept", () => {
+  const harnessed = harness()
+  harnessed.handle.setActiveBranchName("feature/branch")
+  assert.equal(harnessed.handle.activeBranchName, "feature/branch")
+  harnessed.handle.setActiveBranchName(undefined)
+  assert.equal(harnessed.handle.activeBranchName, undefined)
+})
+
+test("communicated updates are kept in their history and inside their call state", () => {
+  const harnessed = harness()
+  harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "one", messageIndex: 1, finalSummary: "done" })
+  harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "two", messageIndex: 2, parentToolCallId: "call-1", finalSummary: "call summary" })
+  harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "three", messageIndex: 3, parentToolCallId: "call-1", completedSubtitle: "subtitle" })
+  assert.deepEqual(harnessed.handle.communicateUpdateHistory.map((entry) => [entry.step, entry.messageIndex]), [["one", 1]])
+  assert.equal(harnessed.handle.communicateUpdateFinalSummary, "done")
+  const state = harnessed.handle.communicateUpdateStatesByParentToolCallId.get("call-1")
+  assert.equal(state?.history.length, 2)
+  assert.equal(state?.finalSummary, "call summary")
+  assert.equal(state?.completedSubtitle, "subtitle")
+})
+
+test("token details are stored as they were given", () => {
+  const harnessed = harness()
+  const details = harnessed.handle.tokenDetails
+  const replacement = new (details.constructor as new (data: Record<string, unknown>) => typeof details)({ inputTokens: 42 })
+  harnessed.handle.setTokenDetails(replacement)
+  assert.equal(harnessed.handle.tokenDetails, replacement)
+})
+
+test("a restore keeps its read paths, plans, skipped-prompt flag and agent-type change", async () => {
+  const state = new ConversationStateStructure({
+    readPaths: ["/repo/read.ts"],
+    plans: { "plan-1": new PlanRegistryEntry({ id: "plan-1" }) },
+  })
+  const restoreWithChange = await restored(state, "cli" as never, { shouldTrackAgentTypeChange: true });
+  assert.deepEqual([...restoreWithChange.handle.readPaths], ["/repo/read.ts"])
+  assert.deepEqual([...restoreWithChange.handle.plans.keys()], ["plan-1"])
+  assert.equal(restoreWithChange.handle.skippedRootPromptBlobs, false)
+  assert.equal(restoreWithChange.handle.agentTypeChangedFromPersistedState, false)
+  const changedType = await restored(new ConversationStateStructure({ agentType: "ide" }), "cli" as never, { shouldTrackAgentTypeChange: true })
+  assert.equal(changedType.handle.agentTypeChangedFromPersistedState, true)
+  assert.equal(changedType.handle.hasAgentTypeChangedFromPersistedState(), true)
+
+  const withoutBlobs = await restored(state, undefined, { loadRootPromptBlobs: false })
+  assert.equal(withoutBlobs.handle.skippedRootPromptBlobs, true)
+})
+
