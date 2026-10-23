@@ -17,22 +17,23 @@ export interface SubagentDispatchMeta {
   readonly lineage?: SubagentLineage;
 }
 
+/** The request a subagent's own calls are made under: its tool call id, or just the role when it has no id. */
 export function computeSubagentRequestId(toolCallId: string): string {
   return toolCallId.length > 0 ? `subagent:${toolCallId}` : "subagent";
 }
 
-export function subagentSteerRunOptions(meta: SubagentDispatchMeta): {
+export function subagentSteerRunOptions(dispatch: SubagentDispatchMeta): {
   readonly inferenceRequestId: string;
   readonly lineage?: SubagentLineage;
 } {
-  const parentToolCallPart = meta.toolCallId.length > 0
-    ? { parentAgentToolCallId: meta.toolCallId }
+  const parentToolCallPart = dispatch.toolCallId.length > 0
+    ? { parentAgentToolCallId: dispatch.toolCallId }
     : {};
   return {
-    inferenceRequestId: computeSubagentRequestId(meta.toolCallId),
-    ...(meta.lineage == null
+    inferenceRequestId: computeSubagentRequestId(dispatch.toolCallId),
+    ...(dispatch.lineage == null
       ? {}
-      : { lineage: { ...meta.lineage, ...parentToolCallPart } }),
+      : { lineage: { ...dispatch.lineage, ...parentToolCallPart } }),
   };
 }
 
@@ -96,7 +97,7 @@ export interface SubagentRuntimeHost {
   getConversationId(): string;
   resolveBoxId(): string;
   emitAsyncTasksChanged(): void;
-  computerUse: { freeWindow(subagentAgentId: string): void };
+  computerUse: { freeWindow(subagentId: string): void };
   now?: () => number;
   onPendingWakeArmed?(event: {
     parentAgentId: string;
@@ -155,17 +156,32 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The quiet origin of a run, when it has one, as a spreadable field; absent rather than undefined otherwise. */
+const quietOriginField = (quietOrigin: string | undefined): { quietOrigin?: string } =>
+  quietOrigin == null ? {} : { quietOrigin };
+
+/** The dispatch of one background subagent, as the platform reports it when it starts. */
+function dispatchEventOf(parentAgentId: string, request: DispatchParams) {
+  return {
+    parentAgentId,
+    subagentAgentId: request.subagentAgentId,
+    subagentType: request.subagentType,
+    toolCallId: request.toolCallId,
+    subagentRequestId: computeSubagentRequestId(request.toolCallId),
+  };
+}
+
 export function createSubagentRuntime(host: SubagentRuntimeHost) {
   const now = host.now ?? Date.now;
-  const subagentSessions = new Map<string, SubagentSession>();
-  const backgroundSubagentRuns = new Map<string, Promise<void>>();
-  const subagentMeta = new Map<string, RuntimeMeta>();
-  const subagentRegistry = new Map<string, SubagentRecord>();
-  const subagentOutlines = new Map<string, readonly unknown[]>();
-  const pendingSubagentSteers = new Map<string, string>();
-  const abortingSubagents = new Set<string>();
+  const sessions = new Map<string, SubagentSession>();
+  const backgroundRuns = new Map<string, Promise<void>>();
+  const dispatchMeta = new Map<string, RuntimeMeta>();
+  const registry = new Map<string, SubagentRecord>();
+  const outlines = new Map<string, readonly unknown[]>();
+  const pendingSteers = new Map<string, string>();
+  const aborting = new Set<string>();
 
-  let onBackgroundSubagentDispatched:
+  let onDispatched:
     | ((event: {
       parentAgentId: string;
       subagentAgentId: string;
@@ -174,76 +190,82 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
       subagentRequestId: string;
     }) => void)
     | undefined;
-  let onBackgroundSubagentSettled:
+  let onSettled:
     | ((completion: BackgroundSubagentCompletion) => void)
     | undefined;
-  let onSubagentsChanged:
+  let onChanged:
     | ((event: { parentAgentId: string; subagents: readonly ReturnType<typeof listSubagents>[number][] }) => void)
     | undefined;
 
   function emitSubagentsChanged(): void {
-    onSubagentsChanged?.({
+    onChanged?.({
       parentAgentId: host.getConversationId(),
       subagents: listSubagents(),
     });
   }
 
-  function logLifecycle(
-    phase: "dispatched" | "settled",
-    subagentAgentId: string,
-    status?: SubagentRecord["status"],
-  ): void {
-    const record = subagentRegistry.get(subagentAgentId);
-    const label = record == null ? "" : ` [${record.subagentType}] "${record.title}"`;
-    host.log?.(`[slate][subagent] ${phase} ${subagentAgentId}${label}${status == null ? "" : ` status=${status}`}`);
+  /** Tells the host that a background subagent's pending wake is over, when there is one to tell. */
+  function notifyWakeDisarmed(dispatch: RuntimeMeta | undefined, workId: string): void {
+    if (dispatch == null) return;
+    host.onPendingWakeDisarmed?.({
+      parentAgentId: dispatch.parentAgentId,
+      kind: "subagent",
+      workId,
+    });
   }
 
-  function dispatchBackgroundSubagent(params: DispatchParams): void {
-    if (backgroundSubagentRuns.has(params.subagentAgentId)) return;
+  /** A log line for a subagent lifecycle moment, naming the type and title when the registry knows them. */
+  function logLifecycle(
+    phase: "dispatched" | "settled",
+    subagentId: string,
+    status?: SubagentRecord["status"],
+  ): void {
+    const record = registry.get(subagentId);
+    const label = record == null ? "" : ` [${record.subagentType}] "${record.title}"`;
+    const statusLabel = status == null ? "" : ` status=${status}`;
+    host.log?.(`[slate][subagent] ${phase} ${subagentId}${label}${statusLabel}`);
+  }
 
-    const title = deriveBackgroundSubagentTitle(params.prompt);
+  function dispatchBackgroundSubagent(request: DispatchParams): void {
+    if (backgroundRuns.has(request.subagentAgentId)) return;
+
+    const title = deriveBackgroundSubagentTitle(request.prompt);
     const startedAtMs = now();
     const parentAgentId = host.getConversationId();
-    const meta: RuntimeMeta = {
+    const dispatch: RuntimeMeta = {
       parentAgentId,
-      subagentType: params.subagentType,
-      toolCallId: params.toolCallId,
+      subagentType: request.subagentType,
+      toolCallId: request.toolCallId,
       title,
       startedAtMs,
-      ...(params.lineage == null ? {} : { lineage: params.lineage }),
-      ...(params.quietOrigin == null ? {} : { quietOrigin: params.quietOrigin }),
+      ...(request.lineage == null ? {} : { lineage: request.lineage }),
+      ...quietOriginField(request.quietOrigin),
     };
-    subagentMeta.set(params.subagentAgentId, meta);
-    subagentRegistry.set(params.subagentAgentId, {
-      subagentType: params.subagentType,
+    dispatchMeta.set(request.subagentAgentId, dispatch);
+    registry.set(request.subagentAgentId, {
+      subagentType: request.subagentType,
       title,
       startedAtMs,
       status: "running",
     });
 
-    logLifecycle("dispatched", params.subagentAgentId);
-    onBackgroundSubagentDispatched?.({
-      parentAgentId,
-      subagentAgentId: params.subagentAgentId,
-      subagentType: params.subagentType,
-      toolCallId: params.toolCallId,
-      subagentRequestId: computeSubagentRequestId(params.toolCallId),
-    });
+    logLifecycle("dispatched", request.subagentAgentId);
+    onDispatched?.(dispatchEventOf(parentAgentId, request));
     host.onPendingWakeArmed?.({
       parentAgentId,
       kind: "subagent",
-      workId: params.subagentAgentId,
+      workId: request.subagentAgentId,
       title,
-      subagentType: params.subagentType,
-      ...(params.quietOrigin == null ? {} : { quietOrigin: params.quietOrigin }),
+      subagentType: request.subagentType,
+      ...quietOriginField(request.quietOrigin),
     });
     emitSubagentsChanged();
     host.emitAsyncTasksChanged();
-    startBackgroundSubagentTurn(params.subagentAgentId, params.run);
+    startBackgroundSubagentTurn(request.subagentAgentId, request.run);
   }
 
   function startBackgroundSubagentTurn(
-    subagentAgentId: string,
+    subagentId: string,
     runTurn: () => Promise<SubagentRunResult>,
   ): void {
     let turn: Promise<SubagentRunResult>;
@@ -256,168 +278,179 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     const promise = turn
       .then((result) =>
         settleBackgroundSubagentTurn(
-          subagentAgentId,
+          subagentId,
           result.aborted
             ? { status: "aborted" }
             : { status: "completed", text: result.text },
         ),
       )
       .catch((error: unknown) =>
-        settleBackgroundSubagentTurn(subagentAgentId, {
+        settleBackgroundSubagentTurn(subagentId, {
           status: "error",
           error: errorMessage(error),
         }),
       );
-    backgroundSubagentRuns.set(subagentAgentId, promise);
+    backgroundRuns.set(subagentId, promise);
+  }
+
+  /** The status a finished run leaves in the registry: an explicit abort wins over what the run itself said. */
+  function settledStatus(aborted: boolean, ending: RunOutcome): SubagentRecord["status"] {
+    if (aborted || ending.status === "aborted") return "aborted";
+    return ending.status === "completed" ? "done" : "error";
+  }
+
+  /** What a completed background run tells its parent, in the parent's words. */
+  function settledResultText(ending: RunOutcome): string {
+    if (ending.status === "completed") {
+      return ending.text.trim().length > 0
+        ? ending.text.trim()
+        : "(the task finished without producing any text output)";
+    }
+    return ending.status === "aborted"
+      ? "The background task was interrupted before it finished."
+      : ending.error;
+  }
+
+  /** Reports a computerUse run's spend and what it did, and audits it when the host keeps an auditor. */
+  function reportComputerUseRun(args: {
+    readonly subagentAgentId: string;
+    readonly meta: RuntimeMeta;
+    readonly session: SubagentSession | undefined;
+    readonly outcome: RunOutcome;
+    readonly aborted: boolean;
+  }): void {
+    const { subagentAgentId: subagentId, meta: dispatch, session, outcome: ending, aborted } = args;
+    const usage = session?.getComputerUseUsageSnapshot?.();
+    const durationMs = Math.max(0, now() - dispatch.startedAtMs);
+    host.onComputerUseUsage?.({
+      parentAgentId: dispatch.parentAgentId,
+      subagentAgentId: subagentId,
+      subagentType: dispatch.subagentType,
+      subagentRequestId: computeSubagentRequestId(dispatch.toolCallId),
+      ...(usage?.modelId == null ? {} : { modelId: usage.modelId }),
+      outcome: aborted || ending.status === "aborted" ? "aborted" : ending.status,
+      durationMs,
+      toolCallCount: session?.getObservedToolCallCount() ?? 0,
+      turnEndedCount: usage?.turnEndedCount ?? 0,
+      ...(usage?.usage == null ? {} : { usage: usage.usage }),
+    });
+    if (host.actionAuditor == null || session == null) return;
+    const actionCounts: Record<string, number> = {};
+    let actionCount = 0;
+    for (const [kind, count] of session.getComputerUseAuditActionCounts?.() ?? []) {
+      actionCounts[kind] = count;
+      actionCount += count;
+    }
+    host.actionAuditor.record({
+      agentId: host.getConversationId(),
+      ...(dispatch.toolCallId.length === 0
+        ? {}
+        : { turnId: computeSubagentRequestId(dispatch.toolCallId) }),
+      boxId: host.resolveBoxId(),
+      occurredAtMs: now(),
+      action: {
+        kind: "computerUseSession",
+        toolCallId: dispatch.toolCallId,
+        actionCount,
+        actionCounts,
+        durationMs,
+        screenshotCount: actionCounts.screenshot ?? 0,
+      },
+    });
+  }
+
+  /** The completion a settled background run hands its parent, when there is a parent handler to hand it to. */
+  function settledCompletion(
+    subagentId: string,
+    dispatch: RuntimeMeta,
+    ending: RunOutcome,
+  ): BackgroundSubagentCompletion {
+    return {
+      parentAgentId: dispatch.parentAgentId,
+      subagentAgentId: subagentId,
+      subagentType: dispatch.subagentType,
+      toolCallId: dispatch.toolCallId,
+      title: dispatch.title,
+      status: ending.status === "completed" ? "completed" : "error",
+      result: settledResultText(ending),
+      ...quietOriginField(dispatch.quietOrigin),
+    };
   }
 
   async function settleBackgroundSubagentTurn(
-    subagentAgentId: string,
-    outcome: RunOutcome,
+    subagentId: string,
+    ending: RunOutcome,
   ): Promise<void> {
-    backgroundSubagentRuns.delete(subagentAgentId);
-    const pendingSteer = pendingSubagentSteers.get(subagentAgentId);
-    const runner = subagentSessions.get(subagentAgentId);
-    const meta = subagentMeta.get(subagentAgentId);
+    backgroundRuns.delete(subagentId);
+    const pendingSteer = pendingSteers.get(subagentId);
+    const session = sessions.get(subagentId);
+    const dispatch = dispatchMeta.get(subagentId);
 
-    if (
-      pendingSteer != null
-      && runner != null
-      && !abortingSubagents.has(subagentAgentId)
-    ) {
-      pendingSubagentSteers.delete(subagentAgentId);
-      startBackgroundSubagentTurn(subagentAgentId, () => {
+    // A steering message that arrived while the run settled starts another turn with it instead of settling.
+    if (pendingSteer != null && session != null && !aborting.has(subagentId)) {
+      pendingSteers.delete(subagentId);
+      startBackgroundSubagentTurn(subagentId, () => {
         const prompt = formatSteerPrompt(pendingSteer);
-        return meta == null
-          ? runner.run(prompt)
-          : runner.run(prompt, subagentSteerRunOptions(meta));
+        return dispatch == null
+          ? session.run(prompt)
+          : session.run(prompt, subagentSteerRunOptions(dispatch));
       });
       return;
     }
 
-    pendingSubagentSteers.delete(subagentAgentId);
-    const aborted = abortingSubagents.delete(subagentAgentId);
-    const record = subagentRegistry.get(subagentAgentId);
+    pendingSteers.delete(subagentId);
+    const aborted = aborting.delete(subagentId);
+    const record = registry.get(subagentId);
     if (record != null) {
-      record.status = aborted || outcome.status === "aborted"
-        ? "aborted"
-        : outcome.status === "completed"
-          ? "done"
-          : "error";
-      logLifecycle("settled", subagentAgentId, record.status);
+      record.status = settledStatus(aborted, ending);
+      logLifecycle("settled", subagentId, record.status);
       emitSubagentsChanged();
     }
     host.emitAsyncTasksChanged();
 
-    if (runner != null) {
+    if (session != null) {
       try {
-        subagentOutlines.set(
-          subagentAgentId,
-          await runner.getResolvedOutline(),
-        );
+        outlines.set(subagentId, await session.getResolvedOutline());
       } catch {}
     }
 
-    host.computerUse.freeWindow(subagentAgentId);
-    subagentSessions.delete(subagentAgentId);
-    subagentMeta.delete(subagentAgentId);
+    host.computerUse.freeWindow(subagentId);
+    sessions.delete(subagentId);
+    dispatchMeta.delete(subagentId);
 
-    const isComputerUse = meta != null
-      && host.isComputerUseSubagentType?.(meta.subagentType) === true;
-    if (isComputerUse && meta != null) {
-      const usage = runner?.getComputerUseUsageSnapshot?.();
-      host.onComputerUseUsage?.({
-        parentAgentId: meta.parentAgentId,
-        subagentAgentId,
-        subagentType: meta.subagentType,
-        subagentRequestId: computeSubagentRequestId(meta.toolCallId),
-        ...(usage?.modelId == null ? {} : { modelId: usage.modelId }),
-        outcome: aborted || outcome.status === "aborted"
-          ? "aborted"
-          : outcome.status,
-        durationMs: Math.max(0, now() - meta.startedAtMs),
-        toolCallCount: runner?.getObservedToolCallCount() ?? 0,
-        turnEndedCount: usage?.turnEndedCount ?? 0,
-        ...(usage?.usage == null ? {} : { usage: usage.usage }),
-      });
-
-      if (host.actionAuditor != null && runner != null) {
-        const actionCounts: Record<string, number> = {};
-        let actionCount = 0;
-        for (const [kind, count] of runner.getComputerUseAuditActionCounts?.() ?? []) {
-          actionCounts[kind] = count;
-          actionCount += count;
-        }
-        host.actionAuditor.record({
-          agentId: host.getConversationId(),
-          ...(meta.toolCallId.length === 0
-            ? {}
-            : { turnId: computeSubagentRequestId(meta.toolCallId) }),
-          boxId: host.resolveBoxId(),
-          occurredAtMs: now(),
-          action: {
-            kind: "computerUseSession",
-            toolCallId: meta.toolCallId,
-            actionCount,
-            actionCounts,
-            durationMs: Math.max(0, now() - meta.startedAtMs),
-            screenshotCount: actionCounts.screenshot ?? 0,
-          },
-        });
-      }
+    if (dispatch != null && host.isComputerUseSubagentType?.(dispatch.subagentType) === true) {
+      reportComputerUseRun({ subagentAgentId: subagentId, meta: dispatch, session: session, outcome: ending, aborted });
     }
 
     if (aborted) {
-      if (meta != null) {
-        host.onPendingWakeDisarmed?.({
-          parentAgentId: meta.parentAgentId,
-          kind: "subagent",
-          workId: subagentAgentId,
-        });
-      }
+      notifyWakeDisarmed(dispatch, subagentId);
       return;
     }
-    if (meta == null || onBackgroundSubagentSettled == null) return;
-
-    onBackgroundSubagentSettled({
-      parentAgentId: meta.parentAgentId,
-      subagentAgentId,
-      subagentType: meta.subagentType,
-      toolCallId: meta.toolCallId,
-      title: meta.title,
-      status: outcome.status === "completed" ? "completed" : "error",
-      result: outcome.status === "completed"
-        ? outcome.text.trim().length > 0
-          ? outcome.text.trim()
-          : "(the task finished without producing any text output)"
-        : outcome.status === "aborted"
-          ? "The background task was interrupted before it finished."
-          : outcome.error,
-      ...(meta.quietOrigin == null ? {} : { quietOrigin: meta.quietOrigin }),
-    });
+    if (dispatch == null || onSettled == null) return;
+    onSettled(settledCompletion(subagentId, dispatch, ending));
   }
 
   function buildRunningSubagentInfo(
-    subagentAgentId: string,
+    subagentId: string,
   ): RunningSubagentInfo | null {
-    if (!backgroundSubagentRuns.has(subagentAgentId)) return null;
-    const meta = subagentMeta.get(subagentAgentId);
-    if (meta == null) return null;
-    const runner = subagentSessions.get(subagentAgentId);
+    if (!backgroundRuns.has(subagentId)) return null;
+    const dispatch = dispatchMeta.get(subagentId);
+    if (dispatch == null) return null;
+    const session = sessions.get(subagentId);
     return {
-      subagentId: subagentAgentId,
-      subagentType: meta.subagentType,
-      title: meta.title,
-      elapsedMs: Math.max(0, now() - meta.startedAtMs),
-      toolCallCount: runner?.getObservedToolCallCount() ?? 0,
-      recentActivity: runner?.getActivitySnapshot() ?? [],
-      transcriptPath: runner?.getTranscriptPath() ?? null,
+      subagentId: subagentId,
+      subagentType: dispatch.subagentType,
+      title: dispatch.title,
+      elapsedMs: Math.max(0, now() - dispatch.startedAtMs),
+      toolCallCount: session?.getObservedToolCallCount() ?? 0,
+      recentActivity: session?.getActivitySnapshot() ?? [],
+      transcriptPath: session?.getTranscriptPath() ?? null,
     };
   }
 
   function listRunningSubagents(): RunningSubagentInfo[] {
     const infos: RunningSubagentInfo[] = [];
-    for (const id of backgroundSubagentRuns.keys()) {
+    for (const id of backgroundRuns.keys()) {
       const info = buildRunningSubagentInfo(id);
       if (info != null) infos.push(info);
     }
@@ -428,47 +461,41 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     return buildRunningSubagentInfo(id);
   }
 
+  /** The session of a subagent that can be steered or stopped, when there is a running one. */
+  function liveSession(subagentId: string): SubagentSession | "not-running" {
+    const session = sessions.get(subagentId);
+    if (session == null || !backgroundRuns.has(subagentId)) return "not-running";
+    return session;
+  }
+
   function steerSubagent(
-    subagentAgentId: string,
+    subagentId: string,
     message: string,
   ): "ok" | "not-running" {
-    const runner = subagentSessions.get(subagentAgentId);
-    if (
-      runner == null
-      || !backgroundSubagentRuns.has(subagentAgentId)
-      || abortingSubagents.has(subagentAgentId)
-    ) return "not-running";
+    const session = liveSession(subagentId);
+    if (session === "not-running" || aborting.has(subagentId)) return "not-running";
 
-    pendingSubagentSteers.set(subagentAgentId, message);
-    runner.interrupt("Steering message from the parent agent.");
+    pendingSteers.set(subagentId, message);
+    session.interrupt("Steering message from the parent agent.");
     return "ok";
   }
 
   function abortSubagent(
-    subagentAgentId: string,
+    subagentId: string,
   ): "ok" | "not-running" {
-    const runner = subagentSessions.get(subagentAgentId);
-    if (runner == null || !backgroundSubagentRuns.has(subagentAgentId)) {
-      return "not-running";
-    }
+    const session = liveSession(subagentId);
+    if (session === "not-running") return "not-running";
 
-    abortingSubagents.add(subagentAgentId);
-    pendingSubagentSteers.delete(subagentAgentId);
-    const meta = subagentMeta.get(subagentAgentId);
-    if (meta != null) {
-      host.onPendingWakeDisarmed?.({
-        parentAgentId: meta.parentAgentId,
-        kind: "subagent",
-        workId: subagentAgentId,
-      });
-    }
+    aborting.add(subagentId);
+    pendingSteers.delete(subagentId);
+    notifyWakeDisarmed(dispatchMeta.get(subagentId), subagentId);
     host.emitAsyncTasksChanged();
-    runner.interrupt("Stopped by the parent agent.");
+    session.interrupt("Stopped by the parent agent.");
     return "ok";
   }
 
   function listSubagents() {
-    return [...subagentRegistry.entries()]
+    return [...registry.entries()]
       .map(([subagentId, record]) => ({
         subagentId,
         subagentType: record.subagentType,
@@ -480,25 +507,29 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
   }
 
   async function getSubagentOutline(id: string): Promise<readonly unknown[]> {
-    const live = subagentSessions.get(id);
+    const live = sessions.get(id);
     if (live != null) return live.getResolvedOutline();
-    return subagentOutlines.get(id) ?? [];
+    return outlines.get(id) ?? [];
+  }
+
+  function notifyBackgroundWorkSettled(completion: BackgroundSubagentCompletion): void {
+    onSettled?.(completion);
+  }
+
+  function reset(): void {
+    sessions.clear();
+    registry.clear();
+    outlines.clear();
+    emitSubagentsChanged();
   }
 
   return {
-    sessions: subagentSessions,
-    registryEntries: () => subagentRegistry.entries(),
-    notifyBackgroundWorkSettled(completion: BackgroundSubagentCompletion): void {
-      onBackgroundSubagentSettled?.(completion);
-    },
-    reset(): void {
-      subagentSessions.clear();
-      subagentRegistry.clear();
-      subagentOutlines.clear();
-      emitSubagentsChanged();
-    },
-    isAborting: (id: string): boolean => abortingSubagents.has(id),
-    isRunning: (id: string): boolean => backgroundSubagentRuns.has(id),
+    sessions: sessions,
+    registryEntries: () => registry.entries(),
+    notifyBackgroundWorkSettled,
+    reset,
+    isAborting: (id: string): boolean => aborting.has(id),
+    isRunning: (id: string): boolean => backgroundRuns.has(id),
     dispatchBackgroundSubagent,
     startBackgroundSubagentTurn,
     listRunningSubagents,
@@ -506,30 +537,30 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     steerSubagent,
     abortSubagent,
     listSubagents,
-    hasSubagent: (id: string): boolean => subagentRegistry.has(id),
+    hasSubagent: (id: string): boolean => registry.has(id),
     hasRunningSubagents(): boolean {
-      return [...subagentRegistry.values()].some(
+      return [...registry.values()].some(
         (record) => record.status === "running",
       );
     },
     getSubagentOutline,
     async drainBackgroundSubagents(): Promise<void> {
-      await Promise.allSettled([...backgroundSubagentRuns.values()]);
+      await Promise.allSettled([...backgroundRuns.values()]);
     },
     setBackgroundSubagentHandler(
       handler: (completion: BackgroundSubagentCompletion) => void,
     ): void {
-      onBackgroundSubagentSettled = handler;
+      onSettled = handler;
     },
     setBackgroundSubagentDispatchHandler(
-      handler: NonNullable<typeof onBackgroundSubagentDispatched>,
+      handler: NonNullable<typeof onDispatched>,
     ): void {
-      onBackgroundSubagentDispatched = handler;
+      onDispatched = handler;
     },
     setSubagentEventHandler(
-      handler: NonNullable<typeof onSubagentsChanged>,
+      handler: NonNullable<typeof onChanged>,
     ): void {
-      onSubagentsChanged = handler;
+      onChanged = handler;
     },
   };
 }
