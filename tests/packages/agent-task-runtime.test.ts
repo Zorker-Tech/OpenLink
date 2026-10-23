@@ -510,3 +510,38 @@ test("a cloud-only field without the cloud environment is refused, and blank doe
     /cloud_requested_environment_build_id may only be specified when environment equals cloud\./,
   )
 })
+
+test("a generic parent's default keeps the parent's own placeholder model", async () => {
+  assert.equal(await resolve(config({ defaultModelIds: ["other-model"] }), { parentModelId: "genericbase-1" }), "genericbase-1")
+})
+
+test("an auto parent with a user default still uses the user's model", async () => {
+  assert.equal(await resolve(config({ userRequestedModelId: "composer-2-fast" }), { parentModelId: "auto-medium" }), "composer-2-fast")
+})
+
+test("a pin policy without a pinned model does not refuse the call", async () => {
+  assert.equal(await resolve(config(), { policy: SubagentModelForcePolicy.ParentPin }), "composer-2")
+})
+
+test("an auto parent naming its own placeholder is refused rather than taken", async () => {
+  // The placeholder is not a catalogue model, so naming it is not the same as naming the parent's model.
+  await assert.rejects(
+    () => resolve(config(), { requestedModel: "default", parentModelId: "default" }),
+    /Invalid model selection "default"\./,
+  )
+})
+
+test("a forced default is not overridden by the request", async () => {
+  assert.equal(await resolve(config({ forceDefaultModel: true }), { requestedModel: "other-model" }), "composer-2")
+})
+
+test("a blocked user default falls back to the parent's model", async () => {
+  assert.equal(await resolve(config({ userRequestedModelId: "composer-2-fast" }), { blocked: ["composer-2-fast"] }), "composer-2")
+})
+
+test("inheriting the parent's model for exploring needs an explore subagent", async () => {
+  // The parent's model is on the catalogue and is not a default placeholder, so only the type stops the inheritance.
+  const resolved = await resolve(config({ defaultModelIds: ["composer-2-fast"] }), { enableExploreParentModelInheritance: true, parentModelId: "other-model" })
+  assert.equal(resolved, "composer-2-fast")
+})
+
