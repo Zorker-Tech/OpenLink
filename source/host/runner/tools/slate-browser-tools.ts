@@ -1,7 +1,7 @@
 /**
  * The tools an agent drives a browser with.
  *
- * What the agent asks for — navigating, reading a page, clicking, filling, screenshotting — is carried to the driver
+ * What the agent asks for — navigating, reading a page, clicking, filling, screenshotting — is carried to the driverClient
  * running in the page, and what comes back is what the page answered.
  */
 import { Buffer } from "node:buffer";
@@ -28,15 +28,15 @@ import {
 export const BOX_CDP_PORT_BASE = 9_222;
 export const PENDING_SCREENSHOT_CAP = 32;
 
-const pendingScreenshots = new Map<string, string>();
+const stashedShots = new Map<string, string>();
 
 export function stashScreenshot(imageB64: string): string {
   const key = `shot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  if (pendingScreenshots.size >= PENDING_SCREENSHOT_CAP) {
-    const oldest = pendingScreenshots.keys().next().value;
-    if (oldest !== undefined) pendingScreenshots.delete(oldest);
+  if (stashedShots.size >= PENDING_SCREENSHOT_CAP) {
+    const oldestKey = stashedShots.keys().next().value;
+    if (oldestKey !== undefined) stashedShots.delete(oldestKey);
   }
-  pendingScreenshots.set(key, imageB64);
+  stashedShots.set(key, imageB64);
   return key;
 }
 
@@ -51,18 +51,18 @@ export function encodeEnvelope(envelope: BrowserEnvelope): string {
 
 export function decodeEnvelope(raw: string): BrowserEnvelope {
   try {
-    const parsed: unknown = JSON.parse(raw);
+    const parsedValue: unknown = JSON.parse(raw);
     if (
-      typeof parsed === "object"
-      && parsed !== null
-      && "text" in parsed
-      && typeof parsed.text === "string"
+      typeof parsedValue === "object"
+      && parsedValue !== null
+      && "text" in parsedValue
+      && typeof parsedValue.text === "string"
     ) {
       return {
-        text: parsed.text,
+        text: parsedValue.text,
         ...(
-          "imageKey" in parsed && typeof parsed.imageKey === "string"
-            ? { imageKey: parsed.imageKey }
+          "imageKey" in parsedValue && typeof parsedValue.imageKey === "string"
+            ? { imageKey: parsedValue.imageKey }
             : {}
         ),
       };
@@ -82,7 +82,7 @@ export interface BrowserDriverResponse {
   readonly screenshot?: boolean | undefined;
 }
 
-function optionalString(
+function stringFieldOf(
   object: Record<string, unknown>,
   key: string,
 ): string | undefined {
@@ -90,7 +90,7 @@ function optionalString(
   return typeof value === "string" ? value : undefined;
 }
 
-function optionalBoolean(
+function booleanFieldOf(
   object: Record<string, unknown>,
   key: string,
 ): boolean | undefined {
@@ -99,31 +99,31 @@ function optionalBoolean(
 }
 
 export function toDriverResponse(
-  parsed: Record<string, unknown>,
+  parsedValue: Record<string, unknown>,
 ): BrowserDriverResponse {
   return {
-    ok: optionalBoolean(parsed, "ok") ?? false,
-    ...(optionalString(parsed, "error") == null
+    ok: booleanFieldOf(parsedValue, "ok") ?? false,
+    ...(stringFieldOf(parsedValue, "error") == null
       ? {}
-      : { error: optionalString(parsed, "error") }),
-    ...(optionalString(parsed, "summary") == null
+      : { error: stringFieldOf(parsedValue, "error") }),
+    ...(stringFieldOf(parsedValue, "summary") == null
       ? {}
-      : { summary: optionalString(parsed, "summary") }),
-    ...(optionalString(parsed, "data") == null
+      : { summary: stringFieldOf(parsedValue, "summary") }),
+    ...(stringFieldOf(parsedValue, "data") == null
       ? {}
-      : { data: optionalString(parsed, "data") }),
-    ...(optionalString(parsed, "url") == null
+      : { data: stringFieldOf(parsedValue, "data") }),
+    ...(stringFieldOf(parsedValue, "url") == null
       ? {}
-      : { url: optionalString(parsed, "url") }),
-    ...(optionalString(parsed, "title") == null
+      : { url: stringFieldOf(parsedValue, "url") }),
+    ...(stringFieldOf(parsedValue, "title") == null
       ? {}
-      : { title: optionalString(parsed, "title") }),
-    ...(optionalString(parsed, "viewId") == null
+      : { title: stringFieldOf(parsedValue, "title") }),
+    ...(stringFieldOf(parsedValue, "viewId") == null
       ? {}
-      : { viewId: optionalString(parsed, "viewId") }),
-    ...(optionalBoolean(parsed, "screenshot") == null
+      : { viewId: stringFieldOf(parsedValue, "viewId") }),
+    ...(booleanFieldOf(parsedValue, "screenshot") == null
       ? {}
-      : { screenshot: optionalBoolean(parsed, "screenshot") }),
+      : { screenshot: booleanFieldOf(parsedValue, "screenshot") }),
   };
 }
 
@@ -133,18 +133,18 @@ export function parseDriverResponse(
   const lines = stdout.split("\n");
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index] ?? "";
-    const markerIndex = line.indexOf(SLATE_BROWSER_RESULT_MARKER);
-    if (markerIndex < 0) continue;
+    const markerAt = line.indexOf(SLATE_BROWSER_RESULT_MARKER);
+    if (markerAt < 0) continue;
     try {
-      const parsed: unknown = JSON.parse(
-        line.slice(markerIndex + SLATE_BROWSER_RESULT_MARKER.length),
+      const parsedValue: unknown = JSON.parse(
+        line.slice(markerAt + SLATE_BROWSER_RESULT_MARKER.length),
       );
       if (
-        typeof parsed === "object"
-        && parsed !== null
-        && !Array.isArray(parsed)
+        typeof parsedValue === "object"
+        && parsedValue !== null
+        && !Array.isArray(parsedValue)
       ) {
-        return toDriverResponse(parsed as Record<string, unknown>);
+        return toDriverResponse(parsedValue as Record<string, unknown>);
       }
     } catch {
       return undefined;
@@ -154,8 +154,8 @@ export function parseDriverResponse(
 }
 
 export function sanitizeForBoxPath(value: string): string {
-  const cleaned = value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
-  return cleaned.length > 0 ? cleaned : `call-${Date.now()}`;
+  const sanitized = value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
+  return sanitized.length > 0 ? sanitized : `call-${Date.now()}`;
 }
 
 export class SlateBrowserDriverError extends Error {
@@ -164,22 +164,22 @@ export class SlateBrowserDriverError extends Error {
 
 export interface BrowserDriverDependencies<Context> {
   readonly resourceAccessor: { get(resource: unknown): unknown };
-  getWindowIndex(context: Context): Promise<number | undefined>;
+  getWindowIndex(browserCtx: Context): Promise<number | undefined>;
   getBoxId(): string;
   getDefaultViewId(): string;
   uploadFile(
-    context: Context,
+    browserCtx: Context,
     boxId: string,
     path: string,
-    bytes: Uint8Array,
+    fileBytes: Uint8Array,
   ): Promise<void>;
   downloadFile(
-    context: Context,
+    browserCtx: Context,
     boxId: string,
     path: string,
   ): Promise<Uint8Array>;
   executeShell(
-    context: Context,
+    browserCtx: Context,
     input: {
       command: string;
       name: string;
@@ -193,7 +193,7 @@ export interface BrowserDriverDependencies<Context> {
     readonly exitCode?: number;
   }>;
   getPersistImage?():
-    | ((bytes: Uint8Array, mimeType: string) => Promise<unknown>)
+    | ((fileBytes: Uint8Array, mimeType: string) => Promise<unknown>)
     | undefined;
   readonly autoReview?: SlateBrowserAutoReviewOptions;
 }
@@ -208,10 +208,10 @@ export class SlateBrowserDriver<Context = unknown> {
   #uploaded: Promise<void> | undefined;
   #windowIndex: Promise<number> | undefined;
 
-  constructor(readonly dependencies: BrowserDriverDependencies<Context>) {}
+  constructor(readonly ports: BrowserDriverDependencies<Context>) {}
 
-  resolveWindowIndex(context: Context): Promise<number> {
-    this.#windowIndex ??= this.dependencies.getWindowIndex(context)
+  windowIndexFor(browserCtx: Context): Promise<number> {
+    this.#windowIndex ??= this.ports.getWindowIndex(browserCtx)
       .then((index) => {
         if (index === undefined) {
           this.#windowIndex = undefined;
@@ -232,10 +232,10 @@ export class SlateBrowserDriver<Context = unknown> {
     return this.#windowIndex;
   }
 
-  ensureUploaded(context: Context): Promise<void> {
-    this.#uploaded ??= this.dependencies.uploadFile(
-      context,
-      this.dependencies.getBoxId(),
+  ensureDriverUploaded(browserCtx: Context): Promise<void> {
+    this.#uploaded ??= this.ports.uploadFile(
+      browserCtx,
+      this.ports.getBoxId(),
       SLATE_BROWSER_DRIVER_BOX_PATH,
       Buffer.from(SLATE_BROWSER_DRIVER_SOURCE, "utf8"),
     ).catch((error: unknown) => {
@@ -248,7 +248,7 @@ export class SlateBrowserDriver<Context = unknown> {
   }
 
   async run(
-    context: Context,
+    browserCtx: Context,
     input: {
       readonly op: string;
       readonly toolCallId: string;
@@ -257,91 +257,91 @@ export class SlateBrowserDriver<Context = unknown> {
     },
   ): Promise<BrowserDriverOutput> {
     const [windowIndex] = await Promise.all([
-      this.resolveWindowIndex(context),
-      this.ensureUploaded(context),
+      this.windowIndexFor(browserCtx),
+      this.ensureDriverUploaded(browserCtx),
     ]);
 
-    const screenshotPath = input.skipScreenshot === true
+    const shotPath = input.skipScreenshot === true
       ? undefined
       : `${SLATE_BROWSER_DRIVER_BOX_DIR}/shot-${sanitizeForBoxPath(input.toolCallId)}.png`;
-    const requestedViewId = input.args.viewId;
-    const request = {
+    const viewIdArg = input.args.viewId;
+    const driverRequest = {
       ...input.args,
       op: input.op,
       display: windowIndex,
       cdpPort: BOX_CDP_PORT_BASE + windowIndex,
-      viewId: typeof requestedViewId === "string" && requestedViewId.length > 0
-        ? requestedViewId
-        : this.dependencies.getDefaultViewId(),
-      ...(screenshotPath == null ? {} : { screenshotPath }),
+      viewId: typeof viewIdArg === "string" && viewIdArg.length > 0
+        ? viewIdArg
+        : this.ports.getDefaultViewId(),
+      ...(shotPath == null ? {} : { shotPath }),
     };
-    const encoded = Buffer.from(
-      JSON.stringify(request),
+    const encodedRequest = Buffer.from(
+      JSON.stringify(driverRequest),
       "utf8",
     ).toString("base64");
 
-    const shell = await this.dependencies.executeShell(context, {
-      command: `node ${SLATE_BROWSER_DRIVER_BOX_PATH} ${encoded}`,
+    const shellRun = await this.ports.executeShell(browserCtx, {
+      command: `node ${SLATE_BROWSER_DRIVER_BOX_PATH} ${encodedRequest}`,
       name: "node",
       workingDirectory: "/workspace",
       toolCallId: `slate-browser-${input.op}-${sanitizeForBoxPath(input.toolCallId)}`,
     });
-    if (shell.case !== "success") {
+    if (shellRun.case !== "success") {
       throw new SlateBrowserDriverError(
-        `Browser driver shell failed (${shell.case || "unknown"})`,
+        `Browser driver shell failed (${shellRun.case || "unknown"})`,
       );
     }
 
-    const response = parseDriverResponse(shell.stdout ?? "");
-    if (response === undefined) {
-      const detail = [shell.stderr ?? "", shell.stdout ?? ""]
+    const driverReply = parseDriverResponse(shellRun.stdout ?? "");
+    if (driverReply === undefined) {
+      const failureDetail = [shellRun.stderr ?? "", shellRun.stdout ?? ""]
         .map((part) => part.trim().slice(-400))
         .filter((part) => part.length > 0)
         .join(" | ");
       throw new SlateBrowserDriverError(
-        `Browser driver produced no result (exit ${shell.exitCode ?? "unknown"})${detail.length > 0 ? `: ${detail}` : ""}`,
+        `Browser driver produced no result (exit ${shellRun.exitCode ?? "unknown"})${failureDetail.length > 0 ? `: ${failureDetail}` : ""}`,
       );
     }
-    if (!response.ok) {
+    if (!driverReply.ok) {
       return {
-        text: response.error ?? "The browser action failed.",
+        text: driverReply.error ?? "The browser action failed.",
         isError: true,
       };
     }
 
-    const parts = [response.summary ?? "Done."];
-    if (response.url != null && response.url.length > 0) {
-      parts.push(`Current page: ${response.title ?? ""} (${response.url})`);
+    const sections = [driverReply.summary ?? "Done."];
+    if (driverReply.url != null && driverReply.url.length > 0) {
+      sections.push(`Current page: ${driverReply.title ?? ""} (${driverReply.url})`);
     }
-    if (response.data != null && response.data.length > 0) {
-      parts.push(response.data);
+    if (driverReply.data != null && driverReply.data.length > 0) {
+      sections.push(driverReply.data);
     }
 
-    const imageB64 = response.screenshot === true && screenshotPath != null
-      ? await this.fetchScreenshot(context, screenshotPath)
+    const imageB64 = driverReply.screenshot === true && shotPath != null
+      ? await this.downloadScreenshot(browserCtx, shotPath)
       : undefined;
     return {
-      text: parts.join("\n\n"),
+      text: sections.join("\n\n"),
       ...(imageB64 == null ? {} : { imageB64 }),
     };
   }
 
-  async fetchScreenshot(
-    context: Context,
+  async downloadScreenshot(
+    browserCtx: Context,
     boxPath: string,
   ): Promise<string | undefined> {
     try {
-      const bytes = await this.dependencies.downloadFile(
-        context,
-        this.dependencies.getBoxId(),
+      const fileBytes = await this.ports.downloadFile(
+        browserCtx,
+        this.ports.getBoxId(),
         boxPath,
       );
-      if (bytes.length === 0) return undefined;
-      const persistImage = this.dependencies.getPersistImage?.();
+      if (fileBytes.length === 0) return undefined;
+      const persistImage = this.ports.getPersistImage?.();
       if (persistImage != null) {
-        await persistImage(bytes, "image/png").catch(() => null);
+        await persistImage(fileBytes, "image/png").catch(() => null);
       }
-      return Buffer.from(bytes).toString("base64");
+      return Buffer.from(fileBytes).toString("base64");
     } catch {
       return undefined;
     }
@@ -377,17 +377,17 @@ export interface BrowserReviewAction {
   readonly modifiers?: readonly string[] | undefined;
 }
 
-const BROWSER_REVIEW_STATE_MARKER = "__SLATE_BROWSER_VIEW_STATE__";
+const REVIEW_STATE_MARKER = "__SLATE_BROWSER_VIEW_STATE__";
 
-function resolveBrowserTargetPageUrl(
+function targetPageUrlOf(
   probeStdout: string,
   stateJson: string,
   viewId: string,
 ): string | undefined {
-  let parsed: unknown;
-  try { parsed = JSON.parse(stateJson); } catch { parsed = undefined; }
-  const fields = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
+  let parsedValue: unknown;
+  try { parsedValue = JSON.parse(stateJson); } catch { parsedValue = undefined; }
+  const fields = parsedValue !== null && typeof parsedValue === "object" && !Array.isArray(parsedValue)
+    ? parsedValue as Record<string, unknown>
     : {};
   const views = fields.views !== null && typeof fields.views === "object" && !Array.isArray(fields.views)
     ? fields.views as Record<string, unknown>
@@ -395,31 +395,31 @@ function resolveBrowserTargetPageUrl(
   const urls = fields.urls !== null && typeof fields.urls === "object" && !Array.isArray(fields.urls)
     ? fields.urls as Record<string, unknown>
     : {};
-  const targetId = views[viewId];
-  if (typeof targetId === "string" && targetId.length > 0) {
-    const target = parseNavigationProbeOutput(probeStdout).find(candidate => candidate.type === "page" && candidate.id === targetId);
-    const url = typeof target?.url === "string" ? normalizeNavigationUrl(target.url) : undefined;
+  const viewTargetId = views[viewId];
+  if (typeof viewTargetId === "string" && viewTargetId.length > 0) {
+    const pageTarget = parseNavigationProbeOutput(probeStdout).find(candidatePage => candidatePage.type === "page" && candidatePage.id === viewTargetId);
+    const url = typeof pageTarget?.url === "string" ? normalizeNavigationUrl(pageTarget.url) : undefined;
     if (url !== undefined) return url;
   }
   return typeof urls[viewId] === "string" ? normalizeNavigationUrl(urls[viewId] as string) : undefined;
 }
 
-async function captureBrowserReviewState(args: {
+async function captureReviewState(args: {
   readonly ctx: OperationContext;
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>;
   readonly toolCallId: string;
   readonly resolveDisplayNumber: (ctx: OperationContext) => Promise<number | undefined>;
   readonly viewId?: string;
-}): Promise<{ displayStateIdentity: string; targetPageUrl?: string }> {
-  let displayNumber: number | undefined;
-  try { displayNumber = await args.resolveDisplayNumber(args.ctx); } catch {
+}): Promise<{ displayStateIdentity: string; pageUrl?: string }> {
+  let displayIndex: number | undefined;
+  try { displayIndex = await args.resolveDisplayNumber(args.ctx); } catch {
     throw new SlateBrowserAutoReviewBlockedError("Browser Auto-review could not identify this agent's own display; retry once the box desktop is ready.");
   }
-  if (displayNumber === undefined) throw new SlateBrowserAutoReviewBlockedError(SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE);
+  if (displayIndex === undefined) throw new SlateBrowserAutoReviewBlockedError(SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE);
   let result: any;
   try {
     result = await (args.resourceAccessor.get(shellExecutorResource) as { execute(ctx: OperationContext, args: unknown): Promise<any> }).execute(args.ctx, buildHostShellArgs({
-      command: `${navigationProbeCommand(displayNumber)} && echo ${BROWSER_REVIEW_STATE_MARKER} && (cat ${SLATE_BROWSER_DRIVER_BOX_DIR}/views-${displayNumber}.json 2>/dev/null || true)`,
+      command: `${navigationProbeCommand(displayIndex)} && echo ${REVIEW_STATE_MARKER} && (cat ${SLATE_BROWSER_DRIVER_BOX_DIR}/views-${displayIndex}.json 2>/dev/null || true)`,
       name: "curl",
       workingDirectory: "/workspace",
       toolCallId: `${args.toolCallId}:auto-review-state`,
@@ -430,18 +430,18 @@ async function captureBrowserReviewState(args: {
   if (result?.result?.case !== "success") throw new SlateBrowserAutoReviewBlockedError("Browser Auto-review could not capture the current page state.");
   if (result.result.value.exitCode !== 0) return { displayStateIdentity: "chrome-unreachable" };
   const stdout = result.result.value.stdout ?? "";
-  const markerIndex = stdout.indexOf(BROWSER_REVIEW_STATE_MARKER);
-  const probePart = markerIndex >= 0 ? stdout.slice(0, markerIndex) : stdout;
-  const statePart = markerIndex >= 0 ? stdout.slice(markerIndex + BROWSER_REVIEW_STATE_MARKER.length) : "";
-  const targetPageUrl = args.viewId === undefined ? undefined : resolveBrowserTargetPageUrl(probePart, statePart.trim(), args.viewId);
-  const pageIdentity = parseNavigationProbeOutput(probePart)
-    .filter(target => target.type === "page" && typeof target.id === "string")
-    .map(target => `${String(target.id)}\t${typeof target.url === "string" ? String(target.url).trim() : ""}`)
+  const markerAt = stdout.indexOf(REVIEW_STATE_MARKER);
+  const probeText = markerAt >= 0 ? stdout.slice(0, markerAt) : stdout;
+  const stateText = markerAt >= 0 ? stdout.slice(markerAt + REVIEW_STATE_MARKER.length) : "";
+  const pageUrl = args.viewId === undefined ? undefined : targetPageUrlOf(probeText, stateText.trim(), args.viewId);
+  const pageState = parseNavigationProbeOutput(probeText)
+    .filter(pageTarget => pageTarget.type === "page" && typeof pageTarget.id === "string")
+    .map(pageTarget => `${String(pageTarget.id)}\t${typeof pageTarget.url === "string" ? String(pageTarget.url).trim() : ""}`)
     .sort()
     .join("\n");
   return {
-    displayStateIdentity: createHash("sha256").update(pageIdentity).digest("hex"),
-    ...(targetPageUrl === undefined ? {} : { targetPageUrl }),
+    displayStateIdentity: createHash("sha256").update(pageState).digest("hex"),
+    ...(pageUrl === undefined ? {} : { pageUrl }),
   };
 }
 
@@ -532,11 +532,11 @@ export interface BrowserToolDefinition<Context> {
   readonly canNavigate?: boolean;
   readonly skipScreenshot?: boolean;
   execute(
-    context: Context,
+    browserCtx: Context,
     args: Record<string, unknown>,
-    metadata: { readonly toolCallId: string; readonly stateHandler?: unknown; readonly workspacePaths?: readonly string[] },
+    callContext: { readonly toolCallId: string; readonly stateHandler?: unknown; readonly workspacePaths?: readonly string[] },
   ): Promise<BrowserDriverOutput>;
-  render(output: BrowserDriverOutput): {
+  render(driverOutput: BrowserDriverOutput): {
     readonly kind: "text" | "image";
     readonly text: string;
     readonly imageB64?: string;
@@ -544,7 +544,7 @@ export interface BrowserToolDefinition<Context> {
   };
 }
 
-interface BrowserToolSpec {
+interface BrowserToolNote {
   readonly id: string;
   readonly name: string;
   readonly description: string;
@@ -554,7 +554,7 @@ interface BrowserToolSpec {
   readonly skipScreenshot?: boolean;
 }
 
-const BROWSER_TOOL_SPECS: readonly BrowserToolSpec[] = [
+const BROWSER_TOOL_NOTES: readonly BrowserToolNote[] = [
   { id: "BROWSER_NAVIGATE", name: "browser_navigate", op: "navigate", description: "Navigate the box browser to a URL. By default reuses your tab; set newTab: true to open in a new tab. Returns the resulting page state with a screenshot.", schema: { required: ["url"] }, canNavigate: true },
   { id: "BROWSER_SNAPSHOT", name: "browser_snapshot", op: "snapshot", description: "Capture a structured snapshot of the current page with [ref=eN] handles for interactive elements. This is the source of truth for page structure; refs are tied to the latest snapshot for that tab. Better than a screenshot for deciding what to click or type." },
   { id: "BROWSER_CLICK", name: "browser_click", op: "click", description: "Click an element by ref from browser_snapshot. Scrolls the element into view first.", schema: { required: ["ref"] }, canNavigate: true },
@@ -572,7 +572,7 @@ const BROWSER_TOOL_SPECS: readonly BrowserToolSpec[] = [
   { id: "BROWSER_TAKE_SCREENSHOT", name: "browser_take_screenshot", op: "screenshot", description: "Take a screenshot of the current page. Usually redundant: every browser action already returns one. Use fullPage for the full scrollable page." },
 ];
 
-function validateArguments(
+function assertArguments(
   schema: BrowserToolSchema,
   args: Record<string, unknown>,
 ): void {
@@ -591,55 +591,55 @@ function validateArguments(
 }
 
 export function createSlateBrowserTools<Context>(
-  dependencies: BrowserDriverDependencies<Context> & {
-    readonly onPossibleNavigation?: (context: Context) => void;
+  ports: BrowserDriverDependencies<Context> & {
+    readonly onPossibleNavigation?: (browserCtx: Context) => void;
   },
 ): BrowserToolDefinition<Context>[] {
-  const driver = new SlateBrowserDriver(dependencies);
-  return BROWSER_TOOL_SPECS.map((spec) => ({
-    id: spec.id,
-    name: spec.name,
-    description: spec.description,
-    op: spec.op,
-    schema: spec.schema ?? {},
-    ...(spec.canNavigate === true ? { canNavigate: true } : {}),
-    ...(spec.skipScreenshot === true ? { skipScreenshot: true } : {}),
-    async execute(context, args, metadata) {
+  const driverClient = new SlateBrowserDriver(ports);
+  return BROWSER_TOOL_NOTES.map((note) => ({
+    id: note.id,
+    name: note.name,
+    description: note.description,
+    op: note.op,
+    schema: note.schema ?? {},
+    ...(note.canNavigate === true ? { canNavigate: true } : {}),
+    ...(note.skipScreenshot === true ? { skipScreenshot: true } : {}),
+    async execute(browserCtx, args, callContext) {
       try {
-        validateArguments(spec.schema ?? {}, args);
-        if (dependencies.autoReview !== undefined) {
-          const exactAction = toBrowserReviewAction(spec.op, args, dependencies.getDefaultViewId());
+        assertArguments(note.schema ?? {}, args);
+        if (ports.autoReview !== undefined) {
+          const exactAction = toBrowserReviewAction(note.op, args, ports.getDefaultViewId());
           await runSlateBrowserAutoReviewPreflight({
-            ctx: context as unknown as OperationContext,
-            resourceAccessor: dependencies.resourceAccessor as ResourceAccessor<RemoteExecManager>,
+            ctx: browserCtx as unknown as OperationContext,
+            resourceAccessor: ports.resourceAccessor as ResourceAccessor<RemoteExecManager>,
             options: {
-              ...dependencies.autoReview,
-              captureReviewState: (stateCtx, stateToolCallId) => captureBrowserReviewState({
+              ...ports.autoReview,
+              captureReviewState: (stateCtx, stateToolCallId) => captureReviewState({
                 ctx: stateCtx,
-                resourceAccessor: dependencies.resourceAccessor as ResourceAccessor<RemoteExecManager>,
+                resourceAccessor: ports.resourceAccessor as ResourceAccessor<RemoteExecManager>,
                 toolCallId: stateToolCallId,
-                resolveDisplayNumber: dependencies.autoReview!.resolveDisplayNumber,
-                ...(spec.op !== "tabs" && exactAction.viewId === undefined ? {} : { viewId: exactAction.viewId }),
+                resolveDisplayNumber: ports.autoReview!.resolveDisplayNumber,
+                ...(note.op !== "tabs" && exactAction.viewId === undefined ? {} : { viewId: exactAction.viewId }),
               }),
             },
             exactAction,
-            toolCallId: metadata.toolCallId,
-            ...(metadata.stateHandler === undefined ? {} : { stateHandler: metadata.stateHandler }),
-            ...(metadata.workspacePaths === undefined ? {} : { workspacePaths: metadata.workspacePaths }),
+            toolCallId: callContext.toolCallId,
+            ...(callContext.stateHandler === undefined ? {} : { stateHandler: callContext.stateHandler }),
+            ...(callContext.workspacePaths === undefined ? {} : { workspacePaths: callContext.workspacePaths }),
           });
         }
-        const output = await driver.run(context, {
-          op: spec.op,
-          toolCallId: metadata.toolCallId,
+        const driverOutput = await driverClient.run(browserCtx, {
+          op: note.op,
+          toolCallId: callContext.toolCallId,
           args,
-          ...(spec.skipScreenshot === undefined
+          ...(note.skipScreenshot === undefined
             ? {}
-            : { skipScreenshot: spec.skipScreenshot }),
+            : { skipScreenshot: note.skipScreenshot }),
         });
-        if (spec.canNavigate === true && output.isError !== true) {
-          dependencies.onPossibleNavigation?.(context);
+        if (note.canNavigate === true && driverOutput.isError !== true) {
+          ports.onPossibleNavigation?.(browserCtx);
         }
-        return output;
+        return driverOutput;
       } catch (error) {
         return {
           text: error instanceof Error ? error.message : String(error),
@@ -647,22 +647,22 @@ export function createSlateBrowserTools<Context>(
         };
       }
     },
-    render(output) {
-      if (output.imageB64 != null && output.imageB64.length > 0) {
-        const key = stashScreenshot(output.imageB64);
-        const image = pendingScreenshots.get(key);
-        pendingScreenshots.delete(key);
+    render(driverOutput) {
+      if (driverOutput.imageB64 != null && driverOutput.imageB64.length > 0) {
+        const key = stashScreenshot(driverOutput.imageB64);
+        const image = stashedShots.get(key);
+        stashedShots.delete(key);
         return {
           kind: "image",
-          text: output.text,
+          text: driverOutput.text,
           ...(image == null ? {} : { imageB64: image }),
-          ...(output.isError === true ? { isError: true } : {}),
+          ...(driverOutput.isError === true ? { isError: true } : {}),
         };
       }
       return {
         kind: "text",
-        text: output.text,
-        ...(output.isError === true ? { isError: true } : {}),
+        text: driverOutput.text,
+        ...(driverOutput.isError === true ? { isError: true } : {}),
       };
     },
   }));
