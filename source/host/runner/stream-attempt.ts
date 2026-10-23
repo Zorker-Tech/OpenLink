@@ -13,79 +13,79 @@ export interface StreamAttemptHost<Context, Checkpoint, State> {
   readonly transientStreamRetry?: RetryPolicy;
   setStreamOutputProduced(value: boolean): void; getStreamOutputProduced(): boolean;
   persistCheckpoint(ctx: Context, checkpoint: Checkpoint, accepted: (persisted: Checkpoint) => void): Promise<void>;
-  startStream(ctx: Context, resumeFrom: Checkpoint | undefined, persist: (ctx: Context, checkpoint: Checkpoint) => Promise<void>): Promise<State>;
-  createDeadlineTimer(callback: () => void, deadlineMs: number): { cancel(): void; restart(): void };
-  setDeadlineHooks(disarm: () => void, reset: () => void): void;
-  clearDeadlineHookIf(disarm: () => void, reset: () => void): void;
+  startStream(ctx: Context, resumeFrom: Checkpoint | undefined, persistIfCurrent: (ctx: Context, checkpoint: Checkpoint) => Promise<void>): Promise<State>;
+  createDeadlineTimer(callback: () => void, stallDeadline: number): { cancel(): void; restart(): void };
+  setDeadlineHooks(stopDeadline: () => void, restartDeadline: () => void): void;
+  clearDeadlineHookIf(stopDeadline: () => void, restartDeadline: () => void): void;
   setTraceAttributes(attributes: Readonly<Record<string, number>>): void;
   emitRetrying(): void;
   reportTurnRetry(info: { outcome: "retried" | "exhausted" | "gave_up_ineligible"; attempt: number; maxAttempts: number; delayMs?: number; serverPaced?: boolean; error: unknown }): void;
 }
 
 export function createStreamAttempt<Context, Checkpoint, State>(host: StreamAttemptHost<Context, Checkpoint, State>) {
-  let attemptResumeCheckpoint: Checkpoint | undefined, resumeStreamFrom: Checkpoint | undefined;
-  const inactive = {}, activeRef: { value: object } = { value: inactive };
-  let retriesPerformed = 0;
+  let latestCheckpoint: Checkpoint | undefined, resumeStreamFrom: Checkpoint | undefined;
+  const idleToken = {}, tokenRef: { value: object } = { value: idleToken };
+  let retryCount = 0;
 
-  const runStreamOnce = async (): Promise<State> => {
-    host.setStreamOutputProduced(false); attemptResumeCheckpoint = undefined;
+  const attemptStreamOnce = async (): Promise<State> => {
+    host.setStreamOutputProduced(false); latestCheckpoint = undefined;
     const [attemptCtx, cancelAttempt] = host.ctx.withCancel();
-    const attempt = {}; activeRef.value = attempt;
-    const current = (): boolean => activeRef.value === attempt;
-    const settle = (): void => { if (current()) activeRef.value = inactive; };
-    const operations = new Set<Promise<void>>(); let checkpointFailure: unknown;
-    const persist = async (ctx: Context, checkpoint: Checkpoint): Promise<void> => {
-      if (!current()) return;
-      const operation = Promise.resolve().then(() => host.persistCheckpoint(ctx, checkpoint, (persisted) => { attemptResumeCheckpoint = persisted; }));
-      operations.add(operation);
-      try { await operation; } catch (error) { checkpointFailure ??= error; throw error; } finally { operations.delete(operation); }
+    const attempt = {}; tokenRef.value = attempt;
+    const isCurrentAttempt = (): boolean => tokenRef.value === attempt;
+    const retireAttempt = (): void => { if (isCurrentAttempt()) tokenRef.value = idleToken; };
+    const pendingWrites = new Set<Promise<void>>(); let writeFailure: unknown;
+    const persistIfCurrent = async (ctx: Context, checkpoint: Checkpoint): Promise<void> => {
+      if (!isCurrentAttempt()) return;
+      const writeOperation = Promise.resolve().then(() => host.persistCheckpoint(ctx, checkpoint, (persisted) => { latestCheckpoint = persisted; }));
+      pendingWrites.add(writeOperation);
+      try { await writeOperation; } catch (error) { writeFailure ??= error; throw error; } finally { pendingWrites.delete(writeOperation); }
     };
-    let stream: Promise<State>;
-    try { stream = host.startStream(attemptCtx, resumeStreamFrom, persist); } catch (error) { settle(); throw error; }
-    const base = resolveFirstTokenStallDeadlineMs();
-    if (base <= 0) {
-      try { const state = await stream; if (checkpointFailure != null) throw checkpointFailure; return state; }
-      catch (error) { throw checkpointFailure ?? error; } finally { settle(); }
+    let streamPromise: Promise<State>;
+    try { streamPromise = host.startStream(attemptCtx, resumeStreamFrom, persistIfCurrent); } catch (error) { retireAttempt(); throw error; }
+    const stallBase = resolveFirstTokenStallDeadlineMs();
+    if (stallBase <= 0) {
+      try { const streamState = await streamPromise; if (writeFailure != null) throw writeFailure; return streamState; }
+      catch (error) { throw writeFailure ?? error; } finally { retireAttempt(); }
     }
-    const deadlineMs = base * 2 ** retriesPerformed;
+    const stallDeadline = stallBase * 2 ** retryCount;
     return new Promise<State>((resolve, reject) => {
-      let settled = false, deadlineFired = false;
-      const onDeadline = (): void => {
-        if (settled || host.getStreamOutputProduced()) return;
-        settled = true; deadlineFired = true; settle(); cancelAttempt({ intentional: false, reason: "first-token stall" });
-        void Promise.allSettled(operations).then((results) => reject(checkpointFailure ?? results.find((result) => result.status === "rejected")?.reason ?? new FirstTokenStallError(deadlineMs)));
+      let isSettled = false, stallTaken = false;
+      const handleStall = (): void => {
+        if (isSettled || host.getStreamOutputProduced()) return;
+        isSettled = true; stallTaken = true; retireAttempt(); cancelAttempt({ intentional: false, reason: "first-token stall" });
+        void Promise.allSettled(pendingWrites).then((settledWrites) => reject(writeFailure ?? settledWrites.find((result) => result.status === "rejected")?.reason ?? new FirstTokenStallError(stallDeadline)));
       };
-      const timer = host.createDeadlineTimer(onDeadline, deadlineMs);
-      const disarm = (): void => { settled = true; timer.cancel(); host.clearDeadlineHookIf(disarm, reset); };
-      const reset = (): void => { if (!settled && !host.getStreamOutputProduced()) timer.restart(); };
-      host.setDeadlineHooks(disarm, reset);
-      void stream.then((state) => { if (deadlineFired) return; disarm(); settle(); checkpointFailure == null ? resolve(state) : reject(checkpointFailure); }, (error) => { if (deadlineFired) return; disarm(); settle(); reject(checkpointFailure ?? error); });
+      const deadlineTimer = host.createDeadlineTimer(handleStall, stallDeadline);
+      const stopDeadline = (): void => { isSettled = true; deadlineTimer.cancel(); host.clearDeadlineHookIf(stopDeadline, restartDeadline); };
+      const restartDeadline = (): void => { if (!isSettled && !host.getStreamOutputProduced()) deadlineTimer.restart(); };
+      host.setDeadlineHooks(stopDeadline, restartDeadline);
+      void streamPromise.then((streamState) => { if (stallTaken) return; stopDeadline(); retireAttempt(); writeFailure == null ? resolve(streamState) : reject(writeFailure); }, (error) => { if (stallTaken) return; stopDeadline(); retireAttempt(); reject(writeFailure ?? error); });
     });
   };
 
-  const automation = host.transientStreamRetry;
-  const policy = automation ?? resolveOverloadStreamRetryPolicy();
-  const automationIsRetryable = automation == null
+  const automationPolicy = host.transientStreamRetry;
+  const retryPolicy = automationPolicy ?? resolveOverloadStreamRetryPolicy();
+  const automationIsRetryable = automationPolicy == null
     ? undefined
-    : automation.isRetryable ?? isTransientStreamError;
-  const runBounded = async (): Promise<State> => policy.maxAttempts > 1 ? runWithTransientRetry(runStreamOnce, {
-    ...policy,
-    isRetryable: (error) => shouldRetryTurnAttempt({ error, canceled: host.ctx.canceled, streamOutputProduced: host.getStreamOutputProduced(), resumeCheckpointAvailable: attemptResumeCheckpoint != null, ...(automationIsRetryable == null ? {} : { automationIsRetryable }) }),
+    : automationPolicy.isRetryable ?? isTransientStreamError;
+  const runWithPolicy = async (): Promise<State> => retryPolicy.maxAttempts > 1 ? runWithTransientRetry(attemptStreamOnce, {
+    ...retryPolicy,
+    isRetryable: (error) => shouldRetryTurnAttempt({ error, canceled: host.ctx.canceled, streamOutputProduced: host.getStreamOutputProduced(), resumeCheckpointAvailable: latestCheckpoint != null, ...(automationIsRetryable == null ? {} : { automationIsRetryable }) }),
     onRetry: (info) => {
-      retriesPerformed = info.attempt;
-      if (host.getStreamOutputProduced() && attemptResumeCheckpoint != null) resumeStreamFrom = attemptResumeCheckpoint;
+      retryCount = info.attempt;
+      if (host.getStreamOutputProduced() && latestCheckpoint != null) resumeStreamFrom = latestCheckpoint;
       host.setTraceAttributes({ "slate.retry_count": info.attempt }); if (!host.hidden) host.emitRetrying();
-      host.reportTurnRetry({ outcome: "retried", attempt: info.attempt, maxAttempts: policy.maxAttempts, delayMs: info.delayMs, serverPaced: info.serverPaced, error: info.error });
-      automation?.onRetry?.(info);
+      host.reportTurnRetry({ outcome: "retried", attempt: info.attempt, maxAttempts: retryPolicy.maxAttempts, delayMs: info.delayMs, serverPaced: info.serverPaced, error: info.error });
+      automationPolicy?.onRetry?.(info);
     },
-  }) : runStreamOnce();
+  }) : attemptStreamOnce();
 
   return { async run(): Promise<State> {
-    try { return await runBounded(); } catch (error) {
+    try { return await runWithPolicy(); } catch (error) {
       if (!host.ctx.canceled) {
-        const attempt = retriesPerformed + 1;
-        if (retriesPerformed > 0 && retriesPerformed >= policy.maxAttempts - 1) host.reportTurnRetry({ outcome: "exhausted", attempt, maxAttempts: policy.maxAttempts, error });
-        else if (retriesPerformed > 0 || isRetryableProviderError(error)) host.reportTurnRetry({ outcome: "gave_up_ineligible", attempt, maxAttempts: policy.maxAttempts, error });
+        const attempt = retryCount + 1;
+        if (retryCount > 0 && retryCount >= retryPolicy.maxAttempts - 1) host.reportTurnRetry({ outcome: "exhausted", attempt, maxAttempts: retryPolicy.maxAttempts, error });
+        else if (retryCount > 0 || isRetryableProviderError(error)) host.reportTurnRetry({ outcome: "gave_up_ineligible", attempt, maxAttempts: retryPolicy.maxAttempts, error });
       }
       throw error;
     }
@@ -119,7 +119,7 @@ export interface OuterStreamLifecycleInput<Context, State> {
   >;
   readonly persistence: OuterStreamPersistence<Context, State>;
   readonly cleanup?: () => void | Promise<void>;
-  readonly onCompleted?: (state: State) => void | Promise<void>;
+  readonly onCompleted?: (streamState: State) => void | Promise<void>;
 }
 
 /**
