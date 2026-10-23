@@ -1,8 +1,8 @@
 /**
  * Starting a shell that outlives the command that asked for it.
  *
- * A background shell is started through the same executor a foreground command uses, with the workspace's ignore
- * mapping and the command's own sandbox policy, and then left to run: what the platform keeps is the shell itself — its
+ * A background shell is started through the same executor a foreground command uses, with the workspace's ignoreSource
+ * mapping and the command's own sandbox sandboxRule, and then left to run: what the platform keeps is the shell itself — its
  * process, its input, and the events it produces — so it can be written to, watched and stopped later. Starting it
  * waits only until the shell reports that it is ready to be written to, since waiting for a command that may run for
  * hours would defeat the point.
@@ -45,15 +45,15 @@ export type {
 } from "./background-shell-lifecycle.ts";
 export type BackgroundCompletion = import("./background-shell-lifecycle.ts").ShellCompletion;
 
-async function consumeShellEvents(shell: CoreBackgroundShell, eventIterator: AsyncIterator<ShellCoreEvent>): Promise<void> {
-  let completion: import("./background-shell-lifecycle.ts").ShellCompletion | undefined;
+async function drainShellEvents(shell: CoreBackgroundShell, eventIterator: AsyncIterator<ShellCoreEvent>): Promise<void> {
+  let finalCompletion: import("./background-shell-lifecycle.ts").ShellCompletion | undefined;
   try {
     for (let result = await eventIterator.next(); !result.done; result = await eventIterator.next()) {
       if (result.value.type === "stdin_ready") {
         shell.stdin = result.value.stdin;
         shell.pid = result.value.pid;
       } else if (result.value.type === "exit") {
-        completion = {
+        finalCompletion = {
           code: result.value.code,
           aborted: result.value.aborted,
           ...(result.value.outputLocation?.filePath === undefined ? {} : { outputPath: result.value.outputLocation.filePath }),
@@ -61,32 +61,32 @@ async function consumeShellEvents(shell: CoreBackgroundShell, eventIterator: Asy
       }
     }
   } catch {
-    // Background completion is finalized below; the original execution error is
+    // Background finalCompletion is finalized below; the original execution error is
     // owned by the foreground stream and is intentionally not rethrown here.
   } finally {
-    shell.markCompleted(completion ?? { code: null, aborted: shell.signal.aborted });
+    shell.markCompleted(finalCompletion ?? { code: null, aborted: shell.signal.aborted });
   }
 }
 
-interface BackgroundCoreExecutor {
+interface BackgroundExecutorPort {
   execute(ctx: ShellCoreContext, args: ShellCoreArgs): AsyncIterable<ShellCoreEvent>;
 }
 
-interface LocalBackgroundCoreExecutor extends BackgroundCoreExecutor {
+interface LocalBackgroundExecutorPort extends BackgroundExecutorPort {
   getCwd(): Promise<string>;
 }
 
-function isBackgroundCoreExecutor(value: unknown): value is BackgroundCoreExecutor {
+function looksLikeBackgroundExecutor(value: unknown): value is BackgroundExecutorPort {
   return typeof value === "object" && value !== null && "execute" in value && typeof value.execute === "function";
 }
 
-function runInBackground(fn: () => Promise<void>): void {
+function startInBackground(fn: () => Promise<void>): void {
   fn().catch(() => {});
 }
 
 export class CoreShellFactory implements BackgroundShellFactory {
   async spawn(context: BackgroundSpawnContext, coreExecutor: unknown): Promise<BackgroundShell> {
-    if (!isBackgroundCoreExecutor(coreExecutor)) throw new TypeError("Background shell core executor is not configured");
+    if (!looksLikeBackgroundExecutor(coreExecutor)) throw new TypeError("Background shell core executor is not configured");
     const abortController = new AbortController();
     const shell = new CoreBackgroundShell(context.shellId, abortController);
     const eventIterator = coreExecutor.execute(context.ctx, {
@@ -110,7 +110,7 @@ export class CoreShellFactory implements BackgroundShellFactory {
     } catch (error) {
       if (error instanceof SandboxUnsupportedError) throw error;
     }
-    runInBackground(() => consumeShellEvents(shell, eventIterator));
+    startInBackground(() => drainShellEvents(shell, eventIterator));
     return shell;
   }
 
@@ -118,43 +118,43 @@ export class CoreShellFactory implements BackgroundShellFactory {
     const shell = new CoreBackgroundShell(state.shellId, state.abortController);
     shell.stdin = state.stdin;
     shell.pid = state.pid;
-    runInBackground(() => consumeShellEvents(shell, state.eventIterator));
+    startInBackground(() => drainShellEvents(shell, state.eventIterator));
     return shell;
   }
 }
 
-type Decision = { kind: "block"; reason: ShellBlockReason } | { kind: "allow"; policy?: SandboxRule };
+type PolicyDecision = { kind: "block"; reason: ShellBlockReason } | { kind: "allow"; policy?: SandboxRule };
 export interface BackgroundPermissions {
-  shouldEnforceShellInvariantBlocks(ctx: Context, options: unknown, policy: SandboxRule | undefined): Promise<Decision>;
-  shouldBlockShellCommand(ctx: Context, command: string, options: unknown, policy: SandboxRule | undefined): Promise<Decision>;
+  shouldEnforceShellInvariantBlocks(ctx: Context, options: unknown, sandboxRule: SandboxRule | undefined): Promise<PolicyDecision>;
+  shouldBlockShellCommand(ctx: Context, command: string, options: unknown, sandboxRule: SandboxRule | undefined): Promise<PolicyDecision>;
 }
-function createBackgroundShellFactory(projectDir: string): BackgroundShellFactory {
+function shellFactoryFor(workspaceDir: string): BackgroundShellFactory {
   const coreFactory = new CoreShellFactory();
-  return new FileLoggingShellFactory(coreFactory, projectDir);
+  return new FileLoggingShellFactory(coreFactory, workspaceDir);
 }
 
 export class LocalBackgroundShellExecutor {
-  private readonly manager: BackgroundShellManager;
+  private readonly shellManager: BackgroundShellManager;
 
   constructor(
-    private readonly permissions: BackgroundPermissions,
-    private readonly core: LocalBackgroundCoreExecutor,
-    private readonly ignore: { getCursorIgnoreMapping(): Promise<unknown> },
-    private readonly projectDir: string,
+    private readonly permissionChecks: BackgroundPermissions,
+    private readonly coreExecutor: LocalBackgroundExecutorPort,
+    private readonly ignoreSource: { getCursorIgnoreMapping(): Promise<unknown> },
+    private readonly workspaceDir: string,
     factory?: BackgroundShellFactory,
-    backgroundWorkRegistry?: BackgroundWorkRegistry,
-    wakeupOwnerConversationId?: string,
+    workRegistry?: BackgroundWorkRegistry,
+    wakeupOwner?: string,
   ) {
-    const ownedRegistry = backgroundWorkRegistry !== undefined && wakeupOwnerConversationId !== undefined
-      ? new ConversationOwnerOverrideRegistry(backgroundWorkRegistry, wakeupOwnerConversationId)
-      : backgroundWorkRegistry;
-    const baseShellFactory = factory ?? createBackgroundShellFactory(projectDir);
-    const shellFactory = new NotifyingBackgroundShellFactory(baseShellFactory, projectDir, ownedRegistry);
-    this.manager = new BackgroundShellManager(shellFactory, ownedRegistry);
+    const ownedWorkRegistry = workRegistry !== undefined && wakeupOwner !== undefined
+      ? new ConversationOwnerOverrideRegistry(workRegistry, wakeupOwner)
+      : workRegistry;
+    const baseFactory = factory ?? shellFactoryFor(workspaceDir);
+    const notifyingFactory = new NotifyingBackgroundShellFactory(baseFactory, workspaceDir, ownedWorkRegistry);
+    this.shellManager = new BackgroundShellManager(notifyingFactory, ownedWorkRegistry);
   }
 
-  getManager(): BackgroundShellManager { return this.manager; }
-  dispose(): void { this.manager.dispose(); }
+  getManager(): BackgroundShellManager { return this.shellManager; }
+  dispose(): void { this.shellManager.dispose(); }
 
   async execute(ctx: Context, args: {
     command: string;
@@ -172,63 +172,63 @@ export class LocalBackgroundShellExecutor {
     hookApprovalRequirement?: import("../proto/generated/agent/v1/shell_exec_pb.ts").ShellHookApprovalRequirement;
   }): Promise<BackgroundShellSpawnResult> {
     const command = args.command;
-    const workingDirectory = resolve(args.workingDirectory || await this.core.getCwd());
-    const analysis = analyzeShellCommand(command).structured;
-    const parsed = new ShellCommandParsingResult({
-      parsingFailed: analysis.parsingFailed,
-      executableCommands: analysis.executableCommands.map((item) => ({
+    const workingDirectory = resolve(args.workingDirectory || await this.coreExecutor.getCwd());
+    const parsedCommand = analyzeShellCommand(command).structured;
+    const parsingResult = new ShellCommandParsingResult({
+      parsingFailed: parsedCommand.parsingFailed,
+      executableCommands: parsedCommand.executableCommands.map((item) => ({
         name: item.name,
         fullText: item.fullText,
         args: item.args.map((arg) => ({ type: arg.type, value: arg.value })),
       })),
-      hasRedirects: analysis.hasRedirects,
-      hasCommandSubstitution: analysis.hasCommandSubstitution,
-      ...(analysis.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: analysis.allRedirectsAreDevNull }),
-      redirects: analysis.redirects.map((item) => ({
+      hasRedirects: parsedCommand.hasRedirects,
+      hasCommandSubstitution: parsedCommand.hasCommandSubstitution,
+      ...(parsedCommand.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: parsedCommand.allRedirectsAreDevNull }),
+      redirects: parsedCommand.redirects.map((item) => ({
         operator: item.operator,
         destinationFds: [...item.destinationFds],
         targetNodeType: item.targetNodeType,
         ...(item.targetText === undefined ? {} : { targetText: item.targetText }),
       })),
     });
-    const model = getModelShellAdminCommandDenylistBlockReason({ command, parsingResult: parsed, blockedCommands: args.adminCommandDenylist ?? [] });
-    if (model !== undefined) return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: model }) } });
-    let policy = args.sandboxPolicy ? convertProtoToInternalPolicy(args.sandboxPolicy) : undefined;
-    const decision = args.skipApproval
-      ? await this.permissions.shouldEnforceShellInvariantBlocks(ctx, { workingDirectory, skipUnsafeWorkingDirectoryBlock: true, command, parsingResult: parsed, toolCallId: args.toolCallId }, policy)
-      : await this.permissions.shouldBlockShellCommand(ctx, command, { workingDirectory, timeout: 0, parsingResult: parsed, toolCallId: args.toolCallId, classifierResult: args.classifierResult, smartModeApprovalReason: args.smartModeApproval?.reason, smartModeApprovalRequestId: args.smartModeApproval?.requestId, hookApprovalRequirement: getShellHookApprovalRequirement(args) }, policy);
-    if (decision.kind === "block") {
-      if (decision.reason.type === "permissionsConfig") return new BackgroundShellSpawnResult({ result: { case: "permissionDenied", value: new ShellPermissionDenied({ command, workingDirectory, error: "Command blocked by permissions configuration", isReadonly: decision.reason.isReadonly ?? false }) } });
-      return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: shellBlockReasonMessage(decision.reason) }) } });
+    const denylistReason = getModelShellAdminCommandDenylistBlockReason({ command, parsingResult: parsingResult, blockedCommands: args.adminCommandDenylist ?? [] });
+    if (denylistReason !== undefined) return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: denylistReason }) } });
+    let sandboxRule = args.sandboxPolicy ? convertProtoToInternalPolicy(args.sandboxPolicy) : undefined;
+    const preflightDecision = args.skipApproval
+      ? await this.permissionChecks.shouldEnforceShellInvariantBlocks(ctx, { workingDirectory, skipUnsafeWorkingDirectoryBlock: true, command, parsingResult: parsingResult, toolCallId: args.toolCallId }, sandboxRule)
+      : await this.permissionChecks.shouldBlockShellCommand(ctx, command, { workingDirectory, timeout: 0, parsingResult: parsingResult, toolCallId: args.toolCallId, classifierResult: args.classifierResult, smartModeApprovalReason: args.smartModeApproval?.reason, smartModeApprovalRequestId: args.smartModeApproval?.requestId, hookApprovalRequirement: getShellHookApprovalRequirement(args) }, sandboxRule);
+    if (preflightDecision.kind === "block") {
+      if (preflightDecision.reason.type === "permissionsConfig") return new BackgroundShellSpawnResult({ result: { case: "permissionDenied", value: new ShellPermissionDenied({ command, workingDirectory, error: "Command blocked by permissions configuration", isReadonly: preflightDecision.reason.isReadonly ?? false }) } });
+      return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: shellBlockReasonMessage(preflightDecision.reason) }) } });
     }
-    policy = decision.policy;
+    sandboxRule = preflightDecision.policy;
     if (isForcedShellEgressEnabled()) {
-      policy = forcedShellSandboxPolicy(command, parsed);
-      if (policy.type !== "insecure_none") policy = { ...policy, ignoreMapping: await this.ignore.getCursorIgnoreMapping() };
+      sandboxRule = forcedShellSandboxPolicy(command, parsingResult);
+      if (sandboxRule.type !== "insecure_none") sandboxRule = { ...sandboxRule, ignoreMapping: await this.ignoreSource.getCursorIgnoreMapping() };
     }
     try {
-      const shellId = this.manager.generateShellId();
-      const spawn = await this.manager.spawn({
+      const shellId = this.shellManager.generateShellId();
+      const spawn = await this.shellManager.spawn({
         ctx,
         shellId,
         command,
         workingDirectory,
         ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
         ...(args.conversationId === undefined ? {} : { conversationId: args.conversationId }),
-        ...(policy === undefined ? {} : { sandboxPolicy: { perRepo: policy } }),
+        ...(sandboxRule === undefined ? {} : { sandboxPolicy: { perRepo: sandboxRule } }),
         ...(args.enableWriteShellStdinTool === undefined ? {} : { enableWriteShellStdinTool: args.enableWriteShellStdinTool }),
         ...(args.description === undefined ? {} : { description: args.description }),
         ...(args.outputNotification === undefined ? {} : { outputNotification: args.outputNotification }),
-      }, this.core);
+      }, this.coreExecutor);
       return new BackgroundShellSpawnResult({ result: { case: "success", value: new BackgroundShellSpawnSuccess({ shellId, command, workingDirectory, ...(spawn.pid === undefined ? {} : { pid: spawn.pid }) }) } });
     } catch (error) {
       if (error instanceof SandboxUnsupportedError) {
-        const type = policy?.type ?? "unknown";
+        const type = sandboxRule?.type ?? "unknown";
         return new BackgroundShellSpawnResult({ result: { case: "sandboxUnsupported", value: new ShellSandboxUnsupported({ command, workingDirectory, sandboxPolicyType: type, reason: error.reason ?? error.message, isReadonly: type === "workspace_readonly" }) } });
       }
       return new BackgroundShellSpawnResult({ result: { case: "error", value: new BackgroundShellSpawnError({ command, workingDirectory, error: error instanceof Error ? error.message : "Unknown error" }) } });
     }
   }
 
-  writeStdin(id: number, data: string): Promise<void> { return this.manager.writeStdin(id, data); }
+  writeStdin(id: number, data: string): Promise<void> { return this.shellManager.writeStdin(id, data); }
 }
