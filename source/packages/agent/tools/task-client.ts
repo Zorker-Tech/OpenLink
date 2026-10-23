@@ -3,7 +3,7 @@
  * model and the user read.
  *
  * A subagent runs where the request says it should. Here that means handing the request to the local
- * subagent executor and letting it start, resume, fork or background the run; the request is assembled
+ * subagent handoffExecutor and letting it start, resume, fork or background the run; the request is assembled
  * from the resolved target rather than from the raw arguments, because by this point the model's intent
  * has already been read into a type name, a model, an environment and a machine.
  *
@@ -15,7 +15,7 @@
  * follow-up reaches the same machine.
  *
  * What comes back is shaped for reading. A finished run reads as its last assistant message, prefixed by
- * the high-level summary the subagent itself chose to show when there is one; a run that went to the
+ * the high-level chosenSummary the subagent itself chose to show when there is one; a run that went to the
  * background reads as a note that it is still going, with the transcript path when there is one and the
  * promise that its answer will arrive on its own. A run that failed reads as its error, and the two
  * errors that are really a retry hint — a follow-up sent to a running subagent, an interrupted one — say
@@ -78,54 +78,54 @@ export interface TaskResultRenderingOptions {
   readonly enableAgentChatLinks?: boolean
 }
 
-/** The last summary the subagent asked to show the user, read back out of its own tool calls. */
+/** The last chosenSummary the subagent asked to show the user, read back out of its own tool calls. */
 function extractFinalSummaryFromSteps(steps: readonly ConversationStepValue[]): string | undefined {
-  for (let index = steps.length - 1; index >= 0; index -= 1) {
-    const step = steps[index]
-    if (step?.message.case !== "toolCall") continue
-    const tool = step.message.value.tool
+  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+    const conversationStep = steps[stepIndex]
+    if (conversationStep?.message.case !== "toolCall") continue
+    const tool = conversationStep.message.value.tool
     if (tool.case !== "sendFinalSummaryToolCall" && tool.case !== "communicateUpdateToolCall") continue
-    const summary = tool.value.args?.finalSummary?.trim()
-    if (summary !== undefined && summary.length > 0) return summary
+    const chosenSummary = tool.value.args?.finalSummary?.trim()
+    if (chosenSummary !== undefined && chosenSummary.length > 0) return chosenSummary
   }
   return undefined
 }
 
 function getTaskSuccessResultText(
-  taskSuccess: TaskSuccess,
-  options?: TaskResultRenderingOptions,
+  successValue: TaskSuccess,
+  renderOptions?: TaskResultRenderingOptions,
 ): string {
-  const lastAssistantOutput = [...taskSuccess.conversationSteps]
+  const finalAssistantText = [...successValue.conversationSteps]
     .reverse()
-    .map((step) => (step.message.case === "assistantMessage" ? step.message.value?.text : undefined))
+    .map((conversationStep) => (conversationStep.message.case === "assistantMessage" ? conversationStep.message.value?.text : undefined))
     .find((text) => text !== undefined)
-  const responseBody = lastAssistantOutput ?? "No output"
-  // The subagent's own summary is shown above its answer when the platform is showing notifications at all.
-  if (options?.hideAsyncSubagentTaskNotifications !== true) {
-    const finalSummary = extractFinalSummaryFromSteps(taskSuccess.conversationSteps)
-    if (finalSummary !== undefined) {
+  const answerBody = finalAssistantText ?? "No output"
+  // The subagent's own chosenSummary is shown above its answer when the platform is showing notifications at all.
+  if (renderOptions?.hideAsyncSubagentTaskNotifications !== true) {
+    const summaryText = extractFinalSummaryFromSteps(successValue.conversationSteps)
+    if (summaryText !== undefined) {
       return [
         "response:",
         "<user_visible_high_level_summary>",
-        finalSummary,
+        summaryText,
         "</user_visible_high_level_summary>",
         "<response>",
-        responseBody,
+        answerBody,
         "</response>",
       ].join("\n")
     }
   }
   // An answer that already carries its own response tags is passed through rather than tagged twice.
-  if (lastAssistantOutput !== undefined && lastAssistantOutput.includes("<response>") && lastAssistantOutput.includes("</response>")) {
-    return ["response:", lastAssistantOutput].join("\n")
+  if (finalAssistantText !== undefined && finalAssistantText.includes("<response>") && finalAssistantText.includes("</response>")) {
+    return ["response:", finalAssistantText].join("\n")
   }
-  return ["response:", "<response>", responseBody, "</response>"].join("\n")
+  return ["response:", "<response>", answerBody, "</response>"].join("\n")
 }
 
 export function formatSubagentBackgroundMessage(
   reason: SubagentBackgroundReason,
   transcriptPath: string | undefined,
-  options?: TaskResultRenderingOptions,
+  renderOptions?: TaskResultRenderingOptions,
 ): string {
   let intro: string
   switch (reason) {
@@ -145,40 +145,40 @@ export function formatSubagentBackgroundMessage(
   const displayTranscriptPath = transcriptPath?.trim()
   if (!displayTranscriptPath) return intro
   // With completion notifications on, the answer arrives by itself, so the model is told not to wait for it.
-  if (options?.enableJobCompletionNotifications === true) {
+  if (renderOptions?.enableJobCompletionNotifications === true) {
     return `${intro} If needed, you can monitor its output by tailing the transcript at: ${displayTranscriptPath}. When you end your turn, you will be automatically sent the subagent's final response upon its completion, so do not wait for it - either end your turn or work on something else.\nDo NOT mention the transcript path to the user. Do NOT try to predict the subagent's response before it replies.`
   }
   return `${intro} You can monitor its output by tailing the transcript at: ${displayTranscriptPath}. Do not mention the transcript path to the user.`
 }
 
 export function renderTaskResultToString(
-  taskResult: TaskResult,
-  options?: TaskResultRenderingOptions,
+  resultValue: TaskResult,
+  renderOptions?: TaskResultRenderingOptions,
 ): string {
-  const enableAgentChatLinks = options?.enableAgentChatLinks ?? true
+  const enableAgentChatLinks = renderOptions?.enableAgentChatLinks ?? true
   const chatLinkExample = (agentId: string): string =>
-    options?.hideAsyncSubagentTaskNotifications === true
+    renderOptions?.hideAsyncSubagentTaskNotifications === true
       ? `\`[Name](${agentId})\`. Don't use a generic label such as \`[agent]\`, \`[worker]\`, or \`[subagent]\`. For cloud subagents, when the agent has edited code, link to \`[Review](${agentId}#changes)\`, or, if you know the exact added and deleted line counts, \`[Review +A −D](${agentId}#changes)\`, replacing A and D with those counts. Never write A or D literally. Use \`[Try Live](${agentId}#desktop)\` only when the agent used computer use`
       : `\`[label](${agentId})\``
-  switch (taskResult.result.case) {
+  switch (resultValue.result.case) {
     case "success": {
-      const taskSuccess = taskResult.result.value
+      const successValue = resultValue.result.value
       // The agent id is what makes a follow-up or a link possible, so it is handed over with its uses.
-      const agentIdInfo = taskSuccess.agentId
-        ? `\n\nAgent ID: ${taskSuccess.agentId} (can be used with the \`resume\` parameter to send a follow-up after it completes${enableAgentChatLinks ? `, or to link to this agent/subagent in user-facing text with ${chatLinkExample(taskSuccess.agentId)}` : ""})`
+      const agentIdInfo = successValue.agentId
+        ? `\n\nAgent ID: ${successValue.agentId} (can be used with the \`resume\` parameter to send a follow-up after it completes${enableAgentChatLinks ? `, or to link to this agent/subagent in user-facing text with ${chatLinkExample(successValue.agentId)}` : ""})`
         : ""
-      const suffixInfo = taskSuccess.resultSuffix ? `\n\n${taskSuccess.resultSuffix}` : ""
-      if (taskSuccess.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED) {
-        return `${formatSubagentBackgroundMessage(taskSuccess.backgroundReason, taskSuccess.transcriptPath, options)}${agentIdInfo}${suffixInfo}`
+      const suffixInfo = successValue.resultSuffix ? `\n\n${successValue.resultSuffix}` : ""
+      if (successValue.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED) {
+        return `${formatSubagentBackgroundMessage(successValue.backgroundReason, successValue.transcriptPath, renderOptions)}${agentIdInfo}${suffixInfo}`
       }
-      return `This is the output of the subagent:\n\n${getTaskSuccessResultText(taskSuccess, options)}${agentIdInfo}${suffixInfo}`
+      return `This is the output of the subagent:\n\n${getTaskSuccessResultText(successValue, renderOptions)}${agentIdInfo}${suffixInfo}`
     }
     case "error":
-      return `Error: ${taskResult.result.value.error}`
+      return `Error: ${resultValue.result.value.error}`
     case undefined:
       return "Unknown error"
     default:
-      throw new Error(`Unhandled result case: ${taskResult.result}`)
+      throw new Error(`Unhandled result case: ${resultValue.result}`)
   }
 }
 
@@ -187,9 +187,9 @@ export function createTaskToolCall(taskTool: TaskToolCall): ToolCall {
 }
 
 export function serializeError(error: unknown): ToolCall {
-  const errorMessage = error instanceof Error ? error.message : String(error)
+  const failureMessage = error instanceof Error ? error.message : String(error)
   return createTaskToolCall(new TaskToolCall({
-    result: new TaskResult({ result: { case: "error", value: new TaskError({ error: errorMessage }) } }),
+    result: new TaskResult({ result: { case: "error", value: new TaskError({ error: failureMessage }) } }),
   }))
 }
 
@@ -205,30 +205,30 @@ interface ContinuationSubagentConfig {
 }
 
 export function buildClientContinuationConfig(
-  config: ContinuationSubagentConfig,
+  subagentConfig: ContinuationSubagentConfig,
 ): ClientContinuationConfig | undefined {
-  const policy = config.continuationPolicy
-  if (!policy) return undefined
-  const msg = policy.continuationMessage
-  const nudgeMessage = typeof msg === "function" ? msg({ isEscapeHatch: false, idleCount: 0, escapeToken: "" }) : msg
+  const continuationPolicy = subagentConfig.continuationPolicy
+  if (!continuationPolicy) return undefined
+  const continuationMessage = continuationPolicy.continuationMessage
+  const nudgeText = typeof continuationMessage === "function" ? continuationMessage({ isEscapeHatch: false, idleCount: 0, escapeToken: "" }) : continuationMessage
   // A message written as a function is asked for its escape-hatch form with sentinels in place, and the
   // sentinels become the placeholders the platform fills in per run.
-  const idleSentinel = 99999
-  const tokenSentinel = "___ESCAPE_TOKEN_PLACEHOLDER___"
-  const escapeMessageTemplate = typeof msg === "function"
-    ? msg({ isEscapeHatch: true, idleCount: idleSentinel, escapeToken: tokenSentinel })
-      .replace(String(idleSentinel), "{idle_count}")
-      .replace(tokenSentinel, "{escape_token}")
+  const sentinelIdle = 99999
+  const sentinelToken = "___ESCAPE_TOKEN_PLACEHOLDER___"
+  const escapeTextTemplate = typeof continuationMessage === "function"
+    ? continuationMessage({ isEscapeHatch: true, idleCount: sentinelIdle, escapeToken: sentinelToken })
+      .replace(String(sentinelIdle), "{idle_count}")
+      .replace(sentinelToken, "{escape_token}")
     : "You've made {idle_count} responses without tool calls. If you're done, respond with exactly: {escape_token}\nIf not, continue working."
-  const isCoordinatorAgent = getSubagentTypeName(config.subagent_type) === "coordinator-agent"
+  const isCoordinator = getSubagentTypeName(subagentConfig.subagent_type) === "coordinator-agent"
   return new ClientContinuationConfig({
-    idleThreshold: policy.idleThreshold,
-    maxLoops: policy.maxLoops ?? 0,
-    nudgeMessage,
-    escapeMessageTemplate,
+    idleThreshold: continuationPolicy.idleThreshold,
+    maxLoops: continuationPolicy.maxLoops ?? 0,
+    nudgeMessage: nudgeText,
+    escapeMessageTemplate: escapeTextTemplate,
     // Only a coordinator is told about its background children: it is the one expected to collect them.
-    collectBackgroundChildren: isCoordinatorAgent,
-    childrenCompletedMessageTemplate: isCoordinatorAgent
+    collectBackgroundChildren: isCoordinator,
+    childrenCompletedMessageTemplate: isCoordinator
       ? "The following background agents have completed:\n\n{summaries}\n\nReview their results. If more work is needed, spawn additional workers. Otherwise, wrap up."
       : "",
   })
@@ -285,8 +285,8 @@ function getUserAttachedVideoPaths(ctx: Context, stateHandler: ClientTaskStateHa
       const turn = await turnHandle.get(ctx)
       const userMessage = turn.userMessage === undefined ? undefined : await turn.userMessage.get(ctx)
       if (userMessage?.isSimulatedMsg === true || userMessage?.selectedContext === undefined) continue
-      const selectedContext = fromRedactedSelectedContext(userMessage.selectedContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, {})
-      for (const selectedVideo of selectedContext.selectedVideos) {
+      const attachedContext = fromRedactedSelectedContext(userMessage.selectedContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, {})
+      for (const selectedVideo of attachedContext.selectedVideos) {
         const videoPath = selectedVideo.path.trim()
         if (videoPath.length > 0) videoPaths.add(videoPath)
       }
@@ -314,7 +314,7 @@ function modelParameters(value: readonly unknown[] | undefined): Array<{ id: str
 export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArgs): Promise<TaskResult> {
   const {
     ctx,
-    rawArgs,
+    rawArgs: rawInput,
     resolved,
     resourceAccessor,
     stateHandler,
@@ -322,15 +322,15 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     contextInjectionSignal,
   } = args
   const startedAt = Date.now()
-  const subagentExecutor = resourceAccessor.get(subagentExecutorResource)
+  const executorResource = resourceAccessor.get(subagentExecutorResource)
   const continuationConfig = buildClientContinuationConfig(resolved.subagentConfig)
-  const parentConversationId = getConversationId(ctx)
-  const rootParentConversationId = getConversationGroupId(ctx)
-  const runInBackground = rawArgs.run_in_background ?? resolved.subagentConfig.isBackground
-  let selectedContext
-  if ((rawArgs.file_attachments?.length ?? 0) > 0) {
-    const userAttachedVideoPaths = await getUserAttachedVideoPaths(ctx, stateHandler)
-    const attachmentOptions = {
+  const parentConversation = getConversationId(ctx)
+  const rootParentConversation = getConversationGroupId(ctx)
+  const backgroundRun = rawInput.run_in_background ?? resolved.subagentConfig.isBackground
+  let attachedContext
+  if ((rawInput.file_attachments?.length ?? 0) > 0) {
+    const videoPaths = await getUserAttachedVideoPaths(ctx, stateHandler)
+    const mediaOptions = {
       resolvedModelId: resolved.resolvedModelId,
       privacyMode: stateHandler.getPrivacyMode(),
       // A model that watches video gets the bytes or a signed URL; which provider can do that depends on
@@ -340,120 +340,120 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
           ? { attachedMediaUrlProvider: args.geminiVideoAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider }
           : {}
         : args.attachedMediaUrlProvider !== undefined ? { attachedMediaUrlProvider: args.attachedMediaUrlProvider } : {}),
-      ...(parentConversationId !== undefined ? { conversationId: parentConversationId } : {}),
+      ...(parentConversation !== undefined ? { conversationId: parentConversation } : {}),
       ...(args.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: args.inlineVideoMaxBytes } : {}),
       ...(args.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: args.signedUrlVideoMaxBytes } : {}),
-      userAttachedVideoPaths,
+      videoPaths,
       ...(args.trustedVideoAttachmentRoots !== undefined ? { trustedVideoAttachmentRoots: args.trustedVideoAttachmentRoots } : {}),
     }
-    selectedContext = await buildClientSubagentAttachmentsContext(ctx, rawArgs.file_attachments!, resourceAccessor, args.toolCallId, attachmentOptions)
+    attachedContext = await buildClientSubagentAttachmentsContext(ctx, rawInput.file_attachments!, resourceAccessor, args.toolCallId, mediaOptions)
   }
-  let stopSteerHandoff: (() => void) | undefined
-  if (contextInjectionSignal !== undefined && runInBackground !== true) {
+  let stopHandoff: (() => void) | undefined
+  if (contextInjectionSignal !== undefined && backgroundRun !== true) {
     let stopped = false
-    let handoffInFlight = false
-    let handoffAccepted = false
-    let retryTimer: ReturnType<typeof setTimeout> | undefined
-    let unsubscribe: (() => void) | undefined
-    const requestSteerHandoff = (): void => {
-      if (stopped || handoffInFlight || handoffAccepted) return
-      handoffInFlight = true
+    let handoffRunning = false
+    let handoffGranted = false
+    let retryHandle: ReturnType<typeof setTimeout> | undefined
+    let unsubscribeInjection: (() => void) | undefined
+    const requestHandoff = (): void => {
+      if (stopped || handoffRunning || handoffGranted) return
+      handoffRunning = true
       void (async () => {
         try {
-          const executor = resourceAccessor.get(forceBackgroundSubagentExecutorResource)
-          const result = await executor.execute(ctx, new ForceBackgroundSubagentArgs({ toolCallId: args.toolCallId }))
-          if (result.status === ForceBackgroundSubagentStatus.ACCEPTED) handoffAccepted = true
+          const handoffExecutor = resourceAccessor.get(forceBackgroundSubagentExecutorResource)
+          const result = await handoffExecutor.execute(ctx, new ForceBackgroundSubagentArgs({ toolCallId: args.toolCallId }))
+          if (result.status === ForceBackgroundSubagentStatus.ACCEPTED) handoffGranted = true
         } catch {
           // A missing or torn-down handoff resource is intentionally fail-closed.
         } finally {
-          handoffInFlight = false
+          handoffRunning = false
           // An injection that is still waiting keeps asking, since the first request may have been refused.
-          if (!stopped && !handoffAccepted && retryTimer === undefined && contextInjectionSignal.hasPendingUserInjections()) {
-            retryTimer = setTimeout(() => {
-              retryTimer = undefined
-              requestSteerHandoff()
+          if (!stopped && !handoffGranted && retryHandle === undefined && contextInjectionSignal.hasPendingUserInjections()) {
+            retryHandle = setTimeout(() => {
+              retryHandle = undefined
+              requestHandoff()
             }, 500)
           }
         }
       })()
     }
-    stopSteerHandoff = () => {
+    stopHandoff = () => {
       stopped = true
-      if (retryTimer !== undefined) clearTimeout(retryTimer)
-      unsubscribe?.()
+      if (retryHandle !== undefined) clearTimeout(retryHandle)
+      unsubscribeInjection?.()
     }
-    unsubscribe = contextInjectionSignal.onUserInjectionAdmitted(requestSteerHandoff)
-    if (contextInjectionSignal.hasPendingUserInjections()) requestSteerHandoff()
+    unsubscribeInjection = contextInjectionSignal.onUserInjectionAdmitted(requestHandoff)
+    if (contextInjectionSignal.hasPendingUserInjections()) requestHandoff()
   }
   try {
     let result: SubagentResult
     try {
-      result = await subagentExecutor.execute(ctx, new SubagentArgs({
+      result = await executorResource.execute(ctx, new SubagentArgs({
         toolCallId: args.toolCallId,
         subagentType: resolved.typeName,
         modelId: resolved.resolvedModelId,
-        prompt: rawArgs.prompt,
+        prompt: rawInput.prompt,
         readonly: resolved.useAskModeForSubagent,
         // Resuming and forking are two different identities, so only one of them is ever sent.
         ...(resolved.isSelfForkRequested ? {} : resolved.subagentIdToResume !== undefined ? { resumeAgentId: resolved.subagentIdToResume } : {}),
-        ...(resolved.isSelfForkRequested && parentConversationId !== undefined ? { forkAgentId: parentConversationId } : {}),
+        ...(resolved.isSelfForkRequested && parentConversation !== undefined ? { forkAgentId: parentConversation } : {}),
         ...(args.enableSubagentInterrupt === true && args.interrupt === true ? { interrupt: true } : {}),
-        ...(runInBackground !== undefined ? { runInBackground } : {}),
+        ...(backgroundRun !== undefined ? { runInBackground: backgroundRun } : {}),
         ...(continuationConfig !== undefined ? { continuationConfig } : {}),
-        ...(rootParentConversationId !== undefined ? { rootParentConversationId } : {}),
-        ...(parentConversationId !== undefined ? { parentConversationId } : {}),
-        ...(selectedContext !== undefined ? { selectedContext } : {}),
+        ...(rootParentConversation !== undefined ? { rootParentConversationId: rootParentConversation } : {}),
+        ...(parentConversation !== undefined ? { parentConversationId: parentConversation } : {}),
+        ...(attachedContext !== undefined ? { selectedContext: attachedContext } : {}),
         environment: resolved.effectiveEnvironment,
         // A resumed run keeps its own base branch; a fresh cloud run takes the one the request or the
         // target machine asked for.
         ...(resolved.subagentIdToResume === undefined
-          ? rawArgs.cloud_base_branch !== undefined
-            ? { cloudBaseBranch: rawArgs.cloud_base_branch }
+          ? rawInput.cloud_base_branch !== undefined
+            ? { cloudBaseBranch: rawInput.cloud_base_branch }
             : resolved.effectiveTargetMachine.type === "new_cloud_vm" && resolved.effectiveTargetMachine.base_branch !== undefined
               ? { cloudBaseBranch: resolved.effectiveTargetMachine.base_branch }
               : {}
-          : rawArgs.cloud_base_branch !== undefined ? { cloudBaseBranch: rawArgs.cloud_base_branch } : {}),
+          : rawInput.cloud_base_branch !== undefined ? { cloudBaseBranch: rawInput.cloud_base_branch } : {}),
         ...(modelParameters(resolved.resolvedModelParameters) !== undefined ? { modelParameters: modelParameters(resolved.resolvedModelParameters)! } : {}),
         ...(args.subagentCredentials !== undefined ? { credentials: args.subagentCredentials } : {}),
       }))
     } finally {
-      stopSteerHandoff?.()
+      stopHandoff?.()
     }
     if (result.result.case === "error") {
       throw new Error(maybeAppendInterruptRetryHint(result.result.value.error || "Unknown subagent error", args.enableSubagentInterrupt === true, args.interrupt === true))
     }
     if (result.result.case !== "success") throw new Error("Unknown subagent result")
-    const success = result.result.value
+    const successResult = result.result.value
     // A follow-up that arrived while the subagent was still running is an error the model should read as
     // one, since the run it meant to steer never took it.
-    if (success.backgroundReason === SubagentBackgroundReason.QUEUED_FOLLOW_UP) {
+    if (successResult.backgroundReason === SubagentBackgroundReason.QUEUED_FOLLOW_UP) {
       return new TaskResult({ result: { case: "error", value: new TaskError({ error: maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true) }) } })
     }
     // A cloud run's identity is the box it ran in; a local one keeps the id it already had.
-    const lastAgentId = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
-      ? success.agentId
-      : success.agentId ?? resolved.subagentId
-    if (lastAgentId !== undefined && lastAgentId.length > 0) {
-      const persistedState = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
-        ? buildCloudSubagentPersistedState({ bcId: lastAgentId, modelId: resolved.resolvedModelId, ...(success.transcriptPath !== undefined ? { transcriptPath: success.transcriptPath } : {}), machine: resolved.effectiveTargetMachine })
+    const runAgentId = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
+      ? successResult.agentId
+      : successResult.agentId ?? resolved.subagentId
+    if (runAgentId !== undefined && runAgentId.length > 0) {
+      const savedState = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
+        ? buildCloudSubagentPersistedState({ bcId: runAgentId, modelId: resolved.resolvedModelId, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}), machine: resolved.effectiveTargetMachine })
         : new SubagentPersistedState({ modelId: resolved.resolvedModelId })
-      stateHandler.persistSubagentState(ctx, lastAgentId, resolved.subagentConfig.subagent_type, persistedState)
+      stateHandler.persistSubagentState(ctx, runAgentId, resolved.subagentConfig.subagent_type, savedState)
     }
-    const isBackground = success.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED
+    const wentToBackground = successResult.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED
     const conversationSteps: ConversationStep[] = []
     // A background run has not answered yet, so its final message is not an answer to show.
-    if (!isBackground && success.finalMessage) {
-      conversationSteps.push(new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text: success.finalMessage }) } }))
+    if (!wentToBackground && successResult.finalMessage) {
+      conversationSteps.push(new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text: successResult.finalMessage }) } }))
     }
-    return new TaskResult({ result: { case: "success", value: new TaskSuccess({ conversationSteps, durationMs: BigInt(Date.now() - startedAt), ...(lastAgentId !== undefined ? { agentId: lastAgentId } : {}), isBackground, backgroundReason: success.backgroundReason, ...(success.transcriptPath !== undefined ? { transcriptPath: success.transcriptPath } : {}) }) } })
+    return new TaskResult({ result: { case: "success", value: new TaskSuccess({ conversationSteps, durationMs: BigInt(Date.now() - startedAt), ...(runAgentId !== undefined ? { agentId: runAgentId } : {}), isBackground: wentToBackground, backgroundReason: successResult.backgroundReason, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}) }) } })
   } catch (error) {
-    const errorMessage = isWritableIterableClosedError(error)
+    const failureMessage = isWritableIterableClosedError(error)
       ? SUBAGENT_STREAM_CLOSED_ERROR
       : error instanceof Error ? error.message : String(error)
-    return new TaskResult({ result: { case: "error", value: new TaskError({ error: errorMessage }) } })
+    return new TaskResult({ result: { case: "error", value: new TaskError({ error: failureMessage }) } })
   }
 }
 
-export function renderClientTaskResult(result: TaskResult, options?: TaskResultRenderingOptions): TextResult {
-  return createStringResult(renderTaskResultToString(result, options), result.result.case === "error")
+export function renderClientTaskResult(result: TaskResult, renderOptions?: TaskResultRenderingOptions): TextResult {
+  return createStringResult(renderTaskResultToString(result, renderOptions), result.result.case === "error")
 }
