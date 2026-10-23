@@ -17,7 +17,7 @@ import {
   computeDeterministicFallbackMaxChars,
 } from "../../source/packages/agent-summarization/deterministic-summary-builder.ts"
 import { BackgroundSummarizationMode } from "../../source/packages/agent-summarization/background-summarization.ts"
-import { InputTokenLimitError } from "../../source/packages/chat-inference/prompt-executor.ts"
+import { InputTokenLimitError, OutputTokensLimitExceededError } from "../../source/packages/chat-inference/prompt-executor.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"
@@ -509,4 +509,141 @@ test("the summary text is stored redacted, without the carrier's prefix", () => 
 test("a summary written without a carrier is redacted as code", () => {
   const summary = createRedactedString("the summary", DataClassification.CODE, "summary", PrivacyMode.NO_STORAGE)
   assert.equal(summary.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "the summary")
+})
+// ---------------------------------------------------------------------------------------------
+// the edges summarization keeps
+// ---------------------------------------------------------------------------------------------
+
+/** A prompt session that records what it was asked and answers from a script. */
+function recordingSession(answers: Array<{ text?: string; error?: Error; messages?: Array<{ role: string; content: string }> }>) {
+  const prompts: Array<{ messages: readonly { role: string; content: unknown }[]; maxTokens?: number }> = []
+  const session: SummarizationPromptSession = {
+    getModelId: () => "model-1",
+    getExecutor: (messages) => ({
+      stream: (_ctx: Context, _request?: unknown, _tools?: unknown, options?: { readonly maxTokens?: number }) => {
+        prompts.push({ messages, ...(options?.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }) })
+        const answer = answers[Math.min(prompts.length - 1, answers.length - 1)] ?? {}
+        return {
+          fullStream: (async function* () { yield {} })(),
+          extendedUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+          usage: Promise.resolve({}),
+          providerMetadata: Promise.resolve({}),
+          invocationId: Promise.resolve("invocation-1"),
+          response: answer.error === undefined
+            ? Promise.resolve({ messages: answer.messages ?? [{ role: "assistant", content: answer.text ?? "a summary" }] })
+            : Promise.reject(answer.error),
+        } as never
+      },
+    }),
+  }
+  return { session, prompts }
+}
+
+test("when a provider sends several assistant messages, the last one is the summary", async () => {
+  const made = recordingSession([{ messages: [{ role: "assistant", content: "first" }, { role: "assistant", content: "last" }] }])
+  const result = await handlerWith(made.session).summarize(ctx, [textMessage("system", "sys"), textMessage("user", "ask")], runOptions())
+  assert.equal(result.rawSummary.text, "last")
+})
+
+
+test("a prompt over the byte ceiling is first given a smaller character budget", async () => {
+  const wide = "你".repeat(3_300_000)
+  const made = recordingSession([{ text: "summary" }])
+  await handlerWith(made.session, { maxPromptChars: 3_200_000 }).summarize(ctx, [textMessage("system", "sys"), textMessage("user", wide)], runOptions())
+  const sent = String(made.prompts[0]?.messages[1]?.content ?? "")
+  assert.equal(sent.length < 3_000_000, true)
+})
+
+test("a truncated prompt names what was dropped", async () => {
+  const made = recordingSession([{ text: "summary" }])
+  const messages = [textMessage("system", "sys"), ...Array.from({ length: 200 }, (_value, index) => textMessage(index % 2 === 0 ? "user" : "assistant", "a".repeat(2_000))), textMessage("user", "now")]
+  await handlerWith(made.session, { maxPromptChars: 20_000 }).summarize(ctx, messages, runOptions())
+  const sent = String(made.prompts[0]?.messages[1]?.content ?? "")
+  assert.match(sent, /omitted due to size limits/)
+})
+
+test("a later attempt keeps the prompt budget above what a prompt needs", async () => {
+  const made = recordingSession([
+    { error: new InputTokenLimitError("too big") },
+    { error: new InputTokenLimitError("still too big") },
+    { text: "summary" },
+  ])
+  const long = "a".repeat(120_000)
+  await handlerWith(made.session, { enableReduceInputsRetry: true }).summarize(ctx, [textMessage("system", "sys"), textMessage("user", long)], runOptions())
+  const third = String(made.prompts[2]?.messages[1]?.content ?? "")
+  assert.equal(third.length > 40_000, true)
+})
+
+test("a control character the provider cannot read is stripped on the final input-limit retry", async () => {
+  const made = recordingSession([
+    { error: new InputTokenLimitError("too big") },
+    { error: new InputTokenLimitError("still too big") },
+    { text: "summary" },
+  ])
+  const withControl = "ask " + String.fromCharCode(1) + " once"
+  await handlerWith(made.session, { enableReduceInputsRetry: true }).summarize(ctx, [textMessage("system", "sys"), textMessage("user", withControl)], runOptions())
+  const third = String(made.prompts[2]?.messages[1]?.content ?? "")
+  assert.equal(third.includes(String.fromCharCode(1)), false)
+})
+
+test("an attempt is retried, and the last attempt is the last one", async () => {
+  const made = recordingSession([{ error: new Error("broken") }, { text: "second time" }])
+  const result = await handlerWith(made.session).summarize(ctx, [textMessage("system", "sys"), textMessage("user", "ask")], runOptions())
+  assert.equal(result.rawSummary.text, "second time")
+  assert.equal(made.prompts.length, 2)
+})
+
+test("an output limit asks the next attempt for a shorter answer", async () => {
+  const made = recordingSession([{ error: new OutputTokensLimitExceededError("too long") }, { text: "shorter" }])
+  const result = await handlerWith(made.session).summarize(ctx, [textMessage("system", "sys"), textMessage("user", "ask")], runOptions())
+  assert.equal(result.rawSummary.text, "shorter")
+  const second = String(made.prompts[1]?.messages[1]?.content ?? "")
+  assert.match(second, /Additional instruction: Write a shorter summary/)
+})
+
+test("an input limit sends the next attempt a smaller prompt", async () => {
+  const made = recordingSession([{ error: new InputTokenLimitError("too big") }, { text: "fits" }])
+  const long = "a".repeat(80_000)
+  await handlerWith(made.session, { enableReduceInputsRetry: true }).summarize(ctx, [textMessage("system", "sys"), textMessage("user", long)], runOptions())
+  const first = String(made.prompts[0]?.messages[1]?.content ?? "")
+  const second = String(made.prompts[1]?.messages[1]?.content ?? "")
+  assert.equal(second.length < first.length, true)
+})
+
+test("a carrier summary is not a user message when the split is decided", () => {
+  const session = promptSession([{ text: "summary" }])
+  const handler = handlerWith(session.session)
+  const carrier = message("user", "[Previous conversation summary]: earlier", { isSummary: true })
+  const parts = handler.partitionMessages([textMessage("system", "sys"), textMessage("user", "old"), carrier, textMessage("assistant", "after")], runOptions())
+  assert.equal(parts.preservedTailMessages.length, 1)
+  const tailContent = parts.preservedTailMessages[0]?.content
+  assert.equal(isRedactedString(tailContent) ? tailContent.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : tailContent, "old")
+})
+
+test("an image in the preserved tail is not carried into the summary a second time", () => {
+  const session = promptSession([{ text: "summary" }])
+  const handler = handlerWith(session.session, { preserveLatestImage: true })
+  const image = { type: "image", data: new Uint8Array([9]), mimeType: "image/png" }
+  const withImage = message("user", [{ type: "text", text: "shot" }, image])
+  const summarizedImage = message("user", [{ type: "text", text: "older shot" }, image])
+  const parts = {
+    systemMessage: textMessage("system", "sys"),
+    userInfoMessage: undefined,
+    messagesToSummarize: [textMessage("user", "old"), summarizedImage],
+    preservedTailMessages: [withImage],
+    skillBlocks: [],
+  }
+  const built = handler.buildSummaryMessage({ text: "summary", inputTokens: 1, outputTokens: 1, hadError: false }, parts as never, { skillBlocks: [], todoContent: undefined, currentPlan: undefined, modePrompt: undefined, projectRootPrompt: undefined, automationTriggerContext: undefined, agentTranscriptsFolder: undefined, conversationId: undefined })
+  assert.equal(Array.isArray(built.message.content), false)
+})
+
+test("the deterministic fallback honors the window ratio it was given", async () => {
+  const long = "x".repeat(150_000)
+  const messages = [textMessage("system", "sys"), textMessage("user", long), textMessage("assistant", long)]
+  const failing = [{ error: new Error("broken") }, { error: new Error("broken") }, { error: new Error("broken") }]
+  const small = recordingSession(failing)
+  const smallResult = await handlerWith(small.session, { enableDeterministicFallback: true, deterministicFallbackWindowRatio: 0.0001 }).summarize(ctx, messages, runOptions({ contextWindowTokens: 1_000_000 }))
+  const normal = recordingSession(failing)
+  const normalResult = await handlerWith(normal.session, { enableDeterministicFallback: true }).summarize(ctx, messages, runOptions({ contextWindowTokens: 1_000_000 }))
+  assert.equal(smallResult.rawSummary.text.length < normalResult.rawSummary.text.length, true)
 })
