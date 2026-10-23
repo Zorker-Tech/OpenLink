@@ -66,39 +66,39 @@ export interface LinkMetadata extends Record<string, unknown> {
   readonly fetchedAt: number;
 }
 
-const AUTHENTICATION_HOSTNAMES = new Set(["accounts.google.com"]);
-const AUTHENTICATION_HOST_LABELS = new Set(["auth", "authenticate", "authentication", "authenticator", "idp", "identity", "login", "oauth", "signin", "sso"]);
-const AUTHENTICATION_PATH_SEGMENTS = new Set(["auth", "authenticate", "authorize", "login", "saml", "sign-in", "sign_in", "signin", "sso"]);
-const NESTED_AUTHENTICATION_PATHS = new Set(["sign-in/identifier", "sign_in/identifier", "signin/identifier"]);
+const AUTH_HOSTNAMES = new Set(["accounts.google.com"]);
+const AUTH_HOST_LABELS = new Set(["auth", "authenticate", "authentication", "authenticator", "idp", "identity", "login", "oauth", "signin", "sso"]);
+const AUTH_PATH_SEGMENTS = new Set(["auth", "authenticate", "authorize", "login", "saml", "sign-in", "sign_in", "signin", "sso"]);
+const NESTED_AUTH_PATHS = new Set(["sign-in/identifier", "sign_in/identifier", "signin/identifier"]);
 
 /** Everything a text preview may be read from, by the name it has. */
-const TEXT_PREVIEWABLE_EXTENSIONS = new Set(["txt", "text", "log", "md", "markdown", "mdx", "rst", "adoc", "tex", "json", "jsonc", "json5", "ndjson", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "env", "properties", "plist", "gradle", "html", "htm", "css", "scss", "sass", "less", "svg", "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "py", "pyi", "rb", "go", "rs", "java", "kt", "kts", "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "cs", "php", "swift", "scala", "dart", "lua", "pl", "pm", "r", "sql", "graphql", "gql", "proto", "vue", "svelte", "astro", "sh", "bash", "zsh", "fish", "bat", "ps1", "tf", "tfvars", "dockerfile", "diff", "patch"]);
+const TEXT_EXTENSIONS = new Set(["txt", "text", "log", "md", "markdown", "mdx", "rst", "adoc", "tex", "json", "jsonc", "json5", "ndjson", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "env", "properties", "plist", "gradle", "html", "htm", "css", "scss", "sass", "less", "svg", "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "py", "pyi", "rb", "go", "rs", "java", "kt", "kts", "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "cs", "php", "swift", "scala", "dart", "lua", "pl", "pm", "r", "sql", "graphql", "gql", "proto", "vue", "svelte", "astro", "sh", "bash", "zsh", "fish", "bat", "ps1", "tf", "tfvars", "dockerfile", "diff", "patch"]);
 
 function sha256(input: string | Uint8Array): string {
   return createHash("sha256").update(input).digest("hex");
 }
 
-async function ensureDir(dir: string): Promise<void> {
-  await fs.mkdir(dir, { recursive: true });
+async function makeDir(directory: string): Promise<void> {
+  await fs.mkdir(directory, { recursive: true });
 }
 
 /** A file that is already there is the same file: nothing is written over a hash that exists. */
-async function writeContentAddressedFile(dir: string, targetPath: string, buffer: Buffer): Promise<void> {
-  await ensureDir(dir);
+async function writeHashedFile(directory: string, destination: string, content: Buffer): Promise<void> {
+  await makeDir(directory);
   try {
-    await fs.access(targetPath);
+    await fs.access(destination);
   } catch {
-    await fs.writeFile(targetPath, buffer);
+    await fs.writeFile(destination, content);
   }
 }
 
-function getLinkCachePath(agentDir: string, url: string): string {
-  return join(agentDir, LINK_CACHE_DIRNAME, `${sha256(url)}.json`);
+function cachePathFor(agentDirectory: string, url: string): string {
+  return join(agentDirectory, LINK_CACHE_DIRNAME, `${sha256(url)}.json`);
 }
 
-async function readCachedLinkMetadata(agentDir: string, url: string): Promise<LinkMetadata | null> {
+async function readCachedMetadata(agentDirectory: string, url: string): Promise<LinkMetadata | null> {
   try {
-    const parsed = JSON.parse(await fs.readFile(getLinkCachePath(agentDir, url), "utf8")) as LinkMetadata & { cacheVersion?: number };
+    const parsed = JSON.parse(await fs.readFile(cachePathFor(agentDirectory, url), "utf8")) as LinkMetadata & { cacheVersion?: number };
     if (parsed.cacheVersion !== LINK_CACHE_VERSION) return null;
     if (Date.now() - parsed.fetchedAt > LINK_CACHE_TTL_MS) return null;
     return parsed;
@@ -107,19 +107,19 @@ async function readCachedLinkMetadata(agentDir: string, url: string): Promise<Li
   }
 }
 
-async function writeCachedLinkMetadata(agentDir: string, url: string, metadata: LinkMetadata): Promise<void> {
+async function writeCachedMetadata(agentDirectory: string, url: string, metadata: LinkMetadata): Promise<void> {
   const entry = { ...metadata, cacheVersion: LINK_CACHE_VERSION };
-  const cachePath = getLinkCachePath(agentDir, url);
-  await ensureDir(dirname(cachePath));
+  const cachePath = cachePathFor(agentDirectory, url);
+  await makeDir(dirname(cachePath));
   await fs.writeFile(cachePath, JSON.stringify(entry, null, 2));
 }
 
-/** What the preview fetcher answers with, and what a caller may hand in instead of the real one. */
+/** What the preview previewFetcher answers with, and what a caller may hand in instead of the real one. */
 export type LinkPreviewFetcher = typeof fetchSafeLinkPreviewResource;
 
-async function fetchText(url: string, byteLimit: number, fetcher: LinkPreviewFetcher): Promise<{ body: string; finalUrl: URL; redirectUrls: URL[]; contentType: string }> {
-  const response = await fetcher(url, {
-    maxBytes: byteLimit,
+async function fetchPreviewHtml(url: string, byteCap: number, previewFetcher: LinkPreviewFetcher): Promise<{ body: string; finalUrl: URL; redirectUrls: URL[]; contentType: string }> {
+  const response = await previewFetcher(url, {
+    maxBytes: byteCap,
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9",
     truncateAtByteLimit: true,
   });
@@ -133,10 +133,10 @@ async function fetchText(url: string, byteLimit: number, fetcher: LinkPreviewFet
 }
 
 /** An image the page points at, as a data url — or nothing, which is a preview without one. */
-async function fetchImageAsDataUrl(url: string, fetcher: LinkPreviewFetcher): Promise<string | null> {
+async function fetchImageDataUrl(url: string, previewFetcher: LinkPreviewFetcher): Promise<string | null> {
   let response;
   try {
-    response = await fetcher(url, { maxBytes: LINK_IMAGE_BYTE_LIMIT, accept: LINK_IMAGE_ACCEPT });
+    response = await previewFetcher(url, { maxBytes: LINK_IMAGE_BYTE_LIMIT, accept: LINK_IMAGE_ACCEPT });
   } catch {
     return null;
   }
@@ -147,7 +147,7 @@ async function fetchImageAsDataUrl(url: string, fetcher: LinkPreviewFetcher): Pr
   return `data:${mime};base64,${response.body.toString("base64")}`;
 }
 
-function decodeHtmlEntities(text: string): string {
+function decodeEntities(text: string): string {
   return text
     .replace(/&(amp|#38);/gi, "&")
     .replace(/&(lt|#60);/gi, "<")
@@ -160,48 +160,48 @@ function decodeHtmlEntities(text: string): string {
 }
 
 /** What a page said about itself, as text the surfaces can show: no control characters, one space, bounded. */
-function cleanLinkMetadataText(text: string, charLimit: number): string {
+function cleanMetadataText(text: string, charLimit: number): string {
   return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim().slice(0, charLimit);
 }
 
-function matchAttr(tag: string, attr: string): string | undefined {
+function attributeValue(tag: string, attr: string): string | undefined {
   const match = new RegExp(`${attr}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
   if (match == null) return undefined;
   return match[2] ?? match[3] ?? match[4];
 }
 
-function findMeta(html: string, attr: string, value: string): string | undefined {
+function metaContent(html: string, attr: string, value: string): string | undefined {
   const tagPattern = /<meta\b[^>]*>/gi;
   let tag: RegExpExecArray | null;
   while ((tag = tagPattern.exec(html)) != null) {
-    const candidate = matchAttr(tag[0], attr);
+    const candidate = attributeValue(tag[0], attr);
     if (candidate == null || candidate.toLowerCase() !== value.toLowerCase()) continue;
-    const content = matchAttr(tag[0], "content");
-    if (content != null) return decodeHtmlEntities(content).trim();
+    const content = attributeValue(tag[0], "content");
+    if (content != null) return decodeEntities(content).trim();
   }
   return undefined;
 }
 
-function findFirstLinkHref(html: string, relValues: readonly string[]): string | undefined {
+function firstLinkHref(html: string, relValues: readonly string[]): string | undefined {
   const tagPattern = /<link\b[^>]*>/gi;
   let tag: RegExpExecArray | null;
   while ((tag = tagPattern.exec(html)) != null) {
-    const rel = matchAttr(tag[0], "rel");
+    const rel = attributeValue(tag[0], "rel");
     if (rel == null) continue;
     const tokens = rel.toLowerCase().split(/\s+/);
     if (!relValues.some((value) => tokens.includes(value))) continue;
-    const href = matchAttr(tag[0], "href");
-    if (href != null) return decodeHtmlEntities(href).trim();
+    const href = attributeValue(tag[0], "href");
+    if (href != null) return decodeEntities(href).trim();
   }
   return undefined;
 }
 
-function findTitle(html: string): string | undefined {
+function pageTitle(html: string): string | undefined {
   const match = /<title>([^<]*)<\/title>/i.exec(html);
-  return match == null ? undefined : decodeHtmlEntities(match[1] ?? "").trim();
+  return match == null ? undefined : decodeEntities(match[1] ?? "").trim();
 }
 
-function toAbsoluteUrl(href: string, base: string): string | null {
+function absoluteUrl(href: string, base: string): string | null {
   try {
     return parseSafeLinkPreviewUrl(new URL(href, base).toString()).toString();
   } catch {
@@ -210,29 +210,29 @@ function toAbsoluteUrl(href: string, base: string): string | null {
 }
 
 /** What a page says about itself: its own words first, then the social ones, then its title. */
-function scrapeOpenGraph(html: string, finalUrl: string) {
-  const title = findMeta(html, "property", "og:title") ?? findMeta(html, "name", "twitter:title") ?? findTitle(html) ?? "";
-  const description = findMeta(html, "property", "og:description") ?? findMeta(html, "name", "description") ?? findMeta(html, "name", "twitter:description") ?? "";
-  const siteName = findMeta(html, "property", "og:site_name") ?? findMeta(html, "name", "application-name") ?? "";
-  const canonical = findFirstLinkHref(html, ["canonical"]) ?? findMeta(html, "property", "og:url") ?? finalUrl;
-  const image = findMeta(html, "property", "og:image") ?? findMeta(html, "property", "og:image:url") ?? findMeta(html, "name", "twitter:image") ?? findMeta(html, "name", "twitter:image:src") ?? null;
-  const favicon = findFirstLinkHref(html, ["icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon"]) ?? null;
+function scrapeMetadata(html: string, finalUrl: string) {
+  const title = metaContent(html, "property", "og:title") ?? metaContent(html, "name", "twitter:title") ?? pageTitle(html) ?? "";
+  const description = metaContent(html, "property", "og:description") ?? metaContent(html, "name", "description") ?? metaContent(html, "name", "twitter:description") ?? "";
+  const siteName = metaContent(html, "property", "og:site_name") ?? metaContent(html, "name", "application-name") ?? "";
+  const canonical = firstLinkHref(html, ["canonical"]) ?? metaContent(html, "property", "og:url") ?? finalUrl;
+  const image = metaContent(html, "property", "og:image") ?? metaContent(html, "property", "og:image:url") ?? metaContent(html, "name", "twitter:image") ?? metaContent(html, "name", "twitter:image:src") ?? null;
+  const favicon = firstLinkHref(html, ["icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon"]) ?? null;
   return {
-    title: cleanLinkMetadataText(title, LINK_TITLE_CHAR_LIMIT),
-    description: cleanLinkMetadataText(description, LINK_DESCRIPTION_CHAR_LIMIT),
-    siteName: cleanLinkMetadataText(siteName, LINK_SITE_NAME_CHAR_LIMIT),
-    canonicalUrl: toAbsoluteUrl(canonical, finalUrl) ?? finalUrl,
-    imageUrl: image == null ? null : toAbsoluteUrl(image, finalUrl),
-    faviconUrl: favicon == null ? null : toAbsoluteUrl(favicon, finalUrl),
+    title: cleanMetadataText(title, LINK_TITLE_CHAR_LIMIT),
+    description: cleanMetadataText(description, LINK_DESCRIPTION_CHAR_LIMIT),
+    siteName: cleanMetadataText(siteName, LINK_SITE_NAME_CHAR_LIMIT),
+    canonicalUrl: absoluteUrl(canonical, finalUrl) ?? finalUrl,
+    imageUrl: image == null ? null : absoluteUrl(image, finalUrl),
+    faviconUrl: favicon == null ? null : absoluteUrl(favicon, finalUrl),
   };
 }
 
 /** Where a page without a favicon of its own gets one. */
-function googleFaviconUrl(hostname: string): string {
+function faviconServiceUrl(hostname: string): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
 }
 
-function normalizeUrl(raw: string): URL | null {
+function normalizePreviewUrl(raw: string): URL | null {
   try {
     return parseSafeLinkPreviewUrl(raw.trim());
   } catch {
@@ -240,167 +240,167 @@ function normalizeUrl(raw: string): URL | null {
   }
 }
 
-function hasAuthenticationPathSegment(url: URL): boolean {
+function authPathSegment(url: URL): boolean {
   try {
-    const segments = url.pathname.split("/").filter((segment) => segment.length > 0).map((segment) => decodeURIComponent(segment).toLowerCase());
-    const finalSegment = segments.at(-1);
-    if (finalSegment != null && AUTHENTICATION_PATH_SEGMENTS.has(finalSegment)) return true;
-    return segments.some((segment, index) => NESTED_AUTHENTICATION_PATHS.has(`${segment}/${segments[index + 1] ?? ""}`));
+    const pathParts = url.pathname.split("/").filter((segment) => segment.length > 0).map((segment) => decodeURIComponent(segment).toLowerCase());
+    const finalSegment = pathParts.at(-1);
+    if (finalSegment != null && AUTH_PATH_SEGMENTS.has(finalSegment)) return true;
+    return pathParts.some((segment, index) => NESTED_AUTH_PATHS.has(`${segment}/${pathParts[index + 1] ?? ""}`));
   } catch {
     return false;
   }
 }
 
 /** Whether a page is a sign-in wall: a preview of one is a preview of nothing a user meant to share. */
-function isAuthenticationDestination(url: URL): boolean {
+function authDestination(url: URL): boolean {
   const hostname = url.hostname.toLowerCase();
-  if (AUTHENTICATION_HOSTNAMES.has(hostname) || hostname.split(".").some((label) => AUTHENTICATION_HOST_LABELS.has(label))) return true;
-  return hasAuthenticationPathSegment(url);
+  if (AUTH_HOSTNAMES.has(hostname) || hostname.split(".").some((label) => AUTH_HOST_LABELS.has(label))) return true;
+  return authPathSegment(url);
 }
 
-export async function fetchLinkMetadata(agentDir: string, rawUrl: string, fetcher: LinkPreviewFetcher = fetchSafeLinkPreviewResource): Promise<LinkMetadata | null> {
-  const url = normalizeUrl(rawUrl);
+export async function fetchLinkMetadata(agentDirectory: string, rawUrl: string, previewFetcher: LinkPreviewFetcher = fetchSafeLinkPreviewResource): Promise<LinkMetadata | null> {
+  const url = normalizePreviewUrl(rawUrl);
   if (url == null) return null;
-  const cached = await readCachedLinkMetadata(agentDir, url.toString());
+  const cached = await readCachedMetadata(agentDirectory, url.toString());
   if (cached != null) return cached;
-  let fetched: Awaited<ReturnType<typeof fetchText>>;
+  let fetched: Awaited<ReturnType<typeof fetchPreviewHtml>>;
   try {
-    fetched = await fetchText(url.toString(), LINK_HTML_BYTE_LIMIT, fetcher);
+    fetched = await fetchPreviewHtml(url.toString(), LINK_HTML_BYTE_LIMIT, previewFetcher);
   } catch {
     return null;
   }
   // A redirect through a sign-in page is a sign-in page, whatever the address asked for.
-  if (fetched.redirectUrls.some(isAuthenticationDestination)) return null;
+  if (fetched.redirectUrls.some(authDestination)) return null;
   const lowerType = fetched.contentType.toLowerCase();
   if (fetched.contentType.length > 0 && !lowerType.includes("html") && !lowerType.includes("xml")) return null;
-  const scraped = scrapeOpenGraph(fetched.body, fetched.finalUrl.toString());
+  const scraped = scrapeMetadata(fetched.body, fetched.finalUrl.toString());
   const hostname = fetched.finalUrl.hostname;
   const [imageDataUrl, faviconDataUrl] = await Promise.all([
-    scraped.imageUrl == null ? null : fetchImageAsDataUrl(scraped.imageUrl, fetcher),
+    scraped.imageUrl == null ? null : fetchImageDataUrl(scraped.imageUrl, previewFetcher),
     (async () => {
-      const direct = scraped.faviconUrl == null ? null : await fetchImageAsDataUrl(scraped.faviconUrl, fetcher);
+      const direct = scraped.faviconUrl == null ? null : await fetchImageDataUrl(scraped.faviconUrl, previewFetcher);
       if (direct != null) return direct;
-      return await fetchImageAsDataUrl(googleFaviconUrl(hostname), fetcher);
+      return await fetchImageDataUrl(faviconServiceUrl(hostname), previewFetcher);
     })(),
   ]);
   const metadata: LinkMetadata = { url: url.toString(), canonicalUrl: scraped.canonicalUrl, title: scraped.title, description: scraped.description, siteName: scraped.siteName, hostname, imageDataUrl, faviconDataUrl, fetchedAt: Date.now() };
   try {
-    await writeCachedLinkMetadata(agentDir, url.toString(), metadata);
+    await writeCachedMetadata(agentDirectory, url.toString(), metadata);
   } catch {}
   return metadata;
 }
 
 /** A file the user put in the attachments folder themselves is already where it belongs. */
-export async function ingestAttachment(agentDir: string, sourcePath: string): Promise<IngestedAttachment> {
-  if (typeof sourcePath !== "string" || sourcePath.trim().length === 0) throw new SlateAttachmentError("Attachment file path is empty.");
-  if (!isAbsolute(sourcePath)) throw new SlateAttachmentError(`Attachment path must be absolute: ${sourcePath}`);
-  const attachmentsDir = getAgentAttachmentsDir(agentDir);
-  if (isPathWithin(attachmentsDir, sourcePath, { isInclusive: true })) {
-    const info = await fs.stat(sourcePath);
-    return { absolutePath: sourcePath, hash: "preserved", bytes: info.size };
+export async function ingestAttachment(agentDirectory: string, sourceFile: string): Promise<IngestedAttachment> {
+  if (typeof sourceFile !== "string" || sourceFile.trim().length === 0) throw new SlateAttachmentError("Attachment file path is empty.");
+  if (!isAbsolute(sourceFile)) throw new SlateAttachmentError(`Attachment path must be absolute: ${sourceFile}`);
+  const attachmentsDir = getAgentAttachmentsDir(agentDirectory);
+  if (isPathWithin(attachmentsDir, sourceFile, { isInclusive: true })) {
+    const stats = await fs.stat(sourceFile);
+    return { absolutePath: sourceFile, hash: "preserved", bytes: stats.size };
   }
-  const info = await fs.stat(sourcePath);
-  if (!info.isFile()) throw new SlateAttachmentError(`Attachment source is not a file: ${sourcePath}`);
-  const byteLimit = attachmentByteLimitForName(sourcePath);
-  if (info.size > byteLimit) throw new AttachmentTooLargeError(byteLimit);
-  return await ingestAttachmentBytes(agentDir, sourcePath, await fs.readFile(sourcePath));
+  const stats = await fs.stat(sourceFile);
+  if (!stats.isFile()) throw new SlateAttachmentError(`Attachment source is not a file: ${sourceFile}`);
+  const byteCap = attachmentByteLimitForName(sourceFile);
+  if (stats.size > byteCap) throw new AttachmentTooLargeError(byteCap);
+  return await ingestAttachmentBytes(agentDirectory, sourceFile, await fs.readFile(sourceFile));
 }
 
 /** The bytes of an attachment, kept under their own hash: attaching the same file twice is one file. */
-export async function ingestAttachmentBytes(agentDir: string, filename: string, data: Uint8Array): Promise<IngestedAttachment> {
+export async function ingestAttachmentBytes(agentDirectory: string, filename: string, data: Uint8Array): Promise<IngestedAttachment> {
   if (typeof filename !== "string" || filename.trim().length === 0) throw new SlateAttachmentError("Attachment filename is empty.");
   if (data.byteLength === 0) throw new SlateAttachmentError("Attachment is empty.");
-  const byteLimit = attachmentByteLimitForName(filename);
-  if (data.byteLength > byteLimit) throw new AttachmentTooLargeError(byteLimit);
-  const buffer = Buffer.from(data);
-  const hash = sha256(buffer);
-  const sourceExt = extname(filename).toLowerCase();
-  const targetPath = join(getAgentAttachmentsDir(agentDir), `${hash}${sourceExt.length > 0 ? sourceExt : ".bin"}`);
-  await writeContentAddressedFile(getAgentAttachmentsDir(agentDir), targetPath, buffer);
-  return { absolutePath: targetPath, hash, bytes: buffer.byteLength };
+  const byteCap = attachmentByteLimitForName(filename);
+  if (data.byteLength > byteCap) throw new AttachmentTooLargeError(byteCap);
+  const content = Buffer.from(data);
+  const hash = sha256(content);
+  const extension = extname(filename).toLowerCase();
+  const destination = join(getAgentAttachmentsDir(agentDirectory), `${hash}${extension.length > 0 ? extension : ".bin"}`);
+  await writeHashedFile(getAgentAttachmentsDir(agentDirectory), destination, content);
+  return { absolutePath: destination, hash, bytes: content.byteLength };
 }
 
-function imageSize(buffer: Buffer, mime: string): ImageSize | null {
-  return readEncodedImageSize(`data:${mime};base64,${buffer.toString("base64")}`);
+function imageDimensionsOf(content: Buffer, mime: string): ImageSize | null {
+  return readEncodedImageSize(`data:${mime};base64,${content.toString("base64")}`);
 }
 
-export async function readHostAttachmentImage(filePath: string) {
-  const resolved = reanchorSlatePath(filePath);
+export async function readHostAttachmentImage(attachmentFile: string) {
+  const absolute = reanchorSlatePath(attachmentFile);
   // A read the platform may not make answers nothing rather than reading it anyway.
-  if (!filePath || !isPathWithin(getSlateRootDir(), resolved)) return null;
-  const mime = servableImageMimeFromPath(resolved);
+  if (!attachmentFile || !isPathWithin(getSlateRootDir(), absolute)) return null;
+  const mime = servableImageMimeFromPath(absolute);
   if (mime == null) return null;
   try {
-    const data = await fs.readFile(resolved);
-    const size = imageSize(data, mime);
+    const data = await fs.readFile(absolute);
+    const size = imageDimensionsOf(data, mime);
     return { dataUrl: `data:${mime};base64,${data.toString("base64")}`, width: size?.width ?? null, height: size?.height ?? null };
   } catch {
     return null;
   }
 }
 
-export async function readHostAttachmentVideoBytes(filePath: string): Promise<Uint8Array | null> {
-  const resolved = reanchorSlatePath(filePath);
-  if (!filePath || !isPathWithin(getSlateRootDir(), resolved) || videoMimeFromPath(resolved) === undefined) return null;
+export async function readHostAttachmentVideoBytes(attachmentFile: string): Promise<Uint8Array | null> {
+  const absolute = reanchorSlatePath(attachmentFile);
+  if (!attachmentFile || !isPathWithin(getSlateRootDir(), absolute) || videoMimeFromPath(absolute) === undefined) return null;
   try {
-    const info = await fs.stat(resolved);
+    const stats = await fs.stat(absolute);
     // A video the platform will not carry whole is not one it hands over at all.
-    return !info.isFile() || info.size > VIDEO_BYTE_LIMIT ? null : new Uint8Array(await fs.readFile(resolved));
+    return !stats.isFile() || stats.size > VIDEO_BYTE_LIMIT ? null : new Uint8Array(await fs.readFile(absolute));
   } catch {
     return null;
   }
 }
 
-export async function readHostAttachmentChunk(agentDir: string, filePath: string, offset: number, length: number, videoPlayback = false) {
-  if (!filePath) return null;
-  const source = reanchorSlatePath(filePath);
-  if (!isPathWithin(getAgentAttachmentsDir(agentDir), source) && !isPathWithin(getAgentAssetsDir(agentDir), source)) return null;
-  if (videoPlayback && videoMimeFromPath(source) == null) return null;
-  const read = async (resolved: string) => {
-    const info = await fs.stat(resolved);
-    if (!info.isFile()) return null;
-    const totalSize = info.size;
-    const mime = imageMimeFromPath(resolved) ?? videoMimeFromPath(resolved) ?? audioMimeFromPath(resolved) ?? null;
+export async function readHostAttachmentChunk(agentDirectory: string, attachmentFile: string, offset: number, length: number, playback = false) {
+  if (!attachmentFile) return null;
+  const source = reanchorSlatePath(attachmentFile);
+  if (!isPathWithin(getAgentAttachmentsDir(agentDirectory), source) && !isPathWithin(getAgentAssetsDir(agentDirectory), source)) return null;
+  if (playback && videoMimeFromPath(source) == null) return null;
+  const read = async (absolute: string) => {
+    const stats = await fs.stat(absolute);
+    if (!stats.isFile()) return null;
+    const totalSize = stats.size;
+    const mime = imageMimeFromPath(absolute) ?? videoMimeFromPath(absolute) ?? audioMimeFromPath(absolute) ?? null;
     // An offset or a length nobody can use is clamped rather than refused; both are sizes, and neither is negative.
     const start = Math.min(Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0, totalSize);
     const safeLength = Number.isFinite(length) ? Math.max(0, Math.floor(length)) : 0;
     const wanted = Math.min(safeLength, ATTACHMENT_CHUNK_MAX_BYTES, totalSize - start);
     if (wanted <= 0) return { bytesBase64: "", totalSize, mime };
-    const handle = await fs.open(resolved, "r");
+    const handle = await fs.open(absolute, "r");
     try {
-      const buffer = Buffer.alloc(wanted);
-      const { bytesRead } = await handle.read(buffer, 0, wanted, start);
-      return { bytesBase64: buffer.subarray(0, bytesRead).toString("base64"), totalSize, mime };
+      const content = Buffer.alloc(wanted);
+      const { bytesRead } = await handle.read(content, 0, wanted, start);
+      return { bytesBase64: content.subarray(0, bytesRead).toString("base64"), totalSize, mime };
     } finally {
       await handle.close();
     }
   };
   try {
-    return videoPlayback ? await withVideoPlaybackSource(source, read) : await read(source);
+    return playback ? await withVideoPlaybackSource(source, read) : await read(source);
   } catch {
     return null;
   }
 }
 
 /** Whose attachment a path is, read off the path itself rather than guessed from what is signed in. */
-export function resolveAttachmentOwnerDir(filePath: string): string | null {
-  if (!filePath) return null;
-  const resolved = reanchorSlatePath(filePath);
+export function resolveAttachmentOwnerDir(attachmentFile: string): string | null {
+  if (!attachmentFile) return null;
+  const absolute = reanchorSlatePath(attachmentFile);
   const agentsRoot = join(getSlateRootDir(), "agents");
-  if (!isPathWithin(agentsRoot, resolved)) return null;
-  const segments = relative(agentsRoot, resolved).split(sep);
-  const agentId = segments[0];
-  const bucket = segments[1];
-  return segments.length >= 3 && isSafeFolderId(agentId) && (bucket === ATTACHMENTS_DIRNAME || bucket === ASSETS_DIRNAME) ? join(agentsRoot, agentId) : null;
+  if (!isPathWithin(agentsRoot, absolute)) return null;
+  const pathParts = relative(agentsRoot, absolute).split(sep);
+  const agentId = pathParts[0];
+  const folderName = pathParts[1];
+  return pathParts.length >= 3 && isSafeFolderId(agentId) && (folderName === ATTACHMENTS_DIRNAME || folderName === ASSETS_DIRNAME) ? join(agentsRoot, agentId) : null;
 }
 
-function isTextPreviewableName(path: string): boolean {
+function textPreviewable(path: string): boolean {
   const extension = extname(path).slice(1).toLowerCase();
-  return extension.length > 0 && TEXT_PREVIEWABLE_EXTENSIONS.has(extension);
+  return extension.length > 0 && TEXT_EXTENSIONS.has(extension);
 }
 
 /** A file with a control character or a NUL this early in it is not one to render as text. */
-function looksLikeBinary(bytes: Uint8Array): boolean {
+function binarySample(bytes: Uint8Array): boolean {
   const sample = bytes.subarray(0, 8 * 1024);
   if (sample.byteLength === 0) return false;
   let controls = 0;
@@ -411,35 +411,35 @@ function looksLikeBinary(bytes: Uint8Array): boolean {
   return controls / sample.byteLength > 0.3;
 }
 
-export async function readAttachmentText(agentDir: string, filePath: string) {
-  const resolved = reanchorSlatePath(filePath);
-  if (!filePath || !isPathWithin(getAgentAttachmentsDir(agentDir), resolved)) return null;
+export async function readAttachmentText(agentDirectory: string, attachmentFile: string) {
+  const absolute = reanchorSlatePath(attachmentFile);
+  if (!attachmentFile || !isPathWithin(getAgentAttachmentsDir(agentDirectory), absolute)) return null;
   try {
-    const info = await fs.stat(resolved);
-    if (!info.isFile()) return null;
+    const stats = await fs.stat(absolute);
+    if (!stats.isFile()) return null;
     // A file this platform would not preview as text is reported as what it is, with its size.
-    if (!isTextPreviewableName(resolved)) return { kind: "binary" as const, bytes: info.size };
-    const handle = await fs.open(resolved, "r");
-    let head: Buffer;
+    if (!textPreviewable(absolute)) return { kind: "binary" as const, bytes: stats.size };
+    const handle = await fs.open(absolute, "r");
+    let headBytes: Buffer;
     try {
-      head = Buffer.alloc(ATTACHMENT_TEXT_PREVIEW_BYTE_CAP);
-      const result = await handle.read(head, 0, head.length, 0);
-      head = head.subarray(0, result.bytesRead);
+      headBytes = Buffer.alloc(ATTACHMENT_TEXT_PREVIEW_BYTE_CAP);
+      const ingested = await handle.read(headBytes, 0, headBytes.length, 0);
+      headBytes = headBytes.subarray(0, ingested.bytesRead);
     } finally {
       await handle.close();
     }
-    return looksLikeBinary(head) ? { kind: "binary" as const, bytes: info.size } : { kind: "text" as const, text: head.toString("utf8"), truncated: info.size > ATTACHMENT_TEXT_PREVIEW_BYTE_CAP, bytes: info.size };
+    return binarySample(headBytes) ? { kind: "binary" as const, bytes: stats.size } : { kind: "text" as const, text: headBytes.toString("utf8"), truncated: stats.size > ATTACHMENT_TEXT_PREVIEW_BYTE_CAP, bytes: stats.size };
   } catch {
     return null;
   }
 }
 
-export async function readImageDimensions(filePath: string): Promise<ImageSize | null> {
-  const resolved = reanchorSlatePath(filePath);
-  const mime = servableImageMimeFromPath(resolved);
+export async function readImageDimensions(attachmentFile: string): Promise<ImageSize | null> {
+  const absolute = reanchorSlatePath(attachmentFile);
+  const mime = servableImageMimeFromPath(absolute);
   if (mime == null) return null;
   try {
-    return imageSize(await fs.readFile(resolved), mime);
+    return imageDimensionsOf(await fs.readFile(absolute), mime);
   } catch {
     return null;
   }
@@ -447,23 +447,23 @@ export async function readImageDimensions(filePath: string): Promise<ImageSize |
 
 export { Mp4Dimensions };
 
-/** A video's dimensions, read from its head and — when the header is not there — from its tail. */
-export async function readVideoDimensions(filePath: string): Promise<ImageSize | null> {
-  const resolved = reanchorSlatePath(filePath);
-  if (!isPathWithin(getSlateRootDir(), resolved) || videoMimeFromPath(resolved) === undefined) return null;
+/** A video's dimensions, read from its headBytes and — when the header is not there — from its tailBytes. */
+export async function readVideoDimensions(attachmentFile: string): Promise<ImageSize | null> {
+  const absolute = reanchorSlatePath(attachmentFile);
+  if (!isPathWithin(getSlateRootDir(), absolute) || videoMimeFromPath(absolute) === undefined) return null;
   try {
-    const handle = await fs.open(resolved, "r");
+    const handle = await fs.open(absolute, "r");
     try {
       const { size } = await handle.stat();
       const headLength = Math.min(size, VIDEO_DIMENSIONS_HEAD_BYTES);
-      const head = Buffer.alloc(headLength);
-      await handle.read(head, 0, headLength, 0);
-      const fromHead = Mp4Dimensions.read(head);
+      const headBytes = Buffer.alloc(headLength);
+      await handle.read(headBytes, 0, headLength, 0);
+      const fromHead = Mp4Dimensions.read(headBytes);
       if (fromHead != null || size <= headLength) return fromHead;
       const tailLength = Math.min(size, VIDEO_DIMENSIONS_TAIL_BYTES);
-      const tail = Buffer.alloc(tailLength);
-      await handle.read(tail, 0, tailLength, size - tailLength);
-      return Mp4Dimensions.read(tail);
+      const tailBytes = Buffer.alloc(tailLength);
+      await handle.read(tailBytes, 0, tailLength, size - tailLength);
+      return Mp4Dimensions.read(tailBytes);
     } finally {
       await handle.close();
     }
@@ -472,22 +472,22 @@ export async function readVideoDimensions(filePath: string): Promise<ImageSize |
   }
 }
 
-export async function readMediaDimensions(filePath: string): Promise<ImageSize | null> {
-  const resolved = reanchorSlatePath(filePath);
-  if (!isPathWithin(getSlateRootDir(), resolved)) return null;
-  if (servableImageMimeFromPath(resolved) != null) return readImageDimensions(resolved);
-  if (videoMimeFromPath(resolved) !== undefined) return readVideoDimensions(resolved);
+export async function readMediaDimensions(attachmentFile: string): Promise<ImageSize | null> {
+  const absolute = reanchorSlatePath(attachmentFile);
+  if (!isPathWithin(getSlateRootDir(), absolute)) return null;
+  if (servableImageMimeFromPath(absolute) != null) return readImageDimensions(absolute);
+  if (videoMimeFromPath(absolute) !== undefined) return readVideoDimensions(absolute);
   return null;
 }
 
 /** A generated picture, kept under its own hash like any other attachment. */
-export async function persistImageBytes(targetDir: string, data: Uint8Array, mimeType: string) {
-  const buffer = Buffer.from(data);
-  const hash = sha256(buffer);
-  const targetPath = join(targetDir, `${hash}${extensionFromImageMime(mimeType) ?? ".png"}`);
-  await writeContentAddressedFile(targetDir, targetPath, buffer);
-  const size = imageSize(buffer, mimeType);
-  return { absolutePath: targetPath, fileUrl: pathToFileURL(targetPath).href, bytes: buffer.byteLength, width: size?.width ?? null, height: size?.height ?? null };
+export async function persistImageBytes(destinationDirectory: string, data: Uint8Array, contentMime: string) {
+  const content = Buffer.from(data);
+  const hash = sha256(content);
+  const destination = join(destinationDirectory, `${hash}${extensionFromImageMime(contentMime) ?? ".png"}`);
+  await writeHashedFile(destinationDirectory, destination, content);
+  const size = imageDimensionsOf(content, contentMime);
+  return { absolutePath: destination, fileUrl: pathToFileURL(destination).href, bytes: content.byteLength, width: size?.width ?? null, height: size?.height ?? null };
 }
 
 export interface AttachmentsServiceDependencies<Context> {
@@ -517,26 +517,26 @@ export function createAttachmentsService<Context>(deps: AttachmentsServiceDepend
       fallbackAgentId = agentId;
     },
     async upload(args: { filename: string; bytesBase64?: string; agentId?: string | null }) {
-      const result = await ingestAttachmentBytes(resolveDir(args.agentId), args.filename, Buffer.from(typeof args.bytesBase64 === "string" ? args.bytesBase64 : "", "base64"));
-      return { path: result.absolutePath };
+      const ingested = await ingestAttachmentBytes(resolveDir(args.agentId), args.filename, Buffer.from(typeof args.bytesBase64 === "string" ? args.bytesBase64 : "", "base64"));
+      return { path: ingested.absolutePath };
     },
     readImage: (args: { path: string }) => readHostAttachmentImage(args.path),
     async readText(args: { path: string; agentId?: string | null }) {
-      const dir = readDir(args.path, args.agentId);
-      if (dir == null) {
+      const directory = readDir(args.path, args.agentId);
+      if (directory == null) {
         // A read that could not find an owner is reported: it is the difference between "nothing" and "not yours".
         deps.report?.({ extension: "attachments", kind: "read_text_miss", hasActive: args.agentId != null });
         return null;
       }
-      return await readAttachmentText(dir, args.path);
+      return await readAttachmentText(directory, args.path);
     },
-    async readChunk(args: { path: string; agentId?: string | null; offset: number; length: number; videoPlayback?: boolean }) {
-      const dir = readDir(args.path, args.agentId);
-      if (dir == null) {
+    async readChunk(args: { path: string; agentId?: string | null; offset: number; length: number; playback?: boolean }) {
+      const directory = readDir(args.path, args.agentId);
+      if (directory == null) {
         deps.report?.({ extension: "attachments", kind: "read_chunk_miss", hasActive: args.agentId != null });
         return null;
       }
-      return await readHostAttachmentChunk(dir, args.path, args.offset, args.length, args.videoPlayback);
+      return await readHostAttachmentChunk(directory, args.path, args.offset, args.length, args.playback);
     },
     ingest: ingestAttachment,
     ingestBytes: ingestAttachmentBytes,
