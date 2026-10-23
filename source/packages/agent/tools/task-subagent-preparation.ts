@@ -40,6 +40,22 @@ interface MimeTypesModule {
 
 const mimeTypes = mimeTypesModule as MimeTypesModule;
 
+
+/** A blob's bytes, carried inline or as a blob id with the bytes beside it. */
+function dataOrBlobId(binaryData: Uint8Array, outputBlobId: Uint8Array | undefined) {
+  return outputBlobId !== undefined && outputBlobId.length > 0
+    ? { case: "blobIdWithData" as const, value: { blobId: new Uint8Array(outputBlobId), data: new Uint8Array(binaryData) } }
+    : { case: "data" as const, value: new Uint8Array(binaryData) };
+}
+
+/** Video attachments are a Gemini-only feature: say so before anything is read. */
+function assertVideoModelSupported(resolvedModelId: string | undefined): void {
+  const modelId = resolvedModelId?.trim();
+  if (modelId !== undefined && modelId.length > 0 && !isGeminiModelId(modelId)) {
+    throw new Error("Video attachments are only supported for Gemini models");
+  }
+}
+
 export type RawTaskEnvironmentArgs = {
   readonly environment?: TaskEnvironment;
   readonly machine?: TaskTargetMachine;
@@ -235,7 +251,7 @@ interface SubagentAttachmentRequestContextResult {
   readonly requestContext: SubagentAttachmentRequestContext;
 }
 
-async function getRequestContextForAttachmentValidation(args: {
+async function fetchAttachmentTrustContext(args: {
   readonly ctx: Context;
   readonly resourceAccessor: AttachmentResourceAccessor;
 }): Promise<SubagentAttachmentRequestContext> {
@@ -297,7 +313,7 @@ export async function buildClientSubagentAttachmentsContext(
   }
   const selectedContext =
     (nonVideoPaths.length > 0
-      ? await processAttachments(
+      ? await collectAttachments(
           ctx,
           nonVideoPaths,
           resourceAccessor,
@@ -308,7 +324,7 @@ export async function buildClientSubagentAttachmentsContext(
   if (videoPaths.length === 0) {
     return selectedContext;
   }
-  const requestContext = await getRequestContextForAttachmentValidation({
+  const requestContext = await fetchAttachmentTrustContext({
     ctx,
     resourceAccessor,
   });
@@ -478,7 +494,7 @@ export interface TaskSubagentResolution {
   readonly cloudRequestedEnvironmentBuildId?: string | undefined;
 }
 
-function findSubagentConfigByName(
+function subagentConfigNamed(
   configs: readonly TaskSubagentModelConfig[],
   name: string | undefined,
 ): TaskSubagentModelConfig | undefined {
@@ -487,7 +503,7 @@ function findSubagentConfigByName(
   return configs.find(config => getSubagentTypeName(config.subagent_type).trim().toLowerCase().replace(/[-_]/g, "") === normalizedInput);
 }
 
-function isResumeSelfForkRequest(resume: string | undefined): boolean {
+function resumeMeansSelf(resume: string | undefined): boolean {
   return resume?.trim().toLowerCase() === "self";
 }
 
@@ -501,60 +517,87 @@ export async function resolveTaskSubagentConfig(args: {
   readonly parentModelInfo: TaskResolutionModelInfo;
   readonly options: TaskResolutionOptions;
 }): Promise<TaskSubagentResolution> {
-  const { ctx, rawArgs, meta, subagentConfigs, parentState, parentModelInfo, options } = args;
-  const defaultConfig = findSubagentConfigByName(subagentConfigs, GENERAL_PURPOSE_SUBAGENT_TYPE) ?? subagentConfigs[0];
-  if (defaultConfig === undefined) throw new ToolCallArgParseError("No subagent types are available.");
-  const requestedSubagentConfig = findSubagentConfigByName(subagentConfigs, rawArgs.subagent_type) ?? defaultConfig;
-  const effectiveResumeMode = requestedSubagentConfig.resumeModeOverride ?? "DEFAULT";
-  const requestedTypeName = getSubagentTypeName(requestedSubagentConfig.subagent_type);
-  const subagentRequestId = computeSubagentRequestId(meta.toolCallId);
-  const isSelfForkRequested = isResumeSelfForkRequest(rawArgs.resume);
-  let subagentIdToResume: string | undefined;
-  if (!isSelfForkRequested) {
-    if (effectiveResumeMode !== "DEFAULT") subagentIdToResume = parentState.getSubagentIdToResume?.(requestedTypeName, effectiveResumeMode);
-    else if (rawArgs.resume !== undefined && rawArgs.resume.length > 0) subagentIdToResume = resolveCanonicalSubagentId(parentState, rawArgs.resume);
+  const {
+    ctx: turnContext,
+    rawArgs: requestArgs,
+    meta: callMeta,
+    subagentConfigs: catalogue,
+    parentState: parent,
+    parentModelInfo: parentModel,
+    options: settings,
+  } = args;
+  const fallbackConfig = subagentConfigNamed(catalogue, GENERAL_PURPOSE_SUBAGENT_TYPE) ?? catalogue[0];
+  if (fallbackConfig === undefined) throw new ToolCallArgParseError("No subagent types are available.");
+  const requestedConfig = subagentConfigNamed(catalogue, requestArgs.subagent_type) ?? fallbackConfig;
+  const resumeMode = requestedConfig.resumeModeOverride ?? "DEFAULT";
+  const requestedType = getSubagentTypeName(requestedConfig.subagent_type);
+  const requestKey = computeSubagentRequestId(callMeta.toolCallId);
+  const selfForkRequested = resumeMeansSelf(requestArgs.resume);
+  let resumeId: string | undefined;
+  if (!selfForkRequested) {
+    if (resumeMode !== "DEFAULT") resumeId = parent.getSubagentIdToResume?.(requestedType, resumeMode);
+    else if (requestArgs.resume !== undefined && requestArgs.resume.length > 0) resumeId = resolveCanonicalSubagentId(parent, requestArgs.resume);
   }
-  const restoredSubagentState = subagentIdToResume === undefined ? undefined : parentState.restoreSubagentState(ctx, subagentIdToResume);
-  const persistedTypeName = restoredSubagentState?.subagentType === undefined ? undefined : getSubagentTypeName(restoredSubagentState.subagentType);
-  const persistedSubagentConfig = findSubagentConfigByName(subagentConfigs, persistedTypeName);
-  if (persistedTypeName !== undefined && persistedSubagentConfig === undefined) throw new ToolCallArgParseError(`Cannot resume subagent of type "${persistedTypeName}" because that subagent type is not available.`);
-  const subagentConfig = persistedSubagentConfig ?? requestedSubagentConfig;
-  const effectiveReadonly = getEffectiveReadonlyForSubagent(subagentConfig);
-  const useAskModeForSubagent = shouldUseAskModeForSubagent(effectiveReadonly, subagentConfig);
-  const typeName = getSubagentTypeName(subagentConfig.subagent_type);
-  const analyticsSubagentType = subagentConfig.subagent_type.type.case === "custom" ? "custom" : typeName;
-  const effectiveEnvironment = getEffectiveSubagentEnvironment(rawArgs, restoredSubagentState);
-  const requestedTargetMachine = rawArgs.machine ?? targetMachineFromProto(restoredSubagentState?.machine) ?? (effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
-    ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: rawArgs.cloud_base_branch, cloud_requested_environment_build_id: rawArgs.cloud_requested_environment_build_id })
+  const restoredState = resumeId === undefined ? undefined : parent.restoreSubagentState(turnContext, resumeId);
+  const persistedType = restoredState?.subagentType === undefined ? undefined : getSubagentTypeName(restoredState.subagentType);
+  const persistedConfig = subagentConfigNamed(catalogue, persistedType);
+  if (persistedType !== undefined && persistedConfig === undefined) throw new ToolCallArgParseError(`Cannot resume subagent of type "${persistedType}" because that subagent type is not available.`);
+  const subagentConfig = persistedConfig ?? requestedConfig;
+  const readonlyEffective = getEffectiveReadonlyForSubagent(subagentConfig);
+  const askMode = shouldUseAskModeForSubagent(readonlyEffective, subagentConfig);
+  const resolvedTypeName = getSubagentTypeName(subagentConfig.subagent_type);
+  const analyticsType = subagentConfig.subagent_type.type.case === "custom" ? "custom" : resolvedTypeName;
+  const environmentField = getEffectiveSubagentEnvironment(requestArgs, restoredState);
+  const requestedMachine = requestArgs.machine ?? targetMachineFromProto(restoredState?.machine) ?? (environmentField === SubagentExecutionEnvironment.CLOUD
+    ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: requestArgs.cloud_base_branch, cloud_requested_environment_build_id: requestArgs.cloud_requested_environment_build_id })
     : { type: "same_machine" });
-  const priorModelId = isSelfForkRequested ? options.parentRequestedModelName ?? parentModelInfo.modelName : restoredSubagentState?.modelId?.trim() || undefined;
-  if (priorModelId !== undefined && options.subagentModelForcePolicy === SubagentModelForcePolicy.ParentPin && options.forceModelId !== undefined && priorModelId !== options.forceModelId) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModelId}" because the active policy requires model "${options.forceModelId}".`);
-  const resolvedModelId = priorModelId ?? await resolveSubagentModel({
+  const priorModel = selfForkRequested ? settings.parentRequestedModelName ?? parentModel.modelName : restoredState?.modelId?.trim() || undefined;
+  if (priorModel !== undefined && settings.subagentModelForcePolicy === SubagentModelForcePolicy.ParentPin && settings.forceModelId !== undefined && priorModel !== settings.forceModelId) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModel}" because the active policy requires model "${settings.forceModelId}".`);
+  const chosenModelId = priorModel ?? await resolveSubagentModel({
     subagentConfig,
-    forceModelId: options.forceModelId,
-    subagentModelForcePolicy: options.subagentModelForcePolicy,
-    requestedModel: rawArgs.model,
-    parentModelId: options.parentRequestedModelName ?? parentModelInfo.modelName,
-    enableExploreParentModelInheritance: options.enableExploreParentModelInheritance,
-    parentMaxMode: options.parentMaxMode,
-    subagentModels: options.subagentModels,
-    isModelBlocked: options.isModelBlocked,
-    isModelValid: options.isModelValid,
-    requiresMaxMode: options.requiresMaxMode,
-    compareModelCosts: options.compareModelCosts,
+    forceModelId: settings.forceModelId,
+    subagentModelForcePolicy: settings.subagentModelForcePolicy,
+    requestedModel: requestArgs.model,
+    parentModelId: settings.parentRequestedModelName ?? parentModel.modelName,
+    enableExploreParentModelInheritance: settings.enableExploreParentModelInheritance,
+    parentMaxMode: settings.parentMaxMode,
+    subagentModels: settings.subagentModels,
+    isModelBlocked: settings.isModelBlocked,
+    isModelValid: settings.isModelValid,
+    requiresMaxMode: settings.requiresMaxMode,
+    compareModelCosts: settings.compareModelCosts,
   });
-  if (priorModelId !== undefined && !await isPriorSubagentModelUsable(priorModelId, options)) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModelId}" because it is blocked or unavailable.`);
-  const subagentId = subagentIdToResume ?? generateSeededUuid(`subagent-${typeName}-${meta.toolCallId}`);
-  const parentRequestId = getRequestId(ctx);
-  const rootParentRequestId = getRootParentRequestId(ctx) ?? parentRequestId;
-  const cloudSubagentBcId = restoredSubagentState?.cloudSubagent?.bcId?.trim() || restoredSubagentState?.firstClassBcId?.trim() || undefined;
-  const cloudRequestedEnvironmentBuildId = requestedTargetMachine.type === "new_cloud_vm" ? requestedTargetMachine.environment_build_id?.trim() || rawArgs.cloud_requested_environment_build_id?.trim() || restoredSubagentState?.cloudRequestedEnvironmentBuildId?.trim() || undefined : undefined;
-  const effectiveTargetMachine = requestedTargetMachine.type === "new_cloud_vm" && cloudRequestedEnvironmentBuildId !== requestedTargetMachine.environment_build_id
-    ? { ...requestedTargetMachine, ...(cloudRequestedEnvironmentBuildId !== undefined ? { environment_build_id: cloudRequestedEnvironmentBuildId } : {}) }
-    : requestedTargetMachine;
-  const parentModelIdForParameters = options.parentRequestedModelName ?? parentModelInfo.modelName;
-  const resolvedModelParameters = resolvedModelId === parentModelIdForParameters && (options.parentModelParameters?.length ?? 0) > 0 ? options.parentModelParameters : undefined;
-  return { subagentConfig, effectiveReadonly, useAskModeForSubagent, typeName, analyticsSubagentType, resolvedModelId, resolvedModelParameters, subagentIdToResume, subagentId, isResume: subagentIdToResume !== undefined, parentRequestId, rootParentRequestId, subagentRequestId, isSelfForkRequested, effectiveEnvironment, effectiveTargetMachine, cloudSubagentBcId, cloudRequestedEnvironmentBuildId };
+  if (priorModel !== undefined && !await isPriorSubagentModelUsable(priorModel, settings)) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModel}" because it is blocked or unavailable.`);
+  const newSubagentId = resumeId ?? generateSeededUuid(`subagent-${resolvedTypeName}-${callMeta.toolCallId}`);
+  const parentKey = getRequestId(turnContext);
+  const rootParentKey = getRootParentRequestId(turnContext) ?? parentKey;
+  const resumeBcId = restoredState?.cloudSubagent?.bcId?.trim() || restoredState?.firstClassBcId?.trim() || undefined;
+  const buildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.cloud_requested_environment_build_id?.trim() || restoredState?.cloudRequestedEnvironmentBuildId?.trim() || undefined : undefined;
+  const targetMachineFinal = requestedMachine.type === "new_cloud_vm" && buildId !== requestedMachine.environment_build_id
+    ? { ...requestedMachine, ...(buildId !== undefined ? { environment_build_id: buildId } : {}) }
+    : requestedMachine;
+  const parentModelForParams = settings.parentRequestedModelName ?? parentModel.modelName;
+  const modelParametersChosen = chosenModelId === parentModelForParams && (settings.parentModelParameters?.length ?? 0) > 0 ? settings.parentModelParameters : undefined;
+  return {
+    subagentConfig,
+    effectiveReadonly: readonlyEffective,
+    useAskModeForSubagent: askMode,
+    typeName: resolvedTypeName,
+    analyticsSubagentType: analyticsType,
+    resolvedModelId: chosenModelId,
+    resolvedModelParameters: modelParametersChosen,
+    subagentIdToResume: resumeId,
+    subagentId: newSubagentId,
+    isResume: resumeId !== undefined,
+    parentRequestId: parentKey,
+    rootParentRequestId: rootParentKey,
+    subagentRequestId: requestKey,
+    isSelfForkRequested: selfForkRequested,
+    effectiveEnvironment: environmentField,
+    effectiveTargetMachine: targetMachineFinal,
+    cloudSubagentBcId: resumeBcId,
+    cloudRequestedEnvironmentBuildId: buildId,
+  };
 }
 
 export interface PrepareTaskSubagentArgs {
@@ -581,14 +624,30 @@ export interface PrepareTaskSubagentArgs {
 /** Everything a subagent needs to start, assembled from the request and the state it resumes from. */
 export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promise<InstanceType<typeof PreparedTaskSubagent>> {
   const { resolved, ctx, rawArgs, meta, parentState, resourceAccessor, parentModelInfo } = args;
-  const { subagentConfig, typeName, resolvedModelId, subagentIdToResume, subagentId, isResume, isSelfForkRequested, useAskModeForSubagent, effectiveReadonly, analyticsSubagentType, parentRequestId, rootParentRequestId, subagentRequestId, cloudSubagentBcId, cloudRequestedEnvironmentBuildId } = resolved;
-  let selectedContext: SelectedContextValue | undefined;
+  const {
+    subagentConfig,
+    typeName: resolvedTypeName,
+    resolvedModelId: chosenModelId,
+    subagentIdToResume: resumeId,
+    subagentId: newSubagentId,
+    isResume: isResumeFlag,
+    isSelfForkRequested: selfForkRequested,
+    useAskModeForSubagent: askMode,
+    effectiveReadonly: readonlyEffective,
+    analyticsSubagentType: analyticsType,
+    parentRequestId: parentKey,
+    rootParentRequestId: rootParentKey,
+    subagentRequestId: requestKey,
+    cloudSubagentBcId: resumeBcId,
+    cloudRequestedEnvironmentBuildId: buildId,
+  } = resolved;
+  let attachmentSelection: SelectedContextValue | undefined;
   if (rawArgs.file_attachments !== undefined && rawArgs.file_attachments.length > 0) {
-    const selectedMediaProvider = isGeminiVideoSubagentType(subagentConfig.subagent_type) ? args.geminiVideoAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
-    selectedContext = await processAttachments(ctx, rawArgs.file_attachments, resourceAccessor, meta.toolCallId, {
-      resolvedModelId,
+    const mediaProvider = isGeminiVideoSubagentType(subagentConfig.subagent_type) ? args.geminiVideoAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
+    attachmentSelection = await collectAttachments(ctx, rawArgs.file_attachments, resourceAccessor, meta.toolCallId, {
+      resolvedModelId: chosenModelId,
       ...(args.privacyMode !== undefined ? { privacyMode: args.privacyMode } : {}),
-      ...(selectedMediaProvider !== undefined ? { attachedMediaUrlProvider: selectedMediaProvider } : {}),
+      ...(mediaProvider !== undefined ? { attachedMediaUrlProvider: mediaProvider } : {}),
       ...(args.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: args.inlineVideoMaxBytes } : {}),
       ...(args.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: args.signedUrlVideoMaxBytes } : {}),
       subagentType: subagentConfig.subagent_type,
@@ -597,32 +656,32 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     });
   }
   if (args.parentCursorCommands !== undefined && args.parentCursorCommands.length > 0) {
-    selectedContext = selectedContext ?? new SelectedContext();
-    selectedContext.cursorCommands = [...args.parentCursorCommands];
+    attachmentSelection = attachmentSelection ?? new SelectedContext();
+    attachmentSelection.cursorCommands = [...args.parentCursorCommands];
   }
-  const initialAction = createUserMessageAction(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), useAskModeForSubagent, selectedContext);
-  const conversationState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, subagentIdToResume, isSelfForkRequested, meta.toolCallId, typeName);
-  const shouldPersistSubagentCredentials = resolved.effectiveEnvironment !== SubagentExecutionEnvironment.CLOUD;
+  const firstAction = createUserMessageAction(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
+  const startingState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, resumeId, selfForkRequested, meta.toolCallId, resolvedTypeName);
+  const persistCredentials = resolved.effectiveEnvironment !== SubagentExecutionEnvironment.CLOUD;
   return new PreparedTaskSubagent({
-    subagentId,
-    subagentTypeName: typeName,
+    subagentId: newSubagentId,
+    subagentTypeName: resolvedTypeName,
     subagentType: subagentConfig.subagent_type,
-    analyticsSubagentType,
-    resolvedModelId,
-    effectiveReadonly,
-    useAskModeForSubagent,
-    conversationState,
-    initialAction,
-    initialTurnsCount: conversationState.turns.length,
-    subagentRequestId,
-    ...(cloudSubagentBcId !== undefined ? { cloudSubagentBcId } : {}),
+    analyticsSubagentType: analyticsType,
+    resolvedModelId: chosenModelId,
+    effectiveReadonly: readonlyEffective,
+    useAskModeForSubagent: askMode,
+    conversationState: startingState,
+    initialAction: firstAction,
+    initialTurnsCount: startingState.turns.length,
+    subagentRequestId: requestKey,
+    ...(resumeBcId !== undefined ? { cloudSubagentBcId: resumeBcId } : {}),
     toolCallId: meta.toolCallId,
-    isResume,
-    ...(parentRequestId !== undefined ? { parentRequestId } : {}),
-    ...(rootParentRequestId !== undefined ? { rootParentRequestId } : {}),
+    isResume: isResumeFlag,
+    ...(parentKey !== undefined ? { parentRequestId: parentKey } : {}),
+    ...(rootParentKey !== undefined ? { rootParentRequestId: rootParentKey } : {}),
     taskPrompt: rawArgs.prompt,
     taskDescription: rawArgs.description ?? "",
-    ...(selectedContext !== undefined ? { selectedContext } : {}),
+    ...(attachmentSelection !== undefined ? { selectedContext: attachmentSelection } : {}),
     ...(subagentConfig.plugin !== undefined ? { plugin: subagentConfig.plugin } : {}),
     ...(subagentConfig.marketplace !== undefined ? { marketplace: subagentConfig.marketplace } : {}),
     ...(subagentConfig.pluginId !== undefined ? { pluginId: subagentConfig.pluginId } : {}),
@@ -632,17 +691,17 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       description: rawArgs.description ?? "",
       prompt: rawArgs.prompt,
       ...(rawArgs.model !== undefined ? { model: rawArgs.model } : {}),
-      subagentType: rawArgs.subagent_type ?? typeName,
+      subagentType: rawArgs.subagent_type ?? resolvedTypeName,
       ...(rawArgs.resume !== undefined ? { resume: rawArgs.resume } : {}),
       ...(rawArgs.run_in_background !== undefined ? { runInBackground: rawArgs.run_in_background } : {}),
       attachments: rawArgs.file_attachments === undefined ? [] : [...rawArgs.file_attachments],
       environment: resolved.effectiveEnvironment,
       ...((rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : "") } : {}),
-      ...(cloudRequestedEnvironmentBuildId !== undefined ? { cloudRequestedEnvironmentBuildId } : {}),
+      ...(buildId !== undefined ? { cloudRequestedEnvironmentBuildId: buildId } : {}),
       machine: targetMachineToProto(resolved.effectiveTargetMachine),
     }),
     parentModelName: parentModelInfo.modelName,
-    ...(args.subagentCredentials !== undefined && shouldPersistSubagentCredentials ? { subagentCredentials: new SubagentCredentials({ credentials: args.subagentCredentials }) } : {}),
+    ...(args.subagentCredentials !== undefined && persistCredentials ? { subagentCredentials: new SubagentCredentials({ credentials: args.subagentCredentials }) } : {}),
     ...(subagentConfig.resultSuffix !== undefined ? { resultSuffix: subagentConfig.resultSuffix } : {}),
     enableExecuteHookExec: args.enableExecuteHookExec ?? false,
     configuredSteps: args.configuredSteps === undefined ? [] : [...args.configuredSteps],
@@ -652,7 +711,7 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
   });
 }
 
-export function buildPreparedTaskToolHookInput(prepared: InstanceType<typeof PreparedTaskSubagent>): {
+export function buildPreparedTaskToolHookInput(subagent: InstanceType<typeof PreparedTaskSubagent>): {
   readonly description: string | undefined;
   readonly prompt: string | undefined;
   readonly model: string | undefined;
@@ -665,8 +724,8 @@ export function buildPreparedTaskToolHookInput(prepared: InstanceType<typeof Pre
   readonly run_in_background: boolean | undefined;
   readonly file_attachments: readonly string[] | undefined;
 } {
-  const raw = prepared.rawArgs;
-  if (raw === undefined) {
+  const storedArgs = subagent.rawArgs;
+  if (storedArgs === undefined) {
     return {
       description: undefined,
       prompt: undefined,
@@ -676,104 +735,104 @@ export function buildPreparedTaskToolHookInput(prepared: InstanceType<typeof Pre
       cloud_base_branch: undefined,
       cloud_requested_environment_build_id: undefined,
       machine: undefined,
-      subagent_type: prepared.subagentTypeName,
+      subagent_type: subagent.subagentTypeName,
       run_in_background: undefined,
       file_attachments: undefined,
     };
   }
   return {
-    description: raw.description,
-    prompt: raw.prompt,
-    model: raw.model,
-    resume: raw.resume,
-    environment: protoEnvironmentToTaskEnvironment(raw.environment),
-    cloud_base_branch: raw.cloudBaseBranch,
-    cloud_requested_environment_build_id: raw.cloudRequestedEnvironmentBuildId,
-    machine: targetMachineFromProto(raw.machine),
-    subagent_type: prepared.subagentTypeName,
-    run_in_background: raw.runInBackground,
-    file_attachments: raw.attachments.length > 0 ? raw.attachments : undefined,
+    description: storedArgs.description,
+    prompt: storedArgs.prompt,
+    model: storedArgs.model,
+    resume: storedArgs.resume,
+    environment: protoEnvironmentToTaskEnvironment(storedArgs.environment),
+    cloud_base_branch: storedArgs.cloudBaseBranch,
+    cloud_requested_environment_build_id: storedArgs.cloudRequestedEnvironmentBuildId,
+    machine: targetMachineFromProto(storedArgs.machine),
+    subagent_type: subagent.subagentTypeName,
+    run_in_background: storedArgs.runInBackground,
+    file_attachments: storedArgs.attachments.length > 0 ? storedArgs.attachments : undefined,
   };
 }
 
 /** Reads the attachments a subagent was given and turns each into what the protocol carries. */
-async function processAttachments(
+async function collectAttachments(
   ctx: Context,
-  attachmentPaths: readonly string[],
+  attachmentList: readonly string[],
   resourceAccessor: AttachmentResourceAccessor,
   toolCallId: string,
   options?: AttachmentProcessingOptions,
 ): Promise<SelectedContextValue | undefined> {
-  if (attachmentPaths.length === 0) {
+  if (attachmentList.length === 0) {
     return undefined;
   }
-  const hasVideoAttachment = attachmentPaths.some(
+  const hasVideo = attachmentList.some(
     (attachmentPath) => getPotentialVideoMimeTypeFromPath(attachmentPath) !== undefined,
   );
-  const requestContext =
-    options?.skipTrustedPathValidation === true || !hasVideoAttachment
+  const trustedContext =
+    options?.skipTrustedPathValidation === true || !hasVideo
       ? undefined
-      : await getRequestContextForAttachmentValidation({ ctx, resourceAccessor });
-  const readExecutor = resourceAccessor.get(readExecutorResource);
-  const selectedImages: InstanceType<typeof SelectedImage>[] = [];
-  const selectedVideos: InstanceType<typeof SelectedVideo>[] = [];
-  for (const rawFilePath of attachmentPaths) {
-    const filePath =
-      requestContext !== undefined &&
-      getPotentialVideoMimeTypeFromPath(rawFilePath) !== undefined
+      : await fetchAttachmentTrustContext({ ctx, resourceAccessor });
+  const reader = resourceAccessor.get(readExecutorResource);
+  const images: InstanceType<typeof SelectedImage>[] = [];
+  const videos: InstanceType<typeof SelectedVideo>[] = [];
+  for (const rawPath of attachmentList) {
+    const attachmentPath =
+      trustedContext !== undefined &&
+      getPotentialVideoMimeTypeFromPath(rawPath) !== undefined
         ? resolveTrustedAttachmentPath({
-            attachmentPath: rawFilePath,
-            requestContext,
+            attachmentPath: rawPath,
+            requestContext: trustedContext,
           })
-        : rawFilePath;
-    if (filePath === undefined) {
-      throw untrustedAttachmentPathError(rawFilePath);
+        : rawPath;
+    if (attachmentPath === undefined) {
+      throw untrustedAttachmentPathError(rawPath);
     }
-    const execResult = await readExecutor.execute(
+    const readResult = await reader.execute(
       ctx,
-      new ReadArgs({ path: filePath, toolCallId }),
-      { execId: generateSeededUuid(`${toolCallId}:${filePath}`) },
+      new ReadArgs({ path: attachmentPath, toolCallId }),
+      { execId: generateSeededUuid(`${toolCallId}:${attachmentPath}`) },
     );
-    if (execResult.result.case !== "success") {
-      throw new Error(`Failed to read attachment: ${filePath}`);
+    if (readResult.result.case !== "success") {
+      throw new Error(`Failed to read attachment: ${attachmentPath}`);
     }
-    const output = execResult.result.value.output;
+    const output = readResult.result.value.output;
     if (output.case !== "data") {
-      throw new Error(`Attachment is not binary data: ${filePath}`);
+      throw new Error(`Attachment is not binary data: ${attachmentPath}`);
     }
-    const binaryData = output.value;
-    const detectedImageMime = detectImageMimeType(binaryData, filePath);
-    const videoMime = getPotentialVideoMimeTypeFromPath(filePath);
-    const lookupMime = mimeTypes.lookup(filePath);
-    const mimeType =
-      detectedImageMime ??
-      videoMime ??
-      (typeof lookupMime === "string" ? lookupMime : undefined);
-    if (!mimeType) {
-      throw new Error(`Could not detect mime type for attachment: ${filePath}`);
+    const bytes = output.value;
+    const imageMime = detectImageMimeType(bytes, attachmentPath);
+    const foundVideoMime = getPotentialVideoMimeTypeFromPath(attachmentPath);
+    const mimeLookup = mimeTypes.lookup(attachmentPath);
+    const resolvedMime =
+      imageMime ??
+      foundVideoMime ??
+      (typeof mimeLookup === "string" ? mimeLookup : undefined);
+    if (!resolvedMime) {
+      throw new Error(`Could not detect mime type for attachment: ${attachmentPath}`);
     }
-    const outputBlobId = execResult.result.value.outputBlobId;
-    const imageDataOrBlobId: SelectedImage["dataOrBlobId"] =
-      outputBlobId !== undefined && outputBlobId.length > 0
+    const blobId = readResult.result.value.outputBlobId;
+    const imagePayload: SelectedImage["dataOrBlobId"] =
+      blobId !== undefined && blobId.length > 0
         ? {
             case: "blobIdWithData",
             value: new SelectedImage_BlobIdWithData({
-              blobId: new Uint8Array(outputBlobId),
-              data: new Uint8Array(binaryData),
+              blobId: new Uint8Array(blobId),
+              data: new Uint8Array(bytes),
             }),
           }
-        : { case: "data", value: new Uint8Array(binaryData) };
-    const videoDataOrBlobId: SelectedVideo["dataOrBlobId"] =
-      outputBlobId !== undefined && outputBlobId.length > 0
+        : { case: "data", value: new Uint8Array(bytes) };
+    const videoPayload: SelectedVideo["dataOrBlobId"] =
+      blobId !== undefined && blobId.length > 0
         ? {
             case: "blobIdWithData",
             value: new SelectedVideo_BlobIdWithData({
-              blobId: new Uint8Array(outputBlobId),
-              data: new Uint8Array(binaryData),
+              blobId: new Uint8Array(blobId),
+              data: new Uint8Array(bytes),
             }),
           }
-        : { case: "data", value: new Uint8Array(binaryData) };
-    if (mimeType.startsWith("video/")) {
+        : { case: "data", value: new Uint8Array(bytes) };
+    if (resolvedMime.startsWith("video/")) {
       const resolvedModelId = options?.resolvedModelId?.trim();
       if (
         resolvedModelId !== undefined &&
@@ -782,83 +841,83 @@ async function processAttachments(
       ) {
         throw new Error("Video attachments are only supported for Gemini models");
       }
-      const useSignedUrl =
+      const useSigned =
         options?.privacyMode !== undefined &&
         isSignedUrlStorageAllowed(options.privacyMode) &&
         options.attachedMediaUrlProvider !== undefined;
-      const maxVideoBytes = useSignedUrl
+      const maxBytes = useSigned
         ? options?.useGeminiDeveloperVideoUpload === true &&
           isGeminiVideoSubagentType(options.subagentType)
           ? GEMINI_VIDEO_SUBAGENT_MAX_BYTES
           : options?.signedUrlVideoMaxBytes ?? getSignedUrlVideoMaxBytes({})
         : options?.inlineVideoMaxBytes ?? getInlineVideoMaxBytes({});
-      if (binaryData.length > maxVideoBytes) {
+      if (bytes.length > maxBytes) {
         throw new Error(
-          `Video exceeds maximum size of ${maxVideoBytes} bytes (${Math.round(maxVideoBytes / 1024 / 1024)}MB)`,
+          `Video exceeds maximum size of ${maxBytes} bytes (${Math.round(maxBytes / 1024 / 1024)}MB)`,
         );
       }
-      if (useSignedUrl) {
-        const conversationId = options.conversationId ?? "";
-        const signedUrls = await options.attachedMediaUrlProvider.getSignedUrlForAttachedMedia(
+      if (useSigned) {
+        const conversation = options.conversationId ?? "";
+        const signed = await options.attachedMediaUrlProvider.getSignedUrlForAttachedMedia(
           ctx,
           {
-            conversationId,
-            mimeType,
-            contentLengthBytes: binaryData.length,
+            conversationId: conversation,
+            mimeType: resolvedMime,
+            contentLengthBytes: bytes.length,
           },
         );
         await uploadAttachedMediaToSignedUrl({
-          putUrl: signedUrls.putUrl,
-          data: new Uint8Array(binaryData),
-          mimeType,
+          putUrl: signed.putUrl,
+          data: new Uint8Array(bytes),
+          mimeType: resolvedMime,
           signal: ctx.signal,
         });
-        selectedVideos.push(
+        videos.push(
           new SelectedVideo({
             dataOrBlobId: {
               case: "signedUrl",
               value: new SelectedVideo_SignedUrl({
-                url: signedUrls.getUrl,
-                key: signedUrls.key,
-                expiresAtUnixMs: signedUrls.expiresAtUnixMs,
-                refreshAfterUnixMs: signedUrls.refreshAfterUnixMs,
-                conversationId,
+                url: signed.getUrl,
+                key: signed.key,
+                expiresAtUnixMs: signed.expiresAtUnixMs,
+                refreshAfterUnixMs: signed.refreshAfterUnixMs,
+                conversationId: conversation,
               }),
             },
-            uuid: generateSeededUuid(`video-${filePath}`),
-            path: filePath,
-            mimeType,
+            uuid: generateSeededUuid(`video-${attachmentPath}`),
+            path: attachmentPath,
+            mimeType: resolvedMime,
             fps: 4,
           }),
         );
       } else {
-        selectedVideos.push(
+        videos.push(
           new SelectedVideo({
-            dataOrBlobId: videoDataOrBlobId,
-            uuid: generateSeededUuid(`video-${filePath}`),
-            path: filePath,
-            mimeType,
+            dataOrBlobId: videoPayload,
+            uuid: generateSeededUuid(`video-${attachmentPath}`),
+            path: attachmentPath,
+            mimeType: resolvedMime,
             fps: 4,
           }),
         );
       }
-    } else if (mimeType.startsWith("image/")) {
-      selectedImages.push(
+    } else if (resolvedMime.startsWith("image/")) {
+      images.push(
         new SelectedImage({
-          dataOrBlobId: imageDataOrBlobId,
-          uuid: generateSeededUuid(`image-${filePath}`),
-          path: filePath,
-          mimeType,
+          dataOrBlobId: imagePayload,
+          uuid: generateSeededUuid(`image-${attachmentPath}`),
+          path: attachmentPath,
+          mimeType: resolvedMime,
         }),
       );
     } else {
       throw new Error(
-        `Attachment must be image/* or video/*; got ${mimeType} for ${filePath}`,
+        `Attachment must be image/* or video/*; got ${resolvedMime} for ${attachmentPath}`,
       );
     }
   }
-  if (selectedImages.length === 0 && selectedVideos.length === 0) {
+  if (images.length === 0 && videos.length === 0) {
     return undefined;
   }
-  return new SelectedContext({ selectedImages, selectedVideos });
+  return new SelectedContext({ selectedImages: images, selectedVideos: videos });
 }
