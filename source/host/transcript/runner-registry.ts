@@ -1,6 +1,6 @@
 /** The runners a conversation runs on.
 
- * A runner is created once per conversation and then wired: what it says about itself goes to the roster, what it
+ * A activeRunner is created once per conversation and then wired: what it says about itself goes to the roster, what it
  * spends goes to telemetry, what it wakes and what it waits on go to the machinery that owns those, and what it fails
  * with is classified before it is reported. */
 import { findBackendConnectError } from "./agent-run-error.ts";
@@ -14,20 +14,20 @@ import {
 
 export class SlateRemoteRoomError extends Error {}
 
-export function coarseErrorTypeAndCode(error: unknown): {
+export function coarseErrorTypeAndCode(failure: unknown): {
   errorType: string;
   errorCode?: string;
 } {
-  const connectError = findBackendConnectError(error, false);
-  if (connectError != null) {
-    const errorCode = connectCodeOf(error);
+  const connectFailure = findBackendConnectError(failure, false);
+  if (connectFailure != null) {
+    const wireErrorCode = connectCodeOf(failure);
     return {
       errorType: "connect_error",
-      ...(errorCode == null ? {} : { errorCode }),
+      ...(wireErrorCode == null ? {} : { errorCode: wireErrorCode }),
     };
   }
-  if (error instanceof Error)
-    return { errorType: error.name.length > 0 ? error.name : "error" };
+  if (failure instanceof Error)
+    return { errorType: failure.name.length > 0 ? failure.name : "error" };
   return { errorType: "unknown" };
 }
 
@@ -38,207 +38,207 @@ export class RunnerRegistry {
   constructor(readonly tm: TranscriptManagerLike) {}
 
   interruptWedgedRunForWatchdog(agentId: string): boolean {
-    const reason = "run-queue watchdog: releasing a wedged predecessor";
-    const wasInFlight = this.tm.runLifecycle.runningAgentIds().has(agentId);
-    const hadActiveGroupMemberRun =
-      this.activeGroupMemberRunners.get(agentId)?.interrupt(reason) ?? false;
-    const hadActiveRun =
-      (this.runners.get(agentId)?.interrupt(reason) ?? false) ||
-      hadActiveGroupMemberRun;
+    const interruptReason = "run-queue watchdog: releasing a wedged predecessor";
+    const wasRunning = this.tm.runLifecycle.runningAgentIds().has(agentId);
+    const hadGroupMemberRun =
+      this.activeGroupMemberRunners.get(agentId)?.interrupt(interruptReason) ?? false;
+    const hadLiveRun =
+      (this.runners.get(agentId)?.interrupt(interruptReason) ?? false) ||
+      hadGroupMemberRun;
     this.tm.telemetry.reportTurnInterrupt({
       conversationId: agentId,
       reason: "watchdog",
-      hadActiveRun,
-      wasInFlight,
+      hadActiveRun: hadLiveRun,
+      wasInFlight: wasRunning,
     });
-    return hadActiveRun;
+    return hadLiveRun;
   }
 
-  attachRunner(runner: any): void {
-    this.tm.attachRunnerFactory((session: any, hooks: any) => {
-      runner.setAgentStore(session.agentStore, hooks.agentProfileProvider);
-      runner.setMemoryStore(session.memory);
-      runner.setMemorySnapshotStore(session.db);
-      runner.setProfilePromptSnapshotStore(session.db);
-      runner.setEpisodeProgress(session.db);
-      runner.setAutomationStore(session.automations);
-      runner.setWorkflowStore(session.workflows);
-      runner.setChannelStore(session.channels);
-      runner.setAttachmentIngestor(hooks.ingestAttachment);
-      runner.setImagePersister(hooks.persistImage);
-      runner.setMediaBytesPersister(hooks.persistMediaBytes);
-      runner.setAgentIdProvider(() => session.id);
-      return runner;
+  attachRunner(activeRunner: any): void {
+    this.tm.attachRunnerFactory((sessionState: any, hookState: any) => {
+      activeRunner.setAgentStore(sessionState.agentStore, hookState.agentProfileProvider);
+      activeRunner.setMemoryStore(sessionState.memory);
+      activeRunner.setMemorySnapshotStore(sessionState.db);
+      activeRunner.setProfilePromptSnapshotStore(sessionState.db);
+      activeRunner.setEpisodeProgress(sessionState.db);
+      activeRunner.setAutomationStore(sessionState.automations);
+      activeRunner.setWorkflowStore(sessionState.workflows);
+      activeRunner.setChannelStore(sessionState.channels);
+      activeRunner.setAttachmentIngestor(hookState.ingestAttachment);
+      activeRunner.setImagePersister(hookState.persistImage);
+      activeRunner.setMediaBytesPersister(hookState.persistMediaBytes);
+      activeRunner.setAgentIdProvider(() => sessionState.id);
+      return activeRunner;
     });
   }
 
-  attachRunnerFactory(factory: (...args: any[]) => any): void {
+  attachRunnerFactory(runnerFactory: (...args: any[]) => any): void {
     this.tm.setTurnExecution({
       ...this.tm.execution,
       canExecute: true,
-      createRunner: (session: any, hooks: any) => factory(session, hooks),
+      createRunner: (sessionState: any, hookState: any) => runnerFactory(sessionState, hookState),
     });
   }
-  attachGroupMemberRunnerFactory(factory: (...args: any[]) => any): void {
+  attachGroupMemberRunnerFactory(runnerFactory: (...args: any[]) => any): void {
     this.tm.setTurnExecution({
       ...this.tm.execution,
       canExecuteGroupMember: true,
-      createGroupMemberRunner: (session: any, hooks: any, overrides: any) =>
-        factory(session, hooks, overrides),
+      createGroupMemberRunner: (sessionState: any, hookState: any, runnerOverrides: any) =>
+        runnerFactory(sessionState, hookState, runnerOverrides),
     });
   }
-  attachRunReadinessProbe(probe: () => Promise<boolean>): void {
-    this.tm.setTurnExecution({ ...this.tm.execution, isRunReady: probe });
+  attachRunReadinessProbe(readinessProbe: () => Promise<boolean>): void {
+    this.tm.setTurnExecution({ ...this.tm.execution, isRunReady: readinessProbe });
   }
   async isRunReady(): Promise<boolean> {
     return this.tm.execution.isRunReady();
   }
 
-  getRunner(session: any): any {
-    if (this.tm.groupChat.isRemoteRoomSession(session))
+  getRunner(sessionState: any): any {
+    if (this.tm.groupChat.isRemoteRoomSession(sessionState))
       throw new SlateRemoteRoomError(
         "This is a shared chat hosted by another user; it has no local agent to run.",
       );
-    const cached = this.runners.get(session.id);
-    if (cached != null) {
+    const existingRunner = this.runners.get(sessionState.id);
+    if (existingRunner != null) {
       if (this.tm.upgradeResume.quiescingForUpgrade)
-        cached.requestQuiesceForUpgrade();
-      return cached;
+        existingRunner.requestQuiesceForUpgrade();
+      return existingRunner;
     }
     if (!this.tm.execution.canExecute)
       throw new Error(RUNNER_UNATTACHED_MESSAGE);
-    const runner = this.tm.execution.createRunner(
-      session,
-      this.runnerHooksFor(session),
+    const activeRunner = this.tm.execution.createRunner(
+      sessionState,
+      this.runnerHooksFor(sessionState),
     );
-    this.wireRunnerLifecycle(runner, session, session.id);
-    this.runners.set(session.id, runner);
-    return runner;
+    this.wireRunnerLifecycle(activeRunner, sessionState, sessionState.id);
+    this.runners.set(sessionState.id, activeRunner);
+    return activeRunner;
   }
 
   createGroupMemberRunner(
-    session: any,
-    transport: unknown,
-    overrides: unknown,
+    sessionState: any,
+    givenTransport: unknown,
+    runnerOverrides: unknown,
   ): any {
     if (!this.tm.execution.canExecuteGroupMember)
       throw new Error(RUNNER_UNATTACHED_MESSAGE);
-    const runner = this.tm.execution.createGroupMemberRunner(
-      session,
-      this.runnerHooksFor(session, transport),
-      overrides,
+    const activeRunner = this.tm.execution.createGroupMemberRunner(
+      sessionState,
+      this.runnerHooksFor(sessionState, givenTransport),
+      runnerOverrides,
     );
-    this.wireRunnerLifecycle(runner, session, session.id);
-    return runner;
+    this.wireRunnerLifecycle(activeRunner, sessionState, sessionState.id);
+    return activeRunner;
   }
 
   wireRunnerLifecycle(
-    runner: any,
-    session: any,
-    ttftConversationId: string,
+    activeRunner: any,
+    sessionState: any,
+    ttftId: string,
   ): any {
     if (this.tm.upgradeResume.quiescingForUpgrade)
-      runner.requestQuiesceForUpgrade();
-    runner.setBackgroundSubagentHandler((completion: unknown) =>
-      this.tm.backgroundWakes.handleBackgroundSubagentCompletion(completion),
+      activeRunner.requestQuiesceForUpgrade();
+    activeRunner.setBackgroundSubagentHandler((completionEvent: unknown) =>
+      this.tm.backgroundWakes.handleBackgroundSubagentCompletion(completionEvent),
     );
-    runner.setBackgroundSubagentDispatchHandler((dispatch: any) =>
+    activeRunner.setBackgroundSubagentDispatchHandler((dispatchEvent: any) =>
       this.tm.productAnalytics.trackEvent("slate.subagent.dispatched", {
-        parent_agent_id: dispatch.parentAgentId,
-        subagent_agent_id: dispatch.subagentAgentId,
-        subagent_type: dispatch.subagentType,
-        tool_call_id: dispatch.toolCallId,
-        subagent_request_id: dispatch.subagentRequestId,
+        parent_agent_id: dispatchEvent.parentAgentId,
+        subagent_agent_id: dispatchEvent.subagentAgentId,
+        subagent_type: dispatchEvent.subagentType,
+        tool_call_id: dispatchEvent.toolCallId,
+        subagent_request_id: dispatchEvent.subagentRequestId,
       }),
     );
-    runner.setComputerUseUsageHandler((report: any) => {
-      const usage = report.usage;
+    activeRunner.setComputerUseUsageHandler((reportData: any) => {
+      const usageData = reportData.usage;
       this.tm.productAnalytics.trackEvent("slate.computer_use.usage", {
-        parent_agent_id: report.parentAgentId,
-        subagent_agent_id: report.subagentAgentId,
-        subagent_type: report.subagentType,
-        subagent_request_id: report.subagentRequestId,
-        outcome: report.outcome,
-        duration_ms: report.durationMs,
-        tool_call_count: report.toolCallCount,
-        turn_ended_count: report.turnEndedCount,
-        has_usage: usage != null,
-        ...(report.modelId == null ? {} : { model_id: report.modelId }),
-        ...(usage == null
+        parent_agent_id: reportData.parentAgentId,
+        subagent_agent_id: reportData.subagentAgentId,
+        subagent_type: reportData.subagentType,
+        subagent_request_id: reportData.subagentRequestId,
+        outcome: reportData.outcome,
+        duration_ms: reportData.durationMs,
+        tool_call_count: reportData.toolCallCount,
+        turn_ended_count: reportData.turnEndedCount,
+        has_usage: usageData != null,
+        ...(reportData.modelId == null ? {} : { model_id: reportData.modelId }),
+        ...(usageData == null
           ? {}
           : {
-              input_tokens: usage.inputTokens,
-              output_tokens: usage.outputTokens,
-              cache_read_tokens: usage.cacheReadTokens,
-              cache_write_tokens: usage.cacheWriteTokens,
-              ...(usage.reasoningTokens == null
+              input_tokens: usageData.inputTokens,
+              output_tokens: usageData.outputTokens,
+              cache_read_tokens: usageData.cacheReadTokens,
+              cache_write_tokens: usageData.cacheWriteTokens,
+              ...(usageData.reasoningTokens == null
                 ? {}
-                : { reasoning_tokens: usage.reasoningTokens }),
+                : { reasoning_tokens: usageData.reasoningTokens }),
             }),
       });
-      this.tm.telemetry.reportComputerUseUsage(report);
+      this.tm.telemetry.reportComputerUseUsage(reportData);
     });
-    runner.setSubagentEventHandler((event: unknown) =>
-      this.tm.roster.emitSubagents(runner, event),
+    activeRunner.setSubagentEventHandler((payloadEvent: unknown) =>
+      this.tm.roster.emitSubagents(activeRunner, payloadEvent),
     );
-    runner.setAsyncTasksEventHandler((event: unknown) =>
-      this.tm.roster.emitAsyncTasks(runner, event),
+    activeRunner.setAsyncTasksEventHandler((payloadEvent: unknown) =>
+      this.tm.roster.emitAsyncTasks(activeRunner, payloadEvent),
     );
-    runner.setBackgroundShellHandler((completion: unknown) =>
-      this.tm.backgroundWakes.handleBackgroundShellCompletion(completion),
+    activeRunner.setBackgroundShellHandler((completionEvent: unknown) =>
+      this.tm.backgroundWakes.handleBackgroundShellCompletion(completionEvent),
     );
-    runner.setPendingWakeArmedHandler((event: unknown) =>
-      this.tm.pendingWakes.persistPendingWake(event),
+    activeRunner.setPendingWakeArmedHandler((payloadEvent: unknown) =>
+      this.tm.pendingWakes.persistPendingWake(payloadEvent),
     );
-    runner.setPendingWakeDisarmedHandler((event: unknown) =>
-      this.tm.pendingWakes.disarmPendingWake(event),
+    activeRunner.setPendingWakeDisarmedHandler((payloadEvent: unknown) =>
+      this.tm.pendingWakes.disarmPendingWake(payloadEvent),
     );
-    runner.setTurnAwaitHandler((observation: unknown) =>
+    activeRunner.setTurnAwaitHandler((observationData: unknown) =>
       this.tm.telemetry.reportTurnAwait({
-        conversationId: session.id,
-        ...(observation as object),
+        conversationId: sessionState.id,
+        ...(observationData as object),
       }),
     );
-    runner.setFirstTokenHandler((observation: unknown) =>
+    activeRunner.setFirstTokenHandler((observationData: unknown) =>
       this.tm.telemetry.reportTtft({
-        conversationId: ttftConversationId,
-        ...(observation as object),
+        conversationId: ttftId,
+        ...(observationData as object),
       }),
     );
-    runner.setSendDispatchHandler((observation: unknown) =>
+    activeRunner.setSendDispatchHandler((observationData: unknown) =>
       this.tm.telemetry.reportSendDispatch({
-        conversationId: session.id,
-        ...(observation as object),
+        conversationId: sessionState.id,
+        ...(observationData as object),
       }),
     );
-    runner.setTurnRetryHandler(({ error, ...rest }: any) => {
-      const { errorType, errorCode } = coarseErrorTypeAndCode(error);
+    activeRunner.setTurnRetryHandler(({ error: failure, ...remaining }: any) => {
+      const { errorType, errorCode: wireErrorCode } = coarseErrorTypeAndCode(failure);
       this.tm.telemetry.reportTurnRetry({
-        conversationId: session.id,
-        ...rest,
+        conversationId: sessionState.id,
+        ...remaining,
         errorType,
-        ...(errorCode == null ? {} : { errorCode }),
-        cause: slateErrorWireCode(classifyAgentError(error)),
+        ...(wireErrorCode == null ? {} : { errorCode: wireErrorCode }),
+        cause: slateErrorWireCode(classifyAgentError(failure)),
       });
     });
-    runner.setToolCallDiagnosticHandler((observation: unknown) =>
-      this.tm.turnRuntime.reportToolCallDiagnostic(session, observation),
+    activeRunner.setToolCallDiagnosticHandler((observationData: unknown) =>
+      this.tm.turnRuntime.reportToolCallDiagnostic(sessionState, observationData),
     );
-    return runner;
+    return activeRunner;
   }
 
-  runnerHooksFor(session: any, transport?: unknown): Record<string, unknown> {
+  runnerHooksFor(sessionState: any, givenTransport?: unknown): Record<string, unknown> {
     return {
       transport:
-        transport ??
+        givenTransport ??
         createSlateTransport((update) =>
-          this.tm.handleAgentUpdate(update, session),
+          this.tm.handleAgentUpdate(update, sessionState),
         ),
-      onRunLifecycle: (event: unknown) => this.tm.emitAgentRunLifecycle(event),
-      ingestAttachment: this.tm.createAttachmentIngestor(session),
-      persistImage: this.tm.createAssetImagePersister(session),
-      persistMediaBytes: this.tm.createMediaBytesPersister(session),
-      agentProfileProvider: () => this.tm.roster.resolveAgentProfile(session),
+      onRunLifecycle: (payloadEvent: unknown) => this.tm.emitAgentRunLifecycle(payloadEvent),
+      ingestAttachment: this.tm.createAttachmentIngestor(sessionState),
+      persistImage: this.tm.createAssetImagePersister(sessionState),
+      persistMediaBytes: this.tm.createMediaBytesPersister(sessionState),
+      agentProfileProvider: () => this.tm.roster.resolveAgentProfile(sessionState),
     };
   }
 }
