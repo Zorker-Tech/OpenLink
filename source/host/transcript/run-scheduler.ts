@@ -19,11 +19,11 @@ export interface RunTask {
   promise: Promise<void>;
 }
 interface ActiveRun {
-  item: RunTask;
+  queued: RunTask;
   startedAtMs: number;
-  generation: number;
-  settled: Promise<void>;
-  markSettled(): void;
+  runGeneration: number;
+  settledSignal: Promise<void>;
+  markDone(): void;
   phase: "running" | "interrupted";
 }
 interface RunQueue {
@@ -31,8 +31,8 @@ interface RunQueue {
   pendingAgent: RunTask[];
   pendingBackground: RunTask[];
   active: ActiveRun | null;
-  generationCounter: number;
-  zombies: Set<Promise<void>>;
+  generationCount: number;
+  abandoned: Set<Promise<void>>;
   watchdogTimer?: Disposable;
   graceTimer?: Disposable;
 }
@@ -52,13 +52,13 @@ export function takeNextUserTask<T extends { source: string }>(
   pending: T[],
 ): T | undefined {
   if (pending.length === 0) return undefined;
-  const preferred = pending.findIndex((item) => item.source !== "group-member");
+  const preferred = pending.findIndex((queued) => queued.source !== "group-member");
   return pending.splice(preferred === -1 ? 0 : preferred, 1)[0];
 }
 
 export class SlateRunScheduler {
   readonly queues = new Map<string, RunQueue>();
-  private disposed = false;
+  private isDisposed = false;
 
   constructor(
     readonly options: SchedulerOptions,
@@ -68,75 +68,75 @@ export class SlateRunScheduler {
   enqueue(
     agentId: string,
     task: () => Promise<void>,
-    options: {
+    taskOptions: {
       lane: RunLane;
       source: string;
       acceptedAtMs?: number;
       ackToken?: string;
     },
   ): Promise<void> {
-    const queue = this.queueFor(agentId);
-    let resolve!: () => void;
-    let reject!: (error: unknown) => void;
-    const promise = new Promise<void>((res, rej) => {
-      resolve = res;
-      reject = rej;
+    const queue = this.ensureQueue(agentId);
+    let finishResolve!: () => void;
+    let finishReject!: (error: unknown) => void;
+    const finishPromise = new Promise<void>((res, rej) => {
+      finishResolve = res;
+      finishReject = rej;
     });
-    const item: RunTask = {
-      lane: options.lane,
-      source: options.source,
+    const queued: RunTask = {
+      lane: taskOptions.lane,
+      source: taskOptions.source,
       enqueuedAtMs: this.clock.now(),
-      ...(options.acceptedAtMs == null
+      ...(taskOptions.acceptedAtMs == null
         ? {}
-        : { acceptedAtMs: options.acceptedAtMs }),
-      ...(options.ackToken == null ? {} : { ackToken: options.ackToken }),
+        : { acceptedAtMs: taskOptions.acceptedAtMs }),
+      ...(taskOptions.ackToken == null ? {} : { ackToken: taskOptions.ackToken }),
       task,
-      resolve,
-      reject,
-      promise,
+      resolve: finishResolve,
+      reject: finishReject,
+      promise: finishPromise,
     };
-    if (item.lane === "user") queue.pendingUser.push(item);
-    else if (item.lane === "agent") queue.pendingAgent.push(item);
-    else queue.pendingBackground.push(item);
+    if (queued.lane === "user") queue.pendingUser.push(queued);
+    else if (queued.lane === "agent") queue.pendingAgent.push(queued);
+    else queue.pendingBackground.push(queued);
     let pendingAhead =
       queue.pendingUser.length +
       queue.pendingAgent.length +
       queue.pendingBackground.length -
       1;
-    if (item.lane === "user") pendingAhead = queue.pendingUser.length - 1;
-    else if (item.lane === "agent")
+    if (queued.lane === "user") pendingAhead = queue.pendingUser.length - 1;
+    else if (queued.lane === "agent")
       pendingAhead = queue.pendingUser.length + queue.pendingAgent.length - 1;
     this.options.telemetry.onAccepted({
       agentId,
-      lane: item.lane,
-      source: item.source,
+      lane: queued.lane,
+      source: queued.source,
       position: (queue.active == null ? 0 : 1) + pendingAhead,
       depthUser: queue.pendingUser.length,
       depthAgent: queue.pendingAgent.length,
       depthBackground: queue.pendingBackground.length,
       hasActive: queue.active != null,
     });
-    this.armWatchdog(agentId, queue);
+    this.armWatchdogTimer(agentId, queue);
     void Promise.resolve().then(() => this.pump(agentId));
-    return promise;
+    return finishPromise;
   }
 
   async drain(agentId: string): Promise<void> {
     const queue = this.queues.get(agentId);
     if (queue == null) return;
-    const snapshot = [
-      ...(queue.active == null ? [] : [queue.active.settled]),
-      ...queue.zombies,
-      ...queue.pendingUser.map((item) => item.promise),
-      ...queue.pendingAgent.map((item) => item.promise),
-      ...queue.pendingBackground.map((item) => item.promise),
+    const waiters = [
+      ...(queue.active == null ? [] : [queue.active.settledSignal]),
+      ...queue.abandoned,
+      ...queue.pendingUser.map((queued) => queued.promise),
+      ...queue.pendingAgent.map((queued) => queued.promise),
+      ...queue.pendingBackground.map((queued) => queued.promise),
     ];
-    await Promise.allSettled(snapshot);
+    await Promise.allSettled(waiters);
   }
 
   getDiagnostics(): Array<Record<string, unknown>> {
     const now = this.clock.now();
-    const diagnostics: Array<Record<string, unknown>> = [];
+    const rows: Array<Record<string, unknown>> = [];
     for (const [agentId, queue] of this.queues) {
       const depthUser = queue.pendingUser.length;
       const depthAgent = queue.pendingAgent.length;
@@ -148,7 +148,7 @@ export class SlateRunScheduler {
         queue.active == null
       )
         continue;
-      diagnostics.push({
+      rows.push({
         agentId,
         depthUser,
         depthAgent,
@@ -167,97 +167,97 @@ export class SlateRunScheduler {
           ? {}
           : {
               active: {
-                lane: queue.active.item.lane,
-                source: queue.active.item.source,
+                lane: queue.active.queued.lane,
+                source: queue.active.queued.source,
                 runtimeMs: now - queue.active.startedAtMs,
                 phase: queue.active.phase,
               },
             }),
       });
     }
-    return diagnostics;
+    return rows;
   }
 
   getActiveLane(agentId: string): RunLane | undefined {
-    return this.queues.get(agentId)?.active?.item.lane;
+    return this.queues.get(agentId)?.active?.queued.lane;
   }
 
   dispose(): void {
-    this.disposed = true;
-    for (const queue of this.queues.values()) this.disarmWatchdog(queue);
+    this.isDisposed = true;
+    for (const queue of this.queues.values()) this.disarmTimers(queue);
   }
 
-  private queueFor(agentId: string): RunQueue {
-    const existing = this.queues.get(agentId);
-    if (existing != null) return existing;
-    const created: RunQueue = {
+  private ensureQueue(agentId: string): RunQueue {
+    const existingQueue = this.queues.get(agentId);
+    if (existingQueue != null) return existingQueue;
+    const newQueue: RunQueue = {
       pendingUser: [],
       pendingAgent: [],
       pendingBackground: [],
       active: null,
-      generationCounter: 0,
-      zombies: new Set(),
+      generationCount: 0,
+      abandoned: new Set(),
     };
-    this.queues.set(agentId, created);
-    return created;
+    this.queues.set(agentId, newQueue);
+    return newQueue;
   }
 
   private pump(agentId: string): void {
-    if (this.disposed) return;
+    if (this.isDisposed) return;
     const queue = this.queues.get(agentId);
     if (queue == null || queue.active != null) return;
-    const next =
+    const dequeued =
       queue.pendingUser.length > 0
         ? takeNextUserTask(queue.pendingUser)
         : (queue.pendingAgent.shift() ?? queue.pendingBackground.shift());
-    if (next == null) {
-      this.disarmWatchdog(queue);
+    if (dequeued == null) {
+      this.disarmTimers(queue);
       return;
     }
-    let markSettled!: () => void;
-    const settled = new Promise<void>((resolve) => {
-      markSettled = resolve;
+    let markDone!: () => void;
+    const settledSignal = new Promise<void>((resolve) => {
+      markDone = resolve;
     });
-    const active: ActiveRun = {
-      item: next,
+    const runningRun: ActiveRun = {
+      queued: dequeued,
       startedAtMs: this.clock.now(),
-      generation: ++queue.generationCounter,
-      settled,
-      markSettled,
+      runGeneration: ++queue.generationCount,
+      settledSignal,
+      markDone,
       phase: "running",
     };
-    queue.active = active;
+    queue.active = runningRun;
     this.options.telemetry.onDequeued({
       agentId,
-      lane: next.lane,
-      source: next.source,
-      queueWaitMs: active.startedAtMs - next.enqueuedAtMs,
-      ...(next.acceptedAtMs == null
+      lane: dequeued.lane,
+      source: dequeued.source,
+      queueWaitMs: runningRun.startedAtMs - dequeued.enqueuedAtMs,
+      ...(dequeued.acceptedAtMs == null
         ? {}
-        : { acceptedToRunMs: active.startedAtMs - next.acceptedAtMs }),
+        : { acceptedToRunMs: runningRun.startedAtMs - dequeued.acceptedAtMs }),
       jumpedBackground:
-        next.lane === "background" ? 0 : queue.pendingBackground.length,
+        dequeued.lane === "background" ? 0 : queue.pendingBackground.length,
       depthUser: queue.pendingUser.length,
       depthAgent: queue.pendingAgent.length,
       depthBackground: queue.pendingBackground.length,
     });
-    this.disarmWatchdog(queue);
-    this.armWatchdog(agentId, queue);
+    this.disarmTimers(queue);
+    this.armWatchdogTimer(agentId, queue);
     this.options.onRunStart?.(agentId);
-    let running: Promise<void>;
+    let workPromise: Promise<void>;
     try {
-      running = next.task();
+      workPromise = dequeued.task();
     } catch (error) {
-      running = Promise.reject(error);
+      workPromise = Promise.reject(error);
     }
-    void running.then(
+    void workPromise.then(
       () => {
-        this.onTaskSettled(agentId, queue, active);
-        markSettled();
+        this.onTaskSettled(agentId, queue, runningRun);
+        markDone();
       },
       (error) => {
-        this.onTaskSettled(agentId, queue, active, { error });
-        markSettled();
+        this.onTaskSettled(agentId, queue, runningRun, { error });
+        markDone();
       },
     );
   }
@@ -266,107 +266,107 @@ export class SlateRunScheduler {
     agentId: string,
     queue: RunQueue,
     active: ActiveRun,
-    failure?: { error: unknown },
+    taskFailure?: { error: unknown },
   ): void {
-    if (failure == null) active.item.resolve();
-    else active.item.reject(failure.error);
-    if (queue.active?.generation !== active.generation) {
+    if (taskFailure == null) active.queued.resolve();
+    else active.queued.reject(taskFailure.error);
+    if (queue.active?.runGeneration !== active.runGeneration) {
       this.options.telemetry.onWatchdog({
         agentId,
         stage: "late_settle",
-        activeLane: active.item.lane,
-        activeSource: active.item.source,
+        activeLane: active.queued.lane,
+        activeSource: active.queued.source,
         activeRuntimeMs: this.clock.now() - active.startedAtMs,
       });
       return;
     }
     queue.active = null;
-    this.disarmWatchdog(queue);
+    this.disarmTimers(queue);
     this.pump(agentId);
   }
 
-  private waitedBehindActiveMs(queue: RunQueue): number | null {
-    const head = queue.pendingUser[0];
+  private queuedBehindActiveMs(queue: RunQueue): number | null {
+    const firstUser = queue.pendingUser[0];
     const active = queue.active;
-    return head == null || active == null
+    return firstUser == null || active == null
       ? null
-      : this.clock.now() - Math.max(head.enqueuedAtMs, active.startedAtMs);
+      : this.clock.now() - Math.max(firstUser.enqueuedAtMs, active.startedAtMs);
   }
-  private armWatchdog(agentId: string, queue: RunQueue): void {
+  private armWatchdogTimer(agentId: string, queue: RunQueue): void {
     if (
-      this.disposed ||
+      this.isDisposed ||
       queue.watchdogTimer != null ||
       queue.graceTimer != null
     )
       return;
-    const waited = this.waitedBehindActiveMs(queue);
-    if (waited == null) return;
+    const queuedAge = this.queuedBehindActiveMs(queue);
+    if (queuedAge == null) return;
     queue.watchdogTimer = this.clock.schedule(
-      Math.max(0, this.options.watchdogMs - waited),
+      Math.max(0, this.options.watchdogMs - queuedAge),
       () => {
         delete queue.watchdogTimer;
-        this.onWatchdogFired(agentId, queue);
+        this.tripWatchdogTimer(agentId, queue);
       },
     );
   }
-  private disarmWatchdog(queue: RunQueue): void {
+  private disarmTimers(queue: RunQueue): void {
     queue.watchdogTimer?.dispose();
     queue.graceTimer?.dispose();
     delete queue.watchdogTimer;
     delete queue.graceTimer;
   }
-  private onWatchdogFired(agentId: string, queue: RunQueue): void {
-    if (this.disposed) return;
+  private tripWatchdogTimer(agentId: string, queue: RunQueue): void {
+    if (this.isDisposed) return;
     const active = queue.active;
-    const head = queue.pendingUser[0];
-    const waited = this.waitedBehindActiveMs(queue);
-    if (active == null || head == null || waited == null) return;
-    if (waited < this.options.watchdogMs) {
-      this.armWatchdog(agentId, queue);
+    const firstUser = queue.pendingUser[0];
+    const queuedAge = this.queuedBehindActiveMs(queue);
+    if (active == null || firstUser == null || queuedAge == null) return;
+    if (queuedAge < this.options.watchdogMs) {
+      this.armWatchdogTimer(agentId, queue);
       return;
     }
-    let interrupted = false;
+    let interruptAccepted = false;
     try {
-      interrupted = this.options.interruptWedgedRun(agentId);
+      interruptAccepted = this.options.interruptWedgedRun(agentId);
     } catch {}
     active.phase = "interrupted";
     this.options.telemetry.onWatchdog({
       agentId,
       stage: "trip",
-      activeLane: active.item.lane,
-      activeSource: active.item.source,
+      activeLane: active.queued.lane,
+      activeSource: active.queued.source,
       activeRuntimeMs: this.clock.now() - active.startedAtMs,
-      waitingUserAgeMs: this.clock.now() - head.enqueuedAtMs,
-      interrupted,
+      waitingUserAgeMs: this.clock.now() - firstUser.enqueuedAtMs,
+      interrupted: interruptAccepted,
     });
     queue.graceTimer = this.clock.schedule(this.options.watchdogGraceMs, () => {
       delete queue.graceTimer;
-      this.escapeWedgedRun(agentId, queue, active);
+      this.releaseWedgedRun(agentId, queue, active);
     });
   }
-  private escapeWedgedRun(
+  private releaseWedgedRun(
     agentId: string,
     queue: RunQueue,
     active: ActiveRun,
   ): void {
-    if (this.disposed || queue.active?.generation !== active.generation) return;
+    if (this.isDisposed || queue.active?.runGeneration !== active.runGeneration) return;
     const waitingHead = queue.pendingUser[0];
     this.options.telemetry.onWatchdog({
       agentId,
       stage: "escape",
-      activeLane: active.item.lane,
-      activeSource: active.item.source,
+      activeLane: active.queued.lane,
+      activeSource: active.queued.source,
       activeRuntimeMs: this.clock.now() - active.startedAtMs,
       ...(waitingHead == null
         ? {}
         : { waitingUserAgeMs: this.clock.now() - waitingHead.enqueuedAtMs }),
-      ...(active.item.ackToken == null
+      ...(active.queued.ackToken == null
         ? {}
-        : { ackToken: active.item.ackToken }),
+        : { ackToken: active.queued.ackToken }),
     });
-    active.item.resolve();
-    queue.zombies.add(active.settled);
-    void active.settled.then(() => queue.zombies.delete(active.settled));
+    active.queued.resolve();
+    queue.abandoned.add(active.settledSignal);
+    void active.settledSignal.then(() => queue.abandoned.delete(active.settledSignal));
     queue.active = null;
     this.pump(agentId);
   }
