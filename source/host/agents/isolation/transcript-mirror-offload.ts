@@ -21,12 +21,12 @@ import { WorkerBlobStore } from "./worker-blob-store.ts";
 export const DEFAULT_MIRROR_WORKERS = 2;
 
 export function defaultMirrorWorkerEntryPath(): string {
-  const hostBundleDirectory =
+  const bundleDirectory =
     typeof __dirname === "string"
       ? __dirname
       : dirname(fileURLToPath(import.meta.url));
   return join(
-    hostBundleDirectory,
+    bundleDirectory,
     "agent-isolation",
     "transcript-mirror-worker.cjs",
   );
@@ -47,23 +47,23 @@ interface MirrorWorkerResponse {
 }
 
 interface PendingMirrorRequest {
-  resolve(response: MirrorWorkerResponse): void;
+  resolve(workerResponse: MirrorWorkerResponse): void;
   reject(error: Error): void;
 }
 
 class MirrorWorkerConnection {
   readonly worker: Worker;
   readonly pending = new Map<number, PendingMirrorRequest>();
-  private nextRequestId = 1;
-  private dead = false;
+  private nextSequence = 1;
+  private isDead = false;
 
   constructor(
     workerEntryPath: string,
-    readonly onExit: (connection: MirrorWorkerConnection) => void
+    readonly whenExited: (workerConnection: MirrorWorkerConnection) => void
   ) {
     this.worker = new Worker(workerEntryPath);
-    this.worker.on("message", response => {
-      this.onMessage(response as MirrorWorkerResponse);
+    this.worker.on("message", workerResponse => {
+      this.onMessage(workerResponse as MirrorWorkerResponse);
     });
     this.worker.on("error", error => this.die(error));
     this.worker.on("exit", code => {
@@ -71,60 +71,60 @@ class MirrorWorkerConnection {
     });
   }
 
-  private onMessage(response: MirrorWorkerResponse): void {
-    const entry = this.pending.get(response.requestId);
-    if (entry == null) return;
-    this.pending.delete(response.requestId);
+  private onMessage(workerResponse: MirrorWorkerResponse): void {
+    const entryItem = this.pending.get(workerResponse.requestId);
+    if (entryItem == null) return;
+    this.pending.delete(workerResponse.requestId);
 
-    if (response.kind === "error") {
-      entry.reject(new Error(response.message));
+    if (workerResponse.kind === "error") {
+      entryItem.reject(new Error(workerResponse.message));
     } else {
-      entry.resolve(response);
+      entryItem.resolve(workerResponse);
     }
   }
 
   private die(reason: unknown): void {
-    if (this.dead) return;
-    this.dead = true;
+    if (this.isDead) return;
+    this.isDead = true;
     const error = reason instanceof Error ? reason : new Error(String(reason));
-    for (const entry of this.pending.values()) entry.reject(error);
+    for (const entryItem of this.pending.values()) entryItem.reject(error);
     this.pending.clear();
-    this.onExit(this);
+    this.whenExited(this);
   }
 
   isAlive(): boolean {
-    return !this.dead;
+    return !this.isDead;
   }
 
   private send(
-    build: (requestId: number) => object,
-    transfer: ArrayBuffer[] = []
+    buildRequest: (requestId: number) => object,
+    transferList: ArrayBuffer[] = []
   ): Promise<MirrorWorkerResponse> {
-    if (this.dead) {
+    if (this.isDead) {
       return Promise.reject(new Error("mirror worker is no longer running"));
     }
 
-    const requestId = this.nextRequestId++;
+    const requestId = this.nextSequence++;
     return new Promise<MirrorWorkerResponse>((resolve, reject) => {
       this.pending.set(requestId, { resolve, reject });
-      this.worker.postMessage(build(requestId), transfer);
+      this.worker.postMessage(buildRequest(requestId), transferList);
     });
   }
 
-  async write(job: TranscriptMirrorJob): Promise<boolean> {
-    const response = await this.send(
+  async write(mirrorJob: TranscriptMirrorJob): Promise<boolean> {
+    const workerResponse = await this.send(
       requestId => ({
         kind: "mirror-write",
         requestId,
-        ...job
+        ...mirrorJob
       }),
-      [job.stateBlobId.buffer]
+      [mirrorJob.stateBlobId.buffer]
     );
-    return response.written as boolean;
+    return workerResponse.written as boolean;
   }
 
   async close(): Promise<void> {
-    if (this.dead) return;
+    if (this.isDead) return;
     try {
       await this.send(requestId => ({ kind: "close", requestId }));
     } catch {
@@ -135,7 +135,7 @@ class MirrorWorkerConnection {
 }
 
 interface MirrorResolver {
-  resolve(written: boolean): void;
+  resolve(shipped: boolean): void;
   reject(error: Error): void;
 }
 
@@ -166,16 +166,16 @@ export class TranscriptMirrorOffloadPool {
   readonly lanes = new Map<string, ConversationLane>();
   private isClosed = false;
 
-  constructor(options: TranscriptMirrorOffloadPoolOptions = {}) {
-    this.workerEntryPath = options.workerEntryPath ?? defaultMirrorWorkerEntryPath();
-    this.maxWorkers = options.maxWorkers ?? DEFAULT_MIRROR_WORKERS;
+  constructor(settings: TranscriptMirrorOffloadPoolOptions = {}) {
+    this.workerEntryPath = settings.workerEntryPath ?? defaultMirrorWorkerEntryPath();
+    this.maxWorkers = settings.maxWorkers ?? DEFAULT_MIRROR_WORKERS;
     this.workers = new Array(this.maxWorkers).fill(null);
   }
 
   workerIndexFor(conversationId: string): number {
     let hash = 0;
-    for (let index = 0; index < conversationId.length; index += 1) {
-      hash = hash * 31 + conversationId.charCodeAt(index) | 0;
+    for (let workerSlot = 0; workerSlot < conversationId.length; workerSlot += 1) {
+      hash = hash * 31 + conversationId.charCodeAt(workerSlot) | 0;
     }
     return Math.abs(hash) % this.maxWorkers;
   }
@@ -185,65 +185,65 @@ export class TranscriptMirrorOffloadPool {
   ): MirrorWorkerConnection {
     invariant(!this.isClosed, "mirror offload pool is closed");
 
-    const index = this.workerIndexFor(conversationId);
-    const existing = this.workers[index];
-    if (existing != null && existing.isAlive()) return existing;
+    const workerSlot = this.workerIndexFor(conversationId);
+    const reusableConnection = this.workers[workerSlot];
+    if (reusableConnection != null && reusableConnection.isAlive()) return reusableConnection;
 
-    const onExit = (self: MirrorWorkerConnection) => {
-      if (this.workers[index] === self) this.workers[index] = null;
+    const whenExited = (settlingConnection: MirrorWorkerConnection) => {
+      if (this.workers[workerSlot] === settlingConnection) this.workers[workerSlot] = null;
     };
-    const connection = new MirrorWorkerConnection(this.workerEntryPath, onExit);
-    this.workers[index] = connection;
-    return connection;
+    const workerConnection = new MirrorWorkerConnection(this.workerEntryPath, whenExited);
+    this.workers[workerSlot] = workerConnection;
+    return workerConnection;
   }
 
-  write(job: TranscriptMirrorJob): Promise<boolean> {
+  write(mirrorJob: TranscriptMirrorJob): Promise<boolean> {
     if (this.isClosed) {
       return Promise.reject(new Error("mirror offload pool is closed"));
     }
 
-    const lane = this.lanes.get(job.conversationId) ?? {
+    const conversationLane = this.lanes.get(mirrorJob.conversationId) ?? {
       isRunning: false,
       queued: null
     };
-    this.lanes.set(job.conversationId, lane);
+    this.lanes.set(mirrorJob.conversationId, conversationLane);
 
     return new Promise<boolean>((resolve, reject) => {
-      const resolver = { resolve, reject };
-      if (lane.isRunning) {
-        if (lane.queued == null) {
-          lane.queued = { job, resolvers: [resolver] };
+      const waiter = { resolve, reject };
+      if (conversationLane.isRunning) {
+        if (conversationLane.queued == null) {
+          conversationLane.queued = { job: mirrorJob, resolvers: [waiter] };
         } else {
-          lane.queued.job = job;
-          lane.queued.resolvers.push(resolver);
+          conversationLane.queued.job = mirrorJob;
+          conversationLane.queued.resolvers.push(waiter);
         }
         return;
       }
 
-      lane.isRunning = true;
-      void this.runJob(lane, { job, resolvers: [resolver] });
+      conversationLane.isRunning = true;
+      void this.runJob(conversationLane, { job: mirrorJob, resolvers: [waiter] });
     });
   }
 
   private async runJob(
-    lane: ConversationLane,
-    entry: QueuedMirrorJob
+    conversationLane: ConversationLane,
+    entryItem: QueuedMirrorJob
   ): Promise<void> {
     try {
-      const written = await this.connectionFor(entry.job.conversationId)
-        .write(entry.job);
-      for (const resolver of entry.resolvers) resolver.resolve(written);
+      const shipped = await this.connectionFor(entryItem.job.conversationId)
+        .write(entryItem.job);
+      for (const waiter of entryItem.resolvers) waiter.resolve(shipped);
     } catch (reason) {
       const error = reason instanceof Error ? reason : new Error(String(reason));
-      for (const resolver of entry.resolvers) resolver.reject(error);
+      for (const waiter of entryItem.resolvers) waiter.reject(error);
     } finally {
-      const next = lane.queued;
-      lane.queued = null;
+      const next = conversationLane.queued;
+      conversationLane.queued = null;
       if (next != null) {
-        void this.runJob(lane, next);
+        void this.runJob(conversationLane, next);
       } else {
-        lane.isRunning = false;
-        this.lanes.delete(entry.job.conversationId);
+        conversationLane.isRunning = false;
+        this.lanes.delete(entryItem.job.conversationId);
       }
     }
   }
@@ -310,13 +310,13 @@ export class OffloadingTranscriptMirror<
 
   static forTranscriptsDir(
     pool: () => TranscriptMirrorOffloadPool,
-    options: OffloadingTranscriptMirrorOptions,
+    settings: OffloadingTranscriptMirrorOptions,
     previousRootPromptCount = 0
   ): OffloadingTranscriptMirror<LegacyTranscriptState, LegacyTranscriptBlobStore> {
     return new OffloadingTranscriptMirror(
-      new LegacyFileTranscriptMirror(options.transcriptsDir),
+      new LegacyFileTranscriptMirror(settings.transcriptsDir),
       pool,
-      options,
+      settings,
       previousRootPromptCount
     );
   }
@@ -341,13 +341,13 @@ export class OffloadingTranscriptMirror<
     }
 
     if (!(blobStore instanceof WorkerBlobStore)) {
-      const written = await this.inline.writeFull(
+      const shipped = await this.inline.writeFull(
         ctx,
         conversationId,
         state,
         blobStore
       );
-      if (written) {
+      if (shipped) {
         this.previousRootPromptCount = state.rootPromptMessagesJson.length;
       } else {
         warnStaleMirror(conversationId, "full-write-failed");
@@ -361,13 +361,13 @@ export class OffloadingTranscriptMirror<
     }
 
     try {
-      const written = await this.pool().write({
+      const shipped = await this.pool().write({
         conversationId,
         stateBlobId: new Uint8Array(stateBlobId),
         blobDbPaths: this.options.blobDbPaths,
         transcriptsDir: this.options.transcriptsDir
       });
-      if (written) {
+      if (shipped) {
         this.previousRootPromptCount = state.rootPromptMessagesJson.length;
       } else {
         warnStaleMirror(conversationId, "worker-write-failed");
