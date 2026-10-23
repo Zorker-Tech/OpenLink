@@ -1,7 +1,7 @@
 /** The trace this host keeps of itself.
 
- * Spans are started and ended around the work the host does, with the resource that says which build and which machine
- * they came from, and an exporter that carries them to wherever the platform collects them — or keeps them in memory
+ * Spans are started and ended around the work the host does, with the resourceAttributes that says which build and which machine
+ * they came from, and an spanExporter that carries them to wherever the platform collects them — or keeps them in memory
  * when it is asked to. */
 import { hostname, platform } from "node:os";
 import { ExportResultCode } from "@opentelemetry/core";
@@ -17,14 +17,14 @@ import { SLATE_CLIENT_TYPE } from "../../shared/node/slate-client-metadata.ts";
 import { sendTraceSampler } from "./send-trace-sampler.ts";
 export { ExportResultCode };
 export type SpanExporter = OTelSpanExporter;
-export type SpanExporterFactory = (options: {
+export type SpanExporterFactory = (settings: {
   url: string;
   headers: Record<string, string>;
   httpAgentOptions?: { rejectUnauthorized: boolean };
 }) => SpanExporter;
 export class TokenRefreshingSpanExporter implements SpanExporter {
-  private delegate: SpanExporter | undefined;
-  private delegateToken: string | undefined;
+  private currentExporter: SpanExporter | undefined;
+  private currentToken: string | undefined;
   constructor(
     readonly url: string,
     readonly getToken: () => string | null,
@@ -41,62 +41,62 @@ export class TokenRefreshingSpanExporter implements SpanExporter {
     }),
   ) {}
   resolveDelegate(): SpanExporter | undefined {
-    let token: string | null;
+    let freshToken: string | null;
     try {
-      token = this.getToken();
+      freshToken = this.getToken();
     } catch {
-      token = null;
+      freshToken = null;
     }
-    if (token == null || token.length === 0) return this.delegate;
-    if (this.delegate === undefined || token !== this.delegateToken) {
-      const previous = this.delegate;
-      this.delegate = this.createExporter({
+    if (freshToken == null || freshToken.length === 0) return this.currentExporter;
+    if (this.currentExporter === undefined || freshToken !== this.currentToken) {
+      const previousExporter = this.currentExporter;
+      this.currentExporter = this.createExporter({
         url: this.url,
-        headers: { ...this.baseHeaders, authorization: `Bearer ${token}` },
+        headers: { ...this.baseHeaders, authorization: `Bearer ${freshToken}` },
         ...(this.insecure
           ? { httpAgentOptions: { rejectUnauthorized: false } }
           : {}),
       });
-      this.delegateToken = token;
-      if (previous !== undefined)
-        void previous
+      this.currentToken = freshToken;
+      if (previousExporter !== undefined)
+        void previousExporter
           .shutdown()
-          .catch((error) =>
+          .catch((cause) =>
             console.warn(
-              `[slate-tracing] replaced exporter shutdown failed (${errorLogTag(error)})`,
+              `[slate-tracing] replaced exporter shutdown failed (${errorLogTag(cause)})`,
             ),
           );
     }
-    return this.delegate;
+    return this.currentExporter;
   }
   export(
-    spans: Parameters<SpanExporter["export"]>[0],
-    resultCallback: Parameters<SpanExporter["export"]>[1],
+    batch: Parameters<SpanExporter["export"]>[0],
+    onResult: Parameters<SpanExporter["export"]>[1],
   ): void {
-    let delegate: SpanExporter | undefined;
+    let currentExporter: SpanExporter | undefined;
     try {
-      delegate = this.resolveDelegate();
+      currentExporter = this.resolveDelegate();
     } catch {
-      delegate = undefined;
+      currentExporter = undefined;
     }
-    if (delegate === undefined) {
-      resultCallback({ code: ExportResultCode.FAILED });
+    if (currentExporter === undefined) {
+      onResult({ code: ExportResultCode.FAILED });
       return;
     }
     try {
-      delegate.export(spans, resultCallback);
+      currentExporter.export(batch, onResult);
     } catch {
-      resultCallback({ code: ExportResultCode.FAILED });
+      onResult({ code: ExportResultCode.FAILED });
     }
   }
   async shutdown(): Promise<void> {
     try {
-      await this.delegate?.shutdown();
+      await this.currentExporter?.shutdown();
     } catch {}
   }
   async forceFlush(): Promise<void> {
     try {
-      await this.delegate?.forceFlush?.();
+      await this.currentExporter?.forceFlush?.();
     } catch {}
   }
 }
@@ -108,13 +108,13 @@ export const NOOP_HOST_TRACING: HostTracing = {
   flush: () => {},
   dispose: async () => {},
 };
-let initialized = false,
-  hostTracing: HostTracing | undefined;
+let tracingReady = false,
+  activeTracing: HostTracing | undefined;
 export function resetHostTracingForTests(): void {
-  initialized = false;
-  hostTracing = undefined;
+  tracingReady = false;
+  activeTracing = undefined;
 }
-export function initSlateHostTracing(options: {
+export function initSlateHostTracing(settings: {
   backendUrl: string;
   getToken(): string | null;
   serviceVersion?: string;
@@ -130,76 +130,76 @@ export function initSlateHostTracing(options: {
     shutdown(): Promise<void>;
   };
 }): HostTracing {
-  if (initialized) return hostTracing ?? NOOP_HOST_TRACING;
+  if (tracingReady) return activeTracing ?? NOOP_HOST_TRACING;
   try {
-    const exporter = new TokenRefreshingSpanExporter(
-      `${options.backendUrl.replace(/\/+$/, "")}/v1/traces`,
-      options.getToken,
+    const spanExporter = new TokenRefreshingSpanExporter(
+      `${settings.backendUrl.replace(/\/+$/, "")}/v1/traces`,
+      settings.getToken,
       {
         "x-ghost-mode": "false",
         "x-cursor-client-type": SLATE_CLIENT_TYPE,
         "x-cursor-client-version": "slate-host",
       },
-      options.insecure ?? false,
-      options.createExporter,
+      settings.insecure ?? false,
+      settings.createExporter,
     );
-    const resource = {
+    const resourceAttributes = {
       "service.name": "slate-host",
-      "service.version": options.serviceVersion ?? "unknown",
+      "service.version": settings.serviceVersion ?? "unknown",
       "host.name": hostname(),
       "os.type": platform(),
       "process.runtime.name": "node",
       "process.runtime.version": process.version,
       "deployment.environment": "box",
     };
-    const sampler = sendTraceSampler();
-    const provider = options.createProvider?.({ exporter, resource, sampler }) ?? (() => {
-      const nodeProvider = new NodeTracerProvider({
-        resource: resourceFromAttributes(resource),
-        sampler,
-        spanProcessors: [new BatchSpanProcessor(exporter)],
+    const traceSampler = sendTraceSampler();
+    const tracingProvider = settings.createProvider?.({ exporter: spanExporter, resource: resourceAttributes, sampler: traceSampler }) ?? (() => {
+      const nodeTracingProvider = new NodeTracerProvider({
+        resource: resourceFromAttributes(resourceAttributes),
+        sampler: traceSampler,
+        spanProcessors: [new BatchSpanProcessor(spanExporter)],
       });
       return {
-        register: () => nodeProvider.register(),
-        forceFlush: () => nodeProvider.forceFlush(),
-        shutdown: () => nodeProvider.shutdown(),
+        register: () => nodeTracingProvider.register(),
+        forceFlush: () => nodeTracingProvider.forceFlush(),
+        shutdown: () => nodeTracingProvider.shutdown(),
       };
     })();
-    if (provider === undefined) return NOOP_HOST_TRACING;
-    provider.register();
-    let disposed = false;
-    const shutdown = () => {
-      void tracing.dispose();
+    if (tracingProvider === undefined) return NOOP_HOST_TRACING;
+    tracingProvider.register();
+    let shutDown = false;
+    const onSignal = () => {
+      void handle.dispose();
     };
-    const tracing: HostTracing = {
+    const handle: HostTracing = {
       flush: () => {
         try {
-          void provider
+          void tracingProvider
             .forceFlush()
-            .catch((error) =>
+            .catch((cause) =>
               console.warn(
-                `[slate-tracing] span flush failed (${errorLogTag(error)})`,
+                `[slate-tracing] span flush failed (${errorLogTag(cause)})`,
               ),
             );
         } catch {}
       },
       dispose: async () => {
-        if (disposed) return;
-        disposed = true;
-        process.off("SIGTERM", shutdown);
-        process.off("SIGINT", shutdown);
-        process.off("beforeExit", shutdown);
+        if (shutDown) return;
+        shutDown = true;
+        process.off("SIGTERM", onSignal);
+        process.off("SIGINT", onSignal);
+        process.off("beforeExit", onSignal);
         try {
-          await provider.shutdown();
+          await tracingProvider.shutdown();
         } catch {}
       },
     };
-    process.once("SIGTERM", shutdown);
-    process.once("SIGINT", shutdown);
-    process.once("beforeExit", shutdown);
-    hostTracing = tracing;
-    initialized = true;
-    return tracing;
+    process.once("SIGTERM", onSignal);
+    process.once("SIGINT", onSignal);
+    process.once("beforeExit", onSignal);
+    activeTracing = handle;
+    tracingReady = true;
+    return handle;
   } catch {
     return NOOP_HOST_TRACING;
   }
