@@ -14,7 +14,7 @@ import { copyFileHashing, makeInFlightByteBudget, resolveRestoreDestination, sha
 import { dedupeNestedRoots, globToRegExp, walkNodes } from "../../source/host/boxes/box-store-sync/box-store-transfer.ts";
 import { hasManifestPathConflict, parseManifest, BoxStoreUnsupportedManifestVersionError, BoxStoreManifestPathConflictError, BoxStoreManifestRevisionState, countStoreDbManifestEntries, getStoreDbManifestAgentIds, countAgentDirManifestEntries } from "../../source/host/boxes/box-store-sync/box-store-manifest.ts";
 import { evaluateBoxStoreFlush, boxStoreSyncCycleTelemetry, type BoxStoreCycleSummary } from "../../source/host/boxes/box-store-sync/box-store-sync.ts";
-import { aggregateStoreDbSweepOutcome, boxStoreDbCaptureTelemetry } from "../../source/host/boxes/box-store-sync/store-db-capture.ts";
+import { aggregateStoreDbSweepOutcome, boxStoreDbCaptureTelemetry, StoreDbCapture } from "../../source/host/boxes/box-store-sync/store-db-capture.ts";
 import { isCriticalRelPath } from "../../source/host/boxes/box-store-sync/box-store-download.ts";
 import {
   bucketCopyInReason,
@@ -246,6 +246,250 @@ describe("what a cycle and a capture report", () => {
     assert.equal(telemetry.level, "warn");
     assert.equal(telemetry.metadata.failure_phase, "capture");
   });
+});
+
+describe("capturing agent databases", () => {
+  /** A capture over a fresh temp directory, with a scripted bundle capture and manifest store. */
+  const withCapture = async (
+    options: Record<string, unknown>,
+    run: (capture: StoreDbCapture, world: { dir: string; category: string; agents: string; addAgent: (name: string, files?: Record<string, number>) => void; logs: unknown[]; saves: unknown[] }) => Promise<unknown>,
+  ) => {
+    const dir = mkdtempSync(join(tmpdir(), "slate-capture-"))
+    const category = join(dir, "cat")
+    const agents = join(category, "agents")
+    mkdirSync(agents, { recursive: true })
+    const addAgent = (name: string, files: Record<string, number> = {}) => {
+      const agentDir = join(agents, name)
+      mkdirSync(agentDir, { recursive: true })
+      for (const [fileName, size] of Object.entries(files)) writeFileSync(join(agentDir, fileName), Buffer.alloc(size, 1))
+    }
+    const logs: unknown[] = []
+    const saves: unknown[] = []
+    const manifest = new Map((options.manifest as [string, unknown][] | undefined) ?? [])
+    const capture = new StoreDbCapture({
+      deps: {
+        categories: [{ absRoot: category, relPrefix: "cat", containsAgentStoreDbs: true }],
+        objectStoreProvider: {} as never,
+        async resolveStoreId() { return "store-1" },
+        hasLiveHandle: (dbPath: string) => ((options.liveHandles as string[] | undefined) ?? []).some((suffix) => dbPath.endsWith(suffix)),
+      },
+      now: () => 1,
+      log: (message: string) => logs.push(message.replace(dir, "<dir>")),
+      manifestStore: {
+        async loadManifest() { return manifest },
+        async saveManifest(storeId: string, saveOptions: { isForced: boolean }) {
+          saves.push({ storeId, isForced: saveOptions.isForced })
+          if (options.saveThrows === true) throw new Error("save failed")
+        },
+        writeQueue: Promise.resolve(),
+        uncommittedStoreDbEntries: new Set(options.uncommitted as string[] | undefined),
+        deleteManifestEntry(map: Map<string, unknown>, relPath: string) { return map.delete(relPath) },
+      } as never,
+      transfer: { hasDiskSpaceForLargeObject: () => true, localStat: new Map() } as never,
+      maxObjectBytes: 10_000,
+      uploadConcurrency: 2,
+      largeObjectThreshold: 100,
+      async ensureWriterLock() { return options.lock !== false },
+      isStopped: () => options.stopped === true,
+    })
+    ;(capture as unknown as { bundleCapture: unknown }).bundleCapture = {
+      async agentHasPendingDbRecovery(agentDir: string) { return options.pendingAgent === agentDir.split("/").pop() },
+      async readWalStat(absPath: string) {
+        const walPath = absPath + "-wal"
+        return existsSync(walPath) ? { size: readFileSync(walPath).length } : null
+      },
+      async captureAgentDbBundle(args: { agentId: string; agentDir: string; targets: { relPath: string; effectiveSize: number }[]; summary: { filesScanned: number; filesUploaded: number }; manifest: Map<string, unknown> }) {
+        logs.push({ capture: args.agentId, targets: args.targets.map((target) => [target.relPath.replace(category, "<cat>"), target.effectiveSize]) })
+        if (options.removeAgentOnCapture === args.agentId) rmSync(args.agentDir, { recursive: true, force: true })
+        if (options.captureThrows === args.agentId) throw new Error("capture blew up")
+        if (options.captureFails === args.agentId || options.committed === false) return false
+        args.summary.filesScanned += 1
+        args.summary.filesUploaded += 1
+        if (options.writeManifest !== false) {
+          for (const target of args.targets) args.manifest.set(target.relPath, { size: target.effectiveSize })
+        }
+        return true
+      },
+      isAgentDbBundleCommitted() { return options.bundleCommitted !== false },
+      async isAgentDbSnapshotDurable(relPath: string) { return options.durable === undefined ? true : (options.durable as (path: string) => boolean)(relPath) },
+    }
+    try {
+      const result = await run(capture, { dir, category, agents, addAgent, logs, saves })
+      return { result, logs, saves, manifest: [...manifest.keys()] }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it("reports what a capture did in the one word the cycle reads", () => {
+    assert.equal(aggregateStoreDbSweepOutcome({ failures: 1, oversize: 0, filesUploaded: 0, filesScanned: 0 }), "error")
+    assert.equal(aggregateStoreDbSweepOutcome({ failures: 0, oversize: 1, filesUploaded: 1, filesScanned: 1 }), "oversize")
+    assert.equal(aggregateStoreDbSweepOutcome({ failures: 0, oversize: 0, filesUploaded: 2, filesScanned: 2 }), "uploaded")
+    assert.equal(aggregateStoreDbSweepOutcome({ failures: 0, oversize: 0, filesUploaded: 0, filesScanned: 2 }), "unchanged")
+    assert.equal(aggregateStoreDbSweepOutcome({ failures: 0, oversize: 0, filesUploaded: 0, filesScanned: 0 }), "skipped")
+    const telemetry = boxStoreDbCaptureTelemetry({ outcome: "error", trigger: "sweep", failurePhase: "capture", isCommitted: false, agentCount: 2, filesScanned: 3, filesUploaded: 1, bytes: 42, durationMs: 5, queueDurationMs: 1, captureDurationMs: 2, blobUploadDurationMs: 3, manifestCommitDurationMs: 4, storeId: null })
+    assert.equal(telemetry.level, "warn")
+    assert.deepEqual(telemetry.metadata, { outcome: "error", trigger: "sweep", failure_phase: "capture", committed: "false", agent_count: "2", files_scanned: "3", files_uploaded: "1", bytes: "42", duration_ms: "5", queue_duration_ms: "1", capture_duration_ms: "2", blob_upload_duration_ms: "3", manifest_commit_duration_ms: "4", store_id: undefined })
+  })
+
+  it("treats a box with no agents directory as an empty, complete sweep", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "slate-capture-empty-"))
+    try {
+      const manifest = new Map()
+      const capture = new StoreDbCapture({
+        deps: { categories: [{ absRoot: join(dir, "cat"), relPrefix: "cat", containsAgentStoreDbs: true }], objectStoreProvider: {} as never, async resolveStoreId() { return "s" }, hasLiveHandle: () => false },
+        now: () => 1,
+        log: () => {},
+        manifestStore: { async loadManifest() { return manifest }, async saveManifest() {}, writeQueue: Promise.resolve(), uncommittedStoreDbEntries: new Set(), deleteManifestEntry() { return false } } as never,
+        transfer: { hasDiskSpaceForLargeObject: () => true, localStat: new Map() } as never,
+        maxObjectBytes: 10,
+        uploadConcurrency: 1,
+        largeObjectThreshold: 10,
+        async ensureWriterLock() { return true },
+        isStopped: () => false,
+      })
+      const result = await capture.runAgentStoreDbsSweep("s", false)
+      assert.equal(result.complete, true)
+      assert.equal(result.agentCount, 0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("sweeps every agent's databases, largest bundles first and small ones at the upload concurrency", async () => {
+    const outcome = await withCapture({ committed: true }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      world.addAgent("a2", { "store.db": 200, "store.db-wal": 50 })
+      world.addAgent("a3", {})
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.deepEqual((outcome.result as { summary: unknown }).summary, { name: "store.db", filesScanned: 2, filesUploaded: 2, bytesUploaded: 0, skippedUnchanged: 0, removed: 0, oversize: 0, failures: 0, metadataFailures: 0 })
+    assert.equal((outcome.result as { complete: boolean }).complete, true)
+    assert.equal((outcome.result as { agentCount: number }).agentCount, 2)
+    // The larger bundle is captured first; the write-ahead log counts towards its size.
+    assert.deepEqual(outcome.logs, [{ capture: "a2", targets: [["cat/agents/a2/store.db", 250]] }, { capture: "a1", targets: [["cat/agents/a1/store.db", 10]] }])
+    assert.equal([...(outcome.result as { capturedThisSweep: Set<string> }).capturedThisSweep].length, 2)
+  })
+
+  it("leaves a database that is being written alone when asked", async () => {
+    const skipped = await withCapture({ committed: true, skipLive: true, liveHandles: ["a1/store.db"] }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      world.addAgent("a2", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", true)
+    })
+    assert.deepEqual(skipped.logs.map((entry) => (entry as { capture: string }).capture), ["a2"])
+    const kept = await withCapture({ committed: true, liveHandles: ["a1/store.db"] }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.deepEqual(kept.logs.map((entry) => (entry as { capture: string }).capture), ["a1"])
+  })
+
+  it("counts an agent whose database still needs recovery", async () => {
+    const outcome = await withCapture({ committed: true, pendingAgent: "a1" }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      world.addAgent("a2", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.equal((outcome.result as { summary: { failures: number } }).summary.failures, 1)
+    assert.deepEqual(outcome.logs.map((entry) => (entry as { capture: string }).capture), ["a2"])
+  })
+
+  it("counts a capture that failed without saying so, and a complete sweep needs every database durable", async () => {
+    const failed = await withCapture({ committed: true, captureFails: "a1" }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.equal((failed.result as { summary: { failures: number } }).summary.failures, 1)
+    const thrown = await withCapture({ committed: true, captureThrows: "a1" }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.equal((thrown.result as { summary: { failures: number } }).summary.failures, 1)
+    assert.match(String(thrown.logs.find((entry) => typeof entry === "string") ?? ""), /capture failed/)
+    const notDurable = await withCapture({ committed: true, durable: (relPath: string) => !relPath.includes("a2") }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      world.addAgent("a2", { "store.db": 10 })
+      return await capture.runAgentStoreDbsSweep("store-1", false)
+    })
+    assert.equal((notDurable.result as { complete: boolean }).complete, false)
+  })
+
+  it("prunes leftovers, deleted agents and nested paths, and prunes nothing else", async () => {
+    const manifest: [string, unknown][] = [
+      ["cat/agents/a1/store.db", {}],
+      ["cat/agents/gone/store.db", {}],
+      ["cat/agents/a1/store.db.corrupt-1", {}],
+      ["cat/agents/a1/store.db-wal", {}],
+      ["cat/agents/a1/store.db.pending", {}],
+      ["cat/agents/a1/store.db.replacement-x", {}],
+      ["cat/agents/a1/nested/store.db", {}],
+      ["other/agents/a1/store.db", {}],
+      ["cat/agents/a1/other.db", {}],
+    ]
+    const outcome = await withCapture({ manifest }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.pruneMissingAgentStoreDbs("store-1")
+    })
+    assert.equal(outcome.result, 6)
+    assert.deepEqual(outcome.manifest, ["cat/agents/a1/store.db", "other/agents/a1/store.db", "cat/agents/a1/other.db"])
+  })
+
+  it("captures one agent at a turn's end and says whether the manifest committed", async () => {
+    const skipped = await withCapture({ stopped: true }, async (capture) => await capture.runAgentStoreDbSnapshot("a1"))
+    assert.equal((skipped.result as { outcome: string }).outcome, "skipped")
+    const noFiles = await withCapture({}, async (capture, world) => { world.addAgent("a1"); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.equal((noFiles.result as { outcome: string }).outcome, "skipped")
+    const noLock = await withCapture({ lock: false }, async (capture, world) => { world.addAgent("a1", { "store.db": 10 }); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.equal((noLock.result as { outcome: string }).outcome, "skipped")
+    assert.deepEqual(noLock.logs, [])
+    const uploaded = await withCapture({ committed: true, writeManifest: false }, async (capture, world) => { world.addAgent("a1", { "store.db": 10 }); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.equal((uploaded.result as { outcome: string }).outcome, "uploaded")
+    assert.equal((uploaded.result as { isCommitted: boolean }).isCommitted, true)
+    assert.match(String(uploaded.logs.find((entry) => typeof entry === "string")), /uploaded/)
+    const failed = await withCapture({ committed: true, captureFails: "a1" }, async (capture, world) => { world.addAgent("a1", { "store.db": 10 }); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.equal((failed.result as { outcome: string }).outcome, "error")
+    assert.equal((failed.result as { summary: { failures: number } }).summary.failures, 1)
+    // Bytes that went up but were never recorded as committed are an error, not an upload.
+    const uncommitted = await withCapture({ committed: true, bundleCommitted: false, writeManifest: false }, async (capture, world) => { world.addAgent("a1", { "store.db": 10 }); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.deepEqual([(uncommitted.result as { outcome: string }).outcome, (uncommitted.result as { isCommitted: boolean }).isCommitted], ["error", false])
+    assert.equal((uncommitted.result as { captureTrace: { failurePhase?: string } }).captureTrace.failurePhase, "manifest_commit")
+  })
+
+  it("checks the whole store against a directory that is not there", async () => {
+    const outcome = await withCapture({}, async (capture, world) => {
+      return await capture.verifyAgentDbsComplete(join(world.agents, "missing"), "cat", new Map(), new Set())
+    })
+    assert.equal(outcome.result, true)
+  })
+
+  it("forgets an agent that disappeared while its snapshot was being taken", async () => {
+    const outcome = await withCapture({ committed: true, removeAgentOnCapture: "a1", manifest: [["cat/agents/a1/store.db", {}]] }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.runAgentStoreDbSnapshot("a1")
+    })
+    assert.equal((outcome.result as { summary: { removed: number } }).summary.removed, 1)
+    assert.deepEqual(outcome.manifest, [])
+    assert.equal(outcome.saves.length, 1)
+  })
+
+  it("does not write the manifest when an unchanged snapshot leaves it where it was", async () => {
+    const outcome = await withCapture({ committed: true, writeManifest: false, manifest: [["cat/agents/a1/store.db", {}]] }, async (capture, world) => {
+      world.addAgent("a1", { "store.db": 10 })
+      return await capture.runAgentStoreDbSnapshot("a1")
+    })
+    assert.equal((outcome.result as { outcome: string }).outcome, "uploaded")
+    assert.equal((outcome.result as { isCommitted: boolean }).isCommitted, true)
+    assert.deepEqual(outcome.saves, [])
+  })
+
+  it("fails the snapshot when the manifest cannot be written", async () => {
+    const outcome = await withCapture({ committed: true, saveThrows: true }, async (capture, world) => { world.addAgent("a1", { "store.db": 10 }); return await capture.runAgentStoreDbSnapshot("a1") })
+    assert.equal((outcome.result as { outcome: string }).outcome, "error")
+    assert.equal((outcome.result as { isCommitted: boolean }).isCommitted, false)
+    assert.equal((outcome.result as { captureTrace: { failurePhase?: string } }).captureTrace.failurePhase, "manifest_commit")
+    assert.match(String(outcome.logs.find((entry) => typeof entry === "string")), /failed/)
+  })
 });
 
 describe("what a copy-in says", () => {
