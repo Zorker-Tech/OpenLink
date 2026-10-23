@@ -21,68 +21,68 @@ export interface DurablePendingWakeMarker extends PendingWakeMarker {
   interruptedByRecreate?: boolean;
 }
 export function coerceQuietOrigin(
-  value: unknown,
+  rawOrigin: unknown,
 ): DurablePendingWakeMarker["quietOrigin"] | null {
-  if (typeof value !== "object" || value == null) return null;
-  const automation = (value as { automation?: unknown }).automation;
-  if (typeof automation !== "object" || automation == null) return {};
-  const a = automation as Record<string, unknown>;
+  if (typeof rawOrigin !== "object" || rawOrigin == null) return null;
+  const automationValue = (rawOrigin as { automation?: unknown }).automation;
+  if (typeof automationValue !== "object" || automationValue == null) return {};
+  const a = automationValue as Record<string, unknown>;
   return typeof a.id === "string" &&
     a.id.length > 0 &&
     typeof a.name === "string"
     ? { automation: { id: a.id, name: a.name } }
     : {};
 }
-export function coerceMarker(entry: unknown): DurablePendingWakeMarker | null {
-  if (typeof entry !== "object" || entry == null) return null;
-  const e = entry as Record<string, unknown>;
+export function coerceMarker(markerCandidate: unknown): DurablePendingWakeMarker | null {
+  if (typeof markerCandidate !== "object" || markerCandidate == null) return null;
+  const markerFields = markerCandidate as Record<string, unknown>;
   if (
-    typeof e.agentId !== "string" ||
-    !e.agentId ||
-    typeof e.workId !== "string" ||
-    !e.workId ||
-    !PENDING_WAKE_KINDS.includes(e.kind as PendingWakeKind)
+    typeof markerFields.agentId !== "string" ||
+    !markerFields.agentId ||
+    typeof markerFields.workId !== "string" ||
+    !markerFields.workId ||
+    !PENDING_WAKE_KINDS.includes(markerFields.kind as PendingWakeKind)
   )
     return null;
-  const quietOrigin = coerceQuietOrigin(e.quietOrigin);
+  const quietOrigin = coerceQuietOrigin(markerFields.quietOrigin);
   return {
-    agentId: e.agentId,
-    kind: e.kind as PendingWakeKind,
-    workId: e.workId,
+    agentId: markerFields.agentId,
+    kind: markerFields.kind as PendingWakeKind,
+    workId: markerFields.workId,
     markedAtMs:
-      typeof e.markedAtMs === "number" && Number.isFinite(e.markedAtMs)
-        ? e.markedAtMs
+      typeof markerFields.markedAtMs === "number" && Number.isFinite(markerFields.markedAtMs)
+        ? markerFields.markedAtMs
         : 0,
     ...(quietOrigin != null ? { quietOrigin } : {}),
-    ...(typeof e.title === "string" && e.title.length > 0
-      ? { title: e.title }
+    ...(typeof markerFields.title === "string" && markerFields.title.length > 0
+      ? { title: markerFields.title }
       : {}),
-    ...(typeof e.subagentType === "string" && e.subagentType.length > 0
-      ? { subagentType: e.subagentType }
+    ...(typeof markerFields.subagentType === "string" && markerFields.subagentType.length > 0
+      ? { subagentType: markerFields.subagentType }
       : {}),
-    ...(e.interruptedByRecreate === true
+    ...(markerFields.interruptedByRecreate === true
       ? { interruptedByRecreate: true }
       : {}),
   };
 }
 export function coercePendingWakeMarkers(
-  value: unknown,
+  rawOrigin: unknown,
 ): DurablePendingWakeMarker[] {
-  return Array.isArray(value)
-    ? value.flatMap((entry) => {
-        const marker = coerceMarker(entry);
+  return Array.isArray(rawOrigin)
+    ? rawOrigin.flatMap((markerCandidate) => {
+        const marker = coerceMarker(markerCandidate);
         return marker == null ? [] : [marker];
       })
     : [];
 }
 export function parsePendingWakeFile(
-  raw: string | null,
+  fileText: string | null,
 ): DurablePendingWakeMarker[] {
-  if (raw == null) return [];
+  if (fileText == null) return [];
   try {
-    const value = JSON.parse(raw) as { pending?: unknown };
-    return typeof value === "object" && value != null
-      ? coercePendingWakeMarkers(value.pending)
+    const rawOrigin = JSON.parse(fileText) as { pending?: unknown };
+    return typeof rawOrigin === "object" && rawOrigin != null
+      ? coercePendingWakeMarkers(rawOrigin.pending)
       : [];
   } catch {
     return [];
@@ -101,21 +101,21 @@ export function markerKeyMatches(
   );
 }
 export function upsertPendingWakeMarker(
-  existing: readonly DurablePendingWakeMarker[],
+  currentMarkers: readonly DurablePendingWakeMarker[],
   marker: DurablePendingWakeMarker,
 ): DurablePendingWakeMarker[] {
   return [
-    ...existing.filter(
-      (entry) =>
-        !markerKeyMatches(entry, marker.agentId, marker.kind, marker.workId),
+    ...currentMarkers.filter(
+      (markerCandidate) =>
+        !markerKeyMatches(markerCandidate, marker.agentId, marker.kind, marker.workId),
     ),
     marker,
   ];
 }
 export class SlatePendingWakeStore {
   readonly filePath: string;
-  constructor(rootDir: string) {
-    this.filePath = join(rootDir, SLATE_PENDING_WAKE_FILE_NAME);
+  constructor(rootDirectory: string) {
+    this.filePath = join(rootDirectory, SLATE_PENDING_WAKE_FILE_NAME);
   }
   markPending(marker: DurablePendingWakeMarker): boolean {
     try {
@@ -129,18 +129,18 @@ export class SlatePendingWakeStore {
     return this.readPending();
   }
   hasPending(agentId: string, kind: PendingWakeKind, workId: string): boolean {
-    return this.readPending().some((entry) =>
-      markerKeyMatches(entry, agentId, kind, workId),
+    return this.readPending().some((markerCandidate) =>
+      markerKeyMatches(markerCandidate, agentId, kind, workId),
     );
   }
   clearOne(agentId: string, kind: PendingWakeKind, workId: string): boolean {
     try {
-      const existing = this.readPending(),
-        remaining = existing.filter(
-          (entry) => !markerKeyMatches(entry, agentId, kind, workId),
+      const currentMarkers = this.readPending(),
+        keptMarkers = currentMarkers.filter(
+          (markerCandidate) => !markerKeyMatches(markerCandidate, agentId, kind, workId),
         );
-      if (remaining.length === existing.length) return false;
-      remaining.length === 0 ? this.deleteFile() : this.write(remaining);
+      if (keptMarkers.length === currentMarkers.length) return false;
+      keptMarkers.length === 0 ? this.deleteFile() : this.write(keptMarkers);
       return true;
     } catch {
       return false;
@@ -148,27 +148,27 @@ export class SlatePendingWakeStore {
   }
   clearAgent(agentId: string): void {
     try {
-      const existing = this.readPending(),
-        remaining = existing.filter((entry) => entry.agentId !== agentId);
-      if (remaining.length === existing.length) return;
-      remaining.length === 0 ? this.deleteFile() : this.write(remaining);
+      const currentMarkers = this.readPending(),
+        keptMarkers = currentMarkers.filter((markerCandidate) => markerCandidate.agentId !== agentId);
+      if (keptMarkers.length === currentMarkers.length) return;
+      keptMarkers.length === 0 ? this.deleteFile() : this.write(keptMarkers);
     } catch {}
   }
   clearAll(): void {
     this.deleteFile();
   }
-  pruneStale(maxAgeMs: number, nowMs = Date.now()): DurablePendingWakeMarker[] {
+  pruneStale(maxAge: number, now = Date.now()): DurablePendingWakeMarker[] {
     try {
-      const existing = this.readPending(),
-        pruned = existing.filter(
-          (entry) => nowMs - entry.markedAtMs > maxAgeMs,
+      const currentMarkers = this.readPending(),
+        staleMarkers = currentMarkers.filter(
+          (markerCandidate) => now - markerCandidate.markedAtMs > maxAge,
         );
-      if (pruned.length === 0) return [];
-      const remaining = existing.filter(
-        (entry) => nowMs - entry.markedAtMs <= maxAgeMs,
+      if (staleMarkers.length === 0) return [];
+      const keptMarkers = currentMarkers.filter(
+        (markerCandidate) => now - markerCandidate.markedAtMs <= maxAge,
       );
-      remaining.length === 0 ? this.deleteFile() : this.write(remaining);
-      return pruned;
+      keptMarkers.length === 0 ? this.deleteFile() : this.write(keptMarkers);
+      return staleMarkers;
     } catch {
       return [];
     }
@@ -181,12 +181,12 @@ export class SlatePendingWakeStore {
     }
   }
   write(pending: readonly DurablePendingWakeMarker[]): void {
-    const part = `${this.filePath}.part`;
+    const temporaryPath = `${this.filePath}.part`;
     try {
       mkdirSync(dirname(this.filePath), { recursive: true });
     } catch {}
-    writeFileSync(part, JSON.stringify({ version: 1, pending }));
-    renameSync(part, this.filePath);
+    writeFileSync(temporaryPath, JSON.stringify({ version: 1, pending }));
+    renameSync(temporaryPath, this.filePath);
   }
   deleteFile(): void {
     try {
