@@ -1,7 +1,7 @@
 /** Sending what the user typed, once and only once.
 
- * A send is admitted against the ledger so a retried nonce does not go out twice, the entries it stands for — its
- * attachments and its message — are appended to the timeline and to the session, and the turn is then either fanned out
+ * A send is admitted against the ledger so a retried nonceValue does not go out twice, the entries it stands for — its
+ * attachments and its incomingMessage — are appended to the timeline and to the session, and the turn is then either fanned out
  * to a room or dispatched to the agent, carrying the acknowledgement obligation and the send trace along with it. */
 import { basename } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -72,8 +72,8 @@ export interface EchoEntry {
   readonly isOnActiveTranscript: boolean;
 }
 
-function invariant(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
+function invariant(condition: unknown, incomingMessage: string): asserts condition {
+  if (!condition) throw new Error(incomingMessage);
 }
 
 export class SendPipeline {
@@ -88,11 +88,11 @@ export class SendPipeline {
     this.boxRequests = new BoxRequestEntries(tm);
   }
 
-  promptAcceptanceStatus(args: {
+  promptAcceptanceStatus(input: {
     accountSlot: string;
     clientNonce: string;
   }): unknown {
-    return this.tm.acceptanceLedger.lookup(args);
+    return this.tm.acceptanceLedger.lookup(input);
   }
 
   materializeInlineImages(
@@ -102,95 +102,95 @@ export class SendPipeline {
     return materializeInlineImages(session, images);
   }
 
-  async sendPrompt(prompt: string, options: SendPromptOptions): Promise<void> {
-    const nonce = options.clientNonce?.length ? options.clientNonce : undefined;
-    if (nonce == null) return this.sendPromptOnce(prompt, options);
-    const inFlight = this.inFlightSends.get(nonce);
+  async sendPrompt(prompt: string, settings: SendPromptOptions): Promise<void> {
+    const nonceValue = settings.clientNonce?.length ? settings.clientNonce : undefined;
+    if (nonceValue == null) return this.sendPromptOnce(prompt, settings);
+    const inFlight = this.inFlightSends.get(nonceValue);
     if (inFlight != null) {
       console.log(
         "[slate] duplicate send (nonce still in flight) — coalescing onto the running attempt",
       );
       return inFlight;
     }
-    const digest = sendInputDigest({
-      ...(options.agentId == null ? {} : { agentId: options.agentId }),
+    const inputDigest = sendInputDigest({
+      ...(settings.agentId == null ? {} : { agentId: settings.agentId }),
       prompt,
-      ...(options.richText == null ? {} : { richText: options.richText }),
-      ...(options.replyToId == null ? {} : { replyToId: options.replyToId }),
-      ...(options.isFork == null ? {} : { isFork: options.isFork }),
-      ...(options.attachmentPaths == null
+      ...(settings.richText == null ? {} : { richText: settings.richText }),
+      ...(settings.replyToId == null ? {} : { replyToId: settings.replyToId }),
+      ...(settings.isFork == null ? {} : { isFork: settings.isFork }),
+      ...(settings.attachmentPaths == null
         ? {}
-        : { attachmentPaths: options.attachmentPaths }),
-      ...(options.attachmentNames == null
+        : { attachmentPaths: settings.attachmentPaths }),
+      ...(settings.attachmentNames == null
         ? {}
-        : { attachmentNames: options.attachmentNames }),
+        : { attachmentNames: settings.attachmentNames }),
     });
-    const admission = this.tm.acceptanceLedger.admitSend({
+    const ledgerAdmission = this.tm.acceptanceLedger.admitSend({
       accountSlot: HOST_ACCOUNT_SLOT,
-      clientNonce: nonce,
-      inputDigest: digest,
+      clientNonce: nonceValue,
+      inputDigest: inputDigest,
     });
-    if (admission.kind === "duplicate") {
+    if (ledgerAdmission.kind === "duplicate") {
       console.log(
         "[slate] duplicate send (nonce already accepted) — idempotent no-op",
       );
       return;
     }
-    const pending = this.sendPromptOnce(prompt, options, { digest });
-    this.inFlightSends.set(nonce, pending);
+    const pending = this.sendPromptOnce(prompt, settings, { inputDigest });
+    this.inFlightSends.set(nonceValue, pending);
     try {
       await pending;
     } catch (error) {
       this.tm.acceptanceLedger.clearUnlessAccepted({
         accountSlot: HOST_ACCOUNT_SLOT,
-        clientNonce: nonce,
+        clientNonce: nonceValue,
       });
       throw error;
     } finally {
-      this.inFlightSends.delete(nonce);
+      this.inFlightSends.delete(nonceValue);
     }
   }
 
   async sendPromptOnce(
     prompt: string,
-    options: SendPromptOptions,
-    acceptance?: { digest: string },
+    settings: SendPromptOptions,
+    acceptance?: { inputDigest: string },
   ): Promise<void> {
-    const trimmedPrompt = prompt.trim();
-    const attachmentPaths = Array.isArray(options.attachmentPaths)
-      ? options.attachmentPaths.filter(
-          (path): path is string => typeof path === "string",
+    const cleanPrompt = prompt.trim();
+    const attachmentPaths = Array.isArray(settings.attachmentPaths)
+      ? settings.attachmentPaths.filter(
+          (filePath): filePath is string => typeof filePath === "string",
         )
       : [];
-    if (trimmedPrompt.length === 0 && attachmentPaths.length === 0) return;
+    if (cleanPrompt.length === 0 && attachmentPaths.length === 0) return;
     invariant(this.tm.execution.canExecute, RUNNER_UNATTACHED_MESSAGE);
-    const awaitTurn = options.awaitTurn ?? true;
-    const sendTrace = beginSendTrace(options.traceparent);
+    const awaitTurn = settings.awaitTurn ?? true;
+    const trace = beginSendTrace(settings.traceparent);
     const hostReceiptEpochMs = Date.now();
     const hostReceiptPerfMs = performance.now();
-    let pinnedSession: LiveTranscriptSession | undefined;
+    let pinnedConversation: LiveTranscriptSession | undefined;
     let ackGuard: (SendAckGuard & { [Symbol.dispose]?(): void }) | undefined;
     try {
-      if (options.directAddressedAcceptance !== true)
-        await this.tm.sessions.ensureActionTarget(options.agentId);
-      const ensuredSession =
-        options.agentId == null
+      if (settings.directAddressedAcceptance !== true)
+        await this.tm.sessions.ensureActionTarget(settings.agentId);
+      const resolvedSession =
+        settings.agentId == null
           ? await traceSendPhase(
-              sendTrace,
+              trace,
               "ensureSession",
               async () =>
                 this.tm.sessions.ensureSession() as Promise<LiveTranscriptSession>,
             )
           : undefined;
-      const targetAgentId = options.agentId ?? ensuredSession?.id;
-      invariant(targetAgentId != null, "A send target could not be resolved.");
-      const wasInFlight = this.tm.runLifecycle
+      const targetAgent = settings.agentId ?? resolvedSession?.id;
+      invariant(targetAgent != null, "A send target could not be resolved.");
+      const wasRunning = this.tm.runLifecycle
         .runningAgentIds()
-        .has(targetAgentId);
+        .has(targetAgent);
       const session = (await this.tm.groupChat.pinMemberSessionForGroupTurn(
-        targetAgentId,
+        targetAgent,
       )) as LiveTranscriptSession;
-      pinnedSession = session;
+      pinnedConversation = session;
       const isOnScreen = () =>
         this.tm.sessions.activeSession?.id === session.id &&
         this.tm.sessions.inMemoryTranscriptAgentId === session.id;
@@ -204,115 +204,115 @@ export class SendPipeline {
       ) =>
         appendAddressedEcho(this.tm, session, isOnScreen, build, appendOptions);
       try {
-        sendTrace?.span.setAttribute("slate.conversation_id", session.id);
-        sendTrace?.span.setAttribute(
+        trace?.span.setAttribute("slate.conversation_id", session.id);
+        trace?.span.setAttribute(
           "slate.attachment_count",
           attachmentPaths.length,
         );
-        sendTrace?.span.setAttribute(
+        trace?.span.setAttribute(
           "slate.span_scope",
           awaitTurn
             ? "host-receipt-to-turn-end"
             : "host-receipt-to-durable-acceptance",
         );
-        if (options.clientNonce != null && options.clientNonce.length > 0) {
-          sendTrace?.span.setAttribute(
+        if (settings.clientNonce != null && settings.clientNonce.length > 0) {
+          trace?.span.setAttribute(
             "slate.client_nonce",
-            options.clientNonce,
+            settings.clientNonce,
           );
         }
-        if (options.isFork === true) {
-          sendTrace?.span.setAttribute("slate.is_fork", true);
+        if (settings.isFork === true) {
+          trace?.span.setAttribute("slate.is_fork", true);
         }
       } catch {}
       if (!this.tm.groupChat.isGroupSession(session))
         this.tm.telemetry.reportUserMessageReceived({
           conversationId: session.id,
-          wasInFlight,
+          wasInFlight: wasRunning,
         });
       session.db.setIntroductionPending(false);
-      const needsRosterRefresh = applySendRosterSideEffects(
+      const rosterDirty = applySendRosterSideEffects(
         this.tm,
         session,
-        trimmedPrompt,
+        cleanPrompt,
         readTranscript,
       );
-      const threading = resolveSendReplyThreading(
+      const threadingInfo = resolveSendReplyThreading(
         { turnRuntime: this.tm.turnRuntime },
-        options.replyToId,
-        options.isFork === true,
+        settings.replyToId,
+        settings.isFork === true,
         readTranscript,
       );
-      const names = options.attachmentNames ?? [];
-      const batchId =
+      const attachmentNames = settings.attachmentNames ?? [];
+      const batchKey =
         attachmentPaths.length > 0 ? crypto.randomUUID() : undefined;
       const durableAppendStartEpochMs = Date.now();
       const durableAppendStartPerfMs = performance.now();
-      let acceptedDurably = true;
+      let durable = true;
       const observePersistOutcome = (isDurable: boolean) => {
-        if (!isDurable) acceptedDurably = false;
+        if (!isDurable) durable = false;
       };
       const echoes: EchoEntry[] = [];
-      let userMessageId: string | undefined;
-      const sizes = await statAttachedFileSizes(attachmentPaths);
+      let messageEntryId: string | undefined;
+      const fileSizes = await statAttachedFileSizes(attachmentPaths);
       try {
-        for (const [index, path] of attachmentPaths.entries()) {
-          const name = names[index];
-          const byteSize = sizes.get(path);
-          const built = await createUserAttachmentEntry(
+        for (const [position, filePath] of attachmentPaths.entries()) {
+          const name = attachmentNames[position];
+          const bytes = fileSizes.get(filePath);
+          const attachmentEntry = await createUserAttachmentEntry(
             this.tm.attachments,
             "pending-user-attachment-id",
-            path,
+            filePath,
             {
-              ...(threading.replyToId == null
+              ...(threadingInfo.replyToId == null
                 ? {}
-                : { replyTo: threading.replyToId }),
-              ...(batchId == null ? {} : { batchId }),
+                : { replyTo: threadingInfo.replyToId }),
+              ...(batchKey == null ? {} : { batchId: batchKey }),
               ...(typeof name !== "string" ? {} : { fileName: name }),
-              ...(threading.isFork ? { branched: true } : {}),
-              ...(options.clientNonce == null
+              ...(threadingInfo.isFork ? { branched: true } : {}),
+              ...(settings.clientNonce == null
                 ? {}
-                : { clientNonce: options.clientNonce }),
-              ...(byteSize == null ? {} : { byteSize }),
+                : { clientNonce: settings.clientNonce }),
+              ...(bytes == null ? {} : { byteSize: bytes }),
             },
           );
           echoes.push(
             appendEcho(
               (entries) => ({
-                ...built,
+                ...attachmentEntry,
                 id: nextEntryId(entries, "user-attachment"),
               }),
               { onPersistOutcome: observePersistOutcome },
             ),
           );
         }
-        if ((options.appendUserMessage ?? true) && trimmedPrompt.length > 0) {
-          const echo = appendEcho(
+        if ((settings.appendUserMessage ?? true) && cleanPrompt.length > 0) {
+          const entry = appendEcho(
             (entries) =>
               createUserMessage(
                 nextEntryId(entries, "user-message"),
-                trimmedPrompt,
+                cleanPrompt,
                 {
-                  ...(options.richText == null
+                  ...(settings.richText == null
                     ? {}
-                    : { richText: options.richText }),
-                  ...(threading.replyToId == null
+                    : { richText: settings.richText }),
+                  ...(threadingInfo.replyToId == null
                     ? {}
-                    : { replyTo: threading.replyToId }),
-                  ...(options.clientNonce == null
+                    : { replyTo: threadingInfo.replyToId }),
+                  ...(settings.clientNonce == null
                     ? {}
-                    : { clientNonce: options.clientNonce }),
-                  ...(batchId == null ? {} : { batchId }),
-                  ...(threading.isFork ? { branched: true } : {}),
-                  ...(options.composedAtMs == null
+                    : { clientNonce: settings.clientNonce }),
+                  ...(batchKey == null ? {} : { batchId: batchKey }),
+                  ...(threadingInfo.isFork ? { branched: true } : {}),
+                  ...(settings.composedAtMs == null
                     ? {}
-                    : { composedAtMs: options.composedAtMs }),
+                    : { composedAtMs: settings.composedAtMs }),
                 },
               ),
             { onPersistOutcome: observePersistOutcome },
           );
-          userMessageId = echo.entry.id;
-          echoes.push(echo);
+          messageEntryId = entry.entry.id;
+          echoes.push(entry);
         }
       } catch (error) {
         for (const { entry } of echoes) {
@@ -322,143 +322,143 @@ export class SendPipeline {
         }
         throw error;
       }
-      if (!acceptedDurably) {
+      if (!durable) {
         console.warn(
           "[slate] send accepted NON-durably (persist dropped on a locked db); the echo still shipped so the send proceeds, but a host crash before the next successful write would lose the entry",
         );
       }
-      if (options.clientNonce != null && acceptance != null)
+      if (settings.clientNonce != null && acceptance != null)
         this.tm.acceptanceLedger.recordPending({
           accountSlot: HOST_ACCOUNT_SLOT,
-          clientNonce: options.clientNonce,
-          inputDigest: acceptance.digest,
+          clientNonce: settings.clientNonce,
+          inputDigest: acceptance.inputDigest,
           agentId: session.id,
-          echoEntryId: userMessageId ?? echoes[0]?.entry.id ?? null,
+          echoEntryId: messageEntryId ?? echoes[0]?.entry.id ?? null,
         });
       const acceptedAtMs = Date.now();
-      const owesAck =
+      const ackOwed =
         !this.tm.groupChat.isRemoteRoomSession(session) &&
         !this.tm.groupChat.isGroupSession(session);
-      if (owesAck)
+      if (ackOwed)
         this.tm.ackObligations.recordAckObligationSend(session, acceptedAtMs);
-      const armedAckGuard = this.tm.ackObligations.armSendGuard(
+      const ackGuardHandle = this.tm.ackObligations.armSendGuard(
         session,
         acceptedAtMs,
-        owesAck,
+        ackOwed,
       ) as SendAckGuard & { [Symbol.dispose]?(): void };
-      ackGuard = armedAckGuard;
-      const traceContext = sendTrace?.context;
-      const acceptanceTraceContext =
-        traceContext != null &&
-        typeof traceContext === "object" &&
-        "withName" in traceContext &&
-        typeof traceContext.withName === "function"
-          ? (traceContext as SendAcceptanceTraceContext)
+      ackGuard = ackGuardHandle;
+      const traceContextValue = trace?.context;
+      const acceptTraceContext =
+        traceContextValue != null &&
+        typeof traceContextValue === "object" &&
+        "withName" in traceContextValue &&
+        typeof traceContextValue.withName === "function"
+          ? (traceContextValue as SendAcceptanceTraceContext)
           : undefined;
       emitAcceptedSendEchoes({
         tm: this.tm,
         session,
         echoEntries: echoes,
         isAddressedChatOnScreen: isOnScreen,
-        directAddressedAcceptance: options.directAddressedAcceptance === true,
-        ...(options.clientNonce == null
+        directAddressedAcceptance: settings.directAddressedAcceptance === true,
+        ...(settings.clientNonce == null
           ? {}
-          : { clientNonce: options.clientNonce }),
-        ...(acceptanceTraceContext == null
+          : { clientNonce: settings.clientNonce }),
+        ...(acceptTraceContext == null
           ? {}
-          : { traceCtx: acceptanceTraceContext }),
-        ...(sendTrace == null ? {} : { sendTrace }),
-        acceptedDurably,
+          : { traceCtx: acceptTraceContext }),
+        ...(trace == null ? {} : { trace }),
+        acceptedDurably: durable,
         durableAppendStartEpochMs,
         durableAppendStartPerfMs,
         hostReceiptEpochMs,
         hostReceiptPerfMs,
       });
-      if (needsRosterRefresh) await this.tm.roster.emitAgentUpdate(session.id);
+      if (rosterDirty) await this.tm.roster.emitAgentUpdate(session.id);
       if (this.tm.roster.outlineAgentId === session.id) {
         this.tm.roster.streamingAssistantOutlineId = undefined;
         this.tm.roster.streamingThinkingOutlineId = undefined;
-        if (trimmedPrompt.length > 0) {
+        if (cleanPrompt.length > 0) {
           this.tm.roster.appendOutlineItem({
             kind: "user",
             id: crypto.randomUUID(),
-            text: trimmedPrompt,
+            text: cleanPrompt,
             timestampMs: Date.now(),
           });
         }
       }
       const {
-        imageAttachmentPaths,
-        videoAttachmentPaths,
-        fileAttachmentPaths,
+        imageAttachmentPaths: imagePaths,
+        videoAttachmentPaths: videoPaths,
+        fileAttachmentPaths: filePaths,
       } = splitAttachmentPathsByChannel(attachmentPaths);
-      const selectedImages =
-        await loadSelectedImageInputs(imageAttachmentPaths);
-      const selectedVideos = buildSelectedVideos(videoAttachmentPaths);
+      const imageInputs =
+        await loadSelectedImageInputs(imagePaths);
+      const videoInputs = buildSelectedVideos(videoPaths);
       if (
         this.tm.groupChat.isRemoteRoomSession(session) ||
         this.tm.groupChat.isGroupSession(session)
       ) {
         await dispatchMirrorOrGroupSend(this.tm, {
           session,
-          trimmedPrompt,
-          selectedImages,
-          videoAttachmentPaths,
-          fileAttachmentPaths,
-          clientNonce: options.clientNonce,
-          userMessageId,
+          trimmedPrompt: cleanPrompt,
+          selectedImages: imageInputs,
+          videoAttachmentPaths: videoInputs,
+          fileAttachmentPaths: filePaths,
+          clientNonce: settings.clientNonce,
+          userMessageId: messageEntryId,
           awaitTurn,
           acceptedAtMs,
-          traceCtx: sendTrace?.context,
+          traceCtx: trace?.context,
           readAddressedTranscript: readTranscript,
           nextTurnEpoch: (target: LiveTranscriptSession) =>
             this.nextTurnEpoch(target),
-          markSendAccepted: (nonce?: string) => this.markSendAccepted(nonce),
+          markSendAccepted: (nonceValue?: string) => this.markSendAccepted(nonceValue),
         });
         return;
       }
       await dispatchUserTurn({
         tm: this.tm,
         session,
-        trimmedPrompt,
-        ...(options.richText == null ? {} : { richText: options.richText }),
-        ...(options.composedAtMs == null
+        trimmedPrompt: cleanPrompt,
+        ...(settings.richText == null ? {} : { richText: settings.richText }),
+        ...(settings.composedAtMs == null
           ? {}
-          : { composedAtMs: options.composedAtMs }),
-        ...(options.enterEpochMs == null
+          : { composedAtMs: settings.composedAtMs }),
+        ...(settings.enterEpochMs == null
           ? {}
-          : { enterEpochMs: options.enterEpochMs }),
-        ...(options.clientNonce == null
+          : { enterEpochMs: settings.enterEpochMs }),
+        ...(settings.clientNonce == null
           ? {}
-          : { clientNonce: options.clientNonce }),
+          : { clientNonce: settings.clientNonce }),
         awaitTurn,
-        isFork: threading.isFork,
-        ...(userMessageId == null ? {} : { userMessageId }),
-        ...(threading.replyContext == null
+        isFork: threadingInfo.isFork,
+        ...(messageEntryId == null ? {} : { userMessageId: messageEntryId }),
+        ...(threadingInfo.replyContext == null
           ? {}
-          : { replyContext: threading.replyContext }),
-        selectedImages,
-        selectedVideos,
-        fileAttachmentPaths,
-        attachedFileSizes: sizes,
-        ...(sendTrace?.context == null ? {} : { traceCtx: sendTrace.context }),
+          : { replyContext: threadingInfo.replyContext }),
+        selectedImages: imageInputs,
+        selectedVideos: videoInputs,
+        fileAttachmentPaths: filePaths,
+        attachedFileSizes: fileSizes,
+        ...(trace?.context == null ? {} : { traceCtx: trace.context }),
         acceptedAtMs,
-        wasInFlight,
+        wasInFlight: wasRunning,
         readAddressedTranscript: readTranscript,
         latestRecoverySends: this.latestRecoverySends,
         recoveryBreakEpochs: this.recoveryBreakEpochs,
         nextTurnEpoch: (target) => this.nextTurnEpoch(target),
-        markSendAccepted: (nonce) => this.markSendAccepted(nonce),
-        ackGuard: armedAckGuard,
+        markSendAccepted: (nonceValue) => this.markSendAccepted(nonceValue),
+        ackGuard: ackGuardHandle,
       });
     } finally {
       try {
         ackGuard?.[Symbol.dispose]?.();
       } catch {}
-      if (pinnedSession != null)
-        this.tm.runLifecycle.endSessionRun(pinnedSession);
+      if (pinnedConversation != null)
+        this.tm.runLifecycle.endSessionRun(pinnedConversation);
       try {
-        sendTrace?.span.end();
+        trace?.span.end();
       } catch {}
     }
   }
@@ -472,9 +472,9 @@ export class SendPipeline {
   }
 
   nextTurnEpoch(session: { id: string }): number {
-    const next = (this.turnEpochs.get(session.id) ?? 0) + 1;
-    this.turnEpochs.set(session.id, next);
-    return next;
+    const nextEpoch = (this.turnEpochs.get(session.id) ?? 0) + 1;
+    this.turnEpochs.set(session.id, nextEpoch);
+    return nextEpoch;
   }
 
   currentTurnEpoch(session: { id: string }): number {
@@ -482,11 +482,11 @@ export class SendPipeline {
   }
 
   claimSendAttachmentBatchId(sessionId: string): string {
-    const existing = this.sendAttachmentBatchIds.get(sessionId);
-    if (existing != null) return existing;
-    const minted = crypto.randomUUID();
-    this.sendAttachmentBatchIds.set(sessionId, minted);
-    return minted;
+    const existingBatch = this.sendAttachmentBatchIds.get(sessionId);
+    if (existingBatch != null) return existingBatch;
+    const batchValue = crypto.randomUUID();
+    this.sendAttachmentBatchIds.set(sessionId, batchValue);
+    return batchValue;
   }
 
   appendSendMessageEntry(entry: TranscriptEntry): void {
@@ -507,56 +507,56 @@ export class SendPipeline {
   }
 
   validateAiReplyTarget(
-    message: SendMessage,
+    incomingMessage: SendMessage,
     inFlightId: string,
     entries: readonly TranscriptEntry[],
   ): SendMessage {
-    return validateAiReplyTarget(message, inFlightId, entries);
+    return validateAiReplyTarget(incomingMessage, inFlightId, entries);
   }
 
   applyAutoReplyThread(
-    message: SendMessage,
+    incomingMessage: SendMessage,
     session: LiveTranscriptSession | null,
     entries: readonly TranscriptEntry[],
   ): SendMessage {
     return applyAutoReplyThread(
       { turnRuntime: this.tm.turnRuntime },
-      message,
+      incomingMessage,
       session,
       entries,
     );
   }
 
-  async resolveDevSendMessage(message: SendMessage): Promise<SendMessage> {
-    if (message.type !== "attachment" || typeof message.url !== "string")
-      return message;
-    const filePath = filePathFromFileUrl(message.url);
+  async resolveDevSendMessage(incomingMessage: SendMessage): Promise<SendMessage> {
+    if (incomingMessage.type !== "attachment" || typeof incomingMessage.url !== "string")
+      return incomingMessage;
+    const filePath = filePathFromFileUrl(incomingMessage.url);
     const session = this.tm.sessions.activeSession as
       LiveTranscriptSession | undefined;
-    if (filePath == null || session == null) return message;
+    if (filePath == null || session == null) return incomingMessage;
     try {
-      const ingested =
+      const storedPath =
         await this.tm.createAttachmentIngestor(session)(filePath);
-      const fileName = basename(filePath);
-      const resolvedFileName =
-        fileName.length > 0 ? fileName : message.file_name;
+      const baseName = basename(filePath);
+      const finalFileName =
+        baseName.length > 0 ? baseName : incomingMessage.file_name;
       return {
         type: "attachment",
-        url: pathToFileURL(ingested).href,
-        ...(message.reply_to == null ? {} : { reply_to: message.reply_to }),
-        ...(resolvedFileName == null ? {} : { file_name: resolvedFileName }),
-        ...(message.alt == null ? {} : { alt: message.alt }),
-        ...(message.channel == null ? {} : { channel: message.channel }),
-        ...(message.width == null ? {} : { width: message.width }),
-        ...(message.height == null ? {} : { height: message.height }),
+        url: pathToFileURL(storedPath).href,
+        ...(incomingMessage.reply_to == null ? {} : { reply_to: incomingMessage.reply_to }),
+        ...(finalFileName == null ? {} : { file_name: finalFileName }),
+        ...(incomingMessage.alt == null ? {} : { alt: incomingMessage.alt }),
+        ...(incomingMessage.channel == null ? {} : { channel: incomingMessage.channel }),
+        ...(incomingMessage.width == null ? {} : { width: incomingMessage.width }),
+        ...(incomingMessage.height == null ? {} : { height: incomingMessage.height }),
       };
     } catch {
-      return message;
+      return incomingMessage;
     }
   }
 
-  async devAppendSendMessage(message: SendMessage): Promise<void> {
-    const resolved = await this.resolveDevSendMessage(message);
+  async devAppendSendMessage(incomingMessage: SendMessage): Promise<void> {
+    const resolved = await this.resolveDevSendMessage(incomingMessage);
     this.appendSendMessageEntry(
       createSendMessageEntry(
         nextEntryId(getTranscript(), "send-message"),
@@ -566,23 +566,23 @@ export class SendPipeline {
     );
   }
 
-  async appendConnectorCard(args: {
+  async appendConnectorCard(input: {
     agentId?: string;
     connector: string;
     variant: string;
     reason?: string;
   }): Promise<void> {
-    await this.tm.sessions.ensureActionTarget(args.agentId);
-    const message: SendMessage = {
+    await this.tm.sessions.ensureActionTarget(input.agentId);
+    const incomingMessage: SendMessage = {
       type: "connector",
-      connector: args.connector,
-      variant: args.variant,
-      ...(args.reason ? { reason: args.reason } : {}),
+      connector: input.connector,
+      variant: input.variant,
+      ...(input.reason ? { reason: input.reason } : {}),
     };
     this.appendSendMessageEntry(
       createSendMessageEntry(
         nextEntryId(getTranscript(), "send-message"),
-        message,
+        incomingMessage,
         Date.now(),
       ),
     );
