@@ -67,8 +67,8 @@ export type McpAuthenticationResult =
 export interface McpManagementDependencies {
   listPlugins(): Promise<readonly McpPluginSummary[]>;
   getPlugin(pluginId: string): Promise<McpPluginDetail | null>;
-  install(args: { readonly id: string; readonly values?: Readonly<Record<string, string>> }): Promise<void>;
-  add(args: { readonly name: string; readonly configJson: string }): Promise<readonly McpInstalledServer[]>;
+  install(input: { readonly id: string; readonly values?: Readonly<Record<string, string>> }): Promise<void>;
+  add(input: { readonly name: string; readonly configJson: string }): Promise<readonly McpInstalledServer[]>;
   listInstalled(): Promise<readonly McpInstalledServer[]>;
   removeServer(serverId: string): Promise<{
     readonly removed: boolean;
@@ -76,11 +76,11 @@ export interface McpManagementDependencies {
     readonly servers: readonly McpInstalledServer[];
   }>;
   uninstallPlugin(pluginId: string): Promise<{ readonly removed: boolean; readonly reason?: string }>;
-  setInstructions(args: { readonly serverId: string; readonly instructions: string }): Promise<readonly McpInstalledServer[]>;
+  setInstructions(input: { readonly serverId: string; readonly instructions: string }): Promise<readonly McpInstalledServer[]>;
   restart(): Promise<readonly McpInstalledServer[]>;
-  authenticate(serverId: string, accountKey: string, requestingAgentId: string | null, forceReauth: boolean): Promise<McpAuthenticationResult>;
-  removeAccount(args: { readonly serverId: string; readonly accountKey: string }): Promise<readonly McpInstalledServer[]>;
-  renameAccount(args: { readonly serverId: string; readonly accountKey: string; readonly newAccountKey: string }): Promise<readonly McpInstalledServer[]>;
+  authenticate(serverId: string, accountKey: string, requestingAgentId: string | null, forceReauthShape: boolean): Promise<McpAuthenticationResult>;
+  removeAccount(input: { readonly serverId: string; readonly accountKey: string }): Promise<readonly McpInstalledServer[]>;
+  renameAccount(input: { readonly serverId: string; readonly accountKey: string; readonly newAccountKey: string }): Promise<readonly McpInstalledServer[]>;
 }
 
 export interface ConnectorCard {
@@ -130,11 +130,11 @@ export function scorePluginForToken(plugin: McpPluginSummary, token: string): nu
   return 0;
 }
 
-export function rankPluginsLexically<T extends McpPluginSummary>(plugins: readonly T[], query: string): T[] {
+export function rankPluginsLexically<T extends McpPluginSummary>(catalog: readonly T[], query: string): T[] {
   const tokens = tokenizePluginQuery(query);
   const byName = (left: T, right: T): number => left.displayName.localeCompare(right.displayName);
-  if (tokens.length === 0) return [...plugins].sort(byName);
-  return plugins.map((plugin) => ({
+  if (tokens.length === 0) return [...catalog].sort(byName);
+  return catalog.map((plugin) => ({
     plugin,
     score: tokens.reduce((sum, token) => sum + scorePluginForToken(plugin, token), 0),
   })).filter((entry) => entry.score > 0)
@@ -158,22 +158,22 @@ export function validateRemoteMcpUrl(rawUrl: string): string | null {
   return null;
 }
 
-export function buildServerConfigJson(args: { readonly url?: string | undefined; readonly headers?: Readonly<Record<string, string>> | undefined }): string | null {
-  if (args.url == null || args.url.length === 0) return null;
+export function buildServerConfigJson(input: { readonly url?: string | undefined; readonly headers?: Readonly<Record<string, string>> | undefined }): string | null {
+  if (input.url == null || input.url.length === 0) return null;
   return JSON.stringify({
     type: "http",
-    url: args.url,
-    ...(args.headers != null && Object.keys(args.headers).length > 0 ? { headers: args.headers } : {}),
+    url: input.url,
+    ...(input.headers != null && Object.keys(input.headers).length > 0 ? { headers: input.headers } : {}),
   });
 }
 
 export function truncateOneLine(value: string, max: number): string {
-  const oneLine = value.replace(/\s+/g, " ").trim();
-  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+  const singleLine = value.replace(/\s+/g, " ").trim();
+  return singleLine.length > max ? `${singleLine.slice(0, max - 1)}…` : singleLine;
 }
 
 export function describeInstalled(server: McpInstalledServer): string {
-  const parts = [
+  const segments = [
     `- ${server.serverIdentifier}: ${server.name} [${server.status}]`,
     `account=${encodeMcpAccountLabelForListing(server.accountKey)}`,
     `transport=${server.transport}`,
@@ -181,12 +181,12 @@ export function describeInstalled(server: McpInstalledServer): string {
       ? `tools=${server.toolCount}/${server.toolCount + server.disabledToolCount} enabled`
       : `tools=${server.toolCount}`,
   ];
-  if (server.pluginId != null) parts.push(`plugin=${server.pluginId} (remove via UninstallPlugin — removes the whole plugin)`);
-  if (server.statusDetail != null && server.statusDetail.length > 0) parts.push(`detail="${truncateOneLine(server.statusDetail, 200)}"`);
+  if (server.pluginId != null) segments.push(`plugin=${server.pluginId} (remove via UninstallPlugin — removes the whole plugin)`);
+  if (server.statusDetail != null && server.statusDetail.length > 0) segments.push(`detail="${truncateOneLine(server.statusDetail, 200)}"`);
   if (server.customInstructions.length > 0 && server.customInstructions !== getDefaultMcpCustomInstruction(server.name)) {
-    parts.push(`instructions="${truncateOneLine(server.customInstructions, 120)}"`);
+    segments.push(`instructions="${truncateOneLine(server.customInstructions, 120)}"`);
   }
-  return parts.join(" · ");
+  return segments.join(" · ");
 }
 
 export function describeInstalledList(servers: readonly McpInstalledServer[]): string {
@@ -195,251 +195,251 @@ export function describeInstalledList(servers: readonly McpInstalledServer[]): s
     : [`${servers.length} installed MCP server(s):`, ...servers.map(describeInstalled)].join("\n");
 }
 
-function describePluginInstallState(plugin: McpPluginSummary): string {
+function installStateText(plugin: McpPluginSummary): string {
   if (!plugin.isInstalled) return "installed=no";
   return plugin.installMode != null ? `installed=yes (${plugin.installMode})` : "installed=yes";
 }
 
-function describePluginIncludes(plugin: McpPluginSummary): string {
-  const parts: string[] = [];
-  if (plugin.connectorCount > 0) parts.push(`${plugin.connectorCount} connector${plugin.connectorCount === 1 ? "" : "s"}`);
-  if (plugin.skills.length > 0) parts.push(`${plugin.skills.length} skill${plugin.skills.length === 1 ? "" : "s"}`);
-  return parts.length > 0 ? parts.join(", ") : "no primitives";
+function includesText(plugin: McpPluginSummary): string {
+  const segments: string[] = [];
+  if (plugin.connectorCount > 0) segments.push(`${plugin.connectorCount} connector${plugin.connectorCount === 1 ? "" : "s"}`);
+  if (plugin.skills.length > 0) segments.push(`${plugin.skills.length} skill${plugin.skills.length === 1 ? "" : "s"}`);
+  return segments.length > 0 ? segments.join(", ") : "no primitives";
 }
 
 export function describePluginSummary(plugin: McpPluginSummary): string {
-  const result = [
+  const outcome = [
     `- ${plugin.pluginId}: ${plugin.displayName} \u2014 ${plugin.description}`,
     `  (${[
-      describePluginInstallState(plugin),
-      `includes: ${describePluginIncludes(plugin)}`,
+      installStateText(plugin),
+      `includes: ${includesText(plugin)}`,
       `category=${plugin.category}`
     ].join("; ")})`,
   ];
-  const guidance = getDefaultMcpCustomInstruction(plugin.displayName);
-  if (guidance.length > 0) result.push(`  usage guidance: ${guidance}`);
-  return result.join("\n");
+  const hint = getDefaultMcpCustomInstruction(plugin.displayName);
+  if (hint.length > 0) outcome.push(`  usage hint: ${hint}`);
+  return outcome.join("\n");
 }
 
 export function describePluginDetail(detail: McpPluginDetail): string {
-  const sections = [
+  const blocks = [
     `${detail.pluginId}: ${detail.displayName} \u2014 ${detail.description}`,
-    `${describePluginInstallState(detail)} \xB7 includes: ${describePluginIncludes(detail)} \xB7 category=${detail.category}`,
+    `${installStateText(detail)} \xB7 includes: ${includesText(detail)} \xB7 category=${detail.category}`,
   ];
   if (detail.skills.length > 0) {
-    sections.push(["Skills:", ...detail.skills.map((skill) =>
+    blocks.push(["Skills:", ...detail.skills.map((skill) =>
       `  - ${skill.name}${skill.description.length > 0 ? ` \u2014 ${truncateOneLine(skill.description, 140)}` : ""}`,
     )].join("\n"));
   }
   if (detail.fields.length > 0) {
-    sections.push(["Setup fields (pass in InstallPlugin values):", ...detail.fields.map((field) => {
-      const flags = [field.isRequired ? "required" : "optional", ...(field.isSecret ? ["secret \u2014 ask the user, never guess"] : [])];
-      return `  - ${field.key} (${field.label}; ${flags.join(", ")})`;
+    blocks.push(["Setup fields (pass in InstallPlugin values):", ...detail.fields.map((field) => {
+      const tags = [field.isRequired ? "required" : "optional", ...(field.isSecret ? ["secret \u2014 ask the user, never guess"] : [])];
+      return `  - ${field.key} (${field.label}; ${tags.join(", ")})`;
     })].join("\n"));
   }
-  if (detail.servers.length > 0) sections.push(["Its installed MCP server(s) — statuses live in GetMcpServerStatus:", ...detail.servers.map(describeInstalled)].join("\n"));
-  if (detail.isInstalled && detail.installMode === "team-required") sections.push("Required by the user's team — it cannot be uninstalled.");
-  return sections.join("\n");
+  if (detail.servers.length > 0) blocks.push(["Its installed MCP server(s) — statuses live in GetMcpServerStatus:", ...detail.servers.map(describeInstalled)].join("\n"));
+  if (detail.isInstalled && detail.installMode === "team-required") blocks.push("Required by the user's team — it cannot be uninstalled.");
+  return blocks.join("\n");
 }
 
 export const CARD_SHOWN_NOTE = "Its connect card is now in the chat. Finish unrelated work, then end your turn — you're resumed automatically when the user authorizes. Don't send a link, another card, or reach the service another way meanwhile.";
 export const MCP_AWAITING_SELECTION_MESSAGE = "You just sent a question widget, so this turn is waiting on the user's selection — their answer arrives as the next message. Don't install, uninstall, restart, or authenticate an MCP server in the same turn as the confirmation widget; wait for the user to confirm, then do it on your next turn.";
 
 export function newNeedsAuthRows(before: readonly McpInstalledServer[], after: readonly McpInstalledServer[]): Array<{ id: string; name: string }> {
-  const prior = new Set(before.map((server) => server.serverIdentifier));
-  const rows = new Map<string, string>();
+  const previousIds = new Set(before.map((server) => server.serverIdentifier));
+  const entries = new Map<string, string>();
   for (const server of after) {
-    if (!prior.has(server.serverIdentifier) && server.status === "needsAuth") rows.set(server.id, server.name);
+    if (!previousIds.has(server.serverIdentifier) && server.status === "needsAuth") entries.set(server.id, server.name);
   }
-  return [...rows].map(([id, name]) => ({ id, name }));
+  return [...entries].map(([id, name]) => ({ id, name }));
 }
 
 export function emitAndDescribeAuthResult(
-  result: McpAuthenticationResult,
+  outcome: McpAuthenticationResult,
   isForceReauth: boolean,
   serverId: string,
-  emitConnectorCard?: (card: ConnectorCard) => void,
+  emitCard?: (card: ConnectorCard) => void,
 ): string {
-  switch (result.kind) {
+  switch (outcome.kind) {
     case "started":
-      emitConnectorCard?.({ connector: result.serverName, serverId, variant: "connect" });
+      emitCard?.({ connector: outcome.serverName, serverId, variant: "connect" });
       return isForceReauth
-        ? `Signed "${result.serverName}" out and started a fresh sign-in. ${CARD_SHOWN_NOTE}`
-        : `Authentication started for "${result.serverName}". ${CARD_SHOWN_NOTE}`;
+        ? `Signed "${outcome.serverName}" out and started a fresh sign-in. ${CARD_SHOWN_NOTE}`
+        : `Authentication started for "${outcome.serverName}". ${CARD_SHOWN_NOTE}`;
     case "already-authenticated":
-      emitConnectorCard?.({ connector: result.serverName, serverId, variant: "connected" });
-      return `"${result.serverName}" is already authenticated and connected; a confirmation card is now in the chat.`;
-    case "not-configured": return `"${result.serverName}" is not installed, so there is nothing to authenticate. Install it first.`;
-    case "not-supported": return `"${result.serverName}" does not support interactive authentication: ${result.message}`;
-    case "unreachable": return `Sign-in for "${result.serverName}" never started. The server or its configuration failed the check: "${result.message}" \u2014 not a missing credential, so the user authenticating in Settings would hit the same error. Tell them what it reported instead of sending them to Settings.`;
+      emitCard?.({ connector: outcome.serverName, serverId, variant: "connected" });
+      return `"${outcome.serverName}" is already authenticated and connected; a confirmation card is now in the chat.`;
+    case "not-configured": return `"${outcome.serverName}" is not installed, so there is nothing to authenticate. Install it first.`;
+    case "not-supported": return `"${outcome.serverName}" does not support interactive authentication: ${outcome.message}`;
+    case "unreachable": return `Sign-in for "${outcome.serverName}" never started. The server or its configuration failed the check: "${outcome.message}" \u2014 not a missing credential, so the user authenticating in Settings would hit the same error. Tell them what it reported instead of sending them to Settings.`;
   }
 }
 
-const serverIdParameters = z.object({ server_id: z.string().trim().min(1) });
-const statusParameters = z.object({ server_id: z.string().trim().optional() });
-const instructionsParameters = serverIdParameters.extend({ instructions: z.string() });
-const forceReauth = z.boolean().optional();
-const authParameters = serverIdParameters.extend({ force_reauth: forceReauth });
-const multiAuthParameters = authParameters.extend({ account_label: z.string().trim().min(1) });
-const accountParameters = serverIdParameters.extend({ account_label: z.string().trim().min(1) });
-const renameParameters = accountParameters.extend({ new_account_label: z.string().trim().min(1) });
+const serverIdShape = z.object({ server_id: z.string().trim().min(1) });
+const statusShape = z.object({ server_id: z.string().trim().optional() });
+const instructionsShape = serverIdShape.extend({ instructions: z.string() });
+const forceReauthShape = z.boolean().optional();
+const authShape = serverIdShape.extend({ force_reauth: forceReauthShape });
+const multiAuthShape = authShape.extend({ account_label: z.string().trim().min(1) });
+const accountShape = serverIdShape.extend({ account_label: z.string().trim().min(1) });
+const renameShape = accountShape.extend({ new_account_label: z.string().trim().min(1) });
 
-function noInstalledServerMessage(token: string): string {
+function missingServerText(token: string): string {
   return `No installed MCP server "${token}". Run GetMcpServerStatus to list every server with its identifier.`;
 }
 
 export function createMcpManagementTools(
-  management: McpManagementDependencies,
-  getRequestingAgentId?: () => string | undefined,
-  isAwaitingUserSelection?: () => boolean,
-  isMultiAccountEnabled?: () => boolean,
-  emitConnectorCard?: (card: ConnectorCard) => void,
+  host: McpManagementDependencies,
+  requestingAgentId?: () => string | undefined,
+  isAwaitingSelection?: () => boolean,
+  multiAccountEnabled?: () => boolean,
+  emitCard?: (card: ConnectorCard) => void,
 ) {
-  const multiAccount = isMultiAccountEnabled?.() === true;
-  const guardMutation = <A>(execute: (ctx: unknown, args: A, deps: McpManagementDependencies & { toolCallId: string }) => Promise<string>) =>
-    async (ctx: unknown, args: A, deps: McpManagementDependencies & { toolCallId: string }): Promise<string> =>
-      isAwaitingUserSelection?.() === true ? MCP_AWAITING_SELECTION_MESSAGE : execute(ctx, args, deps);
+  const accountsMode = multiAccountEnabled?.() === true;
+  const guardWrite = <A>(execute: (ctx: unknown, input: A, services: McpManagementDependencies & { toolCallId: string }) => Promise<string>) =>
+    async (ctx: unknown, input: A, services: McpManagementDependencies & { toolCallId: string }): Promise<string> =>
+      isAwaitingSelection?.() === true ? MCP_AWAITING_SELECTION_MESSAGE : execute(ctx, input, services);
 
-  const resolveServerId = async (deps: McpManagementDependencies, token: string): Promise<string | null> => {
+  const resolveId = async (services: McpManagementDependencies, token: string): Promise<string | null> => {
     const trimmed = token.trim();
     if (isMcpServerId(trimmed)) return trimmed;
-    const listing = await readMcpInstalledListing(() => deps.listInstalled());
-    return listing.kind === "unreadable" ? trimmed : resolveMcpServerRowByIdentifierOrLegacyId(listing.servers, trimmed)?.id ?? null;
+    const existing = await readMcpInstalledListing(() => services.listInstalled());
+    return existing.kind === "unreadable" ? trimmed : resolveMcpServerRowByIdentifierOrLegacyId(existing.servers, trimmed)?.id ?? null;
   };
 
-  const emitNeedsAuthCards = (before: readonly McpInstalledServer[], after: readonly McpInstalledServer[]): string | null => {
-    const rows = newNeedsAuthRows(before, after);
-    if (rows.length === 0 || emitConnectorCard == null) return null;
-    for (const row of rows) emitConnectorCard({ connector: row.name, serverId: row.id, variant: "connect" });
-    return rows.length === 1
-      ? `"${rows[0]?.name ?? "Connector"}" needs authentication. ${CARD_SHOWN_NOTE}`
-      : `${rows.map((row) => `"${row.name}"`).join(", ")} need authentication. ${CARD_SHOWN_NOTE}`;
+  const emitAuthCards = (before: readonly McpInstalledServer[], after: readonly McpInstalledServer[]): string | null => {
+    const entries = newNeedsAuthRows(before, after);
+    if (entries.length === 0 || emitCard == null) return null;
+    for (const row of entries) emitCard({ connector: row.name, serverId: row.id, variant: "connect" });
+    return entries.length === 1
+      ? `"${entries[0]?.name ?? "Connector"}" needs authentication. ${CARD_SHOWN_NOTE}`
+      : `${entries.map((row) => `"${row.name}"`).join(", ")} need authentication. ${CARD_SHOWN_NOTE}`;
   };
 
   const tools = [
-    defineCommunicateTool(management, {
-      id: "SEARCH_PLUGINS", name: "SearchPlugins", description: "Search the plugins the user could install (or already has): marketplace plugins bundling connectors and skills. Say what you're looking for in natural language and results come back ranked by relevance, each with its STABLE plugin id, install state, and what it includes. Use this to discover a capability (Linear, Notion, writing Word documents, …) or to check whether a plugin is installed. Inspect one result with GetPlugin; connector runtime statuses (connected/needsAuth) live in GetMcpServerStatus. This is read-only and never needs the user's permission.", parameters: searchPluginsParameters,
-      execute: async (_ctx, args: z.infer<typeof searchPluginsParameters>, deps) => {
-        const query = (args.query ?? "").trim();
-        const plugins = rankPluginsLexically(await deps.listPlugins(), query);
-        if (plugins.length === 0) return query.length > 0 ? `No plugins match "${query}".` : "The plugin catalog is empty or unavailable right now.";
-        return [`${plugins.length} plugin(s)${query.length > 0 ? ` matching "${query}" (best first)` : " available"}:`, ...plugins.map(describePluginSummary)].join("\n");
+    defineCommunicateTool(host, {
+      id: "SEARCH_PLUGINS", name: "SearchPlugins", description: "Search the catalog the user could install (or already has): marketplace catalog bundling connectors and skills. Say what you're looking for in natural language and results come back ranked by relevance, each with its STABLE plugin id, install state, and what it includes. Use this to discover a capability (Linear, Notion, writing Word documents, …) or to check whether a plugin is installed. Inspect one outcome with GetPlugin; connector runtime statuses (connected/needsAuth) live in GetMcpServerStatus. This is read-only and never needs the user's permission.", parameters: searchPluginsParameters,
+      execute: async (_ctx, input: z.infer<typeof searchPluginsParameters>, services) => {
+        const query = (input.query ?? "").trim();
+        const catalog = rankPluginsLexically(await services.listPlugins(), query);
+        if (catalog.length === 0) return query.length > 0 ? `No catalog match "${query}".` : "The plugin catalog is empty or unavailable right now.";
+        return [`${catalog.length} plugin(s)${query.length > 0 ? ` matching "${query}" (best first)` : " available"}:`, ...catalog.map(describePluginSummary)].join("\n");
       },
     }),
-    defineCommunicateTool(management, {
-      id: "GET_PLUGIN", name: "GetPlugin", description: "Full detail for one plugin by its STABLE plugin id (from SearchPlugins): what it includes (connectors, skills), its install state, any setup fields InstallPlugin needs (with required/secret flags), and the installed MCP servers backing it. Read this before installing a plugin with setup fields, and before uninstalling (to know the full scope you must disclose). Read-only.", parameters: getPluginParameters,
-      execute: async (_ctx, args: z.infer<typeof getPluginParameters>, deps) => {
-        const detail = await deps.getPlugin(args.plugin_id);
-        return detail == null ? `No plugin with id "${args.plugin_id}".` : describePluginDetail(detail);
+    defineCommunicateTool(host, {
+      id: "GET_PLUGIN", name: "GetPlugin", description: "Full detail for one plugin by its STABLE plugin id (from SearchPlugins): what it includes (connectors, skills), its install state, any setup fields InstallPlugin needs (with required/secret tags), and the installed MCP servers backing it. Read this before installing a plugin with setup fields, and before uninstalling (to know the full scope you must disclose). Read-only.", parameters: getPluginParameters,
+      execute: async (_ctx, input: z.infer<typeof getPluginParameters>, services) => {
+        const detail = await services.getPlugin(input.plugin_id);
+        return detail == null ? `No plugin with id "${input.plugin_id}".` : describePluginDetail(detail);
       },
     }),
-    defineCommunicateTool(management, {
+    defineCommunicateTool(host, {
       id: "INSTALL_PLUGIN", name: "InstallPlugin", description: "Install a plugin by its STABLE plugin id (from SearchPlugins) into the user's Cursor account. Only call this after the user has agreed — confirm with a question widget first, since installing changes the user's configuration. Idempotent: re-installing an installed plugin is safe. Pass any setup values GetPlugin lists (ask the user for secrets like API keys — never guess). If an installed connector needs authentication, its connect card is shown to the user automatically — finish unrelated work, then end your turn; you're resumed when they authorize. New tools and skills become available on your next message.", parameters: installPluginParameters,
-      execute: guardMutation(async (_ctx, args: z.infer<typeof installPluginParameters>, deps) => {
-        const before = await deps.getPlugin(args.plugin_id);
-        if (before == null) return `No plugin with id "${args.plugin_id}".`;
-        await deps.install({ id: args.plugin_id, ...(args.values == null ? {} : { values: args.values }) });
-        const after = await deps.getPlugin(args.plugin_id);
+      execute: guardWrite(async (_ctx, input: z.infer<typeof installPluginParameters>, services) => {
+        const before = await services.getPlugin(input.plugin_id);
+        if (before == null) return `No plugin with id "${input.plugin_id}".`;
+        await services.install({ id: input.plugin_id, ...(input.values == null ? {} : { values: input.values }) });
+        const after = await services.getPlugin(input.plugin_id);
         if (after == null || !after.isInstalled) return `The install request for "${before.displayName}" completed, but the plugin does not read as installed yet.`;
-        const note = emitNeedsAuthCards(before.servers, after.servers);
+        const note = emitAuthCards(before.servers, after.servers);
         return [`Installed ${after.displayName} (plugin ${after.pluginId}).`, ...(note == null ? [] : [note]), describePluginDetail(after)].join("\n");
       }),
     }),
-    defineCommunicateTool(management, {
+    defineCommunicateTool(host, {
       id: "ADD_MCP_SERVER", name: "AddMcpServer", description: "Add a remote MCP server that isn't in the catalog to the user's Cursor account — use this when the user gives you a link for a server that SearchPlugins doesn't know. Only call this after the user agrees to add it — confirm with a question widget first, since it changes the user's account configuration and the server can reach external services on their behalf. Provide the remote server's `url` (with `headers` for any auth token). Slate only supports remote http/sse MCP servers (executed on the backend); local/stdio servers are not supported. Ask the user for the exact endpoint and any secrets rather than guessing; if you only have a link, open it first (WebFetch) to find the connection details. Newly added tools become available to you on your next message.", parameters: addMcpServerParameters,
-      execute: guardMutation(async (_ctx, args: z.infer<typeof addMcpServerParameters>, deps) => {
-        const error = validateRemoteMcpUrl(args.url);
+      execute: guardWrite(async (_ctx, input: z.infer<typeof addMcpServerParameters>, services) => {
+        const error = validateRemoteMcpUrl(input.url);
         if (error != null) return error;
-        const configJson = buildServerConfigJson(args);
+        const configJson = buildServerConfigJson(input);
         if (configJson == null) return "A remote MCP URL is required.";
-        const before = await deps.listInstalled();
-        const servers = await deps.add({ name: args.name, configJson });
-        const note = emitNeedsAuthCards(before, servers);
-        return [`Added "${args.name}".`, ...(note == null ? [] : [note]), describeInstalledList(servers)].join("\n");
+        const before = await services.listInstalled();
+        const servers = await services.add({ name: input.name, configJson });
+        const note = emitAuthCards(before, servers);
+        return [`Added "${input.name}".`, ...(note == null ? [] : [note]), describeInstalledList(servers)].join("\n");
       }),
     }),
-    defineCommunicateTool(management, {
-      id: "UNINSTALL_MCP_SERVER", name: "UninstallMcpServer", description: "Remove ONE custom MCP server — a server added with AddMcpServer, not one that came from a plugin — by its server identifier. This is destructive and deletes the server with all of its accounts, so confirm with the user via a question widget first. A server the listing marks `plugin=<id>` came from a marketplace plugin: removing it would uninstall that WHOLE plugin, which this tool refuses — use UninstallPlugin for those so the confirmation can disclose the full scope." + (multiAccount ? " To remove just one account and keep the server, use RemoveMcpAccount instead." : ""), parameters: serverIdParameters,
-      execute: guardMutation(async (_ctx, args: z.infer<typeof serverIdParameters>, deps) => {
-        const installed = await deps.listInstalled();
-        const row = resolveMcpServerRowByIdentifierOrLegacyId(installed, args.server_id);
-        if (row == null) return noInstalledServerMessage(args.server_id);
+    defineCommunicateTool(host, {
+      id: "UNINSTALL_MCP_SERVER", name: "UninstallMcpServer", description: "Remove ONE custom MCP server — a server added with AddMcpServer, not one that came from a plugin — by its server identifier. This is destructive and deletes the server with all of its accounts, so confirm with the user via a question widget first. A server the existing marks `plugin=<id>` came from a marketplace plugin: removing it would uninstall that WHOLE plugin, which this tool refuses — use UninstallPlugin for those so the confirmation can disclose the full scope." + (accountsMode ? " To remove just one account and keep the server, use RemoveMcpAccount instead." : ""), parameters: serverIdShape,
+      execute: guardWrite(async (_ctx, input: z.infer<typeof serverIdShape>, services) => {
+        const installed = await services.listInstalled();
+        const row = resolveMcpServerRowByIdentifierOrLegacyId(installed, input.server_id);
+        if (row == null) return missingServerText(input.server_id);
         if (row.pluginId != null) return `${row.name} was installed from marketplace plugin ${row.pluginId}; use UninstallPlugin.`;
         if (row.isTeamServer === true) return `${row.name} is provided by the user's team, so it can't be removed here.`;
-        const result = await deps.removeServer(row.id);
-        const status = result.removed ? `Removed MCP server ${row.name} (${row.serverIdentifier}).` : `The removal request for ${row.name} completed, but it still reads as installed.`;
-        return [status, describeInstalledList(result.servers)].join("\n");
+        const outcome = await services.removeServer(row.id);
+        const status = outcome.removed ? `Removed MCP server ${row.name} (${row.serverIdentifier}).` : `The removal request for ${row.name} completed, but it still reads as installed.`;
+        return [status, describeInstalledList(outcome.servers)].join("\n");
       }),
     }),
-    defineCommunicateTool(management, {
-      id: "UNINSTALL_PLUGIN", name: "UninstallPlugin", description: "Uninstall a plugin by its STABLE plugin id (from SearchPlugins). This is destructive and removes the WHOLE PLUGIN — its install record and EVERY connector and skill it added — so confirm with the user via a question widget first, and your confirmation must disclose that full scope (list what goes). Plugins required by the user's team cannot be uninstalled." + (multiAccount ? " This removes each of its servers with ALL of their accounts; to remove just one account from a server, use RemoveMcpAccount instead." : ""), parameters: getPluginParameters,
-      execute: guardMutation(async (_ctx, args: z.infer<typeof getPluginParameters>, deps) => {
-        const detail = await deps.getPlugin(args.plugin_id);
-        if (detail == null) return `No plugin with id "${args.plugin_id}".`;
+    defineCommunicateTool(host, {
+      id: "UNINSTALL_PLUGIN", name: "UninstallPlugin", description: "Uninstall a plugin by its STABLE plugin id (from SearchPlugins). This is destructive and removes the WHOLE PLUGIN — its install record and EVERY connector and skill it added — so confirm with the user via a question widget first, and your confirmation must disclose that full scope (list what goes). Plugins required by the user's team cannot be uninstalled." + (accountsMode ? " This removes each of its servers with ALL of their accounts; to remove just one account from a server, use RemoveMcpAccount instead." : ""), parameters: getPluginParameters,
+      execute: guardWrite(async (_ctx, input: z.infer<typeof getPluginParameters>, services) => {
+        const detail = await services.getPlugin(input.plugin_id);
+        if (detail == null) return `No plugin with id "${input.plugin_id}".`;
         if (!detail.isInstalled) return `${detail.displayName} is not installed — nothing to uninstall.`;
         if (detail.installMode === "team-required") return `${detail.displayName} is required by the user's team and cannot be uninstalled.`;
-        const result = await deps.uninstallPlugin(args.plugin_id);
-        return result.removed ? `Uninstalled ${detail.displayName} (plugin ${detail.pluginId}).` : `The uninstall request for ${detail.displayName} completed, but it still reads as installed.`;
+        const outcome = await services.uninstallPlugin(input.plugin_id);
+        return outcome.removed ? `Uninstalled ${detail.displayName} (plugin ${detail.pluginId}).` : `The uninstall request for ${detail.displayName} completed, but it still reads as installed.`;
       }),
     }),
-    defineCommunicateTool(management, {
-      id: "GET_MCP_SERVER_STATUS", name: "GetMcpServerStatus", description: "The runtime status of the user's installed MCP servers (connected / needsAuth / error, per account). Pass server_id (the server identifier, NEVER a display name) for one server; omit it to list everything. Use this to see which connectors still need authentication, to find the identifier a lifecycle tool needs — the same one GetMcpTools and CallMcpTool address — or to check a connector after installing or authenticating. Read-only and never needs the user's permission.", parameters: statusParameters,
-      execute: async (_ctx, args: z.infer<typeof statusParameters>, deps) => {
-        const installed = await deps.listInstalled();
-        const token = args.server_id?.trim();
+    defineCommunicateTool(host, {
+      id: "GET_MCP_SERVER_STATUS", name: "GetMcpServerStatus", description: "The runtime status of the user's installed MCP servers (connected / needsAuth / error, per account). Pass server_id (the server identifier, NEVER a display name) for one server; omit it to list everything. Use this to see which connectors still need authentication, to find the identifier a lifecycle tool needs — the same one GetMcpTools and CallMcpTool address — or to check a connector after installing or authenticating. Read-only and never needs the user's permission.", parameters: statusShape,
+      execute: async (_ctx, input: z.infer<typeof statusShape>, services) => {
+        const installed = await services.listInstalled();
+        const token = input.server_id?.trim();
         if (token == null || token.length === 0) return describeInstalledList(installed);
-        const rows = resolveMcpServerRowsByIdentifierOrLegacyId(installed, token);
-        return rows.length === 0 ? `No installed MCP server "${token}".` : rows.map(describeInstalled).join("\n");
+        const entries = resolveMcpServerRowsByIdentifierOrLegacyId(installed, token);
+        return entries.length === 0 ? `No installed MCP server "${token}".` : entries.map(describeInstalled).join("\n");
       },
     }),
-    defineCommunicateTool(management, {
-      id: "SET_MCP_INSTRUCTIONS", name: "SetMcpInstructions", description: `Set (or clear) an installed connector's custom instructions \u2014 the guidance you follow whenever you use that server (e.g. "Reply in threads on Slack"). Use this when the user tells you how they want a connector used, so the preference persists across turns. Pass an empty string to clear it and fall back to the connector's default. This changes a saved preference, not the connection (no OAuth needed); the current value shows in GetMcpServerStatus when it's been customized.`, parameters: instructionsParameters,
-      execute: guardMutation(async (_ctx, args: z.infer<typeof instructionsParameters>, deps) => {
-        const serverId = await resolveServerId(deps, args.server_id);
-        if (serverId == null) return noInstalledServerMessage(args.server_id);
-        const servers = await deps.setInstructions({ serverId, instructions: args.instructions });
-        return [`${args.instructions.trim().length === 0 ? "Cleared" : "Updated"} custom instructions for MCP server ${args.server_id}.`, describeInstalledList(servers)].join("\n");
+    defineCommunicateTool(host, {
+      id: "SET_MCP_INSTRUCTIONS", name: "SetMcpInstructions", description: `Set (or clear) an installed connector's custom instructions \u2014 the hint you follow whenever you use that server (e.g. "Reply in threads on Slack"). Use this when the user tells you how they want a connector used, so the preference persists across turns. Pass an empty string to clear it and fall back to the connector's default. This changes a saved preference, not the connection (no OAuth needed); the current value shows in GetMcpServerStatus when it's been customized.`, parameters: instructionsShape,
+      execute: guardWrite(async (_ctx, input: z.infer<typeof instructionsShape>, services) => {
+        const serverId = await resolveId(services, input.server_id);
+        if (serverId == null) return missingServerText(input.server_id);
+        const servers = await services.setInstructions({ serverId, instructions: input.instructions });
+        return [`${input.instructions.trim().length === 0 ? "Cleared" : "Updated"} custom instructions for MCP server ${input.server_id}.`, describeInstalledList(servers)].join("\n");
       }),
     }),
-    defineCommunicateTool(management, {
+    defineCommunicateTool(host, {
       id: "RESTART_MCP_SERVERS", name: "RestartMcpServers", description: "Restart (reconnect) the installed MCP servers — useful when a server is stuck, errored, or you just finished authenticating one. Confirm with the user first if a server is mid-task.", parameters: z.object({}),
-      execute: guardMutation(async (_ctx, _args: Record<string, never>, deps) => ["Restarted MCP servers.", describeInstalledList(await deps.restart())].join("\n")),
+      execute: guardWrite(async (_ctx, _args: Record<string, never>, services) => ["Restarted MCP servers.", describeInstalledList(await services.restart())].join("\n")),
     }),
   ];
 
-  const authenticate = (parameters: typeof authParameters | typeof multiAuthParameters) => defineCommunicateTool(management, {
+  const authenticate = (parameters: typeof authShape | typeof multiAuthShape) => defineCommunicateTool(host, {
     id: "AUTHENTICATE_MCP_SERVER", name: "AuthenticateMcpServer", description: "Authenticate an installed MCP server that needs it (status needsAuth, or a tool call failing with an auth error). This is the only way to start a connector's auth: its connect card is shown to the user automatically — never compose a card, paste an authorization link, or reach the same service another way while its authorization is pending. The user authorizes in place and you're resumed automatically, so finish unrelated work, then end your turn.", parameters,
-    execute: guardMutation(async (_ctx, args: { server_id: string; account_label?: string; force_reauth?: boolean }, deps) => {
-      const serverId = await resolveServerId(deps, args.server_id);
-      if (serverId == null) return noInstalledServerMessage(args.server_id);
-      const account = multiAccount ? decodeMcpAccountLabelArgument(args.account_label ?? "default") : "default";
-      const result = await deps.authenticate(serverId, account, getRequestingAgentId?.() ?? null, args.force_reauth === true);
-      return emitAndDescribeAuthResult(result, args.force_reauth === true, serverId, emitConnectorCard);
+    execute: guardWrite(async (_ctx, input: { server_id: string; account_label?: string; force_reauth?: boolean }, services) => {
+      const serverId = await resolveId(services, input.server_id);
+      if (serverId == null) return missingServerText(input.server_id);
+      const account = accountsMode ? decodeMcpAccountLabelArgument(input.account_label ?? "default") : "default";
+      const outcome = await services.authenticate(serverId, account, requestingAgentId?.() ?? null, input.force_reauth === true);
+      return emitAndDescribeAuthResult(outcome, input.force_reauth === true, serverId, emitCard);
     }),
   });
-  tools.push(authenticate(multiAccount ? multiAuthParameters : authParameters));
+  tools.push(authenticate(accountsMode ? multiAuthShape : authShape));
 
-  if (multiAccount) {
+  if (accountsMode) {
     tools.push(
-      defineCommunicateTool(management, {
-        id: "REMOVE_MCP_ACCOUNT", name: "RemoveMcpAccount", description: "Remove ONE account from an MCP server: the account and its credential are deleted, while the server and its other accounts stay. This is destructive — confirm with the user via a question widget before calling it. To remove a whole custom server (every account), use UninstallMcpServer; to remove a server's whole plugin (every connector, skill, and account), use UninstallPlugin.", parameters: accountParameters,
-        execute: guardMutation(async (_ctx, args: z.infer<typeof accountParameters>, deps) => {
-          const serverId = await resolveServerId(deps, args.server_id);
-          if (serverId == null) return noInstalledServerMessage(args.server_id);
-          const accountKey = decodeMcpAccountLabelArgument(args.account_label);
-          const servers = await deps.removeAccount({ serverId, accountKey });
-          return [`Removed account "${formatMcpAccountLabelForPrompt(accountKey)}" from MCP server ${args.server_id}.`, describeInstalledList(servers)].join("\n");
+      defineCommunicateTool(host, {
+        id: "REMOVE_MCP_ACCOUNT", name: "RemoveMcpAccount", description: "Remove ONE account from an MCP server: the account and its credential are deleted, while the server and its other accounts stay. This is destructive — confirm with the user via a question widget before calling it. To remove a whole custom server (every account), use UninstallMcpServer; to remove a server's whole plugin (every connector, skill, and account), use UninstallPlugin.", parameters: accountShape,
+        execute: guardWrite(async (_ctx, input: z.infer<typeof accountShape>, services) => {
+          const serverId = await resolveId(services, input.server_id);
+          if (serverId == null) return missingServerText(input.server_id);
+          const accountKey = decodeMcpAccountLabelArgument(input.account_label);
+          const servers = await services.removeAccount({ serverId, accountKey });
+          return [`Removed account "${formatMcpAccountLabelForPrompt(accountKey)}" from MCP server ${input.server_id}.`, describeInstalledList(servers)].join("\n");
         }),
       }),
-      defineCommunicateTool(management, {
-        id: "RENAME_MCP_ACCOUNT", name: "RenameMcpAccount", description: "Rename one of an MCP server's accounts (change its label). The account's server identifier changes with the label at the next listing, so after renaming, re-run GetMcpServerStatus (or GetMcpTools) before calling that account's tools again — stale identifiers fail cleanly. Confirm with a question widget first.", parameters: renameParameters,
-        execute: guardMutation(async (_ctx, args: z.infer<typeof renameParameters>, deps) => {
-          const serverId = await resolveServerId(deps, args.server_id);
-          if (serverId == null) return noInstalledServerMessage(args.server_id);
-          const accountKey = decodeMcpAccountLabelArgument(args.account_label);
-          const newAccountKey = decodeMcpAccountLabelArgument(args.new_account_label);
-          const servers = await deps.renameAccount({ serverId, accountKey, newAccountKey });
-          return [`Renamed account "${formatMcpAccountLabelForPrompt(accountKey)}" to "${formatMcpAccountLabelForPrompt(newAccountKey)}" on MCP server ${args.server_id}.`, describeInstalledList(servers)].join("\n");
+      defineCommunicateTool(host, {
+        id: "RENAME_MCP_ACCOUNT", name: "RenameMcpAccount", description: "Rename one of an MCP server's accounts (change its label). The account's server identifier changes with the label at the next existing, so after renaming, re-run GetMcpServerStatus (or GetMcpTools) before calling that account's tools again — stale identifiers fail cleanly. Confirm with a question widget first.", parameters: renameShape,
+        execute: guardWrite(async (_ctx, input: z.infer<typeof renameShape>, services) => {
+          const serverId = await resolveId(services, input.server_id);
+          if (serverId == null) return missingServerText(input.server_id);
+          const accountKey = decodeMcpAccountLabelArgument(input.account_label);
+          const newAccountKey = decodeMcpAccountLabelArgument(input.new_account_label);
+          const servers = await services.renameAccount({ serverId, accountKey, newAccountKey });
+          return [`Renamed account "${formatMcpAccountLabelForPrompt(accountKey)}" to "${formatMcpAccountLabelForPrompt(newAccountKey)}" on MCP server ${input.server_id}.`, describeInstalledList(servers)].join("\n");
         }),
       }),
     );
