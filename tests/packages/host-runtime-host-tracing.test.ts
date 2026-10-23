@@ -11,12 +11,12 @@ import { ExportResultCode, initSlateHostTracing, NOOP_HOST_TRACING, resetHostTra
 import { SLATE_CLIENT_TYPE } from "../../source/shared/node/slate-client-metadata.ts";
 
 /** An exporter the test controls, with every call written down. */
-function fakeExporter(behaviour: { failExport?: boolean; failShutdown?: boolean } = {}) {
+function fakeExporter(behaviour: { failExport?: boolean; failShutdown?: boolean; failFlush?: boolean } = {}) {
   const calls: string[] = [];
   const exporter: SpanExporter = {
     export: (_spans, resultCallback) => { calls.push("export"); resultCallback({ code: behaviour.failExport === true ? ExportResultCode.FAILED : ExportResultCode.SUCCESS }); },
     shutdown: async () => { calls.push("shutdown"); if (behaviour.failShutdown === true) throw new Error("no shutdown here"); },
-    forceFlush: async () => { calls.push("force-flush"); },
+    forceFlush: async () => { calls.push("force-flush"); if (behaviour.failFlush === true) throw new Error("no flush here"); },
   };
   return { exporter, calls };
 }
@@ -72,12 +72,20 @@ describe("the exporter that changes its token", () => {
     const broken = new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => "token", {}, false, () => { throw new Error("no exporter"); });
     broken.export([], (result) => { outcomes.push(result.code); });
     assert.deepEqual(outcomes, [ExportResultCode.FAILED, ExportResultCode.FAILED]);
+    // An export that throws at its caller is still a failed send, not an exception.
+    const throwingExporter = new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => "token", {}, false, () => ({ export() { throw new Error("the delegate threw"); }, shutdown: async () => {}, forceFlush: async () => {} }));
+    throwingExporter.export([], (result) => { outcomes.push(result.code); });
+    assert.equal(outcomes.at(-1), ExportResultCode.FAILED);
     // Stopping and flushing are quiet about a delegate that is not there or that refuses.
     const refusing = fakeExporter({ failShutdown: true });
     const refusingExporter = new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => "token", {}, false, () => refusing.exporter);
     refusingExporter.export([], () => {});
-    return Promise.all([refusingExporter.shutdown(), refusingExporter.forceFlush(), new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => null, {}).shutdown()]).then(() => {
+    const failingFlush = fakeExporter({ failFlush: true });
+    const failingFlushExporter = new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => "token", {}, false, () => failingFlush.exporter);
+    failingFlushExporter.export([], () => {});
+    return Promise.all([refusingExporter.shutdown(), refusingExporter.forceFlush(), failingFlushExporter.forceFlush(), new TokenRefreshingSpanExporter("https://collector.invalid/v1/traces", () => null, {}).shutdown()]).then(() => {
       assert.deepEqual(refusing.calls, ["export", "shutdown", "force-flush"]);
+      assert.deepEqual(failingFlush.calls, ["export", "force-flush"]);
     });
   });
 });
