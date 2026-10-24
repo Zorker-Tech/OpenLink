@@ -47,128 +47,128 @@ export async function fetchHealth(
   timing: CoordinatorHostSupervisorTiming,
   baseUrl: string,
   headers?: Record<string, string>,
-  onReachability?: (report: HealthReachabilityReport, baseUrl: string) => void
+  onReachability?: (publishReport: HealthReachabilityReport, baseUrl: string) => void
 ): Promise<Record<string, unknown> | null> {
-  const startMonotonicMs = timing.clock.monotonicNow();
-  const report = (value: HealthReachabilityReport) => { try { onReachability?.(value, baseUrl); } catch { /* best effort */ } };
+  const probeStartedAt = timing.clock.monotonicNow();
+  const publishReport = (reportValue: HealthReachabilityReport) => { try { onReachability?.(reportValue, baseUrl); } catch { /* best effort */ } };
   try {
-    const response = await timing.healthProbeDeadline.run((signal) => fetch(`${baseUrl}/health`, { signal, ...(headers == null ? {} : { headers: { ...headers } }) }));
-    if (!response.ok) {
-      report({ outcome: outcomeForHttpStatus(response.status) ?? "network", method: "health", latencyMs: timing.clock.monotonicNow() - startMonotonicMs, baseUrlKind: classifyBaseUrlKind(baseUrl), httpStatus: response.status });
+    const probeResponse = await timing.healthProbeDeadline.run((signal) => fetch(`${baseUrl}/health`, { signal, ...(headers == null ? {} : { headers: { ...headers } }) }));
+    if (!probeResponse.ok) {
+      publishReport({ outcome: outcomeForHttpStatus(probeResponse.status) ?? "network", method: "health", latencyMs: timing.clock.monotonicNow() - probeStartedAt, baseUrlKind: classifyBaseUrlKind(baseUrl), httpStatus: probeResponse.status });
       return null;
     }
-    const health = await response.json() as Record<string, unknown>;
-    return health.ok === true ? health : null;
-  } catch (error) {
-    const { outcome, causeSummary } = classifyGatewayFetchFailure(error);
-    report({ outcome, method: "health", latencyMs: timing.clock.monotonicNow() - startMonotonicMs, baseUrlKind: classifyBaseUrlKind(baseUrl), causeSummary });
+    const healthPayload = await probeResponse.json() as Record<string, unknown>;
+    return healthPayload.ok === true ? healthPayload : null;
+  } catch (failure) {
+    const { outcome, causeSummary } = classifyGatewayFetchFailure(failure);
+    publishReport({ outcome, method: "health", latencyMs: timing.clock.monotonicNow() - probeStartedAt, baseUrlKind: classifyBaseUrlKind(baseUrl), causeSummary });
     return null;
   }
 }
 
 interface ConnectionAttempt {
-  healthEpoch: number;
-  promise: Promise<GatewayConnection>;
-  state: "pending" | "settled";
-  isRetired: boolean;
-  hasWaiter: boolean;
+  epoch: number;
+  resultPromise: Promise<GatewayConnection>;
+  phase: "pending" | "settled";
+  retired: boolean;
+  waiterAttached: boolean;
   retirement: Promise<never>;
-  retire(): void;
+  abandon(): void;
 }
 
 export interface SlateHostSupervisorOptions {
   timing: CoordinatorHostSupervisorTiming;
   resolveGatewayConnection(): Promise<GatewayConnection>;
   isTransportLive?(): boolean;
-  onReachability?(report: HealthReachabilityReport, baseUrl: string): void;
+  onReachability?(publishReport: HealthReachabilityReport, baseUrl: string): void;
 }
 
 export class SlateHostSupervisor {
-  private connection?: GatewayConnection;
-  private lastHealthyAtMs = Number.NEGATIVE_INFINITY;
-  private healthEpoch = 0;
-  private latestConnectionAttempt?: ConnectionAttempt;
-  private readonly healthTtlDisabled: boolean;
-  private readonly streamLivenessDisabled: boolean;
+  private gatewayConnection?: GatewayConnection;
+  private lastHealthyAt = Number.NEGATIVE_INFINITY;
+  private epoch = 0;
+  private latestAttempt?: ConnectionAttempt;
+  private readonly ttlDisabled: boolean;
+  private readonly livenessDisabled: boolean;
 
-  constructor(private readonly options: SlateHostSupervisorOptions) {
-    this.healthTtlDisabled = process.env[DISABLE_HEALTH_TTL_ENV] === "1";
-    this.streamLivenessDisabled = process.env[DISABLE_STREAM_LIVENESS_ENV] === "1";
+  constructor(private readonly supervisorOptions: SlateHostSupervisorOptions) {
+    this.ttlDisabled = process.env[DISABLE_HEALTH_TTL_ENV] === "1";
+    this.livenessDisabled = process.env[DISABLE_STREAM_LIVENESS_ENV] === "1";
   }
 
-  private getOrStartConnectionAttempt(healthEpoch: number): ConnectionAttempt {
-    const current = this.latestConnectionAttempt;
-    if (current != null && current.healthEpoch === healthEpoch && current.state === "pending" && !current.isRetired) return current;
-    let release = () => {};
-    const retirement = new Promise<never>((_resolve, reject) => { release = () => reject(new GatewayConnectResolveAbandonedError()); });
+  private startOrReuseAttempt(healthEpoch: number): ConnectionAttempt {
+    const activeAttempt = this.latestAttempt;
+    if (activeAttempt != null && activeAttempt.epoch === healthEpoch && activeAttempt.phase === "pending" && !activeAttempt.retired) return activeAttempt;
+    let abandon = () => {};
+    const retirement = new Promise<never>((_resolve, reject) => { abandon = () => reject(new GatewayConnectResolveAbandonedError()); });
     void retirement.catch(() => {});
-    const attempt: ConnectionAttempt = {
-      healthEpoch,
-      promise: this.options.resolveGatewayConnection(),
-      state: "pending",
-      isRetired: false,
-      hasWaiter: false,
+    const connectAttempt: ConnectionAttempt = {
+      epoch: healthEpoch,
+      resultPromise: this.supervisorOptions.resolveGatewayConnection(),
+      phase: "pending",
+      retired: false,
+      waiterAttached: false,
       retirement,
-      retire: () => { if (attempt.isRetired) return; attempt.isRetired = true; release(); }
+      abandon: () => { if (connectAttempt.retired) return; connectAttempt.retired = true; abandon(); }
     };
-    this.latestConnectionAttempt = attempt;
-    const markSettled = () => { attempt.state = "settled"; };
-    void attempt.promise.then(markSettled, markSettled);
-    return attempt;
+    this.latestAttempt = connectAttempt;
+    const markAttemptSettled = () => { connectAttempt.phase = "settled"; };
+    void connectAttempt.resultPromise.then(markAttemptSettled, markAttemptSettled);
+    return connectAttempt;
   }
 
-  private getLatestAttemptForCurrentEpoch(): ConnectionAttempt {
-    const current = this.latestConnectionAttempt;
-    return current != null && current.healthEpoch === this.healthEpoch && !current.isRetired ? current : this.getOrStartConnectionAttempt(this.healthEpoch);
+  private latestAttemptForEpoch(): ConnectionAttempt {
+    const activeAttempt = this.latestAttempt;
+    return activeAttempt != null && activeAttempt.epoch === this.epoch && !activeAttempt.retired ? activeAttempt : this.startOrReuseAttempt(this.epoch);
   }
 
-  private async awaitAttempt(attempt: ConnectionAttempt, signal?: AbortSignal): Promise<GatewayConnection> {
-    if (signal == null) { attempt.hasWaiter = true; return await Promise.race([attempt.promise, attempt.retirement]); }
-    if (signal.aborted) { if (!attempt.hasWaiter) attempt.retire(); throw new GatewayConnectResolveAbandonedError(); }
-    attempt.hasWaiter = true;
-    const onAbort = () => attempt.retire();
+  private async awaitConnectionAttempt(connectAttempt: ConnectionAttempt, signal?: AbortSignal): Promise<GatewayConnection> {
+    if (signal == null) { connectAttempt.waiterAttached = true; return await Promise.race([connectAttempt.resultPromise, connectAttempt.retirement]); }
+    if (signal.aborted) { if (!connectAttempt.waiterAttached) connectAttempt.abandon(); throw new GatewayConnectResolveAbandonedError(); }
+    connectAttempt.waiterAttached = true;
+    const onAbort = () => connectAttempt.abandon();
     signal.addEventListener("abort", onAbort, { once: true });
-    try { return await Promise.race([attempt.promise, attempt.retirement]); }
+    try { return await Promise.race([connectAttempt.resultPromise, connectAttempt.retirement]); }
     finally { signal.removeEventListener("abort", onAbort); }
   }
 
   invalidateHealthCache(): void {
-    this.healthEpoch += 1;
-    this.lastHealthyAtMs = Number.NEGATIVE_INFINITY;
-    this.latestConnectionAttempt?.retire();
+    this.epoch += 1;
+    this.lastHealthyAt = Number.NEGATIVE_INFINITY;
+    this.latestAttempt?.abandon();
   }
 
   async ensureConnection(signal?: AbortSignal): Promise<GatewayConnection> {
-    const cached = this.connection;
-    if (cached != null) {
-      if (!this.streamLivenessDisabled && this.options.isTransportLive?.() === true) return cached;
-      if (!this.healthTtlDisabled && this.options.timing.clock.monotonicNow() - this.lastHealthyAtMs < HEALTH_PROBE_TTL_MS) return cached;
-      const epochAtProbe = this.healthEpoch;
-      if (await fetchHealth(this.options.timing, cached.baseUrl, cached.headers, this.options.onReachability) != null) {
-        if (epochAtProbe === this.healthEpoch) this.lastHealthyAtMs = this.options.timing.clock.monotonicNow();
-        return cached;
+    const knownConnection = this.gatewayConnection;
+    if (knownConnection != null) {
+      if (!this.livenessDisabled && this.supervisorOptions.isTransportLive?.() === true) return knownConnection;
+      if (!this.ttlDisabled && this.supervisorOptions.timing.clock.monotonicNow() - this.lastHealthyAt < HEALTH_PROBE_TTL_MS) return knownConnection;
+      const probeEpoch = this.epoch;
+      if (await fetchHealth(this.supervisorOptions.timing, knownConnection.baseUrl, knownConnection.headers, this.supervisorOptions.onReachability) != null) {
+        if (probeEpoch === this.epoch) this.lastHealthyAt = this.supervisorOptions.timing.clock.monotonicNow();
+        return knownConnection;
       }
     }
-    const epochAtConnect = this.healthEpoch;
-    let attempt = this.getOrStartConnectionAttempt(epochAtConnect);
+    const connectEpoch = this.epoch;
+    let connectAttempt = this.startOrReuseAttempt(connectEpoch);
     for (;;) {
       try {
-        const connection = await this.awaitAttempt(attempt, signal);
-        const supersedingAttempt = this.latestConnectionAttempt;
-        if (attempt.healthEpoch !== this.healthEpoch) { attempt = this.getLatestAttemptForCurrentEpoch(); continue; }
-        if (supersedingAttempt !== attempt) {
-          if (supersedingAttempt == null) throw new Error("latest gateway connection attempt is missing");
-          attempt = supersedingAttempt;
+        const gatewayConnection = await this.awaitConnectionAttempt(connectAttempt, signal);
+        const newerAttempt = this.latestAttempt;
+        if (connectAttempt.epoch !== this.epoch) { connectAttempt = this.latestAttemptForEpoch(); continue; }
+        if (newerAttempt !== connectAttempt) {
+          if (newerAttempt == null) throw new Error("latest gateway connection attempt is missing");
+          connectAttempt = newerAttempt;
           continue;
         }
-        this.connection = connection;
-        this.lastHealthyAtMs = Number.NEGATIVE_INFINITY;
-        return connection;
-      } catch (error) {
-        const supersedingAttempt = this.latestConnectionAttempt;
-        if (attempt.healthEpoch !== this.healthEpoch) { attempt = this.getLatestAttemptForCurrentEpoch(); continue; }
-        if (supersedingAttempt === attempt || supersedingAttempt == null) throw error;
-        attempt = supersedingAttempt;
+        this.gatewayConnection = gatewayConnection;
+        this.lastHealthyAt = Number.NEGATIVE_INFINITY;
+        return gatewayConnection;
+      } catch (failure) {
+        const newerAttempt = this.latestAttempt;
+        if (connectAttempt.epoch !== this.epoch) { connectAttempt = this.latestAttemptForEpoch(); continue; }
+        if (newerAttempt === connectAttempt || newerAttempt == null) throw failure;
+        connectAttempt = newerAttempt;
       }
     }
   }
