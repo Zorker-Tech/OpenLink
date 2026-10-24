@@ -35,10 +35,10 @@ export interface DreamingBridge { isEnabled(): boolean; record(evidence: unknown
 export function getAgentMemoryDir(agentDir: string): string { return join(agentDir, MEMORY_DIRNAME); }
 export function memoryIdFor(content: string): string { return createHash("sha1").update(memoryDedupeKey(content)).digest("hex").slice(0, 16); }
 export function serializeFactLine(content: string, createdAt: number): string { return `- (${formatMemoryDate(createdAt)}) ${content}`; }
-export function parseFacts(raw: string, kind: MemoryKind, path = "", base = 0): MemoryFact[] {
+export function parseFacts(sourceText: string, kind: MemoryKind, path = "", base = 0): MemoryFact[] {
   const facts: MemoryFact[] = [];
-  for (const [line, text] of raw.split("\n").entries()) {
-    const match = FACT_LINE.exec(text); if (match == null) continue;
+  for (const [line, lineText] of sourceText.split("\n").entries()) {
+    const match = FACT_LINE.exec(lineText); if (match == null) continue;
     const content = normalizeMemoryContent(match[2] ?? ""); if (!content) continue;
     const createdAt = Date.parse(`${match[1]}T00:00:00Z`);
     facts.push({ id: memoryIdFor(content), content, createdAt: Number.isFinite(createdAt) ? createdAt : 0, kind, origin: "legacy", path, line, order: base + facts.length });
@@ -46,9 +46,9 @@ export function parseFacts(raw: string, kind: MemoryKind, path = "", base = 0): 
   return facts;
 }
 export function agentMemoryHasContent(agentDir: string): boolean {
-  const memoryDir = getAgentMemoryDir(agentDir), logDir = join(memoryDir, LOG_DIRNAME);
-  let logs: string[] = []; try { logs = readdirSync(logDir).filter((name) => name.endsWith(".md")).map((name) => join(logDir, name)); } catch {}
-  return [join(memoryDir, PROFILE_FILENAME), ...logs].some((path) => { try { return parseFacts(readFileSync(path, "utf8"), path.endsWith(PROFILE_FILENAME) ? "profile" : "log").length > 0; } catch { return false; } });
+  const memoryDirectory = getAgentMemoryDir(agentDir), logDir = join(memoryDirectory, LOG_DIRNAME);
+  let logs: string[] = []; try { logs = readdirSync(logDir).filter((fileName) => fileName.endsWith(".md")).map((fileName) => join(logDir, fileName)); } catch {}
+  return [join(memoryDirectory, PROFILE_FILENAME), ...logs].some((path) => { try { return parseFacts(readFileSync(path, "utf8"), path.endsWith(PROFILE_FILENAME) ? "profile" : "log").length > 0; } catch { return false; } });
 }
 
 export class FileMemoryStore {
@@ -59,79 +59,79 @@ export class FileMemoryStore {
   readonly generatedDir: string;
   readonly tombstoneDir: string;
   readonly refreshFile: string;
-  constructor(readonly memoryDir: string, debounce: DebouncePolicy, readonly dreaming?: DreamingBridge) {
-    this.dir = new WatchedDirectory(memoryDir, debounce);
-    this.profileFile = join(memoryDir, PROFILE_FILENAME);
-    this.logDir = join(memoryDir, LOG_DIRNAME);
-    const metadata = join(memoryDir, METADATA_DIRNAME);
+  constructor(readonly memoryDirectory: string, debounce: DebouncePolicy, readonly dreaming?: DreamingBridge) {
+    this.dir = new WatchedDirectory(memoryDirectory, debounce);
+    this.profileFile = join(memoryDirectory, PROFILE_FILENAME);
+    this.logDir = join(memoryDirectory, LOG_DIRNAME);
+    const metadata = join(memoryDirectory, METADATA_DIRNAME);
     this.explicitDir = join(metadata, "explicit"); this.generatedDir = join(metadata, "synthesized"); this.tombstoneDir = join(metadata, "tombstones"); this.refreshFile = join(metadata, "next-refresh-at");
   }
   get recordMemoryEvidence(): ((evidence: unknown) => void) | undefined { return this.dreaming?.isEnabled() === true ? (evidence) => this.dreaming?.record(evidence) : undefined; }
   getLocation(): string { return this.dir.getLocation(); }
-  setOnChange(listener?: (() => void) | null): void { this.dir.setOnChange(listener); }
-  private read(path: string): string { try { return readFileSync(path, "utf8"); } catch { return ""; } }
-  private logFiles(): string[] { try { return readdirSync(this.logDir).filter((name) => name.endsWith(".md")).sort().map((name) => join(this.logDir, name)); } catch { return []; } }
-  private logFileForDate(createdAt: number): string { return join(this.logDir, `${formatMemoryDate(createdAt).slice(0, 7)}.md`); }
-  private originPath(content: string, origin: Exclude<MemoryOrigin, "legacy">): string { return join(origin === "explicit" ? this.explicitDir : this.generatedDir, `${memoryIdFor(content)}.memory`); }
-  private tombstonePath(content: string): string { return join(this.tombstoneDir, `${memoryIdFor(content)}.deleted`); }
-  private hasFile(path: string): boolean { try { return statSync(path).isFile(); } catch { return false; } }
-  private memoryOrigin(content: string): MemoryOrigin { if (this.hasFile(this.originPath(content, "explicit"))) return "explicit"; if (this.hasFile(this.originPath(content, "synthesis"))) return "synthesis"; return "legacy"; }
-  private markOrigin(content: string, origin: Exclude<MemoryOrigin, "legacy">): void { this.dir.writeFileAtomic(this.originPath(content, origin), ""); }
-  private clearOrigins(content: string): void { rmSync(this.originPath(content, "explicit"), { force: true }); rmSync(this.originPath(content, "synthesis"), { force: true }); }
-  private isTombstoned(content: string): boolean { return this.hasFile(this.tombstonePath(content)); }
-  private markTombstone(content: string): void { this.dir.writeFileAtomic(this.tombstonePath(content), ""); }
-  private clearTombstone(content: string): void { rmSync(this.tombstonePath(content), { force: true }); }
+  setOnChange(changeListener?: (() => void) | null): void { this.dir.setOnChange(changeListener); }
+  private readText(path: string): string { try { return readFileSync(path, "utf8"); } catch { return ""; } }
+  private logFilePaths(): string[] { try { return readdirSync(this.logDir).filter((fileName) => fileName.endsWith(".md")).sort().map((fileName) => join(this.logDir, fileName)); } catch { return []; } }
+  private logFileForTime(createdAt: number): string { return join(this.logDir, `${formatMemoryDate(createdAt).slice(0, 7)}.md`); }
+  private originFilePath(content: string, origin: Exclude<MemoryOrigin, "legacy">): string { return join(origin === "explicit" ? this.explicitDir : this.generatedDir, `${memoryIdFor(content)}.memory`); }
+  private tombstoneFilePath(content: string): string { return join(this.tombstoneDir, `${memoryIdFor(content)}.deleted`); }
+  private isFile(path: string): boolean { try { return statSync(path).isFile(); } catch { return false; } }
+  private originOf(content: string): MemoryOrigin { if (this.isFile(this.originFilePath(content, "explicit"))) return "explicit"; if (this.isFile(this.originFilePath(content, "synthesis"))) return "synthesis"; return "legacy"; }
+  private writeOrigin(content: string, origin: Exclude<MemoryOrigin, "legacy">): void { this.dir.writeFileAtomic(this.originFilePath(content, origin), ""); }
+  private removeOrigins(content: string): void { rmSync(this.originFilePath(content, "explicit"), { force: true }); rmSync(this.originFilePath(content, "synthesis"), { force: true }); }
+  private hasTombstone(content: string): boolean { return this.isFile(this.tombstoneFilePath(content)); }
+  private writeTombstone(content: string): void { this.dir.writeFileAtomic(this.tombstoneFilePath(content), ""); }
+  private removeTombstone(content: string): void { rmSync(this.tombstoneFilePath(content), { force: true }); }
   private facts(): MemoryFact[] {
-    const profile = parseFacts(this.read(this.profileFile), "profile", this.profileFile);
-    const logs: MemoryFact[] = []; for (const path of this.logFiles()) logs.push(...parseFacts(this.read(path), "log", path, logs.length));
-    return [...profile, ...logs].map((fact) => ({ ...fact, origin: this.memoryOrigin(fact.content) }));
+    const profile = parseFacts(this.readText(this.profileFile), "profile", this.profileFile);
+    const logs: MemoryFact[] = []; for (const path of this.logFilePaths()) logs.push(...parseFacts(this.readText(path), "log", path, logs.length));
+    return [...profile, ...logs].map((rememberedFact) => ({ ...rememberedFact, origin: this.originOf(rememberedFact.content) }));
   }
-  private record(fact: MemoryFact): MemoryRecord { return { id: fact.id, content: fact.content, createdAt: fact.createdAt, kind: fact.kind }; }
-  private byRecent(a: MemoryFact, b: MemoryFact): number { return b.createdAt - a.createdAt || b.order - a.order; }
-  recall(recentLimit = 20): { profile: MemoryRecord[]; recent: MemoryRecord[] } { const facts = this.facts(); return { profile: facts.filter((fact) => fact.kind === "profile").sort((a, b) => this.byRecent(a, b)).slice(0, MEMORY_PROFILE_PROMPT_LIMIT).map((fact) => this.record(fact)), recent: facts.filter((fact) => fact.kind === "log").sort((a, b) => this.byRecent(a, b)).slice(0, Math.max(0, Math.floor(recentLimit))).map((fact) => this.record(fact)) }; }
-  listMemories(limit = 100): MemoryRecord[] { return this.facts().sort((a, b) => Number(b.kind === "profile") - Number(a.kind === "profile") || this.byRecent(a, b)).slice(0, Math.max(0, Math.floor(limit))).map((fact) => this.record(fact)); }
+  private toRecord(rememberedFact: MemoryFact): MemoryRecord { return { id: rememberedFact.id, content: rememberedFact.content, createdAt: rememberedFact.createdAt, kind: rememberedFact.kind }; }
+  private compareRecent(a: MemoryFact, b: MemoryFact): number { return b.createdAt - a.createdAt || b.order - a.order; }
+  recall(recentLimit = 20): { profile: MemoryRecord[]; recent: MemoryRecord[] } { const facts = this.facts(); return { profile: facts.filter((rememberedFact) => rememberedFact.kind === "profile").sort((left, right) => this.compareRecent(left, right)).slice(0, MEMORY_PROFILE_PROMPT_LIMIT).map((rememberedFact) => this.toRecord(rememberedFact)), recent: facts.filter((rememberedFact) => rememberedFact.kind === "log").sort((left, right) => this.compareRecent(left, right)).slice(0, Math.max(0, Math.floor(recentLimit))).map((rememberedFact) => this.toRecord(rememberedFact)) }; }
+  listMemories(limit = 100): MemoryRecord[] { return this.facts().sort((left, right) => Number(right.kind === "profile") - Number(left.kind === "profile") || this.compareRecent(left, right)).slice(0, Math.max(0, Math.floor(limit))).map((rememberedFact) => this.toRecord(rememberedFact)); }
   countMemories(): number { return this.facts().length; }
   addMemory(content: string, createdAt: number, kind: MemoryKind): MemoryRecord | null {
     const normalized = normalizeMemoryContent(content); if (!normalized) return null;
-    const existing = this.facts().find((fact) => memoryDedupeKey(fact.content) === memoryDedupeKey(normalized));
-    if (existing != null) { if (this.dreaming?.isEnabled()) { this.clearTombstone(existing.content); this.clearOrigins(existing.content); this.markOrigin(existing.content, "explicit"); } return null; }
-    const path = kind === "profile" ? this.profileFile : this.logFileForDate(createdAt), raw = this.read(path), base = raw || (kind === "profile" ? PROFILE_HEADER : LOG_HEADER);
+    const duplicate = this.facts().find((rememberedFact) => memoryDedupeKey(rememberedFact.content) === memoryDedupeKey(normalized));
+    if (duplicate != null) { if (this.dreaming?.isEnabled()) { this.removeTombstone(duplicate.content); this.removeOrigins(duplicate.content); this.writeOrigin(duplicate.content, "explicit"); } return null; }
+    const path = kind === "profile" ? this.profileFile : this.logFileForTime(createdAt), sourceText = this.readText(path), base = sourceText || (kind === "profile" ? PROFILE_HEADER : LOG_HEADER);
     this.dir.writeFileAtomic(path, `${base}${base.endsWith("\n") ? "" : "\n"}${serializeFactLine(normalized, createdAt)}\n`);
-    if (this.dreaming?.isEnabled()) { this.clearTombstone(normalized); this.clearOrigins(normalized); this.markOrigin(normalized, "explicit"); }
+    if (this.dreaming?.isEnabled()) { this.removeTombstone(normalized); this.removeOrigins(normalized); this.writeOrigin(normalized, "explicit"); }
     return { id: memoryIdFor(normalized), content: normalized, createdAt, kind };
   }
   removeMemoryByContent(content: string): boolean { const normalized = normalizeMemoryContent(content); return normalized ? this.removeMemory(memoryIdFor(normalized)) : false; }
   removeMemory(id: string): boolean {
-    for (const fact of this.facts()) {
-      if (fact.id !== id) continue; const raw = this.read(fact.path), lines = raw.split("\n"); lines.splice(fact.line, 1); this.dir.writeFileAtomic(fact.path, lines.join("\n"));
-      if (this.dreaming?.isEnabled()) { this.clearOrigins(fact.content); this.markTombstone(fact.content); }
+    for (const rememberedFact of this.facts()) {
+      if (rememberedFact.id !== id) continue; const sourceText = this.readText(rememberedFact.path), fileLines = sourceText.split("\n"); fileLines.splice(rememberedFact.line, 1); this.dir.writeFileAtomic(rememberedFact.path, fileLines.join("\n"));
+      if (this.dreaming?.isEnabled()) { this.removeOrigins(rememberedFact.content); this.writeTombstone(rememberedFact.content); }
       return true;
     }
     return false;
   }
   prepareSynthesis(): SynthesisSnapshot {
-    const state = this.readSynthesisState(), seen = new Set<string>();
-    const memories = [...state.facts].sort((a, b) => Number(b.origin === "explicit") - Number(a.origin === "explicit") || Number(b.kind === "profile") - Number(a.kind === "profile") || this.byRecent(a, b)).filter((fact) => { if (seen.has(fact.id)) return false; seen.add(fact.id); return true; }).slice(0, MEMORY_SYNTHESIS_INPUT_LIMIT).map(({ id, content, createdAt, kind, origin }) => ({ id, content, createdAt, kind, origin }));
-    return { fingerprint: state.fingerprint, memories };
+    const synthesisState = this.readState(), seenIds = new Set<string>();
+    const memories = [...synthesisState.facts].sort((left, right) => Number(right.origin === "explicit") - Number(left.origin === "explicit") || Number(right.kind === "profile") - Number(left.kind === "profile") || this.compareRecent(left, right)).filter((rememberedFact) => { if (seenIds.has(rememberedFact.id)) return false; seenIds.add(rememberedFact.id); return true; }).slice(0, MEMORY_SYNTHESIS_INPUT_LIMIT).map(({ id, content, createdAt, kind, origin }) => ({ id, content, createdAt, kind, origin }));
+    return { fingerprint: synthesisState.fingerprint, memories };
   }
   applySynthesis(snapshot: SynthesisSnapshot, changes: readonly SynthesisChange[], now: number): "committed" | "stale" | "invalid" {
-    const state = this.readSynthesisState(); if (state.fingerprint !== snapshot.fingerprint) return "stale";
-    const allowed = new Set(snapshot.memories.map((memory) => memory.id)), byId = new Map(state.facts.map((fact) => [fact.id, fact])), changed = new Set<string>();
-    for (const change of changes) {
-      if (change.action === "create") { const content = normalizeMemoryContent(change.content); if (!content) return "invalid"; if (!this.isTombstoned(content)) this.addSynthesized(content, now, change.kind); continue; }
-      if (!allowed.has(change.id) || changed.has(change.id)) return "invalid"; const current = byId.get(change.id); if (current == null || current.origin === "explicit") return "invalid"; changed.add(change.id);
-      if (change.action === "remove") { this.removeFact(current, false); continue; }
-      const content = normalizeMemoryContent(change.content); if (!content) return "invalid"; this.removeFact(current, false); if (!this.isTombstoned(content)) this.addSynthesized(content, now, change.kind);
+    const synthesisState = this.readState(); if (synthesisState.fingerprint !== snapshot.fingerprint) return "stale";
+    const allowedIds = new Set(snapshot.memories.map((memory) => memory.id)), byId = new Map(synthesisState.facts.map((rememberedFact) => [rememberedFact.id, rememberedFact])), changedIds = new Set<string>();
+    for (const synthesisChange of changes) {
+      if (synthesisChange.action === "create") { const content = normalizeMemoryContent(synthesisChange.content); if (!content) return "invalid"; if (!this.hasTombstone(content)) this.insertSynthesized(content, now, synthesisChange.kind); continue; }
+      if (!allowedIds.has(synthesisChange.id) || changedIds.has(synthesisChange.id)) return "invalid"; const currentFact = byId.get(synthesisChange.id); if (currentFact == null || currentFact.origin === "explicit") return "invalid"; changedIds.add(synthesisChange.id);
+      if (synthesisChange.action === "remove") { this.dropFact(currentFact, false); continue; }
+      const content = normalizeMemoryContent(synthesisChange.content); if (!content) return "invalid"; this.dropFact(currentFact, false); if (!this.hasTombstone(content)) this.insertSynthesized(content, now, synthesisChange.kind);
     }
     this.markTemporalReview(now); return "committed";
   }
-  private removeFact(fact: MemoryFact, tombstone: boolean): void { const lines = this.read(fact.path).split("\n"); lines.splice(fact.line, 1); this.dir.writeFileAtomic(fact.path, lines.join("\n")); this.clearOrigins(fact.content); if (tombstone) this.markTombstone(fact.content); }
-  private addSynthesized(content: string, createdAt: number, kind: MemoryKind): void { if (this.facts().some((fact) => memoryDedupeKey(fact.content) === memoryDedupeKey(content))) return; const path = kind === "profile" ? this.profileFile : this.logFileForDate(createdAt), raw = this.read(path), base = raw || (kind === "profile" ? PROFILE_HEADER : LOG_HEADER); this.dir.writeFileAtomic(path, `${base}${base.endsWith("\n") ? "" : "\n"}${serializeFactLine(content, createdAt)}\n`); this.clearOrigins(content); this.markOrigin(content, "synthesis"); }
+  private dropFact(rememberedFact: MemoryFact, tombstone: boolean): void { const fileLines = this.readText(rememberedFact.path).split("\n"); fileLines.splice(rememberedFact.line, 1); this.dir.writeFileAtomic(rememberedFact.path, fileLines.join("\n")); this.removeOrigins(rememberedFact.content); if (tombstone) this.writeTombstone(rememberedFact.content); }
+  private insertSynthesized(content: string, createdAt: number, kind: MemoryKind): void { if (this.facts().some((rememberedFact) => memoryDedupeKey(rememberedFact.content) === memoryDedupeKey(content))) return; const path = kind === "profile" ? this.profileFile : this.logFileForTime(createdAt), sourceText = this.readText(path), base = sourceText || (kind === "profile" ? PROFILE_HEADER : LOG_HEADER); this.dir.writeFileAtomic(path, `${base}${base.endsWith("\n") ? "" : "\n"}${serializeFactLine(content, createdAt)}\n`); this.removeOrigins(content); this.writeOrigin(content, "synthesis"); }
   hasMemories(): boolean { return this.countMemories() > 0; }
-  isTemporalReviewDue(now: number): boolean { const next = Number.parseInt(this.read(this.refreshFile).trim(), 10); return !Number.isFinite(next) || next <= now; }
+  isTemporalReviewDue(now: number): boolean { const next = Number.parseInt(this.readText(this.refreshFile).trim(), 10); return !Number.isFinite(next) || next <= now; }
   markTemporalReview(now: number): void { this.dir.writeFileAtomic(this.refreshFile, `${now + MEMORY_SYNTHESIS_REFRESH_INTERVAL_MS}\n`); }
-  clearMemories(): void { const facts = this.facts(); if (!facts.length) return; if (this.dreaming?.isEnabled()) for (const fact of facts) { this.clearOrigins(fact.content); this.markTombstone(fact.content); } rmSync(this.logDir, { recursive: true, force: true }); this.dir.writeFileAtomic(this.profileFile, PROFILE_HEADER); }
-  private readSynthesisState(): { fingerprint: string; facts: MemoryFact[] } { const files = [{ path: this.profileFile, raw: this.read(this.profileFile), kind: "profile" as const }, ...this.logFiles().map((path) => ({ path, raw: this.read(path), kind: "log" as const }))], hash = createHash("sha256"), facts: MemoryFact[] = []; for (const file of files) { hash.update(file.path).update("\0").update(file.raw).update("\0"); facts.push(...parseFacts(file.raw, file.kind, file.path, facts.length).map((fact) => ({ ...fact, origin: this.memoryOrigin(fact.content) }))); } return { fingerprint: hash.digest("hex"), facts }; }
+  clearMemories(): void { const facts = this.facts(); if (!facts.length) return; if (this.dreaming?.isEnabled()) for (const rememberedFact of facts) { this.removeOrigins(rememberedFact.content); this.writeTombstone(rememberedFact.content); } rmSync(this.logDir, { recursive: true, force: true }); this.dir.writeFileAtomic(this.profileFile, PROFILE_HEADER); }
+  private readState(): { fingerprint: string; facts: MemoryFact[] } { const files = [{ path: this.profileFile, raw: this.readText(this.profileFile), kind: "profile" as const }, ...this.logFilePaths().map((path) => ({ path, raw: this.readText(path), kind: "log" as const }))], contentHash = createHash("sha256"), facts: MemoryFact[] = []; for (const stateFile of files) { contentHash.update(stateFile.path).update("\0").update(stateFile.raw).update("\0"); facts.push(...parseFacts(stateFile.raw, stateFile.kind, stateFile.path, facts.length).map((rememberedFact) => ({ ...rememberedFact, origin: this.originOf(rememberedFact.content) }))); } return { fingerprint: contentHash.digest("hex"), facts }; }
 }
 
 export function getUserMemoryDir(slateRoot: string): string { return join(slateRoot, "user-memory"); }
@@ -147,12 +147,12 @@ export class UserMemoryStore {
   constructor(readonly slateRoot: string, readonly ownAgentId: string, readonly resolveAgentName: (id: string) => string, readonly debounce: DebouncePolicy) {}
   getLocation(): string { return getUserMemoryDir(this.slateRoot); }
   getOwnShardLocation(): string { return getUserMemoryShardDir(this.slateRoot, this.ownAgentId); }
-  recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }) { const profile: Array<MemoryRecord & { agentId: string; agentName: string }> = [], recent: Array<MemoryRecord & { agentId: string; agentName: string }> = []; let ids: string[] = []; try { ids = readdirSync(getUserMemoryShardsDir(this.slateRoot)); } catch {} for (const id of ids) { const store = new FileMemoryStore(getUserMemoryShardDir(this.slateRoot, id), this.debounce), recalled = store.recall(limits.recent); profile.push(...recalled.profile.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); recent.push(...recalled.recent.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); } return { profile: profile.slice(0, limits.profile), recent: recent.sort((a, b) => b.createdAt - a.createdAt).slice(0, limits.recent) }; }
+  recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }) { const profile: Array<MemoryRecord & { agentId: string; agentName: string }> = [], recent: Array<MemoryRecord & { agentId: string; agentName: string }> = []; let shardIds: string[] = []; try { shardIds = readdirSync(getUserMemoryShardsDir(this.slateRoot)); } catch {} for (const id of shardIds) { const store = new FileMemoryStore(getUserMemoryShardDir(this.slateRoot, id), this.debounce), recalledMemories = store.recall(limits.recent); profile.push(...recalledMemories.profile.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); recent.push(...recalledMemories.recent.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); } return { profile: profile.slice(0, limits.profile), recent: recent.sort((left, right) => right.createdAt - left.createdAt).slice(0, limits.recent) }; }
 }
 export class ProjectMemoryStore {
   constructor(readonly slateRoot: string, readonly ownAgentId: string, readonly membership: AgentProjectMembership, readonly resolveAgentName: (id: string) => string, readonly debounce: DebouncePolicy) {}
   getLocation(): string { return getProjectsRootDir(this.slateRoot); }
-  recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }, cap = 100) { const results: Array<{ project: string; agentId: string; agentName: string; memory: MemoryRecord }> = []; for (const slug of this.membership.read()) { let ids: string[] = []; try { ids = readdirSync(getProjectMemoryShardsDir(this.slateRoot, slug)); } catch {} for (const id of ids) { const store = new FileMemoryStore(getProjectMemoryShardDir(this.slateRoot, slug, id), this.debounce), recalled = store.recall(limits.recent); for (const memory of [...recalled.profile, ...recalled.recent]) results.push({ project: slug, agentId: id, agentName: this.resolveAgentName(id), memory }); } } return results.sort((a, b) => b.memory.createdAt - a.memory.createdAt).slice(0, cap); }
+  recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }, cap = 100) { const collected: Array<{ project: string; agentId: string; agentName: string; memory: MemoryRecord }> = []; for (const slug of this.membership.read()) { let shardIds: string[] = []; try { shardIds = readdirSync(getProjectMemoryShardsDir(this.slateRoot, slug)); } catch {} for (const id of shardIds) { const store = new FileMemoryStore(getProjectMemoryShardDir(this.slateRoot, slug, id), this.debounce), recalledMemories = store.recall(limits.recent); for (const memory of [...recalledMemories.profile, ...recalledMemories.recent]) collected.push({ project: slug, agentId: id, agentName: this.resolveAgentName(id), memory }); } } return collected.sort((a, b) => b.memory.createdAt - a.memory.createdAt).slice(0, cap); }
 }
 
 export class MemoryService {
@@ -164,13 +164,13 @@ export class MemoryService {
   agentHasContent(agentDir: string): boolean { return agentMemoryHasContent(agentDir); }
   enableMemorySynthesis(service: { start(): void; dispose(): void; recordTurn?(agentId: string, exchange: unknown): void }): void { this.synthesis?.dispose(); this.synthesis = service; service.start(); }
   list({ agentId }: { agentId: string }): MemoryRecord[] { return this.storeForAgent(agentId).listMemories(); }
-  remove({ agentId, id }: { agentId: string; id: string }): boolean { const removed = this.storeForAgent(agentId).removeMemory(id); if (removed) this.emit(); return removed; }
-  clear({ agentId }: { agentId: string }): void { this.storeForAgent(agentId).clearMemories(); this.emit(); }
-  setActiveAgent(agentId: string | null): void { if (this.activeAgentId === agentId) return; this.activeAgentId = agentId; this.emit(); }
-  subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  remove({ agentId, id }: { agentId: string; id: string }): boolean { const removed = this.storeForAgent(agentId).removeMemory(id); if (removed) this.notify(); return removed; }
+  clear({ agentId }: { agentId: string }): void { this.storeForAgent(agentId).clearMemories(); this.notify(); }
+  setActiveAgent(agentId: string | null): void { if (this.activeAgentId === agentId) return; this.activeAgentId = agentId; this.notify(); }
+  subscribe(changeListener: () => void): () => void { this.listeners.add(changeListener); return () => this.listeners.delete(changeListener); }
   dispose(): void { this.synthesis?.dispose(); this.synthesis = null; this.listeners.clear(); }
   synthesisTargetForAgent(agentId: string): FileMemoryStore | null { const dir = join(this.options.agentsRootDir, agentId); return existsSync(dir) ? this.createAgentStore(dir) : null; }
-  listSynthesisTargets(): Array<{ agentId: string; store: FileMemoryStore }> { let ids: string[] = []; try { ids = readdirSync(this.options.agentsRootDir); } catch {} return ids.flatMap((agentId) => { const store = this.synthesisTargetForAgent(agentId); return store == null ? [] : [{ agentId, store }]; }); }
+  listSynthesisTargets(): Array<{ agentId: string; store: FileMemoryStore }> { let shardIds: string[] = []; try { shardIds = readdirSync(this.options.agentsRootDir); } catch {} return shardIds.flatMap((agentId) => { const store = this.synthesisTargetForAgent(agentId); return store == null ? [] : [{ agentId, store }]; }); }
   storeForAgent(agentId: string): FileMemoryStore { return this.createAgentStore(join(this.options.agentsRootDir, agentId)); }
-  private emit(): void { for (const listener of [...this.listeners]) listener(); }
+  private notify(): void { for (const changeListener of [...this.listeners]) changeListener(); }
 }
