@@ -8,7 +8,7 @@
  * The queue is fair in the way that matters: a waiting exclusive lock blocks later per-file locks, so a
  * long stream of small writes cannot starve the one operation that needs everything to stop. A caller
  * that is cancelled while waiting leaves the queue rather than being granted a lock it no longer wants,
- * and a lock that was granted in the same instant is released again — otherwise an aborted call would
+ * and a lock that was granted in the same instant is disposed again — otherwise an aborted call would
  * leave a file locked forever. The lock is disposable, so the release happens even if the operation
  * throws.
  */
@@ -16,18 +16,18 @@
 import type { Context } from "../../../context/context.ts"
 import { ToolCallAbortedError } from "../tool-errors.ts"
 
-interface FileWaiter {
+interface PathWaiter {
   readonly type: "file"
   readonly path: string
   readonly resolve: () => void
 }
 
-interface ExclusiveWaiter {
+interface WorkspaceWaiter {
   readonly type: "exclusive"
   readonly resolve: () => void
 }
 
-type Waiter = FileWaiter | ExclusiveWaiter
+type QueueEntry = PathWaiter | WorkspaceWaiter
 
 export interface FileOperationLock {
   /** The order this lock was taken in, when the caller asked for it; used to compare overlapping writes. */
@@ -40,125 +40,125 @@ export interface ExclusiveFileOperationLock {
 }
 
 export class FileOperationLockManager {
-  private readonly lockedFiles = new Set<string>()
-  private exclusiveLockActive = false
-  private readonly waitQueue: Waiter[] = []
-  private nextAcquisitionOrder = 0n
+  private readonly heldPaths = new Set<string>()
+  private workspaceHeld = false
+  private readonly pendingQueue: QueueEntry[] = []
+  private acquisitionCounter = 0n
 
   get activeFileOperationCount(): number {
-    return this.lockedFiles.size
+    return this.heldPaths.size
   }
 
   async waitForLock(
     ctx: Context,
-    targetPath: string,
-    options?: { readonly trackAcquisitionOrder?: boolean | undefined },
+    requestedPath: string,
+    settings?: { readonly trackAcquisitionOrder?: boolean | undefined },
   ): Promise<FileOperationLock> {
     if (ctx.signal.aborted) throw new ToolCallAbortedError()
-    const needsToWait = this.exclusiveLockActive ||
-      this.lockedFiles.has(targetPath) ||
-      this.hasExclusiveWaiterAhead()
-    if (needsToWait) {
-      let wasGranted = false
+    const mustWait = this.workspaceHeld ||
+      this.heldPaths.has(requestedPath) ||
+      this.hasWorkspaceWaiterAhead()
+    if (mustWait) {
+      let grantedWhileWaiting = false
       await new Promise<void>(resolve => {
-        const wrappedResolve = () => {
-          wasGranted = true
-          ctx.signal.removeEventListener("abort", onAbort)
+        const grantPath = () => {
+          grantedWhileWaiting = true
+          ctx.signal.removeEventListener("abort", abortListener)
           resolve()
         }
-        const onAbort = () => {
-          const index = this.waitQueue.findIndex(waiter =>
-            waiter.type === "file" && waiter.path === targetPath && waiter.resolve === wrappedResolve)
-          if (index >= 0) this.waitQueue.splice(index, 1)
+        const abortListener = () => {
+          const index = this.pendingQueue.findIndex(entry =>
+            entry.type === "file" && entry.path === requestedPath && entry.resolve === grantPath)
+          if (index >= 0) this.pendingQueue.splice(index, 1)
           resolve()
         }
-        ctx.signal.addEventListener("abort", onAbort, { once: true })
-        this.waitQueue.push({ type: "file", path: targetPath, resolve: wrappedResolve })
+        ctx.signal.addEventListener("abort", abortListener, { once: true })
+        this.pendingQueue.push({ type: "file", path: requestedPath, resolve: grantPath })
       })
       if (ctx.signal.aborted) {
         // The lock may have been granted as the abort arrived; give it back rather than hold it.
-        if (wasGranted) this.releaseFileLock(targetPath)
+        if (grantedWhileWaiting) this.releasePathLock(requestedPath)
         throw new ToolCallAbortedError()
       }
     } else {
-      this.lockedFiles.add(targetPath)
+      this.heldPaths.add(requestedPath)
     }
-    let released = false
-    const dispose = () => {
-      if (released) return
-      released = true
-      this.releaseFileLock(targetPath)
+    let disposed = false
+    const releaseOnce = () => {
+      if (disposed) return
+      disposed = true
+      this.releasePathLock(requestedPath)
     }
     return {
-      acquisitionOrder: options?.trackAcquisitionOrder === true ? ++this.nextAcquisitionOrder : undefined,
-      [Symbol.dispose]: dispose,
+      acquisitionOrder: settings?.trackAcquisitionOrder === true ? ++this.acquisitionCounter : undefined,
+      [Symbol.dispose]: releaseOnce,
     }
   }
 
   async waitForExclusiveLock(ctx: Context): Promise<ExclusiveFileOperationLock> {
     if (ctx.signal.aborted) throw new ToolCallAbortedError()
-    const needsToWait = this.exclusiveLockActive || this.activeFileOperationCount > 0
-    if (needsToWait) {
-      let wasGranted = false
+    const mustWait = this.workspaceHeld || this.activeFileOperationCount > 0
+    if (mustWait) {
+      let grantedWhileWaiting = false
       await new Promise<void>(resolve => {
-        const wrappedResolve = () => {
-          wasGranted = true
-          ctx.signal.removeEventListener("abort", onAbort)
+        const grantPath = () => {
+          grantedWhileWaiting = true
+          ctx.signal.removeEventListener("abort", abortListener)
           resolve()
         }
-        const onAbort = () => {
-          const index = this.waitQueue.findIndex(waiter => waiter.type === "exclusive" && waiter.resolve === wrappedResolve)
-          if (index >= 0) this.waitQueue.splice(index, 1)
+        const abortListener = () => {
+          const index = this.pendingQueue.findIndex(entry => entry.type === "exclusive" && entry.resolve === grantPath)
+          if (index >= 0) this.pendingQueue.splice(index, 1)
           resolve()
         }
-        ctx.signal.addEventListener("abort", onAbort, { once: true })
-        this.waitQueue.push({ type: "exclusive", resolve: wrappedResolve })
+        ctx.signal.addEventListener("abort", abortListener, { once: true })
+        this.pendingQueue.push({ type: "exclusive", resolve: grantPath })
       })
       if (ctx.signal.aborted) {
-        if (wasGranted) this.releaseExclusiveLock()
+        if (grantedWhileWaiting) this.releaseWorkspaceLock()
         throw new ToolCallAbortedError()
       }
     } else {
-      this.exclusiveLockActive = true
+      this.workspaceHeld = true
     }
-    let released = false
-    const dispose = () => {
-      if (released) return
-      released = true
-      this.releaseExclusiveLock()
+    let disposed = false
+    const releaseOnce = () => {
+      if (disposed) return
+      disposed = true
+      this.releaseWorkspaceLock()
     }
-    return { [Symbol.dispose]: dispose }
+    return { [Symbol.dispose]: releaseOnce }
   }
 
-  private hasExclusiveWaiterAhead(): boolean {
-    return this.waitQueue.some(waiter => waiter.type === "exclusive")
+  private hasWorkspaceWaiterAhead(): boolean {
+    return this.pendingQueue.some(entry => entry.type === "exclusive")
   }
 
-  private releaseFileLock(pathKey: string): void {
-    this.lockedFiles.delete(pathKey)
-    this.processQueue()
+  private releasePathLock(releasedPath: string): void {
+    this.heldPaths.delete(releasedPath)
+    this.grantQueued()
   }
 
-  private releaseExclusiveLock(): void {
-    this.exclusiveLockActive = false
-    this.processQueue()
+  private releaseWorkspaceLock(): void {
+    this.workspaceHeld = false
+    this.grantQueued()
   }
 
-  /** Grants as much of the queue as the current state allows, stopping at the first waiter that cannot run. */
-  private processQueue(): void {
-    while (this.waitQueue.length > 0) {
-      const front = this.waitQueue[0]!
-      if (front.type === "exclusive") {
-        if (this.activeFileOperationCount > 0 || this.exclusiveLockActive) break
-        this.exclusiveLockActive = true
-        this.waitQueue.shift()
-        front.resolve()
+  /** Grants as much of the queue as the current state allows, stopping at the first entry that cannot run. */
+  private grantQueued(): void {
+    while (this.pendingQueue.length > 0) {
+      const head = this.pendingQueue[0]!
+      if (head.type === "exclusive") {
+        if (this.activeFileOperationCount > 0 || this.workspaceHeld) break
+        this.workspaceHeld = true
+        this.pendingQueue.shift()
+        head.resolve()
         break
       }
-      if (this.exclusiveLockActive || this.lockedFiles.has(front.path)) break
-      this.lockedFiles.add(front.path)
-      this.waitQueue.shift()
-      front.resolve()
+      if (this.workspaceHeld || this.heldPaths.has(head.path)) break
+      this.heldPaths.add(head.path)
+      this.pendingQueue.shift()
+      head.resolve()
     }
   }
 }
