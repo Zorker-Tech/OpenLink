@@ -17,22 +17,22 @@ import {
 export const BOOTSTRAP_FLAG = "--bootstrap=";
 
 export interface PortLike {
-  postMessage(value: unknown): void;
-  on(event: "message" | "close", listener: (event: { readonly data?: unknown; readonly ports?: readonly PortLike[] }) => void): void;
+  postMessage(channelValue: unknown): void;
+  on(portEvent: "message" | "close", listener: (portEvent: { readonly data?: unknown; readonly ports?: readonly PortLike[] }) => void): void;
   close?(): void;
   start?(): void;
 }
 
-export function isPortLike(value: unknown): value is PortLike {
-  if (typeof value !== "object" || value == null) return false;
-  const candidate = value as Partial<PortLike>;
-  return typeof candidate.postMessage === "function" && typeof candidate.on === "function";
+export function isPortLike(channelValue: unknown): channelValue is PortLike {
+  if (typeof channelValue !== "object" || channelValue == null) return false;
+  const portCandidate = channelValue as Partial<PortLike>;
+  return typeof portCandidate.postMessage === "function" && typeof portCandidate.on === "function";
 }
 
 export interface CarrierIntakeHandlers {
-  readonly onControlFrame: (value: unknown) => void;
-  readonly onDataFrame: (value: unknown) => void;
-  readonly onMainDataFrame: (value: unknown) => void;
+  readonly onControlFrame: (channelValue: unknown) => void;
+  readonly onDataFrame: (channelValue: unknown) => void;
+  readonly onMainDataFrame: (channelValue: unknown) => void;
   readonly onClosed: () => void;
 }
 
@@ -40,9 +40,9 @@ export interface CoordinatorCarrier {
   readonly kind: "fork-ipc" | "parent-port";
   readonly bootstrap: CoordinatorBootstrap;
   readonly control: { post(frame: CoordinatorFrame): void; close(): void };
-  readonly data: { post(value: unknown): void; close(): void };
-  readonly mainData: { post(value: unknown): void; close(): void };
-  exitProcess(exitCode: number): void;
+  readonly data: { post(channelValue: unknown): void; close(): void };
+  readonly mainData: { post(channelValue: unknown): void; close(): void };
+  exitProcess(requestedExitCode: number): void;
   bind(handlers: CarrierIntakeHandlers): void;
 }
 
@@ -51,106 +51,106 @@ export type CarrierIntake =
   | { readonly adopted: false; readonly rejection: { readonly detail: string } };
 
 export function adoptForkIpc(argv: readonly string[]): CarrierIntake {
-  const argument = argv.find((value) => value.startsWith(BOOTSTRAP_FLAG));
-  if (argument == null) return { adopted: false, rejection: { detail: "missing --bootstrap argument" } };
-  let parsed: unknown;
-  try { parsed = JSON.parse(argument.slice(BOOTSTRAP_FLAG.length)) as unknown; }
+  const bootstrapArgument = argv.find((channelValue) => channelValue.startsWith(BOOTSTRAP_FLAG));
+  if (bootstrapArgument == null) return { adopted: false, rejection: { detail: "missing --bootstrap argument" } };
+  let parsedBootstrap: unknown;
+  try { parsedBootstrap = JSON.parse(bootstrapArgument.slice(BOOTSTRAP_FLAG.length)) as unknown; }
   catch { return { adopted: false, rejection: { detail: "--bootstrap is not valid JSON" } }; }
-  const intake = parseCoordinatorBootstrap(parsed);
-  if (!intake.accepted) return { adopted: false, rejection: { detail: intake.rejection.detail } };
-  const send = process.send?.bind(process);
-  if (send == null) return { adopted: false, rejection: { detail: "no renderer data channel was transferred" } };
-  let channelClosed = false;
-  const closeChannel = () => {
-    if (channelClosed) return;
-    channelClosed = true;
+  const bootstrapIntake = parseCoordinatorBootstrap(parsedBootstrap);
+  if (!bootstrapIntake.accepted) return { adopted: false, rejection: { detail: bootstrapIntake.rejection.detail } };
+  const ipcSender = process.send?.bind(process);
+  if (ipcSender == null) return { adopted: false, rejection: { detail: "no renderer data channel was transferred" } };
+  let isChannelClosed = false;
+  const closeIpcChannel = () => {
+    if (isChannelClosed) return;
+    isChannelClosed = true;
     if (process.connected) process.disconnect?.();
   };
-  const post = (value: unknown) => {
-    try { send(value, () => {}); }
+  const post = (channelValue: unknown) => {
+    try { ipcSender(channelValue, () => {}); }
     catch {}
   };
-  let bound = false;
+  let isBound = false;
   return {
     adopted: true,
     carrier: {
       kind: "fork-ipc",
-      bootstrap: intake.bootstrap,
-      control: { post: (frame) => post({ channel: COORDINATOR_CONTROL_CHANNEL, frame }), close: closeChannel },
-      data: { post, close: closeChannel },
-      mainData: { post: (frame) => post({ channel: COORDINATOR_MAIN_DATA_CHANNEL, frame }), close: closeChannel },
-      exitProcess(exitCode) { process.exitCode = exitCode; },
-      bind(intakeHandlers) {
-        if (bound) return;
-        bound = true;
-        process.on("message", (value) => {
-          const controlEnvelope = asCoordinatorControlEnvelope(value);
-          if (controlEnvelope != null) { intakeHandlers.onControlFrame(controlEnvelope.frame); return; }
-          const mainDataEnvelope = asCoordinatorMainDataEnvelope(value);
-          if (mainDataEnvelope != null) { intakeHandlers.onMainDataFrame(mainDataEnvelope.frame); return; }
-          intakeHandlers.onDataFrame(value);
+      bootstrap: bootstrapIntake.bootstrap,
+      control: { post: (frame) => post({ channel: COORDINATOR_CONTROL_CHANNEL, frame }), close: closeIpcChannel },
+      data: { post, close: closeIpcChannel },
+      mainData: { post: (frame) => post({ channel: COORDINATOR_MAIN_DATA_CHANNEL, frame }), close: closeIpcChannel },
+      exitProcess(requestedExitCode) { process.exitCode = requestedExitCode; },
+      bind(carrierHandlers) {
+        if (isBound) return;
+        isBound = true;
+        process.on("message", (channelValue) => {
+          const controlEnvelope = asCoordinatorControlEnvelope(channelValue);
+          if (controlEnvelope != null) { carrierHandlers.onControlFrame(controlEnvelope.frame); return; }
+          const mainDataEnvelope = asCoordinatorMainDataEnvelope(channelValue);
+          if (mainDataEnvelope != null) { carrierHandlers.onMainDataFrame(mainDataEnvelope.frame); return; }
+          carrierHandlers.onDataFrame(channelValue);
         });
-        process.on("disconnect", () => { channelClosed = true; intakeHandlers.onClosed(); });
+        process.on("disconnect", () => { isChannelClosed = true; carrierHandlers.onClosed(); });
       }
     }
   };
 }
 
-export function adoptParentPort(_parentPort: PortLike, handoff: { readonly data: unknown; readonly ports: readonly PortLike[] }): CarrierIntake {
-  const body = handoff.data;
-  const bootstrapValue = typeof body === "object" && body != null && "bootstrap" in body
-    ? (body as { readonly bootstrap: unknown }).bootstrap
+export function adoptParentPort(_parentPort: PortLike, parentHandoff: { readonly data: unknown; readonly ports: readonly PortLike[] }): CarrierIntake {
+  const handoffBody = parentHandoff.data;
+  const bootstrapCandidate = typeof handoffBody === "object" && handoffBody != null && "bootstrap" in handoffBody
+    ? (handoffBody as { readonly bootstrap: unknown }).bootstrap
     : null;
-  const intake = parseCoordinatorBootstrap(bootstrapValue);
-  if (!intake.accepted) return { adopted: false, rejection: { detail: intake.rejection.detail } };
-  const [controlPort, dataPort, mainDataPort] = handoff.ports;
-  if (!isPortLike(controlPort) || !isPortLike(dataPort) || !isPortLike(mainDataPort)) {
+  const bootstrapIntake = parseCoordinatorBootstrap(bootstrapCandidate);
+  if (!bootstrapIntake.accepted) return { adopted: false, rejection: { detail: bootstrapIntake.rejection.detail } };
+  const [controlChannelPort, dataPort, mainChannelPort] = parentHandoff.ports;
+  if (!isPortLike(controlChannelPort) || !isPortLike(dataPort) || !isPortLike(mainChannelPort)) {
     return { adopted: false, rejection: { detail: "parent handoff did not transfer three message ports" } };
   }
-  const closed = { control: false, data: false, mainData: false };
-  const closePort = (port: PortLike, key: keyof typeof closed) => {
-    if (closed[key]) return;
-    closed[key] = true;
+  const closedChannels = { control: false, data: false, mainData: false };
+  const closeChannel = (port: PortLike, channelKey: keyof typeof closedChannels) => {
+    if (closedChannels[channelKey]) return;
+    closedChannels[channelKey] = true;
     port.close?.();
   };
-  const postTo = (port: PortLike, key: keyof typeof closed, value: unknown) => {
-    if (closed[key]) return;
-    try { port.postMessage(value); }
+  const postOnChannel = (port: PortLike, channelKey: keyof typeof closedChannels, channelValue: unknown) => {
+    if (closedChannels[channelKey]) return;
+    try { port.postMessage(channelValue); }
     catch {}
   };
-  let bound = false;
+  let isBound = false;
   return {
     adopted: true,
     carrier: {
       kind: "parent-port",
-      bootstrap: intake.bootstrap,
-      control: { post: (frame) => postTo(controlPort, "control", frame), close: () => closePort(controlPort, "control") },
-      data: { post: (value) => postTo(dataPort, "data", value), close: () => closePort(dataPort, "data") },
-      mainData: { post: (value) => postTo(mainDataPort, "mainData", value), close: () => closePort(mainDataPort, "mainData") },
-      exitProcess(exitCode) { process.exitCode = exitCode; process.exit(exitCode); },
-      bind(intakeHandlers) {
-        if (bound) return;
-        bound = true;
-        controlPort.on("message", (event) => intakeHandlers.onControlFrame(event.data));
-        controlPort.on("close", () => { closed.control = true; intakeHandlers.onClosed(); });
-        dataPort.on("message", (event) => intakeHandlers.onDataFrame(event.data));
-        dataPort.on("close", () => { closed.data = true; intakeHandlers.onClosed(); });
-        mainDataPort.on("message", (event) => intakeHandlers.onMainDataFrame(event.data));
-        mainDataPort.on("close", () => { closed.mainData = true; intakeHandlers.onClosed(); });
-        controlPort.start?.();
+      bootstrap: bootstrapIntake.bootstrap,
+      control: { post: (frame) => postOnChannel(controlChannelPort, "control", frame), close: () => closeChannel(controlChannelPort, "control") },
+      data: { post: (channelValue) => postOnChannel(dataPort, "data", channelValue), close: () => closeChannel(dataPort, "data") },
+      mainData: { post: (channelValue) => postOnChannel(mainChannelPort, "mainData", channelValue), close: () => closeChannel(mainChannelPort, "mainData") },
+      exitProcess(requestedExitCode) { process.exitCode = requestedExitCode; process.exit(requestedExitCode); },
+      bind(carrierHandlers) {
+        if (isBound) return;
+        isBound = true;
+        controlChannelPort.on("message", (portEvent) => carrierHandlers.onControlFrame(portEvent.data));
+        controlChannelPort.on("close", () => { closedChannels.control = true; carrierHandlers.onClosed(); });
+        dataPort.on("message", (portEvent) => carrierHandlers.onDataFrame(portEvent.data));
+        dataPort.on("close", () => { closedChannels.data = true; carrierHandlers.onClosed(); });
+        mainChannelPort.on("message", (portEvent) => carrierHandlers.onMainDataFrame(portEvent.data));
+        mainChannelPort.on("close", () => { closedChannels.mainData = true; carrierHandlers.onClosed(); });
+        controlChannelPort.start?.();
         dataPort.start?.();
-        mainDataPort.start?.();
+        mainChannelPort.start?.();
       }
     }
   };
 }
 
 export function adoptCarrier(): Promise<CarrierIntake> {
-  const parentPort = (process as NodeJS.Process & { readonly parentPort?: unknown }).parentPort;
-  if (parentPort != null && isPortLike(parentPort)) {
-    return new Promise((resolve) => {
-      parentPort.on("message", (event) => resolve(adoptParentPort(parentPort, { data: event.data, ports: event.ports ?? [] })));
-      parentPort.start?.();
+  const rendererPort = (process as NodeJS.Process & { readonly parentPort?: unknown }).parentPort;
+  if (rendererPort != null && isPortLike(rendererPort)) {
+    return new Promise((adoptResolved) => {
+      rendererPort.on("message", (portEvent) => adoptResolved(adoptParentPort(rendererPort, { data: portEvent.data, ports: portEvent.ports ?? [] })));
+      rendererPort.start?.();
     });
   }
   return Promise.resolve(adoptForkIpc(process.argv));
