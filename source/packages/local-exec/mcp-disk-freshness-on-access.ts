@@ -3,7 +3,7 @@
  *
  * The catalog is a cache of what the MCP servers reported, and a reader that finds it stale should not have to wait for
  * the next lease event: a read of a path inside the catalog schedules a refresh, debounced so that a burst of reads is
- * one refresh rather than one per read, and the state that was read is what decides whether the refresh is worth
+ * one refresh rather than one per read, and the mcpState that was read is what decides whether the refresh is worth
  * doing at all.
  */
 import { createCounter, createHistogram } from "../metrics/index.ts";
@@ -14,8 +14,8 @@ import { readMcpDiskCatalogToolNamesForProjectDir } from "./mcp-disk-catalog-rea
 import { sanitizeServerName } from "./mcp.ts";
 
 const logger = createLogger("local-exec:mcp-disk-freshness-on-access");
-const MCP_PATH_SEGMENT = "/mcps/";
-const DISK_MCPS_FRESHNESS_DEBOUNCE_MS = 2_000;
+const MCPS_SEGMENT = "/mcps/";
+const DEBOUNCE_MS = 2_000;
 
 const mcpDiscoveryFreshnessCheck = createCounter("mcp.discovery_freshness.check", {
   description: "MCP discovery surface freshness comparison outcome against canonical live tools",
@@ -38,15 +38,15 @@ type McpState = { readonly servers: readonly McpStateServer[] };
 export interface McpStateAccessor { getState(ctx: Context): Promise<McpState> }
 type DiskCatalogReader = typeof readMcpDiskCatalogToolNamesForProjectDir;
 
-const diskFreshnessDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function normalizePathForMcpsLayout(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, "/");
-  return normalized.endsWith("/mcps") ? `${normalized}/` : normalized;
+function normalizedMcpsPath(filePath: string): string {
+  const flatPath = filePath.replace(/\\/g, "/");
+  return flatPath.endsWith("/mcps") ? `${flatPath}/` : flatPath;
 }
 
 export function isMcpDirectoryPath(filePath: string | undefined): boolean {
-  return filePath !== undefined && normalizePathForMcpsLayout(filePath).includes(MCP_PATH_SEGMENT);
+  return filePath !== undefined && normalizedMcpsPath(filePath).includes(MCPS_SEGMENT);
 }
 
 type ParsedMcpsPath =
@@ -54,69 +54,69 @@ type ParsedMcpsPath =
   | { readonly projectDir: string; readonly kind: "server"; readonly sanitizedServerFolder: string };
 
 export function parseMcpsPath(filePath: string): ParsedMcpsPath | undefined {
-  const normalized = normalizePathForMcpsLayout(filePath);
-  const index = normalized.indexOf(MCP_PATH_SEGMENT);
-  if (index === -1) return undefined;
-  const projectDir = normalized.slice(0, index);
-  const rest = normalized.slice(index + MCP_PATH_SEGMENT.length);
-  const parts = rest.split("/").filter(Boolean);
+  const flatPath = normalizedMcpsPath(filePath);
+  const segmentIndex = flatPath.indexOf(MCPS_SEGMENT);
+  if (segmentIndex === -1) return undefined;
+  const projectDir = flatPath.slice(0, segmentIndex);
+  const remainder = flatPath.slice(segmentIndex + MCPS_SEGMENT.length);
+  const segments = remainder.split("/").filter(Boolean);
   if (projectDir.length === 0) return undefined;
-  if (parts.length === 0) return { projectDir, kind: "mcps_root" };
-  return { projectDir, kind: "server", sanitizedServerFolder: parts[0]! };
+  if (segments.length === 0) return { projectDir, kind: "mcps_root" };
+  return { projectDir, kind: "server", sanitizedServerFolder: segments[0]! };
 }
 
-function emitDiskMcpDiscoveryFreshness(args: {
+function reportDiskFreshness(input: {
   readonly ctx: Context;
   readonly serverIdentifier: string;
   readonly canonicalToolNames: readonly string[];
   readonly observedToolNames: readonly string[];
 }): void {
-  const observed = new Set(args.observedToolNames);
-  const canonical = new Set(args.canonicalToolNames);
-  const missingTools = args.canonicalToolNames.filter((toolName) => !observed.has(toolName));
-  const extraTools = args.observedToolNames.filter((toolName) => !canonical.has(toolName));
-  const outcome = missingTools.length === 0 && extraTools.length === 0 ? "match" : "mismatch";
-  const tags = { surface: "disk" };
-  mcpDiscoveryFreshnessCheck.increment(args.ctx, 1, { ...tags, outcome });
-  mcpDiscoveryFreshnessMissingTools.histogram(args.ctx, missingTools.length, tags);
-  mcpDiscoveryFreshnessExtraTools.histogram(args.ctx, extraTools.length, tags);
-  mcpDiscoveryFreshnessSymmetricDifference.histogram(args.ctx, missingTools.length + extraTools.length, tags);
-  if (outcome === "mismatch") {
-    logger.warn(args.ctx, "mcp_disk_discovery_freshness_mismatch", {
-      server_identifier: args.serverIdentifier,
-      missing_tool_count: missingTools.length,
-      extra_tool_count: extraTools.length,
+  const observedSet = new Set(input.observedToolNames);
+  const canonicalSet = new Set(input.canonicalToolNames);
+  const missingNames = input.canonicalToolNames.filter((name) => !observedSet.has(name));
+  const extraNames = input.observedToolNames.filter((name) => !canonicalSet.has(name));
+  const comparison = missingNames.length === 0 && extraNames.length === 0 ? "match" : "mismatch";
+  const labels = { surface: "disk" };
+  mcpDiscoveryFreshnessCheck.increment(input.ctx, 1, { ...labels, outcome: comparison });
+  mcpDiscoveryFreshnessMissingTools.histogram(input.ctx, missingNames.length, labels);
+  mcpDiscoveryFreshnessExtraTools.histogram(input.ctx, extraNames.length, labels);
+  mcpDiscoveryFreshnessSymmetricDifference.histogram(input.ctx, missingNames.length + extraNames.length, labels);
+  if (comparison === "mismatch") {
+    logger.warn(input.ctx, "mcp_disk_discovery_freshness_mismatch", {
+      server_identifier: input.serverIdentifier,
+      missing_tool_count: missingNames.length,
+      extra_tool_count: extraNames.length,
     });
   }
 }
 
-async function runDiskMcpDiscoveryFreshness(args: {
+async function checkDiskFreshness(input: {
   readonly ctx: Context;
   readonly mcpStateAccessor: McpStateAccessor;
   readonly projectDir: string;
   readonly sanitizedServerFolder: string;
   readonly readDiskCatalog: DiskCatalogReader;
-  readonly state?: McpState;
+  readonly mcpState?: McpState;
 }): Promise<void> {
-  let state = args.state;
-  if (state === undefined) {
-    try { state = await args.mcpStateAccessor.getState(args.ctx); }
-    catch (error) {
-      logger.warn(args.ctx, "mcp_disk_state_read_failed", { error_type: error instanceof Error ? error.name : typeof error });
+  let mcpState = input.mcpState;
+  if (mcpState === undefined) {
+    try { mcpState = await input.mcpStateAccessor.getState(input.ctx); }
+    catch (failure) {
+      logger.warn(input.ctx, "mcp_disk_state_read_failed", { error_type: failure instanceof Error ? failure.name : typeof failure });
       return;
     }
   }
-  const server = state.servers.find((candidate) => sanitizeServerName(candidate.serverIdentifier) === args.sanitizedServerFolder);
-  if (server === undefined) return;
-  let diskResult: Awaited<ReturnType<DiskCatalogReader>>;
-  try { diskResult = await args.readDiskCatalog(args.projectDir, server.serverIdentifier); }
-  catch (error) {
-    logger.warn(args.ctx, "mcp_disk_catalog_read_failed", { error_type: error instanceof Error ? error.name : typeof error });
+  const serverEntry = mcpState.servers.find((serverState) => sanitizeServerName(serverState.serverIdentifier) === input.sanitizedServerFolder);
+  if (serverEntry === undefined) return;
+  let catalog: Awaited<ReturnType<DiskCatalogReader>>;
+  try { catalog = await input.readDiskCatalog(input.projectDir, serverEntry.serverIdentifier); }
+  catch (failure) {
+    logger.warn(input.ctx, "mcp_disk_catalog_read_failed", { error_type: failure instanceof Error ? failure.name : typeof failure });
     return;
   }
-  if (!diskResult.toolsDirExists) return;
-  const canonicalToolNames = server.tools.map((tool) => tool.toolName).filter((toolName) => toolName.length > 0).sort((a, b) => a.localeCompare(b));
-  emitDiskMcpDiscoveryFreshness({ ctx: args.ctx, serverIdentifier: server.serverIdentifier, canonicalToolNames, observedToolNames: diskResult.toolNames });
+  if (!catalog.toolsDirExists) return;
+  const canonicalToolNames = serverEntry.tools.map((tool) => tool.toolName).filter((name) => name.length > 0).sort((a, b) => a.localeCompare(b));
+  reportDiskFreshness({ ctx: input.ctx, serverIdentifier: serverEntry.serverIdentifier, canonicalToolNames, observedToolNames: catalog.toolNames });
 }
 
 export function scheduleDiskMcpDiscoveryFreshnessOnMcpsPathAccess(
@@ -128,36 +128,36 @@ export function scheduleDiskMcpDiscoveryFreshnessOnMcpsPathAccess(
   if (!isMcpDirectoryPath(filePath) || filePath === undefined) return;
   const parsed = parseMcpsPath(filePath);
   if (parsed === undefined) return;
-  const isMcpsRoot = parsed.kind === "mcps_root";
-  const key = isMcpsRoot ? `${parsed.projectDir}\0__mcps_root__` : `${parsed.projectDir}\0${parsed.sanitizedServerFolder}`;
-  const serverFolderForRun = isMcpsRoot ? undefined : parsed.sanitizedServerFolder;
-  const existing = diskFreshnessDebounceTimers.get(key);
-  if (existing !== undefined) clearTimeout(existing);
-  const freshnessCtx = ctx;
-  const timer = setTimeout(() => {
-    diskFreshnessDebounceTimers.delete(key);
-    const runFreshnessCheck = async (): Promise<void> => {
-      if (isMcpsRoot) {
-        const state = await mcpStateAccessor.getState(freshnessCtx);
-        for (const server of state.servers) {
-          await runDiskMcpDiscoveryFreshness({
-            ctx: freshnessCtx,
+  const rootAccess = parsed.kind === "mcps_root";
+  const key = rootAccess ? `${parsed.projectDir}\0__mcps_root__` : `${parsed.projectDir}\0${parsed.sanitizedServerFolder}`;
+  const folderToCheck = rootAccess ? undefined : parsed.sanitizedServerFolder;
+  const previousTimer = pendingTimers.get(key);
+  if (previousTimer !== undefined) clearTimeout(previousTimer);
+  const scheduledCtx = ctx;
+  const scheduled = setTimeout(() => {
+    pendingTimers.delete(key);
+    const sweepServers = async (): Promise<void> => {
+      if (rootAccess) {
+        const mcpState = await mcpStateAccessor.getState(scheduledCtx);
+        for (const serverEntry of mcpState.servers) {
+          await checkDiskFreshness({
+            ctx: scheduledCtx,
             mcpStateAccessor,
             projectDir: parsed.projectDir,
-            sanitizedServerFolder: sanitizeServerName(server.serverIdentifier),
+            sanitizedServerFolder: sanitizeServerName(serverEntry.serverIdentifier),
             readDiskCatalog,
-            state,
+            mcpState,
           });
         }
         return;
       }
-      if (serverFolderForRun !== undefined) {
-        await runDiskMcpDiscoveryFreshness({ ctx: freshnessCtx, mcpStateAccessor, projectDir: parsed.projectDir, sanitizedServerFolder: serverFolderForRun, readDiskCatalog });
+      if (folderToCheck !== undefined) {
+        await checkDiskFreshness({ ctx: scheduledCtx, mcpStateAccessor, projectDir: parsed.projectDir, sanitizedServerFolder: folderToCheck, readDiskCatalog });
       }
     };
-    void runFreshnessCheck().catch((error) => {
-      logger.warn(freshnessCtx, "mcp_disk_discovery_freshness_schedule_failed", { error_type: error instanceof Error ? error.name : typeof error });
+    void sweepServers().catch((failure) => {
+      logger.warn(scheduledCtx, "mcp_disk_discovery_freshness_schedule_failed", { error_type: failure instanceof Error ? failure.name : typeof failure });
     });
-  }, DISK_MCPS_FRESHNESS_DEBOUNCE_MS);
-  diskFreshnessDebounceTimers.set(key, timer);
+  }, DEBOUNCE_MS);
+  pendingTimers.set(key, scheduled);
 }
