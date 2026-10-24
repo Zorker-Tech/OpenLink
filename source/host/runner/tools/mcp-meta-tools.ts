@@ -27,35 +27,35 @@ export class SlateToolCallExecutionTimeoutError extends Error {
 }
 
 export interface DynamicToolRegistry {
-  resolveToolName(rawArguments: string): string | undefined;
+  resolveToolName(rawArgumentText: string): string | undefined;
 }
 
 export interface StreamingInvocationTool<Context, Handler, Meta, Result> {
   readonly name: string;
   execute(
-    context: Context,
+    runContext: Context,
     interactionHandler: Handler,
-    argumentsStream: AsyncIterable<string>,
-    meta: Meta,
+    argumentChunks: AsyncIterable<string>,
+    invocationMeta: Meta,
   ): Promise<Result>;
 }
 
 async function withTimeout<Result>(
-  operation: Promise<Result>,
-  milliseconds: number,
-  createError: () => Error,
+  pendingOperation: Promise<Result>,
+  timeoutMs: number,
+  makeTimeoutError: () => Error,
 ): Promise<Result> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      operation,
+      pendingOperation,
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(createError()), milliseconds);
-        timer.unref?.();
+        timeoutHandle = setTimeout(() => reject(makeTimeoutError()), timeoutMs);
+        timeoutHandle.unref?.();
       }),
     ]);
   } finally {
-    if (timer != null) clearTimeout(timer);
+    if (timeoutHandle != null) clearTimeout(timeoutHandle);
   }
 }
 
@@ -66,32 +66,32 @@ export function wrapDynamicInvocationToolWithTimeout<
   Result,
   Tool extends StreamingInvocationTool<Context, Handler, Meta, Result>,
 >(
-  tool: Tool,
-  dynamicToolRegistry: DynamicToolRegistry,
+  streamingTool: Tool,
+  toolRegistry: DynamicToolRegistry,
   isComputerUseSubagent: boolean,
 ): Tool {
   return {
-    ...tool,
+    ...streamingTool,
     async execute(
-      context: Context,
+      runContext: Context,
       interactionHandler: Handler,
-      argumentsStream: AsyncIterable<string>,
-      meta: Meta,
+      argumentChunks: AsyncIterable<string>,
+      invocationMeta: Meta,
     ): Promise<Result> {
-      let rawArguments = "";
-      for await (const chunk of argumentsStream) rawArguments += chunk;
-      const effectiveToolName = dynamicToolRegistry.resolveToolName(rawArguments) ?? tool.name;
+      let rawArgumentText = "";
+      for await (const argumentChunk of argumentChunks) rawArgumentText += argumentChunk;
+      const resolvedToolName = toolRegistry.resolveToolName(rawArgumentText) ?? streamingTool.name;
       const executionTimeoutMs = slateToolCallExecutionTimeoutMs(
-        effectiveToolName,
+        resolvedToolName,
         isComputerUseSubagent,
       );
       const replay = (async function* () {
-        yield rawArguments;
+        yield rawArgumentText;
       })();
       return withTimeout(
-        tool.execute(context, interactionHandler, replay, meta),
+        streamingTool.execute(runContext, interactionHandler, replay, invocationMeta),
         executionTimeoutMs,
-        () => new SlateToolCallExecutionTimeoutError(effectiveToolName, executionTimeoutMs),
+        () => new SlateToolCallExecutionTimeoutError(resolvedToolName, executionTimeoutMs),
       );
     },
   };
@@ -124,34 +124,34 @@ export interface McpDescriptor {
   readonly tools: McpToolDescriptor[];
 }
 
-export function createSlateMcpMetaToolOptions(mcpTools: readonly McpToolForMeta[]) {
-  const descriptors = new Map<string, Omit<McpDescriptor, "serverIdentifier">>();
-  for (const tool of mcpTools) {
-    const serverIdentifier = tool.providerIdentifier;
-    let descriptor = descriptors.get(serverIdentifier);
-    if (descriptor == null) {
-      descriptor = {
-        serverName: tool.providerIdentifier,
-        ...(tool.plugin == null ? {} : { plugin: tool.plugin }),
-        ...(tool.marketplace == null ? {} : { marketplace: tool.marketplace }),
-        ...(tool.pluginId == null ? {} : { pluginDbId: tool.pluginId }),
-        ...(tool.marketplaceId == null ? {} : { marketplaceId: tool.marketplaceId }),
+export function createSlateMcpMetaToolOptions(catalogTools: readonly McpToolForMeta[]) {
+  const descriptorsByServer = new Map<string, Omit<McpDescriptor, "serverIdentifier">>();
+  for (const streamingTool of catalogTools) {
+    const serverIdentifier = streamingTool.providerIdentifier;
+    let serverDescriptor = descriptorsByServer.get(serverIdentifier);
+    if (serverDescriptor == null) {
+      serverDescriptor = {
+        serverName: streamingTool.providerIdentifier,
+        ...(streamingTool.plugin == null ? {} : { plugin: streamingTool.plugin }),
+        ...(streamingTool.marketplace == null ? {} : { marketplace: streamingTool.marketplace }),
+        ...(streamingTool.pluginId == null ? {} : { pluginDbId: streamingTool.pluginId }),
+        ...(streamingTool.marketplaceId == null ? {} : { marketplaceId: streamingTool.marketplaceId }),
         tools: [],
       };
-      descriptors.set(serverIdentifier, descriptor);
+      descriptorsByServer.set(serverIdentifier, serverDescriptor);
     }
-    descriptor.tools.push({
-      toolName: tool.toolName,
-      ...(tool.description == null ? {} : { description: tool.description }),
-      ...(tool.inputSchema == null ? {} : { inputSchema: tool.inputSchema }),
+    serverDescriptor.tools.push({
+      toolName: streamingTool.toolName,
+      ...(streamingTool.description == null ? {} : { description: streamingTool.description }),
+      ...(streamingTool.inputSchema == null ? {} : { inputSchema: streamingTool.inputSchema }),
     });
   }
   return {
     enabled: true,
-    mcpDescriptors: [...descriptors.entries()].map(([serverIdentifier, descriptor]) => ({
+    mcpDescriptors: [...descriptorsByServer.entries()].map(([serverIdentifier, serverDescriptor]) => ({
       serverIdentifier,
-      ...descriptor,
-      tools: descriptor.tools.sort((left, right) => left.toolName.localeCompare(right.toolName)),
+      ...serverDescriptor,
+      tools: serverDescriptor.tools.sort((left, right) => left.toolName.localeCompare(right.toolName)),
     })),
   };
 }
