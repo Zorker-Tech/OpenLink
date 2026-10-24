@@ -12,33 +12,44 @@ import { realpathNearestExisting } from "../../shared/node/paths.ts";
 
 export class SlateLocalExecPathError extends Error {}
 
-async function statOrUndefined(path: string) {
-  try { return await stat(path); } catch { return undefined; }
+async function inspectPath(pathname: string) {
+  try {
+    return await stat(pathname);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function regularFileSizeBytes(path: string): Promise<number | undefined> {
-  const stats = await statOrUndefined(path);
-  return stats?.isFile() === true ? stats.size : undefined;
+  const entry = await inspectPath(path);
+  if (entry === undefined || !entry.isFile()) return undefined;
+  return entry.size;
 }
 
 export function resolveLocalExecRoot(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.SLATE_LOCAL_EXEC_ROOT?.trim() || env.SLATE_AGENT_PROJECT_DIR?.trim();
-  return configured != null && configured.length > 0 ? configured : homedir();
+  const primaryRoot = env.SLATE_LOCAL_EXEC_ROOT?.trim();
+  if (primaryRoot) return primaryRoot;
+  const projectRoot = env.SLATE_AGENT_PROJECT_DIR?.trim();
+  return projectRoot || homedir();
 }
 
-async function isDirectory(path: string): Promise<boolean> {
-  return (await statOrUndefined(path))?.isDirectory() ?? false;
+async function isDirectory(pathname: string): Promise<boolean> {
+  const entry = await inspectPath(pathname);
+  return entry !== undefined && entry.isDirectory();
 }
 
-function resolvePath(path: string, root: string): string {
-  return isAbsolute(path) ? resolve(path) : resolve(root, path);
+function absoluteFrom(root: string, candidate: string): string {
+  if (isAbsolute(candidate)) return resolve(candidate);
+  return resolve(root, candidate);
 }
 
 export async function resolveShellWorkingDirectory(args: { readonly root: string; readonly requested: string }): Promise<{ workingDirectory: string; fellBackToRoot: boolean }> {
   const requested = args.requested.trim();
   if (requested.length === 0) return { workingDirectory: requested, fellBackToRoot: false };
-  const resolved = resolvePath(requested, args.root);
-  if (await isDirectory(resolved)) return { workingDirectory: resolved, fellBackToRoot: false };
+  const targetDirectory = absoluteFrom(args.root, requested);
+  if (await isDirectory(targetDirectory)) {
+    return { workingDirectory: targetDirectory, fellBackToRoot: false };
+  }
   return { workingDirectory: args.root, fellBackToRoot: true };
 }
 
@@ -47,12 +58,13 @@ export function missingWorkingDirectoryNotice(args: { readonly requested: string
 }
 
 export function escapesRoot(base: string, target: string): boolean {
-  const rel = relative(base, target);
-  return rel !== "" && (rel.startsWith("..") || isAbsolute(rel));
+  const pathFromBase = relative(base, target);
+  if (pathFromBase === "") return false;
+  return pathFromBase.startsWith("..") || isAbsolute(pathFromBase);
 }
 
 export async function containPath(args: { readonly root: string; readonly path: string }): Promise<string> {
-  const resolved = isAbsolute(args.path) ? resolve(args.path) : resolve(args.root, args.path);
+  const resolved = absoluteFrom(args.root, args.path);
   if (escapesRoot(args.root, resolved)) {
     throw new SlateLocalExecPathError(`Path is outside the allowed local-exec root and was refused: ${args.path}`);
   }
