@@ -17,14 +17,14 @@ type FireOutcome = "ok" | "error" | "interrupted" | undefined;
 interface FireItem {
   event: Record<string, unknown>;
   runUuid?: string;
-  resolve(outcome: FireOutcome): void;
+  resolve(resultOutcome: FireOutcome): void;
 }
 interface FireBatch {
   agentId: string;
   automation: AutomationRecord;
   items: FireItem[];
   debounce: AbortController | null;
-  /** Compatibility handle used by manager teardown while debounce is armed. */
+  /** Compatibility handle used by manager teardown while abortController is armed. */
   timer: ReturnType<typeof setTimeout> | null;
   flushing: boolean;
   flushImmediately: boolean;
@@ -43,7 +43,7 @@ export class AutomationEventFires {
 
   constructor(readonly tm: TranscriptManagerLike) {}
 
-  enqueueEventAutomationFire(args: {
+  enqueueEventAutomationFire(request: {
     agentId: string;
     automation: AutomationRecord;
     event: Record<string, unknown>;
@@ -51,128 +51,128 @@ export class AutomationEventFires {
   }): Promise<FireOutcome> {
     if (!this.tm.execution.canExecute || this.tm.disposed)
       return Promise.resolve(undefined);
-    const runKey = `${args.agentId}:${args.automation.id}`;
-    return new Promise((resolve) => {
-      let batch = this.pendingEventFireBatches.get(runKey);
-      if (batch == null) {
-        batch = {
-          agentId: args.agentId,
-          automation: args.automation,
+    const batchKey = `${request.agentId}:${request.automation.id}`;
+    return new Promise((settle) => {
+      let pendingBatch = this.pendingEventFireBatches.get(batchKey);
+      if (pendingBatch == null) {
+        pendingBatch = {
+          agentId: request.agentId,
+          automation: request.automation,
           items: [],
           debounce: null,
           timer: null,
           flushing: false,
           flushImmediately: false,
         };
-        this.pendingEventFireBatches.set(runKey, batch);
+        this.pendingEventFireBatches.set(batchKey, pendingBatch);
       }
-      batch.automation = args.automation;
-      batch.items.push({
-        event: args.event,
-        ...(args.runUuid === undefined ? {} : { runUuid: args.runUuid }),
-        resolve,
+      pendingBatch.automation = request.automation;
+      pendingBatch.items.push({
+        event: request.event,
+        ...(request.runUuid === undefined ? {} : { runUuid: request.runUuid }),
+        resolve: settle,
       });
-      this.shedOverflowingEventFires(runKey);
-      this.scheduleEventBatchFlush(runKey);
+      this.shedOverflowingEventFires(batchKey);
+      this.scheduleEventBatchFlush(batchKey);
     });
   }
 
-  shedOverflowingEventFires(runKey: string): void {
-    const batch = this.pendingEventFireBatches.get(runKey);
-    if (batch == null) return;
-    const excess = batch.items.length - MAX_QUEUED_EVENT_FIRES_PER_AUTOMATION;
-    if (excess <= 0) return;
-    for (const item of batch.items.splice(0, excess)) {
+  shedOverflowingEventFires(batchKey: string): void {
+    const pendingBatch = this.pendingEventFireBatches.get(batchKey);
+    if (pendingBatch == null) return;
+    const overflowCount = pendingBatch.items.length - MAX_QUEUED_EVENT_FIRES_PER_AUTOMATION;
+    if (overflowCount <= 0) return;
+    for (const queuedItem of pendingBatch.items.splice(0, overflowCount)) {
       this.reportFireDropped({
-        agentId: batch.agentId,
+        agentId: pendingBatch.agentId,
         trigger: "event",
         reason: "event_batch_overflow",
-        ...(item.runUuid === undefined ? {} : { runUuid: item.runUuid }),
+        ...(queuedItem.runUuid === undefined ? {} : { runUuid: queuedItem.runUuid }),
       });
-      item.resolve("error");
+      queuedItem.resolve("error");
     }
   }
 
-  scheduleEventBatchFlush(runKey: string): void {
-    const batch = this.pendingEventFireBatches.get(runKey);
+  scheduleEventBatchFlush(batchKey: string): void {
+    const pendingBatch = this.pendingEventFireBatches.get(batchKey);
     if (
-      batch == null ||
-      batch.items.length === 0 ||
-      batch.flushing ||
-      batch.debounce != null
+      pendingBatch == null ||
+      pendingBatch.items.length === 0 ||
+      pendingBatch.flushing ||
+      pendingBatch.debounce != null
     )
       return;
-    const debounce = new AbortController();
-    batch.debounce = debounce;
-    const waitMs = batch.flushImmediately ? 0 : EVENT_FIRE_DEBOUNCE_MS;
-    batch.flushImmediately = false;
-    batch.timer = setTimeout(() => {
-      batch.timer = null;
-      batch.debounce = null;
-      if (!debounce.signal.aborted) void this.flushEventBatch(runKey);
-    }, waitMs);
+    const abortController = new AbortController();
+    pendingBatch.debounce = abortController;
+    const delayMs = pendingBatch.flushImmediately ? 0 : EVENT_FIRE_DEBOUNCE_MS;
+    pendingBatch.flushImmediately = false;
+    pendingBatch.timer = setTimeout(() => {
+      pendingBatch.timer = null;
+      pendingBatch.debounce = null;
+      if (!abortController.signal.aborted) void this.flushEventBatch(batchKey);
+    }, delayMs);
   }
 
-  async flushEventBatch(runKey: string): Promise<void> {
-    const batch = this.pendingEventFireBatches.get(runKey);
+  async flushEventBatch(batchKey: string): Promise<void> {
+    const pendingBatch = this.pendingEventFireBatches.get(batchKey);
     if (
-      batch == null ||
-      batch.items.length === 0 ||
-      batch.flushing ||
+      pendingBatch == null ||
+      pendingBatch.items.length === 0 ||
+      pendingBatch.flushing ||
       this.tm.disposed
     )
       return;
-    batch.flushing = true;
-    const items = batch.items.splice(0, MAX_EVENTS_IN_AUTOMATION_WAKE);
-    const fireUuids = items.flatMap((item) =>
-      item.runUuid === undefined ? [] : [item.runUuid],
+    pendingBatch.flushing = true;
+    const queuedItems = pendingBatch.items.splice(0, MAX_EVENTS_IN_AUTOMATION_WAKE);
+    const runIdentifiers = queuedItems.flatMap((queuedItem) =>
+      queuedItem.runUuid === undefined ? [] : [queuedItem.runUuid],
     );
-    let outcome: FireOutcome;
+    let resultOutcome: FireOutcome;
     try {
-      outcome = (await this.tm.automationRuntime.fireAutomation({
-        agentId: batch.agentId,
-        automation: batch.automation,
+      resultOutcome = (await this.tm.automationRuntime.fireAutomation({
+        agentId: pendingBatch.agentId,
+        automation: pendingBatch.automation,
         trigger: "event",
-        events: items.map((item) => item.event),
-        ...(fireUuids[0] === undefined ? {} : { runUuid: fireUuids[0] }),
-        coalescedRunUuids: fireUuids.slice(1),
+        events: queuedItems.map((queuedItem) => queuedItem.event),
+        ...(runIdentifiers[0] === undefined ? {} : { runUuid: runIdentifiers[0] }),
+        coalescedRunUuids: runIdentifiers.slice(1),
       })) as FireOutcome;
-    } catch (error) {
+    } catch (cause) {
       console.error(
-        `[slate:automation] event wake dispatch failed for "${batch.automation.name}" (${batch.automation.id}): ${errorMessage(error)}`,
+        `[slate:automation] event wake dispatch failed for "${pendingBatch.automation.name}" (${pendingBatch.automation.id}): ${errorMessage(cause)}`,
       );
     } finally {
-      for (const item of items) item.resolve(outcome);
-      batch.flushing = false;
-      if (batch.items.length > 0) {
-        batch.flushImmediately = true;
-        this.scheduleEventBatchFlush(runKey);
+      for (const queuedItem of queuedItems) queuedItem.resolve(resultOutcome);
+      pendingBatch.flushing = false;
+      if (pendingBatch.items.length > 0) {
+        pendingBatch.flushImmediately = true;
+        this.scheduleEventBatchFlush(batchKey);
       } else {
-        this.pendingEventFireBatches.delete(runKey);
+        this.pendingEventFireBatches.delete(batchKey);
       }
     }
   }
 
-  reportFireDropped(args: DroppedFire): void {
-    if (args.runUuid !== undefined) {
-      if (this.reportedDroppedFireUuids.has(args.runUuid)) return;
-      this.reportedDroppedFireUuids.add(args.runUuid);
+  reportFireDropped(request: DroppedFire): void {
+    if (request.runUuid !== undefined) {
+      if (this.reportedDroppedFireUuids.has(request.runUuid)) return;
+      this.reportedDroppedFireUuids.add(request.runUuid);
       while (this.reportedDroppedFireUuids.size > MAX_REPORTED_DROPPED_FIRES) {
-        const oldest = this.reportedDroppedFireUuids.values().next().value as
+        const oldestReported = this.reportedDroppedFireUuids.values().next().value as
           string | undefined;
-        if (oldest === undefined) break;
-        this.reportedDroppedFireUuids.delete(oldest);
+        if (oldestReported === undefined) break;
+        this.reportedDroppedFireUuids.delete(oldestReported);
       }
     }
     this.tm.telemetry.reportAutomationFireDropped({
-      conversationId: args.agentId,
-      trigger: args.trigger,
-      reason: args.reason,
-      ...(args.scheduledForMs == null
+      conversationId: request.agentId,
+      trigger: request.trigger,
+      reason: request.reason,
+      ...(request.scheduledForMs == null
         ? {}
         : {
-            scheduledForMs: args.scheduledForMs,
-            latenessMs: Math.max(0, Date.now() - args.scheduledForMs),
+            scheduledForMs: request.scheduledForMs,
+            latenessMs: Math.max(0, Date.now() - request.scheduledForMs),
           }),
     });
   }
