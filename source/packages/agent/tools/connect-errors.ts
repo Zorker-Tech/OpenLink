@@ -24,76 +24,76 @@ const AGENT_STREAM_START_TIMEOUT_DETAIL =
   "Slate lost connection to the workspace while starting tool execution. Reload the window and try again."
 const AGENT_STREAM_START_TIMEOUT_ERROR_NAME = "AgentExecStreamStartTimeoutError"
 
-export function maybeNormalizeExecBoundaryError(error: unknown): unknown {
-  if (error instanceof Error && error.message.includes("signal is aborted without reason")) {
-    const normalized = new ToolCallAbortedError()
-    setErrorCause(normalized, error)
-    return normalized
+export function maybeNormalizeExecBoundaryError(failure: unknown): unknown {
+  if (failure instanceof Error && failure.message.includes("signal is aborted without reason")) {
+    const normalizedFailure = new ToolCallAbortedError()
+    setErrorCause(normalizedFailure, failure)
+    return normalizedFailure
   }
-  if (isExecBackendUnavailableError(error)) {
-    const normalized = new CustomToolCallError(ToolErrorClassification.EXEC_BACKEND_UNAVAILABLE, {
+  if (isExecutionBackendUnavailableError(failure)) {
+    const normalizedFailure = new CustomToolCallError(ToolErrorClassification.EXEC_BACKEND_UNAVAILABLE, {
       clientVisibleErrorMessage: "The execution backend is unavailable. The extension host may have disconnected or stopped responding.",
       modelVisibleErrorMessage: "Execution backend unavailable. Do not retry tool calls — the execution environment is down. Inform the user and stop.",
       error: "Execution backend unavailable",
     })
-    setErrorCause(normalized, error)
-    return normalized
+    setErrorCause(normalizedFailure, failure)
+    return normalizedFailure
   }
   if (
-    isPodNotFoundExecBoundaryError(error) ||
-    isExecDaemonUnreachableExecBoundaryError(error) ||
-    isBridgeTransportClosedExecBoundaryError(error) ||
-    isEnvironmentUnreachableMessageError(error)
+    isPodMissingBoundaryError(failure) ||
+    isExecDaemonUnreachableError(failure) ||
+    isBridgeTransportClosedError(failure) ||
+    isEnvironmentUnreachableError(failure)
   ) {
-    return new RetryableToolEnvironmentOrchestrationError("The execution environment has become unreachable.", { cause: error })
+    return new RetryableToolEnvironmentOrchestrationError("The execution environment has become unreachable.", { cause: failure })
   }
-  const code = getConnectErrorCode(error)
-  if (code === undefined) return error
-  let message: string
-  let classification: ToolErrorClassification
-  switch (code) {
+  const connectCode = getConnectErrorCode(failure)
+  if (connectCode === undefined) return failure
+  let failureMessage: string
+  let errorClassification: ToolErrorClassification
+  switch (connectCode) {
     case Code.DeadlineExceeded:
-      message = "Tool failed; this may be temporary. Try again."
-      classification = ToolErrorClassification.OTHER_ERROR
+      failureMessage = "Tool failed; this may be temporary. Try again."
+      errorClassification = ToolErrorClassification.OTHER_ERROR
       break
     case Code.ResourceExhausted:
-      if (shouldUseRateLimitMessage(error)) {
-        message = "Service is currently rate limited. This may be temporary; try again."
-        classification = ToolErrorClassification.PROVIDER_ERROR
+      if (isRateLimitedError(failure)) {
+        failureMessage = "Service is currently rate limited. This may be temporary; try again."
+        errorClassification = ToolErrorClassification.PROVIDER_ERROR
       } else {
-        message = "Tool failed; this may be temporary. Try again."
-        classification = ToolErrorClassification.OTHER_ERROR
+        failureMessage = "Tool failed; this may be temporary. Try again."
+        errorClassification = ToolErrorClassification.OTHER_ERROR
       }
       break
     case Code.Unavailable:
-      message = "Service temporarily unavailable. This may be temporary; try again."
-      classification = ToolErrorClassification.OTHER_ERROR
+      failureMessage = "Service temporarily unavailable. This may be temporary; try again."
+      errorClassification = ToolErrorClassification.OTHER_ERROR
       break
     case Code.NotFound:
-      message = "Requested resource was not found. Check model selection and access."
-      classification = ToolErrorClassification.OTHER_ERROR
+      failureMessage = "Requested resource was not found. Check model selection and access."
+      errorClassification = ToolErrorClassification.OTHER_ERROR
       break
     case Code.Canceled:
     case Code.Aborted:
-      message = "Aborted"
-      classification = ToolErrorClassification.ABORTED
+      failureMessage = "Aborted"
+      errorClassification = ToolErrorClassification.ABORTED
       break
     default:
-      message = "Tool failed; this may be temporary. Try again."
-      classification = ToolErrorClassification.OTHER_ERROR
+      failureMessage = "Tool failed; this may be temporary. Try again."
+      errorClassification = ToolErrorClassification.OTHER_ERROR
   }
-  const normalized = new CustomToolCallError(classification, {
-    clientVisibleErrorMessage: message,
-    modelVisibleErrorMessage: message,
-    error: message,
+  const normalizedFailure = new CustomToolCallError(errorClassification, {
+    clientVisibleErrorMessage: failureMessage,
+    modelVisibleErrorMessage: failureMessage,
+    error: failureMessage,
   })
-  setErrorCause(normalized, error)
-  return normalized
+  setErrorCause(normalizedFailure, failure)
+  return normalizedFailure
 }
 
 /** A stream that never started is worth a distinct, non-retryable turn error: reload, do not retry. */
-export function maybeCreateAgentStreamStartTimeoutTurnError(error: unknown): ConnectError | undefined {
-  if (!isAgentStreamStartTimeoutError(error)) return undefined
+export function maybeCreateAgentStreamStartTimeoutTurnError(failure: unknown): ConnectError | undefined {
+  if (!isAgentStreamStartTimeoutError(failure)) return undefined
   return new ConnectError(AGENT_STREAM_START_TIMEOUT_TITLE, Code.DeadlineExceeded, undefined, [
     new ErrorDetails({
       error: ErrorDetails_Error.EXTENSION_HOST_TIMEOUT,
@@ -104,120 +104,120 @@ export function maybeCreateAgentStreamStartTimeoutTurnError(error: unknown): Con
         shouldShowImmediateError: true,
       },
     }),
-  ], error instanceof Error ? error : undefined)
+  ], failure instanceof Error ? failure : undefined)
 }
 
-function isPodNotFoundExecBoundaryError(error: unknown): boolean {
-  return collectErrorText(error).some(text => text.toLowerCase().includes("object not found: pod"))
+function isPodMissingBoundaryError(failure: unknown): boolean {
+  return errorTextsOf(failure).some(errorText => errorText.toLowerCase().includes("object not found: pod"))
 }
-function isExecDaemonUnreachableExecBoundaryError(error: unknown): boolean {
-  return collectErrorText(error).some(text => text.toLowerCase().includes("exec-daemon is unreachable"))
+function isExecDaemonUnreachableError(failure: unknown): boolean {
+  return errorTextsOf(failure).some(errorText => errorText.toLowerCase().includes("exec-daemon is unreachable"))
 }
-function isBridgeTransportClosedExecBoundaryError(error: unknown): boolean {
-  return collectErrorText(error).some(text => text.toLowerCase().includes("bridge transport is closed"))
+function isBridgeTransportClosedError(failure: unknown): boolean {
+  return errorTextsOf(failure).some(errorText => errorText.toLowerCase().includes("bridge transport is closed"))
 }
-function isEnvironmentUnreachableMessageError(error: unknown): boolean {
-  return collectErrorText(error).some(text => text.toLowerCase().includes("execution environment has become unreachable"))
+function isEnvironmentUnreachableError(failure: unknown): boolean {
+  return errorTextsOf(failure).some(errorText => errorText.toLowerCase().includes("execution environment has become unreachable"))
 }
 
-function isExecBackendUnavailableError(error: unknown): boolean {
+function isExecutionBackendUnavailableError(failure: unknown): boolean {
   if (
-    error instanceof Error &&
-    (error.name === "ExecBackendUnavailableError" ||
-      error.name === "ControlledExecDisposedError" ||
-      error.name === AGENT_STREAM_START_TIMEOUT_ERROR_NAME)
+    failure instanceof Error &&
+    (failure.name === "ExecBackendUnavailableError" ||
+      failure.name === "ControlledExecDisposedError" ||
+      failure.name === AGENT_STREAM_START_TIMEOUT_ERROR_NAME)
   ) return true
-  if (isAgentStreamStartTimeoutError(error) || isExtensionHostTimeoutConnectError(error) || isLegacyAgentStreamStartTimeoutError(error)) return true
-  return collectErrorText(error).map(text => text.toLowerCase()).some(text =>
-    text.includes("execution runtime disposed") ||
-    text.includes("agent execution timed out") ||
-    text.includes("extension host is not running or is unresponsive") ||
-    text.includes("controlledexecdisposederror"))
+  if (isAgentStreamStartTimeoutError(failure) || isExtensionHostTimeoutError(failure) || isLegacyStreamStartTimeoutError(failure)) return true
+  return errorTextsOf(failure).map(errorText => errorText.toLowerCase()).some(errorText =>
+    errorText.includes("execution runtime disposed") ||
+    errorText.includes("agent execution timed out") ||
+    errorText.includes("extension host is not running or is unresponsive") ||
+    errorText.includes("controlledexecdisposederror"))
 }
 
-export function isAgentStreamStartTimeoutError(error: unknown): boolean {
-  return error instanceof Error && error.name === AGENT_STREAM_START_TIMEOUT_ERROR_NAME
+export function isAgentStreamStartTimeoutError(failure: unknown): boolean {
+  return failure instanceof Error && failure.name === AGENT_STREAM_START_TIMEOUT_ERROR_NAME
 }
 
-export function isAgentStreamStartTimeoutRecoveryTurnError(error: unknown): boolean {
-  if (isAgentStreamStartTimeoutError(error)) return true
-  if (!(error instanceof ConnectError) || error.code !== Code.DeadlineExceeded) return false
-  return findErrorDetails(error).some(detail =>
-    detail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT && detail.details?.title === AGENT_STREAM_START_TIMEOUT_TITLE)
+export function isAgentStreamStartTimeoutRecoveryTurnError(failure: unknown): boolean {
+  if (isAgentStreamStartTimeoutError(failure)) return true
+  if (!(failure instanceof ConnectError) || failure.code !== Code.DeadlineExceeded) return false
+  return findDetailsOf(failure).some(errorDetail =>
+    errorDetail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT && errorDetail.details?.title === AGENT_STREAM_START_TIMEOUT_TITLE)
 }
 
-function findErrorDetails(error: ConnectError): ErrorDetails[] {
-  return error.findDetails(ErrorDetails) as ErrorDetails[]
+function findDetailsOf(failure: ConnectError): ErrorDetails[] {
+  return failure.findDetails(ErrorDetails) as ErrorDetails[]
 }
 
-function isExtensionHostTimeoutConnectError(error: unknown): boolean {
-  return error instanceof ConnectError && findErrorDetails(error).some(detail => detail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT)
+function isExtensionHostTimeoutError(failure: unknown): boolean {
+  return failure instanceof ConnectError && findDetailsOf(failure).some(errorDetail => errorDetail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT)
 }
 
-function isLegacyAgentStreamStartTimeoutError(error: unknown): boolean {
-  return collectErrorText(error).some(text => text.toLowerCase().includes("agent stream start timeout"))
+function isLegacyStreamStartTimeoutError(failure: unknown): boolean {
+  return errorTextsOf(failure).some(errorText => errorText.toLowerCase().includes("agent stream start timeout"))
 }
 
-function setErrorCause(target: Error, cause: unknown): void {
-  target.cause = cause
+function setErrorCause(errorTarget: Error, failureCause: unknown): void {
+  errorTarget.cause = failureCause
 }
 
-function shouldUseRateLimitMessage(error: unknown): boolean {
-  const texts = collectErrorText(error).map(text => text.toLowerCase())
-  return texts.length > 0 && texts.some(text =>
-    text.includes("resource exhausted") ||
-    text.includes("high load") ||
-    text.includes("rate limit") ||
-    text.includes("rate-limited") ||
-    text.includes("too many requests") ||
-    text.includes("overloaded") ||
-    text.includes("overload") ||
-    text.includes("econnreset"))
+function isRateLimitedError(failure: unknown): boolean {
+  const errorTexts = errorTextsOf(failure).map(errorText => errorText.toLowerCase())
+  return errorTexts.length > 0 && errorTexts.some(errorText =>
+    errorText.includes("resource exhausted") ||
+    errorText.includes("high load") ||
+    errorText.includes("rate limit") ||
+    errorText.includes("rate-limited") ||
+    errorText.includes("too many requests") ||
+    errorText.includes("overloaded") ||
+    errorText.includes("overload") ||
+    errorText.includes("econnreset"))
 }
 
 /** Everything the error chain says, including the details Connect errors carry out of band. */
-function collectErrorText(error: unknown): string[] {
-  const texts: string[] = []
-  const queue: unknown[] = [error]
-  const seen = new Set<unknown>()
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (current === undefined || seen.has(current)) continue
-    seen.add(current)
-    if (current instanceof Error) {
-      texts.push(current.message)
-      if (current.cause !== undefined) queue.push(current.cause)
+function errorTextsOf(failure: unknown): string[] {
+  const errorTexts: string[] = []
+  const pendingErrors: unknown[] = [failure]
+  const visitedErrors = new Set<unknown>()
+  while (pendingErrors.length > 0) {
+    const currentError = pendingErrors.shift()
+    if (currentError === undefined || visitedErrors.has(currentError)) continue
+    visitedErrors.add(currentError)
+    if (currentError instanceof Error) {
+      errorTexts.push(currentError.message)
+      if (currentError.cause !== undefined) pendingErrors.push(currentError.cause)
     }
-    if (current instanceof ConnectError) {
-      if (typeof current.rawMessage === "string") texts.push(current.rawMessage)
-      for (const detail of findErrorDetails(current)) {
-        if (typeof detail.details?.title === "string") texts.push(detail.details.title)
-        if (typeof detail.details?.detail === "string") texts.push(detail.details.detail)
+    if (currentError instanceof ConnectError) {
+      if (typeof currentError.rawMessage === "string") errorTexts.push(currentError.rawMessage)
+      for (const errorDetail of findDetailsOf(currentError)) {
+        if (typeof errorDetail.details?.title === "string") errorTexts.push(errorDetail.details.title)
+        if (typeof errorDetail.details?.detail === "string") errorTexts.push(errorDetail.details.detail)
       }
     }
   }
-  return texts.filter(text => text.length > 0)
+  return errorTexts.filter(errorText => errorText.length > 0)
 }
 
 const CONNECT_CODE_BY_NAME = new Map<string, Code>(
-  Array.from(Object.values(Code).filter((value): value is Code => typeof value === "number")).map(code => {
-    const name = Code[code]
-    const snake = typeof name === "string"
-      ? name[0]!.toLowerCase() + name.substring(1).replace(/[A-Z]/g, character => `_${character.toLowerCase()}`)
-      : String(code)
-    return [snake, code]
+  Array.from(Object.values(Code).filter((codeValue): codeValue is Code => typeof codeValue === "number")).map(connectCode => {
+    const varianceName = Code[connectCode]
+    const codeName = typeof varianceName === "string"
+      ? varianceName[0]!.toLowerCase() + varianceName.substring(1).replace(/[A-Z]/g, character => `_${character.toLowerCase()}`)
+      : String(connectCode)
+    return [codeName, connectCode]
   }),
 )
 
 /** A Connect code from the message's `[code]` prefix, its stack, or the words it used instead. */
-export function getConnectErrorCode(error: unknown): Code | undefined {
-  if (!(error instanceof Error)) return undefined
-  const messageMatch = /^\[([a-z_]+)\](?:\s|$)/.exec(error.message)
-  if (messageMatch) return CONNECT_CODE_BY_NAME.get(messageMatch[1] as string)
-  const stackMatch = typeof error.stack === "string" ? /(?:^|\n)\s*ConnectError:\s*\[([a-z_]+)\](?:\s|$)/.exec(error.stack) : null
-  if (stackMatch) return CONNECT_CODE_BY_NAME.get(stackMatch[1] as string)
-  const lowered = collectErrorText(error).map(text => text.toLowerCase())
-  if (lowered.some(text => text.includes("user aborted request"))) return Code.Aborted
-  if (lowered.some(text => text === "canceled" || text.includes("request canceled") || text.includes("request cancelled"))) return Code.Canceled
+export function getConnectErrorCode(failure: unknown): Code | undefined {
+  if (!(failure instanceof Error)) return undefined
+  const messageCodeMatch = /^\[([a-z_]+)\](?:\s|$)/.exec(failure.message)
+  if (messageCodeMatch) return CONNECT_CODE_BY_NAME.get(messageCodeMatch[1] as string)
+  const stackCodeMatch = typeof failure.stack === "string" ? /(?:^|\n)\s*ConnectError:\s*\[([a-z_]+)\](?:\s|$)/.exec(failure.stack) : null
+  if (stackCodeMatch) return CONNECT_CODE_BY_NAME.get(stackCodeMatch[1] as string)
+  const loweredTexts = errorTextsOf(failure).map(errorText => errorText.toLowerCase())
+  if (loweredTexts.some(errorText => errorText.includes("user aborted request"))) return Code.Aborted
+  if (loweredTexts.some(errorText => errorText === "canceled" || errorText.includes("request canceled") || errorText.includes("request cancelled"))) return Code.Canceled
   return undefined
 }
