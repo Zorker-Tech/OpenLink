@@ -59,90 +59,90 @@ export function elapsedLabel(elapsedMs: number): string {
 }
 
 export function describeRunningSubagent(
-  info: RunningSubagentInfo,
-  options: { readonly detailed: boolean },
+  subagentInfo: RunningSubagentInfo,
+  formatOptions: { readonly detailed: boolean },
 ): string {
-  const header = `- ${info.subagentId} [${info.subagentType}] "${info.title}" — running for ${elapsedLabel(info.elapsedMs)}, ${info.toolCallCount} tool call(s)`;
-  if (!options.detailed) return header;
-  const lines = [header];
-  if (info.recentActivity.length > 0) {
-    lines.push("  Recent activity (oldest → newest):");
-    for (const entry of info.recentActivity) lines.push(`    ${entry}`);
+  const summaryLine = `- ${subagentInfo.subagentId} [${subagentInfo.subagentType}] "${subagentInfo.title}" — running for ${elapsedLabel(subagentInfo.elapsedMs)}, ${subagentInfo.toolCallCount} tool call(s)`;
+  if (!formatOptions.detailed) return summaryLine;
+  const outputLines = [summaryLine];
+  if (subagentInfo.recentActivity.length > 0) {
+    outputLines.push("  Recent activity (oldest → newest):");
+    for (const activityLine of subagentInfo.recentActivity) outputLines.push(`    ${activityLine}`);
   } else {
-    lines.push("  No tool activity recorded yet.");
+    outputLines.push("  No tool activity recorded yet.");
   }
-  if (info.transcriptPath != null) {
-    lines.push(`  Full transcript (read it for the complete play-by-play): ${info.transcriptPath}`);
+  if (subagentInfo.transcriptPath != null) {
+    outputLines.push(`  Full transcript (read it for the complete play-by-play): ${subagentInfo.transcriptPath}`);
   }
-  return lines.join("\n");
+  return outputLines.join("\n");
 }
 
 export function notRunningMessage(
   subagentId: string,
-  running: readonly RunningSubagentInfo[],
+  activeSubagents: readonly RunningSubagentInfo[],
 ): string {
-  const base = `No subagent "${subagentId}" is currently running. It may have already finished (you're revived automatically with a finished subagent's result), or the id is wrong.`;
-  return running.length === 0
-    ? `${base} No subagents are running right now.`
-    : `${base} Currently running: ${running.map((info) => info.subagentId).join(", ")}.`;
+  const introText = `No subagent "${subagentId}" is currently running. It may have already finished (you're revived automatically with a finished subagent's result), or the id is wrong.`;
+  return activeSubagents.length === 0
+    ? `${introText} No subagents are running right now.`
+    : `${introText} Currently running: ${activeSubagents.map((subagentInfo) => subagentInfo.subagentId).join(", ")}.`;
 }
 
 export function createSubagentManagementTools(
-  controller: SubagentManagementController,
+  management: SubagentManagementController,
 ) {
   return [
-    defineCommunicateTool(controller, {
+    defineCommunicateTool(management, {
       id: "CHECK_SUBAGENT",
       name: "CheckSubagent",
       description: "Check how a background subagent you dispatched (via Task) is doing without waiting for it to finish. Returns its status, how long it has been running, the tool calls it has made recently, and a path to its live transcript you can Read for the full play-by-play. Pass the subagent's Agent ID (from the Task result), or omit it to list every running subagent. Use this when a subagent — especially a computerUse one driving the box desktop — is taking a long time or might be stuck or looping, so you can decide whether to MessageSubagent it or StopSubagent it. This is read-only; it's not polling for completion (you're revived automatically when a subagent finishes).",
       parameters: checkSubagentParameters,
-      async execute(_context, args: z.infer<typeof checkSubagentParameters>, dependencies) {
-        const id = args.subagent_id;
+      async execute(_context, parsedArgs: z.infer<typeof checkSubagentParameters>, capabilities) {
+        const id = parsedArgs.subagent_id;
         if (id == null || id.length === 0) {
-          const running = dependencies.listRunningSubagents();
-          if (running.length === 0) return "No background subagents are running right now.";
+          const activeSubagents = capabilities.listRunningSubagents();
+          if (activeSubagents.length === 0) return "No background subagents are running right now.";
           return [
-            `${running.length} subagent(s) running:`,
-            ...running.map((info) => describeRunningSubagent(info, { detailed: false })),
+            `${activeSubagents.length} subagent(s) running:`,
+            ...activeSubagents.map((subagentInfo) => describeRunningSubagent(subagentInfo, { detailed: false })),
             "Pass a subagent_id to see its recent activity and transcript path.",
           ].join("\n");
         }
-        const info = dependencies.getRunningSubagent(id);
-        return info == null
-          ? notRunningMessage(id, dependencies.listRunningSubagents())
-          : describeRunningSubagent(info, { detailed: true });
+        const subagentInfo = capabilities.getRunningSubagent(id);
+        return subagentInfo == null
+          ? notRunningMessage(id, capabilities.listRunningSubagents())
+          : describeRunningSubagent(subagentInfo, { detailed: true });
       },
     }),
-    defineCommunicateTool(controller, {
+    defineCommunicateTool(management, {
       id: "MESSAGE_SUBAGENT",
       name: "MessageSubagent",
       description: "Force a message into a running background subagent to course-correct it without aborting it. The subagent interrupts its current step, reads your message, and continues from where it was (its context is preserved — it does not start over). Use this to unstick or redirect a subagent that is looping, stuck, or heading the wrong way — for example to tell a computerUse subagent to try a different element, that the user just signed in so it can proceed, or to wrap up and report what it has. Pass the subagent's Agent ID (from the Task result). You're still revived with its result when it finishes; to follow up AFTER a subagent has already finished, use Task with the resume parameter instead.",
       parameters: messageSubagentParameters,
-      async execute(context: Context, args: z.infer<typeof messageSubagentParameters>, dependencies) {
-        if (dependencies.reviewSteer != null) {
-          const review = await dependencies.reviewSteer(context, {
-            subagentId: args.subagent_id,
-            message: args.message,
-            toolCallId: dependencies.toolCallId,
+      async execute(context: Context, parsedArgs: z.infer<typeof messageSubagentParameters>, capabilities) {
+        if (capabilities.reviewSteer != null) {
+          const steerDecision = await capabilities.reviewSteer(context, {
+            subagentId: parsedArgs.subagent_id,
+            message: parsedArgs.message,
+            toolCallId: capabilities.toolCallId,
           });
-          if (!review.allowed) return review.reason;
+          if (!steerDecision.allowed) return steerDecision.reason;
         }
-        if (dependencies.steerSubagent(args.subagent_id, args.message) === "not-running") {
-          return notRunningMessage(args.subagent_id, dependencies.listRunningSubagents());
+        if (capabilities.steerSubagent(parsedArgs.subagent_id, parsedArgs.message) === "not-running") {
+          return notRunningMessage(parsedArgs.subagent_id, capabilities.listRunningSubagents());
         }
-        return `Message delivered to subagent ${args.subagent_id}. It will interrupt what it's doing, take your message into account, and keep working. You'll be revived with its result when it finishes \u2014 don't wait on it.`;
+        return `Message delivered to subagent ${parsedArgs.subagent_id}. It will interrupt what it's doing, take your message into account, and keep working. You'll be revived with its result when it finishes \u2014 don't wait on it.`;
       },
     }),
-    defineCommunicateTool(controller, {
+    defineCommunicateTool(management, {
       id: "STOP_SUBAGENT",
       name: "StopSubagent",
       description: "Abort a running background subagent you dispatched (via Task). Use this to kill a subagent that is wedged, looping with no progress, or no longer needed — for example a computerUse subagent stuck on the box desktop. This tears the subagent down and frees its box desktop window; it does not come back, and you are not separately revived for it (this tool's result is the confirmation). If you instead want it to change course and keep going, use MessageSubagent. Pass the subagent's Agent ID (from the Task result).",
       parameters: stopSubagentParameters,
-      async execute(_context, args: z.infer<typeof stopSubagentParameters>, dependencies) {
-        if (dependencies.abortSubagent(args.subagent_id) === "not-running") {
-          return notRunningMessage(args.subagent_id, dependencies.listRunningSubagents());
+      async execute(_context, parsedArgs: z.infer<typeof stopSubagentParameters>, capabilities) {
+        if (capabilities.abortSubagent(parsedArgs.subagent_id) === "not-running") {
+          return notRunningMessage(parsedArgs.subagent_id, capabilities.listRunningSubagents());
         }
-        return `Stopping subagent ${args.subagent_id}. It will be torn down and won't report back.`;
+        return `Stopping subagent ${parsedArgs.subagent_id}. It will be torn down and won't report back.`;
       },
     }),
   ];
