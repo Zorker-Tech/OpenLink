@@ -41,79 +41,79 @@ export function emptySettings(): SlateStoredSettings {
   return { version: SETTINGS_VERSION, mcpBoxServers: [], autoUpdateWhenIdleOptIn: false, egressTunnelEnabled: false, webauthnProxyEnabled: true, mcpCustomInstructions: {}, mcpCustomInstructionsByServerId: {}, mcpDisabledToolsByServerId: {}, conciergeConsent: "unset", settingsMigrations: [...SLATE_SETTINGS_MIGRATION_IDS] };
 }
 
-function stringMap(value: unknown): StringMap { const result: StringMap = {}; if (typeof value !== "object" || value == null || Array.isArray(value)) return result; for (const [key, item] of Object.entries(value)) if (typeof item === "string") result[key] = item; return result; }
-function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
-function normalizeCustomInstructions(raw: StringMap): StringMap { const normalized: StringMap = {}; for (const [name, value] of Object.entries(raw)) { const clamped = clampMcpCustomInstruction(value); if (clamped.trim().length > 0) normalized[name] = clamped; else if (getDefaultMcpCustomInstruction(name).length > 0) normalized[name] = ""; } return normalized; }
-function normalizeCustomInstructionsByServerId(raw: StringMap): StringMap { const normalized: StringMap = {}; for (const [id, value] of Object.entries(raw)) if (/^[1-9]\d*$/.test(id)) normalized[id] = clampMcpCustomInstruction(value); return normalized; }
-function normalizeDisabledToolsByServerId(raw: unknown): StringListMap { const normalized: StringListMap = {}; if (typeof raw !== "object" || raw == null || Array.isArray(raw)) return normalized; for (const [id, value] of Object.entries(raw)) { if (!/^[1-9]\d*$/.test(id)) continue; const tools = [...new Set(stringArray(value).filter((name) => name.length > 0))]; if (tools.length > 0) normalized[id] = tools; } return normalized; }
-function downgradePersistedFast(model: SlateAgentModelSelection): SlateAgentModelSelection { return { modelId: model.modelId, maxMode: true, parameters: model.parameters.map((parameter) => ({ id: parameter.id, value: parameter.id === "fast" ? "false" : parameter.value })) }; }
+function stringRecordOf(value: unknown): StringMap { const parsed: StringMap = {}; if (typeof value !== "object" || value == null || Array.isArray(value)) return parsed; for (const [key, entry] of Object.entries(value)) if (typeof entry === "string") parsed[key] = entry; return parsed; }
+function stringListOf(value: unknown): string[] { return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []; }
+function clampedInstructions(fields: StringMap): StringMap { const normalized: StringMap = {}; for (const [name, value] of Object.entries(fields)) { const clamped = clampMcpCustomInstruction(value); if (clamped.trim().length > 0) normalized[name] = clamped; else if (getDefaultMcpCustomInstruction(name).length > 0) normalized[name] = ""; } return normalized; }
+function clampedInstructionsById(fields: StringMap): StringMap { const normalized: StringMap = {}; for (const [id, value] of Object.entries(fields)) if (/^[1-9]\d*$/.test(id)) normalized[id] = clampMcpCustomInstruction(value); return normalized; }
+function disabledToolsByServerIdOf(fields: unknown): StringListMap { const normalized: StringListMap = {}; if (typeof fields !== "object" || fields == null || Array.isArray(fields)) return normalized; for (const [id, value] of Object.entries(fields)) { if (!/^[1-9]\d*$/.test(id)) continue; const tools = [...new Set(stringListOf(value).filter((name) => name.length > 0))]; if (tools.length > 0) normalized[id] = tools; } return normalized; }
+function downgradeFastSelection(model: SlateAgentModelSelection): SlateAgentModelSelection { return { modelId: model.modelId, maxMode: true, parameters: model.parameters.map((parameter) => ({ id: parameter.id, value: parameter.id === "fast" ? "false" : parameter.value })) }; }
 
-function parseSettings(value: unknown): SlateStoredSettings | null {
+function parseStoredSettings(value: unknown): SlateStoredSettings | null {
   if (typeof value !== "object" || value == null || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>; if (raw.version !== SETTINGS_VERSION) return null;
-  const base = emptySettings();
-  const result: SlateStoredSettings = {
-    ...base,
-    mcpBoxServers: [...new Set(stringArray(raw.mcpBoxServers).filter((name) => name.length > 0))],
-    autoUpdateWhenIdleOptIn: raw.autoUpdateWhenIdleOptIn === true,
-    egressTunnelEnabled: raw.egressTunnelEnabled === true,
-    webauthnProxyEnabled: raw.webauthnProxyEnabled !== false,
-    mcpCustomInstructions: normalizeCustomInstructions(stringMap(raw.mcpCustomInstructions)),
-    mcpCustomInstructionsByServerId: normalizeCustomInstructionsByServerId(stringMap(raw.mcpCustomInstructionsByServerId)),
-    mcpDisabledToolsByServerId: normalizeDisabledToolsByServerId(raw.mcpDisabledToolsByServerId),
-    conciergeConsent: raw.conciergeConsent === "allowed" || raw.conciergeConsent === "denied" ? raw.conciergeConsent : "unset",
-    settingsMigrations: stringArray(raw.settingsMigrations)
+  const fields = value as Record<string, unknown>; if (fields.version !== SETTINGS_VERSION) return null;
+  const defaults = emptySettings();
+  const parsed: SlateStoredSettings = {
+    ...defaults,
+    mcpBoxServers: [...new Set(stringListOf(fields.mcpBoxServers).filter((name) => name.length > 0))],
+    autoUpdateWhenIdleOptIn: fields.autoUpdateWhenIdleOptIn === true,
+    egressTunnelEnabled: fields.egressTunnelEnabled === true,
+    webauthnProxyEnabled: fields.webauthnProxyEnabled !== false,
+    mcpCustomInstructions: clampedInstructions(stringRecordOf(fields.mcpCustomInstructions)),
+    mcpCustomInstructionsByServerId: clampedInstructionsById(stringRecordOf(fields.mcpCustomInstructionsByServerId)),
+    mcpDisabledToolsByServerId: disabledToolsByServerIdOf(fields.mcpDisabledToolsByServerId),
+    conciergeConsent: fields.conciergeConsent === "allowed" || fields.conciergeConsent === "denied" ? fields.conciergeConsent : "unset",
+    settingsMigrations: stringListOf(fields.settingsMigrations)
   };
-  if (typeof raw.hasSeenOnboarding === "boolean") result.hasSeenOnboarding = raw.hasSeenOnboarding;
-  if (typeof raw.hasSeenOnboardingAccountScope === "string" && raw.hasSeenOnboardingAccountScope.length > 0) result.hasSeenOnboardingAccountScope = raw.hasSeenOnboardingAccountScope;
-  if (isSlateUpdateTrack(raw.updateTrackOverride)) result.updateTrackOverride = raw.updateTrackOverride;
-  if (isSlateThemePreference(raw.themePreference)) result.themePreference = raw.themePreference;
-  if (isSlateAgentModelSelection(raw.agentDefaultModel)) result.agentDefaultModel = raw.agentDefaultModel;
-  if (isSlateAgentModelSelection(raw.computerUseModel)) result.computerUseModel = raw.computerUseModel;
-  if (typeof raw.notifications === "object" && raw.notifications != null && !Array.isArray(raw.notifications)) result.notifications = raw.notifications as Record<string, unknown>;
-  for (const key of ["userTimeZone", "userTimeZoneOverride", "mcpCustomInstructionsAccountScope"] as const) if (typeof raw[key] === "string" && raw[key].length > 0) result[key] = raw[key];
-  if (typeof raw.autoReviewInstructions === "object" && raw.autoReviewInstructions != null) result.autoReviewInstructions = normalizeSlateAutoReviewInstructions(raw.autoReviewInstructions as Record<string, unknown>);
-  if (isSlateLocalToolPermission(raw.localToolPermission)) result.localToolPermission = raw.localToolPermission;
-  if (isSlateLocalToolPermission(raw.localToolPermissionCeiling)) result.localToolPermissionCeiling = raw.localToolPermissionCeiling;
-  if (isSlateInferenceProvider(raw.inferenceProvider)) result.inferenceProvider = raw.inferenceProvider;
-  if (isBoxRuntime(raw.boxRuntime)) result.boxRuntime = raw.boxRuntime;
-  if (typeof raw.inferenceRouterUsage === "object" && raw.inferenceRouterUsage != null && !Array.isArray(raw.inferenceRouterUsage)) {
-    const usage = emptySlateInferenceRouterUsage();
-    const rawProviders = (raw.inferenceRouterUsage as { providers?: unknown }).providers;
-    if (typeof rawProviders === "object" && rawProviders != null && !Array.isArray(rawProviders)) {
-      for (const provider of Object.keys(usage.providers) as SlateInferenceProvider[]) {
-        const item = (rawProviders as Record<string, unknown>)[provider];
-        if (typeof item !== "object" || item == null || Array.isArray(item)) continue;
-        const record = item as Record<string, unknown>;
-        const count = (key: string): number => Number.isSafeInteger(record[key]) && (record[key] as number) >= 0 ? record[key] as number : 0;
-        usage.providers[provider] = { requests: count("requests"), inputTokens: count("inputTokens"), outputTokens: count("outputTokens"), cacheReadTokens: count("cacheReadTokens"), cacheWriteTokens: count("cacheWriteTokens"), lastUsedAt: typeof record.lastUsedAt === "string" ? record.lastUsedAt : null };
+  if (typeof fields.hasSeenOnboarding === "boolean") parsed.hasSeenOnboarding = fields.hasSeenOnboarding;
+  if (typeof fields.hasSeenOnboardingAccountScope === "string" && fields.hasSeenOnboardingAccountScope.length > 0) parsed.hasSeenOnboardingAccountScope = fields.hasSeenOnboardingAccountScope;
+  if (isSlateUpdateTrack(fields.updateTrackOverride)) parsed.updateTrackOverride = fields.updateTrackOverride;
+  if (isSlateThemePreference(fields.themePreference)) parsed.themePreference = fields.themePreference;
+  if (isSlateAgentModelSelection(fields.agentDefaultModel)) parsed.agentDefaultModel = fields.agentDefaultModel;
+  if (isSlateAgentModelSelection(fields.computerUseModel)) parsed.computerUseModel = fields.computerUseModel;
+  if (typeof fields.notifications === "object" && fields.notifications != null && !Array.isArray(fields.notifications)) parsed.notifications = fields.notifications as Record<string, unknown>;
+  for (const key of ["userTimeZone", "userTimeZoneOverride", "mcpCustomInstructionsAccountScope"] as const) if (typeof fields[key] === "string" && fields[key].length > 0) parsed[key] = fields[key];
+  if (typeof fields.autoReviewInstructions === "object" && fields.autoReviewInstructions != null) parsed.autoReviewInstructions = normalizeSlateAutoReviewInstructions(fields.autoReviewInstructions as Record<string, unknown>);
+  if (isSlateLocalToolPermission(fields.localToolPermission)) parsed.localToolPermission = fields.localToolPermission;
+  if (isSlateLocalToolPermission(fields.localToolPermissionCeiling)) parsed.localToolPermissionCeiling = fields.localToolPermissionCeiling;
+  if (isSlateInferenceProvider(fields.inferenceProvider)) parsed.inferenceProvider = fields.inferenceProvider;
+  if (isBoxRuntime(fields.boxRuntime)) parsed.boxRuntime = fields.boxRuntime;
+  if (typeof fields.inferenceRouterUsage === "object" && fields.inferenceRouterUsage != null && !Array.isArray(fields.inferenceRouterUsage)) {
+    const routerUsage = emptySlateInferenceRouterUsage();
+    const providerRecords = (fields.inferenceRouterUsage as { providers?: unknown }).providers;
+    if (typeof providerRecords === "object" && providerRecords != null && !Array.isArray(providerRecords)) {
+      for (const providerKey of Object.keys(routerUsage.providers) as SlateInferenceProvider[]) {
+        const entry = (providerRecords as Record<string, unknown>)[providerKey];
+        if (typeof entry !== "object" || entry == null || Array.isArray(entry)) continue;
+        const providerRecord = entry as Record<string, unknown>;
+        const counterOf = (key: string): number => Number.isSafeInteger(providerRecord[key]) && (providerRecord[key] as number) >= 0 ? providerRecord[key] as number : 0;
+        routerUsage.providers[providerKey] = { requests: counterOf("requests"), inputTokens: counterOf("inputTokens"), outputTokens: counterOf("outputTokens"), cacheReadTokens: counterOf("cacheReadTokens"), cacheWriteTokens: counterOf("cacheWriteTokens"), lastUsedAt: typeof providerRecord.lastUsedAt === "string" ? providerRecord.lastUsedAt : null };
       }
     }
-    result.inferenceRouterUsage = usage;
+    parsed.inferenceRouterUsage = routerUsage;
   }
-  if (Array.isArray(raw.pinnedAgentIds)) result.pinnedAgentIds = [...new Set(stringArray(raw.pinnedAgentIds).filter((id) => id.length > 0))];
-  if (Array.isArray(raw.sidebarSections)) result.sidebarSections = SidebarGrouping.foldsCarried({ sections: raw.sidebarSections.filter((entry): entry is SidebarSection => typeof entry === "object" && entry != null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { name?: unknown }).name === "string" && Array.isArray((entry as { agentIds?: unknown }).agentIds)) });
-  return result;
+  if (Array.isArray(fields.pinnedAgentIds)) parsed.pinnedAgentIds = [...new Set(stringListOf(fields.pinnedAgentIds).filter((id) => id.length > 0))];
+  if (Array.isArray(fields.sidebarSections)) parsed.sidebarSections = SidebarGrouping.foldsCarried({ sections: fields.sidebarSections.filter((entry): entry is SidebarSection => typeof entry === "object" && entry != null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { name?: unknown }).name === "string" && Array.isArray((entry as { agentIds?: unknown }).agentIds)) });
+  return parsed;
 }
 
 export class SlateSettingsStore {
   constructor(readonly settingsPath: string) {}
   load(): SlateStoredSettings {
     if (!existsSync(this.settingsPath)) return emptySettings();
-    try { const parsed = parseSettings(JSON.parse(readFileSync(this.settingsPath, "utf8")) as unknown); return parsed == null ? emptySettings() : this.applyPendingMigrations(parsed); }
+    try { const parsed = parseStoredSettings(JSON.parse(readFileSync(this.settingsPath, "utf8")) as unknown); return parsed == null ? emptySettings() : this.migrateOnLoad(parsed); }
     catch { return emptySettings(); }
   }
-  private applyPendingMigrations(settings: SlateStoredSettings): SlateStoredSettings {
+  private migrateOnLoad(settings: SlateStoredSettings): SlateStoredSettings {
     if (settings.settingsMigrations.includes(SLATE_DOWNGRADE_MAX_FAST_MIGRATION_ID)) return settings;
-    const migrated = { ...settings, settingsMigrations: [...settings.settingsMigrations, SLATE_DOWNGRADE_MAX_FAST_MIGRATION_ID], ...(settings.agentDefaultModel === undefined ? {} : { agentDefaultModel: downgradePersistedFast(settings.agentDefaultModel) }) };
+    const migrated = { ...settings, settingsMigrations: [...settings.settingsMigrations, SLATE_DOWNGRADE_MAX_FAST_MIGRATION_ID], ...(settings.agentDefaultModel === undefined ? {} : { agentDefaultModel: downgradeFastSelection(settings.agentDefaultModel) }) };
     try { this.persist(migrated); } catch {}
     return migrated;
   }
-  persist(settings: SlateStoredSettings): void { mkdirSync(dirname(this.settingsPath), { recursive: true }); const temp = `${this.settingsPath}.${process.pid}.tmp`; writeFileSync(temp, JSON.stringify(settings, null, 2), "utf8"); renameSync(temp, this.settingsPath); }
-  private update(mutator: (settings: SlateStoredSettings) => SlateStoredSettings): void { this.persist(mutator(this.load())); }
+  persist(settings: SlateStoredSettings): void { mkdirSync(dirname(this.settingsPath), { recursive: true }); const tempPath = `${this.settingsPath}.${process.pid}.tmp`; writeFileSync(tempPath, JSON.stringify(settings, null, 2), "utf8"); renameSync(tempPath, this.settingsPath); }
+  private update(mutate: (settings: SlateStoredSettings) => SlateStoredSettings): void { this.persist(mutate(this.load())); }
   getHasSeenOnboarding(): boolean | undefined { return this.load().hasSeenOnboarding; }
-  setHasSeenOnboarding(value: boolean): void { this.update((current) => { const { hasSeenOnboardingAccountScope: _old, ...rest } = current; return { ...rest, hasSeenOnboarding: value, ...(rest.mcpCustomInstructionsAccountScope === undefined ? {} : { hasSeenOnboardingAccountScope: rest.mcpCustomInstructionsAccountScope }) }; }); }
-  clearHasSeenOnboarding(): void { this.update((current) => { const { hasSeenOnboarding: _seen, hasSeenOnboardingAccountScope: _owner, ...rest } = current; return rest; }); }
+  setHasSeenOnboarding(value: boolean): void { this.update((loaded) => { const { hasSeenOnboardingAccountScope: _old, ...remainder } = loaded; return { ...remainder, hasSeenOnboarding: value, ...(remainder.mcpCustomInstructionsAccountScope === undefined ? {} : { hasSeenOnboardingAccountScope: remainder.mcpCustomInstructionsAccountScope }) }; }); }
+  clearHasSeenOnboarding(): void { this.update((loaded) => { const { hasSeenOnboarding: _seen, hasSeenOnboardingAccountScope: _owner, ...remainder } = loaded; return remainder; }); }
   getAutoUpdateWhenIdleOptIn(): boolean { return this.load().autoUpdateWhenIdleOptIn; }
   setAutoUpdateWhenIdleOptIn(value: boolean): void { this.update((s) => ({ ...s, autoUpdateWhenIdleOptIn: value })); }
   getThemePreference(): SlateThemePreference { return this.load().themePreference ?? DEFAULT_SLATE_THEME_PREFERENCE; }
@@ -125,38 +125,38 @@ export class SlateSettingsStore {
   getWebauthnProxyEnabled(): boolean { return this.load().webauthnProxyEnabled; }
   setWebauthnProxyEnabled(value: boolean): void { this.update((s) => ({ ...s, webauthnProxyEnabled: value })); }
   getAgentDefaultModel(): SlateAgentModelSelection | undefined { const model = this.load().agentDefaultModel; return model === undefined ? undefined : { ...model, maxMode: true }; }
-  setAgentDefaultModel(model: SlateAgentModelSelection | undefined): void { this.update((s) => { const { agentDefaultModel: _old, ...rest } = s; return model === undefined ? rest : { ...rest, agentDefaultModel: { modelId: model.modelId, maxMode: true, parameters: model.parameters.map((p) => ({ ...p })) } }; }); }
+  setAgentDefaultModel(model: SlateAgentModelSelection | undefined): void { this.update((s) => { const { agentDefaultModel: _old, ...remainder } = s; return model === undefined ? remainder : { ...remainder, agentDefaultModel: { modelId: model.modelId, maxMode: true, parameters: model.parameters.map((p) => ({ ...p })) } }; }); }
   getComputerUseModel(): SlateAgentModelSelection | undefined { return this.load().computerUseModel; }
-  setComputerUseModel(model: SlateAgentModelSelection | undefined): void { this.update((s) => { const { computerUseModel: _old, ...rest } = s; return model === undefined ? rest : { ...rest, computerUseModel: { modelId: model.modelId, maxMode: model.maxMode, parameters: model.parameters.map((p) => ({ ...p })) } }; }); }
+  setComputerUseModel(model: SlateAgentModelSelection | undefined): void { this.update((s) => { const { computerUseModel: _old, ...remainder } = s; return model === undefined ? remainder : { ...remainder, computerUseModel: { modelId: model.modelId, maxMode: model.maxMode, parameters: model.parameters.map((p) => ({ ...p })) } }; }); }
   getUpdateTrackOverride(): SlateUpdateTrack | null { const stored = this.load().updateTrackOverride ?? null; if (stored == null) return null; const coerced = coerceToEnabledTrack(stored); if (coerced !== stored) { try { this.setUpdateTrackOverride(coerced); } catch {} } return coerced; }
-  setUpdateTrackOverride(track: SlateUpdateTrack | null): void { this.update((s) => { const { updateTrackOverride: _old, ...rest } = s; return track == null ? rest : { ...rest, updateTrackOverride: track }; }); }
+  setUpdateTrackOverride(track: SlateUpdateTrack | null): void { this.update((s) => { const { updateTrackOverride: _old, ...remainder } = s; return track == null ? remainder : { ...remainder, updateTrackOverride: track }; }); }
   getMcpCustomInstructions(): StringMap { return this.load().mcpCustomInstructions; }
-  setMcpCustomInstructions(value: StringMap): void { this.update((s) => ({ ...s, mcpCustomInstructions: normalizeCustomInstructions(value) })); }
+  setMcpCustomInstructions(value: StringMap): void { this.update((s) => ({ ...s, mcpCustomInstructions: clampedInstructions(value) })); }
   getMcpCustomInstructionsByServerId(): StringMap { return this.load().mcpCustomInstructionsByServerId; }
-  setMcpCustomInstructionsByServerId(value: StringMap): void { this.update((s) => ({ ...s, mcpCustomInstructionsByServerId: normalizeCustomInstructionsByServerId(value) })); }
+  setMcpCustomInstructionsByServerId(value: StringMap): void { this.update((s) => ({ ...s, mcpCustomInstructionsByServerId: clampedInstructionsById(value) })); }
   getMcpCustomInstructionsAccountScope(): string | undefined { return this.load().mcpCustomInstructionsAccountScope; }
   getMcpDisabledToolsByServerId(): StringListMap { return this.load().mcpDisabledToolsByServerId; }
-  setMcpDisabledToolsByServerId(value: StringListMap): void { this.update((s) => ({ ...s, mcpDisabledToolsByServerId: normalizeDisabledToolsByServerId(value) })); }
-  scopeToAccount(accountScope: string): void { this.update((current) => { const seen = current.hasSeenOnboarding === undefined || (current.hasSeenOnboardingAccountScope !== undefined && current.hasSeenOnboardingAccountScope !== accountScope) ? {} : { hasSeenOnboarding: current.hasSeenOnboarding, hasSeenOnboardingAccountScope: accountScope }; const { hasSeenOnboarding: _seen, hasSeenOnboardingAccountScope: _owner, ...withoutSeen } = current; if (current.mcpCustomInstructionsAccountScope === undefined || current.mcpCustomInstructionsAccountScope === accountScope) return { ...withoutSeen, ...seen, mcpCustomInstructionsAccountScope: accountScope }; const { autoReviewInstructions: _a, agentDefaultModel: _m, computerUseModel: _c, localToolPermission: _p, localToolPermissionCeiling: _pc, ...rest } = withoutSeen; return { ...rest, ...seen, mcpCustomInstructionsAccountScope: accountScope, mcpCustomInstructions: {}, mcpCustomInstructionsByServerId: {}, mcpDisabledToolsByServerId: {} }; }); }
-  clearAccountScope(): void { this.update((current) => { const { mcpCustomInstructionsAccountScope: _scope, autoReviewInstructions: _a, agentDefaultModel: _m, computerUseModel: _c, localToolPermission: _p, localToolPermissionCeiling: _pc, ...rest } = current; return { ...rest, mcpCustomInstructions: {}, mcpCustomInstructionsByServerId: {}, mcpDisabledToolsByServerId: {} }; }); }
+  setMcpDisabledToolsByServerId(value: StringListMap): void { this.update((s) => ({ ...s, mcpDisabledToolsByServerId: disabledToolsByServerIdOf(value) })); }
+  scopeToAccount(accountScope: string): void { this.update((loaded) => { const carriedSeen = loaded.hasSeenOnboarding === undefined || (loaded.hasSeenOnboardingAccountScope !== undefined && loaded.hasSeenOnboardingAccountScope !== accountScope) ? {} : { hasSeenOnboarding: loaded.hasSeenOnboarding, hasSeenOnboardingAccountScope: accountScope }; const { hasSeenOnboarding: _seen, hasSeenOnboardingAccountScope: _owner, ...withoutSeenState } = loaded; if (loaded.mcpCustomInstructionsAccountScope === undefined || loaded.mcpCustomInstructionsAccountScope === accountScope) return { ...withoutSeenState, ...carriedSeen, mcpCustomInstructionsAccountScope: accountScope }; const { autoReviewInstructions: _a, agentDefaultModel: _m, computerUseModel: _c, localToolPermission: _p, localToolPermissionCeiling: _pc, ...remainder } = withoutSeenState; return { ...remainder, ...carriedSeen, mcpCustomInstructionsAccountScope: accountScope, mcpCustomInstructions: {}, mcpCustomInstructionsByServerId: {}, mcpDisabledToolsByServerId: {} }; }); }
+  clearAccountScope(): void { this.update((loaded) => { const { mcpCustomInstructionsAccountScope: _scope, autoReviewInstructions: _a, agentDefaultModel: _m, computerUseModel: _c, localToolPermission: _p, localToolPermissionCeiling: _pc, ...remainder } = loaded; return { ...remainder, mcpCustomInstructions: {}, mcpCustomInstructionsByServerId: {}, mcpDisabledToolsByServerId: {} }; }); }
   getUserTimeZone(): string | undefined { const s = this.load(); return s.userTimeZoneOverride ?? s.userTimeZone; }
   getDetectedUserTimeZone(): string | undefined { return this.load().userTimeZone; }
   getUserTimeZoneOverride(): string | undefined { return this.load().userTimeZoneOverride; }
-  setUserTimeZone(value?: string): void { this.update((s) => { const { userTimeZone: _old, ...rest } = s; const trimmed = value?.trim(); return trimmed == null || trimmed.length === 0 ? rest : { ...rest, userTimeZone: trimmed }; }); }
-  setUserTimeZoneOverride(value?: string): void { this.update((s) => { const { userTimeZoneOverride: _old, ...rest } = s; const trimmed = value?.trim(); return trimmed == null || trimmed.length === 0 ? rest : { ...rest, userTimeZoneOverride: trimmed }; }); }
+  setUserTimeZone(value?: string): void { this.update((s) => { const { userTimeZone: _old, ...remainder } = s; const trimmed = value?.trim(); return trimmed == null || trimmed.length === 0 ? remainder : { ...remainder, userTimeZone: trimmed }; }); }
+  setUserTimeZoneOverride(value?: string): void { this.update((s) => { const { userTimeZoneOverride: _old, ...remainder } = s; const trimmed = value?.trim(); return trimmed == null || trimmed.length === 0 ? remainder : { ...remainder, userTimeZoneOverride: trimmed }; }); }
   getMcpBoxServers(): string[] { return this.load().mcpBoxServers; }
   setMcpBoxServers(names: readonly string[]): void { this.update((s) => ({ ...s, mcpBoxServers: [...new Set(names)] })); }
   getRawMcpCustomInstruction(name: string): string | undefined { return this.load().mcpCustomInstructions[name]; }
   getRawMcpCustomInstructionByServerId(id: string): string | undefined { return this.load().mcpCustomInstructionsByServerId[id]; }
-  setMcpCustomInstructionByServerId(args: { serverId: string; displayName: string; value: string; mirrorLegacyName: boolean }): void { this.update((s) => { const byId = { ...s.mcpCustomInstructionsByServerId, [args.serverId]: clampMcpCustomInstruction(args.value) }; const legacy = { ...s.mcpCustomInstructions }; if (args.mirrorLegacyName) { const value = clampMcpCustomInstruction(args.value); if (value.trim().length > 0 || getDefaultMcpCustomInstruction(args.displayName).length > 0) legacy[args.displayName] = value; else delete legacy[args.displayName]; } else delete legacy[args.displayName]; return { ...s, mcpCustomInstructionsByServerId: byId, mcpCustomInstructions: legacy }; }); }
-  migrateMcpCustomInstructionToServerId(args: { serverId: string; displayName: string }): void { const current = this.load(); if (current.mcpCustomInstructionsByServerId[args.serverId] !== undefined) return; const legacy = current.mcpCustomInstructions[args.displayName]; if (legacy === undefined) return; this.persist({ ...current, mcpCustomInstructionsByServerId: { ...current.mcpCustomInstructionsByServerId, [args.serverId]: legacy } }); }
-  deleteMcpCustomInstructionByServerId(args: { serverId: string; displayName: string; deleteLegacyName: boolean }): void { this.update((s) => { const byId = { ...s.mcpCustomInstructionsByServerId }; delete byId[args.serverId]; const legacy = { ...s.mcpCustomInstructions }; if (args.deleteLegacyName) delete legacy[args.displayName]; return { ...s, mcpCustomInstructionsByServerId: byId, mcpCustomInstructions: legacy }; }); }
-  setMcpCustomInstruction(name: string, value: string): void { this.update((s) => { const next = { ...s.mcpCustomInstructions }; const clamped = clampMcpCustomInstruction(value); if (clamped.trim().length === 0) { if (getDefaultMcpCustomInstruction(name).length > 0) next[name] = ""; else delete next[name]; } else next[name] = clamped; return { ...s, mcpCustomInstructions: next }; }); }
-  deleteMcpCustomInstruction(name: string): void { const current = this.load(); if (!(name in current.mcpCustomInstructions)) return; const next = { ...current.mcpCustomInstructions }; delete next[name]; this.persist({ ...current, mcpCustomInstructions: next }); }
-  getNotificationConfig() { const current = this.load(); if (current.notifications?.isEnabled !== false || Object.keys(current.notifications).length !== 1) this.persist({ ...current, notifications: { isEnabled: false } }); return SLATE_DISABLED_NOTIFICATION_CONFIG; }
+  setMcpCustomInstructionByServerId(args: { serverId: string; displayName: string; value: string; mirrorLegacyName: boolean }): void { this.update((s) => { const byServerId = { ...s.mcpCustomInstructionsByServerId, [args.serverId]: clampMcpCustomInstruction(args.value) }; const legacyInstructions = { ...s.mcpCustomInstructions }; if (args.mirrorLegacyName) { const value = clampMcpCustomInstruction(args.value); if (value.trim().length > 0 || getDefaultMcpCustomInstruction(args.displayName).length > 0) legacyInstructions[args.displayName] = value; else delete legacyInstructions[args.displayName]; } else delete legacyInstructions[args.displayName]; return { ...s, mcpCustomInstructionsByServerId: byServerId, mcpCustomInstructions: legacyInstructions }; }); }
+  migrateMcpCustomInstructionToServerId(args: { serverId: string; displayName: string }): void { const loaded = this.load(); if (loaded.mcpCustomInstructionsByServerId[args.serverId] !== undefined) return; const legacyInstructions = loaded.mcpCustomInstructions[args.displayName]; if (legacyInstructions === undefined) return; this.persist({ ...loaded, mcpCustomInstructionsByServerId: { ...loaded.mcpCustomInstructionsByServerId, [args.serverId]: legacyInstructions } }); }
+  deleteMcpCustomInstructionByServerId(args: { serverId: string; displayName: string; deleteLegacyName: boolean }): void { this.update((s) => { const byServerId = { ...s.mcpCustomInstructionsByServerId }; delete byServerId[args.serverId]; const legacyInstructions = { ...s.mcpCustomInstructions }; if (args.deleteLegacyName) delete legacyInstructions[args.displayName]; return { ...s, mcpCustomInstructionsByServerId: byServerId, mcpCustomInstructions: legacyInstructions }; }); }
+  setMcpCustomInstruction(name: string, value: string): void { this.update((s) => { const nextInstructionMap = { ...s.mcpCustomInstructions }; const clamped = clampMcpCustomInstruction(value); if (clamped.trim().length === 0) { if (getDefaultMcpCustomInstruction(name).length > 0) nextInstructionMap[name] = ""; else delete nextInstructionMap[name]; } else nextInstructionMap[name] = clamped; return { ...s, mcpCustomInstructions: nextInstructionMap }; }); }
+  deleteMcpCustomInstruction(name: string): void { const loaded = this.load(); if (!(name in loaded.mcpCustomInstructions)) return; const nextInstructionMap = { ...loaded.mcpCustomInstructions }; delete nextInstructionMap[name]; this.persist({ ...loaded, mcpCustomInstructions: nextInstructionMap }); }
+  getNotificationConfig() { const loaded = this.load(); if (loaded.notifications?.isEnabled !== false || Object.keys(loaded.notifications).length !== 1) this.persist({ ...loaded, notifications: { isEnabled: false } }); return SLATE_DISABLED_NOTIFICATION_CONFIG; }
   setNotificationConfig(_input: unknown): void { this.update((s) => ({ ...s, notifications: { isEnabled: false } })); }
   getAutoReviewInstructions(): SlateAutoReviewInstructions { return this.load().autoReviewInstructions ?? DEFAULT_SLATE_AUTO_REVIEW_INSTRUCTIONS; }
-  setAutoReviewInstructions(value: SlateAutoReviewInstructions): void { const normalized = normalizeSlateAutoReviewInstructions(value); this.update((s) => { const { autoReviewInstructions: _old, ...rest } = s; return normalized.isEnabled && normalized.allowInstructions.length === 0 && normalized.blockInstructions.length === 0 ? rest : { ...rest, autoReviewInstructions: normalized }; }); }
+  setAutoReviewInstructions(value: SlateAutoReviewInstructions): void { const normalized = normalizeSlateAutoReviewInstructions(value); this.update((s) => { const { autoReviewInstructions: _old, ...remainder } = s; return normalized.isEnabled && normalized.allowInstructions.length === 0 && normalized.blockInstructions.length === 0 ? remainder : { ...remainder, autoReviewInstructions: normalized }; }); }
   getLocalToolPermission(): SlateLocalToolPermission { const s = this.load(); return resolveSlateLocalToolPermission(s.localToolPermission ?? SLATE_DEFAULT_LOCAL_TOOL_PERMISSION, s.localToolPermissionCeiling); }
   getLocalToolPermissionChoice(): SlateLocalToolPermission { return this.load().localToolPermission ?? SLATE_DEFAULT_LOCAL_TOOL_PERMISSION; }
   getLocalToolPermissionCeiling(): SlateLocalToolPermission | undefined { return this.load().localToolPermissionCeiling; }
@@ -164,15 +164,15 @@ export class SlateSettingsStore {
   getInferenceProvider(): SlateInferenceProvider { return this.load().inferenceProvider ?? "slate"; }
   setInferenceProvider(value: SlateInferenceProvider): void { this.update((s) => ({ ...s, inferenceProvider: value })); }
   getInferenceRouterUsage(): SlateInferenceRouterUsage { return this.load().inferenceRouterUsage ?? emptySlateInferenceRouterUsage(); }
-  recordInferenceUsage(provider: SlateInferenceProvider, usage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }): void {
+  recordInferenceUsage(providerKey: SlateInferenceProvider, routerUsage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }): void {
     const safe = (value: number | undefined): number => Number.isFinite(value) && value! >= 0 ? Math.round(value!) : 0;
     this.update((settings) => {
-      const current = settings.inferenceRouterUsage ?? emptySlateInferenceRouterUsage();
-      const previous = current.providers[provider];
-      return { ...settings, inferenceRouterUsage: { schemaVersion: 1, providers: { ...current.providers, [provider]: { requests: previous.requests + 1, inputTokens: previous.inputTokens + safe(usage.inputTokens), outputTokens: previous.outputTokens + safe(usage.outputTokens), cacheReadTokens: previous.cacheReadTokens + safe(usage.cacheReadTokens), cacheWriteTokens: previous.cacheWriteTokens + safe(usage.cacheWriteTokens), lastUsedAt: new Date().toISOString() } } } };
+      const loaded = settings.inferenceRouterUsage ?? emptySlateInferenceRouterUsage();
+      const previous = loaded.providers[providerKey];
+      return { ...settings, inferenceRouterUsage: { schemaVersion: 1, providers: { ...loaded.providers, [providerKey]: { requests: previous.requests + 1, inputTokens: previous.inputTokens + safe(routerUsage.inputTokens), outputTokens: previous.outputTokens + safe(routerUsage.outputTokens), cacheReadTokens: previous.cacheReadTokens + safe(routerUsage.cacheReadTokens), cacheWriteTokens: previous.cacheWriteTokens + safe(routerUsage.cacheWriteTokens), lastUsedAt: new Date().toISOString() } } } };
     });
   }
-  setLocalToolPermissionCeiling(value?: SlateLocalToolPermission): void { this.update((s) => { const { localToolPermissionCeiling: _old, ...rest } = s; return value === undefined ? rest : { ...rest, localToolPermissionCeiling: value }; }); }
+  setLocalToolPermissionCeiling(value?: SlateLocalToolPermission): void { this.update((s) => { const { localToolPermissionCeiling: _old, ...remainder } = s; return value === undefined ? remainder : { ...remainder, localToolPermissionCeiling: value }; }); }
   getPinnedAgentIds(): string[] | undefined { return this.load().pinnedAgentIds; }
   setPinnedAgentIds(ids: readonly string[]): void { this.update((s) => ({ ...s, pinnedAgentIds: [...new Set(ids)] })); }
   static storable(args: { sections: readonly SidebarSection[]; stored?: readonly SidebarSection[] }): SidebarSection[] { return SidebarGrouping.foldsCarried(args).map((s) => ({ id: s.id, name: s.name, agentIds: [...s.agentIds], isCollapsed: s.isCollapsed ?? false })); }
