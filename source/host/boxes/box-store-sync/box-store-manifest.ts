@@ -5,10 +5,10 @@
  * The manifest is the store's index: a path in the box maps to a hash (and, in v2, a kind and a mode), and the store's
  * blobs are named by those hashes. Three rules shape this file:
  *
- * - **a write happens only when it would change something** — the revision state remembers what was persisted and what is
+ * - **a write happens only when it would change something** — the revision state remembers what was persistedBaseline and what is
  *   already in flight, so a cycle that found nothing is free rather than an upload of an identical document;
  * - **a lost race is not a failure** — the object store is written by more than one host, so a conflict is reported with
- *   what the winner wrote, and a caller that asked to accept a matching canonical manifest gets it;
+ *   what the winner wrote, and a caller that asked to accept a matching canonicalManifest manifest gets it;
  * - **the manifest can be unreadable without being broken** — a conflicting node path (a file and a directory with the
  *   same name) blocks writing and is reported by name, because a silently lossy manifest would delete files later.
  */
@@ -65,6 +65,10 @@ export function countAgentDirManifestEntries(manifest: ReadonlyMap<string, unkno
   return ids.size;
 }
 
+function parseWireJson(wireBytes: Uint8Array): unknown {
+  return JSON.parse(Buffer.from(wireBytes).toString("utf8"));
+}
+
 const manifestVersionSchema = z.object({ version: z.number().int() });
 
 export class BoxStoreUnsupportedManifestVersionError extends BoxStoreSyncError {
@@ -79,27 +83,31 @@ export class BoxStoreManifestPathConflictError extends BoxStoreSyncError {
   }
 }
 
+function ancestorPaths(relPath: string): string[] {
+  const ancestors: string[] = [];
+  for (let separatorIndex = relPath.indexOf("/"); separatorIndex >= 0; separatorIndex = relPath.indexOf("/", separatorIndex + 1)) {
+    ancestors.push(relPath.slice(0, separatorIndex));
+  }
+  return ancestors;
+}
+
 /** Whether one entry's path is also another entry's parent: a manifest cannot hold both, so it is refused. */
 export function hasManifestPathConflict(entries: Record<string, unknown>): boolean {
   const relPaths = new Set(Object.keys(entries));
-  for (const relPath of relPaths) {
-    for (let separatorIndex = relPath.indexOf("/"); separatorIndex >= 0; separatorIndex = relPath.indexOf("/", separatorIndex + 1)) {
-      if (relPaths.has(relPath.slice(0, separatorIndex))) return true;
-    }
-  }
+  for (const relPath of relPaths) if (ancestorPaths(relPath).some((ancestor) => relPaths.has(ancestor))) return true;
   return false;
 }
 
 export type DecodedManifest = z.infer<typeof manifestSchema>;
 
 /**
- * A manifest read from bytes, or null when it is not a manifest at all. A version this build does not know, or a set of
+ * A manifest read from wireBytes, or null when it is not a manifest at all. A version this build does not know, or a set of
  * conflicting paths, is not "unreadable": both are thrown and reported to the caller's write-block sink.
  */
-export function parseManifest(bytes: Uint8Array, onWriteBlockedError?: (error: Error) => void): DecodedManifest | null {
+export function parseManifest(wireBytes: Uint8Array, onWriteBlockedError?: (error: Error) => void): DecodedManifest | null {
   let value: unknown;
   try {
-    value = JSON.parse(Buffer.from(bytes).toString("utf8"));
+    value = parseWireJson(wireBytes);
   } catch {
     return null;
   }
@@ -109,14 +117,14 @@ export function parseManifest(bytes: Uint8Array, onWriteBlockedError?: (error: E
     onWriteBlockedError?.(error);
     throw error;
   }
-  const parsed = manifestSchema.safeParse(value);
-  if (!parsed.success) return null;
-  if (hasManifestPathConflict(parsed.data.entries)) {
+  const decodedManifest = manifestSchema.safeParse(value);
+  if (!decodedManifest.success) return null;
+  if (hasManifestPathConflict(decodedManifest.data.entries)) {
     const error = new BoxStoreManifestPathConflictError();
     onWriteBlockedError?.(error);
     throw error;
   }
-  return parsed.data;
+  return decodedManifest.data;
 }
 
 interface ManifestCapture {
@@ -129,56 +137,56 @@ interface ManifestCapture {
  * flight. A capture is the decision to write; a release is the write finishing (successfully or not).
  */
 export class BoxStoreManifestRevisionState {
-  private revisionValue = 0;
-  private readonly pendingRevisionCounts = new Map<number, number>();
-  private constructionCount = 0;
-  constructor(private persisted?: { revision: number; fullyHydrated?: boolean | undefined }) {}
+  private revisionCounter = 0;
+  private readonly pendingWritesByRevision = new Map<number, number>();
+  private captureCount = 0;
+  constructor(private persistedBaseline?: { revision: number; fullyHydrated?: boolean | undefined }) {}
 
   get revision(): number {
-    return this.revisionValue;
+    return this.revisionCounter;
   }
 
   get persistedRevision(): number | undefined {
-    return this.persisted?.revision;
+    return this.persistedBaseline?.revision;
   }
 
   get snapshotConstructionCount(): number {
-    return this.constructionCount;
+    return this.captureCount;
   }
 
   get hasPendingWriteForRevision(): boolean {
-    return (this.pendingRevisionCounts.get(this.revisionValue) ?? 0) > 0;
+    return (this.pendingWritesByRevision.get(this.revisionCounter) ?? 0) > 0;
   }
 
   markChanged(): void {
-    this.revisionValue += 1;
+    this.revisionCounter += 1;
   }
 
   /** A write is captured unless nothing changed since the store last saw this revision, and nothing is already in flight. */
-  capture(manifest: ReadonlyMap<string, BoxStoreManifestEntry>, fullyHydrated: boolean | undefined, isRequiredWrite: boolean): ManifestCapture | null {
-    const alreadyWriting = (this.pendingRevisionCounts.get(this.revisionValue) ?? 0) > 0;
-    const storeHasThisRevision = this.persisted?.revision === this.revisionValue && this.persisted.fullyHydrated === fullyHydrated;
-    if (!isRequiredWrite && (alreadyWriting || storeHasThisRevision)) return null;
+  capture(manifest: ReadonlyMap<string, BoxStoreManifestEntry>, fullyHydrated: boolean | undefined, requiresWrite: boolean): ManifestCapture | null {
+    const alreadyWriting = (this.pendingWritesByRevision.get(this.revisionCounter) ?? 0) > 0;
+    const storeHasThisRevision = this.persistedBaseline?.revision === this.revisionCounter && this.persistedBaseline.fullyHydrated === fullyHydrated;
+    if (!requiresWrite && (alreadyWriting || storeHasThisRevision)) return null;
     const entries: Record<string, BoxStoreManifestEntry> = {};
     for (const [relPath, entry] of manifest) entries[relPath] = entry;
-    this.constructionCount += 1;
-    this.pendingRevisionCounts.set(this.revisionValue, (this.pendingRevisionCounts.get(this.revisionValue) ?? 0) + 1);
-    return { revision: this.revisionValue, entries };
+    this.captureCount += 1;
+    this.pendingWritesByRevision.set(this.revisionCounter, (this.pendingWritesByRevision.get(this.revisionCounter) ?? 0) + 1);
+    return { revision: this.revisionCounter, entries };
   }
 
   markPersisted(capture: ManifestCapture, fullyHydrated: boolean | undefined): void {
-    this.persisted = { revision: capture.revision, fullyHydrated };
+    this.persistedBaseline = { revision: capture.revision, fullyHydrated };
   }
 
   /** A failed write forgets what the store is believed to hold, so the next capture is a real one. */
   markFailed(): void {
-    this.persisted = undefined;
+    this.persistedBaseline = undefined;
   }
 
   release(capture: ManifestCapture): void {
-    const count = this.pendingRevisionCounts.get(capture.revision);
-    if (count == null || count <= 1) this.pendingRevisionCounts.delete(capture.revision);
-    else this.pendingRevisionCounts.set(capture.revision, count - 1);
+    const count = this.pendingWritesByRevision.get(capture.revision);
+    if (count == null || count <= 1) this.pendingWritesByRevision.delete(capture.revision);
+    else this.pendingWritesByRevision.set(capture.revision, count - 1);
   }
 }
 
@@ -196,7 +204,7 @@ export interface ManifestStoreDependencies {
   manifestV2: boolean;
   windowId?: string;
   hydrationHandoffMarkerPath?: string;
-  onManifestWriteConflict?(info: Record<string, unknown>): void;
+  onManifestWriteConflict?(conflictInfo: Record<string, unknown>): void;
 }
 
 export interface ManifestSaveOptions {
@@ -208,19 +216,19 @@ export interface ManifestSaveOptions {
 
 /** The manifest document, its revision, and the writes queued behind each other. */
 export class BoxStoreManifestStore {
-  private writeManifestV2: boolean;
+  private manifestV2Enabled: boolean;
   manifest: BoxManifestMap | undefined;
-  private readonly manifestRevisions = new WeakMap<BoxManifestMap, BoxStoreManifestRevisionState>();
-  private readonly manifestAncestorRefCounts = new WeakMap<BoxManifestMap, Map<string, number>>();
+  private readonly revisionStates = new WeakMap<BoxManifestMap, BoxStoreManifestRevisionState>();
+  private readonly ancestorCountsByManifest = new WeakMap<BoxManifestMap, Map<string, number>>();
   fullyHydrated: boolean | undefined;
   hydrationManifestReadBlocked = false;
   manifestWriteBlock: Error | undefined;
   readonly uncommittedStoreDbEntries = new Map<string, BoxStoreManifestEntry>();
-  private manifestWriteQueue: Promise<void> = Promise.resolve();
-  private manifestLoadInFlight: Promise<BoxManifestMap> | undefined;
+  private pendingWritesQueue: Promise<void> = Promise.resolve();
+  private loadInFlightPromise: Promise<BoxManifestMap> | undefined;
 
   constructor(readonly args: { deps: ManifestStoreDependencies; now: () => number; log: (message: string) => void; isDisposed: () => boolean }) {
-    this.writeManifestV2 = args.deps.manifestV2;
+    this.manifestV2Enabled = args.deps.manifestV2;
   }
 
   get deps(): ManifestStoreDependencies {
@@ -228,16 +236,16 @@ export class BoxStoreManifestStore {
   }
 
   get writeQueue(): Promise<void> {
-    return this.manifestWriteQueue;
+    return this.pendingWritesQueue;
   }
 
   get isManifestV2Enabled(): boolean {
-    return this.writeManifestV2;
+    return this.manifestV2Enabled;
   }
 
   /** Reads a v2 manifest once: from then on this store writes v2, because the store's own format decides. */
   enrollManifestV2(): void {
-    this.writeManifestV2 = true;
+    this.manifestV2Enabled = true;
   }
 
   objectStore(storeId: string) {
@@ -245,12 +253,12 @@ export class BoxStoreManifestStore {
   }
 
   configuredManifestVersion(): 1 | 2 {
-    return this.writeManifestV2 ? BOX_STORE_MANIFEST_VERSION : BOX_STORE_LEGACY_MANIFEST_VERSION;
+    return this.manifestV2Enabled ? BOX_STORE_MANIFEST_VERSION : BOX_STORE_LEGACY_MANIFEST_VERSION;
   }
 
   /** An entry as this store's format can hold it: a legacy manifest has no room for a symlink. */
   configuredEntry(entry: BoxStoreManifestEntry): BoxStoreManifestEntry | undefined {
-    if (this.writeManifestV2) return entry;
+    if (this.manifestV2Enabled) return entry;
     if (entry.kind === "symlink") return undefined;
     return { sha: entry.sha, size: entry.size };
   }
@@ -264,49 +272,48 @@ export class BoxStoreManifestStore {
     return configured;
   }
 
-  parseManifest(bytes: Uint8Array): DecodedManifest | null {
-    const parsed = parseManifest(bytes, (error) => {
+  parseManifest(wireBytes: Uint8Array): DecodedManifest | null {
+    const decodedManifest = parseManifest(wireBytes, (error) => {
       if (error instanceof BoxStoreUnsupportedManifestVersionError || this.manifestWriteBlock == null) this.manifestWriteBlock = error;
     });
-    if (parsed?.version === BOX_STORE_MANIFEST_VERSION) this.writeManifestV2 = true;
-    return parsed;
+    if (decodedManifest?.version === BOX_STORE_MANIFEST_VERSION) this.manifestV2Enabled = true;
+    return decodedManifest;
   }
 
   manifestRevisionState(manifest: BoxManifestMap): BoxStoreManifestRevisionState {
-    let state = this.manifestRevisions.get(manifest);
+    let state = this.revisionStates.get(manifest);
     if (state == null) {
       state = new BoxStoreManifestRevisionState();
-      this.manifestRevisions.set(manifest, state);
+      this.revisionStates.set(manifest, state);
     }
     return state;
   }
 
-  initializeManifestRevision(manifest: BoxManifestMap, persisted?: { revision: number; fullyHydrated?: boolean | undefined }): void {
-    this.manifestRevisions.set(manifest, new BoxStoreManifestRevisionState(persisted));
+  initializeManifestRevision(manifest: BoxManifestMap, persistedBaseline?: { revision: number; fullyHydrated?: boolean | undefined }): void {
+    this.revisionStates.set(manifest, new BoxStoreManifestRevisionState(persistedBaseline));
   }
 
   /** How many entries sit under each directory: the index that makes "is this a file or a directory" cheap to ask. */
-  private ancestorRefCounts(manifest: BoxManifestMap): Map<string, number> {
-    const existing = this.manifestAncestorRefCounts.get(manifest);
+  private ancestorCounts(manifest: BoxManifestMap): Map<string, number> {
+    const existing = this.ancestorCountsByManifest.get(manifest);
     if (existing != null) return existing;
     const counts = new Map<string, number>();
-    for (const relPath of manifest.keys()) this.adjustAncestorRefCounts(counts, relPath, 1);
-    this.manifestAncestorRefCounts.set(manifest, counts);
+    for (const relPath of manifest.keys()) this.updateAncestorCounts(counts, relPath, 1);
+    this.ancestorCountsByManifest.set(manifest, counts);
     return counts;
   }
 
-  private adjustAncestorRefCounts(counts: Map<string, number>, relPath: string, delta: number): void {
-    for (let separatorIndex = relPath.indexOf("/"); separatorIndex >= 0; separatorIndex = relPath.indexOf("/", separatorIndex + 1)) {
-      const ancestor = relPath.slice(0, separatorIndex);
+  private updateAncestorCounts(counts: Map<string, number>, relPath: string, delta: number): void {
+    for (const ancestor of ancestorPaths(relPath)) {
       const next = (counts.get(ancestor) ?? 0) + delta;
       if (next === 0) counts.delete(ancestor);
       else counts.set(ancestor, next);
     }
   }
 
-  private deleteManifestEntryWithIndex(manifest: BoxManifestMap, relPath: string, counts?: Map<string, number>): boolean {
+  private removeEntryWithIndex(manifest: BoxManifestMap, relPath: string, counts?: Map<string, number>): boolean {
     if (!manifest.delete(relPath)) return false;
-    if (counts != null) this.adjustAncestorRefCounts(counts, relPath, -1);
+    if (counts != null) this.updateAncestorCounts(counts, relPath, -1);
     this.uncommittedStoreDbEntries.delete(relPath);
     this.manifestRevisionState(manifest).markChanged();
     return true;
@@ -318,34 +325,32 @@ export class BoxStoreManifestStore {
    */
   setManifestEntry(manifest: BoxManifestMap, relPath: string, entry: BoxStoreManifestEntry): boolean {
     const configured = this.configuredEntry(entry);
-    if (configured == null) return this.deleteManifestEntryWithIndex(manifest, relPath, this.manifestAncestorRefCounts.get(manifest));
-    const counts = this.ancestorRefCounts(manifest);
+    if (configured == null) return this.removeEntryWithIndex(manifest, relPath, this.ancestorCountsByManifest.get(manifest));
+    const counts = this.ancestorCounts(manifest);
     let removedConflict = false;
-    for (let separatorIndex = relPath.indexOf("/"); separatorIndex >= 0; separatorIndex = relPath.indexOf("/", separatorIndex + 1)) {
-      removedConflict = this.deleteManifestEntryWithIndex(manifest, relPath.slice(0, separatorIndex), counts) || removedConflict;
-    }
+    for (const ancestor of ancestorPaths(relPath)) removedConflict = this.removeEntryWithIndex(manifest, ancestor, counts) || removedConflict;
     if ((counts.get(relPath) ?? 0) > 0) {
       for (const existingPath of manifest.keys()) {
-        if (existingPath.startsWith(`${relPath}/`)) removedConflict = this.deleteManifestEntryWithIndex(manifest, existingPath, counts) || removedConflict;
+        if (existingPath.startsWith(`${relPath}/`)) removedConflict = this.removeEntryWithIndex(manifest, existingPath, counts) || removedConflict;
       }
     }
     const current = manifest.get(relPath);
     if (boxStoreManifestEntriesEqual(current, configured)) return removedConflict;
     manifest.set(relPath, configured);
-    if (current == null) this.adjustAncestorRefCounts(counts, relPath, 1);
+    if (current == null) this.updateAncestorCounts(counts, relPath, 1);
     this.manifestRevisionState(manifest).markChanged();
     return true;
   }
 
   deleteManifestEntry(manifest: BoxManifestMap, relPath: string): boolean {
-    return this.deleteManifestEntryWithIndex(manifest, relPath, this.manifestAncestorRefCounts.get(manifest));
+    return this.removeEntryWithIndex(manifest, relPath, this.ancestorCountsByManifest.get(manifest));
   }
 
-  private elapsedDurationMs(startedAt: number): number {
+  private elapsedSince(startedAt: number): number {
     return Math.max(0, this.args.now() - startedAt);
   }
 
-  private markStoreDbEntriesCommitted(entries: Record<string, BoxStoreManifestEntry>): void {
+  private clearCommittedStoreDb(entries: Record<string, BoxStoreManifestEntry>): void {
     for (const [relPath, pending] of this.uncommittedStoreDbEntries) {
       if (boxStoreManifestEntriesEqual(entries[relPath], pending)) this.uncommittedStoreDbEntries.delete(relPath);
     }
@@ -355,7 +360,7 @@ export class BoxStoreManifestStore {
     return manifest != null && this.manifest === manifest;
   }
 
-  /** Whether the sweep's captures are the ones the store now holds: a live manifest with nothing left uncommitted. */
+  /** Whether the sweep's captures are the ones the store now holds: a liveManifestView manifest with nothing left uncommitted. */
   isStoreDbSweepCommitted(manifest: BoxManifestMap | null | undefined, capturedThisSweep: Iterable<string>): boolean {
     if (!this.isLiveManifest(manifest)) return false;
     for (const relPath of capturedThisSweep) if (this.uncommittedStoreDbEntries.has(relPath)) return false;
@@ -369,48 +374,48 @@ export class BoxStoreManifestStore {
   loadManifest(storeId: string): Promise<BoxManifestMap> {
     if (this.manifestWriteBlock != null) return Promise.reject(this.manifestWriteBlock);
     if (this.manifest != null) return Promise.resolve(this.manifest);
-    this.manifestLoadInFlight ??= (async () => {
+    this.loadInFlightPromise ??= (async () => {
       try {
-        const map = new Map<string, BoxStoreManifestEntry>();
-        let persisted: { revision: number; fullyHydrated?: boolean | undefined } | undefined;
-        const hydrationHandoffPending = this.deps.hydrationHandoffMarkerPath != null && existsSync(this.deps.hydrationHandoffMarkerPath);
+        const loadedManifest = new Map<string, BoxStoreManifestEntry>();
+        let persistedBaseline: { revision: number; fullyHydrated?: boolean | undefined } | undefined;
+        const handoffPending = this.deps.hydrationHandoffMarkerPath != null && existsSync(this.deps.hydrationHandoffMarkerPath);
         try {
-          const bytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-          if (bytes == null && hydrationHandoffPending) throw new BoxStoreSyncError("manifest missing while legacy hydration handoff is pending");
-          if (bytes != null) {
-            const decoded = this.parseManifest(bytes);
-            if (decoded == null && hydrationHandoffPending) throw new BoxStoreSyncError("manifest unreadable while legacy hydration handoff is pending");
+          const wireBytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+          if (wireBytes == null && handoffPending) throw new BoxStoreSyncError("manifest missing while legacy hydration handoff is pending");
+          if (wireBytes != null) {
+            const decoded = this.parseManifest(wireBytes);
+            if (decoded == null && handoffPending) throw new BoxStoreSyncError("manifest unreadable while legacy hydration handoff is pending");
             if (decoded != null) {
-              if (hydrationHandoffPending && decoded.fullyHydrated == null && this.deps.hydrationHandoffMarkerPath != null) {
+              if (handoffPending && decoded.fullyHydrated == null && this.deps.hydrationHandoffMarkerPath != null) {
                 await removeHydrationHandoffMarker(this.deps.hydrationHandoffMarkerPath);
               }
               this.hydrationManifestReadBlocked = false;
               this.fullyHydrated = decoded.fullyHydrated;
-              let isCanonicalSnapshot = true;
+              let canonicalSnapshot = true;
               for (const [relPath, entry] of Object.entries(decoded.entries)) {
-                // The marker and its temporary are evidence, not content: they are not part of the canonical view.
-                if (isHydrationHandoffManifestPath(relPath)) isCanonicalSnapshot = false;
-                else map.set(relPath, entry);
+                // The marker and its temporary are evidence, not content: they are not part of the canonicalManifest view.
+                if (isHydrationHandoffManifestPath(relPath)) canonicalSnapshot = false;
+                else loadedManifest.set(relPath, entry);
               }
-              if (isCanonicalSnapshot && decoded.version === this.configuredManifestVersion()) persisted = { revision: 0, fullyHydrated: decoded.fullyHydrated };
+              if (canonicalSnapshot && decoded.version === this.configuredManifestVersion()) persistedBaseline = { revision: 0, fullyHydrated: decoded.fullyHydrated };
             }
           }
         } catch (error) {
           if (error instanceof BoxStoreUnsupportedManifestVersionError || error instanceof BoxStoreManifestPathConflictError) throw error;
-          if (hydrationHandoffPending) {
+          if (handoffPending) {
             this.hydrationManifestReadBlocked = true;
             throw error;
           }
           this.args.log(`manifest load failed, starting empty: ${errorMessage(error)}`);
         }
-        this.initializeManifestRevision(map, persisted);
-        this.manifest ??= map;
+        this.initializeManifestRevision(loadedManifest, persistedBaseline);
+        this.manifest ??= loadedManifest;
         return this.manifest;
       } finally {
-        this.manifestLoadInFlight = undefined;
+        this.loadInFlightPromise = undefined;
       }
     })();
-    return this.manifestLoadInFlight;
+    return this.loadInFlightPromise;
   }
 
   /**
@@ -420,22 +425,22 @@ export class BoxStoreManifestStore {
   saveManifest(storeId: string, options: ManifestSaveOptions = {}): Promise<void> {
     if (this.manifestWriteBlock != null) return Promise.reject(this.manifestWriteBlock);
     if (this.hydrationManifestReadBlocked) return Promise.reject(new Error("manifest write blocked until hydration metadata can be read"));
-    const manifest = (this.manifest ??= new Map());
-    const revisionState = this.manifestRevisionState(manifest);
-    const isRequiredWrite = options.acceptMatchingCanonicalOnConflict === true || options.isForced === true || options.hydrationUpdate != null;
+    const manifestSnapshot = (this.manifest ??= new Map());
+    const revisionState = this.manifestRevisionState(manifestSnapshot);
+    const requiresWrite = options.acceptMatchingCanonicalOnConflict === true || options.isForced === true || options.hydrationUpdate != null;
     const captureTrace = options.captureTrace;
-    const queuedAt = captureTrace == null ? undefined : this.args.now();
-    const capture = revisionState.capture(manifest, this.fullyHydrated, isRequiredWrite);
+    const enqueuedAt = captureTrace == null ? undefined : this.args.now();
+    const capture = revisionState.capture(manifestSnapshot, this.fullyHydrated, requiresWrite);
     if (capture == null) {
       if (!revisionState.hasPendingWriteForRevision) return Promise.resolve();
-      const settled = this.manifestWriteQueue;
-      if (captureTrace == null || queuedAt == null) return settled;
-      return settled.then(() => {
-        captureTrace.queueDurationMs += this.elapsedDurationMs(queuedAt);
+      const queuedPosition = this.pendingWritesQueue;
+      if (captureTrace == null || enqueuedAt == null) return queuedPosition;
+      return queuedPosition.then(() => {
+        captureTrace.queueDurationMs += this.elapsedSince(enqueuedAt);
       });
     }
     const run = async () => {
-      if (captureTrace != null && queuedAt != null) captureTrace.queueDurationMs += this.elapsedDurationMs(queuedAt);
+      if (captureTrace != null && enqueuedAt != null) captureTrace.queueDurationMs += this.elapsedSince(enqueuedAt);
       const commitStartedAt = this.args.now();
       try {
         if (this.manifestWriteBlock != null) throw this.manifestWriteBlock;
@@ -446,17 +451,17 @@ export class BoxStoreManifestStore {
         await this.writeManifestWithRetry(storeId, entries, fullyHydrated, options);
         revisionState.markPersisted(capture, fullyHydrated);
         this.fullyHydrated = fullyHydrated;
-        this.markStoreDbEntriesCommitted(entries);
+        this.clearCommittedStoreDb(entries);
       } catch (error) {
         revisionState.markFailed();
         throw error;
       } finally {
-        if (captureTrace != null) captureTrace.manifestCommitDurationMs += this.elapsedDurationMs(commitStartedAt);
+        if (captureTrace != null) captureTrace.manifestCommitDurationMs += this.elapsedSince(commitStartedAt);
         revisionState.release(capture);
       }
     };
-    const save = this.manifestWriteQueue.then(run, run);
-    this.manifestWriteQueue = save.then(
+    const save = this.pendingWritesQueue.then(run, run);
+    this.pendingWritesQueue = save.then(
       () => {},
       () => {},
     );
@@ -464,19 +469,19 @@ export class BoxStoreManifestStore {
   }
 
   private async writeManifestWithRetry(storeId: string, entries: Record<string, BoxStoreManifestEntry>, fullyHydrated: boolean | undefined, options: ManifestSaveOptions = {}): Promise<void> {
-    let attempts = 0;
-    let lastConflict: BoxStoreCanonicalWriteConflictError | undefined;
+    let attemptCount = 0;
+    let lastWriteConflict: BoxStoreCanonicalWriteConflictError | undefined;
     try {
       await this.deps.manifestRetry.runWithRetry(async (attempt) => {
         // A host that is going away stops retrying: the conflict is reported rather than chased.
-        if (attempt > 1 && this.args.isDisposed() && lastConflict != null) throw new ManifestRetryStoppedError(lastConflict);
-        attempts = attempt;
+        if (attempt > 1 && this.args.isDisposed() && lastWriteConflict != null) throw new ManifestRetryStoppedError(lastWriteConflict);
+        attemptCount = attempt;
         const manifest = { version: this.configuredManifestVersion(), updatedAtMs: this.args.now(), writerWindowId: this.deps.windowId, fullyHydrated, entries };
         try {
           await this.writeManifestAttempt(storeId, manifest);
         } catch (error) {
-          if (error instanceof ManifestRetryStoppedError) lastConflict = error.conflict;
-          else if (error instanceof BoxStoreCanonicalWriteConflictError) lastConflict = error;
+          if (error instanceof ManifestRetryStoppedError) lastWriteConflict = error.conflict;
+          else if (error instanceof BoxStoreCanonicalWriteConflictError) lastWriteConflict = error;
           throw error;
         }
       });
@@ -484,7 +489,7 @@ export class BoxStoreManifestStore {
     } catch (error) {
       const conflict = error instanceof ManifestRetryStoppedError ? error.conflict : error;
       if (!(conflict instanceof BoxStoreCanonicalWriteConflictError)) throw error;
-      if (await this.handleExhaustedManifestConflict(storeId, entries, fullyHydrated, conflict, attempts, options)) return;
+      if (await this.handleExhaustedManifestConflict(storeId, entries, fullyHydrated, conflict, attemptCount, options)) return;
       throw conflict;
     }
   }
@@ -496,8 +501,8 @@ export class BoxStoreManifestStore {
       if (error instanceof BoxStoreCanonicalWriteConflictError && this.args.isDisposed()) throw new ManifestRetryStoppedError(error);
       if (error instanceof BoxStoreCanonicalWriteConflictError) {
         // The winner's manifest becomes the base of the next attempt, so a retry merges rather than overwrites.
-        const canonical = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-        if (canonical != null) this.parseManifest(canonical);
+        const canonicalManifest = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+        if (canonicalManifest != null) this.parseManifest(canonicalManifest);
         this.args.log(
           `manifest save lost a concurrent-write race; retry policy will use the winner's baseline${error.conflictRelPath == null ? "" : ` (lost attempt preserved at ${error.conflictRelPath})`}`,
         );
@@ -507,73 +512,73 @@ export class BoxStoreManifestStore {
   }
 
   /**
-   * After the retries are spent: report what happened, and accept the canonical manifest only when the caller asked for it
-   * *and* that manifest already covers exactly what was attempted (nothing of this host's work would be lost).
+   * After the retries are spent: report what happened, and accept the canonicalManifest manifest only when the caller asked for it
+   * *and* that manifest already covers exactly what was attemptedEntries (nothing of this host's work would be lost).
    */
   private async handleExhaustedManifestConflict(
     storeId: string,
     entries: Record<string, BoxStoreManifestEntry>,
     fullyHydrated: boolean | undefined,
     conflict: BoxStoreCanonicalWriteConflictError,
-    attempts: number,
+    attemptCount: number,
     options: ManifestSaveOptions,
   ): Promise<boolean> {
-    const canonical = await this.readCanonicalManifestForDiagnostics(storeId);
-    const attempted = Object.entries(entries);
-    const covered = canonical != null && attempted.length > 0 && attempted.every(([relPath, entry]) => boxStoreManifestEntriesEqual(canonical.entries[relPath], entry));
-    const canonicalMatchesAttempt = covered && canonical != null && Object.keys(canonical.entries).length === attempted.length && canonical.fullyHydrated === fullyHydrated;
-    const live = this.manifest ?? new Map();
-    const liveViewChanged = live.size !== attempted.length || attempted.some(([relPath, entry]) => !boxStoreManifestEntriesEqual(live.get(relPath), entry));
-    const accepted = options.acceptMatchingCanonicalOnConflict === true && canonicalMatchesAttempt && !liveViewChanged;
+    const canonicalManifest = await this.readCanonicalManifestForDiagnostics(storeId);
+    const attemptedEntries = Object.entries(entries);
+    const coveredByCanonical = canonicalManifest != null && attemptedEntries.length > 0 && attemptedEntries.every(([relPath, entry]) => boxStoreManifestEntriesEqual(canonicalManifest.entries[relPath], entry));
+    const canonicalMatchesAttempt = coveredByCanonical && canonicalManifest != null && Object.keys(canonicalManifest.entries).length === attemptedEntries.length && canonicalManifest.fullyHydrated === fullyHydrated;
+    const liveManifestView = this.manifest ?? new Map();
+    const liveViewChanged = liveManifestView.size !== attemptedEntries.length || attemptedEntries.some(([relPath, entry]) => !boxStoreManifestEntriesEqual(liveManifestView.get(relPath), entry));
+    const acceptCanonical = options.acceptMatchingCanonicalOnConflict === true && canonicalMatchesAttempt && !liveViewChanged;
     this.reportManifestWriteConflict({
       storeId,
-      attempts,
-      accepted,
-      covered,
+      attempts: attemptCount,
+      accepted: acceptCanonical,
+      covered: coveredByCanonical,
       canonicalMatchesAttempt,
       liveViewChanged,
-      attemptedEntries: attempted.length,
+      attemptedEntries: attemptedEntries.length,
       lastBaseEtag: conflict.baseEtag,
       lastBaselineSource: conflict.baselineSource,
       lastConflictRelPath: conflict.conflictRelPath,
-      canonicalReadable: canonical != null,
-      canonicalEntryCount: canonical == null ? null : Object.keys(canonical.entries).length,
-      canonicalUpdatedAtMs: canonical?.updatedAtMs ?? null,
-      canonicalWriterWindowId: canonical?.writerWindowId ?? null,
+      canonicalReadable: canonicalManifest != null,
+      canonicalEntryCount: canonicalManifest == null ? null : Object.keys(canonicalManifest.entries).length,
+      canonicalUpdatedAtMs: canonicalManifest?.updatedAtMs ?? null,
+      canonicalWriterWindowId: canonicalManifest?.writerWindowId ?? null,
       ourWindowId: this.deps.windowId ?? null,
     });
-    if (accepted) {
+    if (acceptCanonical) {
       this.args.log(
-        `manifest save lost a concurrent-write race; canonical manifest already covers the attempted entries (winner ${canonical?.writerWindowId ?? "unknown"}${conflict.conflictRelPath == null ? "" : `; lost attempt preserved at ${conflict.conflictRelPath}`})`,
+        `manifest save lost a concurrent-write race; canonical manifest already covers the attempted entries (winner ${canonicalManifest?.writerWindowId ?? "unknown"}${conflict.conflictRelPath == null ? "" : `; lost attempt preserved at ${conflict.conflictRelPath}`})`,
       );
     }
-    return accepted;
+    return acceptCanonical;
   }
 
   private async readCanonicalManifestForDiagnostics(
     storeId: string,
   ): Promise<{ entries: Record<string, BoxStoreManifestEntry>; updatedAtMs: number; writerWindowId: string | null; fullyHydrated?: boolean | undefined } | null> {
     try {
-      const bytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-      if (bytes == null) return null;
-      const parsed = parseManifest(bytes);
-      if (parsed == null) return null;
-      return { entries: parsed.entries, updatedAtMs: parsed.updatedAtMs, writerWindowId: parsed.writerWindowId ?? null, fullyHydrated: parsed.fullyHydrated };
+      const wireBytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+      if (wireBytes == null) return null;
+      const decodedManifest = parseManifest(wireBytes);
+      if (decodedManifest == null) return null;
+      return { entries: decodedManifest.entries, updatedAtMs: decodedManifest.updatedAtMs, writerWindowId: decodedManifest.writerWindowId ?? null, fullyHydrated: decodedManifest.fullyHydrated };
     } catch (error) {
-      this.args.log(`canonical manifest readback failed after a lost write: ${errorMessage(error)}`);
+      this.args.log(`canonicalManifest manifest readback failed after a lost write: ${errorMessage(error)}`);
       return null;
     }
   }
 
   async readCanonicalManifestSnapshot(): Promise<DecodedManifest | null> {
     const storeId = await this.deps.resolveStoreId();
-    const bytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-    return bytes == null ? null : this.parseManifest(bytes);
+    const wireBytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+    return wireBytes == null ? null : this.parseManifest(wireBytes);
   }
 
-  private reportManifestWriteConflict(info: Record<string, unknown>): void {
+  private reportManifestWriteConflict(conflictInfo: Record<string, unknown>): void {
     try {
-      this.deps.onManifestWriteConflict?.(info);
+      this.deps.onManifestWriteConflict?.(conflictInfo);
     } catch {
       // Reporting a conflict must not become the conflict that fails the cycle.
     }
@@ -581,10 +586,10 @@ export class BoxStoreManifestStore {
 
   /** Before clearing the store: a conflicting manifest is unblocked (it is about to be replaced), an unknown version is not. */
   async prepareCanonicalManifestReset(storeId: string): Promise<void> {
-    const bytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-    if (bytes == null) return;
+    const wireBytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+    if (wireBytes == null) return;
     try {
-      this.parseManifest(bytes);
+      this.parseManifest(wireBytes);
     } catch (error) {
       if (!(error instanceof BoxStoreManifestPathConflictError)) throw error;
       if (this.manifestWriteBlock instanceof BoxStoreUnsupportedManifestVersionError) throw this.manifestWriteBlock;
@@ -600,25 +605,25 @@ export class BoxStoreManifestStore {
   async readManifestStrictDetailed(): Promise<{ present: boolean; manifest: BoxManifestMap; fullyHydrated?: boolean | undefined }> {
     if (this.manifestWriteBlock != null) throw this.manifestWriteBlock;
     const storeId = await this.deps.resolveStoreId();
-    const bytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
-    const map = new Map<string, BoxStoreManifestEntry>();
-    if (bytes == null) {
-      this.initializeManifestRevision(map);
-      this.manifest = map;
+    const wireBytes = await this.objectStore(storeId).get(BOX_STORE_MANIFEST_REL_PATH);
+    const loadedManifest = new Map<string, BoxStoreManifestEntry>();
+    if (wireBytes == null) {
+      this.initializeManifestRevision(loadedManifest);
+      this.manifest = loadedManifest;
       this.uncommittedStoreDbEntries.clear();
       this.fullyHydrated = undefined;
       this.hydrationManifestReadBlocked = false;
-      return { present: false, manifest: map };
+      return { present: false, manifest: loadedManifest };
     }
-    const decoded = this.parseManifest(bytes);
+    const decoded = this.parseManifest(wireBytes);
     if (decoded == null) throw new BoxStoreSyncError("box store manifest is present but unparseable");
-    for (const [relPath, entry] of Object.entries(decoded.entries)) map.set(relPath, entry);
-    this.initializeManifestRevision(map, decoded.version === this.configuredManifestVersion() ? { revision: 0, fullyHydrated: decoded.fullyHydrated } : undefined);
-    this.manifest = map;
+    for (const [relPath, entry] of Object.entries(decoded.entries)) loadedManifest.set(relPath, entry);
+    this.initializeManifestRevision(loadedManifest, decoded.version === this.configuredManifestVersion() ? { revision: 0, fullyHydrated: decoded.fullyHydrated } : undefined);
+    this.manifest = loadedManifest;
     this.uncommittedStoreDbEntries.clear();
     this.fullyHydrated = decoded.fullyHydrated;
     this.hydrationManifestReadBlocked = false;
-    return { present: true, manifest: map, fullyHydrated: decoded.fullyHydrated };
+    return { present: true, manifest: loadedManifest, fullyHydrated: decoded.fullyHydrated };
   }
 
   /** The legacy store says it is not complete: the marker goes, and the manifest records that much. */
