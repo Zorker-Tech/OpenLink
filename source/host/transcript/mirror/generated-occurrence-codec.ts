@@ -1,6 +1,6 @@
 /** Reading the generated transcript messages this platform keeps.
 
- * The conversation turns, the messages in them and the steps between them are decoded from the generated messages, so
+ * The conversation turns, the messages in them and the steps between them are decodedMessage from the generated messages, so
  * the deriver sees what the platform wrote rather than a shape of its own. */
 import type {
   DecodedTranscriptStep,
@@ -8,23 +8,23 @@ import type {
   TranscriptOccurrenceCodec,
 } from "./transcript-occurrence-deriver.ts";
 
-interface GeneratedBinaryType<Message> {
-  fromBinary(bytes: Uint8Array): Message;
+interface BinaryMessageType<Message> {
+  fromBinary(wireBytes: Uint8Array): Message;
 }
 
-interface GeneratedJsonMessage {
+interface JsonProjectable {
   toJson(): unknown;
 }
 
-interface GeneratedToolCallValue {
-  readonly args?: GeneratedJsonMessage & {
+interface ToolReplyShape {
+  readonly args?: JsonProjectable & {
     readonly toolName?: string;
     readonly name?: string;
   };
-  readonly result?: GeneratedJsonMessage;
+  readonly result?: JsonProjectable;
 }
 
-interface GeneratedConversationTurnStructure {
+interface TurnShape {
   readonly turn:
     | {
         readonly case: "agentConversationTurn";
@@ -37,12 +37,12 @@ interface GeneratedConversationTurnStructure {
     | { readonly case: undefined; readonly value?: undefined };
 }
 
-interface GeneratedUserMessage {
+interface UserMessageShape {
   readonly text: string;
   readonly textBlobId?: Uint8Array;
 }
 
-interface GeneratedConversationStep {
+interface StepShape {
   readonly message:
     | {
         readonly case: "assistantMessage" | "thinkingMessage";
@@ -54,7 +54,7 @@ interface GeneratedConversationStep {
           readonly tool:
             | {
                 readonly case: string;
-                readonly value: GeneratedToolCallValue;
+                readonly value: ToolReplyShape;
               }
             | { readonly case: undefined; readonly value?: undefined };
         };
@@ -65,34 +65,34 @@ interface GeneratedConversationStep {
 /**
  * Narrow generated-source boundary required by the shipped transcript deriver.
  *
- * The constructors are the emitted @bufbuild/protobuf agent.v1 bindings. Their
+ * The constructors are the emitted @bufbuild/protobuf agent.v1 generatedBindings. Their
  * default fromBinary behavior owns malformed-wire errors and unknown-field
- * handling; the tool args/result instances own exact generated toJson behavior.
+ * handling; the toolUnion args/result instances own exact generated toJson behavior.
  */
 export interface GeneratedTranscriptOccurrenceBindings {
-  readonly ConversationTurnStructure: GeneratedBinaryType<GeneratedConversationTurnStructure>;
-  readonly UserMessage: GeneratedBinaryType<GeneratedUserMessage>;
-  readonly ConversationStep: GeneratedBinaryType<GeneratedConversationStep>;
+  readonly ConversationTurnStructure: BinaryMessageType<TurnShape>;
+  readonly UserMessage: BinaryMessageType<UserMessageShape>;
+  readonly ConversationStep: BinaryMessageType<StepShape>;
 }
 
-function generatedType<Message>(
-  value: GeneratedBinaryType<Message> | undefined,
-  name: string,
-): GeneratedBinaryType<Message> {
+function requireGeneratedType<Message>(
+  value: BinaryMessageType<Message> | undefined,
+  typeName: string,
+): BinaryMessageType<Message> {
   if (typeof value?.fromBinary !== "function") {
-    throw new TypeError(`generated ${name}.fromBinary is required`);
+    throw new TypeError(`generated ${typeName}.fromBinary is required`);
   }
   return value;
 }
 
 function toolName(
-  toolCase: string,
-  value: GeneratedToolCallValue,
+  caseName: string,
+  value: ToolReplyShape,
 ): string {
-  if (toolCase === "mcpToolCall") {
+  if (caseName === "mcpToolCall") {
     return value.args?.toolName ?? value.args?.name ?? "mcp";
   }
-  return toolCase
+  return caseName
     .replace(/ToolCall$/, "")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .toLowerCase();
@@ -105,69 +105,69 @@ function toolName(
  * the mandatory generated-source collaborators.
  */
 export function createGeneratedTranscriptOccurrenceCodec(
-  bindings: GeneratedTranscriptOccurrenceBindings,
+  generatedBindings: GeneratedTranscriptOccurrenceBindings,
 ): TranscriptOccurrenceCodec {
-  const ConversationTurnStructure = generatedType(
-    bindings?.ConversationTurnStructure,
+  const ConversationTurnStructure = requireGeneratedType(
+    generatedBindings?.ConversationTurnStructure,
     "ConversationTurnStructure",
   );
-  const UserMessage = generatedType(bindings?.UserMessage, "UserMessage");
-  const ConversationStep = generatedType(
-    bindings?.ConversationStep,
+  const UserMessage = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage");
+  const ConversationStep = requireGeneratedType(
+    generatedBindings?.ConversationStep,
     "ConversationStep",
   );
 
   return {
-    decodeTurn(bytes): DecodedTranscriptTurn {
-      const decoded = ConversationTurnStructure.fromBinary(bytes);
-      if (decoded.turn.case === "agentConversationTurn") {
+    decodeTurn(wireBytes): DecodedTranscriptTurn {
+      const decodedMessage = ConversationTurnStructure.fromBinary(wireBytes);
+      if (decodedMessage.turn.case === "agentConversationTurn") {
         return {
           case: "agent",
-          userMessage: decoded.turn.value.userMessage,
-          steps: decoded.turn.value.steps,
+          userMessage: decodedMessage.turn.value.userMessage,
+          steps: decodedMessage.turn.value.steps,
         };
       }
-      if (decoded.turn.case === "shellConversationTurn") {
+      if (decodedMessage.turn.case === "shellConversationTurn") {
         return { case: "shell" };
       }
       return { case: undefined };
     },
 
-    decodeUserMessage(bytes) {
-      const decoded = UserMessage.fromBinary(bytes);
+    decodeUserMessage(wireBytes) {
+      const decodedMessage = UserMessage.fromBinary(wireBytes);
       return {
-        text: decoded.text,
-        ...(decoded.textBlobId === undefined
+        text: decodedMessage.text,
+        ...(decodedMessage.textBlobId === undefined
           ? {}
-          : { textBlobId: decoded.textBlobId }),
+          : { textBlobId: decodedMessage.textBlobId }),
       };
     },
 
-    decodeStep(bytes): DecodedTranscriptStep {
-      const decoded = ConversationStep.fromBinary(bytes);
+    decodeStep(wireBytes): DecodedTranscriptStep {
+      const decodedMessage = ConversationStep.fromBinary(wireBytes);
       if (
-        decoded.message.case === "assistantMessage"
-        || decoded.message.case === "thinkingMessage"
+        decodedMessage.message.case === "assistantMessage"
+        || decodedMessage.message.case === "thinkingMessage"
       ) {
         return {
-          case: decoded.message.case === "assistantMessage"
+          case: decodedMessage.message.case === "assistantMessage"
             ? "assistant"
             : "thinking",
-          text: decoded.message.value.text,
+          text: decodedMessage.message.value.text,
         };
       }
-      if (decoded.message.case !== "toolCall") {
+      if (decodedMessage.message.case !== "toolCall") {
         return { case: undefined };
       }
-      const tool = decoded.message.value.tool;
-      if (tool.case == null) return { case: undefined };
+      const toolUnion = decodedMessage.message.value.tool;
+      if (toolUnion.case == null) return { case: undefined };
       return {
         case: "tool",
-        name: toolName(tool.case, tool.value),
-        input: tool.value.args?.toJson() ?? {},
-        ...(tool.value.result == null
+        name: toolName(toolUnion.case, toolUnion.value),
+        input: toolUnion.value.args?.toJson() ?? {},
+        ...(toolUnion.value.result == null
           ? {}
-          : { result: tool.value.result.toJson() }),
+          : { result: toolUnion.value.result.toJson() }),
       };
     },
   };
