@@ -59,6 +59,8 @@ test("the registry describes its tools as a server of their own", () => {
   assert.equal(descriptor?.serverIdentifier, DYNAMIC_TOOLS_NAMESPACE)
   assert.deepEqual(descriptor?.tools.map(entry => entry.toolName), ["alpha", "zeta"])
   assert.match(String(descriptor?.serverUseInstructions), /Native Slate tools for this session/)
+  assert.equal(descriptor?.tools[0]?.inputSchema !== undefined, true)
+  assert.deepEqual((descriptor?.tools[0]?.inputSchema as { toJson(): unknown } | undefined)?.toJson(), { type: "object" })
 })
 
 test("a tool's concise context is added to the instructions", () => {
@@ -67,7 +69,10 @@ test("a tool's concise context is added to the instructions", () => {
     dynamicTools: [tool("alpha", { contextType: { type: "dynamic", conciseStaticContext: "  does a thing  " } })],
     allTools: [tool("alpha", { contextType: { type: "dynamic", conciseStaticContext: "  does a thing  " } })],
   })
-  assert.match(String(registry.getMcpDescriptor()?.serverUseInstructions), /- alpha: does a thing/)
+  const instructions = String(registry.getMcpDescriptor()?.serverUseInstructions)
+  assert.equal(instructions.startsWith("Native Slate tools for this session. These are highly recommended and useful tools that you should use when the right situation arises. Don't be afraid to look at one if it seems relevant, even if you don't end up using it. You MUST read the tool schemas before calling them." + "\n"), true)
+  assert.equal(instructions.includes("Here are some crucial instructions:" + "\n"), true)
+  assert.match(instructions, /- alpha: does a thing/)
 })
 
 test("a tool that writes its own description is asked for the unseen-tool version", () => {
