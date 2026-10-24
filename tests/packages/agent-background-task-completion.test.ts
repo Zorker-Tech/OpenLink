@@ -268,3 +268,20 @@ test("a thread is only resolved when every completion agrees on one", () => {
   )
   assert.equal(getBackgroundTaskCompletionThreadId([completion({ taskId: "a" })], { getSubagentThreadId: () => undefined }), undefined)
 })
+test("a hidden subagent without cloud view links is not told to link a cloud view", () => {
+  const text = getNotificationAcknowledgementUserQuery([completion()], options({ hideAsyncSubagentTaskNotifications: true, enableAgentChatLinks: true, includeCloudSubagentViewLinks: false }))
+  assert.equal(text.includes("Try Live"), false)
+  assert.equal(text.includes("Review"), false)
+})
+
+test("a shell acknowledgement is wrapped as the model's user query", () => {
+  const text = getNotificationAcknowledgementUserQuery([completion({ kind: BackgroundTaskKind.SHELL })], options())
+  assert.equal(text.startsWith("<user_query>"), true)
+  assert.equal(text.endsWith("</user_query>"), true)
+})
+
+test("a meta-parent result with nothing to say leaves an empty response block", () => {
+  const text = formatMetaParentBackgroundCompletions([new BackgroundTaskCompletion({ kind: BackgroundTaskKind.SHELL, taskId: "task-empty" })], options())
+  assert.equal(text.includes("<response>"), true)
+  assert.equal(text.includes("No output"), true)
+})
