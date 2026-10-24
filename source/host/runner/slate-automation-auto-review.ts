@@ -44,38 +44,70 @@ export interface AutomationWriteTarget {
   readonly referencingRoutines?: readonly AutomationReference[];
 }
 
-export function buildSlateAutomationWriteRiskTarget(args: {
+interface AutomationRiskArgs {
   readonly target: AutomationWriteTarget;
   readonly personalInstructions?: InstructionPermissions;
   readonly userAutoRunInstructions?: InstructionPermissions;
   readonly projectAutoRunInstructions?: InstructionPermissions;
-}) {
-  const { operation, id, spec, referencedWorkflows, referencingRoutines } = args.target;
-  const argumentsJson = JSON.parse(JSON.stringify({
-      surface: "automation_write",
-      operation,
-      automation_id: id,
-      name: spec.name,
-      prompt: spec.prompt,
-      trigger: serializeStoredTrigger(spec.trigger),
-      schedule: triggerSchedule(spec.trigger) ?? undefined,
-      trigger_description: describeTrigger(spec.trigger),
-      enabled: spec.isEnabled,
-      referenced_workflows: referencedWorkflows?.map((workflow) => ({
-        id: workflow.id,
-        name: workflow.name,
-        body: workflow.body,
-      })) ?? [],
-      referencing_routines: referencingRoutines?.map((routine) => ({
-        id: routine.id,
-        name: routine.name,
-        prompt: routine.prompt,
-      })) ?? [],
-      project_permissions: buildProjectPermissionsContext(args),
-    }));
+}
+
+/** The classifier sees the routine exactly as it would be stored, plus who references it. */
+function automationArgumentsRecord(input: AutomationRiskArgs): unknown {
+  const { operation, id, spec, referencedWorkflows, referencingRoutines } = input.target;
+  return JSON.parse(JSON.stringify({
+    surface: "automation_write",
+    operation,
+    automation_id: id,
+    name: spec.name,
+    prompt: spec.prompt,
+    trigger: serializeStoredTrigger(spec.trigger),
+    schedule: triggerSchedule(spec.trigger) ?? undefined,
+    trigger_description: describeTrigger(spec.trigger),
+    enabled: spec.isEnabled,
+    referenced_workflows: referencedWorkflows?.map((workflow) => ({
+      id: workflow.id,
+      name: workflow.name,
+      body: workflow.body,
+    })) ?? [],
+    referencing_routines: referencingRoutines?.map((routine) => ({
+      id: routine.id,
+      name: routine.name,
+      prompt: routine.prompt,
+    })) ?? [],
+    project_permissions: buildProjectPermissionsContext(input),
+  }));
+}
+
+export function buildSlateAutomationWriteRiskTarget(input: AutomationRiskArgs) {
   return new SmartModeRiskTarget({
     action: SLATE_AUTOMATION_WRITE_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(argumentsJson),
+    arguments: Struct.fromJson(automationArgumentsRecord(input) as never),
+  });
+}
+
+
+/** What the review is fingerprinted by: the routine itself and where it is referenced. */
+function automationWriteFingerprint(target: AutomationWriteTarget) {
+  return fingerprintSlateAutoReviewTarget({
+    operation: target.operation,
+    id: target.id,
+    spec: target.spec,
+    referencedWorkflows: target.referencedWorkflows ?? [],
+    referencingRoutines: target.referencingRoutines ?? [],
+  });
+}
+
+/** The one-line description of the change shown with the approval card. */
+function automationWriteSummary(target: AutomationWriteTarget) {
+  return summarizeSlateAutomationWriteAction({
+    operation: target.operation,
+    name: target.spec.name,
+    triggerDescription: describeTrigger(target.spec.trigger),
+    prompt: target.spec.prompt,
+    isEnabled: target.spec.isEnabled,
+    ...(target.referencingRoutines == null
+      ? {}
+      : { referencingRoutineNames: target.referencingRoutines.map((routine) => routine.name) }),
   });
 }
 
@@ -93,61 +125,46 @@ export interface AutomationReviewOptions<Context> {
     mode: "shadow" | "enforce",
     toolCallId: string,
   ): Promise<AutoReviewClassifierDecision>;
-  reportShadowFailure?(error: unknown): void;
+  reportShadowFailure?(failure: unknown): void;
   suspendToolExecutionTimeout?<T>(context: Context, operation: () => Promise<T>): Promise<T>;
 }
 
-export async function reviewSlateAutomationWrite<Context>(args: {
+export async function reviewSlateAutomationWrite<Context>(input: {
   readonly ctx: Context;
   readonly target: AutomationWriteTarget;
   readonly options: AutomationReviewOptions<Context>;
   readonly toolCallId: string;
   readonly signal?: AbortSignal;
 }): Promise<{ readonly allowed: boolean; readonly reason?: string }> {
-  const { ctx, target, options, toolCallId } = args;
-  if (options.mode === "off") return { allowed: true };
-  if (options.mode === "shadow") {
-    void options.classify(ctx, target, "shadow", toolCallId)
-      .catch((error: unknown) => options.reportShadowFailure?.(error));
+  const { ctx, target, options: reviewOptions, toolCallId } = input;
+  if (reviewOptions.mode === "off") return { allowed: true };
+  if (reviewOptions.mode === "shadow") {
+    void reviewOptions.classify(ctx, target, "shadow", toolCallId)
+      .catch((failure: unknown) => reviewOptions.reportShadowFailure?.(failure));
     return { allowed: true };
   }
-  const decision = await options.classify(ctx, target, "enforce", toolCallId);
-  if (decision.kind === "allow") return { allowed: true };
-  const controller = options.autoReviewController;
-  if (decision.kind !== "block" || controller == null) {
-    return { allowed: false, reason: decision.reason };
+  const classifierDecision = await reviewOptions.classify(ctx, target, "enforce", toolCallId);
+  if (classifierDecision.kind === "allow") return { allowed: true };
+  const approvalController = reviewOptions.autoReviewController;
+  if (classifierDecision.kind !== "block" || approvalController == null) {
+    return { allowed: false, reason: classifierDecision.reason };
   }
-  const request = () => controller.requestApproval({
-    agentId: options.agentId,
+  const approvalRequest = () => approvalController.requestApproval({
+    agentId: reviewOptions.agentId,
     surface: "automation_write",
-    fingerprint: fingerprintSlateAutoReviewTarget({
-      operation: target.operation,
-      id: target.id,
-      spec: target.spec,
-      referencedWorkflows: target.referencedWorkflows ?? [],
-      referencingRoutines: target.referencingRoutines ?? [],
-    }),
-    reason: decision.reason,
-    summary: summarizeSlateAutomationWriteAction({
-      operation: target.operation,
-      name: target.spec.name,
-      triggerDescription: describeTrigger(target.spec.trigger),
-      prompt: target.spec.prompt,
-      isEnabled: target.spec.isEnabled,
-      ...(target.referencingRoutines == null
-        ? {}
-        : { referencingRoutineNames: target.referencingRoutines.map((routine) => routine.name) }),
-    }),
-    ...(decision.proposedRule == null ? {} : { proposedRule: decision.proposedRule }),
-    ...(args.signal == null ? {} : { signal: args.signal }),
-    ...(options.getApprovalExpiryPolicy == null
+    fingerprint: automationWriteFingerprint(target),
+    reason: classifierDecision.reason,
+    summary: automationWriteSummary(target),
+    ...(classifierDecision.proposedRule == null ? {} : { proposedRule: classifierDecision.proposedRule }),
+    ...(input.signal == null ? {} : { signal: input.signal }),
+    ...(reviewOptions.getApprovalExpiryPolicy == null
       ? {}
-      : { expiryPolicy: options.getApprovalExpiryPolicy() }),
+      : { expiryPolicy: reviewOptions.getApprovalExpiryPolicy() }),
   });
-  const approval = options.suspendToolExecutionTimeout == null
-    ? await request()
-    : await options.suspendToolExecutionTimeout(ctx, request);
-  return approval.approved
+  const approvalOutcome = reviewOptions.suspendToolExecutionTimeout == null
+    ? await approvalRequest()
+    : await reviewOptions.suspendToolExecutionTimeout(ctx, approvalRequest);
+  return approvalOutcome.approved
     ? { allowed: true }
-    : { allowed: false, reason: approval.reason ?? decision.reason };
+    : { allowed: false, reason: approvalOutcome.reason ?? classifierDecision.reason };
 }
