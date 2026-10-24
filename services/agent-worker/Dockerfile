@@ -50,6 +50,7 @@ COPY services/agent-browser-extension/openlink-browser.ts ./extensions/openlink-
 COPY services/agent-supabase-extension/openlink-supabase.ts ./extensions/openlink-supabase.ts
 COPY services/agent-worker/desktop/start.sh /opt/openlink/desktop/start.sh
 COPY services/agent-worker/desktop/run-ubuntu-vm.sh /opt/openlink/desktop/run-ubuntu-vm.sh
+COPY services/agent-worker/desktop/qmp-control.py /opt/openlink/desktop/qmp-control.py
 
 ENV NODE_ENV=production
 EXPOSE 43130 6080

@@ -781,7 +781,7 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
   const title = item.executions.length ? dynamicTaskLabel(item.executions, item.state === 'active', t) : item.label
   const orbState = latestExecution ? executionOrbState(latestExecution) : 'working'
   return (
-    <Task className="w-full" onOpenChange={setOpen} open={open}>
+    <Task className="w-full" data-expanded={open} onOpenChange={setOpen} open={open}>
       <TaskTrigger className="w-full" title={title}>
         <div className="flex h-7 w-full items-center gap-2 overflow-hidden rounded-md text-left text-[13px] leading-[21.125px] tracking-[-0.0762px] text-[var(--app-muted)] transition-colors hover:text-[var(--app-foreground)]">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={title} orbState={orbState} running={item.state === 'active'} />
@@ -804,12 +804,12 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
   const t = useT()
   const stateSuffix = item.state === 'active' ? t('中') : item.state === 'failed' ? t('失败') : t('已完成')
   return (
-    <div className="flex min-h-7 min-w-0 items-start gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
-      <span className="mt-0.5"><StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} /></span>
-      <div className="min-w-0 flex-1 leading-[21px]">
-        <p className="break-words [overflow-wrap:anywhere]">{item.label}</p>
-        {item.detail ? <p className="whitespace-pre-wrap break-words text-[12px] text-[var(--app-subtle-foreground)] [overflow-wrap:anywhere]">{item.detail}</p> : null}
-      </div>
+    <div className="flex h-7 min-w-0 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
+      <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} />
+      <p className="min-w-0 flex-1 truncate" title={[item.label, item.detail].filter(Boolean).join(' — ')}>
+        <span>{item.label}</span>
+        {item.detail ? <span className="ml-2 text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</span> : null}
+      </p>
     </div>
   )
 }
@@ -836,9 +836,9 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
   if (item.snapshot && files.length === 0) return null
 
   return (
-    <div className={`overflow-hidden rounded-lg border border-[color-mix(in_oklab,var(--app-foreground)_16%,var(--app-border))] bg-[var(--app-elevated)] p-2 shadow-[0_6px_20px_var(--app-shadow)] transition-[max-height,border-color] duration-200 ease-out ${open ? 'max-h-[540px] border-[color-mix(in_oklab,var(--app-foreground)_24%,var(--app-border))]' : 'max-h-[46px]'}`} data-slot="git-snapshot">
-      <div className="flex h-7 items-center gap-1">
-        <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 select-none items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus:outline-none focus-visible:outline-none" onClick={() => setOpen((value) => !value)} type="button">
+    <div className={`overflow-hidden rounded-lg border border-[color-mix(in_oklab,var(--app-foreground)_16%,var(--app-border))] bg-[var(--app-elevated)] shadow-[0_6px_20px_var(--app-shadow)] transition-[max-height,border-color,padding] duration-200 ease-out ${open ? 'max-h-[540px] border-[color-mix(in_oklab,var(--app-foreground)_24%,var(--app-border))] p-2' : 'h-7 max-h-7 p-0'}`} data-expanded={open} data-slot="git-snapshot">
+      <div className={`flex items-center gap-1 ${open ? 'h-7' : 'h-[26px]'}`}>
+        <button aria-expanded={open} className={`flex ${open ? 'h-7' : 'h-full'} min-w-0 flex-1 select-none items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus:outline-none focus-visible:outline-none`} onClick={() => setOpen((value) => !value)} type="button">
           {open ? <ChevronDown className="size-[13px] shrink-0 text-[var(--app-muted)]" /> : <ChevronRight className="size-[13px] shrink-0 text-[var(--app-muted)]" />}
           <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)]">{item.label}</span>
           {item.baseCommit ? <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">@{item.baseCommit}</span> : item.changeCount && item.changeCount > 1 ? <span className="shrink-0 text-[12px] text-[var(--app-muted)]">v{item.changeCount}</span> : null}
@@ -890,7 +890,7 @@ function ConfirmationResultItem({ item }: { item: Extract<TimelineItem, { kind: 
   return (
     <div
       aria-label={t('{title}，{result}', { title: item.title, result: approved ? t('已批准执行') : t('已拒绝执行') })}
-      className="flex h-6 min-w-0 items-center gap-2 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]"
+      className="flex h-7 min-w-0 items-center gap-2 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]"
       role="status"
     >
       <span className="w-14 shrink-0 truncate">{approved ? t('批准') : t('跳过')}</span>
@@ -1027,7 +1027,7 @@ function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> })
   const messages = item.messages ?? [item.message]
   const title = item.title ?? agentErrorTitle(item.message, t)
   return (
-    <div className="py-0.5" data-slot="timeline-error">
+    <div className="py-0.5" data-expanded={open} data-slot="timeline-error">
       <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 w-full items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
         <CircleAlert className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
@@ -1042,11 +1042,13 @@ function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> })
 function TimelineItemView({ item, showContent = true }: { item: TimelineItem; showContent?: boolean }) {
   const t = useT()
   if (item.kind === 'message') return <TimelineMessageItem item={item} />
+  if (item.kind === 'change' && item.snapshot && !(item.files ?? []).some((file) => !isLegacyRuntimeSnapshotPath(typeof file === 'string' ? file : file.path))) return null
+  let content: ReactNode
   if (item.kind === 'reasoning') {
     // Hidden thinking keeps the live progress row only; once the model stops
     // reasoning the row is noise, so it disappears with the content.
     if (!showContent && !item.streaming) return null
-    return (
+    content = (
       <Reasoning className="mb-0!" defaultOpen={false} duration={item.durationMs ? Math.max(1, Math.round(item.durationMs / 1000)) : undefined} isStreaming={item.streaming}>
         <ReasoningTrigger className="h-7 gap-2 text-[13px] leading-[21px] tracking-[-0.0762px]" getThinkingMessage={(streaming) => streaming ? <span>{t('Thinking…')}</span> : <span>{t('Thought for a moment')}</span>}>
           <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? t('正在思考') : t('思考已完成')} orbState="solving" running={item.streaming} />
@@ -1055,13 +1057,21 @@ function TimelineItemView({ item, showContent = true }: { item: TimelineItem; sh
         {showContent && item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
       </Reasoning>
     )
+  } else if (item.kind === 'task') {
+    content = <TaskGroupItem item={item} />
+  } else if (item.kind === 'status') {
+    content = <StatusItem item={item} />
+  } else if (item.kind === 'change') {
+    content = <ChangeItem item={item} />
+  } else if (item.kind === 'confirmation') {
+    if (!item.resolved) return null
+    content = <ConfirmationResultItem item={item} />
+  } else if (item.kind === 'checkpoint') {
+    return null
+  } else {
+    content = <ErrorItem item={item} />
   }
-  if (item.kind === 'task') return <TaskGroupItem item={item} />
-  if (item.kind === 'status') return <StatusItem item={item} />
-  if (item.kind === 'change') return <ChangeItem item={item} />
-  if (item.kind === 'confirmation') return item.resolved ? <ConfirmationResultItem item={item} /> : null
-  if (item.kind === 'checkpoint') return null
-  return <ErrorItem item={item} />
+  return <div className="grid h-7 w-full min-w-0 shrink-0 items-center overflow-hidden [&:has([data-expanded=true])]:h-auto [&:has([data-expanded=true])]:overflow-visible [&:has([data-open])]:h-auto [&:has([data-open])]:overflow-visible" data-timeline-item={item.kind}>{content}</div>
 }
 
 function StreamingThinkingItem() {
@@ -1117,8 +1127,8 @@ function WorkFlowGroup({
 
   return (
     <section className={`flex w-full flex-col text-[13px] tracking-[-0.0762px] text-[var(--app-subtle-foreground)] ${round.state === 'worked' ? 'border-b border-[var(--app-border)]' : ''}`} id={checkpoint ? `checkpoint-${checkpoint.id}` : undefined}>
-      <div className={`flex min-h-9 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
-        <button aria-expanded={open} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
+      <div className={`flex h-7 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
+        <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={flow.label} orbState={flow.state} running={round.state === 'working'} />
           <span className="truncate text-[14px] font-medium">{label}</span>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
@@ -1181,12 +1191,14 @@ function EndingSection({ round }: { round: ConversationRound }) {
 }
 
 export function ChatTimeline({
+  contentClassName = '',
   events,
   isStreaming = false,
   showThinkingContent = true,
   onFlowStatusChange,
   onEditMessage,
 }: {
+  contentClassName?: string
   events: OpenLinkAgentEvent[]
   isStreaming?: boolean
   showThinkingContent?: boolean
@@ -1205,8 +1217,8 @@ export function ChatTimeline({
   }, [activeFlow, onFlowStatusChange])
 
   return (
-    <Conversation className="min-h-0 flex-1" data-no-press-motion-scope>
-      <ConversationContent className="min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px]">
+    <Conversation className="min-h-0 w-full flex-1" data-no-press-motion-scope>
+      <ConversationContent className={`min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px] ${contentClassName}`}>
         {rounds.map((round) => (
           <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>
             {round.user ? <EditableUserMessage item={round.user} disabled={isStreaming} onEditMessage={onEditMessage} /> : null}

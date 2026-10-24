@@ -9,6 +9,10 @@ disk="$vm_root/system.qcow2"
 seed="$vm_root/seed.iso"
 installed_marker="$vm_root/installed"
 cached_iso="$vm_root/iso"
+# QMP lives in the container's /tmp: the session volume can sit on a shared
+# filesystem where Unix sockets are not dependable. The Agent Worker uses the
+# same path to pause (stop) and resume (cont) the installed desktop VM.
+qmp_socket="/tmp/openlink-ubuntu-vm-qmp.sock"
 
 prepare_workspace_share() {
   if [[ ! -d "$workspace_root" ]]; then
@@ -122,6 +126,7 @@ EOF
   xorriso -as mkisofs -quiet -V CIDATA -J -R \
     -o "$seed" "$vm_root/user-data" "$vm_root/meta-data"
 
+  rm -f "$qmp_socket"
   runuser -u openlink -- qemu-system-x86_64 \
     -name openlink-ubuntu-desktop-installer \
     "${qemu_machine_args[@]}" \
@@ -140,6 +145,7 @@ EOF
     -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
     -device qemu-xhci -device usb-kbd -device usb-tablet \
     -vga virtio -display none -vnc 127.0.0.1:0 \
+    -qmp "unix:$qmp_socket,server=on,wait=off" \
     -no-reboot \
     >>"$vm_root/qemu-install.log" 2>&1 &
   install_pid=$!
@@ -170,6 +176,7 @@ EOF
   fi
 fi
 
+rm -f "$qmp_socket"
 runuser -u openlink -- qemu-system-x86_64 \
   -name openlink-ubuntu-desktop \
   "${qemu_machine_args[@]}" \
@@ -180,6 +187,7 @@ runuser -u openlink -- qemu-system-x86_64 \
   -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
   -device qemu-xhci -device usb-kbd -device usb-tablet \
   -vga virtio -display none -vnc 127.0.0.1:0 \
+  -qmp "unix:$qmp_socket,server=on,wait=off" \
   >>"$vm_root/qemu.log" 2>&1 &
 vm_pid=$!
 

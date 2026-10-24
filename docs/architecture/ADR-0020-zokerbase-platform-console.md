@@ -4,6 +4,11 @@
 
 Accepted
 
+Refined by
+[ADR-0027](./ADR-0027-platform-control-plane-and-dynamic-desktop-resources.md)
+for platform control-plane data ownership and dynamic desktop resources. The
+administrative surface boundaries in this ADR remain binding.
+
 ## Context
 
 OpenLink currently has one root lifecycle that can start a complete Local

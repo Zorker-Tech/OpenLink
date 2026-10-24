@@ -2,6 +2,45 @@ import { ConnectionConfig, type Sandbox } from '@alibaba-group/opensandbox'
 import { AgentHostError } from '../errors.js'
 import type { DesktopEndpoint } from '../desktop-gateway.js'
 
+export type DesktopRuntimeState = 'stopped' | 'installing' | 'booting' | 'running' | 'suspended' | 'failed'
+
+export interface DesktopRuntimeStatus {
+  state: DesktopRuntimeState
+  suspended: boolean
+}
+
+export interface DesktopSuspendResult {
+  suspended: boolean
+  state: DesktopRuntimeState
+}
+
+/** Worker-side desktop lifecycle endpoint used for prewarm and idle sleep. */
+export async function requestDesktopControl(
+  baseUrl: string,
+  headers: Record<string, string>,
+  action: 'status' | 'suspend' | 'resume',
+  timeoutMs = 10_000,
+): Promise<DesktopRuntimeStatus & { suspended: boolean }> {
+  const response = await fetch(`${baseUrl}/desktop/${action}`, {
+    method: 'POST',
+    headers,
+    body: '{}',
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  const payload = await response.json().catch(() => null) as Partial<DesktopRuntimeStatus> | null
+  if (!response.ok) {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `OpenSandbox desktop ${action} failed (${response.status})`,
+      { retryable: true },
+    )
+  }
+  return {
+    state: payload?.state ?? 'failed',
+    suspended: payload?.suspended === true,
+  }
+}
+
 async function waitForDesktop(baseUrl: string, headers: Record<string, string> = {}, timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
