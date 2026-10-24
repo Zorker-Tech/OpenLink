@@ -3,7 +3,7 @@
  *
  * A resume arrives when a turn was interrupted — the app was closed, the stream was cut, the machine
  * restarted — so the tool calls that were admitted and never executed are executed before the loop runs
- * again, and they are executed under the contract they were admitted with: a call whose identity no longer
+ * again, and they are executed under the admittedContract they were admitted with: a call whose identity no longer
  * matches what was admitted is refused rather than run, so a resumed turn cannot execute something the user
  * never approved. The rest of the resume is the ordinary loop: the turn that was open is continued, and a
  * conversation with no turns at all has nothing to resume.
@@ -35,14 +35,14 @@ import { AbstractUserMessageActionHandler } from "./abstract-user-message-action
 type Any = any;
 
 export class ResumeActionHandler extends AbstractUserMessageActionHandler {
-  async executePendingToolCalls(ctx: Context, stateHandler: Any, mergedMcpTools: Any, requestContext: Any, invocationId: string): Promise<boolean> {
-    const pendingMessages = stateHandler.getRawPendingMessages();
-    if (pendingMessages.length === 0 || stateHandler.turns.length === 0) return false;
-    const lastTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
-    const candidateTurn: Any = await lastTurnRef.get(ctx);
-    if (!(candidateTurn instanceof AgentConversationTurnHandle)) throw new Error("Expected last turn to be an agent turn");
-    const turn: Any = candidateTurn;
-    const interactionHandler = new InteractionHandler(
+  async executePendingToolCalls(ctx: Context, stateHandler: Any, mergedTools: Any, requestContext: Any, invocationId: string): Promise<boolean> {
+    const queuedMessages = stateHandler.getRawPendingMessages();
+    if (queuedMessages.length === 0 || stateHandler.turns.length === 0) return false;
+    const newestTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
+    const loadedTurn: Any = await newestTurnRef.get(ctx);
+    if (!(loadedTurn instanceof AgentConversationTurnHandle)) throw new Error("Expected last turn to be an agent turn");
+    const turn: Any = loadedTurn;
+    const toolInteractionHandler = new InteractionHandler(
       toUnredactedInteractionListener(this.interactionListener, stateHandler.getPrivacyMode()),
       turn,
       invocationId,
@@ -50,85 +50,85 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
       this.config.thinkingStyle,
       this.config.featureFlags?.nalLoopDetection === true,
     );
-    const mode = (await turn.userMessage.get(ctx)).mode;
-    const fileOperationLockManager = new FileOperationLockManager();
-    const toolSetHandle = this.config.toolsGenerator({
+    const userMode = (await turn.userMessage.get(ctx)).userMode;
+    const fileLocks = new FileOperationLockManager();
+    const toolSet = this.config.toolsGenerator({
       resourceAccessor: this.resourceAccessor,
       stateHandler,
       agentSessionId: this.config.agentSessionId,
-      mcpTools: mergedMcpTools,
+      mcpTools: mergedTools,
       repositoryInfos: requestContext.repositoryInfo,
       blobStore: stateHandler.getBlobStore(),
-      mode,
+      mode: userMode,
       loggingContext: ctx,
       requestContext,
-      fileOperationLockManager,
+      fileOperationLockManager: fileLocks,
       smartModeClassifierMode: this.config.smartModeClassifierMode,
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
     });
-    const messages = pendingMessages.map((message: Any) => JSON.parse(message.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)));
-    const lastMessage = messages.at(-1);
-    if (lastMessage === undefined || lastMessage.role !== "assistant") throw new Error("No assistant message to resume from");
-    const contracts = readPendingToolExecutionContracts(lastMessage);
-    const { allowedToolNames, admittedEffectiveToolNames } = collectPendingToolAdmission({ contracts: contracts.values() });
-    const modelVisibleTools = toolSetHandle.getStaticTools();
-    const scopedModelVisibleTools = allowedToolNames === undefined ? modelVisibleTools : modelVisibleTools.filter((tool: Any) => allowedToolNames.has(tool.name) || admittedEffectiveToolNames.has(tool.name));
-    const toolExecutionSet = toolSetHandle.getToolExecutionSet(scopedModelVisibleTools);
-    const executableTools = getExecutableTools(toolExecutionSet);
-    const directDynamicToolNames = getDirectDynamicToolNames(toolExecutionSet);
-    const toolMap: Record<string, Any> = {};
-    for (const tool of executableTools) toolMap[tool.name] = tool;
-    const renderProps = { allTools: extractToolMetadataMap(executableTools), blobStore: stateHandler.getBlobStore() };
-    const toolPromises: Promise<Any>[] = [];
-    if (Array.isArray(lastMessage.content)) {
-      for (const content of lastMessage.content) {
+    const messages = queuedMessages.map((message: Any) => JSON.parse(message.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)));
+    const assistantMessage = messages.at(-1);
+    if (assistantMessage === undefined || assistantMessage.role !== "assistant") throw new Error("No assistant message to resume from");
+    const admittedContracts = readPendingToolExecutionContracts(assistantMessage);
+    const { allowedToolNames: permittedToolNames, admittedEffectiveToolNames: admittedAliasNames } = collectPendingToolAdmission({ contracts: admittedContracts.values() });
+    const staticTools = toolSet.getStaticTools();
+    const scopedTools = permittedToolNames === undefined ? staticTools : staticTools.filter((tool: Any) => permittedToolNames.has(tool.name) || admittedAliasNames.has(tool.name));
+    const executionSet = toolSet.getToolExecutionSet(scopedTools);
+    const runnableTools = getExecutableTools(executionSet);
+    const directDynamicNames = getDirectDynamicToolNames(executionSet);
+    const toolsByName: Record<string, Any> = {};
+    for (const tool of runnableTools) toolsByName[tool.name] = tool;
+    const renderParameters = { allTools: extractToolMetadataMap(runnableTools), blobStore: stateHandler.getBlobStore() };
+    const callPromises: Promise<Any>[] = [];
+    if (Array.isArray(assistantMessage.content)) {
+      for (const content of assistantMessage.content) {
         if (content.type !== "tool-call") continue;
-        const contract = contracts.get(content.toolCallId);
-        const descriptor = resolveDescriptorForPendingToolCall({ toolCallId: content.toolCallId, toolName: content.toolName, args: content.args, contract, toolExecutionSet });
-        const effectiveToolName = descriptor.effectiveNativeToolCall?.toolName ?? descriptor.toolName;
-        const tool = toolMap[effectiveToolName];
-        if (contract !== undefined && tool !== undefined) {
-          const validation = validatePendingToolContractIdentity({ contract, tool, descriptor, directDynamicToolNames });
-          if (!validation.ok) {
-            toolPromises.push(Promise.resolve(createPendingToolContractMismatchResult(descriptor, validation.reason)));
+        const admittedContract = admittedContracts.get(content.toolCallId);
+        const resolvedDescriptor = resolveDescriptorForPendingToolCall({ toolCallId: content.toolCallId, toolName: content.toolName, args: content.args, contract: admittedContract, toolExecutionSet: executionSet });
+        const nativeToolName = resolvedDescriptor.effectiveNativeToolCall?.toolName ?? resolvedDescriptor.toolName;
+        const tool = toolsByName[nativeToolName];
+        if (admittedContract !== undefined && tool !== undefined) {
+          const identityCheck = validatePendingToolContractIdentity({ contract: admittedContract, tool, descriptor: resolvedDescriptor, directDynamicToolNames: directDynamicNames });
+          if (!identityCheck.ok) {
+            callPromises.push(Promise.resolve(createPendingToolContractMismatchResult(resolvedDescriptor, identityCheck.reason)));
             continue;
           }
         }
-        const conflictNoticesEnabled = this.config.featureFlags?.enableAgentStoreConflictNotices === true;
-        toolPromises.push(executeDeferredToolCall(ctx, descriptor, toolMap, interactionHandler, {
+        const storeConflictNotices = this.config.featureFlags?.enableAgentStoreConflictNotices === true;
+        callPromises.push(executeDeferredToolCall(ctx, resolvedDescriptor, toolsByName, toolInteractionHandler, {
           repositoryInfos: requestContext.repositoryInfo,
           stateHandler,
           workspacePaths: requestContext.env?.workspacePaths,
           enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
-          enableAgentStoreConflictNoticeCollector: conflictNoticesEnabled,
-          enableAgentStoreConflictNotices: conflictNoticesEnabled,
+          enableAgentStoreConflictNoticeCollector: storeConflictNotices,
+          enableAgentStoreConflictNotices: storeConflictNotices,
           writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
           onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-        }, async () => {}, renderProps, undefined, undefined, directDynamicToolNames));
+        }, async () => {}, renderParameters, undefined, undefined, directDynamicNames));
       }
     }
-    const toolResults = await Promise.all(toolPromises);
-    messages.push(...toolResults);
+    const resultMessages = await Promise.all(callPromises);
+    messages.push(...resultMessages);
     if (shouldTagToolCallIdsForCurrentContext(ctx)) appendToolCallIdTagsToToolResults(messages);
     turn.appendPromptMessages(toRedactedCoreMessages(messages, stateHandler.getPrivacyMode()));
     return true;
   }
 
   async handle(parentCtx: Context, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    using span = createSpan(parentCtx.withName("ResumeActionHandler.handle"));
-    const ctx = span.ctx;
+    using executionSpan = createSpan(parentCtx.withName("ResumeActionHandler.handle"));
+    const ctx = executionSpan.ctx;
     const invocationId = getInvocationId(ctx);
-    span.span.setAttribute("invocationId", invocationId);
+    executionSpan.span.setAttribute("invocationId", invocationId);
     const requestContext = await getRequestContext(ctx, action.requestContext ? fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) : undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
-    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
-    await this.executePendingToolCalls(ctx, stateHandler, mergedMcpTools, requestContext, invocationId);
+    const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
+    await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);
     if (stateHandler.turns.length === 0) return await stateHandler.computeNewStructure(ctx);
-    const lastTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
-    const candidateTurn: Any = await lastTurnRef.get(ctx);
-    if (!(candidateTurn instanceof AgentConversationTurnHandle)) throw new Error("Expected last turn to be an agent turn");
-    const turn: Any = candidateTurn;
-    await this.runTurnLoop(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedMcpTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
+    const newestTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
+    const loadedTurn: Any = await newestTurnRef.get(ctx);
+    if (!(loadedTurn instanceof AgentConversationTurnHandle)) throw new Error("Expected last turn to be an agent turn");
+    const turn: Any = loadedTurn;
+    await this.runTurnLoop(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
     return await stateHandler.computeNewStructure(ctx);
   }
 
@@ -140,34 +140,34 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
       options: buildRequestContextOptions(this.config),
       ...(action.requestContext ? { maybeRequestContext: fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) } : {}),
     });
-    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
-    await this.executePendingToolCalls(ctx, stateHandler, mergedMcpTools, requestContext, invocationId);
+    const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
+    await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);
     if (stateHandler.turns.length === 0) return { noTurns: true };
-    const lastTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
-    const turn: Any = await lastTurnRef.get(ctx);
+    const newestTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
+    const turn: Any = await newestTurnRef.get(ctx);
     if (!(turn instanceof AgentConversationTurnHandle)) throw new Error("Expected last turn to be an agent turn");
-    return { turn, mergedMcpTools, requestContext, requestContextProvenance };
+    return { turn, mergedTools, requestContext, requestContextProvenance };
   }
 
   async handleSingleStep(parentCtx: Context, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    using span = createSpan(parentCtx.withName("ResumeActionHandler.handleSingleStep"));
-    const ctx = span.ctx;
-    span.span.setAttribute("invocationId", getInvocationId(ctx));
-    const setup = await this.setupResumeStep(ctx, action, stateHandler, mcpTools);
-    if ("noTurns" in setup) return { state: await stateHandler.computeNewStructure(ctx), hasToolCall: false };
-    const { turn, mergedMcpTools, requestContext } = setup;
-    const { hasToolCall } = await this.runSingleStep(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedMcpTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
+    using executionSpan = createSpan(parentCtx.withName("ResumeActionHandler.handleSingleStep"));
+    const ctx = executionSpan.ctx;
+    executionSpan.span.setAttribute("invocationId", getInvocationId(ctx));
+    const stepSetup = await this.setupResumeStep(ctx, action, stateHandler, mcpTools);
+    if ("noTurns" in stepSetup) return { state: await stateHandler.computeNewStructure(ctx), hasToolCall: false };
+    const { turn, mergedTools, requestContext } = stepSetup;
+    const { hasToolCall } = await this.runSingleStep(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
     return { state: await stateHandler.computeNewStructure(ctx), hasToolCall };
   }
 
   async handleModelStep(parentCtx: Context, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
-    using span = createSpan(parentCtx.withName("ResumeActionHandler.handleModelStep"));
-    const ctx = span.ctx;
-    span.span.setAttribute("invocationId", getInvocationId(ctx));
-    const setup = await this.setupResumeStep(ctx, action, stateHandler, mcpTools);
-    if ("noTurns" in setup) return { state: await stateHandler.computeNewStructure(ctx), toolCallDescriptors: [], splitStepData: { modelResponseMessages: [] } };
-    const { turn, mergedMcpTools, requestContext, requestContextProvenance } = setup;
-    const { toolCallDescriptors, splitStepData } = await this.runModelStep(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedMcpTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
+    using executionSpan = createSpan(parentCtx.withName("ResumeActionHandler.handleModelStep"));
+    const ctx = executionSpan.ctx;
+    executionSpan.span.setAttribute("invocationId", getInvocationId(ctx));
+    const stepSetup = await this.setupResumeStep(ctx, action, stateHandler, mcpTools);
+    if ("noTurns" in stepSetup) return { state: await stateHandler.computeNewStructure(ctx), toolCallDescriptors: [], splitStepData: { modelResponseMessages: [] } };
+    const { turn, mergedTools, requestContext, requestContextProvenance } = stepSetup;
+    const { toolCallDescriptors, splitStepData } = await this.runModelStep(ctx, rootPromptExecutor, stateHandler, turn, this.config.toolsGenerator, mergedTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
     return { state: await stateHandler.computeNewStructure(ctx), toolCallDescriptors, splitStepData: { ...splitStepData, requestContextProvenance } };
   }
 }
