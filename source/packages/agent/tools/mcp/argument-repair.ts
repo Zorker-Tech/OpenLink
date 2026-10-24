@@ -2,14 +2,14 @@
  * Reading the arguments a model sent for an MCP tool when they are not quite JSON.
  *
  * A model writing a tool call by hand produces almost-JSON: a trailing comma before the closing brace, a
- * truncated blob, Python's single quotes, or — most often — the tool's own parameter markup leaked into
+ * truncated blob, Python's single quotes, or — most often — the tool's own parameter markup leakedFields into
  * the argument it belongs to, because the model wrote the call the way it was trained to write it rather
  * than the way the schema asks. The call is worth repairing rather than rejecting: the model meant
  * something specific, and a round trip to ask again costs more than reading it correctly.
  *
- * The repairs are deliberately conservative. A blob with two readings is refused rather than guessed at,
- * since the two readings would call the tool differently. Markup is only stripped when it names exactly
- * one parameter — the one being read — because otherwise the argument is not the thing that leaked.
+ * The repairs are deliberately conservative. A blob with two candidateReadings is refused rather than guessed at,
+ * since the two candidateReadings would call the tool differently. Markup is only stripped when it names exactly
+ * one parameter — the one being read — because otherwise the argument is not the thing that leakedFields.
  * Duplicate keys are refused outright: JSON parsers keep the last one, and the model's intent is not
  * recoverable from that.
  */
@@ -23,24 +23,24 @@ export function* jsonTokens(text: string, start: number): Generator<JsonToken> {
   for (let index = start; index < text.length; index++) {
     const char = text[index]!
     if (char === '"') {
-      const openIndex = index
-      let escaped = false
+      const stringStart = index
+      let inEscape = false
       index++
       while (index < text.length) {
-        const inner = text[index]!
-        if (escaped) escaped = false
-        else if (inner === "\\") escaped = true
-        else if (inner === '"') break
+        const innerCharacter = text[index]!
+        if (inEscape) inEscape = false
+        else if (innerCharacter === "\\") inEscape = true
+        else if (innerCharacter === '"') break
         index++
       }
-      yield { kind: "string", raw: text.slice(openIndex, index + 1), index: openIndex }
+      yield { kind: "string", raw: text.slice(stringStart, index + 1), index: stringStart }
     } else if (char === "{" || char === "}" || char === "[" || char === "]" || char === ":" || char === ",") {
       yield { kind: "punctuation", char, index }
     }
   }
 }
 
-const decodeStringLiteral = (raw: string): string => {
+const decodedTextOf = (raw: string): string => {
   try {
     const decoded: unknown = JSON.parse(raw)
     return typeof decoded === "string" ? decoded : raw
@@ -49,7 +49,7 @@ const decodeStringLiteral = (raw: string): string => {
   }
 }
 
-const parseJsonObject = (text: string): Record<string, unknown> | undefined => {
+const jsonObjectOrUndefined = (text: string): Record<string, unknown> | undefined => {
   try {
     const value: unknown = JSON.parse(text)
     if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined
@@ -61,109 +61,109 @@ const parseJsonObject = (text: string): Record<string, unknown> | undefined => {
 
 /** A key written twice in one object is refused, because which one was meant is not recoverable. */
 export const namesAKeyTwice = (text: string): boolean => {
-  const containers: Array<"object" | "array"> = []
-  const keysPerObject: Array<Set<string>> = []
-  let pendingString: string | undefined
+  const containerKinds: Array<"object" | "array"> = []
+  const keysByObject: Array<Set<string>> = []
+  let pendingKeyText: string | undefined
   for (const token of jsonTokens(text, 0)) {
     if (token.kind === "string") {
-      pendingString = token.raw
+      pendingKeyText = token.raw
       continue
     }
     switch (token.char) {
       case "{":
-        containers.push("object")
-        keysPerObject.push(new Set())
+        containerKinds.push("object")
+        keysByObject.push(new Set())
         break
       case "[":
-        containers.push("array")
+        containerKinds.push("array")
         break
       case "}":
-        if (containers.pop() === "object") keysPerObject.pop()
+        if (containerKinds.pop() === "object") keysByObject.pop()
         break
       case "]":
-        containers.pop()
+        containerKinds.pop()
         break
       case ":":
-        if (containers[containers.length - 1] === "object" && pendingString !== undefined) {
-          const key = decodeStringLiteral(pendingString)
-          const seen = keysPerObject[keysPerObject.length - 1]
-          if (seen !== undefined) {
-            if (seen.has(key)) return true
-            seen.add(key)
+        if (containerKinds[containerKinds.length - 1] === "object" && pendingKeyText !== undefined) {
+          const key = decodedTextOf(pendingKeyText)
+          const seenKeys = keysByObject[keysByObject.length - 1]
+          if (seenKeys !== undefined) {
+            if (seenKeys.has(key)) return true
+            seenKeys.add(key)
           }
         }
         break
       default:
         break
     }
-    pendingString = undefined
+    pendingKeyText = undefined
   }
   return false
 }
 
-const parseWholeObject = (text: string): Record<string, unknown> | undefined =>
-  namesAKeyTwice(text) ? undefined : parseJsonObject(text)
+const parseObjectIfSingleKeyed = (text: string): Record<string, unknown> | undefined =>
+  namesAKeyTwice(text) ? undefined : jsonObjectOrUndefined(text)
 
-const decodeLeadingJsonObject = (blob: string): { readonly value: Record<string, unknown>; readonly rest: string } | undefined => {
+const leadingObjectOf = (blob: string): { readonly value: Record<string, unknown>; readonly rest: string } | undefined => {
   const start = blob.indexOf("{")
   if (start < 0) return undefined
-  let depth = 0
+  let braceDepth = 0
   for (const token of jsonTokens(blob, start)) {
     if (token.kind !== "punctuation") continue
     if (token.char === "{") {
-      depth++
-    } else if (token.char === "}" && --depth === 0) {
-      const value = parseJsonObject(blob.slice(start, token.index + 1))
+      braceDepth++
+    } else if (token.char === "}" && --braceDepth === 0) {
+      const value = jsonObjectOrUndefined(blob.slice(start, token.index + 1))
       return value === undefined ? undefined : { value, rest: blob.slice(token.index + 1) }
     }
   }
   return undefined
 }
 
-const structuralClosingBraces = (blob: string, start: number): number[] => {
-  const out: number[] = []
+const closingBraceIndexes = (blob: string, start: number): number[] => {
+  const indexes: number[] = []
   for (const token of jsonTokens(blob, start)) {
-    if (token.kind === "punctuation" && token.char === "}") out.push(token.index)
+    if (token.kind === "punctuation" && token.char === "}") indexes.push(token.index)
   }
-  return out
+  return indexes
 }
 
 /** The markup a model's own tool-call format uses, which sometimes leaks into an argument. */
 export const leakedParameter = /<(?:antml:)?parameter\s+name="([^"]+)"\s*>([\s\S]*?)(?=<(?:antml:)?parameter\b|<\/|$)/gi
 
-const readLeakedParameters = (markup: string): Record<string, string> | undefined => {
-  const fields: Record<string, string> = {}
-  for (const match of markup.matchAll(leakedParameter)) {
-    const name = match[1]
-    const value = match[2]
-    if (name !== undefined && value !== undefined && value.trim() !== "") fields[name] = value.trim()
+const leakedFieldsOf = (markup: string): Record<string, string> | undefined => {
+  const fieldsByName: Record<string, string> = {}
+  for (const markupMatch of markup.matchAll(leakedParameter)) {
+    const name = markupMatch[1]
+    const value = markupMatch[2]
+    if (name !== undefined && value !== undefined && value.trim() !== "") fieldsByName[name] = value.trim()
   }
-  return Object.keys(fields).length > 0 ? fields : undefined
+  return Object.keys(fieldsByName).length > 0 ? fieldsByName : undefined
 }
 
-const READING_SEARCH_BUDGET = 250_000
+const READING_BUDGET = 250_000
 
 /** Every faithful reading of a blob, so a blob with more than one can be refused rather than guessed. */
-const faithfulReadings = (blob: string): Record<string, unknown>[] | undefined => {
+const readingsOf = (blob: string): Record<string, unknown>[] | undefined => {
   const start = blob.indexOf("{")
   if (start < 0) return []
-  const closingBraces = structuralClosingBraces(blob, start)
-  if (closingBraces.length * blob.length > READING_SEARCH_BUDGET) return undefined
-  const byFingerprint = new Map<string, Record<string, unknown>>()
+  const closingIndexes = closingBraceIndexes(blob, start)
+  if (closingIndexes.length * blob.length > READING_BUDGET) return undefined
+  const readingsByFingerprint = new Map<string, Record<string, unknown>>()
   const add = (value: Record<string, unknown> | undefined): void => {
     if (value === undefined) return
-    const fingerprint = JSON.stringify(value)
-    if (!byFingerprint.has(fingerprint)) byFingerprint.set(fingerprint, value)
+    const readingFingerprint = JSON.stringify(value)
+    if (!readingsByFingerprint.has(readingFingerprint)) readingsByFingerprint.set(readingFingerprint, value)
   }
-  const decoded = decodeLeadingJsonObject(blob)
+  const decoded = leadingObjectOf(blob)
   const leading = decoded !== undefined && !namesAKeyTwice(blob.slice(start, blob.length - decoded.rest.length))
     ? decoded
     : undefined
-  const tail = leading?.rest.trim() ?? ""
-  if (leading !== undefined && /^[\s,\]}]*$/.test(tail)) add(leading.value)
+  const trailer = leading?.rest.trim() ?? ""
+  if (leading !== undefined && /^[\s,\]}]*$/.test(trailer)) add(leading.value)
   // Dropping a stray closing brace is the other common shape, so each of them is tried.
-  for (const index of closingBraces) add(parseWholeObject(blob.slice(start, index) + blob.slice(index + 1)))
-  return [...byFingerprint.values()]
+  for (const index of closingIndexes) add(parseObjectIfSingleKeyed(blob.slice(start, index) + blob.slice(index + 1)))
+  return [...readingsByFingerprint.values()]
 }
 
 export interface ParsedMcpArguments {
@@ -173,16 +173,16 @@ export interface ParsedMcpArguments {
 }
 
 export const parseArgumentsLeniently = (blob: string): ParsedMcpArguments | undefined => {
-  const direct = parseJsonObject(blob)
-  if (direct !== undefined) return { args: direct, repaired: false }
-  const readings = faithfulReadings(blob)
-  if (readings === undefined || readings.length > 1) return undefined
-  if (readings.length === 1) return { args: readings[0]!, repaired: true }
-  const decoded = decodeLeadingJsonObject(blob)
-  const leaked = decoded === undefined ? undefined : readLeakedParameters(decoded.rest.trim())
-  if (decoded === undefined || leaked === undefined) return undefined
-  // Only a leaked description may be absorbed: anything else would be a parameter the call lost.
-  return Object.keys(leaked).some(field => field !== "description")
+  const parsedDirectly = jsonObjectOrUndefined(blob)
+  if (parsedDirectly !== undefined) return { args: parsedDirectly, repaired: false }
+  const candidateReadings = readingsOf(blob)
+  if (candidateReadings === undefined || candidateReadings.length > 1) return undefined
+  if (candidateReadings.length === 1) return { args: candidateReadings[0]!, repaired: true }
+  const decoded = leadingObjectOf(blob)
+  const leakedFields = decoded === undefined ? undefined : leakedFieldsOf(decoded.rest.trim())
+  if (decoded === undefined || leakedFields === undefined) return undefined
+  // Only a leakedFields description may be absorbed: anything else would be a parameter the call lost.
+  return Object.keys(leakedFields).some(field => field !== "description")
     ? undefined
-    : { args: decoded.value, repaired: true, envelopeFields: leaked }
+    : { args: decoded.value, repaired: true, envelopeFields: leakedFields }
 }
