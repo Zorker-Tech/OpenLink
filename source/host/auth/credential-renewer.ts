@@ -32,12 +32,12 @@ export interface RenewalResult {
   readonly errorSummary: string | undefined;
 }
 
-function credentialFromPayload(parsed: unknown, absentMessage: string): InferenceCredential {
-  const record = parsed as Record<string, unknown>;
-  const accessToken = typeof record.accessToken === "string" ? record.accessToken : "";
+function credentialFromPayload(payload: unknown, absentMessage: string): InferenceCredential {
+  const payloadRecord = payload as Record<string, unknown>;
+  const accessToken = typeof payloadRecord.accessToken === "string" ? payloadRecord.accessToken : "";
   if (accessToken.length === 0) throw new SlateCredentialRenewalError(absentMessage);
-  const expiresAtMs = typeof record.expiresAtMs === "number" && Number.isFinite(record.expiresAtMs)
-    ? record.expiresAtMs
+  const expiresAtMs = typeof payloadRecord.expiresAtMs === "number" && Number.isFinite(payloadRecord.expiresAtMs)
+    ? payloadRecord.expiresAtMs
     : getAccessTokenExpiryMs(accessToken) ?? Date.now() + DEFAULT_TTL_MS;
   return { accessToken, expiresAtMs };
 }
@@ -60,18 +60,18 @@ export async function readDevInferenceCredentialFile(args: {
   readonly path: string;
   readonly readFileImpl?: (path: string) => Promise<string>;
 }): Promise<InferenceCredential> {
-  const raw = await (args.readFileImpl ?? ((path) => readFile(path, "utf8")))(args.path);
-  return credentialFromPayload(JSON.parse(raw) as unknown, `Dev inference token file ${args.path} has no accessToken yet.`);
+  const rawText = await (args.readFileImpl ?? ((path) => readFile(path, "utf8")))(args.path);
+  return credentialFromPayload(JSON.parse(rawText) as unknown, `Dev inference token file ${args.path} has no accessToken yet.`);
 }
 
 export class SlateInferenceCredentialRenewer {
-  private readonly abort = new AbortController();
+  private readonly abortController = new AbortController();
   private loop: Promise<void> | undefined;
-  private consecutiveFailures = 0;
-  private interruptRefreshWait: (() => void) | undefined;
-  private onDemandRenewal: PromiseWithResolvers<void> | undefined;
+  private failureCount = 0;
+  private wakeRefresh: (() => void) | undefined;
+  private demandRenewal: PromiseWithResolvers<void> | undefined;
 
-  constructor(private readonly options: {
+  constructor(private readonly renewalOptions: {
     readonly getCredential: () => string | null;
     readonly renew: (credential: string) => Promise<InferenceCredential>;
     readonly setCredential: (credential: InferenceCredential) => void;
@@ -80,86 +80,86 @@ export class SlateInferenceCredentialRenewer {
     readonly clock: Clock;
   }) {}
 
-  start(): void { this.loop ??= this.run(); }
-  close(): void { this.abort.abort(); }
+  start(): void { this.loop ??= this.runLoop(); }
+  close(): void { this.abortController.abort(); }
 
   requestImmediateRenewal(): Promise<boolean> {
-    if (this.onDemandRenewal !== undefined) return this.onDemandRenewal.promise.then(() => true);
-    const interrupt = this.interruptRefreshWait;
+    if (this.demandRenewal !== undefined) return this.demandRenewal.promise.then(() => true);
+    const interrupt = this.wakeRefresh;
     if (interrupt === undefined) return Promise.resolve(false);
-    this.onDemandRenewal = Promise.withResolvers<void>();
-    const result = this.onDemandRenewal.promise.then(() => true);
+    this.demandRenewal = Promise.withResolvers<void>();
+    const result = this.demandRenewal.promise.then(() => true);
     interrupt();
     return result;
   }
 
-  private async run(): Promise<void> {
+  private async runLoop(): Promise<void> {
     try {
-      while (!this.abort.signal.aborted) {
-        const next = await this.cycle();
-        this.completeOnDemandRenewal();
-        if (next === null) return;
-        await this.waitFor(next);
+      while (!this.abortController.signal.aborted) {
+        const nextDelay = await this.renewalCycle();
+        this.settleDemandRenewal();
+        if (nextDelay === null) return;
+        await this.waitUntilNext(nextDelay);
       }
-    } finally { this.completeOnDemandRenewal(); }
+    } finally { this.settleDemandRenewal(); }
   }
 
-  private completeOnDemandRenewal(): void { this.onDemandRenewal?.resolve(); this.onDemandRenewal = undefined; }
+  private settleDemandRenewal(): void { this.demandRenewal?.resolve(); this.demandRenewal = undefined; }
 
-  private async cycle(): Promise<{ kind: "refresh"; delayMs: number } | { kind: "backoff"; attempt: number } | null> {
+  private async renewalCycle(): Promise<{ kind: "refresh"; delayMs: number } | { kind: "backoff"; attempt: number } | null> {
     const cycleStartedAtMs = Date.now();
     try {
-      const credential = this.options.getCredential();
+      const credential = this.renewalOptions.getCredential();
       if (credential == null || credential.length === 0) return { kind: "refresh", delayMs: MAX_REFRESH_INTERVAL_MS };
-      const renewed = await this.options.renew(credential);
-      if (this.abort.signal.aborted) return null;
-      this.options.setCredential(renewed);
-      this.consecutiveFailures = 0;
-      this.reportResult("renewed", Date.now() - cycleStartedAtMs);
-      const untilRefresh = renewed.expiresAtMs - Date.now() - REFRESH_LEEWAY_MS;
+      const renewedCredential = await this.renewalOptions.renew(credential);
+      if (this.abortController.signal.aborted) return null;
+      this.renewalOptions.setCredential(renewedCredential);
+      this.failureCount = 0;
+      this.publishResult("renewed", Date.now() - cycleStartedAtMs);
+      const untilRefresh = renewedCredential.expiresAtMs - Date.now() - REFRESH_LEEWAY_MS;
       return { kind: "refresh", delayMs: Math.min(Math.max(untilRefresh, MIN_REFRESH_INTERVAL_MS), MAX_REFRESH_INTERVAL_MS) };
     } catch (error) {
-      if (this.abort.signal.aborted) return null;
-      this.consecutiveFailures += 1;
-      this.reportResult("failed", Date.now() - cycleStartedAtMs, redactRenewalErrorForReport(error instanceof Error ? error.message : String(error)));
-      return { kind: "backoff", attempt: this.consecutiveFailures };
+      if (this.abortController.signal.aborted) return null;
+      this.failureCount += 1;
+      this.publishResult("failed", Date.now() - cycleStartedAtMs, redactRenewalErrorForReport(error instanceof Error ? error.message : String(error)));
+      return { kind: "backoff", attempt: this.failureCount };
     }
   }
 
-  private async waitFor(next: { kind: "refresh"; delayMs: number } | { kind: "backoff"; attempt: number }): Promise<void> {
-    const signal = this.abort.signal;
-    if (signal.aborted) return;
-    if (next.kind === "backoff") {
-      await this.options.retry.schedule(next.attempt, signal).elapsed.catch((error) => {
-        if (!signal.aborted) console.warn(`[slate-credential-renewer] backoff wait failed (${errorLogTag(error)})`);
+  private async waitUntilNext(nextDelay: { kind: "refresh"; delayMs: number } | { kind: "backoff"; attempt: number }): Promise<void> {
+    const abortSignal = this.abortController.signal;
+    if (abortSignal.aborted) return;
+    if (nextDelay.kind === "backoff") {
+      await this.renewalOptions.retry.schedule(nextDelay.attempt, abortSignal).elapsed.catch((error) => {
+        if (!abortSignal.aborted) console.warn(`[slate-credential-renewer] backoff wait failed (${errorLogTag(error)})`);
       });
       return;
     }
     await new Promise<void>((resolve) => {
-      let settled = false;
-      let scheduled: { dispose(): void };
+      let isSettled = false;
+      let scheduledWait: { dispose(): void };
       const finish = () => {
-        if (settled) return;
-        settled = true;
-        scheduled.dispose();
-        signal.removeEventListener("abort", finish);
-        if (this.interruptRefreshWait === finish) this.interruptRefreshWait = undefined;
+        if (isSettled) return;
+        isSettled = true;
+        scheduledWait.dispose();
+        abortSignal.removeEventListener("abort", finish);
+        if (this.wakeRefresh === finish) this.wakeRefresh = undefined;
         resolve();
       };
-      scheduled = this.options.clock.schedule(next.delayMs, finish);
-      this.interruptRefreshWait = finish;
-      signal.addEventListener("abort", finish, { once: true });
+      scheduledWait = this.renewalOptions.clock.schedule(nextDelay.delayMs, finish);
+      this.wakeRefresh = finish;
+      abortSignal.addEventListener("abort", finish, { once: true });
     });
   }
 
-  private reportResult(outcome: "renewed" | "failed", durationMs: number, errorSummary?: string): void {
-    try { this.options.onResult?.({ outcome, consecutiveFailures: this.consecutiveFailures, durationMs, errorSummary }); }
+  private publishResult(outcome: "renewed" | "failed", durationMs: number, errorSummary?: string): void {
+    try { this.renewalOptions.onResult?.({ outcome, consecutiveFailures: this.failureCount, durationMs, errorSummary }); }
     catch {}
   }
 }
 
-export function redactRenewalErrorForReport(raw: string): string {
-  return raw.replace(/https?:\/\/\S+/gi, "<url>").replace(/\/[^\s"']+/g, "<path>").replace(/[A-Za-z0-9_-]{24,}/g, "<id>").replace(/\s+/g, " ").trim().slice(0, 160);
+export function redactRenewalErrorForReport(rawText: string): string {
+  return rawText.replace(/https?:\/\/\S+/gi, "<url>").replace(/\/[^\s"']+/g, "<path>").replace(/[A-Za-z0-9_-]{24,}/g, "<id>").replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
 export function getSlateInferenceBackendUrl(): string { return getConfiguredBackendUrl(); }
