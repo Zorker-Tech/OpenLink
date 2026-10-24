@@ -38,52 +38,52 @@ export class ProfileWatch {
     readonly rosterEmit: RosterEmit,
   ) {}
 
-  emitProfileChanged(agentId: string): void {
-    this.recordNameChangeEvent(agentId);
-    this.emitter.emit("profile-changed", { agentId });
+  emitProfileChanged(profileAgentId: string): void {
+    this.recordNameChangeEvent(profileAgentId);
+    this.emitter.emit("profile-changed", { agentId: profileAgentId });
   }
 
-  recordNameChangeEvent(agentId: string): void {
-    const currentName =
-      this.tm.sessionStore.getAgentProfileText(agentId)?.name.trim() ?? "";
-    if (currentName.length === 0) return;
-    const previousName = this.lastKnownAgentNames.get(agentId);
-    this.lastKnownAgentNames.set(agentId, currentName);
-    if (previousName == null || previousName === currentName) return;
-    this.tm.emitTimelineEvent(agentId, {
+  recordNameChangeEvent(profileAgentId: string): void {
+    const resolvedName =
+      this.tm.sessionStore.getAgentProfileText(profileAgentId)?.name.trim() ?? "";
+    if (resolvedName.length === 0) return;
+    const knownName = this.lastKnownAgentNames.get(profileAgentId);
+    this.lastKnownAgentNames.set(profileAgentId, resolvedName);
+    if (knownName == null || knownName === resolvedName) return;
+    this.tm.emitTimelineEvent(profileAgentId, {
       type: "name-changed",
-      from: previousName,
-      to: currentName,
+      from: knownName,
+      to: resolvedName,
     });
   }
 
-  seedKnownAgentName(agentId: string): void {
-    if (this.lastKnownAgentNames.has(agentId)) return;
-    const name =
-      this.tm.sessionStore.getAgentProfileText(agentId)?.name.trim() ?? "";
-    if (name.length > 0) this.lastKnownAgentNames.set(agentId, name);
+  seedKnownAgentName(profileAgentId: string): void {
+    if (this.lastKnownAgentNames.has(profileAgentId)) return;
+    const displayName =
+      this.tm.sessionStore.getAgentProfileText(profileAgentId)?.name.trim() ?? "";
+    if (displayName.length > 0) this.lastKnownAgentNames.set(profileAgentId, displayName);
   }
 
   subscribeProfileChanged(
-    listener: (event: { agentId: string }) => void,
+    changeListener: (watchEvent: { agentId: string }) => void,
   ): () => void {
-    this.emitter.on("profile-changed", listener);
-    return () => this.emitter.off("profile-changed", listener);
+    this.emitter.on("profile-changed", changeListener);
+    return () => this.emitter.off("profile-changed", changeListener);
   }
 
-  watchSessionProfile(session: { id: string; dbPath: string }): void {
-    if (this.watchedProfileAgentId === session.id) return;
+  watchSessionProfile(profileSession: { id: string; dbPath: string }): void {
+    if (this.watchedProfileAgentId === profileSession.id) return;
     this.stopWatchingProfile();
-    this.watchedProfileAgentId = session.id;
-    this.seedKnownAgentName(session.id);
+    this.watchedProfileAgentId = profileSession.id;
+    this.seedKnownAgentName(profileSession.id);
     try {
       this.profileWatcher = watch(
-        dirname(session.dbPath),
-        (_event, filename) => {
+        dirname(profileSession.dbPath),
+        (_event, changedFilename) => {
           if (
-            filename !== SLATE_PROFILE_FILENAME &&
-            filename !== SLATE_SETTINGS_FILENAME &&
-            (filename == null || !isConventionalAvatarFilename(filename))
+            changedFilename !== SLATE_PROFILE_FILENAME &&
+            changedFilename !== SLATE_SETTINGS_FILENAME &&
+            (changedFilename == null || !isConventionalAvatarFilename(changedFilename))
           )
             return;
           this.scheduleProfileEmit();
@@ -100,16 +100,16 @@ export class ProfileWatch {
       PROFILE_WATCH_DEBOUNCE_MS,
       () => {
         this.profileWatchTimer = undefined;
-        const agentId = this.watchedProfileAgentId;
-        if (agentId == null) {
+        const profileAgentId = this.watchedProfileAgentId;
+        if (profileAgentId == null) {
           void this.rosterEmit.emitAgents();
           return;
         }
-        const active = this.tm.sessions.activeSession;
-        if (active?.id === agentId)
-          invalidateAvatarDataUrlCache(dirname(active.dbPath));
-        void this.rosterEmit.emitAgentUpdate(agentId);
-        this.emitProfileChanged(agentId);
+        const activeSession = this.tm.sessions.activeSession;
+        if (activeSession?.id === profileAgentId)
+          invalidateAvatarDataUrlCache(dirname(activeSession.dbPath));
+        void this.rosterEmit.emitAgentUpdate(profileAgentId);
+        this.emitProfileChanged(profileAgentId);
       },
     );
   }
@@ -122,33 +122,33 @@ export class ProfileWatch {
     this.watchedProfileAgentId = undefined;
   }
 
-  async getAgentDisplayProfile(agentId: string): Promise<{
+  async getAgentDisplayProfile(profileAgentId: string): Promise<{
     name: string;
     description: string;
   } | null> {
-    const dir = this.tm.sessionStore.getAgentDir(agentId);
-    if (!existsSync(dir)) return null;
-    const profile = readSlateProfileFile(getSlateProfilePath(dir));
+    const agentDirectory = this.tm.sessionStore.getAgentDir(profileAgentId);
+    if (!existsSync(agentDirectory)) return null;
+    const storedProfile = readSlateProfileFile(getSlateProfilePath(agentDirectory));
     return {
-      name: profile?.name.trim() || SLATE_DEFAULT_AGENT_NAME,
-      description: profile?.description ?? "",
+      name: storedProfile?.name.trim() || SLATE_DEFAULT_AGENT_NAME,
+      description: storedProfile?.description ?? "",
     };
   }
 
-  resolveAgentProfile(session: { dbPath: string }): {
+  resolveAgentProfile(profileSession: { dbPath: string }): {
     name: string;
     description: string;
     filePath: string;
     settingsFilePath: string;
   } {
-    const dir = dirname(session.dbPath);
-    const filePath = getSlateProfilePath(dir);
-    const profile = readSlateProfileFile(filePath);
+    const agentDirectory = dirname(profileSession.dbPath);
+    const filePath = getSlateProfilePath(agentDirectory);
+    const storedProfile = readSlateProfileFile(filePath);
     return {
-      name: profile?.name.trim() || SLATE_DEFAULT_AGENT_NAME,
-      description: profile?.description ?? "",
+      name: storedProfile?.name.trim() || SLATE_DEFAULT_AGENT_NAME,
+      description: storedProfile?.description ?? "",
       filePath,
-      settingsFilePath: getSlateSettingsPath(dir),
+      settingsFilePath: getSlateSettingsPath(agentDirectory),
     };
   }
 }
