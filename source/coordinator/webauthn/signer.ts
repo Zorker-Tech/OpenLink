@@ -24,8 +24,8 @@ export type SignerEvent =
   | { readonly kind: "pin-required" }
   | { readonly kind: "pin-invalid"; readonly retries?: number };
 
-export function describeSignerEventAsStatus(event: SignerEvent): string | undefined {
-  switch (event.kind) {
+export function describeSignerEventAsStatus(signerEvent: SignerEvent): string | undefined {
+  switch (signerEvent.kind) {
     case "presence-required": return "Touch your security key now";
     case "select-device": return "Touch the security key you want to use";
     case "pin-not-set": return "This security key has no PIN set, but the site asked for one";
@@ -47,29 +47,29 @@ export type WebAuthnSignerResult =
   | { readonly ok: true; readonly credentialJson: unknown }
   | { readonly ok: false; readonly error: WebAuthnSignerError };
 
-function failure(error: WebAuthnSignerError): WebAuthnSignerResult {
+function signerFailure(error: WebAuthnSignerError): WebAuthnSignerResult {
   return { ok: false, error };
 }
 
 export const SIGNER_BINARY = process.platform === "win32" ? "slate-webauthn-signer.exe" : "slate-webauthn-signer";
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 
-export function devRepoRoot(override?: string): string {
-  if (override !== undefined) return override;
+export function devRepoRoot(envOverride?: string): string {
+  if (envOverride !== undefined) return envOverride;
   return join(moduleDirectory, "..", "..", "..");
 }
 
-export function resolveWebAuthnSignerPath(options: { readonly isPackaged: boolean; readonly repoRoot?: string }): string | undefined {
-  const override = process.env.SLATE_WEBAUTHN_SIGNER_PATH;
-  if (override !== undefined && override.length > 0) return existsSync(override) ? override : undefined;
-  const resourcesPath = (process as NodeJS.Process & { readonly resourcesPath?: string }).resourcesPath ?? "";
-  const candidates = options.isPackaged
-    ? [join(resourcesPath, "app.asar.unpacked", "dist", "native", SIGNER_BINARY)]
+export function resolveWebAuthnSignerPath(signerOptions: { readonly isPackaged: boolean; readonly repoRoot?: string }): string | undefined {
+  const envOverride = process.env.SLATE_WEBAUTHN_SIGNER_PATH;
+  if (envOverride !== undefined && envOverride.length > 0) return existsSync(envOverride) ? envOverride : undefined;
+  const packagedResources = (process as NodeJS.Process & { readonly resourcesPath?: string }).resourcesPath ?? "";
+  const binaryCandidates = signerOptions.isPackaged
+    ? [join(packagedResources, "app.asar.unpacked", "dist", "native", SIGNER_BINARY)]
     : [
-        join(devRepoRoot(options.repoRoot), "target", "release", SIGNER_BINARY),
-        join(devRepoRoot(options.repoRoot), "target", "debug", SIGNER_BINARY)
+        join(devRepoRoot(signerOptions.repoRoot), "target", "release", SIGNER_BINARY),
+        join(devRepoRoot(signerOptions.repoRoot), "target", "debug", SIGNER_BINARY)
       ];
-  return candidates.find((candidate) => existsSync(candidate));
+  return binaryCandidates.find((binaryCandidate) => existsSync(binaryCandidate));
 }
 
 export function parseSignerEvent(body: string, log: (message: string) => void): SignerEvent | undefined {
@@ -90,92 +90,92 @@ export interface ApprovedWebAuthnConsent {
 export interface SpawnedWebAuthnSignerOptions {
   readonly binaryPath: string;
   readonly log?: (message: string) => void;
-  readonly onStatus?: (status: string) => void;
-  readonly onPinRequest?: (request: { readonly invalid: boolean; readonly retries?: number }, promptId: string) => Promise<string | undefined>;
+  readonly onStatus?: (statusText: string) => void;
+  readonly onPinRequest?: (request: { readonly invalid: boolean; readonly retries?: number }, consentPromptId: string) => Promise<string | undefined>;
 }
 
 export interface WebAuthnSigner {
-  sign(ceremony: WebAuthnCeremony, signal: AbortSignal, approved?: ApprovedWebAuthnConsent): Promise<WebAuthnSignerResult>;
+  sign(ceremony: WebAuthnCeremony, signal: AbortSignal, consent?: ApprovedWebAuthnConsent): Promise<WebAuthnSignerResult>;
 }
 
-export function createSpawnedWebAuthnSigner(options: SpawnedWebAuthnSignerOptions): WebAuthnSigner {
-  const log = options.log ?? (() => {});
+export function createSpawnedWebAuthnSigner(signerOptions: SpawnedWebAuthnSignerOptions): WebAuthnSigner {
+  const log = signerOptions.log ?? (() => {});
   return {
-    sign(ceremony, signal, approved) {
+    sign(ceremony, signal, consent) {
       return new Promise((resolve) => {
-        const child = spawn(options.binaryPath, [], { stdio: ["pipe", "pipe", "pipe"] });
-        let stdout = "";
+        const signerProcess = spawn(signerOptions.binaryPath, [], { stdio: ["pipe", "pipe", "pipe"] });
+        let stdoutText = "";
         let stderr = "";
-        let settled = false;
-        const settle = (result: WebAuthnSignerResult) => {
-          if (settled) return;
-          settled = true;
+        let isSettled = false;
+        const finish = (result: WebAuthnSignerResult) => {
+          if (isSettled) return;
+          isSettled = true;
           signal.removeEventListener("abort", onAbort);
           resolve(result);
         };
         function onAbort() {
-          child.kill("SIGTERM");
-          settle(failure({ name: "NotAllowedError", code: "cancelled_or_timeout", message: "the security key request was cancelled" }));
+          signerProcess.kill("SIGTERM");
+          finish(signerFailure({ name: "NotAllowedError", code: "cancelled_or_timeout", message: "the security key request was cancelled" }));
         }
         signal.addEventListener("abort", onAbort, { once: true });
-        child.stdin.on("error", (error) => log(`signer stdin: ${error.message}`));
-        const send = (reply: { readonly kind: "cancel" } | { readonly kind: "pin"; readonly pin: string }) => {
-          if (settled || child.stdin.destroyed) return;
-          child.stdin.write(`${JSON.stringify(reply)}\n`);
+        signerProcess.stdin.on("error", (error) => log(`signer stdin: ${error.message}`));
+        const writeReply = (reply: { readonly kind: "cancel" } | { readonly kind: "pin"; readonly pin: string }) => {
+          if (isSettled || signerProcess.stdin.destroyed) return;
+          signerProcess.stdin.write(`${JSON.stringify(reply)}\n`);
         };
-        let promptsInOrder = Promise.resolve();
-        const promptId = approved?.promptId;
-        const answerPin = (request: { readonly invalid: boolean; readonly retries?: number }) => {
-          promptsInOrder = promptsInOrder.then(async () => {
-            const pin = promptId === undefined ? undefined : await options.onPinRequest?.(request, promptId);
-            send(pin === undefined || pin === "" ? { kind: "cancel" } : { kind: "pin", pin });
+        let promptQueue = Promise.resolve();
+        const consentPromptId = consent?.promptId;
+        const answerPinRequest = (request: { readonly invalid: boolean; readonly retries?: number }) => {
+          promptQueue = promptQueue.then(async () => {
+            const pin = consentPromptId === undefined ? undefined : await signerOptions.onPinRequest?.(request, consentPromptId);
+            writeReply(pin === undefined || pin === "" ? { kind: "cancel" } : { kind: "pin", pin });
           }).catch((error: unknown) => {
             log(`pin prompt failed: ${String(error)}`);
-            send({ kind: "cancel" });
+            writeReply({ kind: "cancel" });
           });
         };
-        const handleEvent = (event: SignerEvent) => {
-          if (event.kind === "pin-required") return answerPin({ invalid: false });
-          if (event.kind === "pin-invalid") {
-            answerPin({ invalid: true, ...(event.retries == null ? {} : { retries: event.retries }) });
+        const handleSignerEvent = (signerEvent: SignerEvent) => {
+          if (signerEvent.kind === "pin-required") return answerPinRequest({ invalid: false });
+          if (signerEvent.kind === "pin-invalid") {
+            answerPinRequest({ invalid: true, ...(signerEvent.retries == null ? {} : { retries: signerEvent.retries }) });
             return;
           }
-          const status = describeSignerEventAsStatus(event);
-          if (status !== undefined) options.onStatus?.(status);
+          const statusText = describeSignerEventAsStatus(signerEvent);
+          if (statusText !== undefined) signerOptions.onStatus?.(statusText);
         };
-        child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-        let pendingLine = "";
-        child.stderr.on("data", (chunk) => {
-          const text = String(chunk);
-          stderr += text;
-          pendingLine += text;
-          let newline = pendingLine.indexOf("\n");
-          while (newline >= 0) {
-            const line = pendingLine.slice(0, newline).trim();
-            pendingLine = pendingLine.slice(newline + 1);
-            newline = pendingLine.indexOf("\n");
+        signerProcess.stdout.on("data", (chunk) => { stdoutText += String(chunk); });
+        let lineBuffer = "";
+        signerProcess.stderr.on("data", (chunk) => {
+          const stderrChunk = String(chunk);
+          stderr += stderrChunk;
+          lineBuffer += stderrChunk;
+          let lineBreak = lineBuffer.indexOf("\n");
+          while (lineBreak >= 0) {
+            const line = lineBuffer.slice(0, lineBreak).trim();
+            lineBuffer = lineBuffer.slice(lineBreak + 1);
+            lineBreak = lineBuffer.indexOf("\n");
             if (!line.startsWith(SIGNER_EVENT_PREFIX)) continue;
-            const event = parseSignerEvent(line.slice(SIGNER_EVENT_PREFIX.length), log);
-            if (event !== undefined) handleEvent(event);
+            const signerEvent = parseSignerEvent(line.slice(SIGNER_EVENT_PREFIX.length), log);
+            if (signerEvent !== undefined) handleSignerEvent(signerEvent);
           }
         });
-        child.on("error", (error) => {
-          settle(failure({ name: "NotAllowedError", code: "helper_spawn_failed", message: `could not start the security key helper: ${error.message}` }));
+        signerProcess.on("error", (error) => {
+          finish(signerFailure({ name: "NotAllowedError", code: "helper_spawn_failed", message: `could not start the security key helper: ${error.message}` }));
         });
-        child.on("close", (code) => {
+        signerProcess.on("close", (code) => {
           if (stderr.length > 0) log(`signer stderr: ${stderr.trim()}`);
-          if (stdout.length === 0) {
-            settle(failure({ name: "NotAllowedError", code: "helper_no_result", message: `the security key helper exited with code ${code} and no result` }));
+          if (stdoutText.length === 0) {
+            finish(signerFailure({ name: "NotAllowedError", code: "helper_no_result", message: `the security key helper exited with code ${code} and no result` }));
             return;
           }
           try {
-            settle(JSON.parse(stdout) as WebAuthnSignerResult);
+            finish(JSON.parse(stdoutText) as WebAuthnSignerResult);
           } catch (error) {
-            settle(failure({ name: "NotAllowedError", code: "helper_no_result", message: `unreadable result from the security key helper: ${String(error)}` }));
+            finish(signerFailure({ name: "NotAllowedError", code: "helper_no_result", message: `unreadable result from the security key helper: ${String(error)}` }));
           }
         });
-        const windowHandle = approved?.windowHandle;
-        child.stdin.write(`${JSON.stringify(windowHandle === undefined ? ceremony : { ...ceremony, windowHandle })}\n`);
+        const windowHandle = consent?.windowHandle;
+        signerProcess.stdin.write(`${JSON.stringify(windowHandle === undefined ? ceremony : { ...ceremony, windowHandle })}\n`);
       });
     }
   };
