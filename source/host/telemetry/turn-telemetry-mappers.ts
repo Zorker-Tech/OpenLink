@@ -19,147 +19,147 @@ export interface TokenUsage {
   cacheWriteTokens: number;
   reasoningTokens?: number;
 }
-type TurnFields = Record<
+type TurnTelemetryFields = Record<
   string,
   string | number | boolean | null | undefined | TokenUsage
 >;
-export function totalInputTokens(usage: TokenUsage): number {
-  return usage.inputTokens;
+export function totalInputTokens(tokenUsage: TokenUsage): number {
+  return tokenUsage.inputTokens;
 }
-export function usageTokenTags(usage: TokenUsage | null | undefined) {
-  if (usage == null) return {};
+export function usageTokenTags(tokenUsage: TokenUsage | null | undefined) {
+  if (tokenUsage == null) return {};
   return {
-    input_tokens: String(usage.inputTokens),
-    output_tokens: String(usage.outputTokens),
-    cache_read_tokens: String(usage.cacheReadTokens),
-    cache_write_tokens: String(usage.cacheWriteTokens),
+    input_tokens: String(tokenUsage.inputTokens),
+    output_tokens: String(tokenUsage.outputTokens),
+    cache_read_tokens: String(tokenUsage.cacheReadTokens),
+    cache_write_tokens: String(tokenUsage.cacheWriteTokens),
     reasoning_tokens:
-      usage.reasoningTokens != null ? String(usage.reasoningTokens) : undefined,
-    total_input_tokens: String(totalInputTokens(usage)),
+      tokenUsage.reasoningTokens != null ? String(tokenUsage.reasoningTokens) : undefined,
+    total_input_tokens: String(totalInputTokens(tokenUsage)),
   };
 }
-export function turnInterruptTelemetry(r: TurnFields) {
+export function turnInterruptTelemetry(fields: TurnTelemetryFields) {
   return {
     level: "info",
     event: TURN_INTERRUPT_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      reason: r.reason,
-      had_active_run: String(r.hadActiveRun),
-      was_in_flight: String(r.wasInFlight),
+      conversation_id: fields.conversationId,
+      reason: fields.reason,
+      had_active_run: String(fields.hadActiveRun),
+      was_in_flight: String(fields.wasInFlight),
     },
   };
 }
-export function turnAwaitTelemetry(r: TurnFields) {
+export function turnAwaitTelemetry(fields: TurnTelemetryFields) {
   return {
     level: "info",
     event: TURN_AWAIT_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      block_until_ms: String(r.blockUntilMs),
-      outcome: r.outcome,
-      await_index: String(r.awaitIndex),
+      conversation_id: fields.conversationId,
+      block_until_ms: String(fields.blockUntilMs),
+      outcome: fields.outcome,
+      await_index: String(fields.awaitIndex),
     },
   };
 }
-export function turnRetryTelemetry(r: TurnFields) {
+export function turnRetryTelemetry(fields: TurnTelemetryFields) {
   return {
-    level: r.outcome === "retried" ? "info" : "warn",
+    level: fields.outcome === "retried" ? "info" : "warn",
     event: TURN_RETRY_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      outcome: r.outcome,
-      attempt: String(r.attempt),
-      max_attempts: String(r.maxAttempts),
-      error_type: BOUNDED_ERROR_TYPE.test(String(r.errorType))
-        ? r.errorType
+      conversation_id: fields.conversationId,
+      outcome: fields.outcome,
+      attempt: String(fields.attempt),
+      max_attempts: String(fields.maxAttempts),
+      error_type: BOUNDED_ERROR_TYPE.test(String(fields.errorType))
+        ? fields.errorType
         : "error",
-      error_code: r.errorCode,
-      cause: r.cause,
+      error_code: fields.errorCode,
+      cause: fields.cause,
       delay_ms:
-        r.delayMs != null ? String(Math.round(r.delayMs as number)) : undefined,
-      server_paced: r.serverPaced != null ? String(r.serverPaced) : undefined,
+        fields.delayMs != null ? String(Math.round(fields.delayMs as number)) : undefined,
+      server_paced: fields.serverPaced != null ? String(fields.serverPaced) : undefined,
     },
   };
 }
-export function userMessageReceivedTelemetry(r: TurnFields) {
+export function userMessageReceivedTelemetry(fields: TurnTelemetryFields) {
   return {
     level: "info",
     event: USER_MESSAGE_RECEIVED_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      was_in_flight: String(r.wasInFlight),
+      conversation_id: fields.conversationId,
+      was_in_flight: String(fields.wasInFlight),
     },
   };
 }
-export function closingSendNudgeTelemetry(r: TurnFields) {
+export function closingSendNudgeTelemetry(fields: TurnTelemetryFields) {
   return {
-    level: !r.delivered && !r.aborted ? "warn" : "info",
+    level: !fields.delivered && !fields.aborted ? "warn" : "info",
     event: CLOSING_SEND_NUDGE_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      delivered: String(r.delivered),
-      sent_message_count: String(r.sentMessageCount),
-      aborted: String(r.aborted),
+      conversation_id: fields.conversationId,
+      delivered: String(fields.delivered),
+      sent_message_count: String(fields.sentMessageCount),
+      aborted: String(fields.aborted),
     },
   };
 }
-export function ttftTelemetry(r: TurnFields) {
+export function ttftTelemetry(fields: TurnTelemetryFields) {
   return {
     level: "info",
     event: TTFT_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
+      conversation_id: fields.conversationId,
       ttft_ms:
-        r.ttftMs !== undefined
-          ? String(Math.round(r.ttftMs as number))
+        fields.ttftMs !== undefined
+          ? String(Math.round(fields.ttftMs as number))
           : undefined,
-      skew: String(r.skew),
-      skew_reason: r.skewReason,
-      chunk_type: r.chunkType,
-      is_fork: String(r.isFork),
-      model_id: r.modelId,
-      trace_id: r.traceId,
-      span_id: r.spanId,
+      skew: String(fields.skew),
+      skew_reason: fields.skewReason,
+      chunk_type: fields.chunkType,
+      is_fork: String(fields.isFork),
+      model_id: fields.modelId,
+      trace_id: fields.traceId,
+      span_id: fields.spanId,
     },
   };
 }
-export function turnUsageTelemetry(r: TurnFields) {
-  const usage = r.usage as TokenUsage | null | undefined;
+export function turnUsageTelemetry(fields: TurnTelemetryFields) {
+  const tokenUsage = fields.usage as TokenUsage | null | undefined;
   return {
     level: "info",
     event: TURN_USAGE_EVENT,
     metadata: {
       schema_version: TURN_USAGE_SCHEMA_VERSION,
-      conversation_id: r.conversationId,
-      source: r.source,
-      request_id: r.requestId as string | undefined,
-      has_request_id: String(r.requestId != null),
-      request_id_count: String(r.requestIdCount),
-      turn_ended_seq: String(r.turnEndedSeq),
-      has_usage: String(usage != null),
-      ...usageTokenTags(usage),
+      conversation_id: fields.conversationId,
+      source: fields.source,
+      request_id: fields.requestId as string | undefined,
+      has_request_id: String(fields.requestId != null),
+      request_id_count: String(fields.requestIdCount),
+      turn_ended_seq: String(fields.turnEndedSeq),
+      has_usage: String(tokenUsage != null),
+      ...usageTokenTags(tokenUsage),
     },
   };
 }
-export function computerUseUsageTelemetry(r: TurnFields) {
-  const usage = r.usage as TokenUsage | null | undefined;
+export function computerUseUsageTelemetry(fields: TurnTelemetryFields) {
+  const tokenUsage = fields.usage as TokenUsage | null | undefined;
   return {
-    level: r.outcome === "error" ? "warn" : "info",
+    level: fields.outcome === "error" ? "warn" : "info",
     event: COMPUTER_USE_USAGE_EVENT,
     metadata: {
       schema_version: "1",
-      parent_agent_id: r.parentAgentId,
-      subagent_agent_id: r.subagentAgentId,
-      subagent_type: r.subagentType,
-      request_id: r.subagentRequestId,
-      model_id: r.modelId,
-      outcome: r.outcome,
-      duration_ms: String(Math.round(r.durationMs as number)),
-      tool_call_count: String(r.toolCallCount),
-      turn_ended_count: String(r.turnEndedCount),
-      has_usage: String(usage != null),
-      ...usageTokenTags(usage),
+      parent_agent_id: fields.parentAgentId,
+      subagent_agent_id: fields.subagentAgentId,
+      subagent_type: fields.subagentType,
+      request_id: fields.subagentRequestId,
+      model_id: fields.modelId,
+      outcome: fields.outcome,
+      duration_ms: String(Math.round(fields.durationMs as number)),
+      tool_call_count: String(fields.toolCallCount),
+      turn_ended_count: String(fields.turnEndedCount),
+      has_usage: String(tokenUsage != null),
+      ...usageTokenTags(tokenUsage),
     },
   };
 }
