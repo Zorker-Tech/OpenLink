@@ -1,19 +1,19 @@
 /**
- * The shell that is not a shell: a command run through a plain program, and how a shell is chosen.
+ * The shellName that is not a shellName: a command run through a plain program, and how a shellName is chosen.
  *
  * Two things live here because they are two halves of the same decision. The first is the executor used when
- * no shell of the user's own is worth driving: a command is handed to a program directly, its output is
- * streamed, and the caller is told when its input is ready and when it has exited. What a stateful shell
+ * no shellName of the user's own is worth driving: a command is handed to a program directly, its output is
+ * streamed, and the caller is told when its input is ready and when it has exited. What a stateful shellName
  * adds is the state between commands, and this one has none — which is also why it is the fallback rather
  * than the default. The policy a command runs under is resolved here, from the workspace it is run in and
- * whatever sources the caller has, so that the same resolution serves every shell.
+ * whatever sources the caller has, so that the same resolution serves every shellName.
  *
- * The second is the choice of shell. A user's own shell is preferred, since a command written for their
+ * The second is the choice of shellName. A user's own shellName is preferred, since a command written for their
  * environment expects it; a hint from the terminal they are in is trusted first, then what the platform
  * detects about the machine, and only if nothing is found does the plain executor get used. Two of those
  * choices are platform-specific and are made carefully: bash on Windows is only usable when it is Git's
  * bash rather than the one Windows ships, and PowerShell is looked for under both of its names, the modern
- * one first. The executor that comes back is lazy, so that the work of starting a shell happens when a
+ * one first. The executor that comes back is lazy, so that the work of starting a shellName happens when a
  * command is first run rather than when the session starts.
  */
 
@@ -59,7 +59,7 @@ export interface TerminalExecuteOptions {
 export interface TerminalExecutor {
   getCwd(): Promise<string>;
   clone(workingDirectory?: string): TerminalExecutor;
-  execute(ctx: Context, command: string, options?: TerminalExecuteOptions): AsyncIterable<TerminalEvent>;
+  execute(ctx: Context, command: string, executionOptions?: TerminalExecuteOptions): AsyncIterable<TerminalEvent>;
 }
 
 export interface DefaultTerminalExecutorOptions {
@@ -67,123 +67,123 @@ export interface DefaultTerminalExecutorOptions {
   readonly shell?: string;
   readonly shellArgs?: readonly string[];
   readonly userTerminalHint?: string;
-  readonly statefulFactories?: Partial<Record<KnownShellExecutor.Zsh | KnownShellExecutor.ZshLight | KnownShellExecutor.Bash | KnownShellExecutor.PowerShell, (options?: DefaultTerminalExecutorOptions) => Promise<TerminalExecutor>>>;
+  readonly statefulFactories?: Partial<Record<KnownShellExecutor.Zsh | KnownShellExecutor.ZshLight | KnownShellExecutor.Bash | KnownShellExecutor.PowerShell, (executionOptions?: DefaultTerminalExecutorOptions) => Promise<TerminalExecutor>>>;
 }
 
 export class NaiveTerminalExecutor implements TerminalExecutor {
-  constructor(private readonly cwd: string, private readonly options: DefaultTerminalExecutorOptions = {}) {}
-  async getCwd(): Promise<string> { return this.cwd; }
-  clone(workingDirectory?: string): TerminalExecutor { return new NaiveTerminalExecutor(workingDirectory ?? this.cwd, this.options); }
-  async *execute(ctx: Context, command: string, options: TerminalExecuteOptions = {}): AsyncIterable<TerminalEvent> {
+  constructor(private readonly workingDirectory: string, private readonly executionOptions: DefaultTerminalExecutorOptions = {}) {}
+  async getCwd(): Promise<string> { return this.workingDirectory; }
+  clone(workingDirectory?: string): TerminalExecutor { return new NaiveTerminalExecutor(workingDirectory ?? this.workingDirectory, this.executionOptions); }
+  async *execute(ctx: Context, command: string, executionOptions: TerminalExecuteOptions = {}): AsyncIterable<TerminalEvent> {
     using span = createSpan(ctx.withName("NaiveTerminalExecutor.execute"));
-    const iterable = createWritableIterable<TerminalEvent>();
-    const pipeStdin = options.pipeStdin ?? false;
+    const eventStream = createWritableIterable<TerminalEvent>();
+    const pipeStdin = executionOptions.pipeStdin ?? false;
     const env = {
       ...process.env,
       ...SHELL_ENV_OVERRIDES,
-      ...options.env,
+      ...executionOptions.env,
     };
-    const transformedCommand = shouldEnableSudoAskpass(env) ? transformSudoCommand(command) : command;
-    const cwd = options.workingDirectory ?? this.cwd;
-    const sandboxWorkspaceRoot = options.sandboxWorkspaceRoot ?? cwd;
-    const resolvedPolicy = await resolveSandboxPolicyForWorkspace(sandboxWorkspaceRoot, options.sandboxPolicy as SandboxPolicySources | undefined);
-    const sandboxPolicy = resolvedPolicy.policy.type !== "insecure_none"
-      ? { ...resolvedPolicy.policy, sandboxWorkspaceRoot }
-      : resolvedPolicy.policy;
-    const child = spawnWithSignal(this.options.shell || process.env.SHELL || "/bin/sh", [...this.options.shellArgs ?? [], "-c", transformedCommand], {
+    const finalCommand = shouldEnableSudoAskpass(env) ? transformSudoCommand(command) : command;
+    const workingDirectory = executionOptions.workingDirectory ?? this.workingDirectory;
+    const sandboxWorkspaceRoot = executionOptions.sandboxWorkspaceRoot ?? workingDirectory;
+    const policyResolution = await resolveSandboxPolicyForWorkspace(sandboxWorkspaceRoot, executionOptions.sandboxPolicy as SandboxPolicySources | undefined);
+    const sandboxPolicy = policyResolution.policy.type !== "insecure_none"
+      ? { ...policyResolution.policy, sandboxWorkspaceRoot }
+      : policyResolution.policy;
+    const childProcess = spawnWithSignal(this.executionOptions.shell || process.env.SHELL || "/bin/sh", [...this.executionOptions.shellArgs ?? [], "-c", finalCommand], {
       env,
       // Use 'ignore' for stdin unless interactive, to prevent background processes from inheriting an open stdin pipe.
       stdio: [pipeStdin ? "pipe" : "ignore", "pipe", "pipe"],
-    }, sandboxPolicy, options.signal);
-    child.on("spawn", async () => {
+    }, sandboxPolicy, executionOptions.signal);
+    childProcess.on("spawn", async () => {
       try {
-        await iterable.write({ type: "stdin_ready", stdin: child.stdin ?? undefined, pid: child.pid });
+        await eventStream.write({ type: "stdin_ready", stdin: childProcess.stdin ?? undefined, pid: childProcess.pid });
       } catch {
-        // The consumer may have closed the iterable before spawn was observed.
+        // The consumer may have closed the eventStream before spawn was observed.
       }
     });
-    const outputPump = attachShellOutputStreams({
-      stdout: child.stdout,
-      stderr: child.stderr,
-      writable: iterable,
-      bufferOutputEvents: options.bufferOutputEvents,
-      outputLimiterOptions: options.outputLimiterOptions as OutputLimiterOptions | undefined,
+    const outputs = attachShellOutputStreams({
+      stdout: childProcess.stdout,
+      stderr: childProcess.stderr,
+      writable: eventStream,
+      bufferOutputEvents: executionOptions.bufferOutputEvents,
+      outputLimiterOptions: executionOptions.outputLimiterOptions as OutputLimiterOptions | undefined,
     });
-    child.on("error", (error) => {
-      iterable.throw(error);
+    childProcess.on("error", (cause) => {
+      eventStream.throw(cause);
     });
-    child.on("exit", async (code) => {
+    childProcess.on("exit", async (exitCode) => {
       reportEvent(span.ctx, "exit");
-      await outputPump.flush();
+      await outputs.flush();
       if (sandboxPolicy.captureDenies ?? false) {
         try {
-          const denyEvents = await captureSandboxDenies(child);
-          if (denyEvents && denyEvents.length > 0) {
-            await iterable.write({ type: "sandbox_denies", events: denyEvents });
+          const deniedEvents = await captureSandboxDenies(childProcess);
+          if (deniedEvents && deniedEvents.length > 0) {
+            await eventStream.write({ type: "sandbox_denies", events: deniedEvents });
           }
         } catch {
           // Sandbox diagnostics are best-effort after process exit.
         }
       }
       try {
-        await iterable.write({
+        await eventStream.write({
           type: "exit",
-          code,
+          code: exitCode,
           data: "",
-          aborted: options.signal?.aborted ?? false,
+          aborted: executionOptions.signal?.aborted ?? false,
         });
-        iterable.close();
+        eventStream.close();
       } catch {
-        iterable.close();
+        eventStream.close();
       }
     });
-    yield* iterable;
+    yield* eventStream;
   }
 }
 
-export function createNaiveTerminalExecutor(options: DefaultTerminalExecutorOptions = {}): TerminalExecutor {
-  return new NaiveTerminalExecutor(process.cwd(), options);
+export function createNaiveTerminalExecutor(executionOptions: DefaultTerminalExecutorOptions = {}): TerminalExecutor {
+  return new NaiveTerminalExecutor(process.cwd(), executionOptions);
 }
 
 function commandExists(command: string): boolean { return spawnSync(command, ["--version"], { stdio: "ignore" }).error === undefined; }
 function detectGitBashFromEnvironment(): string | undefined {
   if (process.platform !== "win32" || !process.env.MSYSTEM) return undefined;
-  const executablePath = process.env.EXEPATH;
-  if (executablePath) { const normalized = executablePath.replace(/[\\/]+$/, ""); const base = win32.basename(normalized).toLowerCase(); return base === "bash.exe" ? normalized : base === "bin" ? win32.join(normalized, "bash.exe") : win32.join(normalized, "bin", "bash.exe"); }
+  const exePath = process.env.EXEPATH;
+  if (exePath) { const normalizedPath = exePath.replace(/[\\/]+$/, ""); const leafBase = win32.basename(normalizedPath).toLowerCase(); return leafBase === "bash.exe" ? normalizedPath : leafBase === "bin" ? win32.join(normalizedPath, "bash.exe") : win32.join(normalizedPath, "bin", "bash.exe"); }
   return "C:\\Program Files\\Git\\bin\\bash.exe";
 }
 
 export function getSuggestedShell(userTerminalHint: string): KnownShellExecutor {
   if (userTerminalHint === KnownShellExecutor.ZshLight) return KnownShellExecutor.ZshLight;
-  const shell = userTerminalHint || process.env.SHELL || ""; const windows = process.platform === "win32"; const gitBash = windows && !userTerminalHint ? detectGitBashFromEnvironment() : undefined;
-  const isGitBash = gitBash !== undefined || /git.*bash\.exe$/i.test(shell) || /program.*git.*bin.*bash\.exe$/i.test(shell); const bashIsOkay = !windows || isGitBash;
-  if (shell.includes("zsh")) return KnownShellExecutor.Zsh;
-  if (shell.includes("bash") && bashIsOkay) return KnownShellExecutor.Bash;
-  if (shell.includes("pwsh") || shell.includes("powershell")) return KnownShellExecutor.PowerShell;
-  if (gitBash) return KnownShellExecutor.Bash;
-  if (windows && (commandExists("pwsh") || commandExists("powershell"))) return KnownShellExecutor.PowerShell;
+  const shellName = userTerminalHint || process.env.SHELL || ""; const runningOnWindows = process.platform === "win32"; const gitBashExecutable = runningOnWindows && !userTerminalHint ? detectGitBashFromEnvironment() : undefined;
+  const bashIsGitBash = gitBashExecutable !== undefined || /git.*bash\.exe$/i.test(shellName) || /program.*git.*bin.*bash\.exe$/i.test(shellName); const bashUsable = !runningOnWindows || bashIsGitBash;
+  if (shellName.includes("zsh")) return KnownShellExecutor.Zsh;
+  if (shellName.includes("bash") && bashUsable) return KnownShellExecutor.Bash;
+  if (shellName.includes("pwsh") || shellName.includes("powershell")) return KnownShellExecutor.PowerShell;
+  if (gitBashExecutable) return KnownShellExecutor.Bash;
+  if (runningOnWindows && (commandExists("pwsh") || commandExists("powershell"))) return KnownShellExecutor.PowerShell;
   if (commandExists("zsh")) return KnownShellExecutor.Zsh;
-  if (commandExists("bash") && bashIsOkay) return KnownShellExecutor.Bash;
+  if (commandExists("bash") && bashUsable) return KnownShellExecutor.Bash;
   if (commandExists("pwsh") || commandExists("powershell")) return KnownShellExecutor.PowerShell;
   return KnownShellExecutor.Naive;
 }
 
-export function createDefaultTerminalExecutor(options: DefaultTerminalExecutorOptions = {}): TerminalExecutor {
-  let effective = options; const gitBashPath = options.userTerminalHint ? undefined : detectGitBashFromEnvironment(); if (gitBashPath) effective = { ...options, userTerminalHint: gitBashPath };
-  const suggested = getSuggestedShell(effective.userTerminalHint ?? "");
-  if (suggested === KnownShellExecutor.Naive) return createNaiveTerminalExecutor(effective);
-  const override = effective.statefulFactories?.[suggested];
-  if (override !== undefined) return new LazyTerminalExecutor(() => override(effective));
-  switch (suggested) {
+export function createDefaultTerminalExecutor(executionOptions: DefaultTerminalExecutorOptions = {}): TerminalExecutor {
+  let resolvedOptions = executionOptions; const gitBashPath = executionOptions.userTerminalHint ? undefined : detectGitBashFromEnvironment(); if (gitBashPath) resolvedOptions = { ...executionOptions, userTerminalHint: gitBashPath };
+  const chosenShell = getSuggestedShell(resolvedOptions.userTerminalHint ?? "");
+  if (chosenShell === KnownShellExecutor.Naive) return createNaiveTerminalExecutor(resolvedOptions);
+  const customFactory = resolvedOptions.statefulFactories?.[chosenShell];
+  if (customFactory !== undefined) return new LazyTerminalExecutor(() => customFactory(resolvedOptions));
+  switch (chosenShell) {
     case KnownShellExecutor.Zsh:
-      return new LazyTerminalExecutor(() => initZshState(effective));
+      return new LazyTerminalExecutor(() => initZshState(resolvedOptions));
     case KnownShellExecutor.Bash:
-      return new LazyTerminalExecutor(() => initBashState(effective));
+      return new LazyTerminalExecutor(() => initBashState(resolvedOptions));
     case KnownShellExecutor.PowerShell:
       return new LazyTerminalExecutor(() => initPowerShellState());
     case KnownShellExecutor.ZshLight:
-      return new LazyTerminalExecutor(() => initZshLightState(effective));
+      return new LazyTerminalExecutor(() => initZshLightState(resolvedOptions));
     default:
-      return createNaiveTerminalExecutor(effective);
+      return createNaiveTerminalExecutor(resolvedOptions);
   }
 }
