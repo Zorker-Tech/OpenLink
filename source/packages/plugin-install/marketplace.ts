@@ -23,39 +23,36 @@ export interface PluginCacheKey {
   readonly version?: string;
 }
 
-function sanitizePluginCacheMarketplaceSlug(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+/** A marketplace or plugin name becomes one path segment, so no name can escape the cache. */
+function safeFolderName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function sanitizePluginCachePluginId(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+function safeVersionFolder(value: string): string {
+  return sanitizeFilename(value);
 }
 
-function sanitizePluginCacheVersion(raw: string): string {
-  return sanitizeFilename(raw);
-}
-
-function getPluginCachePath(
+function cachePathIn(
   cacheRoot: string,
   marketplaceSlug: string,
   pluginId: string,
   version?: string,
 ): string {
-  const parts = [cacheRoot, marketplaceSlug, pluginId];
-  if (version !== undefined) parts.push(version);
-  return join(...parts);
+  const segments = [cacheRoot, marketplaceSlug, pluginId];
+  if (version !== undefined) segments.push(version);
+  return join(...segments);
 }
 
 export function getPluginInstallCachePath(
   cacheRoot: string,
-  args: PluginCacheKey,
+  input: PluginCacheKey,
 ): string {
-  return getPluginCachePath(
+  return cachePathIn(
     cacheRoot,
-    sanitizePluginCacheMarketplaceSlug(args.marketplaceSlug),
-    sanitizePluginCachePluginId(args.pluginId),
-    args.version !== undefined
-      ? sanitizePluginCacheVersion(args.version)
+    safeFolderName(input.marketplaceSlug),
+    safeFolderName(input.pluginId),
+    input.version !== undefined
+      ? safeVersionFolder(input.version)
       : undefined,
   );
 }
@@ -65,90 +62,90 @@ export class DefaultPluginCacheManager {
 
   constructor(
     userHomeDir?: string,
-    options?: { readonly cacheRoot?: string },
+    settings?: { readonly cacheRoot?: string },
   ) {
-    const home = userHomeDir ?? process.env.HOME ?? "";
-    this.cacheRoot = options?.cacheRoot
-      ?? join(home, ".slate", PLUGINS_CACHE_ROOT);
+    const userHome = userHomeDir ?? process.env.HOME ?? "";
+    this.cacheRoot = settings?.cacheRoot
+      ?? join(userHome, ".slate", PLUGINS_CACHE_ROOT);
   }
 
-  getCacheDir(args: PluginCacheKey): string {
-    return getPluginInstallCachePath(this.cacheRoot, args);
+  getCacheDir(input: PluginCacheKey): string {
+    return getPluginInstallCachePath(this.cacheRoot, input);
   }
 
-  async isCached(args: PluginCacheKey): Promise<boolean> {
-    const cacheDir = this.getCacheDir(args);
+  async isCached(input: PluginCacheKey): Promise<boolean> {
+    const cacheDirectory = this.getCacheDir(input);
     try {
-      const stats = await stat(join(cacheDir, PLUGIN_CACHE_SENTINEL));
-      return stats.isFile();
+      const entryStats = await stat(join(cacheDirectory, PLUGIN_CACHE_SENTINEL));
+      return entryStats.isFile();
     } catch {
       return false;
     }
   }
 
   async extractToCache(
-    args: PluginCacheKey & { readonly tarball: Uint8Array },
+    input: PluginCacheKey & { readonly tarball: Uint8Array },
   ): Promise<string> {
-    const cacheDir = this.getCacheDir(args);
-    await mkdir(cacheDir, { recursive: true });
-    const bufferStream = Readable.from(args.tarball);
+    const cacheDirectory = this.getCacheDir(input);
+    await mkdir(cacheDirectory, { recursive: true });
+    const tarballStream = Readable.from(input.tarball);
     await pipeline(
-      bufferStream,
+      tarballStream,
       createGunzip(),
-      extract({ cwd: cacheDir, strip: 1 }),
+      extract({ cwd: cacheDirectory, strip: 1 }),
     );
-    await this.markCacheComplete(args);
-    return cacheDir;
+    await this.markCacheComplete(input);
+    return cacheDirectory;
   }
 
   async listCachedVersions(
-    args: Omit<PluginCacheKey, "version">,
+    input: Omit<PluginCacheKey, "version">,
   ): Promise<string[]> {
-    const safeSlug = sanitizePluginCacheMarketplaceSlug(args.marketplaceSlug);
-    const safePluginId = sanitizePluginCachePluginId(args.pluginId);
-    const pluginDir = join(this.cacheRoot, safeSlug, safePluginId);
+    const folderSlug = safeFolderName(input.marketplaceSlug);
+    const folderPluginId = safeFolderName(input.pluginId);
+    const pluginDirectory = join(this.cacheRoot, folderSlug, folderPluginId);
     try {
-      const entries = await readdir(pluginDir, { withFileTypes: true });
-      return entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+      const directoryEntries = await readdir(pluginDirectory, { withFileTypes: true });
+      return directoryEntries.filter(dirent => dirent.isDirectory()).map(dirent => dirent.name);
     } catch {
       return [];
     }
   }
 
-  async removeVersion(args: PluginCacheKey): Promise<void> {
+  async removeVersion(input: PluginCacheKey): Promise<void> {
     try {
-      await rm(this.getCacheDir(args), { recursive: true, force: true });
+      await rm(this.getCacheDir(input), { recursive: true, force: true });
     } catch {
       // Cache cleanup is best effort in the immutable implementation.
     }
   }
 
   async removeAllVersions(
-    args: Omit<PluginCacheKey, "version">,
+    input: Omit<PluginCacheKey, "version">,
   ): Promise<void> {
-    await rm(getPluginInstallCachePath(this.cacheRoot, args), {
+    await rm(getPluginInstallCachePath(this.cacheRoot, input), {
       recursive: true,
       force: true,
     });
   }
 
   async pruneOldVersions(
-    args: Omit<PluginCacheKey, "version"> & {
+    input: Omit<PluginCacheKey, "version"> & {
       readonly keepVersions: readonly string[];
     },
   ): Promise<void> {
-    const cachedVersions = await this.listCachedVersions(args);
-    const keepSet = new Set(
-      args.keepVersions.map(version => sanitizePluginCacheVersion(version)),
+    const storedVersions = await this.listCachedVersions(input);
+    const retainedVersions = new Set(
+      input.keepVersions.map(version => safeVersionFolder(version)),
     );
-    for (const version of cachedVersions) {
-      if (!keepSet.has(version)) {
-        await this.removeVersion({ ...args, version });
+    for (const version of storedVersions) {
+      if (!retainedVersions.has(version)) {
+        await this.removeVersion({ ...input, version });
       }
     }
   }
 
-  async markCacheComplete(args: PluginCacheKey): Promise<void> {
-    await writeFile(join(this.getCacheDir(args), PLUGIN_CACHE_SENTINEL), "");
+  async markCacheComplete(input: PluginCacheKey): Promise<void> {
+    await writeFile(join(this.getCacheDir(input), PLUGIN_CACHE_SENTINEL), "");
   }
 }
