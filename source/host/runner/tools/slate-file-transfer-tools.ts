@@ -71,16 +71,27 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 10 || Number.isInteger(value) ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function connectedComputersText(transferController: FileTransferController): string {
+  const knownComputers = transferController.userComputers.list()
+  return knownComputers.length > 0
+    ? knownComputers.map((computer) => `${computer.id}${computer.connected ? "" : " (offline)"}`).join(", ")
+    : "none connected"}
+
+function copiedIntoBoxText(computerFilePath: string, computerLabel: string, boxFilePath: string, byteCount: number): string {
+  return `Copied ${computerFilePath} from ${computerLabel} into your box at ${boxFilePath} (${formatBytes(byteCount)}). Open it with Shell.`
+}
+
+function copiedOutOfBoxText(boxFilePath: string, computerLabel: string, computerFilePath: string, byteCount: number): string {
+  return `Copied ${boxFilePath} from your box to ${computerLabel} at ${computerFilePath} (${formatBytes(byteCount)}). The user can open it there with ExternalShell.`
+}
+
 export function resolveComputerOrThrow(
-  controller: FileTransferController,
+  transferController: FileTransferController,
   computerId?: string,
 ): UserComputerHandle {
-  const handle = controller.userComputers.resolve(computerId);
-  if (handle != null) return handle;
-  const known = controller.userComputers.list();
-  const list = known.length > 0
-    ? known.map((computer) => `${computer.id}${computer.connected ? "" : " (offline)"}`).join(", ")
-    : "none connected";
+  const computerHandle = transferController.userComputers.resolve(computerId);
+  if (computerHandle != null) return computerHandle;
+  const list = connectedComputersText(transferController);
   if (computerId == null) {
     throw new BoxTransferError(
       `No computer is connected right now (the Slate desktop app must be open and online to transfer files). Connected computers: ${list}.`,
@@ -91,67 +102,67 @@ export function resolveComputerOrThrow(
   );
 }
 
-export function assertBoxReady(controller: FileTransferController): void {
-  if (controller.isBoxPreparing()) throw new BoxTransferError(SLATE_BOX_NOT_READY_MESSAGE);
+export function assertBoxReady(transferController: FileTransferController): void {
+  if (transferController.isBoxPreparing()) throw new BoxTransferError(SLATE_BOX_NOT_READY_MESSAGE);
 }
 
 export async function copyFileToBox(
-  context: unknown,
+  runtimeContext: unknown,
   args: z.infer<typeof copyToBoxParameters>,
-  controller: FileTransferController,
+  transferController: FileTransferController,
 ): Promise<string> {
-  assertBoxReady(controller);
-  const computer = resolveComputerOrThrow(controller, args.computer);
+  assertBoxReady(transferController);
+  const computer = resolveComputerOrThrow(transferController, args.computer);
   const boxPath = resolveBoxWorkspacePath(
     args.box_path
       ?? posix.join(SLATE_BOX_UPLOADS_DIR, posix.basename(args.computer_path)),
   );
-  const bytes = await transferFileBetweenBoxes(context, {
+  const bytes = await transferFileBetweenBoxes(runtimeContext, {
     source: {
       box: computer.box,
-      agentId: controller.getComputerAgentId(),
+      agentId: transferController.getComputerAgentId(),
       path: args.computer_path,
       label: computer.label,
     },
     dest: {
-      box: controller.agentBox,
-      agentId: controller.getBoxId(),
+      box: transferController.agentBox,
+      agentId: transferController.getBoxId(),
       path: boxPath,
       label: "your box",
     },
   });
-  return `Copied ${args.computer_path} from ${computer.label} into your box at ${boxPath} (${formatBytes(bytes)}). Open it with Shell.`;
+  return copiedIntoBoxText(args.computer_path, computer.label, boxPath, bytes);
 }
 
 export async function copyFileFromBox(
-  context: unknown,
+  runtimeContext: unknown,
   args: z.infer<typeof copyFromBoxParameters>,
-  controller: FileTransferController,
+  transferController: FileTransferController,
 ): Promise<string> {
-  assertBoxReady(controller);
-  const computer = resolveComputerOrThrow(controller, args.computer);
+  assertBoxReady(transferController);
+  const computer = resolveComputerOrThrow(transferController, args.computer);
   const boxPath = resolveBoxWorkspacePath(args.box_path);
   const computerPath = args.computer_path ?? posix.basename(boxPath);
-  const bytes = await transferFileBetweenBoxes(context, {
+  const bytes = await transferFileBetweenBoxes(runtimeContext, {
     source: {
-      box: controller.agentBox,
-      agentId: controller.getBoxId(),
+      box: transferController.agentBox,
+      agentId: transferController.getBoxId(),
       path: boxPath,
       label: "your box",
     },
     dest: {
       box: computer.box,
-      agentId: controller.getComputerAgentId(),
+      agentId: transferController.getComputerAgentId(),
       path: computerPath,
       label: computer.label,
     },
   });
-  return `Copied ${boxPath} from your box to ${computer.label} at ${computerPath} (${formatBytes(bytes)}). The user can open it there with ExternalShell.`;
+  return copiedOutOfBoxText(boxPath, computer.label, computerPath, bytes);
 }
 
-export function createFileTransferTools(controller: FileTransferController) {
+export function createFileTransferTools(transferController: FileTransferController) {
   return [
-    defineCommunicateTool(controller, {
+    defineCommunicateTool(transferController, {
       id: "COPY_TO_BOX",
       name: "CopyToBox",
       description: "Copy a file from the user's computer into your box, verbatim. Use this to bring a user's file (any type or size — a CSV, PDF, archive, image, dataset, binary) onto your box so you can work on it with Shell or Read, or open it in the box browser (parent agents delegate that GUI interaction to computerUse). This is the deliberate way to get a file into the box: the user does not have to drag it into chat first, and unlike reading the file and re-writing it, the bytes are copied exactly (no truncation, binaries are safe). Give the file's absolute path on the user's computer (the path your ExternalShell tool would use); it lands in /workspace/uploads by default, or at a box_path you choose. Then open it with Shell at the path reported back.",
@@ -160,10 +171,10 @@ export function createFileTransferTools(controller: FileTransferController) {
         const detail = fileBasename(args.computer_path);
         return detail == null ? {} : { detail };
       },
-      execute: (context, args: z.infer<typeof copyToBoxParameters>, dependencies) =>
-        copyFileToBox(context, args, dependencies),
+      execute: (runtimeContext, args: z.infer<typeof copyToBoxParameters>, toolDependencies) =>
+        copyFileToBox(runtimeContext, args, toolDependencies),
     }),
-    defineCommunicateTool(controller, {
+    defineCommunicateTool(transferController, {
       id: "COPY_FROM_BOX",
       name: "CopyFromBox",
       description: "Copy a file from your box out to the user's computer, verbatim. Use this to hand the user a file you generated or downloaded in the box (a spreadsheet, report, log, archive, anything) by placing it on their actual computer where their ExternalShell, editor, and apps can reach it. Any type or size; the bytes are copied exactly (no truncation, binaries are safe). This is for putting a file ON their disk; to instead show a file inline in chat (an image, a video, or a downloadable attachment) use SendMessage with the box path. Give the box_path of the file; it lands under its own name in the ExternalShell working directory by default, or at a computer_path you choose.",
@@ -172,8 +183,8 @@ export function createFileTransferTools(controller: FileTransferController) {
         const detail = fileBasename(args.box_path);
         return detail == null ? {} : { detail };
       },
-      execute: (context, args: z.infer<typeof copyFromBoxParameters>, dependencies) =>
-        copyFileFromBox(context, args, dependencies),
+      execute: (runtimeContext, args: z.infer<typeof copyFromBoxParameters>, toolDependencies) =>
+        copyFileFromBox(runtimeContext, args, toolDependencies),
     }),
   ];
 }
