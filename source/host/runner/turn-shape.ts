@@ -28,132 +28,132 @@ export interface CoreMessage {
   };
 }
 
-export function asCoreMessage(value: unknown): CoreMessage | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (!("role" in value) || typeof value.role !== "string") return undefined;
+export function asCoreMessage(candidate: unknown): CoreMessage | undefined {
+  if (typeof candidate !== "object" || candidate === null) return undefined;
+  if (!("role" in candidate) || typeof candidate.role !== "string") return undefined;
   if (
-    !("content" in value)
-    || (typeof value.content !== "string" && !Array.isArray(value.content))
+    !("content" in candidate)
+    || (typeof candidate.content !== "string" && !Array.isArray(candidate.content))
   ) return undefined;
-  return value as CoreMessage;
+  return candidate as CoreMessage;
 }
 
-export function toolCallNames(message: CoreMessage): string[] {
-  if (message.role !== "assistant" || typeof message.content === "string") {
+export function toolCallNames(transcriptMessage: CoreMessage): string[] {
+  if (transcriptMessage.role !== "assistant" || typeof transcriptMessage.content === "string") {
     return [];
   }
-  return message.content.flatMap((part) =>
-    part.type === "tool-call" && part.toolName != null
-      ? [part.toolName]
+  return transcriptMessage.content.flatMap((contentPart) =>
+    contentPart.type === "tool-call" && contentPart.toolName != null
+      ? [contentPart.toolName]
       : []
   );
 }
 
-export function hasDeliveryToolCall(names: readonly string[]): boolean {
-  return names.some((name) => DELIVERY_TOOL_NAMES.has(name));
+export function hasDeliveryToolCall(toolNames: readonly string[]): boolean {
+  return toolNames.some((toolName) => DELIVERY_TOOL_NAMES.has(toolName));
 }
 
-function deliveryToolCallIds(message: CoreMessage): string[] {
-  if (message.role !== "assistant" || typeof message.content === "string") {
+function deliveryToolCallIds(transcriptMessage: CoreMessage): string[] {
+  if (transcriptMessage.role !== "assistant" || typeof transcriptMessage.content === "string") {
     return [];
   }
-  return message.content.flatMap((part) =>
-    part.type === "tool-call"
-      && part.toolName != null
-      && DELIVERY_TOOL_NAMES.has(part.toolName)
-      && part.toolCallId != null
-      ? [part.toolCallId]
+  return transcriptMessage.content.flatMap((contentPart) =>
+    contentPart.type === "tool-call"
+      && contentPart.toolName != null
+      && DELIVERY_TOOL_NAMES.has(contentPart.toolName)
+      && contentPart.toolCallId != null
+      ? [contentPart.toolCallId]
       : []
   );
 }
 
 function erroredToolResultIds(
-  messages: readonly (CoreMessage | undefined)[],
+  parsedMessages: readonly (CoreMessage | undefined)[],
 ): Set<string> {
-  const ids = new Set<string>();
-  for (const message of messages) {
+  const callIds = new Set<string>();
+  for (const transcriptMessage of parsedMessages) {
     if (
-      message === undefined
-      || message.role !== "tool"
-      || typeof message.content === "string"
+      transcriptMessage === undefined
+      || transcriptMessage.role !== "tool"
+      || typeof transcriptMessage.content === "string"
     ) continue;
-    const highLevel = message.providerOptions?.cursor
+    const highLevelResult = transcriptMessage.providerOptions?.cursor
       ?.highLevelToolCallResult;
     if (
-      typeof highLevel !== "object"
-      || highLevel === null
-      || Array.isArray(highLevel)
-      || !("isError" in highLevel)
-      || highLevel.isError !== true
+      typeof highLevelResult !== "object"
+      || highLevelResult === null
+      || Array.isArray(highLevelResult)
+      || !("isError" in highLevelResult)
+      || highLevelResult.isError !== true
     ) continue;
-    for (const part of message.content) {
-      if (part.type === "tool-result" && part.toolCallId != null) {
-        ids.add(part.toolCallId);
+    for (const contentPart of transcriptMessage.content) {
+      if (contentPart.type === "tool-result" && contentPart.toolCallId != null) {
+        callIds.add(contentPart.toolCallId);
       }
     }
   }
-  return ids;
+  return callIds;
 }
 
-export function isBlankAssistantMessage(message: CoreMessage): boolean {
-  if (message.role !== "assistant") return false;
-  if (typeof message.content === "string") {
-    return message.content.trim().length === 0;
+export function isBlankAssistantMessage(transcriptMessage: CoreMessage): boolean {
+  if (transcriptMessage.role !== "assistant") return false;
+  if (typeof transcriptMessage.content === "string") {
+    return transcriptMessage.content.trim().length === 0;
   }
-  return message.content.every(
-    (part) => part.type === "text" && (part.text ?? "").trim().length === 0,
+  return transcriptMessage.content.every(
+    (contentPart) => contentPart.type === "text" && (contentPart.text ?? "").trim().length === 0,
   );
 }
 
 export function turnEndedOnSilentToolCalls(
-  rawMessages: readonly unknown[],
+  rawTranscript: readonly unknown[],
 ): boolean {
-  const messages = rawMessages.map(asCoreMessage);
-  let tailIndex = messages.length - 1;
-  while (tailIndex >= 0) {
-    const message = messages[tailIndex];
+  const parsedMessages = rawTranscript.map(asCoreMessage);
+  let tailPosition = parsedMessages.length - 1;
+  while (tailPosition >= 0) {
+    const transcriptMessage = parsedMessages[tailPosition];
     if (
-      message === undefined
-      || message.role === "tool"
-      || isBlankAssistantMessage(message)
-      || isInjectedReminderMessage(message)
+      transcriptMessage === undefined
+      || transcriptMessage.role === "tool"
+      || isBlankAssistantMessage(transcriptMessage)
+      || isInjectedReminderMessage(transcriptMessage)
     ) {
-      tailIndex -= 1;
+      tailPosition -= 1;
       continue;
     }
     break;
   }
 
-  const tail = tailIndex >= 0 ? messages[tailIndex] : undefined;
-  if (tail === undefined || tail.role !== "assistant") return false;
-  const tailNames = toolCallNames(tail);
-  if (tailNames.length === 0 || hasDeliveryToolCall(tailNames)) return false;
+  const tailMessage = tailPosition >= 0 ? parsedMessages[tailPosition] : undefined;
+  if (tailMessage === undefined || tailMessage.role !== "assistant") return false;
+  const tailToolNames = toolCallNames(tailMessage);
+  if (tailToolNames.length === 0 || hasDeliveryToolCall(tailToolNames)) return false;
 
-  let boundary = -1;
-  for (let index = tailIndex - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message === undefined || isInjectedReminderMessage(message)) continue;
-    if (message.role === "user" || message.role === "system") {
-      boundary = index;
+  let userBoundary = -1;
+  for (let position = tailPosition - 1; position >= 0; position -= 1) {
+    const transcriptMessage = parsedMessages[position];
+    if (transcriptMessage === undefined || isInjectedReminderMessage(transcriptMessage)) continue;
+    if (transcriptMessage.role === "user" || transcriptMessage.role === "system") {
+      userBoundary = position;
       break;
     }
   }
 
-  const erroredIds = erroredToolResultIds(messages);
-  let ackedFirst = false;
-  for (let index = boundary + 1; index <= tailIndex; index += 1) {
-    const message = messages[index];
-    if (message === undefined || message.role !== "assistant") continue;
-    const names = toolCallNames(message);
-    if (names.length === 0) continue;
-    if (!ackedFirst) {
-      if (!hasDeliveryToolCall(names)) return false;
-      ackedFirst = true;
+  const failedCallIds = erroredToolResultIds(parsedMessages);
+  let deliveryAcknowledged = false;
+  for (let position = userBoundary + 1; position <= tailPosition; position += 1) {
+    const transcriptMessage = parsedMessages[position];
+    if (transcriptMessage === undefined || transcriptMessage.role !== "assistant") continue;
+    const toolNames = toolCallNames(transcriptMessage);
+    if (toolNames.length === 0) continue;
+    if (!deliveryAcknowledged) {
+      if (!hasDeliveryToolCall(toolNames)) return false;
+      deliveryAcknowledged = true;
     } else if (
-      deliveryToolCallIds(message).some((id) => !erroredIds.has(id))
+      deliveryToolCallIds(transcriptMessage).some((callId) => !failedCallIds.has(callId))
     ) {
       return false;
     }
   }
-  return ackedFirst;
+  return deliveryAcknowledged;
 }
