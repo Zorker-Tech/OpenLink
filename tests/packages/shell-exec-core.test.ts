@@ -126,7 +126,7 @@ test("a detached group that ignores the polite signal is forced down within a se
   await waitForFile(ready);
   const startedAt = Date.now();
   controller.abort();
-  const exit = await waitExit(child as never, 2500);
+  const exit = await waitExit(child as never, 8000);
   assert.notEqual(exit, null);
   assert.equal(exit?.signal, "SIGKILL");
   assert.equal(Date.now() - startedAt < 2000, true);
