@@ -102,10 +102,10 @@ interface UxStatsPatterns {
   readonly markdownLink: RE2JS;
 }
 
-function alternateModelIdForAnalytics(selection: {
+function alternateModelIdForAnalytics(modelSelection: {
   readonly alternate: "parent" | { readonly modelId: string };
 }): string {
-  return selection.alternate === "parent" ? "same_as_parent" : selection.alternate.modelId;
+  return modelSelection.alternate === "parent" ? "same_as_parent" : modelSelection.alternate.modelId;
 }
 
 function hasAutoRunInstructions(instructions: {
@@ -116,17 +116,17 @@ function hasAutoRunInstructions(instructions: {
     (instructions.allowInstructions.length > 0 || instructions.blockInstructions.length > 0);
 }
 
-const logger = createLogger("@slate/agent");
+const agentLogger = createLogger("@slate/agent");
 
 async function loadUserPermissionsFileAutoRunInstructions(
-  ctx: Context,
+  runContext: Context,
 ): Promise<{ readonly allowInstructions: readonly string[]; readonly blockInstructions: readonly string[] } | undefined> {
   try {
     const provider = await PermissionsFileProvider.load();
     const instructions = provider?.getAutoRunInstructions();
     return hasAutoRunInstructions(instructions) ? instructions : undefined;
   } catch (error) {
-    logger.warn(ctx, "Failed to load user permissions auto-run instructions", {
+    agentLogger.warn(runContext, "Failed to load user permissions auto-run instructions", {
       error: error instanceof Error ? error.message : String(error),
     });
     return undefined;
@@ -134,16 +134,16 @@ async function loadUserPermissionsFileAutoRunInstructions(
 }
 
 function getGrindPhaseOverrideFromResponse(
-  responseMessages: readonly CoreMessageLike[],
+  modelMessages: readonly CoreMessageLike[],
 ): "executing" | "planning" | undefined {
-  for (const message of responseMessages) {
-    if (message.role === "assistant" && Array.isArray(message.content)) {
-      for (const part of message.content as AssistantContentPart[]) {
-        if (part.type === "tool-call") {
-          if (part.toolName === "StartGrindExecution") {
+  for (const turnMessage of modelMessages) {
+    if (turnMessage.role === "assistant" && Array.isArray(turnMessage.content)) {
+      for (const streamPart of turnMessage.content as AssistantContentPart[]) {
+        if (streamPart.type === "tool-call") {
+          if (streamPart.toolName === "StartGrindExecution") {
             return "executing";
           }
-          if (part.toolName === "StartGrindPlanning") {
+          if (streamPart.toolName === "StartGrindPlanning") {
             return "planning";
           }
         }
@@ -153,42 +153,42 @@ function getGrindPhaseOverrideFromResponse(
   return undefined;
 }
 
-function countAssistantMessages(responseMessages: readonly CoreMessageLike[]): number {
-  return responseMessages.filter(message => message.role === "assistant").length;
+function countAssistantMessages(modelMessages: readonly CoreMessageLike[]): number {
+  return modelMessages.filter(turnMessage => turnMessage.role === "assistant").length;
 }
 
-function extractAssistantText(message: CoreMessageLike): string | undefined {
-  if (message.role !== "assistant") {
+function extractAssistantText(turnMessage: CoreMessageLike): string | undefined {
+  if (turnMessage.role !== "assistant") {
     return undefined;
   }
-  if (typeof message.content === "string") {
-    return message.content;
+  if (typeof turnMessage.content === "string") {
+    return turnMessage.content;
   }
-  if (!Array.isArray(message.content)) {
+  if (!Array.isArray(turnMessage.content)) {
     return "";
   }
-  return message.content.map(part => {
+  return turnMessage.content.map(streamPart => {
     if (
-      typeof part === "object" &&
-      part !== null &&
-      "type" in part &&
-      part.type === "text" &&
-      "text" in part &&
-      typeof part.text === "string"
+      typeof streamPart === "object" &&
+      streamPart !== null &&
+      "type" in streamPart &&
+      streamPart.type === "text" &&
+      "text" in streamPart &&
+      typeof streamPart.text === "string"
     ) {
-      return part.text;
+      return streamPart.text;
     }
     return "";
   }).join("");
 }
 
-function containsToolCall(responseMessages: readonly CoreMessageLike[]): boolean {
-  return responseMessages.some(message =>
-    message.role === "tool" ||
-    message.role === "assistant" &&
-      Array.isArray(message.content) &&
-      message.content.some(part =>
-        typeof part === "object" && part !== null && "type" in part && part.type === "tool-call"
+function containsToolCall(modelMessages: readonly CoreMessageLike[]): boolean {
+  return modelMessages.some(turnMessage =>
+    turnMessage.role === "tool" ||
+    turnMessage.role === "assistant" &&
+      Array.isArray(turnMessage.content) &&
+      turnMessage.content.some(streamPart =>
+        typeof streamPart === "object" && streamPart !== null && "type" in streamPart && streamPart.type === "tool-call"
       )
   );
 }
@@ -206,8 +206,8 @@ const FINAL_ASSISTANT_MESSAGE_UX_STAT_NAMES = [
   "link_count",
 ] as const;
 
-function countRegexMatches(text: string, pattern: RE2JS): number {
-  const matcher = pattern.matcher(text);
+function countRegexMatches(messageText: string, pattern: RE2JS): number {
+  const matcher = pattern.matcher(messageText);
   let count = 0;
   while (matcher.find()) {
     count += 1;
@@ -226,39 +226,39 @@ function compileFinalAssistantMessageUxStatsPatterns(): UxStatsPatterns {
   };
 }
 
-function countWords(text: string, patterns: UxStatsPatterns): number {
-  return countRegexMatches(text, patterns.word);
+function countWords(messageText: string, patterns: UxStatsPatterns): number {
+  return countRegexMatches(messageText, patterns.word);
 }
 
-function countLines(text: string): number {
-  if (text.length === 0) {
+function countLines(messageText: string): number {
+  if (messageText.length === 0) {
     return 0;
   }
   let lineCount = 1;
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
+  for (let position = 0; position < messageText.length; position += 1) {
+    const char = messageText[position];
     if (char === "\n") {
       lineCount += 1;
     } else if (char === "\r") {
       lineCount += 1;
-      if (text[index + 1] === "\n") {
-        index += 1;
+      if (messageText[position + 1] === "\n") {
+        position += 1;
       }
     }
   }
   return lineCount;
 }
 
-function countParagraphs(text: string): number {
-  const trimmedText = text.trim();
+function countParagraphs(messageText: string): number {
+  const trimmedText = messageText.trim();
   if (trimmedText.length === 0) {
     return 0;
   }
   let paragraphCount = 1;
   let newlineCountInWhitespaceRun = 0;
   let countedCurrentWhitespaceRun = false;
-  for (let index = 0; index < trimmedText.length; index += 1) {
-    const char = trimmedText[index]!;
+  for (let position = 0; position < trimmedText.length; position += 1) {
+    const char = trimmedText[position]!;
     const isNewline = char === "\n" || char === "\r";
     if (isNewline) {
       newlineCountInWhitespaceRun += 1;
@@ -266,8 +266,8 @@ function countParagraphs(text: string): number {
         paragraphCount += 1;
         countedCurrentWhitespaceRun = true;
       }
-      if (char === "\r" && trimmedText[index + 1] === "\n") {
-        index += 1;
+      if (char === "\r" && trimmedText[position + 1] === "\n") {
+        position += 1;
       }
       continue;
     }
@@ -279,8 +279,8 @@ function countParagraphs(text: string): number {
   return paragraphCount;
 }
 
-function countSentences(text: string, patterns: UxStatsPatterns): number {
-  const trimmedText = text.trim();
+function countSentences(messageText: string, patterns: UxStatsPatterns): number {
+  const trimmedText = messageText.trim();
   if (trimmedText.length === 0) {
     return 0;
   }
@@ -306,35 +306,35 @@ function getFenceMarker(line: string): "```" | "~~~" | undefined {
   return undefined;
 }
 
-function getNextLineWithEnding(text: string, startIndex: number): {
+function getNextLineWithEnding(messageText: string, startIndex: number): {
   readonly line: string;
   readonly lineWithEnding: string;
   readonly nextIndex: number;
 } {
   let lineEndIndex = startIndex;
   while (
-    lineEndIndex < text.length &&
-    text[lineEndIndex] !== "\n" &&
-    text[lineEndIndex] !== "\r"
+    lineEndIndex < messageText.length &&
+    messageText[lineEndIndex] !== "\n" &&
+    messageText[lineEndIndex] !== "\r"
   ) {
     lineEndIndex += 1;
   }
   let nextIndex = lineEndIndex;
-  if (nextIndex < text.length) {
-    if (text[nextIndex] === "\r" && text[nextIndex + 1] === "\n") {
+  if (nextIndex < messageText.length) {
+    if (messageText[nextIndex] === "\r" && messageText[nextIndex + 1] === "\n") {
       nextIndex += 2;
     } else {
       nextIndex += 1;
     }
   }
   return {
-    line: text.slice(startIndex, lineEndIndex),
-    lineWithEnding: text.slice(startIndex, nextIndex),
+    line: messageText.slice(startIndex, lineEndIndex),
+    lineWithEnding: messageText.slice(startIndex, nextIndex),
     nextIndex,
   };
 }
 
-function extractFencedCodeBlockStats(text: string): {
+function extractFencedCodeBlockStats(messageText: string): {
   readonly count: number;
   readonly textWithoutFencedCodeBlocks: string;
 } {
@@ -342,9 +342,9 @@ function extractFencedCodeBlockStats(text: string): {
   let textWithoutFencedCodeBlocks = "";
   let pendingFenceMarker: "```" | "~~~" | undefined;
   let pendingFenceText = "";
-  for (let index = 0; index < text.length;) {
-    const { line, lineWithEnding, nextIndex } = getNextLineWithEnding(text, index);
-    index = nextIndex;
+  for (let position = 0; position < messageText.length;) {
+    const { line, lineWithEnding, nextIndex } = getNextLineWithEnding(messageText, position);
+    position = nextIndex;
     const marker = getFenceMarker(line);
     if (pendingFenceMarker === undefined) {
       if (marker === undefined) {
@@ -369,16 +369,16 @@ function extractFencedCodeBlockStats(text: string): {
   return { count, textWithoutFencedCodeBlocks };
 }
 
-function analyzeAssistantMessageUxStats(text: string): FinalAssistantMessageUxStats {
+function analyzeAssistantMessageUxStats(messageText: string): FinalAssistantMessageUxStats {
   const patterns = compileFinalAssistantMessageUxStatsPatterns();
   const { count: codeBlockCount, textWithoutFencedCodeBlocks } =
-    extractFencedCodeBlockStats(text);
+    extractFencedCodeBlockStats(messageText);
   return {
-    character_count: text.length,
-    word_count: countWords(text, patterns),
-    line_count: countLines(text),
-    paragraph_count: countParagraphs(text),
-    sentence_count: countSentences(text, patterns),
+    character_count: messageText.length,
+    word_count: countWords(messageText, patterns),
+    line_count: countLines(messageText),
+    paragraph_count: countParagraphs(messageText),
+    sentence_count: countSentences(messageText, patterns),
     heading_count: countRegexMatches(textWithoutFencedCodeBlocks, patterns.heading),
     list_item_count: countRegexMatches(textWithoutFencedCodeBlocks, patterns.listItem),
     code_block_count: codeBlockCount,
@@ -388,9 +388,9 @@ function analyzeAssistantMessageUxStats(text: string): FinalAssistantMessageUxSt
 }
 
 function getFinalAssistantMessageUxStats(
-  responseMessages: readonly CoreMessageLike[],
+  modelMessages: readonly CoreMessageLike[],
 ): FinalAssistantMessageUxStats | undefined {
-  const finalMessage = responseMessages.at(-1);
+  const finalMessage = modelMessages.at(-1);
   if (finalMessage === undefined) {
     return undefined;
   }
@@ -402,9 +402,9 @@ function getFinalAssistantMessageUxStats(
 }
 
 function getFinalAssistantMessageCharacterCount(
-  responseMessages: readonly CoreMessageLike[],
+  modelMessages: readonly CoreMessageLike[],
 ): number | undefined {
-  const finalMessage = responseMessages.at(-1);
+  const finalMessage = modelMessages.at(-1);
   if (finalMessage === undefined) {
     return undefined;
   }
@@ -412,29 +412,29 @@ function getFinalAssistantMessageCharacterCount(
 }
 
 function hasReflectGeneralToolCall(
-  responseMessages: readonly CoreMessageLike[],
+  modelMessages: readonly CoreMessageLike[],
   toolCallIdentityResolver: {
     resolveToolCallIdentity(input: { readonly toolName: string; readonly args: unknown }): {
       readonly toolIdentifier?: unknown;
     } | undefined;
   },
 ): boolean {
-  for (const message of responseMessages) {
-    if (!Array.isArray(message.content)) {
+  for (const turnMessage of modelMessages) {
+    if (!Array.isArray(turnMessage.content)) {
       continue;
     }
-    for (const part of message.content as AssistantContentPart[]) {
+    for (const streamPart of turnMessage.content as AssistantContentPart[]) {
       if (
-        (part.type === "tool-call" || part.type === "tool-result") &&
-        part.toolName === "Reflect"
+        (streamPart.type === "tool-call" || streamPart.type === "tool-result") &&
+        streamPart.toolName === "Reflect"
       ) {
         return true;
       }
       if (
-        part.type === "tool-call" &&
+        streamPart.type === "tool-call" &&
         toolCallIdentityResolver.resolveToolCallIdentity({
-          toolName: part.toolName as string,
-          args: part.args,
+          toolName: streamPart.toolName as string,
+          args: streamPart.args,
         })?.toolIdentifier === "REFLECT_GENERAL"
       ) {
         return true;
@@ -444,24 +444,24 @@ function hasReflectGeneralToolCall(
   return false;
 }
 
-function isSuccessfulCreatePlanStep(step: unknown): boolean {
-  if (typeof step !== "object" || step === null || !("message" in step)) return false;
-  const message = step.message;
-  if (typeof message !== "object" || message === null || !("case" in message) || message.case !== "toolCall" || !("value" in message)) return false;
-  const messageValue = message.value;
+function isSuccessfulCreatePlanStep(agentStep: unknown): boolean {
+  if (typeof agentStep !== "object" || agentStep === null || !("message" in agentStep)) return false;
+  const turnMessage = agentStep.message;
+  if (typeof turnMessage !== "object" || turnMessage === null || !("case" in turnMessage) || turnMessage.case !== "toolCall" || !("value" in turnMessage)) return false;
+  const messageValue = turnMessage.value;
   if (typeof messageValue !== "object" || messageValue === null || !("tool" in messageValue)) return false;
-  const tool = messageValue.tool;
-  if (typeof tool !== "object" || tool === null || !("case" in tool) || tool.case !== "createPlanToolCall" || !("value" in tool)) return false;
-  const toolValue = tool.value;
+  const executableTool = messageValue.tool;
+  if (typeof executableTool !== "object" || executableTool === null || !("case" in executableTool) || executableTool.case !== "createPlanToolCall" || !("value" in executableTool)) return false;
+  const toolValue = executableTool.value;
   if (typeof toolValue !== "object" || toolValue === null || !("result" in toolValue)) return false;
-  const result = toolValue.result;
-  if (typeof result !== "object" || result === null || !("result" in result)) return false;
-  return typeof result.result === "object" && result.result !== null && "case" in result.result && result.result.case === "success";
+  const stepResult = toolValue.result;
+  if (typeof stepResult !== "object" || stepResult === null || !("result" in stepResult)) return false;
+  return typeof stepResult.result === "object" && stepResult.result !== null && "case" in stepResult.result && stepResult.result.case === "success";
 }
 
 interface DeliveryTurnLike {
   readonly steps: readonly {
-    get(ctx: Context): Promise<{
+    get(runContext: Context): Promise<{
       readonly message: {
         readonly case?: string;
         readonly value?: {
@@ -476,53 +476,53 @@ interface DeliveryTurnLike {
     }>;
   }[];
   readonly userMessage: {
-    get(ctx: Context): Promise<{ readonly isSimulatedMsg?: boolean }>;
+    get(runContext: Context): Promise<{ readonly isSimulatedMsg?: boolean }>;
   };
 }
 
 interface DeliveryStateHandlerLike {
-  readonly turns: readonly { get(ctx: Context): Promise<unknown> }[];
+  readonly turns: readonly { get(runContext: Context): Promise<unknown> }[];
 }
 
-function isDeliveryTurnLike(value: unknown): value is DeliveryTurnLike {
-  return value instanceof AgentConversationTurnHandle;
+function isDeliveryTurnLike(fieldValue: unknown): fieldValue is DeliveryTurnLike {
+  return fieldValue instanceof AgentConversationTurnHandle;
 }
 
 async function isSendMessageDeliveryOwed(
-  ctx: Context,
-  stateHandler: DeliveryStateHandlerLike,
+  runContext: Context,
+  turnState: DeliveryStateHandlerLike,
 ): Promise<boolean> {
-  for (let turnIndex = stateHandler.turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
-    const turn = await stateHandler.turns[turnIndex]!.get(ctx);
-    if (!isDeliveryTurnLike(turn)) {
+  for (let turnIndex = turnState.turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
+    const conversationTurn = await turnState.turns[turnIndex]!.get(runContext);
+    if (!isDeliveryTurnLike(conversationTurn)) {
       continue;
     }
-    for (let stepIndex = turn.steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
-      const step = await turn.steps[stepIndex]!.get(ctx);
+    for (let stepIndex = conversationTurn.steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+      const agentStep = await conversationTurn.steps[stepIndex]!.get(runContext);
       if (
-        step.message.case === "toolCall" &&
-        step.message.value?.tool?.case === "sendMessageToolCall" &&
-        step.message.value.tool.value?.result?.result?.case === "success"
+        agentStep.message.case === "toolCall" &&
+        agentStep.message.value?.tool?.case === "sendMessageToolCall" &&
+        agentStep.message.value.tool.value?.result?.result?.case === "success"
       ) {
         return false;
       }
     }
-    const userMessage = await turn.userMessage.get(ctx);
-    if (userMessage.isSimulatedMsg !== true) {
+    const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+    if (promptUserMessage.isSimulatedMsg !== true) {
       return true;
     }
   }
   return false;
 }
 
-function trailingToolBatchHasFailure(messages: readonly CoreMessageLike[]): boolean {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role !== "tool") {
+function trailingToolBatchHasFailure(turnMessages: readonly CoreMessageLike[]): boolean {
+  for (let position = turnMessages.length - 1; position >= 0; position -= 1) {
+    const turnMessage = turnMessages[position];
+    if (turnMessage?.role !== "tool") {
       break;
     }
     const highLevelResult = (
-      message.providerOptions as {
+      turnMessage.providerOptions as {
         readonly cursor?: {
           readonly highLevelToolCallResult?: { readonly isError?: unknown };
         };
@@ -536,7 +536,7 @@ function trailingToolBatchHasFailure(messages: readonly CoreMessageLike[]): bool
 }
 
 function isTrailingTaskToolCallMessage(
-  messages: readonly CoreMessageLike[],
+  turnMessages: readonly CoreMessageLike[],
   taskToolName: string | undefined,
   toolCallIdentityResolver: {
     resolveToolCallIdentity(input: { readonly toolName: string; readonly args: unknown }): {
@@ -547,23 +547,23 @@ function isTrailingTaskToolCallMessage(
   if (taskToolName === undefined) {
     return false;
   }
-  const lastMessage = messages.at(-1);
+  const lastMessage = turnMessages.at(-1);
   if (
     lastMessage?.role !== "assistant" ||
     !Array.isArray(lastMessage.content)
   ) {
     return false;
   }
-  for (const part of lastMessage.content as AssistantContentPart[]) {
-    if (part?.type !== "tool-call") {
+  for (const streamPart of lastMessage.content as AssistantContentPart[]) {
+    if (streamPart?.type !== "tool-call") {
       continue;
     }
-    if (part.toolName === taskToolName) {
+    if (streamPart.toolName === taskToolName) {
       return true;
     }
     if (toolCallIdentityResolver?.resolveToolCallIdentity({
-      toolName: part.toolName as string,
-      args: part.args,
+      toolName: streamPart.toolName as string,
+      args: streamPart.args,
     })?.toolIdentifier === "TASK") {
       return true;
     }
@@ -584,10 +584,10 @@ class EmptyResponseRetryError extends Error {
   readonly retryAction: unknown;
   readonly needsContinuationMessage: unknown;
 
-  constructor(retryAction: unknown, needsContinuationMessage: unknown) {
-    super(`Empty model response, retry action: ${String(retryAction)}`);
+  constructor(retryOutcome: unknown, needsContinuationMessage: unknown) {
+    super(`Empty model response, retry action: ${String(retryOutcome)}`);
     this.name = "EmptyResponseRetryError";
-    this.retryAction = retryAction;
+    this.retryAction = retryOutcome;
     this.needsContinuationMessage = needsContinuationMessage;
   }
 }
@@ -596,9 +596,9 @@ class StepRetriesExhaustedError extends Error {
   readonly reason: unknown;
   readonly isStepRetriesExhausted = true;
 
-  constructor(reason: unknown) {
+  constructor(retryReason: unknown) {
     super("Failed to run step, exceeded max retries");
-    this.reason = reason;
+    this.reason = retryReason;
     this.name = "StepRetriesExhaustedError";
   }
 }
@@ -606,18 +606,18 @@ class StepRetriesExhaustedError extends Error {
 const MAX_RETRY_ITERATIONS = 5;
 const MAX_EMPTY_RESPONSE_RETRIES_PER_TURN = 3;
 
-function hasEmptyAssistantText(messages: readonly CoreMessageLike[]): boolean {
-  for (const message of messages) {
-    if (message.role !== "assistant") {
+function hasEmptyAssistantText(turnMessages: readonly CoreMessageLike[]): boolean {
+  for (const turnMessage of turnMessages) {
+    if (turnMessage.role !== "assistant") {
       continue;
     }
-    if (typeof message.content === "string") {
-      if (message.content.trim().length > 0) {
+    if (typeof turnMessage.content === "string") {
+      if (turnMessage.content.trim().length > 0) {
         return false;
       }
-    } else if (Array.isArray(message.content)) {
-      for (const part of message.content as AssistantContentPart[]) {
-        if (part.type === "text" && (part.text?.trim().length ?? 0) > 0) {
+    } else if (Array.isArray(turnMessage.content)) {
+      for (const streamPart of turnMessage.content as AssistantContentPart[]) {
+        if (streamPart.type === "text" && (streamPart.text?.trim().length ?? 0) > 0) {
           return false;
         }
       }
@@ -626,37 +626,37 @@ function hasEmptyAssistantText(messages: readonly CoreMessageLike[]): boolean {
   return true;
 }
 
-function countImagePartsInMessages(messages: readonly CoreMessageLike[]): number {
-  const countImagesInValue = (value: unknown): number => {
-    if (Array.isArray(value)) {
+function countImagePartsInMessages(turnMessages: readonly CoreMessageLike[]): number {
+  const countImagesInValue = (fieldValue: unknown): number => {
+    if (Array.isArray(fieldValue)) {
       let total = 0;
-      for (const item of value) {
+      for (const item of fieldValue) {
         total += countImagesInValue(item);
       }
       return total;
     }
-    if (typeof value !== "object" || value === null) {
+    if (typeof fieldValue !== "object" || fieldValue === null) {
       return 0;
     }
     let total = 0;
     if (
-      "type" in value &&
-      typeof value.type === "string" &&
-      (value.type === "image" || value.type === "image_url" || value.type === "input_image")
+      "type" in fieldValue &&
+      typeof fieldValue.type === "string" &&
+      (fieldValue.type === "image" || fieldValue.type === "image_url" || fieldValue.type === "input_image")
     ) {
       total += 1;
     }
-    if ("content" in value) {
-      total += countImagesInValue(value.content);
+    if ("content" in fieldValue) {
+      total += countImagesInValue(fieldValue.content);
     }
-    if ("experimental_content" in value) {
-      total += countImagesInValue(value.experimental_content);
+    if ("experimental_content" in fieldValue) {
+      total += countImagesInValue(fieldValue.experimental_content);
     }
     return total;
   };
   let imageCount = 0;
-  for (const message of messages) {
-    imageCount += countImagesInValue(message.content);
+  for (const turnMessage of turnMessages) {
+    imageCount += countImagesInValue(turnMessage.content);
   }
   return imageCount;
 }
@@ -774,7 +774,7 @@ interface ResponseComparisonSelectionLike {
 interface PreparedResponseComparisonAttemptLike {
   readonly selection: ResponseComparisonSelectionLike;
   readonly maxResponseChars: number;
-  isParentLengthEligible(response: string): boolean;
+  isParentLengthEligible(modelResponse: string): boolean;
   hasSufficientCharacterDiff(parentResponse: string, alternateResponse: string): boolean;
   commitCooldown(): Promise<boolean>;
 }
@@ -795,28 +795,28 @@ interface ResponseComparisonResultLike {
 
 interface AgentResponseComparisonCapabilityLike {
   readonly supportsPendingUi?: boolean;
-  readonly warm?: (args: {
+  readonly warm?: (toolArgs: {
     readonly ctx: Context;
     readonly selection: ResponseComparisonSelectionLike;
     readonly messages: readonly CoreMessageLike[];
     readonly tools: readonly unknown[];
   }) => Promise<unknown>;
-  readonly preselect?: (args: {
+  readonly preselect?: (toolArgs: {
     readonly isByok: boolean;
     readonly isSubagent: boolean;
   }) => Promise<PreparedResponseComparisonAttemptLike | undefined>;
-  readonly resolve?: (args: {
+  readonly resolve?: (toolArgs: {
     readonly responseText: string;
     readonly isByok: boolean;
     readonly isSubagent: boolean;
   }) => Promise<PreparedResponseComparisonAttemptLike | undefined>;
-  readonly refineSelection?: (args: {
+  readonly refineSelection?: (toolArgs: {
     readonly ctx: Context;
     readonly parentResponse: string;
     readonly messages: readonly CoreMessageLike[];
     readonly selection: ResponseComparisonSelectionLike;
   }) => Promise<ResponseComparisonSelectionLike | undefined>;
-  execute(args: {
+  execute(toolArgs: {
     readonly ctx: Context;
     readonly selection: ResponseComparisonSelectionLike;
     readonly messages: readonly CoreMessageLike[];
@@ -853,8 +853,8 @@ interface UserMessageActionHandlerConfigLike {
     readonly collectModelUxStats?: boolean | undefined;
     readonly enablePromptSuggestion?: boolean | undefined;
     readonly promptSuggestionMaxInputTokenCost?: number | undefined;
-    readonly getModelInputCostForContext?: ((model: string, estimatedTokens: number) => number) | undefined;
-    readonly getFeedbackRequestDetails?: ((args: { readonly canonicalModelName: string | undefined }) => Promise<{
+    readonly getModelInputCostForContext?: ((modelConfig: string, estimatedTokens: number) => number) | undefined;
+    readonly getFeedbackRequestDetails?: ((toolArgs: { readonly canonicalModelName: string | undefined }) => Promise<{
       readonly categories: readonly { readonly id: unknown; readonly label: unknown }[];
       readonly categoryGroups?: readonly {
         readonly id: unknown;
@@ -877,8 +877,8 @@ interface UserMessageActionHandlerConfigLike {
   } | undefined;
   readonly automationInstructions?: unknown;
   readonly reminders?: Parameters<typeof applyRemindersToToolResults>[1];
-  readonly messageHistoryModifier?: ((messages: CoreMessageLike[]) => CoreMessageLike[] | undefined) | undefined;
-  readonly systemPromptGenerator: (args: {
+  readonly messageHistoryModifier?: ((turnMessages: CoreMessageLike[]) => CoreMessageLike[] | undefined) | undefined;
+  readonly systemPromptGenerator: (toolArgs: {
     readonly requestContext: RequestContext;
     readonly cursorRules: ReturnType<typeof getAllRules>;
     readonly env: unknown;
@@ -886,7 +886,7 @@ interface UserMessageActionHandlerConfigLike {
     readonly cloudRule: unknown;
     readonly mode: AgentMode;
     readonly grindMode: { readonly phase: "executing" | "planning" };
-  }, toolSetHandle: ToolSetHandle) => string;
+  }, toolSetLease: ToolSetHandle) => string;
   readonly smartModeClassifierMode?: unknown;
   readonly smartModeClassifierShadowMode?: unknown;
   readonly agentResponseComparison?: AgentResponseComparisonCapabilityLike | undefined;
@@ -934,8 +934,8 @@ type RedactedConversationActionOneof =
 type RedactedConversationAction = { readonly action: RedactedConversationActionOneof };
 
 interface ConversationActionReceiverLike {
-  peek(ctx: Context): Promise<{ readonly action: RedactedConversationAction["action"] } | undefined>;
-  pop(ctx: Context): Promise<undefined>;
+  peek(runContext: Context): Promise<{ readonly action: RedactedConversationAction["action"] } | undefined>;
+  pop(runContext: Context): Promise<undefined>;
   peekIsClaimedInjection?(): boolean;
   failConsumedInjectionDelivery?(): void;
   getContextInjectionToolSignal?(): unknown;
@@ -947,20 +947,20 @@ interface RetryStateHandlerLike {
   readonly tokenDetails: SummarizationStateHandler["tokenDetails"];
   tokenDetailsStaleAfterSummarization: SummarizationStateHandler["tokenDetailsStaleAfterSummarization"];
   readonly lastStepInvocationId?: string | undefined;
-  shouldSuppressSelfSummaryAfterInputLimitFailure(usedTokens: number): boolean;
+  shouldSuppressSelfSummaryAfterInputLimitFailure(consumedTokens: number): boolean;
 }
 
 interface RetryRootPromptExecutorLike {
-  appendMessages(messages: ReturnType<typeof toRedactedCoreMessages>): void;
+  appendMessages(turnMessages: ReturnType<typeof toRedactedCoreMessages>): void;
   clearMessages(): void;
   getState(): unknown;
   getMessages(): readonly (
     Parameters<typeof extractAutomationTriggerContext>[0][number] &
     Parameters<typeof fromRedactedCoreMessages>[0][number]
   )[];
-  executeToolStream(...args: readonly unknown[]): StepStreamResultLike;
-  executeModelStreamOnly(...args: readonly unknown[]): ModelOnlyStreamResultLike;
-  stream(...args: readonly unknown[]): PromptSuggestionStreamResultLike;
+  executeToolStream(...toolArgs: readonly unknown[]): StepStreamResultLike;
+  executeModelStreamOnly(...toolArgs: readonly unknown[]): ModelOnlyStreamResultLike;
+  stream(...toolArgs: readonly unknown[]): PromptSuggestionStreamResultLike;
 }
 
 interface StepStreamResultLike {
@@ -1012,7 +1012,7 @@ interface ModelOnlyStepResultLike {
 
 interface RunStepTurnLike extends SetupStepTurnLike {
   readonly steps: readonly {
-    get(ctx: Context): Promise<{
+    get(runContext: Context): Promise<{
       readonly message: {
         readonly case?: string;
         readonly value?: {
@@ -1025,14 +1025,14 @@ interface RunStepTurnLike extends SetupStepTurnLike {
     }>;
   }[];
   readonly userMessage: {
-    get(ctx: Context): Promise<{
+    get(runContext: Context): Promise<{
       readonly mode?: AgentMode | undefined;
       readonly selectedContext?: PromptTokenTrackingParamsLike["selectedContext"];
       readonly messageId?: string | undefined;
     }>;
   };
-  appendPromptMessages(messages: ReturnType<typeof toRedactedCoreMessages>): void;
-  upsertToolCall(ctx: Context, toolCall: unknown, toolCallId?: string): Promise<unknown>;
+  appendPromptMessages(turnMessages: ReturnType<typeof toRedactedCoreMessages>): void;
+  upsertToolCall(runContext: Context, pendingCall: unknown, callIdentifier?: string): Promise<unknown>;
 }
 
 interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationStateHandler {
@@ -1042,9 +1042,9 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
   getPrivacyMode(): PrivacyMode;
   assertRootPromptBlobsLoadedForFullPromptRead(): void;
   invalidateRootPromptPrefix(): void;
-  computeNewStructure(ctx: Context): Promise<{ pendingToolCalls: unknown[] }>;
-  setTokenDetails(tokenDetails: ReturnType<typeof createRedactedConversationTokenDetails>): void;
-  addTurnUsage(usage: {
+  computeNewStructure(runContext: Context): Promise<{ pendingToolCalls: unknown[] }>;
+  setTokenDetails(tokenUsageDetails: ReturnType<typeof createRedactedConversationTokenDetails>): void;
+  addTurnUsage(tokenUsage: {
     readonly inputTokens: number;
     readonly outputTokens: number;
     readonly cacheReadTokens: number;
@@ -1053,24 +1053,24 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
   }): void;
   setMode(mode: AgentMode): void;
   createAgentTurn(
-    ctx: Context,
-    userMessage: unknown,
-    requestContext: unknown,
+    runContext: Context,
+    promptUserMessage: unknown,
+    requestState: unknown,
     config: unknown,
     resourceAccessor: unknown,
   ): Promise<RunStepTurnLike>;
-  hasCompletedAskQuestion(toolCallId: string): boolean;
-  markAskQuestionCompleted(toolCallId: string): void;
+  hasCompletedAskQuestion(callIdentifier: string): boolean;
+  markAskQuestionCompleted(callIdentifier: string): void;
   readonly readPaths: ReadonlySet<string>;
   readonly backgroundSummarizationCancellationToken: { cancelled: boolean } | undefined;
   readonly selfSummaryInputLimitFailureTokenCount: number | undefined;
-  generateModeChangeContent(config: unknown, requestContext: unknown, previousMode?: AgentMode): string;
+  generateModeChangeContent(config: unknown, requestState: unknown, previousMode?: AgentMode): string;
 }
 
 interface RetryOrchestratorLike {
-  shouldStartBackgroundSummarization(...args: unknown[]): boolean;
-  handleSummarization(...args: unknown[]): Promise<void>;
-  canUseSelfSummary(args: { readonly tools: unknown; readonly extraT: unknown }): boolean;
+  shouldStartBackgroundSummarization(...toolArgs: unknown[]): boolean;
+  handleSummarization(...toolArgs: unknown[]): Promise<void>;
+  canUseSelfSummary(toolArgs: { readonly tools: unknown; readonly extraT: unknown }): boolean;
 }
 
 type ToolCountingExecutorLike = Parameters<ReturnType<typeof createToolCountingMiddleware>>[0];
@@ -1135,17 +1135,17 @@ interface SetupStepStateHandlerLike {
 
 interface SetupStepTurnLike {
   readonly userMessage: {
-    get(ctx: Context): Promise<{ readonly mode?: AgentMode | undefined }>;
+    get(runContext: Context): Promise<{ readonly mode?: AgentMode | undefined }>;
   };
 }
 
 interface PostStepTurnLike extends SetupStepTurnLike {
-  appendPromptMessages(messages: ReturnType<typeof toRedactedCoreMessages>): void;
+  appendPromptMessages(turnMessages: ReturnType<typeof toRedactedCoreMessages>): void;
 }
 
 interface InteractionListenerLike {
-  sendUpdate(ctx: Context, update: unknown): Promise<void>;
-  query(ctx: Context, query: unknown): Promise<any>;
+  sendUpdate(runContext: Context, update: unknown): Promise<void>;
+  query(runContext: Context, query: unknown): Promise<any>;
   enqueuePostTurnEndedWork?: ((work: () => Promise<unknown>) => void) | undefined;
 }
 
@@ -1203,10 +1203,10 @@ type ResponseComparisonEventLike =
 
 interface SplitStepStateMutationTarget {
   readonly mode?: AgentMode | undefined;
-  readonly turns: readonly { get(ctx: Context): Promise<unknown> }[];
+  readonly turns: readonly { get(runContext: Context): Promise<unknown> }[];
   getBlobStore(): unknown;
   setActiveBranchName(branchName: string | undefined): void;
-  persistSubagentState(ctx: Context, subagentId: string, subagentType: unknown, state: Partial<Record<string, unknown>>): void;
+  persistSubagentState(runContext: Context, subagentId: string, subagentType: unknown, turnStatus: Partial<Record<string, unknown>>): void;
   setPlan(plan: unknown | undefined): void;
   setMode(mode: AgentMode): void;
   setTodos(todos: readonly unknown[]): void;
@@ -1219,24 +1219,24 @@ interface SplitStepStateMutationTarget {
 }
 
 interface SplitStepTurnLike {
-  upsertToolCall(ctx: Context, toolCall: unknown, toolCallId?: string): Promise<void>;
+  upsertToolCall(runContext: Context, pendingCall: unknown, callIdentifier?: string): Promise<void>;
 }
 
 interface SplitStepToolCallRecorderLike {
-  recordToolCall(toolCall: unknown, toolCallId?: string): void;
-  recordPendingToolCall(ctx: Context, toolCall: unknown, toolCallId?: string): Promise<void>;
-  upsertToolCall(ctx: Context, toolCall: unknown, toolCallId?: string): Promise<void>;
+  recordToolCall(pendingCall: unknown, callIdentifier?: string): void;
+  recordPendingToolCall(runContext: Context, pendingCall: unknown, callIdentifier?: string): Promise<void>;
+  upsertToolCall(runContext: Context, pendingCall: unknown, callIdentifier?: string): Promise<void>;
 }
 
 interface SplitStepReplayToolCallRecorderLike {
   recordToolCall(
-    toolCall: Parameters<AgentConversationTurnHandle["recordToolCall"]>[0],
-    toolCallId?: string,
+    pendingCall: Parameters<AgentConversationTurnHandle["recordToolCall"]>[0],
+    callIdentifier?: string,
   ): void;
   upsertToolCall(
-    ctx: Context,
-    toolCall: Parameters<AgentConversationTurnHandle["recordToolCall"]>[0],
-    toolCallId?: string,
+    runContext: Context,
+    pendingCall: Parameters<AgentConversationTurnHandle["recordToolCall"]>[0],
+    callIdentifier?: string,
   ): Promise<void>;
 }
 
@@ -1276,7 +1276,7 @@ interface DeferredExecutableToolLike extends Record<string, unknown> {
   readonly toolIdentifier: string;
   readonly dynamicToolMetaRole?: string;
   readonly customToolFormat?: unknown;
-  readonly prepareSubagent?: ((ctx: Context, args: unknown, metadata: Record<string, unknown>) => unknown | Promise<unknown>);
+  readonly prepareSubagent?: ((runContext: Context, toolArgs: unknown, metadata: Record<string, unknown>) => unknown | Promise<unknown>);
 }
 
 interface DeferredToolCallResultLike {
@@ -1284,45 +1284,45 @@ interface DeferredToolCallResultLike {
   readonly stateOps?: readonly SplitStepStateOp[] | undefined;
 }
 
-function isCoreMessageLike(value: Record<string, unknown>): value is CoreMessageLike {
-  return typeof value.role === "string" && "content" in value;
+function isCoreMessageLike(fieldValue: Record<string, unknown>): fieldValue is CoreMessageLike {
+  return typeof fieldValue.role === "string" && "content" in fieldValue;
 }
 
-function isDeferredExecutableTool(value: unknown): value is DeferredExecutableToolLike {
-  return typeof value === "object" &&
-    value !== null &&
-    "name" in value &&
-    typeof value.name === "string" &&
-    "toolIdentifier" in value &&
-    typeof value.toolIdentifier === "string";
+function isDeferredExecutableTool(fieldValue: unknown): fieldValue is DeferredExecutableToolLike {
+  return typeof fieldValue === "object" &&
+    fieldValue !== null &&
+    "name" in fieldValue &&
+    typeof fieldValue.name === "string" &&
+    "toolIdentifier" in fieldValue &&
+    typeof fieldValue.toolIdentifier === "string";
 }
 
 function createSplitStepStateHandler(
-  stateHandler: SplitStepStateMutationTarget,
-  turn: SplitStepTurnLike,
+  turnState: SplitStepStateMutationTarget,
+  conversationTurn: SplitStepTurnLike,
 ): {
   readonly stateHandler: SplitStepStateMutationTarget;
   readonly toolCallRecorder: SplitStepToolCallRecorderLike;
   readonly stateOps: SplitStepStateOp[];
 } {
-  const stateOps: SplitStepStateOp[] = [];
-  const splitStateHandler = new Proxy(stateHandler, {
+  const stateOperations: SplitStepStateOp[] = [];
+  const splitStateHandler = new Proxy(turnState, {
     get(target, property, receiver) {
       if (property === "setActiveBranchName") {
         return (branchName: string | undefined) => {
-          stateOps.push({ type: "setActiveBranchName", branchName });
+          stateOperations.push({ type: "setActiveBranchName", branchName });
           return target.setActiveBranchName(branchName);
         };
       }
       if (property === "persistSubagentState") {
-        return (ctx: Context, subagentId: string, subagentType: unknown, state: Partial<Record<string, unknown>>) => {
-          stateOps.push({ type: "persistSubagentState", subagentId, subagentType, state });
-          return target.persistSubagentState(ctx, subagentId, subagentType, state);
+        return (runContext: Context, subagentId: string, subagentType: unknown, turnStatus: Partial<Record<string, unknown>>) => {
+          stateOperations.push({ type: "persistSubagentState", subagentId, subagentType, state: turnStatus });
+          return target.persistSubagentState(runContext, subagentId, subagentType, turnStatus);
         };
       }
       if (property === "setPlan") {
         return (plan: unknown | undefined) => {
-          stateOps.push({
+          stateOperations.push({
             type: "setPlan",
             plan: plan === undefined ? undefined : fromRedactedConversationPlan(plan, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
           });
@@ -1331,13 +1331,13 @@ function createSplitStepStateHandler(
       }
       if (property === "setMode") {
         return (mode: AgentMode) => {
-          stateOps.push({ type: "setMode", mode });
+          stateOperations.push({ type: "setMode", mode });
           return target.setMode(mode);
         };
       }
       if (property === "setTodos") {
         return (todos: readonly unknown[]) => {
-          stateOps.push({
+          stateOperations.push({
             type: "setTodos",
             todos: todos.map(todo => fromRedactedTodoItem(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
           });
@@ -1346,109 +1346,109 @@ function createSplitStepStateHandler(
       }
       if (property === "upsertPlanEntry") {
         return (entry: unknown) => {
-          stateOps.push({ type: "upsertPlanEntry", entry });
+          stateOperations.push({ type: "upsertPlanEntry", entry });
           return target.upsertPlanEntry(entry);
         };
       }
       if (property === "setGoalState") {
         return (goalState: unknown) => {
-          stateOps.push({ type: "setGoalState", goalState });
+          stateOperations.push({ type: "setGoalState", goalState });
           return target.setGoalState(goalState);
         };
       }
       if (property === "appendCommunicateUpdateHistoryEntry") {
         return (entry: unknown) => {
-          stateOps.push({ type: "appendCommunicateUpdateHistoryEntry", entry });
+          stateOperations.push({ type: "appendCommunicateUpdateHistoryEntry", entry });
           return target.appendCommunicateUpdateHistoryEntry(entry);
         };
       }
       if (property === "recordReadPath") {
         return (path: { unwrap(purpose: PrivacyCapability): string }) => {
-          stateOps.push({ type: "recordReadPath", path: path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) });
+          stateOperations.push({ type: "recordReadPath", path: path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) });
           return target.recordReadPath(path);
         };
       }
       if (property === "markAskQuestionCompleted") {
         return (originalToolCallId: string) => {
-          stateOps.push({ type: "markAskQuestionCompleted", originalToolCallId });
+          stateOperations.push({ type: "markAskQuestionCompleted", originalToolCallId });
           return target.markAskQuestionCompleted?.(originalToolCallId);
         };
       }
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === "function" ? value.bind(target) : value;
+      const fieldValue = Reflect.get(target, property, receiver);
+      return typeof fieldValue === "function" ? fieldValue.bind(target) : fieldValue;
     },
   });
   const splitToolCallRecorder: SplitStepToolCallRecorderLike = {
-    recordToolCall(toolCall, toolCallId) {
-      stateOps.push({
+    recordToolCall(pendingCall, callIdentifier) {
+      stateOperations.push({
         type: "recordToolCall",
-        toolCall: fromRedactedToolCall(toolCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
-        toolCallId,
+        toolCall: fromRedactedToolCall(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+        toolCallId: callIdentifier,
       });
     },
-    async recordPendingToolCall(ctx, toolCall, toolCallId) {
-      await turn.upsertToolCall(ctx, toolCall, toolCallId);
+    async recordPendingToolCall(runContext, pendingCall, callIdentifier) {
+      await conversationTurn.upsertToolCall(runContext, pendingCall, callIdentifier);
     },
-    async upsertToolCall(_ctx, toolCall, toolCallId) {
-      stateOps.push({
+    async upsertToolCall(_ctx, pendingCall, callIdentifier) {
+      stateOperations.push({
         type: "recordToolCall",
-        toolCall: fromRedactedToolCall(toolCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
-        toolCallId,
+        toolCall: fromRedactedToolCall(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+        toolCallId: callIdentifier,
       });
     },
   };
-  return { stateHandler: splitStateHandler, toolCallRecorder: splitToolCallRecorder, stateOps };
+  return { stateHandler: splitStateHandler, toolCallRecorder: splitToolCallRecorder, stateOps: stateOperations };
 }
 
 async function applyConversationStateOp(
-  ctx: Context,
-  stateHandler: SplitStepStateMutationTarget,
+  runContext: Context,
+  turnState: SplitStepStateMutationTarget,
   toolCallRecorder: SplitStepReplayToolCallRecorderLike,
-  stateOp: SplitStepStateOp,
+  stateOperation: SplitStepStateOp,
 ): Promise<void> {
-  switch (stateOp.type) {
+  switch (stateOperation.type) {
     case "setActiveBranchName":
-      stateHandler.setActiveBranchName(stateOp.branchName);
+      turnState.setActiveBranchName(stateOperation.branchName);
       break;
     case "persistSubagentState":
-      stateHandler.persistSubagentState(ctx, stateOp.subagentId, stateOp.subagentType, stateOp.state);
+      turnState.persistSubagentState(runContext, stateOperation.subagentId, stateOperation.subagentType, stateOperation.state);
       break;
     case "setPlan":
-      stateHandler.setPlan(stateOp.plan === undefined ? undefined : toRedactedConversationPlan(stateOp.plan, stateHandler.getPrivacyMode()));
+      turnState.setPlan(stateOperation.plan === undefined ? undefined : toRedactedConversationPlan(stateOperation.plan, turnState.getPrivacyMode()));
       break;
     case "setMode":
-      stateHandler.setMode(stateOp.mode);
+      turnState.setMode(stateOperation.mode);
       break;
     case "setTodos":
-      stateHandler.setTodos(stateOp.todos.map(todo => toRedactedTodoItem(todo, stateHandler.getPrivacyMode())));
+      turnState.setTodos(stateOperation.todos.map(todo => toRedactedTodoItem(todo, turnState.getPrivacyMode())));
       break;
     case "upsertPlanEntry":
-      stateHandler.upsertPlanEntry(stateOp.entry);
+      turnState.upsertPlanEntry(stateOperation.entry);
       break;
     case "setGoalState":
-      stateHandler.setGoalState(stateOp.goalState);
+      turnState.setGoalState(stateOperation.goalState);
       break;
     case "appendCommunicateUpdateHistoryEntry":
-      stateHandler.appendCommunicateUpdateHistoryEntry(stateOp.entry);
+      turnState.appendCommunicateUpdateHistoryEntry(stateOperation.entry);
       break;
     case "recordToolCall":
-      const toolCall = stateOp.toolCall as { readonly tool?: { readonly case?: string } };
-      if (toolCall.tool?.case === "askQuestionToolCall" && stateOp.toolCallId !== undefined) {
-        await toolCallRecorder.upsertToolCall(ctx, toRedactedToolCall(stateOp.toolCall, stateHandler.getPrivacyMode()), stateOp.toolCallId);
+      const pendingCall = stateOperation.toolCall as { readonly tool?: { readonly case?: string } };
+      if (pendingCall.tool?.case === "askQuestionToolCall" && stateOperation.toolCallId !== undefined) {
+        await toolCallRecorder.upsertToolCall(runContext, toRedactedToolCall(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
       } else {
-        toolCallRecorder.recordToolCall(toRedactedToolCall(stateOp.toolCall, stateHandler.getPrivacyMode()), stateOp.toolCallId);
+        toolCallRecorder.recordToolCall(toRedactedToolCall(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
       }
       break;
     case "recordReadPath":
-      stateHandler.recordReadPath(safeString(stateOp.path));
+      turnState.recordReadPath(safeString(stateOperation.path));
       break;
     case "markAskQuestionCompleted":
-      if (typeof stateHandler.markAskQuestionCompleted === "function") {
-        stateHandler.markAskQuestionCompleted(stateOp.originalToolCallId);
+      if (typeof turnState.markAskQuestionCompleted === "function") {
+        turnState.markAskQuestionCompleted(stateOperation.originalToolCallId);
       }
       break;
     default: {
-      const exhaustiveCheck: never = stateOp;
+      const exhaustiveCheck: never = stateOperation;
       throw new Error(`Unhandled conversation state op: ${exhaustiveCheck}`);
     }
   }
@@ -1494,166 +1494,166 @@ export class AbstractUserMessageActionHandler {
   }
 
   getAutomationTriggerContext(
-    messages: Parameters<typeof extractAutomationTriggerContext>[0],
+    turnMessages: Parameters<typeof extractAutomationTriggerContext>[0],
   ): string | undefined {
     if (this.config.automationInstructions === void 0) return undefined;
     if (this.cachedAutomationTriggerContext !== null) return this.cachedAutomationTriggerContext;
-    const result = extractAutomationTriggerContext(messages);
-    this.cachedAutomationTriggerContext = result;
-    return result;
+    const stepResult = extractAutomationTriggerContext(turnMessages);
+    this.cachedAutomationTriggerContext = stepResult;
+    return stepResult;
   }
 
   getUserPermissionsFileAutoRunInstructions(
-    ctx: Context,
-    requestContext: SmartModeRequestContextLike,
+    runContext: Context,
+    requestState: SmartModeRequestContextLike,
   ): Promise<Awaited<ReturnType<typeof loadUserPermissionsFileAutoRunInstructions>>> {
     if (!this.config.smartModeClassifierMode && !this.config.smartModeClassifierShadowMode) {
       return Promise.resolve(undefined);
     }
-    const { userAutoRunInstructions, hasAdminOverride } = smartModeAutoRunInstructionsFromProtos(requestContext);
+    const { userAutoRunInstructions, hasAdminOverride } = smartModeAutoRunInstructionsFromProtos(requestState);
     if (hasAdminOverride) return Promise.resolve(undefined);
     if (userAutoRunInstructions !== undefined) return Promise.resolve(userAutoRunInstructions);
-    return loadUserPermissionsFileAutoRunInstructions(ctx);
+    return loadUserPermissionsFileAutoRunInstructions(runContext);
   }
 
   getProjectPermissionsFileAutoRunInstructions(
-    requestContext: SmartModeRequestContextLike,
+    requestState: SmartModeRequestContextLike,
   ) {
-    const { projectAutoRunInstructions } = smartModeAutoRunInstructionsFromProtos(requestContext);
+    const { projectAutoRunInstructions } = smartModeAutoRunInstructionsFromProtos(requestState);
     return projectAutoRunInstructions;
   }
 
   tapAgentResponseComparisonWarmup(
-    ctx: Context,
+    runContext: Context,
     fullStream: AsyncIterable<ResponseComparisonStreamPartLike>,
-    messages: readonly CoreMessageLike[] | undefined,
-    tools: readonly unknown[] | undefined,
+    turnMessages: readonly CoreMessageLike[] | undefined,
+    executableTools: readonly unknown[] | undefined,
   ): AsyncIterable<ResponseComparisonStreamPartLike> {
-    const capability = this.config.agentResponseComparison;
-    if (capability?.warm === undefined || messages === undefined || tools === undefined || this.pendingResponseComparison === undefined) {
+    const comparisonCapability = this.config.agentResponseComparison;
+    if (comparisonCapability?.warm === undefined || turnMessages === undefined || executableTools === undefined || this.pendingResponseComparison === undefined) {
       return fullStream;
     }
-    const maybeWarm = () => this.maybeWarmAgentResponseComparison(ctx, capability, messages, tools);
+    const maybeWarm = () => this.maybeWarmAgentResponseComparison(runContext, comparisonCapability, turnMessages, executableTools);
     return (async function* () {
       let warmTriggered = false;
-      for await (const part of fullStream) {
-        if (!warmTriggered && part.type === "text-delta") {
+      for await (const streamPart of fullStream) {
+        if (!warmTriggered && streamPart.type === "text-delta") {
           warmTriggered = true;
           maybeWarm();
         }
-        yield part;
+        yield streamPart;
       }
     })();
   }
 
   maybeWarmAgentResponseComparison(
-    ctx: Context,
-    capability: AgentResponseComparisonCapabilityLike,
-    messages: readonly CoreMessageLike[],
-    tools: readonly unknown[],
+    runContext: Context,
+    comparisonCapability: AgentResponseComparisonCapabilityLike,
+    turnMessages: readonly CoreMessageLike[],
+    executableTools: readonly unknown[],
   ): void {
-    const pending = this.pendingResponseComparison;
-    if (pending === undefined || capability.warm === undefined || this.responseComparisonWarmupsInTurn >= MAX_RESPONSE_COMPARISON_WARMUPS_PER_TURN) return;
+    const pendingState = this.pendingResponseComparison;
+    if (pendingState === undefined || comparisonCapability.warm === undefined || this.responseComparisonWarmupsInTurn >= MAX_RESPONSE_COMPARISON_WARMUPS_PER_TURN) return;
     this.responseComparisonWarmupsInTurn += 1;
-    void capability.warm({ ctx, selection: pending.preparedAttempt.selection, messages, tools }).catch(error => {
-      logger.warn(ctx, "Agent response comparison warmup failed open", { error });
+    void comparisonCapability.warm({ ctx: runContext, selection: pendingState.preparedAttempt.selection, messages: turnMessages, tools: executableTools }).catch(error => {
+      agentLogger.warn(runContext, "Agent response comparison warmup failed open", { error });
   });
 }
 
-  async preparePendingAgentResponseComparison(args: {
+  async preparePendingAgentResponseComparison(toolArgs: {
     readonly ctx: Context;
     readonly parentInvocationId: string;
     readonly messages: readonly CoreMessageLike[];
     readonly tools: readonly unknown[];
     readonly privacyMode: PrivacyMode;
   }): Promise<void> {
-    const capability = this.config.agentResponseComparison;
-    if (this.responseComparisonPendingUiAttempted || capability?.supportsPendingUi !== true || capability.preselect === undefined || this.interactionListener.enqueuePostTurnEndedWork === undefined || args.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED) return;
+    const comparisonCapability = this.config.agentResponseComparison;
+    if (this.responseComparisonPendingUiAttempted || comparisonCapability?.supportsPendingUi !== true || comparisonCapability.preselect === undefined || this.interactionListener.enqueuePostTurnEndedWork === undefined || toolArgs.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED) return;
     this.responseComparisonPendingUiAttempted = true;
-    let preparedAttempt: PreparedResponseComparisonAttemptLike | undefined;
+    let preparedSelection: PreparedResponseComparisonAttemptLike | undefined;
     try {
-      preparedAttempt = await capability.preselect({
-        isByok: getIsUserApiKeyFromContext(args.ctx),
-        isSubagent: getIsSubagentFromContext(args.ctx),
+      preparedAttempt: preparedSelection  = await comparisonCapability.preselect({
+        isByok: getIsUserApiKeyFromContext(toolArgs.ctx),
+        isSubagent: getIsSubagentFromContext(toolArgs.ctx),
       });
     } catch (error) {
-      logger.warn(args.ctx, "Agent response comparison preselection failed open", { error });
+      agentLogger.warn(toolArgs.ctx, "Agent response comparison preselection failed open", { error });
       return;
     }
-    if (preparedAttempt === undefined) return;
-    const pending: ResponseComparisonPendingLike = {
+    if (preparedSelection === undefined) return;
+    const pendingState: ResponseComparisonPendingLike = {
       kind: "awaiting-parent",
-      ...args,
-      preparedAttempt,
+      ...toolArgs,
+      preparedAttempt: preparedSelection,
       comparisonId: randomUUID(),
-      alternateInvocationId: getInvocationId(args.ctx),
+      alternateInvocationId: getInvocationId(toolArgs.ctx),
     };
-    this.pendingResponseComparison = pending;
+    this.pendingResponseComparison = pendingState;
     try {
       await this.sendAgentResponseComparisonEvent({
-        ctx: args.ctx,
-        privacyMode: args.privacyMode,
-        comparisonId: pending.comparisonId,
+        ctx: toolArgs.ctx,
+        privacyMode: toolArgs.privacyMode,
+        comparisonId: pendingState.comparisonId,
         event: {
           case: "started",
           value: new ResponseComparisonStarted({
-            displayOrder: preparedAttempt.selection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST,
-            parentInvocationId: args.parentInvocationId,
-            alternateInvocationId: pending.alternateInvocationId,
+            displayOrder: preparedSelection.selection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST,
+            parentInvocationId: toolArgs.parentInvocationId,
+            alternateInvocationId: pendingState.alternateInvocationId,
             parentResponse: "",
-            comparisonConfigId: preparedAttempt.selection.comparisonConfigId,
-            alternateModelId: alternateModelIdForAnalytics(preparedAttempt.selection),
+            comparisonConfigId: preparedSelection.selection.comparisonConfigId,
+            alternateModelId: alternateModelIdForAnalytics(preparedSelection.selection),
           }),
         },
       });
     } catch (error) {
       this.pendingResponseComparison = undefined;
-      logger.warn(args.ctx, "Agent response comparison pending update failed open", { error });
+      agentLogger.warn(toolArgs.ctx, "Agent response comparison pending update failed open", { error });
     }
   }
 
   async finalizePendingAgentResponseComparison(shouldCompare: boolean): Promise<void> {
-    const pending = this.pendingResponseComparison;
-    if (pending === undefined) return;
-    if (!shouldCompare || pending.kind !== "parent-ready") {
+    const pendingState = this.pendingResponseComparison;
+    if (pendingState === undefined) return;
+    if (!shouldCompare || pendingState.kind !== "parent-ready") {
       await this.cancelPendingAgentResponseComparison();
       return;
     }
     this.pendingResponseComparison = undefined;
     this.interactionListener.enqueuePostTurnEndedWork?.(() => this.runAgentResponseComparison({
-      ctx: pending.ctx,
-      parentInvocationId: pending.parentInvocationId,
-      parentResponse: pending.parentResponse,
-      messages: pending.messages,
-      tools: pending.tools,
-      privacyMode: pending.privacyMode,
-      selection: pending.preparedAttempt.selection,
-      preparedAttempt: pending.preparedAttempt,
+      ctx: pendingState.ctx,
+      parentInvocationId: pendingState.parentInvocationId,
+      parentResponse: pendingState.parentResponse,
+      messages: pendingState.messages,
+      tools: pendingState.tools,
+      privacyMode: pendingState.privacyMode,
+      selection: pendingState.preparedAttempt.selection,
+      preparedAttempt: pendingState.preparedAttempt,
       pendingUi: true,
-      comparisonId: pending.comparisonId,
-      alternateInvocationId: pending.alternateInvocationId,
+      comparisonId: pendingState.comparisonId,
+      alternateInvocationId: pendingState.alternateInvocationId,
     }));
   }
 
   async cancelPendingAgentResponseComparison(
-    reason: ResponseComparisonSkipReason = ResponseComparisonSkipReason.CANCELLED,
+    retryReason: ResponseComparisonSkipReason = ResponseComparisonSkipReason.CANCELLED,
   ): Promise<void> {
-    const pending = this.pendingResponseComparison;
-    if (pending === undefined) return;
+    const pendingState = this.pendingResponseComparison;
+    if (pendingState === undefined) return;
     this.pendingResponseComparison = undefined;
     try {
       await this.sendAgentResponseComparisonEvent({
-        ctx: pending.ctx,
-        privacyMode: pending.privacyMode,
-        comparisonId: pending.comparisonId,
-        event: { case: "skipped", value: new ResponseComparisonSkipped({ reason }) },
+        ctx: pendingState.ctx,
+        privacyMode: pendingState.privacyMode,
+        comparisonId: pendingState.comparisonId,
+        event: { case: "skipped", value: new ResponseComparisonSkipped({ reason: retryReason }) },
       });
     } catch (error) {
-      logger.warn(pending.ctx, "Agent response comparison skip update failed open", { error });
+      agentLogger.warn(pendingState.ctx, "Agent response comparison skip update failed open", { error });
     }
   }
 
-  async enqueueAgentResponseComparisonIfEligible(args: {
+  async enqueueAgentResponseComparisonIfEligible(toolArgs: {
     readonly ctx: Context;
     readonly parentInvocationId: string;
     readonly responseMessages: readonly CoreMessageLike[];
@@ -1661,66 +1661,66 @@ export class AbstractUserMessageActionHandler {
     readonly tools: readonly unknown[];
     readonly privacyMode: PrivacyMode;
   }): Promise<void> {
-    const capability = this.config.agentResponseComparison;
-    if (capability === undefined || this.interactionListener.enqueuePostTurnEndedWork === undefined) return;
-    if (capability.supportsPendingUi && this.responseComparisonPendingUiAttempted) {
-      const pending = this.pendingResponseComparison;
-      if (pending === undefined) return;
-      if (args.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || containsToolCall(args.responseMessages)) {
+    const comparisonCapability = this.config.agentResponseComparison;
+    if (comparisonCapability === undefined || this.interactionListener.enqueuePostTurnEndedWork === undefined) return;
+    if (comparisonCapability.supportsPendingUi && this.responseComparisonPendingUiAttempted) {
+      const pendingState = this.pendingResponseComparison;
+      if (pendingState === undefined) return;
+      if (toolArgs.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || containsToolCall(toolArgs.responseMessages)) {
         await this.cancelPendingAgentResponseComparison();
         return;
       }
-      const finalAssistantMessage = [...args.responseMessages].reverse().find(message => message.role === "assistant");
-      const responseText = finalAssistantMessage === undefined ? undefined : extractAssistantText(finalAssistantMessage);
-      if (responseText === undefined || !pending.preparedAttempt.isParentLengthEligible(responseText)) {
+      const finalAssistantMessage = [...toolArgs.responseMessages].reverse().find(turnMessage => turnMessage.role === "assistant");
+      const assistantResponseText = finalAssistantMessage === undefined ? undefined : extractAssistantText(finalAssistantMessage);
+      if (assistantResponseText === undefined || !pendingState.preparedAttempt.isParentLengthEligible(assistantResponseText)) {
         await this.cancelPendingAgentResponseComparison();
         return;
       }
       this.pendingResponseComparison = {
-        ...pending,
+        ...pendingState,
         kind: "parent-ready",
-        parentInvocationId: args.parentInvocationId,
-        parentResponse: responseText,
-        messages: args.messages,
-        tools: args.tools,
+        parentInvocationId: toolArgs.parentInvocationId,
+        parentResponse: assistantResponseText,
+        messages: toolArgs.messages,
+        tools: toolArgs.tools,
       };
       return;
     }
-    if (args.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || containsToolCall(args.responseMessages)) {
+    if (toolArgs.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || containsToolCall(toolArgs.responseMessages)) {
       this.responseComparisonCandidate = undefined;
       return;
     }
-    const finalAssistantMessage = [...args.responseMessages].reverse().find(message => message.role === "assistant");
-    const responseText = finalAssistantMessage === undefined ? undefined : extractAssistantText(finalAssistantMessage);
-    if (responseText === undefined || responseText.length === 0) {
+    const finalAssistantMessage = [...toolArgs.responseMessages].reverse().find(turnMessage => turnMessage.role === "assistant");
+    const assistantResponseText = finalAssistantMessage === undefined ? undefined : extractAssistantText(finalAssistantMessage);
+    if (assistantResponseText === undefined || assistantResponseText.length === 0) {
       this.responseComparisonCandidate = undefined;
       return;
     }
     const sequence = ++this.responseComparisonSequence;
-    this.responseComparisonCandidate = { ...args, responseText, sequence };
-    this.interactionListener.enqueuePostTurnEndedWork(() => this.runPendingAgentResponseComparison(capability, sequence));
+    this.responseComparisonCandidate = { ...toolArgs, responseText: assistantResponseText, sequence };
+    this.interactionListener.enqueuePostTurnEndedWork(() => this.runPendingAgentResponseComparison(comparisonCapability, sequence));
   }
 
   async runPendingAgentResponseComparison(
-    capability: AgentResponseComparisonCapabilityLike,
+    comparisonCapability: AgentResponseComparisonCapabilityLike,
     sequence: number,
   ): Promise<void> {
     const candidate = this.responseComparisonCandidate;
     if (candidate === undefined || candidate.sequence !== sequence) return;
     this.responseComparisonCandidate = undefined;
-    if (candidate.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || capability.resolve === undefined) return;
-    let preparedAttempt: PreparedResponseComparisonAttemptLike | undefined;
+    if (candidate.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED || comparisonCapability.resolve === undefined) return;
+    let preparedSelection: PreparedResponseComparisonAttemptLike | undefined;
     try {
-      preparedAttempt = await capability.resolve({
+      preparedAttempt: preparedSelection  = await comparisonCapability.resolve({
         responseText: candidate.responseText,
         isByok: getIsUserApiKeyFromContext(candidate.ctx),
         isSubagent: getIsSubagentFromContext(candidate.ctx),
       });
     } catch (error) {
-      logger.warn(candidate.ctx, "Agent response comparison selection failed open", { error });
+      agentLogger.warn(candidate.ctx, "Agent response comparison selection failed open", { error });
       return;
     }
-    if (preparedAttempt === undefined) return;
+    if (preparedSelection === undefined) return;
     await this.runAgentResponseComparison({
       ctx: candidate.ctx,
       parentInvocationId: candidate.parentInvocationId,
@@ -1728,53 +1728,53 @@ export class AbstractUserMessageActionHandler {
       messages: candidate.messages,
       tools: candidate.tools,
       privacyMode: candidate.privacyMode,
-      selection: preparedAttempt.selection,
-      preparedAttempt,
+      selection: preparedSelection.selection,
+      preparedAttempt: preparedSelection,
       pendingUi: false,
     });
   }
 
-  async runAgentResponseComparison(args: ResponseComparisonRunArgsLike): Promise<void> {
-    const capability = this.config.agentResponseComparison;
-    if (capability === undefined || args.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED) return;
-    const comparisonId = args.comparisonId ?? randomUUID();
-    const alternateInvocationId = args.alternateInvocationId ?? getInvocationId(args.ctx);
-    const comparisonCtx = args.ctx.withTimeout(AGENT_RESPONSE_COMPARISON_TIMEOUT_MS);
-    const sendEvent = async (event: ResponseComparisonEventLike, eventCtx: Context = comparisonCtx) => {
-      await this.sendAgentResponseComparisonEvent({ ctx: eventCtx, privacyMode: args.privacyMode, comparisonId, event });
+  async runAgentResponseComparison(toolArgs: ResponseComparisonRunArgsLike): Promise<void> {
+    const comparisonCapability = this.config.agentResponseComparison;
+    if (comparisonCapability === undefined || toolArgs.privacyMode !== PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED) return;
+    const comparisonId = toolArgs.comparisonId ?? randomUUID();
+    const alternateInvocationId = toolArgs.alternateInvocationId ?? getInvocationId(toolArgs.ctx);
+    const comparisonCtx = toolArgs.ctx.withTimeout(AGENT_RESPONSE_COMPARISON_TIMEOUT_MS);
+    const sendEvent = async (streamEvent: ResponseComparisonEventLike, eventCtx: Context = comparisonCtx) => {
+      await this.sendAgentResponseComparisonEvent({ ctx: eventCtx, privacyMode: toolArgs.privacyMode, comparisonId, event: streamEvent });
     };
-    let result: ResponseComparisonResultLike | undefined;
+    let stepResult: ResponseComparisonResultLike | undefined;
     try {
-      let selection = args.selection;
-      if (capability.refineSelection !== undefined) {
+      let modelSelection = toolArgs.selection;
+      if (comparisonCapability.refineSelection !== undefined) {
         try {
-          const refined = await capability.refineSelection({ ctx: comparisonCtx, parentResponse: args.parentResponse, messages: args.messages, selection });
+          const refined = await comparisonCapability.refineSelection({ ctx: comparisonCtx, parentResponse: toolArgs.parentResponse, messages: toolArgs.messages, selection: modelSelection });
           if (refined === undefined) {
             await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
             return;
           }
-          selection = refined;
+          modelSelection = refined;
         } catch (error) {
-          logger.warn(args.ctx, "Agent response comparison selection refinement failed open", { error });
+          agentLogger.warn(toolArgs.ctx, "Agent response comparison selection refinement failed open", { error });
         }
       }
-      if (!args.pendingUi) {
-        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: selection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: args.parentInvocationId, alternateInvocationId, parentResponse: args.parentResponse, comparisonConfigId: selection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(selection) }) });
+      if (!toolArgs.pendingUi) {
+        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: modelSelection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) }) });
       }
-      result = capability.execute({ ctx: comparisonCtx, selection, messages: args.messages, tools: args.tools, invocationId: alternateInvocationId });
+      stepResult = comparisonCapability.execute({ ctx: comparisonCtx, selection: modelSelection, messages: toolArgs.messages, tools: toolArgs.tools, invocationId: alternateInvocationId });
       let sawToolCall = false;
       let exceededMaxResponseChars = false;
       let bufferedTextLength = 0;
       const bufferedTextDeltas: string[] = [];
-      for await (const part of result.fullStream) {
-        if (part.type === "tool-call-streaming-start" || part.type === "tool-call-delta" || part.type === "tool-call") {
+      for await (const streamPart of stepResult.fullStream) {
+        if (streamPart.type === "tool-call-streaming-start" || streamPart.type === "tool-call-delta" || streamPart.type === "tool-call") {
           sawToolCall = true;
           continue;
         }
-        if (!sawToolCall && !exceededMaxResponseChars && part.type === "text-delta") {
-          const textDelta = part.textDelta ?? "";
+        if (!sawToolCall && !exceededMaxResponseChars && streamPart.type === "text-delta") {
+          const textDelta = streamPart.textDelta ?? "";
           bufferedTextLength += textDelta.length;
-          if (bufferedTextLength > args.preparedAttempt.maxResponseChars) {
+          if (bufferedTextLength > toolArgs.preparedAttempt.maxResponseChars) {
             exceededMaxResponseChars = true;
             bufferedTextDeltas.length = 0;
             continue;
@@ -1782,64 +1782,64 @@ export class AbstractUserMessageActionHandler {
           bufferedTextDeltas.push(textDelta);
         }
       }
-      const response = await result.response;
-      if (sawToolCall || containsToolCall(response.messages)) {
+      const modelResponse = await stepResult.response;
+      if (sawToolCall || containsToolCall(modelResponse.messages)) {
         await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.ALTERNATE_TOOL_CALL }) });
         return;
       }
-      if (response.error !== undefined) throw response.error;
+      if (modelResponse.error !== undefined) throw modelResponse.error;
       if (exceededMaxResponseChars) {
         await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
         return;
       }
       const alternateResponse = bufferedTextDeltas.join("");
       if (alternateResponse.trim().length === 0) throw new Error("Alternate response completed without text");
-      if (!args.preparedAttempt.hasSufficientCharacterDiff(args.parentResponse, alternateResponse)) {
+      if (!toolArgs.preparedAttempt.hasSufficientCharacterDiff(toolArgs.parentResponse, alternateResponse)) {
         await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
         return;
       }
-      if (!args.pendingUi && !await args.preparedAttempt.commitCooldown()) {
+      if (!toolArgs.pendingUi && !await toolArgs.preparedAttempt.commitCooldown()) {
         await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
         return;
       }
-      if (args.pendingUi) {
-        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: selection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: args.parentInvocationId, alternateInvocationId, parentResponse: args.parentResponse, comparisonConfigId: selection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(selection) }) });
+      if (toolArgs.pendingUi) {
+        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: modelSelection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) }) });
       }
       await sendEvent({ case: "textDelta", value: new ResponseComparisonTextDelta({ text: alternateResponse }) });
-      if (args.pendingUi && !await args.preparedAttempt.commitCooldown()) {
+      if (toolArgs.pendingUi && !await toolArgs.preparedAttempt.commitCooldown()) {
         await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
         return;
       }
       await sendEvent({ case: "completed", value: new ResponseComparisonCompleted() });
     } catch (error) {
-      const reason = args.ctx.signal.aborted ? ResponseComparisonSkipReason.CANCELLED : comparisonCtx.signal.aborted ? ResponseComparisonSkipReason.TIMEOUT : ResponseComparisonSkipReason.INFERENCE_ERROR;
+      const retryReason = toolArgs.ctx.signal.aborted ? ResponseComparisonSkipReason.CANCELLED : comparisonCtx.signal.aborted ? ResponseComparisonSkipReason.TIMEOUT : ResponseComparisonSkipReason.INFERENCE_ERROR;
       try {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason }) }, args.ctx);
+        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: retryReason }) }, toolArgs.ctx);
       } catch (sendError) {
-        logger.warn(args.ctx, "Agent response comparison failed open", { error, sendError });
+        agentLogger.warn(toolArgs.ctx, "Agent response comparison failed open", { error, sendError });
       }
     } finally {
-      if (result !== undefined) {
-        void Promise.allSettled([result.response, result.usage, result.extendedUsage, result.providerMetadata, result.invocationId]);
+      if (stepResult !== undefined) {
+        void Promise.allSettled([stepResult.response, stepResult.usage, stepResult.extendedUsage, stepResult.providerMetadata, stepResult.invocationId]);
       }
     }
   }
 
-  async sendAgentResponseComparisonEvent(args: {
+  async sendAgentResponseComparisonEvent(toolArgs: {
     readonly ctx: Context;
     readonly privacyMode: PrivacyMode;
     readonly comparisonId: string;
     readonly event: ResponseComparisonEventLike;
   }): Promise<void> {
-    await this.interactionListener.sendUpdate(args.ctx, toRedactedInteractionUpdate(new InteractionUpdate({
+    await this.interactionListener.sendUpdate(toolArgs.ctx, toRedactedInteractionUpdate(new InteractionUpdate({
       message: {
         case: "responseComparison",
-        value: new ResponseComparisonUpdate({ comparisonId: args.comparisonId, event: args.event }),
+        value: new ResponseComparisonUpdate({ comparisonId: toolArgs.comparisonId, event: toolArgs.event }),
       },
-    }), args.privacyMode));
+    }), toolArgs.privacyMode));
   }
 
-  createAfterAgentThoughtCallback(invocationId: string, requestContext: {
+  createAfterAgentThoughtCallback(callInvocationId: string, requestState: {
     readonly hooksConfig?: { readonly configuredSteps?: readonly unknown[] | undefined } | undefined;
   }): (hookCtx: Context, params: { readonly text: string; readonly durationMs?: number | undefined }) => Promise<void> {
     return async (hookCtx, params) => {
@@ -1850,9 +1850,9 @@ export class AbstractUserMessageActionHandler {
           text: params.text,
           durationMs: params.durationMs,
           requestContext: {
-            toolCallId: `after-agent-thought:${this.config.conversationId ?? invocationId}:${invocationId}:v1`,
+            toolCallId: `after-agent-thought:${this.config.conversationId ?? callInvocationId}:${callInvocationId}:v1`,
             conversationId: this.config.conversationId,
-            generationId: invocationId,
+            generationId: callInvocationId,
             model: this.config.modelId,
             modelId: this.config.model?.mcid,
             modelParams: this.config.model?.parameters !== undefined ? [...this.config.model.parameters] : undefined,
@@ -1860,7 +1860,7 @@ export class AbstractUserMessageActionHandler {
           options: {
             resourceAccessor: this.resourceAccessor,
             enableExecuteHookExec: this.config.enableExecuteHookExec,
-            configuredSteps: requestContext.hooksConfig?.configuredSteps,
+            configuredSteps: requestState.hooksConfig?.configuredSteps,
             model: this.config.modelId,
             modelId: this.config.model?.mcid,
             modelParams: this.config.model?.parameters !== undefined ? [...this.config.model.parameters] : undefined,
@@ -1874,108 +1874,108 @@ export class AbstractUserMessageActionHandler {
 
   async runStep(
     parentCtx: Context,
-    turn: RunStepTurnLike,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: PromptTokenTrackingParamsLike["mcpTools"],
+    conversationTurn: RunStepTurnLike,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryInfos: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
-    onStateUpdate: ((ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
+    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
     previousQueuedMessageSource: unknown,
     maxOutputTokenRetryDebug: MaxOutputTokenRetryDebugLike | undefined,
   ): Promise<{ readonly hasToolCall: boolean; readonly responseMessages: readonly CoreMessageLike[] }> {
     using spanCtxt = createSpan(parentCtx.withName("runStep"));
-    const ctx = spanCtxt.ctx;
-    const invocationId = getInvocationId(ctx);
-      stateHandler.lastStepInvocationId = invocationId;
-      spanCtxt.span.setAttribute("invocationId", invocationId);
-      logger.info(ctx, "Running step");
+    const runContext = spanCtxt.ctx;
+    const callInvocationId = getInvocationId(runContext);
+      turnState.lastStepInvocationId = callInvocationId;
+      spanCtxt.span.setAttribute("invocationId", callInvocationId);
+      agentLogger.info(runContext, "Running step");
       const stepSetupStart = performance.now();
-      const isFirstStep = turn.steps.length === 0;
+      const isFirstStep = conversationTurn.steps.length === 0;
       const isResponseComparisonFirstModelStep = !this.responseComparisonModelStepStarted;
       this.responseComparisonModelStepStarted = true;
       const interactionHandler = new InteractionHandler(
-        toUnredactedInteractionListener(this.interactionListener, stateHandler.getPrivacyMode()),
-        turn,
-        invocationId,
+        toUnredactedInteractionListener(this.interactionListener, turnState.getPrivacyMode()),
+        conversationTurn,
+        callInvocationId,
         undefined,
         this.config.thinkingStyle,
         this.config.featureFlags?.nalLoopDetection === true,
-        this.createAfterAgentThoughtCallback(invocationId, requestContext),
+        this.createAfterAgentThoughtCallback(callInvocationId, requestState),
       );
-      const userMessage = await turn.userMessage.get(ctx);
-      const mode = resolveCurrentStepMode(stateHandler.mode, userMessage.mode);
-      const toolSetHandle = toolsGenerator({
+      const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+      const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+      const toolSetLease = toolSetGenerator({
         resourceAccessor: this.resourceAccessor,
-        stateHandler,
+        stateHandler: turnState,
         agentSessionId: this.config.agentSessionId,
-        mcpTools,
+        mcpTools: mcpToolSet,
         repositoryInfos,
-        blobStore: stateHandler.getBlobStore(),
+        blobStore: turnState.getBlobStore(),
         mode,
-        loggingContext: ctx,
-        requestContext,
-        fileOperationLockManager,
+        loggingContext: runContext,
+        requestContext: requestState,
+        fileOperationLockManager: fileLockManager,
         smartModeClassifierMode: this.config.smartModeClassifierMode,
         smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
         autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
       });
       const initialMessages = fromRedactedCoreMessages(
-        rootPromptExecutor.getMessages(),
+        promptExecutor.getMessages(),
         PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
       );
       if (isFirstStep) {
-        warnIfLongTrailingUserMessageRun(ctx, initialMessages as Parameters<typeof warnIfLongTrailingUserMessageRun>[1], invocationId);
-        firstStepSetupDuration.histogram(ctx, performance.now() - stepSetupStart);
+        warnIfLongTrailingUserMessageRun(runContext, initialMessages as Parameters<typeof warnIfLongTrailingUserMessageRun>[1], callInvocationId);
+        firstStepSetupDuration.histogram(runContext, performance.now() - stepSetupStart);
       }
       trackPromptTokenUsage({
-        ctx,
-        mcpTools,
-        requestContext,
+        ctx: runContext,
+        mcpTools: mcpToolSet,
+        requestContext: requestState,
         messages: initialMessages,
-        selectedContext: userMessage.selectedContext,
+        selectedContext: promptUserMessage.selectedContext,
         userInfoDisplayOptions: this.config.userInfoDisplayOptions,
         agentTokenLimit: this.config.agentTokenLimit,
-        readToolName: toolSetHandle.getTool("READ")?.name,
-        invocationId,
+        readToolName: toolSetLease.getTool("READ")?.name,
+        invocationId: callInvocationId,
         modelInfo: this.config.modelInfo,
         featureFlags: this.config.featureFlags,
-        stateHandler,
+        stateHandler: turnState,
       });
-      const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(ctx, requestContext);
-      const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestContext);
+      const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(runContext, requestState);
+      const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestState);
       let responseComparisonMessages = this.config.agentResponseComparison === undefined
         ? undefined
         : [...initialMessages];
       let responseComparisonTools = this.config.agentResponseComparison === undefined
         ? undefined
-        : Object.freeze(toAgentTools(toolSetHandle.getStaticTools(), toolSetHandle.getDescriptionProps()));
+        : Object.freeze(toAgentTools(toolSetLease.getStaticTools(), toolSetLease.getDescriptionProps()));
       if (
         isResponseComparisonFirstModelStep &&
         responseComparisonMessages !== undefined &&
         responseComparisonTools !== undefined
       ) {
         await this.preparePendingAgentResponseComparison({
-          ctx,
-          parentInvocationId: invocationId,
+          ctx: runContext,
+          parentInvocationId: callInvocationId,
           messages: responseComparisonMessages,
           tools: responseComparisonTools,
-          privacyMode: stateHandler.getPrivacyMode(),
+          privacyMode: turnState.getPrivacyMode(),
         });
       }
-      let result: StepStreamResultLike;
+      let stepResult: StepStreamResultLike;
       try {
-        result = rootPromptExecutor.executeToolStream(
-          ctx,
-          stateHandler,
+        result: stepResult  = promptExecutor.executeToolStream(
+          runContext,
+          turnState,
           interactionHandler,
-          toolSetHandle.getToolExecutionSet(),
+          toolSetLease.getToolExecutionSet(),
           {
             repositoryInfos,
-            shouldQueryProd: requestContext.repositoryInfoShouldQueryProd,
-            stateHandler,
+            shouldQueryProd: requestState.repositoryInfoShouldQueryProd,
+            stateHandler: turnState,
             strictArgParsing: this.config.strictArgParsing === true,
             enableToolArgPreservation: this.config.enableToolArgPreservation === true,
             enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
@@ -1983,48 +1983,48 @@ export class AbstractUserMessageActionHandler {
             enableAgentStoreConflictNotices: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
             writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
             onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-            workspacePaths: requestContext.env?.workspacePaths,
+            workspacePaths: requestState.env?.workspacePaths,
             userAutoRunInstructions,
             projectAutoRunInstructions,
-            cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-            agentSkills: requestContext.agentSkills ?? [],
+            cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+            agentSkills: requestState.agentSkills ?? [],
             contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
           },
           interactionHandler.recordToolCallResult.bind(interactionHandler),
-          toolSetHandle.getDescriptionProps(),
+          toolSetLease.getDescriptionProps(),
           this.config.maxSteps === 1
             ? undefined
-            : async (pending: readonly string[] | undefined) => {
+            : async (pendingState: readonly string[] | undefined) => {
               const pendingToolCallStartedAtMs = Date.now();
-              const toolExecutionSet = toolSetHandle.getToolExecutionSet();
-              const allowedToolNames = toolExecutionSet.modelVisibleTools.map(tool => tool.name);
-              const pendingWithContracts = (pending ?? []).map(pendingToolCall => enrichPendingToolCallJson(pendingToolCall, {
-                resolveIdentity: input => toolSetHandle.resolveToolCallIdentity(input),
+              const toolExecutionSet = toolSetLease.getToolExecutionSet();
+              const allowedToolNames = toolExecutionSet.modelVisibleTools.map(executableTool => executableTool.name);
+              const pendingWithContracts = (pendingState ?? []).map(pendingToolCall => enrichPendingToolCallJson(pendingToolCall, {
+                resolveIdentity: input => toolSetLease.resolveToolCallIdentity(input),
                 toolExecutionSet,
                 allowedToolNames,
                 pendingToolCallStartedAtMs,
               }));
               if (this.config.fireAndForgetCheckpoints) {
-                void stateHandler.computeNewStructure(ctx).then(async current => {
+                void turnState.computeNewStructure(runContext).then(async current => {
                   current.pendingToolCalls = pendingWithContracts.map(pendingToolCall => createRedactedString(
                     pendingToolCall,
                     DataClassification.CODE,
                     "pendingToolCalls",
                     PrivacyMode.UNSPECIFIED,
                   ));
-                  if (onStateUpdate) await onStateUpdate(ctx, current);
+                  if (publishStateUpdate) await publishStateUpdate(runContext, current);
                 }).catch(error => {
-                  logger.error(ctx, "Failed to persist checkpoint with pending tool calls", { error });
+                  agentLogger.error(runContext, "Failed to persist checkpoint with pending tool calls", { error });
                 });
               } else {
-                const current = await stateHandler.computeNewStructure(ctx);
+                const current = await turnState.computeNewStructure(runContext);
                 current.pendingToolCalls = pendingWithContracts.map(pendingToolCall => createRedactedString(
                   pendingToolCall,
                   DataClassification.CODE,
                   "pendingToolCalls",
                   PrivacyMode.UNSPECIFIED,
                 ));
-                if (onStateUpdate) await onStateUpdate(ctx, current);
+                if (publishStateUpdate) await publishStateUpdate(runContext, current);
               }
             },
         );
@@ -2032,41 +2032,41 @@ export class AbstractUserMessageActionHandler {
         await this.cancelPendingAgentResponseComparison();
         throw error;
       }
-      const tokenDetails = stateHandler.tokenDetails;
+      const tokenUsageDetails = turnState.tokenDetails;
       const isCloudAgentSingleStep = this.config.maxSteps === 1;
-      const shouldSuppressSelfSummaryAfterInputLimitFailure = stateHandler.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenDetails.usedTokens);
+      const shouldSuppressSelfSummaryAfterInputLimitFailure = turnState.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenUsageDetails.usedTokens);
       const shouldStartBg = !isCloudAgentSingleStep &&
-        !stateHandler.tokenDetailsStaleAfterSummarization &&
+        !turnState.tokenDetailsStaleAfterSummarization &&
         !shouldSuppressSelfSummaryAfterInputLimitFailure &&
         this.orchestrator.shouldStartBackgroundSummarization(
-          tokenDetails,
-          rootPromptExecutor.getMessages(),
-          ctx,
+          tokenUsageDetails,
+          promptExecutor.getMessages(),
+          runContext,
         );
       if (shouldStartBg) {
-        logger.info(ctx, "[summarization-trigger] Triggering background summarization since we are below free token threshold", {
-          usedTokens: tokenDetails.usedTokens,
-          maxTokens: tokenDetails.maxTokens,
+        agentLogger.info(runContext, "[summarization-trigger] Triggering background summarization since we are below free token threshold", {
+          usedTokens: tokenUsageDetails.usedTokens,
+          maxTokens: tokenUsageDetails.maxTokens,
           backgroundSummarizationConfig: this.config.backgroundSummarizationProps,
         });
         await this.orchestrator.handleSummarization(
-          ctx,
-          stateHandler,
-          rootPromptExecutor,
+          runContext,
+          turnState,
+          promptExecutor,
           this.interactionListener,
           this.config,
-          requestContext,
+          requestState,
           {
             backgroundSummarizationMode: BackgroundSummarizationMode.Background,
             triggerReason: "approaching_token_limit",
-            currentInvocationId: invocationId,
+            currentInvocationId: callInvocationId,
             resourceAccessor: this.resourceAccessor,
-            tools: toolSetHandle.getStaticTools(),
-            descriptionProps: toolSetHandle.getDescriptionProps(),
+            tools: toolSetLease.getStaticTools(),
+            descriptionProps: toolSetLease.getDescriptionProps(),
             extraT: {
               repositoryInfos,
-              shouldQueryProd: requestContext.repositoryInfoShouldQueryProd,
-              stateHandler,
+              shouldQueryProd: requestState.repositoryInfoShouldQueryProd,
+              stateHandler: turnState,
               strictArgParsing: this.config.strictArgParsing === true,
               enableToolArgPreservation: this.config.enableToolArgPreservation === true,
               enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
@@ -2074,97 +2074,97 @@ export class AbstractUserMessageActionHandler {
               enableAgentStoreConflictNotices: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
               writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
               onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-              workspacePaths: requestContext.env?.workspacePaths,
+              workspacePaths: requestState.env?.workspacePaths,
               userAutoRunInstructions,
               projectAutoRunInstructions,
-              cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-              agentSkills: requestContext.agentSkills ?? [],
+              cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+              agentSkills: requestState.agentSkills ?? [],
             },
-            automationTriggerContext: this.getAutomationTriggerContext(rootPromptExecutor.getMessages()),
+            automationTriggerContext: this.getAutomationTriggerContext(promptExecutor.getMessages()),
           },
         );
       }
-      let response: { readonly messages: readonly CoreMessageLike[]; readonly error?: unknown };
-      let extendedUsage: Awaited<StepStreamResultLike["extendedUsage"]>;
-      let usage: Awaited<StepStreamResultLike["usage"]>;
+      let modelResponse: { readonly messages: readonly CoreMessageLike[]; readonly error?: unknown };
+      let usageDetails: Awaited<StepStreamResultLike["extendedUsage"]>;
+      let tokenUsage: Awaited<StepStreamResultLike["usage"]>;
       let finalInvocationId: string;
-      [response, extendedUsage, usage, finalInvocationId] = await Promise.all([
-        result.response,
-        result.extendedUsage,
-        result.usage,
-        result.invocationId,
+      [modelResponse, usageDetails, tokenUsage, finalInvocationId] = await Promise.all([
+        stepResult.response,
+        stepResult.extendedUsage,
+        stepResult.usage,
+        stepResult.invocationId,
         interactionHandler.consumeStream(
-          ctx,
-          this.tapAgentResponseComparisonWarmup(ctx, result.fullStream, responseComparisonMessages, responseComparisonTools),
-          turn,
+          runContext,
+          this.tapAgentResponseComparisonWarmup(runContext, stepResult.fullStream, responseComparisonMessages, responseComparisonTools),
+          conversationTurn,
         ),
       ]);
-      if (finalInvocationId !== invocationId) {
-        logger.error(ctx, "Invocation ID mismatch. Bug in executeToolStream", undefined, {
-          initialInvocationId: invocationId,
+      if (finalInvocationId !== callInvocationId) {
+        agentLogger.error(runContext, "Invocation ID mismatch. Bug in executeToolStream", undefined, {
+          initialInvocationId: callInvocationId,
           finalInvocationId,
         });
       }
-      logger.info(ctx, "Setting token details for client token ring", {
-        usedTokens: usage.totalTokens,
-        maxTokens: extendedUsage.maxTokens,
-        inputTokens: extendedUsage.inputTokens,
-        outputTokens: extendedUsage.outputTokens,
-        cacheReadTokens: extendedUsage.cacheReadTokens,
-        cacheWriteTokens: extendedUsage.cacheWriteTokens,
+      agentLogger.info(runContext, "Setting token details for client token ring", {
+        usedTokens: tokenUsage.totalTokens,
+        maxTokens: usageDetails.maxTokens,
+        inputTokens: usageDetails.inputTokens,
+        outputTokens: usageDetails.outputTokens,
+        cacheReadTokens: usageDetails.cacheReadTokens,
+        cacheWriteTokens: usageDetails.cacheWriteTokens,
       });
-      const promptContextDetails = computeNextRedactedPromptContextDetails(ctx, this.config, stateHandler, {
+      const promptContextDetails = computeNextRedactedPromptContextDetails(runContext, this.config, turnState, {
         messages: initialMessages as unknown as PromptTokenBreakdownParams["messages"],
-        tools: toolSetHandle.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
-        descriptionProps: toolSetHandle.getDescriptionProps(),
-        totalUsedTokens: usage.totalTokens,
-        maxTokens: extendedUsage.maxTokens,
+        tools: toolSetLease.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
+        descriptionProps: toolSetLease.getDescriptionProps(),
+        totalUsedTokens: tokenUsage.totalTokens,
+        maxTokens: usageDetails.maxTokens,
       });
-      stateHandler.setTokenDetails(createRedactedConversationTokenDetails(stateHandler.getPrivacyMode(), {
-        usedTokens: usage.totalTokens,
-        maxTokens: extendedUsage.maxTokens,
+      turnState.setTokenDetails(createRedactedConversationTokenDetails(turnState.getPrivacyMode(), {
+        usedTokens: tokenUsage.totalTokens,
+        maxTokens: usageDetails.maxTokens,
         breakdown: promptContextDetails!.breakdown,
         promptContextUsageTree: promptContextDetails!.promptContextUsageTree,
       }));
-      if (response.error || ctx.signal.aborted) {
+      if (modelResponse.error || runContext.signal.aborted) {
         await this.cancelPendingAgentResponseComparison();
         if (this.config.skipErrorStateCheckpoint !== true) {
-          turn.appendPromptMessages(toRedactedCoreMessages(response.messages, stateHandler.getPrivacyMode()));
-          const currentState = await stateHandler.computeNewStructure(ctx);
-          if (onStateUpdate) await onStateUpdate(ctx, currentState);
+          conversationTurn.appendPromptMessages(toRedactedCoreMessages(modelResponse.messages, turnState.getPrivacyMode()));
+          const currentState = await turnState.computeNewStructure(runContext);
+          if (publishStateUpdate) await publishStateUpdate(runContext, currentState);
         }
-        throw response.error ?? new ConnectError("User aborted request", Code.Canceled);
+        throw modelResponse.error ?? new ConnectError("User aborted request", Code.Canceled);
       }
-      stateHandler.addTurnUsage({
-        inputTokens: extendedUsage.inputTokens,
-        outputTokens: extendedUsage.outputTokens,
-        cacheReadTokens: extendedUsage.cacheReadTokens,
-        cacheWriteTokens: extendedUsage.cacheWriteTokens,
-        reasoningTokens: extendedUsage.reasoningTokens,
+      turnState.addTurnUsage({
+        inputTokens: usageDetails.inputTokens,
+        outputTokens: usageDetails.outputTokens,
+        cacheReadTokens: usageDetails.cacheReadTokens,
+        cacheWriteTokens: usageDetails.cacheWriteTokens,
+        reasoningTokens: usageDetails.reasoningTokens,
       });
-      const hasToolCall = containsToolCall(response.messages);
-      if (!hasToolCall && responseComparisonMessages !== undefined && responseComparisonTools !== undefined) {
+      const madeToolCall = containsToolCall(modelResponse.messages);
+      if (!madeToolCall && responseComparisonMessages !== undefined && responseComparisonTools !== undefined) {
         try {
           await this.enqueueAgentResponseComparisonIfEligible({
-            ctx,
+            ctx: runContext,
             parentInvocationId: finalInvocationId,
-            responseMessages: response.messages,
+            responseMessages: modelResponse.messages,
             messages: responseComparisonMessages,
             tools: responseComparisonTools,
-            privacyMode: stateHandler.getPrivacyMode(),
+            privacyMode: turnState.getPrivacyMode(),
           });
         } finally {
           responseComparisonMessages = undefined;
           responseComparisonTools = undefined;
         }
       }
-      if (extendedUsage) {
+      if (usageDetails) {
         let currentToolCallName = "userMessage";
-        for (const message of response.messages) {
-          if (message.role === "assistant" && Array.isArray(message.content)) {
-            for (const part of message.content as AssistantContentPart[]) {
-              if (part.type === "tool-call") {
-                currentToolCallName = part.toolName ?? "userMessage";
+        for (const turnMessage of modelResponse.messages) {
+          if (turnMessage.role === "assistant" && Array.isArray(turnMessage.content)) {
+            for (const streamPart of turnMessage.content as AssistantContentPart[]) {
+              if (streamPart.type === "tool-call") {
+                currentToolCallName = streamPart.toolName ?? "userMessage";
                 break;
               }
             }
@@ -2172,42 +2172,42 @@ export class AbstractUserMessageActionHandler {
           }
         }
         const argsTags = { toolCallName: currentToolCallName };
-        toolCallArgsOutputTokens.histogram(ctx, extendedUsage.outputTokens, argsTags);
-        toolCallArgsCacheWriteTokens.histogram(ctx, extendedUsage.cacheWriteTokens, argsTags);
+        toolCallArgsOutputTokens.histogram(runContext, usageDetails.outputTokens, argsTags);
+        toolCallArgsCacheWriteTokens.histogram(runContext, usageDetails.cacheWriteTokens, argsTags);
         let priorToolCallName = "userMessage";
-        if (turn.steps.length > 0) {
-          const lastStepRef = turn.steps[turn.steps.length - 1]!;
-          const lastStep = await lastStepRef.get(ctx);
+        if (conversationTurn.steps.length > 0) {
+          const lastStepRef = conversationTurn.steps[conversationTurn.steps.length - 1]!;
+          const lastStep = await lastStepRef.get(runContext);
           if (lastStep.message.case === "toolCall") {
             const toolCase = lastStep.message.value?.tool?.case;
             if (toolCase !== undefined) priorToolCallName = toolCase.replace("ToolCall", "").replace(/_/g, "-");
           }
         }
         const resultTags = { toolCallName: priorToolCallName };
-        toolCallResultInputTokens.histogram(ctx, extendedUsage.inputTokens, resultTags);
-        toolCallResultCachedReadTokens.histogram(ctx, extendedUsage.cacheReadTokens, resultTags);
+        toolCallResultInputTokens.histogram(runContext, usageDetails.inputTokens, resultTags);
+        toolCallResultCachedReadTokens.histogram(runContext, usageDetails.cacheReadTokens, resultTags);
       }
-      if (!hasToolCall && hasEmptyAssistantText(response.messages)) {
-        const executorMessages = rootPromptExecutor.getMessages();
-        const taskToolName = toolSetHandle.getTool("TASK")?.name ??
+      if (!madeToolCall && hasEmptyAssistantText(modelResponse.messages)) {
+        const executorMessages = promptExecutor.getMessages();
+        const taskToolName = toolSetLease.getTool("TASK")?.name ??
           (this.config.modelInfo !== undefined ? getTaskToolName(this.config.modelInfo) : undefined);
         const unwrappedExecutorMessages = fromRedactedCoreMessages(executorMessages, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        const isTrailingTaskToolCall = isTrailingTaskToolCallMessage(unwrappedExecutorMessages, taskToolName, toolSetHandle);
+        const isTrailingTaskToolCall = isTrailingTaskToolCallMessage(unwrappedExecutorMessages, taskToolName, toolSetLease);
         const executorMessageCount = executorMessages.length;
         const lastExecutorMsg = executorMessages.at(-1);
         const lastExecutorMsgRole = lastExecutorMsg?.role ?? "unknown";
         let thinkingChars = 0;
-        for (const message of response.messages) {
-          if (message.role === "assistant" && Array.isArray(message.content)) {
-            for (const part of message.content as AssistantContentPart[]) {
-              if (part.type === "reasoning" && typeof part.text === "string") thinkingChars += part.text.length;
+        for (const turnMessage of modelResponse.messages) {
+          if (turnMessage.role === "assistant" && Array.isArray(turnMessage.content)) {
+            for (const streamPart of turnMessage.content as AssistantContentPart[]) {
+              if (streamPart.type === "reasoning" && typeof streamPart.text === "string") thinkingChars += streamPart.text.length;
             }
           }
         }
         const emptyResponseAttrs = {
-          outputTokens: extendedUsage.outputTokens,
-          inputTokens: extendedUsage.inputTokens,
-          invocationId,
+          outputTokens: usageDetails.outputTokens,
+          inputTokens: usageDetails.inputTokens,
+          invocationId: callInvocationId,
           earlyStopDebug: {
             hasThinkingContent: thinkingChars > 0,
             thinkingChars,
@@ -2221,29 +2221,29 @@ export class AbstractUserMessageActionHandler {
             },
           },
         };
-        if (lastExecutorMsgRole === "assistant") logger.warn(ctx, "nal.empty_response.sent_assistant_message", emptyResponseAttrs);
-        if (lastExecutorMsgRole === "tool") logger.warn(ctx, "nal.empty_response.sent_tool", emptyResponseAttrs);
-        if (thinkingChars > 0) logger.warn(ctx, "nal.empty_response.received_only_thinking", emptyResponseAttrs);
-        if (extendedUsage.outputTokens === 0) logger.warn(ctx, "nal.empty_response.received_no_output_tokens", emptyResponseAttrs);
-        logger.warn(ctx, "nal.empty_response", emptyResponseAttrs);
-        let retryAction: string;
-        if (this.constructor.name === "ResumeActionHandler") retryAction = "ok_resume_action";
-        else if (this.constructor.name === "BackgroundTaskCompletionActionHandler") retryAction = "ok_background_task_completion_action";
-        else if (lastExecutorMsgRole === "tool") retryAction = "retry_tool_result";
-        else if (lastExecutorMsgRole === "user") retryAction = "retry_user_msg";
-        else if (extendedUsage.outputTokens === 0) retryAction = "retry_no_output_tokens";
-        else if (thinkingChars > 0) retryAction = "retry_thinking_only";
-        else retryAction = "fallthrough";
+        if (lastExecutorMsgRole === "assistant") agentLogger.warn(runContext, "nal.empty_response.sent_assistant_message", emptyResponseAttrs);
+        if (lastExecutorMsgRole === "tool") agentLogger.warn(runContext, "nal.empty_response.sent_tool", emptyResponseAttrs);
+        if (thinkingChars > 0) agentLogger.warn(runContext, "nal.empty_response.received_only_thinking", emptyResponseAttrs);
+        if (usageDetails.outputTokens === 0) agentLogger.warn(runContext, "nal.empty_response.received_no_output_tokens", emptyResponseAttrs);
+        agentLogger.warn(runContext, "nal.empty_response", emptyResponseAttrs);
+        let retryOutcome: string;
+        if (this.constructor.name === "ResumeActionHandler") retryOutcome = "ok_resume_action";
+        else if (this.constructor.name === "BackgroundTaskCompletionActionHandler") retryOutcome = "ok_background_task_completion_action";
+        else if (lastExecutorMsgRole === "tool") retryOutcome = "retry_tool_result";
+        else if (lastExecutorMsgRole === "user") retryOutcome = "retry_user_msg";
+        else if (usageDetails.outputTokens === 0) retryOutcome = "retry_no_output_tokens";
+        else if (thinkingChars > 0) retryOutcome = "retry_thinking_only";
+        else retryOutcome = "fallthrough";
         const trailingUserMsg = lastExecutorMsg === undefined
           ? undefined
           : fromRedactedCoreMessages([lastExecutorMsg], PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)[0];
-        const isTrailingNotificationUserMsg = retryAction === "retry_user_msg" &&
+        const isTrailingNotificationUserMsg = retryOutcome === "retry_user_msg" &&
           trailingUserMsg !== undefined &&
           isNotificationOnlyUserMessage(trailingUserMsg as Parameters<typeof isNotificationOnlyUserMessage>[0]) &&
           !isGoalContinuationNotificationMessage(trailingUserMsg as Parameters<typeof isGoalContinuationNotificationMessage>[0]);
-        const hasSendMessageCapability = toolSetHandle.getTool("SEND_MESSAGE") !== undefined;
+        const hasSendMessageCapability = toolSetLease.getTool("SEND_MESSAGE") !== undefined;
         const deliveryOwed = hasSendMessageCapability && this.config.featureFlags?.slateSendMessageDeliveryOwed !== false
-          ? await isSendMessageDeliveryOwed(ctx, stateHandler)
+          ? await isSendMessageDeliveryOwed(runContext, turnState)
           : true;
         const hasTrailingToolFailure = trailingToolBatchHasFailure(unwrappedExecutorMessages);
         const deliveryObligationSatisfied = hasSendMessageCapability && !deliveryOwed && !hasTrailingToolFailure;
@@ -2257,11 +2257,11 @@ export class AbstractUserMessageActionHandler {
         const turnBudgetExhausted = turnBudget !== undefined && turnRetriesUsed >= MAX_EMPTY_RESPONSE_RETRIES_PER_TURN;
         const shouldRetry = isRetryEnabled && !isMetaParentAgent && !isMultitaskMode && !alreadyRetried &&
           !isLastRetryLoopIteration && !turnBudgetExhausted && !isTrailingNotificationUserMsg &&
-          !deliveryObligationSatisfied && retryAction !== "ok_resume_action" &&
-          retryAction !== "ok_background_task_completion_action" && retryAction !== "fallthrough";
-        const needsContinuationMessage = retryAction !== "retry_user_msg" && !isTrailingTaskToolCall;
+          !deliveryObligationSatisfied && retryOutcome !== "ok_resume_action" &&
+          retryOutcome !== "ok_background_task_completion_action" && retryOutcome !== "fallthrough";
+        const needsContinuationMessage = retryOutcome !== "retry_user_msg" && !isTrailingTaskToolCall;
         const retryInfo = {
-          retryAction,
+          retryAction: retryOutcome,
           isRetryEnabled,
           isMetaParentAgent,
           isMultitaskMode,
@@ -2277,29 +2277,29 @@ export class AbstractUserMessageActionHandler {
           turnBudgetExhausted,
           maxEmptyResponseRetriesPerTurn: MAX_EMPTY_RESPONSE_RETRIES_PER_TURN,
         };
-        logger.warn(ctx, "nal.empty_response.retry_dry_run", { ...emptyResponseAttrs, retryInfo, shouldRetry });
-        emptyResponseRetryClassification.increment(ctx, 1, {
-          retryAction,
+        agentLogger.warn(runContext, "nal.empty_response.retry_dry_run", { ...emptyResponseAttrs, retryInfo, shouldRetry });
+        emptyResponseRetryClassification.increment(runContext, 1, {
+          retryAction: retryOutcome,
           didRetry: shouldRetry ? "true" : "false",
         });
         if (shouldRetry) {
           await this.cancelPendingAgentResponseComparison();
-          throw new EmptyResponseRetryError(retryAction, needsContinuationMessage);
+          throw new EmptyResponseRetryError(retryOutcome, needsContinuationMessage);
         }
-        if (turnBudgetExhausted) logger.warn(ctx, "nal.empty_response.turn_budget_exceeded", { ...emptyResponseAttrs, retryInfo });
-        logger.warn(ctx, "nal.empty_response.did_not_retry", { ...emptyResponseAttrs, retryInfo });
+        if (turnBudgetExhausted) agentLogger.warn(runContext, "nal.empty_response.turn_budget_exceeded", { ...emptyResponseAttrs, retryInfo });
+        agentLogger.warn(runContext, "nal.empty_response.did_not_retry", { ...emptyResponseAttrs, retryInfo });
       }
-      return { hasToolCall, responseMessages: response.messages };
+      return { hasToolCall: madeToolCall, responseMessages: modelResponse.messages };
   }
 
   async runWithMaxTokensRetry<T>(
     parentCtx: Context,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    fn: (ctx: Context, debug: MaxOutputTokenRetryDebugLike) => Promise<T>,
+    promptExecutor: RetryRootPromptExecutorLike,
+    fn: (runContext: Context, debug: MaxOutputTokenRetryDebugLike) => Promise<T>,
     emptyResponseRetryTurnBudget: EmptyResponseRetryTurnBudgetLike | undefined,
   ): Promise<T> {
     using spanContext = createSpan(parentCtx.withName("runWithMaxTokensRetry"));
-    const ctx = spanContext.ctx;
+    const runContext = spanContext.ctx;
     let didAddOutputTokenReminder = false;
     let outputTokenLimitRetryCount = 0;
     let didRetryAfterSingleMessageLoop = false;
@@ -2307,7 +2307,7 @@ export class AbstractUserMessageActionHandler {
     const isSingleMessageLoopRetryEnabled = this.config.featureFlags?.nalLoopDetection === true;
     for (let i = 0; i < MAX_RETRY_ITERATIONS; i += 1) {
       try {
-        return await fn(ctx, {
+        return await fn(runContext, {
           didAddOutputTokenReminder,
           outputTokenLimitRetryCount,
           didRetryAfterEmptyResponse,
@@ -2319,15 +2319,15 @@ export class AbstractUserMessageActionHandler {
           outputTokenLimitRetryCount += 1;
           if (!didAddOutputTokenReminder) {
             didAddOutputTokenReminder = true;
-            rootPromptExecutor.appendMessages(toRedactedCoreMessages([
+            promptExecutor.appendMessages(toRedactedCoreMessages([
               {
                 role: "user",
                 content: "<system_reminder>Your response was cut off because it exceeded the output token limit. Please break your work into smaller pieces. Continue from where you left off.</system_reminder>",
               },
             ], PrivacyMode.UNSPECIFIED));
-            logger.info(ctx, "Hit max tokens error, added reminder");
+            agentLogger.info(runContext, "Hit max tokens error, added reminder");
           } else {
-            logger.info(ctx, "Hit max tokens error, but already added reminder");
+            agentLogger.info(runContext, "Hit max tokens error, but already added reminder");
           }
         } else if (error instanceof EmptyResponseRetryError && !didRetryAfterEmptyResponse) {
           didRetryAfterEmptyResponse = true;
@@ -2335,11 +2335,11 @@ export class AbstractUserMessageActionHandler {
             emptyResponseRetryTurnBudget.retriesUsed += 1;
           }
           if (error.needsContinuationMessage) {
-            rootPromptExecutor.appendMessages(toRedactedCoreMessages([
+            promptExecutor.appendMessages(toRedactedCoreMessages([
               { role: "user", content: EMPTY_RESPONSE_CONTINUATION_MESSAGE },
             ], PrivacyMode.UNSPECIFIED));
           }
-          logger.info(ctx, "nal.empty_response.retrying", {
+          agentLogger.info(runContext, "nal.empty_response.retrying", {
             retryAction: error.retryAction,
             needsContinuationMessage: error.needsContinuationMessage,
             turnRetriesUsed: emptyResponseRetryTurnBudget?.retriesUsed,
@@ -2347,7 +2347,7 @@ export class AbstractUserMessageActionHandler {
           });
         } else if (isSingleMessageLoopRetryEnabled && isSingleMessageLoopError(error)) {
           if (didRetryAfterSingleMessageLoop) {
-            logger.warn(ctx, "Single-message loop detected again after retry", {
+            agentLogger.warn(runContext, "Single-message loop detected again after retry", {
               loopKind: error.singleMessageLoopKind,
               repetitions: error.repetitions,
               period: error.period,
@@ -2358,8 +2358,8 @@ export class AbstractUserMessageActionHandler {
           const reminder = createLoopReminderMessage({
             kind: error.singleMessageLoopKind ?? "single_message_multi_line",
           });
-          rootPromptExecutor.appendMessages(toRedactedCoreMessages([reminder], PrivacyMode.UNSPECIFIED));
-          logger.info(ctx, "Single-message loop detected, added reminder and retrying", {
+          promptExecutor.appendMessages(toRedactedCoreMessages([reminder], PrivacyMode.UNSPECIFIED));
+          agentLogger.info(runContext, "Single-message loop detected, added reminder and retrying", {
             loopKind: error.singleMessageLoopKind,
             repetitions: error.repetitions,
             period: error.period,
@@ -2374,47 +2374,47 @@ export class AbstractUserMessageActionHandler {
 
   async runWithSummarizationRetry<T>(
     parentCtx: Context,
-    stateHandler: RetryStateHandlerLike,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    requestContext: unknown,
-    tools: unknown,
-    extraT: unknown,
+    turnState: RetryStateHandlerLike,
+    promptExecutor: RetryRootPromptExecutorLike,
+    requestState: unknown,
+    executableTools: unknown,
+    extraTools: unknown,
     descriptionProps: unknown,
-    fn: (ctx: Context) => Promise<T>,
+    fn: (runContext: Context) => Promise<T>,
   ): Promise<T> {
     using spanContext = createSpan(parentCtx.withName("runWithSummarizationRetry"));
-    const ctx = spanContext.ctx;
-    const automationTriggerContext = this.getAutomationTriggerContext(rootPromptExecutor.getMessages());
+    const runContext = spanContext.ctx;
+    const automationTriggerContext = this.getAutomationTriggerContext(promptExecutor.getMessages());
     for (let i = 0; i < 5; i += 1) {
       try {
-        const evalCompletionMode = EVAL_ENFORCED_WAIT_FOR_SUMMARIZATION_COMPLETION(ctx);
+        const evalCompletionMode = EVAL_ENFORCED_WAIT_FOR_SUMMARIZATION_COMPLETION(runContext);
         const forcedSummarizationMode = shouldForceSummarizationForTesting(
-          fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+          fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
           evalCompletionMode,
         );
         if (forcedSummarizationMode !== undefined) {
-          logger.info(ctx, "[summarization-trigger] Force summarization triggered", {
+          agentLogger.info(runContext, "[summarization-trigger] Force summarization triggered", {
             evalCompletionMode,
             mode: forcedSummarizationMode,
           });
-          await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+          await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
             backgroundSummarizationMode: forcedSummarizationMode,
             fullSummarization: true,
             triggerReason: "force_dev_testing",
-            currentInvocationId: stateHandler.lastStepInvocationId,
+            currentInvocationId: turnState.lastStepInvocationId,
             resourceAccessor: this.resourceAccessor,
-            tools,
-            extraT,
+            tools: executableTools,
+            extraT: extraTools,
             descriptionProps,
             automationTriggerContext,
           });
         }
         if (
-          stateHandler.backgroundSummarizationPromiseInfo !== null &&
-          stateHandler.backgroundSummarizationHasCompleted &&
-          !stateHandler.shouldSuppressSelfSummaryAfterInputLimitFailure(stateHandler.tokenDetails.usedTokens)
+          turnState.backgroundSummarizationPromiseInfo !== null &&
+          turnState.backgroundSummarizationHasCompleted &&
+          !turnState.shouldSuppressSelfSummaryAfterInputLimitFailure(turnState.tokenDetails.usedTokens)
         ) {
-          const midLoopTokenDetails = stateHandler.tokenDetails;
+          const midLoopTokenDetails = turnState.tokenDetails;
           const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(
             midLoopTokenDetails.usedTokens,
             midLoopTokenDetails.maxTokens,
@@ -2427,11 +2427,11 @@ export class AbstractUserMessageActionHandler {
           );
           const requireTriggerThreshold = this.config.backgroundSummarizationProps.requireTriggerThresholdForMidLoopPersist === true;
           const imageCountMidLoop = countImagePartsInMessages(
-            fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+            fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
           );
           const shouldPersistForImageThresholdMidLoop = imageCountMidLoop >= IMAGE_SUMMARIZATION_TRIGGER_COUNT;
           const shouldPersistMidLoop = shouldPersistForImageThresholdMidLoop || !requireTriggerThreshold || wouldMeetTriggerThreshold;
-          logger.info(ctx, "[summarization-persist] Mid-loop background summarization persistence: checking persist threshold", {
+          agentLogger.info(runContext, "[summarization-persist] Mid-loop background summarization persistence: checking persist threshold", {
             usedTokens: midLoopTokenDetails.usedTokens,
             maxTokens: midLoopTokenDetails.maxTokens,
             unusedTokens: midLoopTokenDetails.maxTokens - midLoopTokenDetails.usedTokens,
@@ -2449,96 +2449,96 @@ export class AbstractUserMessageActionHandler {
             },
           });
           if (shouldPersistMidLoop) {
-            await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+            await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
               backgroundSummarizationMode: BackgroundSummarizationMode.BackgroundAndPersistIfCompleted,
               triggerReason: shouldPersistForImageThresholdMidLoop && !wouldMeetTriggerThreshold ? "approaching_image_limit" : "approaching_token_limit",
-              currentInvocationId: stateHandler.lastStepInvocationId,
+              currentInvocationId: turnState.lastStepInvocationId,
               resourceAccessor: this.resourceAccessor,
-              tools,
-              extraT,
+              tools: executableTools,
+              extraT: extraTools,
               descriptionProps,
               automationTriggerContext,
             });
           }
         }
-        if (stateHandler.backgroundSummarizationPromiseInfo !== null && !stateHandler.backgroundSummarizationHasCompleted) {
-          const currentTokenDetails = stateHandler.tokenDetails;
+        if (turnState.backgroundSummarizationPromiseInfo !== null && !turnState.backgroundSummarizationHasCompleted) {
+          const currentTokenDetails = turnState.tokenDetails;
           const overageThreshold = Math.min(0.25 * currentTokenDetails.maxTokens, 5e4);
           if (currentTokenDetails.maxTokens > 0 && currentTokenDetails.usedTokens > currentTokenDetails.maxTokens + overageThreshold) {
-            logger.info(ctx, "[summarization-persist] Blocking on background summarization because token usage significantly exceeds max tokens", {
+            agentLogger.info(runContext, "[summarization-persist] Blocking on background summarization because token usage significantly exceeds max tokens", {
               usedTokens: currentTokenDetails.usedTokens,
               maxTokens: currentTokenDetails.maxTokens,
               overageThreshold,
             });
-            await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+            await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
               backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion,
               triggerReason: "significantly_over_token_limit",
-              currentInvocationId: stateHandler.lastStepInvocationId,
+              currentInvocationId: turnState.lastStepInvocationId,
               resourceAccessor: this.resourceAccessor,
-              tools,
-              extraT,
+              tools: executableTools,
+              extraT: extraTools,
               descriptionProps,
               automationTriggerContext,
             });
           }
         }
-        const messagesBeforeImageCompaction = fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+        const messagesBeforeImageCompaction = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
         const imageCount = countImagePartsInMessages(messagesBeforeImageCompaction);
         if (imageCount >= IMAGE_SUMMARIZATION_TRIGGER_COUNT) {
-          logger.info(ctx, "Image count reached threshold; starting background summarization", {
+          agentLogger.info(runContext, "Image count reached threshold; starting background summarization", {
             imageCount,
             triggerCount: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
           });
-          await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+          await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
             backgroundSummarizationMode: BackgroundSummarizationMode.Background,
             triggerReason: "approaching_image_limit",
-            currentInvocationId: stateHandler.lastStepInvocationId,
+            currentInvocationId: turnState.lastStepInvocationId,
             resourceAccessor: this.resourceAccessor,
-            tools,
-            extraT,
+            tools: executableTools,
+            extraT: extraTools,
             descriptionProps,
             automationTriggerContext,
           });
         }
-        if (this.config.maxSteps === 1 && this.config.featureFlags?.cloudAgentProactiveTokenLimitError === true && !stateHandler.tokenDetailsStaleAfterSummarization) {
-          const tokenDetails = stateHandler.tokenDetails;
-          if (shouldPersistBackgroundSummarization(tokenDetails.usedTokens, tokenDetails.maxTokens, this.config.backgroundSummarizationProps)) {
+        if (this.config.maxSteps === 1 && this.config.featureFlags?.cloudAgentProactiveTokenLimitError === true && !turnState.tokenDetailsStaleAfterSummarization) {
+          const tokenUsageDetails = turnState.tokenDetails;
+          if (shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps)) {
             const useProactiveSelfSummarization = this.config.featureFlags?.cloudAgentProactiveSelfSummarization === true;
-            logger.info(ctx, useProactiveSelfSummarization ? "[cloud-summarization] Token usage hit configured threshold, throwing ProactiveSummarizationThresholdError to trigger compaction" : "[cloud-summarization] Token usage hit configured threshold, throwing InputTokenLimitError to trigger external compaction", {
-              usedTokens: tokenDetails.usedTokens,
-              maxTokens: tokenDetails.maxTokens,
+            agentLogger.info(runContext, useProactiveSelfSummarization ? "[cloud-summarization] Token usage hit configured threshold, throwing ProactiveSummarizationThresholdError to trigger compaction" : "[cloud-summarization] Token usage hit configured threshold, throwing InputTokenLimitError to trigger external compaction", {
+              usedTokens: tokenUsageDetails.usedTokens,
+              maxTokens: tokenUsageDetails.maxTokens,
               useProactiveSelfSummarization,
             });
             throw useProactiveSelfSummarization ? new ProactiveSummarizationThresholdError() : new InputTokenLimitError();
           }
         }
-        return await fn(ctx);
+        return await fn(runContext);
       } catch (error) {
         const isProactiveSummarizationThresholdError = error instanceof ProactiveSummarizationThresholdError;
         const isTokenLimitError = SummarizationHandler.isTokenLimitError(error);
         const isImagePartsLimitError = isTooManyImagesOrDocumentsError(error);
         if (isProactiveSummarizationThresholdError || isTokenLimitError || isImagePartsLimitError) {
-          const wouldUseSelfSummary = this.orchestrator.canUseSelfSummary({ tools, extraT });
-          logger.info(ctx, isImagePartsLimitError ? "[summarization-trigger] Hit image limit error, running blocking summarization in order to compress context" : isProactiveSummarizationThresholdError ? "[summarization-trigger] Hit configured summarization threshold, running blocking summarization in order to compress context" : "[summarization-trigger] Hit token limit error, running blocking summarization in order to compress context");
+          const wouldUseSelfSummary = this.orchestrator.canUseSelfSummary({ tools: executableTools, extraT: extraTools });
+          agentLogger.info(runContext, isImagePartsLimitError ? "[summarization-trigger] Hit image limit error, running blocking summarization in order to compress context" : isProactiveSummarizationThresholdError ? "[summarization-trigger] Hit configured summarization threshold, running blocking summarization in order to compress context" : "[summarization-trigger] Hit token limit error, running blocking summarization in order to compress context");
           const forceExternalModel = isTokenLimitError || isImagePartsLimitError ? true : undefined;
           const summarizationOptions = {
             backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion,
-            currentInvocationId: stateHandler.lastStepInvocationId,
+            currentInvocationId: turnState.lastStepInvocationId,
             triggerReason: isImagePartsLimitError ? "approaching_image_limit" : isProactiveSummarizationThresholdError ? "approaching_token_limit" : wouldUseSelfSummary ? "fallback_on_limit_error" : "input_token_limit_error",
             resourceAccessor: this.resourceAccessor,
             forceExternalModel,
-            tools,
-            extraT,
+            tools: executableTools,
+            extraT: extraTools,
             descriptionProps,
             automationTriggerContext,
           };
           try {
-            await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, summarizationOptions);
+            await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, summarizationOptions);
           } catch (summarizationError) {
             const shouldFallbackToExternalSummarization = this.config.featureFlags?.cloudAgentProactiveSelfSummarization === true && forceExternalModel !== true && wouldUseSelfSummary && SummarizationHandler.isTokenLimitError(summarizationError);
             if (!shouldFallbackToExternalSummarization) throw summarizationError;
-            logger.info(ctx, "[summarization-trigger] Self-summary hit token limit, falling back to external summarization");
-            await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+            agentLogger.info(runContext, "[summarization-trigger] Self-summary hit token limit, falling back to external summarization");
+            await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
               ...summarizationOptions,
               triggerReason: "fallback_on_limit_error",
               forceExternalModel: true,
@@ -2554,17 +2554,17 @@ export class AbstractUserMessageActionHandler {
 
   async runTurnLoop(
     parentCtx: Context,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
     initialTurn: RunStepTurnLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly MergedRequestContextToolLike[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly MergedRequestContextToolLike[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<void> {
     using spanContext = createSpan(parentCtx.withName("runTurnLoop"));
-    const ctx = spanContext.ctx;
+    const runContext = spanContext.ctx;
     await this.cancelPendingAgentResponseComparison();
     this.responseComparisonPendingUiAttempted = false;
     this.responseComparisonModelStepStarted = false;
@@ -2574,100 +2574,100 @@ export class AbstractUserMessageActionHandler {
     let totalToolCallsInTurn = 0;
     const turnToolCountingState = new ToolCountingStateTracker();
     const turnToolCountingMiddleware = createToolCountingMiddleware(turnToolCountingState);
-    const wrappedRootPromptExecutor = turnToolCountingMiddleware(rootPromptExecutor);
-    const hadPreviousAssistantMessage = rootPromptExecutor.getMessages().some(message => message.role === "assistant");
-    const initialTodos = await Promise.all(stateHandler.todos.map(todoRef => todoRef.get(ctx)));
+    const wrappedRootPromptExecutor = turnToolCountingMiddleware(promptExecutor);
+    const hadPreviousAssistantMessage = promptExecutor.getMessages().some(turnMessage => turnMessage.role === "assistant");
+    const initialTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
     const initialTodoCount = initialTodos.length;
     const hadUnfinishedTodosAtStart = initialTodos.some(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS);
     const unfinishedTodosAtStart = initialTodos.filter(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS).length;
-    let turn = initialTurn;
-    let currentMcpTools = mcpTools;
+    let conversationTurn = initialTurn;
+    let currentMcpTools = mcpToolSet;
     let assistantMessagesSinceLastReflectGeneral = 0;
     const cliReflectGeneralReminderInterval = this.config.featureFlags?.cliReflectGeneralConfig?.stepsUntilForcedFollowUp ?? DEFAULT_CLI_REFLECT_GENERAL_REMINDER_INTERVAL;
     const cliReflectGeneralMaxFollowUpsPerTurn = this.config.featureFlags?.cliReflectGeneralConfig?.maxForcedFollowUpsPerTurn ?? DEFAULT_CLI_REFLECT_GENERAL_MAX_FOLLOW_UPS_PER_TURN;
     const cliReflectGeneralReminderText = this.config.featureFlags?.cliReflectGeneralConfig?.forcedFollowUpMessage ?? DEFAULT_CLI_REFLECT_GENERAL_REMINDER_TEXT;
     let cliReflectGeneralFollowUpsSentInTurn = 0;
-    const userMessage = await initialTurn.userMessage.get(ctx);
-    stateHandler.setMode(resolveCurrentTurnMode(stateHandler.mode, userMessage.mode));
+    const promptUserMessage = await initialTurn.userMessage.get(runContext);
+    turnState.setMode(resolveCurrentTurnMode(turnState.mode, promptUserMessage.mode));
     const maxSteps = this.config.maxSteps;
     if (typeof maxSteps !== "number" || !Number.isFinite(maxSteps) || maxSteps <= 0) {
       throw new Error("Max steps must be a finite number greater than 0");
     }
-    const fileOperationLockManager = new FileOperationLockManager();
-    let previousStepCount = turn.steps.length;
-    let previousMode = stateHandler.mode;
+    const fileLockManager = new FileOperationLockManager();
+    let previousStepCount = conversationTurn.steps.length;
+    let previousMode = turnState.mode;
     let previousQueuedMessageSource = "none";
     let finalAssistantMessageCharacterCount: number | undefined;
     let finalAssistantMessageUxStats: FinalAssistantMessageUxStats | undefined;
     const emptyResponseRetryTurnBudget: EmptyResponseRetryTurnBudgetLike = { retriesUsed: 0 };
     let conflictBarrierInjectionsRemaining = 2;
     try {
-      for (let step = 0; step < maxSteps && !ctx.signal.aborted; step += 1) {
+      for (let agentStep = 0; agentStep < maxSteps && !runContext.signal.aborted; agentStep += 1) {
         try {
-          const currentMode = stateHandler.mode;
+          const currentMode = turnState.mode;
           if (previousMode !== undefined && currentMode !== undefined && currentMode !== previousMode) {
-            const modeReminder = stateHandler.generateModeChangeContent(this.config, requestContext, previousMode);
-            logger.info(ctx, "Mode changed, adding nudge", { previousMode, newMode: currentMode });
+            const modeReminder = turnState.generateModeChangeContent(this.config, requestState, previousMode);
+            agentLogger.info(runContext, "Mode changed, adding nudge", { previousMode, newMode: currentMode });
             if (modeReminder) {
-              rootPromptExecutor.appendMessages(toRedactedCoreMessages([{ role: "user", content: modeReminder }], stateHandler.getPrivacyMode()));
+              promptExecutor.appendMessages(toRedactedCoreMessages([{ role: "user", content: modeReminder }], turnState.getPrivacyMode()));
             }
             previousMode = currentMode;
           }
-          const readPathsBefore = new Set(stateHandler.readPaths);
-          const { hasToolCall, responseMessages, toolCallIdentityResolver } = await this.executeStepWithMetrics(
-            ctx,
-            turn,
-            { wrappedPromptExecutor: wrappedRootPromptExecutor, rootPromptExecutor },
-            stateHandler,
-            toolsGenerator,
+          const readPathsBefore = new Set(turnState.readPaths);
+          const { hasToolCall: madeToolCall, responseMessages: modelMessages, toolCallIdentityResolver } = await this.executeStepWithMetrics(
+            runContext,
+            conversationTurn,
+            { wrappedPromptExecutor: wrappedRootPromptExecutor, rootPromptExecutor: promptExecutor },
+            turnState,
+            toolSetGenerator,
             currentMcpTools,
-            repositoryInfo,
-            requestContext,
-            fileOperationLockManager,
-            onStateUpdate,
+            repositoryDetails,
+            requestState,
+            fileLockManager,
+            publishStateUpdate,
             previousQueuedMessageSource,
             emptyResponseRetryTurnBudget,
           );
-          const toolCallsInStep = responseMessages.filter(message => message.role === "tool").length;
+          const toolCallsInStep = modelMessages.filter(turnMessage => turnMessage.role === "tool").length;
           totalToolCallsInTurn += toolCallsInStep;
-          const assistantMessagesInStep = countAssistantMessages(responseMessages);
-          const hasReflectGeneralCall = hasReflectGeneralToolCall(responseMessages, toolCallIdentityResolver);
+          const assistantMessagesInStep = countAssistantMessages(modelMessages);
+          const hasReflectGeneralCall = hasReflectGeneralToolCall(modelMessages, toolCallIdentityResolver);
           assistantMessagesSinceLastReflectGeneral = hasReflectGeneralCall
             ? 0
             : assistantMessagesSinceLastReflectGeneral + assistantMessagesInStep;
-          previousStepCount = turn.steps.length;
-          await this.applyPostStepProcessing(ctx, turn, rootPromptExecutor, stateHandler, hasToolCall, [...responseMessages], onStateUpdate, {
-            requestContext,
-            toolsGenerator,
-            repositoryInfo,
+          previousStepCount = conversationTurn.steps.length;
+          await this.applyPostStepProcessing(runContext, conversationTurn, promptExecutor, turnState, madeToolCall, [...modelMessages], publishStateUpdate, {
+            requestContext: requestState,
+            toolsGenerator: toolSetGenerator,
+            repositoryInfo: repositoryDetails,
             mcpTools: currentMcpTools,
-            fileOperationLockManager,
+            fileOperationLockManager: fileLockManager,
           });
-          const isLastIteration = step === maxSteps - 1;
-          let updatedTurn = turn;
+          const isLastIteration = agentStep === maxSteps - 1;
+          let updatedTurn = conversationTurn;
           let hasQueuedMessages = false;
           let queuedMessageSource = "none";
           let hasQueuedUserTurn = false;
           let updatedMcpTools = currentMcpTools;
-          const queuedAction = await this.conversationActionReceiver.peek(ctx);
+          const queuedAction = await this.conversationActionReceiver.peek(runContext);
           if (queuedAction?.action.case === "asyncAskQuestionCompletionAction") {
-            logger.info(ctx, "Found queued AsyncAskQuestionCompletionAction - processing immediately", {
+            agentLogger.info(runContext, "Found queued AsyncAskQuestionCompletionAction - processing immediately", {
               originalToolCallId: queuedAction.action.value.originalToolCallId,
             });
-            await this.conversationActionReceiver.pop(ctx);
+            await this.conversationActionReceiver.pop(runContext);
             const completionAction = queuedAction.action.value;
-            const application = await applyAskQuestionCompletion(ctx, {
+            const application = await applyAskQuestionCompletion(runContext, {
               action: completionAction,
-              stateHandler,
-              turn,
-              rootPromptExecutor,
+              stateHandler: turnState,
+              turn: conversationTurn,
+              rootPromptExecutor: promptExecutor,
               resultFormat: "json-object",
             });
             if (application.outcome === "applied") {
               const syntheticModelCallId = randomUUID();
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.toolCallStarted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.toolCallCompleted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
-              logger.info(ctx, "Injected async completion into current turn", {
+              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.toolCallStarted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
+              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.toolCallCompleted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
+              agentLogger.info(runContext, "Injected async completion into current turn", {
                 originalToolCallId: completionAction.originalToolCallId,
                 resultCase: completionAction.result?.result.case,
               });
@@ -2675,168 +2675,168 @@ export class AbstractUserMessageActionHandler {
               hasQueuedMessages = true;
               queuedMessageSource = "asyncAskQuestionCompletion";
             } else {
-              logger.info(ctx, "Dropped queued async completion", {
+              agentLogger.info(runContext, "Dropped queued async completion", {
                 originalToolCallId: completionAction.originalToolCallId,
                 outcome: application.outcome,
               });
             }
           }
           if (!isLastIteration) {
-            const result = await this.consumeQueuedUserMessagesAndMaybeCreateNewTurns(ctx, stateHandler, turn, currentMcpTools, onStateUpdate);
-            updatedTurn = result.turn;
-            hasQueuedMessages = hasQueuedMessages || result.hasQueuedMessages;
-            if (result.hasQueuedMessages) queuedMessageSource = "consumeQueuedUserMessages";
-            hasQueuedUserTurn = result.hasQueuedMessages;
-            updatedMcpTools = result.mcpTools;
+            const stepResult = await this.consumeQueuedUserMessagesAndMaybeCreateNewTurns(runContext, turnState, conversationTurn, currentMcpTools, publishStateUpdate);
+            updatedTurn = stepResult.turn;
+            hasQueuedMessages = hasQueuedMessages || stepResult.hasQueuedMessages;
+            if (stepResult.hasQueuedMessages) queuedMessageSource = "consumeQueuedUserMessages";
+            hasQueuedUserTurn = stepResult.hasQueuedMessages;
+            updatedMcpTools = stepResult.mcpTools;
           }
           const crossedReflectReminderThreshold = !hasReflectGeneralCall && assistantMessagesInStep > 0 &&
             Math.floor((assistantMessagesSinceLastReflectGeneral - assistantMessagesInStep) / cliReflectGeneralReminderInterval) <
             Math.floor(assistantMessagesSinceLastReflectGeneral / cliReflectGeneralReminderInterval);
           const canInjectReflectReminderThisTurn = cliReflectGeneralMaxFollowUpsPerTurn === -1 || cliReflectGeneralFollowUpsSentInTurn < cliReflectGeneralMaxFollowUpsPerTurn;
-          if (!isLastIteration && !hasQueuedUserTurn && crossedReflectReminderThreshold && canInjectReflectReminderThisTurn && await this.shouldInjectCliReflectGeneralFollowUp(ctx, stateHandler, turn, toolsGenerator, updatedMcpTools, repositoryInfo, requestContext, fileOperationLockManager)) {
-            updatedTurn = await this.createCliReflectGeneralFollowUpTurn(ctx, stateHandler, turn, cliReflectGeneralReminderText, requestContext, onStateUpdate);
+          if (!isLastIteration && !hasQueuedUserTurn && crossedReflectReminderThreshold && canInjectReflectReminderThisTurn && await this.shouldInjectCliReflectGeneralFollowUp(runContext, turnState, conversationTurn, toolSetGenerator, updatedMcpTools, repositoryDetails, requestState, fileLockManager)) {
+            updatedTurn = await this.createCliReflectGeneralFollowUpTurn(runContext, turnState, conversationTurn, cliReflectGeneralReminderText, requestState, publishStateUpdate);
             hasQueuedMessages = true;
             queuedMessageSource = "cliReflectGeneralFollowUp";
             cliReflectGeneralFollowUpsSentInTurn += 1;
-            logger.info(ctx, "Injected CLI reflect-general follow-up", {
+            agentLogger.info(runContext, "Injected CLI reflect-general follow-up", {
               assistantMessagesSinceLastReflectGeneral,
               cliReflectGeneralFollowUpsSentInTurn,
               cliReflectGeneralMaxFollowUpsPerTurn,
             });
           }
-          turn = updatedTurn;
+          conversationTurn = updatedTurn;
           currentMcpTools = updatedMcpTools;
-          const hasEnded = (!hasToolCall && !hasQueuedMessages) || isLastIteration;
-          if (!hasToolCall && !hasQueuedMessages && conflictBarrierInjectionsRemaining > 0 && !isLastIteration && this.config.featureFlags?.enableAgentStoreConflictNotices === true && await this.maybeInjectPreFinalConflictBarrier(ctx, rootPromptExecutor, stateHandler.getPrivacyMode())) {
+          const hasEnded = (!madeToolCall && !hasQueuedMessages) || isLastIteration;
+          if (!madeToolCall && !hasQueuedMessages && conflictBarrierInjectionsRemaining > 0 && !isLastIteration && this.config.featureFlags?.enableAgentStoreConflictNotices === true && await this.maybeInjectPreFinalConflictBarrier(runContext, promptExecutor, turnState.getPrivacyMode())) {
             conflictBarrierInjectionsRemaining -= 1;
             this.responseComparisonCandidate = undefined;
             continue;
           }
           if (!hasEnded) {
             this.responseComparisonCandidate = undefined;
-          } else if (hasToolCall || hasQueuedMessages) {
+          } else if (madeToolCall || hasQueuedMessages) {
             this.responseComparisonCandidate = undefined;
             await this.finalizePendingAgentResponseComparison(false);
           }
           if (hasEnded) {
             try {
-              finalAssistantMessageCharacterCount = getFinalAssistantMessageCharacterCount(responseMessages);
+              finalAssistantMessageCharacterCount = getFinalAssistantMessageCharacterCount(modelMessages);
             } catch (error) {
-              logger.error(ctx, "Failed to count final assistant message characters", error);
+              agentLogger.error(runContext, "Failed to count final assistant message characters", error);
               finalAssistantMessageCharacterCount = undefined;
             }
             if (this.config.featureFlags?.collectModelUxStats !== false) {
               try {
-                finalAssistantMessageUxStats = getFinalAssistantMessageUxStats(responseMessages);
+                finalAssistantMessageUxStats = getFinalAssistantMessageUxStats(modelMessages);
               } catch (error) {
-                logger.error(ctx, "Failed to analyze final assistant message UX stats", error);
+                agentLogger.error(runContext, "Failed to analyze final assistant message UX stats", error);
                 finalAssistantMessageUxStats = undefined;
               }
             }
           }
           previousQueuedMessageSource = queuedMessageSource;
-          if (hasEnded && stateHandler.backgroundSummarizationPromiseInfo !== null) {
-            const backgroundSummarizationPromiseInfo = stateHandler.backgroundSummarizationPromiseInfo;
-            const tokenDetails = stateHandler.tokenDetails;
+          if (hasEnded && turnState.backgroundSummarizationPromiseInfo !== null) {
+            const backgroundSummarizationPromiseInfo = turnState.backgroundSummarizationPromiseInfo;
+            const tokenUsageDetails = turnState.tokenDetails;
             const isSelfSummary = backgroundSummarizationPromiseInfo.summarizerType === "self";
-            const shouldPersistForTokenThreshold = shouldPersistBackgroundSummarization(tokenDetails.usedTokens, tokenDetails.maxTokens, this.config.backgroundSummarizationProps);
-            const endOfTurnMessages = fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+            const shouldPersistForTokenThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+            const endOfTurnMessages = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
             const imageCountAtTurnEnd = countImagePartsInMessages(endOfTurnMessages);
             const shouldPersistForImageThreshold = imageCountAtTurnEnd >= IMAGE_SUMMARIZATION_TRIGGER_COUNT;
             const shouldPersist = shouldPersistForTokenThreshold || shouldPersistForImageThreshold;
             const completedPersistTriggerReason = shouldPersistForImageThreshold ? "approaching_image_limit" : isSelfSummary ? "self_summary_completed" : "threshold_met";
             if (shouldPersist) {
-              if (stateHandler.backgroundSummarizationHasCompleted) {
-                if (stateHandler.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenDetails.usedTokens)) {
-                  logger.info(ctx, "[summarization-discard] At end of turn, suppressing completed self-summary persistence after input-limit failure", {
-                    usedTokens: tokenDetails.usedTokens,
-                    selfSummaryInputLimitFailureTokenCount: stateHandler.selfSummaryInputLimitFailureTokenCount,
+              if (turnState.backgroundSummarizationHasCompleted) {
+                if (turnState.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenUsageDetails.usedTokens)) {
+                  agentLogger.info(runContext, "[summarization-discard] At end of turn, suppressing completed self-summary persistence after input-limit failure", {
+                    usedTokens: tokenUsageDetails.usedTokens,
+                    selfSummaryInputLimitFailureTokenCount: turnState.selfSummaryInputLimitFailureTokenCount,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     shouldPersistForImageThreshold,
                   });
                 } else {
-                  logger.info(ctx, "[summarization-persist] At end of turn, background summarization has completed and persistence threshold has been hit. Persisting summarization.", {
-                    usedTokens: tokenDetails.usedTokens,
-                    maxTokens: tokenDetails.maxTokens,
+                  agentLogger.info(runContext, "[summarization-persist] At end of turn, background summarization has completed and persistence threshold has been hit. Persisting summarization.", {
+                    usedTokens: tokenUsageDetails.usedTokens,
+                    maxTokens: tokenUsageDetails.maxTokens,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     shouldPersistForImageThreshold,
                   });
-                  await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+                  await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
                     backgroundSummarizationMode: BackgroundSummarizationMode.BackgroundAndPersistIfCompleted,
-                    currentInvocationId: stateHandler.lastStepInvocationId,
+                    currentInvocationId: turnState.lastStepInvocationId,
                     isToolCall: totalToolCallsInTurn > 0,
                     triggerReason: completedPersistTriggerReason,
                     resourceAccessor: this.resourceAccessor,
                   });
                 }
               } else {
-                const overageThreshold = Math.min(0.25 * tokenDetails.maxTokens, 5e4);
-                const shouldBlockForTokenOverage = tokenDetails.maxTokens > 0 && tokenDetails.usedTokens > tokenDetails.maxTokens + overageThreshold;
+                const overageThreshold = Math.min(0.25 * tokenUsageDetails.maxTokens, 5e4);
+                const shouldBlockForTokenOverage = tokenUsageDetails.maxTokens > 0 && tokenUsageDetails.usedTokens > tokenUsageDetails.maxTokens + overageThreshold;
                 const shouldBlockForImageThreshold = shouldPersistForImageThreshold;
                 if (shouldBlockForTokenOverage || shouldBlockForImageThreshold) {
-                  logger.info(ctx, shouldBlockForImageThreshold ? "[summarization-persist] At end of turn, blocking on background summarization before persistence because image count reached threshold" : "[summarization-persist] At end of turn, blocking on background summarization because token usage significantly exceeds max tokens", {
-                    usedTokens: tokenDetails.usedTokens,
-                    maxTokens: tokenDetails.maxTokens,
+                  agentLogger.info(runContext, shouldBlockForImageThreshold ? "[summarization-persist] At end of turn, blocking on background summarization before persistence because image count reached threshold" : "[summarization-persist] At end of turn, blocking on background summarization because token usage significantly exceeds max tokens", {
+                    usedTokens: tokenUsageDetails.usedTokens,
+                    maxTokens: tokenUsageDetails.maxTokens,
                     overageThreshold,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     blockedForImageThreshold: shouldBlockForImageThreshold,
                     blockedForTokenOverage: shouldBlockForTokenOverage,
                   });
-                  await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+                  await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
                     backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion,
-                    currentInvocationId: stateHandler.lastStepInvocationId,
+                    currentInvocationId: turnState.lastStepInvocationId,
                     isToolCall: totalToolCallsInTurn > 0,
                     triggerReason: shouldBlockForImageThreshold ? "approaching_image_limit" : "significantly_over_token_limit",
                     resourceAccessor: this.resourceAccessor,
                   });
                 } else {
-                  logger.info(ctx, "[summarization-discard] At end of turn, persistence threshold is met, but we are discarding background summarization as it has not completed", {
-                    usedTokens: tokenDetails.usedTokens,
-                    maxTokens: tokenDetails.maxTokens,
+                  agentLogger.info(runContext, "[summarization-discard] At end of turn, persistence threshold is met, but we are discarding background summarization as it has not completed", {
+                    usedTokens: tokenUsageDetails.usedTokens,
+                    maxTokens: tokenUsageDetails.maxTokens,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     shouldPersistForImageThreshold,
                   });
-                  backgroundSummarizationDiscarded.increment(ctx, 1, { reason: "not_completed", model: backgroundSummarizationPromiseInfo.modelId });
+                  backgroundSummarizationDiscarded.increment(runContext, 1, { reason: "not_completed", model: backgroundSummarizationPromiseInfo.modelId });
                 }
               }
             } else if (isSelfSummary) {
-              logger.info(ctx, "[summarization-discard] At end of turn, discarding self-summary as persistence threshold is not met", {
-                usedTokens: tokenDetails.usedTokens,
-                maxTokens: tokenDetails.maxTokens,
+              agentLogger.info(runContext, "[summarization-discard] At end of turn, discarding self-summary as persistence threshold is not met", {
+                usedTokens: tokenUsageDetails.usedTokens,
+                maxTokens: tokenUsageDetails.maxTokens,
                 imageCountAtTurnEnd,
                 imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                 shouldPersistForImageThreshold,
-                backgroundSummarizationHasCompleted: stateHandler.backgroundSummarizationHasCompleted,
+                backgroundSummarizationHasCompleted: turnState.backgroundSummarizationHasCompleted,
               });
-              backgroundSummarizationDiscarded.increment(ctx, 1, { reason: "self_summary_persist_threshold_not_met", model: backgroundSummarizationPromiseInfo.modelId });
+              backgroundSummarizationDiscarded.increment(runContext, 1, { reason: "self_summary_persist_threshold_not_met", model: backgroundSummarizationPromiseInfo.modelId });
             } else {
-              logger.info(ctx, "[summarization-discard] At end of turn, we are discarding background summarization as persistence threshold is not met", {
-                usedTokens: tokenDetails.usedTokens,
-                maxTokens: tokenDetails.maxTokens,
+              agentLogger.info(runContext, "[summarization-discard] At end of turn, we are discarding background summarization as persistence threshold is not met", {
+                usedTokens: tokenUsageDetails.usedTokens,
+                maxTokens: tokenUsageDetails.maxTokens,
                 imageCountAtTurnEnd,
                 imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                 shouldPersistForImageThreshold,
                 backgroundSummarizationConfig: this.config.backgroundSummarizationProps,
-                backgroundSummarizationHasCompleted: stateHandler.backgroundSummarizationHasCompleted,
+                backgroundSummarizationHasCompleted: turnState.backgroundSummarizationHasCompleted,
               });
-              const completed = stateHandler.backgroundSummarizationHasCompleted;
-              const triggerThreshold = getBackgroundSummarizationTriggerThreshold(tokenDetails.maxTokens, this.config.backgroundSummarizationProps);
-              let reason = completed ? "threshold_not_met_completed" : "threshold_not_met_not_completed";
-              if (triggerThreshold !== undefined && tokenDetails.usedTokens < triggerThreshold * 0.6) reason = "incorrectly_triggered_summarization";
-              backgroundSummarizationDiscarded.increment(ctx, 1, { reason, model: backgroundSummarizationPromiseInfo.modelId });
+              const completed = turnState.backgroundSummarizationHasCompleted;
+              const triggerThreshold = getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+              let retryReason = completed ? "threshold_not_met_completed" : "threshold_not_met_not_completed";
+              if (triggerThreshold !== undefined && tokenUsageDetails.usedTokens < triggerThreshold * 0.6) retryReason = "incorrectly_triggered_summarization";
+              backgroundSummarizationDiscarded.increment(runContext, 1, { reason: retryReason, model: backgroundSummarizationPromiseInfo.modelId });
             }
           }
-          if (hasEnded && stateHandler.backgroundSummarizationPromiseInfo !== null) {
-            const backgroundSummarizationPromiseInfo = stateHandler.backgroundSummarizationPromiseInfo;
-            if (stateHandler.backgroundSummarizationCancellationToken !== undefined) {
-              stateHandler.backgroundSummarizationCancellationToken.cancelled = true;
+          if (hasEnded && turnState.backgroundSummarizationPromiseInfo !== null) {
+            const backgroundSummarizationPromiseInfo = turnState.backgroundSummarizationPromiseInfo;
+            if (turnState.backgroundSummarizationCancellationToken !== undefined) {
+              turnState.backgroundSummarizationCancellationToken.cancelled = true;
             }
             backgroundSummarizationPromiseInfo.promise.catch(error => {
-              logger.error(ctx, "Background summarization failed", {
+              agentLogger.error(runContext, "Background summarization failed", {
                 error,
                 summarizationMode: "unspecified",
                 triggerReason: "unspecified",
@@ -2844,165 +2844,165 @@ export class AbstractUserMessageActionHandler {
               });
             });
           }
-          if (hasEnded && !hasToolCall && !hasQueuedMessages) await this.finalizePendingAgentResponseComparison(true);
-          const lastTurn = await stateHandler.turns.at(-1)?.get(ctx);
+          if (hasEnded && !madeToolCall && !hasQueuedMessages) await this.finalizePendingAgentResponseComparison(true);
+          const lastTurn = await turnState.turns.at(-1)?.get(runContext);
           if (lastTurn instanceof AgentConversationTurnHandle) {
-            const lastStep = await lastTurn.steps.at(-1)?.get(ctx);
+            const lastStep = await lastTurn.steps.at(-1)?.get(runContext);
             if (isSuccessfulCreatePlanStep(lastStep)) {
-              logger.info(ctx, "Plan created, breaking out of turn loop");
+              agentLogger.info(runContext, "Plan created, breaking out of turn loop");
               this.responseComparisonCandidate = undefined;
               await this.cancelPendingAgentResponseComparison();
               break;
             }
           }
-          if (!hasToolCall && !hasQueuedMessages) break;
+          if (!madeToolCall && !hasQueuedMessages) break;
           if (!this.config.doNotFailOnMaxSteps && isLastIteration) throw new Error("Reached maximum number of steps before turn ended (possible looping?)");
         } finally {
-          agentStepCount.increment(ctx, 1, {});
+          agentStepCount.increment(runContext, 1, {});
         }
       }
       try {
-        const finalTodos = await Promise.all(stateHandler.todos.map(todoRef => todoRef.get(ctx)));
+        const finalTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
         const unfinishedTodoCount = finalTodos.filter(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS).length;
         if (unfinishedTodoCount > 0) {
-          unfinishedTodosMetric.increment(ctx, unfinishedTodoCount);
-          logger.info(ctx, "Turn ended with unfinished todos", { unfinishedTodoCount });
+          unfinishedTodosMetric.increment(runContext, unfinishedTodoCount);
+          agentLogger.info(runContext, "Turn ended with unfinished todos", { unfinishedTodoCount });
         }
-        const eventTracker = getAgentEventTracker(ctx);
+        const eventTracker = getAgentEventTracker(runContext);
         const finalTodoCount = finalTodos.length;
-        eventTracker.trackUnfinishedTodos(ctx, { unfinishedTodoCount });
-        if (finalTodoCount > initialTodoCount) eventTracker.trackUnfinishedTodosWhenCreatedTodos(ctx, { unfinishedTodoCount, createdTodoCount: finalTodoCount - initialTodoCount });
-        if (hadUnfinishedTodosAtStart) eventTracker.trackUnfinishedTodosWhenHadUnfinishedTodosAtStart(ctx, { unfinishedTodosAtEnd: unfinishedTodoCount, unfinishedTodosAtStart });
+        eventTracker.trackUnfinishedTodos(runContext, { unfinishedTodoCount });
+        if (finalTodoCount > initialTodoCount) eventTracker.trackUnfinishedTodosWhenCreatedTodos(runContext, { unfinishedTodoCount, createdTodoCount: finalTodoCount - initialTodoCount });
+        if (hadUnfinishedTodosAtStart) eventTracker.trackUnfinishedTodosWhenHadUnfinishedTodosAtStart(runContext, { unfinishedTodosAtEnd: unfinishedTodoCount, unfinishedTodosAtStart });
       } catch (error) {
-        logger.error(ctx, "Failed to track unfinished todos metric", error);
+        agentLogger.error(runContext, "Failed to track unfinished todos metric", error);
       }
       const turnDuration = performance.now() - turnStartTime;
-      agentTurnDuration.histogram(ctx, turnDuration);
+      agentTurnDuration.histogram(runContext, turnDuration);
       const outcomeTags = {
         newConversation: hadPreviousAssistantMessage ? "false" : "true",
-        isauto: getIsAutoFromContext(ctx) ? "true" : "false",
-        ispremium: getIsPremiumFromContext(ctx) ? "true" : "false",
-        isinternalteam: getIsInternalTeamFromContext(ctx) ? "true" : "false",
-        isuserapikey: getIsUserApiKeyFromContext(ctx) ? "true" : "false",
-        issubagent: getIsSubagentFromContext(ctx) ? "true" : "false",
-        autoroutingreason: getAutoRoutingReasonFromContext(ctx),
+        isauto: getIsAutoFromContext(runContext) ? "true" : "false",
+        ispremium: getIsPremiumFromContext(runContext) ? "true" : "false",
+        isinternalteam: getIsInternalTeamFromContext(runContext) ? "true" : "false",
+        isuserapikey: getIsUserApiKeyFromContext(runContext) ? "true" : "false",
+        issubagent: getIsSubagentFromContext(runContext) ? "true" : "false",
+        autoroutingreason: getAutoRoutingReasonFromContext(runContext),
       };
-      agentTurnResult.increment(ctx, 1, { outcome: "success", ...outcomeTags });
+      agentTurnResult.increment(runContext, 1, { outcome: "success", ...outcomeTags });
       if (finalAssistantMessageCharacterCount !== undefined) {
-        try { finalAssistantMessageCharacters.histogram(ctx, finalAssistantMessageCharacterCount); } catch (error) { logger.error(ctx, "Failed to record final assistant message character metric", error); }
+        try { finalAssistantMessageCharacters.histogram(runContext, finalAssistantMessageCharacterCount); } catch (error) { agentLogger.error(runContext, "Failed to record final assistant message character metric", error); }
       }
       if (finalAssistantMessageUxStats !== undefined) {
         try {
-          for (const stat of FINAL_ASSISTANT_MESSAGE_UX_STAT_NAMES) finalAssistantMessageUxStatsMetric.histogram(ctx, finalAssistantMessageUxStats[stat], { stat });
-        } catch (error) { logger.error(ctx, "Failed to record final assistant message UX stats", error); }
+          for (const stat of FINAL_ASSISTANT_MESSAGE_UX_STAT_NAMES) finalAssistantMessageUxStatsMetric.histogram(runContext, finalAssistantMessageUxStats[stat], { stat });
+        } catch (error) { agentLogger.error(runContext, "Failed to record final assistant message UX stats", error); }
       }
-      await this.interactionListener.sendUpdate(ctx, RedactedUpdates.stepCompleted(stateHandler.getPrivacyMode(), turn.steps.length, Math.round(turnDuration)));
+      await this.interactionListener.sendUpdate(runContext, RedactedUpdates.stepCompleted(turnState.getPrivacyMode(), conversationTurn.steps.length, Math.round(turnDuration)));
       if (this.config.featureFlags?.enablePromptSuggestion && this.config.modelId !== undefined) {
         try {
-          const userMessageForTools = await turn.userMessage.get(ctx);
-          const modeForTools = resolveCurrentStepMode(stateHandler.mode, userMessageForTools.mode);
-          const toolSetHandleForSuggestion = toolsGenerator({
+          const userMessageForTools = await conversationTurn.userMessage.get(runContext);
+          const modeForTools = resolveCurrentStepMode(turnState.mode, userMessageForTools.mode);
+          const toolSetHandleForSuggestion = toolSetGenerator({
             resourceAccessor: this.resourceAccessor,
-            stateHandler,
+            stateHandler: turnState,
             agentSessionId: this.config.agentSessionId,
             mcpTools: currentMcpTools,
-            repositoryInfos: repositoryInfo,
-            blobStore: stateHandler.getBlobStore(),
+            repositoryInfos: repositoryDetails,
+            blobStore: turnState.getBlobStore(),
             mode: modeForTools,
-            loggingContext: ctx,
-            requestContext,
-            fileOperationLockManager,
+            loggingContext: runContext,
+            requestContext: requestState,
+            fileOperationLockManager: fileLockManager,
             smartModeClassifierMode: this.config.smartModeClassifierMode,
             smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
             autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
           });
           const toolsForSuggestion = toAgentTools(toolSetHandleForSuggestion.getStaticTools(), toolSetHandleForSuggestion.getDescriptionProps());
-          const messagesSnapshot = rootPromptExecutor.getMessages();
+          const messagesSnapshot = promptExecutor.getMessages();
           const maxInputTokenCost = this.config.featureFlags?.promptSuggestionMaxInputTokenCost;
           const costChecker = this.config.featureFlags?.getModelInputCostForContext;
           this.interactionListener.enqueuePostTurnEndedWork?.(async () => {
             try {
-              await requestPromptSuggestion(ctx, getInvocationId(ctx), this.config.modelId!, rootPromptExecutor, toUnredactedInteractionListener(this.interactionListener, stateHandler.getPrivacyMode()), toolsForSuggestion, messagesSnapshot, { maxInputTokenCost, getModelInputCostForContext: costChecker });
-            } catch (error) { logger.error(ctx, "Failed to request prompt suggestion", error); }
+              await requestPromptSuggestion(runContext, getInvocationId(runContext), this.config.modelId!, promptExecutor, toUnredactedInteractionListener(this.interactionListener, turnState.getPrivacyMode()), toolsForSuggestion, messagesSnapshot, { maxInputTokenCost, getModelInputCostForContext: costChecker });
+            } catch (error) { agentLogger.error(runContext, "Failed to request prompt suggestion", error); }
           });
-        } catch (error) { logger.error(ctx, "Failed to setup prompt suggestion", error); }
+        } catch (error) { agentLogger.error(runContext, "Failed to setup prompt suggestion", error); }
       }
       const getFeedbackRequestDetails = this.config.featureFlags?.getFeedbackRequestDetails;
-      if (getFeedbackRequestDetails !== undefined && !getIsSubagentFromContext(ctx)) {
-        const feedbackRequestId = getRequestId(ctx);
+      if (getFeedbackRequestDetails !== undefined && !getIsSubagentFromContext(runContext)) {
+        const feedbackRequestId = getRequestId(runContext);
         if (feedbackRequestId !== undefined) {
           this.interactionListener.enqueuePostTurnEndedWork?.(async () => {
             try {
               if (!hadPreviousAssistantMessage) return;
               const feedbackRequestDetails = await getFeedbackRequestDetails({ canonicalModelName: this.config.canonicalModelName });
               if (feedbackRequestDetails === undefined) return;
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.feedbackRequest(feedbackRequestId, this.config.canonicalModelName ?? "", stateHandler.getPrivacyMode(), feedbackRequestDetails.categories, feedbackRequestDetails.categoryGroups ?? [], { title: feedbackRequestDetails.title, negativeTitle: feedbackRequestDetails.negativeTitle, commentPlaceholder: feedbackRequestDetails.commentPlaceholder }));
-            } catch (error) { logger.error(ctx, "Failed to emit feedback request", error); }
+              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.feedbackRequest(feedbackRequestId, this.config.canonicalModelName ?? "", turnState.getPrivacyMode(), feedbackRequestDetails.categories, feedbackRequestDetails.categoryGroups ?? [], { title: feedbackRequestDetails.title, negativeTitle: feedbackRequestDetails.negativeTitle, commentPlaceholder: feedbackRequestDetails.commentPlaceholder }));
+            } catch (error) { agentLogger.error(runContext, "Failed to emit feedback request", error); }
           });
         }
       }
-      agentToolCallsPerTurn.histogram(ctx, totalToolCallsInTurn, { outcome: "success", ...getClientVersionMetricTagsFromContext(ctx), ...getSdkFlavorMetricTagFromContext(ctx), "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false" });
+      agentToolCallsPerTurn.histogram(runContext, totalToolCallsInTurn, { outcome: "success", ...getClientVersionMetricTagsFromContext(runContext), ...getSdkFlavorMetricTagFromContext(runContext), "user.is_dev": getIsDevFromContext(runContext) ? "true" : "false" });
       const modelName = this.config.modelId ?? "unknown";
-      unifiedHandlerNumberOfToolCalls.histogram(ctx, totalToolCallsInTurn, { model: modelName, hasFailedToolCalls: turnToolCountingState.hasFailedToolCalls(), hasUnexpectedToolCallErrors: turnToolCountingState.hasUnexpectedToolCallErrors(), success: "true", errorName: "none" });
-      const eventTrackerForToolCalls = getAgentEventTracker(ctx);
-      eventTrackerForToolCalls.trackNumberOfToolCalls(ctx, { numberOfToolCalls: totalToolCallsInTurn, numberOfFailedToolCalls: turnToolCountingState.getFailedToolCallCount(), numberOfUnexpectedToolCallErrors: turnToolCountingState.getUnexpectedToolCallErrorCount(), success: true });
+      unifiedHandlerNumberOfToolCalls.histogram(runContext, totalToolCallsInTurn, { model: modelName, hasFailedToolCalls: turnToolCountingState.hasFailedToolCalls(), hasUnexpectedToolCallErrors: turnToolCountingState.hasUnexpectedToolCallErrors(), success: "true", errorName: "none" });
+      const eventTrackerForToolCalls = getAgentEventTracker(runContext);
+      eventTrackerForToolCalls.trackNumberOfToolCalls(runContext, { numberOfToolCalls: totalToolCallsInTurn, numberOfFailedToolCalls: turnToolCountingState.getFailedToolCallCount(), numberOfUnexpectedToolCallErrors: turnToolCountingState.getUnexpectedToolCallErrorCount(), success: true });
     } catch (error) {
       await this.cancelPendingAgentResponseComparison();
       const turnDuration = performance.now() - turnStartTime;
-      agentTurnDuration.histogram(ctx, turnDuration);
-      const outcome = ctx.signal.aborted ? "aborted" : "error";
-      agentTurnResult.increment(ctx, 1, { outcome, newConversation: hadPreviousAssistantMessage ? "false" : "true", isauto: getIsAutoFromContext(ctx) ? "true" : "false", ispremium: getIsPremiumFromContext(ctx) ? "true" : "false", isinternalteam: getIsInternalTeamFromContext(ctx) ? "true" : "false", isuserapikey: getIsUserApiKeyFromContext(ctx) ? "true" : "false", issubagent: getIsSubagentFromContext(ctx) ? "true" : "false", autoroutingreason: getAutoRoutingReasonFromContext(ctx) });
-      await this.interactionListener.sendUpdate(ctx, RedactedUpdates.stepCompleted(stateHandler.getPrivacyMode(), turn.steps.length, Math.round(turnDuration)));
-      agentToolCallsPerTurn.histogram(ctx, totalToolCallsInTurn, { outcome, ...getClientVersionMetricTagsFromContext(ctx), ...getSdkFlavorMetricTagFromContext(ctx), "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false" });
+      agentTurnDuration.histogram(runContext, turnDuration);
+      const outcome = runContext.signal.aborted ? "aborted" : "error";
+      agentTurnResult.increment(runContext, 1, { outcome, newConversation: hadPreviousAssistantMessage ? "false" : "true", isauto: getIsAutoFromContext(runContext) ? "true" : "false", ispremium: getIsPremiumFromContext(runContext) ? "true" : "false", isinternalteam: getIsInternalTeamFromContext(runContext) ? "true" : "false", isuserapikey: getIsUserApiKeyFromContext(runContext) ? "true" : "false", issubagent: getIsSubagentFromContext(runContext) ? "true" : "false", autoroutingreason: getAutoRoutingReasonFromContext(runContext) });
+      await this.interactionListener.sendUpdate(runContext, RedactedUpdates.stepCompleted(turnState.getPrivacyMode(), conversationTurn.steps.length, Math.round(turnDuration)));
+      agentToolCallsPerTurn.histogram(runContext, totalToolCallsInTurn, { outcome, ...getClientVersionMetricTagsFromContext(runContext), ...getSdkFlavorMetricTagFromContext(runContext), "user.is_dev": getIsDevFromContext(runContext) ? "true" : "false" });
       const modelName = this.config.modelId ?? "unknown";
       const errorName = error instanceof Error ? error.constructor.name : "unknown";
-      unifiedHandlerNumberOfToolCalls.histogram(ctx, totalToolCallsInTurn, { model: modelName, hasFailedToolCalls: turnToolCountingState.hasFailedToolCalls(), hasUnexpectedToolCallErrors: turnToolCountingState.hasUnexpectedToolCallErrors(), success: "false", errorName });
-      const eventTrackerForToolCalls = getAgentEventTracker(ctx);
-      eventTrackerForToolCalls.trackNumberOfToolCalls(ctx, { numberOfToolCalls: totalToolCallsInTurn, numberOfFailedToolCalls: turnToolCountingState.getFailedToolCallCount(), numberOfUnexpectedToolCallErrors: turnToolCountingState.getUnexpectedToolCallErrorCount(), success: false });
+      unifiedHandlerNumberOfToolCalls.histogram(runContext, totalToolCallsInTurn, { model: modelName, hasFailedToolCalls: turnToolCountingState.hasFailedToolCalls(), hasUnexpectedToolCallErrors: turnToolCountingState.hasUnexpectedToolCallErrors(), success: "false", errorName });
+      const eventTrackerForToolCalls = getAgentEventTracker(runContext);
+      eventTrackerForToolCalls.trackNumberOfToolCalls(runContext, { numberOfToolCalls: totalToolCallsInTurn, numberOfFailedToolCalls: turnToolCountingState.getFailedToolCallCount(), numberOfUnexpectedToolCallErrors: turnToolCountingState.getUnexpectedToolCallErrorCount(), success: false });
       throw error;
     }
   }
 
   async createCliReflectGeneralFollowUpTurn(
-    ctx: Context,
-    stateHandler: RunStepStateHandlerLike,
+    runContext: Context,
+    turnState: RunStepStateHandlerLike,
     _turn: RunStepTurnLike,
     reminderText: string,
-    requestContext: RequestContext,
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    requestState: RequestContext,
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<RunStepTurnLike> {
     const syntheticUserMessage = new UserMessage({
       text: reminderText,
       messageId: randomUUID(),
       isSimulatedMsg: true,
     });
-    await this.interactionListener.sendUpdate(ctx, toRedactedInteractionUpdate(Updates.userMessageAppended(syntheticUserMessage), stateHandler.getPrivacyMode()));
-    const newTurn = await stateHandler.createAgentTurn(ctx, syntheticUserMessage, requestContext, this.config, this.resourceAccessor);
+    await this.interactionListener.sendUpdate(runContext, toRedactedInteractionUpdate(Updates.userMessageAppended(syntheticUserMessage), turnState.getPrivacyMode()));
+    const newTurn = await turnState.createAgentTurn(runContext, syntheticUserMessage, requestState, this.config, this.resourceAccessor);
     if (this.config.immediatelyUpdateStateOnNewTurn) {
       if (this.config.fireAndForgetCheckpoints) {
-        void stateHandler.computeNewStructure(ctx).then(async newState => { await onStateUpdate(ctx, newState); }).catch(error => { logger.error(ctx, "Failed to persist checkpoint after creating CLI reflect-general follow-up turn", { error }); });
+        void turnState.computeNewStructure(runContext).then(async newState => { await publishStateUpdate(runContext, newState); }).catch(error => { agentLogger.error(runContext, "Failed to persist checkpoint after creating CLI reflect-general follow-up turn", { error }); });
       } else {
-        const newState = await stateHandler.computeNewStructure(ctx);
-        await onStateUpdate(ctx, newState);
+        const newState = await turnState.computeNewStructure(runContext);
+        await publishStateUpdate(runContext, newState);
       }
     }
     return newTurn;
   }
 
   async consumeQueuedUserMessagesAndMaybeCreateNewTurns(
-    ctx: Context,
-    stateHandler: RunStepStateHandlerLike,
+    runContext: Context,
+    turnState: RunStepStateHandlerLike,
     currentTurn: RunStepTurnLike,
     currentMcpTools: readonly MergedRequestContextToolLike[],
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<{ readonly turn: RunStepTurnLike; readonly hasQueuedMessages: boolean; readonly mcpTools: MergedRequestContextToolLike[] }> {
-    let turn = currentTurn;
+    let conversationTurn = currentTurn;
     let hasQueuedMessages = false;
-    let mcpTools = [...currentMcpTools];
+    let mcpToolSet = [...currentMcpTools];
     while (true) {
-      const queuedAction = await this.conversationActionReceiver.peek(ctx);
+      const queuedAction = await this.conversationActionReceiver.peek(runContext);
       if (queuedAction?.action.case === "asyncAskQuestionCompletionAction") {
-        logger.warn(ctx, "Found AsyncAskQuestionCompletionAction in queue handler - should have been handled by inline handler", { originalToolCallId: queuedAction.action.value.originalToolCallId });
+        agentLogger.warn(runContext, "Found AsyncAskQuestionCompletionAction in queue handler - should have been handled by inline handler", { originalToolCallId: queuedAction.action.value.originalToolCallId });
         break;
       }
       if (queuedAction?.action.case !== "userMessageAction") break;
@@ -3010,18 +3010,18 @@ export class AbstractUserMessageActionHandler {
       if (queuedMsg === undefined) throw new Error("User message is required");
       let consumedClaimedInjection = false;
       if (this.conversationActionReceiver.peekIsClaimedInjection?.() === true) {
-        await this.conversationActionReceiver.pop(ctx);
+        await this.conversationActionReceiver.pop(runContext);
         consumedClaimedInjection = true;
       }
-      const turnMsg = await turn.userMessage.get(ctx);
+      const turnMsg = await conversationTurn.userMessage.get(runContext);
       const shouldCreateNewTurn = turnMsg.messageId !== queuedMsg.messageId;
       if (!shouldCreateNewTurn || queuedReqContext === undefined) {
-        logger.info(ctx, "Queued user message consumption decision", { queuedMessageId: queuedMsg.messageId, currentTurnMessageId: turnMsg.messageId, decision: shouldCreateNewTurn ? "new_turn_created" : "already_has_turn", missingQueuedRequestContext: queuedReqContext === undefined, immediatelyUpdateStateOnNewTurn: this.config.immediatelyUpdateStateOnNewTurn, fireAndForgetCheckpoints: this.config.fireAndForgetCheckpoints });
+        agentLogger.info(runContext, "Queued user message consumption decision", { queuedMessageId: queuedMsg.messageId, currentTurnMessageId: turnMsg.messageId, decision: shouldCreateNewTurn ? "new_turn_created" : "already_has_turn", missingQueuedRequestContext: queuedReqContext === undefined, immediatelyUpdateStateOnNewTurn: this.config.immediatelyUpdateStateOnNewTurn, fireAndForgetCheckpoints: this.config.fireAndForgetCheckpoints });
       }
       if (shouldCreateNewTurn) {
         try {
-          await this.interactionListener.sendUpdate(ctx, RedactedUpdates.userMessageAppended(queuedMsg));
-          turn = await stateHandler.createAgentTurn(ctx, fromRedactedUserMessage(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), queuedReqContext === undefined ? new RequestContext() : fromRedactedRequestContext(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
+          await this.interactionListener.sendUpdate(runContext, RedactedUpdates.userMessageAppended(queuedMsg));
+          conversationTurn = await turnState.createAgentTurn(runContext, fromRedactedUserMessage(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), queuedReqContext === undefined ? new RequestContext() : fromRedactedRequestContext(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
         } catch (error) {
           if (consumedClaimedInjection) this.conversationActionReceiver.failConsumedInjectionDelivery?.();
           throw error;
@@ -3029,46 +3029,46 @@ export class AbstractUserMessageActionHandler {
         hasQueuedMessages = true;
         if (this.config.immediatelyUpdateStateOnNewTurn) {
           if (this.config.fireAndForgetCheckpoints) {
-            void stateHandler.computeNewStructure(ctx).then(async newState => { await onStateUpdate(ctx, newState); }).catch(error => { logger.error(ctx, "Failed to persist checkpoint after creating queued turn", { error }); });
+            void turnState.computeNewStructure(runContext).then(async newState => { await publishStateUpdate(runContext, newState); }).catch(error => { agentLogger.error(runContext, "Failed to persist checkpoint after creating queued turn", { error }); });
           } else {
-            const newState = await stateHandler.computeNewStructure(ctx);
-            await onStateUpdate(ctx, newState);
+            const newState = await turnState.computeNewStructure(runContext);
+            await publishStateUpdate(runContext, newState);
           }
         }
       }
-      if (!consumedClaimedInjection) await this.conversationActionReceiver.pop(ctx);
-      const unredactedTools = queuedReqContext?.tools?.map(tool => fromRedactedMcpToolDefinition(tool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)) ?? [];
-      mcpTools = this.mergeRequestContextTools(currentMcpTools, unredactedTools);
+      if (!consumedClaimedInjection) await this.conversationActionReceiver.pop(runContext);
+      const unredactedTools = queuedReqContext?.tools?.map(executableTool => fromRedactedMcpToolDefinition(executableTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)) ?? [];
+      mcpToolSet = this.mergeRequestContextTools(currentMcpTools, unredactedTools);
     }
-    return { turn, hasQueuedMessages, mcpTools };
+    return { turn: conversationTurn, hasQueuedMessages, mcpTools: mcpToolSet };
   }
 
   async shouldInjectCliReflectGeneralFollowUp(
-    ctx: Context,
-    stateHandler: SummarizationStateHandler,
-    turn: SetupStepTurnLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    runContext: Context,
+    turnState: SummarizationStateHandler,
+    conversationTurn: SetupStepTurnLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
   ): Promise<boolean> {
     if (this.config.featureFlags?.enableCliReflectGeneralTool !== true) {
       return false;
     }
-    const userMessage = await turn.userMessage.get(ctx);
-    const mode = resolveCurrentStepMode(stateHandler.mode, userMessage.mode);
-    return toolsGenerator({
+    const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    return toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
-      stateHandler,
+      stateHandler: turnState,
       agentSessionId: this.config.agentSessionId,
-      mcpTools,
-      repositoryInfos: repositoryInfo,
-      blobStore: stateHandler.getBlobStore(),
+      mcpTools: mcpToolSet,
+      repositoryInfos: repositoryDetails,
+      blobStore: turnState.getBlobStore(),
       mode,
-      loggingContext: ctx,
-      requestContext,
-      fileOperationLockManager,
+      loggingContext: runContext,
+      requestContext: requestState,
+      fileOperationLockManager: fileLockManager,
       smartModeClassifierMode: this.config.smartModeClassifierMode,
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
@@ -3076,9 +3076,9 @@ export class AbstractUserMessageActionHandler {
   }
 
   async maybeInjectPreFinalConflictBarrier(
-    ctx: Context,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    privacyMode: PrivacyMode,
+    runContext: Context,
+    promptExecutor: RetryRootPromptExecutorLike,
+    privacySetting: PrivacyMode,
   ): Promise<boolean> {
     let executor: Parameters<typeof conflictNoticeSyncAndPeek>[0] | undefined;
     try {
@@ -3091,7 +3091,7 @@ export class AbstractUserMessageActionHandler {
     if (executor === undefined) {
       return false;
     }
-    const isAbortSignalAborted = () => ctx.signal?.aborted === true;
+    const isAbortSignalAborted = () => runContext.signal?.aborted === true;
     if (isAbortSignalAborted()) {
       return false;
     }
@@ -3100,57 +3100,57 @@ export class AbstractUserMessageActionHandler {
         return;
       }
       try {
-        await conflictNoticeRelease(executor, ctx, eventIds, this.config.conversationId !== undefined ? { conversationId: this.config.conversationId } : undefined);
+        await conflictNoticeRelease(executor, runContext, eventIds, this.config.conversationId !== undefined ? { conversationId: this.config.conversationId } : undefined);
       } catch (releaseError) {
-        logger.warn(ctx, "Conflict barrier release failed", { error: releaseError });
+        agentLogger.warn(runContext, "Conflict barrier release failed", { error: releaseError });
       }
     };
     try {
-      const result = await conflictNoticeSyncAndPeek(executor, ctx, {
+      const stepResult = await conflictNoticeSyncAndPeek(executor, runContext, {
         ...(this.config.conversationId !== undefined ? { conversationId: this.config.conversationId } : {}),
       }) as ConflictNoticeSyncAndPeekResultLike;
-      const timedOut = result.kind === "timed-out" ? "true" : "false";
-      if (result.kind === "mount-passive") {
-        agentStoreConflictBarrier.increment(ctx, 1, { outcome: "mount_passive", timed_out: timedOut });
+      const timedOut = stepResult.kind === "timed-out" ? "true" : "false";
+      if (stepResult.kind === "mount-passive") {
+        agentStoreConflictBarrier.increment(runContext, 1, { outcome: "mount_passive", timed_out: timedOut });
         return false;
       }
-      const reminder = result.kind === "completed" || result.kind === "timed-out" ? result.reminder : undefined;
-      const eventIds = result.kind === "completed" || result.kind === "timed-out" ? result.events.map(event => event.eventId) : [];
+      const reminder = stepResult.kind === "completed" || stepResult.kind === "timed-out" ? stepResult.reminder : undefined;
+      const eventIds = stepResult.kind === "completed" || stepResult.kind === "timed-out" ? stepResult.events.map(streamEvent => streamEvent.eventId) : [];
       if (isAbortSignalAborted()) {
         await releaseConflictNoticeEvents(eventIds);
         return false;
       }
       if (reminder === undefined || reminder.length === 0) {
-        agentStoreConflictBarrier.increment(ctx, 1, { outcome: "checked", timed_out: timedOut });
+        agentStoreConflictBarrier.increment(runContext, 1, { outcome: "checked", timed_out: timedOut });
         return false;
       }
       const sanitizedReminder = sanitizeSystemReminderContent(reminder);
       try {
-        rootPromptExecutor.appendMessages(toRedactedCoreMessages([
+        promptExecutor.appendMessages(toRedactedCoreMessages([
           {
             role: "user",
             content: `<system_reminder>\n${sanitizedReminder}\n</system_reminder>`,
           },
-        ], privacyMode));
+        ], privacySetting));
       } catch (error) {
         await releaseConflictNoticeEvents(eventIds);
         throw error;
       }
       try {
-        await conflictNoticeAck(executor, ctx, eventIds, this.config.conversationId !== undefined ? { conversationId: this.config.conversationId } : undefined);
+        await conflictNoticeAck(executor, runContext, eventIds, this.config.conversationId !== undefined ? { conversationId: this.config.conversationId } : undefined);
       } catch (error) {
-        logger.warn(ctx, "Conflict barrier ack failed", { error });
+        agentLogger.warn(runContext, "Conflict barrier ack failed", { error });
         await releaseConflictNoticeEvents(eventIds);
       }
-      agentStoreConflictBarrier.increment(ctx, 1, { outcome: "rescued", timed_out: timedOut });
-      logger.info(ctx, "Local-sync conflict turn-end barrier injected", {
+      agentStoreConflictBarrier.increment(runContext, 1, { outcome: "rescued", timed_out: timedOut });
+      agentLogger.info(runContext, "Local-sync conflict turn-end barrier injected", {
         eventCount: eventIds.length,
-        timedOut: result.kind === "timed-out",
+        timedOut: stepResult.kind === "timed-out",
       });
       return true;
     } catch (error) {
-      agentStoreConflictBarrier.increment(ctx, 1, { outcome: "error", timed_out: "false" });
-      logger.warn(ctx, "Conflict turn-end barrier failed", { error });
+      agentStoreConflictBarrier.increment(runContext, 1, { outcome: "error", timed_out: "false" });
+      agentLogger.warn(runContext, "Conflict turn-end barrier failed", { error });
       return false;
     }
   }
@@ -3161,18 +3161,18 @@ export class AbstractUserMessageActionHandler {
   ): MergedRequestContextToolLike[] {
     const mergedTools = [...existingTools];
     for (const maybeRedTool of requestContextTools) {
-      const tool = "_privacyMode" in maybeRedTool
+      const executableTool = "_privacyMode" in maybeRedTool
         ? fromRedactedMcpToolDefinition(maybeRedTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
         : maybeRedTool;
-      const exists = mergedTools.some((t) => t.name === tool.name);
+      const exists = mergedTools.some((t) => t.name === executableTool.name);
       if (!exists) {
         mergedTools.push({
-          name: tool.name,
-          providerIdentifier: tool.providerIdentifier,
-          toolName: tool.toolName,
-          description: tool.description,
-          inputSchema: mcpInputSchemaToJson(tool),
-          clientKey: tool.providerIdentifier,
+          name: executableTool.name,
+          providerIdentifier: executableTool.providerIdentifier,
+          toolName: executableTool.toolName,
+          description: executableTool.description,
+          inputSchema: mcpInputSchemaToJson(executableTool),
+          clientKey: executableTool.providerIdentifier,
         });
       }
     }
@@ -3180,144 +3180,144 @@ export class AbstractUserMessageActionHandler {
   }
 
   async executeStepWithMetrics(
-    ctx: Context,
-    turn: SetupStepTurnLike,
+    runContext: Context,
+    conversationTurn: SetupStepTurnLike,
     executors: StepExecutorsLike,
-    stateHandler: SummarizationStateHandler & RetryStateHandlerLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
-    onStateUpdate: ((ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    turnState: SummarizationStateHandler & RetryStateHandlerLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
+    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
     previousQueuedMessageSource?: unknown,
     emptyResponseRetryTurnBudget?: EmptyResponseRetryTurnBudgetLike,
   ): Promise<StepResultLike & {
     readonly stepToolCountingState: ToolCountingStateTracker;
     readonly toolCallIdentityResolver: ToolSetHandle;
   }> {
-    const { result, stepToolCountingState, toolCallIdentityResolver } = await this.executeStepWithCommonMetrics(
-      ctx,
-      turn,
+    const { result: stepResult, stepToolCountingState, toolCallIdentityResolver } = await this.executeStepWithCommonMetrics(
+      runContext,
+      conversationTurn,
       executors,
-      stateHandler,
-      toolsGenerator,
-      mcpTools,
-      repositoryInfo,
-      requestContext,
-      fileOperationLockManager,
+      turnState,
+      toolSetGenerator,
+      mcpToolSet,
+      repositoryDetails,
+      requestState,
+      fileLockManager,
       (innerCtx, wrappedPromptExecutor, maxOutputTokenRetryDebug) => this.runStep(
         innerCtx,
-        turn as RunStepTurnLike,
+        conversationTurn as RunStepTurnLike,
         wrappedPromptExecutor,
-        stateHandler as unknown as RunStepStateHandlerLike,
-        toolsGenerator,
-        mcpTools as PromptTokenTrackingParamsLike["mcpTools"],
-        repositoryInfo,
-        requestContext,
-        fileOperationLockManager,
-        onStateUpdate,
+        turnState as unknown as RunStepStateHandlerLike,
+        toolSetGenerator,
+        mcpToolSet as PromptTokenTrackingParamsLike["mcpTools"],
+        repositoryDetails,
+        requestState,
+        fileLockManager,
+        publishStateUpdate,
         previousQueuedMessageSource,
         maxOutputTokenRetryDebug,
       ),
       emptyResponseRetryTurnBudget,
     );
     return {
-      ...result,
+      ...stepResult,
       stepToolCountingState,
       toolCallIdentityResolver,
     };
   }
 
   async buildStepSummarizationContext(
-    ctx: Context,
-    turn: SetupStepTurnLike,
-    stateHandler: SummarizationStateHandler,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    runContext: Context,
+    conversationTurn: SetupStepTurnLike,
+    turnState: SummarizationStateHandler,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
   ): Promise<{
     readonly tools: ReturnType<ToolSetHandle["getStaticTools"]>;
     readonly extraT: UnknownRecord;
     readonly descriptionProps: ReturnType<ToolSetHandle["getDescriptionProps"]>;
     readonly toolCallIdentityResolver: ToolSetHandle;
   }> {
-    const userMessage = await turn.userMessage.get(ctx);
-    const mode = resolveCurrentStepMode(stateHandler.mode, userMessage.mode);
-    const toolSetHandle = toolsGenerator({
+    const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    const toolSetLease = toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
-      stateHandler,
+      stateHandler: turnState,
       agentSessionId: this.config.agentSessionId,
-      mcpTools,
-      repositoryInfos: repositoryInfo,
-      blobStore: stateHandler.getBlobStore(),
+      mcpTools: mcpToolSet,
+      repositoryInfos: repositoryDetails,
+      blobStore: turnState.getBlobStore(),
       mode,
-      loggingContext: ctx,
-      requestContext,
-      fileOperationLockManager,
+      loggingContext: runContext,
+      requestContext: requestState,
+      fileOperationLockManager: fileLockManager,
       smartModeClassifierMode: this.config.smartModeClassifierMode,
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
     });
-    const tools = toolSetHandle.getStaticTools();
-    const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(ctx, requestContext);
-    const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestContext);
-    const extraT = {
-      repositoryInfos: repositoryInfo,
-      shouldQueryProd: requestContext.repositoryInfoShouldQueryProd,
-      stateHandler,
+    const executableTools = toolSetLease.getStaticTools();
+    const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(runContext, requestState);
+    const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestState);
+    const extraTools = {
+      repositoryInfos: repositoryDetails,
+      shouldQueryProd: requestState.repositoryInfoShouldQueryProd,
+      stateHandler: turnState,
       enableToolArgPreservation: this.config.enableToolArgPreservation === true,
       enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
       enableAgentStoreConflictNoticeCollector: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
       enableAgentStoreConflictNotices: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
       writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
       onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-      workspacePaths: requestContext.env?.workspacePaths,
+      workspacePaths: requestState.env?.workspacePaths,
       userAutoRunInstructions,
       projectAutoRunInstructions,
-      cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-      agentSkills: requestContext.agentSkills ?? [],
+      cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+      agentSkills: requestState.agentSkills ?? [],
       contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
     };
     return {
-      tools,
-      extraT,
-      descriptionProps: toolSetHandle.getDescriptionProps(),
-      toolCallIdentityResolver: toolSetHandle,
+      tools: executableTools,
+      extraT: extraTools,
+      descriptionProps: toolSetLease.getDescriptionProps(),
+      toolCallIdentityResolver: toolSetLease,
     };
   }
 
-  recordStepToolCallMetrics(ctx: Context, stepToolCountingState: StepToolCountingStateLike): void {
+  recordStepToolCallMetrics(runContext: Context, stepToolCountingState: StepToolCountingStateLike): void {
     const baseParallelToolCallTags = {
       hasFailedToolCalls: stepToolCountingState.hasFailedToolCalls(),
       hasUnexpectedToolCallErrors: stepToolCountingState.hasUnexpectedToolCallErrors(),
       success: "true",
       errorName: "none",
     };
-    numberOfParallelToolCalls.histogram(ctx, stepToolCountingState.toolCallCount, baseParallelToolCallTags);
+    numberOfParallelToolCalls.histogram(runContext, stepToolCountingState.toolCallCount, baseParallelToolCallTags);
     if (stepToolCountingState.toolCallCount > 0) {
-      numberOfParallelToolCallsWithAtLeastOneCall.histogram(ctx, stepToolCountingState.toolCallCount, {
+      numberOfParallelToolCallsWithAtLeastOneCall.histogram(runContext, stepToolCountingState.toolCallCount, {
         ...baseParallelToolCallTags,
-        ...getClientVersionMetricTagsFromContext(ctx),
-        "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false",
+        ...getClientVersionMetricTagsFromContext(runContext),
+        "user.is_dev": getIsDevFromContext(runContext) ? "true" : "false",
       });
     }
   }
 
   async executeStepWithCommonMetrics<T>(
-    ctx: Context,
-    turn: SetupStepTurnLike,
+    runContext: Context,
+    conversationTurn: SetupStepTurnLike,
     executors: StepExecutorsLike,
-    stateHandler: SummarizationStateHandler & RetryStateHandlerLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    turnState: SummarizationStateHandler & RetryStateHandlerLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
     runStep: (
-      ctx: Context,
+      runContext: Context,
       wrappedPromptExecutor: RetryRootPromptExecutorLike,
       maxOutputTokenRetryDebug: MaxOutputTokenRetryDebugLike,
     ) => Promise<T>,
@@ -3331,23 +3331,23 @@ export class AbstractUserMessageActionHandler {
     const stepToolCountingState = new ToolCountingStateTracker();
     const stepToolCountingMiddleware = createToolCountingMiddleware(stepToolCountingState);
     const stepWrappedExecutor = stepToolCountingMiddleware(executors.wrappedPromptExecutor);
-    const { tools, extraT, descriptionProps, toolCallIdentityResolver } = await this.buildStepSummarizationContext(
-      ctx,
-      turn,
-      stateHandler,
-      toolsGenerator,
-      mcpTools,
-      repositoryInfo,
-      requestContext,
-      fileOperationLockManager,
+    const { tools: executableTools, extraT: extraTools, descriptionProps, toolCallIdentityResolver } = await this.buildStepSummarizationContext(
+      runContext,
+      conversationTurn,
+      turnState,
+      toolSetGenerator,
+      mcpToolSet,
+      repositoryDetails,
+      requestState,
+      fileLockManager,
     );
-    const result = await this.runWithSummarizationRetry(
-      ctx,
-      stateHandler,
+    const stepResult = await this.runWithSummarizationRetry(
+      runContext,
+      turnState,
       executors.rootPromptExecutor,
-      requestContext,
-      tools,
-      extraT,
+      requestState,
+      executableTools,
+      extraTools,
       descriptionProps,
         innerCtx => this.runWithMaxTokensRetry(
           innerCtx,
@@ -3360,23 +3360,23 @@ export class AbstractUserMessageActionHandler {
           emptyResponseRetryTurnBudget,
         ),
     );
-    this.recordStepToolCallMetrics(ctx, stepToolCountingState);
+    this.recordStepToolCallMetrics(runContext, stepToolCountingState);
     return {
-      result,
+      result: stepResult,
       stepToolCountingState,
-      tools,
+      tools: executableTools,
       toolCallIdentityResolver,
     };
   }
 
   async applyPostStepProcessing(
-    ctx: Context,
-    turn: PostStepTurnLike,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
-    hasToolCall: boolean,
-    responseMessages: CoreMessageLike[],
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    runContext: Context,
+    conversationTurn: PostStepTurnLike,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
+    madeToolCall: boolean,
+    modelMessages: CoreMessageLike[],
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
     grindRebuildParams: {
       readonly requestContext: RequestContext;
       readonly toolsGenerator: AgentToolsGenerator;
@@ -3385,194 +3385,194 @@ export class AbstractUserMessageActionHandler {
       readonly fileOperationLockManager: FileOperationLockManager;
     },
   ): Promise<void> {
-    if (hasToolCall && this.config.reminders && this.config.reminders.length > 0) {
-      const currentTodos = await Promise.all(stateHandler.todos.map((todo) => todo.get(ctx)));
-      stateHandler.assertRootPromptBlobsLoadedForFullPromptRead();
-      const conversationMessages = fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+    if (madeToolCall && this.config.reminders && this.config.reminders.length > 0) {
+      const currentTodos = await Promise.all(turnState.todos.map((todo) => todo.get(runContext)));
+      turnState.assertRootPromptBlobsLoadedForFullPromptRead();
+      const conversationMessages = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
       await applyRemindersToToolResults(
-        responseMessages,
+        modelMessages,
         this.config.reminders,
         currentTodos.map((todo) => fromRedactedTodoItem(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
         conversationMessages,
       );
     }
-    if (shouldTagToolCallIdsForCurrentContext(ctx)) {
-      appendToolCallIdTagsToToolResults(responseMessages);
+    if (shouldTagToolCallIdsForCurrentContext(runContext)) {
+      appendToolCallIdTagsToToolResults(modelMessages);
     }
-    turn.appendPromptMessages(toRedactedCoreMessages(responseMessages, stateHandler.getPrivacyMode()));
+    conversationTurn.appendPromptMessages(toRedactedCoreMessages(modelMessages, turnState.getPrivacyMode()));
     if (this.config.messageHistoryModifier) {
-      stateHandler.assertRootPromptBlobsLoadedForFullPromptRead();
-      const currentMessages = fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+      turnState.assertRootPromptBlobsLoadedForFullPromptRead();
+      const currentMessages = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
       const modifiedHistory = this.config.messageHistoryModifier(currentMessages);
       if (modifiedHistory) {
-        stateHandler.invalidateRootPromptPrefix();
-        rootPromptExecutor.clearMessages();
-        rootPromptExecutor.appendMessages(toRedactedCoreMessages(modifiedHistory, stateHandler.getPrivacyMode()));
+        turnState.invalidateRootPromptPrefix();
+        promptExecutor.clearMessages();
+        promptExecutor.appendMessages(toRedactedCoreMessages(modifiedHistory, turnState.getPrivacyMode()));
       }
     }
-    const grindPhaseOverride = getGrindPhaseOverrideFromResponse(responseMessages);
+    const grindPhaseOverride = getGrindPhaseOverrideFromResponse(modelMessages);
     if (grindPhaseOverride !== undefined && grindRebuildParams) {
-      const { requestContext, toolsGenerator, repositoryInfo, mcpTools, fileOperationLockManager } = grindRebuildParams;
-      const userMessage = await turn.userMessage.get(ctx);
-      const mode = resolveCurrentStepMode(stateHandler.mode, userMessage.mode);
-      const toolSetHandle = toolsGenerator({
+      const { requestContext: requestState, toolsGenerator: toolSetGenerator, repositoryInfo: repositoryDetails, mcpTools: mcpToolSet, fileOperationLockManager: fileLockManager } = grindRebuildParams;
+      const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+      const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+      const toolSetLease = toolSetGenerator({
         resourceAccessor: this.resourceAccessor,
-        stateHandler,
+        stateHandler: turnState,
         agentSessionId: this.config.agentSessionId,
-        mcpTools,
-        repositoryInfos: repositoryInfo,
-        blobStore: stateHandler.getBlobStore(),
+        mcpTools: mcpToolSet,
+        repositoryInfos: repositoryDetails,
+        blobStore: turnState.getBlobStore(),
         mode,
-        loggingContext: ctx,
-        requestContext,
-        fileOperationLockManager,
+        loggingContext: runContext,
+        requestContext: requestState,
+        fileOperationLockManager: fileLockManager,
         smartModeClassifierMode: this.config.smartModeClassifierMode,
         smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
         autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
         grindMode: { phase: grindPhaseOverride },
       } as Parameters<AgentToolsGenerator>[0]);
-      stateHandler.assertRootPromptBlobsLoadedForFullPromptRead();
-      const messagesWithoutSystemPrompt = rootPromptExecutor.getMessages().filter((message) => message.role !== "system");
-      stateHandler.invalidateRootPromptPrefix();
-      rootPromptExecutor.clearMessages();
-      rootPromptExecutor.appendMessages(toRedactedCoreMessages([
+      turnState.assertRootPromptBlobsLoadedForFullPromptRead();
+      const messagesWithoutSystemPrompt = promptExecutor.getMessages().filter((turnMessage) => turnMessage.role !== "system");
+      turnState.invalidateRootPromptPrefix();
+      promptExecutor.clearMessages();
+      promptExecutor.appendMessages(toRedactedCoreMessages([
         {
           role: "system",
           content: this.config.systemPromptGenerator({
-            requestContext,
-            cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-            env: requestContext.env,
-            browserTools: getBrowserToolNames(mcpTools as Parameters<typeof getBrowserToolNames>[0]),
-            cloudRule: requestContext.cloudRule,
+            requestContext: requestState,
+            cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+            env: requestState.env,
+            browserTools: getBrowserToolNames(mcpToolSet as Parameters<typeof getBrowserToolNames>[0]),
+            cloudRule: requestState.cloudRule,
             mode,
             grindMode: { phase: grindPhaseOverride },
-          }, toolSetHandle),
+          }, toolSetLease),
         },
-      ], stateHandler.getPrivacyMode()));
-      rootPromptExecutor.appendMessages(messagesWithoutSystemPrompt);
+      ], turnState.getPrivacyMode()));
+      promptExecutor.appendMessages(messagesWithoutSystemPrompt);
     }
     if (this.config.fireAndForgetCheckpoints) {
-      void stateHandler.computeNewStructure(ctx).then(async (currentState) => {
-        await onStateUpdate(ctx, currentState);
+      void turnState.computeNewStructure(runContext).then(async (currentState) => {
+        await publishStateUpdate(runContext, currentState);
       }).catch((error) => {
-        logger.error(ctx, "Failed to persist checkpoint after step", { error });
+        agentLogger.error(runContext, "Failed to persist checkpoint after step", { error });
       });
     } else {
-      const currentState = await stateHandler.computeNewStructure(ctx);
-      await onStateUpdate(ctx, currentState);
+      const currentState = await turnState.computeNewStructure(runContext);
+      await publishStateUpdate(runContext, currentState);
     }
   }
 
   async setupStep(
-    ctx: Context,
-    stateHandler: SetupStepStateHandlerLike,
-    turn: SetupStepTurnLike,
+    runContext: Context,
+    turnState: SetupStepStateHandlerLike,
+    conversationTurn: SetupStepTurnLike,
   ): Promise<{ readonly fileOperationLockManager: FileOperationLockManager }> {
-    const userMessage = await turn.userMessage.get(ctx);
-    if (stateHandler.mode === void 0) {
-      stateHandler.setMode(resolveCurrentTurnMode(stateHandler.mode, userMessage.mode));
+    const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+    if (turnState.mode === void 0) {
+      turnState.setMode(resolveCurrentTurnMode(turnState.mode, promptUserMessage.mode));
     }
-    const fileOperationLockManager = new FileOperationLockManager();
-    return { fileOperationLockManager };
+    const fileLockManager = new FileOperationLockManager();
+    return { fileOperationLockManager: fileLockManager };
   }
 
   async runSingleStep(
     parentCtx: Context,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
-    turn: RunStepTurnLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: PromptTokenTrackingParamsLike["mcpTools"],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
+    conversationTurn: RunStepTurnLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<{ readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("runSingleStep"));
-    const ctx = span.ctx;
-    const { fileOperationLockManager } = await this.setupStep(ctx, stateHandler as unknown as SetupStepStateHandlerLike, turn);
+    const runContext = span.ctx;
+    const { fileOperationLockManager: fileLockManager } = await this.setupStep(runContext, turnState as unknown as SetupStepStateHandlerLike, conversationTurn);
     try {
-      const { hasToolCall, responseMessages } = await this.executeStepWithMetrics(
-        ctx,
-        turn,
+      const { hasToolCall: madeToolCall, responseMessages: modelMessages } = await this.executeStepWithMetrics(
+        runContext,
+        conversationTurn,
         {
-          wrappedPromptExecutor: rootPromptExecutor as unknown as ToolCountingExecutorLike,
-          rootPromptExecutor,
+          wrappedPromptExecutor: promptExecutor as unknown as ToolCountingExecutorLike,
+          rootPromptExecutor: promptExecutor,
         },
-        stateHandler as unknown as SummarizationStateHandler & RetryStateHandlerLike,
-        toolsGenerator,
-        mcpTools,
-        repositoryInfo,
-        requestContext,
-        fileOperationLockManager,
-        onStateUpdate,
+        turnState as unknown as SummarizationStateHandler & RetryStateHandlerLike,
+        toolSetGenerator,
+        mcpToolSet,
+        repositoryDetails,
+        requestState,
+        fileLockManager,
+        publishStateUpdate,
       );
-      await this.applyPostStepProcessing(ctx, turn, rootPromptExecutor, stateHandler, hasToolCall, responseMessages as CoreMessageLike[], onStateUpdate, {
-        requestContext,
-        toolsGenerator,
-        repositoryInfo,
-        mcpTools,
-        fileOperationLockManager,
+      await this.applyPostStepProcessing(runContext, conversationTurn, promptExecutor, turnState, madeToolCall, modelMessages as CoreMessageLike[], publishStateUpdate, {
+        requestContext: requestState,
+        toolsGenerator: toolSetGenerator,
+        repositoryInfo: repositoryDetails,
+        mcpTools: mcpToolSet,
+        fileOperationLockManager: fileLockManager,
       });
-      return { hasToolCall };
+      return { hasToolCall: madeToolCall };
     } finally {
-      agentStepCount.increment(ctx, 1, {});
+      agentStepCount.increment(runContext, 1, {});
     }
   }
 
   async buildToolExecutionContext(
-    ctx: Context,
-    stateHandler: SplitStepStateMutationTarget,
+    runContext: Context,
+    turnState: SplitStepStateMutationTarget,
     toolCallRecorder: SplitStepToolCallRecorderLike,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
     allowedToolNames: ReadonlySet<string> | undefined,
     admittedEffectiveToolName: string | undefined,
   ): Promise<ToolExecutionContextLike> {
-    const invocationId = getInvocationId(ctx);
-    if (stateHandler.mode === undefined) {
+    const callInvocationId = getInvocationId(runContext);
+    if (turnState.mode === undefined) {
       throw new Error("stateHandler.mode must be set before building tool execution context");
     }
-    const mode = stateHandler.mode;
-    const toolSetHandle = this.config.toolsGenerator({
+    const mode = turnState.mode;
+    const toolSetLease = this.config.toolsGenerator({
       resourceAccessor: this.resourceAccessor,
-      stateHandler,
+      stateHandler: turnState,
       agentSessionId: this.config.agentSessionId,
-      mcpTools,
-      repositoryInfos: repositoryInfo,
-      blobStore: stateHandler.getBlobStore(),
+      mcpTools: mcpToolSet,
+      repositoryInfos: repositoryDetails,
+      blobStore: turnState.getBlobStore(),
       mode,
-      loggingContext: ctx,
-      requestContext,
-      fileOperationLockManager,
+      loggingContext: runContext,
+      requestContext: requestState,
+      fileOperationLockManager: fileLockManager,
       smartModeClassifierMode: this.config.smartModeClassifierMode,
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
     });
-    const modelVisibleTools = toolSetHandle.getStaticTools();
+    const modelVisibleTools = toolSetLease.getStaticTools();
     const scopedModelVisibleTools = allowedToolNames === undefined
       ? modelVisibleTools
-      : modelVisibleTools.filter(tool => allowedToolNames.has(tool.name) || tool.name === admittedEffectiveToolName);
-    const toolExecutionSet = toolSetHandle.getToolExecutionSet(scopedModelVisibleTools);
+      : modelVisibleTools.filter(executableTool => allowedToolNames.has(executableTool.name) || executableTool.name === admittedEffectiveToolName);
+    const toolExecutionSet = toolSetLease.getToolExecutionSet(scopedModelVisibleTools);
     const executableTools = getExecutableTools(toolExecutionSet);
     const directDynamicToolNames = getDirectDynamicToolNames(toolExecutionSet);
     const toolMap: Record<string, DeferredExecutableToolLike> = {};
-    for (const tool of executableTools) {
-      if (!isDeferredExecutableTool(tool)) {
+    for (const executableTool of executableTools) {
+      if (!isDeferredExecutableTool(executableTool)) {
         throw new Error("Executable tool is missing name or toolIdentifier");
       }
-      toolMap[tool.name] = tool;
+      toolMap[executableTool.name] = executableTool;
     }
     const renderProps = {
       allTools: extractToolMetadataMap(executableTools),
     };
-    const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(ctx, requestContext);
-    const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestContext);
-    const extraT: UnknownRecord = {
-      repositoryInfos: repositoryInfo,
-      shouldQueryProd: requestContext.repositoryInfoShouldQueryProd,
-      stateHandler,
+    const userAutoRunInstructions = await this.getUserPermissionsFileAutoRunInstructions(runContext, requestState);
+    const projectAutoRunInstructions = this.getProjectPermissionsFileAutoRunInstructions(requestState);
+    const extraTools: UnknownRecord = {
+      repositoryInfos: repositoryDetails,
+      shouldQueryProd: requestState.repositoryInfoShouldQueryProd,
+      stateHandler: turnState,
       strictArgParsing: this.config.strictArgParsing === true,
       enableToolArgPreservation: this.config.enableToolArgPreservation === true,
       enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
@@ -3580,26 +3580,26 @@ export class AbstractUserMessageActionHandler {
       enableAgentStoreConflictNotices: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
       writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
       onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-      workspacePaths: requestContext.env?.workspacePaths,
+      workspacePaths: requestState.env?.workspacePaths,
       userAutoRunInstructions,
       projectAutoRunInstructions,
-      cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-      agentSkills: requestContext.agentSkills ?? [],
+      cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+      agentSkills: requestState.agentSkills ?? [],
       contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
     };
     const interactionHandler = new InteractionHandler(
-      toUnredactedInteractionListener(this.interactionListener, stateHandler.getPrivacyMode()),
+      toUnredactedInteractionListener(this.interactionListener, turnState.getPrivacyMode()),
       toolCallRecorder,
-      invocationId,
+      callInvocationId,
       undefined,
       this.config.thinkingStyle,
       this.config.featureFlags?.nalLoopDetection === true,
-      this.createAfterAgentThoughtCallback(invocationId, requestContext),
+      this.createAfterAgentThoughtCallback(callInvocationId, requestState),
     );
     return {
       toolMap,
       interactionHandler,
-      extraT,
+      extraT: extraTools,
       renderProps,
       directDynamicToolNames,
       recordToolCallResult: interactionHandler.recordToolCallResult.bind(interactionHandler),
@@ -3607,37 +3607,37 @@ export class AbstractUserMessageActionHandler {
   }
 
   async buildDeferredToolExecutionContext(
-    ctx: Context,
+    runContext: Context,
     descriptor: NativeToolCallDescriptor,
-    stateHandler: SplitStepStateMutationTarget,
-    mcpTools: readonly MergedRequestContextToolLike[],
+    turnState: SplitStepStateMutationTarget,
+    mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
     logMessage: string,
   ): Promise<ToolExecutionContextLike & { readonly stateOps: readonly SplitStepStateOp[] }> {
-    const lastTurnRef = stateHandler.turns.at(-1);
+    const lastTurnRef = turnState.turns.at(-1);
     if (lastTurnRef === undefined) {
       throw new Error("No turns in conversation state");
     }
-    const turn = await lastTurnRef.get(ctx);
-    if (!(turn instanceof AgentConversationTurnHandle)) {
+    const conversationTurn = await lastTurnRef.get(runContext);
+    if (!(conversationTurn instanceof AgentConversationTurnHandle)) {
       throw new Error("Expected last turn to be an agent turn");
     }
-    const { stateHandler: splitStateHandler, toolCallRecorder, stateOps } = createSplitStepStateHandler(stateHandler, turn);
+    const { stateHandler: splitStateHandler, toolCallRecorder, stateOps: stateOperations } = createSplitStepStateHandler(turnState, conversationTurn);
     const allowedToolNames = splitStepData.allowedToolNames === undefined
       ? undefined
       : new Set(splitStepData.allowedToolNames);
     const admittedEffectiveToolName = getAdmittedEffectiveToolName(descriptor, allowedToolNames);
-    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
+    const mergedMcpTools = this.mergeRequestContextTools(mcpToolSet, requestState.tools);
     const executionContext = await this.buildToolExecutionContext(
-      ctx,
+      runContext,
       splitStateHandler,
       toolCallRecorder,
       mergedMcpTools,
-      requestContext.repositoryInfo,
-      requestContext,
-      fileOperationLockManager,
+      requestState.repositoryInfo,
+      requestState,
+      fileLockManager,
       allowedToolNames,
       admittedEffectiveToolName,
     );
@@ -3646,7 +3646,7 @@ export class AbstractUserMessageActionHandler {
       !allowedToolNames.has(descriptor.toolName) &&
       !executionContext.directDynamicToolNames.has(getEffectiveToolCallName(descriptor))
     ) {
-      logger.warn(ctx, logMessage, {
+      agentLogger.warn(runContext, logMessage, {
         toolCallId: descriptor.toolCallId,
         toolName: descriptor.toolName,
         allowedToolCount: allowedToolNames.size,
@@ -3655,21 +3655,21 @@ export class AbstractUserMessageActionHandler {
     splitStepData.stepReadPathDedup ??= new Set();
     executionContext.extraT.stepReadPathDedup = splitStepData.stepReadPathDedup;
     return {
-      stateOps,
+      stateOps: stateOperations,
       ...executionContext,
     };
   }
 
   async runModelStep(
     parentCtx: Context,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
-    turn: RunStepTurnLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: PromptTokenTrackingParamsLike["mcpTools"],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    onStateUpdate: ((ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
+    conversationTurn: RunStepTurnLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<{
     readonly toolCallDescriptors: readonly unknown[];
     readonly splitStepData: {
@@ -3679,70 +3679,70 @@ export class AbstractUserMessageActionHandler {
     };
   }> {
     using span = createSpan(parentCtx.withName("runModelStep"));
-    const ctx = span.ctx;
-    const { fileOperationLockManager } = await this.setupStep(ctx, stateHandler as unknown as SetupStepStateHandlerLike, turn);
-    const { toolCallDescriptors, responseMessages, availableToolNames } = await this.executeModelStepWithMetrics(
-      ctx,
-      turn,
+    const runContext = span.ctx;
+    const { fileOperationLockManager: fileLockManager } = await this.setupStep(runContext, turnState as unknown as SetupStepStateHandlerLike, conversationTurn);
+    const { toolCallDescriptors: toolCallSpecs, responseMessages: modelMessages, availableToolNames } = await this.executeModelStepWithMetrics(
+      runContext,
+      conversationTurn,
       {
-        wrappedPromptExecutor: rootPromptExecutor as unknown as ToolCountingExecutorLike,
-        rootPromptExecutor,
+        wrappedPromptExecutor: promptExecutor as unknown as ToolCountingExecutorLike,
+        rootPromptExecutor: promptExecutor,
       },
-      stateHandler as unknown as SummarizationStateHandler & RetryStateHandlerLike,
-      toolsGenerator,
-      mcpTools,
-      repositoryInfo,
-      requestContext,
-      fileOperationLockManager,
-      onStateUpdate,
+      turnState as unknown as SummarizationStateHandler & RetryStateHandlerLike,
+      toolSetGenerator,
+      mcpToolSet,
+      repositoryDetails,
+      requestState,
+      fileLockManager,
+      publishStateUpdate,
     );
     return {
-      toolCallDescriptors,
+      toolCallDescriptors: toolCallSpecs,
       splitStepData: {
-        modelResponseMessages: responseMessages,
-        requestContext,
+        modelResponseMessages: modelMessages,
+        requestContext: requestState,
         allowedToolNames: availableToolNames,
       },
     };
   }
 
   async executeToolCall(
-    ctx: Context,
+    runContext: Context,
     descriptor: NativeToolCallDescriptor,
-    stateHandler: SplitStepStateMutationTarget,
-    mcpTools: readonly MergedRequestContextToolLike[],
+    turnState: SplitStepStateMutationTarget,
+    mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
   ): Promise<{
     readonly toolCallId: string;
     readonly resultMessage: Record<string, unknown>;
     readonly stateOps: readonly SplitStepStateOp[];
   }> {
     const {
-      stateOps,
+      stateOps: stateOperations,
       toolMap,
       interactionHandler,
-      extraT,
+      extraT: extraTools,
       recordToolCallResult,
       renderProps,
       directDynamicToolNames,
     } = await this.buildDeferredToolExecutionContext(
-      ctx,
+      runContext,
       descriptor,
-      stateHandler,
-      mcpTools,
+      turnState,
+      mcpToolSet,
       splitStepData,
-      requestContext,
-      fileOperationLockManager,
+      requestState,
+      fileLockManager,
       "Rejected deferred split-step tool call outside model-visible tool allowlist",
     );
     const rawResultMessage = await executeDeferredToolCall(
-      ctx,
+      runContext,
       descriptor,
       toolMap,
       interactionHandler,
-      extraT,
+      extraTools,
       recordToolCallResult,
       renderProps,
       undefined,
@@ -3755,40 +3755,40 @@ export class AbstractUserMessageActionHandler {
     return {
       toolCallId: descriptor.toolCallId,
       resultMessage: rawResultMessage,
-      stateOps,
+      stateOps: stateOperations,
     };
   }
 
   async prepareSubagent(
-    ctx: Context,
+    runContext: Context,
     descriptor: NativeToolCallDescriptor,
-    stateHandler: SplitStepStateMutationTarget,
-    mcpTools: readonly MergedRequestContextToolLike[],
+    turnState: SplitStepStateMutationTarget,
+    mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
   ): Promise<unknown> {
-    const { toolMap, extraT } = await this.buildDeferredToolExecutionContext(
-      ctx,
+    const { toolMap, extraT: extraTools } = await this.buildDeferredToolExecutionContext(
+      runContext,
       descriptor,
-      stateHandler,
-      mcpTools,
+      turnState,
+      mcpToolSet,
       splitStepData,
-      requestContext,
-      fileOperationLockManager,
+      requestState,
+      fileLockManager,
       "Rejected deferred split-step subagent preparation outside model-visible tool allowlist",
     );
     const effectiveToolName = getEffectiveToolCallName(descriptor);
-    const tool = toolMap[effectiveToolName];
-    if (tool === undefined) {
+    const executableTool = toolMap[effectiveToolName];
+    if (executableTool === undefined) {
       throw new Error(`Tool not found: ${effectiveToolName}`);
     }
-    if (tool.prepareSubagent === undefined) {
+    if (executableTool.prepareSubagent === undefined) {
       throw new Error(`Tool does not support subagent preparation: ${effectiveToolName}`);
     }
-    return await tool.prepareSubagent(ctx, getEffectiveToolCallArgs(descriptor), {
+    return await executableTool.prepareSubagent(runContext, getEffectiveToolCallArgs(descriptor), {
       toolCallId: descriptor.toolCallId,
-      ...extraT,
+      ...extraTools,
     });
   }
 
@@ -3796,189 +3796,189 @@ export class AbstractUserMessageActionHandler {
     parentCtx: Context,
     splitStepData: { readonly modelResponseMessages: readonly CoreMessageLike[] },
     toolCallResults: readonly DeferredToolCallResultLike[],
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike & SplitStepStateMutationTarget,
-    mcpTools: readonly MergedRequestContextToolLike[],
-    requestContext: RequestContext,
-    onStateUpdate: (ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike & SplitStepStateMutationTarget,
+    mcpToolSet: readonly MergedRequestContextToolLike[],
+    requestState: RequestContext,
+    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<{ readonly state: { pendingToolCalls: unknown[] }; readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("finalizeStep"));
-    const ctx = span.ctx;
-    const lastTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
+    const runContext = span.ctx;
+    const lastTurnRef = turnState.turns[turnState.turns.length - 1];
     if (lastTurnRef === undefined) {
       return {
-        state: await stateHandler.computeNewStructure(ctx),
+        state: await turnState.computeNewStructure(runContext),
         hasToolCall: false,
       };
     }
-    const turn = await lastTurnRef.get(ctx);
-    if (!(turn instanceof AgentConversationTurnHandle)) {
+    const conversationTurn = await lastTurnRef.get(runContext);
+    if (!(conversationTurn instanceof AgentConversationTurnHandle)) {
       throw new Error("Expected last turn to be an agent turn");
     }
-    const fileOperationLockManager = new FileOperationLockManager();
-    const responseMessages: CoreMessageLike[] = [
+    const fileLockManager = new FileOperationLockManager();
+    const modelMessages: CoreMessageLike[] = [
       ...splitStepData.modelResponseMessages,
-      ...toolCallResults.map(result => result.resultMessage),
+      ...toolCallResults.map(stepResult => stepResult.resultMessage),
     ];
-    const hasToolCall = toolCallResults.length > 0;
-    for (const stateOp of toolCallResults.flatMap(result => result.stateOps ?? [])) {
-      await applyConversationStateOp(ctx, stateHandler, turn, stateOp);
+    const madeToolCall = toolCallResults.length > 0;
+    for (const stateOperation of toolCallResults.flatMap(stepResult => stepResult.stateOps ?? [])) {
+      await applyConversationStateOp(runContext, turnState, conversationTurn, stateOperation);
     }
-    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
+    const mergedMcpTools = this.mergeRequestContextTools(mcpToolSet, requestState.tools);
     try {
       await this.applyPostStepProcessing(
-        ctx,
-        turn,
-        rootPromptExecutor,
-        stateHandler,
-        hasToolCall,
-        responseMessages,
-        onStateUpdate,
+        runContext,
+        conversationTurn,
+        promptExecutor,
+        turnState,
+        madeToolCall,
+        modelMessages,
+        publishStateUpdate,
         {
-          requestContext,
+          requestContext: requestState,
           toolsGenerator: this.config.toolsGenerator,
-          repositoryInfo: requestContext.repositoryInfo,
+          repositoryInfo: requestState.repositoryInfo,
           mcpTools: mergedMcpTools,
-          fileOperationLockManager,
+          fileOperationLockManager: fileLockManager,
         },
       );
-      const state = await stateHandler.computeNewStructure(ctx);
-      return { state, hasToolCall };
+      const turnStatus = await turnState.computeNewStructure(runContext);
+      return { state: turnStatus, hasToolCall: madeToolCall };
     } finally {
-      agentStepCount.increment(ctx, 1, {});
+      agentStepCount.increment(runContext, 1, {});
     }
   }
 
   async executeModelStepWithMetrics(
-    ctx: Context,
-    turn: RunStepTurnLike,
+    runContext: Context,
+    conversationTurn: RunStepTurnLike,
     executors: StepExecutorsLike,
-    stateHandler: SummarizationStateHandler & RetryStateHandlerLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: readonly unknown[],
-    repositoryInfo: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
-    onStateUpdate: ((ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    turnState: SummarizationStateHandler & RetryStateHandlerLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: readonly unknown[],
+    repositoryDetails: readonly unknown[],
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
+    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<ModelOnlyStepResultLike & { readonly availableToolNames: readonly string[] }> {
-    const { result, tools } = await this.executeStepWithCommonMetrics(
-      ctx,
-      turn,
+    const { result: stepResult, tools: executableTools } = await this.executeStepWithCommonMetrics(
+      runContext,
+      conversationTurn,
       executors,
-      stateHandler,
-      toolsGenerator,
-      mcpTools,
-      repositoryInfo,
-      requestContext,
-      fileOperationLockManager,
+      turnState,
+      toolSetGenerator,
+      mcpToolSet,
+      repositoryDetails,
+      requestState,
+      fileLockManager,
       (innerCtx, wrappedPromptExecutor) => this.runModelOnlyStep(
         innerCtx,
-        turn,
+        conversationTurn,
         wrappedPromptExecutor,
-        stateHandler as unknown as RunStepStateHandlerLike,
-        toolsGenerator,
-        mcpTools as PromptTokenTrackingParamsLike["mcpTools"],
-        repositoryInfo,
-        requestContext,
-        fileOperationLockManager,
-        onStateUpdate,
+        turnState as unknown as RunStepStateHandlerLike,
+        toolSetGenerator,
+        mcpToolSet as PromptTokenTrackingParamsLike["mcpTools"],
+        repositoryDetails,
+        requestState,
+        fileLockManager,
+        publishStateUpdate,
       ),
       undefined,
     );
     return {
-      ...result,
-      availableToolNames: tools.map(tool => tool.name),
+      ...stepResult,
+      availableToolNames: executableTools.map(executableTool => executableTool.name),
     };
   }
 
   async runModelOnlyStep(
     parentCtx: Context,
-    turn: RunStepTurnLike,
-    rootPromptExecutor: RetryRootPromptExecutorLike,
-    stateHandler: RunStepStateHandlerLike,
-    toolsGenerator: AgentToolsGenerator,
-    mcpTools: PromptTokenTrackingParamsLike["mcpTools"],
+    conversationTurn: RunStepTurnLike,
+    promptExecutor: RetryRootPromptExecutorLike,
+    turnState: RunStepStateHandlerLike,
+    toolSetGenerator: AgentToolsGenerator,
+    mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryInfos: readonly unknown[],
-    requestContext: RequestContext,
-    fileOperationLockManager: FileOperationLockManager,
-    onStateUpdate: ((ctx: Context, state: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    requestState: RequestContext,
+    fileLockManager: FileOperationLockManager,
+    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<ModelOnlyStepResultLike> {
     using spanCtxt = createSpan(parentCtx.withName("runModelOnlyStep"));
-    const ctx = spanCtxt.ctx;
-    const invocationId = getInvocationId(ctx);
-    stateHandler.lastStepInvocationId = invocationId;
-    spanCtxt.span.setAttribute("invocationId", invocationId);
-    logger.info(ctx, "Running model-only step");
+    const runContext = spanCtxt.ctx;
+    const callInvocationId = getInvocationId(runContext);
+    turnState.lastStepInvocationId = callInvocationId;
+    spanCtxt.span.setAttribute("invocationId", callInvocationId);
+    agentLogger.info(runContext, "Running model-only step");
     const stepSetupStart = performance.now();
-    const isFirstStep = turn.steps.length === 0;
+    const isFirstStep = conversationTurn.steps.length === 0;
     const isResponseComparisonFirstModelStep = !this.responseComparisonModelStepStarted;
     this.responseComparisonModelStepStarted = true;
     const interactionHandler = new InteractionHandler(
-      toUnredactedInteractionListener(this.interactionListener, stateHandler.getPrivacyMode()),
-      turn,
-      invocationId,
+      toUnredactedInteractionListener(this.interactionListener, turnState.getPrivacyMode()),
+      conversationTurn,
+      callInvocationId,
       undefined,
       this.config.thinkingStyle,
       this.config.featureFlags?.nalLoopDetection === true,
-      this.createAfterAgentThoughtCallback(invocationId, requestContext),
+      this.createAfterAgentThoughtCallback(callInvocationId, requestState),
     );
-    const userMessage = await turn.userMessage.get(ctx);
-    const mode = resolveCurrentStepMode(stateHandler.mode, userMessage.mode);
-    const toolSetHandle = toolsGenerator({
+    const promptUserMessage = await conversationTurn.userMessage.get(runContext);
+    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    const toolSetLease = toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
-      stateHandler,
+      stateHandler: turnState,
       agentSessionId: this.config.agentSessionId,
-      mcpTools,
+      mcpTools: mcpToolSet,
       repositoryInfos,
-      blobStore: stateHandler.getBlobStore(),
+      blobStore: turnState.getBlobStore(),
       mode,
-      loggingContext: ctx,
-      requestContext,
-      fileOperationLockManager,
+      loggingContext: runContext,
+      requestContext: requestState,
+      fileOperationLockManager: fileLockManager,
       smartModeClassifierMode: this.config.smartModeClassifierMode,
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
     });
-    const initialMessages = fromRedactedCoreMessages(rootPromptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+    const initialMessages = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
     if (isFirstStep) {
-      warnIfLongTrailingUserMessageRun(ctx, initialMessages as Parameters<typeof warnIfLongTrailingUserMessageRun>[1], invocationId);
-      firstStepSetupDuration.histogram(ctx, performance.now() - stepSetupStart);
+      warnIfLongTrailingUserMessageRun(runContext, initialMessages as Parameters<typeof warnIfLongTrailingUserMessageRun>[1], callInvocationId);
+      firstStepSetupDuration.histogram(runContext, performance.now() - stepSetupStart);
     }
     trackPromptTokenUsage({
-      ctx,
-      mcpTools,
-      requestContext,
+      ctx: runContext,
+      mcpTools: mcpToolSet,
+      requestContext: requestState,
       messages: initialMessages,
-      selectedContext: userMessage.selectedContext,
+      selectedContext: promptUserMessage.selectedContext,
       userInfoDisplayOptions: this.config.userInfoDisplayOptions,
       agentTokenLimit: this.config.agentTokenLimit,
-      readToolName: toolSetHandle.getTool("READ")?.name,
-      invocationId,
+      readToolName: toolSetLease.getTool("READ")?.name,
+      invocationId: callInvocationId,
       modelInfo: this.config.modelInfo,
       featureFlags: this.config.featureFlags,
-      stateHandler,
+      stateHandler: turnState,
     });
     let responseComparisonMessages = this.config.agentResponseComparison === undefined ? undefined : [...initialMessages];
     let responseComparisonTools = this.config.agentResponseComparison === undefined
       ? undefined
-      : Object.freeze(toAgentTools(toolSetHandle.getStaticTools(), toolSetHandle.getDescriptionProps()));
+      : Object.freeze(toAgentTools(toolSetLease.getStaticTools(), toolSetLease.getDescriptionProps()));
     if (isResponseComparisonFirstModelStep && responseComparisonMessages !== undefined && responseComparisonTools !== undefined) {
       await this.preparePendingAgentResponseComparison({
-        ctx,
-        parentInvocationId: invocationId,
+        ctx: runContext,
+        parentInvocationId: callInvocationId,
         messages: responseComparisonMessages,
         tools: responseComparisonTools,
-        privacyMode: stateHandler.getPrivacyMode(),
+        privacyMode: turnState.getPrivacyMode(),
       });
     }
-    let result: ModelOnlyStreamResultLike;
+    let stepResult: ModelOnlyStreamResultLike;
     try {
-      result = rootPromptExecutor.executeModelStreamOnly(
-        ctx,
-        stateHandler,
+      result: stepResult  = promptExecutor.executeModelStreamOnly(
+        runContext,
+        turnState,
         interactionHandler,
-        toolSetHandle.getToolExecutionSet(),
-        toolSetHandle.getDescriptionProps(),
+        toolSetLease.getToolExecutionSet(),
+        toolSetLease.getDescriptionProps(),
         undefined,
       );
     } catch (error) {
@@ -3986,133 +3986,133 @@ export class AbstractUserMessageActionHandler {
       throw error;
     }
     const isCloudAgentSingleStep = this.config.maxSteps === 1;
-    const tokenDetails = stateHandler.tokenDetails;
-    const shouldSuppressSelfSummaryAfterInputLimitFailure = stateHandler.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenDetails.usedTokens);
-    const shouldStartBg = !isCloudAgentSingleStep && !stateHandler.tokenDetailsStaleAfterSummarization && !shouldSuppressSelfSummaryAfterInputLimitFailure && this.orchestrator.shouldStartBackgroundSummarization(tokenDetails, rootPromptExecutor.getMessages(), ctx);
+    const tokenUsageDetails = turnState.tokenDetails;
+    const shouldSuppressSelfSummaryAfterInputLimitFailure = turnState.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenUsageDetails.usedTokens);
+    const shouldStartBg = !isCloudAgentSingleStep && !turnState.tokenDetailsStaleAfterSummarization && !shouldSuppressSelfSummaryAfterInputLimitFailure && this.orchestrator.shouldStartBackgroundSummarization(tokenUsageDetails, promptExecutor.getMessages(), runContext);
     if (shouldStartBg) {
-      const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(tokenDetails.usedTokens, tokenDetails.maxTokens, this.config.backgroundSummarizationProps);
-      logger.info(ctx, "Mid-loop background summarization trigger (model-stream-only): checking persist threshold", {
-        usedTokens: tokenDetails.usedTokens,
-        maxTokens: tokenDetails.maxTokens,
-        unusedTokens: tokenDetails.maxTokens - tokenDetails.usedTokens,
+      const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+      agentLogger.info(runContext, "Mid-loop background summarization trigger (model-stream-only): checking persist threshold", {
+        usedTokens: tokenUsageDetails.usedTokens,
+        maxTokens: tokenUsageDetails.maxTokens,
+        unusedTokens: tokenUsageDetails.maxTokens - tokenUsageDetails.usedTokens,
         wouldMeetPersistThreshold,
-        triggerThreshold: getBackgroundSummarizationTriggerThreshold(tokenDetails.maxTokens, this.config.backgroundSummarizationProps),
+        triggerThreshold: getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps),
         backgroundSummarizationConfig: this.config.backgroundSummarizationProps,
         persistConfig: {
           unusedTokensThreshold: this.config.backgroundSummarizationProps.unusedTokensThresholdToPersistBackgroundSummarization,
           unusedPercentTokensThreshold: this.config.backgroundSummarizationProps.unusedPercentTokensThresholdToPersistBackgroundSummarization,
         },
       });
-      await this.orchestrator.handleSummarization(ctx, stateHandler, rootPromptExecutor, this.interactionListener, this.config, requestContext, {
+      await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
         backgroundSummarizationMode: BackgroundSummarizationMode.Background,
         triggerReason: "approaching_token_limit",
-        currentInvocationId: invocationId,
+        currentInvocationId: callInvocationId,
         resourceAccessor: this.resourceAccessor,
-        tools: toolSetHandle.getStaticTools(),
-        descriptionProps: toolSetHandle.getDescriptionProps(),
+        tools: toolSetLease.getStaticTools(),
+        descriptionProps: toolSetLease.getDescriptionProps(),
         extraT: {
           repositoryInfos,
-          shouldQueryProd: requestContext.repositoryInfoShouldQueryProd,
-          stateHandler,
+          shouldQueryProd: requestState.repositoryInfoShouldQueryProd,
+          stateHandler: turnState,
           enableToolArgPreservation: this.config.enableToolArgPreservation === true,
           enableHookAdditionalContext: this.config.featureFlags?.enableHookAdditionalContext === true,
           enableAgentStoreConflictNoticeCollector: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
           enableAgentStoreConflictNotices: this.config.featureFlags?.enableAgentStoreConflictNotices === true,
           writeBarrierTimeoutMs: this.resolveWriteBarrierTimeoutMs(),
           onWriteBarrier: this.config.recordAgentStoreWriteBarrier,
-          workspacePaths: requestContext.env?.workspacePaths,
-          userAutoRunInstructions: await this.getUserPermissionsFileAutoRunInstructions(ctx, requestContext),
-          projectAutoRunInstructions: this.getProjectPermissionsFileAutoRunInstructions(requestContext),
-          cursorRules: getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags),
-          agentSkills: requestContext.agentSkills ?? [],
+          workspacePaths: requestState.env?.workspacePaths,
+          userAutoRunInstructions: await this.getUserPermissionsFileAutoRunInstructions(runContext, requestState),
+          projectAutoRunInstructions: this.getProjectPermissionsFileAutoRunInstructions(requestState),
+          cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+          agentSkills: requestState.agentSkills ?? [],
         },
-        automationTriggerContext: this.getAutomationTriggerContext(rootPromptExecutor.getMessages()),
+        automationTriggerContext: this.getAutomationTriggerContext(promptExecutor.getMessages()),
       });
     }
-    let response: Awaited<ModelOnlyStreamResultLike["response"]>;
-    let extendedUsage: Awaited<ModelOnlyStreamResultLike["extendedUsage"]>;
-    let usage: Awaited<ModelOnlyStreamResultLike["usage"]>;
-    let toolCallDescriptors: readonly unknown[];
+    let modelResponse: Awaited<ModelOnlyStreamResultLike["response"]>;
+    let usageDetails: Awaited<ModelOnlyStreamResultLike["extendedUsage"]>;
+    let tokenUsage: Awaited<ModelOnlyStreamResultLike["usage"]>;
+    let toolCallSpecs: readonly unknown[];
     let finalInvocationId: string;
     try {
-      [response, extendedUsage, usage, toolCallDescriptors, finalInvocationId] = await Promise.all([
-        result.response,
-        result.extendedUsage,
-        result.usage,
-        result.toolCallDescriptors,
-        result.invocationId,
-        interactionHandler.consumeStream(ctx, this.tapAgentResponseComparisonWarmup(ctx, result.fullStream, responseComparisonMessages, responseComparisonTools), turn),
+      [modelResponse, usageDetails, tokenUsage, toolCallSpecs, finalInvocationId] = await Promise.all([
+        stepResult.response,
+        stepResult.extendedUsage,
+        stepResult.usage,
+        stepResult.toolCallDescriptors,
+        stepResult.invocationId,
+        interactionHandler.consumeStream(runContext, this.tapAgentResponseComparisonWarmup(runContext, stepResult.fullStream, responseComparisonMessages, responseComparisonTools), conversationTurn),
       ]);
     } catch (error) {
       await this.cancelPendingAgentResponseComparison();
       throw error;
     }
-    if (finalInvocationId !== invocationId) {
-      logger.error(ctx, "Invocation ID mismatch. Bug in executeModelStreamOnly", undefined, {
-        initialInvocationId: invocationId,
+    if (finalInvocationId !== callInvocationId) {
+      agentLogger.error(runContext, "Invocation ID mismatch. Bug in executeModelStreamOnly", undefined, {
+        initialInvocationId: callInvocationId,
         finalInvocationId,
       });
     }
-    logger.info(ctx, "Setting token details for client token ring (model-stream-only)", {
-      usedTokens: usage.totalTokens,
-      maxTokens: extendedUsage.maxTokens,
-      inputTokens: extendedUsage.inputTokens,
-      outputTokens: extendedUsage.outputTokens,
-      cacheReadTokens: extendedUsage.cacheReadTokens,
-      cacheWriteTokens: extendedUsage.cacheWriteTokens,
+    agentLogger.info(runContext, "Setting token details for client token ring (model-stream-only)", {
+      usedTokens: tokenUsage.totalTokens,
+      maxTokens: usageDetails.maxTokens,
+      inputTokens: usageDetails.inputTokens,
+      outputTokens: usageDetails.outputTokens,
+      cacheReadTokens: usageDetails.cacheReadTokens,
+      cacheWriteTokens: usageDetails.cacheWriteTokens,
     });
-    const promptContextDetails = computeNextRedactedPromptContextDetails(ctx, this.config, stateHandler, {
+    const promptContextDetails = computeNextRedactedPromptContextDetails(runContext, this.config, turnState, {
       messages: initialMessages as unknown as PromptTokenBreakdownParams["messages"],
-      tools: toolSetHandle.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
-      descriptionProps: toolSetHandle.getDescriptionProps(),
-      totalUsedTokens: usage.totalTokens,
-      maxTokens: extendedUsage.maxTokens,
+      tools: toolSetLease.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
+      descriptionProps: toolSetLease.getDescriptionProps(),
+      totalUsedTokens: tokenUsage.totalTokens,
+      maxTokens: usageDetails.maxTokens,
     });
-    stateHandler.setTokenDetails(createRedactedConversationTokenDetails(stateHandler.getPrivacyMode(), {
-      usedTokens: usage.totalTokens,
-      maxTokens: extendedUsage.maxTokens,
+    turnState.setTokenDetails(createRedactedConversationTokenDetails(turnState.getPrivacyMode(), {
+      usedTokens: tokenUsage.totalTokens,
+      maxTokens: usageDetails.maxTokens,
       breakdown: promptContextDetails!.breakdown,
       promptContextUsageTree: promptContextDetails!.promptContextUsageTree,
     }));
-    if (response.error || ctx.signal.aborted) {
+    if (modelResponse.error || runContext.signal.aborted) {
       await this.cancelPendingAgentResponseComparison();
       if (this.config.skipErrorStateCheckpoint !== true) {
-        turn.appendPromptMessages(toRedactedCoreMessages(response.messages, stateHandler.getPrivacyMode()));
-        const currentState = await stateHandler.computeNewStructure(ctx);
-        if (onStateUpdate) {
-          await onStateUpdate(ctx, currentState);
+        conversationTurn.appendPromptMessages(toRedactedCoreMessages(modelResponse.messages, turnState.getPrivacyMode()));
+        const currentState = await turnState.computeNewStructure(runContext);
+        if (publishStateUpdate) {
+          await publishStateUpdate(runContext, currentState);
         }
       }
-      throw response.error ?? new ConnectError("User aborted request", Code.Canceled);
+      throw modelResponse.error ?? new ConnectError("User aborted request", Code.Canceled);
     }
-    stateHandler.addTurnUsage({
-      inputTokens: extendedUsage.inputTokens,
-      outputTokens: extendedUsage.outputTokens,
-      cacheReadTokens: extendedUsage.cacheReadTokens,
-      cacheWriteTokens: extendedUsage.cacheWriteTokens,
-      reasoningTokens: extendedUsage.reasoningTokens,
+    turnState.addTurnUsage({
+      inputTokens: usageDetails.inputTokens,
+      outputTokens: usageDetails.outputTokens,
+      cacheReadTokens: usageDetails.cacheReadTokens,
+      cacheWriteTokens: usageDetails.cacheWriteTokens,
+      reasoningTokens: usageDetails.reasoningTokens,
     });
-    if (toolCallDescriptors.length === 0 && responseComparisonMessages !== undefined && responseComparisonTools !== undefined) {
+    if (toolCallSpecs.length === 0 && responseComparisonMessages !== undefined && responseComparisonTools !== undefined) {
       try {
         await this.enqueueAgentResponseComparisonIfEligible({
-          ctx,
+          ctx: runContext,
           parentInvocationId: finalInvocationId,
-          responseMessages: response.messages,
+          responseMessages: modelResponse.messages,
           messages: responseComparisonMessages,
           tools: responseComparisonTools,
-          privacyMode: stateHandler.getPrivacyMode(),
+          privacyMode: turnState.getPrivacyMode(),
         });
       } finally {
         responseComparisonMessages = undefined;
         responseComparisonTools = undefined;
       }
     }
-    if (toolCallDescriptors.length === 0) {
+    if (toolCallSpecs.length === 0) {
       await this.finalizePendingAgentResponseComparison(true);
     }
     return {
-      toolCallDescriptors,
-      responseMessages: response.messages,
+      toolCallDescriptors: toolCallSpecs,
+      responseMessages: modelResponse.messages,
     };
   }
 }
