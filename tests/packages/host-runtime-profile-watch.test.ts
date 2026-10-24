@@ -146,6 +146,18 @@ describe("noticing that a conversation's files changed", () => {
     assert.equal(watch.lastKnownAgentNames.get("agent-1"), "Notebook");
   });
 
+  it("forgets the conversation it watched when told to stop", async () => {
+    const { watch, calls, runDue, root, profiles } = harness();
+    const dir = writeProfile(root, "agent-1", { name: "Notes" });
+    profiles.set("agent-1", { name: "Notes" });
+    watch.watchSessionProfile({ id: "agent-1", dbPath: join(dir, "db") });
+    watch.stopWatchingProfile();
+    watch.scheduleProfileEmit();
+    runDue();
+    await until(20);
+    assert.deepEqual(calls.map((call) => call[0]), ["emit-agents"]);
+  });
+
   it("asks for the whole roster when there is no conversation to update", async () => {
     const { watch, calls, runDue } = harness();
     watch.scheduleProfileEmit();
