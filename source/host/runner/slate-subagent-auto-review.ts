@@ -34,50 +34,50 @@ export interface InstructionPermissions {
   readonly blockInstructions?: readonly string[];
 }
 
-export function buildSlateSubagentLaunchReviewTarget(args: {
+export function buildSlateSubagentLaunchReviewTarget(input: {
   readonly prompt: string;
   readonly subagentType?: string;
   readonly readonly?: boolean;
   readonly resume?: boolean;
 }): SubagentReviewTarget | undefined {
-  const prompt = args.prompt.trim();
+  const prompt = input.prompt.trim();
   if (prompt.length === 0) return undefined;
   return {
     action: "launch",
     prompt,
-    ...(args.subagentType != null && args.subagentType.length > 0
-      ? { subagentType: args.subagentType }
+    ...(input.subagentType != null && input.subagentType.length > 0
+      ? { subagentType: input.subagentType }
       : {}),
-    ...(args.readonly == null ? {} : { readonly: args.readonly }),
-    ...(args.resume == null ? {} : { resume: args.resume }),
+    ...(input.readonly == null ? {} : { readonly: input.readonly }),
+    ...(input.resume == null ? {} : { resume: input.resume }),
   };
 }
 
-export function buildSlateSubagentSteerReviewTarget(args: {
+export function buildSlateSubagentSteerReviewTarget(input: {
   readonly message: string;
   readonly subagentAgentId: string;
   readonly subagentType?: string;
 }): SubagentReviewTarget | undefined {
-  const prompt = args.message.trim();
+  const prompt = input.message.trim();
   if (prompt.length === 0) return undefined;
   return {
     action: "steer",
     prompt,
-    subagentAgentId: args.subagentAgentId,
-    ...(args.subagentType != null && args.subagentType.length > 0
-      ? { subagentType: args.subagentType }
+    subagentAgentId: input.subagentAgentId,
+    ...(input.subagentType != null && input.subagentType.length > 0
+      ? { subagentType: input.subagentType }
       : {}),
   };
 }
 
-export function buildSlateSubagentRiskTarget(args: {
+export function buildSlateSubagentRiskTarget(input: {
   readonly target: SubagentReviewTarget;
   readonly personalInstructions?: InstructionPermissions;
   readonly userAutoRunInstructions?: InstructionPermissions;
   readonly projectAutoRunInstructions?: InstructionPermissions;
 }) {
-  const { target } = args;
-  const argumentsJson = JSON.parse(JSON.stringify({
+  const { target } = input;
+  const argumentsRecord = JSON.parse(JSON.stringify({
       surface: "subagent",
       action: target.action,
       prompt: target.prompt,
@@ -85,11 +85,11 @@ export function buildSlateSubagentRiskTarget(args: {
       subagent_agent_id: target.subagentAgentId,
       readonly: target.readonly,
       resume: target.resume,
-      project_permissions: buildProjectPermissionsContext(args),
+      project_permissions: buildProjectPermissionsContext(input),
     }));
   return new SmartModeRiskTarget({
     action: SLATE_SUBAGENT_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(argumentsJson),
+    arguments: Struct.fromJson(argumentsRecord),
   });
 }
 
@@ -107,39 +107,39 @@ export interface SubagentReviewOptions<Context> {
     mode: "shadow" | "enforce",
     toolCallId: string,
   ): Promise<AutoReviewClassifierDecision>;
-  reportShadowFailure?(error: unknown): void;
+  reportShadowFailure?(failure: unknown): void;
   suspendToolExecutionTimeout?<T>(context: Context, operation: () => Promise<T>): Promise<T>;
 }
 
-const CANCELLED_SUBAGENT_REVIEW = {
+const CANCELLED_REVIEW = {
   allowed: false,
   reason: "The task was cancelled.",
 } as const;
 
-export async function reviewSlateSubagentAction<Context>(args: {
+export async function reviewSlateSubagentAction<Context>(input: {
   readonly ctx: Context;
   readonly target: SubagentReviewTarget;
   readonly options: SubagentReviewOptions<Context>;
   readonly toolCallId: string;
   readonly signal?: AbortSignal;
 }): Promise<{ readonly allowed: boolean; readonly reason?: string }> {
-  const { ctx, target, options, toolCallId } = args;
+  const { ctx, target, options, toolCallId } = input;
   if (options.mode === "off") return { allowed: true };
   if (options.mode === "shadow") {
     void options.classify(ctx, target, "shadow", toolCallId)
-      .catch((error: unknown) => options.reportShadowFailure?.(error));
+      .catch((failure: unknown) => options.reportShadowFailure?.(failure));
     return { allowed: true };
   }
-  const cancelled = () => args.signal?.aborted === true;
-  if (cancelled()) return CANCELLED_SUBAGENT_REVIEW;
-  const decision = await options.classify(ctx, target, "enforce", toolCallId);
-  if (cancelled()) return CANCELLED_SUBAGENT_REVIEW;
-  if (decision.kind === "allow") return { allowed: true };
-  const controller = options.autoReviewController;
-  if (decision.kind !== "block" || controller == null) {
-    return { allowed: false, reason: decision.reason };
+  const isCancelled = () => input.signal?.aborted === true;
+  if (isCancelled()) return CANCELLED_REVIEW;
+  const classifierDecision = await options.classify(ctx, target, "enforce", toolCallId);
+  if (isCancelled()) return CANCELLED_REVIEW;
+  if (classifierDecision.kind === "allow") return { allowed: true };
+  const approvalController = options.autoReviewController;
+  if (classifierDecision.kind !== "block" || approvalController == null) {
+    return { allowed: false, reason: classifierDecision.reason };
   }
-  const request = () => controller.requestApproval({
+  const approvalRequest = () => approvalController.requestApproval({
     agentId: options.agentId,
     surface: "subagent",
     fingerprint: fingerprintSlateAutoReviewTarget({
@@ -150,19 +150,19 @@ export async function reviewSlateSubagentAction<Context>(args: {
       readonly: target.readonly,
       resume: target.resume,
     }),
-    reason: decision.reason,
+    reason: classifierDecision.reason,
     summary: summarizeSlateSubagentAction({ action: target.action, prompt: target.prompt }),
-    ...(decision.proposedRule == null ? {} : { proposedRule: decision.proposedRule }),
-    ...(args.signal == null ? {} : { signal: args.signal }),
+    ...(classifierDecision.proposedRule == null ? {} : { proposedRule: classifierDecision.proposedRule }),
+    ...(input.signal == null ? {} : { signal: input.signal }),
     ...(options.getApprovalExpiryPolicy == null
       ? {}
       : { expiryPolicy: options.getApprovalExpiryPolicy() }),
   });
-  const approval = options.suspendToolExecutionTimeout == null
-    ? await request()
-    : await options.suspendToolExecutionTimeout(ctx, request);
-  if (cancelled()) return CANCELLED_SUBAGENT_REVIEW;
-  return approval.approved
+  const approvalOutcome = options.suspendToolExecutionTimeout == null
+    ? await approvalRequest()
+    : await options.suspendToolExecutionTimeout(ctx, approvalRequest);
+  if (isCancelled()) return CANCELLED_REVIEW;
+  return approvalOutcome.approved
     ? { allowed: true }
-    : { allowed: false, reason: approval.reason ?? decision.reason };
+    : { allowed: false, reason: approvalOutcome.reason ?? classifierDecision.reason };
 }
