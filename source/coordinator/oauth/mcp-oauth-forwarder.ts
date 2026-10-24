@@ -11,8 +11,8 @@ import { McpOAuthLoopbackRegistry, type CoordinatorLogger } from "./mcp-oauth-lo
 
 export const MCP_OAUTH_PENDING_TTL_MS = 11 * 60 * 1_000;
 
-function expiryKey(origin: string, state: string): string {
-  return JSON.stringify([origin, state]);
+function pendingKey(redirectOrigin: string, state: string): string {
+  return JSON.stringify([redirectOrigin, state]);
 }
 
 interface PendingAuth {
@@ -21,48 +21,48 @@ interface PendingAuth {
 }
 
 export class OAuthPendingRegistry {
-  private readonly byOrigin = new Map<string, Map<string, PendingAuth>>();
+  private readonly pendingByOrigin = new Map<string, Map<string, PendingAuth>>();
 
-  add(origin: string, state: string, auth: PendingAuth): void {
-    let states = this.byOrigin.get(origin);
-    if (states == null) { states = new Map(); this.byOrigin.set(origin, states); }
-    states.set(state, auth);
+  add(redirectOrigin: string, state: string, pendingAuth: PendingAuth): void {
+    let stateEntries = this.pendingByOrigin.get(redirectOrigin);
+    if (stateEntries == null) { stateEntries = new Map(); this.pendingByOrigin.set(redirectOrigin, stateEntries); }
+    stateEntries.set(state, pendingAuth);
   }
 
-  resolve(origin: string, state: string): string | undefined {
-    return this.byOrigin.get(origin)?.get(state)?.serverName;
+  resolve(redirectOrigin: string, state: string): string | undefined {
+    return this.pendingByOrigin.get(redirectOrigin)?.get(state)?.serverName;
   }
 
-  remove(origin: string, state: string): PendingAuth | undefined {
-    const states = this.byOrigin.get(origin);
-    const auth = states?.get(state);
-    if (states == null || auth == null) return undefined;
-    states.delete(state);
-    if (states.size === 0) this.byOrigin.delete(origin);
-    return auth;
+  remove(redirectOrigin: string, state: string): PendingAuth | undefined {
+    const stateEntries = this.pendingByOrigin.get(redirectOrigin);
+    const pendingAuth = stateEntries?.get(state);
+    if (stateEntries == null || pendingAuth == null) return undefined;
+    stateEntries.delete(state);
+    if (stateEntries.size === 0) this.pendingByOrigin.delete(redirectOrigin);
+    return pendingAuth;
   }
 
   removeServer(serverName: string): PendingAuth[] {
-    const removed: PendingAuth[] = [];
-    for (const [origin, states] of [...this.byOrigin]) {
-      for (const [state, auth] of [...states]) {
-        if (auth.serverName !== serverName) continue;
-        states.delete(state);
-        removed.push(auth);
+    const evicted: PendingAuth[] = [];
+    for (const [redirectOrigin, stateEntries] of [...this.pendingByOrigin]) {
+      for (const [state, pendingAuth] of [...stateEntries]) {
+        if (pendingAuth.serverName !== serverName) continue;
+        stateEntries.delete(state);
+        evicted.push(pendingAuth);
       }
-      if (states.size === 0) this.byOrigin.delete(origin);
+      if (stateEntries.size === 0) this.pendingByOrigin.delete(redirectOrigin);
     }
-    return removed;
+    return evicted;
   }
 
   removeAll(): PendingAuth[] {
-    const removed = [...this.byOrigin.values()].flatMap((states) => [...states.values()]);
-    this.byOrigin.clear();
-    return removed;
+    const evicted = [...this.pendingByOrigin.values()].flatMap((stateEntries) => [...stateEntries.values()]);
+    this.pendingByOrigin.clear();
+    return evicted;
   }
 
-  hasPendingFor(origin: string): boolean {
-    return this.byOrigin.has(origin);
+  hasPendingFor(redirectOrigin: string): boolean {
+    return this.pendingByOrigin.has(redirectOrigin);
   }
 }
 
@@ -72,93 +72,93 @@ export interface McpOAuthPendingPayload {
   serverName: string;
 }
 
-interface OAuthListener { close(): void }
-type StartListener = (args: McpOAuthCallbackListenerArgs, registry: McpOAuthLoopbackRegistry) => Promise<OAuthListener>;
+interface CallbackListener { close(): void }
+type ListenerStarter = (args: McpOAuthCallbackListenerArgs, registry: McpOAuthLoopbackRegistry) => Promise<CallbackListener>;
 
 export interface McpOAuthForwarderDependencies {
   completion: { completeMcpOAuth(value: { code: string; state: string }): Promise<unknown> };
   log: CoordinatorLogger;
-  pendingEvents: { subscribe(listener: (pending: McpOAuthPendingPayload) => void): { dispose(): void } };
+  pendingEvents: { subscribe(callbackListener: (pendingRegistry: McpOAuthPendingPayload) => void): { dispose(): void } };
   pendingExpiry?: ExpiryPolicy;
-  startListener?: StartListener;
+  startListener?: ListenerStarter;
 }
 
 export class McpOAuthForwarder {
-  private readonly listeners = new Map<string, OAuthListener>();
-  private readonly pending = new OAuthPendingRegistry();
-  private readonly loopbackPool: McpOAuthLoopbackRegistry;
-  private readonly subscription: { dispose(): void };
-  private readonly completion: McpOAuthForwarderDependencies["completion"];
-  private readonly log: CoordinatorLogger;
-  private readonly pendingExpiry: ExpiryPolicy;
-  private readonly startListener: StartListener;
+  private readonly activeListeners = new Map<string, CallbackListener>();
+  private readonly pendingRegistry = new OAuthPendingRegistry();
+  private readonly loopbackRegistry: McpOAuthLoopbackRegistry;
+  private readonly pendingSubscription: { dispose(): void };
+  private readonly completionClient: McpOAuthForwarderDependencies["completion"];
+  private readonly logger: CoordinatorLogger;
+  private readonly expiryPolicy: ExpiryPolicy;
+  private readonly listenerStarter: ListenerStarter;
 
-  constructor(deps: McpOAuthForwarderDependencies) {
-    this.completion = deps.completion;
-    this.log = deps.log;
-    this.pendingExpiry = deps.pendingExpiry ?? createRealExpiryPolicy({ name: "mcp-oauth-pending", ttlMs: MCP_OAUTH_PENDING_TTL_MS });
-    this.startListener = deps.startListener ?? startMcpOAuthCallbackListener;
-    this.loopbackPool = new McpOAuthLoopbackRegistry(deps.log);
-    this.subscription = deps.pendingEvents.subscribe((pending) => { void this.handlePending(pending); });
+  constructor(dependencies: McpOAuthForwarderDependencies) {
+    this.completionClient = dependencies.completion;
+    this.logger = dependencies.log;
+    this.expiryPolicy = dependencies.pendingExpiry ?? createRealExpiryPolicy({ name: "mcp-oauth-pending", ttlMs: MCP_OAUTH_PENDING_TTL_MS });
+    this.listenerStarter = dependencies.startListener ?? startMcpOAuthCallbackListener;
+    this.loopbackRegistry = new McpOAuthLoopbackRegistry(dependencies.log);
+    this.pendingSubscription = dependencies.pendingEvents.subscribe((pendingRegistry) => { void this.forwardPending(pendingRegistry); });
   }
 
-  private async handlePending(payload: McpOAuthPendingPayload): Promise<void> {
-    let origin: string;
-    try { origin = new URL(payload.redirectUrl).origin; }
-    catch (error) {
-      this.log.warn({ kind: "invalid-redirect-url", serverName: payload.serverName, detail: errorMessage(error) });
+  private async forwardPending(pendingPayload: McpOAuthPendingPayload): Promise<void> {
+    let redirectOrigin: string;
+    try { redirectOrigin = new URL(pendingPayload.redirectUrl).origin; }
+    catch (failure) {
+      this.logger.warn({ kind: "invalid-redirect-url", serverName: pendingPayload.serverName, detail: errorMessage(failure) });
       return;
     }
-    this.track(origin, payload.state, payload.serverName);
-    if (this.listeners.has(origin)) return;
+    this.trackPending(redirectOrigin, pendingPayload.state, pendingPayload.serverName);
+    if (this.activeListeners.has(redirectOrigin)) return;
     try {
-      const listener = await this.startListener({
-        redirectUrl: payload.redirectUrl,
+      const callbackListener = await this.listenerStarter({
+        redirectUrl: pendingPayload.redirectUrl,
         resolve: (state) => {
-          const serverName = this.pending.resolve(origin, state);
+          const serverName = this.pendingRegistry.resolve(redirectOrigin, state);
           return serverName != null ? { serverName } : undefined;
         },
-        onCallback: async ({ code, state }) => { await this.completion.completeMcpOAuth({ code, state }); },
-        onSettled: (state) => { this.forget(origin, state); },
-        log: this.log
-      }, this.loopbackPool);
-      if (this.listeners.has(origin)) listener.close();
-      else { this.listeners.set(origin, listener); this.closeDrainedListeners(); }
-    } catch (error) {
-      this.forget(origin, payload.state);
-      this.log.warn({ kind: "listener-start-failed", serverName: payload.serverName, detail: errorMessage(error) });
+        onCallback: async ({ code, state }) => { await this.completionClient.completeMcpOAuth({ code, state }); },
+        onSettled: (state) => { this.forgetPending(redirectOrigin, state); },
+        log: this.logger
+      }, this.loopbackRegistry);
+      if (this.activeListeners.has(redirectOrigin)) callbackListener.close();
+      else { this.activeListeners.set(redirectOrigin, callbackListener); this.closeIdleListeners(); }
+    } catch (failure) {
+      this.forgetPending(redirectOrigin, pendingPayload.state);
+      this.logger.warn({ kind: "listener-start-failed", serverName: pendingPayload.serverName, detail: errorMessage(failure) });
     }
   }
 
   dispose(): void {
-    this.subscription.dispose();
-    for (const listener of this.listeners.values()) listener.close();
-    this.listeners.clear();
-    for (const auth of this.pending.removeAll()) auth.expiry.dispose();
-    void this.loopbackPool.dispose();
+    this.pendingSubscription.dispose();
+    for (const callbackListener of this.activeListeners.values()) callbackListener.close();
+    this.activeListeners.clear();
+    for (const pendingAuth of this.pendingRegistry.removeAll()) pendingAuth.expiry.dispose();
+    void this.loopbackRegistry.dispose();
   }
 
-  private track(origin: string, state: string, serverName: string): void {
-    const superseded = this.pending.removeServer(serverName);
-    for (const auth of superseded) auth.expiry.dispose();
-    this.pending.remove(origin, state)?.expiry.dispose();
-    const expiry = this.pendingExpiry.arm(expiryKey(origin, state), () => { this.forget(origin, state); });
-    this.pending.add(origin, state, { serverName, expiry });
-    this.closeDrainedListeners();
+  private trackPending(redirectOrigin: string, state: string, serverName: string): void {
+    const superseded = this.pendingRegistry.removeServer(serverName);
+    for (const pendingAuth of superseded) pendingAuth.expiry.dispose();
+    this.pendingRegistry.remove(redirectOrigin, state)?.expiry.dispose();
+    const expiry = this.expiryPolicy.arm(pendingKey(redirectOrigin, state), () => { this.forgetPending(redirectOrigin, state); });
+    this.pendingRegistry.add(redirectOrigin, state, { serverName, expiry });
+    this.closeIdleListeners();
   }
 
-  private forget(origin: string, state: string): void {
-    const auth = this.pending.remove(origin, state);
-    if (auth == null) return;
-    auth.expiry.dispose();
-    this.closeDrainedListeners();
+  private forgetPending(redirectOrigin: string, state: string): void {
+    const pendingAuth = this.pendingRegistry.remove(redirectOrigin, state);
+    if (pendingAuth == null) return;
+    pendingAuth.expiry.dispose();
+    this.closeIdleListeners();
   }
 
-  private closeDrainedListeners(): void {
-    for (const [origin, listener] of [...this.listeners]) {
-      if (this.pending.hasPendingFor(origin)) continue;
-      listener.close();
-      this.listeners.delete(origin);
+  private closeIdleListeners(): void {
+    for (const [redirectOrigin, callbackListener] of [...this.activeListeners]) {
+      if (this.pendingRegistry.hasPendingFor(redirectOrigin)) continue;
+      callbackListener.close();
+      this.activeListeners.delete(redirectOrigin);
     }
   }
 }
