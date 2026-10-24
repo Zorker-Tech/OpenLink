@@ -15,7 +15,7 @@ import { createSessionStorageLayout, ensureSessionStorage, type SessionStorageLa
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
-import { ensureDesktopEndpoint } from './desktop-runtime.js'
+import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
 
@@ -59,6 +59,9 @@ export interface OpenSandboxPromptSession {
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
   resources(request?: AgentResourceRequest): Promise<unknown>
   desktopEndpoint(): Promise<DesktopEndpoint>
+  desktopStatus(): Promise<DesktopRuntimeStatus>
+  suspendDesktop(): Promise<DesktopSuspendResult>
+  resumeDesktop(): Promise<DesktopSuspendResult>
   setBrowser(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
 }
@@ -382,6 +385,12 @@ export class LocalOpenSandboxBackend {
       Authorization: `Bearer ${workerToken}`,
       'Content-Type': 'application/json',
     })
+    const desktopControl = async (action: 'status' | 'suspend' | 'resume'): Promise<DesktopRuntimeStatus> => {
+      // Do not wake a paused sandbox just to inspect or sleep its desktop.
+      if (paused) return { state: 'stopped', suspended: false }
+      await ensureRunning()
+      return requestDesktopControl(baseUrl, workerHeaders(), action)
+    }
     return {
       sandboxId: sandbox.id as string,
       layout,
@@ -396,6 +405,15 @@ export class LocalOpenSandboxBackend {
         return requestWorkerPrompt(baseUrl, workerHeaders(), message, signal, attachments)
       },
       desktopEndpoint,
+      desktopStatus: () => desktopControl('status'),
+      suspendDesktop: async () => {
+        const result = await desktopControl('suspend')
+        return { suspended: result.suspended === true, state: result.state }
+      },
+      resumeDesktop: async () => {
+        const result = await desktopControl('resume')
+        return { suspended: result.suspended === true, state: result.state }
+      },
       control: async (input) => {
         await ensureRunning()
         const result = await fetch(`${baseUrl}/v1/control`, {

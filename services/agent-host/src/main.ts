@@ -95,6 +95,9 @@ const codexPluginSnapshot = createCodexPluginSnapshotProvider({
   cacheRoot: resolve(storageRoot, '.codex-plugin-snapshots'),
 })
 const sessionIdleTtlMs = integer(env.OPENLINK_AGENT_SESSION_IDLE_TTL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000)
+const desktopPrewarm = env.OPENLINK_DESKTOP_PREWARM !== '0'
+const desktopPrewarmMax = integer(env.OPENLINK_DESKTOP_PREWARM_MAX, 1, 1, 32)
+const desktopIdleTtlMs = integer(env.OPENLINK_DESKTOP_IDLE_TTL_MS, 5 * 60_000, 60_000, 24 * 60 * 60_000)
 const maxSessions = integer(env.OPENLINK_AGENT_MAX_SESSIONS, 32, 1, 512)
 const projectVmStateRoot = resolve(env.OPENLINK_PROJECT_VM_STATE_ROOT || '.project-vms')
 let projectVmManager: ProjectVmManager | undefined
@@ -193,6 +196,9 @@ const runtime = await startPromptHttpServer({
   storageRoot,
   transport: 'opensandbox-node-sdk',
   sessionIdleTtlMs,
+  desktopPrewarm,
+  desktopPrewarmMax,
+  desktopIdleTtlMs,
   maxSessions,
   ...(projectVmManager ? { projectVmManager } : {}),
   projectRuntimeManager: sshRuntimeRouter,

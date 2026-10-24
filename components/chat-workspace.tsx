@@ -281,18 +281,106 @@ function WorkspaceTabs({
   activeTab,
   onClose,
   onSelect,
+  onReorder,
   openTabs,
 }: {
   activeTab: WorkspaceTabId
   onClose: (tab: WorkspaceTabId) => void
   onSelect: (tab: WorkspaceTabId) => void
+  onReorder: (source: WorkspaceTabId, target: WorkspaceTabId, after: boolean) => void
   openTabs: WorkspaceTabId[]
 }) {
   const t = useT()
   const tabs = workspaceTabs(t)
+  const [draggingTab, setDraggingTab] = useState<WorkspaceTabId | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: WorkspaceTabId; after: boolean } | null>(null)
+  const tabsViewportRef = useRef<HTMLDivElement | null>(null)
+  const tabElementsRef = useRef(new Map<WorkspaceTabId, HTMLDivElement>())
+  const tabsRef = useRef(openTabs)
+  const onReorderRef = useRef(onReorder)
+  const dragRef = useRef<{
+    id: WorkspaceTabId
+    pointerId: number
+    startX: number
+    startY: number
+    started: boolean
+    target: { id: WorkspaceTabId; after: boolean } | null
+  } | null>(null)
+  const suppressClickRef = useRef(false)
+  tabsRef.current = openTabs
+  onReorderRef.current = onReorder
+
+  useEffect(() => {
+    const setTarget = (target: { id: WorkspaceTabId; after: boolean } | null) => {
+      setDropTarget((current) => current?.id === target?.id && current?.after === target?.after ? current : target)
+    }
+
+    const updateDrag = (event: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      if (!drag.started) {
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return
+        drag.started = true
+        setDraggingTab(drag.id)
+      }
+      event.preventDefault()
+
+      const viewport = tabsViewportRef.current?.getBoundingClientRect()
+      if (!viewport || event.clientY < viewport.top - 8 || event.clientY > viewport.bottom + 8 || event.clientX < viewport.left || event.clientX > viewport.right) {
+        drag.target = null
+        setTarget(null)
+        return
+      }
+      const viewportElement = tabsViewportRef.current
+      if (viewportElement && event.clientX < viewport.left + 20) viewportElement.scrollLeft -= 12
+      else if (viewportElement && event.clientX > viewport.right - 20) viewportElement.scrollLeft += 12
+
+      let nearest: { id: WorkspaceTabId; left: number; right: number; distance: number } | null = null
+      for (const id of tabsRef.current) {
+        const element = tabElementsRef.current.get(id)
+        if (!element) continue
+        const bounds = element.getBoundingClientRect()
+        const distance = event.clientX < bounds.left ? bounds.left - event.clientX : event.clientX > bounds.right ? event.clientX - bounds.right : 0
+        if (!nearest || distance < nearest.distance) nearest = { id, left: bounds.left, right: bounds.right, distance }
+      }
+
+      const target = nearest && nearest.id !== drag.id
+        ? { id: nearest.id, after: event.clientX >= nearest.left + (nearest.right - nearest.left) / 2 }
+        : null
+      drag.target = target
+      setTarget(target)
+    }
+
+    const finishDrag = (event: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      if (event.type === 'pointerup') updateDrag(event)
+      const completed = dragRef.current
+      if (completed?.started && completed.target) {
+        onReorderRef.current(completed.id, completed.target.id, completed.target.after)
+        suppressClickRef.current = true
+        window.setTimeout(() => {
+          suppressClickRef.current = false
+        }, 0)
+      }
+      dragRef.current = null
+      setDraggingTab(null)
+      setTarget(null)
+    }
+
+    window.addEventListener('pointermove', updateDrag)
+    window.addEventListener('pointerup', finishDrag)
+    window.addEventListener('pointercancel', finishDrag)
+    return () => {
+      window.removeEventListener('pointermove', updateDrag)
+      window.removeEventListener('pointerup', finishDrag)
+      window.removeEventListener('pointercancel', finishDrag)
+    }
+  }, [])
+
   return (
-    <div aria-label={t('工作区标签')} className="flex h-7 min-w-0 flex-1 items-center overflow-hidden">
-      <div className="flex min-w-0 items-center overflow-x-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div aria-label={t('工作区标签')} className="flex h-7 min-w-0 flex-1 items-center overflow-hidden" role="tablist">
+      <div className="flex min-w-0 items-center overflow-x-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" ref={tabsViewportRef}>
         <AnimatePresence initial={false} mode="popLayout">
           {openTabs.map((tabId) => {
             const tab = tabs.find((candidate) => candidate.id === tabId)!
@@ -300,17 +388,29 @@ function WorkspaceTabs({
             const selected = tabId === activeTab
             return (
             <motion.div
-              animate={{ opacity: 1, scale: 1 }}
-              className={`group mr-0.5 flex h-7 min-w-[112px] max-w-[126px] shrink-0 items-center rounded-lg transition-[background-color,color,box-shadow] duration-150 ${selected ? 'bg-[var(--app-active)] text-[var(--app-foreground)] shadow-[inset_0_0_0_1px_var(--app-control-border),0_1px_2px_var(--app-shadow)]' : 'bg-[var(--app-surface)] text-[var(--app-muted)] shadow-[inset_0_0_0_1px_var(--app-control-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`}
+              animate={{ opacity: draggingTab === tabId ? 0.45 : 1, scale: 1 }}
+              className={`group relative mr-0.5 flex h-7 min-w-[112px] max-w-[126px] shrink-0 select-none cursor-grab items-center rounded-lg transition-[background-color,color,box-shadow,opacity] duration-150 active:cursor-grabbing ${selected ? 'bg-[var(--app-active)] text-[var(--app-foreground)] shadow-[inset_0_0_0_1px_var(--app-control-border),0_1px_2px_var(--app-shadow)]' : 'bg-[var(--app-surface)] text-[var(--app-muted)] shadow-[inset_0_0_0_1px_var(--app-control-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`}
               exit={{ opacity: 0, scale: 0.96 }}
               initial={{ opacity: 0, scale: 0.96 }}
               key={tabId}
               layout
+              onClickCapture={(event) => {
+                if (!suppressClickRef.current) return
+                suppressClickRef.current = false
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+              onPointerDown={(event) => {
+                if (event.button !== 0 || event.pointerType === 'touch' || (event.target instanceof Element && event.target.closest('[data-tab-close]'))) return
+                dragRef.current = { id: tabId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, started: false, target: null }
+              }}
+              ref={(element) => { if (element) tabElementsRef.current.set(tabId, element); else tabElementsRef.current.delete(tabId) }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             >
+              {dropTarget?.id === tabId && <span aria-hidden="true" className={`pointer-events-none absolute inset-y-1 z-10 w-0.5 rounded-full bg-[var(--app-brand)] ${dropTarget.after ? 'right-0' : 'left-0'}`} />}
               <button
                 aria-selected={selected}
-                className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-l-lg pl-2 text-[13px] font-medium tracking-[-0.0762px]"
+                className="flex h-full min-w-0 flex-1 cursor-grab items-center gap-1.5 rounded-l-lg pl-2 text-[13px] font-medium tracking-[-0.0762px] active:cursor-grabbing"
                 onClick={() => onSelect(tabId)}
                 role="tab"
                 type="button"
@@ -320,7 +420,8 @@ function WorkspaceTabs({
               </button>
               <button
                 aria-label={t('关闭{label}标签', { label: tab.label })}
-                className={`mr-1 flex size-5 shrink-0 items-center justify-center rounded text-[var(--app-subtle)] transition-[color,background-color,opacity] hover:bg-[var(--app-control-border)] hover:text-[var(--app-foreground)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)] ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
+                className={`mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-[var(--app-subtle)] transition-[color,background-color,opacity] hover:bg-[var(--app-control-border)] hover:text-[var(--app-foreground)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)] ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
+                data-tab-close
                 onClick={() => onClose(tabId)}
                 type="button"
               >
@@ -352,6 +453,7 @@ function ChatTopbar({
   activeTab,
   onCloseWorkspaceTab,
   onSelectWorkspaceTab,
+  onReorderWorkspaceTabs,
   openTabs,
   showWorkspaceLauncher = false,
 }: {
@@ -371,6 +473,7 @@ function ChatTopbar({
   activeTab: WorkspaceTabId
   onCloseWorkspaceTab: (tab: WorkspaceTabId) => void
   onSelectWorkspaceTab: (tab: WorkspaceTabId) => void
+  onReorderWorkspaceTabs: (source: WorkspaceTabId, target: WorkspaceTabId, after: boolean) => void
   openTabs: WorkspaceTabId[]
   showWorkspaceLauncher?: boolean
 }) {
@@ -383,14 +486,15 @@ function ChatTopbar({
   const titleMeasureRef = useRef<HTMLSpanElement | null>(null)
   const t = useT()
 
-  // The title slot animates between the measured text width and the editor
-  // width. Measuring keeps the resting state hugging the text instead of
-  // reserving a fixed slot, while the transition itself is a real width change
-  // so the surrounding header controls glide along with it.
+  // The title slot animates between the natural text width and the editor
+  // width. Flex sizing lets long titles yield space to nearby controls while
+  // its minimum width preserves room for at least seven Chinese characters.
   useEffect(() => {
     const element = titleMeasureRef.current
     if (!element) return
-    const update = () => setTitleWidth(element.offsetWidth)
+    // Include the display button's horizontal padding, then let flex sizing
+    // give long titles as much room as the chat header can spare.
+    const update = () => setTitleWidth(element.offsetWidth + 8)
     update()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
     observer?.observe(element)
@@ -439,13 +543,13 @@ function ChatTopbar({
       <motion.div
         animate={{ opacity: chatCollapsed ? 0 : 1, x: chatCollapsed ? -10 : 0 }}
         aria-hidden={chatCollapsed}
-        className="flex size-full min-w-0 items-center px-3"
+        className="relative top-[1.5px] flex size-full min-w-0 items-center gap-1 px-2.5"
         data-header-region="chat-title"
         initial={false}
         style={{ pointerEvents: chatCollapsed ? 'none' : 'auto' }}
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       >
-        <button aria-label={t('打开侧边栏')} className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] md:hidden" onClick={onOpenSidebar} type="button">
+        <button aria-label={t('打开侧边栏')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] md:hidden" onClick={onOpenSidebar} type="button">
           <PanelLeft className="size-4" />
         </button>
         {collapsed && <span aria-hidden="true" className="hidden w-11 shrink-0 md:block" />}
@@ -466,7 +570,7 @@ function ChatTopbar({
           const contextWindow = contextTokens == null ? null : context.contextWindow
           const usedCompact = contextTokens == null ? '—' : new Intl.NumberFormat('en-US', { notation: 'compact' }).format(contextTokens)
           return (
-            <span className="mr-1 flex shrink-0">
+            <span className="flex shrink-0">
               <ContextContainer
                 maxTokens={contextWindow ?? Math.max(contextTokens ?? 0, 1)}
                 modelId={context.modelId ?? undefined}
@@ -505,20 +609,20 @@ function ChatTopbar({
             </span>
           )
         })()}
-        <div className="relative flex h-7 min-w-0 items-center">
+        <div className="relative flex h-7 min-w-[100px] items-center">
           {/* Off-screen probe: the slot animates between the real text width and
               the editor width, so neighbouring chrome slides with it instead of
               jumping the way a transform-based layout animation does. */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute -left-[9999px] top-0 max-w-[210px] truncate text-[13px] font-medium tracking-[-0.0762px] opacity-0"
+            className="pointer-events-none absolute -left-[9999px] top-0 whitespace-nowrap text-[13px] font-medium tracking-[-0.0762px] opacity-0"
             ref={titleMeasureRef}
           >
             {sessionTitle}
           </span>
           <motion.div
             animate={{ width: editingTitle ? TITLE_EDITOR_WIDTH : (titleWidth ?? undefined) }}
-            className="flex h-7 min-w-0 items-center overflow-hidden"
+            className="flex h-7 min-w-[100px] max-w-full shrink items-center overflow-hidden"
             initial={false}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -551,7 +655,7 @@ function ChatTopbar({
                 onClick={() => setEditingTitle(true)}
                 type="button"
               >
-                <span className="max-w-[210px] truncate">{sessionTitle}</span>
+                <span className="min-w-0 truncate">{sessionTitle}</span>
               </button>
             )}
           </motion.div>
@@ -561,18 +665,18 @@ function ChatTopbar({
       )}
 
       {side === 'workspace' && (
-      <div className="flex min-w-0 flex-1 items-center" data-header-region="workspace-tabs">
-        <div className="flex size-full min-w-0 items-center gap-1.5 pl-3 pr-1.5">
+        <div className="flex min-w-0 flex-1 items-center" data-header-region="workspace-tabs">
+        <div className="relative top-[1.5px] flex size-full min-w-0 items-center gap-1 px-2.5">
           {chatCollapsed && collapsed && <span aria-hidden="true" className="w-11 shrink-0" />}
           <ToolbarButton aria-pressed={chatCollapsed} className={chatCollapsed ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''} label={t('评论')} onClick={onToggleChat}><MessageCircle className="size-4" /></ToolbarButton>
-          <WorkspaceTabs activeTab={activeTab} onClose={onCloseWorkspaceTab} onSelect={onSelectWorkspaceTab} openTabs={openTabs} />
+          <WorkspaceTabs activeTab={activeTab} onClose={onCloseWorkspaceTab} onReorder={onReorderWorkspaceTabs} onSelect={onSelectWorkspaceTab} openTabs={openTabs} />
           <WorkspaceTabLauncher onSelect={onSelectWorkspaceTab} />
           {workspaceView === 'data' && localRuntime && <button aria-pressed={dataSurface === 'studio'} className={`flex h-[26px] shrink-0 items-center gap-1 rounded-full border border-[var(--app-control-border)] px-2.5 text-xs font-medium transition-colors ${dataSurface === 'studio' ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-foreground)]'}`} onClick={onToggleDataSurface} type="button"><ExternalLink className="size-3" />Studio</button>}
         </div>
       </div>
       )}
       {side === 'workspace' && (
-      <div className="flex w-[150px] shrink-0 items-center gap-1.5 pr-3">
+      <div className="relative top-[1.5px] flex w-[150px] shrink-0 items-center gap-1 pr-2.5">
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label={t("更多")}><MoreHorizontal className="size-4" /></ToolbarButton>
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label={t("分享")}><Share2 className="size-4" /></ToolbarButton>
         <button className={`relative flex h-7 w-[70px] items-center justify-center gap-1.5 rounded-md border border-[var(--app-submit-background)] text-sm font-medium tracking-[-0.1504px] after:absolute after:-right-1 after:-top-1 after:size-3 after:rounded-full after:border-[1.5px] after:border-[var(--app-background)] after:bg-[var(--app-brand)] hover:opacity-90 ${theme('action')}`} type="button"><Globe2 className="size-4" />{t('发布')}</button>
@@ -1440,6 +1544,7 @@ export function ChatWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
+  const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)
   const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
   const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
   // The browser canvas is the primary workspace. The device control is an
@@ -1479,12 +1584,14 @@ export function ChatWorkspace({
   const workspaceTabsOpen = openWorkspaceTabs.length > 0
   const pendingConfirmations = useMemo(() => pendingConfirmationRequests(agentEvents), [agentEvents])
 
-  const startPanelMotion = useCallback(() => {
+  const startPanelMotion = useCallback((contentWidth: number) => {
     if (panelMotionTimerRef.current !== null) window.clearTimeout(panelMotionTimerRef.current)
+    setPanelMotionContentWidth(contentWidth)
     setPanelMotionActive(true)
     panelMotionTimerRef.current = window.setTimeout(() => {
       panelMotionTimerRef.current = null
       setPanelMotionActive(false)
+      setPanelMotionContentWidth(null)
     }, 320)
   }, [])
 
@@ -1509,6 +1616,16 @@ export function ChatWorkspace({
     } else {
       setWorkspaceView('desktop')
     }
+  }, [])
+
+  const reorderWorkspaceTabs = useCallback((source: WorkspaceTabId, target: WorkspaceTabId, after: boolean) => {
+    setOpenWorkspaceTabs((current) => {
+      if (source === target || !current.includes(source) || !current.includes(target)) return current
+      const next = current.filter((tab) => tab !== source)
+      const targetIndex = next.indexOf(target)
+      next.splice(targetIndex + (after ? 1 : 0), 0, source)
+      return next
+    })
   }, [])
 
   const closeWorkspaceTab = useCallback((tabId: WorkspaceTabId) => {
@@ -2059,7 +2176,8 @@ export function ChatWorkspace({
       setChatPanelCollapsed(false)
       return
     }
-    startPanelMotion()
+    const currentWidth = chatPanelRef.current?.getSize().inPixels ?? 390
+    startPanelMotion(chatPanelCollapsed ? 390 : Math.max(390, currentWidth))
     if (chatPanelCollapsed) {
       chatPanelRef.current?.expand()
       chatPanelRef.current?.resize('390px')
@@ -2097,6 +2215,7 @@ export function ChatWorkspace({
     localRuntime,
     onCloseWorkspaceTab: closeWorkspaceTab,
     onOpenSidebar: () => { setCollapsed(false); setMobileOpen(true) },
+    onReorderWorkspaceTabs: reorderWorkspaceTabs,
     onSessionTitleChange: updateSessionTitle,
     onToggleChat: toggleChatPanel,
     onToggleDataSurface: () => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio'),
@@ -2150,6 +2269,7 @@ export function ChatWorkspace({
                     <ResizablePanel
                       collapsedSize="0px"
                       collapsible
+                      className="min-w-0"
                       defaultSize="390px"
                       groupResizeBehavior="preserve-pixel-size"
                       id="chat-panel"
@@ -2157,8 +2277,15 @@ export function ChatWorkspace({
                       minSize="390px"
                       onResize={(size) => setChatPanelCollapsed(size.inPixels < 1)}
                       panelRef={chatPanelRef}
+                      style={{ overflow: 'hidden' }}
                     >
-                      <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
+                      <section
+                        className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]"
+                        style={panelMotionContentWidth === null ? undefined : {
+                          minWidth: `${panelMotionContentWidth}px`,
+                          width: `${panelMotionContentWidth}px`,
+                        }}
+                      >
                         <ChatTopbar {...chatTopbarProps} side="chat" />
                         <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
                         <div className="px-2 pb-2">
@@ -2190,13 +2317,11 @@ export function ChatWorkspace({
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <ChatTopbar {...chatTopbarProps} chatCollapsed={false} side="chat" showWorkspaceLauncher />
-                  <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col">
-                    <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
-                    <div className="px-2 pb-2">
-                      <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                      <AccessWritesBanner sessionId={sessionId} />
-                      <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
-                    </div>
+                  <ChatTimeline contentClassName="mx-auto w-full max-w-3xl" events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+                  <div className="flex w-full max-w-3xl shrink-0 flex-col px-2 pb-2">
+                    <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
+                    <AccessWritesBanner sessionId={sessionId} />
+                    <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
                   </div>
                 </motion.section>
               )}

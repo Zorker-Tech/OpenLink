@@ -189,22 +189,6 @@ export function DesktopWorkbench({ chatSessionId }: { chatSessionId: string }) {
 
   return (
     <section aria-label={t('桌面')} className={`flex size-full min-h-0 flex-col ${theme('editor')}`}>
-      <div className={`flex h-9 shrink-0 items-center justify-between border-b px-3 ${theme('border', 'surface')}`}>
-        <div className="flex min-w-0 items-center gap-2 text-xs font-medium">
-          <Monitor aria-hidden className="size-3.5 text-[var(--app-muted)]" />
-          <span className="truncate">{t('桌面')}</span>
-          {status === 'ready' && <span aria-hidden="true" className="size-1.5 rounded-full bg-[var(--app-success)]" />}
-        </div>
-        <button
-          aria-label={t('刷新')}
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] disabled:opacity-50"
-          disabled={status === 'connecting'}
-          onClick={() => void connect()}
-          type="button"
-        >
-          <RotateCw className="size-3.5" />
-        </button>
-      </div>
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-black">
         {desktopUrl && status !== 'failed' && (
           <DesktopCanvas
