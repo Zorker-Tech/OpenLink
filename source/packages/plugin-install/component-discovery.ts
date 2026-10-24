@@ -2,7 +2,7 @@
  * Finding what a plugin actually brings.
  *
  * A manifest says which commands, agents, skills, rules and hooks a plugin has, and those entries name files rather
- * than describe them: the discovery reads each named entry, tells a file from a directory, and describes what it found
+ * than describe them: the discovery reads each named entry, tells a file from a directoryEntry, and describes what it found
  * so a surface can list it — with the entries that are not there left out rather than invented, and the ones that are
  * unusable reported as such instead of as content.
  */
@@ -12,10 +12,10 @@ import { isPathSafe, type PluginManifest } from "./manifest-parser.ts";
 import { PLUGIN_MCP_CONFIG_FILE_NAMES, resolvePluginMcpConfigFromReader } from "./mcp-parser.ts";
 import { inferMcpPlaceholderVariables, type PlaceholderProperty } from "./mcp-placeholder-variables.ts";
 
-const MARKDOWN_EXTENSIONS = [".md", ".mdc", ".markdown"];
-const COMMAND_EXTENSIONS = [...MARKDOWN_EXTENSIONS, ".txt"];
-const FRONTMATTER_REGEX = /^---\s*\n([\s\S]*?)\n---/;
-const EMPTY_METADATA_DESCRIPTION = "";
+const MARKDOWN_SUFFIXES = [".md", ".mdc", ".markdown"];
+const COMMAND_SUFFIXES = [...MARKDOWN_SUFFIXES, ".txt"];
+const FRONTMATTER_PATTERN = /^---\s*\n([\s\S]*?)\n---/;
+const EMPTY_DESCRIPTION = "";
 
 export interface PluginFileEntry { name: string; path: string; type: "file" | "dir" }
 export interface PluginFileFetcher {
@@ -41,110 +41,110 @@ export interface DiscoveredPluginComponents {
 }
 export type PluginDiscoveryManifest = Pick<PluginManifest, "commands" | "agents" | "skills" | "rules" | "hooks" | "mcpServers">;
 
-function toKebabCase(value: string): string { return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9.-]/g, ""); }
-function normalizeEnvironmentList(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) { const normalized = value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0); return normalized.length === 0 ? undefined : normalized; }
-  if (typeof value === "string") { const normalized = value.split(",").map(entry => entry.trim()).filter(entry => entry.length > 0); return normalized.length === 0 ? undefined : normalized; }
+function slugifyName(value: string): string { return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9.-]/g, ""); }
+function normalizeEnvironments(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) { const normalizedEntries = value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0); return normalizedEntries.length === 0 ? undefined : normalizedEntries; }
+  if (typeof value === "string") { const normalizedEntries = value.split(",").map(entry => entry.trim()).filter(entry => entry.length > 0); return normalizedEntries.length === 0 ? undefined : normalizedEntries; }
   return undefined;
 }
-function parseNameAndDescription(content: string): { name?: string | undefined; description?: string | undefined; environments?: string[] | undefined; disabledEnvironments?: string[] | undefined } {
-  const frontmatterMatch = content.match(FRONTMATTER_REGEX); if (!frontmatterMatch) return {};
+function readFrontmatter(content: string): { name?: string | undefined; description?: string | undefined; environments?: string[] | undefined; disabledEnvironments?: string[] | undefined } {
+  const frontmatterBlock = content.match(FRONTMATTER_PATTERN); if (!frontmatterBlock) return {};
   try {
-    const parsed = yaml.load(frontmatterMatch[1]!, { schema: yaml.JSON_SCHEMA }); if (!parsed || typeof parsed !== "object") return {};
-    const record = parsed as Record<string, unknown>, metadata = record.metadata !== null && typeof record.metadata === "object" ? record.metadata as Record<string, unknown> : undefined;
-    return { disabledEnvironments: normalizeEnvironmentList(record["disabled-environments"] ?? metadata?.disabledEnvironments), environments: normalizeEnvironmentList(record.environments ?? metadata?.environments), name: typeof record.name === "string" ? record.name : undefined, description: typeof record.description === "string" ? record.description : undefined };
+    const frontmatterFields = yaml.load(frontmatterBlock[1]!, { schema: yaml.JSON_SCHEMA }); if (!frontmatterFields || typeof frontmatterFields !== "object") return {};
+    const frontmatterRecord = frontmatterFields as Record<string, unknown>, frontmatterMetadata = frontmatterRecord.frontmatterMetadata !== null && typeof frontmatterRecord.frontmatterMetadata === "object" ? frontmatterRecord.frontmatterMetadata as Record<string, unknown> : undefined;
+    return { disabledEnvironments: normalizeEnvironments(frontmatterRecord["disabled-environments"] ?? frontmatterMetadata?.disabledEnvironments), environments: normalizeEnvironments(frontmatterRecord.environments ?? frontmatterMetadata?.environments), name: typeof frontmatterRecord.name === "string" ? frontmatterRecord.name : undefined, description: typeof frontmatterRecord.description === "string" ? frontmatterRecord.description : undefined };
   } catch {
-    const raw = frontmatterMatch[1]!, nameMatch = raw.match(/^name:\s*(.+)$/m), descriptionMatch = raw.match(/^description:\s*(.+)$/m);
-    return nameMatch || descriptionMatch ? { name: nameMatch ? nameMatch[1]!.trim() : undefined, description: descriptionMatch ? descriptionMatch[1]!.trim() : undefined } : {};
+    const frontmatterText = frontmatterBlock[1]!, nameLine = frontmatterText.match(/^name:\s*(.+)$/m), descriptionLine = frontmatterText.match(/^description:\s*(.+)$/m);
+    return nameLine || descriptionLine ? { name: nameLine ? nameLine[1]!.trim() : undefined, description: descriptionLine ? descriptionLine[1]!.trim() : undefined } : {};
   }
 }
-function deriveNameFromPath(filePath: string): string { return toKebabCase(basename(filePath).replace(/\.(md|mdc|markdown|txt)$/i, "")); }
-function deduplicateByName(components: PluginComponentDescriptor[]): PluginComponentDescriptor[] { const seen = new Set<string>(), result: PluginComponentDescriptor[] = []; for (const component of components) if (!seen.has(component.name)) { seen.add(component.name); result.push(component); } return result; }
+function nameFromPath(filePath: string): string { return slugifyName(basename(filePath).replace(/\.(md|mdc|markdown|txt)$/i, "")); }
+function uniqueByName(descriptors: PluginComponentDescriptor[]): PluginComponentDescriptor[] { const seenNames = new Set<string>(), result: PluginComponentDescriptor[] = []; for (const descriptor of descriptors) if (!seenNames.has(descriptor.name)) { seenNames.add(descriptor.name); result.push(descriptor); } return result; }
 
 export class PluginComponentDiscovery {
-  constructor(private readonly fetcher: PluginFileFetcher) {}
+  constructor(private readonly fileFetcher: PluginFileFetcher) {}
 
-  async discoverComponents(options: { basePath?: string | undefined; metadataOnly?: boolean | undefined; manifest?: PluginDiscoveryManifest | undefined } = {}): Promise<DiscoveredPluginComponents> {
-    const basePath = options.basePath ?? "", basePrefix = basePath ? `${basePath}/` : "", metadataOnly = options.metadataOnly ?? false, manifest = options.manifest;
-    let rootContents: PluginFileEntry[]; try { rootContents = await this.fetcher.listDirectory(basePath); } catch { rootContents = []; }
-    const folderNames = new Set(rootContents.filter(item => item.type === "dir").map(item => item.name.toLowerCase()));
-    const presentMcpConfigFiles = PLUGIN_MCP_CONFIG_FILE_NAMES.filter(name => rootContents.some(item => item.type === "file" && item.name === name));
-    const hasRootSkillMd = rootContents.some(item => item.type === "file" && item.name === "SKILL.md");
-    const [rootSkill, skills, agents, hooks, commands, rules, mcp] = await Promise.all([
-      hasRootSkillMd && manifest?.skills === undefined ? this.discoverRootSkill(basePrefix, metadataOnly) : Promise.resolve(null),
-      manifest?.skills !== undefined ? this.discoverFromManifestPaths(basePrefix, manifest.skills, true, MARKDOWN_EXTENSIONS, metadataOnly) : folderNames.has("skills") ? this.discoverSkills(`${basePrefix}skills`, metadataOnly) : Promise.resolve([]),
-      manifest?.agents !== undefined ? this.discoverFromManifestPaths(basePrefix, manifest.agents, false, MARKDOWN_EXTENSIONS, metadataOnly) : folderNames.has("agents") ? this.discoverMarkdownComponents(`${basePrefix}agents`, MARKDOWN_EXTENSIONS, metadataOnly) : Promise.resolve([]),
-      manifest?.hooks !== undefined ? this.discoverHooksFromManifest(basePrefix, manifest.hooks, metadataOnly) : folderNames.has("hooks") ? this.discoverHooksFromJson(`${basePrefix}hooks/hooks.json`, metadataOnly) : Promise.resolve([]),
-      manifest?.commands !== undefined ? this.discoverFromManifestPaths(basePrefix, manifest.commands, false, COMMAND_EXTENSIONS, metadataOnly) : folderNames.has("commands") ? this.discoverMarkdownComponents(`${basePrefix}commands`, COMMAND_EXTENSIONS, metadataOnly) : Promise.resolve([]),
-      manifest?.rules !== undefined ? this.discoverFromManifestPaths(basePrefix, manifest.rules, false, MARKDOWN_EXTENSIONS, metadataOnly) : folderNames.has("rules") ? this.discoverMarkdownComponents(`${basePrefix}rules`, MARKDOWN_EXTENSIONS, metadataOnly) : Promise.resolve([]),
-      this.discoverMcpServers(basePrefix, manifest?.mcpServers, presentMcpConfigFiles),
+  async discoverComponents(discoveryOptions: { rootPath?: string | undefined; metadataOnly?: boolean | undefined; manifest?: PluginDiscoveryManifest | undefined } = {}): Promise<DiscoveredPluginComponents> {
+    const rootPath = discoveryOptions.rootPath ?? "", rootPrefix = rootPath ? `${rootPath}/` : "", metadataOnlyMode = discoveryOptions.metadataOnly ?? false, manifest = discoveryOptions.manifest;
+    let rootEntries: PluginFileEntry[]; try { rootEntries = await this.fileFetcher.listDirectory(rootPath); } catch { rootEntries = []; }
+    const directoryNames = new Set(rootEntries.filter(item => item.type === "dir").map(item => item.name.toLowerCase()));
+    const mcpConfigFiles = PLUGIN_MCP_CONFIG_FILE_NAMES.filter(name => rootEntries.some(item => item.type === "file" && item.name === name));
+    const hasRootSkillFile = rootEntries.some(item => item.type === "file" && item.name === "SKILL.md");
+    const [rootSkillComponent, skills, agents, hooks, commands, rules, mcp] = await Promise.all([
+      hasRootSkillFile && manifest?.skills === undefined ? this.readRootSkill(rootPrefix, metadataOnlyMode) : Promise.resolve(null),
+      manifest?.skills !== undefined ? this.readManifestPaths(rootPrefix, manifest.skills, true, MARKDOWN_SUFFIXES, metadataOnlyMode) : directoryNames.has("skills") ? this.readSkillsFolder(`${rootPrefix}skills`, metadataOnlyMode) : Promise.resolve([]),
+      manifest?.agents !== undefined ? this.readManifestPaths(rootPrefix, manifest.agents, false, MARKDOWN_SUFFIXES, metadataOnlyMode) : directoryNames.has("agents") ? this.readMarkdownFolder(`${rootPrefix}agents`, MARKDOWN_SUFFIXES, metadataOnlyMode) : Promise.resolve([]),
+      manifest?.hooks !== undefined ? this.readHooksFromManifest(rootPrefix, manifest.hooks, metadataOnlyMode) : directoryNames.has("hooks") ? this.readHooksJson(`${rootPrefix}hooks/hooks.json`, metadataOnlyMode) : Promise.resolve([]),
+      manifest?.commands !== undefined ? this.readManifestPaths(rootPrefix, manifest.commands, false, COMMAND_SUFFIXES, metadataOnlyMode) : directoryNames.has("commands") ? this.readMarkdownFolder(`${rootPrefix}commands`, COMMAND_SUFFIXES, metadataOnlyMode) : Promise.resolve([]),
+      manifest?.rules !== undefined ? this.readManifestPaths(rootPrefix, manifest.rules, false, MARKDOWN_SUFFIXES, metadataOnlyMode) : directoryNames.has("rules") ? this.readMarkdownFolder(`${rootPrefix}rules`, MARKDOWN_SUFFIXES, metadataOnlyMode) : Promise.resolve([]),
+      this.readMcpServers(rootPrefix, manifest?.mcpServers, mcpConfigFiles),
     ]);
-    return { skills: deduplicateByName(rootSkill ? [rootSkill, ...skills] : skills), agents: deduplicateByName(agents), hooks, commands: deduplicateByName(commands), rules: deduplicateByName(rules), mcpServers: mcp.servers, mcpVariables: mcp.variables };
+    return { skills: uniqueByName(rootSkillComponent ? [rootSkillComponent, ...skills] : skills), agents: uniqueByName(agents), hooks, commands: uniqueByName(commands), rules: uniqueByName(rules), mcpServers: mcp.servers, mcpVariables: mcp.variables };
   }
 
-  private async discoverHooksFromJson(hooksJsonPath: string, metadataOnly = false): Promise<PluginComponentDescriptor[]> {
-    try { if (!await this.fetcher.fileExists(hooksJsonPath)) return []; const config = JSON.parse((await this.fetcher.fetchFile(hooksJsonPath)).content) as { hooks?: unknown }; if (!config.hooks || typeof config.hooks !== "object" || Array.isArray(config.hooks)) return []; return Object.keys(config.hooks).map(name => ({ name: toKebabCase(name), path: hooksJsonPath, description: metadataOnly ? EMPTY_METADATA_DESCRIPTION : `Hook: ${name}` })); } catch { return []; }
+  private async readHooksJson(hooksJsonPath: string, metadataOnlyMode = false): Promise<PluginComponentDescriptor[]> {
+    try { if (!await this.fileFetcher.fileExists(hooksJsonPath)) return []; const config = JSON.parse((await this.fileFetcher.fetchFile(hooksJsonPath)).content) as { hooks?: unknown }; if (!config.hooks || typeof config.hooks !== "object" || Array.isArray(config.hooks)) return []; return Object.keys(config.hooks).map(name => ({ name: slugifyName(name), path: hooksJsonPath, description: metadataOnlyMode ? EMPTY_DESCRIPTION : `Hook: ${name}` })); } catch { return []; }
   }
-  private async discoverHooksFromManifest(basePrefix: string, hooksConfig: NonNullable<PluginManifest["hooks"]>, metadataOnly = false): Promise<PluginComponentDescriptor[]> {
-    if (typeof hooksConfig === "string") { if (!isPathSafe(hooksConfig)) return []; const fullPath = `${basePrefix}${hooksConfig.replace(/^\.\//, "")}`; return this.discoverHooksFromJson(fullPath.endsWith(".json") ? fullPath : `${fullPath}/hooks.json`, metadataOnly); }
-    const hooksRecord = hooksConfig as Record<string, unknown>, hooks = hooksRecord.hooks ?? hooksRecord; if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) return [];
-    return Object.keys(hooks).map(name => ({ name: toKebabCase(name), path: "manifest", description: metadataOnly ? EMPTY_METADATA_DESCRIPTION : `Hook: ${name}` }));
+  private async readHooksFromManifest(rootPrefix: string, hooksSetting: NonNullable<PluginManifest["hooks"]>, metadataOnlyMode = false): Promise<PluginComponentDescriptor[]> {
+    if (typeof hooksSetting === "string") { if (!isPathSafe(hooksSetting)) return []; const targetPath = `${rootPrefix}${hooksSetting.replace(/^\.\//, "")}`; return this.readHooksJson(targetPath.endsWith(".json") ? targetPath : `${targetPath}/hooks.json`, metadataOnlyMode); }
+    const hooksObject = hooksSetting as Record<string, unknown>, hooks = hooksObject.hooks ?? hooksObject; if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) return [];
+    return Object.keys(hooks).map(name => ({ name: slugifyName(name), path: "manifest", description: metadataOnlyMode ? EMPTY_DESCRIPTION : `Hook: ${name}` }));
   }
 
-  private async discoverFromManifestPaths(basePrefix: string, paths: string | string[], isSkillDir = false, extensions = MARKDOWN_EXTENSIONS, metadataOnly = false): Promise<PluginComponentDescriptor[]> {
-    if (typeof paths === "string") { if (!isPathSafe(paths)) return []; const directory = `${basePrefix}${paths.replace(/^\.\//, "")}`.replace(/\/$/, ""); return isSkillDir ? this.discoverSkills(directory, metadataOnly) : this.discoverMarkdownComponents(directory, extensions, metadataOnly); }
-    const results: PluginComponentDescriptor[] = [];
-    for (const itemPath of paths) {
+  private async readManifestPaths(rootPrefix: string, entryPaths: string | string[], skillDirectory = false, suffixes = MARKDOWN_SUFFIXES, metadataOnlyMode = false): Promise<PluginComponentDescriptor[]> {
+    if (typeof entryPaths === "string") { if (!isPathSafe(entryPaths)) return []; const directoryEntry = `${rootPrefix}${entryPaths.replace(/^\.\//, "")}`.replace(/\/$/, ""); return skillDirectory ? this.readSkillsFolder(directoryEntry, metadataOnlyMode) : this.readMarkdownFolder(directoryEntry, suffixes, metadataOnlyMode); }
+    const descriptors: PluginComponentDescriptor[] = [];
+    for (const entryPath of entryPaths) {
       try {
-        if (!isPathSafe(itemPath)) continue; const fullPath = `${basePrefix}${itemPath.replace(/^\.\//, "")}`;
-        if (isSkillDir) {
-          const skillPath = fullPath.endsWith("SKILL.md") ? fullPath : `${fullPath.replace(/\/$/, "")}/SKILL.md`;
-          if (!await this.fetcher.fileExists(skillPath)) { results.push(...await this.discoverSkills(fullPath.replace(/\/$/, ""), metadataOnly)); continue; }
-          const directory = fullPath.endsWith("SKILL.md") ? fullPath.slice(0, -"SKILL.md".length).replace(/\/$/, "") : fullPath; let name = deriveNameFromPath(directory), description = metadataOnly ? EMPTY_METADATA_DESCRIPTION : undefined;
-          if (!metadataOnly) { const parsed = parseNameAndDescription((await this.fetcher.fetchFile(skillPath)).content); name = parsed.name ?? name; description = parsed.description; if (name) { const component: PluginComponentDescriptor = { disabledEnvironments: parsed.disabledEnvironments, environments: parsed.environments, name: toKebabCase(name), path: skillPath }; if (description !== undefined) component.description = description; results.push(component); } continue; }
-          if (name) { const component: PluginComponentDescriptor = { name: toKebabCase(name), path: skillPath }; if (description !== undefined) component.description = description; results.push(component); }
+        if (!isPathSafe(entryPath)) continue; const targetPath = `${rootPrefix}${entryPath.replace(/^\.\//, "")}`;
+        if (skillDirectory) {
+          const skillPath = targetPath.endsWith("SKILL.md") ? targetPath : `${targetPath.replace(/\/$/, "")}/SKILL.md`;
+          if (!await this.fileFetcher.fileExists(skillPath)) { descriptors.push(...await this.readSkillsFolder(targetPath.replace(/\/$/, ""), metadataOnlyMode)); continue; }
+          const directoryEntry = targetPath.endsWith("SKILL.md") ? targetPath.slice(0, -"SKILL.md".length).replace(/\/$/, "") : targetPath; let name = nameFromPath(directoryEntry), description = metadataOnlyMode ? EMPTY_DESCRIPTION : undefined;
+          if (!metadataOnlyMode) { const frontmatterFields = readFrontmatter((await this.fileFetcher.fetchFile(skillPath)).content); name = frontmatterFields.name ?? name; description = frontmatterFields.description; if (name) { const descriptor: PluginComponentDescriptor = { disabledEnvironments: frontmatterFields.disabledEnvironments, environments: frontmatterFields.environments, name: slugifyName(name), path: skillPath }; if (description !== undefined) descriptor.description = description; descriptors.push(descriptor); } continue; }
+          if (name) { const descriptor: PluginComponentDescriptor = { name: slugifyName(name), path: skillPath }; if (description !== undefined) descriptor.description = description; descriptors.push(descriptor); }
         } else {
-          if (!await this.fetcher.fileExists(fullPath)) continue; let name = deriveNameFromPath(fullPath), description = metadataOnly ? EMPTY_METADATA_DESCRIPTION : undefined;
-          if (!metadataOnly) { const parsed = parseNameAndDescription((await this.fetcher.fetchFile(fullPath)).content); name = parsed.name ?? name; description = parsed.description; }
-          if (name) { const component: PluginComponentDescriptor = { name: toKebabCase(name), path: fullPath }; if (description !== undefined) component.description = description; results.push(component); }
+          if (!await this.fileFetcher.fileExists(targetPath)) continue; let name = nameFromPath(targetPath), description = metadataOnlyMode ? EMPTY_DESCRIPTION : undefined;
+          if (!metadataOnlyMode) { const frontmatterFields = readFrontmatter((await this.fileFetcher.fetchFile(targetPath)).content); name = frontmatterFields.name ?? name; description = frontmatterFields.description; }
+          if (name) { const descriptor: PluginComponentDescriptor = { name: slugifyName(name), path: targetPath }; if (description !== undefined) descriptor.description = description; descriptors.push(descriptor); }
         }
       } catch {}
     }
-    return results;
+    return descriptors;
   }
 
-  private async discoverMarkdownComponents(folderPath: string, extensions = MARKDOWN_EXTENSIONS, metadataOnly = false, visited = new Set<string>()): Promise<PluginComponentDescriptor[]> {
-    let contents: PluginFileEntry[]; try { contents = await this.fetcher.listDirectory(folderPath, visited); } catch { return []; }
-    const files = contents.filter(item => item.type === "file" && extensions.some(extension => item.name.endsWith(extension))), directories = contents.filter(item => item.type === "dir");
-    const [fileResults, directoryResults] = await Promise.all([
-      Promise.all(files.map(async file => { try { let name = deriveNameFromPath(file.name), description = metadataOnly ? EMPTY_METADATA_DESCRIPTION : undefined; if (!metadataOnly) { const parsed = parseNameAndDescription((await this.fetcher.fetchFile(file.path)).content); name = parsed.name ? toKebabCase(parsed.name) : name; description = parsed.description; } if (!name) return null; const component: PluginComponentDescriptor = { name, path: file.path }; if (description !== undefined) component.description = description; return component; } catch { return null; } })),
-      Promise.all(directories.map(directory => this.discoverMarkdownComponents(directory.path, extensions, metadataOnly, visited))),
+  private async readMarkdownFolder(folderPath: string, suffixes = MARKDOWN_SUFFIXES, metadataOnlyMode = false, visited = new Set<string>()): Promise<PluginComponentDescriptor[]> {
+    let directoryEntries: PluginFileEntry[]; try { directoryEntries = await this.fileFetcher.listDirectory(folderPath, visited); } catch { return []; }
+    const files = directoryEntries.filter(item => item.type === "file" && suffixes.some(extension => item.name.endsWith(extension))), directories = directoryEntries.filter(item => item.type === "dir");
+    const [fileDescriptors, nestedDescriptors] = await Promise.all([
+      Promise.all(files.map(async file => { try { let name = nameFromPath(file.name), description = metadataOnlyMode ? EMPTY_DESCRIPTION : undefined; if (!metadataOnlyMode) { const frontmatterFields = readFrontmatter((await this.fileFetcher.fetchFile(file.path)).content); name = frontmatterFields.name ? slugifyName(frontmatterFields.name) : name; description = frontmatterFields.description; } if (!name) return null; const descriptor: PluginComponentDescriptor = { name, path: file.path }; if (description !== undefined) descriptor.description = description; return descriptor; } catch { return null; } })),
+      Promise.all(directories.map(directoryEntry => this.readMarkdownFolder(directoryEntry.path, suffixes, metadataOnlyMode, visited))),
     ]);
-    return [...fileResults.filter((component): component is PluginComponentDescriptor => component !== null), ...directoryResults.flat()];
+    return [...fileDescriptors.filter((descriptor): descriptor is PluginComponentDescriptor => descriptor !== null), ...nestedDescriptors.flat()];
   }
 
-  private async discoverRootSkill(basePrefix: string, metadataOnly = false): Promise<PluginComponentDescriptor | null> {
+  private async readRootSkill(rootPrefix: string, metadataOnlyMode = false): Promise<PluginComponentDescriptor | null> {
     try {
-      const skillPath = `${basePrefix}SKILL.md`, directoryName = basename(basePrefix.replace(/[\\/]+$/, "")); let name = metadataOnly ? toKebabCase(directoryName || deriveNameFromPath(skillPath)) : toKebabCase(directoryName), description = metadataOnly ? EMPTY_METADATA_DESCRIPTION : undefined;
-      if (!metadataOnly) { const parsed = parseNameAndDescription((await this.fetcher.fetchFile(skillPath)).content); name = parsed.name ? toKebabCase(parsed.name) : name; description = parsed.description; if (!name) return null; const component: PluginComponentDescriptor = { disabledEnvironments: parsed.disabledEnvironments, environments: parsed.environments, name, path: skillPath }; if (description !== undefined) component.description = description; return component; }
+      const skillPath = `${rootPrefix}SKILL.md`, directoryName = basename(rootPrefix.replace(/[\\/]+$/, "")); let name = metadataOnlyMode ? slugifyName(directoryName || nameFromPath(skillPath)) : slugifyName(directoryName), description = metadataOnlyMode ? EMPTY_DESCRIPTION : undefined;
+      if (!metadataOnlyMode) { const frontmatterFields = readFrontmatter((await this.fileFetcher.fetchFile(skillPath)).content); name = frontmatterFields.name ? slugifyName(frontmatterFields.name) : name; description = frontmatterFields.description; if (!name) return null; const descriptor: PluginComponentDescriptor = { disabledEnvironments: frontmatterFields.disabledEnvironments, environments: frontmatterFields.environments, name, path: skillPath }; if (description !== undefined) descriptor.description = description; return descriptor; }
       if (!name) return null; return { name, path: skillPath, ...(description !== undefined ? { description } : {}) };
     } catch { return null; }
   }
 
-  private async discoverSkills(skillsPath: string, metadataOnly = false): Promise<PluginComponentDescriptor[]> {
-    let contents: PluginFileEntry[]; try { contents = await this.fetcher.listDirectory(skillsPath); } catch { return []; }
-    const results = await Promise.all(contents.filter(item => item.type === "dir").map(async directory => {
-      try { const skillPath = `${directory.path}/SKILL.md`; if (!await this.fetcher.fileExists(skillPath)) return null; if (metadataOnly) { const name = toKebabCase(directory.name); return name ? { name, path: skillPath, description: EMPTY_METADATA_DESCRIPTION } : null; } const parsed = parseNameAndDescription((await this.fetcher.fetchFile(skillPath)).content), name = parsed.name ? toKebabCase(parsed.name) : toKebabCase(directory.name); if (!name) return null; const component: PluginComponentDescriptor = { disabledEnvironments: parsed.disabledEnvironments, environments: parsed.environments, name, path: skillPath }; if (parsed.description !== undefined) component.description = parsed.description; return component; } catch { return null; }
+  private async readSkillsFolder(skillsPath: string, metadataOnlyMode = false): Promise<PluginComponentDescriptor[]> {
+    let directoryEntries: PluginFileEntry[]; try { directoryEntries = await this.fileFetcher.listDirectory(skillsPath); } catch { return []; }
+    const descriptors = await Promise.all(directoryEntries.filter(item => item.type === "dir").map(async directoryEntry => {
+      try { const skillPath = `${directoryEntry.path}/SKILL.md`; if (!await this.fileFetcher.fileExists(skillPath)) return null; if (metadataOnlyMode) { const name = slugifyName(directoryEntry.name); return name ? { name, path: skillPath, description: EMPTY_DESCRIPTION } : null; } const frontmatterFields = readFrontmatter((await this.fileFetcher.fetchFile(skillPath)).content), name = frontmatterFields.name ? slugifyName(frontmatterFields.name) : slugifyName(directoryEntry.name); if (!name) return null; const descriptor: PluginComponentDescriptor = { disabledEnvironments: frontmatterFields.disabledEnvironments, environments: frontmatterFields.environments, name, path: skillPath }; if (frontmatterFields.description !== undefined) descriptor.description = frontmatterFields.description; return descriptor; } catch { return null; }
     }));
-    return results.filter((component): component is PluginComponentDescriptor => component !== null);
+    return descriptors.filter((descriptor): descriptor is PluginComponentDescriptor => descriptor !== null);
   }
 
-  private async discoverMcpServers(basePrefix: string, manifestMcpServers: unknown, presentMcpConfigFiles: readonly string[]): Promise<{ servers: PluginComponentDescriptor[]; variables: DiscoveredPluginComponents["mcpVariables"] }> {
-    const fetched = new Map<string, Promise<string | null>>();
-    const readFileContent = async (relativePath: string): Promise<string | null> => { const cached = fetched.get(relativePath); if (cached !== undefined) return cached; const pending = this.fetcher.fetchFile(`${basePrefix}${relativePath}`).then(({ content }) => content).catch(() => null); fetched.set(relativePath, pending); return pending; };
-    const resolveWith = async (manifestPrecedence: "fill" | "override") => resolvePluginMcpConfigFromReader(readFileContent, manifestMcpServers, manifestMcpServers !== undefined ? "manifest" : undefined, { fallbackFileNames: presentMcpConfigFiles, manifestPrecedence, toSourcePath: relativePath => `${basePrefix}${relativePath}`, parserOptions: { skipExpansion: true } });
-    const resolved = await resolveWith("fill"); if (resolved?.mcpServers === undefined) return { servers: [], variables: undefined };
-    const runtimeResolved = manifestMcpServers === undefined ? resolved : await resolveWith("override");
-    return { servers: Object.keys(resolved.mcpServers).map(name => ({ name: toKebabCase(name), path: resolved.mcpServerSourcePaths?.[name] ?? "manifest" })), variables: inferMcpPlaceholderVariables(runtimeResolved ?? resolved) };
+  private async readMcpServers(rootPrefix: string, manifestMcpServers: unknown, mcpConfigFiles: readonly string[]): Promise<{ servers: PluginComponentDescriptor[]; variables: DiscoveredPluginComponents["mcpVariables"] }> {
+    const fileCache = new Map<string, Promise<string | null>>();
+    const readConfigContent = async (relativePath: string): Promise<string | null> => { const cached = fileCache.get(relativePath); if (cached !== undefined) return cached; const pending = this.fileFetcher.fetchFile(`${rootPrefix}${relativePath}`).then(({ content }) => content).catch(() => null); fileCache.set(relativePath, pending); return pending; };
+    const resolveManifestConfig = async (precedence: "fill" | "override") => resolvePluginMcpConfigFromReader(readConfigContent, manifestMcpServers, manifestMcpServers !== undefined ? "manifest" : undefined, { fallbackFileNames: mcpConfigFiles, manifestPrecedence: precedence, toSourcePath: relativePath => `${rootPrefix}${relativePath}`, parserOptions: { skipExpansion: true } });
+    const resolved = await resolveManifestConfig("fill"); if (resolved?.mcpServers === undefined) return { servers: [], variables: undefined };
+    const runtimeConfig = manifestMcpServers === undefined ? resolved : await resolveManifestConfig("override");
+    return { servers: Object.keys(resolved.mcpServers).map(name => ({ name: slugifyName(name), path: resolved.mcpServerSourcePaths?.[name] ?? "manifest" })), variables: inferMcpPlaceholderVariables(runtimeConfig ?? resolved) };
   }
 }
