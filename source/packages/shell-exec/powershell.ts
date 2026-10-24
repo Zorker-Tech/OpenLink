@@ -37,149 +37,149 @@ import dumpPowerShellState from "./dump_powershell_state.ts";
 
 type SandboxPolicySources = NonNullable<Parameters<typeof resolveSandboxPolicyForWorkspace>[1]>;
 type OutputLimiterOptions = Parameters<typeof attachShellOutputStreams>[0]["outputLimiterOptions"];
-type PowerShellExecuteOptions = Omit<TerminalExecuteOptions, "sandboxPolicy" | "outputLimiterOptions"> & {
+type PowerShellExecuteOptions = Omit<TerminalExecuteOptions, "executionPolicy" | "outputLimiterOptions"> & {
   readonly sandboxPolicy?: SandboxPolicySources;
   readonly outputLimiterOptions?: OutputLimiterOptions;
   readonly closeTimeout?: number;
 };
 type SpawnWithSignal = (
   command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-  sandboxPolicy: SandboxExecutionPolicy,
+  launcherArgs: readonly string[],
+  settings: SpawnOptions,
+  executionPolicy: SandboxExecutionPolicy,
   signal?: AbortSignal,
 ) => ChildProcess;
 
-let spawnWithSignalBinding: SpawnWithSignal = spawnWithSignal;
+let boundSpawn: SpawnWithSignal = spawnWithSignal;
 
-function requireSpawnWithSignal(): SpawnWithSignal {
-  return spawnWithSignalBinding;
+function spawnWithSignalBindingOf(): SpawnWithSignal {
+  return boundSpawn;
 }
 
-const UTF8_BOM = "\uFEFF";
+const BOM_PREFIX = "\uFEFF";
 
-async function writeFileWithBom(filePath: string, content: string): Promise<void> {
-  await writeFile(filePath, UTF8_BOM + content, { encoding: "utf8" });
+async function writeScriptWithBom(filePath: string, content: string): Promise<void> {
+  await writeFile(filePath, BOM_PREFIX + content, { encoding: "utf8" });
 }
 
-export async function initPowerShellState(): Promise<PowerShellState> {
-  return new PowerShellState(process.cwd(), "");
+export async function initPowerShellState(): Promise<PowerShellSession> {
+  return new PowerShellSession(process.cwd(), "");
 }
 
-class PowerShellState {
-  constructor(private cwd: string, private state: string) {}
+class PowerShellSession {
+  constructor(private scriptCwd: string, private state: string) {}
 
   async getCwd(): Promise<string> {
-    return this.cwd;
+    return this.scriptCwd;
   }
 
-  clone(workingDirectory?: string): PowerShellState {
-    return new PowerShellState(workingDirectory ?? this.cwd, this.state);
+  clone(workingDirectory?: string): PowerShellSession {
+    return new PowerShellSession(workingDirectory ?? this.scriptCwd, this.state);
   }
 
-  async *execute(ctx: Context, command: string, options?: PowerShellExecuteOptions): AsyncIterable<TerminalEvent> {
-    using span = createSpan(ctx.withName("PowerShellState.execute"));
-    const pipeStdin = options?.pipeStdin ?? false;
-    const cwd = options?.workingDirectory ?? this.cwd;
-    const iterable = createWritableIterable<TerminalEvent>();
+  async *execute(ctx: Context, command: string, settings?: PowerShellExecuteOptions): AsyncIterable<TerminalEvent> {
+    using span = createSpan(ctx.withName("PowerShellSession.execute"));
+    const pipesInput = settings?.pipeStdin ?? false;
+    const scriptCwd = settings?.workingDirectory ?? this.scriptCwd;
+    const outputEvents = createWritableIterable<TerminalEvent>();
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       ...SHELL_ENV_OVERRIDES,
-      ...options?.env,
+      ...settings?.env,
     };
-    const transformedCommand = shouldEnableSudoAskpass(env) ? transformSudoCommand(command) : command;
-    const tempDir = tmpdir();
-    const stateOutFile = join(tempDir, `ps-state-out-${randomUUID()}.txt`);
-    const commandScript = dumpPowerShellState(this.state, cwd, transformedCommand, stateOutFile);
-    const scriptFile = join(tempDir, `ps-script-${randomUUID()}.ps1`);
-    await writeFileWithBom(scriptFile, commandScript);
-    const args = ["-ExecutionPolicy", "Bypass"];
-    if (!pipeStdin) args.push("-NonInteractive");
-    args.push("-File", scriptFile);
-    const pwsh = getPowerShellExecutable();
-    const isWindows = process.platform === "win32";
-    const sandboxWorkspaceRoot = options?.sandboxWorkspaceRoot ?? cwd;
-    const resolvedPolicy = (await resolveSandboxPolicyForWorkspace(sandboxWorkspaceRoot, options?.sandboxPolicy)).policy;
-    const sandboxPolicy = resolvedPolicy.type !== "insecure_none" ? { ...resolvedPolicy, sandboxWorkspaceRoot } : resolvedPolicy;
-    const child = requireSpawnWithSignal()(pwsh, args, {
+    const convertedCommand = shouldEnableSudoAskpass(env) ? transformSudoCommand(command) : command;
+    const tempDirectory = tmpdir();
+    const stateFilePath = join(tempDirectory, `ps-state-out-${randomUUID()}.txt`);
+    const wrapperScript = dumpPowerShellState(this.state, scriptCwd, convertedCommand, stateFilePath);
+    const scriptPath = join(tempDirectory, `ps-script-${randomUUID()}.ps1`);
+    await writeScriptWithBom(scriptPath, wrapperScript);
+    const launcherArgs = ["-ExecutionPolicy", "Bypass"];
+    if (!pipesInput) launcherArgs.push("-NonInteractive");
+    launcherArgs.push("-File", scriptPath);
+    const executable = getPowerShellExecutable();
+    const onWindows = process.platform === "win32";
+    const workspaceRoot = settings?.sandboxWorkspaceRoot ?? scriptCwd;
+    const mergedPolicy = (await resolveSandboxPolicyForWorkspace(workspaceRoot, settings?.sandboxPolicy)).policy;
+    const executionPolicy = mergedPolicy.type !== "insecure_none" ? { ...mergedPolicy, workspaceRoot } : mergedPolicy;
+    const processHandle = spawnWithSignalBindingOf()(executable, launcherArgs, {
       env,
-      stdio: [pipeStdin ? "pipe" : "ignore", "pipe", "pipe"],
-      cwd,
-      detached: !isWindows,
-    }, sandboxPolicy, options?.signal);
-    child.on("spawn", async () => {
+      stdio: [pipesInput ? "pipe" : "ignore", "pipe", "pipe"],
+      cwd: scriptCwd,
+      detached: !onWindows,
+    }, executionPolicy, settings?.signal);
+    processHandle.on("spawn", async () => {
       try {
-        await iterable.write({ type: "stdin_ready", stdin: child.stdin ?? undefined, pid: child.pid });
+        await outputEvents.write({ type: "stdin_ready", stdin: processHandle.stdin ?? undefined, pid: processHandle.pid });
       } catch {
-        // The consumer may have closed the iterable before spawn was observed.
+        // The consumer may have closed the outputEvents before spawn was observed.
       }
     });
-    const outputPump = attachShellOutputStreams({
-      stdout: child.stdout,
-      stderr: child.stderr,
-      writable: iterable,
-      bufferOutputEvents: options?.bufferOutputEvents,
-      outputLimiterOptions: options?.outputLimiterOptions,
+    const outputPipes = attachShellOutputStreams({
+      stdout: processHandle.stdout,
+      stderr: processHandle.stderr,
+      writable: outputEvents,
+      bufferOutputEvents: settings?.bufferOutputEvents,
+      outputLimiterOptions: settings?.outputLimiterOptions,
     });
-    const cleanup = async (): Promise<void> => {
+    const removeArtifacts = async (): Promise<void> => {
       try {
-        const newState = await readFile(stateOutFile, "utf8");
+        const newState = await readFile(stateFilePath, "utf8");
         const { cwd: newCwd, rest } = splitPwdAndState(newState);
         this.state = rest;
-        this.cwd = newCwd.trim();
-        await rm(stateOutFile).catch(() => {});
+        this.scriptCwd = newCwd.trim();
+        await rm(stateFilePath).catch(() => {});
       } catch {
         // PowerShell may terminate before writing a state snapshot.
       }
-      await rm(scriptFile).catch(() => {});
+      await rm(scriptPath).catch(() => {});
     };
-    let exitCode: number | null = null;
-    let closeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let hasEmittedExit = false;
-    const emitExitAndClose = async (waitForOutputPumps: boolean): Promise<void> => {
-      if (hasEmittedExit) return;
-      hasEmittedExit = true;
-      if (closeTimeoutId !== null) {
-        clearTimeout(closeTimeoutId);
-        closeTimeoutId = null;
+    let childExitCode: number | null = null;
+    let closeTimer: ReturnType<typeof setTimeout> | null = null;
+    let exitSent = false;
+    const finishExecution = async (waitForOutputPumps: boolean): Promise<void> => {
+      if (exitSent) return;
+      exitSent = true;
+      if (closeTimer !== null) {
+        clearTimeout(closeTimer);
+        closeTimer = null;
       }
       reportEvent(span.ctx, "exit");
       if (waitForOutputPumps) {
         try {
-          await outputPump.waitForOutput();
+          await outputPipes.waitForOutput();
         } catch (error) {
-          await cleanup();
-          iterable.throw(error instanceof Error ? error : new Error(String(error)));
+          await removeArtifacts();
+          outputEvents.throw(error instanceof Error ? error : new Error(String(error)));
           return;
         }
       }
-      await outputPump.flush();
+      await outputPipes.flush();
       try {
-        await iterable.write(createShellExitEvent(exitCode, options?.signal?.aborted ?? false));
-        await cleanup();
-        iterable.close();
+        await outputEvents.write(createShellExitEvent(childExitCode, settings?.signal?.aborted ?? false));
+        await removeArtifacts();
+        outputEvents.close();
       } catch {
-        iterable.close();
+        outputEvents.close();
       }
     };
-    child.on("exit", (code) => {
-      exitCode = code;
-      const timeout = options?.closeTimeout ?? 5_000;
-      if (timeout > 0) {
-        closeTimeoutId = setTimeout(() => {
-          console.warn(`[shell-exec] Close event did not fire within ${timeout}ms after exit. This may indicate a background process is holding file descriptors open. Proceeding anyway to prevent hang.`);
-          void emitExitAndClose(false);
-        }, timeout);
+    processHandle.on("exit", (code) => {
+      childExitCode = code;
+      const gracePeriod = settings?.closeTimeout ?? 5_000;
+      if (gracePeriod > 0) {
+        closeTimer = setTimeout(() => {
+          console.warn(`[shell-exec] Close event did not fire within ${gracePeriod}ms after exit. This may indicate a background process is holding file descriptors open. Proceeding anyway to prevent hang.`);
+          void finishExecution(false);
+        }, gracePeriod);
       }
     });
-    child.on("close", () => {
-      void emitExitAndClose(true);
+    processHandle.on("close", () => {
+      void finishExecution(true);
     });
-    child.on("error", (error) => {
-      void cleanup().catch(() => {});
-      iterable.throw(error);
+    processHandle.on("error", (error) => {
+      void removeArtifacts().catch(() => {});
+      outputEvents.throw(error);
     });
-    yield* iterable;
+    yield* outputEvents;
   }
 }
 
