@@ -1,8 +1,9 @@
-import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFile, spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 interface Config {
@@ -353,6 +354,49 @@ function startDesktopProcess(): void {
     if (signal) console.error(`OpenLink desktop process exited from signal ${signal}`)
   })
 }
+
+type DesktopState = 'stopped' | 'installing' | 'booting' | 'running' | 'suspended' | 'failed'
+
+const desktopMode = process.env.OPENLINK_DESKTOP_MODE === 'ubuntu-iso' ? 'ubuntu-iso' : 'ubuntu-container'
+const desktopQmpSocket = '/tmp/openlink-ubuntu-vm-qmp.sock'
+const desktopControlScript = '/opt/openlink/desktop/qmp-control.py'
+const desktopInstalledMarker = resolve(config.sessionRoot, 'ubuntu-desktop', 'installed')
+const execFileAsync = promisify(execFile)
+
+function desktopProcessRunning(): boolean {
+  return Boolean(desktopProcess && desktopProcess.exitCode === null && !desktopProcess.killed)
+}
+
+async function desktopMarkerExists(): Promise<boolean> {
+  try { await access(desktopInstalledMarker); return true } catch { return false }
+}
+
+async function runDesktopQmp(command: 'status' | 'suspend' | 'resume'): Promise<Record<string, unknown>> {
+  const { stdout } = await execFileAsync('python3', [desktopControlScript, desktopQmpSocket, command], { timeout: 10_000 })
+  const line = stdout.trim().split('\n').pop() || ''
+  if (!line) throw new Error(`QMP ${command} returned no output`)
+  const result = JSON.parse(line) as Record<string, unknown>
+  if (result.ok === false) throw new Error(typeof result.error === 'string' ? result.error : `QMP ${command} failed`)
+  return result
+}
+
+async function desktopRuntimeState(): Promise<{ state: DesktopState; suspended: boolean }> {
+  if (!desktopProcessRunning()) return { state: 'stopped', suspended: false }
+  if (desktopMode !== 'ubuntu-iso') return { state: 'running', suspended: false }
+  if (!(await desktopMarkerExists())) return { state: 'installing', suspended: false }
+  try {
+    const result = await runDesktopQmp('status')
+    // The installer and the installed desktop share the QMP socket. Only the
+    // final VM may be paused; an installer in its late-command/reboot phase
+    // still has the installed marker.
+    if (result.name !== 'openlink-ubuntu-desktop') return { state: 'booting', suspended: false }
+    if (result.status === 'paused') return { state: 'suspended', suspended: true }
+    if (result.status === 'running') return { state: 'running', suspended: false }
+    return { state: 'booting', suspended: false }
+  } catch {
+    return { state: 'booting', suspended: false }
+  }
+}
 const server = createServer((request, response) => {
   void (async () => {
     const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
@@ -367,6 +411,40 @@ const server = createServer((request, response) => {
     if (request.method === 'POST' && url.pathname === '/desktop/start') {
       startDesktopProcess()
       response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ ok: true }))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/desktop/status') {
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(await desktopRuntimeState()))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/desktop/suspend') {
+      const current = await desktopRuntimeState()
+      if (current.state === 'suspended') {
+        response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        response.end(JSON.stringify({ suspended: true, state: current.state }))
+        return
+      }
+      if (desktopMode !== 'ubuntu-iso' || current.state !== 'running') {
+        response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        response.end(JSON.stringify({ suspended: false, state: current.state }))
+        return
+      }
+      await runDesktopQmp('suspend')
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ suspended: true, state: 'suspended' }))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/desktop/resume') {
+      const current = await desktopRuntimeState()
+      if (current.state !== 'suspended') {
+        response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        response.end(JSON.stringify({ suspended: false, state: current.state }))
+        return
+      }
+      await runDesktopQmp('resume')
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ suspended: false, state: 'running' }))
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/cancel') {

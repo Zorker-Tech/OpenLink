@@ -9,7 +9,7 @@ import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
-import { ensureDesktopEndpoint } from './desktop-runtime.js'
+import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 
 export interface RemoteOpenSandboxRpcConfig {
   domain: string
@@ -29,6 +29,9 @@ export interface RemoteRpcPromptSession {
   pause(): Promise<void>
   resume(): Promise<void>
   desktopEndpoint(): Promise<DesktopEndpoint>
+  desktopStatus(): Promise<DesktopRuntimeStatus>
+  suspendDesktop(): Promise<DesktopSuspendResult>
+  resumeDesktop(): Promise<DesktopSuspendResult>
   prompt(message: string, signal?: AbortSignal): Promise<Response>
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
@@ -273,6 +276,15 @@ export class RemoteOpenSandboxRpcBackend {
         const desktop = await activeSandbox.getEndpoint(6080)
         return { url: endpointUrl(connection, desktop), headers: desktop.headers ?? {} }
       }
+      const desktopControl = async (action: 'status' | 'suspend' | 'resume'): Promise<DesktopRuntimeStatus> => {
+        if (paused) return { state: 'stopped', suspended: false }
+        await ensureRunning()
+        return requestDesktopControl(baseUrl, {
+          ...endpoint.headers,
+          'X-OpenLink-Agent-Token': workerToken,
+          'Content-Type': 'application/json',
+        }, action)
+      }
       return {
         sandboxId: sandbox.id as string,
         pause: async () => {
@@ -282,6 +294,15 @@ export class RemoteOpenSandboxRpcBackend {
         },
         resume: ensureRunning,
         desktopEndpoint,
+        desktopStatus: () => desktopControl('status'),
+        suspendDesktop: async () => {
+          const result = await desktopControl('suspend')
+          return { suspended: result.suspended === true, state: result.state }
+        },
+        resumeDesktop: async () => {
+          const result = await desktopControl('resume')
+          return { suspended: result.suspended === true, state: result.state }
+        },
         prompt: async (message, signal) => {
           await ensureRunning()
           const headers = { ...endpoint.headers, 'X-OpenLink-Agent-Token': workerToken, 'Content-Type': 'application/json' }

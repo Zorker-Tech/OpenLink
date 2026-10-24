@@ -51,6 +51,25 @@ credentials.
 - Keep desktop availability optional on runtimes that do not expose a desktop
   endpoint.
 
+### Desktop lifecycle
+
+- Agent Host warms the desktop after a chat session is leased, before the user
+  opens the Desktop tab. `OPENLINK_DESKTOP_PREWARM=0` disables it, and
+  `OPENLINK_DESKTOP_PREWARM_MAX` (default `1`) bounds concurrent prewarmed
+  desktops because each ISO guest reserves several GB of the Project VM.
+- After `OPENLINK_DESKTOP_IDLE_TTL_MS` (default five minutes) with no Desktop
+  Gateway client, the worker pauses the installed desktop VM with QMP `stop`.
+  Opening the tab resumes it with QMP `cont`; the WebSocket connection is the
+  activity signal. The first-boot installer is never paused: QMP `query-name`
+  distinguishes `openlink-ubuntu-desktop` from
+  `openlink-ubuntu-desktop-installer`.
+- QMP `stop` freezes the vCPUs and retains the guest RAM, so resume is
+  near-instant. It does not free the guest memory. `system_wakeup` (guest S3)
+  is available through the same worker endpoint for guests that suspend
+  themselves.
+- The `ubuntu-container` fallback has no guest QMP socket, so it stays running
+  and is not suspended by this policy.
+
 ## Consequences
 
 - The Ubuntu container fallback uses GNOME/Xvfb. It is not a booted Ubuntu
@@ -61,9 +80,13 @@ credentials.
   when those CPU flags are available. Its session workloads need more CPU,
   memory, and disk than the container fallback.
 - The first ISO boot runs an unattended install. The installed qcow2 disk is
-  retained in that chat session's storage for later restarts.
+  retained in that chat session's storage for later restarts. Prewarming moves
+  the install earlier but does not remove it; a shared preinstalled golden
+  qcow2 with per-session overlays is the next optimization.
 - Opening the desktop adds GUI and VNC processes to that session workload.
   The VM mode additionally runs QEMU until the sandbox pauses or closes.
+  Prewarming starts those processes before the tab opens; idle sleep frees
+  their CPU, not their memory.
 - The worker images are larger because they ship the GUI and VM packages.
 - Browser clients never receive OpenSandbox API keys or direct sandbox URLs.
   Reverse proxies must allow WebSocket upgrades on the Desktop Gateway path.
