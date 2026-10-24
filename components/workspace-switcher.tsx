@@ -28,8 +28,9 @@ export interface ActiveWorkspaceSummary {
 }
 
 function ScopeAvatar({ label, organization }: { label: string; organization?: boolean }) {
+  const avatarTheme = organization ? theme('subtleSurface') : `${theme('brand')} text-[var(--app-submit-foreground)]`
   return (
-    <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${organization ? theme('subtleSurface') : 'bg-[linear-gradient(135deg,#7c3aed,#ec4899)] text-white'}`}>
+    <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${avatarTheme}`}>
       {label.trim().charAt(0).toUpperCase() || 'O'}
     </span>
   )

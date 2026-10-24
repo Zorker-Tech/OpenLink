@@ -199,6 +199,9 @@ const projectRuntimeProvisioner = provisioningQueue
   : undefined
 
 const sessionIdleTtlMs = integer(env.OPENLINK_AGENT_SESSION_IDLE_TTL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000)
+const desktopPrewarm = env.OPENLINK_DESKTOP_PREWARM !== '0'
+const desktopPrewarmMax = integer(env.OPENLINK_DESKTOP_PREWARM_MAX, 1, 1, 32)
+const desktopIdleTtlMs = integer(env.OPENLINK_DESKTOP_IDLE_TTL_MS, 5 * 60_000, 60_000, 24 * 60 * 60_000)
 const maxSessions = integer(env.OPENLINK_AGENT_MAX_SESSIONS, 32, 1, 512)
 const backend = new RemoteOpenSandboxRpcBackend({
   domain: '127.0.0.1:43122',
@@ -219,6 +222,9 @@ const runtime = await startPromptHttpServer({
   storageRoot: resolvePath(env.OPENLINK_REMOTE_AGENT_STORAGE_ROOT || '.agent-data/remote-host'),
   transport: 'ssh-project-vm-opensandbox-pi-cli-rpc',
   sessionIdleTtlMs,
+  desktopPrewarm,
+  desktopPrewarmMax,
+  desktopIdleTtlMs,
   maxSessions,
   projectRuntimeManager,
   requireProjectRuntime: true,

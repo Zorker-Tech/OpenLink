@@ -11,6 +11,7 @@ import type { ProjectRuntimeController } from './project-runtime-router.js'
 import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
 import { BrowserGateway } from './browser-gateway.js'
 import { DesktopGateway, type DesktopEndpoint } from './desktop-gateway.js'
+import type { DesktopRuntimeStatus, DesktopSuspendResult } from './backends/desktop-runtime.js'
 import { CodeServerGateway } from './code-server-gateway.js'
 import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
 
@@ -29,6 +30,12 @@ export interface PromptRuntimeSession {
   resources?(request?: AgentResourceRequest): Promise<unknown>
   /** Start or reconnect the session's private noVNC endpoint on demand. */
   desktopEndpoint?(): Promise<DesktopEndpoint>
+  /** Report whether the desktop is installing, booting, running or paused. */
+  desktopStatus?(): Promise<DesktopRuntimeStatus>
+  /** Pause the installed desktop VM (QMP stop) while retaining its memory state. */
+  suspendDesktop?(): Promise<DesktopSuspendResult>
+  /** Resume a paused desktop VM (QMP cont). */
+  resumeDesktop?(): Promise<DesktopSuspendResult>
   /** Hot-swap the optional Browser capability without recreating the Agent. */
   setBrowser?(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
@@ -72,6 +79,12 @@ export interface PromptHttpServerConfig {
   storageRoot: string
   transport: string
   sessionIdleTtlMs: number
+  /** Warm the desktop while the chat session is being initialized. */
+  desktopPrewarm?: boolean
+  /** Maximum number of sessions allowed to hold a prewarmed desktop. */
+  desktopPrewarmMax?: number
+  /** Pause the desktop VM after this long without any desktop client. */
+  desktopIdleTtlMs?: number
   maxSessions?: number
   projectVmManager?: ProjectVmManager
   projectRuntimeManager?: ProjectRuntimeController
@@ -690,6 +703,70 @@ export async function startPromptHttpServer(
     cleanupOperations.add(tracked)
     return tracked
   }
+  // Desktop prewarm is proactive: it starts the desktop while the chat is
+  // opening so the tab does not pay the installer/boot latency. Slots are
+  // bounded because each ISO desktop reserves several GB of the Project VM.
+  const desktopPrewarmSessions = new Set<string>()
+  const desktopPrewarmMax = config.desktopPrewarmMax ?? 1
+  const desktopIdleTimers = new Map<string, NodeJS.Timeout>()
+
+  function findSessionEntry(sessionId: string): SessionEntry | undefined {
+    for (const entry of sessions.values()) {
+      if (entry.sessionId === sessionId) return entry
+    }
+    return undefined
+  }
+
+  function releaseDesktopState(sessionId?: string): void {
+    if (!sessionId) return
+    const timer = desktopIdleTimers.get(sessionId)
+    if (timer) clearTimeout(timer)
+    desktopIdleTimers.delete(sessionId)
+    desktopPrewarmSessions.delete(sessionId)
+  }
+
+  function scheduleDesktopIdle(sessionId: string | undefined): void {
+    if (!sessionId) return
+    if (!config.desktopIdleTtlMs || desktopGateway.hasActiveConnection(sessionId)) return
+    const existing = desktopIdleTimers.get(sessionId)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      desktopIdleTimers.delete(sessionId)
+      if (desktopGateway.hasActiveConnection(sessionId)) {
+        scheduleDesktopIdle(sessionId)
+        return
+      }
+      const entry = findSessionEntry(sessionId)
+      if (!entry?.runtime.suspendDesktop) return
+      void entry.runtime.suspendDesktop()
+        .then((result) => {
+          // The installer must not be paused: it owns the session's first-boot
+          // progress. Retry after the install/boot transition completes.
+          if (!result.suspended && (result.state === 'installing' || result.state === 'booting')) {
+            scheduleDesktopIdle(sessionId)
+          }
+        })
+        .catch((error) => {
+          entry.lastUsedAt = Date.now()
+          console.warn(`OpenLink desktop idle suspend failed for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+        })
+    }, config.desktopIdleTtlMs)
+    timer.unref()
+    desktopIdleTimers.set(sessionId, timer)
+  }
+
+  function prewarmDesktop(entry: SessionEntry): void {
+    if (config.desktopPrewarm === false || entry.userPaused || !entry.sessionId || !entry.runtime.desktopEndpoint) return
+    if (desktopPrewarmSessions.has(entry.sessionId)) return
+    if (desktopPrewarmSessions.size >= desktopPrewarmMax) return
+    desktopPrewarmSessions.add(entry.sessionId)
+    void entry.runtime.desktopEndpoint()
+      .then(() => scheduleDesktopIdle(entry.sessionId!))
+      .catch((error) => {
+        desktopPrewarmSessions.delete(entry.sessionId!)
+        console.warn(`OpenLink desktop prewarm failed for ${entry.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+      })
+  }
 
   async function withSessionCreationLock<T>(baseKey: string, operation: () => Promise<T>): Promise<T> {
     const previous = sessionCreationLocks.get(baseKey) ?? Promise.resolve()
@@ -794,6 +871,7 @@ export async function startPromptHttpServer(
         desktopGateway.unregister(request.sessionId)
         await existing.runtime.cleanup()
         if (sessions.get(existingKey) === existing) sessions.delete(existingKey)
+        releaseDesktopState(request.sessionId)
       }
       if (config.maxSessions !== undefined && sessions.size + creatingSessions >= config.maxSessions) {
         throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })
@@ -814,6 +892,7 @@ export async function startPromptHttpServer(
         if (recoveredRuntime) {
           const entry: SessionEntry = { runtime: recoveredRuntime, sessionId: request.sessionId, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: request.browserSessionId }
           sessions.set(request.key, entry)
+          prewarmDesktop(entry)
           return { entry, created: false }
         }
         // No compatible durable lease was recoverable. Reclaim only this
@@ -839,6 +918,7 @@ export async function startPromptHttpServer(
           browserSessionId: request.browserSessionId,
         }
         sessions.set(request.key, entry)
+        prewarmDesktop(entry)
         return { entry, created: true }
       } finally {
         creatingSessions -= 1
@@ -897,6 +977,7 @@ export async function startPromptHttpServer(
       if (entry.paused) {
         await entry.runtime.resume?.()
         entry.paused = false
+        scheduleDesktopIdle(entry.sessionId)
       }
       entry.busy = true
       entry.lastUsedAt = Date.now()
@@ -933,6 +1014,7 @@ export async function startPromptHttpServer(
         try {
           await trackCleanup(entry.runtime.cleanup())
           if (sessions.get(prepared.key) === entry) sessions.delete(prepared.key)
+          releaseDesktopState(prepared.sessionId)
         } catch (cleanupError) {
           entry.recovering = false
           entry.lastUsedAt = Date.now()
@@ -975,6 +1057,7 @@ export async function startPromptHttpServer(
         )
       }
       if (sessions.get(prepared.key) === entry) sessions.delete(prepared.key)
+      releaseDesktopState(prepared.sessionId)
       entry = (await createEntry(prepared)).entry
       await runPrompt(entry)
     } finally {
@@ -1199,6 +1282,7 @@ export async function startPromptHttpServer(
       if (entry.paused) {
         await entry.runtime.resume?.()
         entry.paused = false
+        scheduleDesktopIdle(entry.sessionId)
       }
       entry.lastUsedAt = Date.now()
       return json(response, 200, { ok: true, active: 1, ready: true, paused: false })
@@ -1211,6 +1295,7 @@ export async function startPromptHttpServer(
       if (entry.paused) {
         await entry.runtime.resume?.()
         entry.paused = false
+        scheduleDesktopIdle(entry.sessionId)
       }
       entry.lastUsedAt = now
       active += 1
@@ -1244,6 +1329,7 @@ export async function startPromptHttpServer(
     if (entry.paused) {
       await entry.runtime.resume?.()
       entry.paused = false
+      scheduleDesktopIdle(entry.sessionId)
     }
     entry.lastUsedAt = Date.now()
     const endpoint = await entry.runtime.desktopEndpoint()
@@ -1255,6 +1341,19 @@ export async function startPromptHttpServer(
     }, endpoint, () => {
       for (const [key, candidate] of sessions) {
         if (key.startsWith(`${baseKey}:`)) candidate.lastUsedAt = Date.now()
+      }
+    }, (count) => {
+      const current = findSessionEntry(body.sessionId) ?? entry
+      if (count > 0) {
+        const timer = desktopIdleTimers.get(body.sessionId)
+        if (timer) clearTimeout(timer)
+        desktopIdleTimers.delete(body.sessionId)
+        current.lastUsedAt = Date.now()
+        void current.runtime.resumeDesktop?.().catch((error) => {
+          console.warn(`OpenLink desktop resume failed for ${body.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      } else {
+        scheduleDesktopIdle(body.sessionId)
       }
     })
     json(response, 200, binding)
@@ -1298,6 +1397,7 @@ export async function startPromptHttpServer(
     if (entry.paused) {
       await entry.runtime.resume?.()
       entry.paused = false
+      scheduleDesktopIdle(entry.sessionId)
     }
     if (!entry.runtime.resources) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Agent backend does not expose runtime resources', { retryable: true })
     entry.lastUsedAt = Date.now()
@@ -1535,6 +1635,7 @@ export async function startPromptHttpServer(
           entry.paused = false
           entry.userPaused = false
           entry.lastUsedAt = Date.now()
+          scheduleDesktopIdle(entry.sessionId)
           return json(response, 200, { ok: true, paused: false })
         }
         if (entry.userPaused && raw.action !== 'status') throw new AgentHostError('SESSION_BUSY', 'Session is paused', { retryable: true })
@@ -1687,6 +1788,7 @@ export async function startPromptHttpServer(
         void trackCleanup(entry.runtime.pause()).then(() => {
           entry.recovering = false
           entry.paused = true
+          releaseDesktopState(entry.sessionId)
         }).catch((error) => {
           entry.recovering = false
           entry.lastUsedAt = Date.now()
@@ -1698,6 +1800,7 @@ export async function startPromptHttpServer(
         if (entry.sessionId) desktopGateway.unregister(entry.sessionId)
         void trackCleanup(entry.runtime.cleanup()).then(() => {
           if (sessions.get(key) === entry) sessions.delete(key)
+          releaseDesktopState(entry.sessionId)
         }).catch((error) => {
           entry.recovering = false
           entry.lastUsedAt = Date.now()

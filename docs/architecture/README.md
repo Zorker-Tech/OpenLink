@@ -64,6 +64,11 @@ The current ADR set covers these areas:
 - A separate Linux Web/BFF source checkout for local development while the
   existing checkout owns backend services and runtime artifacts
   ([ADR-0025](./ADR-0025-split-web-source-local-development.md)).
+- the per-session OpenSandbox desktop surface, with prewarm and QMP idle sleep
+  ([ADR-0026](./ADR-0026-opensandbox-desktop-session-surface.md)).
+- a separate platform control-plane store and independent Platform Console,
+  with dynamic, capacity-aware desktop resource policy
+  ([ADR-0027](./ADR-0027-platform-control-plane-and-dynamic-desktop-resources.md)).
 
 New decisions use the format below and the next unused ADR number:
 

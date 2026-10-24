@@ -29,6 +29,7 @@ interface DesktopBinding extends DesktopSessionIdentity {
   cleanupTimer: NodeJS.Timeout
   clients: Set<WebSocket>
   onActivity?: () => void
+  onClientCountChange?: (count: number) => void
 }
 
 export interface DesktopGatewayConfig {
@@ -88,7 +89,7 @@ export class DesktopGateway {
     if (!this.allowedOrigins.size) throw new Error('Desktop gateway requires at least one allowed origin')
   }
 
-  register(identity: DesktopSessionIdentity, endpoint: DesktopEndpoint, onActivity?: () => void): PublicDesktopSession {
+  register(identity: DesktopSessionIdentity, endpoint: DesktopEndpoint, onActivity?: () => void, onClientCountChange?: (count: number) => void): PublicDesktopSession {
     const existing = this.bindings.get(identity.sessionId)
     if (existing && existing.expiresAt > Date.now()
       && existing.ownerId === identity.ownerId
@@ -97,6 +98,8 @@ export class DesktopGateway {
       && existing.upstream.toString() === new URL(endpoint.url).toString()) {
       existing.upstreamHeaders = normalizedHeaders(endpoint.headers)
       existing.onActivity = onActivity
+      existing.onClientCountChange = onClientCountChange
+      existing.onClientCountChange?.(existing.clients.size)
       this.touch(existing)
       return { desktopUrl: this.desktopUrl(existing) }
     }
@@ -117,6 +120,7 @@ export class DesktopGateway {
       cleanupTimer,
       clients: new Set(),
       onActivity,
+      onClientCountChange,
     }
     this.bindings.set(binding.sessionId, binding)
     return { desktopUrl: this.desktopUrl(binding) }
@@ -183,6 +187,7 @@ export class DesktopGateway {
 
     this.sockets.handleUpgrade(request, socket, head, (client) => {
       binding.clients.add(client)
+      binding.onClientCountChange?.(binding.clients.size)
       const upstreamSocket = new WebSocket(upstream.toString().replace(/^http/, 'ws'), {
         headers: { ...binding.upstreamHeaders, Origin: upstream.origin },
         maxPayload: MAX_SOCKET_BUFFER_BYTES,
@@ -335,7 +340,8 @@ export class DesktopGateway {
     const closeBoth = (code = 1000, reason = 'Desktop gateway closed') => {
       if (closed) return
       closed = true
-      binding.clients.delete(client)
+      const removed = binding.clients.delete(client)
+      if (removed) binding.onClientCountChange?.(binding.clients.size)
       if (client.readyState === WebSocket.OPEN) client.close(code, reason)
       else if (client.readyState === WebSocket.CONNECTING) client.terminate()
       if (upstream.readyState === WebSocket.OPEN) upstream.close(code, reason)

@@ -4,6 +4,12 @@
 
 Accepted
 
+Refined by
+[ADR-0027](./ADR-0027-platform-control-plane-and-dynamic-desktop-resources.md)
+for platform control-plane data ownership and dynamic desktop resources. Tenant
+entitlements remain application-domain data; global capacity and policy live in
+the platform control plane.
+
 ## Context
 
 OpenLink must run on hosts with different resource and virtualization
