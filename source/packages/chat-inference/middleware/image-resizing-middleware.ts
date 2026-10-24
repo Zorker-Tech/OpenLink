@@ -12,109 +12,109 @@ type Loose = Record<string, any>;
 const logger = createLogger("@slate/chat-inference/image-resizing-middleware");
 export const IMAGE_RESIZE_CONCURRENCY = 4;
 
-export async function resizeImagesInMessage(context: any, message: Loose): Promise<Loose> {
-  if (message.role === "user") {
-    if (typeof message.content === "string" || !Array.isArray(message.content)) return message;
-    let hasUpdates = false;
-    const content: Loose[] = [];
-    for (const part of message.content as Loose[]) {
-      if (part.type !== "image") {
-        content.push(part);
+export async function resizeImagesInMessage(runContext: any, promptMessage: Loose): Promise<Loose> {
+  if (promptMessage.role === "user") {
+    if (typeof promptMessage.content === "string" || !Array.isArray(promptMessage.content)) return promptMessage;
+    let messageChanged = false;
+    const contentParts: Loose[] = [];
+    for (const contentPart of promptMessage.content as Loose[]) {
+      if (contentPart.type !== "image") {
+        contentParts.push(contentPart);
         continue;
       }
-      if (!(part.image instanceof Uint8Array)) {
-        content.push(part);
+      if (!(contentPart.image instanceof Uint8Array)) {
+        contentParts.push(contentPart);
         continue;
       }
       try {
-        const resized = await resizeImageBufferIfNeeded(Buffer.from(part.image));
-        const changed = resized.data.length !== part.image.length || resized.mimeType !== part.mimeType;
-        if (changed) {
-          hasUpdates = true;
-          logger.info(context, "Resized image in user message", {
-            originalSize: part.image.length,
-            newSize: resized.data.length,
-            newMimeType: resized.mimeType,
+        const resizedImage = await resizeImageBufferIfNeeded(Buffer.from(contentPart.image));
+        const wasResized = resizedImage.data.length !== contentPart.image.length || resizedImage.mimeType !== contentPart.mimeType;
+        if (wasResized) {
+          hasUpdates: messageChanged  = true;
+          logger.info(runContext, "Resized image in user message", {
+            originalSize: contentPart.image.length,
+            newSize: resizedImage.data.length,
+            newMimeType: resizedImage.mimeType,
           });
-          content.push({ ...part, image: resized.data, mimeType: resized.mimeType });
-        } else content.push(part);
-      } catch (error) {
-        if (part.image.length > MAX_IMAGE_SIZE_BYTES) {
-          hasUpdates = true;
-          logger.error(context, "Failed to resize oversized image, dropping it", error, { originalSize: part.image.length });
-          content.push({ type: "text", text: `[image omitted: failed to process ${part.image.length} bytes (${part.mimeType ?? "unknown"})]` });
+          contentParts.push({ ...contentPart, image: resizedImage.data, mimeType: resizedImage.mimeType });
+        } else contentParts.push(contentPart);
+      } catch (failure) {
+        if (contentPart.image.length > MAX_IMAGE_SIZE_BYTES) {
+          hasUpdates: messageChanged  = true;
+          logger.error(runContext, "Failed to resize oversized image, dropping it", failure, { originalSize: contentPart.image.length });
+          contentParts.push({ type: "text", text: `[image omitted: failed to process ${contentPart.image.length} bytes (${contentPart.mimeType ?? "unknown"})]` });
         } else {
-          logger.error(context, "Failed to resize image, keeping original", error);
-          content.push(part);
+          logger.error(runContext, "Failed to resize image, keeping original", failure);
+          contentParts.push(contentPart);
         }
       }
     }
-    return hasUpdates ? { ...message, content } : message;
+    return messageChanged ? { ...promptMessage, content: contentParts } : promptMessage;
   }
 
-  if (message.role === "tool") {
-    if (!Array.isArray(message.content)) return message;
-    let messageHasUpdates = false;
-    const content = [...message.content] as Loose[];
-    for (let partIndex = 0; partIndex < message.content.length; partIndex += 1) {
-      const part = message.content[partIndex] as Loose;
-      if (part.type !== "tool-result" || !Array.isArray(part.experimental_content)) continue;
-      let experimentalHasUpdates = false;
-      const experimental = [...part.experimental_content] as Loose[];
-      for (let expContentIndex = 0; expContentIndex < part.experimental_content.length; expContentIndex += 1) {
-        const expPart = part.experimental_content[expContentIndex] as Loose;
-        if (expPart.type !== "image" || typeof expPart.data !== "string") continue;
-        let imageBuffer: Buffer;
+  if (promptMessage.role === "tool") {
+    if (!Array.isArray(promptMessage.content)) return promptMessage;
+    let toolMessageChanged = false;
+    const contentParts = [...promptMessage.content] as Loose[];
+    for (let resultPartIndex = 0; resultPartIndex < promptMessage.content.length; resultPartIndex += 1) {
+      const contentPart = promptMessage.content[resultPartIndex] as Loose;
+      if (contentPart.type !== "tool-result" || !Array.isArray(contentPart.experimental_content)) continue;
+      let experimentalChanged = false;
+      const experimentalParts = [...contentPart.experimental_content] as Loose[];
+      for (let experimentalPartIndex = 0; experimentalPartIndex < contentPart.experimental_content.length; experimentalPartIndex += 1) {
+        const experimentalPart = contentPart.experimental_content[experimentalPartIndex] as Loose;
+        if (experimentalPart.type !== "image" || typeof experimentalPart.data !== "string") continue;
+        let decodedImage: Buffer;
         try {
-          imageBuffer = Buffer.from(expPart.data, "base64");
-        } catch (error) {
-          logger.error(context, "Failed to decode base64 image in tool result", error, { partIndex, expContentIndex });
+          imageBuffer: decodedImage  = Buffer.from(experimentalPart.data, "base64");
+        } catch (failure) {
+          logger.error(runContext, "Failed to decode base64 image in tool result", failure, { partIndex: resultPartIndex, expContentIndex: experimentalPartIndex });
           continue;
         }
         try {
-          const resized = await resizeImageBufferIfNeeded(imageBuffer);
-          const changed = resized.data.length !== imageBuffer.length || resized.mimeType !== expPart.mimeType;
-          if (changed) {
-            experimentalHasUpdates = true;
-            messageHasUpdates = true;
-            logger.info(context, "Resized image in tool result", {
-              partIndex,
-              expContentIndex,
-              originalSize: imageBuffer.length,
-              newSize: resized.data.length,
-              newMimeType: resized.mimeType,
+          const resizedImage = await resizeImageBufferIfNeeded(decodedImage);
+          const wasResized = resizedImage.data.length !== decodedImage.length || resizedImage.mimeType !== experimentalPart.mimeType;
+          if (wasResized) {
+            experimentalHasUpdates: experimentalChanged  = true;
+            toolMessageChanged = true;
+            logger.info(runContext, "Resized image in tool result", {
+              partIndex: resultPartIndex,
+              expContentIndex: experimentalPartIndex,
+              originalSize: decodedImage.length,
+              newSize: resizedImage.data.length,
+              newMimeType: resizedImage.mimeType,
             });
-            experimental[expContentIndex] = { ...expPart, data: Buffer.from(resized.data).toString("base64"), mimeType: resized.mimeType };
+            experimentalParts[experimentalPartIndex] = { ...experimentalPart, data: Buffer.from(resizedImage.data).toString("base64"), mimeType: resizedImage.mimeType };
           }
-        } catch (error) {
-          if (imageBuffer.length > MAX_IMAGE_SIZE_BYTES) {
-            experimentalHasUpdates = true;
-            messageHasUpdates = true;
-            logger.error(context, "Failed to resize oversized image in tool result, dropping it", error, { partIndex, expContentIndex, originalSize: imageBuffer.length });
-            experimental[expContentIndex] = { type: "text", text: `[image omitted: failed to process ${imageBuffer.length} bytes (${expPart.mimeType ?? "unknown"})]` };
+        } catch (failure) {
+          if (decodedImage.length > MAX_IMAGE_SIZE_BYTES) {
+            experimentalHasUpdates: experimentalChanged  = true;
+            toolMessageChanged = true;
+            logger.error(runContext, "Failed to resize oversized image in tool result, dropping it", failure, { partIndex: resultPartIndex, expContentIndex: experimentalPartIndex, originalSize: decodedImage.length });
+            experimentalParts[experimentalPartIndex] = { type: "text", text: `[image omitted: failed to process ${decodedImage.length} bytes (${experimentalPart.mimeType ?? "unknown"})]` };
           } else {
-            logger.error(context, "Failed to resize image in tool result, keeping original", error, { partIndex, expContentIndex });
+            logger.error(runContext, "Failed to resize image in tool result, keeping original", failure, { partIndex: resultPartIndex, expContentIndex: experimentalPartIndex });
           }
         }
       }
-      if (experimentalHasUpdates) content[partIndex] = { ...part, experimental_content: experimental };
+      if (experimentalChanged) contentParts[resultPartIndex] = { ...contentPart, experimental_content: experimentalParts };
     }
-    if (messageHasUpdates) return { ...message, content };
+    if (toolMessageChanged) return { ...promptMessage, content: contentParts };
   }
-  return message;
+  return promptMessage;
 }
 
-export async function resizeImagesInMessages(context: any, messages: readonly Loose[]): Promise<Loose[]> {
-  const results = new Array<Loose>(messages.length);
-  let nextIndex = 0;
-  const worker = async (): Promise<void> => {
-    while (nextIndex < messages.length) {
-      const index = nextIndex++;
-      results[index] = await resizeImagesInMessage(context, messages[index]!);
+export async function resizeImagesInMessages(runContext: any, promptMessages: readonly Loose[]): Promise<Loose[]> {
+  const resizedMessages = new Array<Loose>(promptMessages.length);
+  let nextMessageIndex = 0;
+  const resizeWorker = async (): Promise<void> => {
+    while (nextMessageIndex < promptMessages.length) {
+      const messageIndex = nextMessageIndex++;
+      resizedMessages[messageIndex] = await resizeImagesInMessage(runContext, promptMessages[messageIndex]!);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(IMAGE_RESIZE_CONCURRENCY, messages.length) }, worker));
-  return results;
+  await Promise.all(Array.from({ length: Math.min(IMAGE_RESIZE_CONCURRENCY, promptMessages.length) }, resizeWorker));
+  return resizedMessages;
 }
 
 interface StreamResult {
@@ -127,30 +127,30 @@ interface StreamResult {
 }
 
 export class ImageResizingPromptExecutor extends BaseMiddleware<Loose> {
-  override stream(context: any, invocationId?: string, tools?: readonly Loose[], options?: Loose): StreamResult {
-    const messages = this.innerExecutor.getMessages();
-    const processingPromise = (async (): Promise<StreamResult> => {
-      const processed = await resizeImagesInMessages(context, messages);
+  override stream(runContext: any, streamInvocationId?: string, streamTools?: readonly Loose[], streamOptions?: Loose): StreamResult {
+    const promptMessages = this.innerExecutor.getMessages();
+    const processing = (async (): Promise<StreamResult> => {
+      const processed = await resizeImagesInMessages(runContext, promptMessages);
       this.innerExecutor.clearMessages();
       this.innerExecutor.appendMessages(processed);
-      return this.innerExecutor.stream(context, invocationId, tools, options) as StreamResult;
+      return this.innerExecutor.stream(runContext, streamInvocationId, streamTools, streamOptions) as StreamResult;
     })();
     return {
       fullStream: (async function*(): AsyncGenerator<Loose> {
-        const result = await processingPromise;
-        yield* result.fullStream;
+        const streamResult = await processing;
+        yield* streamResult.fullStream;
       })(),
-      response: processingPromise.then((result) => result.response),
-      usage: processingPromise.then((result) => result.usage),
-      providerMetadata: processingPromise.then((result) => result.providerMetadata),
-      extendedUsage: processingPromise.then((result) => result.extendedUsage),
-      invocationId: processingPromise.then((result) => result.invocationId),
+      response: processing.then((streamResult) => streamResult.response),
+      usage: processing.then((streamResult) => streamResult.usage),
+      providerMetadata: processing.then((streamResult) => streamResult.providerMetadata),
+      extendedUsage: processing.then((streamResult) => streamResult.extendedUsage),
+      invocationId: processing.then((streamResult) => streamResult.invocationId),
     };
   }
 }
 
-export function createImageResizingMiddleware(): (executor: PromptExecutor<Loose>) => ImageResizingPromptExecutor {
-  return (executor) => new ImageResizingPromptExecutor(executor);
+export function createImageResizingMiddleware(): (wrappedExecutor: PromptExecutor<Loose>) => ImageResizingPromptExecutor {
+  return (wrappedExecutor) => new ImageResizingPromptExecutor(wrappedExecutor);
 }
 
 export const imageResizingMiddleware = createImageResizingMiddleware();
