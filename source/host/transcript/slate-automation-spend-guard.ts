@@ -21,8 +21,8 @@ export type SpendGuardAnswer = keyof typeof SPEND_GUARD_ANSWER_VALUES;
 export function interpretSpendGuardAnswer(
   value: string,
 ): SpendGuardAnswer | null {
-  for (const [answer, sentinel] of Object.entries(SPEND_GUARD_ANSWER_VALUES))
-    if (value === sentinel) return answer as SpendGuardAnswer;
+  for (const [answer, sentinelValue] of Object.entries(SPEND_GUARD_ANSWER_VALUES))
+    if (value === sentinelValue) return answer as SpendGuardAnswer;
   return null;
 }
 export interface SpendGuardEvaluation {
@@ -35,7 +35,7 @@ export interface SpendGuardEvaluation {
   optedOut: boolean;
 }
 export function evaluateAutomationSpendGuard(
-  input: SpendGuardEvaluation,
+  state: SpendGuardEvaluation,
 ):
   | "opted-out"
   | "user-active"
@@ -44,30 +44,30 @@ export function evaluateAutomationSpendGuard(
   | "awaiting-ack"
   | "nudge"
   | "below-thresholds" {
-  if (input.optedOut) return "opted-out";
-  if (input.nowMs - input.lastViewedAtMs < SPEND_GUARD_IDLE_TTL_MS)
+  if (state.optedOut) return "opted-out";
+  if (state.nowMs - state.lastViewedAtMs < SPEND_GUARD_IDLE_TTL_MS)
     return "user-active";
-  if (input.snoozedUntilMs != null && input.nowMs < input.snoozedUntilMs)
+  if (state.snoozedUntilMs != null && state.nowMs < state.snoozedUntilMs)
     return "snoozed";
-  if (input.nudgedAtMs != null && input.nudgedAtMs > input.lastViewedAtMs)
-    return input.nowMs - input.nudgedAtMs >= SPEND_GUARD_PAUSE_DELAY_MS
+  if (state.nudgedAtMs != null && state.nudgedAtMs > state.lastViewedAtMs)
+    return state.nowMs - state.nudgedAtMs >= SPEND_GUARD_PAUSE_DELAY_MS
       ? "pause"
       : "awaiting-ack";
   if (
-    input.unreadCount >= SPEND_GUARD_MIN_UNREAD_COUNT ||
-    input.firesSinceViewedCount >= SPEND_GUARD_MIN_FIRES_SINCE_VIEWED
+    state.unreadCount >= SPEND_GUARD_MIN_UNREAD_COUNT ||
+    state.firesSinceViewedCount >= SPEND_GUARD_MIN_FIRES_SINCE_VIEWED
   )
     return "nudge";
   return "below-thresholds";
 }
 export function countAutomationRunsSince(
-  automations: readonly { runs: readonly { startedAt: number }[] }[],
-  sinceMs: number,
+  schedules: readonly { runs: readonly { startedAt: number }[] }[],
+  cutoffMs: number,
 ): number {
-  let count = 0;
-  for (const automation of automations)
-    for (const run of automation.runs) if (run.startedAt > sinceMs) count++;
-  return count;
+  let total = 0;
+  for (const schedule of schedules)
+    for (const execution of schedule.runs) if (execution.startedAt > cutoffMs) total++;
+  return total;
 }
 export interface SpendGuardWidget {
   prompt: string;
@@ -123,36 +123,36 @@ export function renderSpendGuardAnswerAck(answer: SpendGuardAnswer): string {
   ].join("\n");
 }
 export function isSpendGuardCard(
-  widget: SpendGuardWidget,
+  card: SpendGuardWidget,
   value: string,
 ): boolean {
   return (
     [
       buildSpendGuardNudgeWidget().prompt,
       buildSpendGuardPausedWidget().prompt,
-    ].includes(widget.prompt) &&
-    widget.options.some((option) => option.value === value)
+    ].includes(card.prompt) &&
+    card.options.some((choice) => choice.value === value)
   );
 }
 export function renderSpendGuardNudgeReminder(
-  input: Pick<
+  state: Pick<
     SpendGuardEvaluation,
     "nowMs" | "lastViewedAtMs" | "unreadCount" | "firesSinceViewedCount"
   > & { timeZone?: string },
 ): string {
-  const away =
-      input.lastViewedAtMs > 0
-        ? `hasn't opened this chat since ${formatTimestamp(input.lastViewedAtMs, input.timeZone)}`
+  const absence =
+      state.lastViewedAtMs > 0
+        ? `hasn't opened this chat since ${formatTimestamp(state.lastViewedAtMs, state.timeZone)}`
         : "has never opened this chat",
-    deadline = formatTimestamp(
-      input.nowMs + SPEND_GUARD_PAUSE_DELAY_MS,
-      input.timeZone,
+    deadlineText = formatTimestamp(
+      state.nowMs + SPEND_GUARD_PAUSE_DELAY_MS,
+      state.timeZone,
     );
   return [
     "<system_reminder>",
-    `The user ${away} — ${input.unreadCount} of your messages are unread and your routines have run ${input.firesSinceViewedCount} times since then. They may be spending money on work nobody is reading.`,
+    `The user ${absence} — ${state.unreadCount} of your messages are unread and your routines have run ${state.firesSinceViewedCount} times since then. They may be spending money on work nobody is reading.`,
     "The app has already asked them directly whether to keep your routines running, and applies their answer itself. Do NOT ask again yourself and do NOT edit any automation.json; just acknowledge their choice if it comes back as their reply.",
-    `If they neither answer nor return by ${deadline}, the app will pause ALL of this agent's routines and tell them so.`,
+    `If they neither answer nor return by ${deadlineText}, the app will pause ALL of this agent's routines and tell them so.`,
     "</system_reminder>",
   ].join("\n");
 }
