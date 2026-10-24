@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { ResumeActionHandler } from "../../source/packages/agent/actions/user-message-action/resume-action-handler.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { AgentConversationTurnHandle } from "../../source/packages/agent/state.ts";
+import { RequestContext, RequestContextResult, RequestContextSuccess } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts";
 
 function stateHandler(options: Record<string, unknown> = {}) {
   return {
@@ -19,9 +20,9 @@ function stateHandler(options: Record<string, unknown> = {}) {
 }
 function instance(calls: unknown[] = []): Record<string, any> {
   const handler = Object.create(ResumeActionHandler.prototype) as Record<string, any>;
-  handler.config = { toolsGenerator: () => ({ getStaticTools: () => [], getToolExecutionSet: () => ({}) }), thinkingStyle: "x", featureFlags: {} };
+  handler.config = { toolsGenerator: () => ({ getStaticTools: () => [], getToolExecutionSet: () => ({ modelVisibleTools: [], additionalExecutableTools: [] }) }), thinkingStyle: "x", featureFlags: {} };
   handler.interactionListener = {};
-  handler.resourceAccessor = { get: () => undefined };
+  handler.resourceAccessor = { get: () => ({ async execute() { return new RequestContextResult({ result: { case: "success", value: new RequestContextSuccess({ requestContext: new RequestContext() }) } }); } }) };
   handler.mergeRequestContextTools = () => ({ merged: true });
   handler.resolveWriteBarrierTimeoutMs = () => 7;
   handler.runTurnLoop = async (...args: unknown[]) => { calls.push(["runTurnLoop", args.length]); };
@@ -62,6 +63,89 @@ test("the setup step refuses a non-agent last turn", async () => {
   const ctx = createContext();
   await assert.rejects(
     () => instance().setupResumeStep(ctx, action(), stateHandler({ turns: [{ get: async () => ({}) }] }), {}),
-    /execute/,
+    /Expected last turn to be an agent turn/,
   );
+});
+
+function realTurn(append: unknown[]): unknown {
+  const turn = Object.create(AgentConversationTurnHandle.prototype) as Record<string, any>;
+  turn.userMessage = { get: async () => ({ mode: "user-message" }) };
+  turn.appendPromptMessages = (messages: unknown) => { append.push(messages); };
+  return turn;
+}
+function resumeInput(content: unknown, contracts?: Record<string, unknown>) {
+  const assistant = { role: "assistant", content, ...(contracts === undefined ? {} : { providerOptions: { cursor: { pendingToolExecutionContracts: contracts } } }) };
+  return { unwrap: () => JSON.stringify(assistant) };
+}
+const tool = { name: "outer", toolIdentifier: "outer", execute: async () => ({ content: [] }) };
+
+test("a pending tool call whose admitted identity changed gets the mismatch answer instead of running", async () => {
+  const ctx = createContext();
+  const appended: unknown[] = [];
+  const scoped: unknown[] = [];
+  const handler = instance();
+  handler.config.toolsGenerator = () => ({
+    getStaticTools: () => [tool],
+    getToolExecutionSet: (tools: unknown[]) => { scoped.push(tools.map((entry) => (entry as { name: string }).name)); return { modelVisibleTools: tools, additionalExecutableTools: [] }; },
+  });
+  const turn = realTurn(appended);
+  const state = stateHandler({
+    messages: [resumeInput([{ type: "tool-call", toolCallId: "call-1", toolName: "outer", args: {} }], { "call-1": { toolCallId: "call-1", outerToolName: "outer", toolIdentifier: "outer", isDynamic: false, allowedToolNames: ["outer"], effectiveToolName: "inner" } })],
+    turns: [{ get: async () => turn }],
+  });
+  assert.equal(await handler.executePendingToolCalls(ctx, state, {}, { repositoryInfo: [] }, "inv"), true);
+  assert.deepEqual(scoped, [["outer"]]);
+  assert.equal(appended.length, 1);
+  assert.match(JSON.stringify(appended), /contract mismatch/);
+});
+
+test("an assistant message without tool calls resumes with nothing to execute", async () => {
+  const ctx = createContext();
+  const appended: unknown[] = [];
+  const handler = instance();
+  const turn = realTurn(appended);
+  const state = stateHandler({ messages: [resumeInput("plain answer")], turns: [{ get: async () => turn }] });
+  assert.equal(await handler.executePendingToolCalls(ctx, state, {}, { repositoryInfo: [] }, "inv"), true);
+  assert.equal(appended.length, 1);
+});
+
+test("a turn that is present is resumed through the loop", async () => {
+  const ctx = createContext();
+  const calls: unknown[] = [];
+  const handler = instance(calls);
+  const turn = realTurn([]);
+  const state = stateHandler({ turns: [{ get: async () => turn }] });
+  const result = await handler.handle(ctx, action(), {}, state, {}, async () => undefined);
+  assert.deepEqual(result, { computed: true });
+  assert.deepEqual(calls.map((call) => (call as unknown[])[0]), ["runTurnLoop"]);
+});
+
+test("a turn that is present is set up for the single-step and model-step entries", async () => {
+  const ctx = createContext();
+  const calls: unknown[] = [];
+  const handler = instance(calls);
+  const turn = realTurn([]);
+  const state = stateHandler({ turns: [{ get: async () => turn }] });
+  const setup = await handler.setupResumeStep(ctx, action(), state, {});
+  assert.equal(setup.turn, turn);
+  assert.equal(setup.requestContextProvenance, "executorFetched");
+  const single = await handler.handleSingleStep(ctx, action(), {}, state, {}, async () => undefined);
+  assert.deepEqual(single, { state: { computed: true }, hasToolCall: true });
+  const model = await handler.handleModelStep(ctx, action(), {}, state, {}, async () => undefined);
+  assert.deepEqual(model.toolCallDescriptors, ["d"]);
+  assert.deepEqual(model.splitStepData.modelResponseMessages, ["m"]);
+  assert.equal(typeof model.splitStepData.requestContextProvenance, "string");
+  assert.equal(calls.filter((call) => (call as unknown[])[0] === "runTurnLoop").length, 0);
+});
+
+test("the no-turn entries answer without touching the loop", async () => {
+  const ctx = createContext();
+  const calls: unknown[] = [];
+  const handler = instance(calls);
+  const state = stateHandler();
+  assert.deepEqual(await handler.setupResumeStep(ctx, action(), state, {}), { noTurns: true });
+  assert.deepEqual(await handler.handleSingleStep(ctx, action(), {}, state, {}, async () => undefined), { state: { computed: true }, hasToolCall: false });
+  const model = await handler.handleModelStep(ctx, action(), {}, state, {}, async () => undefined);
+  assert.deepEqual(model.toolCallDescriptors, []);
+  assert.deepEqual(calls, []);
 });
