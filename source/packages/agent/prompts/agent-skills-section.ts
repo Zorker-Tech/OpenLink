@@ -16,12 +16,12 @@ import { Fragment, jsx, jsxs } from "../../prompt-jsx/index.ts"
 import type { PromptNode, PromptProps } from "../../prompt-jsx/index.ts"
 import { applySkillCatalogBudget } from "./skill-catalog-budget.ts"
 
-interface AgentSkillItem {
+interface CatalogSkill {
   readonly fullPath: string
   readonly description?: string | undefined
 }
 
-interface AgentSkillsSectionLayoutProps {
+interface SkillsLayoutProps {
   readonly skillItems: PromptNode[]
   readonly omittedNotice?: PromptNode | undefined
   readonly hasOmittedSkills: boolean
@@ -31,8 +31,8 @@ interface AgentSkillsSectionLayoutProps {
   readonly isGpt56?: boolean | undefined
 }
 
-interface BudgetedAgentSkillsSectionProps {
-  readonly skillItems: readonly AgentSkillItem[]
+interface BudgetedSkillsProps {
+  readonly skillItems: readonly CatalogSkill[]
   readonly agentTokenLimit?: number | undefined
   readonly raw?: boolean | undefined
   readonly readToolName?: string | undefined
@@ -40,7 +40,7 @@ interface BudgetedAgentSkillsSectionProps {
   readonly protectLoopSkill?: boolean | undefined
 }
 
-function AgentSkillsSectionLayout({
+function SkillsLayout({
   skillItems,
   omittedNotice,
   hasOmittedSkills,
@@ -48,14 +48,14 @@ function AgentSkillsSectionLayout({
   raw,
   readToolName,
   isGpt56,
-}: AgentSkillsSectionLayoutProps): PromptNode {
-  const skillsDescription = readToolName
+}: SkillsLayoutProps): PromptNode {
+  const instructionText = readToolName
     ? `Skills the agent can use. Use the ${readToolName} tool with the provided absolute path to fetch full contents.`
     : "Skills the agent can use. Fetch full contents from the provided absolute path."
   if (raw) {
     return jsxs("section", {
       title: "agent_skills",
-      description: skillsDescription,
+      description: instructionText,
       children: [skillItems, omittedNotice],
     })
   }
@@ -107,7 +107,7 @@ function AgentSkillsSectionLayout({
       jsx("br", {}),
       jsxs("section", {
         title: "available_skills",
-        description: skillsDescription,
+        description: instructionText,
         children: [skillItems, omittedNotice],
       }),
       jsx("br", {}),
@@ -115,16 +115,16 @@ function AgentSkillsSectionLayout({
   })
 }
 
-function renderAgentSkillItems(skills: readonly AgentSkillItem[]): PromptNode[] {
-  return skills.map(skill => jsx("x", {
+function skillNodesFor(skills: readonly CatalogSkill[]): PromptNode[] {
+  return skills.map(catalogEntry => jsx("x", {
     tag: "agent_skill",
-    fullPath: skill.fullPath,
-    children: skill.description || undefined,
+    fullPath: catalogEntry.fullPath,
+    children: catalogEntry.description || undefined,
   }))
 }
 
 /** What was left out, and where it can still be found if a later task needs it. */
-function OmittedSkillsNotice({ directories, omittedCount }: {
+function OmittedNotice({ directories, omittedCount }: {
   readonly directories: readonly string[]
   readonly omittedCount: number
 }): PromptNode {
@@ -133,8 +133,8 @@ function OmittedSkillsNotice({ directories, omittedCount }: {
   })
 }
 
-const AgentSkillsSectionLayoutPrompt = AgentSkillsSectionLayout as unknown as (props: PromptProps) => PromptNode
-const OmittedSkillsNoticePrompt = OmittedSkillsNotice as unknown as (props: PromptProps) => PromptNode
+const SkillsLayoutPrompt = SkillsLayout as unknown as (props: PromptProps) => PromptNode
+const OmittedNoticePrompt = OmittedNotice as unknown as (props: PromptProps) => PromptNode
 
 export function BudgetedAgentSkillsSection({
   skillItems,
@@ -143,27 +143,27 @@ export function BudgetedAgentSkillsSection({
   readToolName,
   isGpt56,
   protectLoopSkill,
-}: BudgetedAgentSkillsSectionProps) {
-  const budgetResult = applySkillCatalogBudget({
+}: BudgetedSkillsProps) {
+  const budgetOutcome = applySkillCatalogBudget({
     skills: skillItems,
     agentTokenLimit,
     protectLoopSkill,
-    renderSection: (skills, omittedNotice) => jsx(AgentSkillsSectionLayoutPrompt, {
-      skillItems: renderAgentSkillItems(skills),
+    renderSection: (skills, omittedNotice) => jsx(SkillsLayoutPrompt, {
+      skillItems: skillNodesFor(skills),
       omittedNotice,
       hasOmittedSkills: omittedNotice !== undefined,
       raw,
       readToolName,
       isGpt56,
     }),
-    renderOmittedNotice: (directories, omittedCount) => jsx(OmittedSkillsNoticePrompt, { directories, omittedCount }),
+    renderOmittedNotice: (directories, omittedCount) => jsx(OmittedNoticePrompt, { directories, omittedCount }),
   })
   return {
-    section: budgetResult.section,
-    skillCount: budgetResult.retainedCount,
-    renderedEstimatedTokens: budgetResult.renderedEstimatedTokens,
-    uncappedEstimatedTokens: budgetResult.uncappedEstimatedTokens,
-    omittedSkillCount: budgetResult.omittedCount,
-    strategy: budgetResult.strategy,
+    section: budgetOutcome.section,
+    skillCount: budgetOutcome.retainedCount,
+    renderedEstimatedTokens: budgetOutcome.renderedEstimatedTokens,
+    uncappedEstimatedTokens: budgetOutcome.uncappedEstimatedTokens,
+    omittedSkillCount: budgetOutcome.omittedCount,
+    strategy: budgetOutcome.strategy,
   }
 }
