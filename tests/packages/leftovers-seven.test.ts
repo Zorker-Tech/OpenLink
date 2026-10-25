@@ -65,6 +65,32 @@ describe("events waiting to be sent", () => {
     assert.equal(calls[0]?.events[0]?.eventName, "event.one");
     assert.equal(calls[0]?.events[0]?.timestamp, 123n);
     assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 0);
+    await buffer.flush(1_000);
+    assert.equal(calls.length, 1);
+  });
+
+  it("only removes the events included in an in-flight request", async () => {
+    let release: (() => void) | undefined;
+    const firstRequest = new Promise<void>(resolve => { release = resolve; });
+    const requests: string[][] = [];
+    const buffer = new AnalyticsBuffer({
+      client: { trackEvents: async request => {
+        requests.push((request as { events: { eventName: string }[] }).events.map(event => event.eventName));
+        if (requests.length === 1) await firstRequest;
+      } },
+      tokenProvider: { getAccessToken: async () => "token" },
+      bufferLimit: 10,
+      flushIntervalMs: 60_000,
+    });
+    buffer.track("event.one", undefined);
+    const firstFlush = buffer.flush(1_000);
+    await new Promise(resolve => setImmediate(resolve));
+    buffer.track("event.two", undefined);
+    release?.();
+    await firstFlush;
+    await buffer.flush(1_000);
+    assert.deepEqual(requests, [["event.one"], ["event.two"]]);
+    assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 0);
   });
 
   it("defers without a token and leaves pending events intact", async () => {
@@ -86,8 +112,8 @@ describe("events waiting to be sent", () => {
       tokenProvider: { getAccessToken: async () => "token" },
       bufferLimit: 1,
     });
-    buffer.track("event.one");
-    buffer.track("event.two");
+    buffer.track("event.one", undefined);
+    buffer.track("event.two", undefined);
     await buffer.flush(1_000);
     assert.deepEqual((buffer as unknown as { buffer: { eventName: string }[] }).buffer.map(event => event.eventName), ["event.two"]);
   });
