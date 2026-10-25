@@ -7,12 +7,34 @@
  * one of them cannot be fetched.
  */
 
-export function getReleasePluginSource(
-  fields: { releaseTag?: string; releaseRepo?: string; releaseAsset?: string },
-  fallbackReleaseTag?: string,
-): { kind: "release"; releaseRepo: string; releaseAsset: string; releaseTag: string } | undefined {
-  const releaseTag = fields.releaseTag ?? fallbackReleaseTag
-  return fields.releaseRepo && fields.releaseAsset && releaseTag
-    ? { kind: "release", releaseRepo: fields.releaseRepo, releaseAsset: fields.releaseAsset, releaseTag }
-    : undefined
+interface ReleaseManifestFields {
+  readonly releaseRepo?: string | undefined;
+  readonly releaseAsset?: string | undefined;
+  readonly releaseTag?: string | undefined;
+}
+
+interface ReleaseSource {
+  readonly kind: "release";
+  readonly releaseRepo: string;
+  readonly releaseAsset: string;
+  readonly releaseTag: string;
+}
+
+function completeReleaseSource(
+  fields: ReleaseManifestFields,
+): ReleaseSource | undefined {
+  const { releaseRepo, releaseAsset, releaseTag } = fields;
+  if (!releaseRepo || !releaseAsset || !releaseTag) return undefined;
+  return { kind: "release", releaseRepo, releaseAsset, releaseTag };
+}
+
+export function releaseSourceFromManifest(
+  manifest: ReleaseManifestFields,
+  fallbackTag?: string,
+): ReleaseSource | undefined {
+  return completeReleaseSource({
+    releaseRepo: manifest.releaseRepo,
+    releaseAsset: manifest.releaseAsset,
+    releaseTag: manifest.releaseTag ?? fallbackTag,
+  });
 }
