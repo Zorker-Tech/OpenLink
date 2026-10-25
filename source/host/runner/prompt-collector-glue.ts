@@ -25,7 +25,7 @@ import {
   renderAutomationRuntimeStatusReminder,
   type AutomationRecord,
 } from "../automations/automation.ts";
-import type { AutomationStatusReminderRequestContext, AutomationStatusReminderStore } from "../automations/automation-status-reminder.ts";
+import type { AutomationStatusSource, AutomationTimeZoneResolver } from "../automations/automation-status-reminder.ts";
 import {
   ConversationAction,
   UserMessage,
@@ -83,8 +83,8 @@ export interface PromptCollectorHost<Context = unknown> {
   readonly remoteBoxHasDesktop?: boolean | undefined;
   readonly remoteBox?: TransferBox | undefined;
   resolveBoxId?(): string;
-  readonly requestContext?: AutomationStatusReminderRequestContext | undefined;
-  readonly automationStore?: AutomationStatusReminderStore | null | undefined;
+  readonly requestContext?: AutomationTimeZoneResolver | undefined;
+  readonly automationStore?: AutomationStatusSource | null | undefined;
   readonly shellWatchHost?: (() => ShellTerminalWatchHost<Context>) | undefined;
   readonly agentProfileProvider?: (() => AgentProfileIdentity) | undefined;
   readonly mcp?: { getCustomInstructions(ctx: Context): Promise<ReadonlyMap<string, string>> } | undefined;

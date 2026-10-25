@@ -7,7 +7,7 @@
 import type { Context } from "../../packages/context/context.ts";
 import type { TransferBox } from "../boxes/box-transfer.ts";
 import { boxIsPreparing, type CapableBox } from "../boxes/box-capabilities.ts";
-import type { AutomationStatusReminderRequestContext, AutomationStatusReminderStore } from "../automations/automation-status-reminder.ts";
+import type { AutomationStatusSource, AutomationTimeZoneResolver } from "../automations/automation-status-reminder.ts";
 import type { AgentProfileIdentity } from "./slate-agent-profile-prompt.ts";
 import { createSlateMcpTextSpiller, isLargeOutputSpillEnabled } from "./large-output-spill.ts";
 import type { FileTransferController, UserComputerHandle } from "./tools/slate-file-transfer-tools.ts";
@@ -30,9 +30,9 @@ export interface RunnerPromptGlueOwner {
   readonly isSubagentRunner: boolean;
   readonly isComputerUseSubagent: boolean;
   readonly isBrowserUseSubagent: boolean;
-  readonly requestContext: AutomationStatusReminderRequestContext;
+  readonly requestContext: AutomationTimeZoneResolver;
   readonly mcp?: { getCustomInstructions(ctx: Context): Promise<ReadonlyMap<string, string>> };
-  readonly automationStore?: AutomationStatusReminderStore | null;
+  readonly automationStore?: AutomationStatusSource | null;
   readonly agentProfileProvider?: () => AgentProfileIdentity;
   readonly readVideoAttachmentBytes?: (path: string) => Promise<Uint8Array | null>;
   readonly isBrowserUseSubagentEnabled?: () => boolean;
