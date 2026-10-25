@@ -61,6 +61,9 @@ describe("events waiting to be sent", () => {
     buffer.track("event.one", { tier: "free" }, 123);
     await buffer.flush(1_000);
     assert.equal(calls.length, 1);
+    const sent = (calls[0] as { events: { eventName: string; timestamp: bigint }[] }).events;
+    assert.equal(sent[0]?.eventName, "event.one");
+    assert.equal(sent[0]?.timestamp, 123n);
     assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 0);
   });
 });
