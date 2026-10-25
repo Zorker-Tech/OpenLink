@@ -5,7 +5,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { AgentWorkflowEnablement, ENABLEMENT_FILENAME } from "../../source/host/agents/agent-workflow-enablement.ts"
+import { AgentWorkflowAccess, AGENT_WORKFLOW_STATE_FILENAME } from "../../source/host/agents/agent-workflow-enablement.ts"
 import { BoxLifecycleService } from "../../source/host/boxes/box-lifecycle/box-lifecycle-service.ts"
 import { SlateLocalExecError } from "../../source/host/local-exec/local-exec-error.ts"
 import { createNotifyDrainGate, NOTIFY_DRAIN_FLOOR_MS, NOTIFY_SAFETY_POLL_MS } from "../../source/host/notifications/notify-drain-gate.ts"
@@ -31,28 +31,28 @@ import { stateWriteFailed, stateWriteOk } from "../../source/host/runner/agent-s
 test("a workflow is enabled unless the agent turned it off", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-enablement-"))
   try {
-    const enablement = new AgentWorkflowEnablement(dir)
-    assert.equal(enablement.path, path.join(dir, ENABLEMENT_FILENAME))
+    const enablement = new AgentWorkflowAccess(dir)
+    assert.equal(enablement.filePath, path.join(dir, AGENT_WORKFLOW_STATE_FILENAME))
     // Nothing written yet means everything is available, and nothing was said explicitly.
-    assert.equal(enablement.isEnabled("nightly"), true)
-    assert.equal(enablement.hasExplicitEntries(), false)
+    assert.equal(enablement.isWorkflowEnabled("nightly"), true)
+    assert.equal(enablement.hasWorkflowFlags(), false)
 
-    enablement.setEnabled("nightly", false)
-    assert.equal(enablement.isEnabled("nightly"), false)
-    assert.equal(enablement.hasExplicitEntries(), true)
+    enablement.setWorkflowEnabled("nightly", false)
+    assert.equal(enablement.isWorkflowEnabled("nightly"), false)
+    assert.equal(enablement.hasWorkflowFlags(), true)
     // The file holds the disabled ids, sorted.
-    enablement.setEnabled("alpha", false)
-    const written = JSON.parse(fs.readFileSync(enablement.path, "utf8")) as { disabled: string[] }
+    enablement.setWorkflowEnabled("alpha", false)
+    const written = JSON.parse(fs.readFileSync(enablement.filePath, "utf8")) as { disabled: string[] }
     assert.deepEqual(written.disabled, ["alpha", "nightly"])
 
     // Turning one back on, forgetting one, and enabling all are all the same file.
-    enablement.setEnabled("nightly", true)
-    assert.equal(enablement.isEnabled("nightly"), true)
-    enablement.forget("alpha")
-    assert.equal(enablement.hasExplicitEntries(), false)
-    enablement.setEnabled("a", false)
-    enablement.enableAll(["a"])
-    assert.equal(enablement.isEnabled("a"), true)
+    enablement.setWorkflowEnabled("nightly", true)
+    assert.equal(enablement.isWorkflowEnabled("nightly"), true)
+    enablement.forgetWorkflow("alpha")
+    assert.equal(enablement.hasWorkflowFlags(), false)
+    enablement.setWorkflowEnabled("a", false)
+    enablement.enableWorkflows(["a"])
+    assert.equal(enablement.isWorkflowEnabled("a"), true)
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
