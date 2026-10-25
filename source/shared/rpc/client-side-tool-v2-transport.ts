@@ -51,23 +51,31 @@ export type ClientSideToolV2TransportEvent =
   | ClientSideToolV2TransportUpdate
   | ClientSideToolV2TransportReset;
 
-function recordFields(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
+type AnyMessage = ClientSideToolV2Call | ClientSideToolV2Result;
+type Decoder = (data: Uint8Array) => AnyMessage;
+type WireShape = { readonly type: EncodedClientSideToolV2Message["messageType"]; readonly decode: Decoder };
+
+const WIRE_SHAPES = new Map<ClientSideToolV2MessageKind, WireShape>([
+  ["call", { type: "aiserver.v1.ClientSideToolV2Call", decode: data => ClientSideToolV2Call.fromBinary(data) }],
+  ["result", { type: "aiserver.v1.ClientSideToolV2Result", decode: data => ClientSideToolV2Result.fromBinary(data) }],
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-function nonBlankString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function canonicalBase64(value: string): Uint8Array | null {
-  if (value.length === 0) return null;
-  if (value.length % 4 !== 0) return null;
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
-  const decodedBytes = Buffer.from(value, "base64");
-  if (decodedBytes.toString("base64") === value) return decodedBytes;
-  return null;
+function base64Bytes(value: unknown): Uint8Array | null {
+  if (typeof value !== "string" || value.length === 0 || value.length % 4 !== 0) return null;
+  const validAlphabet = /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+  if (!validAlphabet) return null;
+  const bytes = Buffer.from(value, "base64");
+  return bytes.toString("base64") === value ? bytes : null;
 }
 
 export function encodeClientSideToolV2Message(
@@ -95,42 +103,37 @@ export function decodeClientSideToolV2Message(
   kind: ClientSideToolV2MessageKind,
   value: unknown,
 ): ClientSideToolV2Call | ClientSideToolV2Result | null {
-  const fields = recordFields(value);
-  if (fields === undefined || fields.encoding !== "protobuf-base64" || typeof fields.bytes !== "string") return null;
-  const expectedType = kind === "call"
-    ? "aiserver.v1.ClientSideToolV2Call"
-    : "aiserver.v1.ClientSideToolV2Result";
-  if (fields.messageType !== expectedType) return null;
-  const bytes = canonicalBase64(fields.bytes as string);
-  if (bytes === null) return null;
+  const envelope = asRecord(value);
+  const shape = WIRE_SHAPES.get(kind);
+  if (envelope === null || shape === undefined) return null;
+  if (envelope.encoding !== "protobuf-base64" || envelope.messageType !== shape.type) return null;
+  const data = base64Bytes(envelope.bytes);
+  if (data === null) return null;
   try {
-    const decoded = kind === "call"
-      ? ClientSideToolV2Call.fromBinary(bytes)
-      : ClientSideToolV2Result.fromBinary(bytes);
-    if (decoded.toolCallId.length === 0) return null;
-    return decoded;
+    const message = shape.decode(data);
+    return message.toolCallId.length === 0 ? null : message;
   } catch {
     return null;
   }
 }
 
 export function parseClientSideToolV2TransportEvent(value: unknown): ClientSideToolV2TransportEvent | null {
-  const fields = recordFields(value);
-  if (fields === undefined || fields.version !== CLIENT_SIDE_TOOL_V2_WIRE_VERSION) return null;
-  if (!nonBlankString(fields.accountSlot) || !nonBlankString(fields.agentId) || !nonBlankString(fields.epoch)) return null;
-  if (!Number.isSafeInteger(fields.sequence) || (fields.sequence as number) < 1) return null;
-  const base = {
-    version: CLIENT_SIDE_TOOL_V2_WIRE_VERSION,
-    accountSlot: fields.accountSlot as string,
-    agentId: fields.agentId as string,
-    epoch: fields.epoch as string,
-    sequence: fields.sequence as number,
-  } as const;
-  const isReset = fields.kind === "reset";
-  if (isReset) return { ...base, kind: "reset" };
-  if (fields.kind !== "call" && fields.kind !== "result") return null;
-  if (decodeClientSideToolV2Message(fields.kind, fields.message) === null) return null;
-  return { ...base, kind: fields.kind, message: fields.message as unknown as EncodedClientSideToolV2Message };
+  const event = asRecord(value);
+  if (event === null || event.version !== CLIENT_SIDE_TOOL_V2_WIRE_VERSION) return null;
+  const accountSlot = stringOrNull(event.accountSlot);
+  const agentId = stringOrNull(event.agentId);
+  const epoch = stringOrNull(event.epoch);
+  const sequence = event.sequence;
+  const hasIdentity = accountSlot !== null && agentId !== null && epoch !== null;
+  const hasSequence = Number.isSafeInteger(sequence) && (sequence as number) > 0;
+  if (!hasIdentity || !hasSequence) return null;
+  const base = { version: CLIENT_SIDE_TOOL_V2_WIRE_VERSION, accountSlot, agentId, epoch, sequence: sequence as number } as const;
+  if (event.kind === "reset") return { ...base, kind: "reset" };
+  const kind = event.kind;
+  if (kind !== "call" && kind !== "result") return null;
+  const message = event.message;
+  if (decodeClientSideToolV2Message(kind, message) === null) return null;
+  return { ...base, kind, message: message as EncodedClientSideToolV2Message };
 }
 
 export function materializeClientSideToolV2RendererEvent(value: unknown): (Omit<ClientSideToolV2TransportUpdate, "message"> & {
