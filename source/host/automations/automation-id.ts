@@ -9,8 +9,30 @@
 
 import { createHash } from "node:crypto"
 
-export function stableAutomationId(args: { agentId: string; localId: string }): string {
-  const hex = createHash("sha256").update(Buffer.from(`${args.agentId}\0${args.localId}`)).digest("hex")
-  const variant = ((Number.parseInt(hex[16] ?? "0", 16) & 3) | 8).toString(16)
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+const AUTOMATION_ID_VERSION = "5"
+const UUID_VARIANT_MASK = 0x03
+const UUID_VARIANT_PREFIX = 0x08
+
+interface AutomationIdentity {
+  readonly agentId: string
+  readonly localId: string
+}
+
+function digestIdentity({ agentId, localId }: AutomationIdentity): string {
+  return createHash("sha256").update(agentId).update("\0").update(localId).digest("hex")
+}
+
+function variantPrefix(digest: string): string {
+  const sourceNibble = Number.parseInt(digest[16] ?? "0", 16)
+  return ((sourceNibble & UUID_VARIANT_MASK) | UUID_VARIANT_PREFIX).toString(16)
+}
+
+function uuidSections(digest: string): string[] {
+  const versionSection = `${AUTOMATION_ID_VERSION}${digest.slice(13, 16)}`
+  const variantSection = `${variantPrefix(digest)}${digest.slice(17, 20)}`
+  return [digest.slice(0, 8), digest.slice(8, 12), versionSection, variantSection, digest.slice(20, 32)]
+}
+
+export function stableAutomationId(identity: AutomationIdentity): string {
+  return uuidSections(digestIdentity(identity)).join("-")
 }
