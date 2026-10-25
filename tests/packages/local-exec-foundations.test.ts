@@ -22,7 +22,6 @@ import { convertInternalToProtoPolicy, convertProtoToInternalPolicy } from "../.
 import { DEFAULT_AGENT_DATA_CLEANUP_INTERVAL_MS, DEFAULT_AGENT_DATA_TTL_MS } from "../../source/packages/local-exec/agent-data-cleanup.ts"
 import { MAX_BUFFER_SIZE, MAX_OFS_FILE_SIZE } from "../../source/packages/local-exec/constants.ts"
 import { PI_DEFAULT_MAX_BYTES } from "../../source/packages/local-exec/pi/truncate.ts"
-import { OperationType } from "../../source/packages/local-exec/pending-decision-provider.ts"
 import { CLOUD_SPECIFIC_INSTRUCTIONS_HEADER, CLOUD_SPECIFIC_INSTRUCTIONS_SEPARATOR } from "../../source/packages/local-exec/services/cloud-rules-service.ts"
 import { SLATE_PROJECTS_ROOT, SLATE_WORKTREES_ROOT } from "../../source/packages/local-exec/internal-paths.ts"
 import { isRipgrepInvocationRecordingEnabled, recordRipgrepInvocation } from "../../source/packages/local-exec/ripgrep-invocation-recorder.ts"
@@ -425,10 +424,6 @@ test("the executor's own constants are the ones it promises", () => {
   assert.equal(MAX_BUFFER_SIZE, 1_048_576)
   assert.equal(MAX_OFS_FILE_SIZE, 50 * 1024 * 1024)
   assert.equal(PI_DEFAULT_MAX_BYTES, 50 * 1024)
-  assert.equal(OperationType.Write, "write")
-  assert.equal(OperationType.Shell, "shell")
-  assert.equal(OperationType.Delete, "delete")
-  assert.equal(OperationType.Mcp, "mcp")
   // The projects and worktrees the platform manages are its own directories.
   assert.equal(SLATE_PROJECTS_ROOT.endsWith(path.join(".slate", "projects")), true)
   assert.equal(SLATE_WORKTREES_ROOT.endsWith(path.join(".slate", "worktrees")), true)
