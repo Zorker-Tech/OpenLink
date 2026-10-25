@@ -51,20 +51,45 @@ describe("events waiting to be sent", () => {
     assert.equal((buffer as unknown as Record<string, unknown>).flushOnce !== undefined, true);
   });
 
-  it("sends tracked events once a token is available and clears only what was sent", async () => {
-    const calls: unknown[] = [];
+  it("sends at the buffer limit, preserves original event fields, and clears sent events", async () => {
+    const calls: { events: { eventName: string; timestamp: bigint }[] }[] = [];
     const buffer = new AnalyticsBuffer({
-      client: { trackEvents: async request => { calls.push(request); } },
+      client: { trackEvents: async request => { calls.push(request as never); } },
       tokenProvider: { getAccessToken: async () => "token" },
+      bufferLimit: 1,
       flushIntervalMs: 60_000,
     });
     buffer.track("event.one", { tier: "free" }, 123);
-    await buffer.flush(1_000);
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(calls.length, 1);
-    const sent = (calls[0] as { events: { eventName: string; timestamp: bigint }[] }).events;
-    assert.equal(sent[0]?.eventName, "event.one");
-    assert.equal(sent[0]?.timestamp, 123n);
+    assert.equal(calls[0]?.events[0]?.eventName, "event.one");
+    assert.equal(calls[0]?.events[0]?.timestamp, 123n);
     assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 0);
+  });
+
+  it("defers without a token and leaves pending events intact", async () => {
+    const debug: unknown[] = [];
+    const buffer = new AnalyticsBuffer({
+      client: { trackEvents: async () => { throw new Error("must not send"); } },
+      tokenProvider: { getAccessToken: async () => null },
+      onDebug: (_tag, payload) => debug.push(payload),
+    });
+    buffer.track("event.pending", undefined, 7);
+    await buffer.flush(1_000);
+    assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 1);
+    assert.equal((debug[0] as { reason: string }).reason, "no_token");
+  });
+
+  it("keeps a bounded queue when delivery fails", async () => {
+    const buffer = new AnalyticsBuffer({
+      client: { trackEvents: async () => { throw new Error("offline"); } },
+      tokenProvider: { getAccessToken: async () => "token" },
+      bufferLimit: 1,
+    });
+    buffer.track("event.one");
+    buffer.track("event.two");
+    await buffer.flush(1_000);
+    assert.deepEqual((buffer as unknown as { buffer: { eventName: string }[] }).buffer.map(event => event.eventName), ["event.two"]);
   });
 });
 
