@@ -1,10 +1,100 @@
-/**
- * Which workflows an agent has turned off.
- *
- * A workflow is available to an agent unless the agent turned it off, and what is off is kept beside the agent: a file
- * listing the disabled ids, written atomically, with the ids sorted so the file reads the same however it was built. The
- * entries an older version wrote under another key are kept as they are, and an id that is not disabled is enabled
- * rather than absent.
- */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"; import { join } from "node:path"; export const ENABLEMENT_FILENAME = "enabled-workflows.json"; export function getAgentWorkflowEnablementPath(agentDir: string): string { return join(agentDir, ENABLEMENT_FILENAME); } function toStringSet(value: unknown): Set<string> { return new Set(Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []); }
-export class AgentWorkflowEnablement { constructor(readonly agentDir: string) {} get path(): string { return getAgentWorkflowEnablementPath(this.agentDir); } #readFile(): Record<string, unknown> { try { const parsed = JSON.parse(readFileSync(this.path, "utf8")); return typeof parsed === "object" && parsed != null && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } } #readDisabled(): Set<string> { return toStringSet(this.#readFile().disabled); } isEnabled(id: string): boolean { return !this.#readDisabled().has(id); } hasExplicitEntries(): boolean { const file = this.#readFile(); return toStringSet(file.disabled).size > 0 || toStringSet(file.enabled).size > 0; } #write(disabled: ReadonlySet<string>): void { mkdirSync(this.agentDir, { recursive: true }); const legacy = toStringSet(this.#readFile().enabled); const file = { disabled: [...disabled].sort(), ...(legacy.size > 0 ? { enabled: [...legacy].sort() } : {}) }; const temp = `${this.path}.tmp`; writeFileSync(temp, `${JSON.stringify(file, null, 2)}\n`, "utf8"); renameSync(temp, this.path); } setEnabled(id: string, enabled: boolean): void { const disabled = this.#readDisabled(); if (enabled ? !disabled.delete(id) : disabled.has(id)) return; if (!enabled) disabled.add(id); this.#write(disabled); } forget(id: string): void { const disabled = this.#readDisabled(); if (disabled.delete(id)) this.#write(disabled); } enableAll(ids: readonly string[]): void { const disabled = this.#readDisabled(); let changed = false; for (const id of ids) if (disabled.delete(id)) changed = true; if (changed) this.#write(disabled); } }
+/** Per-agent workflow switches stored as a stable set of disabled ids. */
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+export const AGENT_WORKFLOW_STATE_FILENAME = "enabled-workflows.json";
+
+export function agentWorkflowStatePath(agentDirectory: string): string {
+  return join(agentDirectory, AGENT_WORKFLOW_STATE_FILENAME);
+}
+
+type WorkflowState = Record<string, unknown>;
+
+function isWorkflowState(value: unknown): value is WorkflowState {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringIds(value: unknown): Set<string> {
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value.filter((candidate): candidate is string => typeof candidate === "string"));
+}
+
+function idsInState(state: WorkflowState, field: "disabled" | "enabled"): Set<string> {
+  return stringIds(state[field]);
+}
+
+function readWorkflowState(filePath: string): WorkflowState {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
+    return isWorkflowState(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWorkflowState(
+  agentDirectory: string,
+  filePath: string,
+  disabledIds: ReadonlySet<string>,
+  legacyEnabledIds: ReadonlySet<string>
+): void {
+  mkdirSync(agentDirectory, { recursive: true });
+  const nextState = {
+    disabled: [...disabledIds].sort(),
+    ...(legacyEnabledIds.size === 0 ? {} : { enabled: [...legacyEnabledIds].sort() }),
+  };
+  const temporaryPath = `${filePath}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(nextState, null, 2)}\n`, "utf8");
+  renameSync(temporaryPath, filePath);
+}
+
+export class AgentWorkflowAccess {
+  constructor(readonly agentDirectory: string) {}
+
+  get filePath(): string {
+    return agentWorkflowStatePath(this.agentDirectory);
+  }
+
+  #state(): WorkflowState {
+    return readWorkflowState(this.filePath);
+  }
+
+  #disabledIds(): Set<string> {
+    return idsInState(this.#state(), "disabled");
+  }
+
+  #persistDisabledIds(disabledIds: ReadonlySet<string>): void {
+    const legacyEnabledIds = idsInState(this.#state(), "enabled");
+    writeWorkflowState(this.agentDirectory, this.filePath, disabledIds, legacyEnabledIds);
+  }
+
+  isWorkflowEnabled(id: string): boolean {
+    return !this.#disabledIds().has(id);
+  }
+
+  hasWorkflowFlags(): boolean {
+    const state = this.#state();
+    return idsInState(state, "disabled").size > 0 || idsInState(state, "enabled").size > 0;
+  }
+
+  setWorkflowEnabled(id: string, enabled: boolean): void {
+    const disabledIds = this.#disabledIds();
+    const alreadyDisabled = disabledIds.has(id);
+    if (alreadyDisabled === !enabled) return;
+    if (enabled) disabledIds.delete(id);
+    else disabledIds.add(id);
+    this.#persistDisabledIds(disabledIds);
+  }
+
+  forgetWorkflow(id: string): void {
+    const disabledIds = this.#disabledIds();
+    if (disabledIds.delete(id)) this.#persistDisabledIds(disabledIds);
+  }
+
+  enableWorkflows(ids: readonly string[]): void {
+    const disabledIds = this.#disabledIds();
+    let changed = false;
+    for (const id of ids) if (disabledIds.delete(id)) changed = true;
+    if (changed) this.#persistDisabledIds(disabledIds);
+  }
+}
