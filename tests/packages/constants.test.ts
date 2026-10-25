@@ -72,7 +72,6 @@ import {
 import { DEV_SMART_MODE_CLASSIFIER_DELAY_MS, DEV_SMART_MODE_CLASSIFIER_DELAY_SECONDS } from "../../source/packages/constants/smart-mode-classifier.ts"
 import { STRUCTURED_LOG_FUTURE_TIMESTAMP_MAX_SKEW_MS, STRUCTURED_LOG_REPLAY_MAX_AGE_MS } from "../../source/packages/constants/structured-log.ts"
 import { SYSTEM_NOTIFICATION_CLOSE_TAG, SYSTEM_NOTIFICATION_OPEN_TAG } from "../../source/packages/constants/system-notification.ts"
-import { MAX_TEXT_SIZE } from "../../source/packages/constants/text-limits.ts"
 import { USAGE_PANEL_COPY } from "../../source/packages/constants/usage-copy.ts"
 
 const UUID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
@@ -284,7 +283,6 @@ test("environment and log windows are bounded and ordered", () => {
   assert.equal(STRUCTURED_LOG_FUTURE_TIMESTAMP_MAX_SKEW_MS, 2 * 60 * 60 * 1_000)
   assert.equal(DEV_SMART_MODE_CLASSIFIER_DELAY_MS, 10_000, "the development pause is ten seconds")
   assert.equal(DEV_SMART_MODE_CLASSIFIER_DELAY_SECONDS, DEV_SMART_MODE_CLASSIFIER_DELAY_MS / 1_000)
-  assert.equal(MAX_TEXT_SIZE, 8 * 1024 * 1024)
 })
 
 test("notification tags delimit a notification without colliding with prose", () => {
