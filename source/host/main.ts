@@ -23,7 +23,7 @@ import { acquireHostLock } from "./host-lock.ts";
 import { getSlateRootDir } from "./host-paths.ts";
 import { installProcessCrashGuards } from "./process-crash-guard.ts";
 import { createProductionSlateHost, type ProductionSlateHostPorts } from "./slate-host.ts";
-import { resolveBoxExecDaemonEntry, startBoxExecDaemonProcess, type OwnedBoxExecDaemon } from "./boxes/exec-daemon-process.ts";
+import { launchBoxExecDaemon, resolveBoxDaemonEntryFromHost, type HostOwnedBoxExecDaemon } from "./boxes/exec-daemon-process.ts";
 
 export const BOX_COPY_IN_ARG = "--box-copy-in";
 export const BOX_COPY_IN_EXIT_FAILED = 1;
@@ -93,7 +93,7 @@ export interface ProcessCrashGuards {
 /** Everything the process graph needs from the outside, one function per external decision. */
 export type HostMainDependencies = {
   readonly executeBoxCopyInFromEnv: () => Promise<number>;
-  readonly startBoxExecDaemon?: () => Promise<OwnedBoxExecDaemon>;
+  readonly startBoxExecDaemon?: () => Promise<HostOwnedBoxExecDaemon>;
   readonly acquireHostLock: () => Promise<HostLockResult>;
   readonly getSlateRootDir: () => string;
   readonly createHost: () => HostMainHost;
@@ -151,16 +151,16 @@ function usesExistingBoxExecDaemon(): boolean {
 }
 
 /** The part of the graph that starts the box-exec daemon, or nothing when the deployment owns it. */
-function boxExecDaemonStarter(ports: HostProductionPorts, useExisting: boolean): { startBoxExecDaemon?: () => Promise<OwnedBoxExecDaemon> } {
+function boxExecDaemonStarter(ports: HostProductionPorts, useExisting: boolean): { startBoxExecDaemon?: () => Promise<HostOwnedBoxExecDaemon> } {
   if (useExisting) return {};
   return {
     startBoxExecDaemon: async () => {
-      const daemon = startBoxExecDaemonProcess({
-        entryPath: resolveBoxExecDaemonEntry(),
-        generated: ports.extensionHost.boxGenerated,
-        workspaceRoot: join(getSlateRootDir(), WORKSPACE_DIRECTORY_NAME),
-        terminalsDirectory: join(getSlateRootDir(), TERMINALS_DIRECTORY_NAME),
-        ...(ports.log === undefined ? {} : { log: ports.log }),
+      const daemon = launchBoxExecDaemon({
+        daemonEntryPath: resolveBoxDaemonEntryFromHost(),
+        rpcPorts: ports.extensionHost.boxGenerated,
+        workspaceDirectory: join(getSlateRootDir(), WORKSPACE_DIRECTORY_NAME),
+        terminalDirectory: join(getSlateRootDir(), TERMINALS_DIRECTORY_NAME),
+        ...(ports.log === undefined ? {} : { output: ports.log }),
       });
       return daemon;
     },
@@ -307,7 +307,7 @@ async function handleStartupFailure(
   host: HostMainHost,
   hostLock: HostLock,
   processControl: HostProcessControl,
-  boxExecDaemon: OwnedBoxExecDaemon | undefined,
+  boxExecDaemon: HostOwnedBoxExecDaemon | undefined,
   error: unknown,
 ): Promise<void> {
   host.reportProcessCrash(error, CRASH_KINDS.fatalStartup);
@@ -328,7 +328,7 @@ async function runHostProcess(
   reportLockOutcome(lockResult, deps.getSlateRootDir(), log);
 
   const hostLock = lockResult.lock;
-  let boxExecDaemon: OwnedBoxExecDaemon | undefined;
+  let boxExecDaemon: HostOwnedBoxExecDaemon | undefined;
   const host = deps.createHost();
   wireProcessReporters(host, crashGuards, deps);
 
@@ -402,7 +402,7 @@ async function drainBeforeExit(session: {
   readonly clearGatewayDiscovery: () => Promise<void>,
   readonly processControl: HostProcessControl,
   readonly watchdog: ReturnType<typeof setTimeout>,
-  readonly boxExecDaemon: OwnedBoxExecDaemon | undefined,
+  readonly boxExecDaemon: HostOwnedBoxExecDaemon | undefined,
 }): Promise<void> {
   const { host, gateway, hostLock, clearGatewayDiscovery, processControl, watchdog, boxExecDaemon } = session;
   try {
@@ -435,7 +435,7 @@ export function installShutdownHandlers(
   processControl: HostProcessControl = defaultProcessControl,
   log: Pick<Console, "log"> = console,
   watchdogMs = SHUTDOWN_WATCHDOG_MS,
-  boxExecDaemon?: OwnedBoxExecDaemon,
+  boxExecDaemon?: HostOwnedBoxExecDaemon,
 ): ShutdownRegistration {
   let isShuttingDown = false;
 

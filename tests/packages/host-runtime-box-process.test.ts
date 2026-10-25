@@ -5,17 +5,17 @@
 
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 
 import { computerUseExecutorResource } from "../../source/packages/agent-exec/computer-use.ts";
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { createBoxTransport } from "../../source/host/boxes/box-remote-accessor.ts";
-import { BOX_EXEC_DAEMON_ENTRY_RELATIVE, BOX_EXEC_DAEMON_START_TIMEOUT_MS, BOX_EXEC_DAEMON_STOP_TIMEOUT_MS, resolveBoxExecDaemonEntry, startBoxExecDaemonProcess } from "../../source/host/boxes/exec-daemon-process.ts";
+import { BOX_DAEMON_ENTRY_FROM_HOST, BOX_DAEMON_READY_TIMEOUT_MS, BOX_DAEMON_STOP_GRACE_MS, launchBoxExecDaemon, resolveBoxDaemonEntryFromHost } from "../../source/host/boxes/exec-daemon-process.ts";
 import { createForeverBoxExtension, foreverBoxExtension, imageWatchIntervalMs, imageWatchJitterRatio, initialImageWatchDelayMs, isHostBundleAutoUpdateEnabled, isImageAutoUpdateEnabled, jitteredImageWatchIntervalMs } from "../../source/host/boxes/forever-box/extension.ts";
 import { BOX_GENERATED_PACKAGE_VERSIONS, productionBoxGeneratedPorts } from "../../source/host/boxes/generated-production.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
@@ -99,21 +99,24 @@ describe("the box's exec daemon as a process this host owns", () => {
     return wrapper;
   }
 
-  const workspace = () => ({ workspaceRoot: mkdtempSync(join(tmpdir(), "slate-box-workspace-")), terminalsDirectory: mkdtempSync(join(tmpdir(), "slate-box-terminals-")) });
+  const workspace = () => {
+    const root = mkdtempSync(join(tmpdir(), "slate-box-directories-"));
+    return { workspaceRoot: join(root, "workspace"), terminalsDirectory: join(root, "terminals") };
+  };
 
   it("resolves the daemon's entry beside the host's own", () => {
-    assert.equal(BOX_EXEC_DAEMON_ENTRY_RELATIVE, "../box-exec/main.cjs");
-    assert.equal(BOX_EXEC_DAEMON_START_TIMEOUT_MS, 20_000);
-    assert.equal(BOX_EXEC_DAEMON_STOP_TIMEOUT_MS, 5_000);
-    assert.equal(resolveBoxExecDaemonEntry("/app/host/main.cjs"), "/app/box-exec/main.cjs");
+    assert.equal(BOX_DAEMON_ENTRY_FROM_HOST, "../box-exec/main.cjs");
+    assert.equal(BOX_DAEMON_READY_TIMEOUT_MS, 20_000);
+    assert.equal(BOX_DAEMON_STOP_GRACE_MS, 5_000);
+    assert.equal(resolveBoxDaemonEntryFromHost("/app/host/main.cjs"), "/app/box-exec/main.cjs");
     // Without a host entry there is nowhere to resolve the daemon's from — neither an empty one nor a process that
     // was started without one.
-    assert.throws(() => resolveBoxExecDaemonEntry(""), { message: "cannot resolve box exec-daemon entry without a host process entry" });
+    assert.throws(() => resolveBoxDaemonEntryFromHost(""), { message: "cannot resolve box exec-daemon entry without a host process entry" });
     const argv = process.argv as unknown as Array<string | undefined>;
     const saved = argv[1];
     try {
       argv[1] = undefined;
-      assert.throws(() => resolveBoxExecDaemonEntry(), { message: "cannot resolve box exec-daemon entry without a host process entry" });
+      assert.throws(() => resolveBoxDaemonEntryFromHost(), { message: "cannot resolve box exec-daemon entry without a host process entry" });
     } finally {
       argv[1] = saved;
     }
@@ -122,20 +125,34 @@ describe("the box's exec daemon as a process this host owns", () => {
   it("starts the daemon, waits until it answers an authenticated call, and stops it again", async () => {
     const port = await freePort();
     const { workspaceRoot, terminalsDirectory } = workspace();
-    const daemon = await startBoxExecDaemonProcess({
-      entryPath: join(sourceRoot, "source/box-exec/cli.ts"),
-      generated: productionBoxGeneratedPorts,
-      port,
-      workspaceRoot,
-      terminalsDirectory,
-      execPath: typeStrippingNode(),
-      authToken: "test-token",
-      log: { log: () => {}, error: () => {} },
+    const daemonLogs: string[] = [];
+    const daemon = await launchBoxExecDaemon({
+      daemonEntryPath: join(sourceRoot, "source/box-exec/cli.ts"),
+      rpcPorts: productionBoxGeneratedPorts,
+      bindPort: port,
+      workspaceDirectory: workspaceRoot,
+      terminalDirectory: terminalsDirectory,
+      nodeExecutable: typeStrippingNode(),
+      controlToken: "test-token",
+      readinessTimeoutMs: 3_000,
+      processEnvironment: {
+        SLATE_BOX_EXEC_DAEMON_PORT: "1",
+        SLATE_BOX_EXEC_DAEMON_AUTH_TOKEN: "incorrect",
+        SLATE_BOX_WORKSPACE_ROOT: "/incorrect/workspace",
+        SLATE_BOX_TERMINALS_DIRECTORY: "/incorrect/terminals",
+      },
+      output: { log: line => daemonLogs.push(line), error: () => {} },
     });
     try {
       assert.equal(typeof daemon.pid, "number");
-      assert.equal(daemon.entryPath.endsWith("box-exec/cli.ts"), true);
+      assert.equal(daemon.pid > 0, true);
+      assert.notEqual(daemon.pid, process.pid);
+      assert.equal(daemon.daemonEntryPath.endsWith("box-exec/cli.ts"), true);
+      assert.equal(existsSync(workspaceRoot), true);
+      assert.equal(existsSync(terminalsDirectory), true);
       await daemon.ready;
+      assert.equal(daemonLogs.some(line => line.includes(workspaceRoot)), true);
+      assert.equal(daemonLogs.some(line => line.includes(terminalsDirectory)), true);
       // It answers the box's own control call with the token it was started with, and the machine it was given.
       const control = productionBoxGeneratedPorts.createControlClient(createBoxTransport({ host: "127.0.0.1", port, authToken: "test-token" }, productionBoxGeneratedPorts.createTransport));
       assert.deepEqual(await control.ping(createContext(), {}, { timeoutMs: 2_000 }).then(() => "answered"), "answered");
@@ -156,14 +173,14 @@ describe("the box's exec daemon as a process this host owns", () => {
     assert.ok(address !== null && typeof address === "object");
     const { workspaceRoot, terminalsDirectory } = workspace();
     try {
-      await startBoxExecDaemonProcess({
-        entryPath: join(sourceRoot, "source/box-exec/main.ts"),
-        generated: productionBoxGeneratedPorts,
-        port: address.port,
-        workspaceRoot,
-        terminalsDirectory,
-        execPath: typeStrippingNode(),
-        log: { log: () => {}, error: () => {} },
+      await launchBoxExecDaemon({
+        daemonEntryPath: join(sourceRoot, "source/box-exec/main.ts"),
+        rpcPorts: productionBoxGeneratedPorts,
+        bindPort: address.port,
+        workspaceDirectory: workspaceRoot,
+        terminalDirectory: terminalsDirectory,
+        nodeExecutable: typeStrippingNode(),
+        output: { log: () => {}, error: () => {} },
       }).then(
         () => assert.fail("the daemon started on a port that was already bound"),
         (error: Error) => assert.equal(error.message, `refusing contaminated box exec-daemon startup: 127.0.0.1:${address.port} is already bound`),
@@ -171,23 +188,128 @@ describe("the box's exec daemon as a process this host owns", () => {
     } finally {
       await new Promise<void>((resolve) => taken.close(() => resolve()));
     }
+    assert.equal(existsSync(workspaceRoot), false);
+    assert.equal(existsSync(terminalsDirectory), false);
   });
 
   it("reports a daemon that is not there rather than waiting for one", async () => {
     const port = await freePort();
     const { workspaceRoot, terminalsDirectory } = workspace();
-    await startBoxExecDaemonProcess({
-      entryPath: join(workspaceRoot, "no-such-daemon.ts"),
-      generated: productionBoxGeneratedPorts,
-      port,
-      workspaceRoot,
-      terminalsDirectory,
-      startTimeoutMs: 500,
-      log: { log: () => {}, error: () => {} },
+    await launchBoxExecDaemon({
+      daemonEntryPath: join(workspaceRoot, "no-such-daemon.ts"),
+      rpcPorts: productionBoxGeneratedPorts,
+      bindPort: port,
+      workspaceDirectory: workspaceRoot,
+      terminalDirectory: terminalsDirectory,
+      readinessTimeoutMs: 500,
+      output: { log: () => {}, error: () => {} },
     }).then(
       () => assert.fail("a daemon that does not exist was started"),
       (error: Error) => assert.equal((error as Error & { code?: string }).code, "ENOENT"),
     );
+    assert.equal(existsSync(workspaceRoot), false);
+    assert.equal(existsSync(terminalsDirectory), false);
+  });
+
+  it("reports an early child exit with its status and forwards its output", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(join(tmpdir(), "slate-box-early-exit-"));
+    const entryPath = join(root, "exit.cjs");
+    writeFileSync(entryPath, 'console.log(process.cwd()); console.log(process.env.SLATE_BOX_PROBE_MARKER); process.stderr.write("invalid config\\n"); setTimeout(() => { process.exitCode = 7; }, 30);');
+    const { workspaceRoot, terminalsDirectory } = workspace();
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const previousMarker = process.env.SLATE_BOX_PROBE_MARKER;
+    delete process.env.SLATE_BOX_PROBE_MARKER;
+    try {
+      await launchBoxExecDaemon({
+        daemonEntryPath: entryPath,
+        rpcPorts: productionBoxGeneratedPorts,
+        bindPort: port,
+        workspaceDirectory: workspaceRoot,
+        terminalDirectory: terminalsDirectory,
+        nodeExecutable: process.execPath,
+        readinessTimeoutMs: 1_000,
+        processEnvironment: { SLATE_BOX_PROBE_MARKER: "from-launch-options" },
+        output: { log: line => logs.push(line), error: line => errors.push(line) },
+      }).then(
+        () => assert.fail("a process that exited before Ping was accepted"),
+        (error: Error) => assert.match(error.message, /box exec-daemon exited before readiness: .*"code":7/),
+      );
+    } finally {
+      if (previousMarker === undefined) delete process.env.SLATE_BOX_PROBE_MARKER;
+      else process.env.SLATE_BOX_PROBE_MARKER = previousMarker;
+    }
+    const outputDeadline = Date.now() + 2_000;
+    while (
+      (!logs.join("\n").includes("[box-exec-daemon] from-launch-options") || errors.length === 0)
+      && Date.now() < outputDeadline
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(logs.join("\n").includes(`[box-exec-daemon] ${realpathSync(root)}`), true);
+    assert.equal(logs.join("\n").includes("[box-exec-daemon] from-launch-options"), true);
+    assert.deepEqual(errors, ["[box-exec-daemon] invalid config"]);
+    assert.equal(existsSync(workspaceRoot), true);
+    assert.equal(existsSync(terminalsDirectory), true);
+  });
+
+  it("stops a child that never answers the authenticated readiness call", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(join(tmpdir(), "slate-box-no-readiness-"));
+    const entryPath = join(root, "silent.cjs");
+    writeFileSync(entryPath, 'const net = require("node:net"); const server = net.createServer(); server.listen(Number(process.env.SLATE_BOX_EXEC_DAEMON_PORT), "127.0.0.1"); process.on("SIGTERM", () => setTimeout(() => server.close(() => process.exit(0)), 150)); setInterval(() => {}, 1_000);');
+    const { workspaceRoot, terminalsDirectory } = workspace();
+    await assert.rejects(
+      launchBoxExecDaemon({
+        daemonEntryPath: entryPath,
+        rpcPorts: productionBoxGeneratedPorts,
+        bindPort: port,
+        workspaceDirectory: workspaceRoot,
+        terminalDirectory: terminalsDirectory,
+        nodeExecutable: process.execPath,
+        readinessTimeoutMs: 50,
+        output: { log: () => {}, error: () => {} },
+      }),
+      /box exec-daemon did not answer authenticated generated Ping/,
+    );
+    assert.equal(existsSync(workspaceRoot), true);
+    assert.equal(existsSync(terminalsDirectory), true);
+
+    const probe = createServer();
+    await new Promise<void>((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(port, "127.0.0.1", resolve);
+    });
+    await new Promise<void>((resolve, reject) => probe.close(error => error ? reject(error) : resolve()));
+  });
+
+  it("forces down a daemon process that keeps its event loop alive after SIGTERM", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(join(tmpdir(), "slate-box-forced-stop-"));
+    const entryPath = join(root, "hold-open.cjs");
+    const daemonCli = pathToFileURL(join(sourceRoot, "source/box-exec/cli.ts")).href;
+    const keepAliveAfterReady = join(root, "ready");
+    writeFileSync(entryPath, [
+      "const fs = require(\"node:fs\");",
+      `process.on("SIGTERM", () => { if (fs.existsSync(${JSON.stringify(keepAliveAfterReady)})) setInterval(() => {}, 1_000); else process.exit(0); });`,
+      `import(${JSON.stringify(daemonCli)});`,
+    ].join("\n"));
+    const { workspaceRoot, terminalsDirectory } = workspace();
+    const daemon = await launchBoxExecDaemon({
+      daemonEntryPath: entryPath,
+      rpcPorts: productionBoxGeneratedPorts,
+      bindPort: port,
+      workspaceDirectory: workspaceRoot,
+      terminalDirectory: terminalsDirectory,
+      nodeExecutable: typeStrippingNode(),
+      shutdownTimeoutMs: 50,
+      output: { log: () => {}, error: () => {} },
+    });
+
+    writeFileSync(keepAliveAfterReady, "ready");
+    await assert.rejects(daemon.close(), new RegExp(`box exec-daemon pid ${daemon.pid} required forced shutdown`));
+    await daemon.close();
   });
 });
 
