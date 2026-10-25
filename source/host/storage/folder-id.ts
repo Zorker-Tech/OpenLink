@@ -6,6 +6,18 @@
  * caller that passes something else has a bug rather than a value to clean up.
  */
 
+function isNonEmptyFolderName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function containsPathBoundary(id: string): boolean {
+  return ["/", "\\", "\0"].some((separator) => id.includes(separator));
+}
+
+function isTraversalSegment(id: string): boolean {
+  return id === "." || id === "..";
+}
+
 export function isSafeFolderId(id: unknown): id is string {
-  return typeof id === "string" && id.length > 0 && !id.includes("/") && !id.includes("\\") && !id.includes("\0") && id !== "." && id !== ".."
+  return isNonEmptyFolderName(id) && !containsPathBoundary(id) && !isTraversalSegment(id);
 }
