@@ -50,6 +50,19 @@ describe("events waiting to be sent", () => {
     assert.equal(typeof buffer.flush, "function");
     assert.equal((buffer as unknown as Record<string, unknown>).flushOnce !== undefined, true);
   });
+
+  it("sends tracked events once a token is available and clears only what was sent", async () => {
+    const calls: unknown[] = [];
+    const buffer = new AnalyticsBuffer({
+      client: { trackEvents: async request => { calls.push(request); } },
+      tokenProvider: { getAccessToken: async () => "token" },
+      flushIntervalMs: 60_000,
+    });
+    buffer.track("event.one", { tier: "free" }, 123);
+    await buffer.flush(1_000);
+    assert.equal(calls.length, 1);
+    assert.equal((buffer as unknown as { buffer: unknown[] }).buffer.length, 0);
+  });
 });
 
 describe("calling the backend with the context a request carries", () => {

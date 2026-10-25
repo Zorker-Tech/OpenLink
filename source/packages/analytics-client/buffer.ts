@@ -33,20 +33,17 @@ export interface AnalyticsBufferOptions {
 }
 
 export class AnalyticsBuffer {
-  private buffer: AnalyticsEventMessage[];
-  private flushTimer: NodeJS.Timeout | null;
-  private activeFlush: Promise<number> | null;
-  private client: AnalyticsBufferClient;
-  private tokenProvider: AnalyticsBufferTokenProvider;
-  private bufferLimit: number;
-  private flushIntervalMs: number;
-  private normalFlushTimeoutMs: number;
-  private onDebug: (tag: string, payload: unknown) => void;
+  private readonly buffer: AnalyticsEventMessage[] = [];
+  private flushTimer: NodeJS.Timeout | null = null;
+  private activeFlush: Promise<number> | null = null;
+  private readonly client: AnalyticsBufferClient;
+  private readonly tokenProvider: AnalyticsBufferTokenProvider;
+  private readonly bufferLimit: number;
+  private readonly flushIntervalMs: number;
+  private readonly normalFlushTimeoutMs: number;
+  private readonly onDebug: (tag: string, payload: unknown) => void;
 
   constructor(options: AnalyticsBufferOptions) {
-    this.buffer = [];
-    this.flushTimer = null;
-    this.activeFlush = null;
     this.client = options.client;
     this.tokenProvider = options.tokenProvider;
     this.bufferLimit = options.bufferLimit ?? DEFAULT_BUFFER_LIMIT;
@@ -56,34 +53,30 @@ export class AnalyticsBuffer {
   }
 
   track(eventName: string, props: AnalyticsEventProperties | null | undefined, timestamp?: number): void {
-    const timestampValue = typeof timestamp === "number" ? BigInt(timestamp) : BigInt(Date.now());
-    const event = new AnalyticsEventMessage({
-      eventName,
-      eventData: toEventData(props),
-      timestamp: timestampValue,
-    });
+    const timestampValue = BigInt(timestamp ?? Date.now());
+    const event = new AnalyticsEventMessage({ eventName, eventData: toEventData(props), timestamp: timestampValue });
     this.buffer.push(event);
     if (this.buffer.length >= this.bufferLimit) this.flushInBackground();
     else this.scheduleFlush();
   }
 
   async flush(timeoutMs: number): Promise<void> {
-    while (true) {
-      if (this.activeFlush) {
+    for (;;) {
+      if (this.activeFlush !== null) {
         await this.activeFlush;
         if (this.buffer.length === 0) return;
         continue;
       }
       if (this.buffer.length === 0) return;
-      const flushPromise = this.flushOnce(timeoutMs);
-      this.activeFlush = flushPromise;
-      let sentCount = 0;
+      const running = this.flushOnce(timeoutMs);
+      this.activeFlush = running;
+      let sent = 0;
       try {
-        sentCount = await flushPromise;
+        sent = await running;
       } finally {
-        if (this.activeFlush === flushPromise) this.activeFlush = null;
+        if (this.activeFlush === running) this.activeFlush = null;
       }
-      if (this.buffer.length === 0 || sentCount === 0) return;
+      if (this.buffer.length === 0 || sent === 0) return;
     }
   }
 
@@ -91,7 +84,7 @@ export class AnalyticsBuffer {
     if (this.buffer.length === 0) return 0;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    timeout.unref?.();
+    if (typeof timeout.unref === "function") timeout.unref();
     try {
       try {
         const token = await Promise.race([
@@ -138,6 +131,6 @@ export class AnalyticsBuffer {
       this.flushTimer = null;
       this.flushInBackground();
     }, this.flushIntervalMs);
-    this.flushTimer.unref?.();
+    if (typeof this.flushTimer.unref === "function") this.flushTimer.unref();
   }
 }
