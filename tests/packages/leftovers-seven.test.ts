@@ -48,7 +48,7 @@ describe("events waiting to be sent", () => {
     const buffer = new AnalyticsBuffer({ client: {} } as never);
     assert.equal(typeof buffer.track, "function");
     assert.equal(typeof buffer.flush, "function");
-    assert.equal((buffer as unknown as Record<string, unknown>).flushOnce !== undefined, true);
+    assert.equal((buffer as unknown as Record<string, unknown>).flushBatch !== undefined, true);
   });
 
   it("sends at the buffer limit, preserves original event fields, and clears sent events", async () => {
