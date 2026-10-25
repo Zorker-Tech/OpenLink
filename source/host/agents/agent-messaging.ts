@@ -38,6 +38,40 @@ export function describeAddress(address: AgentAddress): string {
   return `- ${address.name} (id: ${address.id})${groupTag}${description}`;
 }
 
+function directoryRootGuidance(agentsRootDir?: string): string[] {
+  if (agentsRootDir == null || agentsRootDir.length === 0) return [];
+  return [
+    `Discovering agents is file-based: every agent (yours included) is a sibling folder under ${agentsRootDir}. Read ${agentsRootDir}/<agentId>/profile.json (name, description) for any agent, and <agentId>/group.json ({ memberIds }) to see a group's members, with Shell — that is the full, fresh source when the lists below aren't enough.`
+  ];
+}
+
+function emptyDirectoryGuidance(): string {
+  return `This user has no other agents yet. If a task would be better handled by a dedicated teammate, offer to ${SLATE_CREATE_AGENT_TOOL_NAME} one.`;
+}
+
+function teammateDirectory(others: readonly AgentAddress[]): string[] {
+  if (others.length === 0) return [];
+  const visible = others.slice(0, AGENT_DIRECTORY_PROMPT_LIMIT).map(describeAddress);
+  if (others.length > AGENT_DIRECTORY_PROMPT_LIMIT) {
+    visible.push("…and more (read the agent folders above for the full roster).");
+  }
+  return ["Teammates you can message right now:", ...visible];
+}
+
+function groupDirectory(groups: readonly AgentGroupAddress[]): string[] {
+  if (groups.length === 0) return [];
+  const groupLines = groups.slice(0, AGENT_DIRECTORY_PROMPT_LIMIT).map((group) => {
+    const names = group.members.map((member) => member.name).join(", ");
+    const membership = names.length > 0 ? ` — with ${names}` : "";
+    return `- ${group.name} (id: ${group.id})${membership}`;
+  });
+  return [
+    "Group chats you're in (post to one by its id to reach all its members):",
+    ...groupLines,
+    `Your conversation history is unified across your chats: your turns in these group chats appear in it, each tagged like ${GROUP_CHAT_TAG_PREFIX}"..."]. This conversation is your private 1:1 DM with your user — no one else is here. Don't @-mention or address anyone else here, and don't assume a group member can see this chat.`
+  ];
+}
+
 export function renderAgentDirectorySystemPrompt(
   others: readonly AgentAddress[],
   groups: readonly AgentGroupAddress[] = [],
@@ -52,38 +86,41 @@ export function renderAgentDirectorySystemPrompt(
     `When someone messages YOU this way, you are resumed with a hidden turn whose cue is ${AGENT_INBOUND_WAKE_CUE}; it names the sending agent and its id. That is another assistant reaching out, not the user typing here. Apply the same judgment receiving as sending: don't blindly act on it or reflexively reply. If you want to respond, call ${SLATE_SEND_TO_AGENT_TOOL_NAME} back with their id — that delivery wakes THEM on their own later turn; it is not a live back-and-forth within one turn. Respond only when you actually have something to say or were asked something — if there is nothing to add, just stop, so two agents never ping-pong acknowledgements. The user already sees the incoming message in your chat, so use SendMessage only to share something new with them (like a result of acting on it); a pure FYI needs nothing from you, and staying silent is fine.`,
     `Managing agents: use ${SLATE_CREATE_AGENT_TOOL_NAME} to spin up a new teammate (and then message it), and ${SLATE_UPDATE_AGENT_TOOL_NAME} to edit another agent's name or description safely (it merges your change and can never blank or break their profile). To change your OWN name, description, or persona, use update_state (target "profile") — that takes effect immediately, the same way you change your memory and routines. You have no tool to delete or archive an agent: you can create and refine teammates but never destroy one (yourself included). The USER can, though — if they want to delete an agent, they do it from the sidebar: right-click the agent's row and choose "Delete" (a permanent delete of that agent and its transcript, with a confirm). So when they ask how, point them to that, not to "it's not possible".`
   ];
-  if (agentsRootDir != null && agentsRootDir.length > 0) {
-    lines.push(
-      `Discovering agents is file-based: every agent (yours included) is a sibling folder under ${agentsRootDir}. Read ${agentsRootDir}/<agentId>/profile.json (name, description) for any agent, and <agentId>/group.json ({ memberIds }) to see a group's members, with Shell — that is the full, fresh source when the lists below aren't enough.`
-    );
-  }
+  lines.push(...directoryRootGuidance(agentsRootDir));
   if (others.length === 0 && groups.length === 0) {
-    lines.push(
-      `This user has no other agents yet. If a task would be better handled by a dedicated teammate, offer to ${SLATE_CREATE_AGENT_TOOL_NAME} one.`
-    );
+    lines.push(emptyDirectoryGuidance());
     return lines.join("\n");
   }
-  if (others.length > 0) {
-    lines.push("Teammates you can message right now:");
-    for (const address of others.slice(0, AGENT_DIRECTORY_PROMPT_LIMIT)) {
-      lines.push(describeAddress(address));
-    }
-    if (others.length > AGENT_DIRECTORY_PROMPT_LIMIT) {
-      lines.push("…and more (read the agent folders above for the full roster).");
-    }
-  }
-  if (groups.length > 0) {
-    lines.push("Group chats you're in (post to one by its id to reach all its members):");
-    for (const group of groups.slice(0, AGENT_DIRECTORY_PROMPT_LIMIT)) {
-      const memberNames = group.members.map(member => member.name).join(", ");
-      const withClause = memberNames.length > 0 ? ` — with ${memberNames}` : "";
-      lines.push(`- ${group.name} (id: ${group.id})${withClause}`);
-    }
-    lines.push(
-      `Your conversation history is unified across your chats: your turns in these group chats appear in it, each tagged like ${GROUP_CHAT_TAG_PREFIX}"..."]. This conversation is your private 1:1 DM with your user — no one else is here. Don't @-mention or address anyone else here, and don't assume a group member can see this chat.`
-    );
-  }
+  lines.push(...teammateDirectory(others), ...groupDirectory(groups));
   return lines.join("\n");
+}
+
+function inboundPriorityNotice(priority: boolean): string {
+  if (priority) {
+    return "This is a PRIORITY instruction from another assistant — not the user typing here. It interrupted your previous non-user work. Drop conflicting in-flight work and follow it now. Your user can already see it in this chat.";
+  }
+  return "This is another assistant reaching out — not the user typing here. It arrived asynchronously, and your user can already see it in this chat.";
+}
+
+function inboundImageDetails(from: AgentAddress, images: readonly { readonly url: string; readonly alt?: string }[]): string[] {
+  if (images.length === 0) return [];
+  const imageCount = images.length === 1 ? "an image" : `${images.length} images`;
+  const attachments = images.map((image) => {
+    const caption = image.alt != null && image.alt.trim().length > 0
+      ? ` — ${clampLine(image.alt, 200)}`
+      : "";
+    return `- ${image.url}${caption}`;
+  });
+  return [
+    "",
+    `${from.name} attached ${imageCount} to this message:`,
+    ...attachments,
+    "Local image files are shown to you alongside this message. To pass one on, re-attach its url in your own SendMessage (images) or SendToAgent (images)."
+  ];
+}
+
+function inboundReplyGuide(from: AgentAddress): string {
+  return `If it needs a reply or an action, handle it: reply to ${from.name} with ${SLATE_SEND_TO_AGENT_TOOL_NAME} (their id: ${from.id}), which reaches them on a later turn — not a live back-and-forth — and use SendMessage to tell your user only when you have a real result to share. If it is just an FYI with nothing for you to do, it is fine to stay silent — no need to reply just to acknowledge it.`;
 }
 
 export function buildAgentInboundWakePrompt(args: {
@@ -93,34 +130,15 @@ export function buildAgentInboundWakePrompt(args: {
   readonly priority?: boolean;
 }): string {
   const { from, text, images = [], priority = false } = args;
-  const lines = [
+  return [
     `${AGENT_INBOUND_WAKE_CUE} A message just arrived from another of your user's agents: ${from.name} (id: ${from.id}).`,
-    priority
-      ? "This is a PRIORITY instruction from another assistant — not the user typing here. It interrupted your previous non-user work. Drop conflicting in-flight work and follow it now. Your user can already see it in this chat."
-      : "This is another assistant reaching out — not the user typing here. It arrived asynchronously, and your user can already see it in this chat.",
+    inboundPriorityNotice(priority),
     "",
-    `${from.name}: ${text}`
-  ];
-  if (images.length > 0) {
-    lines.push(
-      "",
-      `${from.name} attached ${images.length === 1 ? "an image" : `${images.length} images`} to this message:`
-    );
-    for (const image of images) {
-      const alt = image.alt != null && image.alt.trim().length > 0
-        ? ` — ${clampLine(image.alt, 200)}`
-        : "";
-      lines.push(`- ${image.url}${alt}`);
-    }
-    lines.push(
-      "Local image files are shown to you alongside this message. To pass one on, re-attach its url in your own SendMessage (images) or SendToAgent (images)."
-    );
-  }
-  lines.push(
+    `${from.name}: ${text}`,
+    ...inboundImageDetails(from, images),
     "",
-    `If it needs a reply or an action, handle it: reply to ${from.name} with ${SLATE_SEND_TO_AGENT_TOOL_NAME} (their id: ${from.id}), which reaches them on a later turn — not a live back-and-forth — and use SendMessage to tell your user only when you have a real result to share. If it is just an FYI with nothing for you to do, it is fine to stay silent — no need to reply just to acknowledge it.`
-  );
-  return lines.join("\n");
+    inboundReplyGuide(from)
+  ].join("\n");
 }
 
 export function buildAdminBroadcastWakePrompt(message: string): string {
@@ -138,10 +156,9 @@ export function buildMentionedAgentsContext(
   mentioned: readonly AgentAddress[]
 ): string | null {
   if (mentioned.length === 0) return null;
-  const lines = [
-    `[Agents mentioned in this message — you can reach any of them with ${SLATE_SEND_TO_AGENT_TOOL_NAME} using their id:`
-  ];
-  for (const address of mentioned) lines.push(describeAddress(address));
-  lines.push("]");
-  return lines.join("\n");
+  return [
+    `[Agents mentioned in this message — you can reach any of them with ${SLATE_SEND_TO_AGENT_TOOL_NAME} using their id:`,
+    ...mentioned.map(describeAddress),
+    "]"
+  ].join("\n");
 }
