@@ -58,6 +58,7 @@ const EXEMPT = [
   ["packages/agent-exec/subagent-lifecycle-state-machine.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
   ["packages/agent-exec/subagent-lifecycle-store.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
   ["packages/agent-exec/subagent-queue.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/cursor-config/auth/token-refresh-policy.ts", "empty initialization boundary: token refresh policy is owned by the token implementation; the source has no runtime tokens and remains as the imported module boundary"],
 ];
 
 const options = new Map();
