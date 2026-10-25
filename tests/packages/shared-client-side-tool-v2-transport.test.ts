@@ -18,7 +18,7 @@ test("wire identity constants and generated protobuf round-trip remain stable", 
 
 test("decoding refuses malformed envelope, encoding, type, base64 and empty call id", () => {
   const valid=encodeClientSideToolV2Message("call",call);
-  for (const value of [null,[],{}, {...valid,encoding:"protobuf"},{...valid,messageType:"wrong"},{...valid,bytes:""},{...valid,bytes:"GgFh====!!!!"},{...valid,bytes:"YQ== "},{...valid,bytes:"YR=="},{...valid,bytes:"AA=="}]) assert.equal(decodeClientSideToolV2Message("call",value),null);
+  for (const value of [null,[],{}, {...valid,encoding:"protobuf"},{...valid,messageType:"wrong"},{...valid,bytes:""},{...valid,bytes:"GgFh===="},{...valid,bytes:"YQ== "},{...valid,bytes:"YR=="},{...valid,bytes:"AA=="}]) assert.equal(decodeClientSideToolV2Message("call",value),null);
   const emptyCall=new ClientSideToolV2Call({name:"test"});
   assert.equal(decodeClientSideToolV2Message("call",encodeClientSideToolV2Message("call",emptyCall)),null);
   const padded={encoding:"protobuf-base64",messageType:"aiserver.v1.ClientSideToolV2Call",bytes:"GgFh=="};
