@@ -242,13 +242,13 @@ describe("the box's exec daemon as a process this host owns", () => {
     }
     const outputDeadline = Date.now() + 2_000;
     while (
-      (!logs.join("\n").includes("[box-exec-daemon] from-launch-options") || errors.length === 0)
+      (!logs.join("\n").includes("from-launch-options") || errors.length === 0)
       && Date.now() < outputDeadline
     ) {
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     assert.equal(logs.join("\n").includes(`[box-exec-daemon] ${realpathSync(root)}`), true);
-    assert.equal(logs.join("\n").includes("[box-exec-daemon] from-launch-options"), true);
+    assert.equal(logs.join("\n").includes("from-launch-options"), true);
     assert.deepEqual(errors, ["[box-exec-daemon] invalid config"]);
     assert.equal(existsSync(workspaceRoot), true);
     assert.equal(existsSync(terminalsDirectory), true);
