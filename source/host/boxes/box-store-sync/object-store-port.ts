@@ -1,25 +1,47 @@
-/**
- * The failure of a write that lost a race with another writer.
- *
- * The object store is written by more than one host, so a write can find that the key moved under it. That
- * is not a lost update: the content that won is preserved, and the loser is told where its own content was
- * kept and what it was written against, which is what lets the caller merge rather than overwrite.
- */
+/** The failure record shared by writes that lost a concurrent update race. */
+interface WriteConflictRecord {
+  readonly key: string;
+  readonly conflictRelPath: string | null;
+  readonly baseEtag: string | null;
+  readonly baselineSource: string | null;
+}
+
+interface WriteConflictInput {
+  readonly key: string;
+  readonly conflictRelPath?: string | null;
+  readonly baseEtag?: string | null;
+  readonly baselineSource?: string | null;
+}
+
+function conflictRecordFrom(input: WriteConflictInput): WriteConflictRecord {
+  return {
+    key: input.key,
+    conflictRelPath: input.conflictRelPath ?? null,
+    baseEtag: input.baseEtag ?? null,
+    baselineSource: input.baselineSource ?? null,
+  };
+}
+
+function conflictMessage(record: WriteConflictRecord): string {
+  if (record.conflictRelPath == null) {
+    return `canonical write for ${record.key} lost a concurrent-write race`;
+  }
+  return `agent-store write for ${record.key} lost a concurrent-write race; content preserved at ${record.conflictRelPath}`;
+}
 
 export class BoxStoreCanonicalWriteConflictError extends Error {
-  readonly key: string
-  readonly conflictRelPath: string | null
-  readonly baseEtag: string | null
-  readonly baselineSource: string | null
+  readonly key: string;
+  readonly conflictRelPath: string | null;
+  readonly baseEtag: string | null;
+  readonly baselineSource: string | null;
 
-  constructor(args: { key: string; conflictRelPath?: string | null; baseEtag?: string | null; baselineSource?: string | null }) {
-    super(args.conflictRelPath == null
-      ? `canonical write for ${args.key} lost a concurrent-write race`
-      : `agent-store write for ${args.key} lost a concurrent-write race; content preserved at ${args.conflictRelPath}`)
-    this.name = "BoxStoreCanonicalWriteConflictError"
-    this.key = args.key
-    this.conflictRelPath = args.conflictRelPath ?? null
-    this.baseEtag = args.baseEtag ?? null
-    this.baselineSource = args.baselineSource ?? null
+  constructor(input: WriteConflictInput) {
+    const record = conflictRecordFrom(input);
+    super(conflictMessage(record));
+    this.name = "BoxStoreCanonicalWriteConflictError";
+    this.key = record.key;
+    this.conflictRelPath = record.conflictRelPath;
+    this.baseEtag = record.baseEtag;
+    this.baselineSource = record.baselineSource;
   }
 }
