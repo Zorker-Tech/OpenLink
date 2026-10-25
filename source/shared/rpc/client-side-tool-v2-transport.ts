@@ -51,18 +51,23 @@ export type ClientSideToolV2TransportEvent =
   | ClientSideToolV2TransportUpdate
   | ClientSideToolV2TransportReset;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function recordFields(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  if (Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
 }
 
-function isNonEmptyString(value: unknown): value is string {
+function nonBlankString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
 function canonicalBase64(value: string): Uint8Array | null {
-  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
-  const bytes = Buffer.from(value, "base64");
-  return bytes.toString("base64") === value ? bytes : null;
+  if (value.length === 0) return null;
+  if (value.length % 4 !== 0) return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+  const decodedBytes = Buffer.from(value, "base64");
+  if (decodedBytes.toString("base64") === value) return decodedBytes;
+  return null;
 }
 
 export function encodeClientSideToolV2Message(
@@ -90,13 +95,14 @@ export function decodeClientSideToolV2Message(
   kind: ClientSideToolV2MessageKind,
   value: unknown,
 ): ClientSideToolV2Call | ClientSideToolV2Result | null {
-  if (!isRecord(value) || value.encoding !== "protobuf-base64" || typeof value.bytes !== "string") return null;
+  const fields = recordFields(value);
+  if (fields === undefined || fields.encoding !== "protobuf-base64" || typeof fields.bytes !== "string") return null;
   const expectedType = kind === "call"
     ? "aiserver.v1.ClientSideToolV2Call"
     : "aiserver.v1.ClientSideToolV2Result";
-  if (value.messageType !== expectedType) return null;
-  const bytes = canonicalBase64(value.bytes);
-  if (bytes == null) return null;
+  if (fields.messageType !== expectedType) return null;
+  const bytes = canonicalBase64(fields.bytes as string);
+  if (bytes === null) return null;
   try {
     const decoded = kind === "call"
       ? ClientSideToolV2Call.fromBinary(bytes)
@@ -109,20 +115,22 @@ export function decodeClientSideToolV2Message(
 }
 
 export function parseClientSideToolV2TransportEvent(value: unknown): ClientSideToolV2TransportEvent | null {
-  if (!isRecord(value) || value.version !== CLIENT_SIDE_TOOL_V2_WIRE_VERSION) return null;
-  if (!isNonEmptyString(value.accountSlot) || !isNonEmptyString(value.agentId) || !isNonEmptyString(value.epoch)) return null;
-  if (!Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return null;
+  const fields = recordFields(value);
+  if (fields === undefined || fields.version !== CLIENT_SIDE_TOOL_V2_WIRE_VERSION) return null;
+  if (!nonBlankString(fields.accountSlot) || !nonBlankString(fields.agentId) || !nonBlankString(fields.epoch)) return null;
+  if (!Number.isSafeInteger(fields.sequence) || (fields.sequence as number) < 1) return null;
   const base = {
     version: CLIENT_SIDE_TOOL_V2_WIRE_VERSION,
-    accountSlot: value.accountSlot,
-    agentId: value.agentId,
-    epoch: value.epoch,
-    sequence: value.sequence as number,
+    accountSlot: fields.accountSlot as string,
+    agentId: fields.agentId as string,
+    epoch: fields.epoch as string,
+    sequence: fields.sequence as number,
   } as const;
-  if (value.kind === "reset") return { ...base, kind: "reset" };
-  if (value.kind !== "call" && value.kind !== "result") return null;
-  if (decodeClientSideToolV2Message(value.kind, value.message) == null) return null;
-  return { ...base, kind: value.kind, message: value.message as unknown as EncodedClientSideToolV2Message };
+  const isReset = fields.kind === "reset";
+  if (isReset) return { ...base, kind: "reset" };
+  if (fields.kind !== "call" && fields.kind !== "result") return null;
+  if (decodeClientSideToolV2Message(fields.kind, fields.message) === null) return null;
+  return { ...base, kind: fields.kind, message: fields.message as unknown as EncodedClientSideToolV2Message };
 }
 
 export function materializeClientSideToolV2RendererEvent(value: unknown): (Omit<ClientSideToolV2TransportUpdate, "message"> & {
