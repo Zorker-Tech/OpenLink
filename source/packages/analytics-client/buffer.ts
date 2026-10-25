@@ -32,10 +32,13 @@ export interface AnalyticsBufferOptions {
   readonly onDebug?: ((tag: string, payload: unknown) => void) | undefined;
 }
 
+type DeliveryBatch = readonly AnalyticsEventMessage[];
+type FlushResult = { readonly sent: number; readonly retained: number };
+
 export class AnalyticsBuffer {
   private readonly buffer: AnalyticsEventMessage[] = [];
-  private flushTimer: NodeJS.Timeout | null = null;
-  private activeFlush: Promise<number> | null = null;
+  private timer: NodeJS.Timeout | null = null;
+  private flight: Promise<FlushResult> | null = null;
   private readonly client: AnalyticsBufferClient;
   private readonly tokenProvider: AnalyticsBufferTokenProvider;
   private readonly bufferLimit: number;
@@ -53,84 +56,100 @@ export class AnalyticsBuffer {
   }
 
   track(eventName: string, props: AnalyticsEventProperties | null | undefined, timestamp?: number): void {
-    const timestampValue = BigInt(timestamp ?? Date.now());
-    const event = new AnalyticsEventMessage({ eventName, eventData: toEventData(props), timestamp: timestampValue });
-    this.buffer.push(event);
-    if (this.buffer.length >= this.bufferLimit) this.flushInBackground();
-    else this.scheduleFlush();
+    const eventTimestamp = BigInt(timestamp ?? Date.now());
+    const message = new AnalyticsEventMessage({ eventName, eventData: toEventData(props), timestamp: eventTimestamp });
+    this.buffer.push(message);
+    this.onQueueGrowth();
   }
 
   async flush(timeoutMs: number): Promise<void> {
-    for (;;) {
-      if (this.activeFlush !== null) {
-        await this.activeFlush;
-        if (this.buffer.length === 0) return;
+    while (this.buffer.length > 0) {
+      if (this.flight !== null) {
+        const finished = await this.flight;
+        if (finished.sent === 0 || this.buffer.length === 0) return;
         continue;
       }
-      if (this.buffer.length === 0) return;
-      const running = this.flushOnce(timeoutMs);
-      this.activeFlush = running;
-      let sent = 0;
+      const flight = this.flushBatch(timeoutMs);
+      this.flight = flight;
       try {
-        sent = await running;
+        const result = await flight;
+        if (result.sent === 0) return;
       } finally {
-        if (this.activeFlush === running) this.activeFlush = null;
+        if (this.flight === flight) this.flight = null;
       }
-      if (this.buffer.length === 0 || sent === 0) return;
     }
   }
 
-  private async flushOnce(timeoutMs: number): Promise<number> {
-    if (this.buffer.length === 0) return 0;
+  private onQueueGrowth(): void {
+    if (this.buffer.length >= this.bufferLimit) this.flushInBackground();
+    else this.armTimer();
+  }
+
+  private async flushBatch(timeoutMs: number): Promise<FlushResult> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    if (typeof timeout.unref === "function") timeout.unref();
+    timeout.unref?.();
     try {
-      try {
-        const token = await Promise.race([
-          this.tokenProvider.getAccessToken(),
-          new Promise<typeof TOKEN_CHECK_TIMEOUT>(resolve => {
-            controller.signal.addEventListener("abort", () => resolve(TOKEN_CHECK_TIMEOUT), { once: true });
-          }),
-        ]);
-        if (token === TOKEN_CHECK_TIMEOUT) {
-          this.onDebug("analytics.flush.deferred", { reason: "token_check_timed_out", count: this.buffer.length });
-          return 0;
-        }
-        if (!token) {
-          this.onDebug("analytics.flush.deferred", { reason: "no_token", count: this.buffer.length });
-          return 0;
-        }
-      } catch (error) {
-        this.onDebug("analytics.flush.deferred", { reason: "token_check_failed", error, count: this.buffer.length });
-        return 0;
-      }
-      const toSend = this.buffer.slice();
-      if (toSend.length === 0) return 0;
-      try {
-        await this.client.trackEvents(new TrackEventsRequest({ events: toSend }), { signal: controller.signal });
-        this.buffer.splice(0, toSend.length);
-        return toSend.length;
-      } catch (error) {
-        this.onDebug("analytics.flush.error", { error });
-        if (this.buffer.length > this.bufferLimit) this.buffer.splice(0, this.buffer.length - this.bufferLimit);
-        return 0;
-      }
+      const token = await this.readToken(controller);
+      if (token === null) return { sent: 0, retained: this.buffer.length };
+      const batch = this.buffer.slice();
+      if (batch.length === 0) return { sent: 0, retained: 0 };
+      return await this.deliver(batch, controller.signal);
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async readToken(controller: AbortController): Promise<string | null> {
+    try {
+      const token = await Promise.race([
+        this.tokenProvider.getAccessToken(),
+        new Promise<typeof TOKEN_CHECK_TIMEOUT>(resolve => {
+          controller.signal.addEventListener("abort", () => resolve(TOKEN_CHECK_TIMEOUT), { once: true });
+        }),
+      ]);
+      if (token === TOKEN_CHECK_TIMEOUT) {
+        this.onDebug("analytics.flush.deferred", { reason: "token_check_timed_out", count: this.buffer.length });
+        return null;
+      }
+      if (!token) {
+        this.onDebug("analytics.flush.deferred", { reason: "no_token", count: this.buffer.length });
+        return null;
+      }
+      return token;
+    } catch (error) {
+      this.onDebug("analytics.flush.deferred", { reason: "token_check_failed", error, count: this.buffer.length });
+      return null;
+    }
+  }
+
+  private async deliver(batch: DeliveryBatch, signal: AbortSignal): Promise<FlushResult> {
+    try {
+      await this.client.trackEvents(new TrackEventsRequest({ events: [...batch] }), { signal });
+      this.buffer.splice(0, batch.length);
+      return { sent: batch.length, retained: this.buffer.length };
+    } catch (error) {
+      this.onDebug("analytics.flush.error", { error });
+      return { sent: 0, retained: this.trimTail() };
+    }
+  }
+
+  private trimTail(): number {
+    const excess = Math.max(0, this.buffer.length - this.bufferLimit);
+    if (excess > 0) this.buffer.splice(0, excess);
+    return this.buffer.length;
   }
 
   private flushInBackground(): void {
     void this.flush(this.normalFlushTimeoutMs);
   }
 
-  private scheduleFlush(): void {
-    if (this.flushTimer) return;
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
+  private armTimer(): void {
+    if (this.timer !== null) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
       this.flushInBackground();
     }, this.flushIntervalMs);
-    if (typeof this.flushTimer.unref === "function") this.flushTimer.unref();
+    this.timer.unref?.();
   }
 }
