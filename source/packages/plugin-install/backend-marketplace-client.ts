@@ -21,7 +21,7 @@ import { resolveGitRemoteRef } from "./git-remote-ref-resolve.ts";
 import { execGitNonInteractive, resolveExtraGitConfig, type ExtraGitConfig, type ExtraGitConfigProvider } from "./git-subprocess-env.ts";
 import { materializeSparseDirs, materializeSpecForGitPaths, resolveSparseClonePlan, serverIgnoredFilter, setSparseCheckoutDirs, type MaterializeSpec } from "./git-sparse-clone.ts";
 import { getCanonicalMarketplacePathSegments, isKilledSubprocessError, LOCAL_GIT_TIMEOUT_MS, LS_REMOTE_TIMEOUT_MS, MarketplaceCacheManager, REMOTE_GIT_TIMEOUT_MS, type MarketplaceCacheOptions } from "./marketplace-cache.ts";
-import { getReleasePluginSource } from "./cloud-manifest.ts";
+import { releaseSourceFromManifest } from "./cloud-manifest.ts";
 import { containsPluginRootDir, isPathSafe, MARKETPLACE_MANIFEST_PATHS, parseMarketplaceManifest, resolvePluginSourcePath } from "./manifest-parser.ts";
 import { validateAndResolveSubpath } from "./validate-subpath.ts";
 import { synthesizeInlinePluginDir } from "./inline-plugin-synthesizer.ts";
@@ -877,7 +877,7 @@ export class BackendMarketplaceClient {
       const gitUrl = definition.gitUrl;
       const preferredInstallGitUrl = installGitUrl(gitUrl, marketplaceDefinition);
       const ref = pluginRef(effective, marketplaces);
-      const releaseSource = getReleasePluginSource(definition, ref);
+      const releaseSource = releaseSourceFromManifest(definition, ref);
       const marketplaceRef = marketplaceDefinition?.gitRef ?? ref;
       let version: string;
       let installRepositoryUrl = preferredInstallGitUrl;
