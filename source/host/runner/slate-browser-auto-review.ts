@@ -15,20 +15,132 @@ import { fingerprintSlateAutoReviewTarget, type SlateAutoReviewController, type 
 import type { AutoReviewClassifierDecision } from "./slate-auto-review-classifier-run.ts";
 import { runSlateAutoReviewClassifier } from "./slate-auto-review-classifier-run.ts";
 import { summarizeSlateBrowserAutoReviewAction } from "./slate-auto-review-summaries.ts";
-import { buildProjectPermissionsContext, SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION, type BoxIdentity } from "./slate-computer-auto-review.ts";
-export const SLATE_BROWSER_AUTO_REVIEW_MAX_ELEMENT_CHARS = 500, SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS = 2_000, SLATE_BROWSER_AUTO_REVIEW_MAX_URL_CHARS = 2_000, SLATE_BROWSER_AUTO_REVIEW_MAX_KEY_CHARS = 256, SLATE_BROWSER_AUTO_REVIEW_MAX_CDP_PARAMS_CHARS = 2_000;
-const BYPASS = new Set(["snapshot", "screenshot", "get_bounding_box", "highlight", "scroll"]);
-export class SlateBrowserAutoReviewBlockedError extends Error { override readonly name = "SlateBrowserAutoReviewBlockedError"; }
-export interface BrowserAction { readonly op: string; readonly tabsAction?: string | undefined; readonly element?: string | undefined; readonly url?: string | undefined; readonly text?: string | undefined; readonly value?: string | undefined; readonly values?: readonly string[] | undefined; readonly key?: string | undefined; readonly cdpMethod?: string | undefined; readonly cdpParams?: string | undefined; readonly tabIndex?: number | undefined; readonly [key: string]: unknown }
-export function isSlateBrowserAutoReviewMutatingAction(action: BrowserAction): boolean { return action.op === "tabs" ? action.tabsAction === "new" || action.tabsAction === "close" : !BYPASS.has(action.op); }
-function bounded(value: string | undefined, field: string, max: number): void { if ((value?.length ?? 0) > max) throw new SlateBrowserAutoReviewBlockedError(`Browser Auto-review rejected oversized ${field} (max ${max} characters).`); }
-export function normalizeSlateBrowserExactActionArgs<T extends BrowserAction>(action: T): T { bounded(action.url, "url", 2_000); bounded(action.text, "text", 2_000); bounded(action.value, "value", 2_000); bounded(action.key, "key", 256); bounded(action.cdpParams, "params", 2_000); if ((action.values?.join(", ").length ?? 0) > 2_000) bounded("x".repeat(2_001), "values", 2_000); return action; }
-export function normalizeSlateBrowserElement(element?: string): string | undefined { const trimmed = element?.trim(); if (!trimmed) return undefined; bounded(trimmed, "element", 500); return trimmed; }
-export function buildSlateBrowserAutoReviewCanonicalTarget(args: { exactAction: BrowserAction; boxIdentity: BoxIdentity; reviewState: { displayStateIdentity: string; targetPageUrl?: string } }) { const action = normalizeSlateBrowserExactActionArgs(args.exactAction), element = normalizeSlateBrowserElement(action.element); return { exactAction: { ...action, ...(element == null ? {} : { element }) }, boxIdentity: args.boxIdentity, displayStateIdentity: args.reviewState.displayStateIdentity, ...(args.reviewState.targetPageUrl == null ? {} : { targetPageUrl: args.reviewState.targetPageUrl }) }; }
-export function fingerprintSlateBrowserAutoReviewTarget(target: ReturnType<typeof buildSlateBrowserAutoReviewCanonicalTarget>): string { return fingerprintSlateAutoReviewTarget({ exact_action: target.exactAction, window_generation: target.boxIdentity.windowGeneration, box_id: target.boxIdentity.boxId, display_state_identity: target.displayStateIdentity, target_page_url: target.targetPageUrl }); }
-export function buildSlateBrowserClassifierRiskTarget(args: { canonicalTarget: ReturnType<typeof buildSlateBrowserAutoReviewCanonicalTarget>; personalInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; userAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; projectAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] } }): unknown {
-  const action: BrowserAction = args.canonicalTarget.exactAction;
-  const argumentsJson = JSON.parse(JSON.stringify({
+import {
+  buildProjectPermissionsContext,
+  SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION,
+  type BoxIdentity,
+} from "./slate-computer-auto-review.ts";
+
+export const SLATE_BROWSER_AUTO_REVIEW_MAX_ELEMENT_CHARS = 500;
+export const SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS = 2_000;
+export const SLATE_BROWSER_AUTO_REVIEW_MAX_URL_CHARS = 2_000;
+export const SLATE_BROWSER_AUTO_REVIEW_MAX_KEY_CHARS = 256;
+export const SLATE_BROWSER_AUTO_REVIEW_MAX_CDP_PARAMS_CHARS = 2_000;
+
+const BROWSER_OBSERVATIONS_WITHOUT_WRITE = new Set(["snapshot", "screenshot", "get_bounding_box", "highlight", "scroll"]);
+
+export class SlateBrowserAutoReviewBlockedError extends Error {
+  override readonly name = "SlateBrowserAutoReviewBlockedError";
+}
+
+export interface BrowserAction {
+  readonly op: string;
+  readonly tabsAction?: string | undefined;
+  readonly element?: string | undefined;
+  readonly url?: string | undefined;
+  readonly text?: string | undefined;
+  readonly value?: string | undefined;
+  readonly values?: readonly string[] | undefined;
+  readonly key?: string | undefined;
+  readonly cdpMethod?: string | undefined;
+  readonly cdpParams?: string | undefined;
+  readonly tabIndex?: number | undefined;
+  readonly [key: string]: unknown;
+}
+
+type RiskInstructions = { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
+
+function assertBrowserFieldBound(value: string | undefined, field: string, max: number): void {
+  if ((value?.length ?? 0) > max) {
+    throw new SlateBrowserAutoReviewBlockedError(`Browser Auto-review rejected oversized ${field} (max ${max} characters).`);
+  }
+}
+
+function changesBrowserSession(action: BrowserAction): boolean {
+  return action.tabsAction === "new" || action.tabsAction === "close";
+}
+
+export function isSlateBrowserAutoReviewMutatingAction(action: BrowserAction): boolean {
+  if (action.op === "tabs") return changesBrowserSession(action);
+  return !BROWSER_OBSERVATIONS_WITHOUT_WRITE.has(action.op);
+}
+
+interface BoundedBrowserInput {
+  readonly field: string;
+  readonly value: string | undefined;
+  readonly limit: number;
+}
+
+function checkBrowserActionText(action: BrowserAction): void {
+  const boundedFields: readonly BoundedBrowserInput[] = [
+    { field: "url", value: action.url, limit: SLATE_BROWSER_AUTO_REVIEW_MAX_URL_CHARS },
+    { field: "text", value: action.text, limit: SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS },
+    { field: "value", value: action.value, limit: SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS },
+    { field: "key", value: action.key, limit: SLATE_BROWSER_AUTO_REVIEW_MAX_KEY_CHARS },
+    { field: "params", value: action.cdpParams, limit: SLATE_BROWSER_AUTO_REVIEW_MAX_CDP_PARAMS_CHARS },
+  ];
+  for (const { field, value, limit } of boundedFields) assertBrowserFieldBound(value, field, limit);
+
+  const combinedValuesLength = action.values?.join(", ").length ?? 0;
+  if (combinedValuesLength > SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS) {
+    assertBrowserFieldBound("x".repeat(SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS + 1), "values", SLATE_BROWSER_AUTO_REVIEW_MAX_TEXT_CHARS);
+  }
+}
+
+export function normalizeSlateBrowserExactActionArgs<T extends BrowserAction>(action: T): T {
+  checkBrowserActionText(action);
+  return action;
+}
+
+export function normalizeSlateBrowserElement(element?: string): string | undefined {
+  const trimmed = element?.trim();
+  if (!trimmed) return undefined;
+  assertBrowserFieldBound(trimmed, "element", SLATE_BROWSER_AUTO_REVIEW_MAX_ELEMENT_CHARS);
+  return trimmed;
+}
+
+interface SlateBrowserCanonicalTarget {
+  readonly exactAction: BrowserAction;
+  readonly boxIdentity: BoxIdentity;
+  readonly displayStateIdentity: string;
+  readonly targetPageUrl?: string;
+}
+
+export function buildSlateBrowserAutoReviewCanonicalTarget(args: {
+  readonly exactAction: BrowserAction;
+  readonly boxIdentity: BoxIdentity;
+  readonly reviewState: { readonly displayStateIdentity: string; readonly targetPageUrl?: string };
+}): SlateBrowserCanonicalTarget {
+  const exactAction = normalizeSlateBrowserExactActionArgs(args.exactAction);
+  const element = normalizeSlateBrowserElement(exactAction.element);
+  return {
+    exactAction: { ...exactAction, ...(element == null ? {} : { element }) },
+    boxIdentity: args.boxIdentity,
+    displayStateIdentity: args.reviewState.displayStateIdentity,
+    ...(args.reviewState.targetPageUrl == null ? {} : { targetPageUrl: args.reviewState.targetPageUrl }),
+  };
+}
+
+type CanonicalBrowserTarget = SlateBrowserCanonicalTarget;
+
+export function fingerprintSlateBrowserAutoReviewTarget(target: CanonicalBrowserTarget): string {
+  return fingerprintSlateAutoReviewTarget({
+    exact_action: target.exactAction,
+    window_generation: target.boxIdentity.windowGeneration,
+    box_id: target.boxIdentity.boxId,
+    display_state_identity: target.displayStateIdentity,
+    target_page_url: target.targetPageUrl,
+  });
+}
+
+function toClassifierArguments(args: {
+  readonly canonicalTarget: CanonicalBrowserTarget;
+  readonly personalInstructions?: RiskInstructions;
+  readonly userAutoRunInstructions?: RiskInstructions;
+  readonly projectAutoRunInstructions?: RiskInstructions;
+}): unknown {
+  const action = args.canonicalTarget.exactAction;
+  const plainArguments = JSON.parse(JSON.stringify({
     surface: "browser",
     action_kind: `browser_${action.op}`,
     view_id: action.viewId,
@@ -61,10 +173,20 @@ export function buildSlateBrowserClassifierRiskTarget(args: { canonicalTarget: R
     },
     project_permissions: buildProjectPermissionsContext(args),
   }));
+
   return new SmartModeRiskTarget({
     action: SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(argumentsJson),
+    arguments: Struct.fromJson(plainArguments),
   });
+}
+
+export function buildSlateBrowserClassifierRiskTarget(args: {
+  readonly canonicalTarget: CanonicalBrowserTarget;
+  readonly personalInstructions?: RiskInstructions;
+  readonly userAutoRunInstructions?: RiskInstructions;
+  readonly projectAutoRunInstructions?: RiskInstructions;
+}): unknown {
+  return toClassifierArguments(args);
 }
 
 export interface SlateBrowserAutoReviewOptions {
@@ -73,14 +195,14 @@ export interface SlateBrowserAutoReviewOptions {
   readonly boxIdentity: BoxIdentity;
   readonly autoReviewController?: SlateAutoReviewController;
   readonly resolveDisplayNumber: (ctx: Context) => Promise<number | undefined>;
-  readonly personalInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
-  readonly userAutoRunInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
-  readonly projectAutoRunInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
+  readonly personalInstructions?: RiskInstructions;
+  readonly userAutoRunInstructions?: RiskInstructions;
+  readonly projectAutoRunInstructions?: RiskInstructions;
   readonly extractConversationContext?: (ctx: Context, stateHandler: unknown) => Promise<readonly SmartModeClassifierConversationMessage[]>;
   readonly getApprovalExpiryPolicy?: () => "park" | "ttl";
 }
 
-export async function runSlateBrowserAutoReviewPreflight(args: {
+interface BrowserReviewPreflightArgs {
   readonly ctx: Context;
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>;
   readonly exactAction: BrowserAction;
@@ -91,51 +213,132 @@ export async function runSlateBrowserAutoReviewPreflight(args: {
   readonly options: SlateBrowserAutoReviewOptions & {
     readonly captureReviewState: (ctx: Context, toolCallId: string) => Promise<{ displayStateIdentity: string; targetPageUrl?: string }>;
   };
-}): Promise<void> {
-  const { options } = args, op = args.exactAction.op;
-  if (options.mode === "off" || !isSlateBrowserAutoReviewMutatingAction(args.exactAction)) return;
-  if (options.mode === "enforce" && ["click", "mouse_click_xy", "drag"].includes(op) && normalizeSlateBrowserElement(args.exactAction.element) == null) throw new SlateBrowserAutoReviewBlockedError("Browser click and drag actions require an element field: a concise description of the intended target and purpose.");
-  const classifierMode = options.mode === "shadow" ? "shadow" : "enforce";
-  const canonical = buildSlateBrowserAutoReviewCanonicalTarget({ exactAction: args.exactAction, boxIdentity: options.boxIdentity, reviewState: await options.captureReviewState(args.ctx, args.toolCallId) }), fingerprint = fingerprintSlateBrowserAutoReviewTarget(canonical);
-  const recheck = async (): Promise<void> => { if ((await options.captureReviewState(args.ctx, args.toolCallId)).displayStateIdentity !== canonical.displayStateIdentity) { options.autoReviewController?.reportDisplayRecheckFailed(options.agentId); throw new SlateBrowserAutoReviewBlockedError("The page changed after review; take a fresh browser_snapshot and retry the action."); } };
-  const runClassifier = () => runSlateAutoReviewClassifier({
+}
+
+function purposeIsRequired(action: BrowserAction): boolean {
+  return action.op === "click" || action.op === "mouse_click_xy" || action.op === "drag";
+}
+
+async function readClassifierConversation(args: BrowserReviewPreflightArgs): Promise<SmartModeClassifierConversationMessage[]> {
+  if (args.stateHandler === undefined) return [];
+  if (args.options.extractConversationContext !== undefined) {
+    return [...await args.options.extractConversationContext(args.ctx, args.stateHandler)];
+  }
+  return [...await tryExtractSlateAutoReviewClassifierConversationContext(args.ctx, args.stateHandler as never)];
+}
+
+function classifierTarget(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget): SmartModeRiskTarget {
+  const options = args.options;
+  return buildSlateBrowserClassifierRiskTarget({
+    canonicalTarget: canonical,
+    ...(options.personalInstructions === undefined ? {} : { personalInstructions: options.personalInstructions }),
+    ...(options.userAutoRunInstructions === undefined ? {} : { userAutoRunInstructions: options.userAutoRunInstructions }),
+    ...(options.projectAutoRunInstructions === undefined ? {} : { projectAutoRunInstructions: options.projectAutoRunInstructions }),
+  }) as SmartModeRiskTarget;
+}
+
+function classifierFor(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget, mode: "shadow" | "enforce") {
+  return () => runSlateAutoReviewClassifier({
     ctx: args.ctx,
     resourceAccessor: args.resourceAccessor,
     toolCallId: args.toolCallId,
-    mode: classifierMode,
-    buildTarget: () => buildSlateBrowserClassifierRiskTarget({ canonicalTarget: canonical, ...(options.personalInstructions === undefined ? {} : { personalInstructions: options.personalInstructions }), ...(options.userAutoRunInstructions === undefined ? {} : { userAutoRunInstructions: options.userAutoRunInstructions }), ...(options.projectAutoRunInstructions === undefined ? {} : { projectAutoRunInstructions: options.projectAutoRunInstructions }) }) as SmartModeRiskTarget,
-    loadConversationContext: async () => {
-      if (args.stateHandler === undefined) return [];
-      if (options.extractConversationContext !== undefined) return [...await options.extractConversationContext(args.ctx, args.stateHandler)];
-      return [...await tryExtractSlateAutoReviewClassifierConversationContext(args.ctx, args.stateHandler as never)];
-    },
+    mode,
+    buildTarget: () => classifierTarget(args, canonical),
+    loadConversationContext: () => readClassifierConversation(args),
     ...(args.workspacePaths === undefined ? {} : { workspacePaths: args.workspacePaths }),
     errorReason: "An error occurred while classifying this action. Please review manually.",
   });
+}
+
+function recheckDisplay(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget): () => Promise<void> {
+  return async () => {
+    const current = await args.options.captureReviewState(args.ctx, args.toolCallId);
+    if (current.displayStateIdentity === canonical.displayStateIdentity) return;
+    args.options.autoReviewController?.reportDisplayRecheckFailed(args.options.agentId);
+    throw new SlateBrowserAutoReviewBlockedError("The page changed after review; take a fresh browser_snapshot and retry the action.");
+  };
+}
+
+function approvalSummary(target: CanonicalBrowserTarget): string {
+  const action = target.exactAction;
+  return summarizeSlateBrowserAutoReviewAction({
+    op: action.op,
+    ...(action.element === undefined ? {} : { element: action.element }),
+    ...(target.targetPageUrl === undefined ? {} : { targetPageUrl: target.targetPageUrl }),
+    ...(action.url === undefined ? {} : { url: action.url }),
+    ...(action.text === undefined ? {} : { text: action.text }),
+    ...(action.value === undefined ? {} : { value: action.value }),
+    ...(action.values === undefined ? {} : { values: action.values }),
+    ...(action.key === undefined ? {} : { key: action.key }),
+    ...(action.cdpMethod === undefined ? {} : { cdpMethod: action.cdpMethod }),
+    ...(action.cdpParams === undefined ? {} : { cdpParams: action.cdpParams }),
+    ...(action.tabsAction === undefined ? {} : { tabsAction: action.tabsAction }),
+    ...(action.tabIndex === undefined ? {} : { tabIndex: action.tabIndex }),
+  });
+}
+
+async function requestBrowserApproval(
+  args: BrowserReviewPreflightArgs,
+  canonical: CanonicalBrowserTarget,
+  fingerprint: string,
+  decision: Extract<AutoReviewClassifierDecision, { kind: "block" }>,
+  recheck: () => Promise<void>,
+): Promise<void> {
+  const controller = args.options.autoReviewController;
+  if (controller == null) throw new SlateBrowserAutoReviewBlockedError(decision.reason);
+
+  const approval = await withToolExecutionTimeoutSuspended(args.ctx, () => controller.requestApproval({
+    agentId: args.options.agentId,
+    surface: "computer",
+    fingerprint,
+    reason: decision.reason,
+    summary: approvalSummary(canonical),
+    ...(decision.proposedRule == null ? {} : { proposedRule: decision.proposedRule }),
+    ...(args.signal == null ? {} : { signal: args.signal }),
+    ...(args.options.getApprovalExpiryPolicy == null ? {} : { expiryPolicy: args.options.getApprovalExpiryPolicy() }),
+  }));
+
+  if (args.signal?.aborted === true) throw new SlateBrowserAutoReviewBlockedError("The browser action was cancelled.");
+  if (approval.approved) {
+    await recheck();
+    return;
+  }
+  throw new SlateBrowserAutoReviewBlockedError(approval.reason ?? decision.reason);
+}
+
+export async function runSlateBrowserAutoReviewPreflight(args: BrowserReviewPreflightArgs): Promise<void> {
+  const options = args.options;
+  if (options.mode === "off" || !isSlateBrowserAutoReviewMutatingAction(args.exactAction)) return;
+  if (options.mode === "enforce" && purposeIsRequired(args.exactAction) && normalizeSlateBrowserElement(args.exactAction.element) == null) {
+    throw new SlateBrowserAutoReviewBlockedError("Browser click and drag actions require an element field: a concise description of the intended target and purpose.");
+  }
+
+  const classifierMode = options.mode === "shadow" ? "shadow" : "enforce";
+  const initialState = await options.captureReviewState(args.ctx, args.toolCallId);
+  const canonical = buildSlateBrowserAutoReviewCanonicalTarget({
+    exactAction: args.exactAction,
+    boxIdentity: options.boxIdentity,
+    reviewState: initialState,
+  });
+  const fingerprint = fingerprintSlateBrowserAutoReviewTarget(canonical);
+  const recheck = recheckDisplay(args, canonical);
+  const runClassifier = classifierFor(args, canonical, classifierMode);
+
   if (options.mode === "shadow") {
     void runClassifier().catch((error: unknown) => {
       if (!(error instanceof Error && error.name === "AbortError")) throw error;
     });
     return;
   }
+
   const decision = await runClassifier();
-  if (decision.kind === "allow") { await recheck(); return; }
-  if (decision.kind === "block" && options.autoReviewController != null) {
-    const action = canonical.exactAction;
-    const summary = summarizeSlateBrowserAutoReviewAction({
-      op: action.op,
-      ...(action.element === undefined ? {} : { element: action.element }),
-      ...(canonical.targetPageUrl === undefined ? {} : { targetPageUrl: canonical.targetPageUrl }),
-      ...(action.url === undefined ? {} : { url: action.url }),
-      ...(action.text === undefined ? {} : { text: action.text }),
-      ...(action.value === undefined ? {} : { value: action.value }),
-      ...(action.values === undefined ? {} : { values: action.values }),
-      ...(action.key === undefined ? {} : { key: action.key }),
-      ...(action.cdpMethod === undefined ? {} : { cdpMethod: action.cdpMethod }),
-      ...(action.cdpParams === undefined ? {} : { cdpParams: action.cdpParams }),
-      ...(action.tabsAction === undefined ? {} : { tabsAction: action.tabsAction }),
-      ...(action.tabIndex === undefined ? {} : { tabIndex: action.tabIndex }),
-    });
-    const approval = await withToolExecutionTimeoutSuspended(args.ctx, () => options.autoReviewController!.requestApproval({ agentId: options.agentId, surface: "computer", fingerprint, reason: decision.reason, summary, ...(decision.proposedRule == null ? {} : { proposedRule: decision.proposedRule }), ...(args.signal == null ? {} : { signal: args.signal }), ...(options.getApprovalExpiryPolicy == null ? {} : { expiryPolicy: options.getApprovalExpiryPolicy() }) })); if (args.signal?.aborted === true) throw new SlateBrowserAutoReviewBlockedError("The browser action was cancelled."); if (approval.approved) { await recheck(); return; } throw new SlateBrowserAutoReviewBlockedError(approval.reason ?? decision.reason); }
+  if (decision.kind === "allow") {
+    await recheck();
+    return;
+  }
+  if (decision.kind === "block") {
+    await requestBrowserApproval(args, canonical, fingerprint, decision, recheck);
+    return;
+  }
   throw new SlateBrowserAutoReviewBlockedError(decision.reason);
 }
