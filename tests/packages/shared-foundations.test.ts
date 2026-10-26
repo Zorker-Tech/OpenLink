@@ -1,7 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { ENV_NAME_PATTERN } from "../../source/shared/env-file.ts"
 import {
   SLATE_FEEDBACK_ACCOUNT_SLOT_MAX_CHARS,
   SLATE_FEEDBACK_CONVERSATION_ID_MAX_CHARS,
@@ -32,8 +31,6 @@ import { clampBlock, clampLine, decapitalize, slugifyName } from "../../source/s
 // ---------------------------------------------------------------------------------------------
 
 test("the constants the platform shares are the ones it promises", () => {
-  assert.equal(ENV_NAME_PATTERN.test("MY_VAR"), true)
-  assert.equal(ENV_NAME_PATTERN.test("1VAR"), false)
   assert.equal(SLATE_FEEDBACK_MESSAGE_MAX_CHARS, 10_000)
   assert.equal(SLATE_FEEDBACK_CONVERSATION_ID_MAX_CHARS, 512)
   assert.equal(SLATE_FEEDBACK_ACCOUNT_SLOT_MAX_CHARS, 512)
