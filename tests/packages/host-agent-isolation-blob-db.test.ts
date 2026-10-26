@@ -4,11 +4,11 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 
 import {
   CONVERSATION_BLOB_ADOPTION_COMPLETE,
@@ -23,9 +23,15 @@ import {
   ConversationBlobRecoveryError,
 } from "../../source/host/agents/isolation/conversation-blob-db.ts";
 
+const temporaryRoots: string[] = [];
+after(() => {
+  for (const root of temporaryRoots) rmSync(root, { recursive: true, force: true });
+});
+
 /** A directory of its own for one case, and the interesting names left in it. */
 function workspace() {
   const directory = mkdtempSync(join(tmpdir(), "slate-conversation-blobs-"));
+  temporaryRoots.push(directory);
   return {
     directory,
     dbPath: join(directory, "conversation-blobs.db"),
