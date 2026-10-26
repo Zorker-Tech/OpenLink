@@ -94,7 +94,17 @@ test("an instruction given by two workspaces is stated once", async () => {
 test("a workspace path that is empty or not a string is skipped", async () => {
   const dir = workspaceWith('{"autoRun":{"allow_instructions":["run the tests"]}}')
   try {
-    const context = await load([dir, "   ", 7 as never])
+    const context = await load([`  ${dir}  `, "   ", 7 as never])
+    assert.deepEqual(context?.auto_run.allow_instructions, ["run the tests"])
+  } finally {
+    cleanup([dir])
+  }
+})
+
+test("duplicate instructions in one permissions file are stated once", async () => {
+  const dir = workspaceWith('{"autoRun":{"allow_instructions":["run the tests","run the tests"]}}')
+  try {
+    const context = await load([dir])
     assert.deepEqual(context?.auto_run.allow_instructions, ["run the tests"])
   } finally {
     cleanup([dir])
@@ -195,4 +205,17 @@ test("an instruction exactly at the limit is left alone", async () => {
   const context = await load(undefined, instructions([exact]))
   assert.equal(context?.auto_run.allow_instructions[0], exact)
   assert.equal(context?.truncated, false)
+})
+
+test("exactly full project and user lists do not count as truncated", async () => {
+  const project = Array.from({ length: 20 }, (_, index) => `project ${index}`)
+  const personal = Array.from({ length: 20 }, (_, index) => `user ${index}`)
+  const dir = workspaceWith(JSON.stringify({ autoRun: { allow_instructions: project } }))
+  try {
+    const context = await load([dir], instructions(personal))
+    assert.equal(context?.auto_run.allow_instructions.length, 40)
+    assert.equal(context?.truncated, false)
+  } finally {
+    cleanup([dir])
+  }
 })

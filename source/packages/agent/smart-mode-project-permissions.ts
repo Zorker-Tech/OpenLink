@@ -17,142 +17,163 @@
  * the whole of what was written.
  */
 
-import { existsSync } from "node:fs"
-import { readFile } from "node:fs/promises"
-import { join } from "node:path"
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-import { parseProjectPermissionsFileConfig } from "../config/project-permissions-file-provider.ts"
+import { parseProjectPermissionsFileConfig } from "../config/project-permissions-file-provider.ts";
 
-const MAX_PROJECT_PERMISSION_INSTRUCTIONS_PER_WORKSPACE = 20
-const MAX_USER_AUTO_RUN_INSTRUCTIONS = 20
-const MAX_PROJECT_PERMISSION_INSTRUCTION_CHARS = 1e3
-const PROJECT_PERMISSIONS_FILE_NAME = ".slate/permissions.json"
+const PROJECT_RULES_PER_WORKSPACE = 20;
+const USER_RULES_LIMIT = 20;
+const RULE_TEXT_LIMIT = 1_000;
+const PROJECT_RULES_FILENAME = ".slate/permissions.json";
 
-interface AutoRunInstructions {
-  readonly allowInstructions: readonly string[]
-  readonly blockInstructions: readonly string[]
+interface InstructionPolicy {
+  readonly allowInstructions: readonly string[];
+  readonly blockInstructions: readonly string[];
+}
+
+interface RuleAccumulator {
+  readonly allow: string[];
+  readonly block: string[];
+  present: boolean;
 }
 
 export interface SmartModeProjectPermissionsContext {
   readonly auto_run: {
-    readonly allow_instructions: string[]
-    readonly block_instructions: string[]
-  }
-  readonly truncated: boolean
+    readonly allow_instructions: string[];
+    readonly block_instructions: string[];
+  };
+  readonly truncated: boolean;
 }
 
-function truncateInstruction(instruction: string): { value: string; truncated: boolean } {
-  if (instruction.length <= MAX_PROJECT_PERMISSION_INSTRUCTION_CHARS) {
-    return { value: instruction, truncated: false }
-  }
+function boundedRuleText(instruction: string): { readonly value: string; readonly cut: boolean } {
+  if (instruction.length <= RULE_TEXT_LIMIT) return { value: instruction, cut: false };
   return {
-    value: `${instruction.slice(0, MAX_PROJECT_PERMISSION_INSTRUCTION_CHARS)}
-...[truncated]`,
-    truncated: true,
+    value: `${instruction.slice(0, RULE_TEXT_LIMIT)}\n...[truncated]`,
+    cut: true,
+  };
+}
+
+function capRuleList(instructions: readonly string[], limit: number): { readonly values: string[]; readonly cut: boolean } {
+  const kept = instructions.slice(0, limit);
+  let cut = kept.length < instructions.length
+    || instructions.some((instruction) => instruction.length > RULE_TEXT_LIMIT);
+  const values = kept.map((instruction) => {
+    const bounded = boundedRuleText(instruction);
+    cut ||= bounded.cut;
+    return bounded.value;
+  });
+  return { values, cut };
+}
+
+function appendUnseen(target: string[], incoming: readonly string[], excluded: readonly string[] = []): void {
+  const alreadyAdded = new Set([...excluded, ...target]);
+  for (const instruction of incoming) {
+    if (alreadyAdded.has(instruction)) continue;
+    alreadyAdded.add(instruction);
+    target.push(instruction);
   }
 }
 
-function truncateInstructions(
-  instructions: readonly string[],
-  maxCount: number,
-): { values: string[]; truncated: boolean } {
-  const sliced = instructions.slice(0, maxCount)
-  // A list that was cut, or any instruction in it that was cut, is a truncated answer.
-  let truncated = sliced.length < instructions.length || instructions.some(instruction => instruction.length > MAX_PROJECT_PERMISSION_INSTRUCTION_CHARS)
-  const values = sliced.map(instruction => {
-    const result = truncateInstruction(instruction)
-    truncated ||= result.truncated
-    return result.value
-  })
-  return { values, truncated }
+function policyHasRules(policy: InstructionPolicy | undefined): boolean {
+  return policy !== undefined && (policy.allowInstructions.length > 0 || policy.blockInstructions.length > 0);
 }
 
-function appendUniqueInstructions(target: string[], instructions: readonly string[]): void {
-  const seen = new Set(target)
-  for (const instruction of instructions) {
-    if (seen.has(instruction)) continue
-    seen.add(instruction)
-    target.push(instruction)
+function workspacePermissionFiles(workspaces: readonly string[] | undefined): string[] {
+  const paths = new Set<string>();
+  if (workspaces === undefined) return [];
+
+  for (const candidate of workspaces) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (trimmed.length === 0) continue;
+    paths.add(join(trimmed, PROJECT_RULES_FILENAME));
   }
+  return [...paths];
 }
 
-function appendUniqueInstructionsExcluding(
-  target: string[],
-  instructions: readonly string[],
-  excludedInstructions: readonly string[],
-): void {
-  const seen = new Set([...excludedInstructions, ...target])
-  for (const instruction of instructions) {
-    if (seen.has(instruction)) continue
-    seen.add(instruction)
-    target.push(instruction)
+function addProvidedProjectRules(target: RuleAccumulator, supplied: InstructionPolicy): void {
+  appendUnseen(target.allow, supplied.allowInstructions);
+  appendUnseen(target.block, supplied.blockInstructions);
+}
+
+function addParsedProjectRules(target: RuleAccumulator, raw: string): void {
+  const parsed = parseProjectPermissionsFileConfig(raw);
+  if (parsed === undefined) return;
+  target.present = true;
+  if (parsed.autoRun?.allowInstructions !== undefined) appendUnseen(target.allow, parsed.autoRun.allowInstructions);
+  if (parsed.autoRun?.blockInstructions !== undefined) appendUnseen(target.block, parsed.autoRun.blockInstructions);
+}
+
+async function collectProjectRules(
+  files: readonly string[],
+  alreadyParsed: InstructionPolicy | undefined,
+): Promise<RuleAccumulator> {
+  const project: RuleAccumulator = {
+    allow: [],
+    block: [],
+    present: policyHasRules(alreadyParsed),
+  };
+
+  if (alreadyParsed !== undefined && policyHasRules(alreadyParsed)) {
+    addProvidedProjectRules(project, alreadyParsed);
+    return project;
   }
+
+  for (const filePath of files) {
+    if (!existsSync(filePath)) continue;
+    try {
+      addParsedProjectRules(project, await readFile(filePath, "utf8"));
+    } catch {
+      // A workspace whose file cannot be read contributes nothing rather than failing the turn.
+    }
+  }
+  return project;
 }
 
-function hasAnyAutoRunInstructions(instructions: AutoRunInstructions | undefined): boolean {
-  return instructions !== undefined && (instructions.allowInstructions.length > 0 || instructions.blockInstructions.length > 0)
+function collectUserRules(user: InstructionPolicy | undefined, project: RuleAccumulator): RuleAccumulator {
+  const personal: RuleAccumulator = { allow: [], block: [], present: policyHasRules(user) };
+  if (user !== undefined && policyHasRules(user)) {
+    appendUnseen(personal.allow, user.allowInstructions, project.allow);
+    appendUnseen(personal.block, user.blockInstructions, project.block);
+  }
+  return personal;
+}
+
+function combineBoundedRules(
+  project: RuleAccumulator,
+  personal: RuleAccumulator,
+  workspaces: readonly string[] | undefined,
+): SmartModeProjectPermissionsContext {
+  const workspaceCount = Math.max(workspaces?.length ?? 1, 1);
+  const projectLimit = PROJECT_RULES_PER_WORKSPACE * workspaceCount;
+  const projectAllow = capRuleList(project.allow, projectLimit);
+  const projectBlock = capRuleList(project.block, projectLimit);
+  const personalAllow = capRuleList(personal.allow, USER_RULES_LIMIT);
+  const personalBlock = capRuleList(personal.block, USER_RULES_LIMIT);
+
+  return {
+    auto_run: {
+      allow_instructions: [...projectAllow.values, ...personalAllow.values],
+      block_instructions: [...projectBlock.values, ...personalBlock.values],
+    },
+    truncated: projectAllow.cut || projectBlock.cut || personalAllow.cut || personalBlock.cut,
+  };
 }
 
 export async function loadSmartModeProjectPermissionsContext(
   _ctx: unknown,
   workspacePaths: readonly string[] | undefined,
-  userAutoRunInstructions: AutoRunInstructions | undefined,
-  projectAutoRunInstructions: AutoRunInstructions | undefined,
+  userAutoRunInstructions: InstructionPolicy | undefined,
+  projectAutoRunInstructions: InstructionPolicy | undefined,
 ): Promise<SmartModeProjectPermissionsContext | undefined> {
-  const candidatePathSet = new Set<string>()
-  if (workspacePaths !== undefined) {
-    for (const workspacePath of workspacePaths) {
-      if (typeof workspacePath !== "string") continue
-      const trimmed = workspacePath.trim()
-      if (trimmed.length === 0) continue
-      candidatePathSet.add(join(trimmed, PROJECT_PERMISSIONS_FILE_NAME))
-    }
-  }
-  const projectAllowInstructionsAggregate: string[] = []
-  const projectBlockInstructionsAggregate: string[] = []
-  let foundAnyPermissionsFile = hasAnyAutoRunInstructions(projectAutoRunInstructions)
-  if (hasAnyAutoRunInstructions(projectAutoRunInstructions)) {
-    // The caller already parsed the project's file, so its instructions are used as they are.
-    appendUniqueInstructions(projectAllowInstructionsAggregate, projectAutoRunInstructions!.allowInstructions)
-    appendUniqueInstructions(projectBlockInstructionsAggregate, projectAutoRunInstructions!.blockInstructions)
-  } else {
-    for (const filePath of candidatePathSet) {
-      if (!existsSync(filePath)) continue
-      try {
-        const raw = await readFile(filePath, "utf8")
-        const config = parseProjectPermissionsFileConfig(raw)
-        if (config === undefined) continue
-        foundAnyPermissionsFile = true
-        if (config.autoRun?.allowInstructions !== undefined) {
-          appendUniqueInstructions(projectAllowInstructionsAggregate, config.autoRun.allowInstructions)
-        }
-        if (config.autoRun?.blockInstructions !== undefined) {
-          appendUniqueInstructions(projectBlockInstructionsAggregate, config.autoRun.blockInstructions)
-        }
-      } catch {
-        // A workspace whose file cannot be read contributes nothing rather than failing the turn.
-      }
-    }
-  }
-  const userAllowInstructionsAggregate: string[] = []
-  const userBlockInstructionsAggregate: string[] = []
-  if (hasAnyAutoRunInstructions(userAutoRunInstructions)) {
-    appendUniqueInstructionsExcluding(userAllowInstructionsAggregate, userAutoRunInstructions!.allowInstructions, projectAllowInstructionsAggregate)
-    appendUniqueInstructionsExcluding(userBlockInstructionsAggregate, userAutoRunInstructions!.blockInstructions, projectBlockInstructionsAggregate)
-  }
-  // Nothing found anywhere means there is no policy to state, which is different from an empty one.
-  if (!foundAnyPermissionsFile && !hasAnyAutoRunInstructions(userAutoRunInstructions)) return undefined
-  const workspaceCount = Math.max(workspacePaths?.length ?? 1, 1)
-  const maxProjectInstructions = MAX_PROJECT_PERMISSION_INSTRUCTIONS_PER_WORKSPACE * workspaceCount
-  const projectAllowInstructions = truncateInstructions(projectAllowInstructionsAggregate, maxProjectInstructions)
-  const projectBlockInstructions = truncateInstructions(projectBlockInstructionsAggregate, maxProjectInstructions)
-  const userAllowInstructions = truncateInstructions(userAllowInstructionsAggregate, MAX_USER_AUTO_RUN_INSTRUCTIONS)
-  const userBlockInstructions = truncateInstructions(userBlockInstructionsAggregate, MAX_USER_AUTO_RUN_INSTRUCTIONS)
-  return {
-    auto_run: {
-      allow_instructions: [...projectAllowInstructions.values, ...userAllowInstructions.values],
-      block_instructions: [...projectBlockInstructions.values, ...userBlockInstructions.values],
-    },
-    truncated: projectAllowInstructions.truncated || projectBlockInstructions.truncated || userAllowInstructions.truncated || userBlockInstructions.truncated,
-  }
+  const project = await collectProjectRules(
+    workspacePermissionFiles(workspacePaths),
+    projectAutoRunInstructions,
+  );
+  const personal = collectUserRules(userAutoRunInstructions, project);
+
+  if (!project.present && !personal.present) return undefined;
+  return combineBoundedRules(project, personal, workspacePaths);
 }
