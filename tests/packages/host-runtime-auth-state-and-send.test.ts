@@ -4,10 +4,10 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 
 import { createRetryPolicy, type Clock } from "../../source/host/extensions/scheduling.ts";
 import { createHostAuthService, EXPIRY_LEEWAY_MS, InferenceCredentialStore, SLATE_SHORTLIVED_CREDS_WAITING_MESSAGE, SlateCredentialsWaitingError } from "../../source/host/auth/auth-service.ts";
@@ -21,6 +21,10 @@ import { isSlateDefaultAgentName } from "../../source/shared/agents/agents.ts";
 
 const fixedClock: Clock = { now: () => 1_000, monotonicNow: () => 1_000, schedule: () => ({ dispose() {} }) };
 const retry = () => createRetryPolicy(fixedClock, { name: "credential", maxAttempts: 2, initialDelayMs: 1, maxDelayMs: 2 });
+const slateStateRoots: string[] = [];
+after(() => {
+  for (const root of slateStateRoots) rmSync(root, { recursive: true, force: true });
+});
 
 describe("the account this host acts as", () => {
   it("keeps a credential only while it is valid, with room to renew before it runs out", () => {
@@ -141,6 +145,7 @@ describe("the account this host acts as", () => {
 describe("what an agent may be told to change about itself", () => {
   function harness() {
     const slateRoot = mkdtempSync(join(tmpdir(), "slate-state-"));
+    slateStateRoots.push(slateRoot);
     const agentDir = join(slateRoot, "agents", "agent-1");
     mkdirSync(agentDir, { recursive: true });
     const facts: Array<{ content: string; kind: string; where: string }> = [];
