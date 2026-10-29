@@ -19,6 +19,8 @@
  * single enormous line cannot make the per-character work grow without bound.
  */
 
+import { isBoxBorderLine, nextCodeFenceState } from "./streamed-text-line-classification.ts"
+
 export interface StreamedTextLoopDetectorConfig {
   multiLineLoopMinRepetitions(): number
   multiLineLoopMinRepetitionsInCodeFence(): number
@@ -41,20 +43,21 @@ export interface StreamedTextLoopDetectorHooks {
   onTimeout?(event: { latencyMs: number; phase: string; caller: string }): void
 }
 
-/** Characters that only ever draw a border, so a line made of them is not a repeated line. */
-const BOX_DRAWING_CHARS = new Set([
-  "─", "━", "═", "-", "_",
-  "│", "┃", "║", "|",
-  "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝", "┏", "┓", "┗", "┛", "╓", "╖", "╙", "╜",
-  "├", "┤", "┬", "┴", "┼", "╟", "╢", "╤", "╧", "╫", "╠", "╣", "╦", "╩", "╬", "╞", "╡", "╥", "╨", "╪",
-  "+",
-])
-
 interface SingleLineLoop {
   start: number
   period: number
   repetitions: number
   root: string
+}
+
+function isHighSurrogate(value: string): boolean {
+  const code = value.charCodeAt(0)
+  return value.length === 1 && code >= 0xd800 && code <= 0xdbff
+}
+
+function isLowSurrogate(value: string): boolean {
+  const code = value.charCodeAt(0)
+  return value.length === 1 && code >= 0xdc00 && code <= 0xdfff
 }
 
 export class StreamedTextLoopDetector {
@@ -77,6 +80,8 @@ export class StreamedTextLoopDetector {
   readonly SINGLE_LINE_LOOP_MIN_P_TIMES_K: number
   readonly SINGLE_LINE_LOOP_MAX_P_LIMIT: number
   readonly lineBuffer: string[]
+  private currentLineCodePoints: string[] = []
+  private pendingHighSurrogate: string | undefined
 
   constructor(config: StreamedTextLoopDetectorConfig, hooks?: StreamedTextLoopDetectorHooks) {
     this.config = config
@@ -105,66 +110,93 @@ export class StreamedTextLoopDetector {
 
   /** A line whose non-whitespace characters are almost all border characters. */
   isBoxBorderLine(line: string): boolean {
-    let boxCharCount = 0
-    let totalNonWhitespace = 0
-    for (const char of line) {
-      if (char !== " " && char !== "\t") totalNonWhitespace++
-      if (BOX_DRAWING_CHARS.has(char)) boxCharCount++
-    }
-    if (totalNonWhitespace === 0) return false
-    return boxCharCount / totalNonWhitespace >= 0.8
+    return isBoxBorderLine(line)
   }
 
   addText({ newText, caller }: { newText: string; caller: string }): boolean {
     // Once a loop has been found, or the check has run out of time, nothing more is looked at.
     if (this.loopDetected() || this.didTimeout) return this.loopDetected()
     const deadlineMs = performance.now() + this.MAX_CHECK_TIME_MS
-    for (const char of newText) {
-      if (char === "\n") {
-        this.updateCodeFenceStateOnLineEnd(this.currentLine)
-        if (this.currentLine.trim().length > 0 && !this.isBoxBorderLine(this.currentLine)) {
-          this.addLineToQueue(this.currentLine)
-          const detectedPattern = this.checkForMultiLineLoop({ caller, deadlineMs })
-          if (this.didTimeout) return false
-          if (detectedPattern !== null) {
-            this.detectedMultiLinePattern = detectedPattern
-            return true
-          }
+    for (const character of newText) {
+      if (this.pendingHighSurrogate !== undefined) {
+        const pending = this.pendingHighSurrogate
+        this.pendingHighSurrogate = undefined
+        if (isLowSurrogate(character)) {
+          const result = this.scanCharacter(pending + character, caller, deadlineMs)
+          if (result !== null) return result
+          continue
         }
-        this.currentLine = ""
-        this.periodMatchRunLengths.fill(0)
-      } else {
-        // A line past the limit keeps its first characters and drops the rest.
-        if (this.currentLine.length >= this.MAX_LINE_LENGTH) continue
-        this.currentLine += char
-        const startTime = performance.now()
-        if (!this.isBoxBorderLine(this.currentLine) && !/\s/.test(char)) {
-          const pos = this.currentLine.length - 1
-          const maxP = Math.min(this.SINGLE_LINE_LOOP_MAX_P_LIMIT, pos)
-          const minReps = this.insideCodeFence ? this.config.singleLineLoopMinRepetitionsInCodeFence() : this.SINGLE_LINE_LOOP_MIN_REPETITIONS
-          const minPTimesK = this.insideCodeFence ? this.config.singleLineLoopMinPTimesKInCodeFence() : this.SINGLE_LINE_LOOP_MIN_P_TIMES_K
-          for (let p = 1; p <= maxP; p++) {
-            // The deadline is only read every 32 periods, which is often enough and cheap.
-            if ((p & 31) === 0 && this.markTimedOutIfNeeded({ caller, deadlineMs, phase: "single_line", startTime })) return false
-            if (this.currentLine[pos] === this.currentLine[pos - p]) {
-              const matched = ++this.periodMatchRunLengths[p]!
-              const repetitions = Math.floor(matched / p) + 1
-              const pTimesK = p * repetitions
-              if (repetitions >= minReps && pTimesK >= minPTimesK) {
-                this.hooks?.onSingleLineCheck?.({ latencyMs: performance.now() - startTime, result: "loop_detected_single_line_substring", caller })
-                const root = this.currentLine.slice(this.currentLine.length - p, this.currentLine.length)
-                this.detectedSingleLineLoop = { start: this.currentLine.length - p, period: p, repetitions, root }
-                return true
-              }
-            } else {
-              this.periodMatchRunLengths[p] = 0
-            }
-          }
-          this.hooks?.onSingleLineCheck?.({ latencyMs: performance.now() - startTime, result: "no_loop_detected_single_line_substring", caller })
-        }
+        const result = this.scanCharacter(pending, caller, deadlineMs)
+        if (result !== null) return result
       }
+      if (isHighSurrogate(character)) {
+        this.pendingHighSurrogate = character
+        continue
+      }
+      const result = this.scanCharacter(character, caller, deadlineMs)
+      if (result !== null) return result
     }
     return false
+  }
+
+  /** Adds one Unicode scalar to the current line and checks it as a single period unit. */
+  private scanCharacter(character: string, caller: string, deadlineMs: number): boolean | null {
+    if (character === "\n") {
+      this.updateCodeFenceStateOnLineEnd(this.currentLine)
+      if (this.currentLine.trim().length > 0 && !this.isBoxBorderLine(this.currentLine)) {
+        this.addLineToQueue(this.currentLine)
+        const pattern = this.checkForMultiLineLoop({ caller, deadlineMs })
+        if (this.didTimeout) return false
+        if (pattern !== null) {
+          this.detectedMultiLinePattern = pattern
+          return true
+        }
+      }
+      this.currentLine = ""
+      this.currentLineCodePoints = []
+      this.periodMatchRunLengths.fill(0)
+      return null
+    }
+
+    // The line cap is measured in UTF-16 units, matching string storage, while periods use code points.
+    if (this.currentLine.length + character.length > this.MAX_LINE_LENGTH) return null
+    this.currentLine += character
+    this.currentLineCodePoints.push(character)
+    const startedAt = performance.now()
+    if (this.isBoxBorderLine(this.currentLine) || /\s/.test(character)) return null
+
+    const position = this.currentLineCodePoints.length - 1
+    const largestPeriod = Math.min(this.SINGLE_LINE_LOOP_MAX_P_LIMIT, position)
+    const minimumCopies = this.insideCodeFence
+      ? this.config.singleLineLoopMinRepetitionsInCodeFence()
+      : this.SINGLE_LINE_LOOP_MIN_REPETITIONS
+    const minimumPeriodWork = this.insideCodeFence
+      ? this.config.singleLineLoopMinPTimesKInCodeFence()
+      : this.SINGLE_LINE_LOOP_MIN_P_TIMES_K
+
+    for (let period = 1; period <= largestPeriod; period++) {
+      if ((period & 31) === 0 && this.markTimedOutIfNeeded({ caller, deadlineMs, phase: "single_line", startTime: startedAt })) return false
+      if (this.currentLineCodePoints[position] === this.currentLineCodePoints[position - period]) {
+        const matches = ++this.periodMatchRunLengths[period]!
+        const repetitions = Math.floor(matches / period) + 1
+        if (repetitions >= minimumCopies && period * repetitions >= minimumPeriodWork) {
+          const patternPoints = this.currentLineCodePoints.slice(-period)
+          const root = patternPoints.join("")
+          this.hooks?.onSingleLineCheck?.({ latencyMs: performance.now() - startedAt, result: "loop_detected_single_line_substring", caller })
+          this.detectedSingleLineLoop = {
+            start: this.currentLine.length - root.length,
+            period,
+            repetitions,
+            root,
+          }
+          return true
+        }
+      } else {
+        this.periodMatchRunLengths[period] = 0
+      }
+    }
+    this.hooks?.onSingleLineCheck?.({ latencyMs: performance.now() - startedAt, result: "no_loop_detected_single_line_substring", caller })
+    return null
   }
 
   private addLineToQueue(line: string): void {
@@ -226,10 +258,7 @@ export class StreamedTextLoopDetector {
 
   /** A line with an odd number of fence markers opens or closes a code fence. */
   private updateCodeFenceStateOnLineEnd(line: string): void {
-    if (line.length === 0) return
-    const matches = line.match(/```+(?!`)/g)
-    if (!matches || matches.length === 0) return
-    if (matches.length % 2 === 1) this.insideCodeFence = !this.insideCodeFence
+    this.insideCodeFence = nextCodeFenceState(line, this.insideCodeFence)
   }
 
   getSingleLineLoopInfo(): { pattern: string; repetitions: number; period: number } | null {
@@ -244,6 +273,8 @@ export class StreamedTextLoopDetector {
 
   reset(): void {
     this.currentLine = ""
+    this.currentLineCodePoints = []
+    this.pendingHighSurrogate = undefined
     this.insideCodeFence = false
     this.didTimeout = false
     this.lineCount = 0

@@ -121,6 +121,29 @@ test("a period longer than the configured maximum is not looked for", () => {
   assert.equal(detector.addText({ newText: "ababab", caller: "test" }), false)
 })
 
+test("different supplementary characters that share a trailing surrogate are not a loop", () => {
+  const detector = new StreamedTextLoopDetector(config())
+  const distinctCharacters = [0x1f600, 0x1fa00, 0x1fe00, 0x20200, 0x20600]
+    .map(codePoint => String.fromCodePoint(codePoint))
+
+  assert.equal(detector.addText({ newText: distinctCharacters.join(""), caller: "test" }), false)
+  assert.equal(detector.getSingleLineLoopInfo(), null)
+})
+
+test("a repeated supplementary-character pattern survives chunks split between surrogate halves", () => {
+  const detector = new StreamedTextLoopDetector(config())
+  const pattern = `${String.fromCodePoint(0x1f600)}${String.fromCodePoint(0x1fa00)}`
+  const text = pattern.repeat(3)
+  let loopDetected = false
+
+  for (let index = 0; index < text.length; index++) {
+    loopDetected ||= detector.addText({ newText: text[index]!, caller: "test" })
+  }
+
+  assert.equal(loopDetected, true)
+  assert.deepEqual(detector.getSingleLineLoopInfo(), { pattern, repetitions: 3, period: 2 })
+})
+
 test("a line longer than the configured maximum is truncated rather than scanned whole", () => {
   const detector = new StreamedTextLoopDetector(config({ maxLineLength: () => 5 }))
   // All three lines are longer than the limit and differ past it, but only the kept part is compared.
