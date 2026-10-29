@@ -3,12 +3,12 @@ import assert from "node:assert/strict"
 
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { agentEventTrackerKey, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
-import { CursorRule, CursorRuleSource } from "../../source/packages/proto/generated/agent/v1/rules_pb.ts"
-import { LsDirectoryTreeNode } from "../../source/packages/proto/generated/agent/v1/ls_exec_pb.ts"
-import { toRedactedLsDirectoryTreeNode } from "../../source/packages/redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
+import { CursorRule, CursorRuleSource } from "../../source/adapters/interop/proto/generated/agent/v1/rules_pb.ts"
+import { LsDirectoryTreeNode } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
+import { toRedactedLsDirectoryTreeNode } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { renderManuallyAttachedSkillsSection } from "../../source/packages/agent/manually-attached-skills.ts"
-import { resolveSelectedContextSkillSections } from "../../source/packages/agent/selected-context-skills.ts"
+import { resolveSkillAttachments } from "../../source/packages/agent/skill-attachment-policy.ts"
 import {
   countConversationHistoryTokens,
   trackPromptTokenUsage,
@@ -72,56 +72,56 @@ test("a skill with no frontmatter keeps all of its content", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("skills named directly win over skills inferred from paths", () => {
-  const resolved = resolveSelectedContextSkillSections({
-    selectedSkills: [{ fullPath: "/p/a/SKILL.md", content: "skill content" }],
-    cursorRules: [{ rule: { fullPath: "/p/b/SKILL.md", content: "inferred skill" } }],
+  const resolved = resolveSkillAttachments({
+    explicitSkills: [{ path: "/p/a/SKILL.md", text: "skill content" }],
+    ruleCandidates: [{ path: "/p/b/SKILL.md", text: "inferred skill" }],
   })
-  assert.equal(resolved.selectedSkills.length, 1)
-  assert.equal(resolved.selectedSkills[0]?.content, "skill content")
+  assert.equal(resolved.skills.length, 1)
+  assert.equal(resolved.skills[0]?.text, "skill content")
   // With the field present, a rule that happens to be a skill file is an ordinary rule.
-  assert.equal(resolved.regularRules.length, 1)
+  assert.equal(resolved.rules.length, 1)
 })
 
 test("without the field, a skill file among the rules is taken as a skill", () => {
-  const resolved = resolveSelectedContextSkillSections({
-    cursorRules: [
-      { rule: { fullPath: "/p/.cursor/skills/a/SKILL.md", content: "skill content" } },
-      { rule: { fullPath: "/p/.cursor/rules/b.mdc", content: "rule content" } },
+  const resolved = resolveSkillAttachments({
+    ruleCandidates: [
+      { path: "/p/.cursor/skills/a/SKILL.md", text: "skill content" },
+      { path: "/p/.cursor/rules/b.mdc", text: "rule content" },
     ],
   })
-  assert.equal(resolved.selectedSkills.length, 1)
-  assert.equal(resolved.selectedSkills[0]?.fullPath, "/p/.cursor/skills/a/SKILL.md")
-  assert.equal(resolved.regularRules.length, 1)
-  assert.equal(resolved.regularRules[0]?.fullPath, "/p/.cursor/rules/b.mdc")
+  assert.equal(resolved.skills.length, 1)
+  assert.equal(resolved.skills[0]?.path, "/p/.cursor/skills/a/SKILL.md")
+  assert.equal(resolved.rules.length, 1)
+  assert.equal(resolved.rules[0]?.path, "/p/.cursor/rules/b.mdc")
 })
 
 test("an empty or missing attachment is not an attachment", () => {
-  const resolved = resolveSelectedContextSkillSections({
-    cursorRules: [
-      { rule: undefined as never },
-      { rule: { fullPath: "/p/a.mdc", content: "   " } },
-      { rule: { fullPath: "/p/b.mdc", content: "kept" } },
+  const resolved = resolveSkillAttachments({
+    ruleCandidates: [
+      undefined,
+      { path: "/p/a.mdc", text: "   " },
+      { path: "/p/b.mdc", text: "kept" },
     ],
-    selectedSkills: [{ fullPath: "/p/c/SKILL.md", content: " " }, { fullPath: "/p/d/SKILL.md", content: "kept skill" }],
+    explicitSkills: [{ path: "/p/c/SKILL.md", text: " " }, { path: "/p/d/SKILL.md", text: "kept skill" }],
   })
-  assert.equal(resolved.regularRules.length, 1)
-  assert.equal(resolved.selectedSkills.length, 1)
-  assert.equal(resolved.selectedSkills[0]?.content, "kept skill")
+  assert.equal(resolved.rules.length, 1)
+  assert.equal(resolved.skills.length, 1)
+  assert.equal(resolved.skills[0]?.text, "kept skill")
 })
 
 test("a skill at the root, named SKILL.md alone, counts as a skill file", () => {
-  const resolved = resolveSelectedContextSkillSections({
-    cursorRules: [{ rule: { fullPath: "SKILL.md", content: "content" } }],
+  const resolved = resolveSkillAttachments({
+    ruleCandidates: [{ path: "SKILL.md", text: "content" }],
   })
-  assert.equal(resolved.selectedSkills.length, 1)
+  assert.equal(resolved.skills.length, 1)
 })
 
 test("what a skill carries along is preserved", () => {
-  const resolved = resolveSelectedContextSkillSections({
-    selectedSkills: [{ fullPath: "/p/a/SKILL.md", content: "c", plugin: "p", marketplace: "m", pluginId: "pi", marketplaceId: "mi" }],
+  const resolved = resolveSkillAttachments({
+    explicitSkills: [{ path: "/p/a/SKILL.md", text: "c", pluginName: "p", marketplaceName: "m", pluginId: "pi", marketplaceId: "mi" }],
   })
-  assert.equal(resolved.selectedSkills[0]?.plugin, "p")
-  assert.equal(resolved.selectedSkills[0]?.marketplaceId, "mi")
+  assert.equal(resolved.skills[0]?.pluginName, "p")
+  assert.equal(resolved.skills[0]?.marketplaceId, "mi")
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ test("what the user attached is counted, including a folder's tree", () => {
     selectedContext: {
       codeSelections: [{ path: redactedString("/p/a.ts"), content: redactedString("const a = 1") }],
       terminals: [{ content: redactedString("$ ls"), title: redactedString("shell") }],
-      terminalSelections: [],
+      terminalSelections: [{ content: redactedString("selected output"), title: redactedString("terminal selection") }],
       files: [{ path: redactedString("/p/b.ts"), content: redactedString("const b = 2") }],
       folders: [{
         path: redactedString("/p/src"),
@@ -252,7 +252,7 @@ test("what the user attached is counted, including a folder's tree", () => {
     },
   }) as never)
   const event = tracked[0] as AnyRecord
-  assert.equal(event.fileAttachmentCount, 4)
+  assert.equal(event.fileAttachmentCount, 5)
   assert.ok(event.fileAttachmentTokens > 0)
 })
 
