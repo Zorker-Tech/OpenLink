@@ -128,6 +128,24 @@ test("values render by type and are cut off at the configured limits", () => {
   )
 })
 
+test("maps use the shared bounded collection renderer without hiding cycles", () => {
+  const entries = new Map<unknown, unknown>([
+    ["first", { id: 1 }],
+    ["second", 2],
+  ])
+  assert.equal(
+    render({ level: "info", message: "m", metadata: { entries } }, { maxEntries: 1 })[0]?.text,
+    timestamped('INFO  m meta={entries: Map{"first" => {id: 1}, ... 1 more}}'),
+  )
+
+  const cyclic = new Map<unknown, unknown>()
+  cyclic.set("self", cyclic)
+  assert.equal(
+    render({ level: "info", message: "m", metadata: { cyclic } })[0]?.text,
+    timestamped('INFO  m meta={cyclic: Map{"self" => [Circular]}}'),
+  )
+})
+
 test("cycles are reported instead of expanded", () => {
   const node: Record<string, unknown> = {}
   node.self = node

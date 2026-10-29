@@ -111,8 +111,7 @@ function createColorPalette(enabled: boolean): ColorPalette {
   const reset = "\u001b[0m"
   const withCodes = (codes: readonly number[]) => (value: string): string =>
     enabled ? `\u001b[${codes.join(";")}m${value}${reset}` : value
-  const boldRed = withCodes([1, 31])
-  return {
+  const base = {
     dim: withCodes([2]),
     gray: withCodes([90]),
     red: withCodes([31]),
@@ -122,14 +121,16 @@ function createColorPalette(enabled: boolean): ColorPalette {
     magenta: withCodes([35]),
     cyan: withCodes([36]),
     bold: withCodes([1]),
-    level(level, value) {
-      switch (level) {
-        case "debug": return withCodes([35])(value)
-        case "info": return withCodes([34])(value)
-        case "warn": return withCodes([33])(value)
-        case "error": return boldRed(value)
-      }
-    },
+  }
+  const levelStyles: Record<ContextLogLevel, (value: string) => string> = {
+    debug: base.magenta,
+    info: base.blue,
+    warn: base.yellow,
+    error: withCodes([1, 31]),
+  }
+  return {
+    ...base,
+    level: (level, value) => levelStyles[level](value),
   }
 }
 
@@ -214,12 +215,12 @@ function formatInlineValue(
   if (value instanceof Date) return colors.green(Number.isNaN(value.getTime()) ? "Invalid Date" : value.toISOString())
   if (value instanceof RegExp) return colors.cyan(value.toString())
   if (isErrorLike(value)) return formatErrorSummary(value, options, colors, depth, seen, path)
-  if (Array.isArray(value)) return formatInlineArray(value, options, colors, depth, seen, path)
+  if (Array.isArray(value)) return formatInlineCollection(value, "array", options, colors, depth, seen, path)
   if (value instanceof ArrayBuffer) return colors.dim(`ArrayBuffer(${value.byteLength})`)
   if (ArrayBuffer.isView(value)) return colors.dim(`${value.constructor?.name ?? "TypedArray"}(${value.byteLength})`)
-  if (value instanceof Map) return formatInlineMap(value, options, colors, depth, seen, path)
-  if (value instanceof Set) return formatInlineArray(Array.from(value.values()), options, colors, depth, seen, path)
-  return formatInlineObject(value, options, colors, depth, seen, path)
+  if (value instanceof Map) return formatInlineCollection(value, "map", options, colors, depth, seen, path)
+  if (value instanceof Set) return formatInlineCollection(value, "set", options, colors, depth, seen, path)
+  return formatInlineCollection(value, "object", options, colors, depth, seen, path)
 }
 
 function formatErrorSummary(
@@ -243,78 +244,75 @@ function formatErrorSummary(
   return result
 }
 
-function formatInlineArray(
-  value: readonly unknown[],
-  options: RenderOptions,
-  colors: ColorPalette,
-  depth: number,
-  seen: WeakSet<object>,
-  path: readonly (string | number)[],
-): string {
-  if (depth >= options.maxDepth) return colors.dim(`[Array(${value.length})]`)
-  if (seen.has(value)) return colors.dim("[Circular]")
-  seen.add(value)
-  if (value.length === 0) {
-    seen.delete(value)
-    return colors.dim("[]")
-  }
-  const limit = Math.min(value.length, options.maxArrayLength)
-  const items = value.slice(0, limit).map((entry, index) =>
-    formatInlineValue(entry, options, colors, depth + 1, seen, path.concat(index)))
-  if (value.length > limit) items.push(colors.dim(`... ${value.length - limit} more`))
-  const result = `${colors.dim("[")}${items.join(colors.dim(", "))}${colors.dim("]")}`
-  seen.delete(value)
-  return result
-}
+type InlineCollectionKind = "array" | "set" | "map" | "object"
 
-function formatInlineMap(
-  value: Map<unknown, unknown>,
+type InlineCollectionEntry =
+  | { readonly kind: "value"; readonly value: unknown; readonly path: readonly (string | number)[] }
+  | { readonly kind: "property"; readonly name: string; readonly value: unknown; readonly path: readonly (string | number)[] }
+  | { readonly kind: "pair"; readonly key: unknown; readonly value: unknown; readonly path: readonly (string | number)[] }
+
+function formatInlineCollection(
+  value: object,
+  kind: InlineCollectionKind,
   options: RenderOptions,
   colors: ColorPalette,
   depth: number,
   seen: WeakSet<object>,
   path: readonly (string | number)[],
 ): string {
-  if (depth >= options.maxDepth) return colors.dim(`Map(${value.size})`)
+  const depthLabel = kind === "map"
+    ? `Map(${(value as Map<unknown, unknown>).size})`
+    : kind === "object"
+      ? `[${(value as { constructor?: { name?: string } }).constructor?.name ?? "Object"}]`
+      : `[Array(${kind === "set" ? (value as Set<unknown>).size : (value as readonly unknown[]).length})]`
+  if (depth >= options.maxDepth) return colors.dim(depthLabel)
   if (seen.has(value)) return colors.dim("[Circular]")
   seen.add(value)
-  const entries = Array.from(value.entries())
-  const limit = Math.min(entries.length, options.maxEntries)
-  const items = entries.slice(0, limit).map(([key, entryValue]) => {
-    const renderedKey = formatInlineValue(key, options, colors, depth + 1, seen, path.concat("<key>"))
-    const renderedValue = formatInlineValue(entryValue, options, colors, depth + 1, seen, path.concat(String(key)))
+
+  let entries: InlineCollectionEntry[]
+  let opening: string
+  let closing: string
+  switch (kind) {
+    case "array":
+      entries = (value as readonly unknown[]).map((entry, index) => ({ kind: "value", value: entry, path: path.concat(index) }))
+      opening = "["
+      closing = "]"
+      break
+    case "set":
+      entries = Array.from((value as Set<unknown>).values(), (entry, index) => ({ kind: "value", value: entry, path: path.concat(index) }))
+      opening = "["
+      closing = "]"
+      break
+    case "map":
+      entries = Array.from((value as Map<unknown, unknown>).entries(), ([key, entry]) => ({ kind: "pair", key, value: entry, path }))
+      opening = "Map{"
+      closing = "}"
+      break
+    case "object":
+      entries = Object.entries(value).map(([name, entry]) => ({ kind: "property", name, value: entry, path: path.concat(name) }))
+      opening = "{"
+      closing = "}"
+      break
+  }
+
+  if (entries.length === 0) {
+    seen.delete(value)
+    return colors.dim(`${opening}${closing}`)
+  }
+  const limit = Math.min(entries.length, kind === "array" || kind === "set" ? options.maxArrayLength : options.maxEntries)
+  const items = entries.slice(0, limit).map((entry) => {
+    if (entry.kind === "value") {
+      return formatInlineValue(entry.value, options, colors, depth + 1, seen, entry.path)
+    }
+    if (entry.kind === "property") {
+      return `${colors.cyan(entry.name)}: ${formatInlineValue(entry.value, options, colors, depth + 1, seen, entry.path)}`
+    }
+    const renderedKey = formatInlineValue(entry.key, options, colors, depth + 1, seen, entry.path.concat("<key>"))
+    const renderedValue = formatInlineValue(entry.value, options, colors, depth + 1, seen, entry.path.concat(String(entry.key)))
     return `${renderedKey} ${colors.dim("=>")} ${renderedValue}`
   })
   if (entries.length > limit) items.push(colors.dim(`... ${entries.length - limit} more`))
-  const result = `${colors.dim("Map{")}${items.join(colors.dim(", "))}${colors.dim("}")}`
-  seen.delete(value)
-  return result
-}
-
-function formatInlineObject(
-  value: object,
-  options: RenderOptions,
-  colors: ColorPalette,
-  depth: number,
-  seen: WeakSet<object>,
-  path: readonly (string | number)[],
-): string {
-  if (depth >= options.maxDepth) {
-    const label = (value as { constructor?: { name?: string } }).constructor?.name ?? "Object"
-    return colors.dim(`[${label}]`)
-  }
-  if (seen.has(value)) return colors.dim("[Circular]")
-  seen.add(value)
-  const entries = Object.entries(value)
-  if (entries.length === 0) {
-    seen.delete(value)
-    return colors.dim("{}")
-  }
-  const limit = Math.min(entries.length, options.maxEntries)
-  const items = entries.slice(0, limit).map(([key, entryValue]) =>
-    `${colors.cyan(key)}: ${formatInlineValue(entryValue, options, colors, depth + 1, seen, path.concat(key))}`)
-  if (entries.length > limit) items.push(colors.dim(`... ${entries.length - limit} more`))
-  const result = `${colors.dim("{")}${items.join(colors.dim(", "))}${colors.dim("}")}`
+  const result = `${colors.dim(opening)}${items.join(colors.dim(", "))}${colors.dim(closing)}`
   seen.delete(value)
   return result
 }
