@@ -295,4 +295,22 @@ describe("the watcher", () => {
     many.poller.dispose();
     assert.equal(many.disposed.length, 2);
   });
+
+  it("settles active watches when disposed and refuses future watches", async () => {
+    const world = watchWorld({ answers: () => detailedWith(1), maxWaitMs: 100_000 });
+    const waiting = world.poller.awaitCompletion("bc-stop");
+    world.poller.dispose();
+
+    const stopped = {
+      status: "error",
+      text: "Stopped watching the Slate agent (bc-stop) before it finished. The run may still be active; check the Slate cloud agents dashboard for its result.",
+    };
+    assert.deepEqual(await settled(waiting), stopped);
+    assert.deepEqual(await world.poller.awaitCompletion("bc-later"), {
+      status: "error",
+      text: "Stopped watching the Slate agent (bc-later) before it finished. The run may still be active; check the Slate cloud agents dashboard for its result.",
+    });
+    assert.deepEqual(world.disposed, [1]);
+    assert.equal(world.ticks.length, 1)
+  });
 });
