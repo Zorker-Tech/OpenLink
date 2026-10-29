@@ -17,12 +17,13 @@
  */
 
 import { PrivacyCapability } from "../../redaction/classification.ts"
-import { fromRedactedLsDirectoryTreeNode } from "../../redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
+import { fromRedactedLsDirectoryTreeNode } from "../../../adapters/interop/redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
 import type { Context } from "../../context/context.ts"
-import type { AgentSkill } from "../../proto/generated/agent/v1/agent_skills_pb.ts"
-import type { CursorRule } from "../../proto/generated/agent/v1/rules_pb.ts"
+import type { AgentSkill } from "../../../adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts"
+import type { CursorRule } from "../../../adapters/interop/proto/generated/agent/v1/rules_pb.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
-import { resolveSelectedContextSkillSections, type SelectedContextSkillInput } from "../selected-context-skills.ts"
+import { resolveSkillAttachments } from "../skill-attachment-policy.ts"
+import { decodeSelectedContextSkillAttachments } from "../../../adapters/interop/agent/selected-context-skills-adapter.ts"
 import { buildAvailableSkillsPromptSection } from "../prompts/available-skills-section.ts"
 import { categorizeCursorRules } from "../prompts/rule-categorization.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
@@ -101,24 +102,6 @@ interface SelectedContextFileAttachmentsLike {
   readonly folders: readonly SelectedContextFolderLike[]
 }
 
-interface SelectedContextSkillValueLike {
-  readonly fullPath?: unknown
-  readonly content?: unknown
-  readonly plugin?: unknown
-  readonly marketplace?: unknown
-  readonly pluginId?: unknown
-  readonly marketplaceId?: unknown
-}
-
-interface SelectedContextCursorRuleValueLike {
-  readonly rule?: SelectedContextSkillValueLike
-}
-
-interface SelectedContextSkillNormalizationInput {
-  readonly selectedSkills?: readonly SelectedContextSkillValueLike[]
-  readonly cursorRules?: readonly SelectedContextCursorRuleValueLike[]
-}
-
 interface PromptTokenTrackingDisplayOptions {
   readonly agentType?: AgentType | undefined
   readonly computerUseSubagentSurface?: boolean | undefined
@@ -135,7 +118,7 @@ interface PromptTokenTrackingParams {
   readonly mcpTools: readonly McpToolLike[]
   readonly requestContext: McpPromptTrackingRequestContext
   readonly messages: readonly PromptMessageLike[]
-  readonly selectedContext: (SelectedContextFileAttachmentsLike & SelectedContextSkillNormalizationInput) | null | undefined
+  readonly selectedContext: SelectedContextFileAttachmentsLike | null | undefined
   readonly userInfoDisplayOptions: PromptTokenTrackingDisplayOptions | undefined
   readonly readToolName: string | undefined
   readonly invocationId: string
@@ -218,88 +201,54 @@ function estimateRedactedStringTokenCount(str: {
 function countFileAttachmentTokens(
   selectedContext: SelectedContextFileAttachmentsLike | null | undefined,
 ): { readonly fileAttachmentTokens: number; readonly fileAttachmentCount: number } {
+  if (!selectedContext) return { fileAttachmentTokens: 0, fileAttachmentCount: 0 }
+  type AttachmentRecord = {
+    readonly values: readonly (RedactedAttachmentStringLike | null | undefined)[]
+    readonly tree?: unknown
+  }
+  const record = (
+    values: readonly (RedactedAttachmentStringLike | null | undefined)[],
+    tree?: unknown,
+  ): AttachmentRecord => ({ values, tree })
+  // Normalize each attachment kind before counting so adding a kind cannot fork the accounting loop.
+  const attachments: AttachmentRecord[] = [
+    ...selectedContext.codeSelections.map(({ path, content }) => record([path, content])),
+    ...selectedContext.terminals.map(({ content, title }) => record([content, title])),
+    ...selectedContext.terminalSelections.map(({ content, title }) => record([content, title])),
+    ...selectedContext.files.map(({ path, content }) => record([path, content])),
+    ...selectedContext.folders.map(({ path, directoryTree }) => record([path], directoryTree)),
+  ]
+  const fileAttachmentCount = attachments.length
   let fileAttachmentTokens = 0
-  let fileAttachmentCount = 0
-  if (!selectedContext) return { fileAttachmentTokens, fileAttachmentCount }
-  for (const codeSelection of selectedContext.codeSelections) {
-    fileAttachmentTokens += estimateRedactedStringTokenCount(codeSelection.path)
-    fileAttachmentTokens += estimateRedactedStringTokenCount(codeSelection.content)
-    fileAttachmentCount += 1
-  }
-  for (const terminal of selectedContext.terminals) {
-    fileAttachmentTokens += estimateRedactedStringTokenCount(terminal.content)
-    fileAttachmentTokens += estimateRedactedStringTokenCount(terminal.title)
-    fileAttachmentCount += 1
-  }
-  for (const terminalSelection of selectedContext.terminalSelections) {
-    fileAttachmentTokens += estimateRedactedStringTokenCount(terminalSelection.content)
-    fileAttachmentTokens += estimateRedactedStringTokenCount(terminalSelection.title)
-    fileAttachmentCount += 1
-  }
-  for (const file of selectedContext.files) {
-    fileAttachmentTokens += estimateRedactedStringTokenCount(file.path)
-    fileAttachmentTokens += estimateRedactedStringTokenCount(file.content)
-    fileAttachmentCount += 1
-  }
-  for (const folder of selectedContext.folders) {
-    fileAttachmentTokens += estimateRedactedStringTokenCount(folder.path)
-    if (folder.directoryTree) {
-      const unwrappedTree = decodeRedactedLsDirectoryTreeNode(folder.directoryTree, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-      fileAttachmentTokens += estimateStringTokenCount(JSON.stringify(unwrappedTree))
+  for (const attachment of attachments) {
+    for (const value of attachment.values) {
+      fileAttachmentTokens += estimateRedactedStringTokenCount(value)
     }
-    fileAttachmentCount += 1
+    if (attachment.tree) {
+      const decodedTree = decodeRedactedLsDirectoryTreeNode(attachment.tree, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      fileAttachmentTokens += estimateStringTokenCount(JSON.stringify(decodedTree))
+    }
   }
   return { fileAttachmentTokens, fileAttachmentCount }
 }
 
 /** What the attached skills cost is what the block that inlines them costs. */
 function countManuallyAttachedSkillPromptUsage(
-  selectedContext: SelectedContextSkillNormalizationInput | null | undefined,
+  selectedContext: SelectedContextFileAttachmentsLike | null | undefined,
 ): { readonly manuallyAttachedSkillTokens: number; readonly manuallyAttachedSkillCount: number } {
   if (!selectedContext) return { manuallyAttachedSkillTokens: 0, manuallyAttachedSkillCount: 0 }
-  const normalizedSelectedContext = normalizeSelectedContextSkillInput(selectedContext)
-  const { selectedSkills } = resolveSelectedContextSkillSections(
-    normalizedSelectedContext as unknown as SelectedContextSkillInput,
+  const attachments = decodeSelectedContextSkillAttachments(
+    selectedContext,
+    unwrapMaybeRedactedString,
   )
-  const manuallyAttachedSkillsText = renderManuallyAttachedSkillsSection(selectedSkills as Array<{
-    readonly fullPath: string
-    readonly content: string
-  }>)
+  const { skills } = resolveSkillAttachments(attachments)
+  const manuallyAttachedSkillsText = renderManuallyAttachedSkillsSection(skills.map(skill => ({
+    fullPath: skill.path,
+    content: skill.text,
+  })))
   return {
     manuallyAttachedSkillTokens: manuallyAttachedSkillsText ? estimateStringTokenCount(manuallyAttachedSkillsText) : 0,
-    manuallyAttachedSkillCount: selectedSkills.length,
-  }
-}
-
-function normalizeSelectedContextSkillInput(selectedContext: SelectedContextSkillNormalizationInput): {
-  readonly selectedSkills: Array<{
-    readonly fullPath: string
-    readonly content: string
-    readonly plugin: string | undefined
-    readonly marketplace: string | undefined
-  }>
-  readonly cursorRules: Array<{
-    readonly rule: {
-      readonly fullPath: string | undefined
-      readonly content: string | undefined
-    } | undefined
-  }>
-} {
-  return {
-    selectedSkills: (selectedContext.selectedSkills ?? []).map(skill => ({
-      fullPath: unwrapMaybeRedactedString(skill.fullPath) ?? "",
-      content: unwrapMaybeRedactedString(skill.content) ?? "",
-      plugin: unwrapMaybeRedactedString(skill.plugin),
-      marketplace: unwrapMaybeRedactedString(skill.marketplace),
-    })),
-    cursorRules: (selectedContext.cursorRules ?? []).map(cursorRule => ({
-      rule: cursorRule.rule === undefined
-        ? undefined
-        : {
-          fullPath: unwrapMaybeRedactedString(cursorRule.rule.fullPath),
-          content: unwrapMaybeRedactedString(cursorRule.rule.content),
-        },
-    })),
+    manuallyAttachedSkillCount: skills.length,
   }
 }
 
