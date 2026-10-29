@@ -17,40 +17,12 @@
  */
 
 import type { Context } from "../context/context.ts"
-import { createLogger } from "../context/logging.ts"
-import { appendGitDiagnostics } from "../git-core/error-diagnostics.ts"
-import { createCounter, createHistogram } from "../metrics/index.ts"
-import type { ExecServerControlMessage } from "../proto/generated/agent/v1/agent_service_pb.ts"
-import {
-  ExecClientControlMessage,
-  ExecClientHeartbeat,
-  ExecClientMessage,
-  ExecClientStreamClose,
-  ExecClientThrow,
-  ExecServerMessage,
-} from "../proto/generated/agent/v1/exec_pb.ts"
-import type { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
-import { createWritableIterable, WriteIterableClosedError } from "../utils/writable-iterable.ts"
+import type { ExecServerControlMessage } from "../../adapters/interop/proto/generated/agent/v1/agent_service_pb.ts"
+import { ExecClientControlMessage, ExecClientMessage, ExecServerMessage } from "../../adapters/interop/proto/generated/agent/v1/exec_pb.ts"
+import { toInteropHookContextMessages } from "../../adapters/interop/agent/hook-context-adapter.ts"
+import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
 import type { RegisteredControlledResource } from "./resource-provider.ts"
-
-const logger = createLogger("agent-exec/controlled")
-
-/** The event name a store-conflict notice travels under, matched by the streaming handler's filter. */
-const AGENT_STORE_CONFLICT_HOOK_EVENT_NAME = "agentStoreConflict"
-const EXEC_HEARTBEAT_INTERVAL_MS = 3_000
-
-const controlledExecDuration = createHistogram("agent_exec.controlled.exec.duration_ms", {
-  description: "Duration of controlled exec operations in milliseconds",
-  labelNames: ["exec_case"],
-})
-const controlledExecSuccess = createCounter("agent_exec.controlled.exec.success", {
-  description: "Count of successful controlled exec operations",
-  labelNames: ["exec_case"],
-})
-const controlledExecError = createCounter("agent_exec.controlled.exec.error", {
-  description: "Count of failed controlled exec operations",
-  labelNames: ["exec_case"],
-})
+import { startControlledExecSession, unhandledControlledExecRequest } from "./controlled-exec-session.ts"
 
 /** The runtime this operation would have run in is gone; the client should not retry into it. */
 export class ControlledExecDisposedError extends Error {
@@ -69,7 +41,7 @@ function getExecClientErrorCode(error: unknown): string | undefined {
 export interface ControlledExecutor<Args, Result> {
   execute(ctx: Context, args: Args, options: {
     execId?: string | undefined
-    hookContextCollector: HookAdditionalContext[]
+    hookContextCollector: HookContextEntry[]
     deliverAgentStoreConflictNotices: boolean
   }): Promise<Result>
 }
@@ -77,7 +49,7 @@ export interface ControlledExecutor<Args, Result> {
 export interface ControlledStreamExecutor<Args, Event> {
   execute(ctx: Context, args: Args, options: {
     execId?: string | undefined
-    hookContextCollector: HookAdditionalContext[]
+    hookContextCollector: HookContextEntry[]
     deliverAgentStoreConflictNotices: boolean
   }): AsyncIterable<Event>
 }
@@ -99,7 +71,7 @@ export class SimpleControlledExecHandler<Args, Result> {
     const self = this
     return (async function* () {
       const start = performance.now()
-      const hookContextCollector: HookAdditionalContext[] = []
+      const hookContextCollector: HookContextEntry[] = []
       const result = await self.exec.execute(ctx, decoded.args, {
         execId: serverMessage.execId,
         hookContextCollector,
@@ -107,7 +79,7 @@ export class SimpleControlledExecHandler<Args, Result> {
       })
       const message = self.serializeResult(decoded.id, result)
       message.localExecutionTimeMs = Math.round(Math.max(0, performance.now() - start))
-      if (hookContextCollector.length > 0) message.hookAdditionalContexts = hookContextCollector
+      if (hookContextCollector.length > 0) message.hookAdditionalContexts = toInteropHookContextMessages(hookContextCollector)
       yield message
     })()
   }
@@ -126,7 +98,7 @@ export class SimpleControlledStreamExecHandler<Args, Event> {
     const self = this
     return (async function* () {
       const start = performance.now()
-      const hookContextCollector: HookAdditionalContext[] = []
+      const hookContextCollector: HookContextEntry[] = []
       try {
         for await (const event of self.exec.execute(ctx, decoded.args, {
           execId: serverMessage.execId,
@@ -139,8 +111,10 @@ export class SimpleControlledStreamExecHandler<Args, Event> {
         }
       } finally {
         // A conflict notice is not an event of the operation: it is sent once, at the end, if one came up.
-        const conflicts = hookContextCollector.filter(candidate => candidate.hookEventName === AGENT_STORE_CONFLICT_HOOK_EVENT_NAME)
-        if (conflicts.length > 0) yield new ExecClientMessage({ id: decoded.id, hookAdditionalContexts: conflicts })
+        const conflicts = hookContextCollector.filter(candidate => candidate.event === AGENT_STORE_CONFLICT_HOOK_EVENT_NAME)
+        if (conflicts.length > 0) {
+          yield new ExecClientMessage({ id: decoded.id, hookAdditionalContexts: toInteropHookContextMessages(conflicts) })
+        }
       }
     })()
   }
@@ -183,64 +157,21 @@ export class SimpleControlledExecManager {
     for (const handler of this.handlers) {
       const result = handler.handle(execCtx, serverMessage)
       if (result === undefined) continue
-
-      const outputStream = createWritableIterable<ExecClientMessage | ExecClientControlMessage>()
-      let heartbeatTimer: ReturnType<typeof setTimeout> | undefined
-      const scheduleHeartbeat = (): void => {
-        heartbeatTimer = setTimeout(() => {
-          outputStream.write(new ExecClientControlMessage({
-            message: { case: "heartbeat", value: new ExecClientHeartbeat({ id: serverMessage.id }) },
-          })).then(scheduleHeartbeat).catch(() => {})
-        }, EXEC_HEARTBEAT_INTERVAL_MS)
-      }
-      scheduleHeartbeat()
-      const startTime = performance.now()
-
-      const run = async (): Promise<void> => {
-        try {
-          for await (const message of result) await outputStream.write(message)
-          await outputStream.write(new ExecClientControlMessage({
-            message: { case: "streamClose", value: new ExecClientStreamClose({ id: serverMessage.id }) },
-          }))
-          controlledExecSuccess.increment(execCtx, 1, { exec_case: execCase })
-        } catch (error) {
-          // A client that stopped listening is not a failure of the operation.
-          if (error instanceof WriteIterableClosedError) return
-          controlledExecError.increment(execCtx, 1, { exec_case: execCase })
-          const stackTrace = error instanceof Error ? error.stack : undefined
-          const errorCode = getExecClientErrorCode(error)
-          await outputStream.write(new ExecClientControlMessage({
-            message: {
-              case: "throw",
-              value: new ExecClientThrow({
-                id: serverMessage.id,
-                error: error instanceof Error
-                  ? appendGitDiagnostics(error.message, error, { includeStderr: this.includeGitStderrInThrows() })
-                  : "Unknown error",
-                ...(stackTrace !== undefined ? { stackTrace } : {}),
-                ...(errorCode !== undefined ? { errorCode } : {}),
-              }),
-            },
-          }))
-        } finally {
-          controlledExecDuration.histogram(execCtx, performance.now() - startTime, { exec_case: execCase })
-          clearTimeout(heartbeatTimer)
-          outputStream.close()
-          this.runningExecs.delete(serverMessage.id)
-        }
-      }
-      void run()
-      return outputStream
+      return startControlledExecSession({
+        context: execCtx,
+        request: serverMessage,
+        operation: result,
+        operationCase: execCase,
+        cancelContext: execCtxCancel,
+        includeGitStderr: this.includeGitStderrInThrows,
+        errorCode: getExecClientErrorCode,
+        onSettled: () => this.runningExecs.delete(serverMessage.id),
+      })
     }
 
     this.runningExecs.delete(serverMessage.id)
-    const errorMessage = `No handler found for server message of type ${serverMessage.message.case}`
-    logger.error(ctx, errorMessage, { messageCase: serverMessage.message.case })
-    controlledExecError.increment(ctx, 1, { exec_case: execCase })
-    return (async function* () {
-      yield new ExecClientControlMessage({ message: { case: "throw", value: new ExecClientThrow({ id: serverMessage.id, error: errorMessage }) } })
-      yield new ExecClientControlMessage({ message: { case: "streamClose", value: new ExecClientStreamClose({ id: serverMessage.id }) } })
-    })()
+    execCtxCancel()
+    return unhandledControlledExecRequest(ctx, serverMessage, execCase)
   }
 
   /** Builds a manager that can serve everything the registry holds, by asking each resource to register. */
