@@ -17,7 +17,9 @@ import {
   CANCELLED_BEFORE_CLOUD_AGENT_CALL,
   cloudAgentRuntimeDescription,
   createCloudAgentTool,
+  DESTRUCTIVE_ACTIONS,
   modelCatalogLines,
+  REVIEW_GATED_ACTIONS,
   repoShortName,
   requireCloudAgentField,
   runCloudAgentAction,
@@ -184,6 +186,11 @@ describe("what the tool says about a cloud agent's environment", () => {
 });
 
 describe("what the tool does", () => {
+  it("derives confirmation and review gates from the action registry", () => {
+    assert.deepEqual([...DESTRUCTIVE_ACTIONS], ["cancel", "archive", "unarchive", "delete"]);
+    assert.deepEqual([...REVIEW_GATED_ACTIONS], ["launch", "reply", "rename", "cancel", "archive", "unarchive", "delete"]);
+  });
+
   it("asks for a confirmation before anything destructive, and takes it as given", async () => {
     // The agent is one this session follows, so a delete has something to stop following.
     const world = toolWorld({ summaries: [summary("bc-1")] });
@@ -299,7 +306,9 @@ describe("what the tool does", () => {
   it("dumps a transcript for an agent this session follows, and only for one", async () => {
     const world = toolWorld({ summaries: [summary("bc-1")], transcript: { status: "running", lineCount: 2, jsonl: "a\nb" } });
     assert.match(await runCloudAgentAction(world.ctx, { action: "dump", agent_id: "bc-1" }, world.deps), /^Wrote bc-1's full transcript to cloud-agent-transcripts\/bc-1\.jsonl \(3 bytes, 2 message lines\)\.\nThe run is still in progress/);
-    assert.match(await runCloudAgentAction(world.ctx, { action: "dump", agent_id: "bc-other" }, world.deps), /^dump is limited to cloud agents you launched, watched, or replied to this session \(not bc-other\)/);
+    const refused = await runCloudAgentAction(world.ctx, { action: "dump", agent_id: "bc-other" }, world.deps);
+    assert.match(refused, /^dump is limited to agents this session has launched, watched, or replied to \(not bc-other\)/);
+    assert.doesNotMatch(refused, /\bgh\b/);
     const empty = toolWorld({ summaries: [summary("bc-1")], transcript: { status: "finished", lineCount: 0, jsonl: "" } });
     assert.equal(await runCloudAgentAction(empty.ctx, { action: "dump", agent_id: "bc-1" }, empty.deps), "Cloud agent bc-1 hasn't produced any transcript output yet. The run has finished, so this is the complete transcript.");
     const gone = toolWorld({ summaries: [summary("bc-1")], transcript: null });
