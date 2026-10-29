@@ -8,7 +8,8 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 import type { DeadlinePolicy } from "../scheduling.ts";
-import { CsnapsResponseDecoder, encodeCsnapsRequest, parseCsnapsOperationResult, type CsnapsErrorCode, type CsnapsOperation, type CsnapsResponse } from "./csnaps-protocol.ts";
+import { encodeCsnapsRequest, parseCsnapsOperationResult, type CsnapsErrorCode, type CsnapsOperation } from "./csnaps-protocol.ts";
+import { CsnapsRequestMailbox } from "./csnaps-request-mailbox.ts";
 
 export class CsnapsProcessError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -40,15 +41,6 @@ export interface CsnapsProcessState {
   readonly tracked: readonly { readonly codebaseUuid: string; readonly path: string; readonly kind: number; readonly environment: number }[];
 }
 
-/** One request waiting for its answer, together with the deadline it runs under. */
-interface PendingRequest {
-  readonly method: string;
-  resolve(value: unknown): void;
-  reject(error: unknown): void;
-  readonly deadlineSignal: AbortSignal;
-  onDeadline(): void;
-}
-
 export interface CsnapsSpawnOptions {
   executablePath: string;
   initializeParams: Record<string, unknown>;
@@ -60,14 +52,16 @@ export class CsnapsProcess {
   readonly terminalFailure: Promise<Error>;
   private readonly resolveTerminalFailure: (error: Error) => void;
   private readonly childExited: Promise<void>;
+  private readonly requests: CsnapsRequestMailbox;
   private terminalError: Error | undefined;
   private closePromise: Promise<void> | undefined;
   private isClosing = false;
-  private nextRequestId = 0;
-  private readonly awaitingAnswer = new Map<number, PendingRequest>();
-  private readonly answers = new CsnapsResponseDecoder();
 
   constructor(private readonly child: ChildProcessByStdio<Writable, Readable, null>, private readonly deadlines: CsnapsDeadlines) {
+    this.requests = new CsnapsRequestMailbox({
+      process: (message, cause) => new CsnapsProcessError(message, cause === undefined ? undefined : { cause }),
+      request: (method, code) => new CsnapsRequestError(method, code),
+    });
     const terminal = Promise.withResolvers<Error>();
     this.terminalFailure = terminal.promise;
     this.resolveTerminalFailure = terminal.resolve;
@@ -77,14 +71,14 @@ export class CsnapsProcess {
       let error = this.terminalError;
       if (error == null) {
         try {
-          this.answers.assertComplete();
+          this.requests.assertComplete();
           error = new CsnapsProcessError(describeCsnapsExit(code, signal));
         } catch (cause) {
           error = cause instanceof Error ? cause : new CsnapsProcessError("invalid csnaps response", { cause });
         }
       }
       this.terminalError = error;
-      this.rejectAllAwaiting(error);
+      this.requests.rejectAll(error);
       if (!this.isClosing) this.resolveTerminalFailure(error);
       resolve();
     }));
@@ -190,29 +184,17 @@ export class CsnapsProcess {
 
   private async sendAndAwait(operation: CsnapsOperation, deadlineSignal: AbortSignal): Promise<unknown> {
     if (this.terminalError != null) throw this.terminalError;
-    const id = this.nextRequestId++;
-    const answer = Promise.withResolvers<unknown>();
-    const onDeadline = (): void => {
-      if (!this.awaitingAnswer.delete(id)) return;
-      const timedOut = deadlineSignal.reason instanceof Error && deadlineSignal.reason.name === "DeadlineExceededError";
-      const error = new CsnapsProcessError(`csnaps ${operation.method} request ${timedOut ? "timed out" : "cancelled"}`, { cause: deadlineSignal.reason });
-      answer.reject(error);
-      this.fail(error);
-    };
-    this.awaitingAnswer.set(id, { method: operation.method, resolve: answer.resolve, reject: answer.reject, deadlineSignal, onDeadline });
-    deadlineSignal.addEventListener("abort", onDeadline, { once: true });
-    if (deadlineSignal.aborted) {
-      onDeadline();
-    } else {
+    const pending = this.requests.open(operation.method, deadlineSignal, (error) => this.fail(error));
+    if (!deadlineSignal.aborted) {
       try {
-        await writeFrame(this.child.stdin, encodeCsnapsRequest(id, operation));
+        await writeFrame(this.child.stdin, encodeCsnapsRequest(pending.id, operation));
       } catch (error) {
         const failure = this.terminalError ?? (error instanceof Error ? error : new CsnapsProcessError("csnaps stdin write failed", { cause: error }));
         this.fail(failure);
         throw failure;
       }
     }
-    return await answer.promise;
+    return await pending.response;
   }
 
   private deadlineFor(method: CsnapsOperation["method"]): DeadlinePolicy {
@@ -234,30 +216,14 @@ export class CsnapsProcess {
     }
   }
 
-  /** Answers are checked as a whole read before any of them is handed over: a doubled answer is nobody's answer. */
+  /** Decoding and request correlation live in the mailbox; process failure remains owned here. */
   private handleAnswers(chunk: Buffer): void {
     if (this.terminalError != null) return;
     try {
-      const answers = this.answers.decode(chunk);
-      const seen = new Set<number>();
-      for (const answer of answers) {
-        if (seen.has(answer.id)) throw new CsnapsProcessError("csnaps returned a duplicate request ID");
-        if (!this.awaitingAnswer.has(answer.id)) throw new CsnapsProcessError("csnaps returned an unknown request ID");
-        seen.add(answer.id);
-      }
-      for (const answer of answers) this.settle(answer);
+      this.requests.accept(chunk);
     } catch (error) {
       this.fail(error instanceof Error ? error : new CsnapsProcessError("invalid csnaps response", { cause: error }));
     }
-  }
-
-  private settle(answer: CsnapsResponse): void {
-    const awaiting = this.awaitingAnswer.get(answer.id);
-    if (awaiting == null) throw new CsnapsProcessError("csnaps returned an unknown request ID");
-    this.awaitingAnswer.delete(answer.id);
-    awaiting.deadlineSignal.removeEventListener("abort", awaiting.onDeadline);
-    if (answer.ok) awaiting.resolve(answer.result);
-    else awaiting.reject(new CsnapsRequestError(awaiting.method, answer.error));
   }
 
   private fail(error: Error): void {
@@ -265,16 +231,8 @@ export class CsnapsProcess {
     this.terminalError = error;
     this.child.stdin.destroy();
     this.child.kill("SIGTERM");
-    this.rejectAllAwaiting(error);
+    this.requests.rejectAll(error);
     if (!this.isClosing) this.resolveTerminalFailure(error);
-  }
-
-  private rejectAllAwaiting(error: Error): void {
-    for (const awaiting of this.awaitingAnswer.values()) {
-      awaiting.deadlineSignal.removeEventListener("abort", awaiting.onDeadline);
-      awaiting.reject(error);
-    }
-    this.awaitingAnswer.clear();
   }
 }
 
