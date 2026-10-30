@@ -10,21 +10,29 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useState } from 'react'
 
 type AgentKindOption = { value: AgentKind; label: string; description: string }
 
-function agentKindOptions(t: Translator): ReadonlyArray<AgentKindOption> {
-  return [
+function agentKindOptions(t: Translator, runtimeMode: 'local' | 'cloud'): ReadonlyArray<AgentKindOption> {
+  const options: AgentKindOption[] = [
     { value: 'codex', label: 'Codex', description: t('OpenAI Codex · 默认 Agent，自带沙箱') },
     { value: 'pi', label: 'Pi', description: t('Pi coding agent · 浏览器与 Supabase 扩展') },
+    { value: 'omp', label: 'Oh My Pi', description: t('Oh My Pi · Cloud Computer 内置 Agent') },
   ]
+  return runtimeMode === 'cloud' ? options.filter((option) => option.value !== 'codex') : options.filter((option) => option.value !== 'omp')
 }
 
-export function AgentKindPicker({ value, onChange }: { value: AgentKind; onChange: (agent: AgentKind) => void }) {
-  const [open, setOpen] = useState(false)
+export function AgentKindPicker({
+  runtimeMode = 'local',
+  value,
+  onChange,
+}: {
+  runtimeMode?: 'local' | 'cloud'
+  value: AgentKind
+  onChange: (agent: AgentKind) => void
+}) {
   const t = useT()
-  const options = agentKindOptions(t)
+  const options = agentKindOptions(t, runtimeMode)
   const active = options.find((option) => option.value === value) ?? options[0]!
 
   return (

@@ -12,6 +12,7 @@ import type { ReactNode } from 'react'
 
 export interface AppSelectOption {
   description?: string
+  disabled?: boolean
   icon?: ReactNode
   label: ReactNode
   value: string
@@ -41,7 +42,7 @@ export function AppSelect({ ariaLabel, className, contentClassName, disabled, on
       </SelectTrigger>
       <SelectContent align="start" className={cn('min-w-[var(--anchor-width)]', contentClassName)}>
         {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
+          <SelectItem disabled={option.disabled} key={option.value} value={option.value}>
             {option.icon}
             <span className="min-w-0 flex-1">
               <span className="block truncate">{option.label}</span>

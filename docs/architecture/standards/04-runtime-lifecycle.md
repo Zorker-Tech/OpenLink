@@ -7,8 +7,8 @@ current supervisor implementation and owns the complete application lifecycle.
 
 ```mermaid
 flowchart TD
-  Start["pnpm dev:local / pnpm start"] --> Mode["Resolve Local or Cloud mode"]
-  Mode --> Data["Ensure ZOKERBASE and apply migrations"]
+  Start["pnpm dev:local / dev:cloud / start"] --> Mode["Resolve Local or Cloud mode"]
+  Mode -->|Local| Data["Ensure ZOKERBASE and apply migrations"]
   Data --> Artifacts["Verify local runtime artifacts"]
   Artifacts --> Zero["Start Zero when Knowledge is enabled"]
   Zero --> Services["Build/start Browser Host, Knowledge Service, Agent Hosts"]
@@ -16,6 +16,10 @@ flowchart TD
   Health --> Web["Start Next.js"]
   Web --> Ready["Application ready"]
   Ready --> Shutdown["Coordinated shutdown"]
+  Mode -->|Cloud| CloudHost["Start loopback VTSLX SDK Host"]
+  CloudHost --> CloudWeb["Start Cloud-configured Next.js Web/BFF"]
+  CloudWeb --> CloudReady["Web ready; product APIs use Cloud services"]
+  CloudReady --> CloudShutdown["Stop Web and SDK Host"]
 ```
 
 Startup must be observable. A long operation must either emit progress or
@@ -46,6 +50,28 @@ Cloud mode uses deployed instances of the same contracts. It does not weaken
 tenant checks or introduce a second application code path for business logic.
 Cloud storage topology may evolve independently, but a change must preserve the
 documented service contracts or ship an explicit version/migration.
+
+The root source checkout exposes Cloud as a runtime profile, separate from the
+development/production lifecycle mode: `pnpm dev:cloud` and
+`pnpm start:cloud` load `.env.cloud` before the supervisor. The profile requires
+`OPENLINK_CLOUD_SUPABASE_URL` and
+`OPENLINK_CLOUD_SUPABASE_PUBLISHABLE_KEY`, and sets the public Supabase aliases
+to those same values. They must identify the Supabase project shared with
+Studio (`supabase-us`); service-role credentials must never be used as a
+browser key. `OPENLINK_CLOUD_OAUTH_CLIENT_ID` must be the VTSLX client
+registered for Studio. The issuer remains the trusted VTSLX issuer configured
+by the SDK. Missing Cloud database configuration is a startup error, never a
+fallback to Local ZOKERBASE.
+
+The Cloud source-checkout profile starts the Next.js Web/BFF and a loopback
+VTSLX SDK Host, and uses hosted Cloud identity/application data. The SDK Host
+verifies the Hydite subject before Computer status and Pi RPC chat requests; it
+persists encrypted reconnect checkpoints for the Cloud agent session. It does
+not initialize local Podman, Chromium, Local Agent/Browser hosts, Studio origin
+proxy, Project VM, ZOKERBASE, or Zero. Runtime APIs must be configured as Cloud
+endpoints. `.env.cloud` is local-only;
+`.env.cloud.example` documents the variable contract. Local services start only
+after explicitly selecting the Local profile.
 
 ## Project lifecycle
 

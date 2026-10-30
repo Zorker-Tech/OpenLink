@@ -9,6 +9,7 @@ import { getUserSkill, listUserSkills } from '@/lib/user-skills.server'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
 import { getAccessibleWorkspaceById, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { shouldAutoStartInitialPrompt } from '@/lib/chat-auto-start'
+import { observeChatStage } from '@/lib/chat-diagnostics.server'
 import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
@@ -34,31 +35,34 @@ export default async function ChatSessionPage({
 
   if (userId !== user.id || !isChatSessionId(sessionId)) notFound()
 
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await observeChatStage('session.load', getChatSession(supabase, user.id, sessionId))
   if (!session) notFound()
 
   const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, initialEvents, skillSummaries, preferences] = await Promise.all([
-    getAccessibleWorkspaceById(supabase, session.workspace_id),
-    getOwnedWorkspace(supabase, user.id),
-    listOrganizations(supabase, user.id),
-    supabase
+    observeChatStage('workspace.load', getAccessibleWorkspaceById(supabase, session.workspace_id)),
+    observeChatStage('personal_workspace.load', getOwnedWorkspace(supabase, user.id)),
+    observeChatStage('organizations.load', listOrganizations(supabase, user.id)),
+    observeChatStage('profile.load', supabase
       .schema('openlink')
       .from('profiles')
       .select('nickname')
       .eq('user_id', user.id)
-      .maybeSingle(),
-    listConfiguredModels(supabase, user.id),
-    listChatSessions(supabase, user.id, session.workspace_id),
-    getProject(supabase, session.project_id),
-    listPersistedChatEvents(supabase, user.id, session.id),
-    listUserSkills(supabase, user.id),
-    getUserPreferences(supabase, user.id),
+      .maybeSingle()),
+    observeChatStage('models.load', listConfiguredModels(supabase, user.id)),
+    observeChatStage('sessions.load', listChatSessions(supabase, user.id, session.workspace_id)),
+    observeChatStage('project.load', getProject(supabase, session.project_id)),
+    observeChatStage('events.load', listPersistedChatEvents(supabase, user.id, session.id)),
+    observeChatStage('skills.load', listUserSkills(supabase, user.id)),
+    observeChatStage('preferences.load', getUserPreferences(supabase, user.id)),
   ])
 
   if (!workspace || !personalWorkspace || !project) notFound()
 
   const nickname = (profile.data as { nickname?: string } | null)?.nickname ?? workspace.name
-  const skills = (await Promise.all(skillSummaries.map((skill) => getUserSkill(supabase, user.id, skill.id)))).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill))
+  const skills = (await Promise.all(skillSummaries.map((skill) => observeChatStage(
+    'skill.load',
+    getUserSkill(supabase, user.id, skill.id),
+  )))).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill))
 
   return (
     <ChatWorkspace

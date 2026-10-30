@@ -3,7 +3,7 @@
 OpenLink Cloud consumes the built Hydite product SDK, not files imported from an
 adjacent repository and not Bifrost/Studio private implementation modules.
 
-The normal build consumes the immutable `@vtslx/platform-sdk@0.2.0` release from
+The normal build consumes the immutable `@vtslx/platform-sdk@0.2.5` release from
 the internal Nexus consumer registry:
 
 ```sh
@@ -14,7 +14,7 @@ pnpm platform-sdk:verify
 
 The lockfile records the exact version and SHA-512 integrity. npm/pnpm is used
 at build time only; OpenLink startup never downloads a package. The local
-`manifest.json` archive is retained only as a break-glass offline rollback:
+`manifest.json` archive is an integrity-checked offline copy of that release:
 
 ```sh
 node scripts/sync-platform-sdk.mjs --artifact /path/to/reviewed-package.tgz
@@ -22,10 +22,9 @@ pnpm install --offline --frozen-lockfile
 node scripts/sync-platform-sdk.mjs --check
 ```
 
-The tarball is generated release input under `tarballs/`, like the existing Pi
-artifact boundary. It is not hand-edited source. Build/release delivery must supply
-the matching archive before package installation. Ordinary startup never downloads
-it, and Local mode never starts a cloud login or network request.
+The tarball under `tarballs/` is the published package artifact, not hand-edited
+source. Ordinary startup never downloads it, and Local mode never starts a cloud
+login or network request.
 
 The registry release is internal and the local archive is not a second source of
 truth. Replacing either requires a new immutable version, reviewed integrity

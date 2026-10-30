@@ -2,6 +2,7 @@
 
 import { getT } from '@/lib/i18n/server'
 import { confirmNickname } from '@/lib/workspaces'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -30,7 +31,8 @@ export async function saveNickname(
 
   try {
     await confirmNickname(supabase, user, nickname)
-    const target = `/app/onboarding?step=organization${prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''}`
+    const nextStep = getRuntimeMode() === 'cloud' ? 'project' : 'organization'
+    const target = `/app/onboarding?step=${nextStep}${prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''}`
     redirect(target)
   } catch (error) {
     if (error && typeof error === 'object' && 'digest' in error) throw error

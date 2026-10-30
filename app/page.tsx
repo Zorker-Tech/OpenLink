@@ -1,10 +1,11 @@
 import { OpenLinkHome } from '@/components/openlink-home'
 import { loadComposerContext } from '@/lib/composer-context'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
 
 export default async function Home() {
   if (process.env.OPENLINK_STATIC_UI === '1') {
-    return <OpenLinkHome user={null} composerContext={null} />
+    return <OpenLinkHome user={null} composerContext={null} runtimeMode={getRuntimeMode()} />
   }
 
   const supabase = await createClient()
@@ -23,6 +24,7 @@ export default async function Home() {
         name: typeof user.user_metadata?.name === 'string' ? user.user_metadata.name : null,
       } : null}
       composerContext={composerContext}
+      runtimeMode={getRuntimeMode()}
     />
   )
 }

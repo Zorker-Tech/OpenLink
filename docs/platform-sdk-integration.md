@@ -1,87 +1,65 @@
-# OpenLink Cloud SDK integration checkpoint
+# Cloud VTSLX Computer and Pi integration
 
-## Current implementation
+OpenLink Cloud uses `@vtslx/platform-sdk@0.2.5` to connect a user's linked
+Hydite Studio account to the selected Studio project's Computer. OpenLink Host
+owns chat sessions and Pi RPC; the SDK supplies the project-authorized
+Computer stream, terminal transport, heartbeat, event stream, cancellation and
+checkpoint recovery.
 
-The Cloud account controls are now wired into the existing settings page, with
-Local omission, truthful verification/pending states and guarded browser actions.
-See [Cloud settings](./platform-cloud-settings.md) for the 59-test/full-build
-checkpoint and outstanding visual/production acceptance.
+## Request path
 
-Project references now have a deployed RLS/revision schema and BFF source routes;
-see [Cloud project references](./platform-cloud-project-links.md). They are not
-execution migration. The real test account currently has no visible application
-projects, so positive mapping/runtime acceptance remains pending.
+1. The authenticated OpenLink BFF verifies the Cloud connection and the
+   OpenLink-to-Studio project link, checks the user's Studio project access,
+   and obtains a short-lived token with `computer:read` and `computer:write`.
+2. The loopback-only Cloud Computer Host verifies the Studio subject with
+   `userinfo`, then opens or resumes the Computer stream and the Pi RPC session
+   for that OpenLink chat session. The token is sent only to this local Host;
+   it is not sent to the browser or stored in chat history.
+3. Pi JSONL records pass through the existing chat event adapter. OpenLink
+   stores the normalized events and Pi session snapshot in the Cloud Supabase
+   project. The Host keeps the Computer session warm and stores encrypted,
+   user/project/session-bound reconnect checkpoints on disk.
+4. Cloud chat creation selects Pi and obtains model choices from the Computer's
+   Pi RPC. Cloud mode does not require a Local provider configuration or route
+   a request to the Local Agent Host. The Local path remains unchanged.
 
-Login start/callback source and one-use PKCE transactions now exist; their Cloud
-migration and real service smoke passed. See [Cloud login](./platform-cloud-login.md)
-for the explicit disabled-by-default release flag and remaining UI/recovery gates.
+The Cloud Computer Host is started by `scripts/dev-browser.mjs` only for the
+Cloud profile. It binds to loopback and does not start Local Agent workers,
+Browser services, Podman, or Project VMs. Local mode does not start or contact
+this Host.
 
-The durable Cloud token store, refresh coordinator and BFF connection read/exit
-routes are now implemented. See [Cloud OAuth storage](./platform-cloud-oauth-storage.md)
-for deployed database migrations, server receipt authority, real API evidence and
-remaining production BFF/key-provisioning gates. The packed SDK now includes the
-host refresh-coordinator hook, strict multi-origin failover pins and bounded
-request admission. It is pinned to SHA256
-`d1c2d1a55735437f75ccb31bd1d505abedcbd6260c40c532a4b52b149f22a8ce`.
+## Package and configuration
 
-`lib/platform-cloud-sdk.ts` imports the packed `@vtslx/platform-sdk` product and
-Auth subpaths. The package is pinned by SHA256 in
-`packages/platform-sdk/manifest.json`; the root lockfile consumes its hash-named
-tarball. The source SDK remains in AoAPI; no authentication implementation was
-copied into OpenLink. Follow that artifact directory's README for build-time
-provisioning and integrity verification. The current candidate is
-`platform-sdk-0.2.0-d1c2d1a5.tgz`; the previous `62d76c35`, `b6dc745b`, `ef72d9b9`, `ee127c10`, `110555d8`, `5f5c7217`, `23d37284`, `343cb085`, `64448581`, `57f4f1e8`, `5e5b1b2d`, `da13c7ba`, `d0d247f6`, `461ce08b`, `13a956c6`, `f532c29a`, `3248e525`,
-`ca62353f`, `dd28b5ba`, `f4260110`, `56ea80bc`, `74fad278`, `cf303846`, `8d574ff8`,
-`51560bda`, `4fdda226` and `5f4a3366` archives remain available for rollback.
+The root dependency and lockfile pin `@vtslx/platform-sdk@0.2.5`. The downloaded
+Nexus artifact is recorded in `packages/platform-sdk/manifest.json` with
+SHA-256 `33285c4a5a87b96bca9fd2e4e93cce2d7b84db00b3c13280a35f12e78d8bbd56`
+and its registry-matching SHA-512 integrity. The LAN OAuth callback patch is
+kept version-specific at
+`patches/@vtslx__platform-sdk@0.2.5.patch`.
 
-The adapter rejects Local mode before construction and requires an explicit
-user-bound token store and issuer subject. It checks userinfo before directory,
-project or Workspace access. Application and cloud project IDs have different
-fields and cannot be implicitly interchanged. This layer does not replace the
-BFF's required authenticated-user/RLS checks.
+Cloud startup provisions a protected internal Host token and a 32-byte
+checkpoint encryption key in the local OpenLink state directory when the
+corresponding environment values are empty. Deployments must provide stable
+shared key material and durable checkpoint storage if Host processes can move
+between machines. The Host URL must remain loopback for the source-checkout
+supervisor.
 
-## Intended host use
+## Runtime requirements and limits
 
-Create the adapter per authenticated Cloud request/connection. Supply a secure
-store bound to that connection's ZOKERBASE user and established Hydite subject.
-Authorize application project membership before passing an
-`AuthorizedCloudProjectBinding`. Call `project(binding)` for public capabilities
-or `workspace(binding)` for the Workspace session protocol. Do not cache the
-adapter/store globally or accept the binding directly from an untrusted body.
+- The VTSLX Worker must grant the selected project the `terminal` capability
+  for Pi RPC. This is currently feature-gated on the Worker; publishing the
+  SDK does not enable it.
+- File and image attachments also require the Worker `files` capability. The
+  current SDK limits one Workspace write to 32 KiB, so larger binary
+  attachments are rejected with a visible chat error until chunked file upload
+  is supported end to end.
+- Cloud Pi currently supports status, interrupt, steer, follow-up through the
+  authenticated session control endpoint, model selection, and reconnect. Local-only execution modes,
+  rewind/edit, and controls without a Pi RPC equivalent are not silently
+  mapped to different Cloud behavior.
+- The source integration has not had a full browser-to-Worker runtime smoke in
+  this change. Automated tests, production build, and Worker capability
+  enablement were not run here.
 
-There is deliberately no default Code Plan client: Code Plan is Hydite IDE's
-entitlement domain, not an OpenLink account requirement. Local runtime/SSO and
-native VM paths are unchanged.
-
-## Verified in this batch
-
-- Packed SDK dependency installed through the root package graph.
-- Artifact checksum verified.
-- A remote isolated consumer using the packed candidate passed all six Cloud
-  adapter identity, project-reference and ordering tests.
-- Six adapter tests passed: Local no-network, mandatory identity/store,
-  external project mapping, subject mismatch, cross-user binding rejection,
-  identity-before-directory ordering.
-- Focused adapter TypeScript check passed.
-- The underlying Auth SDK's new userinfo method separately passed real-account
-  OAuth/PKCE/signature/subject/refresh/replay tests. This is not a Cloud UI test.
-
-Commands:
-
-```sh
-node scripts/sync-platform-sdk.mjs --check
-node --test scripts/test/platform-cloud-sdk.test.mjs
-```
-
-## Not yet integrated / release gates
-
-Visual/production connect-disconnect acceptance, positive project mapping acceptance,
-Agent Host/Worker wiring, service cleanup retries and actual browser/runtime
-flows are pending. BFF connection routes exist in source but are not deployed;
-only the additive Cloud storage/RPC migrations are deployed. Do not present the
-Cloud login/runtime migration as complete or remove current flows. Complete
-ADR-0023's matrix before accepting the full architectural change.
-
-Retain the previous manifest/lockfile/artifact for an explicit rollback. Missing
-artifacts or cloud authorization must fail rather than fetch code at runtime,
-invent readiness, share another user's tokens or fall back into Local execution.
+Never fall back from a Cloud Computer error to Local execution, and never pass
+Studio OAuth credentials to browser code or a global SDK token store.

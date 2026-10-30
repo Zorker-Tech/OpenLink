@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronRight,
   FileText,
+  FolderKanban,
   HelpCircle,
   LogOut,
   Moon,
@@ -79,6 +80,7 @@ export function AccountDrawer({
   const supabase = useMemo(() => createClient(), [])
   const [isSigningOut, setIsSigningOut] = useState(false)
   const featuredOrganization = organizations.find((organization) => organization.id === activeWorkspace.organizationId) ?? organizations[0]
+  const cloudRuntime = process.env.NEXT_PUBLIC_OPENLINK_RUNTIME_MODE === 'cloud'
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
@@ -117,15 +119,26 @@ export function AccountDrawer({
 
       <button
         className={`flex min-h-[58px] w-full items-center gap-2 rounded-lg px-1.5 pt-2.5 pb-1.5 text-left transition-colors ${theme('hover')}`}
-        onClick={() => featuredOrganization ? router.push(`/app/${featuredOrganization.workspaceSlug}`) : onOpenOrganization()}
+        onClick={() => {
+          if (cloudRuntime) {
+            router.push('/app/onboarding?step=project')
+            return
+          }
+          if (featuredOrganization) router.push(`/app/${featuredOrganization.workspaceSlug}`)
+          else onOpenOrganization()
+        }}
         type="button"
       >
-        {featuredOrganization ? <AccountAvatar avatarUrl={null} nickname={featuredOrganization.name} /> : <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${theme('subtleSurface')}`}><Building2 className="size-3.5" /></span>}
+        {cloudRuntime
+          ? <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${theme('subtleSurface')}`}><FolderKanban className="size-3.5" /></span>
+          : featuredOrganization
+            ? <AccountAvatar avatarUrl={null} nickname={featuredOrganization.name} />
+            : <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${theme('subtleSurface')}`}><Building2 className="size-3.5" /></span>}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm leading-[22px]">{featuredOrganization?.name ?? t('添加组织')}</span>
-          <span className={`block text-xs leading-[18px] ${theme('muted')}`}>
+          <span className="block truncate text-sm leading-[22px]">{cloudRuntime ? t('项目设置') : featuredOrganization?.name ?? t('添加组织')}</span>
+          {!cloudRuntime && <span className={`block text-xs leading-[18px] ${theme('muted')}`}>
             {featuredOrganization ? ({ owner: t('所有者'), admin: t('管理员'), member: t('成员') } as const)[featuredOrganization.role] : t('创建或加入组织')}
-          </span>
+          </span>}
         </span>
         <ChevronRight className={`size-4 shrink-0 ${theme('muted')}`} strokeWidth={1.8} />
       </button>

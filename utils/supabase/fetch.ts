@@ -1,10 +1,12 @@
-const DEFAULT_SUPABASE_TIMEOUT_MS = 5_000
+const DEFAULT_LOCAL_SUPABASE_TIMEOUT_MS = 5_000
+const DEFAULT_CLOUD_SUPABASE_TIMEOUT_MS = 15_000
 
 function timeoutMs(): number {
   const configured = Number(process.env.OPENLINK_SUPABASE_REQUEST_TIMEOUT_MS)
-  return Number.isSafeInteger(configured) && configured >= 1_000 && configured <= 60_000
-    ? configured
-    : DEFAULT_SUPABASE_TIMEOUT_MS
+  if (Number.isSafeInteger(configured) && configured >= 1_000 && configured <= 60_000) return configured
+  return process.env.OPENLINK_RUNTIME_MODE?.trim().toLowerCase() === 'cloud'
+    ? DEFAULT_CLOUD_SUPABASE_TIMEOUT_MS
+    : DEFAULT_LOCAL_SUPABASE_TIMEOUT_MS
 }
 
 /** Keep auth/database calls from pinning a Next request forever on an outage. */

@@ -1,6 +1,8 @@
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
-import { loadPiSessionSnapshot } from '@/lib/chat-session-persistence.server'
+import { findFirstPersistedUserMessage, loadPiSessionSnapshot } from '@/lib/chat-session-persistence.server'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
+import { cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -22,8 +24,9 @@ export async function POST(
 ) {
   const { session_id: sessionId } = await params
   if (!isChatSessionId(sessionId)) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
+  const cloudMode = getRuntimeMode() === 'cloud'
   const config = agentHostConfig()
-  if (!config) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
+  if (!cloudMode && !config) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -54,6 +57,54 @@ export async function POST(
       ? body.browserSessionId
       : null
   if (body.browserSessionId !== undefined && !browserSessionId) return Response.json({ error: 'INVALID_BROWSER_SESSION' }, { status: 400 })
+
+  if (cloudMode) {
+    try {
+      const firstMessage = await findFirstPersistedUserMessage(supabase, user.id, sessionId)
+      if (!firstMessage) {
+        return Response.json({ ready: false, awaitingFirstMessage: true }, { headers: { 'Cache-Control': 'no-store' } })
+      }
+    } catch {
+      return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 503 })
+    }
+    let runtimeConfiguration
+    try {
+      runtimeConfiguration = await resolveAgentProviderRuntimeConfiguration(supabase, user.id, requestedModel)
+    } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      const safeCode = code === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED'
+        ? code
+        : code === 'PROVIDER_API_KEY_REQUIRED' || code === 'MODEL_NOT_ENABLED' || code === 'UNKNOWN_PROVIDER_MODEL' || code === 'UNKNOWN_PROVIDER'
+          ? code
+          : 'MODEL_CONFIGURATION_INVALID'
+      return Response.json({ error: safeCode }, { status: 400 })
+    }
+    if (!runtimeConfiguration) return Response.json({ error: 'MODEL_CONFIGURATION_REQUIRED' }, { status: 400 })
+    try {
+      const upstream = await cloudComputerSdkRequest(session.project_id, `/v1/agent/sessions/${sessionId}/lease`, {
+        sessionId,
+        workspaceId: session.workspace_id,
+        agent: session.agent,
+        model: { providerId: runtimeConfiguration.providerId, modelId: runtimeConfiguration.modelId },
+        runtimeConfiguration,
+      }, AbortSignal.timeout(300_000))
+      const payload = await upstream.json().catch(() => null) as { ready?: unknown; agent?: unknown; error?: unknown } | null
+      if (!upstream.ok || payload?.ready !== true) {
+        const rawCode = typeof payload?.error === 'string' ? payload.error : ''
+        const allowedCodes = new Set(['CLOUD_CONNECTION_NOT_CONFIGURED', 'CLOUD_CONNECTION_INACTIVE', 'CLOUD_CONNECTION_REAUTH_REQUIRED', 'CLOUD_COMPUTER_UNAVAILABLE', 'CLOUD_COMPUTER_PERMISSION_REQUIRED', 'CLOUD_PROJECT_NOT_LINKED', 'CLOUD_PROJECT_NOT_ACCESSIBLE', 'CLOUD_SDK_HOST_NOT_CONFIGURED', 'COMPUTER_AGENT_CAPABILITY_REQUIRED', 'COMPUTER_AGENT_UNAVAILABLE'])
+        const code = allowedCodes.has(rawCode) ? rawCode : 'CLOUD_COMPUTER_UNAVAILABLE'
+        return Response.json({ error: code }, { status: upstream.status })
+      }
+      return Response.json({ ready: true, agent: session.agent }, { headers: { 'Cache-Control': 'no-store' } })
+    } catch (error) {
+      const rawCode = error instanceof Error ? error.message : ''
+      const allowedCodes = new Set(['CLOUD_CONNECTION_NOT_CONFIGURED', 'CLOUD_CONNECTION_INACTIVE', 'CLOUD_CONNECTION_REAUTH_REQUIRED', 'CLOUD_COMPUTER_UNAVAILABLE', 'CLOUD_COMPUTER_PERMISSION_REQUIRED', 'CLOUD_PROJECT_NOT_LINKED', 'CLOUD_PROJECT_NOT_ACCESSIBLE', 'CLOUD_SDK_HOST_NOT_CONFIGURED', 'COMPUTER_AGENT_CAPABILITY_REQUIRED', 'COMPUTER_AGENT_UNAVAILABLE'])
+      return Response.json({ error: allowedCodes.has(rawCode) ? rawCode : 'CLOUD_COMPUTER_UNAVAILABLE' }, {
+        status: typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : 502,
+      })
+    }
+  }
+  if (!config) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
 
   let runtimeConfiguration
   try {

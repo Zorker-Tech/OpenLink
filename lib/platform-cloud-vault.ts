@@ -23,6 +23,11 @@ export type CloudOAuthVaultOptions = {
   wait?: (milliseconds: number) => Promise<void>
 }
 
+function sameTokenSet(left: OAuthTokenSet, right: OAuthTokenSet) {
+  const fields = ['accessToken', 'refreshToken', 'expiresAt', 'scope', 'tokenType', 'idToken'] as const
+  return fields.every((field) => JSON.stringify(left[field]) === JSON.stringify(right[field]))
+}
+
 /** User-scoped encrypted SDK store and database-fenced refresh coordinator. */
 export class CloudOAuthVault {
   private record: CloudConnectionRecord | null = null
@@ -66,6 +71,43 @@ export class CloudOAuthVault {
     const result = await this.call('create', { issuer: record.issuer, subject: record.subject, client_id: record.client_id,
       envelope: this.options.cipher.seal(tokens, record) })
     if (result.outcome !== 'created') throw new Error('Cloud connection creation failed')
+    this.accept(result.record)
+  }
+  /** Replace only a same-subject connection fenced in reauthentication state. */
+  async reauthorize(tokens: OAuthTokenSet): Promise<void> {
+    const loaded = await this.call('load')
+    if (loaded.outcome !== 'loaded' || !loaded.record) throw new Error('Cloud connection is missing')
+    const current = this.accept(loaded.record)
+    if (current.state !== 'reauth_required' || !current.envelope) {
+      throw new Error('Cloud connection is not awaiting reauthentication')
+    }
+    const next: CloudConnectionRecord = {
+      ...current,
+      revision: current.revision + 1,
+      state: 'active',
+      envelope: null,
+      lease_until: null,
+    }
+    let result: Awaited<ReturnType<CloudConnectionCommand>>
+    try {
+      result = await this.options.command('reauthorize', this.options.connectionId, {
+        revision: current.revision,
+        subject: current.subject,
+        client_id: current.client_id,
+        envelope: this.options.cipher.seal(tokens, next),
+      })
+    } catch {
+      // Recover a committed write whose RPC acknowledgement was lost. Compare
+      // only in memory; neither plaintext credential is logged or returned.
+      const recovered = await this.load().catch(() => null)
+      if (recovered && sameTokenSet(recovered, tokens)) return
+      throw new Error('Cloud reauthorization outcome is uncertain')
+    }
+    if (result.outcome !== 'reauthorized' || !result.record) {
+      throw new Error(result.outcome === 'identity_mismatch'
+        ? 'Cloud reauthorization account does not match'
+        : 'Cloud reauthorization lost its revision fence')
+    }
     this.accept(result.record)
   }
   async save(tokens: OAuthTokenSet): Promise<void> {
@@ -150,9 +192,13 @@ export function cloudConnectionCommand(client: {
   schema(name: string): { rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> }
 }): CloudConnectionCommand {
   return async (operation, connectionId, payload = {}) => {
-    const { data, error } = await client.schema('openlink').rpc('cloud_oauth_connection_command', {
-      p_operation: operation, p_connection_id: connectionId, p_payload: payload,
-    })
+    const { data, error } = operation === 'reauthorize'
+      ? await client.schema('openlink').rpc('cloud_oauth_connection_reauthorize', {
+        p_connection_id: connectionId, p_payload: payload,
+      })
+      : await client.schema('openlink').rpc('cloud_oauth_connection_command', {
+        p_operation: operation, p_connection_id: connectionId, p_payload: payload,
+      })
     if (error || !data || typeof data !== 'object' || typeof (data as { outcome?: unknown }).outcome !== 'string')
       throw new Error('Cloud credential storage request failed')
     return data as Awaited<ReturnType<CloudConnectionCommand>>

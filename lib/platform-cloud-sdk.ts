@@ -1,4 +1,6 @@
 import { PlatformProductSdk } from '@vtslx/platform-sdk/product'
+import type { OpenComputerAgentOptions } from '@vtslx/platform-sdk/product'
+import type { ComputerPiAgentCheckpoint } from '@vtslx/platform-sdk/computer-agent'
 import type { OAuthTokenStore, OAuthRefreshCoordinator } from '@vtslx/platform-sdk/auth'
 
 export interface AuthorizedCloudProjectBinding {
@@ -13,6 +15,7 @@ export interface OpenLinkCloudSdkOptions {
   hyditeSubject: string
   clientId: string
   redirectUri: string
+  allowInsecureHttpRedirectOrigins?: readonly string[]
   /** Must be bound to this user's cloud connection; never reuse a global store. */
   tokenStore: OAuthTokenStore
   refreshCoordinator: OAuthRefreshCoordinator
@@ -34,6 +37,7 @@ export function createOpenLinkCloudSdk(options: OpenLinkCloudSdkOptions) {
     auth: {
       issuer: 'https://auth.hydite.com', clientId: options.clientId,
       redirectUri: options.redirectUri, tokenStore: options.tokenStore,
+      allowInsecureHttpRedirectOrigins: options.allowInsecureHttpRedirectOrigins,
       refreshCoordinator: options.refreshCoordinator,
       scopes: ['openid', 'profile', 'email', 'computer:read', 'computer:write'],
     },
@@ -56,5 +60,11 @@ export function createOpenLinkCloudSdk(options: OpenLinkCloudSdkOptions) {
     async listProjects() { await verifyIdentity(); return sdk.directory.listProjects() },
     async project(binding: AuthorizedCloudProjectBinding) { return sdk.project(await projectRef(binding)) },
     async workspace(binding: AuthorizedCloudProjectBinding) { return sdk.workspace(await projectRef(binding)) },
+    async openComputerAgent(binding: AuthorizedCloudProjectBinding, options: OpenComputerAgentOptions) {
+      return sdk.openComputerAgent(await projectRef(binding), options)
+    },
+    async resumeComputerAgent(binding: AuthorizedCloudProjectBinding, checkpoint: ComputerPiAgentCheckpoint, options?: Parameters<typeof sdk.resumeComputerAgent>[2]) {
+      return sdk.resumeComputerAgent(await projectRef(binding), checkpoint, options)
+    },
   }
 }
