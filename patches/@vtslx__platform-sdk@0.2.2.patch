@@ -1,0 +1,63 @@
+diff --git a/dist/auth.d.ts b/dist/auth.d.ts
+index 29c09af64406940bfc27d99835d0b3fc559056e7..f755f3af38c177f4dfb4b4143ddd1aef5c94ff79 100644
+--- a/dist/auth.d.ts
++++ b/dist/auth.d.ts
+@@ -54,6 +54,8 @@ export type PlatformAuthClientOptions = {
+     fetch?: typeof globalThis.fetch;
+     trustedOrigins?: readonly string[];
+     allowInsecureLoopback?: boolean;
++    /** Explicit HTTP redirect origins for trusted development environments. */
++    allowInsecureHttpRedirectOrigins?: readonly string[];
+     metadataTtlMs?: number;
+     maxResponseBytes?: number;
+     now?: () => number;
+diff --git a/dist/auth.js b/dist/auth.js
+index af650b0e44858ea9ae74ef440b48880f48c73252..5e004c4cef169f5b491ad24ebdb8aedec58e6c5e 100644
+--- a/dist/auth.js
++++ b/dist/auth.js
+@@ -79,7 +79,25 @@ function uniqueScopes(scopes) {
+         throw new Error('OAuth scopes are invalid');
+     return [...new Set(normalized)];
+ }
+-function validateRedirectUri(value) {
++function validateInsecureRedirectOrigin(value) {
++    let url;
++    try {
++        url = new URL(value);
++    }
++    catch {
++        throw new Error('OAuth insecure redirect origin must be an absolute URL');
++    }
++    if (url.protocol !== 'http:' ||
++        url.username ||
++        url.password ||
++        url.pathname !== '/' ||
++        url.search ||
++        url.hash) {
++        throw new Error('OAuth insecure redirect origins must be HTTP origins without a path');
++    }
++    return url.origin;
++}
++function validateRedirectUri(value, allowedInsecureHttpOrigins = new Set()) {
+     let url;
+     try {
+         url = new URL(value);
+@@ -91,7 +109,7 @@ function validateRedirectUri(value) {
+         throw new Error('OAuth redirectUri must not contain credentials or a fragment');
+     }
+     const allowed = url.protocol === 'https:' ||
+-        (url.protocol === 'http:' && isLoopback(url)) ||
++        (url.protocol === 'http:' && (isLoopback(url) || allowedInsecureHttpOrigins.has(url.origin))) ||
+         (/^[a-z][a-z0-9+.-]*:$/.test(url.protocol) &&
+             !['data:', 'file:', 'javascript:', 'http:'].includes(url.protocol));
+     if (!allowed)
+@@ -350,7 +368,8 @@ export class PlatformAuthClient {
+             throw new Error('OAuth clientId is required');
+         }
+         this.clientId = options.clientId;
+-        this.redirectUri = validateRedirectUri(options.redirectUri);
++        const allowedInsecureHttpOrigins = new Set((options.allowInsecureHttpRedirectOrigins ?? []).map(validateInsecureRedirectOrigin));
++        this.redirectUri = validateRedirectUri(options.redirectUri, allowedInsecureHttpOrigins);
+         this.scopes = uniqueScopes(options.scopes);
+         if (this.scopes.length === 0)
+             throw new Error('At least one OAuth scope is required');

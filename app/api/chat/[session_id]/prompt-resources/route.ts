@@ -1,5 +1,6 @@
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -13,10 +14,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
+  if (getRuntimeMode() === 'cloud' || (session.agent ?? 'codex') !== 'codex') {
+    return Response.json({ items: [] }, { headers: { 'Cache-Control': 'no-store' } })
+  }
   const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
   const token = process.env.OPENLINK_AGENT_API_TOKEN
   if (!baseUrl || !token) return Response.json({ items: [] }, { status: 503 })
-  if ((session.agent ?? 'codex') !== 'codex') return Response.json({ items: [] }, { headers: { 'Cache-Control': 'no-store' } })
   let runtimeConfiguration
   try {
     runtimeConfiguration = await resolveAgentProviderRuntimeConfiguration(

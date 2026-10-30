@@ -14,6 +14,7 @@ export interface AgentErrorGroup extends AgentErrorRecord {
 const sourceTranslator: Translator = (source) => source
 
 export function agentErrorTitle(message: string, t: Translator = sourceTranslator): string {
+  if (/CLOUD_CONNECTION_(?:REAUTH_REQUIRED|INACTIVE)/.test(message)) return t('需要重新授权')
   if (/reconnecting/i.test(message)) return t('Reconnecting…')
   if (/401|unauthorized|invalid api key/i.test(message)) return t('Agent 鉴权失败')
   if (/cancel(?:led|ed)/i.test(message)) return t('Agent 请求已取消')

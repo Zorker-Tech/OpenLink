@@ -1,6 +1,8 @@
 import { deleteChatSession, forkChatSession, getChatSession, isChatSessionId, type ChatSession } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 import { forkPersistedChatEvents, parsePiSessionDelta, persistPiSessionDelta } from '@/lib/chat-session-persistence.server'
+import { cloudComputerHostRequest } from '@/lib/platform-cloud-host.server'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 
 export const runtime = 'nodejs'
 
@@ -13,12 +15,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
   const body = await request.json().catch(() => null) as { action?: unknown; text?: unknown } | null
-  if (!body || typeof body.action !== 'string' || !['status', 'interrupt', 'pause', 'resume', 'steer', 'plan', 'default', 'goal', 'goal-clear', 'compact', 'fork'].includes(body.action)
+  if (!body || typeof body.action !== 'string' || !['status', 'interrupt', 'pause', 'resume', 'steer', 'follow-up', 'plan', 'default', 'goal', 'goal-clear', 'compact', 'fork'].includes(body.action)
     || (body.text !== undefined && (typeof body.text !== 'string' || body.text.length > 100000))) return Response.json({ error: 'INVALID_BODY' }, { status: 400 })
-  if ((body.action === 'steer' || body.action === 'goal') && (typeof body.text !== 'string' || !body.text.trim())) return Response.json({ error: 'TEXT_REQUIRED' }, { status: 400 })
+  if ((body.action === 'steer' || body.action === 'follow-up' || body.action === 'goal') && (typeof body.text !== 'string' || !body.text.trim())) return Response.json({ error: 'TEXT_REQUIRED' }, { status: 400 })
   if (body.action === 'goal' && (body.text as string).length > 4000) return Response.json({ error: 'GOAL_TOO_LONG' }, { status: 400 })
-  if (session.agent === 'pi' && ['plan', 'default', 'goal', 'goal-clear'].includes(body.action)) return Response.json({ error: 'CONTROL_UNSUPPORTED' }, { status: 400 })
+  if (session.agent !== 'codex' && ['plan', 'default', 'goal', 'goal-clear'].includes(body.action)) return Response.json({ error: 'CONTROL_UNSUPPORTED' }, { status: 400 })
   if (body.action === 'fork' && session.agent !== 'codex') return Response.json({ error: 'CONTROL_UNSUPPORTED' }, { status: 400 })
+  if (getRuntimeMode() === 'cloud') {
+    try {
+      const response = await cloudComputerHostRequest(`/v1/agent/sessions/${sessionId}/control`, {
+        ...body,
+        sessionId,
+        userId: user.id,
+        workspaceId: session.workspace_id,
+        projectId: session.project_id,
+      }, AbortSignal.timeout(body.action === 'interrupt' ? 130_000 : 35_000))
+      const payload = await response.json().catch(() => null)
+      const safeErrors = new Set(['SESSION_BUSY', 'AGENT_SESSION_NOT_ACTIVE', 'CONTROL_UNSUPPORTED', 'AGENT_CONTROL_UNAVAILABLE', 'AGENT_CANCEL_UNAVAILABLE'])
+      if (!response.ok) return Response.json({ error: safeErrors.has(payload?.error) ? payload.error : 'AGENT_CONTROL_FAILED' }, { status: response.status })
+      return Response.json(payload, { headers: { 'Cache-Control': 'no-store' } })
+    } catch {
+      return Response.json({ error: 'AGENT_CONTROL_UNAVAILABLE' }, { status: 502 })
+    }
+  }
   const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
   const token = process.env.OPENLINK_AGENT_API_TOKEN
   if (!baseUrl || !token) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })

@@ -40,6 +40,7 @@ interface AppWorkspaceProps {
   initialPrompt: string
   initialProjectId?: string
   projects: ProjectSummary[]
+  runtimeMode: 'local' | 'cloud'
   workspaceSlug: string
 }
 
@@ -376,6 +377,7 @@ export function AppWorkspace({
   initialPrompt,
   initialProjectId,
   projects,
+  runtimeMode,
   workspaceSlug,
 }: AppWorkspaceProps) {
   const t = useT()
@@ -395,15 +397,18 @@ export function AppWorkspace({
   }, [runtimeSnapshots])
   const currentDefaultProject = useMemo(() => applyRuntimeSnapshot(defaultProject), [applyRuntimeSnapshot, defaultProject])
   const currentProjects = useMemo(() => projects.map(applyRuntimeSnapshot), [applyRuntimeSnapshot, projects])
-  const hasUnsettledRuntime = useMemo(() => [currentDefaultProject, ...currentProjects].some((project) => (
-    project.runtime_phase !== 'failed'
-    && (project.status === 'waiting'
-      || project.runtime_status === 'provisioning'
-      || project.runtime_status === 'error'
-      || project.runtime_status === 'stopped'
-      || project.runtime_status === 'deleting'
-      || project.runtime_claimed)
-  )), [currentDefaultProject, currentProjects])
+  const hasUnsettledRuntime = useMemo(() => {
+    if (runtimeMode === 'cloud') return false
+    return [currentDefaultProject, ...currentProjects].some((project) => {
+      const runtimeNeedsRefresh = project.status === 'waiting'
+        || project.runtime_status === 'provisioning'
+        || project.runtime_status === 'error'
+        || project.runtime_status === 'stopped'
+        || project.runtime_status === 'deleting'
+        || project.runtime_claimed
+      return project.runtime_phase !== 'failed' && runtimeNeedsRefresh
+    })
+  }, [currentDefaultProject, currentProjects, runtimeMode])
 
   const deleteChat = useCallback(async (chatId: string) => {
     if (!window.confirm(t('确定要删除这个会话吗？删除后不可恢复。'))) return
@@ -416,7 +421,7 @@ export function AppWorkspace({
   }, [router, t])
 
   useEffect(() => {
-    if (!hasUnsettledRuntime) return
+    if (runtimeMode === 'cloud' || !hasUnsettledRuntime) return
     let active = true
     let inFlight = false
     const controller = new AbortController()
@@ -464,7 +469,7 @@ export function AppWorkspace({
       window.removeEventListener('focus', refreshWhenVisible)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [hasUnsettledRuntime, workspaceSlug])
+  }, [hasUnsettledRuntime, runtimeMode, workspaceSlug])
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
@@ -537,6 +542,7 @@ export function AppWorkspace({
               initialPrompt={initialPrompt}
               pollRuntimeStatus={false}
               projects={currentProjects}
+              runtimeMode={runtimeMode}
               workspaceSlug={workspaceSlug}
             />
           </PageTransition>

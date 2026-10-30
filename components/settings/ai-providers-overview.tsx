@@ -1,6 +1,7 @@
 'use client'
 
 import { ProviderCard } from '@/components/settings/provider-card'
+import { ProviderCardGrid } from '@/components/settings/provider-card-grid'
 import type { AiProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import { AI_PROVIDERS } from '@/lib/ai-providers'
 import { useT } from '@/lib/i18n/client'
@@ -41,11 +42,11 @@ function ProviderGrid({ configurations, label, providers }: {
         <h2 className="text-[18px] font-semibold tracking-[-0.25px]">{label}</h2>
         <span className="rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[11px] tabular-nums text-[var(--app-muted)]">{providers.length}</span>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <ProviderCardGrid>
         {providers.map((provider) => (
           <ProviderCard configuration={configurations.get(provider.id)} key={provider.id} provider={provider} />
         ))}
-      </div>
+      </ProviderCardGrid>
     </section>
   )
 }

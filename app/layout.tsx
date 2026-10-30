@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import { OpenLinkMotionProvider } from '@/components/ui/motion-provider'
+import { ThemeInitScript } from '@/components/theme-init-script'
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { resolveLocale } from '@/lib/i18n/server'
@@ -49,14 +50,8 @@ export default async function RootLayout({
       : process.env.OPENLINK_CLOUD_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   return (
     <html lang={locale} suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('openlink-theme')||'system';var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);var c=document.documentElement.classList;d?c.add('dark'):c.remove('dark')}catch(e){document.documentElement.classList.add('dark')}})()`,
-          }}
-        />
-      </head>
       <body className={`${geist.className} antialiased`}>
+        <ThemeInitScript />
         <meta content={staticUi ? 'static' : local ? 'local' : 'cloud'} name="openlink-runtime-mode" />
         <meta content={supabaseUrl || ''} name="openlink-supabase-url" />
         <meta content={publishableKey || ''} name="openlink-supabase-publishable-key" />

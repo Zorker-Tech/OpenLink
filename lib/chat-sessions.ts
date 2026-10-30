@@ -2,6 +2,7 @@ import 'server-only'
 
 import { randomBytes } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { getT } from '@/lib/i18n/server'
 import type { Translator } from '@/lib/i18n/messages'
 import { ensureDraftProject, getProject } from '@/lib/projects'
@@ -20,8 +21,14 @@ export type AccessMode = 'restricted' | 'ask' | 'open'
 export const ACCESS_MODES: readonly AccessMode[] = ['restricted', 'ask', 'open']
 export const DEFAULT_ACCESS_MODE: AccessMode = 'restricted'
 
-export const AGENT_KINDS: readonly AgentKind[] = ['codex', 'pi']
+export const AGENT_KINDS: readonly AgentKind[] = ['codex', 'pi', 'omp']
+const LOCAL_AGENT_KINDS: readonly AgentKind[] = ['codex', 'pi']
+const CLOUD_AGENT_KINDS: readonly AgentKind[] = ['pi', 'omp']
 export const DEFAULT_AGENT_KIND: AgentKind = 'codex'
+
+function normalizedAgent(value: unknown, allowed: readonly AgentKind[], fallback: AgentKind): AgentKind {
+  return typeof value === 'string' && allowed.includes(value as AgentKind) ? value as AgentKind : fallback
+}
 
 export interface ChatSession {
   id: string
@@ -114,6 +121,7 @@ export async function listChatSessions(
     }
   }
 
+  const cloudMode = getRuntimeMode() === 'cloud'
   return sessions.map((session) => {
     const project = projectById.get(session.project_id)
     return {
@@ -126,7 +134,9 @@ export async function listChatSessions(
       projectId: session.project_id || 'draft',
       projectName: project?.name ?? 'Draft',
       projectIsDefault: project?.is_default ?? true,
-      agent: session.agent ?? 'codex',
+      agent: cloudMode
+        ? normalizedAgent(session.agent, CLOUD_AGENT_KINDS, 'pi')
+        : normalizedAgent(session.agent, LOCAL_AGENT_KINDS, 'codex'),
     }
   })
 }
@@ -147,7 +157,14 @@ export async function getChatSession(
     .maybeSingle()
 
   if (error) throw error
-  return data as ChatSession | null
+  if (!data) return null
+  const session = data as ChatSession
+  // Cloud sessions execute an explicitly selected Studio Computer agent.
+  // Older rows may still contain Local's `codex` default, so normalize that
+  // legacy value to Pi while preserving the Cloud-only OMP selection.
+  return getRuntimeMode() === 'cloud'
+    ? { ...session, agent: normalizedAgent(session.agent, CLOUD_AGENT_KINDS, 'pi'), access_mode: 'restricted' as const }
+    : { ...session, agent: normalizedAgent(session.agent, LOCAL_AGENT_KINDS, 'codex') }
 }
 
 export async function updateChatSessionTitle(
@@ -246,7 +263,8 @@ export async function createChatSession(
   if (!project || project.workspace_id !== workspace.id) {
     throw new Error('CHAT_PROJECT_NOT_FOUND')
   }
-  if (project.status !== 'active' || project.runtime_status !== 'ready') {
+  const cloudMode = getRuntimeMode() === 'cloud'
+  if (cloudMode ? project.status === 'archived' : project.status !== 'active' || project.runtime_status !== 'ready') {
     throw new Error('PROJECT_RUNTIME_NOT_READY')
   }
   const projectId = project.id
@@ -256,14 +274,17 @@ export async function createChatSession(
   const requestedModel = options.providerId && options.modelId
     ? { providerId: options.providerId, modelId: options.modelId }
     : null
+  // Model credentials stay encrypted in OpenLink's provider configuration.
+  // Persist only the provider/model selection on the session so Cloud's
+  // initial-prompt auto-start and later retries resolve the same app-owned
+  // configuration before sending it to the Computer Host.
   const selectedModel = await resolveConfiguredModelSelection(supabase, userId, requestedModel)
   if (!selectedModel) throw new Error('MODEL_CONFIGURATION_REQUIRED')
 
-  const effectiveAgent = options.agent && AGENT_KINDS.includes(options.agent)
-    ? options.agent
-    : project.default_agent && AGENT_KINDS.includes(project.default_agent as AgentKind)
-      ? (project.default_agent as AgentKind)
-      : DEFAULT_AGENT_KIND
+  const effectiveAgent = cloudMode
+    ? normalizedAgent(options.agent, CLOUD_AGENT_KINDS, 'pi')
+    : normalizedAgent(options.agent, LOCAL_AGENT_KINDS,
+      normalizedAgent(project.default_agent, LOCAL_AGENT_KINDS, DEFAULT_AGENT_KIND))
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = generateChatSessionId()
@@ -275,8 +296,8 @@ export async function createChatSession(
         user_id: userId,
         workspace_id: workspace.id,
         project_id: projectId,
-        provider_id: selectedModel.providerId,
-        model_id: selectedModel.modelId,
+        provider_id: selectedModel?.providerId ?? null,
+        model_id: selectedModel?.modelId ?? null,
         agent: effectiveAgent,
         title,
         initial_prompt: initialPrompt,

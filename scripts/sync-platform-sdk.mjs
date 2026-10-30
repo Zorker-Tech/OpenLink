@@ -21,7 +21,7 @@ if (args[0] === '--artifact') {
     throw new Error('Platform SDK artifact integrity mismatch')
   const metadata = JSON.parse(execFileSync('tar', ['-xOf', source, 'package/package.json'], { encoding: 'utf8', maxBuffer: 65536 }))
   if (metadata.name !== manifest.name || metadata.version !== manifest.version ||
-    !['./auth', './product', './workspace'].every(path => metadata.exports?.[path]))
+    !['./auth', './product', './workspace', './computer', './computer-agent'].every(path => metadata.exports?.[path]))
     throw new Error('Unexpected platform SDK package contract')
   mkdirSync(root + 'tarballs', { recursive: true })
   if (!existsSync(target)) copyFileSync(source, target, constants.COPYFILE_EXCL)

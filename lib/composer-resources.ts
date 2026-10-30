@@ -1,5 +1,6 @@
 import type { AgentKind } from '@/lib/chat-session-types'
 import type { UserSkill } from '@/lib/user-skill-types'
+import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 
 /** Data that can safely be rendered in the composer.  The contents come from
  * the authenticated user's saved settings and are inserted into the next
@@ -20,8 +21,10 @@ export interface RuntimeComposerResources {
   commands: Array<{
     name: string
     description: string
-    source: 'builtin' | 'extension' | 'prompt' | 'skill'
+    source: string
   }>
+  /** Models reported by the selected Cloud Computer agent. */
+  models?: ConfiguredModelOption[]
 }
 
 /** Dynamic prompt candidates returned by the selected session's native Agent.

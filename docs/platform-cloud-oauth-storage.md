@@ -20,7 +20,7 @@ private table, nor call the legacy private mutator around receipt verification.
 | --- | --- | --- |
 | `active` | Stored connected grant | Allowed after identity checks |
 | `refreshing` | One database-fenced rotation lease | Current grant may be read; only lease owner can save |
-| `reauth_required` | Ambiguous/expired failed refresh | Reconnect, never replay old refresh token |
+| `reauth_required` | Ambiguous/expired failed refresh | Obtain fresh same-subject OAuth consent; never replay old refresh token |
 | `revoking` | Local access fenced; remote cleanup pending | Revocation workflow only |
 | `revoked` | Confirmed cleanup; ciphertext destroyed | Denied |
 
@@ -35,6 +35,11 @@ The revision identifies the encrypted credential generation. Disconnect removes
 the active lease and fences writes through state, but preserves that revision so
 the retained bundle can still be authenticated for remote revocation. State and
 revision checks reject a late refresh commit after disconnect.
+
+Reauthorization installs a fresh grant only from `reauth_required`, with the same
+application user, issuer subject and OAuth client. It increments the credential
+revision atomically, so simultaneous callbacks cannot overwrite one another.
+The previous refresh token is never replayed.
 
 ## Encryption and server configuration
 
@@ -110,6 +115,8 @@ Applied on the existing Cloud database at `pool.hydite.com`:
 | --- | --- | --- |
 | `20260912164449` | `openlink_cloud_oauth_connections` | `60f8cf8a4b37f109e30369979439d3da9c64fa050c0d918653f44c5a06ba6bb6` |
 | `20260912171037` | `openlink_cloud_oauth_revocation_receipts` | `146149c1b8e0a70fdc49d08e720910a97aa901d46dadd4dbfaef116197e82196` |
+| `20261029140000` | `cloud_oauth_reauthorization` | `02708b731ed6aeca66fdb989ad9df8d276eba9584a7b67a989eb8c55cb3bf150` |
+| `20261029150000` | `cloud_oauth_reauthorization_retries` | `667333d679350f5c0156cc58853021eac261785df8d4852efc323c33f04212b5` |
 
 Newly generated source filenames were aligned with the authoritative remote
 migration versions, without changing applied SQL bytes. Existing migrations and

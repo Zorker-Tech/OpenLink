@@ -16,6 +16,7 @@ export type ProjectRuntimeProvisioningPhase = 'queued' | 'claimed' | 'starting_v
   | 'retry_wait' | 'ready' | 'stopped' | 'deleting' | 'failed'
 export type ProjectDiskMode = 'thin' | 'thick'
 export type ProjectExecutionMode = 'local' | 'ssh'
+type ProjectAgentKind = Exclude<AgentKind, 'omp'>
 
 export interface ProjectSshTarget {
   host: string
@@ -47,7 +48,7 @@ export interface ProjectSummary {
   runtime_provisioning_lease_expires_at: string | null
   runtime_claimed: boolean
   is_default: boolean
-  default_agent?: AgentKind
+  default_agent?: ProjectAgentKind
   disk_mode: ProjectDiskMode
   execution_mode: ProjectExecutionMode
   ssh_host: string | null
@@ -68,7 +69,7 @@ export interface CreateProjectInput {
   description?: string
   diskMode: ProjectDiskMode
   executionMode: ProjectExecutionMode
-  defaultAgent?: AgentKind
+  defaultAgent?: ProjectAgentKind
   sshTarget?: ProjectSshTarget
 }
 

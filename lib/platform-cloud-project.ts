@@ -7,6 +7,16 @@ export type CloudProjectLink = {
   updated_by: string | null;
   updated_at: string;
 };
+export type CloudProjectOption = {
+  id: string;
+  name: string;
+  organizationId: string;
+};
+export type CloudProjectConnectionState =
+  | "disconnected"
+  | "active"
+  | "reauth_required"
+  | "load_error";
 export type CloudProjectLinkReply = {
   outcome: string;
   project?: { id: string; status: string };

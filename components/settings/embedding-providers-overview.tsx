@@ -1,6 +1,7 @@
 'use client'
 
 import { EmbeddingProviderCard } from '@/components/settings/embedding-provider-card'
+import { ProviderCardGrid } from '@/components/settings/provider-card-grid'
 import type { EmbeddingProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import { EMBEDDING_PROVIDERS } from '@/lib/embedding-providers'
 import { useT } from '@/lib/i18n/client'
@@ -15,5 +16,5 @@ export function EmbeddingProvidersOverview({ configurations }: { configurations:
 
 function Grid({ configurations, label, providers }: { configurations: Map<string, EmbeddingProviderConfigurationSummary>; label: string; providers: readonly (typeof EMBEDDING_PROVIDERS)[number][] }) {
   if (!providers.length) return null
-  return <section className="mt-8"><div className="mb-4 flex items-center gap-2"><h2 className="text-[18px] font-semibold tracking-[-0.25px]">{label}</h2><span className="rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[11px] tabular-nums text-[var(--app-muted)]">{providers.length}</span></div><div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{providers.map((provider) => <EmbeddingProviderCard configuration={configurations.get(provider.id)} key={provider.id} provider={provider} />)}</div></section>
+  return <section className="mt-8"><div className="mb-4 flex items-center gap-2"><h2 className="text-[18px] font-semibold tracking-[-0.25px]">{label}</h2><span className="rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[11px] tabular-nums text-[var(--app-muted)]">{providers.length}</span></div><ProviderCardGrid>{providers.map((provider) => <EmbeddingProviderCard configuration={configurations.get(provider.id)} key={provider.id} provider={provider} />)}</ProviderCardGrid></section>
 }

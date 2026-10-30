@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { startCloudConnectionLogin } from "@/lib/platform-cloud-login.server";
-import { cloudLoginCookie, CloudLoginError } from "@/lib/platform-cloud-login";
+import {
+  cloudLoginCookieConfiguration,
+  CloudLoginError,
+} from "@/lib/platform-cloud-login";
 import { CloudConnectionError } from "@/lib/platform-cloud-connection.server";
 
 export const runtime = "nodejs";
@@ -15,9 +18,10 @@ export async function POST(request: Request) {
       { authorizationUrl: result.authorizationUrl },
       { headers },
     );
-    response.cookies.set(cloudLoginCookie, result.cookieValue, {
+    const cookie = cloudLoginCookieConfiguration();
+    response.cookies.set(cookie.name, result.cookieValue, {
       httpOnly: true,
-      secure: true,
+      secure: cookie.secure,
       sameSite: "lax",
       path: "/",
       maxAge: 300,

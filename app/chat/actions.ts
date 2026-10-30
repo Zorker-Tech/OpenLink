@@ -5,6 +5,7 @@ import type { AgentKind } from '@/lib/chat-session-types'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getChatSession } from '@/lib/chat-sessions'
+import { reportChatFailure } from '@/lib/chat-diagnostics.server'
 
 export interface CreateChatSessionInput {
   prompt?: string
@@ -20,7 +21,7 @@ export interface CreateChatSessionInput {
 export type CreateChatSessionResult =
   | { id: string; path: string; fallback: false }
   | { id: null; path: string; fallback: true }
-  | { id: null; path: null; fallback: false; error: string }
+  | { id: null; path: null; fallback: false; error: string; diagnosticId: string }
 
 export async function createChatSessionAction(
   input: CreateChatSessionInput = {},
@@ -59,11 +60,13 @@ export async function createChatSessionAction(
     const suffix = query.size ? `?${query.toString()}` : ''
     return { id: session.id, path: `/${user.id}/chat/${session.id}${suffix}`, fallback: false }
   } catch (error) {
+    const failure = reportChatFailure('session.create', error)
     return {
       id: null,
       path: null,
       fallback: false,
-      error: error instanceof Error ? error.message : 'CHAT_SESSION_CREATE_FAILED',
+      error: failure.errorCode,
+      diagnosticId: failure.diagnosticId,
     }
   }
 }
