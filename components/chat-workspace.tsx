@@ -41,6 +41,7 @@ import {
   type BrowserWorkbenchHandle,
   type BrowserWorkbenchUiState,
 } from '@/components/browser/browser-workbench'
+import { CloudComputerPreviewWorkbench } from '@/components/browser/cloud-computer-preview-workbench'
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
@@ -64,7 +65,7 @@ import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
 import type { CodexComposerResources, ComposerResources, RuntimeComposerResources, RuntimePromptResource } from '@/lib/composer-resources'
-import { deferInitialPromptSubmission, hasPersistedUserMessage } from '@/lib/chat-auto-start'
+import { deferInitialPromptSubmission, hasPersistedUserMessage, isRetryableInitialPromptFailure, retryableInitialPromptUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { updateChatSessionAccessModeAction } from '@/app/chat/actions'
@@ -99,6 +100,17 @@ import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const CONTROL_ACTIONS_ALLOWED_DURING_TURN = new Set(['interrupt', 'pause', 'steer'])
+
+function resolveInitialComposerModel(
+  models: ConfiguredModelOption[],
+  preferred: { providerId: string; modelId: string } | null,
+) {
+  return models.find((model) => (
+    model.providerId === preferred?.providerId && model.modelId === preferred?.modelId
+  )) ?? (preferred?.modelId
+    ? models.find((model) => model.modelId === preferred.modelId)
+    : undefined) ?? models.find((model) => model.isDefault) ?? models[0] ?? null
+}
 
 interface GitVersionOption {
   ref: string
@@ -164,6 +176,13 @@ interface ChatWorkspaceProps {
   initialAccessMode?: AccessMode
   thinkingVisibility: 'summary' | 'hidden'
   composerResources: ComposerResources
+}
+
+function clearInitialPromptRunParameter() {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('run')) return
+  url.searchParams.delete('run')
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
 }
 
 function pendingConfirmationRequests(events: OpenLinkAgentEvent[]) {
@@ -735,7 +754,7 @@ function BrowserNavigationBar({
           />
           <ToolbarButton aria-pressed={browserState.inspectMode} className={`size-6! rounded ${browserState.inspectMode ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}`} disabled={!browserState.canInspect} label={t('选择组件')} onClick={() => browserWorkbenchRef.current?.toggleInspector()}><Inspect className="size-4" /></ToolbarButton>
           <ToolbarButton className="size-6! rounded" disabled={!browserState.externalUrl} label={t("在新窗口打开")} onClick={() => browserWorkbenchRef.current?.openExternal()}><ExternalLink className="size-4" /></ToolbarButton>
-          <ToolbarButton className="size-6! rounded" disabled={!browserState.canInspect} label={t("刷新")} onClick={() => browserWorkbenchRef.current?.reload()}><RotateCw className="size-4" /></ToolbarButton>
+          <ToolbarButton className="size-6! rounded" disabled={(!browserState.canInspect && !browserState.externalUrl) || browserState.status === 'connecting' || browserState.status === 'reconnecting'} label={t("刷新")} onClick={() => browserWorkbenchRef.current?.reload()}><RotateCw className="size-4" /></ToolbarButton>
           <ToolbarButton className="size-6! rounded" label={t("更多预览选项")}><ChevronDown className="size-4" /></ToolbarButton>
         </form>
       </div>
@@ -797,6 +816,7 @@ function ComposerSubmitButton({ status, input, disabled, hasStructuredAttachment
 export function ChatComposer({
   initialModel,
   models,
+  cloudRuntime,
   onSubmit,
   onRename,
   onFork,
@@ -813,6 +833,7 @@ export function ChatComposer({
 }: {
   initialModel: { providerId: string; modelId: string } | null
   models: ConfiguredModelOption[]
+  cloudRuntime: boolean
   onSubmit: (message: string, model: PromptModelSelection | null, options?: { attachments?: AgentPromptAttachment[]; onAccepted?: () => void }) => Promise<boolean>
   onRename: () => void
   onFork: (path: string) => void
@@ -1053,6 +1074,16 @@ export function ChatComposer({
 
   useEffect(() => {
     if (commandQuery === null) return
+    if (cloudRuntime) {
+      // Cloud runtime resources are loaded by the ordered session warmup after
+      // a durable user message. A command palette opened on a new empty
+      // session must not independently start a Computer.
+      if (runtimeResources?.agent === composerResources.agent) {
+        setLiveCommands(runtimeResources.commands)
+        setCommandsLoaded(true)
+      }
+      return
+    }
     const controller = new AbortController()
     let retryTimer: number | undefined
     const load = async () => {
@@ -1088,7 +1119,7 @@ export function ChatComposer({
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       controller.abort()
     }
-  }, [commandQuery, composerResources.agent, selectedModel, sessionId, status])
+  }, [cloudRuntime, commandQuery, composerResources.agent, runtimeResources, selectedModel, sessionId, status])
 
   useEffect(() => {
     if (composerResources.agent !== 'codex' || promptResourceRequest === null) {
@@ -1152,9 +1183,11 @@ export function ChatComposer({
         kind: 'command' as const,
         group: composerResources.agent === 'codex'
           ? 'Codex Commands'
-          : command.source === 'skill' ? 'Pi Skills' : command.source === 'prompt' ? 'Pi Prompts' : 'Pi Extensions',
+          : composerResources.agent === 'omp'
+            ? command.source === 'skill' ? 'Oh My Pi Skills' : command.source === 'prompt' ? 'Oh My Pi Prompts' : command.source === 'mcp' ? 'Oh My Pi MCP' : 'Oh My Pi Commands'
+            : command.source === 'skill' ? 'Pi Skills' : command.source === 'prompt' ? 'Pi Prompts' : 'Pi Extensions',
         label: `/${command.name}`,
-        description: command.description || `${composerResources.agent === 'codex' ? 'Codex' : 'Pi'} ${command.source}`,
+        description: command.description || `${composerResources.agent === 'codex' ? 'Codex' : composerResources.agent === 'omp' ? 'Oh My Pi' : 'Pi'} ${command.source}`,
         insertText: `/${command.name} `,
         drilldown: composerResources.agent === 'codex' && ['model', 'skills', 'plugins', 'apps', 'mcp', 'permissions'].includes(command.name),
         ...(composerResources.agent === 'codex' && command.name === 'rename' ? { action: 'rename', requiresEmptyComposer: true } : {}),
@@ -1234,7 +1267,7 @@ export function ChatComposer({
       <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-medium">{t("会话状态")}</h2><button aria-label={t("关闭会话状态")} className="rounded-md p-1 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={() => setStatusPanelOpen(false)} type="button"><X aria-hidden className="size-3.5" /></button></div>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
         <dt className="text-[var(--app-muted)]">Chat ID</dt><dd className="truncate font-mono" title={sessionId}>{sessionId}</dd>
-        <dt className="text-[var(--app-muted)]">Agent</dt><dd>{composerResources.agent === 'codex' ? 'Codex' : 'Pi'}</dd>
+        <dt className="text-[var(--app-muted)]">Agent</dt><dd>{composerResources.agent === 'codex' ? 'Codex' : composerResources.agent === 'omp' ? 'Oh My Pi' : 'Pi'}</dd>
         <dt className="text-[var(--app-muted)]">{t('运行状态')}</dt><dd>{sessionPaused ? t('已暂停') : status === 'streaming' ? t('正在运行') : controlReady ? t('空闲') : t('正在连接')}</dd>
         <dt className="text-[var(--app-muted)]">{t('模式')}</dt><dd>{sessionMode === 'plan' ? 'Plan' : 'Default'}</dd>
         <dt className="text-[var(--app-muted)]">{t("模型")}</dt><dd className="truncate" title={selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : undefined}>{selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : t('未配置')}</dd>
@@ -1362,8 +1395,8 @@ export function ChatComposer({
         <AgentPromptTextarea
           ref={promptTextareaRef}
           aria-label={t('描述你想创建的内容')}
-          lineStartCommandsOnly={composerResources.agent === 'pi'}
-          commandPaletteLabel={composerResources.agent === 'codex' ? t('Codex 原生指令') : t('Pi 原生指令')}
+          lineStartCommandsOnly={composerResources.agent !== 'codex'}
+          commandPaletteLabel={composerResources.agent === 'codex' ? t('Codex 原生指令') : composerResources.agent === 'omp' ? t('Oh My Pi 原生指令') : t('Pi 原生指令')}
           commandPaletteLoading={!commandsLoaded || promptResourcesLoading}
           commandPaletteEmptyLabel={promptResourcesError
             ? promptResourceRequest?.command === 'mcp' ? t('无法加载 MCP 状态') : promptResourceRequest?.command === 'skills' ? t('无法加载 Skills') : promptResourceRequest?.command === 'plugins' ? t('无法加载 Plugins') : promptResourceRequest?.command === 'apps' ? t('无法加载 Apps') : t('无法加载候选项')
@@ -1462,6 +1495,7 @@ export function ChatComposer({
 function PreviewCanvas({
   browserState,
   browserWorkbenchRef,
+  cloudRuntime,
   view,
   onBrowserStateChange,
   onToggleDeviceView,
@@ -1477,6 +1511,7 @@ function PreviewCanvas({
 }: {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
+  cloudRuntime: boolean
   view: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   onToggleDeviceView: () => void
@@ -1505,7 +1540,9 @@ function PreviewCanvas({
       <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${browserMode ? theme('surface') : theme('editor')}`}>
         <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
           <div className={browserMode ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}>
-            <BrowserWorkbench chatSessionId={sessionId} initialSurface={browserState.surface} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />
+            {cloudRuntime
+              ? <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} />
+              : <BrowserWorkbench chatSessionId={sessionId} initialSurface={browserState.surface} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />}
           </div>
         </div>
       </main>
@@ -1570,12 +1607,16 @@ export function ChatWorkspace({
   const [activeChatFlow, setActiveChatFlow] = useState<ActiveFlowStatus | null>(null)
   const [agentEvents, setAgentEvents] = useState<OpenLinkAgentEvent[]>(() => recoverInterruptedInitialEvents(initialEvents))
   const [agentStreamStatus, setAgentStreamStatus] = useState<'idle' | 'streaming'>('idle')
+  const hasDurableUserMessage = agentEvents.some((event) =>
+    event.type === 'message.user' && !event.id.includes(':optimistic-user:'),
+  )
   const streamQueueRef = useRef<OpenLinkAgentEvent[]>([])
   const streamFrameRef = useRef<number | null>(null)
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const pendingOptimisticUserRef = useRef<OptimisticUserMessage | null>(null)
   const nextClientSequenceRef = useRef(agentEvents.reduce((maximum, event) => Math.max(maximum, event.sequence), -1) + 1)
   const autoStartHandledSessionRef = useRef<string | null>(null)
+  const warmupStartedRef = useRef(false)
   const chatPanelRef = useRef<PanelImperativeHandle | null>(null)
   const browserWorkbenchRef = useRef<BrowserWorkbenchHandle | null>(null)
   const [panelMotionActive, setPanelMotionActive] = useState(false)
@@ -1656,15 +1697,22 @@ export function ChatWorkspace({
   const [gitVersionError, setGitVersionError] = useState<string | null>(null)
   const [runtimeResources, setRuntimeResources] = useState<RuntimeComposerResources | null>(null)
   const [codexResources, setCodexResources] = useState<CodexComposerResources | null>(null)
+  // Cloud uses the same OpenLink AI provider allowlist as Local. Computer
+  // built-in models are runtime details and must never become selectable.
+  const composerModels = configuredModels
 
   useEffect(() => {
+    // Cloud Computer creation is triggered by the first durable user message.
+    // Do not warm it from the new-session page mount; that races with the
+    // auto-submitted prompt and can create competing Computer streams.
+    if (!localRuntime) return
     const controller = new AbortController()
     void fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store', signal: controller.signal })
       .then(async (response) => response.ok ? response.json() as Promise<RuntimeComposerResources> : null)
       .then((resources) => { if (!controller.signal.aborted) setRuntimeResources(resources) })
       .catch(() => { if (!controller.signal.aborted) setRuntimeResources(null) })
     return () => controller.abort()
-  }, [sessionId])
+  }, [localRuntime, sessionId])
 
   const refreshCodexResources = useCallback(async () => {
     if (composerResources.agent !== 'codex') {
@@ -1860,8 +1908,10 @@ export function ChatWorkspace({
   }, [])
 
   useEffect(() => {
+    if (!localRuntime && (!hasDurableUserMessage || agentStreamStatus === 'streaming')) return
     // Proactively prepare the Agent in the background, independently of
-    // Browser startup and message receipt. Reopening should warm resources.
+    // Browser startup. Local sessions preserve eager warmup; Cloud sessions
+    // begin warmup only after a user message is durably accepted.
     let disposed = false
     const refreshLease = () => {
       void fetch(`/api/chat/${encodeURIComponent(sessionId)}/lease`, {
@@ -1874,6 +1924,13 @@ export function ChatWorkspace({
           console.warn(`OpenLink agent lease refresh failed (${response.status})`)
           return
         }
+        if (!localRuntime) {
+          return response.json().then((lease) => {
+            if (lease?.ready !== true) return null
+            return fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store' })
+          }).then(async (resources) => resources?.ok ? resources.json() as Promise<RuntimeComposerResources> : null)
+            .then((resources) => { if (!disposed && resources) setRuntimeResources(resources) })
+        }
         void fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store' })
           .then(async (resources) => resources.ok ? resources.json() as Promise<RuntimeComposerResources> : null)
           .then((resources) => { if (!disposed) setRuntimeResources(resources) })
@@ -1883,16 +1940,19 @@ export function ChatWorkspace({
         // sandbox from the durable PG Pi snapshot if the Agent Host is down.
       })
     }
-    refreshLease()
+    if (!warmupStartedRef.current) {
+      warmupStartedRef.current = true
+      refreshLease()
+    }
     const timer = window.setInterval(refreshLease, 5 * 60_000)
     return () => {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [sessionId])
+  }, [agentStreamStatus, hasDurableUserMessage, localRuntime, sessionId])
 
   useEffect(() => {
-    if (!browserState.browserSessionId) return
+    if (!browserState.browserSessionId || (!localRuntime && (!hasDurableUserMessage || agentStreamStatus === 'streaming'))) return
     const controller = new AbortController()
     // Bind the independently prepared Browser to the warmed Worker. Retry
     // transient creation races without delaying message receipt.
@@ -1917,12 +1977,12 @@ export function ChatWorkspace({
     }
     void bind()
     return () => { controller.abort(); if (timer) clearTimeout(timer) }
-  }, [agentStreamStatus, browserState.browserSessionId, sessionId])
+  }, [agentStreamStatus, browserState.browserSessionId, hasDurableUserMessage, localRuntime, sessionId])
 
   const submitAgentMessage = useCallback(async (
     message: string,
     model: PromptModelSelection | null,
-    options?: { initialPrompt?: boolean; editMessageId?: string; attachments?: AgentPromptAttachment[]; onAccepted?: () => void },
+    options?: { initialPrompt?: boolean; retryInitialPrompt?: boolean; editMessageId?: string; attachments?: AgentPromptAttachment[]; onAccepted?: () => void },
   ): Promise<boolean> => {
     if (agentStreamStatus === 'streaming') throw new Error(t('请等待当前回复结束后再重发'))
     setAgentStreamStatus('streaming')
@@ -1958,7 +2018,7 @@ export function ChatWorkspace({
           message,
           ...(options?.attachments?.length ? { attachments: options.attachments } : {}),
           ...(options?.editMessageId ? { editMessageId: options.editMessageId } : {}),
-          ...(options?.initialPrompt ? { requestKind: 'initial-prompt' } : {}),
+          ...(options?.initialPrompt ? { requestKind: options.retryInitialPrompt ? 'initial-prompt-retry' : 'initial-prompt' } : {}),
           ...(model ? { model: { providerId: model.providerId, modelId: model.modelId } } : {}),
           ...((workspaceView === 'browser' || workspaceView === 'mobile') && browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
         }),
@@ -1981,6 +2041,9 @@ export function ChatWorkspace({
           ? t('服务商密钥无法解密，请前往设置重新保存 API Key')
           : reason)
       }
+      if (options?.initialPrompt && response.headers.get('X-OpenLink-Idempotent-Replay') === '1') {
+        clearInitialPromptRunParameter()
+      }
       if (!response.body) throw new Error('Agent stream returned no response body')
 
       const reader = response.body.getReader()
@@ -2000,10 +2063,9 @@ export function ChatWorkspace({
                 accepted = true
                 options?.onAccepted?.()
               }
-              if (options?.initialPrompt && event.type === 'message.user') {
-                const url = new URL(window.location.href)
-                url.searchParams.delete('run')
-                window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+              if (options?.initialPrompt && (event.type === 'session.completed'
+                || (event.type === 'error' && !isRetryableInitialPromptFailure(event)))) {
+                clearInitialPromptRunParameter()
               }
               enqueueStreamEvent(event)
             }
@@ -2041,23 +2103,35 @@ export function ChatWorkspace({
     return accepted
   }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, router, sessionId, workspaceView])
 
+  const retrySavedInitialPrompt = useCallback(async () => {
+    const prompt = initialPrompt.trim()
+    if (!prompt) return
+    const selectedModel = resolveInitialComposerModel(composerModels, autoStartModel)
+    await submitAgentMessage(prompt, selectedModel, {
+      initialPrompt: true,
+      retryInitialPrompt: true,
+    })
+  }, [autoStartModel, composerModels, initialPrompt, submitAgentMessage])
+
   useEffect(() => {
-    if (!autoStart || autoStartHandledSessionRef.current === sessionId || !initialPrompt.trim()) return
-    // Only the server-provided snapshot proves durable receipt. agentEvents
-    // also contains optimistic messages, which must not suppress replay after
-    // a canceled initial request.
-    if (hasPersistedUserMessage(initialEvents)) {
+    if (autoStartHandledSessionRef.current === sessionId || !initialPrompt.trim()) return
+    if (!autoStart) {
+      if (hasPersistedUserMessage(initialEvents)) {
+        autoStartHandledSessionRef.current = sessionId
+        clearInitialPromptRunParameter()
+      }
+      return
+    }
+    // Replay only when no agent event followed receipt or the sole following
+    // event proves the runtime never started.
+    if (hasPersistedUserMessage(initialEvents) && !retryableInitialPromptUserMessage(initialEvents, initialPrompt)) {
       autoStartHandledSessionRef.current = sessionId
-      const url = new URL(window.location.href)
-      url.searchParams.delete('run')
-      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+      clearInitialPromptRunParameter()
       return
     }
     // Browser tools are installed before a capability exists and hot-bound
     // independently. Receipt/rendering of a turn must never await the canvas.
-    const selectedModel = configuredModels.find((model) => (
-      model.providerId === autoStartModel?.providerId && model.modelId === autoStartModel.modelId
-    )) ?? configuredModels.find((model) => model.modelId === autoStartModel?.modelId) ?? null
+    const selectedModel = resolveInitialComposerModel(composerModels, autoStartModel)
     // Next.js development uses React Strict Mode, which runs mount effects,
     // cleanup, then setup again. Defer the request one task so the first
     // Strict Mode cleanup can cancel its timer before the request becomes
@@ -2072,7 +2146,7 @@ export function ChatWorkspace({
       (callback) => window.setTimeout(callback, 0),
       (timer) => window.clearTimeout(timer),
     )
-  }, [autoStart, autoStartModel, configuredModels, initialEvents, initialPrompt, sessionId, submitAgentMessage])
+  }, [autoStart, autoStartModel, composerModels, initialEvents, initialPrompt, sessionId, submitAgentMessage])
 
   const resolveConfirmation = useCallback(async (confirmationId: string, approved: boolean, value?: string) => {
     const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/extension-ui-response`, {
@@ -2287,11 +2361,11 @@ export function ChatWorkspace({
                         }}
                       >
                         <ChatTopbar {...chatTopbarProps} side="chat" />
-                        <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+                        <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
                         <div className="px-2 pb-2">
                           <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                           <AccessWritesBanner sessionId={sessionId} />
-                          <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                          <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2300,7 +2374,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <PreviewCanvas browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <PreviewCanvas browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2317,11 +2391,11 @@ export function ChatWorkspace({
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <ChatTopbar {...chatTopbarProps} chatCollapsed={false} side="chat" showWorkspaceLauncher />
-                  <ChatTimeline contentClassName="mx-auto w-full max-w-3xl" events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+                  <ChatTimeline contentClassName="mx-auto w-full max-w-3xl" events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
                   <div className="flex w-full max-w-3xl shrink-0 flex-col px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <AccessWritesBanner sessionId={sessionId} />
-                    <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                    <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
                   </div>
                 </motion.section>
               )}
@@ -2330,10 +2404,10 @@ export function ChatWorkspace({
           <div className="flex min-h-0 flex-1 xl:hidden">
             <section className="flex size-full min-w-0 flex-col bg-[var(--app-background)]">
               <ChatTopbar {...chatTopbarProps} chatCollapsed={false} side="chat" />
-              <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+              <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
               </div>
             </section>
           </div>

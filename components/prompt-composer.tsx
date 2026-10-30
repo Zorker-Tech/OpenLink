@@ -19,6 +19,7 @@ export type { ComposerContext, ComposerWorkspace } from '@/lib/composer-context'
 interface PromptComposerProps {
   user: { email: string | null; name: string | null } | null
   composerContext: ComposerContext | null
+  runtimeMode?: 'local' | 'cloud'
 }
 
 /**
@@ -32,7 +33,7 @@ function loginRedirect(prompt: string): string {
   return `/login?next=${encodeURIComponent(`/app?prompt=${encodeURIComponent(prompt)}`)}`
 }
 
-export function PromptComposer({ user, composerContext }: PromptComposerProps) {
+export function PromptComposer({ user, composerContext, runtimeMode = 'local' }: PromptComposerProps) {
   const router = useRouter()
   const t = useT()
   const workspaces = composerContext?.workspaces ?? []
@@ -94,6 +95,7 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
         defaultProject={workspace.defaultProject}
         initialPrompt=""
         projects={workspace.projects}
+        runtimeMode={runtimeMode}
         onUnauthenticated={() => router.push('/login?next=/app')}
         workspaceSlug={workspace.slug}
       />

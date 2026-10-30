@@ -29,6 +29,12 @@ const nextConfig = {
   // development. Next blocks dev assets and HMR for unlisted origins, which
   // leaves Client Components rendered but their event handlers unattached.
   allowedDevOrigins: [...new Set(['localhost', '127.0.0.1', ...localInterfaceOrigins])],
+  // Server Function arguments can contain provider API keys and other user
+  // credentials. Keep request logging while preventing Next dev from printing
+  // those arguments to the terminal.
+  logging: {
+    serverFunctions: false,
+  },
   // Keep Next's development overlay out of the product surface. It can cover
   // right-aligned controls (for example the Skills editor Save button).
   devIndicators: false,

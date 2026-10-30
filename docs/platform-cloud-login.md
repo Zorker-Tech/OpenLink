@@ -5,13 +5,18 @@
 `POST /api/platform/connections/start` is the Cloud-only login entry point. It
 requires the configured product Origin, an authenticated ZOKERBASE application
 user and explicit `OPENLINK_CLOUD_OAUTH_LOGIN_ENABLED=true`. It refuses to replace
-an active/refreshing/reauthentication-required connection implicitly. The user
-must disconnect that connection through its existing workflow first.
+an active or refreshing connection. A `reauth_required` connection may start a
+new OAuth transaction bound to that same application user, issuer subject, client
+and connection ID; a different Hydite identity is rejected and must be explicitly
+disconnected before account switching.
 
 The response contains only `authorizationUrl`; the BFF sets a five-minute
-`__Host-openlink-cloud-oauth` cookie with Secure, HttpOnly, SameSite=Lax and root
-path, without Domain. The UI should navigate to the returned URL after an
-explicit user action. Do not dynamically register clients on each login.
+HttpOnly, SameSite=Lax state cookie at the root path, without Domain. HTTPS
+uses the `__Host-openlink-cloud-oauth` cookie with Secure. An explicitly
+configured development LAN HTTP origin uses `openlink-cloud-oauth` without
+Secure because browsers reject Secure cookies on that origin. The UI should
+navigate to the returned URL after an explicit user action. Do not dynamically
+register clients on each login.
 
 `GET /auth/platform/callback` rejects missing/mismatched/duplicate state cookies
 and parameters. It authenticates the current application user again, consumes
@@ -20,7 +25,7 @@ uses the SDK to exchange the code and fetch issuer userinfo. The resulting
 issuer subject is explicitly linked to that application user; it is not derived
 from email matching or an unverified JWT.
 
-After successful durable connection creation, the route redirects with 303 to
+After successful durable connection creation or same-identity reauthorization, the route redirects with 303 to
 the configured origin's `/settings?cloud=connected&connectionId=...`. It ignores
 arbitrary `next` destinations. Denial returns to settings as cancelled. Errors
 are redacted and never redirect as connected. Matching callback state cookies
@@ -51,20 +56,27 @@ are erased atomically when consumed, before any external code exchange.
 Start is serialized per user and limited to eight attempts per five-minute
 window, including already-consumed attempts. Expired transactions for that user
 are reclaimed on the next start. A replay, expiry or current-user mismatch cannot
-recover the verifier or invoke token exchange. No Local identity/data flow changes.
+recover the verifier or invoke token exchange. A reauthorization may create more
+than one consumed transaction for the existing connection; the callback's one-time
+consume and connection revision fence decide the winner. No Local identity/data
+flow changes.
 
 ## Recovery and release gates
 
 A lost connection-create acknowledgement can be recovered by reading and
 authenticating that exact persisted connection, without repeating code exchange.
-Otherwise the host fences any created connection and attempts remote revocation.
+Reauthorization replaces credentials only through a revision-fenced transaction
+from `reauth_required`; a lost acknowledgement is recovered by comparing the
+decrypted credential in memory. If storage state cannot be determined, the new
+grant is not revoked blindly because it may already be the active stored grant.
 Unconfirmed recovery is an explicit `CLOUD_LOGIN_RECOVERY_REQUIRED`, not success.
 
 The durable service recovery queue for simultaneous persistence and revocation
 failure remains required. Do not enable the login flag as a substitute for that
 work or call this a completed T0 login system. Production key custody, the BFF
-deployment, settings UI and actual browser acceptance also remain gates. Keep the
-flag unset/false until their readiness review; it was not enabled by this batch.
+deployment, settings UI and actual browser acceptance also remain gates. Keep
+login disabled in production until their readiness review. A local development
+opt-in does not satisfy those gates.
 
 See [Cloud OAuth storage](./platform-cloud-oauth-storage.md) for keyrings, signed
 revocation acknowledgement, refresh coordination, account deletion and cleanup.

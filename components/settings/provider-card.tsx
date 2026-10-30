@@ -41,7 +41,7 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
   }
 
   return (
-    <article className="group relative h-[173px] overflow-hidden rounded-xl bg-[var(--app-surface)] shadow-[inset_0_0_0_1px_var(--app-border)] transition-[box-shadow,background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--app-surface)_94%,var(--app-foreground)_6%)] hover:shadow-[inset_0_0_0_1px_var(--app-control-border)]">
+    <article className="group relative h-[173px] w-[320px] overflow-hidden rounded-xl bg-[var(--app-surface)] shadow-[inset_0_0_0_1px_var(--app-border)] transition-[box-shadow,background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--app-surface)_94%,var(--app-foreground)_6%)] hover:shadow-[inset_0_0_0_1px_var(--app-control-border)]">
       <div className="flex size-full flex-col gap-3 p-4">
         <Link
           aria-describedby={descriptionId}

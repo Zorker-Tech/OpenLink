@@ -49,6 +49,14 @@ export interface AgentProviderRuntimeConfiguration {
   apiKey: string
   baseUrl: string
   revision: string
+  /** Pi API implementation selected from the OpenLink provider catalog. */
+  api?: string
+  name?: string
+  reasoning?: boolean
+  input?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: { input: number; output: number; cacheRead?: number; cacheWrite?: number }
 }
 
 export type EmbeddingProtocol = 'openai' | 'ollama' | 'tei'

@@ -7,6 +7,10 @@ import { createClient } from "@/utils/supabase/server";
 import { getRuntimeMode } from "@/lib/runtime-mode.server";
 import { createOpenLinkCloudSdk } from "@/lib/platform-cloud-sdk";
 import {
+  configuredCloudAppOrigin,
+  isCloudDevelopmentHttpOriginAllowed,
+} from "@/lib/platform-cloud-origin";
+import {
   createCloudCredentialCipher,
   createCloudLoginCipher,
   createCloudRevocationSigner,
@@ -28,16 +32,9 @@ export class CloudConnectionError extends Error {
 
 function configuration() {
   try {
-    const origin = new URL(process.env.OPENLINK_APP_URL ?? "");
+    const origin = configuredCloudAppOrigin();
     const clientId = process.env.OPENLINK_CLOUD_OAUTH_CLIENT_ID ?? "";
-    if (
-      origin.protocol !== "https:" ||
-      origin.username ||
-      origin.password ||
-      origin.search ||
-      origin.hash ||
-      !clientId.trim()
-    )
+    if (!clientId.trim())
       throw new Error("invalid public configuration");
     const encoded = JSON.parse(
       process.env.OPENLINK_CLOUD_OAUTH_KEYRING ?? "",
@@ -144,6 +141,8 @@ export async function getCloudConnection(connectionId: string) {
     hyditeSubject: record.subject,
     clientId: record.client_id,
     redirectUri: config.redirectUri,
+    allowInsecureHttpRedirectOrigins:
+      isCloudDevelopmentHttpOriginAllowed() ? [config.origin] : [],
     tokenStore: vault,
     refreshCoordinator: vault,
   });
@@ -161,6 +160,10 @@ export async function disconnectCloudConnection(connectionId: string) {
       issuer: "https://auth.hydite.com",
       clientId: sdk.auth.clientId,
       redirectUri: sdk.auth.redirectUri,
+      allowInsecureHttpRedirectOrigins:
+        isCloudDevelopmentHttpOriginAllowed()
+          ? [new URL(sdk.auth.redirectUri).origin]
+          : [],
       scopes: ["openid"],
       tokenStore: transient,
     });

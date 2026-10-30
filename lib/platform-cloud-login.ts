@@ -5,8 +5,18 @@ import {
 } from "@vtslx/platform-sdk/auth";
 import type { OAuthTokenSet } from "@vtslx/platform-sdk/auth";
 import type { CloudCredentialEnvelope } from "./platform-cloud-vault";
+import { isCloudDevelopmentHttpOriginAllowed } from "./platform-cloud-origin";
 
 export const cloudLoginCookie = "__Host-openlink-cloud-oauth";
+export function cloudLoginCookieConfiguration() {
+  const insecureDevelopment = isCloudDevelopmentHttpOriginAllowed();
+  return {
+    name: insecureDevelopment
+      ? "openlink-cloud-oauth"
+      : cloudLoginCookie,
+    secure: !insecureDevelopment,
+  };
+}
 export const cloudLoginScopes = [
   "openid",
   "profile",
@@ -23,7 +33,15 @@ export type CloudLoginRecord = {
   expires_at?: string;
   envelope?: CloudCredentialEnvelope;
 };
-export type CloudLoginSecrets = { state: string; codeVerifier: string };
+export type CloudLoginSecrets = {
+  state: string;
+  codeVerifier: string;
+  nonce?: string;
+  nextPath?: string;
+  shareSession?: boolean;
+  expectedSubject?: string;
+  expiresAt?: number;
+};
 export type CloudLoginCipher = {
   seal(
     value: CloudLoginSecrets,
@@ -52,13 +70,14 @@ const hash = (value: string) =>
 export function parseCloudLoginCallback(request: Request) {
   const query = new URL(request.url).searchParams;
   const state = query.get("state");
+  const cookieName = cloudLoginCookieConfiguration().name;
   const cookies = (request.headers.get("cookie") ?? "")
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => part.startsWith(cloudLoginCookie + "="));
+    .filter((part) => part.startsWith(cookieName + "="));
   const parts =
     cookies.length === 1
-      ? cookies[0].slice(cloudLoginCookie.length + 1).split(".")
+      ? cookies[0].slice(cookieName.length + 1).split(".")
       : [];
   if (
     query.getAll("state").length !== 1 ||
@@ -88,6 +107,7 @@ export type CloudLoginContext = {
   userId: string;
   clientId: string;
   redirectUri: string;
+  allowInsecureHttpRedirectOrigins?: readonly string[];
   cipher: CloudLoginCipher;
   command: CloudLoginCommand;
   fetch?: typeof globalThis.fetch;
@@ -101,18 +121,29 @@ function client(
     issuer: "https://auth.hydite.com",
     clientId,
     redirectUri: context.redirectUri,
+    allowInsecureHttpRedirectOrigins:
+      context.allowInsecureHttpRedirectOrigins,
     scopes: cloudLoginScopes,
     tokenStore: store,
     fetch: context.fetch,
   });
 }
-export async function beginCloudLogin(context: CloudLoginContext) {
+export async function beginCloudLogin(
+  context: CloudLoginContext,
+  nextPath?: string,
+  reauthorization?: { connectionId: string; expectedSubject: string },
+) {
+  if (reauthorization && (!uuid.test(reauthorization.connectionId)
+    || !reauthorization.expectedSubject
+    || reauthorization.expectedSubject.length > 255)) {
+    throw new CloudLoginError(400, 'INVALID_CLOUD_REAUTHORIZATION');
+  }
   const auth = client(context, new MemoryOAuthTokenStore());
   const pending = await auth.createAuthorizationRequest();
   const record: CloudLoginRecord = {
     id: randomUUID(),
     user_id: context.userId,
-    connection_id: randomUUID(),
+    connection_id: reauthorization?.connectionId ?? randomUUID(),
     client_id: context.clientId,
     redirect_uri: context.redirectUri,
   };
@@ -122,7 +153,12 @@ export async function beginCloudLogin(context: CloudLoginContext) {
     redirect_uri: record.redirect_uri,
     state_hash: hash(pending.state),
     envelope: context.cipher.seal(
-      { state: pending.state, codeVerifier: pending.codeVerifier },
+      {
+        state: pending.state,
+        codeVerifier: pending.codeVerifier,
+        ...(reauthorization ? { expectedSubject: reauthorization.expectedSubject } : {}),
+        ...(nextPath ? { nextPath } : {}),
+      },
       record,
     ),
   });
@@ -151,6 +187,7 @@ export async function finishCloudLogin(
     clientId: string;
     tokens: OAuthTokenSet;
     auth: PlatformAuthClient;
+    expectedSubject?: string;
   }) => Promise<void>,
 ) {
   const consumed = await context.command("consume", callback.loginId, {
@@ -183,10 +220,15 @@ export async function finishCloudLogin(
     !value ||
     value.state !== callback.state ||
     typeof value.codeVerifier !== "string" ||
-    !/^[A-Za-z0-9._~-]{43,128}$/.test(value.codeVerifier)
+    !/^[A-Za-z0-9._~-]{43,128}$/.test(value.codeVerifier) ||
+    (value.expectedSubject !== undefined &&
+      (typeof value.expectedSubject !== "string" ||
+        !value.expectedSubject ||
+        value.expectedSubject.length > 255))
   )
     throw new CloudLoginError(400, "INVALID_CLOUD_LOGIN_BINDING");
-  if (callback.denied) return { connected: false as const };
+  const nextPath = typeof value.nextPath === "string" ? value.nextPath : undefined;
+  if (callback.denied) return { connected: false as const, nextPath };
   const store = new MemoryOAuthTokenStore(),
     auth = client(context, store, record.client_id);
   try {
@@ -201,17 +243,20 @@ export async function finishCloudLogin(
       clientId: record.client_id,
       tokens,
       auth,
+      ...(typeof value.expectedSubject === 'string' ? { expectedSubject: value.expectedSubject } : {}),
     });
     await store.clear();
-    return { connected: true as const, connectionId: record.connection_id };
+    return { connected: true as const, connectionId: record.connection_id, nextPath };
   } catch (error) {
     let recoveryRequired =
       error instanceof CloudLoginError &&
       error.message === "CLOUD_LOGIN_RECOVERY_REQUIRED";
-    try {
-      await auth.revoke();
-    } catch {
-      recoveryRequired = true;
+    if (!recoveryRequired) {
+      try {
+        await auth.revoke();
+      } catch {
+        recoveryRequired = true;
+      }
     }
     throw new CloudLoginError(
       503,

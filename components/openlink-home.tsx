@@ -116,12 +116,20 @@ function Footer() {
   )
 }
 
-export function OpenLinkHome({ user, composerContext }: { user: HomeUser | null; composerContext: ComposerContext | null }) {
+export function OpenLinkHome({
+  user,
+  composerContext,
+  runtimeMode = 'local',
+}: {
+  user: HomeUser | null
+  composerContext: ComposerContext | null
+  runtimeMode?: 'local' | 'cloud'
+}) {
   return (
     <div className={`flex min-h-screen flex-col overflow-x-hidden ${theme('canvas')}`}>
       <Header user={user} />
       <main className="flex flex-1 items-center justify-center px-6 py-12">
-        <PromptComposer composerContext={composerContext} user={user} />
+        <PromptComposer composerContext={composerContext} runtimeMode={runtimeMode} user={user} />
       </main>
       <Footer />
     </div>

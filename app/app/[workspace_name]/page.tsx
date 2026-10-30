@@ -3,6 +3,7 @@ import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listOrganizations } from '@/lib/organizations'
 import { ensureDraftProject, listProjects } from '@/lib/projects'
 import { listChatSessions } from '@/lib/chat-sessions'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
@@ -69,6 +70,7 @@ export default async function WorkspacePage({
       organizations={organizations}
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       projects={projects}
+      runtimeMode={getRuntimeMode()}
       workspaceSlug={workspace.slug}
     />
   )

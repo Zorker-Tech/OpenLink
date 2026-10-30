@@ -92,7 +92,10 @@ export function CloudConnectionsSettings({ loginEnabled }: { loginEnabled: boole
           : !loaded ? <p className="py-5 text-sm text-[var(--app-muted)]">{t('连接状态暂时不可用')}</p>
             : rows.length === 0 ? <p className="py-5 text-sm text-[var(--app-muted)]">{t('尚未连接 Hydite 账号')}</p>
             : rows.map(row => <SettingRow key={row.id} label={row.state === 'revoking' ? t('远端撤销待确认') : row.state === 'reauth_required' ? t('需要重新授权') : verified[row.id] ? t('身份已验证') : t('授权已保存，尚未验证')} description={row.subject}>
-              <button type="button" className={button} disabled={pending} onClick={() => void act('disconnect', row)}>{row.state === 'revoking' ? t('重试撤销') : t('解除授权')}</button>
+              <div className="flex flex-wrap justify-end gap-2">
+                {row.state === 'reauth_required' && <button type="button" className={button} disabled={pending || !loginEnabled} onClick={() => void act('connect', row)}>{t('连接账号')}</button>}
+                <button type="button" className={button} disabled={pending} onClick={() => void act('disconnect', row)}>{row.state === 'revoking' ? t('重试撤销') : t('解除授权')}</button>
+              </div>
             </SettingRow>)}
       </div>
       {!loginEnabled && <p className="mt-3 text-sm text-[var(--app-muted)]">{t('Cloud 登录尚未开放；现有授权状态仍可查看。')}</p>}

@@ -24,6 +24,8 @@ const knowledgeServiceDirectory = new URL('../services/knowledge-service/', impo
 const rootPath = resolve(fileURLToPath(root))
 const configuredWebRoot = process.env.OPENLINK_WEB_ROOT?.trim()
 const webRootPath = resolve(configuredWebRoot || rootPath)
+const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE ?? 'local').trim().toLowerCase()
+if (runtimeMode !== 'local' && runtimeMode !== 'cloud') throw new Error('OPENLINK_RUNTIME_MODE must be either local or cloud')
 const hostPlatform = resolveHostPlatform()
 const localRuntimeCache = localRuntimeCacheRoot()
 const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
@@ -45,9 +47,11 @@ const podmanContainersRoot = resolve(podmanConfigRoot, 'containers')
 const podmanContainersConfig = resolve(podmanContainersRoot, 'containers.conf')
 const podmanPolicy = resolve(podmanContainersRoot, 'policy.json')
 const podmanConnections = resolve(podmanContainersRoot, 'podman-connections.json')
-process.env.CONTAINERS_CONF ||= podmanContainersConfig
-process.env.CONTAINERS_POLICY ||= podmanPolicy
-process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
+if (runtimeMode === 'local') {
+  process.env.CONTAINERS_CONF ||= podmanContainersConfig
+  process.env.CONTAINERS_POLICY ||= podmanPolicy
+  process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
+}
 const projectVmStateRoot = fileURLToPath(new URL('../.openlink-runtime/project-vms', import.meta.url))
 const projectImageRoot = process.env.OPENLINK_RUNTIME_IMAGE_ROOT?.trim()
   ? resolve(process.env.OPENLINK_RUNTIME_IMAGE_ROOT)
@@ -64,13 +68,6 @@ const projectSupabaseImageOutputRoot = process.env.OPENLINK_PROJECT_SUPABASE_IMA
   : resolve(projectSupabaseArtifactRoot, 'images', hostPlatform.architecture === 'x64' ? 'amd64' : 'arm64')
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
-const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
-const tokenSecret = await persistentRuntimeSecret('browser-token-secret', process.env.OPENLINK_BROWSER_TOKEN_SECRET)
-const agentApiToken = await persistentRuntimeSecret('agent-api-token', process.env.OPENLINK_AGENT_API_TOKEN)
-const desktopAgentApiToken = await persistentRuntimeSecret('desktop-agent-api-token', process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN)
-const openSandboxApiToken = await persistentRuntimeSecret('opensandbox-api-token', process.env.OPEN_SANDBOX_API_KEY)
-const knowledgeApiToken = await persistentRuntimeSecret('knowledge-api-token', process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN)
-const projectRuntimeProvisionerId = await persistentRuntimeSecret('project-runtime-provisioner-id', process.env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID, 'hex')
 const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120'
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
 const desktopAgentHostUrl = process.env.OPENLINK_DESKTOP_AGENT_HOST_URL || 'http://127.0.0.1:43123'
@@ -149,8 +146,6 @@ if (webRootPath !== rootPath) {
   }
   process.stdout.write(`Using Web/BFF source from ${webRootPath}\n`)
 }
-const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE ?? 'local').trim().toLowerCase()
-if (runtimeMode !== 'local' && runtimeMode !== 'cloud') throw new Error('OPENLINK_RUNTIME_MODE must be either local or cloud')
 let projectVmBase
 
 async function loadProjectVmBase() {
@@ -231,7 +226,7 @@ async function persistentProviderSecret() {
   return readProtectedSecret()
 }
 
-async function persistentRuntimeSecret(name, supplied, encoding = 'base64url') {
+async function persistentRuntimeSecret(name, supplied, encoding = 'base64url', byteLength = 48) {
   if (supplied?.trim()) return supplied.trim()
   if (!/^[a-z0-9-]{1,64}$/.test(name)) throw new Error('OpenLink runtime secret name is invalid')
   const secretPath = resolve(supervisorSecretRoot, `${name}.key`)
@@ -247,7 +242,7 @@ async function persistentRuntimeSecret(name, supplied, encoding = 'base64url') {
     if (error?.code !== 'ENOENT') throw error
   }
   await mkdir(supervisorSecretRoot, { recursive: true, mode: 0o700 })
-  const secret = randomBytes(48).toString(encoding)
+  const secret = randomBytes(byteLength).toString(encoding)
   await writeFile(secretPath, `${secret}\n`, { mode: 0o600, flag: 'wx' }).catch(async (error) => {
     if (error?.code !== 'EEXIST') throw error
   })
@@ -330,6 +325,109 @@ async function waitForExit(child, label) {
   if (code !== 0) throw new Error(`${label} exited with code ${code ?? 1}`)
 }
 
+if (runtimeMode === 'cloud') {
+  if (Number(process.versions.node.split('.')[0]) < 22) {
+    throw new Error('OpenLink Cloud SDK Host requires Node 22 or newer.')
+  }
+  const cloudHostPort = Number(process.env.OPENLINK_CLOUD_HOST_PORT || 43126)
+  if (!Number.isSafeInteger(cloudHostPort) || cloudHostPort < 1 || cloudHostPort > 65_535) {
+    throw new Error('OPENLINK_CLOUD_HOST_PORT must be between 1 and 65535')
+  }
+  const cloudHostUrl = process.env.OPENLINK_CLOUD_HOST_URL?.trim() || `http://127.0.0.1:${cloudHostPort}`
+  const cloudHostOrigin = new URL(cloudHostUrl)
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(cloudHostOrigin.hostname)
+    || cloudHostOrigin.protocol !== 'http:'
+    || cloudHostOrigin.pathname !== '/'
+    || cloudHostOrigin.search
+    || cloudHostOrigin.hash
+    || cloudHostOrigin.port !== String(cloudHostPort)) {
+    throw new Error('OPENLINK_CLOUD_HOST_URL must be the loopback URL for OPENLINK_CLOUD_HOST_PORT')
+  }
+  const cloudHostApiToken = await persistentRuntimeSecret(
+    'cloud-sdk-host-api-token',
+    process.env.OPENLINK_CLOUD_HOST_API_TOKEN,
+  )
+  const cloudProviderSecret = await persistentRuntimeSecret(
+    'cloud-provider-secret',
+    process.env.OPENLINK_CLOUD_PROVIDER_SECRET_KEY,
+    'base64',
+    32,
+  )
+  const cloudAgentCheckpointKey = await persistentRuntimeSecret(
+    'cloud-agent-checkpoint-key',
+    process.env.OPENLINK_CLOUD_AGENT_CHECKPOINT_KEY,
+    'base64',
+    32,
+  )
+  const cloudAgentCheckpointDirectory = resolve(userStateRoot, 'cloud-agent-checkpoints')
+  const cloudEnvironment = { ...process.env }
+  for (const key of Object.keys(cloudEnvironment)) {
+    if (/^(OPENLINK_(?:LOCAL_|PROJECT_|PODMAN_|REMOTE_|DESKTOP_|BROWSER_|AGENT_|KNOWLEDGE_|SUPABASE_|ZERO_|RUNTIME_IMAGE|STUDIO_|PROVIDER_|SSH_|OPENSANDBOX_|CODE_SERVER_)|OPEN_SANDBOX_|ZOKERBASE_|NEXT_PUBLIC_ZOKERBASE_|CONTAINERS_|PODMAN_)/.test(key)) {
+      cloudEnvironment[key] = ''
+    }
+  }
+  Object.assign(cloudEnvironment, {
+    OPENLINK_RUNTIME_MODE: 'cloud',
+    NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: 'cloud',
+    OPENLINK_CLOUD_COMPUTER_SERVICE_ZONES: process.env.OPENLINK_CLOUD_COMPUTER_SERVICE_ZONES?.trim() || '',
+    OPENLINK_CLOUD_HOST_URL: cloudHostOrigin.origin,
+    OPENLINK_CLOUD_HOST_API_TOKEN: cloudHostApiToken,
+    OPENLINK_CLOUD_HOST_PORT: String(cloudHostPort),
+    OPENLINK_CLOUD_AGENT_CHECKPOINT_KEY: cloudAgentCheckpointKey,
+    OPENLINK_CLOUD_AGENT_CHECKPOINT_DIR: cloudAgentCheckpointDirectory,
+    OPENLINK_PROVIDER_SECRET_KEY: cloudProviderSecret,
+    // Existing server routes consume these compatibility names. Populate
+    // them only from explicit Cloud configuration; never inherit Local host
+    // endpoints or credentials from the parent shell.
+    OPENLINK_AGENT_HOST_URL: process.env.OPENLINK_CLOUD_AGENT_HOST_URL?.trim() || '',
+    OPENLINK_AGENT_API_TOKEN: process.env.OPENLINK_CLOUD_AGENT_API_TOKEN?.trim() || '',
+    OPENLINK_BROWSER_GATEWAY_PUBLIC_URL: process.env.OPENLINK_CLOUD_BROWSER_GATEWAY_PUBLIC_URL?.trim() || '',
+    OPENLINK_KNOWLEDGE_SERVICE_URL: process.env.OPENLINK_CLOUD_KNOWLEDGE_SERVICE_URL?.trim() || '',
+    OPENLINK_KNOWLEDGE_INTERNAL_TOKEN: process.env.OPENLINK_CLOUD_KNOWLEDGE_INTERNAL_TOKEN?.trim() || '',
+  })
+
+  if (mode === 'production') {
+    const webBuild = run('npm', ['run', 'build:web'], { cwd: webRootPath, env: cloudEnvironment })
+    await waitForExit(webBuild, 'OpenLink Cloud web production build')
+  }
+
+  // The Cloud Computer Host owns the user-bound VTSLX Pi RPC stream and
+  // encrypted reconnect checkpoints. It does not provision Local Agent
+  // workers, Browser services, Podman, or Project VMs.
+  const cloudHost = run(process.execPath, [resolve(rootPath, 'scripts/cloud-computer-host.mjs')], {
+    cwd: rootPath,
+    env: cloudEnvironment,
+  })
+  await waitForHealth(cloudHostUrl, cloudHost, 'OpenLink Cloud Computer Host', '/healthz', 'cloud-computer-host')
+
+  // Cloud also runs the Web/BFF. Local Agent, Browser, Studio proxy, Podman,
+  // and Project VM services remain exclusive to the Local profile.
+  const webScript = mode === 'production' ? 'start:web' : 'dev:web'
+  const web = run('npm', ['run', webScript, '--', '--hostname', '0.0.0.0'], {
+    cwd: webRootPath,
+    env: cloudEnvironment,
+  })
+  process.stdout.write(`OpenLink Cloud profile: Computer Host on ${cloudHostOrigin.origin}, Web on port ${process.env.PORT || '3000'}\n`)
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      web.kill(signal)
+      cloudHost.kill(signal)
+    })
+  }
+  let exitedChild
+  const exitCode = await new Promise((resolveExit) => {
+    web.once('exit', (code) => { exitedChild = web; resolveExit(code) })
+    cloudHost.once('exit', (code) => { exitedChild = cloudHost; resolveExit(code) })
+  })
+  const peer = exitedChild === web ? cloudHost : web
+  if (peer.exitCode === null) {
+    peer.kill('SIGTERM')
+    await new Promise((resolveExit) => peer.once('exit', resolveExit))
+  }
+  process.exit(exitCode ?? 0)
+}
+
 async function ensureNpmDependencies(name, directory, extraInputs = []) {
   const markerRoot = fileURLToPath(new URL('../.openlink-runtime/service-dependencies/', import.meta.url))
   const packageJson = await readFile(new URL('package.json', directory))
@@ -380,13 +478,17 @@ async function ensureNpmDependencies(name, directory, extraInputs = []) {
   await writeFile(markerPath, `${JSON.stringify({ fingerprint: dependencyFingerprint, node: process.version, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 })
 }
 
-async function waitForHealth(url, child, name, path = '/healthz') {
+async function waitForHealth(url, child, name, path = '/healthz', expectedService) {
   const deadline = Date.now() + 120_000
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`${name} exited with code ${child.exitCode}`)
     try {
       const response = await fetch(`${url}${path}`)
-      if (response.ok) return
+      if (response.ok) {
+        if (!expectedService) return
+        const payload = await response.json().catch(() => null)
+        if (payload?.status === 'ok' && payload.service === expectedService) return
+      }
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
@@ -472,6 +574,13 @@ if (hostPlatform.platform === 'win32') {
   })
 }
 const providerSecret = await persistentProviderSecret()
+const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
+const tokenSecret = await persistentRuntimeSecret('browser-token-secret', process.env.OPENLINK_BROWSER_TOKEN_SECRET)
+const agentApiToken = await persistentRuntimeSecret('agent-api-token', process.env.OPENLINK_AGENT_API_TOKEN)
+const desktopAgentApiToken = await persistentRuntimeSecret('desktop-agent-api-token', process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN)
+const openSandboxApiToken = await persistentRuntimeSecret('opensandbox-api-token', process.env.OPEN_SANDBOX_API_KEY)
+const knowledgeApiToken = await persistentRuntimeSecret('knowledge-api-token', process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN)
+const projectRuntimeProvisionerId = await persistentRuntimeSecret('project-runtime-provisioner-id', process.env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID, 'hex')
 const localZokerbase = runtimeMode === 'local' ? await ensureZokerbase() : null
 let localZero = null
 const knowledgeServiceEnabled = runtimeMode === 'local'

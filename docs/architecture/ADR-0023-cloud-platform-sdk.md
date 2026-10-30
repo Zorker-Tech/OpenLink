@@ -2,24 +2,17 @@
 
 ## Status
 
-The basic Cloud settings control is implemented and bundled, while Local omits
-it. DOM/page tests and a full Web build passed; visual/browser and production
-acceptance are still open. See [`platform-cloud-settings.md`](../platform-cloud-settings.md).
+Cloud account, project-link, login and storage flows have source implementations;
+their production and browser acceptance gates remain open. See
+[`platform-cloud-login.md`](../platform-cloud-login.md),
+[`platform-cloud-project-links.md`](../platform-cloud-project-links.md), and
+[`platform-cloud-oauth-storage.md`](../platform-cloud-oauth-storage.md).
 
-Proposed; package and adapter implementation in progress. This is not acceptance
-of Cloud login, runtime integration or production migration.
-
-Login start/callback code and one-use encrypted PKCE transactions are now
-implemented; the additive Cloud migration and callback-core real-service smoke
-passed. Hosted BFF/browser acceptance and the durable grant recovery queue remain
-open, so the login release flag is still disabled by default. See
-[`platform-cloud-login.md`](../platform-cloud-login.md).
-
-Update: encrypted Cloud persistence, database-fenced refresh and server-attested
-revocation are implemented, and their two additive Cloud migrations and real
-API smoke passed. BFF read/disconnect routes exist in source. See
-[`platform-cloud-oauth-storage.md`](../platform-cloud-oauth-storage.md). Callback,
-UI, project mapping, service cleanup and runtime acceptance remain required.
+The Cloud Computer Host and Pi RPC chat path are now wired in source using
+`@vtslx/platform-sdk@0.2.4`; see
+[`platform-sdk-integration.md`](../platform-sdk-integration.md). This is not
+evidence that the VTSLX Worker grants `terminal`, or that end-to-end runtime and
+production acceptance have passed.
 
 ## Context
 
@@ -49,10 +42,12 @@ or matching email. The BFF must authorize application project access through
 ZOKERBASE RLS before supplying the explicit application-to-platform project binding.
 Platform authorization independently checks the OAuth user against that project.
 
-Next implementation gates: durable encrypted Cloud connection storage, atomic
-cross-process refresh coordination, explicit connect/disconnect and callback state,
-RLS-protected project mapping, then BFF/Agent Host integration and actual UI flow.
-The storage/coordination gate now has implementation and real cross-instance API
+Next acceptance gates: end-to-end Cloud chat execution through Studio Computer,
+reconnect/revocation recovery drills, and actual UI acceptance. The Cloud
+Computer Host implements OpenLink's streaming Pi RPC path and accepts only
+authenticated, user-bound project/session requests; it does not expose arbitrary
+Computer commands to the browser. Source implementation is not runtime acceptance.
+The storage/coordination gate has implementation and real cross-instance API
 evidence; process-kill/recovery drills and the remaining consumer flows are not
 covered by that evidence. Revocation acknowledgement requires a server-only
 receipt, not merely the application user's JWT.
@@ -82,8 +77,8 @@ Workspace SDK capabilities and retains explicit application/project mappings.
 ## Migration and rollback
 
 Existing Local, Zorker SSO and native Project VM flows are unchanged in this batch.
-Cloud cutover stays gated until the storage, BFF, service and end-to-end checks
-exist. Retain old package manifest/lockfile and artifact for rollback; do not
+Cloud production cutover stays gated until the storage, BFF, service and
+end-to-end checks pass. Retain old package manifest/lockfile and artifact for rollback; do not
 relabel an existing Local project as Cloud or move its files implicitly.
 
 ## Verification
