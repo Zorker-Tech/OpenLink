@@ -20,6 +20,7 @@ Run product lifecycle commands from the repository root:
 
 ```bash
 pnpm dev:local          # complete Local stack
+pnpm dev:cloud          # Cloud Web/BFF and VTSLX SDK Host
 pnpm build              # production Web build
 pnpm knowledge:test     # Knowledge Service build and tests
 pnpm browser:test       # Browser Host tests
@@ -115,6 +116,39 @@ pnpm runtime:project-supabase:sync
 pnpm runtime:project-supabase:images
 pnpm runtime:project-supabase:test
 ```
+
+### Cloud development profile
+
+Copy `.env.cloud.example` to `.env.cloud`, then set both
+`OPENLINK_CLOUD_SUPABASE_URL` and `OPENLINK_CLOUD_SUPABASE_PUBLISHABLE_KEY`
+to the same `supabase-us` project used by Studio. Keep the `NEXT_PUBLIC_`
+Supabase values pointed at that same project. `OPENLINK_CLOUD_OAUTH_CLIENT_ID`
+must match the VTSLX client registered for Studio; configure the server-only
+OAuth keyring and revocation key when testing those flows. `.env.cloud` is
+ignored by Git and is loaded before the lifecycle supervisor starts.
+
+For a trusted LAN browser test over HTTP, set
+`OPENLINK_CLOUD_INSECURE_HTTP_ORIGIN` to exactly the same origin as
+`OPENLINK_APP_URL` and explicitly enable
+`OPENLINK_CLOUD_OAUTH_LOGIN_ENABLED=true`. This exception is accepted only in
+development; the OAuth state cookie uses a development-only non-`__Host-`
+name because browsers require `Secure` cookies to use that prefix. Production
+Cloud OAuth origins must use HTTPS, and login starts are disabled in production
+in the current release. The exact opted-in origin is also passed to the VTSLX
+SDK's redirect validator; the SDK keeps its normal HTTPS/loopback restriction
+for every other origin.
+
+Run `pnpm dev:cloud` for development or `pnpm start:cloud` for the production
+Web lifecycle. Cloud mode starts the Web/BFF and a loopback VTSLX SDK Host for
+user-scoped Studio Computer requests. It does not initialize local Podman,
+Chromium, Agent/Browser hosts, Studio proxy, Project VM, ZOKERBASE, or Zero
+services. Configure any remote Agent/Knowledge endpoints in `.env.cloud` when
+those features are needed. Cloud startup also blocks missing values from
+Next.js's default `.env*` files, so Local settings do not leak into this
+profile. To use Local services, stop Cloud mode and
+start `pnpm dev:local`; Local-only runtime initialization happens there.
+Missing Cloud Supabase configuration fails before the Web process starts; it
+never falls back to Local data.
 
 On Linux, Project runtime image archives, Project Supabase artifacts, and
 temporary image build inputs use `~/.cache/openlink` by default. Set

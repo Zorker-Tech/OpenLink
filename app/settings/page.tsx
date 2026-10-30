@@ -11,6 +11,6 @@ export default async function PreferencesPage() {
   if (!user) redirect('/login?next=/settings')
   const preferences = await getUserPreferences(supabase, user.id)
   return <div className="size-full overflow-y-auto px-6 py-12 sm:px-10 lg:px-16"><PreferencesForm initial={preferences} />
-    {getRuntimeMode() === 'cloud' && <CloudConnectionsSettings loginEnabled={process.env.OPENLINK_CLOUD_OAUTH_LOGIN_ENABLED === 'true'} locale={preferences.locale} />}
+    {getRuntimeMode() === 'cloud' && <CloudConnectionsSettings loginEnabled={process.env.NODE_ENV !== 'production' && process.env.OPENLINK_CLOUD_OAUTH_LOGIN_ENABLED === 'true'} locale={preferences.locale} />}
   </div>
 }

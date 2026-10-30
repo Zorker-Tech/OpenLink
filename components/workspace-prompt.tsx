@@ -58,6 +58,7 @@ export interface WorkspacePromptProps {
   initialPrompt: string
   initialProjectId?: string
   projects: ProjectSummary[]
+  runtimeMode?: 'local' | 'cloud'
   workspaceSlug: string
   pollRuntimeStatus?: boolean
   /**
@@ -85,6 +86,7 @@ export function WorkspacePrompt({
   initialPrompt,
   initialProjectId,
   projects,
+  runtimeMode = 'local',
   workspaceSlug,
   pollRuntimeStatus = true,
   renderExtraTools,
@@ -123,12 +125,14 @@ export function WorkspacePrompt({
   }, [projects])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
-  const [agentKind, setAgentKind] = useState<AgentKind>('codex')
+  const [agentKind, setAgentKind] = useState<AgentKind>(runtimeMode === 'cloud' ? 'pi' : 'codex')
   const runtimeProject = selectedProject ?? defaultProject
   const runtimeDisplay = projectRuntimeDisplay(runtimeProject, t)
-  const runtimeReady = runtimeDisplay.ready
+  const runtimeReady = runtimeMode === 'cloud'
+    ? runtimeProject.status !== 'archived'
+    : runtimeDisplay.ready
   useEffect(() => {
-    if (!pollRuntimeStatus || runtimeReady || runtimeProject.status === 'archived') return
+    if (runtimeMode === 'cloud' || !pollRuntimeStatus || runtimeReady || runtimeProject.status === 'archived') return
 
     // The Project VM is provisioned out of band. Server-component props are a
     // snapshot, so keep the home composer in sync until the runtime reaches a
@@ -142,7 +146,7 @@ export function WorkspacePrompt({
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
-  }, [pollRuntimeStatus, router, runtimeProject.id, runtimeProject.status, runtimeReady])
+  }, [pollRuntimeStatus, router, runtimeMode, runtimeProject.id, runtimeProject.status, runtimeReady])
   // Agent resources are session-scoped. Before a session exists there is no
   // runtime protocol to expose, so the home composer intentionally has none.
   const promptSuggestions: AgentPromptSuggestion[] = []
@@ -152,11 +156,11 @@ export function WorkspacePrompt({
       <div className="flex h-[22px] items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold tracking-[-0.2px] text-[var(--app-foreground)]">Zorker</span>
-          <AgentKindPicker value={agentKind} onChange={setAgentKind} />
+          <AgentKindPicker runtimeMode={runtimeMode} value={agentKind} onChange={setAgentKind} />
         </div>
         <div aria-label={t('运行环境')} className="flex items-center gap-px rounded-full bg-[var(--app-subtle-surface)] p-px text-[13px]">
-          <button aria-disabled className="rounded-full px-3 py-1 text-[var(--app-muted)]" disabled type="button" title={t('Cloud 即将推出')}>{t('Cloud')}</button>
-          <span aria-current="true" className="rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]">{t('Local')}</span>
+          <span aria-current={runtimeMode === 'cloud' ? 'true' : undefined} className={runtimeMode === 'cloud' ? 'rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]' : 'rounded-full px-3 py-1 text-[var(--app-muted)]'}>{t('Cloud')}</span>
+          <span aria-current={runtimeMode === 'local' ? 'true' : undefined} className={runtimeMode === 'local' ? 'rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]' : 'rounded-full px-3 py-1 text-[var(--app-muted)]'}>{t('Local')}</span>
         </div>
       </div>
     <PromptInput
@@ -186,10 +190,15 @@ export function WorkspacePrompt({
           onUnauthenticated()
           return
         }
+        if (result.fallback) {
+          router.push(result.path)
+          return
+        }
         if (!result.id || !result.path) {
           const message = 'error' in result ? result.error : 'CHAT_SESSION_CREATE_FAILED'
-          setSubmitError(message)
-          throw new Error(message)
+          const diagnosticSuffix = 'diagnosticId' in result ? ` · ID ${result.diagnosticId}` : ''
+          setSubmitError(`${message}${diagnosticSuffix}`)
+          return
         }
         if (files.length) {
           try {
@@ -221,7 +230,7 @@ export function WorkspacePrompt({
           aria-label={t('描述你想创建的内容')}
           className="min-h-[64px]! px-4 pt-4 text-[14px] leading-5 text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)]"
           onValueChange={updateInput}
-          disabled={!runtimeReady}
+          disabled={!runtimeReady || (runtimeMode === 'cloud' && !selectedModel)}
           placeholder=""
           suggestions={promptSuggestions}
           value={input}
@@ -289,7 +298,7 @@ export function WorkspacePrompt({
           {renderExtraTools}
         </PromptInputTools>
         <div className="flex items-center gap-1">
-          <PromptInputSubmit aria-label={t('发送')} className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)] disabled:cursor-wait disabled:opacity-40" disabled={!runtimeReady}>
+          <PromptInputSubmit aria-label={t('发送')} className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)] disabled:cursor-wait disabled:opacity-40" disabled={!runtimeReady || (runtimeMode === 'cloud' && !selectedModel)}>
             <Send aria-hidden className="size-3.5" />
           </PromptInputSubmit>
         </div>
@@ -324,7 +333,7 @@ export function WorkspacePrompt({
                   {selectableProjects.map((project) => {
                     const Icon = project.kind === 'research' ? BookOpenText : Code2
                     const display = projectRuntimeDisplay(project, t)
-                    const ready = display.ready
+                    const ready = runtimeMode === 'cloud' ? project.status !== 'archived' : display.ready
                     return (
                       <ModelSelectorItem
                         className="h-9 text-muted-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
@@ -338,7 +347,7 @@ export function WorkspacePrompt({
                       >
                         <Icon className="size-4" />
                         <ModelSelectorName>{project.name}</ModelSelectorName>
-                        <span className="max-w-[170px] truncate text-xs text-[var(--app-subtle-foreground)]" title={display.detail}>{ready ? (project.kind === 'research' ? t('研究') : t('代码')) : display.label}</span>
+                        <span className="max-w-[170px] truncate text-xs text-[var(--app-subtle-foreground)]" title={runtimeMode === 'cloud' ? t('Cloud') : display.detail}>{runtimeMode === 'cloud' ? t('Cloud') : ready ? (project.kind === 'research' ? t('研究') : t('代码')) : display.label}</span>
                       </ModelSelectorItem>
                     )
                   })}

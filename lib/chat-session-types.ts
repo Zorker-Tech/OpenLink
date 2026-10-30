@@ -1,4 +1,4 @@
-export type AgentKind = 'codex' | 'pi'
+export type AgentKind = 'codex' | 'pi' | 'omp'
 
 export interface ChatSessionSummary {
   id: string

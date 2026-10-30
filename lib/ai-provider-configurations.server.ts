@@ -287,6 +287,30 @@ export async function resolveAgentProviderRuntimeConfiguration(
   const modelDefinition = models.find((model) => model.id === modelId)
   const modelBaseUrl = modelDefinition?.baseUrl
   const baseUrl = row.base_url || modelBaseUrl || definition.baseUrl || ''
+  const modelParams = row.model_params?.[modelId]
+  const configuredInput = Array.isArray(modelParams?.input)
+    ? modelParams.input.filter((value): value is string => typeof value === 'string').slice(0, 8)
+    : []
+  const configuredCost = modelParams?.cost
+  const modelCost = configuredCost && Number.isFinite(configuredCost.input) && Number.isFinite(configuredCost.output)
+    ? {
+        input: configuredCost.input,
+        output: configuredCost.output,
+        ...(typeof configuredCost.cacheRead === 'number' && Number.isFinite(configuredCost.cacheRead) ? { cacheRead: configuredCost.cacheRead } : {}),
+        ...(typeof configuredCost.cacheWrite === 'number' && Number.isFinite(configuredCost.cacheWrite) ? { cacheWrite: configuredCost.cacheWrite } : {}),
+      }
+    : modelDefinition?.cost ?? { input: 0, output: 0 }
+  const modelMetadata = {
+    api: modelDefinition?.api || models[0]?.api || 'openai-completions',
+    name: (modelParams?.name || modelDefinition?.name || modelId).slice(0, 160),
+    reasoning: typeof modelParams?.reasoning === 'boolean' ? modelParams.reasoning : Boolean(modelDefinition?.reasoning),
+    input: configuredInput.length ? configuredInput : modelDefinition?.input?.length ? modelDefinition.input : ['text'],
+    contextWindow: typeof modelParams?.contextWindow === 'number' && Number.isFinite(modelParams.contextWindow)
+      ? modelParams.contextWindow : modelDefinition?.contextWindow || 128_000,
+    maxTokens: typeof modelParams?.maxTokens === 'number' && Number.isFinite(modelParams.maxTokens)
+      ? modelParams.maxTokens : modelDefinition?.maxTokens || 8_192,
+    cost: modelCost,
+  }
   if (!row.encrypted_api_key || !row.api_key_iv || !row.api_key_tag) {
     if (definition.authMode === 'ambient') {
       return {
@@ -295,6 +319,7 @@ export async function resolveAgentProviderRuntimeConfiguration(
         apiKey: '',
         baseUrl,
         revision: row.updated_at,
+        ...modelMetadata,
       }
     }
     throw new Error('PROVIDER_API_KEY_REQUIRED')
@@ -319,6 +344,7 @@ export async function resolveAgentProviderRuntimeConfiguration(
     apiKey,
     baseUrl,
     revision: row.updated_at,
+    ...modelMetadata,
   }
 }
 

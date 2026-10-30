@@ -7,7 +7,7 @@ import { parsePromptAttachments } from '@/lib/agent-runtime/prompt-attachments'
 import { randomBytes } from 'node:crypto'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import {
-  findFirstPersistedUserMessage,
+  getInitialPromptRecoveryState,
   listPersistedChatEvents,
   nextChatEventSequence,
   loadPiSessionSnapshot,
@@ -18,6 +18,8 @@ import {
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { resolvePromptFileAttachments, type ResolvedPromptAttachment } from '@/lib/chat-session-uploads.server'
 import { getT } from '@/lib/i18n/server'
+import { cloudComputerHostRequest, cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
+import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -49,8 +51,9 @@ export async function POST(
   const { session_id: sessionId } = await params
   const { t } = await getT()
   if (!isChatSessionId(sessionId)) return Response.json({ error: 'INVALID_SESSION' }, { status: 404 })
+  const cloudMode = getRuntimeMode() === 'cloud'
   const host = agentHostConfig()
-  if (!host) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
+  if (!cloudMode && !host) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -96,9 +99,12 @@ export async function POST(
     ? 'message'
     : body.requestKind === 'initial-prompt'
       ? 'initial-prompt'
-      : null
+      : body.requestKind === 'initial-prompt-retry'
+        ? 'initial-prompt-retry'
+        : null
   if (!requestKind) return Response.json({ error: 'INVALID_REQUEST_KIND' }, { status: 400 })
-  if (requestKind === 'initial-prompt' && (attachments.length || message !== session.initial_prompt.trim().slice(0, 10_000))) {
+  if ((requestKind === 'initial-prompt' || requestKind === 'initial-prompt-retry')
+    && (attachments.length || message !== session.initial_prompt.trim().slice(0, 10_000))) {
     return Response.json({ error: 'INITIAL_PROMPT_MISMATCH' }, { status: 400 })
   }
   const browserSessionId = body.browserSessionId === undefined
@@ -108,15 +114,17 @@ export async function POST(
       : null
   if (body.browserSessionId !== undefined && !browserSessionId) return Response.json({ error: 'INVALID_BROWSER_SESSION' }, { status: 400 })
 
-  // `?run=1` is a one-shot instruction attached to the newly-created chat
-  // URL. A browser remount or frontend restart can replay that URL after the
-  // first turn is already durable. Return the canonical user event instead of
-  // invoking Agent Host again. The lease-protected check below closes the race
-  // between this fast path and another request persisting the first turn.
-  if (requestKind === 'initial-prompt') {
+  let persistedInitialPrompt: OpenLinkAgentEvent | null = null
+  // `?run=1` is idempotent after durable receipt. Reuse the canonical user
+  // event when it exists; automatic replay is limited to a safe startup retry.
+  // A separate user-triggered retry may replay only saved reauthorization errors.
+  if (requestKind === 'initial-prompt' || requestKind === 'initial-prompt-retry') {
     try {
-      const persisted = await findFirstPersistedUserMessage(supabase, user.id, sessionId)
-      if (persisted) return singleEventResponse(persisted)
+      const recovery = await getInitialPromptRecoveryState(supabase, user.id, sessionId, session.initial_prompt, {
+        allowReauthorizationRetry: requestKind === 'initial-prompt-retry',
+      })
+      if (recovery.userMessage && !recovery.retryable) return singleEventResponse(recovery.userMessage)
+      if (recovery.retryable) persistedInitialPrompt = recovery.userMessage
     } catch {
       return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 500 })
     }
@@ -131,7 +139,7 @@ export async function POST(
     requestedModel = { providerId: candidate.providerId, modelId: candidate.modelId }
   }
 
-  let runtimeConfiguration
+  let runtimeConfiguration: Awaited<ReturnType<typeof resolveAgentProviderRuntimeConfiguration>> | null = null
   try {
     runtimeConfiguration = await resolveAgentProviderRuntimeConfiguration(supabase, user.id, requestedModel)
   } catch (error) {
@@ -174,13 +182,16 @@ export async function POST(
     if (error) console.error('OpenLink chat session lease release failed', error)
   }
 
-  if (requestKind === 'initial-prompt') {
+  if (requestKind === 'initial-prompt' || requestKind === 'initial-prompt-retry') {
     try {
-      const persisted = await findFirstPersistedUserMessage(supabase, user.id, sessionId)
-      if (persisted) {
+      const recovery = await getInitialPromptRecoveryState(supabase, user.id, sessionId, session.initial_prompt, {
+        allowReauthorizationRetry: requestKind === 'initial-prompt-retry',
+      })
+      if (recovery.userMessage && !recovery.retryable) {
         await releaseLease()
-        return singleEventResponse(persisted)
+        return singleEventResponse(recovery.userMessage)
       }
+      persistedInitialPrompt = recovery.retryable ? recovery.userMessage : null
     } catch {
       await releaseLease()
       return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 500 })
@@ -214,6 +225,10 @@ export async function POST(
   }
 
   if (editMessageId) {
+    if (cloudMode) {
+      await releaseLease()
+      return Response.json({ error: 'EDIT_REWIND_UNSUPPORTED', detail: t('Cloud Computer 不支持从 OpenLink 修改旧消息；原消息与历史记录仍会保留') }, { status: 409 })
+    }
     try {
       const active = projectMessageRevisions(await listPersistedChatEvents(supabase, user.id, sessionId))
       const target = active.find((event) => event.type === 'message.user' && event.messageId === editMessageId)
@@ -221,8 +236,8 @@ export async function POST(
         await releaseLease()
         return Response.json({ error: 'EDIT_MESSAGE_NOT_FOUND', detail: t('原消息已变更，请刷新后重试') }, { status: 409 })
       }
-      const rewind = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/control`, {
-        method: 'POST', headers: { Authorization: `Bearer ${host.apiToken}`, 'Content-Type': 'application/json' },
+      const rewind = await fetch(`${host!.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/control`, {
+        method: 'POST', headers: { Authorization: `Bearer ${host!.apiToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rewind', text: target.text, sessionId, userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id }),
         signal: AbortSignal.timeout(35_000), cache: 'no-store',
       })
@@ -238,7 +253,7 @@ export async function POST(
   // should depend on Pi reaching its first `message_start` frame. Persist it
   // before contacting Agent Host so a provider outage or a provisioning error
   // cannot make the user's just-sent message disappear on reopen.
-  const canonicalUserEvent: OpenLinkAgentEvent = {
+  const canonicalUserEvent: OpenLinkAgentEvent = persistedInitialPrompt ?? {
     version: 1,
     id: `${sessionId}:${startSequence}`,
     sequence: startSequence,
@@ -251,11 +266,13 @@ export async function POST(
     text: message,
     ...(attachments.length ? { attachments } : {}),
   }
-  try {
-    await persistChatEvents(supabase, user.id, sessionId, [canonicalUserEvent])
-  } catch {
-    await releaseLease()
-    return Response.json({ error: 'SESSION_EVENTS_WRITE_FAILED' }, { status: 500 })
+  if (!persistedInitialPrompt) {
+    try {
+      await persistChatEvents(supabase, user.id, sessionId, [canonicalUserEvent])
+    } catch {
+      await releaseLease()
+      return Response.json({ error: 'SESSION_EVENTS_WRITE_FAILED' }, { status: 500 })
+    }
   }
   const upstreamAbortController = new AbortController()
   // Keep the BFF↔Agent Host stream alive briefly after the browser disconnects
@@ -271,13 +288,18 @@ export async function POST(
   const cancelAgentPrompt = () => {
     if (cancellationSent) return
     cancellationSent = true
-    void fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/cancel`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${host.apiToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id, sessionId }),
-      signal: AbortSignal.timeout(5_000),
-      cache: 'no-store',
-    }).catch((error) => {
+    const cancellation = cloudMode
+      ? cloudComputerHostRequest(`/v1/agent/sessions/${sessionId}/cancel`, {
+        userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id, sessionId,
+      }, AbortSignal.timeout(5_000))
+      : fetch(`${host!.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${host!.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id, sessionId }),
+        signal: AbortSignal.timeout(5_000),
+        cache: 'no-store',
+      })
+    void cancellation.catch((error) => {
       console.error('OpenLink Agent cancellation request failed', error)
     })
   }
@@ -421,41 +443,47 @@ export async function POST(
         try {
           // Native history restoration belongs to execution, not receipt.
           // Codex restores its VM rollout; only Pi needs the DB snapshot.
-          const nativeSession = agent === 'pi'
+          const nativeSession = agent === 'pi' && !cloudMode
             ? await loadPiSessionSnapshot(supabase, user.id, sessionId)
             : undefined
           upstreamSignal.throwIfAborted()
-          upstream = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/events`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${host.apiToken}`,
-              'Content-Type': 'application/json',
-              'X-OpenLink-Drain-On-Close': '1',
-            },
-            body: JSON.stringify({
+          const agentRequestBody = {
               userId: user.id,
               workspaceId: session.workspace_id,
               projectId: session.project_id,
               message: agentMessage,
               ...(resolvedAttachments.length ? { attachments: resolvedAttachments } : {}),
-              runtimeConfiguration,
-              agent,
-              accessMode: session.access_mode,
+              ...(runtimeConfiguration ? { runtimeConfiguration } : {}),
+              ...(cloudMode ? { model: { providerId: runtimeConfiguration.providerId, modelId: runtimeConfiguration.modelId } } : {}),
+              ...(cloudMode ? { agent } : { agent, accessMode: session.access_mode }),
               ...(browserSessionId ? { browserSessionId } : {}),
               ...(nativeSession ? { nativeSession } : {}),
-            }),
-            signal: upstreamSignal,
-            cache: 'no-store',
-          })
+          }
+          upstream = cloudMode
+            ? await cloudComputerSdkRequest(session.project_id, `/v1/agent/sessions/${sessionId}/events`, {
+              ...agentRequestBody,
+              sessionId,
+            }, upstreamSignal)
+            : await fetch(`${host!.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/events`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${host!.apiToken}`,
+                'Content-Type': 'application/json',
+                'X-OpenLink-Drain-On-Close': '1',
+              },
+              body: JSON.stringify(agentRequestBody),
+              signal: upstreamSignal,
+              cache: 'no-store',
+            })
         } finally {
           clearTimeout(preparationTimeout)
         }
         if (!upstream.ok || !upstream.body) {
           // Only forward known codes, never provider/Host diagnostic text,
           // which can contain credentials or private filesystem paths.
-          const failure = await upstream.json().catch(() => null) as { error?: { code?: unknown } } | null
-          const code = failure?.error?.code
-          const safeCodes = ['SESSION_BUSY', 'PROJECT_BACKEND_UNAVAILABLE', 'PROVISIONING_FAILED', 'BROWSER_SESSION_FAILED', 'INVALID_SESSION', 'BACKEND_NOT_CONFIGURED', 'REQUEST_ABORTED', 'AUTH_DENIED', 'AGENT_TIMEOUT']
+          const failure = await upstream.json().catch(() => null) as { error?: string | { code?: unknown } } | null
+          const code = typeof failure?.error === 'string' ? failure.error : failure?.error?.code
+          const safeCodes = ['SESSION_BUSY', 'PROJECT_BACKEND_UNAVAILABLE', 'PROVISIONING_FAILED', 'BROWSER_SESSION_FAILED', 'INVALID_SESSION', 'BACKEND_NOT_CONFIGURED', 'REQUEST_ABORTED', 'AUTH_DENIED', 'AGENT_TIMEOUT', 'CLOUD_CONNECTION_NOT_CONFIGURED', 'CLOUD_CONNECTION_INACTIVE', 'CLOUD_CONNECTION_REAUTH_REQUIRED', 'CLOUD_COMPUTER_UNAVAILABLE', 'CLOUD_COMPUTER_PERMISSION_REQUIRED', 'CLOUD_PROJECT_NOT_LINKED', 'CLOUD_PROJECT_NOT_ACCESSIBLE', 'CLOUD_SDK_HOST_NOT_CONFIGURED', 'COMPUTER_AGENT_CAPABILITY_REQUIRED', 'COMPUTER_AGENT_UNAVAILABLE']
           if (typeof code === 'string' && safeCodes.includes(code)) throw new Error(`AGENT_HOST_${code}`)
           throw new Error('AGENT_HOST_FAILED')
         }
@@ -508,8 +536,10 @@ export async function POST(
         for (const event of pendingCompletedEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
         controller.close()
       } catch (error) {
+        const safeCloudCodes = new Set(['CLOUD_CONNECTION_NOT_CONFIGURED', 'CLOUD_CONNECTION_INACTIVE', 'CLOUD_CONNECTION_REAUTH_REQUIRED', 'CLOUD_COMPUTER_UNAVAILABLE', 'CLOUD_COMPUTER_PERMISSION_REQUIRED', 'CLOUD_PROJECT_NOT_LINKED', 'CLOUD_PROJECT_NOT_ACCESSIBLE', 'CLOUD_SDK_HOST_NOT_CONFIGURED', 'COMPUTER_AGENT_CAPABILITY_REQUIRED', 'COMPUTER_AGENT_UNAVAILABLE'])
         const hostCode = error instanceof Error && error.message.startsWith('AGENT_HOST_')
-          ? error.message.slice('AGENT_HOST_'.length) : null
+          ? error.message.slice('AGENT_HOST_'.length)
+          : cloudMode && error instanceof Error && safeCloudCodes.has(error.message) ? error.message : null
         if (!upstreamReady) console.error('OpenLink Agent preparation failed', { sessionId, code: hostCode ?? (upstreamSignal.aborted ? 'PREPARATION_TIMEOUT' : 'TRANSPORT_FAILED') })
         if (!leaseRenewalFailure && !persistenceFailure && !terminalErrorSeen) {
           emitSyntheticError(clientDisconnected || (error instanceof Error && error.message === 'REQUEST_ABORTED')
@@ -572,7 +602,7 @@ export async function POST(
       'Cache-Control': 'no-cache, no-transform',
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'X-Accel-Buffering': 'no',
-      'X-OpenLink-Agent-Transport': 'pi-rpc',
+      'X-OpenLink-Agent-Transport': cloudMode ? 'vtslx-computer-pi-rpc' : 'pi-rpc',
     },
   })
 }

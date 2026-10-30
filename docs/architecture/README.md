@@ -69,6 +69,9 @@ The current ADR set covers these areas:
 - a separate platform control-plane store and independent Platform Console,
   with dynamic, capacity-aware desktop resource policy
   ([ADR-0027](./ADR-0027-platform-control-plane-and-dynamic-desktop-resources.md)).
+- separate source-checkout Local and Cloud runtime profiles, with an explicit
+  Cloud Supabase environment and Hydite identity shared with Studio
+  ([ADR-0028](./ADR-0028-cloud-development-startup-profile.md)).
 
 New decisions use the format below and the next unused ADR number:
 

@@ -1020,26 +1020,49 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
   </div>
 }
 
-function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> }) {
+function ErrorItem({
+  item,
+  onRetryInitialPrompt,
+  retryDisabled = false,
+}: {
+  item: Extract<TimelineItem, { kind: 'error' }>
+  onRetryInitialPrompt?: () => Promise<void>
+  retryDisabled?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
   const t = useT()
   const messages = item.messages ?? [item.message]
   const title = item.title ?? agentErrorTitle(item.message, t)
+  const canRetryInitialPrompt = Boolean(onRetryInitialPrompt)
+    && /Agent runtime could not start \(CLOUD_CONNECTION_(?:REAUTH_REQUIRED|INACTIVE)\); your message has been saved/.test(item.message)
   return (
     <div className="py-0.5" data-expanded={open} data-slot="timeline-error">
-      <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 w-full items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
-        <CircleAlert className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
-        {messages.length > 1 ? <span aria-label={t('{count} 次', { count: messages.length })} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
-        <ChevronRight className={`size-3 shrink-0 text-[var(--app-subtle-foreground)] transition-transform ${open ? 'rotate-90' : ''}`} />
-      </button>
+      <div className="flex min-w-0 items-center gap-2">
+        <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
+          <CircleAlert className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+          {messages.length > 1 ? <span aria-label={t('{count} 次', { count: messages.length })} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
+          <ChevronRight className={`size-3 shrink-0 text-[var(--app-subtle-foreground)] transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        {canRetryInitialPrompt && <button aria-label={t('重试')} className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--app-muted)] outline-none hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)] disabled:cursor-not-allowed disabled:opacity-40" disabled={retryDisabled} onClick={() => { void onRetryInitialPrompt?.().catch(() => undefined) }} type="button">{t('重试')}</button>}
+      </div>
       {open ? <div className="ml-[6px] mt-1 max-h-44 space-y-2 overflow-y-auto border-l border-[var(--app-border)] py-1 pl-[18px] pr-1 text-[11px] leading-[18px] text-[var(--app-muted)] [scrollbar-width:thin]" id={detailsId}>{messages.map((message, index) => <div className="whitespace-pre-wrap break-words" key={`${index}:${message}`}><span className="mr-2 font-mono text-[10px] text-[var(--app-subtle-foreground)]">#{index + 1}</span>{message}</div>)}</div> : null}
     </div>
   )
 }
 
-function TimelineItemView({ item, showContent = true }: { item: TimelineItem; showContent?: boolean }) {
+function TimelineItemView({
+  item,
+  showContent = true,
+  onRetryInitialPrompt,
+  retryDisabled = false,
+}: {
+  item: TimelineItem
+  showContent?: boolean
+  onRetryInitialPrompt?: () => Promise<void>
+  retryDisabled?: boolean
+}) {
   const t = useT()
   if (item.kind === 'message') return <TimelineMessageItem item={item} />
   if (item.kind === 'change' && item.snapshot && !(item.files ?? []).some((file) => !isLegacyRuntimeSnapshotPath(typeof file === 'string' ? file : file.path))) return null
@@ -1069,7 +1092,7 @@ function TimelineItemView({ item, showContent = true }: { item: TimelineItem; sh
   } else if (item.kind === 'checkpoint') {
     return null
   } else {
-    content = <ErrorItem item={item} />
+    content = <ErrorItem item={item} onRetryInitialPrompt={onRetryInitialPrompt} retryDisabled={retryDisabled} />
   }
   return <div className="grid h-7 w-full min-w-0 shrink-0 items-center overflow-hidden [&:has([data-expanded=true])]:h-auto [&:has([data-expanded=true])]:overflow-visible [&:has([data-open])]:h-auto [&:has([data-open])]:overflow-visible" data-timeline-item={item.kind}>{content}</div>
 }
@@ -1193,23 +1216,32 @@ function EndingSection({ round }: { round: ConversationRound }) {
 export function ChatTimeline({
   contentClassName = '',
   events,
+  initialPrompt = '',
   isStreaming = false,
   showThinkingContent = true,
   onFlowStatusChange,
   onEditMessage,
+  onRetryInitialPrompt,
 }: {
   contentClassName?: string
   events: OpenLinkAgentEvent[]
+  initialPrompt?: string
   isStreaming?: boolean
   showThinkingContent?: boolean
   onFlowStatusChange?: (status: ActiveFlowStatus | null) => void
   onEditMessage?: (messageId: string, text: string) => Promise<void>
+  onRetryInitialPrompt?: () => Promise<void>
 }) {
   const t = useT()
   // Normalize durable order first: a reconnect can deliver replay frames after
   // later live frames, and both projections below are order-sensitive.
   const timeline = useMemo(() => buildTimeline(projectMessageRevisions(orderAgentEvents(events))), [events])
   const rounds = useMemo(() => buildConversationRounds(timeline, t), [timeline])
+  const initialPromptMessageId = useMemo(() => {
+    const prompt = initialPrompt.trim().slice(0, 10_000)
+    if (!prompt) return null
+    return events.find((event) => event.type === 'message.user' && event.text === prompt)?.messageId ?? null
+  }, [events, initialPrompt])
   const activeFlow = useMemo(() => getActiveFlowStatus(timeline, t) ?? (isStreaming ? { label: t('正在思考'), state: 'solving' as OrbState } : null), [isStreaming, timeline])
 
   useEffect(() => {
@@ -1219,20 +1251,23 @@ export function ChatTimeline({
   return (
     <Conversation className="min-h-0 w-full flex-1" data-no-press-motion-scope>
       <ConversationContent className={`min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px] ${contentClassName}`}>
-        {rounds.map((round) => (
-          <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>
+        {rounds.map((round) => {
+          const retryInitialPrompt = round.user?.id === initialPromptMessageId
+            ? onRetryInitialPrompt
+            : undefined
+          return <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>
             {round.user ? <EditableUserMessage item={round.user} disabled={isStreaming} onEditMessage={onEditMessage} /> : null}
-            {round.thinkingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} />)}
+            {round.thinkingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} onRetryInitialPrompt={retryInitialPrompt} retryDisabled={isStreaming} />)}
             {isStreaming && round === rounds.at(-1) && !round.thinkingItems.length && !round.workingItems.length && !round.outputItems.length && !round.ending ? <StreamingThinkingItem /> : null}
             {round.workingItems.length || round.checkpoint ? (
               <WorkFlowGroup activeFlow={round.state === 'working' ? activeFlow : null} round={round}>
-                {round.workingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} />)}
+                {round.workingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} onRetryInitialPrompt={retryInitialPrompt} retryDisabled={isStreaming} />)}
               </WorkFlowGroup>
             ) : null}
             {round.outputItems.map((item) => <TimelineMessageItem item={item} key={item.id} />)}
             <EndingSection round={round} />
           </section>
-        ))}
+        })}
         <div className="h-px w-full" data-task-position="current" />
       </ConversationContent>
       <TaskPositionCapsule activeFlow={activeFlow} />

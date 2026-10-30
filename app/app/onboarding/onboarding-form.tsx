@@ -6,6 +6,11 @@ import { OrganizationSetup } from '@/components/organization-setup'
 import { useT } from '@/lib/i18n/client'
 import { useActionState } from 'react'
 import { saveNickname, type NicknameActionState } from './actions'
+import {
+  CloudProjectSetup,
+  type CloudProjectConnectionState,
+  type CloudProjectOption,
+} from './cloud-project-setup'
 
 const initialState: NicknameActionState = { error: null }
 
@@ -13,16 +18,33 @@ export function OnboardingForm({
   defaultNickname,
   prompt,
   step,
+  cloudProjectSetup,
 }: {
   defaultNickname: string
   prompt: string
-  step: 'nickname' | 'organization'
+  step: 'nickname' | 'organization' | 'project'
+  cloudProjectSetup?: {
+    connectionId: string | null
+    connectionState: CloudProjectConnectionState
+    projects: CloudProjectOption[]
+  }
 }) {
   const [state, formAction, isPending] = useActionState(saveNickname, initialState)
   const t = useT()
 
   if (step === 'organization') {
     return <OrganizationSetup prompt={prompt} showSkip />
+  }
+
+  if (step === 'project') {
+    return (
+      <CloudProjectSetup
+        connectionId={cloudProjectSetup?.connectionId ?? null}
+        connectionState={cloudProjectSetup?.connectionState ?? 'disconnected'}
+        projects={cloudProjectSetup?.projects ?? []}
+        prompt={prompt}
+      />
+    )
   }
 
   return (

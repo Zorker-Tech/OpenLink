@@ -9,6 +9,11 @@ overrides:
   postcss: 8.5.25
   sharp: 0.35.0
 
+patchedDependencies:
+  '@vtslx/platform-sdk@0.2.5':
+    hash: ab6710ea8fd01fb2e474ec8c05884d676e531dd7d36fcf1c0b443b7a442369dd
+    path: patches/@vtslx__platform-sdk@0.2.5.patch
+
 importers:
 
   .:
@@ -59,8 +64,8 @@ importers:
         specifier: 2.0.1
         version: 2.0.1(next@16.4.2(@babel/core@7.29.7)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
       '@vtslx/platform-sdk':
-        specifier: 0.2.2
-        version: 0.2.2
+        specifier: 0.2.5
+        version: 0.2.5(patch_hash=ab6710ea8fd01fb2e474ec8c05884d676e531dd7d36fcf1c0b443b7a442369dd)
       '@xyflow/react':
         specifier: ^12.12.0
         version: 12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.16)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -3291,8 +3296,8 @@ packages:
   '@vitest/utils@5.0.0':
     resolution: {integrity: sha512-dO++xL3vDfvhTAVimfkuQUA3k+JClIF1i1vAkPqpcGAthRmeWnXmHB7YPViPvgCwviX8u7Y5W1u2N//AaQr3fw==}
 
-  '@vtslx/platform-sdk@0.2.2':
-    resolution: {integrity: sha512-celJWwp0AeY4nGDIfb3zqn+m/91iDFrJAb4C0XOtGgb0gNSAO3bqnW9qiGtythXbWUeUO1/ZufdmswPnj1od9g==}
+  '@vtslx/platform-sdk@0.2.5':
+    resolution: {integrity: sha512-C4KTXx3aVnYE6m4jT3Pv3ADCddszu8dqynaOtFtCW1S/fPLgt0rlJFEPhIO7n6W1Qst0GReTD4gOudXfzm/cIQ==}
     engines: {node: '>=22'}
 
   '@webcontainer/env@1.1.1':
@@ -10498,7 +10503,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
-  '@vtslx/platform-sdk@0.2.2': {}
+  '@vtslx/platform-sdk@0.2.5(patch_hash=ab6710ea8fd01fb2e474ec8c05884d676e531dd7d36fcf1c0b443b7a442369dd)': {}
 
   '@webcontainer/env@1.1.1': {}
 

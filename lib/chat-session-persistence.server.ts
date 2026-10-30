@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import { isOpenLinkAgentEvent } from '@/lib/agent-runtime/events'
+import { isRetryableInitialPromptFailure, retryableInitialPromptUserMessage } from '@/lib/chat-auto-start'
 import { createClient } from '@/utils/supabase/server'
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -103,6 +104,54 @@ export async function findFirstPersistedUserMessage(
   if (error) throw error
   const payload = (data as { payload?: unknown } | null)?.payload
   return isOpenLinkAgentEvent(payload) && payload.type === 'message.user' ? payload : null
+}
+
+/**
+ * Initial prompts are idempotent after durable receipt. Automatic replay is
+ * safe only before the first agent event and for a small allowlist of startup
+ * failures. An explicit reauthorization retry may reuse the message across
+ * repeated reauth errors, but never after an Agent event has started the turn.
+ */
+export async function getInitialPromptRecoveryState(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+  initialPrompt: string,
+  options: { allowReauthorizationRetry?: boolean } = {},
+): Promise<{ userMessage: OpenLinkAgentEvent | null; retryable: boolean }> {
+  const userMessage = await findFirstPersistedUserMessage(supabase, userId, sessionId)
+  if (!userMessage) return { userMessage: null, retryable: false }
+
+  const prompt = initialPrompt.trim().slice(0, 10_000)
+  if (userMessage.type !== 'message.user' || userMessage.text !== prompt) {
+    return { userMessage, retryable: false }
+  }
+
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('chat_session_events')
+    .select('payload')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .gt('sequence', userMessage.sequence)
+    .order('sequence', { ascending: true })
+    .limit(options.allowReauthorizationRetry ? 11 : 2)
+  if (error) throw error
+
+  const failure = data?.length === 1 ? (data[0] as { payload: unknown }).payload : null
+  return {
+    userMessage,
+    retryable: data?.length === 0
+      || (isOpenLinkAgentEvent(failure) && isRetryableInitialPromptFailure(failure))
+      || retryableInitialPromptUserMessage(
+        [userMessage, ...(data ?? []).flatMap((row) => {
+          const payload = (row as { payload: unknown }).payload
+          return isOpenLinkAgentEvent(payload) ? [payload] : []
+        })],
+        prompt,
+        options,
+      ) !== null,
+  }
 }
 
 export async function persistPiSessionDelta(
@@ -254,7 +303,7 @@ export async function loadSessionContextUsage(
   supabase: ServerSupabaseClient,
   userId: string,
   sessionId: string,
-  agent: 'pi' | 'codex' = 'pi',
+  agent: 'pi' | 'codex' | 'omp' = 'pi',
 ): Promise<SessionContextUsage> {
   const usage: SessionContextUsage = {
     contextTokens: null,
@@ -267,7 +316,7 @@ export async function loadSessionContextUsage(
     modelId: null,
   }
 
-  if (agent === 'codex') {
+  if (agent !== 'pi') {
     const { data, error } = await supabase.schema('openlink').from('chat_session_events')
       .select('payload').eq('session_id', sessionId).eq('user_id', userId)
       .eq('event_type', 'usage.updated').order('sequence', { ascending: false }).limit(1).maybeSingle()
