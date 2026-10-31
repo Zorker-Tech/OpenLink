@@ -2,6 +2,7 @@ import { extname, resolve } from 'node:path'
 import { LocalOpenSandboxBackend } from './backends/local-opensandbox.js'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager } from './project-runtime.js'
 import { PodmanMachineDriver, ProjectVmManager } from './project-vm.js'
+import { UbuntuQemuProjectVmDriver } from './project-vm-ubuntu.js'
 import { ProjectContainerBrokerClient } from './project-container-broker.js'
 import { startPromptHttpServer } from './prompt-http-server.js'
 import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-status.js'
@@ -105,32 +106,80 @@ let projectRuntimeManager: ProjectRuntimeController
 if (projectRuntimeBackend === 'container') {
   projectRuntimeManager = new ProjectContainerBrokerClient(required(env, 'OPENLINK_PROJECT_CONTAINER_BROKER_SOCKET'))
 } else {
+  const projectVmDriver = env.OPENLINK_PROJECT_VM_DRIVER?.trim() || 'podman-machine'
+  if (!['podman-machine', 'ubuntu-qemu'].includes(projectVmDriver)) throw new Error('OPENLINK_PROJECT_VM_DRIVER must be podman-machine or ubuntu-qemu')
   const projectBaseDisk = resolve(required(env, 'OPENLINK_PROJECT_VM_BASE_DISK'))
-  const expectedDiskExtension = hostMachineProvider === 'hyperv' ? '.vhdx' : hostMachineProvider === 'applehv' ? '.raw' : '.qcow2'
-  if (extname(projectBaseDisk).toLowerCase() !== expectedDiskExtension) throw new Error(`OpenLink ${hostMachineProvider} Project VM requires a ${expectedDiskExtension} Golden Disk`)
-  const machineDriver = new PodmanMachineDriver({
-    command: env.OPENLINK_PODMAN_COMMAND || 'podman', bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0', rootfulPodman: env.OPENLINK_PROJECT_VM_ROOTFUL === '1', projectBaseDisk,
-    machineProvider: hostMachineProvider as 'applehv' | 'hyperv' | 'qemu', directAppleHv: process.platform === 'darwin',
-    helperBinaryDirectory: env.CONTAINERS_HELPER_BINARY_DIR || resolve('.openlink-runtime/toolchain/bin'),
-    ...(hostMachineProvider === 'applehv' ? { directStateRoot: resolve(projectVmStateRoot, 'applehv'), directSocketRoot: env.OPENLINK_PROJECT_VM_APPLEHV_SOCKET_ROOT } : {}),
-  })
-  projectVmManager = new ProjectVmManager({
-    stateRoot: projectVmStateRoot, machineDriver,
-    guestWorkspaceRoot: env.OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT || '/home/core/openlink/projects',
-    machineSpec: { cpus: integer(env.OPENLINK_PROJECT_VM_CPUS, 4, 1, 64), memoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, 8_192, 512, 262_144), diskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, 64, 10, 4_096), diskMode: 'thin' },
-  })
-  projectRuntimeManager = new ProjectRuntimeManager({
-    stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
-    serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: env.OPENLINK_PROJECT_VM_ROOTFUL === '1' }),
-    statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
-    opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
-    execdImage: env.OPENLINK_OPENSANDBOX_EXECD_IMAGE || 'openlink/opensandbox-execd:dev', egressImage: env.OPENLINK_OPENSANDBOX_EGRESS_IMAGE || 'openlink/opensandbox-egress:dev',
-    agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
-    codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
-    projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
-    ...(ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource } : {}),
-    browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
-  })
+  const machineSpec = {
+    cpus: integer(env.OPENLINK_PROJECT_VM_CPUS, 4, 1, 64),
+    memoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, projectVmDriver === 'ubuntu-qemu' ? 12_288 : 8_192, 512, 262_144),
+    diskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, 64, 10, 4_096),
+    diskMode: 'thin' as const,
+  }
+  if (projectVmDriver === 'ubuntu-qemu') {
+    if (process.platform !== 'linux') throw new Error('The T1 Ubuntu Project VM driver requires Linux with QEMU/KVM')
+    if (extname(projectBaseDisk).toLowerCase() !== '.qcow2') throw new Error('The T1 Ubuntu Project VM requires a .qcow2 base disk')
+    const machineDriver = new UbuntuQemuProjectVmDriver({
+      projectBaseDisk,
+      ...(env.OPENLINK_PROJECT_VM_BASE_FINGERPRINT ? { baseFingerprint: env.OPENLINK_PROJECT_VM_BASE_FINGERPRINT } : {}),
+      stateRoot: projectVmStateRoot,
+      qemuCommand: env.OPENLINK_QEMU_SYSTEM_COMMAND || 'qemu-system-x86_64',
+      qemuImgCommand: env.OPENLINK_QEMU_IMG_COMMAND || 'qemu-img',
+      sshCommand: env.OPENLINK_SSH_COMMAND || '/usr/bin/ssh',
+      scpCommand: env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
+      sshKeygenCommand: env.OPENLINK_SSH_KEYGEN_COMMAND || 'ssh-keygen',
+      guestUser: env.OPENLINK_PROJECT_VM_GUEST_USER || 'ubuntu',
+      bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0',
+      ...(env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT ? { socketRoot: env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT } : {}),
+    })
+    projectVmManager = new ProjectVmManager({
+      stateRoot: projectVmStateRoot,
+      machineDriver,
+      backend: 'qemu-kvm',
+      guestWorkspaceRoot: env.OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT || '/home/ubuntu/openlink/projects',
+      machineSpec,
+    })
+    projectRuntimeManager = new ProjectRuntimeManager({
+      stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
+      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true }),
+      statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
+      opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
+      execdImage: env.OPENLINK_OPENSANDBOX_EXECD_IMAGE || 'openlink/opensandbox-execd:dev', egressImage: env.OPENLINK_OPENSANDBOX_EGRESS_IMAGE || 'openlink/opensandbox-egress:dev',
+      agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
+      codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
+      projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
+      desktopPortOffset: integer(env.OPENLINK_PROJECT_RUNTIME_DESKTOP_PORT_OFFSET, 6_000, 0, 60_000),
+      projectDesktop: env.OPENLINK_DESKTOP_SCOPE === 'project',
+      browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
+    })
+  } else {
+    const expectedDiskExtension = hostMachineProvider === 'hyperv' ? '.vhdx' : hostMachineProvider === 'applehv' ? '.raw' : '.qcow2'
+    if (extname(projectBaseDisk).toLowerCase() !== expectedDiskExtension) throw new Error(`OpenLink ${hostMachineProvider} Project VM requires a ${expectedDiskExtension} Golden Disk`)
+    const machineDriver = new PodmanMachineDriver({
+      command: env.OPENLINK_PODMAN_COMMAND || 'podman', bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0', rootfulPodman: env.OPENLINK_PROJECT_VM_ROOTFUL === '1', projectBaseDisk,
+      machineProvider: hostMachineProvider as 'applehv' | 'hyperv' | 'qemu', directAppleHv: process.platform === 'darwin',
+      helperBinaryDirectory: env.CONTAINERS_HELPER_BINARY_DIR || resolve('.openlink-runtime/toolchain/bin'),
+      ...(hostMachineProvider === 'applehv' ? { directStateRoot: resolve(projectVmStateRoot, 'applehv'), directSocketRoot: env.OPENLINK_PROJECT_VM_APPLEHV_SOCKET_ROOT } : {}),
+    })
+    projectVmManager = new ProjectVmManager({
+      stateRoot: projectVmStateRoot, machineDriver,
+      guestWorkspaceRoot: env.OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT || '/home/core/openlink/projects',
+      machineSpec,
+    })
+    projectRuntimeManager = new ProjectRuntimeManager({
+      stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
+      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: env.OPENLINK_PROJECT_VM_ROOTFUL === '1' }),
+      statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
+      opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
+      execdImage: env.OPENLINK_OPENSANDBOX_EXECD_IMAGE || 'openlink/opensandbox-execd:dev', egressImage: env.OPENLINK_OPENSANDBOX_EGRESS_IMAGE || 'openlink/opensandbox-egress:dev',
+      agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
+      codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
+      projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
+      desktopPortOffset: integer(env.OPENLINK_PROJECT_RUNTIME_DESKTOP_PORT_OFFSET, 6_000, 0, 60_000),
+      projectDesktop: env.OPENLINK_DESKTOP_SCOPE === 'project',
+      ...(ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource } : {}),
+      browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
+    })
+  }
 }
 const provisioningQueue = createSupabaseProjectRuntimeProvisioningQueue(env)
 const provisionerId = env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID?.trim()

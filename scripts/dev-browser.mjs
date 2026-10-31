@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +10,7 @@ import { ensureBundledPodmanPlatformEngine } from './lib/bundled-podman-runtime.
 import { localRuntimeCacheRoot } from './lib/local-runtime-cache.mjs'
 import { bundledToolchainPaths, packageManagerCommand, prependPath, resolveHostPlatform, resolveUserStateRoot } from './lib/host-platform.mjs'
 import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './lib/project-vm-artifact.mjs'
+import { assertUbuntuProjectVmArtifactManifest, UBUNTU_PROJECT_VM_ARCHITECTURE } from './lib/ubuntu-project-vm-artifact.mjs'
 import { hardenUserOnlySecret } from './lib/windows-security.mjs'
 import { assertWindowsHyperVHostReady } from './lib/windows-hyperv.mjs'
 
@@ -26,6 +27,9 @@ const configuredWebRoot = process.env.OPENLINK_WEB_ROOT?.trim()
 const webRootPath = resolve(configuredWebRoot || rootPath)
 const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE ?? 'local').trim().toLowerCase()
 if (runtimeMode !== 'local' && runtimeMode !== 'cloud') throw new Error('OPENLINK_RUNTIME_MODE must be either local or cloud')
+const architecture = (process.env.OPENLINK_ARCHITECTURE ?? 't1').trim().toLowerCase()
+if (architecture !== 't1' && architecture !== 'e1') throw new Error('OPENLINK_ARCHITECTURE must be t1 or e1')
+const useUbuntuProjectVm = runtimeMode === 'local' && architecture === 't1'
 const hostPlatform = resolveHostPlatform()
 const localRuntimeCache = localRuntimeCacheRoot()
 const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
@@ -68,6 +72,8 @@ const projectSupabaseImageOutputRoot = process.env.OPENLINK_PROJECT_SUPABASE_IMA
   : resolve(projectSupabaseArtifactRoot, 'images', hostPlatform.architecture === 'x64' ? 'amd64' : 'arm64')
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
+const ubuntuProjectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/ubuntu/', import.meta.url))
+const ubuntuProjectVmBaseManifestPath = `${ubuntuProjectVmBaseRoot}/manifest.json`
 const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120'
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
 const desktopAgentHostUrl = process.env.OPENLINK_DESKTOP_AGENT_HOST_URL || 'http://127.0.0.1:43123'
@@ -147,6 +153,29 @@ if (webRootPath !== rootPath) {
   process.stdout.write(`Using Web/BFF source from ${webRootPath}\n`)
 }
 let projectVmBase
+
+async function loadUbuntuProjectVmBase() {
+  let manifest
+  try {
+    manifest = JSON.parse(await readFile(ubuntuProjectVmBaseManifestPath, 'utf8'))
+  } catch {
+    throw new Error('OpenLink T1 Ubuntu Project VM image manifest is missing. Run `pnpm runtime:ubuntu-vm-image` or start E1 with `-e1`.')
+  }
+  const architectureName = UBUNTU_PROJECT_VM_ARCHITECTURE[process.arch]
+  if (!architectureName) throw new Error(`T1 does not support the ${process.arch} architecture; start E1 with -e1`)
+  const validated = assertUbuntuProjectVmArtifactManifest(manifest, { architecture: architectureName })
+  const diskPath = resolve(ubuntuProjectVmBaseRoot, validated.disk)
+  let metadata
+  try {
+    metadata = await stat(diskPath)
+  } catch {
+    throw new Error(`OpenLink T1 Ubuntu Project VM disk image is missing: ${diskPath}`)
+  }
+  if (!metadata.isFile() || metadata.size !== manifest.diskBytes) {
+    throw new Error(`OpenLink T1 Ubuntu Project VM disk size does not match its manifest: ${diskPath}`)
+  }
+  return { fingerprint: validated.fingerprint, disk: validated.disk, diskPath, manifest }
+}
 
 async function loadProjectVmBase() {
   let manifest
@@ -537,41 +566,63 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
   })
   process.exit(await new Promise((resolveExit) => child.once('exit', (code) => resolveExit(code ?? 1))))
 }
-const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
-await waitForExit(podmanBuild, 'Podman toolchain build')
-await ensurePodmanConfig()
-if (hostPlatform.platform === 'darwin' && runtimeMode === 'local') {
-  projectVmBase = await loadProjectVmBase()
-  process.env.OPENLINK_PODMAN_COMMAND = podmanCommand
-  process.env.XDG_CONFIG_HOME = podmanConfigRoot
-  process.env.XDG_DATA_HOME = podmanDataRoot
-  process.env.CONTAINERS_HELPER_BINARY_DIR = podmanHelperBinariesDir
-  process.env.CONTAINERS_CONF = podmanContainersConfig
-  process.env.CONTAINERS_POLICY = podmanPolicy
-  process.env.PODMAN_CONNECTIONS_CONF = podmanConnections
-  process.env.PATH = prependPath(podmanHelperBinariesDir)
-  await ensureBundledPodmanPlatformEngine(rootPath, {
-    podman: podmanCommand,
-    host: hostPlatform,
-    baseDisk: projectVmBase.diskPath,
-  })
-}
-if (hostPlatform.platform === 'win32') {
-  await assertWindowsHyperVHostReady(podmanCommand, {
-    commandOptions: {
-      env: {
-        ...process.env,
-        XDG_CONFIG_HOME: podmanConfigRoot,
-        XDG_DATA_HOME: podmanDataRoot,
-        CONTAINERS_MACHINE_PROVIDER: hostPlatform.provider,
-        CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
-        CONTAINERS_CONF: podmanContainersConfig,
-        CONTAINERS_POLICY: podmanPolicy,
-        PODMAN_CONNECTIONS_CONF: podmanConnections,
-        PATH: prependPath(podmanHelperBinariesDir),
+let ubuntuQemuSystem
+let ubuntuQemuImg
+if (useUbuntuProjectVm) {
+  if (process.platform !== 'linux') {
+    throw new Error('T1 requires Linux with QEMU/KVM. Start the existing E1 isolation architecture with `-e1` on this host.')
+  }
+  try {
+    await access('/dev/kvm', constants.R_OK | constants.W_OK)
+  } catch {
+    throw new Error('T1 requires readable/writable /dev/kvm. Enable host KVM, or start E1 with `-e1`.')
+  }
+  ubuntuQemuSystem = process.env.OPENLINK_QEMU_SYSTEM_COMMAND?.trim() || '/usr/bin/qemu-system-x86_64'
+  ubuntuQemuImg = process.env.OPENLINK_QEMU_IMG_COMMAND?.trim() || '/usr/bin/qemu-img'
+  for (const candidate of [ubuntuQemuSystem, ubuntuQemuImg, '/usr/bin/ssh', '/usr/bin/scp', '/usr/bin/ssh-keygen']) {
+    try {
+      await access(candidate, constants.X_OK)
+    } catch {
+      throw new Error(`T1 requires ${candidate}. Install QEMU/OpenSSH or start E1 with \`-e1\`.`)
+    }
+  }
+} else {
+  const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
+  await waitForExit(podmanBuild, 'Podman toolchain build')
+  await ensurePodmanConfig()
+  if (hostPlatform.platform === 'darwin' && runtimeMode === 'local') {
+    projectVmBase = await loadProjectVmBase()
+    process.env.OPENLINK_PODMAN_COMMAND = podmanCommand
+    process.env.XDG_CONFIG_HOME = podmanConfigRoot
+    process.env.XDG_DATA_HOME = podmanDataRoot
+    process.env.CONTAINERS_HELPER_BINARY_DIR = podmanHelperBinariesDir
+    process.env.CONTAINERS_CONF = podmanContainersConfig
+    process.env.CONTAINERS_POLICY = podmanPolicy
+    process.env.PODMAN_CONNECTIONS_CONF = podmanConnections
+    process.env.PATH = prependPath(podmanHelperBinariesDir)
+    await ensureBundledPodmanPlatformEngine(rootPath, {
+      podman: podmanCommand,
+      host: hostPlatform,
+      baseDisk: projectVmBase.diskPath,
+    })
+  }
+  if (hostPlatform.platform === 'win32') {
+    await assertWindowsHyperVHostReady(podmanCommand, {
+      commandOptions: {
+        env: {
+          ...process.env,
+          XDG_CONFIG_HOME: podmanConfigRoot,
+          XDG_DATA_HOME: podmanDataRoot,
+          CONTAINERS_MACHINE_PROVIDER: hostPlatform.provider,
+          CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
+          CONTAINERS_CONF: podmanContainersConfig,
+          CONTAINERS_POLICY: podmanPolicy,
+          PODMAN_CONNECTIONS_CONF: podmanConnections,
+          PATH: prependPath(podmanHelperBinariesDir),
+        },
       },
-    },
-  })
+    })
+  }
 }
 const providerSecret = await persistentProviderSecret()
 const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
@@ -716,11 +767,14 @@ if (knowledgeServiceEnabled) {
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
 }
 
-projectVmBase ||= await loadProjectVmBase()
+const ubuntuProjectVmBase = useUbuntuProjectVm ? await loadUbuntuProjectVmBase() : undefined
+if (!useUbuntuProjectVm) projectVmBase ||= await loadProjectVmBase()
 
 const shared = {
   ...process.env,
-  OPENLINK_DESKTOP_MODE: process.env.OPENLINK_DESKTOP_MODE?.trim() || 'ubuntu-iso',
+  OPENLINK_DESKTOP_MODE: process.env.OPENLINK_DESKTOP_MODE?.trim() || 'ubuntu-container',
+  OPENLINK_DESKTOP_SCOPE: useUbuntuProjectVm ? 'project' : 'session',
+  OPENLINK_ARCHITECTURE: architecture,
   OPENLINK_UBUNTU_DESKTOP_ISO: process.env.OPENLINK_UBUNTU_DESKTOP_ISO?.trim()
     || resolve(rootPath, '.openlink-runtime/ubuntu/26.10/ubuntu-26.10-desktop-amd64.iso'),
   OPENLINK_RUNTIME_IMAGE_ROOT: projectImageRoot,
@@ -807,7 +861,23 @@ const shared = {
   // a system krunkit/libkrun installation on macOS.
   CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || hostPlatform.provider,
   OPENLINK_PROJECT_VM_STATE_ROOT: projectVmStateRoot,
-  OPENLINK_PROJECT_VM_BASE_DISK: projectVmBase.diskPath,
+  OPENLINK_PROJECT_VM_DRIVER: useUbuntuProjectVm ? 'ubuntu-qemu' : 'podman-machine',
+  OPENLINK_PROJECT_VM_BASE_DISK: useUbuntuProjectVm ? ubuntuProjectVmBase.diskPath : projectVmBase.diskPath,
+  ...(useUbuntuProjectVm ? {
+    OPENLINK_PROJECT_VM_BASE_FINGERPRINT: ubuntuProjectVmBase.fingerprint,
+    OPENLINK_PROJECT_VM_GUEST_USER: 'ubuntu',
+    OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT: '/home/ubuntu/openlink/projects',
+    OPENLINK_PROJECT_VM_MEMORY_MB: process.env.OPENLINK_PROJECT_VM_MEMORY_MB || '12288',
+    OPENLINK_QEMU_SYSTEM_COMMAND: ubuntuQemuSystem,
+    OPENLINK_QEMU_IMG_COMMAND: ubuntuQemuImg,
+    OPENLINK_SSH_COMMAND: process.env.OPENLINK_SSH_COMMAND || '/usr/bin/ssh',
+    OPENLINK_SCP_COMMAND: process.env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
+    OPENLINK_SSH_KEYGEN_COMMAND: process.env.OPENLINK_SSH_KEYGEN_COMMAND || '/usr/bin/ssh-keygen',
+  } : {
+    OPENLINK_PROJECT_VM_GUEST_USER: 'core',
+    OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT: '/home/core/openlink/projects',
+    OPENLINK_PROJECT_VM_MEMORY_MB: process.env.OPENLINK_PROJECT_VM_MEMORY_MB || '8192',
+  }),
   OPENLINK_PROJECT_VM_BOOTSTRAP: '1',
   // Rootful here is inside the isolated Project VM, not on the macOS host.
   // OpenSandbox's egress/Credential Vault sidecar requires NET_ADMIN; keep the
