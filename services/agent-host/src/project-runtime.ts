@@ -21,6 +21,12 @@ export interface ProjectRuntimeServicePorts {
   /** Project-local Supavisor session and transaction endpoints. */
   supabaseDatabase: number
   supabasePooler: number
+  /**
+   * Project-level native desktop (noVNC/websockify) published only to the
+   * VM loopback. E1 reserves it for compatibility but uses the per-session
+   * container desktop instead.
+   */
+  desktop: number
 }
 
 export interface ProjectSupabaseStudioProxyRequest {
@@ -51,6 +57,12 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   browserTokenSecret: string
   /** Private Agent Host endpoint for the project's code-server workbench. */
   codeServerEndpoint: string
+  /**
+   * Project-level native desktop exposed through the Desktop Gateway. Present
+   * only for T1 (Ubuntu Project VM + native desktop). E1 sessions return
+   * their own per-session container desktop instead.
+   */
+  desktopEndpoint?: string
   sessionStorageRoot: string
   /** Verified official Ubuntu Desktop ISO staged inside this Project VM. */
   ubuntuDesktopIsoPath?: string
@@ -161,6 +173,13 @@ export interface ProjectRuntimeManagerOptions {
   supabaseGatewayPortOffset?: number
   supabaseDatabasePortOffset?: number
   supabasePoolerPortOffset?: number
+  /** Project-level native desktop port offset (T1). */
+  desktopPortOffset?: number
+  /**
+   * Expose a project-level native desktop endpoint. T1 sets this; E1 leaves
+   * it false and keeps the per-session container desktop.
+   */
+  projectDesktop?: boolean
   publicHost?: string
   browserAllowedOrigins?: string
   statusWriter?: ProjectRuntimeStatusWriter
@@ -202,6 +221,7 @@ interface PersistedProjectPorts {
   supabaseGateway?: number
   supabaseDatabase?: number
   supabasePooler?: number
+  desktop?: number
   allocatedAt: string
 }
 
@@ -318,6 +338,8 @@ export class ProjectRuntimeManager {
   private readonly supabaseGatewayPortOffset: number
   private readonly supabaseDatabasePortOffset: number
   private readonly supabasePoolerPortOffset: number
+  private readonly desktopPortOffset: number
+  private readonly projectDesktop: boolean
   private readonly publicHost: string
   private readonly browserAllowedOrigins: string
   private readonly statusWriter?: ProjectRuntimeStatusWriter
@@ -381,7 +403,9 @@ export class ProjectRuntimeManager {
     this.supabaseGatewayPortOffset = options.supabaseGatewayPortOffset ?? 3_000
     this.supabaseDatabasePortOffset = options.supabaseDatabasePortOffset ?? 4_000
     this.supabasePoolerPortOffset = options.supabasePoolerPortOffset ?? 5_000
-    const offsets = [this.opensandboxPortOffset, this.browserPortOffset, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset]
+    this.desktopPortOffset = options.desktopPortOffset ?? 6_000
+    this.projectDesktop = options.projectDesktop === true
+    const offsets = [this.opensandboxPortOffset, this.browserPortOffset, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset, this.desktopPortOffset]
     if (offsets.some((offset) => !Number.isSafeInteger(offset) || offset < 0) || new Set(offsets).size !== offsets.length) {
       throw new AgentHostError('INVALID_BODY', 'Project runtime port offsets are invalid')
     }
@@ -389,7 +413,7 @@ export class ProjectRuntimeManager {
       throw new AgentHostError('INVALID_BODY', 'Project runtime port range size is invalid')
     }
     const highestPort = this.projectPortBase + this.projectPortRangeSize - 1
-      + Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset)
+      + Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset, this.desktopPortOffset)
     if (highestPort > 65_000) throw new AgentHostError('INVALID_BODY', 'Project runtime port range exceeds 65000')
     this.publicHost = options.publicHost ?? '127.0.0.1'
     this.browserAllowedOrigins = options.browserAllowedOrigins?.trim() || 'http://localhost:3000'
@@ -500,7 +524,7 @@ export class ProjectRuntimeManager {
       || persisted.backend !== this.vmManager.runtimeBackend) return undefined
 
     const ports = persisted.servicePorts as Partial<ProjectRuntimeServicePorts> | undefined
-    if (!ports || !this.isValidPortSet(ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler)) return undefined
+    if (!ports || !this.isValidPortSet(ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler, ports.desktop)) return undefined
     const servicePorts = ports as ProjectRuntimeServicePorts
     const sessionStorageRoot = `${workspacePath}/.openlink/sessions`
     if (typeof persisted.sessionStorageRoot === 'string' && persisted.sessionStorageRoot !== sessionStorageRoot) return undefined
@@ -551,6 +575,7 @@ export class ProjectRuntimeManager {
       browserApiToken: secrets.browserApiToken,
       browserTokenSecret: secrets.browserTokenSecret,
       codeServerEndpoint: `http://${this.publicHost}:${servicePorts.codeServer}`,
+      ...(this.projectDesktop ? { desktopEndpoint: `http://${this.publicHost}:${servicePorts.desktop}` } : {}),
       sessionStorageRoot,
       ...(typeof isoPath === 'string' ? { ubuntuDesktopIsoPath: isoPath } : {}),
       agentWorkerImage: typeof persisted.agentWorkerImage === 'string' ? persisted.agentWorkerImage : this.images.agentWorkerImage,
@@ -1400,6 +1425,7 @@ export class ProjectRuntimeManager {
       vm = await this.vmManager.ensure(projectId, {
         diskMode,
         servicePorts: [ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler],
+        desktopPort: ports.desktop,
         sshPort: this.vmSshPort(ports),
       })
       // A previous stop/rebuild may have retained a tunnel whose close failed.
@@ -1507,6 +1533,7 @@ export class ProjectRuntimeManager {
         browserApiToken: secrets.browserApiToken,
         browserTokenSecret: secrets.browserTokenSecret,
         codeServerEndpoint: `http://${this.publicHost}:${endpointPorts.codeServer}`,
+        ...(this.projectDesktop ? { desktopEndpoint: `http://${this.publicHost}:${ports.desktop}` } : {}),
         sessionStorageRoot: input.sessionStorageRoot,
         ...(ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath } : {}),
         agentWorkerImage: input.agentWorkerImage,
@@ -1785,6 +1812,7 @@ export class ProjectRuntimeManager {
       opensandboxEndpoint: descriptor.opensandboxEndpoint,
       browserHostEndpoint: descriptor.browserHostEndpoint,
       codeServerEndpoint: descriptor.codeServerEndpoint,
+      ...(descriptor.desktopEndpoint ? { desktopEndpoint: descriptor.desktopEndpoint } : {}),
       sessionStorageRoot: descriptor.sessionStorageRoot,
       ...(descriptor.ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath: descriptor.ubuntuDesktopIsoPath } : {}),
       agentWorkerImage: descriptor.agentWorkerImage,
@@ -1836,11 +1864,12 @@ export class ProjectRuntimeManager {
         const supabaseGateway = openSandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
         const supabaseDatabase = openSandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
         const supabasePooler = openSandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
+        const desktop = openSandbox - this.opensandboxPortOffset + this.desktopPortOffset
         const sshPort = browserHost + 101
-        const candidates = [openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, sshPort]
+        const candidates = [openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop, sshPort]
         if (candidates.some((candidate) => !Number.isSafeInteger(candidate) || candidate < 1_024 || candidate > 65_000 || used.has(candidate))) continue
         if (new Set(candidates).size !== candidates.length) continue
-        const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler }
+        const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop }
         if (!await this.areHostPortsAvailable(allocation)) continue
         await this.persistProjectPorts(projectId, allocation)
         this.portAllocations.set(projectId, allocation)
@@ -1874,9 +1903,10 @@ export class ProjectRuntimeManager {
       const supabaseGateway = typeof value.supabaseGateway === 'number' ? value.supabaseGateway : opensandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
       const supabaseDatabase = typeof value.supabaseDatabase === 'number' ? value.supabaseDatabase : opensandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
       const supabasePooler = typeof value.supabasePooler === 'number' ? value.supabasePooler : opensandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
-      if (this.isValidPortSet(opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler)) {
-        const ports = { opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler }
-        if (value.codeServer !== codeServer || value.supabaseGateway !== supabaseGateway || value.supabaseDatabase !== supabaseDatabase || value.supabasePooler !== supabasePooler) await this.persistProjectPorts(projectId, ports)
+      const desktop = typeof value.desktop === 'number' ? value.desktop : opensandbox - this.opensandboxPortOffset + this.desktopPortOffset
+      if (this.isValidPortSet(opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop)) {
+        const ports = { opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop }
+        if (value.codeServer !== codeServer || value.supabaseGateway !== supabaseGateway || value.supabaseDatabase !== supabaseDatabase || value.supabasePooler !== supabasePooler || value.desktop !== desktop) await this.persistProjectPorts(projectId, ports)
         return ports
       }
     } catch {}
@@ -1896,6 +1926,7 @@ export class ProjectRuntimeManager {
         used.add(allocation.supabaseGateway)
         used.add(allocation.supabaseDatabase)
         used.add(allocation.supabasePooler)
+        used.add(allocation.desktop)
         used.add(allocation.browserHost + 101)
         continue
       }
@@ -1915,8 +1946,8 @@ export class ProjectRuntimeManager {
     return used
   }
 
-  private isValidPortSet(opensandbox: unknown, browserHost: unknown, codeServer: unknown, supabaseGateway: unknown, supabaseDatabase: unknown, supabasePooler: unknown): boolean {
-    const values = [opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler]
+  private isValidPortSet(opensandbox: unknown, browserHost: unknown, codeServer: unknown, supabaseGateway: unknown, supabaseDatabase: unknown, supabasePooler: unknown, desktop: unknown): boolean {
+    const values = [opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop]
     if (values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1_024 || value > 65_000)) return false
     return new Set([...values, (browserHost as number) + 101]).size === values.length + 1
       && (browserHost as number) + 101 <= 65_000
