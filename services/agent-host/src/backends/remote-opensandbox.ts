@@ -104,6 +104,8 @@ export class RemoteOpenSandboxRpcBackend {
 
   async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<RemoteRpcPromptSession> {
     const desktopMode = this.config.desktopMode ?? 'ubuntu-container'
+    // T1 exposes one native desktop per Project VM; chats share it.
+    const projectDesktopUrl = projectRuntime?.desktopEndpoint
     if (desktopMode === 'ubuntu-iso' && !projectRuntime?.ubuntuDesktopIsoPath) {
       throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Ubuntu ISO desktop mode is not ready. The verified desktop ISO has not been staged in this Project VM.', { retryable: true })
     }
@@ -276,6 +278,7 @@ export class RemoteOpenSandboxRpcBackend {
         paused = false
       }
       const desktopEndpoint = async (): Promise<DesktopEndpoint> => {
+        if (projectDesktopUrl) return { url: projectDesktopUrl, headers: {} }
         await ensureRunning()
         if (!desktopStarted) {
           if (!desktopStarting) {
@@ -289,6 +292,7 @@ export class RemoteOpenSandboxRpcBackend {
         return { url: endpointUrl(connection, desktop), headers: desktop.headers ?? {} }
       }
       const desktopControl = async (action: 'status' | 'suspend' | 'resume'): Promise<DesktopRuntimeStatus> => {
+        if (projectDesktopUrl) return { state: 'running', suspended: false }
         if (paused) return { state: 'stopped', suspended: false }
         await ensureRunning()
         return requestDesktopControl(baseUrl, {

@@ -11,7 +11,7 @@ import type { ProjectRuntimeDescriptor } from '../src/project-runtime.js'
 const projectId = '123e4567-e89b-42d3-a456-426614174000'
 const descriptor: ProjectRuntimeDescriptor = {
   projectId, machineName: 'olc-123e4567', workspacePath: '/state/projects/123/workspace', backend: 'docker-container', diskMode: 'thin', status: 'ready',
-  servicePorts: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+  servicePorts: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000, desktop: 57000 },
   opensandboxEndpoint: 'http://127.0.0.1:51000', opensandboxApiKey: 'secret', browserHostEndpoint: 'http://127.0.0.1:52000', browserApiToken: 'secret', browserTokenSecret: 'secret', codeServerEndpoint: 'http://127.0.0.1:53000',
   sessionStorageRoot: '/state/projects/123/workspace/.openlink/sessions', agentWorkerImage: 'agent:test', agentRpcWorkerImage: 'rpc:test', codeServerImage: 'code:test',
   supabase: { url: 'http://127.0.0.1:54000', publishableKey: 'sb_publishable_test', anonKey: 'a.b.c', revision: 'test' }, egressMode: 'sidecar',

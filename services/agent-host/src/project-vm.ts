@@ -25,6 +25,8 @@ export interface ProjectVmMachineSpec {
   diskMode: ProjectVmDiskMode
   /** Host ports which the VM must forward to the project guest. */
   servicePorts?: number[]
+  /** Host port forwarded to the guest's project-level desktop (6080). */
+  desktopPort?: number
   /** Host port used to reach the guest SSH server. */
   sshPort?: number
 }
@@ -287,7 +289,7 @@ function machineDiskPath(raw: string): string | undefined {
   }
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\"'\"'") + "'"
 }
 
