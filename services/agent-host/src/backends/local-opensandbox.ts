@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { resolve as resolveGuestPath } from 'node:path/posix'
 import { promisify } from 'node:util'
 import { AgentHostError } from '../errors.js'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from '../contracts.js'
@@ -637,7 +638,10 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_WORKSPACE_ROOT: '/workspace',
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
         OPENLINK_DESKTOP_MODE: desktopMode,
-        ...(desktopMode === 'ubuntu-iso' ? { OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso' } : {}),
+        ...(desktopMode === 'ubuntu-iso' ? {
+          OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
+          OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
+        } : {}),
         ...(nativeSession ? { OPENLINK_AGENT_SESSION_FILE: '/openlink/session/cloud-session.jsonl' } : {}),
         ...(egressEnabled ? { NODE_EXTRA_CA_CERTS: '/opt/opensandbox/mitmproxy-ca-cert.pem' } : {}),
         OPENLINK_AGENT_MODEL: model,
@@ -698,6 +702,15 @@ export class LocalOpenSandboxBackend {
         { name: 'session', host: { path: layout.root }, mountPath: '/openlink/session', readOnly: false },
         ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
           { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
+          // Project-scoped installed golden disk and per-session overlays.
+          // The ISO stays on its separate read-only mount so a session cannot
+          // modify the verified image through this writable cache.
+          {
+            name: 'desktop-cache',
+            host: { path: resolveGuestPath(projectRuntime.sessionStorageRoot, '.runtime', 'desktop') },
+            mountPath: '/opt/openlink/desktop-cache',
+            readOnly: false,
+          },
         ] : []),
       ],
       resource: desktopMode === 'ubuntu-iso' ? { cpu: '4', memory: '8Gi' } : { cpu: '2', memory: '4Gi' },

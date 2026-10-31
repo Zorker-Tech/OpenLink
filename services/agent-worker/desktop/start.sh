@@ -86,7 +86,14 @@ if [[ "${1:-}" == "--run-xfce-session" ]]; then
 fi
 
 if [[ "${OPENLINK_DESKTOP_MODE:-ubuntu-container}" == "ubuntu-iso" ]]; then
+  # The installer VM is a valid, observable desktop surface. Start websockify
+  # up front so the chat tab can attach to the first-boot installer instead of
+  # waiting (and timing out) through the whole install/golden-disk build.
+  # noVNC reconnects when the installer exits and the installed VM takes over
+  # the same 5900 port.
   start_background ubuntu-vm bash /opt/openlink/desktop/run-ubuntu-vm.sh
+  desktop_pid_file=/tmp/openlink-desktop-ubuntu-vm.pid
+  start_background websockify /usr/bin/websockify --web=/usr/share/novnc 6080 localhost:5900
   wait_for_file /tmp/openlink-ubuntu-vm-vnc.ready
 else
   mkdir -p /run/user/1000 /tmp/openlink-runtime-openlink
@@ -135,23 +142,21 @@ else
     exit 1
   fi
   start_background x11vnc x11vnc -display :0 -forever -shared -rfbport 5900 -localhost -nopw -xrandr
+  start_background websockify /usr/bin/websockify --web=/usr/share/novnc 6080 localhost:5900
 fi
 
-start_background websockify /usr/bin/websockify --web=/usr/share/novnc 6080 localhost:5900
 for _ in $(seq 1 30); do
   if curl --silent --fail http://127.0.0.1:6080/vnc.html >/dev/null; then break; fi
   sleep 0.2
 done
 
 websockify_pid="$(cat /tmp/openlink-desktop-websockify.pid)"
-if [[ "${OPENLINK_DESKTOP_MODE:-ubuntu-container}" != "ubuntu-iso" ]]; then
-  desktop_pid="$(cat "$desktop_pid_file")"
-  while kill -0 "$desktop_pid" 2>/dev/null && kill -0 "$websockify_pid" 2>/dev/null; do
-    sleep 1
-  done
-  if ! kill -0 "$desktop_pid" 2>/dev/null; then
-    echo "Desktop session exited; desktop endpoint is no longer ready" >&2
-    exit 1
-  fi
+desktop_pid="$(cat "$desktop_pid_file")"
+while kill -0 "$desktop_pid" 2>/dev/null && kill -0 "$websockify_pid" 2>/dev/null; do
+  sleep 1
+done
+if ! kill -0 "$desktop_pid" 2>/dev/null; then
+  echo "Desktop process exited; desktop endpoint is no longer ready" >&2
+  exit 1
 fi
 tail --pid="$websockify_pid" -f /dev/null
