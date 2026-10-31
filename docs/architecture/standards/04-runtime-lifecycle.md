@@ -144,6 +144,35 @@ While the application is running, inactivity may suspend/pause a VM only when
 the selected runtime supports fast state-preserving resume. Session cleanup
 must never delete or physically power off the Project VM.
 
+## Project computer architectures (T1 and E1)
+
+The project computer mode is resolved by the root supervisor before any
+Project VM is created and is never inferred at request time.
+
+- **T1 (default)** — one Ubuntu 24.04 LTS QEMU/KVM Project VM per project with a
+  native project desktop (Xvfb + GNOME/Xfce + x11vnc + websockify), rootful
+  Podman and OpenSandbox sessions. The desktop is project-scoped and shared by
+  all chats. The immutable Ubuntu base is content-addressed; each project keeps
+  a qcow2 overlay plus its own SSH identity and cloud-init seed identity. The
+  desktop endpoint is published on the project runtime descriptor and reached
+  only through the authenticated Desktop Gateway. A chat idle timer must not
+  suspend the project desktop.
+- **E1 (explicit `-e1`)** — the existing Podman machine Project VM with
+  OpenSandbox sessions and a per-chat container desktop. It does not select the
+  ISO desktop; the ISO/golden code is retained only as an experimental legacy
+  surface. Each chat owns and may suspend its own container desktop without
+  affecting another chat.
+- Both modes preserve the one-project-one-VM rule. Chat sessions never own an
+  OS and never create a nested Project VM in the product path.
+- Ordinary startup verifies the selected mode's immutable artifact before the
+  Agent Host starts. A missing or mismatched artifact, missing project disk,
+  port conflict, unavailable KVM, cloud-init/SSH timeout or unhealthy service
+  fails closed with an actionable error. It never substitutes another mode or
+  a fake ready state.
+
+See [ADR-0029](../ADR-0029-project-computer-t1-e1-modes.md) and the per-mode
+index in [`../architectures/README.md`](../architectures/README.md).
+
 ## Session Worker lifecycle
 
 One Worker lease is keyed by user, workspace, chat session, model/provider
