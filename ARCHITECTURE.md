@@ -16,9 +16,16 @@ Browser
   → Next.js Web/BFF
       → ZOKERBASE (identity + authoritative application data)
       → Agent Host → Project VM → OpenSandbox → Agent Worker/Pi
+                     ├─ T1: Ubuntu LTS + native project desktop (default)
+                     └─ E1: Podman machine OS + per-chat container desktop
       → Browser Host → native preview / isolated Chromium
       → Knowledge Service → ZOKERBASE + embedding provider + Zero
 ```
+
+The project-computer mode is selected at startup
+([ADR-0029](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md)).
+T1 is the default; E1 is explicit `-e1`. Per-mode architecture and operations
+are indexed in [`docs/architecture/architectures/`](./docs/architecture/architectures/README.md).
 
 ## Binding invariants
 
@@ -45,6 +52,17 @@ Browser
 11. **Local host support is native and contract-equal.** macOS uses AppleHV
     with sparse raw/APFS clones; Windows uses Hyper-V with dynamic/differencing
     VHDX. WSL and Docker containers are not implicit Project VM fallbacks.
+12. **A project computer mode is explicit and defaults to T1.** T1 is one
+    Ubuntu Project VM with one native project desktop shared by all chats. E1
+    is the explicit `-e1` mode with per-chat container desktops. The two modes
+    have separate artifacts and state; switching modes is never a silent
+    in-place migration.
+13. **Desktop scope follows the mode.** A T1 project desktop is owned by the
+    Project VM lifecycle and is never suspended by a chat idle timer. An E1
+    desktop is owned by its chat session and may suspend independently.
+14. **T1 requires a native Linux QEMU/KVM host in this release.** A Linux host
+    provided by WSL2 runs a native Project VM; WSL itself is not the Project VM.
+    macOS and Windows use E1 until native T1 drivers are accepted.
 
 ## Repository boundaries
 
