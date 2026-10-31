@@ -63,7 +63,7 @@ test('recreates failed Project VM service containers instead of restarting stale
     machineName: 'olp-test',
     workspacePath: '/home/core/openlink/projects/test/workspace',
     sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
-    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000, desktop: 57000 },
     opensandboxApiKey: 'sandbox-key',
     browserApiToken: 'browser-token',
     browserTokenSecret: 'browser-secret',
@@ -146,7 +146,7 @@ test('does not fail Project VM activation when a stale session workload cannot r
     machineName: 'olp-test',
     workspacePath: '/home/core/openlink/projects/test/workspace',
     sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
-    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000, desktop: 57000 },
     opensandboxApiKey: 'sandbox-key',
     browserApiToken: 'browser-token',
     browserTokenSecret: 'browser-secret',
@@ -217,7 +217,7 @@ test('resumes definition-identical Project VM services after a VM restart withou
     machineName: 'olp-test',
     workspacePath: '/home/core/openlink/projects/test/workspace',
     sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
-    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000, desktop: 57000 },
     opensandboxApiKey: 'sandbox-key', browserApiToken: 'browser-token', browserTokenSecret: 'browser-secret',
     browserAllowedOrigins: 'http://localhost:3000',
     opensandboxImage: 'openlink/opensandbox-server:dev', browserHostImage: 'openlink/browser-host:dev',
@@ -400,6 +400,7 @@ test('reassigns a persisted Project port bundle when a host port is occupied', a
       supabaseGateway: 54_001,
       supabaseDatabase: 55_001,
       supabasePooler: 56_001,
+      desktop: 57_001,
     })
     assert.match(await readFile(resolve(stateRoot, 'projects', projectId, 'ports.json'), 'utf8'), /"codeServer":53001/)
     await runtime.close()
