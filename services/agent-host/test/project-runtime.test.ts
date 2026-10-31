@@ -110,6 +110,64 @@ test('recreates failed Project VM service containers instead of restarting stale
   assert.match(Buffer.from(configEnv!.slice('OPENLINK_OPENSANDBOX_CONFIG_B64='.length), 'base64').toString('utf8'), /userns_mode = "keep-id"/)
 })
 
+test('does not fail Project VM activation when a stale session workload cannot restart', async () => {
+  const calls: Array<{ command: string; args: string[] }> = []
+  const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
+    calls.push({ command, args })
+    const podmanArgs = command === 'sudo' && args[0] === '-n' && args[1] === 'podman' ? args.slice(2) : command === 'podman' ? args : null
+    if (command === 'id' && args[0] === '-u') return { stdout: '1000\n', stderr: '' }
+    if (command === 'id' && args[0] === '-g') return { stdout: '1000\n', stderr: '' }
+    if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'exists') return { stdout: 'true\n', stderr: '' }
+    if (podmanArgs?.[0] === 'network' && podmanArgs[1] === 'inspect') return { stdout: '', stderr: '' }
+    if (command === 'test' && args[0] === '-S') return { stdout: '', stderr: '' }
+    if (podmanArgs?.[0] === 'container' && podmanArgs[1] === 'inspect') throw new Error('container does not exist')
+    if (podmanArgs?.[0] === 'ps') {
+      const filter = podmanArgs.find((value) => value.startsWith('label=')) ?? ''
+      return { stdout: filter === 'label=opensandbox.io/id' ? 'sessionmain\n' : '', stderr: '' }
+    }
+    if (podmanArgs?.[0] === 'inspect' && podmanArgs[1] === '--format' && podmanArgs[2] === '{{.State.Status}}') return { stdout: 'exited\n', stderr: '' }
+    if (podmanArgs?.[0] === 'update') return { stdout: '', stderr: '' }
+    if (podmanArgs?.[0] === 'start' && podmanArgs[1] === 'sessionmain') {
+      throw new Error('listen tcp 0.0.0.0:49421: bind: address already in use')
+    }
+    if (command === 'curl') return { stdout: '', stderr: '' }
+    return { stdout: '', stderr: '' }
+  }
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine,
+    forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const input: ProjectRuntimeServiceInput = {
+    projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+    machineName: 'olp-test',
+    workspacePath: '/home/core/openlink/projects/test/workspace',
+    sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+    opensandboxApiKey: 'sandbox-key',
+    browserApiToken: 'browser-token',
+    browserTokenSecret: 'browser-secret',
+    browserAllowedOrigins: 'http://localhost:3000',
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+    agentRpcWorkerImage: 'openlink/agent-rpc-worker:dev',
+    codeServerImage: 'openlink/code-server:dev',
+  }
+
+  await new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true }).ensureServices(input)
+
+  assert.ok(calls.some((call) => {
+    const podmanArgs = call.command === 'sudo' && call.args[0] === '-n' && call.args[1] === 'podman' ? call.args.slice(2) : null
+    return podmanArgs?.[0] === 'rm' && podmanArgs.includes('--force') && podmanArgs.at(-1) === 'sessionmain'
+  }), 'the conflicting session workload must be removed instead of blocking project services')
+})
+
 test('resumes definition-identical Project VM services after a VM restart without treating shutdown signals as corruption', async () => {
   const calls: Array<{ command: string; args: string[] }> = []
   const containers = new Map<string, { imageId: string; configHash: string }>()
@@ -447,6 +505,9 @@ test('preserves resident Project VMs across an Agent Host restart and restores t
     vmManager,
     machineDriver,
     serviceDriver,
+    // The in-memory driver has no real endpoints; force the persisted fast
+    // path to decline so this test exercises the provisioning fallback.
+    reattachProbeTimeoutMs: 0,
     opensandboxImage: 'openlink/opensandbox-server:dev',
     browserHostImage: 'openlink/browser-host:dev',
     execdImage: 'openlink/opensandbox-execd:dev',
@@ -471,8 +532,60 @@ test('preserves resident Project VMs across an Agent Host restart and restores t
   }
 })
 
-test('serves Project Supabase management from a ready persisted VM without re-provisioning project services', async () => {
-  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-management-'))
+test('reattaches a healthy persisted Project runtime without replaying provisioning', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-reattach-'))
+  let serviceEnsures = 0
+  let machineEnsures = 0
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => { machineEnsures += 1 },
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    isMachineRunning: async () => true,
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
+  const options = {
+    stateRoot,
+    vmManager,
+    machineDriver,
+    serviceDriver: {
+      supportsEgress: true,
+      ensureServices: async () => { serviceEnsures += 1 },
+      stopServices: async () => undefined,
+      removeServices: async () => undefined,
+    },
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+    // The durable services are represented by a probe instead of live HTTP.
+    reattachProbe: async () => undefined,
+    reattachProbeTimeoutMs: 1_000,
+  }
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  try {
+    const first = new ProjectRuntimeManager(options)
+    await first.ensure(projectId, 'thin')
+    assert.equal(serviceEnsures, 1)
+    assert.equal(machineEnsures, 1)
+    await first.close({ stopRuntimes: false })
+
+    const second = new ProjectRuntimeManager(options)
+    const descriptor = await second.ensure(projectId, undefined, 'agent')
+    assert.equal(descriptor.status, 'ready')
+    assert.equal(descriptor.opensandboxApiKey.length > 0, true)
+    // Fast reattach must not recreate the VM or its resident services.
+    assert.equal(serviceEnsures, 1)
+    assert.equal(machineEnsures, 1)
+    await second.close({ stopRuntimes: false })
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('serves Project Supabase management from a ready persisted VM without re-provisioning project services', async () => {  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-management-'))
   let serviceEnsures = 0
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async () => undefined,

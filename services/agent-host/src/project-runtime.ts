@@ -168,6 +168,14 @@ export interface ProjectRuntimeManagerOptions {
   hostPortAvailable?: (port: number) => Promise<boolean>
   /** Coalesce chat warmup/resource/browser bursts into one health probe. */
   healthCheckIntervalMs?: number
+  /**
+   * Readiness window for reattaching a persisted runtime before falling back
+   * to the complete provisioning pipeline. Tests and embedded runtimes can
+   * set this to 0 or inject `reattachProbe` to avoid real HTTP/VM probes.
+   */
+  reattachProbeTimeoutMs?: number
+  /** Injectable persisted-runtime readiness probe. */
+  reattachProbe?: (descriptor: ProjectRuntimeDescriptor, scope: 'all' | 'agent') => Promise<void>
 }
 
 export interface ProjectRuntimeCloseOptions {
@@ -317,13 +325,24 @@ export class ProjectRuntimeManager {
   private readonly active = new Map<string, ProjectRuntimeDescriptor>()
   private readonly healthyAt = new WeakMap<ProjectRuntimeDescriptor, number>()
   private readonly agentHealthyAt = new WeakMap<ProjectRuntimeDescriptor, number>()
+  /** Coalesce concurrent leases/resources requests into one health probe. */
+  private readonly healthProbes = new WeakMap<ProjectRuntimeDescriptor, Promise<void>>()
+  private readonly agentHealthProbes = new WeakMap<ProjectRuntimeDescriptor, Promise<void>>()
   private readonly healthCheckIntervalMs: number
+  private readonly reattachProbeTimeoutMs: number
+  private readonly reattachProbe?: (descriptor: ProjectRuntimeDescriptor, scope: 'all' | 'agent') => Promise<void>
   private readonly pending = new Map<string, Promise<ProjectRuntimeDescriptor>>()
   private readonly forwards = new Map<string, ProjectVmPortForward[]>()
   private readonly portAllocations = new Map<string, ProjectRuntimeServicePorts>()
   /** Git initialization is independent from service provisioning, but must be
    * serialized because two first prompts can arrive for the same project. */
   private readonly gitInitializations = new Map<string, Promise<void>>()
+  /**
+   * Session storage is durable VM state. Repeated page leases must not pay
+   * two remote mkdir/chmod round trips each time; cache the completed (or
+   * in-flight) preparation per chat. `remove` clears it with the VM.
+   */
+  private readonly preparedSessions = new Map<string, Promise<string>>()
   // Health recovery, stop, and remove all mutate the same VM/service/tunnel
   // tuple. Serialize them per project so a failed health check cannot evict an
   // active descriptor while a concurrent stop observes the gap and returns
@@ -334,6 +353,8 @@ export class ProjectRuntimeManager {
 
   constructor(options: ProjectRuntimeManagerOptions) {
     this.healthCheckIntervalMs = Math.max(0, options.healthCheckIntervalMs ?? 5_000)
+    this.reattachProbeTimeoutMs = Math.max(0, options.reattachProbeTimeoutMs ?? 20_000)
+    this.reattachProbe = options.reattachProbe
     this.stateRoot = resolve(options.stateRoot)
     this.vmManager = options.vmManager
     this.machineDriver = options.machineDriver
@@ -394,7 +415,7 @@ export class ProjectRuntimeManager {
           const healthCache = scope === 'agent' ? this.agentHealthyAt : this.healthyAt
           const checkedAt = healthCache.get(existing)
           if (checkedAt !== undefined && Date.now() - checkedAt < this.healthCheckIntervalMs) return existing
-          await this.assertRuntimeHealthy(existing, scope)
+          await this.probeRuntimeHealth(existing, scope)
           healthCache.set(existing, Date.now())
           return existing
         } catch (error) {
@@ -422,6 +443,19 @@ export class ProjectRuntimeManager {
         }
         return descriptor
       }
+      // A durable descriptor written by a previous Agent Host is the normal
+      // case after an application restart. Reattach the already-running VM
+      // and its resident services instead of replaying the complete
+      // provisioning pipeline (image checks, container reconciliation and
+      // Supabase bootstrap) on the first chat request. The full path remains
+      // the fallback whenever the persisted state is stale or unhealthy.
+      const reattached = await this.reattachPersistedRuntime(projectId, requestedDiskMode, scope)
+      if (reattached) {
+        this.active.set(projectId, reattached)
+        if (scope === 'agent') this.agentHealthyAt.set(reattached, Date.now())
+        else this.healthyAt.set(reattached, Date.now())
+        return reattached
+      }
       const diskMode = await this.resolveDiskMode(projectId, requestedDiskMode)
       const task = this.provision(projectId, diskMode)
       this.pending.set(projectId, task)
@@ -434,6 +468,150 @@ export class ProjectRuntimeManager {
         this.pending.delete(projectId)
       }
     })
+  }
+
+  /**
+   * Reattach a healthy persisted Project runtime without recreating its
+   * services. Returns undefined when the descriptor is missing, incompatible
+   * with the current image revision, or not reachable; the caller then runs
+   * the authoritative provisioning path.
+   */
+  private async reattachPersistedRuntime(
+    projectId: string,
+    requestedDiskMode?: ProjectVmDiskMode,
+    scope: 'all' | 'agent' = 'all',
+  ): Promise<ProjectRuntimeDescriptor | undefined> {
+    const projectStateRoot = resolve(this.stateRoot, 'projects', projectId)
+    let persisted: Record<string, unknown>
+    try {
+      persisted = JSON.parse(await readFile(resolve(projectStateRoot, 'runtime.json'), 'utf8')) as Record<string, unknown>
+    } catch {
+      return undefined
+    }
+    if (persisted.status !== 'ready' || persisted.projectId !== projectId) return undefined
+    const diskMode = projectDiskMode(persisted.diskMode) ?? 'thin'
+    if (requestedDiskMode && requestedDiskMode !== diskMode) {
+      throw new AgentHostError('PROVISIONING_FAILED', `Project runtime disk mode is immutable (${diskMode} != ${requestedDiskMode})`)
+    }
+    const machineName = this.vmManager.machineName(projectId)
+    const workspacePath = this.vmManager.workspacePath(projectId)
+    if (persisted.machineName !== machineName
+      || persisted.workspacePath !== workspacePath
+      || persisted.backend !== this.vmManager.runtimeBackend) return undefined
+
+    const ports = persisted.servicePorts as Partial<ProjectRuntimeServicePorts> | undefined
+    if (!ports || !this.isValidPortSet(ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler)) return undefined
+    const servicePorts = ports as ProjectRuntimeServicePorts
+    const sessionStorageRoot = `${workspacePath}/.openlink/sessions`
+    if (typeof persisted.sessionStorageRoot === 'string' && persisted.sessionStorageRoot !== sessionStorageRoot) return undefined
+    const isoPath = persisted.ubuntuDesktopIsoPath
+    if (isoPath !== undefined && (typeof isoPath !== 'string' || !isoPath.startsWith(`${workspacePath}/`))) return undefined
+    const supabase = persisted.supabase as Record<string, unknown> | undefined
+    if (!supabase || supabase.projectId !== projectId
+      || supabase.url !== `http://127.0.0.1:${servicePorts.supabaseGateway}`
+      || typeof supabase.publishableKey !== 'string'
+      || typeof supabase.anonKey !== 'string'
+      || typeof supabase.revision !== 'string') return undefined
+
+    // A rebuilt runtime image is an identity change for every resident
+    // service. Let the provisioning path re-import archives and replace stale
+    // containers instead of adopting them from the persisted descriptor.
+    const currentRevisions = this.imageArchiveVersions()
+    if (currentRevisions) {
+      const recordedRevisions = persisted.imageRevisions
+      if (recordedRevisions && typeof recordedRevisions === 'object' && !Array.isArray(recordedRevisions)) {
+        const recorded = recordedRevisions as Record<string, unknown>
+        if (Object.entries(currentRevisions).some(([image, revision]) => recorded[image] !== revision)) return undefined
+      } else if (currentRevisions[this.images.agentWorkerImage] !== persisted.agentWorkerRevision) {
+        // Descriptors written before imageRevisions existed only persisted the
+        // worker archive revision; keep that compatibility check.
+        return undefined
+      }
+    }
+
+    let secrets: Partial<PersistedRuntimeSecrets>
+    try {
+      secrets = JSON.parse(await readFile(resolve(projectStateRoot, 'runtime-secrets.json'), 'utf8')) as Partial<PersistedRuntimeSecrets>
+    } catch {
+      return undefined
+    }
+    if (!secrets.opensandboxApiKey || !secrets.browserApiToken || !secrets.browserTokenSecret) return undefined
+
+    const descriptor: ProjectRuntimeDescriptor = {
+      projectId,
+      machineName,
+      workspacePath,
+      backend: this.vmManager.runtimeBackend,
+      diskMode,
+      status: 'ready',
+      servicePorts,
+      opensandboxEndpoint: `http://${this.publicHost}:${servicePorts.opensandbox}`,
+      opensandboxApiKey: secrets.opensandboxApiKey,
+      browserHostEndpoint: `http://${this.publicHost}:${servicePorts.browserHost}`,
+      browserApiToken: secrets.browserApiToken,
+      browserTokenSecret: secrets.browserTokenSecret,
+      codeServerEndpoint: `http://${this.publicHost}:${servicePorts.codeServer}`,
+      sessionStorageRoot,
+      ...(typeof isoPath === 'string' ? { ubuntuDesktopIsoPath: isoPath } : {}),
+      agentWorkerImage: typeof persisted.agentWorkerImage === 'string' ? persisted.agentWorkerImage : this.images.agentWorkerImage,
+      ...(typeof persisted.agentWorkerRevision === 'string' ? { agentWorkerRevision: persisted.agentWorkerRevision } : {}),
+      agentRpcWorkerImage: typeof persisted.agentRpcWorkerImage === 'string' ? persisted.agentRpcWorkerImage : this.images.agentRpcWorkerImage,
+      codeServerImage: typeof persisted.codeServerImage === 'string' ? persisted.codeServerImage : this.images.codeServerImage,
+      supabase: {
+        url: supabase.url,
+        publishableKey: supabase.publishableKey,
+        anonKey: supabase.anonKey,
+        revision: supabase.revision,
+      },
+      egressMode: persisted.egressMode === 'disabled' ? 'disabled' : 'sidecar',
+    }
+
+    try {
+      // Probe the persisted endpoints before booting anything. A VM that is
+      // already running exposes its published ports immediately; a stopped
+      // VM falls through to provisioning, which starts and reconciles it in
+      // one authoritative pass instead of probing twice.
+      if (this.machineDriver.isMachineRunning
+        && !await this.machineDriver.isMachineRunning(machineName).catch(() => false)) {
+        return undefined
+      }
+      if (this.machineDriver.forwardPort) {
+        const forwards: ProjectVmPortForward[] = []
+        try {
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.opensandbox))
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.browserHost))
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.codeServer))
+        } catch (error) {
+          await Promise.allSettled(forwards.map((forward) => forward.close()))
+          throw error
+        }
+        this.forwards.set(projectId, forwards)
+        descriptor.opensandboxEndpoint = `http://${this.publicHost}:${forwards[0]!.localPort}`
+        descriptor.browserHostEndpoint = `http://${this.publicHost}:${forwards[1]!.localPort}`
+        descriptor.codeServerEndpoint = `http://${this.publicHost}:${forwards[2]!.localPort}`
+      }
+
+      // Resident services may still be starting after a guest reboot. Give
+      // them a bounded window before declaring the persisted descriptor
+      // unusable and falling back to provisioning.
+      const deadline = Date.now() + this.reattachProbeTimeoutMs
+      const probe = this.reattachProbe ?? ((candidate: ProjectRuntimeDescriptor, targetScope: 'all' | 'agent') => this.assertRuntimeHealthy(candidate, targetScope))
+      let lastError: unknown
+      while (Date.now() < deadline) {
+        try {
+          await probe(descriptor, scope)
+          return descriptor
+        } catch (error) {
+          lastError = error
+        }
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+      }
+      throw lastError instanceof Error ? lastError : new Error('Project runtime did not become healthy')
+    } catch (error) {
+      await this.closeForwards(projectId).catch(() => undefined)
+      console.warn(`OpenLink project runtime ${projectId} fast reattach failed; provisioning instead: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
   }
 
   /**
@@ -764,19 +942,53 @@ export class ProjectRuntimeManager {
   }
 
   async prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string> {
-    const descriptor = await this.ensure(projectId, undefined, 'agent')
     for (const [value, label] of [[userId, 'userId'], [workspaceId, 'workspaceId'], [sessionId, 'sessionId']] as const) {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new AgentHostError('INVALID_BODY', `${label} is invalid`)
     }
+    const key = `${projectId}:${userId}:${workspaceId}:${sessionId}`
+    const existing = this.preparedSessions.get(key)
+    if (existing) return existing
+    // Keep the cache bounded across long-lived processes with chat churn.
+    if (this.preparedSessions.size >= 2_048) {
+      const oldest = this.preparedSessions.keys().next().value
+      if (oldest !== undefined) this.preparedSessions.delete(oldest)
+    }
+    const task = this.prepareSessionStorageOnce(projectId, userId, workspaceId, sessionId)
+    this.preparedSessions.set(key, task)
+    try {
+      return await task
+    } catch (error) {
+      if (this.preparedSessions.get(key) === task) this.preparedSessions.delete(key)
+      throw error
+    }
+  }
+
+  private async prepareSessionStorageOnce(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string> {
+    const descriptor = await this.ensure(projectId, undefined, 'agent')
     const root = `${descriptor.sessionStorageRoot}/${userId}/${workspaceId}/${sessionId}`
     if (!this.machineDriver.runInMachine) return root
-    await this.machineDriver.runInMachine(descriptor.machineName, 'mkdir', ['-p', root, `${root}/workspace`, `${root}/pi-sessions`, `${root}/artifacts`, `${root}/logs`, `${root}/worker`])
+    // The ISO desktop shares one installed golden qcow2 per Project VM and
+    // gives each chat its own thin overlay. Create the shared cache directory
+    // in the same round trip that materialises the session storage so a
+    // recovered runtime never needs a second remote command per lease.
+    const desktopCacheRoot = resolveGuestPath(descriptor.sessionStorageRoot, '.runtime', 'desktop')
+    await this.machineDriver.runInMachine(descriptor.machineName, 'mkdir', [
+      '-p', root, `${root}/workspace`, `${root}/pi-sessions`, `${root}/artifacts`, `${root}/logs`, `${root}/worker`,
+      ...(descriptor.ubuntuDesktopIsoPath ? [desktopCacheRoot] : []),
+    ])
     // OpenSandbox execd runs the worker as uid 1000, while the Project VM
     // driver creates this bind-mounted session directory as root.  Keep the
     // project/session parent private, but make the per-session mount writable
     // so Pi can append its native JSONL log and runtime artifacts.
     await this.machineDriver.runInMachine(descriptor.machineName, 'chmod', ['777', root])
     return root
+  }
+
+  private forgetPreparedSessions(projectId: string): void {
+    const prefix = `${projectId}:`
+    for (const key of this.preparedSessions.keys()) {
+      if (key.startsWith(prefix)) this.preparedSessions.delete(key)
+    }
   }
 
   async persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void> {
@@ -1003,6 +1215,7 @@ export class ProjectRuntimeManager {
       // credentials for a project that no longer exists.
       await rm(resolve(this.stateRoot, 'projects', projectId), { recursive: true, force: true })
       this.portAllocations.delete(projectId)
+      this.forgetPreparedSessions(projectId)
         return
       }
       await this.writeStatus({
@@ -1040,6 +1253,7 @@ export class ProjectRuntimeManager {
         await rm(resolve(this.stateRoot, 'projects', projectId), { recursive: true, force: true })
         this.active.delete(projectId)
         this.portAllocations.delete(projectId)
+        this.forgetPreparedSessions(projectId)
         stateRemoved = true
       } catch (error) {
         failure = error
@@ -1102,6 +1316,19 @@ export class ProjectRuntimeManager {
     } finally {
       release()
       if (this.lifecycleLocks.get(projectId) === queued) this.lifecycleLocks.delete(projectId)
+    }
+  }
+
+  private async probeRuntimeHealth(descriptor: ProjectRuntimeDescriptor, scope: 'all' | 'agent' = 'all'): Promise<void> {
+    const probes = scope === 'agent' ? this.agentHealthProbes : this.healthProbes
+    const inFlight = probes.get(descriptor)
+    if (inFlight) return inFlight
+    const task = this.assertRuntimeHealthy(descriptor, scope)
+    probes.set(descriptor, task)
+    try {
+      await task
+    } finally {
+      if (probes.get(descriptor) === task) probes.delete(descriptor)
     }
   }
 
@@ -1356,8 +1583,11 @@ export class ProjectRuntimeManager {
     if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot stage the Ubuntu Desktop ISO')
     const destination = resolveGuestPath(input.sessionStorageRoot, '.runtime', UBUNTU_DESKTOP_ISO_NAME)
     const directory = resolveGuestPath(input.sessionStorageRoot, '.runtime')
+    // One installed golden desktop per Project VM; sessions only materialise
+    // thin overlays. Keep the directory durable beside the verified ISO.
+    const desktopCacheRoot = resolveGuestPath(directory, 'desktop')
     const checksumMarker = `${destination}.sha256`
-    await runner(input.machineName, 'mkdir', ['-p', directory])
+    await runner(input.machineName, 'mkdir', ['-p', directory, desktopCacheRoot])
 
     const marker = await runner(input.machineName, 'cat', [checksumMarker]).then((result) => result.stdout.trim()).catch(() => '')
     const size = await runner(input.machineName, 'stat', ['-c', '%s', destination]).then((result) => result.stdout.trim()).catch(() => '')
@@ -1541,6 +1771,9 @@ export class ProjectRuntimeManager {
   ): Promise<void> {
     // Keep durable VM identity and public control endpoints together. Runtime
     // credentials remain in the separate 0600 runtime-secrets.json file.
+    // Archive revisions let the next Agent Host distinguish a still-valid
+    // resident service set from one built from replaced images.
+    const imageRevisions = this.imageArchiveVersions()
     await writeFile(resolve(this.stateRoot, 'projects', descriptor.projectId, 'runtime.json'), `${JSON.stringify({
       projectId: descriptor.projectId,
       machineName: descriptor.machineName,
@@ -1558,6 +1791,7 @@ export class ProjectRuntimeManager {
       agentWorkerRevision: descriptor.agentWorkerRevision,
       agentRpcWorkerImage: descriptor.agentRpcWorkerImage,
       codeServerImage: descriptor.codeServerImage,
+      ...(imageRevisions ? { imageRevisions } : {}),
       supabase: descriptor.supabase,
       egressMode: descriptor.egressMode,
       ...(error ? { lastError: error instanceof Error ? error.message : String(error) } : {}),
@@ -1878,29 +2112,30 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       ...(!this.rootful ? { usernsMode: 'keep-id' } : {}),
     })
     await this.ensureSessionRestartPolicies(runInMachine, input.machineName)
-    if (this.machineDriver.forwardPort) {
-      try {
-        await this.waitForMachineEndpoint(runInMachine, input.machineName, input.ports.opensandbox, '/health')
-      } catch (error) {
-        const diagnostics = await runInMachine(input.machineName, 'podman', ['logs', '--tail', '120', `${network}-opensandbox`]).then((result) => result.stdout + result.stderr).catch(() => '')
-        throw new AgentHostError('PROVISIONING_FAILED', `${error instanceof Error ? error.message : String(error)}${diagnostics.trim() ? `; OpenSandbox logs: ${diagnostics.trim().slice(-12_000)}` : ''}`, { retryable: true })
-      }
-      try {
-        await this.waitForMachineEndpoint(runInMachine, input.machineName, input.ports.browserHost, '/healthz')
-      } catch (error) {
-        const diagnostics = await runInMachine(input.machineName, 'podman', ['logs', '--tail', '120', `${network}-browser`]).then((result) => result.stdout + result.stderr).catch(() => '')
-          throw new AgentHostError('PROVISIONING_FAILED', `${error instanceof Error ? error.message : String(error)}${diagnostics.trim() ? `; Browser Host logs: ${diagnostics.trim().slice(-12_000)}` : ''}`, { retryable: true })
-      }
-      try {
-        await this.waitForMachineEndpoint(runInMachine, input.machineName, input.ports.codeServer, '/healthz')
-      } catch (error) {
-        const diagnostics = await runInMachine(input.machineName, 'podman', ['logs', '--tail', '120', `${network}-code-server`]).then((result) => result.stdout + result.stderr).catch(() => '')
-        throw new AgentHostError('PROVISIONING_FAILED', `${error instanceof Error ? error.message : String(error)}${diagnostics.trim() ? `; code-server logs: ${diagnostics.trim().slice(-12_000)}` : ''}`, { retryable: true })
-      }
-    } else {
-      await this.waitForEndpoint(`http://127.0.0.1:${input.ports.opensandbox}`, '/health')
-      await this.waitForEndpoint(`http://127.0.0.1:${input.ports.browserHost}`, '/healthz')
-      await this.waitForEndpoint(`http://127.0.0.1:${input.ports.codeServer}`, '/healthz')
+    // The three control-plane containers start together. Waiting for them
+    // sequentially made a cold Project VM pay the sum of their startup times
+    // even when all three were healthy. Probe them concurrently and only
+    // attach service logs to the probes that actually failed.
+    const probes = [
+      { label: 'OpenSandbox', port: input.ports.opensandbox, path: '/health', container: `${network}-opensandbox` },
+      { label: 'Browser Host', port: input.ports.browserHost, path: '/healthz', container: `${network}-browser` },
+      { label: 'code-server', port: input.ports.codeServer, path: '/healthz', container: `${network}-code-server` },
+    ]
+    const settled = this.machineDriver.forwardPort
+      ? await Promise.allSettled(probes.map((probe) => this.waitForMachineEndpoint(runInMachine, input.machineName, probe.port, probe.path)))
+      : await Promise.allSettled(probes.map((probe) => this.waitForEndpoint(`http://127.0.0.1:${probe.port}`, probe.path)))
+    const failureIndex = settled.findIndex((result) => result.status === 'rejected')
+    if (failureIndex !== -1) {
+      const probe = probes[failureIndex]!
+      const error = (settled[failureIndex] as PromiseRejectedResult).reason
+      const diagnostics = this.machineDriver.forwardPort
+        ? await runInMachine(input.machineName, 'podman', ['logs', '--tail', '120', probe.container]).then((result) => result.stdout + result.stderr).catch(() => '')
+        : ''
+      throw new AgentHostError(
+        'PROVISIONING_FAILED',
+        `${error instanceof Error ? error.message : String(error)}${diagnostics.trim() ? `; ${probe.label} logs: ${diagnostics.trim().slice(-12_000)}` : ''}`,
+        { retryable: true },
+      )
     }
   }
 
@@ -1978,9 +2213,21 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       const result = await runInMachine(machine, 'podman', ['ps', '--all', '--quiet', '--filter', `label=${label}`])
       const ids = result.stdout.split(/\s+/).map((value) => value.trim()).filter((value) => /^[A-Za-z0-9]+$/.test(value))
       for (const id of ids) {
-        await runInMachine(machine, 'podman', ['update', '--restart', 'unless-stopped', id])
-        const state = (await runInMachine(machine, 'podman', ['inspect', '--format', '{{.State.Status}}', id])).stdout.trim()
-        if (['created', 'exited', 'dead'].includes(state)) await runInMachine(machine, 'podman', ['start', id])
+        try {
+          await runInMachine(machine, 'podman', ['update', '--restart', 'unless-stopped', id])
+          const state = (await runInMachine(machine, 'podman', ['inspect', '--format', '{{.State.Status}}', id])).stdout.trim()
+          if (['created', 'exited', 'dead'].includes(state)) await runInMachine(machine, 'podman', ['start', id])
+        } catch (error) {
+          // A stale session workload can hold an OpenSandbox ingress port or
+          // fail its restart policy after a VM power cycle. Session workloads
+          // are recoverable; they must never block the Project VM and its
+          // control-plane services from becoming ready. Remove the exact
+          // container so the next lease recovery materialises a clean one.
+          console.warn(`OpenLink could not restore Project VM session workload ${id}; removing it: ${error instanceof Error ? error.message : String(error)}`)
+          await runInMachine(machine, 'podman', ['rm', '--force', id]).catch((cleanupError) => {
+            console.warn(`OpenLink could not remove Project VM session workload ${id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+          })
+        }
       }
     }
   }
