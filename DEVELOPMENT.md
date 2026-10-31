@@ -19,7 +19,9 @@ This is the mandatory development entry point. Architecture constraints are in
 Run product lifecycle commands from the repository root:
 
 ```bash
-pnpm dev:local          # complete Local stack
+pnpm dev:local          # complete Local stack, T1 by default
+pnpm dev:local:t1       # explicit T1 (Ubuntu Project VM + native desktop)
+pnpm dev:local:e1       # E1 (Podman Project VM + per-chat container desktop)
 pnpm dev:cloud          # Cloud Web/BFF and VTSLX SDK Host
 pnpm build              # production Web build
 pnpm knowledge:test     # Knowledge Service build and tests
@@ -30,6 +32,31 @@ pnpm runtime:zero:status
 `pnpm dev:local` is the normal complete Local start. Do not manually start a
 subset and claim the application is ready unless the task explicitly targets
 that isolated service.
+
+### Project computer modes
+
+T1 is the default and requires a Linux host with QEMU/KVM. Build its immutable
+base once on the development machine or in artifact CI:
+
+```bash
+pnpm runtime:ubuntu-vm-image
+pnpm dev:local
+```
+
+E1 is the explicit heavier-isolation mode and keeps the per-chat container
+desktop:
+
+```bash
+pnpm dev:local:e1
+node scripts/openlink.mjs --mode development --profile local --arch e1
+```
+
+The mode is also accepted as `-t1`, `-e1`, `--arch t1`, or
+`--arch e1`. Ordinary startup verifies the selected artifact and fails closed
+rather than switching modes silently. Architecture and recovery details:
+
+- [`docs/architecture/architectures/`](./docs/architecture/architectures/README.md)
+- [`docs/architecture/ADR-0029-project-computer-t1-e1-modes.md`](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md)
 
 ### Electron desktop shell
 
