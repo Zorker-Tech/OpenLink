@@ -66,6 +66,11 @@ export interface ProjectVmMachineDriver {
    * project runtime.
    */
   forwardPort?(name: string, remotePort: number): Promise<ProjectVmPortForward>
+  /**
+   * Cheap running-state probe used to avoid waiting on a stopped VM's
+   * unreachable published ports during persisted-runtime reattachment.
+   */
+  isMachineRunning?(name: string): Promise<boolean>
   stopMachine(name: string): Promise<void>
   removeMachine(name: string): Promise<void>
 }
@@ -864,6 +869,15 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     }
 
     if (this.bootstrapEnabled) await this.bootstrapToolchain(name)
+  }
+
+  async isMachineRunning(name: string): Promise<boolean> {
+    try {
+      const inspection = await this.run(this.command, ['machine', 'inspect', name])
+      return machineState(inspection.stdout) === 'running'
+    } catch {
+      return false
+    }
   }
 
   async bootstrapToolchain(name: string): Promise<void> {
