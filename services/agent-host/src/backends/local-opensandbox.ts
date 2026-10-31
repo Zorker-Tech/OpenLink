@@ -348,6 +348,9 @@ export class LocalOpenSandboxBackend {
     projectRuntime?: ProjectRuntimeDescriptor,
   ): Promise<OpenSandboxPromptSession> {
     const desktopMode = this.desktopModeFor(projectRuntime)
+    // T1 exposes one native desktop per Project VM. Every chat session shares
+    // it instead of starting its own container desktop.
+    const projectDesktopUrl = projectRuntime?.desktopEndpoint
     let activeSandbox = sandbox
     let endpoint = await activeSandbox.getEndpoint(43130)
     let baseUrl = workerUrl(connection, endpoint)
@@ -368,6 +371,7 @@ export class LocalOpenSandboxBackend {
       paused = false
     }
     const desktopEndpoint = async (): Promise<DesktopEndpoint> => {
+      if (projectDesktopUrl) return { url: projectDesktopUrl, headers: {} }
       await ensureRunning()
       if (!desktopStarted) {
         if (!desktopStarting) {
@@ -387,6 +391,9 @@ export class LocalOpenSandboxBackend {
       'Content-Type': 'application/json',
     })
     const desktopControl = async (action: 'status' | 'suspend' | 'resume'): Promise<DesktopRuntimeStatus> => {
+      // The project-level desktop is owned by the Project VM, not by a chat
+      // session. It must not be paused just because one chat went idle.
+      if (projectDesktopUrl) return { state: 'running', suspended: false }
       // Do not wake a paused sandbox just to inspect or sleep its desktop.
       if (paused) return { state: 'stopped', suspended: false }
       await ensureRunning()
