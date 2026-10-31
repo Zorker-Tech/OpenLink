@@ -152,7 +152,10 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
         OPENLINK_AGENT_SESSION_ID: sessionId,
         OPENLINK_DESKTOP_MODE: desktopMode,
-        ...(desktopMode === 'ubuntu-iso' ? { OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso' } : {}),
+        ...(desktopMode === 'ubuntu-iso' ? {
+          OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
+          OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
+        } : {}),
         ...(nativeSession ? { OPENLINK_AGENT_SESSION_FILE: '/openlink/session/pi-sessions/cloud-session.jsonl' } : {}),
         NODE_EXTRA_CA_CERTS: '/opt/opensandbox/mitmproxy-ca-cert.pem',
         OPENLINK_AGENT_MODEL: model,
@@ -208,6 +211,15 @@ export class RemoteOpenSandboxRpcBackend {
         { name: 'session', host: { path: sessionRoot }, mountPath: '/openlink/session', readOnly: false },
         ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
           { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
+          // Project-scoped installed golden disk and per-session overlays.
+          // The ISO stays on its separate read-only mount so a session cannot
+          // modify the verified image through this writable cache.
+          {
+            name: 'desktop-cache',
+            host: { path: `${projectRuntime.sessionStorageRoot}/.runtime/desktop` },
+            mountPath: '/opt/openlink/desktop-cache',
+            readOnly: false,
+          },
         ] : []),
       ],
       resource: desktopMode === 'ubuntu-iso' ? { cpu: '4', memory: '8Gi' } : { cpu: '2', memory: '4Gi' },

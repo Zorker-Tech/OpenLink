@@ -57,6 +57,20 @@ credentials.
   opens the Desktop tab. `OPENLINK_DESKTOP_PREWARM=0` disables it, and
   `OPENLINK_DESKTOP_PREWARM_MAX` (default `1`) bounds concurrent prewarmed
   desktops because each ISO guest reserves several GB of the Project VM.
+- `ubuntu-iso` keeps one installed golden qcow2 per Project VM under the
+  Project's shared session cache (`<sessionStorageRoot>/.runtime/desktop`).
+  The first ISO session builds and publishes the golden disk; every later
+  chat and restart creates a thin copy-on-write overlay with
+  `qemu-img create -b golden` and boots it in seconds. A per-project `flock`
+  serializes construction so concurrent chats never run two installers.
+- The ISO and the golden cache are mounted separately. The verified ISO stays
+  on a read-only mount; the writable cache mount contains only generated
+  overlay disks and the published golden image, so a session cannot mutate
+  the canonical image through the cache.
+- Desktop websockify starts before the installed VM. The first-boot installer
+  framebuffer is therefore a valid desktop surface during golden-disk
+  construction; the noVNC client reconnects when the installer exits and the
+  installed guest takes over port 5900.
 - After `OPENLINK_DESKTOP_IDLE_TTL_MS` (default five minutes) with no Desktop
   Gateway client, the worker pauses the installed desktop VM with QMP `stop`.
   Opening the tab resumes it with QMP `cont`; the WebSocket connection is the
@@ -79,10 +93,13 @@ credentials.
   VT-x/AMD-V to the Project VM; the VM bootstrap loads the nested KVM module
   when those CPU flags are available. Its session workloads need more CPU,
   memory, and disk than the container fallback.
-- The first ISO boot runs an unattended install. The installed qcow2 disk is
-  retained in that chat session's storage for later restarts. Prewarming moves
-  the install earlier but does not remove it; a shared preinstalled golden
-  qcow2 with per-session overlays is the next optimization.
+- The first ISO session in a Project VM runs one unattended install to build
+  the shared golden qcow2. Every later session in that Project VM materialises
+  only a thin overlay, so desktop readiness no longer scales with the number
+  of chats. Overlay disks remain per-session durable state; deleting a chat
+  never removes the project's golden image. If golden construction fails, the
+  worker falls back to the previous per-session install so the desktop remains
+  available.
 - Opening the desktop adds GUI and VNC processes to that session workload.
   The VM mode additionally runs QEMU until the sandbox pauses or closes.
   Prewarming starts those processes before the tab opens; idle sleep frees
