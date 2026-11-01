@@ -292,19 +292,9 @@ async function main() {
   if (!projectId || !/^[a-f0-9-]{36}$/i.test(projectId)) fail('--project must be a project UUID')
   if (!architectureBackends.has(target)) fail('--to must be t1 or e1')
   await assertAppStopped()
-  const projectRoot = resolve(stateRoot, 'projects', projectId)
-  const runtimePath = resolve(projectRoot, 'runtime.json')
-  let sourceDescriptor
-  try {
-    sourceDescriptor = await readJson(runtimePath)
-  } catch {
-    fail(`project ${projectId} has no runtime descriptor under ${runtimePath}; provision it before switching`)
-  }
-  if (sourceDescriptor.projectId !== projectId) fail('runtime descriptor projectId does not match --project')
-  const sourceArchitecture = architectureForBackend(sourceDescriptor.backend)
-  if (sourceArchitecture === target) fail(`project is already running ${target}`)
-
   const releaseLock = await acquireMigrationLock(projectId)
+  let sourceDescriptor
+  let sourceArchitecture
   let source
   let runtimeTarget
   let backupDirectory
@@ -314,6 +304,16 @@ async function main() {
   let targetQuiesce
   let targetStarted = false
   try {
+    const projectRoot = resolve(stateRoot, 'projects', projectId)
+    const runtimePath = resolve(projectRoot, 'runtime.json')
+    try {
+      sourceDescriptor = await readJson(runtimePath)
+    } catch {
+      fail(`project ${projectId} has no runtime descriptor under ${runtimePath}; provision it before switching`)
+    }
+    if (sourceDescriptor.projectId !== projectId) fail('runtime descriptor projectId does not match --project')
+    sourceArchitecture = architectureForBackend(sourceDescriptor.backend)
+    if (sourceArchitecture === target) fail(`project is already running ${target}`)
     source = await createRuntime(sourceArchitecture)
     runtimeTarget = await createRuntime(target)
     const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
@@ -426,7 +426,7 @@ async function main() {
     sourceQuiesce = undefined
     targetQuiesce = undefined
     let rollback = 'not-needed'
-    if (sourceStopped) {
+    if (sourceStopped && sourceDescriptor && source) {
       try {
         if (targetStarted) await runtimeTarget?.manager.stop(projectId).catch(() => runtimeTarget?.vmManager.stop(projectId))
         await clearTargetRuntimeState()
@@ -436,7 +436,7 @@ async function main() {
       } catch (rollbackError) {
         rollback = `failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
       }
-    } else if (sourceQuiesced) {
+    } else if (sourceQuiesced && source) {
       try {
         await source.manager.ensure(projectId)
         rollback = 'source-resumed'
