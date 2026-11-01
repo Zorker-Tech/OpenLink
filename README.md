@@ -31,7 +31,9 @@ Per-mode architecture and operations live in
 ### T1 (default)
 
 Prerequisites: Linux with `/dev/kvm`, QEMU, OpenSSH, Node.js 22.19+, and Docker
-for ZOKERBASE/runtime image archives.
+for ZOKERBASE/runtime image archives. The Project Supabase attestation
+(`.openlink-runtime/project-supabase/cache/seed.json`) comes from the verified
+E1 image build; startup fails closed if it is missing.
 
 ```bash
 # One-time immutable Ubuntu Project VM base artifact
