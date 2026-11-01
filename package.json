@@ -29,6 +29,7 @@
     "runtime:windows:prepare": "node scripts/ensure-podman-toolchain.mjs && node scripts/prepare-windows-host.mjs",
     "runtime:vm-image": "node scripts/run-with-env.mjs OPENLINK_BUILD_ARTIFACTS=1 -- node scripts/build-project-vm-base.mjs && node scripts/build-project-vm-disk.mjs",
     "runtime:ubuntu-vm-image": "node scripts/build-ubuntu-project-vm-base.mjs",
+    "runtime:switch": "npm --prefix services/agent-host run build && node scripts/switch-project-architecture.mjs",
     "runtime:architecture:test": "node --test scripts/test/architecture-mode.test.mjs",
     "runtime:project-supabase:sync": "node scripts/sync-project-supabase.mjs",
     "runtime:project-supabase:images": "node scripts/run-with-env.mjs OPENLINK_BUILD_ARTIFACTS=1 -- node scripts/build-project-supabase-images.mjs",
