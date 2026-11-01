@@ -70,6 +70,13 @@ const projectSupabaseArtifactRoot = process.env.OPENLINK_PROJECT_SUPABASE_ROOT?.
 const projectSupabaseImageOutputRoot = process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT?.trim()
   ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT)
   : resolve(projectSupabaseArtifactRoot, 'images', hostPlatform.architecture === 'x64' ? 'amd64' : 'arm64')
+// The T1 base carries Project Supabase images and runtime files but not the
+// release attestation. The Agent Host installs this seed into the project
+// state root before the controller verifies the golden image. E1 keeps its
+// baked seed unless an operator explicitly supplies an override.
+const projectSupabaseSeedPath = process.env.OPENLINK_PROJECT_SUPABASE_SEED?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_SEED)
+  : fileURLToPath(new URL('../.openlink-runtime/project-supabase/cache/seed.json', import.meta.url))
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
 const ubuntuProjectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/ubuntu/', import.meta.url))
@@ -165,16 +172,32 @@ async function loadUbuntuProjectVmBase() {
   if (!architectureName) throw new Error(`T1 does not support the ${process.arch} architecture; start E1 with -e1`)
   const validated = assertUbuntuProjectVmArtifactManifest(manifest, { architecture: architectureName })
   const diskPath = resolve(ubuntuProjectVmBaseRoot, validated.disk)
-  let metadata
-  try {
-    metadata = await stat(diskPath)
-  } catch {
-    throw new Error(`OpenLink T1 Ubuntu Project VM disk image is missing: ${diskPath}`)
+  const kernelPath = resolve(ubuntuProjectVmBaseRoot, validated.kernel.file)
+  const initrdPath = resolve(ubuntuProjectVmBaseRoot, validated.initrd.file)
+  for (const [label, path, expected] of [
+    ['disk', diskPath, manifest.diskBytes],
+    ['kernel', kernelPath, validated.kernel.bytes],
+    ['initrd', initrdPath, validated.initrd.bytes],
+  ]) {
+    let metadata
+    try {
+      metadata = await stat(path)
+    } catch {
+      throw new Error(`OpenLink T1 Ubuntu Project VM ${label} image is missing: ${path}`)
+    }
+    if (!metadata.isFile() || metadata.size !== expected) {
+      throw new Error(`OpenLink T1 Ubuntu Project VM ${label} size does not match its manifest: ${path}`)
+    }
   }
-  if (!metadata.isFile() || metadata.size !== manifest.diskBytes) {
-    throw new Error(`OpenLink T1 Ubuntu Project VM disk size does not match its manifest: ${diskPath}`)
+  return {
+    fingerprint: validated.fingerprint,
+    disk: validated.disk,
+    diskPath,
+    kernelPath,
+    initrdPath,
+    rootDevice: validated.rootDevice,
+    manifest,
   }
-  return { fingerprint: validated.fingerprint, disk: validated.disk, diskPath, manifest }
 }
 
 async function loadProjectVmBase() {
@@ -568,6 +591,7 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
 }
 let ubuntuQemuSystem
 let ubuntuQemuImg
+let ubuntuMke2fs
 if (useUbuntuProjectVm) {
   if (process.platform !== 'linux') {
     throw new Error('T1 requires Linux with QEMU/KVM. Start the existing E1 isolation architecture with `-e1` on this host.')
@@ -579,12 +603,18 @@ if (useUbuntuProjectVm) {
   }
   ubuntuQemuSystem = process.env.OPENLINK_QEMU_SYSTEM_COMMAND?.trim() || '/usr/bin/qemu-system-x86_64'
   ubuntuQemuImg = process.env.OPENLINK_QEMU_IMG_COMMAND?.trim() || '/usr/bin/qemu-img'
-  for (const candidate of [ubuntuQemuSystem, ubuntuQemuImg, '/usr/bin/ssh', '/usr/bin/scp', '/usr/bin/ssh-keygen']) {
+  ubuntuMke2fs = process.env.OPENLINK_MKE2FS_COMMAND?.trim() || '/usr/sbin/mke2fs'
+  for (const candidate of [ubuntuQemuSystem, ubuntuQemuImg, ubuntuMke2fs, '/usr/bin/ssh', '/usr/bin/scp', '/usr/bin/ssh-keygen']) {
     try {
       await access(candidate, constants.X_OK)
     } catch {
       throw new Error(`T1 requires ${candidate}. Install QEMU/OpenSSH or start E1 with \`-e1\`.`)
     }
+  }
+  try {
+    await access(projectSupabaseSeedPath, constants.R_OK)
+  } catch {
+    throw new Error(`T1 requires the Project Supabase image seed at ${projectSupabaseSeedPath}. Export it from a verified E1 Project VM or set OPENLINK_PROJECT_SUPABASE_SEED.`)
   }
 } else {
   const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
@@ -779,6 +809,9 @@ const shared = {
     || resolve(rootPath, '.openlink-runtime/ubuntu/26.10/ubuntu-26.10-desktop-amd64.iso'),
   OPENLINK_RUNTIME_IMAGE_ROOT: projectImageRoot,
   OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot,
+  ...(useUbuntuProjectVm || process.env.OPENLINK_PROJECT_SUPABASE_SEED?.trim()
+    ? { OPENLINK_PROJECT_SUPABASE_SEED: projectSupabaseSeedPath }
+    : {}),
   OPENLINK_RUNTIME_MODE: runtimeMode,
   NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: runtimeMode,
   OPENLINK_KNOWLEDGE_SERVICE_URL: knowledgeServiceUrl,
@@ -865,11 +898,15 @@ const shared = {
   OPENLINK_PROJECT_VM_BASE_DISK: useUbuntuProjectVm ? ubuntuProjectVmBase.diskPath : projectVmBase.diskPath,
   ...(useUbuntuProjectVm ? {
     OPENLINK_PROJECT_VM_BASE_FINGERPRINT: ubuntuProjectVmBase.fingerprint,
-    OPENLINK_PROJECT_VM_GUEST_USER: 'ubuntu',
-    OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT: '/home/ubuntu/openlink/projects',
+    OPENLINK_PROJECT_VM_KERNEL: ubuntuProjectVmBase.kernelPath,
+    OPENLINK_PROJECT_VM_INITRD: ubuntuProjectVmBase.initrdPath,
+    OPENLINK_PROJECT_VM_ROOT_DEVICE: ubuntuProjectVmBase.rootDevice,
+    OPENLINK_PROJECT_VM_GUEST_USER: 'openlink',
+    OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT: '/home/openlink/openlink/projects',
     OPENLINK_PROJECT_VM_MEMORY_MB: process.env.OPENLINK_PROJECT_VM_MEMORY_MB || '12288',
     OPENLINK_QEMU_SYSTEM_COMMAND: ubuntuQemuSystem,
     OPENLINK_QEMU_IMG_COMMAND: ubuntuQemuImg,
+    OPENLINK_MKE2FS_COMMAND: ubuntuMke2fs,
     OPENLINK_SSH_COMMAND: process.env.OPENLINK_SSH_COMMAND || '/usr/bin/ssh',
     OPENLINK_SCP_COMMAND: process.env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
     OPENLINK_SSH_KEYGEN_COMMAND: process.env.OPENLINK_SSH_KEYGEN_COMMAND || '/usr/bin/ssh-keygen',
