@@ -5,13 +5,14 @@ Architecture: [README.md](./README.md)
 
 ## Prerequisites
 
-- Linux x86_64 or arm64 host with:
+- Linux x86_64 or arm64 host. To **run** T1:
   - `/dev/kvm` readable and writable by the OpenLink process;
   - `qemu-system-x86_64` (or the matching architecture), `qemu-img`;
   - `ssh`, `scp`, `ssh-keygen`;
   - Node.js 22.19+;
-  - Docker Desktop/engine for the local ZOKERBASE stack and runtime image
-    archive production.
+  - Docker Desktop/engine for ZOKERBASE and runtime image archives.
+- To **build** the artifact: Docker, `qemu-img`, `sfdisk`, `dd`, `debugfs`
+  (e2fsprogs). KVM is not required for the build.
 - The T1 base artifact must be built before the first startup. Ordinary
   startup must never download a cloud image or install a desktop.
 
@@ -23,32 +24,48 @@ pnpm runtime:ubuntu-vm-image
 
 The builder:
 
-1. downloads the official Ubuntu 24.04 cloud image and verifies its SHA-256
-   against the published `SHA256SUMS`;
-2. creates a 64 GiB qcow2 overlay on the host KVM;
-3. boots it with a loopback cloud-init seed; cloud-init installs rootful
-   Podman, SSH, Node.js, Git, Xvfb, GNOME/Xfce, x11vnc and websockify;
-4. verifies the native desktop endpoint, Podman, SSH and service enablement;
-5. removes the build identity, cloud-init state, machine-id and SSH host keys;
-6. collapses the disk to a standalone qcow2, runs `qemu-img check`, and
-   publishes a content-addressed artifact plus `manifest.json`.
+1. verifies the official Ubuntu 24.04 cloud image and extracts the Ubuntu LTS
+   generic kernel, initrd and matching modules;
+2. installs rootful Podman, SSH, cloud-init, network/netfilter tools and the
+   Project Supabase runtime dependencies into the pinned Ubuntu userspace
+   image inside Docker (no slow guest-network package install);
+3. composes the userspace with the native desktop, Project Supabase immutable
+   bundle/images, SSH/cloud-init configuration and the verified kernel modules;
+4. creates a bootable 64 GiB ext4 filesystem from the composed rootfs
+   (`mke2fs -d`), converts it to a content-addressed qcow2, and runs
+   `qemu-img check`;
+5. publishes the base disk, kernel, initrd and `manifest.json`.
 
 Environment:
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENLINK_UBUNTU_CLOUD_IMAGE_URL` | Override the official cloud image URL |
+| `OPENLINK_UBUNTU_CLOUD_IMAGE_URL` | Override the official kernel source image URL |
 | `OPENLINK_UBUNTU_CLOUD_CACHE` | Cloud image cache (default `~/.cache/openlink/ubuntu-cloud`) |
 | `OPENLINK_UBUNTU_PROJECT_VM_OUTPUT` | Artifact directory (default `.openlink-runtime/project-vm-base/ubuntu`) |
-| `OPENLINK_UBUNTU_APT_MIRROR` | Optional apt mirror URL |
-| `OPENLINK_UBUNTU_VM_BUILD_TIMEOUT_MS` | Build timeout (default 60 min) |
-| `OPENLINK_UBUNTU_BUILD_MEMORY_MB` / `_CPUS` | Build guest resources |
+| `OPENLINK_PROJECT_SUPABASE_CACHE` | Project Supabase bundle/images cache |
+| `OPENLINK_PROJECT_SUPABASE_SEED` | Attested Project Supabase image seed copied into the project state before the controller starts (default `.openlink-runtime/project-supabase/cache/seed.json`) |
+| `OPENLINK_MKE2FS_COMMAND` | Host `mke2fs` for the per-project seed disk |
 | `OPENLINK_UBUNTU_PROJECT_VM_DISK_GB` | Base virtual size (default 64) |
 
 The artifact is immutable (`0444`). Never edit or boot it directly; projects
 boot overlays.
 
 ## Start and select the mode
+
+The base artifact includes the immutable Project Supabase bundle and image
+archive. On a project VM's first boot, a one-shot systemd unit performs a
+local `podman load`; Agent Host waits for its marker before starting the
+project Supabase controller. Ordinary startup never pulls these images. The
+controller still verifies the loaded image IDs against the release attestation:
+Agent Host copies the host-controlled `seed.json` into
+`/var/lib/openlink/project-supabase/` before the controller runs, so attestation
+rotation does not require rebuilding the base disk.
+
+Agent Host creates a per-project read-only ext4 seed disk with the project
+public key and instance-id. The base mounts it at
+`/var/lib/cloud/seed/nocloud` before `cloud-init-local.service`, so cloud-init
+uses DataSourceNoCloud without SMBIOS or an HTTP seed listener.
 
 ```bash
 pnpm dev:local          # T1 default
@@ -74,6 +91,8 @@ project-vms/
     disk.qcow2          # project overlay (or thick independent copy)
     id_ed25519(.pub)    # per-project SSH identity
     seed.json           # instance-id + seed token
+    seed/               # cloud-init user-data/meta-data/vendor-data
+    seed.img            # read-only ext4 volume mounted as /var/lib/cloud/seed/nocloud
     vm.json             # machine spec, base path/fingerprint, ports
     qemu.pid            # daemonized QEMU pid
     console.log         # guest serial console
@@ -90,7 +109,8 @@ limits.
 
 Back up, per project:
 
-- `ubuntu-vms/<machine>/` (`disk.qcow2`, `id_ed25519`, `seed.json`, `vm.json`);
+- `ubuntu-vms/<machine>/` (`disk.qcow2`, `id_ed25519`, `seed.json`, `seed/`,
+  `seed.img`, `vm.json`);
 - `projects/<projectId>/` (`runtime.json`, `runtime-secrets.json`,
   `ports.json`).
 
@@ -118,11 +138,14 @@ destructive recovery; restore from backup first when the data matters.
 | `T1 requires ... /dev/kvm` | Enable host KVM and ensure the process can access it, or use `-e1` |
 | `T1 Ubuntu Project VM image manifest is missing` | `pnpm runtime:ubuntu-vm-image` |
 | `disk is missing` | Restore the project disk or explicitly recreate the project runtime |
-| `host port ... already in use` | Stop the conflicting process or restart provisioning; persisted ports are reallocated when possible |
-| `did not become reachable` | Inspect `console.log`; check QEMU started, cloud-init seed server was reachable, and the guest can DHCP |
+| `host port ... already in use` | Stop the conflicting process. Ports persisted for a running VM are reused even though QEMU itself owns them; a stopped VM reallocates only when a foreign process holds a persisted port |
+| `did not become reachable` | Inspect `console.log`; check QEMU started, the seed disk is attached as `/dev/vdb`, and the guest can DHCP |
 | Desktop unreachable | `ssh ... systemctl status openlink-desktop`; inspect `/tmp/openlink-*.log` in the guest |
+| SSH reset / `ssh.service` failed | Check the seed disk is attached as `/dev/vdb` and `ssh-keygen` path in the base; the service must generate host keys before `sshd -t` |
 | Cloud-init failed | The console log and `/var/log/cloud-init-output.log` identify the module; fix the base artifact or the host network |
 | Project services unhealthy | The existing project Supabase/OpenSandbox logs and health probes apply; a stale session container is removed rather than blocking the VM |
+| `Project Supabase seed is not readable` | Provide `OPENLINK_PROJECT_SUPABASE_SEED` or export `seed.json` from a verified E1 Project VM; provisioning fails before starting containers |
+| Supabase `auth` exits with `lookup db on 10.89.0.1:53 ... i/o timeout` or `network is unreachable` | The base must include `aardvark-dns` and project containers must keep `--dns-search dns.podman`; rebuild the artifact/recreate the project VM if it predates either fix |
 
 Never delete the event log or silently recreate a project disk to make a
 health check green.
@@ -147,6 +170,8 @@ pnpm dev:local
 curl -sf http://127.0.0.1:43121/healthz
 # 6. Persisted descriptor
 cat .openlink-runtime/project-vms/projects/<projectId>/runtime.json
+qemu-img info .openlink-runtime/project-vm-base/ubuntu/ubuntu-project-vm-base-*.qcow2
+ls -lh .openlink-runtime/project-vm-base/ubuntu/vmlinuz-* .openlink-runtime/project-vm-base/ubuntu/initrd.img-*
 ```
 
 Scenario tests should cover: first boot, stop/start, Agent Host restart,

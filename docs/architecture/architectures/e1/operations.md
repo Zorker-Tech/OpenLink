@@ -41,6 +41,7 @@ E1 forces `OPENLINK_DESKTOP_MODE=ubuntu-container` and
 | Desktop unavailable | Inspect the session worker `/desktop/status` and its container logs; restart the session desktop |
 | Agent Host restart | Durable session leases recover workers; persisted project runtime fast-reattach applies |
 | Host reboot | Podman machine is restarted on demand; service containers use restart policies |
+| Supabase services report `lookup db ... i/o timeout` or `network is unreachable` | Verify `aardvark-dns` is present in the machine OS. Project containers pin `--dns-search dns.podman`; a host search domain must not be allowed to answer project names with an IPv6 address on the IPv4-only container network |
 | Project deletion | Remove the Podman machine, its disk and the project runtime state; keep versioned base artifacts |
 
 ## Validation
