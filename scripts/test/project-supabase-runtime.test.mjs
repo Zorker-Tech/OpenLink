@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import {
+  acquireLifecycleLock,
   compareRelease,
   containerUsesImage,
   dependencyOrder,
@@ -13,6 +17,49 @@ import {
 } from '../../services/agent-host/project-supabase-runtime.mjs'
 
 const projectId = '11111111-2222-4333-8444-555555555555'
+
+test('treats a lifecycle lock from an earlier guest boot as stale despite PID reuse', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-supabase-lock-'))
+  const lockRoot = join(root, '.lifecycle.lock')
+  try {
+    await mkdir(lockRoot, { recursive: true })
+    await writeFile(join(lockRoot, 'owner.json'), JSON.stringify({
+      schemaVersion: 1,
+      pid: process.pid,
+      command: 'ensure',
+      bootId: '00000000-0000-0000-0000-000000000000',
+    }))
+    const release = await acquireLifecycleLock(root, 'stop')
+    await release()
+    await assert.rejects(() => readFile(join(lockRoot, 'owner.json')), /ENOENT/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('keeps a same-boot live lifecycle owner as busy', async (context) => {
+  let bootId
+  try {
+    bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim()
+  } catch {
+    context.skip('guest boot identity is not available on this host')
+    return
+  }
+  const root = await mkdtemp(join(tmpdir(), 'openlink-supabase-lock-'))
+  const lockRoot = join(root, '.lifecycle.lock')
+  try {
+    await mkdir(lockRoot, { recursive: true })
+    await writeFile(join(lockRoot, 'owner.json'), JSON.stringify({
+      schemaVersion: 1,
+      pid: process.pid,
+      command: 'ensure',
+      bootId,
+    }))
+    await assert.rejects(() => acquireLifecycleLock(root, 'stop'), /lifecycle operation ensure is already running/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('generates independent complete project secrets without example placeholders', () => {
   const left = generateProjectSupabaseSecrets(projectId, 1_700_000_000)
