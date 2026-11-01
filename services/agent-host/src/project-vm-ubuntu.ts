@@ -1,7 +1,6 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -17,7 +16,12 @@ import {
 
 const execFile = promisify(execFileCallback)
 const DEFAULT_START_TIMEOUT_MS = 180_000
-const DEFAULT_COMMAND_TIMEOUT_MS = 120_000
+// The first T1 provisioning starts eleven Project Supabase containers from a
+// multi-gigabyte golden image set. That is a legitimate multi-minute operation;
+// a two-minute SSH ceiling used to kill the controller halfway through and
+// surface as an empty remote failure. Keep the ceiling below the overall VM
+// boot budget so a genuinely wedged command still fails closed.
+const DEFAULT_COMMAND_TIMEOUT_MS = 600_000
 const STOP_TIMEOUT_MS = 60_000
 const MAX_BUFFER = 16 * 1024 * 1024
 const PROJECT_VM_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/
@@ -26,6 +30,14 @@ const PUBLIC_KEY = /^ssh-(ed25519|rsa|ecdsa-[a-z0-9-]+) [A-Za-z0-9+/=]+(?: [^\r\
 export interface UbuntuQemuProjectVmDriverOptions {
   /** Immutable, versioned Ubuntu Project VM base qcow2. */
   projectBaseDisk: string
+  /** Verified Ubuntu generic kernel passed directly to QEMU. */
+  kernelPath: string
+  /** Verified initrd matching kernelPath. */
+  initrdPath: string
+  /** Guest root block device; the base disk is a whole-disk ext4 image. */
+  rootDevice?: string
+  /** mke2fs command used to build the per-project read-only cloud-init seed disk. */
+  mke2fsCommand?: string
   /** Manifest fingerprint recorded with each project disk. */
   baseFingerprint?: string
   /** Durable per-project QEMU state (disk, SSH identity, seed identity). */
@@ -198,7 +210,6 @@ local-hostname: ${input.name}
     ['user-data', userData],
     ['meta-data', metaData],
     ['vendor-data', ''],
-    ['network-config', 'version: 2\n'],
   ])
 }
 
@@ -210,7 +221,10 @@ export interface UbuntuProjectVmQemuArgumentsInput {
   sshPort: number
   servicePorts: number[]
   desktopPort?: number
-  seedUrl: string
+  kernelPath: string
+  initrdPath: string
+  rootDevice: string
+  seedImagePath: string
   pidFile: string
   qmpPath: string
   consoleLog: string
@@ -222,22 +236,19 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
   if (!Number.isSafeInteger(input.memoryMb) || input.memoryMb < 512 || input.memoryMb > 262_144) throw new AgentHostError('INVALID_BODY', 'Ubuntu Project VM memory is invalid')
   const sshPort = assertPort(input.sshPort, 'Ubuntu Project VM SSH port')
   const hostForwardPorts = new Set<number>()
-  const hostfwd = [`tcp:127.0.0.1:${sshPort}-:22`]
+  const hostfwd = [`hostfwd=tcp:127.0.0.1:${sshPort}-:22`]
   hostForwardPorts.add(sshPort)
   for (const port of input.servicePorts) {
     const value = assertPort(port, 'Ubuntu Project VM service port')
     if (hostForwardPorts.has(value)) throw new AgentHostError('INVALID_BODY', 'Ubuntu Project VM service ports collide')
     hostForwardPorts.add(value)
-    hostfwd.push(`tcp:127.0.0.1:${value}-:${value}`)
+    hostfwd.push(`hostfwd=tcp:127.0.0.1:${value}-:${value}`)
   }
   if (input.desktopPort !== undefined) {
     const value = assertPort(input.desktopPort, 'Ubuntu Project VM desktop port')
     if (hostForwardPorts.has(value)) throw new AgentHostError('INVALID_BODY', 'Ubuntu Project VM desktop port collides')
     hostForwardPorts.add(value)
-    hostfwd.push(`tcp:127.0.0.1:${value}-:6080`)
-  }
-  if (!/^http:\/\/10\.0\.2\.2:\d{1,5}\/seed\/[a-f0-9]{32}\/$/.test(input.seedUrl)) {
-    throw new AgentHostError('INVALID_BODY', 'Ubuntu Project VM seed URL is invalid')
+    hostfwd.push(`hostfwd=tcp:127.0.0.1:${value}-:6080`)
   }
   return [
     '-name', `openlink-${input.name}`,
@@ -246,10 +257,13 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
     '-cpu', 'host',
     '-smp', String(input.cpus),
     '-m', String(input.memoryMb),
+    '-kernel', input.kernelPath,
+    '-initrd', input.initrdPath,
+    '-append', `root=${input.rootDevice} rw rootfstype=ext4 console=ttyS0 panic=1`,
     '-drive', `file=${input.diskPath},if=virtio,format=qcow2,cache=none`,
+    '-drive', `file=${input.seedImagePath},if=virtio,format=raw,readonly=on`,
     '-netdev', `user,id=net0,${hostfwd.join(',')}`,
     '-device', 'virtio-net-pci,netdev=net0',
-    '-smbios', `type=1,serial=ds=nocloud;s=${input.seedUrl}`,
     '-display', 'none',
     '-serial', `file:${input.consoleLog}`,
     '-qmp', `unix:${input.qmpPath},server=on,wait=off`,
@@ -258,64 +272,6 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
     '-no-reboot',
     '-daemonize',
   ]
-}
-
-class UbuntuSeedServer {
-  private server?: Server
-  private port?: number
-
-  constructor(
-    private readonly token: string,
-    private readonly documents: Map<string, string>,
-  ) {}
-
-  async start(): Promise<number> {
-    if (this.server) {
-      if (!this.port) throw new Error('Ubuntu seed server has no port')
-      return this.port
-    }
-    const server = createServer((request, response) => {
-      const url = new URL(request.url || '/', 'http://127.0.0.1')
-      const prefix = `/seed/${this.token}/`
-      if (request.method !== 'GET' || !url.pathname.startsWith(prefix)) {
-        response.writeHead(404, { 'Cache-Control': 'no-store' })
-        response.end()
-        return
-      }
-      const name = url.pathname.slice(prefix.length)
-      const value = this.documents.get(name)
-      if (value === undefined) {
-        response.writeHead(404, { 'Cache-Control': 'no-store' })
-        response.end()
-        return
-      }
-      response.writeHead(200, {
-        'Cache-Control': 'no-store',
-        'Content-Type': name.endsWith('-config') ? 'text/cloud-config' : 'text/plain',
-      })
-      response.end(value)
-    })
-    await new Promise<void>((accept, reject) => {
-      server.once('error', reject)
-      server.listen(0, '127.0.0.1', accept)
-    })
-    const address = server.address()
-    if (!address || typeof address === 'string') {
-      server.close()
-      throw new Error('Ubuntu seed server did not bind a loopback port')
-    }
-    this.server = server
-    this.port = address.port
-    return address.port
-  }
-
-  async close(): Promise<void> {
-    const server = this.server
-    this.server = undefined
-    this.port = undefined
-    if (!server?.listening) return
-    await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
-  }
 }
 
 /**
@@ -339,6 +295,10 @@ class UbuntuSeedServer {
  */
 export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   private readonly projectBaseDisk: string
+  private readonly kernelPath: string
+  private readonly initrdPath: string
+  private readonly rootDevice: string
+  private readonly mke2fs: string
   private readonly baseFingerprint: string
   private readonly stateRoot: string
   private readonly qemu: string
@@ -354,10 +314,14 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   private readonly run: NonNullable<UbuntuQemuProjectVmDriverOptions['run']>
   private readonly isProcessRunning: (pid: number) => Promise<boolean>
   private readonly socketRoot: string
-  private readonly seedServers = new Map<string, UbuntuSeedServer>()
 
   constructor(options: UbuntuQemuProjectVmDriverOptions) {
     this.projectBaseDisk = resolve(options.projectBaseDisk)
+    this.kernelPath = resolve(options.kernelPath)
+    this.initrdPath = resolve(options.initrdPath)
+    this.rootDevice = options.rootDevice?.trim() || '/dev/vda'
+    if (!/^\/dev\/vd[a-z]$/.test(this.rootDevice)) throw new AgentHostError('INVALID_BODY', 'Ubuntu Project VM root device is invalid')
+    this.mke2fs = options.mke2fsCommand?.trim() || 'mke2fs'
     this.stateRoot = resolve(options.stateRoot)
     this.qemu = options.qemuCommand?.trim() || 'qemu-system-x86_64'
     this.qemuImg = options.qemuImgCommand?.trim() || 'qemu-img'
@@ -387,6 +351,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     const previous = await readJson<UbuntuProjectVmRecord>(stateFile(directory, 'vm.json'))
     const baseDisk = previous?.baseDisk ? resolve(previous.baseDisk) : this.projectBaseDisk
     await this.assertBaseDisk(baseDisk)
+    await this.assertKernelArtifacts()
     const record = this.normalizeSpec(name, spec, baseDisk, previous)
     if (previous && JSON.stringify({ ...previous, createdAt: '' }) !== JSON.stringify({ ...record, createdAt: '' })) {
       if (await this.isMachineRunning(name)) await this.stopMachine(name)
@@ -398,11 +363,12 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     await this.ensureDisk(directory, record, previous === undefined)
     await atomicWrite(stateFile(directory, 'vm.json'), `${JSON.stringify(record)}\n`)
     const seed = await this.ensureSeed(directory, name)
+    const seedImage = await this.ensureSeedImage(directory, record, seed)
     if (await this.isMachineRunning(name)) {
       if (this.bootstrap) await this.bootstrapToolchain(name)
       return
     }
-    await this.startMachine(directory, record, seed)
+    await this.startMachine(directory, record, seedImage)
     if (this.bootstrap) await this.bootstrapToolchain(name)
   }
 
@@ -410,7 +376,23 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     await this.runInMachine(name, 'sh', ['-lc', [
       'set -eu',
       'sudo -n true',
-      'if command -v systemctl >/dev/null 2>&1; then sudo -n systemctl enable --now podman.socket >/dev/null 2>&1 || true; fi',
+      'if command -v systemctl >/dev/null 2>&1; then',
+      '  sudo -n systemctl enable podman.socket >/dev/null 2>&1 || true',
+      '  for _ in $(seq 1 120); do',
+      '    if sudo -n test -S /run/podman/podman.sock; then break; fi',
+      '    sudo -n systemctl start podman.socket >/dev/null 2>&1 || true',
+      '    sleep 1',
+      '  done',
+      '  sudo -n test -S /run/podman/podman.sock',
+      'fi',
+      'if sudo -n systemctl cat openlink-project-supabase-images.service >/dev/null 2>&1; then',
+      '  for _ in $(seq 1 300); do',
+      '    if sudo -n test -f /var/lib/openlink/.project-supabase-images-loaded; then break; fi',
+      '    sudo -n systemctl start openlink-project-supabase-images.service >/dev/null 2>&1 || true',
+      '    sleep 2',
+      '  done',
+      '  sudo -n test -f /var/lib/openlink/.project-supabase-images-loaded',
+      'fi',
       'sudo -n podman version >/dev/null',
     ].join('\n')])
   }
@@ -418,9 +400,8 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   async runInMachine(name: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> {
     const directory = stateDirectory(this.stateRoot, name)
     const record = await this.requireRecord(directory)
-    const commandLine = [command, ...args].map(shellQuoteArgument).join(' ')
     try {
-      const result = await this.run(this.ssh, this.sshArgs(record, [commandLine]), {
+      const result = await this.run(this.ssh, this.sshArgs(record, [command, ...args]), {
         timeout: this.commandTimeoutMs,
         maxBuffer: MAX_BUFFER,
       })
@@ -489,8 +470,6 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
         try { process.kill(pid, 'SIGKILL') } catch {}
       }
     }
-    await this.seedServers.get(name)?.close()
-    this.seedServers.delete(name)
     await rm(stateFile(directory, 'qemu.pid'), { force: true }).catch(() => undefined)
     await rm(stateFile(directory, 'qmp.sock'), { force: true }).catch(() => undefined)
   }
@@ -525,6 +504,15 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       baseFingerprint: previous?.baseFingerprint || this.baseFingerprint,
       guestUser: this.guestUser,
       createdAt: previous?.createdAt || new Date().toISOString(),
+    }
+  }
+
+  private async assertKernelArtifacts(): Promise<void> {
+    for (const [label, path] of [['kernel', this.kernelPath], ['initrd', this.initrdPath]] as const) {
+      const metadata = await lstat(path).catch(() => undefined)
+      if (!metadata?.isFile() || metadata.isSymbolicLink() || metadata.size <= 0) {
+        throw new AgentHostError('BACKEND_NOT_CONFIGURED', `Ubuntu Project VM ${label} artifact is missing or invalid: ${path}`)
+      }
     }
   }
 
@@ -613,7 +601,11 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
 
   private async qemuInfo(path: string): Promise<QemuImageInfo> {
     try {
-      const result = await this.run(this.qemuImg, ['info', '--output=json', path], { timeout: 30_000 })
+      // A resident VM holds the qcow2 write lock. Metadata inspection is
+      // read-only and must still succeed while reconcile/reattach inspects a
+      // running machine, so force a shared open instead of failing the whole
+      // provisioning pass with a lock error.
+      const result = await this.run(this.qemuImg, ['info', '--output=json', '-U', path], { timeout: 30_000 })
       return JSON.parse(result.stdout) as QemuImageInfo
     } catch (error) {
       throw new AgentHostError('PROVISIONING_FAILED', `Ubuntu Project VM disk metadata is unreadable: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
@@ -635,9 +627,10 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     return seed
   }
 
-  private async startMachine(directory: string, record: UbuntuProjectVmRecord, seed: UbuntuProjectVmSeed): Promise<void> {
-    const disk = stateFile(directory, 'disk.qcow2')
-    await this.assertPorts(record)
+  private async ensureSeedImage(directory: string, record: UbuntuProjectVmRecord, seed: UbuntuProjectVmSeed): Promise<string> {
+    const seedDirectory = stateFile(directory, 'seed')
+    await rm(seedDirectory, { recursive: true, force: true })
+    await mkdir(seedDirectory, { recursive: true, mode: 0o700 })
     const publicKey = (await readFile(stateFile(directory, 'id_ed25519.pub'), 'utf8')).trim()
     const documents = ubuntuProjectVmSeedDocuments({
       name: record.name,
@@ -645,22 +638,28 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       publicKey,
       guestUser: record.guestUser,
     })
-    const seedServer = new UbuntuSeedServer(seed.token, documents)
-    this.seedServers.get(record.name)?.close().catch(() => undefined)
-    this.seedServers.set(record.name, seedServer)
-    let port: number
-    try {
-      port = await seedServer.start()
-    } catch (error) {
-      this.seedServers.delete(record.name)
-      throw new AgentHostError('PROVISIONING_FAILED', `Ubuntu Project VM seed server failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    for (const [name, value] of documents) {
+      await writeFile(resolve(seedDirectory, name), value, { mode: 0o600 })
     }
+    const seedImage = stateFile(directory, 'seed.img')
+    await rm(seedImage, { force: true })
+    try {
+      await this.run(this.mke2fs, ['-t', 'ext4', '-d', seedDirectory, '-F', seedImage, '16M'], { timeout: 60_000 })
+      await chmod(seedImage, 0o600)
+    } catch (error) {
+      throw new AgentHostError('PROVISIONING_FAILED', `Ubuntu Project VM seed disk creation failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    }
+    return seedImage
+  }
+
+  private async startMachine(directory: string, record: UbuntuProjectVmRecord, seedImage: string): Promise<void> {
+    const disk = stateFile(directory, 'disk.qcow2')
+    await this.assertPorts(record)
     const qmpPath = qemuSocketPath(this.socketRoot, record.name)
     const pidFile = stateFile(directory, 'qemu.pid')
     const consoleLog = stateFile(directory, 'console.log')
     await rm(pidFile, { force: true }).catch(() => undefined)
     await rm(qmpPath, { force: true }).catch(() => undefined)
-    const seedUrl = `http://10.0.2.2:${port}/seed/${seed.token}/`
     const args = ubuntuProjectVmQemuArguments({
       name: record.name,
       diskPath: disk,
@@ -669,7 +668,10 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       sshPort: record.sshPort,
       servicePorts: record.servicePorts,
       ...(record.desktopPort !== undefined ? { desktopPort: record.desktopPort } : {}),
-      seedUrl,
+      kernelPath: this.kernelPath,
+      initrdPath: this.initrdPath,
+      rootDevice: this.rootDevice,
+      seedImagePath: seedImage,
       pidFile,
       qmpPath,
       consoleLog,
@@ -677,8 +679,6 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     try {
       await this.run(this.qemu, args, { timeout: 120_000, maxBuffer: MAX_BUFFER, cwd: directory })
     } catch (error) {
-      await seedServer.close()
-      this.seedServers.delete(record.name)
       const tail = await readTail(consoleLog)
       throw new AgentHostError(
         'PROVISIONING_FAILED',
@@ -690,13 +690,9 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       await this.waitForPid(record.name, pidFile)
       await this.waitForSsh(record.name, directory, record)
     } catch (error) {
-      await seedServer.close()
-      this.seedServers.delete(record.name)
       await this.forceStop(pidFile).catch(() => undefined)
       throw error
     }
-    await seedServer.close()
-    this.seedServers.delete(record.name)
   }
 
   private async waitForPid(name: string, pidFile: string): Promise<void> {

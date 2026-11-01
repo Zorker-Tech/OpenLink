@@ -79,7 +79,7 @@ test('recreates failed Project VM service containers instead of restarting stale
 
   // Exercise the same rootless Podman path used by the local AppleHV Project
   // VM. Remote Linux VMs opt into rootful mode separately.
-  await new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: false }).ensureServices(input)
+  await new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: false, publishAddress: '0.0.0.0' }).ensureServices(input)
 
   const removed = calls
     .filter((call) => (call.command === 'podman' && call.args[0] === 'rm') || (call.command === 'sudo' && call.args[0] === '-n' && call.args[1] === 'podman' && call.args[2] === 'rm'))
@@ -102,6 +102,8 @@ test('recreates failed Project VM service containers instead of restarting stale
   assert.ok(restoredSessions[1]?.args.includes('sessionmain'))
   const opensandboxRun = calls.find((call) => call.args.includes('run') && call.args.includes('openlink/opensandbox-server:dev'))
   assert.ok(opensandboxRun)
+  assert.equal(opensandboxRun?.args[opensandboxRun.args.indexOf('--publish') + 1], '0.0.0.0:51000:43122')
+  assert.equal(opensandboxRun?.args[opensandboxRun.args.indexOf('--dns-search') + 1], 'dns.podman')
   assert.equal(opensandboxRun?.args[opensandboxRun.args.indexOf('--user') + 1], '0:0')
   assert.equal(opensandboxRun?.args[opensandboxRun.args.indexOf('--security-opt') + 1], 'label=disable')
   assert.ok(opensandboxRun?.args.some((arg) => arg === '/run/user/1000/podman/podman.sock:/var/run/docker.sock:rw'))
@@ -448,11 +450,17 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
   const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-controller-'))
   const originalWorkspaceRoot = process.env.OPENLINK_AGENT_WORKSPACE_ROOT
   const copied: string[] = []
+  const commands: Array<{ command: string; args: string[] }> = []
+  const seedPath = join(stateRoot, 'project-supabase-seed.json')
+  await writeFile(seedPath, '{"release":"self-hosted/v0.8.0"}\n')
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async () => undefined,
     bootstrapToolchain: async () => undefined,
     copyToMachine: async (_machine, source) => { copied.push(source) },
-    runInMachine: projectSupabaseRunInMachine,
+    runInMachine: async (machine, command, args = []) => {
+      commands.push({ command, args })
+      return projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
+    },
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
@@ -467,6 +475,7 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
     execdImage: 'openlink/opensandbox-execd:dev',
     egressImage: 'openlink/opensandbox-egress:dev',
     agentWorkerImage: 'openlink/agent-worker:dev',
+    projectSupabaseSeed: seedPath,
   })
   process.env.OPENLINK_AGENT_WORKSPACE_ROOT = resolve('/tmp/openlink-supervisor-root')
   try {
@@ -474,10 +483,53 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
     assert.deepEqual(copied, [
       resolve('/tmp/openlink-supervisor-root/services/agent-host/project-supabase-runtime.mjs'),
       resolve('/tmp/openlink-supervisor-root/scripts/lib/project-supabase-bundle.mjs'),
+      seedPath,
     ])
+    const install = commands.find((call) => call.command === 'sudo' && call.args[0] === '-n' && call.args[1] === 'sh' && call.args[2] === '-c')
+    assert.match(install?.args[3] ?? '', /cp \/tmp\/project-supabase-seed\.json \/var\/lib\/openlink\/project-supabase\/seed\.json/)
+    assert.match(install?.args[3] ?? '', /chmod 0600 \/var\/lib\/openlink\/project-supabase\/seed\.json/)
   } finally {
     if (originalWorkspaceRoot === undefined) delete process.env.OPENLINK_AGENT_WORKSPACE_ROOT
     else process.env.OPENLINK_AGENT_WORKSPACE_ROOT = originalWorkspaceRoot
+    await runtime.close()
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('fails closed when the configured Project Supabase seed is missing', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-seed-'))
+  const commands: Array<{ command: string; args: string[] }> = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    copyToMachine: async () => undefined,
+    runInMachine: async (_machine, command, args = []) => {
+      commands.push({ command, args })
+      return projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
+    },
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager,
+    machineDriver,
+    serviceDriver: { supportsEgress: true, ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+    projectSupabaseSeed: join(stateRoot, 'missing-seed.json'),
+  })
+  try {
+    await assert.rejects(
+      () => runtime.ensure('2c51ca26-3cd0-4cb4-896d-2061de06098c', 'thin'),
+      /Project Supabase seed is not readable/,
+    )
+    assert.equal(commands.some((call) => call.command === 'sudo' && call.args[1] === '/var/lib/openlink/project-supabase-runtime' && call.args[2] === 'ensure'), false)
+  } finally {
     await runtime.close()
     await rm(stateRoot, { recursive: true, force: true })
   }

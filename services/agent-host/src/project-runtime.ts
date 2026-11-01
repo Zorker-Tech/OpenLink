@@ -148,6 +148,14 @@ export interface PodmanProjectRuntimeServiceDriverOptions {
   engine?: 'podman' | 'docker'
   /** Socket mounted into the OpenSandbox control-plane container. */
   engineSocketPath?: string
+  /**
+   * Interface used when publishing project service ports inside the Project
+   * VM. Both the E1 machine network and T1 QEMU user-mode hostfwd deliver
+   * connections to the guest's interface address; AppleHV's SSH tunnel also
+   * reaches a 0.0.0.0 listener through guest loopback. The host forwards stay
+   * `127.0.0.1`-only, and neither VM has a bridged external interface.
+   */
+  publishAddress?: string
 }
 
 export interface ProjectRuntimeManagerOptions {
@@ -163,6 +171,13 @@ export interface ProjectRuntimeManagerOptions {
   agentRpcWorkerImage?: string
   codeServerImage?: string
   ubuntuDesktopIsoSource?: string
+  /**
+   * Host path of the attested Project Supabase image seed. T1's immutable base
+   * carries the images and runtime configuration but not the release
+   * attestation; provisioning installs this file into the project state root
+   * so the controller can verify its golden image before starting services.
+   */
+  projectSupabaseSeed?: string
   imageArchives?: Record<string, string>
   projectPortBase?: number
   /** Number of consecutive base ports the scheduler may scan. */
@@ -320,6 +335,7 @@ export class ProjectRuntimeManager {
   private readonly machineDriver: ProjectVmMachineDriver
   private readonly serviceDriver: ProjectRuntimeServiceDriver
   private readonly ubuntuDesktopIsoSource?: string
+  private readonly projectSupabaseSeed?: string
   private readonly images: {
     opensandboxImage: string
     browserHostImage: string
@@ -382,6 +398,9 @@ export class ProjectRuntimeManager {
     this.machineDriver = options.machineDriver
     this.serviceDriver = options.serviceDriver
     this.ubuntuDesktopIsoSource = options.ubuntuDesktopIsoSource?.trim() || undefined
+    this.projectSupabaseSeed = options.projectSupabaseSeed?.trim()
+      ? resolve(options.projectSupabaseSeed.trim())
+      : undefined
     this.images = {
       opensandboxImage: options.opensandboxImage,
       browserHostImage: options.browserHostImage,
@@ -1721,7 +1740,22 @@ export class ProjectRuntimeManager {
       try {
         await this.machineDriver.copyToMachine(machineName, controllerSrc, '/tmp/project-supabase-runtime.mjs')
         await this.machineDriver.copyToMachine(machineName, bundleSrc, '/tmp/project-supabase-bundle.mjs')
-        await runner(machineName, 'sudo', ['-n', 'sh', '-c', 'mkdir -p /var/lib/openlink && cp /tmp/project-supabase-runtime.mjs /var/lib/openlink/project-supabase-runtime && cp /tmp/project-supabase-bundle.mjs /var/lib/openlink/project-supabase-bundle.mjs && chmod 0755 /var/lib/openlink/project-supabase-runtime'])
+        let seedInstall = ''
+        if (this.projectSupabaseSeed) {
+          // The T1 base bakes the verified images and runtime configuration
+          // into read-only /usr/lib, but the release attestation is host
+          // controlled so it can be rotated independently of the base disk.
+          // Fail before bootstrapping containers when an operator configured a
+          // seed that is missing or unreadable.
+          try {
+            await access(this.projectSupabaseSeed)
+          } catch {
+            throw new AgentHostError('PROVISIONING_FAILED', `Project Supabase seed is not readable: ${this.projectSupabaseSeed}`, { retryable: true })
+          }
+          await this.machineDriver.copyToMachine(machineName, this.projectSupabaseSeed, '/tmp/project-supabase-seed.json')
+          seedInstall = ' && mkdir -p /var/lib/openlink/project-supabase && cp /tmp/project-supabase-seed.json /var/lib/openlink/project-supabase/seed.json && chmod 0600 /var/lib/openlink/project-supabase/seed.json'
+        }
+        await runner(machineName, 'sudo', ['-n', 'sh', '-c', `mkdir -p /var/lib/openlink && cp /tmp/project-supabase-runtime.mjs /var/lib/openlink/project-supabase-runtime && cp /tmp/project-supabase-bundle.mjs /var/lib/openlink/project-supabase-bundle.mjs && chmod 0755 /var/lib/openlink/project-supabase-runtime${seedInstall}`])
       } catch (error) {
         throw new AgentHostError(
           'PROVISIONING_FAILED',
@@ -1848,10 +1882,15 @@ export class ProjectRuntimeManager {
     await previous
     try {
       const inMemory = this.portAllocations.get(projectId)
-      if (inMemory && await this.areHostPortsAvailable(inMemory)) return inMemory
+      // A running Project VM binds its own published ports on loopback. The
+      // availability probe must not treat those as foreign collisions and
+      // move a durable project to a new port set, which would force a VM
+      // restart and invalidate every endpoint already handed to clients.
+      const machineRunning = await this.isProjectMachineRunning(projectId)
+      if (inMemory && (machineRunning || await this.areHostPortsAvailable(inMemory))) return inMemory
       if (inMemory) this.portAllocations.delete(projectId)
       const persisted = await this.readPersistedProjectPorts(projectId)
-      if (persisted && await this.areHostPortsAvailable(persisted)) {
+      if (persisted && (machineRunning || await this.areHostPortsAvailable(persisted))) {
         this.portAllocations.set(projectId, persisted)
         return persisted
       }
@@ -1911,6 +1950,15 @@ export class ProjectRuntimeManager {
       }
     } catch {}
     return undefined
+  }
+
+  private async isProjectMachineRunning(projectId: string): Promise<boolean> {
+    if (!this.machineDriver.isMachineRunning) return false
+    try {
+      return await this.machineDriver.isMachineRunning(this.vmManager.machineName(projectId))
+    } catch {
+      return false
+    }
   }
 
   private async readUsedProjectPorts(excludeProjectId: string): Promise<Set<number>> {
@@ -1985,6 +2033,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
   private readonly rootful: boolean
   private readonly engine: 'podman' | 'docker'
   private readonly engineSocketPath: string
+  private readonly publishAddress: string
   readonly supportsEgress: boolean
 
   constructor(
@@ -1997,6 +2046,10 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     this.rootful = options.rootful ?? true
     this.engine = options.engine ?? 'podman'
     this.engineSocketPath = options.engineSocketPath ?? (this.engine === 'docker' ? '/var/run/docker.sock' : '/run/podman/podman.sock')
+    this.publishAddress = options.publishAddress?.trim() || '127.0.0.1'
+    if (!/^[A-Za-z0-9.:[\]-]+$/.test(this.publishAddress)) {
+      throw new AgentHostError('INVALID_BODY', 'Project runtime publish address is invalid')
+    }
     this.supportsEgress = this.rootful
   }
 
@@ -2414,7 +2467,15 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const socketPath = this.engine === 'docker'
       ? this.engineSocketPath
       : this.rootful ? '/run/podman/podman.sock' : await this.rootlessSocketPath(runInMachine, machine)
-    await runInMachine(machine, 'test', ['-S', socketPath])
+    if (this.engine === 'podman' && this.rootful) {
+      // systemd creates /run/podman as a root-only directory. A plain
+      // `test -S` from the guest login user cannot traverse it even though
+      // the socket exists, so probe through the same sudo path used by the
+      // rest of the rootful controller.
+      await runInMachine(machine, 'sudo', ['-n', 'test', '-S', socketPath])
+    } else {
+      await runInMachine(machine, 'test', ['-S', socketPath])
+    }
     return socketPath
   }
 
@@ -2555,7 +2616,11 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       }
     }
     const expectedConfigHash = this.containerConfigHash(input)
-    const args = ['run', '--detach', '--name', input.name, '--network', input.network, '--publish', `127.0.0.1:${input.port}:${input.containerPort}`]
+    const args = ['run', '--detach', '--name', input.name, '--network', input.network, '--publish', `${this.publishAddress}:${input.port}:${input.containerPort}`]
+    // Do not inherit a host search domain into the project network. All
+    // cross-service names are resolved by aardvark-dns; a host suffix can
+    // produce an IPv6 answer for an otherwise IPv4-only container network.
+    args.push('--dns-search', 'dns.podman')
     // Service control planes are Project-VM residents. Let Podman restore
     // them as soon as the VM boots instead of waiting for the first chat turn
     // to cold-start the project. An explicit `podman stop` still suppresses
@@ -2597,6 +2662,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       image: input.image,
       port: input.port,
       containerPort: input.containerPort,
+      publishAddress: this.publishAddress,
+      dnsSearch: 'dns.podman',
       network: input.network,
       env: Object.fromEntries(Object.entries(input.env).sort(([left], [right]) => left.localeCompare(right))),
       volumes: input.volumes,
