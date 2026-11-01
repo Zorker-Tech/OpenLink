@@ -26,6 +26,14 @@ export function assertUbuntuProjectVmArtifactManifest(manifest, expected = {}) {
   if (!Number.isSafeInteger(manifest.diskBytes) || manifest.diskBytes <= 0) fail('diskBytes is invalid')
   if (typeof manifest.diskSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifest.diskSha256)) fail('diskSha256 is invalid')
   if (typeof manifest.baseFingerprint !== 'string' || !manifest.baseFingerprint) fail('baseFingerprint is missing')
+  for (const [name, value] of [['kernel', manifest.kernel], ['initrd', manifest.initrd]]) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${name} is missing`)
+    if (typeof value.file !== 'string' || !value.file.trim()) fail(`${name}.file is missing`)
+    if (value.file.includes('/') || value.file.includes('\\') || value.file === '.' || value.file === '..') fail(`${name}.file must be a basename`)
+    if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0) fail(`${name}.bytes is invalid`)
+    if (typeof value.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(value.sha256)) fail(`${name}.sha256 is invalid`)
+  }
+  if (manifest.rootDevice !== '/dev/vda') fail('rootDevice must be /dev/vda for the payload boot contract')
   if (!Number.isSafeInteger(manifest.diskVirtualBytes) || manifest.diskVirtualBytes < 10 * 1024 * 1024 * 1024) {
     fail('diskVirtualBytes is invalid')
   }
@@ -42,6 +50,9 @@ export function assertUbuntuProjectVmArtifactManifest(manifest, expected = {}) {
     diskPath: null,
     fingerprint: manifest.baseFingerprint,
     architecture: platform.architecture,
+    kernel: { file: manifest.kernel.file, sha256: manifest.kernel.sha256, bytes: manifest.kernel.bytes },
+    initrd: { file: manifest.initrd.file, sha256: manifest.initrd.sha256, bytes: manifest.initrd.bytes },
+    rootDevice: manifest.rootDevice,
   }
 }
 
