@@ -150,7 +150,7 @@ The project computer mode is resolved by the root supervisor before any
 Project VM is created and is never inferred at request time.
 
 - **T1 (default)** — one Ubuntu 24.04 LTS QEMU/KVM Project VM per project with a
-  native project desktop (Xvfb + GNOME/Xfce + x11vnc + websockify), rootful
+  native project desktop (Xvfb + Ubuntu GNOME 46 X11 + x11vnc + websockify), rootful
   Podman and OpenSandbox sessions. The desktop is project-scoped and shared by
   all chats. The immutable Ubuntu base is content-addressed; each project keeps
   a qcow2 overlay plus its own SSH identity and cloud-init seed identity. The
