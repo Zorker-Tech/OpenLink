@@ -59,6 +59,8 @@ export interface ProjectVmMachineDriver {
   bootstrapToolchain(name: string): Promise<void>
   runInMachine?(name: string, command: string, args?: string[]): Promise<ProjectVmCommandResult>
   copyToMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
+  /** Copy a file out of the guest for backup/migration. */
+  copyFromMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
   /** Copy an artifact already present on the VM host into the guest. */
   copyRemoteToMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
   /**
@@ -978,6 +980,24 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
       return
     }
     await this.run(this.command, ['machine', 'cp', sourcePath, `${name}:${destinationPath}`])
+  }
+
+  async copyFromMachine(name: string, sourcePath: string, destinationPath: string): Promise<void> {
+    if (this.directAppleHv) {
+      const config = await this.appleHvMachineConfig(name)
+      await runCommand('/usr/bin/scp', [
+        '-P', String(config.SSH.Port),
+        '-o', 'BatchMode=yes',
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'ConnectTimeout=10',
+        '-i', config.SSH.IdentityPath,
+        `${this.appleHvRemoteUsername(config)}@127.0.0.1:${sourcePath}`,
+        destinationPath,
+      ])
+      return
+    }
+    await this.run(this.command, ['machine', 'cp', `${name}:${sourcePath}`, destinationPath])
   }
 
   async stopMachine(name: string): Promise<void> {

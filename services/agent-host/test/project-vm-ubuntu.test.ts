@@ -181,7 +181,8 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
     const result = await driver.runInMachine(name, 'echo', ['hello'])
     assert.equal(result.stdout, 'ok\n')
     await driver.copyToMachine(name, '/tmp/source', '/var/tmp/target')
-    assert.ok(calls.some((call) => call.file.endsWith('scp')))
+    await driver.copyFromMachine(name, '/var/tmp/source', '/tmp/target')
+    assert.ok(calls.some((call) => call.file.endsWith('scp') && call.args.some((arg) => arg.endsWith('@127.0.0.1:/var/tmp/source'))))
 
     await driver.stopMachine(name)
     assert.equal(running, false)
