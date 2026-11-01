@@ -176,13 +176,19 @@ Xvfb display), not a second kernel.
 
 ## Migration and rollback
 
+- A project runtime descriptor is single-owner. Starting the other architecture
+  against the same project skips the automatic restore and fails explicit
+  provisioning with the recorded architecture in the error; it never runs two
+  VMs, overwrites the other descriptor or steals its ports.
 - Existing E1 projects remain runnable with `-e1`. No disk migration is
-  required.
-- T1 creates a new Ubuntu Project VM and workspace for a project that has no
-  T1 disk. The E1 VM is not deleted; the operator can stop it to free
-  resources and keep it as a backup source.
-- Rollback is a startup selection (`-e1`) plus stopping the T1 VM; the
-  immutable Ubuntu base and E1 base are versioned and retained.
+  required while the project stays on E1.
+- Moving a project between modes is an explicit data migration: back up the
+  workspace and Supabase data, stop the owning runtime, remove its state, then
+  provision the target mode and restore the data. T1 creates a new Ubuntu
+  Project VM and workspace; E1 retains its own machine disk and workspace.
+- Rollback is a startup selection (`-e1`) after the T1 runtime state has been
+  backed up and removed; the E1 machine disk remains a separate durable
+  environment. The immutable Ubuntu base and E1 base are versioned and retained.
 - Base upgrades publish a new versioned qcow2. New projects use it; existing
   projects keep their recorded backing path and are not rewritten.
 

@@ -41,6 +41,11 @@ scope; the Web/BFF never needs a mode-specific code path.
 5. Every fast path has the authoritative provisioning path as its fallback.
 6. Project VM state (disk, SSH identity, seed identity, runtime secrets) is
    backed up as one recovery unit.
+7. A project runtime is bound to the architecture that created it. Startup in
+   the other mode skips automatic restore and explicit provisioning fails with
+   an actionable error; it never runs two VMs for one project, overwrites the
+   other descriptor, or steals its ports. Switching requires stopping/removing
+   the owning runtime and restoring project data into the new VM.
 
 ## Documents per mode
 
