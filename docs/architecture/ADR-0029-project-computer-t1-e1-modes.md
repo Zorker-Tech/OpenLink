@@ -45,7 +45,7 @@ workstation model.
 For T1, the Project VM is an Ubuntu guest composed from the pinned OpenLink
 Ubuntu userspace image and the verified Ubuntu 24.04 LTS generic kernel, with:
 
-- a native desktop (GNOME with Xfce fallback) exposed through noVNC/websockify;
+- the native Ubuntu GNOME 46 desktop (X11 backend under Xvfb) exposed through noVNC/websockify; T1 fails closed if GNOME cannot start rather than silently showing a lightweight fallback;
 - rootful Podman for project services and OpenSandbox session workloads;
 - SSH, systemd, Node.js and Git for the existing Agent Host service contracts;
 - `/workspace` as the durable project root.
@@ -62,7 +62,7 @@ Xvfb display), not a second kernel.
 
 | Mode | Project VM | Session | Desktop | Selection |
 | --- | --- | --- | --- | --- |
-| **T1** (default) | Ubuntu Project VM (pinned userspace + LTS generic kernel), native desktop, rootful Podman | OpenSandbox | Project-scoped native desktop | `pnpm dev:local` / `-t1` / `--arch=t1` |
+| **T1** (default) | Ubuntu 24.04 LTS Project VM (GNOME 46 X11 + LTS generic kernel), native desktop, rootful Podman | OpenSandbox | Project-scoped native Ubuntu desktop | `pnpm dev:local` / `-t1` / `--arch=t1` |
 | **E1** (optional) | Existing Podman machine OS, rootful Podman | OpenSandbox | Per-chat container desktop (Xfvb + GNOME/Xfce) | `-e1` / `--arch=e1` |
 
 - T1 replaces E1 as the default in development and production startup.

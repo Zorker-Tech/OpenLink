@@ -27,8 +27,9 @@ The builder:
 1. verifies the official Ubuntu 24.04 cloud image and extracts the Ubuntu LTS
    generic kernel, initrd and matching modules;
 2. installs rootful Podman, SSH, cloud-init, network/netfilter tools and the
-   Project Supabase runtime dependencies into the pinned Ubuntu userspace
-   image inside Docker (no slow guest-network package install);
+   Project Supabase runtime dependencies into the pinned Ubuntu 24.04 LTS
+   desktop userspace image inside Docker (no slow guest-network package
+   install);
 3. composes the userspace with the native desktop, Project Supabase immutable
    bundle/images, SSH/cloud-init configuration and the verified kernel modules;
 4. creates a bootable 64 GiB ext4 filesystem from the composed rootfs
@@ -45,6 +46,7 @@ Environment:
 | `OPENLINK_UBUNTU_PROJECT_VM_OUTPUT` | Artifact directory (default `.openlink-runtime/project-vm-base/ubuntu`) |
 | `OPENLINK_PROJECT_SUPABASE_CACHE` | Project Supabase bundle/images cache |
 | `OPENLINK_PROJECT_SUPABASE_SEED` | Attested Project Supabase image seed copied into the project state before the controller starts (default `.openlink-runtime/project-supabase/cache/seed.json`) |
+| `OPENLINK_UBUNTU_USERS_IMAGE` | Pinned Ubuntu desktop userspace image for the base build (default `ubuntu:24.04`; production can use a verified digest) |
 | `OPENLINK_MKE2FS_COMMAND` | Host `mke2fs` for the per-project seed disk |
 | `OPENLINK_UBUNTU_PROJECT_VM_DISK_GB` | Base virtual size (default 64) |
 
