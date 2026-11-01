@@ -15,6 +15,25 @@ test('distinguishes never-booted AppleHV configs from machines already provision
   assert.equal(appleHvMachineHasBooted({ LastUp: '2026-08-10T05:54:02.476379+08:00' }), true)
 })
 
+test('copies migration archives in and out of the Podman machine', async () => {
+  const calls: Array<{ file: string; args: string[] }> = []
+  const driver = new PodmanMachineDriver({
+    command: 'podman',
+    bootstrap: false,
+    machineProvider: 'qemu',
+    run: async (file, args) => {
+      calls.push({ file, args })
+      return { stdout: '', stderr: '' }
+    },
+  })
+  await driver.copyToMachine('olp-test', '/host/workspace.tar', '/var/tmp/workspace.tar')
+  await driver.copyFromMachine('olp-test', '/var/tmp/supabase.tar', '/host/supabase.tar')
+  assert.deepEqual(calls, [
+    { file: 'podman', args: ['machine', 'cp', '/host/workspace.tar', 'olp-test:/var/tmp/workspace.tar'] },
+    { file: 'podman', args: ['machine', 'cp', 'olp-test:/var/tmp/supabase.tar', '/host/supabase.tar'] },
+  ])
+})
+
 test('reaps a surviving direct AppleHV helper before rebinding VM sockets', { skip: process.platform !== 'darwin' }, async () => {
   const root = await mkdtemp(`${tmpdir()}/openlink-applehv-partial-`)
   const socketRoot = `/tmp/olp-test-${process.pid}`

@@ -438,6 +438,29 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     }
   }
 
+  async copyFromMachine(name: string, sourcePath: string, destinationPath: string): Promise<void> {
+    const directory = stateDirectory(this.stateRoot, name)
+    const record = await this.requireRecord(directory)
+    try {
+      await this.run(this.scp, [
+        '-i', stateFile(directory, 'id_ed25519'),
+        '-P', String(record.sshPort),
+        '-o', 'BatchMode=yes',
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'ConnectTimeout=10',
+        `${record.guestUser}@127.0.0.1:${sourcePath}`,
+        destinationPath,
+      ], { timeout: 15 * 60_000, maxBuffer: MAX_BUFFER })
+    } catch (error) {
+      throw new AgentHostError(
+        'PROJECT_BACKEND_UNAVAILABLE',
+        `Ubuntu Project VM ${name} copy out failed: ${error instanceof Error ? error.message : String(error)}`,
+        { retryable: true },
+      )
+    }
+  }
+
   async isMachineRunning(name: string): Promise<boolean> {
     const directory = stateDirectory(this.stateRoot, name)
     const pid = await this.readPid(stateFile(directory, 'qemu.pid'))
