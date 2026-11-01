@@ -392,13 +392,27 @@ function processIsAlive(pid) {
   try { process.kill(pid, 0); return true } catch (error) { return error?.code === 'EPERM' }
 }
 
-async function acquireLifecycleLock(stateRoot, command) {
+async function bootIdentity() {
+  // PID numbers are reused after a guest reboot. The boot id is stable for
+  // the life of the kernel, so a lock written before a reboot is stale even
+  // if the recorded PID now belongs to an unrelated live process.
+  try { return (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim() } catch { return undefined }
+}
+
+export async function acquireLifecycleLock(stateRoot, command) {
   await mkdir(stateRoot, { recursive: true, mode: 0o700 })
   const lockRoot = resolve(stateRoot, '.lifecycle.lock')
+  const bootId = await bootIdentity()
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       await mkdir(lockRoot, { mode: 0o700 })
-      await atomicJson(resolve(lockRoot, 'owner.json'), { schemaVersion: 1, pid: process.pid, command, acquiredAt: new Date().toISOString() })
+      await atomicJson(resolve(lockRoot, 'owner.json'), {
+        schemaVersion: 1,
+        pid: process.pid,
+        command,
+        acquiredAt: new Date().toISOString(),
+        ...(bootId ? { bootId } : {}),
+      })
       return async () => {
         const owner = JSON.parse(await readFile(resolve(lockRoot, 'owner.json'), 'utf8')).pid
         if (owner !== process.pid) fail('lifecycle lock ownership changed unexpectedly')
@@ -408,7 +422,12 @@ async function acquireLifecycleLock(stateRoot, command) {
       if (error?.code !== 'EEXIST') throw error
       let owner
       try { owner = JSON.parse(await readFile(resolve(lockRoot, 'owner.json'), 'utf8')) } catch { }
-      if (owner && processIsAlive(owner.pid)) fail(`lifecycle operation ${owner.command || 'unknown'} is already running`)
+      // A different boot id proves the owner cannot still be running, even
+      // when the PID was reused by the current boot.
+      const staleBoot = Boolean(owner && bootId && typeof owner.bootId === 'string' && owner.bootId !== bootId)
+      if (!staleBoot && owner && processIsAlive(owner.pid)) {
+        fail(`lifecycle operation ${owner.command || 'unknown'} is already running`)
+      }
       // The owner file is written immediately after mkdir. Briefly retry an
       // empty directory before classifying it as a crashed owner.
       if (!owner && attempt < 5) {

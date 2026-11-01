@@ -142,7 +142,10 @@ architecture in the error; it does not start a second VM or take over T1 ports.
 To move a project to E1: back up the project workspace and Supabase data, stop
 and remove the T1 runtime (`ubuntu-vms/<machine>/` and `projects/<projectId>/`),
 then provision the project under E1 and restore its data. The reverse applies
-to an E1 project moving to T1.
+to an E1 project moving to T1. Keeping the original VM state instead of removing
+it makes rollback possible: stopping the other mode and restoring the original
+runtime descriptor brings the original VM and its workspace back. Data created
+in the other mode is not merged automatically; export/import it explicitly.
 
 ## Failure recovery
 
@@ -156,6 +159,7 @@ to an E1 project moving to T1.
 | Desktop unreachable | `ssh ... systemctl status openlink-desktop`; inspect `/tmp/openlink-*.log` in the guest |
 | SSH reset / `ssh.service` failed | Check the seed disk is attached as `/dev/vdb` and `ssh-keygen` path in the base; the service must generate host keys before `sshd -t` |
 | Cloud-init failed | The console log and `/var/log/cloud-init-output.log` identify the module; fix the base artifact or the host network |
+| `Project Supabase runtime: lifecycle operation ... is already running` after a VM reboot | The lock is boot-id aware; a lock from an earlier guest boot is stale even if its PID was reused. If an older controller still blocks, remove `/var/lib/openlink/project-supabase/.lifecycle.lock` in the guest and rerun provisioning |
 | Project services unhealthy | The existing project Supabase/OpenSandbox logs and health probes apply; a stale session container is removed rather than blocking the VM |
 | `Project Supabase seed is not readable` | Provide `OPENLINK_PROJECT_SUPABASE_SEED` or export `seed.json` from a verified E1 Project VM; provisioning fails before starting containers |
 | Supabase `auth` exits with `lookup db on 10.89.0.1:53 ... i/o timeout` or `network is unreachable` | The base must include `aardvark-dns` and project containers must keep `--dns-search dns.podman`; rebuild the artifact/recreate the project VM if it predates either fix |
