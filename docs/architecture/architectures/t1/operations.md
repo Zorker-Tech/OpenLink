@@ -139,13 +139,21 @@ destructive recovery; restore from backup first when the data matters.
 A T1 project runtime is bound to T1. Starting E1 against the same project skips
 the automatic restore and fails explicit provisioning with the recorded
 architecture in the error; it does not start a second VM or take over T1 ports.
-To move a project to E1: back up the project workspace and Supabase data, stop
-and remove the T1 runtime (`ubuntu-vms/<machine>/` and `projects/<projectId>/`),
-then provision the project under E1 and restore its data. The reverse applies
-to an E1 project moving to T1. Keeping the original VM state instead of removing
-it makes rollback possible: stopping the other mode and restoring the original
-runtime descriptor brings the original VM and its workspace back. Data created
-in the other mode is not merged automatically; export/import it explicitly.
+
+Use the supported one-command workflow after stopping the app:
+
+```bash
+npm run runtime:switch -- --project <project-uuid> --to e1
+```
+
+The command quiesces T1, exports and verifies the workspace and Project Supabase
+state, archives the T1 runtime descriptor, provisions E1, imports the data,
+verifies endpoints and rolls back to T1 if any step fails. The T1 disk is
+retained, so a later `--to t1` migration can restore/overwrite it with the
+current E1 data. See
+[Switching architectures](../README.md#switching-architectures) for the data
+contract, backup layout and failure semantics. Active chat leases are not
+resumed across the switch.
 
 ## Failure recovery
 

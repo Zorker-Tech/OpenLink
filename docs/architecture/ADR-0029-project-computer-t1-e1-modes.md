@@ -182,13 +182,18 @@ Xvfb display), not a second kernel.
   VMs, overwrites the other descriptor or steals its ports.
 - Existing E1 projects remain runnable with `-e1`. No disk migration is
   required while the project stays on E1.
-- Moving a project between modes is an explicit data migration: back up the
-  workspace and Supabase data, stop the owning runtime, remove its state, then
-  provision the target mode and restore the data. T1 creates a new Ubuntu
-  Project VM and workspace; E1 retains its own machine disk and workspace.
-- Rollback is a startup selection (`-e1`) after the T1 runtime state has been
-  backed up and removed; the E1 machine disk remains a separate durable
-  environment. The immutable Ubuntu base and E1 base are versioned and retained.
+- Moving a project between modes is an explicit, recoverable data migration
+  performed by `npm run runtime:switch -- --project <uuid> --to t1|e1`. The
+  command stops the app, quiesces the source, exports/verifies the workspace and
+  Project Supabase state, archives the source runtime descriptor, provisions the
+  target, imports and verifies the data, and retains a backup plus the source VM
+  disk. On failure it restores the source runtime and restarts it.
+- Active chat leases are not resumed across a switch; sessions are quiesced and
+  the workspace `.openlink` state remains. The source VM disk is retained for
+  rollback and repeat migration; it is not deleted or converted.
+- Rollback is the same command in the other direction, or restoring the archived
+  source runtime descriptor and VM. The immutable Ubuntu base and E1 base are
+  versioned and retained.
 - Base upgrades publish a new versioned qcow2. New projects use it; existing
   projects keep their recorded backing path and are not rewritten.
 

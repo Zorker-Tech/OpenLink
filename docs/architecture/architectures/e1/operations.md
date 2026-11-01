@@ -37,9 +37,22 @@ E1 forces `OPENLINK_DESKTOP_MODE=ubuntu-container` and
 An E1 project runtime is bound to E1. Starting T1 against the same project
 skips the automatic restore and fails explicit provisioning with the recorded
 architecture in the error; it does not start an Ubuntu VM or take over E1
-ports. To move a project to T1: back up the project workspace and Supabase
-data, remove the Podman machine and `projects/<projectId>/`, provision under
-T1, then restore the data.
+ports.
+
+Use the supported one-command workflow after stopping the app:
+
+```bash
+npm run runtime:switch -- --project <project-uuid> --to t1
+```
+
+The command quiesces E1, exports and verifies the workspace and Project Supabase
+state, archives the E1 runtime descriptor, provisions T1, imports the data,
+verifies endpoints and rolls back to E1 if any step fails. The E1 machine disk is
+retained, so a later `--to e1` migration can restore/overwrite it with the
+current T1 data. See
+[Switching architectures](../README.md#switching-architectures) for the data
+contract, backup layout and failure semantics. Active chat leases are not
+resumed across the switch.
 
 ## Failure recovery
 
