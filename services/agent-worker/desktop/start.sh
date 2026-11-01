@@ -100,21 +100,48 @@ else
   chown openlink:openlink /run/user/1000 /tmp/openlink-runtime-openlink
   chmod 700 /run/user/1000 /tmp/openlink-runtime-openlink
 
+  # GNOME sessions are systemd user units. The Project VM has systemd and
+  # must use its user manager/bus so org.freedesktop.systemd1 is available.
+  # Container desktops (E1) keep the private dbus-run-session fallback.
+  desktop_bus=/run/user/1000/bus
+  if [[ -d /run/systemd/system ]]; then
+    systemctl start user@1000.service 2>/dev/null || true
+    for _ in $(seq 1 50); do
+      [[ -S "$desktop_bus" ]] && break
+      runuser -u openlink -- env XDG_RUNTIME_DIR=/run/user/1000 systemctl --user start dbus.socket >/dev/null 2>&1 || true
+      sleep 0.2
+    done
+  fi
+  if [[ "${OPENLINK_DESKTOP_REQUIRE_GNOME:-0}" == "1" && ! -S "$desktop_bus" ]]; then
+    echo "GNOME requires the systemd user D-Bus bus" >&2
+    exit 1
+  fi
+
   start_background xvfb Xvfb :0 -screen 0 1280x800x24 -nolisten tcp -ac +extension RANDR
   wait_for_file /tmp/.X11-unix/X0
 
-  start_background gnome runuser -u openlink -- env \
-    HOME=/home/openlink \
-    DISPLAY=:0 \
-    XDG_RUNTIME_DIR=/run/user/1000 \
-    XDG_SESSION_TYPE=x11 \
-    XDG_CURRENT_DESKTOP=ubuntu:GNOME \
-    GNOME_SHELL_SESSION_MODE=ubuntu \
-    LIBGL_ALWAYS_SOFTWARE=1 \
-    dbus-run-session -- gnome-session --session=ubuntu
+  desktop_env=(
+    HOME=/home/openlink
+    DISPLAY=:0
+    XDG_RUNTIME_DIR=/run/user/1000
+    XDG_SESSION_TYPE=x11
+    XDG_CURRENT_DESKTOP=ubuntu:GNOME
+    GNOME_SHELL_SESSION_MODE=ubuntu
+    LIBGL_ALWAYS_SOFTWARE=1
+  )
+  if [[ -S "$desktop_bus" ]]; then
+    start_background gnome runuser -u openlink -- env "${desktop_env[@]}" DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" gnome-session --session=ubuntu
+  else
+    start_background gnome runuser -u openlink -- env "${desktop_env[@]}" dbus-run-session -- gnome-session --session=ubuntu
+  fi
   desktop_process_name=gnome-shell
   desktop_pid_file=/tmp/openlink-desktop-gnome.pid
   if ! wait_for_process "$desktop_process_name" "$desktop_pid_file"; then
+    if [[ "${OPENLINK_DESKTOP_REQUIRE_GNOME:-0}" == "1" ]]; then
+      echo "GNOME did not start; T1 requires the Ubuntu GNOME desktop" >&2
+      tail -n 80 /tmp/openlink-desktop-gnome.log >&2 || true
+      exit 1
+    fi
     echo "GNOME did not start; using the Xfce desktop fallback in this sandbox" >&2
     pkill -u openlink -x gnome-session 2>/dev/null || true
     pkill -u openlink -x gnome-shell 2>/dev/null || true
@@ -140,6 +167,22 @@ else
   if ! pgrep -u openlink -x "$desktop_process_name" >/dev/null 2>&1; then
     echo "Desktop session exited during startup" >&2
     exit 1
+  fi
+  # There is no GDM/logind graphical seat behind Xvfb. Disable lock/blanking
+  # so the shared remote desktop never presents an unusable lock screen.
+  if [[ -S "$desktop_bus" ]]; then
+    for setting in \
+      "org.gnome.desktop.screensaver lock-enabled false" \
+      "org.gnome.desktop.screensaver idle-activation-enabled false" \
+      "org.gnome.desktop.lockdown disable-lock-screen true" \
+      "org.gnome.desktop.session idle-delay 0"; do
+      runuser -u openlink -- env \
+        HOME=/home/openlink \
+        DISPLAY=:0 \
+        XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        gsettings set $setting >/dev/null 2>&1 || true
+    done
   fi
   start_background x11vnc x11vnc -display :0 -forever -shared -rfbport 5900 -localhost -nopw -xrandr
   start_background websockify /usr/bin/websockify --web=/usr/share/novnc 6080 localhost:5900

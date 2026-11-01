@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Build the immutable Ubuntu Project VM base used by T1.
 //
-// The Project VM userspace is the pinned Ubuntu session image rootfs. It
-// already contains the native GNOME/Xfce desktop, Xvfb, x11vnc, websockify,
-// Node.js and Git. This builder adds the Project VM runtime (rootful Podman,
-// SSH, cloud-init, network and netfilter tools), a verified Ubuntu LTS generic
-// kernel/initrd/modules, and turns the result into a bootable ext4/qcow2 disk.
+// The Project VM userspace is the pinned Ubuntu 24.04 LTS desktop image. It
+// contains Ubuntu GNOME 46 (X11 backend), Xvfb, x11vnc, websockify and the
+// desktop runtime. This builder adds the Project VM runtime (rootful Podman,
+// SSH, cloud-init, network and netfilter tools), the pinned Node runtime, a
+// verified Ubuntu LTS generic kernel/initrd/modules, and turns the result into
+// a bootable ext4/qcow2 disk. T1 requires GNOME: it does not silently fall back
+// to a lightweight desktop.
 //
 // The kernel and initrd are passed directly to QEMU (`-kernel`/`-initrd`), so
 // the Project VM does not depend on a bootloader, an ISO installer or a
@@ -40,6 +42,9 @@ const cloudImageUrl = process.env.OPENLINK_UBUNTU_CLOUD_IMAGE_URL?.trim()
 const cloudImage = resolve(cacheRoot, basename(cloudImageUrl))
 const outputRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT || resolve(root, '.openlink-runtime/project-vm-base/ubuntu'))
 const docker = process.env.OPENLINK_DOCKER_COMMAND?.trim() || 'docker'
+// The Project VM userspace is the Ubuntu LTS desktop image. The worker image
+// remains the source of the pinned Node runtime copied into the guest.
+const usersImage = process.env.OPENLINK_UBUNTU_USERS_IMAGE?.trim() || 'ubuntu:24.04'
 const workerImage = process.env.OPENLINK_AGENT_WORKER_IMAGE?.trim() || 'openlink/agent-worker:dev'
 const imageArchive = resolve(process.env.OPENLINK_AGENT_WORKER_ARCHIVE?.trim()
   || resolve(homedir(), '.cache/openlink/project-images/openlink_agent-worker_dev.tar'))
@@ -58,10 +63,42 @@ const guestPackages = [
   'cloud-init',
   'conntrack',
   'kmod',
+  'curl',
+  'jq',
+  'git',
+  'ca-certificates',
+  'procps',
+  'psmisc',
+  'tar',
+  'gzip',
+  'xz-utils',
   // Podman's netavark backend resolves container names through aardvark-dns.
   // Ubuntu does not install it as a hard dependency, and without it every
   // inter-service lookup (for example auth -> db) times out at 10.89.0.1:53.
   'aardvark-dns',
+  // Ubuntu's GNOME session. GNOME 46 supports the X11 backend, which is the
+  // only backend available under Xvfb; newer GNOME releases are Wayland-only.
+  'ubuntu-desktop-minimal',
+  'ubuntu-session',
+  'gnome-session',
+  'gnome-shell',
+  'gnome-shell-ubuntu-extensions',
+  'gnome-terminal',
+  'nautilus',
+  'gnome-settings-daemon',
+  'polkitd',
+  'xdg-user-dirs',
+  'xvfb',
+  'x11vnc',
+  'websockify',
+  'novnc',
+  'dbus-user-session',
+  'dbus-x11',
+  'x11-utils',
+  'xauth',
+  'x11-xserver-utils',
+  'fonts-ubuntu',
+  'fonts-noto-color-emoji',
 ]
 
 function log(message) {
@@ -208,21 +245,62 @@ try {
   log(`using kernel ${boot.version}`)
 
   rootfsContainer = `openlink-t1-rootfs-${process.pid}-${randomBytes(3).toString('hex')}`
-  log('installing the Project VM runtime into the pinned Ubuntu userspace image')
+  log(`installing the Ubuntu Project VM userspace from ${usersImage}`)
+  const aptMirror = process.env.OPENLINK_UBUNTU_APT_MIRROR?.trim() || ''
+  if (aptMirror && !/^https?:\/\/[^|\\s]+$/.test(aptMirror)) throw new Error('OPENLINK_UBUNTU_APT_MIRROR is invalid')
+  const aptUpdate = process.env.OPENLINK_UBUNTU_APT_UPDATE !== '0'
+  try {
+    await run(docker, ['image', 'inspect', usersImage], { timeout: 30_000 })
+  } catch {
+    log(`pulling ${usersImage}`)
+    await run(docker, ['pull', usersImage], { timeout: 30 * 60_000 })
+  }
   await run(docker, [
-    'run', '--name', rootfsContainer, '--entrypoint', 'bash', workerImage,
-    '-lc', [
+    'run', '--detach', '--name', rootfsContainer, '--entrypoint', 'sleep', usersImage, 'infinity',
+  ], { timeout: 60_000 })
+  await run(docker, [
+    'exec', rootfsContainer, 'bash', '-lc', [
       'set -e',
       'export DEBIAN_FRONTEND=noninteractive',
+      ...(aptMirror ? [
+        `sed -i 's|http://archive.ubuntu.com/ubuntu/|${aptMirror}|g; s|http://security.ubuntu.com/ubuntu/|${aptMirror}|g' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true`,
+      ] : []),
       // Build hosts with IPv6 DNS but no IPv6 route make apt's http method
       // stall indefinitely on AAAA answers. Pin the artifact build to IPv4 and
       // retry transient mirror failures so it is reproducible.
-      'APT_OPTIONS="-o Acquire::ForceIPv4=true -o Acquire::Retries=3"',
-      'apt-get $APT_OPTIONS update -qq',
+      'APT_OPTIONS="-o Acquire::ForceIPv4=true -o Acquire::Retries=5"',
+      ...(aptUpdate ? ['apt-get $APT_OPTIONS update -qq'] : []),
       `apt-get $APT_OPTIONS install -y -qq --no-install-recommends ${guestPackages.join(' ')} >/dev/null`,
+      // The Ubuntu cloud image has a default `ubuntu` user at UID 1000. The
+      // Project VM contract is the `openlink` user at UID 1000; replace it so
+      // cloud-init and the desktop services share one identity.
+      'if getent passwd ubuntu >/dev/null 2>&1; then userdel -r ubuntu >/dev/null 2>&1 || userdel ubuntu >/dev/null 2>&1 || true; fi',
+      'if ! getent passwd openlink >/dev/null 2>&1; then useradd -m -u 1000 -G sudo,adm -s /bin/bash openlink; fi',
+      'echo "openlink ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openlink',
+      'chmod 0440 /etc/sudoers.d/openlink',
+      'mkdir -p /home/openlink && chown openlink:openlink /home/openlink',
       'rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/lib/cloud/* /home/openlink/.ssh /root/.ssh',
     ].join('\n'),
   ], { timeout: 30 * 60_000 })
+
+  // Node is pinned in the worker image; copy only the runtime binary. The
+  // guest does not need npm for project services or the Supabase controller.
+  log('installing the pinned Node runtime into the Project VM userspace')
+  const nodeContainer = `openlink-t1-node-${process.pid}-${randomBytes(3).toString('hex')}`
+  const nodeBinary = resolve(workRoot, 'node')
+  await run(docker, ['create', '--name', nodeContainer, workerImage], { timeout: 60_000 })
+  try {
+    await run(docker, ['cp', `${nodeContainer}:/usr/local/bin/node`, nodeBinary], { timeout: 120_000 })
+  } finally {
+    await run(docker, ['rm', '-f', nodeContainer], { timeout: 60_000 }).catch(() => undefined)
+  }
+  await run(docker, ['exec', rootfsContainer, 'mkdir', '-p', '/usr/local/bin', '/opt/openlink/desktop'], { timeout: 30_000 })
+  await run(docker, ['cp', nodeBinary, `${rootfsContainer}:/usr/local/bin/node`], { timeout: 120_000 })
+  for (const file of ['start.sh', 'run-ubuntu-vm.sh', 'qmp-control.py']) {
+    await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop', file), `${rootfsContainer}:/opt/openlink/desktop/${file}`], { timeout: 60_000 })
+  }
+  await run(docker, ['exec', rootfsContainer, 'sh', '-c', 'chmod 0755 /usr/local/bin/node /opt/openlink/desktop/start.sh /opt/openlink/desktop/run-ubuntu-vm.sh'], { timeout: 30_000 })
+
   const rootfsTar = resolve(workRoot, 'rootfs.tar')
   await run(docker, ['export', rootfsContainer, '-o', rootfsTar], { timeout: 30 * 60_000 })
   await run(docker, ['rm', '-f', rootfsContainer], { timeout: 60_000 })
@@ -230,8 +308,6 @@ try {
 
   const configScript = `set -e
 export DEBIAN_FRONTEND=noninteractive
-apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 update -qq
-apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 install -y -qq --no-install-recommends e2fsprogs >/dev/null
 rm -rf /rootfs
 mkdir -p /rootfs
 tar -xf /work/rootfs.tar -C /rootfs
@@ -239,6 +315,20 @@ mkdir -p /rootfs/boot /rootfs/lib/modules
 cp /work/${boot.kernel} /rootfs/boot/${boot.kernel}
 cp /work/${boot.initrd} /rootfs/boot/${boot.initrd}
 cp -a /work/modules/modules/${boot.version} /rootfs/lib/modules/
+
+# The desktop service starts the systemd user manager explicitly; enabling
+# linger also makes it available immediately after boot for GNOME's session
+# targets and user D-Bus.
+mkdir -p /rootfs/var/lib/systemd/linger
+touch /rootfs/var/lib/systemd/linger/openlink
+
+# A Project VM is an appliance; never prompt for an Ubuntu release upgrade.
+mkdir -p /rootfs/etc/update-manager
+cat >/rootfs/etc/update-manager/release-upgrades <<'OPENLINK_RELEASE_UPGRADES'
+[DEFAULT]
+Prompt=never
+OPENLINK_RELEASE_UPGRADES
+rm -f /rootfs/etc/xdg/autostart/update-notifier.desktop
 
 mkdir -p /rootfs/etc/systemd/network
 cat >/rootfs/etc/systemd/network/20-wired.network <<'OPENLINK_NETWORK'
@@ -259,6 +349,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=OPENLINK_DESKTOP_MODE=ubuntu-container
+Environment=OPENLINK_DESKTOP_REQUIRE_GNOME=1
 ExecStart=/bin/bash /opt/openlink/desktop/start.sh
 Restart=always
 RestartSec=2
@@ -390,7 +481,8 @@ chmod 0444 /work/base.qcow2
     diskFormat: 'qcow2',
     diskVirtualBytes: diskGb * 1024 * 1024 * 1024,
     rootDevice: '/dev/vda',
-    desktop: { session: 'gnome-with-xfce-fallback', websockifyPort: 6080, vncPort: 5900 },
+    desktop: { session: 'ubuntu-gnome-x11', websockifyPort: 6080, vncPort: 5900 },
+    usersImage: { image: usersImage, nodeSource: workerImage },
     packages: guestPackages,
     projectSupabase: {
       bundleSha256: await sha256(projectSupabaseBundle),
