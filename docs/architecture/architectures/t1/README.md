@@ -5,7 +5,9 @@ Decision: [ADR-0029](../ADR-0029-project-computer-t1-e1-modes.md)
 
 ## What T1 is
 
-One project owns one durable Ubuntu 24.04 LTS QEMU/KVM VM:
+One project owns one durable Ubuntu QEMU/KVM VM. The userspace is the pinned
+OpenLink Ubuntu image; the kernel is the verified Ubuntu 24.04 LTS generic
+kernel passed directly to QEMU:
 
 ```text
 Browser
@@ -41,11 +43,11 @@ an OS and do not start their own desktop.
 | --- | --- | --- | --- |
 | Project disk overlay | `<stateRoot>/ubuntu-vms/<machine>/disk.qcow2` | Agent Host | Required |
 | Per-project SSH identity | `<stateRoot>/ubuntu-vms/<machine>/id_ed25519{,.pub}` | Agent Host | Required |
-| Seed identity | `<stateRoot>/ubuntu-vms/<machine>/seed.json` | Agent Host | Required |
+| Seed identity and seed disk | `<stateRoot>/ubuntu-vms/<machine>/{seed.json,seed/**,seed.img}` | Agent Host | Required |
 | VM spec | `<stateRoot>/ubuntu-vms/<machine>/vm.json` | Agent Host | Required |
 | Project runtime descriptor/secrets/ports | `<stateRoot>/projects/<projectId>/` | Agent Host | Required |
-| Project workspace | guest `/home/ubuntu/openlink/projects/<projectId>/workspace` | inside the overlay | via VM backup |
-| Immutable Ubuntu base | `.openlink-runtime/project-vm-base/ubuntu/` | artifact producer | Not per-project |
+| Project workspace | guest `/home/openlink/openlink/projects/<projectId>/workspace` | inside the overlay | via VM backup |
+| Immutable Ubuntu base + kernel/initrd | `.openlink-runtime/project-vm-base/ubuntu/` | artifact producer | Not per-project |
 
 The base is versioned by content (`ubuntu-project-vm-base-<sha>.qcow2`). A
 project records the base path it was created from. A base upgrade publishes a
@@ -60,17 +62,20 @@ removes its overlay, SSH identity and runtime state; the shared base remains.
    its backing file. `thick` mode creates an independent qcow2 copy.
 3. **Identity.** A per-project ed25519 key is generated (or adopted) under the
    project VM state directory.
-4. **Seed.** A per-project instance-id and random seed token are persisted.
-5. **Boot.** QEMU starts with loopback-only host forwards, a loopback HTTP
-   cloud-init seed, a serial log, a QMP socket and a pid file. The VM is not
-   started if any required port is occupied.
-6. **Cloud-init.** The project public key is injected, `podman.socket` is
-   enabled, and the native desktop service starts.
+4. **Seed.** A per-project instance-id, public key and random seed token are
+   written to a read-only ext4 seed disk.
+5. **Boot.** QEMU starts with loopback-only host forwards, the seed disk
+   attached as `/dev/vdb`, a serial log, a QMP socket and a pid file. The VM is
+   not started if any required port is occupied.
+6. **Cloud-init.** The seed disk is mounted at
+   `/var/lib/cloud/seed/nocloud`, the project public key is injected,
+   `podman.socket` is enabled, and the native desktop service starts.
 7. **Readiness.** SSH becomes reachable; Agent Host verifies passwordless sudo
    and rootful Podman.
-8. **Project services.** Agent Host imports runtime image archives, starts the
-   project Supabase stack, OpenSandbox, Browser Host and code-server, and
-   publishes the project desktop endpoint.
+8. **Project services.** Agent Host waits for the immutable Project Supabase
+   images to load from the base (one-time local `podman load`), imports runtime
+   image archives, starts the project Supabase stack, OpenSandbox, Browser Host
+   and code-server, and publishes the project desktop endpoint.
 9. **Sessions.** Chat leases create OpenSandbox session containers inside the
    VM. The session `desktopEndpoint` returns the project desktop URL.
 
@@ -79,8 +84,11 @@ removes its overlay, SSH identity and runtime state; the shared base remains.
 - `OPENLINK_PROJECT_VM_DRIVER=ubuntu-qemu`
 - `OPENLINK_PROJECT_VM_BASE_DISK=<versioned base qcow2>`
 - `OPENLINK_PROJECT_VM_BASE_FINGERPRINT=<manifest fingerprint>`
-- `OPENLINK_PROJECT_VM_GUEST_USER=ubuntu`
-- `OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT=/home/ubuntu/openlink/projects`
+- `OPENLINK_PROJECT_VM_GUEST_USER=openlink`
+- `OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT=/home/openlink/openlink/projects`
+- `OPENLINK_PROJECT_VM_KERNEL=<verified vmlinuz>`
+- `OPENLINK_PROJECT_VM_INITRD=<verified initrd>`
+- `OPENLINK_MKE2FS_COMMAND=/usr/sbin/mke2fs` (seed disk creation)
 - `OPENLINK_DESKTOP_SCOPE=project`
 - `OPENLINK_DESKTOP_MODE=ubuntu-container` (session desktop is not started for
   T1; the project desktop is returned instead)
@@ -95,6 +103,9 @@ worker's `/desktop/start`.
 ## Security
 
 - The Project VM is the host boundary. QEMU exposes only loopback host ports.
+- Project service containers publish on the guest interface so QEMU user-mode
+  hostfwd can reach them; the guest has no bridged external interface and the
+  host forwards remain `127.0.0.1`-only.
 - The desktop VNC server binds guest loopback; websockify is reachable only
   through the project desktop port and the authenticated Desktop Gateway.
 - Session workloads remain isolated by OpenSandbox inside the VM.
@@ -102,8 +113,8 @@ worker's `/desktop/start`.
   browser or logs.
 - The build removes the build key, cloud-init seed state, machine-id and SSH
   host keys; clones generate fresh identities.
-- The seed HTTP server binds loopback and serves only public metadata behind a
-  random token.
+- The cloud-init seed is a read-only ext4 disk containing only public
+  metadata. There is no seed HTTP listener or SMBIOS data source.
 
 ## Failure and recovery
 
@@ -130,7 +141,7 @@ worker's `/desktop/start`.
 ## Build and verification
 
 ```bash
-pnpm runtime:ubuntu-vm-image     # build the immutable Ubuntu base
+pnpm runtime:ubuntu-vm-image     # compose the immutable Ubuntu base
 pnpm dev:local                   # T1 default
 pnpm dev:local:e1                # E1 explicit
 npm --prefix services/agent-host test

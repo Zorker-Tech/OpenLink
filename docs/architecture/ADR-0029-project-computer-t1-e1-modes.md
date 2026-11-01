@@ -42,7 +42,8 @@ workstation model.
 
 ### 1. One project owns one durable Project VM and one project-scoped desktop
 
-For T1, the Project VM is an Ubuntu 24.04 LTS guest with:
+For T1, the Project VM is an Ubuntu guest composed from the pinned OpenLink
+Ubuntu userspace image and the verified Ubuntu 24.04 LTS generic kernel, with:
 
 - a native desktop (GNOME with Xfce fallback) exposed through noVNC/websockify;
 - rootful Podman for project services and OpenSandbox session workloads;
@@ -61,7 +62,7 @@ Xvfb display), not a second kernel.
 
 | Mode | Project VM | Session | Desktop | Selection |
 | --- | --- | --- | --- | --- |
-| **T1** (default) | Ubuntu 24.04 LTS, native desktop, rootful Podman | OpenSandbox | Project-scoped native desktop | `pnpm dev:local` / `-t1` / `--arch=t1` |
+| **T1** (default) | Ubuntu Project VM (pinned userspace + LTS generic kernel), native desktop, rootful Podman | OpenSandbox | Project-scoped native desktop | `pnpm dev:local` / `-t1` / `--arch=t1` |
 | **E1** (optional) | Existing Podman machine OS, rootful Podman | OpenSandbox | Per-chat container desktop (Xfvb + GNOME/Xfce) | `-e1` / `--arch=e1` |
 
 - T1 replaces E1 as the default in development and production startup.
@@ -76,20 +77,23 @@ Xvfb display), not a second kernel.
 
 ### 3. T1 artifact and trust boundaries
 
-- The Ubuntu base is an immutable, versioned qcow2 artifact built once from the
-  official Ubuntu 24.04 cloud image. It contains Podman, SSH, the native
-  desktop and the project service runtime dependencies. It contains no build
-  SSH key, no cloud-init instance state, no machine-id and no SSH host keys.
+- The Ubuntu base is an immutable, versioned qcow2 artifact plus the verified
+  Ubuntu LTS generic kernel/initrd. It is composed once from the pinned Ubuntu
+  userspace image: rootful Podman, SSH, cloud-init, the native desktop, the
+  project service runtime dependencies and the immutable Project Supabase
+  bundle/images. It contains no build SSH key, no cloud-init instance state,
+  no machine-id and no SSH host keys.
 - Each project gets a qcow2 overlay whose backing file is the versioned base.
   Existing projects keep their recorded base path across base upgrades; a
   missing base or disk fails closed and requires an explicit restore or
   recreate.
 - Each project gets its own ed25519 SSH identity, stored under the project VM
   state directory with mode 0600. No SSH identity is shared between projects.
-- cloud-init receives per-project identity through QEMU SMBIOS
-  (`ds=nocloud;s=http://10.0.2.2:<port>/seed/<token>/`) and a loopback-only HTTP
-  seed server. The seed contains only the project public key and instance
-  metadata; the private key never leaves the Agent Host state directory.
+- cloud-init receives per-project identity through a per-project read-only
+  ext4 seed disk. The disk contains only the project public key and instance
+  metadata and is mounted at `/var/lib/cloud/seed/nocloud` before
+  `cloud-init-local.service`; the private key never leaves the Agent Host state
+  directory. No HTTP seed listener is required at runtime.
 - QEMU host-forwarded service ports, SSH and the desktop are bound to
   `127.0.0.1`. Browsers reach the desktop only through the existing
   authenticated Desktop Gateway. Session workloads remain isolated by
