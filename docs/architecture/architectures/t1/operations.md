@@ -60,7 +60,10 @@ project Supabase controller. Ordinary startup never pulls these images. The
 controller still verifies the loaded image IDs against the release attestation:
 Agent Host copies the host-controlled `seed.json` into
 `/var/lib/openlink/project-supabase/` before the controller runs, so attestation
-rotation does not require rebuilding the base disk.
+rotation does not require rebuilding the base disk. The seed is produced by the
+verified E1 golden-image pipeline (`services/agent-host/project-vm-seed-supabase.sh`)
+and stored in `.openlink-runtime/project-supabase/cache/seed.json`; it attests
+the same image archive that the T1 base embeds.
 
 Agent Host creates a per-project read-only ext4 seed disk with the project
 public key and instance-id. The base mounts it at
