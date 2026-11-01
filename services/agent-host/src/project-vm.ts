@@ -583,7 +583,18 @@ export async function cloneThinProjectVmDisk(
       if (!reflinkUnavailable) throw error
       // Some supported Linux filesystems (including iSCSI-backed ext4) cannot
       // reflink. A QCOW2 overlay keeps the VM disk thin without copying the
-      // entire Golden Disk or depending on filesystem clone support.
+      // entire Golden Disk or depending on filesystem clone support. Overlays
+      // can only back a qcow2 image; a raw Golden Disk (for example the
+      // AppleHV artifact when its filesystem cannot clone) would otherwise fail
+      // with an opaque "Image is not in qcow2 format" error.
+      const sourceInfo = JSON.parse((await runCommand(qemuImg, ['info', '--output=json', sourcePath])).stdout) as Qcow2OverlayInfo
+      if (sourceInfo.format !== 'qcow2') {
+        throw new AgentHostError(
+          'PROVISIONING_FAILED',
+          `Native CoW clone is not supported for a ${sourceInfo.format ?? 'non-qcow2'} Golden Disk on this filesystem`,
+          { retryable: false },
+        )
+      }
       await runCommand(qemuImg, ['create', '-f', 'qcow2', '-F', 'qcow2', '-b', sourcePath, staging])
       qcow2Overlay = true
     }
