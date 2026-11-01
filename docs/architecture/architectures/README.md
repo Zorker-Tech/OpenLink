@@ -9,7 +9,7 @@ the supported runtime architectures; the binding decision is
 
 | Mode | Status | Project VM | Desktop | Startup |
 | --- | --- | --- | --- | --- |
-| [`t1`](./t1/README.md) | Default | Ubuntu 24.04 LTS + rootful Podman | One native project desktop shared by all chats | `pnpm dev:local`, `-t1` |
+| [`t1`](./t1/README.md) | Default | Ubuntu Project VM (pinned userspace + LTS generic kernel) + rootful Podman | One native project desktop shared by all chats | `pnpm dev:local`, `-t1` |
 | [`e1`](./e1/README.md) | Optional, explicit | Podman machine OS + rootful Podman | Per-chat container desktop (Xvfb + GNOME/Xfce) | `-e1` |
 | experimental ISO | Not a product support commitment | Session container + nested QEMU/KVM | Full Ubuntu Desktop guest per chat | Explicit legacy configuration only |
 
