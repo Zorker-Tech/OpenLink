@@ -10,7 +10,7 @@ OpenLink ships two explicit project-computer architectures. **T1 is the default.
 
 | Mode | Project VM | Session | Desktop | Startup |
 | --- | --- | --- | --- | --- |
-| **T1** (default) | Ubuntu Project VM (pinned userspace + LTS generic kernel), rootful Podman | OpenSandbox | One native project desktop, shared by all chats | `pnpm dev:local` |
+| **T1** (default) | Ubuntu 24.04 LTS Project VM (GNOME 46 X11 + LTS generic kernel), rootful Podman | OpenSandbox | One native Ubuntu project desktop, shared by all chats | `pnpm dev:local` |
 | **E1** (optional) | Podman machine OS, rootful Podman | OpenSandbox | Per-chat container desktop (Xvfb + GNOME/Xfce) | `pnpm dev:local:e1` |
 
 - T1 is the enterprise target: one Ubuntu computer per project, one OS to

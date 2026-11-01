@@ -6,15 +6,15 @@ Decision: [ADR-0029](../ADR-0029-project-computer-t1-e1-modes.md)
 ## What T1 is
 
 One project owns one durable Ubuntu QEMU/KVM VM. The userspace is the pinned
-OpenLink Ubuntu image; the kernel is the verified Ubuntu 24.04 LTS generic
-kernel passed directly to QEMU:
+Ubuntu 24.04 LTS desktop image; the kernel is the verified Ubuntu 24.04 LTS
+generic kernel passed directly to QEMU:
 
 ```text
 Browser
   → Next.js Web/BFF
       → Agent Host
           → T1 Project VM (Ubuntu LTS, native desktop, rootful Podman)
-              ├─ native desktop: Xvfb + GNOME (Xfce fallback) + x11vnc + websockify :6080
+              ├─ native desktop: Xvfb + Ubuntu GNOME 46 (X11) + x11vnc + websockify :6080
               ├─ project services: OpenSandbox control plane, Browser Host, code-server,
               │                    project Supabase
               └─ OpenSandbox sessions: Agent Worker / Pi / Codex, Browser Host,
