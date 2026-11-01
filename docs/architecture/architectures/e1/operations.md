@@ -51,6 +51,7 @@ T1, then restore the data.
 | Agent Host restart | Durable session leases recover workers; persisted project runtime fast-reattach applies |
 | Host reboot | Podman machine is restarted on demand; service containers use restart policies |
 | Supabase services report `lookup db ... i/o timeout` or `network is unreachable` | Verify `aardvark-dns` is present in the machine OS. Project containers pin `--dns-search dns.podman`; a host search domain must not be allowed to answer project names with an IPv6 address on the IPv4-only container network |
+| `lifecycle operation ... is already running` after a VM restart | The controller lock is boot-id aware; a lock from an earlier boot is stale even if its PID was reused. If an older controller still blocks, remove `/var/lib/openlink/project-supabase/.lifecycle.lock` in the VM and rerun provisioning |
 | Project deletion | Remove the Podman machine, its disk and the project runtime state; keep versioned base artifacts |
 
 ## Validation
