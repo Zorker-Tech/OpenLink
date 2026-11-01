@@ -535,6 +535,62 @@ test('fails closed when the configured Project Supabase seed is missing', async 
   }
 })
 
+test('refuses to provision one architecture over another architecture\'s project runtime', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-mode-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const runtimeRoot = join(stateRoot, 'projects', projectId)
+  await mkdir(runtimeRoot, { recursive: true })
+  await writeFile(join(runtimeRoot, 'runtime.json'), `${JSON.stringify({
+    projectId,
+    status: 'ready',
+    backend: 'qemu-kvm',
+    machineName: 'olp-2c51ca263cd04cb4',
+    workspacePath: '/home/openlink/openlink/projects/2c51ca26-3cd0-4cb4-896d-2061de06098c/workspace',
+  })}\n`)
+  let ensureCalls = 0
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => { ensureCalls += 1 },
+    bootstrapToolchain: async () => undefined,
+    runInMachine: async () => ({ stdout: '', stderr: '' }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/home/core/openlink/projects' })
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager,
+    machineDriver,
+    serviceDriver: { supportsEgress: true, ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+  })
+  const originalWarn = console.warn
+  const warnings: string[] = []
+  console.warn = (message?: unknown) => { warnings.push(String(message)) }
+  try {
+    await assert.rejects(
+      () => runtime.ensure(projectId, 'thin'),
+      /recorded for qemu-kvm, but this Agent Host runs podman-machine/,
+    )
+    assert.equal(ensureCalls, 0)
+    await runtime.restorePersistedRuntimes()
+    assert.equal(ensureCalls, 0)
+    assert.ok(warnings.some((warning) => warning.includes('recorded for qemu-kvm')))
+    await assert.rejects(
+      () => runtime.remove(projectId),
+      /recorded for qemu-kvm, but this Agent Host runs podman-machine/,
+    )
+    assert.equal(ensureCalls, 0)
+  } finally {
+    console.warn = originalWarn
+    await runtime.close()
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
 test('preserves resident Project VMs across an Agent Host restart and restores them on startup', async () => {
   const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-resident-'))
   const machineCalls: string[] = []

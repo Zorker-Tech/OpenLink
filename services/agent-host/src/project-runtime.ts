@@ -499,6 +499,7 @@ export class ProjectRuntimeManager {
         else this.healthyAt.set(reattached, Date.now())
         return reattached
       }
+      await this.assertPersistedArchitecture(projectId)
       const diskMode = await this.resolveDiskMode(projectId, requestedDiskMode)
       const task = this.provision(projectId, diskMode)
       this.pending.set(projectId, task)
@@ -910,10 +911,20 @@ export class ProjectRuntimeManager {
       .sort()
     for (const projectId of projectIds) {
       let status: unknown
+      let backend: unknown
       try {
         const persisted = JSON.parse(await readFile(resolve(projectsRoot, projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
         status = persisted.status
+        backend = persisted.backend
       } catch {
+        continue
+      }
+      // A project belongs to the architecture that created its durable VM.
+      // Never auto-provision the other mode during startup: the previous VM
+      // may still be running, and silently replacing its descriptor can leave
+      // two VMs on the same project and host port set.
+      if (backend !== undefined && backend !== this.vmManager.runtimeBackend) {
+        console.warn(`OpenLink persisted Project VM restore skipped ${projectId}: recorded for ${String(backend)}, this Agent Host runs ${this.vmManager.runtimeBackend}`)
         continue
       }
       // Only a runtime which was successfully ready when the supervisor
@@ -1245,6 +1256,10 @@ export class ProjectRuntimeManager {
       if (!descriptor) {
       // A persisted/externally-created VM may still exist after a process
       // restart. Remove it directly, without creating a new runtime first.
+      // Deletion through the wrong architecture would delete this mode's
+      // machine and then the shared project state while the owning VM may
+      // still be running.
+      await this.assertPersistedArchitecture(projectId)
       try {
         await this.vmManager.remove(projectId)
       } catch (error) {
@@ -1958,6 +1973,33 @@ export class ProjectRuntimeManager {
       return await this.machineDriver.isMachineRunning(this.vmManager.machineName(projectId))
     } catch {
       return false
+    }
+  }
+
+  /**
+   * A project's durable VM belongs to exactly one architecture. Starting the
+   * other mode against the same project must not silently create a second VM
+   * on the same host ports, overwrite the other runtime descriptor, or leave
+   * the first VM orphaned. Require an explicit removal through the owning
+   * architecture instead.
+   */
+  private async assertPersistedArchitecture(projectId: string): Promise<void> {
+    const recorded = await this.readPersistedRuntimeBackend(projectId)
+    if (recorded && recorded !== this.vmManager.runtimeBackend) {
+      throw new AgentHostError(
+        'PROVISIONING_FAILED',
+        `Project ${projectId} is recorded for ${recorded}, but this Agent Host runs ${this.vmManager.runtimeBackend}. Stop and remove the project runtime under ${recorded}, or use a different project, before switching architectures.`,
+        { retryable: false },
+      )
+    }
+  }
+
+  private async readPersistedRuntimeBackend(projectId: string): Promise<string | undefined> {
+    try {
+      const persisted = JSON.parse(await readFile(resolve(this.stateRoot, 'projects', projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
+      return typeof persisted.backend === 'string' ? persisted.backend : undefined
+    } catch {
+      return undefined
     }
   }
 

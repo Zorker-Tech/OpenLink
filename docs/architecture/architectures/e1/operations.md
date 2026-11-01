@@ -32,6 +32,15 @@ E1 forces `OPENLINK_DESKTOP_MODE=ubuntu-container` and
 - If the desktop process exits, the session endpoint restarts it on the next
   request.
 
+## Switching architectures
+
+An E1 project runtime is bound to E1. Starting T1 against the same project
+skips the automatic restore and fails explicit provisioning with the recorded
+architecture in the error; it does not start an Ubuntu VM or take over E1
+ports. To move a project to T1: back up the project workspace and Supabase
+data, remove the Podman machine and `projects/<projectId>/`, provision under
+T1, then restore the data.
+
 ## Failure recovery
 
 | Symptom | Action |
