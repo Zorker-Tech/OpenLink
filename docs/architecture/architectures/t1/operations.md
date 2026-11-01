@@ -134,6 +134,16 @@ scratch, remove the project's `ubuntu-vms/<machine>/` directory **and** its
 `projects/<projectId>/runtime.json`, then let provisioning run. This is a
 destructive recovery; restore from backup first when the data matters.
 
+## Switching architectures
+
+A T1 project runtime is bound to T1. Starting E1 against the same project skips
+the automatic restore and fails explicit provisioning with the recorded
+architecture in the error; it does not start a second VM or take over T1 ports.
+To move a project to E1: back up the project workspace and Supabase data, stop
+and remove the T1 runtime (`ubuntu-vms/<machine>/` and `projects/<projectId>/`),
+then provision the project under E1 and restore its data. The reverse applies
+to an E1 project moving to T1.
+
 ## Failure recovery
 
 | Symptom | Action |
