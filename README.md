@@ -82,6 +82,22 @@ The resolved mode is exported as `OPENLINK_ARCHITECTURE`; the supervisor then
 sets the Project VM driver, base artifact, guest user and desktop scope. The
 Web/BFF has one code path for both modes.
 
+## Switch an existing project between T1 and E1
+
+Switch is a maintenance operation; stop the app first. It migrates the complete
+project workspace and Project Supabase state, verifies every archive, retains a
+backup and the source VM disk, and rolls back to the source if any step fails:
+
+```bash
+npm run runtime:switch -- --project <project-uuid> --to e1
+npm run runtime:switch -- --project <project-uuid> --to t1
+npm run runtime:switch -- --project <project-uuid> --to e1 --dry-run
+```
+
+Active chat leases are quiesced, not resumed. See
+[Switching architectures](./docs/architecture/architectures/README.md#switching-architectures)
+for the data and recovery contract.
+
 ## Repository map
 
 - `app/`, `components/`, `lib/`, `utils/` — Web/BFF and product UI.
