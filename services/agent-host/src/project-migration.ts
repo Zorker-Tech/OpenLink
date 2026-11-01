@@ -149,26 +149,53 @@ export async function quiesceProjectContainers(
       if (match) policies.set(match[1]!.toLowerCase(), match[2]!)
     }
   }
+  let policiesMutable = true
   for (const id of policies.keys()) {
-    await podman(['update', '--restart=no', id]).catch((error) => {
-      if (!/no such|not found|does not exist/i.test(error instanceof Error ? error.message : String(error))) throw error
-    })
+    try {
+      await podman(['update', '--restart=no', id])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (/no such|not found|does not exist/i.test(message)) continue
+      // Podman 4.x predates `podman update --restart`. In that case rely on
+      // `podman stop` suppressing the restart policy and leave the policy
+      // untouched; quiesce still verifies that every container exited.
+      if (/unknown flag|unknown option|flag provided but not defined/i.test(message)) {
+        policiesMutable = false
+        break
+      }
+      throw error
+    }
   }
-  await podman(['stop', '--all']).catch((error) => {
-    if (!/no containers|no such container|nothing to stop/i.test(error instanceof Error ? error.message : String(error))) throw error
-  })
+  let stopFailure: unknown
+  await podman(['stop', '--all']).catch((error) => { stopFailure = error })
+  const benignStopFailure = stopFailure === undefined
+    || /no containers|no such container|nothing to stop/i.test(stopFailure instanceof Error ? stopFailure.message : String(stopFailure))
+  let forceKilled = false
+  if (!benignStopFailure) {
+    // Some Podman versions leave a container in "improper" state after a
+    // timeout. Killing the cgroup is the last safe quiesce step before tarring
+    // its data; the container remains durable and can be started again after
+    // a rollback.
+    await podman(['kill', '--all']).catch(() => undefined)
+    forceKilled = true
+  }
   const deadline = Date.now() + (options.timeoutMs ?? 120_000)
   while (Date.now() < deadline) {
     const remaining = await podman(['ps', '--quiet']).catch(() => ({ stdout: '', stderr: '' }))
     if (!remaining.stdout.trim()) {
       return {
         restore: async () => {
+          if (!policiesMutable) return
           for (const [id, policy] of policies) {
             if (policy === 'no' || policy === '') continue
             await podman(['update', `--restart=${policy}`, id]).catch(() => undefined)
           }
         },
       }
+    }
+    if (!forceKilled) {
+      await podman(['kill', '--all']).catch(() => undefined)
+      forceKilled = true
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
   }
