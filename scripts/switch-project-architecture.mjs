@@ -302,7 +302,6 @@ async function main() {
   let sourceQuiesced = false
   let sourceQuiesce
   let targetQuiesce
-  let targetStarted = false
   try {
     const projectRoot = resolve(stateRoot, 'projects', projectId)
     const runtimePath = resolve(projectRoot, 'runtime.json')
@@ -369,7 +368,6 @@ async function main() {
     await copyFile(resolve(backupDirectory, 'runtime', 'runtime-secrets.json'), resolve(projectRoot, 'runtime-secrets.json')).catch(() => undefined)
 
     const targetDescriptor = await runtimeTarget.manager.ensure(projectId, 'thin')
-    targetStarted = true
     targetQuiesce = await quiesceProjectContainers(runtimeTarget.machineDriver, runtimeTarget.vmManager.machineName(projectId), { rootful })
     let imported
     try {
@@ -428,7 +426,13 @@ async function main() {
     let rollback = 'not-needed'
     if (sourceStopped && sourceDescriptor && source) {
       try {
-        if (targetStarted) await runtimeTarget?.manager.stop(projectId).catch(() => runtimeTarget?.vmManager.stop(projectId))
+        // The target ensure can fail after its VM has already started (for
+        // example while a service image is imported). Always stop the target
+        // VM, not only when ensure reached its ready return value.
+        if (runtimeTarget) {
+          await runtimeTarget.manager.stop(projectId).catch(() => undefined)
+          await runtimeTarget.vmManager.stop(projectId).catch(() => undefined)
+        }
         await clearTargetRuntimeState()
         await restoreArchivedRuntime(sourceDescriptor.backend, backupDirectory)
         await source.manager.ensure(projectId)
