@@ -120,6 +120,9 @@ if (projectRuntimeBackend === 'container') {
     if (extname(projectBaseDisk).toLowerCase() !== '.qcow2') throw new Error('The T1 Ubuntu Project VM requires a .qcow2 base disk')
     const machineDriver = new UbuntuQemuProjectVmDriver({
       projectBaseDisk,
+      kernelPath: resolve(required(env, 'OPENLINK_PROJECT_VM_KERNEL')),
+      initrdPath: resolve(required(env, 'OPENLINK_PROJECT_VM_INITRD')),
+      rootDevice: env.OPENLINK_PROJECT_VM_ROOT_DEVICE || '/dev/vda',
       ...(env.OPENLINK_PROJECT_VM_BASE_FINGERPRINT ? { baseFingerprint: env.OPENLINK_PROJECT_VM_BASE_FINGERPRINT } : {}),
       stateRoot: projectVmStateRoot,
       qemuCommand: env.OPENLINK_QEMU_SYSTEM_COMMAND || 'qemu-system-x86_64',
@@ -127,7 +130,8 @@ if (projectRuntimeBackend === 'container') {
       sshCommand: env.OPENLINK_SSH_COMMAND || '/usr/bin/ssh',
       scpCommand: env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
       sshKeygenCommand: env.OPENLINK_SSH_KEYGEN_COMMAND || 'ssh-keygen',
-      guestUser: env.OPENLINK_PROJECT_VM_GUEST_USER || 'ubuntu',
+      mke2fsCommand: env.OPENLINK_MKE2FS_COMMAND || 'mke2fs',
+      guestUser: env.OPENLINK_PROJECT_VM_GUEST_USER || 'openlink',
       bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0',
       ...(env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT ? { socketRoot: env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT } : {}),
     })
@@ -135,17 +139,18 @@ if (projectRuntimeBackend === 'container') {
       stateRoot: projectVmStateRoot,
       machineDriver,
       backend: 'qemu-kvm',
-      guestWorkspaceRoot: env.OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT || '/home/ubuntu/openlink/projects',
+      guestWorkspaceRoot: env.OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT || '/home/openlink/openlink/projects',
       machineSpec,
     })
     projectRuntimeManager = new ProjectRuntimeManager({
       stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
-      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true }),
+      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true, publishAddress: '0.0.0.0' }),
       statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
       opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
       execdImage: env.OPENLINK_OPENSANDBOX_EXECD_IMAGE || 'openlink/opensandbox-execd:dev', egressImage: env.OPENLINK_OPENSANDBOX_EGRESS_IMAGE || 'openlink/opensandbox-egress:dev',
       agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
       codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
+      ...(env.OPENLINK_PROJECT_SUPABASE_SEED?.trim() ? { projectSupabaseSeed: env.OPENLINK_PROJECT_SUPABASE_SEED.trim() } : {}),
       projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
       desktopPortOffset: integer(env.OPENLINK_PROJECT_RUNTIME_DESKTOP_PORT_OFFSET, 6_000, 0, 60_000),
       projectDesktop: env.OPENLINK_DESKTOP_SCOPE === 'project',
@@ -167,12 +172,13 @@ if (projectRuntimeBackend === 'container') {
     })
     projectRuntimeManager = new ProjectRuntimeManager({
       stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
-      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: env.OPENLINK_PROJECT_VM_ROOTFUL === '1' }),
+      serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: env.OPENLINK_PROJECT_VM_ROOTFUL === '1', publishAddress: '0.0.0.0' }),
       statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
       opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
       execdImage: env.OPENLINK_OPENSANDBOX_EXECD_IMAGE || 'openlink/opensandbox-execd:dev', egressImage: env.OPENLINK_OPENSANDBOX_EGRESS_IMAGE || 'openlink/opensandbox-egress:dev',
       agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
       codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
+      ...(env.OPENLINK_PROJECT_SUPABASE_SEED?.trim() ? { projectSupabaseSeed: env.OPENLINK_PROJECT_SUPABASE_SEED.trim() } : {}),
       projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
       desktopPortOffset: integer(env.OPENLINK_PROJECT_RUNTIME_DESKTOP_PORT_OFFSET, 6_000, 0, 60_000),
       projectDesktop: env.OPENLINK_DESKTOP_SCOPE === 'project',
