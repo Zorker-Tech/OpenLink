@@ -317,6 +317,12 @@ function resolveBindSource(source, options) {
 
 export function serviceCreateArgs(name, service, environment, options) {
   const args = ['create', '--name', containerName(name), '--network', NETWORK, '--label', 'io.openlink.project-supabase=true', '--label', `io.openlink.project-supabase.service=${name}`, '--label', `io.openlink.project-supabase.revision=${options.release}`, '--label', `io.openlink.project-supabase.config=${options.configHash}`, '--security-opt', 'label=disable']
+  // Containers inherit the Project VM host's resolver search domains. A host
+  // domain such as `home` can turn an AAAA lookup for `db` into an upstream
+  // `db.home` answer, which Erlang then tries over the container's IPv4-only
+  // network and reports as "network is unreachable". Keep the container
+  // search list project-local so aardvark-dns is the only DNS authority.
+  args.push('--dns-search', 'dns.podman')
   // Podman Machine injects HTTP_PROXY into all containers at the machine
   // level.  The Supabase backend is fully internal to the VM, so clear proxy
   // variables to prevent health checks and inter-service traffic from routing
