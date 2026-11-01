@@ -47,6 +47,41 @@ scope; the Web/BFF never needs a mode-specific code path.
    other descriptor, or steals its ports. Switching requires stopping/removing
    the owning runtime and restoring project data into the new VM.
 
+## Switching architectures
+
+A project runtime is bound to the architecture that created it, so switching is
+an explicit maintenance operation, not a live migration. The supported
+one-command workflow stops the OpenLink app, quiesces the source VM, exports and
+verifies the project data, archives the source runtime descriptor, provisions
+the target architecture, imports and re-verifies the data, and only then reports
+success. The source VM disk is retained; on any failure the command stops the
+target and restarts the source from its archived descriptor.
+
+```bash
+# Stop the app first.
+npm run runtime:switch -- --project <project-uuid> --to e1
+npm run runtime:switch -- --project <project-uuid> --to t1
+npm run runtime:switch -- --project <project-uuid> --to e1 --dry-run
+```
+
+Data moved by the command:
+
+- the complete project workspace, including `.openlink` session/browser state;
+- Project Supabase `data/`, `configuration/` and `secrets.json`;
+- the runtime's OpenSandbox/Browser capability tokens.
+
+Active chat leases are not resumed across a switch; sessions are quiesced and
+the workspace state remains. The command writes a self-describing backup under
+`.openlink-runtime/project-migrations/<projectId>/<timestamp>/` with
+`manifest.json`, archive SHA-256/size, source runtime files and a
+`migration.json` outcome. It never deletes the source VM disk. Repeating the
+command in the other direction exports the target's current data back, so the
+target becomes the new source of truth.
+
+The app must be stopped for a normal switch. `--allow-running-app` exists only
+for an external maintenance orchestrator that has already fenced project
+traffic; it is not safe for interactive use.
+
 ## Documents per mode
 
 Each mode directory contains:
