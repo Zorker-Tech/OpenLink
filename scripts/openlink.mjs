@@ -2,29 +2,11 @@
 // for backward compatibility with existing local tooling, but all supported
 // root commands now enter through this supervisor.
 import { readFile } from 'node:fs/promises'
+import { resolveArchitecture } from './lib/architecture-mode.mjs'
 
-let architecture
-for (let index = 2; index < process.argv.length; index += 1) {
-  const argument = process.argv[index]
-  if (argument === '-e1' || argument === '--e1' || argument === '--arch=e1' || argument === '--architecture=e1') {
-    architecture = 'e1'
-    continue
-  }
-  if (argument === '-t1' || argument === '--t1' || argument === '--arch=t1' || argument === '--architecture=t1') {
-    architecture = 't1'
-    continue
-  }
-  if (argument === '--arch' || argument === '--architecture') {
-    const value = process.argv[index + 1]?.trim().toLowerCase()
-    if (value !== 't1' && value !== 'e1') throw new Error('OpenLink architecture must be t1 or e1')
-    architecture = value
-    index += 1
-  }
-}
-architecture ||= process.env.OPENLINK_ARCHITECTURE?.trim().toLowerCase() || 't1'
-if (architecture !== 't1' && architecture !== 'e1') throw new Error('OpenLink architecture must be t1 or e1')
 // T1 is the default product architecture. E1 is the explicit heavier-isolation
 // mode invoked with -e1; it keeps the per-session container desktop.
+const architecture = resolveArchitecture(process.argv.slice(2))
 process.env.OPENLINK_ARCHITECTURE = architecture
 
 const profileIndex = process.argv.indexOf('--profile')
