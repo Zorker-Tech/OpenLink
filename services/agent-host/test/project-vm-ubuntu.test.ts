@@ -34,18 +34,22 @@ test('Ubuntu VM QEMU arguments expose only loopback forwards and a cloud-init se
     sshPort: 52_101,
     servicePorts: [51_000, 52_000, 53_000, 54_000, 55_000, 56_000],
     desktopPort: 57_000,
-    seedUrl: `http://10.0.2.2:18080/seed/${'a'.repeat(32)}/`,
+    kernelPath: '/state/vmlinuz',
+    initrdPath: '/state/initrd',
+    rootDevice: '/dev/vda',
+    seedImagePath: '/state/seed.img',
     pidFile: '/state/qemu.pid',
     qmpPath: '/tmp/qemu.sock',
     consoleLog: '/state/console.log',
   })
   const netdev = args[args.indexOf('-netdev') + 1]!
-  assert.match(netdev, /tcp:127\.0\.0\.1:52101-:22/)
-  assert.match(netdev, /tcp:127\.0\.0\.1:51000-:51000/)
-  assert.match(netdev, /tcp:127\.0\.0\.1:57000-:6080/)
+  assert.match(netdev, /hostfwd=tcp:127\.0\.0\.1:52101-:22/)
+  assert.match(netdev, /hostfwd=tcp:127\.0\.0\.1:51000-:51000/)
+  assert.match(netdev, /hostfwd=tcp:127\.0\.0\.1:57000-:6080/)
   assert.ok(args.includes('-daemonize'))
   assert.ok(args.includes('-pidfile'))
-  assert.equal(args[args.indexOf('-smbios') + 1], `type=1,serial=ds=nocloud;s=http://10.0.2.2:18080/seed/${'a'.repeat(32)}/`)
+  assert.match(args[args.indexOf('-append') + 1]!, /root=\/dev\/vda/)
+  assert.ok(args.some((argument) => argument.includes('file=/state/seed.img')))
   assert.throws(() => ubuntuProjectVmQemuArguments({
     name: 'olp-test',
     diskPath: '/state/disk.qcow2',
@@ -53,7 +57,10 @@ test('Ubuntu VM QEMU arguments expose only loopback forwards and a cloud-init se
     memoryMb: 8_192,
     sshPort: 51_000,
     servicePorts: [51_000],
-    seedUrl: `http://10.0.2.2:1/seed/${'a'.repeat(32)}/`,
+    kernelPath: '/state/vmlinuz',
+    initrdPath: '/state/initrd',
+    rootDevice: '/dev/vda',
+    seedImagePath: '/state/seed.img',
     pidFile: '/state/qemu.pid',
     qmpPath: '/tmp/qemu.sock',
     consoleLog: '/state/console.log',
@@ -98,6 +105,11 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
       await writeFile(`${keyPath}.pub`, `${basePublicKey}\n`)
       return { stdout: '', stderr: '' }
     }
+    if (file.endsWith('mke2fs')) {
+      const seedImage = args[args.indexOf('-F') + 1]!
+      await writeFile(seedImage, 'seed-image')
+      return { stdout: '', stderr: '' }
+    }
     if (file.endsWith('qemu-img')) {
       const action = args[0]
       const disk = action === 'create' || action === 'convert'
@@ -133,8 +145,14 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
     if (file.endsWith('scp')) return { stdout: '', stderr: '' }
     throw new Error(`unexpected command ${file}`)
   }
+  const kernel = join(root, 'vmlinuz')
+  const initrd = join(root, 'initrd')
+  await writeFile(kernel, 'kernel')
+  await writeFile(initrd, 'initrd')
   const driver = new UbuntuQemuProjectVmDriver({
     projectBaseDisk: base,
+    kernelPath: kernel,
+    initrdPath: initrd,
     baseFingerprint: 'base-v1',
     stateRoot,
     socketRoot: join(root, 'sockets'),
@@ -190,6 +208,11 @@ test('fails closed when a durable Ubuntu Project VM disk disappears', async () =
       await writeFile(`${keyPath}.pub`, `${basePublicKey}\n`)
       return { stdout: '', stderr: '' }
     }
+    if (file.endsWith('mke2fs')) {
+      const seedImage = args[args.indexOf('-F') + 1]!
+      await writeFile(seedImage, 'seed-image')
+      return { stdout: '', stderr: '' }
+    }
     if (file.endsWith('qemu-img')) {
       if (args[0] === 'info') return { stdout: JSON.stringify({ format: 'qcow2', 'virtual-size': 64 * 1024 * 1024 * 1024, 'full-backing-filename': base }), stderr: '' }
       const disk = args[0] === 'resize' ? args[1]! : args[args.length - 2]!
@@ -207,8 +230,14 @@ test('fails closed when a durable Ubuntu Project VM disk disappears', async () =
     }
     return { stdout: '', stderr: '' }
   }
+  const kernel = join(root, 'vmlinuz')
+  const initrd = join(root, 'initrd')
+  await writeFile(kernel, 'kernel')
+  await writeFile(initrd, 'initrd')
   const driver = new UbuntuQemuProjectVmDriver({
     projectBaseDisk: base,
+    kernelPath: kernel,
+    initrdPath: initrd,
     stateRoot,
     socketRoot: join(root, 'sockets'),
     run,
