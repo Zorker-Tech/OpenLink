@@ -70,6 +70,10 @@ the project workspace or added to the agent worker image instead.
 - The Project VM owns the registry; it persists with the project disk.
 - Agent Host installs the controller and creates the empty registry during
   project provisioning. It does not read or rewrite user tool entries.
+- The one-command architecture switch exports `manifest.tsv`, `bin/` and
+  `tools/` into `agent-tools.tar`, verifies its size and SHA-256, and replaces
+  the target registry only after a complete extraction. The previous target
+  registry is retained as `.agent-tools.migration-previous-<timestamp>`.
 - Every session receives the registry read-only and an injected `agent-tools`
   skill describing the manifest and command.
 - Removing or replacing a tool requires a new session to pick up the change;
