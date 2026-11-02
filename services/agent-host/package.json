@@ -10,7 +10,10 @@
       "import": "./dist/src/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "openlink-agent-tool.sh"
+  ],
   "engines": {
     "node": ">=22.19.0"
   },

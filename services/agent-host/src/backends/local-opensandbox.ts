@@ -20,6 +20,7 @@ import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus
 import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
 import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
+import { agentToolsAvailable, agentToolRegistryEnvironment, agentToolRegistryVolume, agentToolsSkillDirectories, agentToolsSkillFiles } from '../agent-tools.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -636,6 +637,7 @@ export class LocalOpenSandboxBackend {
     }
     const connection = this.connectionFor(projectRuntime)
     const desktopAutomation = desktopAutomationAvailable(projectRuntime)
+    const agentTools = agentToolsAvailable(projectRuntime)
     const sandbox = await Sandbox.create({
       connectionConfig: connection,
       image: projectRuntime?.agentWorkerImage ?? this.config.image,
@@ -648,6 +650,7 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
         OPENLINK_DESKTOP_MODE: desktopMode,
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
+        ...(agentTools ? agentToolRegistryEnvironment() : {}),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
@@ -711,6 +714,7 @@ export class LocalOpenSandboxBackend {
         { name: 'workspace', host: { path: projectRuntime?.workspacePath ?? this.config.workspaceRoot }, mountPath: '/workspace', readOnly: false },
         { name: 'session', host: { path: layout.root }, mountPath: '/openlink/session', readOnly: false },
         ...(desktopAutomation && projectRuntime ? desktopAutomationVolumes(projectRuntime) : []),
+        ...(agentTools ? [agentToolRegistryVolume()] : []),
         ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
           { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
           // Project-scoped installed golden disk and per-session overlays.
@@ -751,8 +755,10 @@ export class LocalOpenSandboxBackend {
           { path: '/openlink/session/artifacts', mode: 777 },
           { path: '/openlink/session/logs', mode: 777 },
           ...(desktopAutomation ? desktopAutomationSkillDirectories().map((path) => ({ path, mode: 777 })) : []),
+          ...(agentTools ? agentToolsSkillDirectories().map((path) => ({ path, mode: 777 })) : []),
         ])
         if (desktopAutomation) await sandbox.files.writeFiles(desktopAutomationSkillFiles())
+        if (agentTools) await sandbox.files.writeFiles(agentToolsSkillFiles())
         if (nativeSession) {
           const serialized = [nativeSession.header, ...nativeSession.entries].map((entry) => JSON.stringify(entry)).join('\n') + '\n'
           // Keep the session payload out of a shell argument. Long Pi sessions
