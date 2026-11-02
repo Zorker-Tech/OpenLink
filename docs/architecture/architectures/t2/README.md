@@ -51,7 +51,10 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
    bridge packages.
 2. Boot with the verified 24.04 LTS generic kernel/initrd and virtio-gpu.
 3. Start the systemd user manager and user D-Bus bus.
-4. Start GNOME Shell 51 with `--headless --no-x11 --virtual-monitor 1280x800 --mode=user`.
+4. Start Ubuntu's `gnome-session@ubuntu.target`. A systemd user drop-in runs
+   `org.gnome.Shell@ubuntu.service` as `gnome-shell --headless --no-x11
+   --virtual-monitor 1280x800 --mode=ubuntu`, so the shell, settings daemons,
+   portals and session manager are one managed Ubuntu session.
 5. Start an empty-password keyring and GNOME Remote Desktop's RDP server.
 6. Configure a self-signed TLS certificate and random per-VM RDP password.
 7. Bridge RDP into Xvfb `:9` with FreeRDP, then expose x11vnc/websockify.
@@ -66,11 +69,18 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
 - T2 disables Xwayland (`--no-x11`) because GNOME Shell 51 headless Xwayland
   exits under the current virtual GPU. **X11 applications are not supported**
   in the T2 desktop; use Wayland applications or T1.
-- Ubuntu Shell extensions that assume a GDM seat are disabled; T2 runs vanilla
-  GNOME Shell with one OpenLink extension.
+- The Ubuntu Dock, desktop icons, AppIndicators and Tiling Assistant extensions
+  are enabled. The dock is fixed to the left so the desktop is complete and
+  discoverable over RDP.
+- X11-only launchers inherited from the E1 worker userspace (Xfce, XTerm,
+  xfreerdp) are hidden. T2 runs `--no-x11`; use Wayland applications or T1.
 - GNOME's screen-sharing and screen-recording top-bar indicators are hidden.
   In T2 the RDP surface is the only display; the indicator's stop action
   terminates that surface and leaves a black desktop.
+- The session is Wayland, but the internal RDP-to-VNC bridge uses Xvfb/x11vnc.
+  Settings may report `Graphics: Software Rendering` because the headless
+  virtio-gpu has no hardware EGL/3D path; this is the renderer, not an X11
+  desktop session.
 - T2 is preview: no stability or migration SLA beyond the supported one-command
   switch.
 
