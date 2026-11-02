@@ -20,6 +20,8 @@ constraints.
    changes are proposed, implemented, migrated, and verified.
 7. [`07-non-functional-requirements.md`](./07-non-functional-requirements.md) —
    reliability, performance, availability, security, and operability baseline.
+8. [`08-release-versioning.md`](./08-release-versioning.md) — shared product
+   version, T1-Crab/T2-Orion release names, and compatibility-mode versioning.
 
 ## Scope
 
