@@ -68,11 +68,21 @@ if [[ ! -S "$desktop_bus" ]]; then
   exit 1
 fi
 
+# Enable the toolkit bridge before GNOME starts. The accessibility bus is
+# resolved after the session is up because a restart can allocate a new GUID.
+desktop_atspi_address=unix:path=/run/user/1000/at-spi/bus_0
+runuser -u openlink -- env \
+  HOME=/home/openlink \
+  XDG_RUNTIME_DIR=/run/user/1000 \
+  DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+  gsettings set org.gnome.desktop.interface toolkit-accessibility true >/dev/null 2>&1 || true
+
 desktop_env=(
   HOME=/home/openlink
   XDG_RUNTIME_DIR=/run/user/1000
   DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus"
-  AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus
+  AT_SPI_BUS_ADDRESS="$desktop_atspi_address"
+  GTK_MODULES=gail:atk-bridge
   XDG_SESSION_TYPE=wayland
   XDG_CURRENT_DESKTOP=ubuntu:GNOME
   XDG_SESSION_DESKTOP=ubuntu
@@ -223,12 +233,36 @@ if [[ "$session_ready" != true ]]; then
   exit 1
 fi
 
+# Resolve the live accessibility bus and start its registry before the bridge
+# so agent-desktop sees GNOME and Chrome instead of timing out.
+if command -v dbus-send >/dev/null 2>&1; then
+  resolved_atspi_address="$(runuser -u openlink -- env \
+    HOME=/home/openlink \
+    XDG_RUNTIME_DIR=/run/user/1000 \
+    DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+    dbus-send --session --print-reply --dest=org.a11y.Bus /org/a11y/bus org.a11y.Bus.GetAddress 2>/dev/null \
+    | sed -n 's/.*string "\(.*\)".*/\1/p' || true)"
+  if [[ -n "$resolved_atspi_address" ]]; then
+    desktop_atspi_address="$resolved_atspi_address"
+  fi
+fi
+if [[ -x /usr/libexec/at-spi2-registryd ]]; then
+  pkill -u openlink -x at-spi2-registryd 2>/dev/null || true
+  start_background at-spi-registry runuser -u openlink -- env \
+    HOME=/home/openlink \
+    XDG_RUNTIME_DIR=/run/user/1000 \
+    DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+    AT_SPI_BUS_ADDRESS="$desktop_atspi_address" \
+    /usr/libexec/at-spi2-registryd
+fi
+
 # Expose agent-desktop to session containers through a constrained socket.
 # The real binary must run in this host PID namespace; the session container
 # only receives a CLI client and the socket.
 desktop_tool_socket=/run/user/1000/openlink-desktop-tool.sock
 rm -f "$desktop_tool_socket"
 start_background desktop-tool runuser -u openlink -- env "${desktop_env[@]}" \
+  AT_SPI_BUS_ADDRESS="$desktop_atspi_address" \
   WAYLAND_DISPLAY=wayland-0 \
   OPENLINK_DESKTOP_TOOL_SOCKET="$desktop_tool_socket" \
   /usr/local/bin/node /opt/openlink/desktop/desktop-tool-bridge.mjs
