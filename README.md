@@ -142,6 +142,11 @@ for the data and recovery contract.
   `.openlink-runtime/project-vm-base/t2/` (Ubuntu 26.10 + GNOME 51 Wayland,
   content-addressed qcow2 + manifest).
 - E1 Project VM base/disk: `pnpm runtime:vm-image`.
+- E1 Project VM base/disk: `pnpm runtime:vm-image`.
+
+Both Ubuntu desktop bases (T1 and T2) bundle Google Chrome 156, agent-desktop
+1.0.2 and the Astreusn light/dark wallpaper set. The build fails if any of
+those first-run dependencies is missing or fails its version check.
 - Runtime image archives: `pnpm runtime:images`.
 - ZOKERBASE and Zero images: `pnpm runtime:zokerbase:images`,
   `pnpm runtime:zero:images`.

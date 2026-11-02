@@ -47,8 +47,10 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
 
 ## Lifecycle
 
-1. Build the T2 base with the Ubuntu 26.10 worker userspace and the T2 RDP
-   bridge packages.
+1. Build the T2 base with the Ubuntu 26.10 worker userspace, the T2 RDP
+   bridge packages, Google Chrome 156, agent-desktop 1.0.2 and the bundled
+   Astreusn Ubuntu wallpaper set. The builder fails if any first-run
+   dependency is missing or fails its version check.
 2. Boot with the verified 24.04 LTS generic kernel/initrd and virtio-gpu.
 3. Start the systemd user manager and user D-Bus bus.
 4. Start Ubuntu's `gnome-session@ubuntu.target`. A systemd user drop-in runs
@@ -58,7 +60,8 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
 5. Start an empty-password keyring and GNOME Remote Desktop's RDP server.
 6. Configure a self-signed TLS certificate and random per-VM RDP password.
 7. Bridge RDP into Xvfb `:9` with FreeRDP, then expose x11vnc/websockify.
-8. Start the same project services and Supabase stack as T1.
+8. Set the light/dark Astreusn wallpapers and make Chrome the default browser.
+9. Start the same project services and Supabase stack as T1.
 
 ## Security and limits
 
@@ -81,6 +84,14 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
   Settings may report `Graphics: Software Rendering` because the headless
   virtio-gpu has no hardware EGL/3D path; this is the renderer, not an X11
   desktop session.
+- Chrome is the default browser and runs with the Wayland ozone backend; the
+  image launcher passes `--ozone-platform=wayland` because Xwayland is off.
+- agent-desktop 1.0.2 is installed from its pinned Apache-2.0 release archive
+  and uses the session's AT-SPI bus. Its source is vendored at
+  `services/agent-desktop` with full upstream history.
+- The bundled wallpaper set lives under
+  `/usr/share/backgrounds/astreusn`; `astreusn.xml` registers the light/dark
+  pair with the GNOME background picker.
 - T2 is preview: no stability or migration SLA beyond the supported one-command
   switch.
 
