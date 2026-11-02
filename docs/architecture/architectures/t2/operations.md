@@ -88,10 +88,11 @@ npm run runtime:switch -- --project <uuid> --to t2 --from t1
 npm run runtime:switch -- --project <uuid> --to t1 --from t2
 ```
 
-The command closes the desktop/service pipeline, exports workspace and Project
-Supabase state, archives the source runtime descriptor, provisions the target
-base (including virtio-gpu for T2), imports data, and verifies the desktop and
-services. Source VM disks and backups are retained.
+The command closes the desktop/service pipeline, exports workspace, Project
+Supabase state and the Agent Tool Registry, archives the source runtime
+descriptor, provisions the target base (including virtio-gpu for T2), imports
+data, and verifies the desktop and services. Source VM disks and backups are
+retained.
 
 ## Validation
 
