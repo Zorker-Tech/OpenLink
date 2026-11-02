@@ -480,12 +480,12 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
   process.env.OPENLINK_AGENT_WORKSPACE_ROOT = resolve('/tmp/openlink-supervisor-root')
   try {
     await runtime.ensure('2c51ca26-3cd0-4cb4-896d-2061de06098c', 'thin')
-    assert.deepEqual(copied, [
+    assert.deepEqual(copied.filter((path) => !/openlink-agent-tool-[^/]+\.sh$/.test(path)), [
       resolve('/tmp/openlink-supervisor-root/services/agent-host/project-supabase-runtime.mjs'),
       resolve('/tmp/openlink-supervisor-root/scripts/lib/project-supabase-bundle.mjs'),
       seedPath,
     ])
-    const install = commands.find((call) => call.command === 'sudo' && call.args[0] === '-n' && call.args[1] === 'sh' && call.args[2] === '-c')
+    const install = commands.find((call) => call.command === 'sudo' && call.args[0] === '-n' && call.args[1] === 'sh' && call.args[2] === '-c' && (call.args[3] ?? '').includes('project-supabase-seed'))
     assert.match(install?.args[3] ?? '', /cp \/tmp\/project-supabase-seed\.json \/var\/lib\/openlink\/project-supabase\/seed\.json/)
     assert.match(install?.args[3] ?? '', /chmod 0600 \/var\/lib\/openlink\/project-supabase\/seed\.json/)
   } finally {
