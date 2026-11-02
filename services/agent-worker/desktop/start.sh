@@ -168,6 +168,43 @@ else
     echo "Desktop session exited during startup" >&2
     exit 1
   fi
+  # Product desktop defaults: Chrome as the browser and the Astreusn
+  # light/dark wallpaper pair. These apply to the GNOME session only; the E1
+  # container fallback keeps its own desktop.
+  if [[ -S "$desktop_bus" ]] && pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+    if command -v google-chrome-stable >/dev/null 2>&1; then
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        gsettings set org.gnome.shell favorite-apps \
+        "['google-chrome.desktop','org.gnome.Nautilus.desktop','org.gnome.Terminal.desktop','org.gnome.Settings.desktop','snap-store_snap-store.desktop','org.gnome.Yelp.desktop','libreoffice-writer.desktop']" >/dev/null 2>&1 || true
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        xdg-settings set default-web-browser google-chrome.desktop >/dev/null 2>&1 || true
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        xdg-mime default google-chrome.desktop x-scheme-handler/http x-scheme-handler/https >/dev/null 2>&1 || true
+    fi
+    background_light=/usr/share/backgrounds/astreusn/astreusn-ubuntu-light-3840x2160.png
+    background_dark=/usr/share/backgrounds/astreusn/astreusn-ubuntu-dark-3840x2160.png
+    if [[ -f "$background_light" && -f "$background_dark" ]]; then
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        gsettings set org.gnome.desktop.background picture-uri "file://$background_light" >/dev/null 2>&1 || true
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        gsettings set org.gnome.desktop.background picture-uri-dark "file://$background_dark" >/dev/null 2>&1 || true
+      runuser -u openlink -- env \
+        HOME=/home/openlink DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        gsettings set org.gnome.desktop.background picture-options "'zoom'" >/dev/null 2>&1 || true
+    fi
+  fi
+
   # There is no GDM/logind graphical seat behind Xvfb. Disable lock/blanking
   # so the shared remote desktop never presents an unusable lock screen.
   if [[ -S "$desktop_bus" ]]; then

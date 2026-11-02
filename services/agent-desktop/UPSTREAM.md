@@ -16,7 +16,7 @@ VM base image:
 
 - archive: `agent-desktop-v1.0.2-x86_64-unknown-linux-gnu.tar.gz`
 - archive SHA-256:
-  `d4f57bb0a8e86c96b2e3dff96c2875d56cb737dc2dccc177784cf520eefa6310`
+  `ad661b7a3fd8f990a769243f4889a240ca0e2c8dab3ef5bddd6019086c71e0b4`
 - installed paths: `/usr/local/bin/agent-desktop` and
   `/usr/local/bin/agent-desktop-linux-clipboard-owner`
 - runtime requirement: the Ubuntu GNOME session's AT-SPI bus under
