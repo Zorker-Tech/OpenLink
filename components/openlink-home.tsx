@@ -19,18 +19,18 @@ type FooterLink = { label: string; href: string; external?: boolean }
 
 const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
   {
-    title: 'Product',
+    title: '产品',
     links: [
       { label: 'Hydite', href: 'https://hydite.com', external: true },
       { label: 'Zorker', href: 'https://zorker.tech', external: true },
     ],
   },
   {
-    title: 'Company',
+    title: '公司',
     links: [{ label: 'Haokir', href: 'https://haokir.com', external: true }],
   },
   {
-    title: 'Social',
+    title: '社交',
     links: [{ label: 'X', href: 'https://x.com/Zorker_Tech', external: true }],
   },
 ]
@@ -50,7 +50,7 @@ function Header({ user }: { user: HomeUser | null }) {
 
   return (
     <header className={`flex h-[50px] shrink-0 items-center justify-between border-b px-2 ${theme('canvas', 'softBorder')}`}>
-      <a aria-label="Zorker home" className="flex h-10 w-9 items-center justify-center rounded-lg" href="#">
+      <a aria-label={t('Zorker home')} className="flex h-10 w-9 items-center justify-center rounded-lg" href="#">
         <ZorkerLogo className="h-5 w-[34px]" />
       </a>
 
@@ -83,16 +83,17 @@ function Header({ user }: { user: HomeUser | null }) {
 }
 
 function Footer() {
+  const t = useT()
   return (
     <footer className="px-6 py-16">
       <div className="mx-auto flex min-h-[226px] max-w-[1400px] items-start justify-between gap-16 px-[60px] pt-6 pb-10">
-        <a aria-label="Zorker home" className="flex h-8 items-center" href="#">
+        <a aria-label={t('Zorker home')} className="flex h-8 items-center" href="#">
           <ZorkerLogo className="h-7 w-[95px]" variant="wordmark" />
         </a>
         <div className="grid flex-1 grid-cols-2 gap-12 sm:grid-cols-3 lg:max-w-[870px] lg:gap-[108px]">
           {footerGroups.map((group) => (
             <div key={group.title}>
-              <h2 className="text-sm leading-5 font-medium text-[var(--app-foreground)]">{group.title}</h2>
+              <h2 className="text-sm leading-5 font-medium text-[var(--app-foreground)]">{t(group.title)}</h2>
               <ul className="mt-4 space-y-2.5">
                 {group.links.map((link) => (
                   <li key={link.label}>

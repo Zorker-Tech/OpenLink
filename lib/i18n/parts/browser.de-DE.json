@@ -1,0 +1,16 @@
+{
+  "Cloud Computer 当前未运行。发送消息启动项目环境后再刷新预览。": "Cloud Computer läuft nicht. Senden Sie eine Nachricht, um die Projektumgebung zu starten, und aktualisieren Sie dann die Vorschau.",
+  "Cloud 项目预览": "Cloud-Projektvorschau",
+  "Cloud 预览暂时无法连接，请稍后重试。": "Die Cloud-Vorschau kann derzeit keine Verbindung herstellen. Bitte versuchen Sie es später erneut.",
+  "Cloud 预览隧道尚未配置。": "Der Cloud-Vorschautunnel ist noch nicht konfiguriert.",
+  "OpenLink 桌面环境": "OpenLink-Desktopumgebung",
+  "{name} 项目预览": "Projektvorschau für {name}",
+  "未检测到正在运行的网站服务。启动项目 Web 服务后可自动预览。": "Kein laufender Webdienst erkannt. Starten Sie den Webdienst des Projekts, um die automatische Vorschau zu aktivieren.",
+  "桌面环境未就绪": "Desktop-Umgebung nicht bereit",
+  "正在启动桌面环境": "Desktop-Umgebung wird gestartet",
+  "正在检测活跃网站端口": "Aktive Webports werden erkannt",
+  "正在检测项目网站服务…": "Projekt-Webdienst wird erkannt…",
+  "该网站服务已停止，请刷新检测活跃端口。": "Dieser Webdienst wurde beendet. Aktualisieren Sie, um aktive Ports zu erkennen.",
+  "重新检测": "Erneut erkennen",
+  "项目预览暂不可用": "Projektvorschau nicht verfügbar"
+}

@@ -178,15 +178,15 @@ function SkillsNavigation({ currentSkillId, importing, onCreate, onImport, skill
         : { flexBasis: '100%', maxWidth: '100%', minWidth: '100%', width: '100%' }}
     >
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--app-border)] pl-3 pr-2">
-        <h1 className="text-sm font-semibold tracking-[-0.43px] text-[var(--app-foreground)]">Skills</h1>
+        <h1 className="text-sm font-semibold tracking-[-0.43px] text-[var(--app-foreground)]">{t('Skills')}</h1>
         <div className="flex items-center gap-1">
           <button aria-label={t('导入 ZIP')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-40" disabled={importing} onClick={onImport} type="button"><FileInput className="size-4" strokeWidth={1.8} /></button>
           <button aria-label={t('创建 Skill')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={onCreate} type="button"><Plus className="size-4" strokeWidth={1.8} /></button>
         </div>
       </header>
       <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-[var(--app-border)] px-3 py-2">
-        <span aria-current="true" className="flex h-7 items-center rounded-md bg-[var(--app-selected)] px-2 text-sm font-medium text-[var(--app-foreground)]">User</span>
-        <span aria-disabled="true" className="flex h-7 cursor-not-allowed items-center rounded-md px-2 text-sm font-medium text-[var(--app-subtle)] opacity-50" title={t('Team Skills 即将开放')}>Team</span>
+        <span aria-current="true" className="flex h-7 items-center rounded-md bg-[var(--app-selected)] px-2 text-sm font-medium text-[var(--app-foreground)]">{t('个人')}</span>
+        <span aria-disabled="true" className="flex h-7 cursor-not-allowed items-center rounded-md px-2 text-sm font-medium text-[var(--app-subtle)] opacity-50" title={t('Team Skills 即将开放')}>{t('团队')}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {skills.map((skill) => {
@@ -212,13 +212,14 @@ function SkillsNavigation({ currentSkillId, importing, onCreate, onImport, skill
 }
 
 function SkillsEmptyState({ disabled, onCreate, onImport }: { disabled: boolean; onCreate: () => void; onImport: () => void }) {
+  const t = useT()
   return (
     <main className="hidden min-w-0 flex-1 flex-col items-center justify-center gap-3 sm:flex">
-      <p className="text-xs leading-4 text-[var(--app-subtle)]">Select a skill to edit</p>
-      <p className="text-xs leading-4 text-[var(--app-subtle)]">or</p>
+      <p className="text-xs leading-4 text-[var(--app-subtle)]">{t('选择一个 Skill 进行编辑')}</p>
+      <p className="text-xs leading-4 text-[var(--app-subtle)]">{t('或者')}</p>
       <div className="flex items-center gap-2">
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90" onClick={onCreate} type="button"><Plus className="size-4" />Create a skill</button>
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-elevated)] px-3 text-sm font-medium text-[var(--app-foreground)] hover:bg-[var(--app-hover)] disabled:opacity-40" disabled={disabled} onClick={onImport} type="button"><FileInput className="size-4" />Import ZIP</button>
+        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90" onClick={onCreate} type="button"><Plus className="size-4" />{t('创建 Skill')}</button>
+        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-elevated)] px-3 text-sm font-medium text-[var(--app-foreground)] hover:bg-[var(--app-hover)] disabled:opacity-40" disabled={disabled} onClick={onImport} type="button"><FileInput className="size-4" />{t('导入 ZIP')}</button>
       </div>
     </main>
   )
@@ -282,14 +283,14 @@ function SkillEditor({ skill }: { skill: UserSkill }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <button className="h-8 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90 disabled:bg-[var(--app-active)] disabled:text-[var(--app-subtle)] disabled:opacity-100" disabled={!dirty || pending} onClick={save} type="button">{pending ? 'Saving…' : 'Save'}</button>
+        <button className="h-8 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90 disabled:bg-[var(--app-active)] disabled:text-[var(--app-subtle)] disabled:opacity-100" disabled={!dirty || pending} onClick={save} type="button">{pending ? t('正在保存…') : t('保存')}</button>
       </header>
       <textarea
         aria-label={t('SKILL.md 内容')}
         className="min-h-0 flex-1 resize-none bg-transparent p-6 font-mono text-xs leading-4 text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-subtle)]"
         maxLength={200_000}
         onChange={(event) => setContent(event.currentTarget.value)}
-        placeholder="The description field controls when OpenLink triggers this skill. The body contains the instructions. Keep SKILL.md concise and use reference files for detailed content."
+        placeholder={t('描述字段决定 OpenLink 何时触发此 Skill；正文包含指令。保持 SKILL.md 简洁，详细内容请使用引用文件。')}
         spellCheck={false}
         value={content}
       />
