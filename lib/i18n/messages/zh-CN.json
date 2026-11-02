@@ -142,5 +142,8 @@
   "What question are you investigating?": "你在研究什么问题？",
   "Worked": "已完成",
   "Working": "工作中",
-  "Zorker home": "Zorker 首页"
+  "Zorker home": "Zorker 首页",
+  "运行中": "运行中",
+  "已取消": "已取消",
+  "已中断": "已中断"
 }
