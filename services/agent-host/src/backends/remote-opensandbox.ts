@@ -10,6 +10,7 @@ import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
 import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
+import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
 
 export interface RemoteOpenSandboxRpcConfig {
   domain: string
@@ -142,6 +143,7 @@ export class RemoteOpenSandboxRpcBackend {
         })
       })()
       : this.connection
+    const desktopAutomation = desktopAutomationAvailable(projectRuntime)
     const sandbox = await Sandbox.create({
       connectionConfig: connection,
       image: projectRuntime?.agentRpcWorkerImage ?? this.config.image,
@@ -154,6 +156,7 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
         OPENLINK_AGENT_SESSION_ID: sessionId,
         OPENLINK_DESKTOP_MODE: desktopMode,
+        ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
@@ -211,6 +214,7 @@ export class RemoteOpenSandboxRpcBackend {
       volumes: [
         { name: 'workspace', host: { path: projectWorkspaceRoot }, mountPath: '/workspace', readOnly: false },
         { name: 'session', host: { path: sessionRoot }, mountPath: '/openlink/session', readOnly: false },
+        ...(desktopAutomation && projectRuntime ? desktopAutomationVolumes(projectRuntime) : []),
         ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
           { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
           // Project-scoped installed golden disk and per-session overlays.
@@ -228,6 +232,10 @@ export class RemoteOpenSandboxRpcBackend {
       readyTimeoutSeconds: 180,
     })
     try {
+      if (desktopAutomation) {
+        await sandbox.files.createDirectories(desktopAutomationSkillDirectories().map((path) => ({ path, mode: 777 })))
+        await sandbox.files.writeFiles(desktopAutomationSkillFiles())
+      }
       if (nativeSession) {
         const serialized = [nativeSession.header, ...nativeSession.entries].map((entry) => JSON.stringify(entry)).join('\n') + '\n'
         // execd runs the worker as uid 1000, while the OpenSandbox file API
