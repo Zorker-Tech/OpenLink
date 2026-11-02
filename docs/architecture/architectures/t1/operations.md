@@ -152,11 +152,11 @@ Use the supported one-command workflow after stopping the app:
 npm run runtime:switch -- --project <project-uuid> --to e1
 ```
 
-The command quiesces T1, exports and verifies the workspace and Project Supabase
-state, archives the T1 runtime descriptor, provisions E1, imports the data,
-verifies endpoints and rolls back to T1 if any step fails. The T1 disk is
-retained, so a later `--to t1` migration can restore/overwrite it with the
-current E1 data. See
+The command quiesces T1, exports and verifies the workspace, Project Supabase
+state and Agent Tool Registry, archives the T1 runtime descriptor, provisions
+E1, imports the data, verifies endpoints and rolls back to T1 if any step
+fails. The T1 disk is retained, so a later `--to t1` migration can
+restore/overwrite it with the current E1 data. See
 [Switching architectures](../README.md#switching-architectures) for the data
 contract, backup layout and failure semantics. Active chat leases are not
 resumed across the switch.

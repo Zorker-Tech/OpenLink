@@ -47,6 +47,7 @@ an OS and do not start their own desktop.
 | VM spec | `<stateRoot>/ubuntu-vms/<machine>/vm.json` | Agent Host | Required |
 | Project runtime descriptor/secrets/ports | `<stateRoot>/projects/<projectId>/` | Agent Host | Required |
 | Project workspace | guest `/home/openlink/openlink/projects/<projectId>/workspace` | inside the overlay | via VM backup |
+| Agent Tool Registry | guest `/var/lib/openlink/agent-tools` | project owner (`openlink-agent-tool`) | via VM backup and architecture switch |
 | Immutable Ubuntu base + kernel/initrd | `.openlink-runtime/project-vm-base/ubuntu/` | artifact producer | Not per-project |
 
 The base is versioned by content (`ubuntu-project-vm-base-<sha>.qcow2`). A

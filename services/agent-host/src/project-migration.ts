@@ -3,11 +3,13 @@ import { createReadStream } from 'node:fs'
 import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { dirname as posixDirname, basename as posixBasename, resolve as posixResolve } from 'node:path/posix'
+import { AGENT_TOOL_REGISTRY_ROOT } from './agent-tools.js'
 import { AgentHostError } from './errors.js'
 import type { ProjectVmCommandResult, ProjectVmMachineDriver } from './project-vm.js'
 
 const SUPABASE_STATE_ROOT = '/var/lib/openlink/project-supabase'
 const SUPABASE_ITEMS = ['data', 'configuration', 'secrets.json'] as const
+const AGENT_TOOL_ITEMS = ['manifest.tsv', 'bin', 'tools'] as const
 const SHA256 = /^[a-f0-9]{64}$/i
 const ARCHITECTURES = new Set(['t1', 'e1', 't2'])
 
@@ -30,6 +32,11 @@ export interface ProjectMigrationManifest {
   sourceGuestUser: string
   workspace: ProjectMigrationArchive
   supabase: ProjectMigrationArchive | null
+  /**
+   * Optional for schema 1 compatibility. Archives written before the tool
+   * registry existed omit it; a null value means the source had no registry.
+   */
+  agentTools?: ProjectMigrationArchive | null
 }
 
 export interface ProjectMigrationExportOptions {
@@ -57,6 +64,7 @@ export interface ProjectMigrationImportResult {
   manifest: ProjectMigrationManifest
   workspaceBackupPath: string | null
   supabaseBackupPath: string | null
+  agentToolsBackupPath: string | null
 }
 
 function fail(message: string): never {
@@ -214,6 +222,7 @@ export async function exportProjectComputerData(options: ProjectMigrationExportO
   const rootful = options.rootful ?? true
   let workspaceArchive: ProjectMigrationArchive | null = null
   let supabaseArchive: ProjectMigrationArchive | null = null
+  let agentToolsArchive: ProjectMigrationArchive | null = null
   try {
     await run(driver, options.machineName, 'sudo', ['-n', 'mkdir', '-p', guestStage])
     await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0700', guestStage])
@@ -234,6 +243,15 @@ export async function exportProjectComputerData(options: ProjectMigrationExportO
       ])
     }
 
+    const agentToolsExists = await run(driver, options.machineName, 'sudo', ['-n', 'test', '-f', `${AGENT_TOOL_REGISTRY_ROOT}/manifest.tsv`])
+      .then(() => true).catch(() => false)
+    if (agentToolsExists) {
+      await run(driver, options.machineName, 'sudo', [
+        '-n', 'sh', '-c',
+        `set -eu; cd ${shellQuote(AGENT_TOOL_REGISTRY_ROOT)}; items=''; for item in ${AGENT_TOOL_ITEMS.map(shellQuote).join(' ')}; do [ -e "$item" ] && items="$items $item"; done; [ -n "$items" ] && tar --numeric-owner -cf ${shellQuote(`${guestStage}/agent-tools.tar`)} $items; sync -f ${shellQuote(`${guestStage}/agent-tools.tar`)}`,
+      ])
+    }
+
     const workspaceGuest = await guestFileArchive(driver, options.machineName, `${guestStage}/workspace.tar`)
     // copyFromMachine runs as the unprivileged guest user. The archives were
     // created by sudo in a 0700 directory, so publish them read-only for the
@@ -241,6 +259,7 @@ export async function exportProjectComputerData(options: ProjectMigrationExportO
     await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0755', guestStage])
     await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0644', `${guestStage}/workspace.tar`])
     if (supabaseExists) await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0644', `${guestStage}/supabase.tar`])
+    if (agentToolsExists) await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0644', `${guestStage}/agent-tools.tar`])
     const workspacePath = resolve(hostDirectory, 'workspace.tar')
     await driver.copyFromMachine(options.machineName, `${guestStage}/workspace.tar`, workspacePath)
     await chmod(workspacePath, 0o600)
@@ -260,6 +279,17 @@ export async function exportProjectComputerData(options: ProjectMigrationExportO
       }
     }
 
+    if (agentToolsExists) {
+      const agentToolsGuest = await guestFileArchive(driver, options.machineName, `${guestStage}/agent-tools.tar`)
+      const agentToolsPath = resolve(hostDirectory, 'agent-tools.tar')
+      await driver.copyFromMachine(options.machineName, `${guestStage}/agent-tools.tar`, agentToolsPath)
+      await chmod(agentToolsPath, 0o600)
+      agentToolsArchive = await hostArchive(agentToolsPath)
+      if (agentToolsArchive.bytes !== agentToolsGuest.bytes || agentToolsArchive.sha256 !== agentToolsGuest.sha256) {
+        fail('agent tool registry archive changed during transfer')
+      }
+    }
+
     const manifest: ProjectMigrationManifest = {
       schemaVersion: 1,
       projectId: options.projectId,
@@ -271,6 +301,7 @@ export async function exportProjectComputerData(options: ProjectMigrationExportO
       sourceGuestUser: options.guestUser,
       workspace: workspaceArchive,
       supabase: supabaseArchive,
+      agentTools: agentToolsArchive,
     }
     await writeFile(resolve(hostDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
     return manifest
@@ -287,9 +318,10 @@ function validateManifest(value: unknown): ProjectMigrationManifest {
   if (!ARCHITECTURES.has(manifest.sourceArchitecture ?? '')) fail('manifest sourceArchitecture is invalid')
   if (typeof manifest.sourceBackend !== 'string' || !manifest.sourceBackend) fail('manifest sourceBackend is invalid')
   if (typeof manifest.createdAt !== 'string' || !Number.isFinite(Date.parse(manifest.createdAt))) fail('manifest createdAt is invalid')
-  for (const key of ['workspace', 'supabase'] as const) {
+  for (const key of ['workspace', 'supabase', 'agentTools'] as const) {
     const archive = manifest[key]
-    if (key === 'supabase' && archive === null) continue
+    if (key === 'agentTools' && archive === undefined) continue
+    if ((key === 'supabase' || key === 'agentTools') && archive === null) continue
     if (!archive || typeof archive !== 'object') fail(`manifest ${key} is missing`)
     safeBasename(archive.file, `${key} archive name`)
     if (!Number.isSafeInteger(archive.bytes) || archive.bytes <= 0) fail(`manifest ${key} size is invalid`)
@@ -301,7 +333,7 @@ function validateManifest(value: unknown): ProjectMigrationManifest {
 export async function readProjectMigrationManifest(directory: string): Promise<ProjectMigrationManifest> {
   const value = JSON.parse(await readFile(resolve(directory, 'manifest.json'), 'utf8'))
   const manifest = validateManifest(value)
-  for (const archive of [manifest.workspace, manifest.supabase]) {
+  for (const archive of [manifest.workspace, manifest.supabase, manifest.agentTools]) {
     if (!archive) continue
     const host = resolve(directory, archive.file)
     const actual = await hostArchive(host)
@@ -331,6 +363,8 @@ export async function importProjectComputerData(options: ProjectMigrationImportO
   const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
   const workspaceBackupPath = `${workspaceParent}/.${workspaceName}.migration-${timestamp}`
   const supabaseBackupPath = `${SUPABASE_STATE_ROOT}/.migration-previous-${timestamp}`
+  const agentToolsBackupPath = `/var/lib/openlink/.agent-tools.migration-previous-${timestamp}`
+  const agentToolsStage = `${guestStage}/agent-tools`
   const rootful = options.rootful ?? true
   try {
     // The guest login user owns the transfer staging directory. Archives are
@@ -342,8 +376,12 @@ export async function importProjectComputerData(options: ProjectMigrationImportO
     if (manifest.supabase) {
       await driver.copyToMachine(options.machineName, resolve(archiveDirectory, manifest.supabase.file), `${guestStage}/supabase.tar`)
     }
+    if (manifest.agentTools) {
+      await driver.copyToMachine(options.machineName, resolve(archiveDirectory, manifest.agentTools.file), `${guestStage}/agent-tools.tar`)
+    }
     const transferred: Array<[ProjectMigrationArchive, string]> = [[manifest.workspace, `${guestStage}/workspace.tar`]]
     if (manifest.supabase) transferred.push([manifest.supabase, `${guestStage}/supabase.tar`])
+    if (manifest.agentTools) transferred.push([manifest.agentTools, `${guestStage}/agent-tools.tar`])
     for (const [archive, guestPath] of transferred) {
       const actual = await guestFileArchive(driver, options.machineName, guestPath)
       if (actual.bytes !== archive.bytes || actual.sha256 !== archive.sha256) fail(`transferred archive checksum mismatch: ${archive.file}`)
@@ -355,6 +393,13 @@ export async function importProjectComputerData(options: ProjectMigrationImportO
         await listTarEntries(driver, options.machineName, `${guestStage}/supabase.tar`),
         new Set(SUPABASE_ITEMS),
         'Supabase',
+      )
+    }
+    if (manifest.agentTools) {
+      assertTarEntries(
+        await listTarEntries(driver, options.machineName, `${guestStage}/agent-tools.tar`),
+        new Set(AGENT_TOOL_ITEMS),
+        'agent tool registry',
       )
     }
 
@@ -393,14 +438,48 @@ export async function importProjectComputerData(options: ProjectMigrationImportO
       }
     }
 
+    if (manifest.agentTools) {
+      // Extract into the private transfer staging directory first. Only a
+      // fully extracted registry replaces the live one, so a truncated or
+      // tampered archive cannot leave the Project VM without its tools.
+      await run(driver, options.machineName, 'sudo', ['-n', 'mkdir', '-p', agentToolsStage])
+      await run(driver, options.machineName, 'sudo', ['-n', 'chmod', '0700', agentToolsStage])
+      await run(driver, options.machineName, 'sudo', [
+        '-n', 'tar', '--numeric-owner', '-xpf', `${guestStage}/agent-tools.tar`, '-C', agentToolsStage,
+      ])
+      await run(driver, options.machineName, 'sudo', ['-n', 'test', '-f', `${agentToolsStage}/manifest.tsv`])
+        .catch(() => fail('agent tool registry archive has no manifest.tsv'))
+
+      const registryExists = await run(driver, options.machineName, 'sudo', ['-n', 'test', '-e', AGENT_TOOL_REGISTRY_ROOT])
+        .then(() => true).catch(() => false)
+      await run(driver, options.machineName, 'sudo', ['-n', 'mkdir', '-p', posixDirname(AGENT_TOOL_REGISTRY_ROOT)])
+      if (registryExists) {
+        await run(driver, options.machineName, 'sudo', ['-n', 'mv', AGENT_TOOL_REGISTRY_ROOT, agentToolsBackupPath])
+      }
+      let registryInstalled = false
+      try {
+        await run(driver, options.machineName, 'sudo', ['-n', 'mv', agentToolsStage, AGENT_TOOL_REGISTRY_ROOT])
+        registryInstalled = true
+        await run(driver, options.machineName, 'sudo', ['-n', 'test', '-f', `${AGENT_TOOL_REGISTRY_ROOT}/manifest.tsv`])
+        await run(driver, options.machineName, 'sudo', ['-n', 'sync', '-f', AGENT_TOOL_REGISTRY_ROOT])
+      } catch (error) {
+        if (registryInstalled) await run(driver, options.machineName, 'sudo', ['-n', 'rm', '-rf', AGENT_TOOL_REGISTRY_ROOT]).catch(() => undefined)
+        if (registryExists) await run(driver, options.machineName, 'sudo', ['-n', 'mv', agentToolsBackupPath, AGENT_TOOL_REGISTRY_ROOT]).catch(() => undefined)
+        throw error
+      }
+    }
+
     const workspaceBackup = await run(driver, options.machineName, 'sudo', ['-n', 'test', '-e', workspaceBackupPath])
       .then(() => true).catch(() => false)
     const supabaseBackup = await run(driver, options.machineName, 'sudo', ['-n', 'test', '-e', supabaseBackupPath])
+      .then(() => true).catch(() => false)
+    const agentToolsBackup = await run(driver, options.machineName, 'sudo', ['-n', 'test', '-e', agentToolsBackupPath])
       .then(() => true).catch(() => false)
     return {
       manifest,
       workspaceBackupPath: workspaceBackup ? workspaceBackupPath : null,
       supabaseBackupPath: supabaseBackup ? supabaseBackupPath : null,
+      agentToolsBackupPath: agentToolsBackup ? agentToolsBackupPath : null,
     }
   } finally {
     await run(driver, options.machineName, 'sudo', ['-n', 'rm', '-rf', guestStage]).catch(() => undefined)
