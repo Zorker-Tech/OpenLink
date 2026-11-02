@@ -314,7 +314,7 @@ try {
   rootfsContainer = `openlink-t1-rootfs-${process.pid}-${randomBytes(3).toString('hex')}`
   log(`installing the Ubuntu Project VM userspace from ${usersImage}`)
   const aptMirror = process.env.OPENLINK_UBUNTU_APT_MIRROR?.trim() || ''
-  if (aptMirror && !/^https?:\/\/[^|\\s]+$/.test(aptMirror)) throw new Error('OPENLINK_UBUNTU_APT_MIRROR is invalid')
+  if (aptMirror && !/^https?:\/\/[^\s|\\]+$/.test(aptMirror)) throw new Error('OPENLINK_UBUNTU_APT_MIRROR is invalid')
   const aptUpdate = process.env.OPENLINK_UBUNTU_APT_UPDATE !== '0'
   try {
     await run(docker, ['image', 'inspect', usersImage], { timeout: 30_000 })
@@ -359,7 +359,7 @@ try {
       'mkdir -p /home/openlink && chown openlink:openlink /home/openlink',
       'rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/lib/cloud/* /home/openlink/.ssh /root/.ssh',
     ].join('\n'),
-  ], { timeout: 30 * 60_000 })
+  ], { timeout: 60 * 60_000 })
 
   // Node is pinned in the worker image; copy only the runtime binary. The
   // guest does not need npm for project services or the Supabase controller.
