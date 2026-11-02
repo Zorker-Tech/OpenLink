@@ -21,6 +21,7 @@ Run product lifecycle commands from the repository root:
 ```bash
 pnpm dev:local          # complete Local stack, T1 by default
 pnpm dev:local:t1       # explicit T1 (Ubuntu Project VM + native desktop)
+pnpm dev:local:t2       # T2 preview (Ubuntu 26.10 + GNOME 51 Wayland)
 pnpm dev:local:e1       # E1 (Podman Project VM + per-chat container desktop)
 pnpm dev:cloud          # Cloud Web/BFF and VTSLX SDK Host
 pnpm build              # production Web build
@@ -43,20 +44,31 @@ pnpm runtime:ubuntu-vm-image
 pnpm dev:local
 ```
 
-E1 is the explicit heavier-isolation mode and keeps the per-chat container
-desktop:
+T2 is the explicit preview mode. It uses Ubuntu 26.10 with GNOME Shell 51 on
+Wayland and a GNOME Remote Desktop RDP-to-VNC bridge. Build its base once:
+
+```bash
+pnpm runtime:t2-vm-image
+pnpm dev:local:t2
+node scripts/openlink.mjs --mode development --profile local --arch t2
+```
+
+E1 is the explicit heavier-isolation compatibility mode and keeps the per-chat
+container desktop:
 
 ```bash
 pnpm dev:local:e1
 node scripts/openlink.mjs --mode development --profile local --arch e1
 ```
 
-The mode is also accepted as `-t1`, `-e1`, `--arch t1`, or
-`--arch e1`. Ordinary startup verifies the selected artifact and fails closed
-rather than switching modes silently. Architecture and recovery details:
+The mode is also accepted as `-t1`, `-t2`, `-e1`, `--arch t1`, `--arch t2`,
+or `--arch e1`. Ordinary startup verifies the selected artifact and fails
+closed rather than switching modes silently. Architecture and recovery details:
 
 - [`docs/architecture/architectures/`](./docs/architecture/architectures/README.md)
 - [`docs/architecture/ADR-0029-project-computer-t1-e1-modes.md`](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md)
+- [`docs/architecture/ADR-0030-t2-orion-wayland-preview.md`](./docs/architecture/ADR-0030-t2-orion-wayland-preview.md)
+- [`docs/architecture/standards/08-release-versioning.md`](./docs/architecture/standards/08-release-versioning.md)
 
 ### Electron desktop shell
 

@@ -53,10 +53,10 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
   return action
 }
 
-function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' {
+function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp' {
   const mode = value?.trim().toLowerCase() || 'ubuntu-container'
-  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso') {
-    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container or ubuntu-iso')
+  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso' && mode !== 'wayland-rdp') {
+    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container, ubuntu-iso or wayland-rdp')
   }
   return mode
 }
@@ -108,6 +108,13 @@ if (projectRuntimeBackend === 'container') {
 } else {
   const projectVmDriver = env.OPENLINK_PROJECT_VM_DRIVER?.trim() || 'podman-machine'
   if (!['podman-machine', 'ubuntu-qemu'].includes(projectVmDriver)) throw new Error('OPENLINK_PROJECT_VM_DRIVER must be podman-machine or ubuntu-qemu')
+  const requestedArchitecture = env.OPENLINK_ARCHITECTURE?.trim()
+    || (projectVmDriver === 'podman-machine' ? 'e1' : 't1')
+  if (!['t1', 'e1', 't2'].includes(requestedArchitecture)) throw new Error('OPENLINK_ARCHITECTURE must be t1, e1 or t2')
+  const releaseArchitecture = requestedArchitecture as 't1' | 'e1' | 't2'
+  if ((releaseArchitecture === 'e1') !== (projectVmDriver === 'podman-machine')) {
+    throw new Error(`${releaseArchitecture} requires the ${releaseArchitecture === 'e1' ? 'podman-machine' : 'ubuntu-qemu'} Project VM driver`)
+  }
   const projectBaseDisk = resolve(required(env, 'OPENLINK_PROJECT_VM_BASE_DISK'))
   const machineSpec = {
     cpus: integer(env.OPENLINK_PROJECT_VM_CPUS, 4, 1, 64),
@@ -131,6 +138,7 @@ if (projectRuntimeBackend === 'container') {
       scpCommand: env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
       sshKeygenCommand: env.OPENLINK_SSH_KEYGEN_COMMAND || 'ssh-keygen',
       mke2fsCommand: env.OPENLINK_MKE2FS_COMMAND || 'mke2fs',
+      gpu: releaseArchitecture === 't2' || env.OPENLINK_PROJECT_VM_GPU === '1',
       guestUser: env.OPENLINK_PROJECT_VM_GUEST_USER || 'openlink',
       bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0',
       ...(env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT ? { socketRoot: env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT } : {}),
@@ -144,6 +152,7 @@ if (projectRuntimeBackend === 'container') {
     })
     projectRuntimeManager = new ProjectRuntimeManager({
       stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
+      architecture: releaseArchitecture,
       serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true, publishAddress: '0.0.0.0' }),
       statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
       opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',
@@ -172,6 +181,7 @@ if (projectRuntimeBackend === 'container') {
     })
     projectRuntimeManager = new ProjectRuntimeManager({
       stateRoot: projectVmStateRoot, vmManager: projectVmManager, machineDriver,
+      architecture: releaseArchitecture,
       serviceDriver: new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: env.OPENLINK_PROJECT_VM_ROOTFUL === '1', publishAddress: '0.0.0.0' }),
       statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
       opensandboxImage: env.OPENLINK_OPENSANDBOX_SERVER_IMAGE || 'openlink/opensandbox-server:dev', browserHostImage: env.OPENLINK_BROWSER_HOST_IMAGE || 'openlink/browser-host:dev',

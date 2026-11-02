@@ -9,9 +9,9 @@ import type { ProjectVmCommandResult, ProjectVmMachineDriver } from './project-v
 const SUPABASE_STATE_ROOT = '/var/lib/openlink/project-supabase'
 const SUPABASE_ITEMS = ['data', 'configuration', 'secrets.json'] as const
 const SHA256 = /^[a-f0-9]{64}$/i
-const ARCHITECTURES = new Set(['t1', 'e1'])
+const ARCHITECTURES = new Set(['t1', 'e1', 't2'])
 
-export type ProjectComputerArchitecture = 't1' | 'e1'
+export type ProjectComputerArchitecture = 't1' | 'e1' | 't2'
 
 export interface ProjectMigrationArchive {
   file: string
@@ -408,5 +408,5 @@ export async function importProjectComputerData(options: ProjectMigrationImportO
 }
 
 export function projectArchitectureBackend(architecture: ProjectComputerArchitecture): string {
-  return architecture === 't1' ? 'qemu-kvm' : 'podman-machine'
+  return architecture === 'e1' ? 'podman-machine' : 'qemu-kvm'
 }

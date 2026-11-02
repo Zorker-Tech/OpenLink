@@ -27,7 +27,7 @@ export interface LocalOpenSandboxConfig {
   apiKey: string
   image: string
   /** Prefer the official Ubuntu Desktop ISO; QEMU selects KVM or TCG per sandbox. */
-  desktopMode?: 'ubuntu-container' | 'ubuntu-iso'
+  desktopMode?: 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp'
   workspaceRoot: string
   storageRoot: string
   /** OpenSandbox workload lifetime. `null` delegates cleanup to Agent Host. */
@@ -261,7 +261,7 @@ export class LocalOpenSandboxBackend {
     })
   }
 
-  private desktopModeFor(projectRuntime?: ProjectRuntimeDescriptor): 'ubuntu-container' | 'ubuntu-iso' {
+  private desktopModeFor(projectRuntime?: ProjectRuntimeDescriptor): 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp' {
     const configured = this.config.desktopMode ?? 'ubuntu-container'
     // The official ISO can also run without a forwarded KVM device through
     // QEMU TCG. The start script chooses acceleration after the ISO is staged.

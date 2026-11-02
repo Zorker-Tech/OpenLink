@@ -144,7 +144,7 @@ While the application is running, inactivity may suspend/pause a VM only when
 the selected runtime supports fast state-preserving resume. Session cleanup
 must never delete or physically power off the Project VM.
 
-## Project computer architectures (T1 and E1)
+## Project computer architectures (T1, T2 and E1)
 
 The project computer mode is resolved by the root supervisor before any
 Project VM is created and is never inferred at request time.
@@ -157,6 +157,12 @@ Project VM is created and is never inferred at request time.
   desktop endpoint is published on the project runtime descriptor and reached
   only through the authenticated Desktop Gateway. A chat idle timer must not
   suspend the project desktop.
+- **T2 (preview `-t2`)** — Ubuntu 26.10 with GNOME 51 Wayland. The Project VM
+  uses a virtio-gpu device, a headless GNOME Shell display server, GNOME Remote
+  Desktop RDP on guest loopback, a FreeRDP-to-Xvfb bridge, x11vnc and
+  websockify. It shares the one-project-one-VM and project-desktop contracts
+  with T1 but is a preview channel with a narrower compatibility surface; see
+  [ADR-0030](../ADR-0030-t2-orion-wayland-preview.md).
 - **E1 (explicit `-e1`)** — the existing Podman machine Project VM with
   OpenSandbox sessions and a per-chat container desktop. It does not select the
   ISO desktop; the ISO/golden code is retained only as an experimental legacy
