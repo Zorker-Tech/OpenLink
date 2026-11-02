@@ -18,13 +18,13 @@ COPY --from=node-runtime /usr/local/ /usr/local/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     sed -i \
-      -e 's|URIs: http://archive.ubuntu.com/ubuntu/|URIs: http://repo.huaweicloud.com/ubuntu/|' \
-      -e 's|URIs: http://security.ubuntu.com/ubuntu/|URIs: http://repo.huaweicloud.com/ubuntu/|' \
+      -e 's|URIs: http://archive.ubuntu.com/ubuntu/|URIs: http://mirrors.aliyun.com/ubuntu/|' \
+      -e 's|URIs: http://security.ubuntu.com/ubuntu/|URIs: http://mirrors.aliyun.com/ubuntu/|' \
       /etc/apt/sources.list.d/ubuntu.sources \
-  && apt-get -o Acquire::http::Proxy::repo.huaweicloud.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 update \
-  && apt-get -o Acquire::http::Proxy::repo.huaweicloud.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 install -y --no-install-recommends \
+  && apt-get -o Acquire::http::Proxy::mirrors.aliyun.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 update \
+  && apt-get -o Acquire::http::Proxy::mirrors.aliyun.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 install -y --no-install-recommends \
     curl git python3 python3-pip build-essential ca-certificates \
-    locales dbus-x11 fonts-dejavu-core gnome-session gnome-shell gnome-terminal \
+    locales dbus-x11 fonts-dejavu-core fonts-noto-cjk fonts-noto-cjk-extra gnome-session gnome-shell gnome-terminal \
     nautilus ubuntu-session ubuntu-desktop-minimal novnc python3-websockify \
     qemu-system-x86 qemu-utils x11vnc x11-xserver-utils xterm xorriso xvfb \
   && corepack enable pnpm \
@@ -48,6 +48,7 @@ RUN npm ci --omit=dev --ignore-scripts=false
 COPY services/agent-worker/dist ./dist
 COPY services/agent-browser-extension/openlink-browser.ts ./extensions/openlink-browser.ts
 COPY services/agent-supabase-extension/openlink-supabase.ts ./extensions/openlink-supabase.ts
+COPY services/agent-desktop-extension/openlink-desktop.ts ./extensions/openlink-desktop.ts
 COPY services/agent-worker/desktop/start.sh /opt/openlink/desktop/start.sh
 COPY services/agent-worker/desktop/run-ubuntu-vm.sh /opt/openlink/desktop/run-ubuntu-vm.sh
 COPY services/agent-worker/desktop/qmp-control.py /opt/openlink/desktop/qmp-control.py
@@ -58,8 +59,8 @@ ENTRYPOINT ["node", "dist/main.js"]
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-  apt-get -o Acquire::http::Proxy::repo.huaweicloud.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 update \
-  && apt-get -o Acquire::http::Proxy::repo.huaweicloud.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 install -y --no-install-recommends \
+  apt-get -o Acquire::http::Proxy::mirrors.aliyun.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 update \
+  && apt-get -o Acquire::http::Proxy::mirrors.aliyun.com=DIRECT -o Acquire::Retries=5 -o Acquire::http::Timeout=600 -o Acquire::https::Timeout=600 install -y --no-install-recommends \
     xfce4 xfce4-terminal thunar \
   && mkdir -p /usr/share/xfce4/backdrops \
   && cp /usr/share/backgrounds/ubuntu-wallpaper-d.png /usr/share/xfce4/backdrops/xubuntu-wallpaper.png \
