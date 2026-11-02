@@ -107,6 +107,19 @@ The root supervisor owns their processes and communicates over authenticated
 service contracts, preserving both the dependency boundary and a single
 OpenLink lifecycle.
 
+## Agent Desktop
+
+`services/agent-desktop` vendors
+[`vercel-labs/agent-desktop`](https://github.com/vercel-labs/agent-desktop) with
+its full upstream history. It is the Apache-2.0 Linux CLI that exposes a
+desktop application's AT-SPI accessibility tree as JSON and performs element
+actions without pixel matching.
+
+The T2 Project VM base installs the pinned `1.0.2` x86_64 release at
+`/usr/local/bin/agent-desktop` with its clipboard helper. It runs inside the
+project's Ubuntu GNOME session and uses the same AT-SPI bus as the desktop; it
+is not imported into the Next.js application or the browser runtime.
+
 ## Browser Host
 
 `services/browser-host` owns native project preview forwarding, the Inspector

@@ -148,7 +148,25 @@ runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.ext
 # Use a normal Ubuntu application set. The worker userspace also carries the
 # E1 Xfce/X11 tools; those entries are hidden by the base image, and the
 # installer launcher is not useful on a provisioned project desktop.
-runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell favorite-apps   "['firefox_firefox.desktop','org.gnome.Nautilus.desktop','org.gnome.Terminal.desktop','org.gnome.Settings.desktop','snap-store_snap-store.desktop','org.gnome.Yelp.desktop','libreoffice-writer.desktop']" >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell favorite-apps   "['google-chrome.desktop','org.gnome.Nautilus.desktop','org.gnome.Terminal.desktop','org.gnome.Settings.desktop','snap-store_snap-store.desktop','org.gnome.Yelp.desktop','libreoffice-writer.desktop']" >/dev/null
+
+# Make Chrome the project browser. The image launcher forces the Wayland ozone
+# backend because T2 does not start Xwayland.
+runuser -u openlink -- env "${desktop_env[@]}" xdg-settings set default-web-browser google-chrome.desktop >/dev/null 2>&1 || true
+runuser -u openlink -- env "${desktop_env[@]}" xdg-mime default google-chrome.desktop x-scheme-handler/http x-scheme-handler/https >/dev/null 2>&1 || true
+
+# Use the product wallpaper set baked into the image. The light/dark pair is
+# also registered with GNOME's background picker through astreusn.xml.
+background_light=/usr/share/backgrounds/astreusn/astreusn-ubuntu-light-3840x2160.png
+background_dark=/usr/share/backgrounds/astreusn/astreusn-ubuntu-dark-3840x2160.png
+if [[ -f "$background_light" && -f "$background_dark" ]]; then
+  runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.desktop.background picture-uri "file://$background_light" >/dev/null
+  runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.desktop.background picture-uri-dark "file://$background_dark" >/dev/null
+  runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.desktop.background picture-options "'zoom'" >/dev/null
+  runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.desktop.screensaver picture-uri "file://$background_dark" >/dev/null 2>&1 || true
+else
+  echo "T2 wallpaper assets are missing; keeping the GNOME default" >&2
+fi
 
 rdp_root=/var/lib/openlink/project-desktop/rdp
 mkdir -p "$rdp_root"

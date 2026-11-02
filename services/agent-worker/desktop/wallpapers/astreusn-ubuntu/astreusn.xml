@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Astreusn</name>
+    <filename>/usr/share/backgrounds/astreusn/astreusn-ubuntu-light-3840x2160.png</filename>
+    <filename-dark>/usr/share/backgrounds/astreusn/astreusn-ubuntu-dark-3840x2160.png</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#eee0ca</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+</wallpapers>

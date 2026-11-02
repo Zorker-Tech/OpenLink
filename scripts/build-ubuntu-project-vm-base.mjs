@@ -26,7 +26,7 @@
 
 import { execFile as execFileCallback } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, resolve } from 'node:path'
@@ -58,6 +58,10 @@ const projectSupabaseCache = resolve(process.env.OPENLINK_PROJECT_SUPABASE_CACHE
 const projectSupabaseBundle = resolve(process.env.OPENLINK_PROJECT_SUPABASE_BUNDLE_ARCHIVE || resolve(projectSupabaseCache, 'bundle.tar'))
 const projectSupabaseImages = resolve(process.env.OPENLINK_PROJECT_SUPABASE_IMAGES_ARCHIVE || resolve(projectSupabaseCache, 'images.tar'))
 const diskGb = Number(process.env.OPENLINK_UBUNTU_PROJECT_VM_DISK_GB || 64)
+const chromeDebUrl = 'https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_156.0.8078.79-1_amd64.deb'
+const chromeDebSha256 = 'be1a1e161419f5c8272432f6860912550d8e29985e925913fa800493a0d0c955'
+const agentDesktopReleaseUrl = 'https://github.com/vercel-labs/agent-desktop/releases/download/v1.0.2/agent-desktop-v1.0.2-x86_64-unknown-linux-gnu.tar.gz'
+const agentDesktopReleaseSha256 = 'ad661b7a3fd8f990a769243f4889a240ca0e2c8dab3ef5bddd6019086c71e0b4'
 const guestPackages = [
   'openssh-server',
   'podman',
@@ -185,6 +189,33 @@ async function downloadCloudImage() {
   return { path: cloudImage, sha256: actual }
 }
 
+async function downloadPinnedFile(url, expectedSha256, label) {
+  await mkdir(cacheRoot, { recursive: true, mode: 0o700 })
+  const path = resolve(cacheRoot, basename(url))
+  if (existsSync(path) && await sha256(path) === expectedSha256) return path
+  const partial = `${path}.partial-${process.pid}`
+  await rm(partial, { force: true })
+  log(`downloading ${label}`)
+  const response = await fetch(url, { signal: AbortSignal.timeout(30 * 60_000) })
+  if (!response.ok || !response.body) throw new Error(`${label} download failed (HTTP ${response.status})`)
+  const hash = createHash('sha256')
+  const check = new Transform({
+    transform(chunk, _encoding, callback) {
+      hash.update(chunk)
+      callback(null, chunk)
+    },
+  })
+  await pipeline(Readable.from(response.body), check, createWriteStream(partial, { mode: 0o600 }))
+  const actual = hash.digest('hex')
+  if (actual !== expectedSha256) {
+    await rm(partial, { force: true })
+    throw new Error(`${label} SHA-256 verification failed`)
+  }
+  await rename(partial, path)
+  await chmod(path, 0o600)
+  return path
+}
+
 async function extractPartitions(rawDisk, workRoot) {
   const table = await run('sfdisk', ['-d', rawDisk], { timeout: 30_000 })
   const partitions = []
@@ -274,6 +305,12 @@ try {
   await run(docker, [
     'run', '--detach', '--name', rootfsContainer, '--entrypoint', 'sleep', usersImage, 'infinity',
   ], { timeout: 60_000 })
+  const chromeDeb = await downloadPinnedFile(chromeDebUrl, chromeDebSha256, 'Google Chrome package')
+  const agentDesktopArchive = await downloadPinnedFile(agentDesktopReleaseUrl, agentDesktopReleaseSha256, 'agent-desktop release')
+  await run(docker, ['cp', chromeDeb, `${rootfsContainer}:/tmp/google-chrome.deb`], { timeout: 120_000 })
+  await run(docker, ['cp', agentDesktopArchive, `${rootfsContainer}:/tmp/agent-desktop.tar.gz`], { timeout: 120_000 })
+  await run(docker, ['exec', rootfsContainer, 'mkdir', '-p', '/usr/share/doc/agent-desktop'], { timeout: 30_000 })
+  await run(docker, ['cp', resolve(root, 'services/agent-desktop/LICENSE'), `${rootfsContainer}:/usr/share/doc/agent-desktop/LICENSE`], { timeout: 60_000 })
   await run(docker, [
     'exec', rootfsContainer, 'bash', '-lc', [
       'set -e',
@@ -287,6 +324,10 @@ try {
       'APT_OPTIONS="-o Acquire::ForceIPv4=true -o Acquire::Retries=5"',
       ...(aptUpdate ? ['apt-get $APT_OPTIONS update -qq'] : []),
       `apt-get $APT_OPTIONS install -y -qq --no-install-recommends ${guestPackages.join(' ')} >/dev/null`,
+      'apt-get $APT_OPTIONS install -y -qq /tmp/google-chrome.deb >/dev/null',
+      'tar -xzf /tmp/agent-desktop.tar.gz -C /usr/local/bin',
+      'chmod 0755 /usr/local/bin/agent-desktop /usr/local/bin/agent-desktop-linux-clipboard-owner',
+      'rm -f /tmp/google-chrome.deb /tmp/agent-desktop.tar.gz',
       // The Ubuntu cloud image has a default `ubuntu` user at UID 1000. The
       // Project VM contract is the `openlink` user at UID 1000; replace it so
       // cloud-init and the desktop services share one identity.
@@ -331,7 +372,47 @@ try {
     }
     await run(docker, ['exec', rootfsContainer, 'chmod', '-R', 'a+rX', '/opt/openlink/desktop/gnome-extensions'], { timeout: 30_000 })
   }
+
+  // Bash the product wallpaper set into the image. The GNOME XML pairs the
+  // light and dark 4K variants, and the start script selects them explicitly
+  // so a fresh project does not depend on the worker image's default.
+  const wallpaperSource = resolve(root, 'services/agent-worker/desktop/wallpapers/astreusn-ubuntu')
+  const wallpaperTarget = '/usr/share/backgrounds/astreusn'
+  await run(docker, ['exec', rootfsContainer, 'mkdir', '-p', wallpaperTarget, '/usr/share/gnome-background-properties', '/usr/share/doc/openlink-wallpapers'], { timeout: 30_000 })
+  for (const file of await readdir(wallpaperSource)) {
+    if (!file.endsWith('.png')) continue
+    await run(docker, ['cp', resolve(wallpaperSource, file), `${rootfsContainer}:${wallpaperTarget}/${file}`], { timeout: 120_000 })
+  }
+  await run(docker, ['cp', resolve(wallpaperSource, 'astreusn.xml'), `${rootfsContainer}:/usr/share/gnome-background-properties/astreusn.xml`], { timeout: 60_000 })
+  await run(docker, ['cp', resolve(wallpaperSource, 'README.md'), `${rootfsContainer}:/usr/share/doc/openlink-wallpapers/README.md`], { timeout: 60_000 })
+  await run(docker, ['exec', rootfsContainer, 'chmod', '-R', 'a+rX', wallpaperTarget, '/usr/share/gnome-background-properties/astreusn.xml', '/usr/share/doc/openlink-wallpapers'], { timeout: 30_000 })
+
   await run(docker, ['exec', rootfsContainer, 'sh', '-c', `chmod 0755 /usr/local/bin/node /opt/openlink/desktop/start.sh${isT2 ? '' : ' /opt/openlink/desktop/run-ubuntu-vm.sh'}`], { timeout: 30_000 })
+
+  // Fail the artifact build before publishing if any first-run dependency is
+  // missing. A project must never boot into a half-composed desktop.
+  const requiredFiles = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/share/applications/google-chrome.desktop',
+    '/usr/local/bin/agent-desktop',
+    '/usr/local/bin/agent-desktop-linux-clipboard-owner',
+    '/usr/share/doc/agent-desktop/LICENSE',
+    '/opt/openlink/desktop/start.sh',
+    '/usr/share/backgrounds/astreusn/astreusn-ubuntu-light-3840x2160.png',
+    '/usr/share/backgrounds/astreusn/astreusn-ubuntu-dark-3840x2160.png',
+    '/usr/share/gnome-background-properties/astreusn.xml',
+    ...(isT2 ? [
+      '/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink/metadata.json',
+      '/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink/extension.js',
+    ] : []),
+  ]
+  for (const path of requiredFiles) {
+    await run(docker, ['exec', rootfsContainer, 'test', '-e', path], { timeout: 30_000 })
+  }
+  await run(docker, ['exec', rootfsContainer, 'google-chrome-stable', '--version'], { timeout: 60_000 })
+  const agentDesktop = await run(docker, ['exec', rootfsContainer, 'agent-desktop', 'version'], { timeout: 60_000 })
+  if (!agentDesktop.stdout.includes('"version":"1.0.2"')) throw new Error('agent-desktop release version check failed')
+  log('verified Chrome, agent-desktop, wallpapers and the desktop runtime')
 
   const rootfsTar = resolve(workRoot, 'rootfs.tar')
   await run(docker, ['export', rootfsContainer, '-o', rootfsTar], { timeout: 30 * 60_000 })
@@ -375,9 +456,19 @@ for desktop_file in \
   if [ -f "$desktop_file" ]; then
     # Desktop files may contain action groups after [Desktop Entry]. Mark the
     # main entry, not the last action group, as hidden.
-    sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$desktop_file"
+    sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\\nNoDisplay=true/' "$desktop_file"
   fi
 done
+
+# Chrome is preinstalled for both desktop profiles. Skip the first-run/default
+# browser prompts; T2 additionally needs the Wayland ozone backend because it
+# runs with --no-x11.
+if [ -f /rootfs/usr/share/applications/google-chrome.desktop ]; then
+  sed -i 's|^Exec=/usr/bin/google-chrome-stable|Exec=/usr/bin/google-chrome-stable --no-first-run --disable-default-browser-check|' /rootfs/usr/share/applications/google-chrome.desktop
+  if [ "${isT2 ? '1' : '0'}" = "1" ]; then
+    sed -i 's|^Exec=/usr/bin/google-chrome-stable|Exec=/usr/bin/google-chrome-stable --ozone-platform=wayland --enable-features=WaylandWindowDecorations --password-store=basic|' /rootfs/usr/share/applications/google-chrome.desktop
+  fi
+fi
 
 mkdir -p /rootfs/etc/systemd/network
 cat >/rootfs/etc/systemd/network/20-wired.network <<'OPENLINK_NETWORK'
@@ -533,6 +624,20 @@ chmod 0444 /work/base.qcow2
     desktop: { session: isT2 ? 'ubuntu-gnome-51-wayland-rdp' : 'ubuntu-gnome-x11', websockifyPort: 6080, vncPort: 5900 },
     usersImage: { image: usersImage, nodeSource: workerImage, profile: projectVmProfile },
     packages: guestPackages,
+    apps: {
+        chrome: { version: '156.0.8078.79-1', packageSha256: chromeDebSha256 },
+        agentDesktop: {
+          version: '1.0.2',
+          sourceCommit: '9eb9b296192fcb70bda25e918cd6dd66abfa3d0d',
+          archiveSha256: agentDesktopReleaseSha256,
+          license: 'Apache-2.0',
+        },
+        wallpapers: {
+          set: 'astreusn-ubuntu',
+          lightSha256: await sha256(resolve(root, 'services/agent-worker/desktop/wallpapers/astreusn-ubuntu/astreusn-ubuntu-light-3840x2160.png')),
+          darkSha256: await sha256(resolve(root, 'services/agent-worker/desktop/wallpapers/astreusn-ubuntu/astreusn-ubuntu-dark-3840x2160.png')),
+        },
+      },
     projectSupabase: {
       bundleSha256: await sha256(projectSupabaseBundle),
       imagesSha256: await sha256(projectSupabaseImages),
