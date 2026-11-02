@@ -19,7 +19,7 @@ export interface RemoteOpenSandboxRpcConfig {
   storageRoot: string
   /** OpenSandbox workload lifetime. `null` delegates cleanup to Agent Host. */
   sessionTtlSeconds: number | null
-  desktopMode?: 'ubuntu-container' | 'ubuntu-iso'
+  desktopMode?: 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp'
   /** Outbound policy selected by the remote approval controller. */
   networkDefaultAction?: 'allow' | 'deny'
 }

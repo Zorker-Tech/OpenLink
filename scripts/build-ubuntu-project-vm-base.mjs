@@ -40,12 +40,18 @@ const cacheRoot = resolve(process.env.OPENLINK_UBUNTU_CLOUD_CACHE || resolve(hom
 const cloudImageUrl = process.env.OPENLINK_UBUNTU_CLOUD_IMAGE_URL?.trim()
   || 'https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img'
 const cloudImage = resolve(cacheRoot, basename(cloudImageUrl))
-const outputRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT || resolve(root, '.openlink-runtime/project-vm-base/ubuntu'))
+const projectVmProfile = (process.env.OPENLINK_UBUNTU_PROJECT_VM_PROFILE
+  || process.env.OPENLINK_ARCHITECTURE
+  || 't1').trim().toLowerCase()
+if (projectVmProfile !== 't1' && projectVmProfile !== 't2') throw new Error('OPENLINK_UBUNTU_PROJECT_VM_PROFILE must be t1 or t2')
+const isT2 = projectVmProfile === 't2'
+const outputRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT
+  || resolve(root, `.openlink-runtime/project-vm-base/${isT2 ? 't2' : 'ubuntu'}`))
 const docker = process.env.OPENLINK_DOCKER_COMMAND?.trim() || 'docker'
-// The Project VM userspace is the Ubuntu LTS desktop image. The worker image
-// remains the source of the pinned Node runtime copied into the guest.
-const usersImage = process.env.OPENLINK_UBUNTU_USERS_IMAGE?.trim() || 'ubuntu:24.04'
 const workerImage = process.env.OPENLINK_AGENT_WORKER_IMAGE?.trim() || 'openlink/agent-worker:dev'
+// T1 is pinned to Ubuntu 24.04 LTS + GNOME 46 X11. T2 is the preview line on
+// the latest Ubuntu 26.10 userspace with GNOME 51 Wayland and an RDP bridge.
+const usersImage = process.env.OPENLINK_UBUNTU_USERS_IMAGE?.trim() || (isT2 ? workerImage : 'ubuntu:24.04')
 const imageArchive = resolve(process.env.OPENLINK_AGENT_WORKER_ARCHIVE?.trim()
   || resolve(homedir(), '.cache/openlink/project-images/openlink_agent-worker_dev.tar'))
 const projectSupabaseCache = resolve(process.env.OPENLINK_PROJECT_SUPABASE_CACHE || resolve(root, '.openlink-runtime/project-supabase/cache'))
@@ -99,6 +105,16 @@ const guestPackages = [
   'x11-xserver-utils',
   'fonts-ubuntu',
   'fonts-noto-color-emoji',
+  ...(isT2 ? [
+    // T2 preview: Wayland GNOME Shell is captured through GNOME Remote
+    // Desktop's RDP server and bridged back to the existing VNC gateway.
+    'gnome-remote-desktop',
+    'freerdp3-x11',
+    'dbus-user-session',
+    'gnome-keyring',
+    'libsecret-tools',
+    'openssl',
+  ] : []),
 ]
 
 function log(message) {
@@ -276,6 +292,7 @@ try {
       // cloud-init and the desktop services share one identity.
       'if getent passwd ubuntu >/dev/null 2>&1; then userdel -r ubuntu >/dev/null 2>&1 || userdel ubuntu >/dev/null 2>&1 || true; fi',
       'if ! getent passwd openlink >/dev/null 2>&1; then useradd -m -u 1000 -G sudo,adm -s /bin/bash openlink; fi',
+      ...(isT2 ? ['usermod -aG render openlink'] : []),
       'echo "openlink ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openlink',
       'chmod 0440 /etc/sudoers.d/openlink',
       'mkdir -p /home/openlink && chown openlink:openlink /home/openlink',
@@ -296,10 +313,13 @@ try {
   }
   await run(docker, ['exec', rootfsContainer, 'mkdir', '-p', '/usr/local/bin', '/opt/openlink/desktop'], { timeout: 30_000 })
   await run(docker, ['cp', nodeBinary, `${rootfsContainer}:/usr/local/bin/node`], { timeout: 120_000 })
-  for (const file of ['start.sh', 'run-ubuntu-vm.sh', 'qmp-control.py']) {
-    await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop', file), `${rootfsContainer}:/opt/openlink/desktop/${file}`], { timeout: 60_000 })
+  const desktopCopies = isT2
+    ? [['start-wayland.sh', 'start.sh']]
+    : [['start.sh', 'start.sh'], ['run-ubuntu-vm.sh', 'run-ubuntu-vm.sh'], ['qmp-control.py', 'qmp-control.py']]
+  for (const [source, destination] of desktopCopies) {
+    await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop', source), `${rootfsContainer}:/opt/openlink/desktop/${destination}`], { timeout: 60_000 })
   }
-  await run(docker, ['exec', rootfsContainer, 'sh', '-c', 'chmod 0755 /usr/local/bin/node /opt/openlink/desktop/start.sh /opt/openlink/desktop/run-ubuntu-vm.sh'], { timeout: 30_000 })
+  await run(docker, ['exec', rootfsContainer, 'sh', '-c', `chmod 0755 /usr/local/bin/node /opt/openlink/desktop/start.sh${isT2 ? '' : ' /opt/openlink/desktop/run-ubuntu-vm.sh'}`], { timeout: 30_000 })
 
   const rootfsTar = resolve(workRoot, 'rootfs.tar')
   await run(docker, ['export', rootfsContainer, '-o', rootfsTar], { timeout: 30 * 60_000 })
@@ -348,7 +368,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=OPENLINK_DESKTOP_MODE=ubuntu-container
+Environment=OPENLINK_DESKTOP_MODE=${isT2 ? 'wayland-rdp' : 'ubuntu-container'}
 Environment=OPENLINK_DESKTOP_REQUIRE_GNOME=1
 ExecStart=/bin/bash /opt/openlink/desktop/start.sh
 Restart=always
@@ -481,8 +501,8 @@ chmod 0444 /work/base.qcow2
     diskFormat: 'qcow2',
     diskVirtualBytes: diskGb * 1024 * 1024 * 1024,
     rootDevice: '/dev/vda',
-    desktop: { session: 'ubuntu-gnome-x11', websockifyPort: 6080, vncPort: 5900 },
-    usersImage: { image: usersImage, nodeSource: workerImage },
+    desktop: { session: isT2 ? 'ubuntu-gnome-51-wayland-rdp' : 'ubuntu-gnome-x11', websockifyPort: 6080, vncPort: 5900 },
+    usersImage: { image: usersImage, nodeSource: workerImage, profile: projectVmProfile },
     packages: guestPackages,
     projectSupabase: {
       bundleSha256: await sha256(projectSupabaseBundle),

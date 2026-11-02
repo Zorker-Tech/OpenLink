@@ -72,7 +72,7 @@ export async function ensureDesktopEndpoint(
   workerPort: number,
   workerToken: string,
   workerTokenHeader: string,
-  desktopMode: 'ubuntu-container' | 'ubuntu-iso',
+  desktopMode: 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp',
 ): Promise<DesktopEndpoint> {
   const endpoint = await sandbox.getEndpoint(6080)
   const url = `${connection.protocol}://${endpoint.endpoint}`

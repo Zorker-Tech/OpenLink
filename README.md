@@ -6,25 +6,43 @@ agents to share.
 
 ## Architecture modes
 
-OpenLink ships two explicit project-computer architectures. **T1 is the default.**
+OpenLink ships three explicit project-computer architectures. **T1 is the stable default.**
+**T2 is the Wayland preview.**
 
 | Mode | Project VM | Session | Desktop | Startup |
 | --- | --- | --- | --- | --- |
 | **T1** (default) | Ubuntu 24.04 LTS Project VM (GNOME 46 X11 + LTS generic kernel), rootful Podman | OpenSandbox | One native Ubuntu project desktop, shared by all chats | `pnpm dev:local` |
+| **T2** (preview) | Ubuntu 26.10 Project VM (GNOME 51 Wayland + RDP bridge), rootful Podman | OpenSandbox | One native GNOME 51 Wayland desktop, shared by all chats | `pnpm dev:local:t2` |
 | **E1** (optional) | Podman machine OS, rootful Podman | OpenSandbox | Per-chat container desktop (Xvfb + GNOME/Xfce) | `pnpm dev:local:e1` |
 
 - T1 is the enterprise target: one Ubuntu computer per project, one OS to
   patch/backup/snapshot/quota, no nested virtualization, persistent desktop
   state shared by the user and every agent.
+- T2 is the preview channel: latest Ubuntu and GNOME Wayland, with the same
+  one-project-one-VM model and a GNOME Remote Desktop RDP-to-VNC bridge.
 - E1 remains supported for hosts that need the previous heavier per-chat
   isolation, or that do not yet have a native T1 driver. It never starts the
   Ubuntu ISO desktop.
 - The nested ISO desktop is retained as an experimental legacy surface only.
 
-The binding decision is
-[ADR-0029](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md).
-Per-mode architecture and operations live in
+The binding decisions are
+[ADR-0029](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md) for
+T1/E1 and [ADR-0030](./docs/architecture/ADR-0030-t2-orion-wayland-preview.md)
+for the T2 preview. Per-mode architecture and operations live in
 [`docs/architecture/architectures/`](./docs/architecture/architectures/README.md).
+
+## Release channels
+
+The product version is shared. The current release identity is:
+
+| Channel | Architecture | Release |
+| --- | --- | --- |
+| stable | T1 | `T1-Crab-0.0.1` |
+| preview | T2 | `T2-Orion-0.0.1` |
+| compatibility | E1 | `E1-0.0.1` |
+
+The format is `<architecture>-<codename>-<semver>`; see
+[release versioning](./docs/architecture/standards/08-release-versioning.md).
 
 ## Start here
 
@@ -70,10 +88,12 @@ node scripts/openlink.mjs --mode development --profile local --arch e1
 `scripts/openlink.mjs` resolves the mode before importing the supervisor:
 
 ```bash
-pnpm dev:local              # T1
+pnpm dev:local              # T1 (default)
 pnpm dev:local:t1           # T1 explicit
+pnpm dev:local:t2           # T2 preview
 pnpm dev:local:e1           # E1
 pnpm start:t1               # production T1
+pnpm start:t2               # production T2 preview
 pnpm start:e1               # production E1
 node scripts/openlink.mjs --mode development --profile local --arch e1
 ```
@@ -82,16 +102,17 @@ The resolved mode is exported as `OPENLINK_ARCHITECTURE`; the supervisor then
 sets the Project VM driver, base artifact, guest user and desktop scope. The
 Web/BFF has one code path for both modes.
 
-## Switch an existing project between T1 and E1
+## Switch an existing project between T1, T2 and E1
 
 Switch is a maintenance operation; stop the app first. It migrates the complete
 project workspace and Project Supabase state, verifies every archive, retains a
 backup and the source VM disk, and rolls back to the source if any step fails:
 
 ```bash
-npm run runtime:switch -- --project <project-uuid> --to e1
+npm run runtime:switch -- --project <project-uuid> --to t2
 npm run runtime:switch -- --project <project-uuid> --to t1
-npm run runtime:switch -- --project <project-uuid> --to e1 --dry-run
+npm run runtime:switch -- --project <project-uuid> --to e1
+npm run runtime:switch -- --project <project-uuid> --from t2 --to t1 --dry-run
 ```
 
 Active chat leases are quiesced, not resumed. See
@@ -117,6 +138,9 @@ for the data and recovery contract.
 - T1 Ubuntu base: `pnpm runtime:ubuntu-vm-image` →
   `.openlink-runtime/project-vm-base/ubuntu/` (content-addressed qcow2 +
   manifest).
+- T2 preview base: `pnpm runtime:t2-vm-image` →
+  `.openlink-runtime/project-vm-base/t2/` (Ubuntu 26.10 + GNOME 51 Wayland,
+  content-addressed qcow2 + manifest).
 - E1 Project VM base/disk: `pnpm runtime:vm-image`.
 - Runtime image archives: `pnpm runtime:images`.
 - ZOKERBASE and Zero images: `pnpm runtime:zokerbase:images`,
@@ -135,10 +159,11 @@ pnpm knowledge:test
 pnpm runtime:project-supabase:test
 ```
 
-T1/E1-specific validation and disaster-recovery procedures are in the mode
+T1/T2/E1-specific validation and disaster-recovery procedures are in the mode
 operations documents:
 
 - [`T1 operations`](./docs/architecture/architectures/t1/operations.md)
+- [`T2 operations`](./docs/architecture/architectures/t2/operations.md)
 - [`E1 operations`](./docs/architecture/architectures/e1/operations.md)
 
 ## Safety rules

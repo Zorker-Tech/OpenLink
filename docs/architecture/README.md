@@ -72,12 +72,16 @@ The current ADR set covers these areas:
 - separate source-checkout Local and Cloud runtime profiles, with an explicit
   Cloud Supabase environment and Hydite identity shared with Studio
   ([ADR-0028](./ADR-0028-cloud-development-startup-profile.md)).
-- one durable project computer with two explicit runtime architectures: T1
-  (Ubuntu Project VM + native project desktop, default) and E1 (the previous
-  Podman Project VM + per-chat container desktop)
-  ([ADR-0029](./ADR-0029-project-computer-t1-e1-modes.md)). Per-mode
-  architecture and operations are indexed in
-  [`architectures/`](./architectures/README.md).
+- one durable project computer with three explicit runtime architectures: T1
+  (Ubuntu 24.04 LTS Project VM + native GNOME X11 desktop, default), T2
+  (Ubuntu 26.10 + GNOME 51 Wayland preview) and E1 (the previous Podman
+  Project VM + per-chat container desktop)
+  ([ADR-0029](./ADR-0029-project-computer-t1-e1-modes.md),
+  [ADR-0030](./ADR-0030-t2-orion-wayland-preview.md)). Per-mode architecture
+  and operations are indexed in [`architectures/`](./architectures/README.md).
+- a shared product version with per-architecture release identities
+  (`T1-Crab-0.0.1`, `T2-Orion-0.0.1`)
+  ([standard 08](./standards/08-release-versioning.md)).
 
 New decisions use the format below and the next unused ADR number:
 

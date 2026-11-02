@@ -16,16 +16,19 @@ Browser
   → Next.js Web/BFF
       → ZOKERBASE (identity + authoritative application data)
       → Agent Host → Project VM → OpenSandbox → Agent Worker/Pi
-                     ├─ T1: Ubuntu LTS + native project desktop (default)
+                     ├─ T1: Ubuntu 24.04 LTS + native GNOME X11 desktop (default)
+                     ├─ T2: Ubuntu 26.10 + native GNOME 51 Wayland desktop (preview)
                      └─ E1: Podman machine OS + per-chat container desktop
       → Browser Host → native preview / isolated Chromium
       → Knowledge Service → ZOKERBASE + embedding provider + Zero
 ```
 
 The project-computer mode is selected at startup
-([ADR-0029](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md)).
-T1 is the default; E1 is explicit `-e1`. Per-mode architecture and operations
-are indexed in [`docs/architecture/architectures/`](./docs/architecture/architectures/README.md).
+([ADR-0029](./docs/architecture/ADR-0029-project-computer-t1-e1-modes.md),
+[ADR-0030](./docs/architecture/ADR-0030-t2-orion-wayland-preview.md)).
+T1 is the default; T2 is the explicit `-t2` preview; E1 is the explicit `-e1`
+compatibility mode. Per-mode architecture and operations are indexed in
+[`docs/architecture/architectures/`](./docs/architecture/architectures/README.md).
 
 ## Binding invariants
 
@@ -53,16 +56,18 @@ are indexed in [`docs/architecture/architectures/`](./docs/architecture/architec
     with sparse raw/APFS clones; Windows uses Hyper-V with dynamic/differencing
     VHDX. WSL and Docker containers are not implicit Project VM fallbacks.
 12. **A project computer mode is explicit and defaults to T1.** T1 is one
-    Ubuntu Project VM with one native project desktop shared by all chats. E1
-    is the explicit `-e1` mode with per-chat container desktops. The two modes
-    have separate artifacts and state; switching modes is never a silent
-    in-place migration.
-13. **Desktop scope follows the mode.** A T1 project desktop is owned by the
+    Ubuntu 24.04 LTS Project VM with one native GNOME X11 project desktop
+    shared by all chats. T2 is the explicit `-t2` preview built from Ubuntu
+    26.10 and GNOME 51 Wayland. E1 is the explicit `-e1` compatibility mode
+    with per-chat container desktops. The modes have separate artifacts and
+    state roots; switching modes is never a silent in-place migration.
+13. **Desktop scope follows the mode.** A T1/T2 project desktop is owned by the
     Project VM lifecycle and is never suspended by a chat idle timer. An E1
     desktop is owned by its chat session and may suspend independently.
 14. **T1 requires a native Linux QEMU/KVM host in this release.** A Linux host
     provided by WSL2 runs a native Project VM; WSL itself is not the Project VM.
-    macOS and Windows use E1 until native T1 drivers are accepted.
+    macOS and Windows use E1 until native T1 drivers are accepted. T2 requires
+    the same QEMU/KVM host plus a virtio-gpu device and is a preview channel.
 
 ## Repository boundaries
 
