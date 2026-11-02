@@ -116,6 +116,8 @@ worker's `/desktop/start`.
 - Session workloads remain isolated by OpenSandbox inside the VM.
 - Google Chrome is installed from a pinned package. T1 runs the X11 backend
   because its GNOME 46 session is under Xvfb.
+- Noto Sans/Serif CJK fonts are part of the desktop userspace so Chrome does
+  not render CJK text as tofu.
 - agent-desktop 1.0.2 runs in the Project VM host's PID namespace behind a
   constrained Unix socket. Session containers receive only a CLI shim and the
   socket; the real binary never runs inside the sandbox. Its source is vendored

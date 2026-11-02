@@ -48,7 +48,7 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
 ## Lifecycle
 
 1. Build the T2 base with the Ubuntu 26.10 worker userspace, the T2 RDP
-   bridge packages, Google Chrome 156, agent-desktop 1.0.2 and the bundled
+   bridge packages, Google Chrome 156, agent-desktop 1.0.2, Noto CJK fonts and the bundled
    Astreusn Ubuntu wallpaper set. The builder fails if any first-run
    dependency is missing or fails its version check.
 2. Boot with the verified 24.04 LTS generic kernel/initrd and virtio-gpu.
