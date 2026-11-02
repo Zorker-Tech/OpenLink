@@ -20,10 +20,13 @@ pnpm runtime:t2-vm-image
 ```
 
 The builder installs GNOME 51, GNOME Remote Desktop, FreeRDP, Xvfb, x11vnc,
-websockify and gnome-keyring into the 26.10 userspace, adds the Project VM
-runtime and Supabase images, and publishes a content-addressed qcow2 plus
-kernel/initrd manifest. The T2 manifest desktop session is
-`ubuntu-gnome-51-wayland-rdp`.
+websockify and gnome-keyring into the 26.10 userspace. It also installs pinned
+Google Chrome 156 and agent-desktop 1.0.2, copies the Astreusn wallpapers and
+extension, adds the Project VM runtime and Supabase images, and publishes a
+content-addressed qcow2 plus kernel/initrd manifest. Before publishing it
+verifies every required file and runs `google-chrome-stable --version` and
+`agent-desktop version`; a missing desktop dependency fails the build. The T2
+manifest desktop session is `ubuntu-gnome-51-wayland-rdp`.
 
 ## Start
 
@@ -47,6 +50,9 @@ guest: pgrep -a gnome-remote-de
 guest: pgrep -a xfreerdp
 guest: pgrep -a x11vnc
 guest: ss -lnt | grep -E ':(3389|5900|6080)\b'
+guest: google-chrome-stable --version
+guest: agent-desktop version
+guest: agent-desktop status
 host:  curl -sf http://127.0.0.1:<desktop-port>/vnc.html
 ```
 
@@ -61,6 +67,9 @@ RDP port is loopback-only.
 | T2 base missing | `pnpm runtime:t2-vm-image`; startup fails closed |
 | GNOME Shell crash | systemd `OnFailure` shuts down the user session; `openlink-desktop` exits and restarts a clean `gnome-session@ubuntu.target`. Verify the session units and VNC endpoint |
 | Dock missing | Verify the Ubuntu Dock extension is enabled and `dock-position` is `LEFT`; restart `openlink-desktop` |
+| Chrome does not open | Check `google-chrome-stable --version`, the Wayland ozone flags in `google-chrome.desktop`, and the GNOME session; Xwayland is intentionally off |
+| Wallpaper missing | Verify `/usr/share/backgrounds/astreusn/astreusn-ubuntu-*-3840x2160.png` and `astreusn.xml`; rebuild the T2 base if absent |
+| agent-desktop cannot see apps | Verify `agent-desktop status` reports accessibility granted and the AT-SPI bus belongs to the Ubuntu session |
 | RDP not listening | Check `gnome-remote-desktop.service`, keyring, certificate and `gnome-shell`; the bridge only starts after RDP listens |
 | Keyring locked | The service recreates and unlocks an empty login keyring at every start; check `org.freedesktop.secrets` on the user bus |
 | VNC endpoint 200 but no desktop | Check FreeRDP/Xvfb `:9`; RDP must be healthy first |

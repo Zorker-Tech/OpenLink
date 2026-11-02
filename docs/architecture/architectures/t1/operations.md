@@ -30,12 +30,16 @@ The builder:
    Project Supabase runtime dependencies into the pinned Ubuntu 24.04 LTS
    desktop userspace image inside Docker (no slow guest-network package
    install);
-3. composes the userspace with the native desktop, Project Supabase immutable
+3. composes the userspace with the native desktop, Google Chrome 156,
+   agent-desktop 1.0.2, the Astreusn wallpaper set, Project Supabase immutable
    bundle/images, SSH/cloud-init configuration and the verified kernel modules;
 4. creates a bootable 64 GiB ext4 filesystem from the composed rootfs
    (`mke2fs -d`), converts it to a content-addressed qcow2, and runs
    `qemu-img check`;
-5. publishes the base disk, kernel, initrd and `manifest.json`.
+5. verifies that Chrome, agent-desktop, the wallpapers, the desktop launcher
+   and their licenses are present, then runs the Chrome and agent-desktop
+   version checks and publishes the base disk, kernel, initrd and
+   `manifest.json`.
 
 Environment:
 
