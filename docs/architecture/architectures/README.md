@@ -70,12 +70,26 @@ target and restarts the source from its archived descriptor.
 npm run runtime:switch -- --project <project-uuid> --to e1
 npm run runtime:switch -- --project <project-uuid> --to t1
 npm run runtime:switch -- --project <project-uuid> --to e1 --dry-run
+
+# Rebuild an existing T1/T2 target from the current base while importing the
+# verified source data. The replaced VM state is preserved under
+# <state-root>/replaced/<timestamp>-<projectId>/.
+npm run runtime:switch -- --project <project-uuid> --from t2 --to t1 --recreate-target
 ```
+
+The command fails closed if the target VM's base fingerprint differs from the
+current immutable base. That prevents a switch from reporting success while
+the target still runs an older base without the bundled desktop tools. Use
+`--recreate-target` to adopt the current base; it stops the target, moves its
+VM and runtime state aside, provisions a fresh VM, and then imports the source
+data. Recreating an E1 target is not supported because its machine disk is the
+source of truth.
 
 Data moved by the command:
 
 - the complete project workspace, including `.openlink` session/browser state;
 - Project Supabase `data/`, `configuration/` and `secrets.json`;
+- the project Agent Tool Registry (`manifest.tsv`, `bin/`, `tools/`);
 - the runtime's OpenSandbox/Browser capability tokens.
 
 Active chat leases are not resumed across a switch; sessions are quiesced and
