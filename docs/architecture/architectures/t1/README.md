@@ -71,7 +71,9 @@ removes its overlay, SSH identity and runtime state; the shared base remains.
    `/var/lib/cloud/seed/nocloud`, the project public key is injected,
    `podman.socket` is enabled, and the native desktop service starts. The base
    also carries Google Chrome and agent-desktop; the desktop service makes
-   Chrome the default browser and applies the Astreusn light/dark wallpapers.
+   Chrome the default browser, applies the Astreusn light/dark wallpapers and
+   starts the agent-desktop Unix-socket bridge. Agent sessions receive a CLI
+   shim plus that socket, not the host desktop runtime.
 7. **Readiness.** SSH becomes reachable; Agent Host verifies passwordless sudo
    and rootful Podman.
 8. **Project services.** Agent Host waits for the immutable Project Supabase
@@ -113,8 +115,10 @@ worker's `/desktop/start`.
 - Session workloads remain isolated by OpenSandbox inside the VM.
 - Google Chrome is installed from a pinned package. T1 runs the X11 backend
   because its GNOME 46 session is under Xvfb.
-- agent-desktop 1.0.2 uses the project's AT-SPI accessibility bus; its source
-  is vendored at `services/agent-desktop`.
+- agent-desktop 1.0.2 runs in the Project VM host's PID namespace behind a
+  constrained Unix socket. Session containers receive only a CLI shim and the
+  socket; the real binary never runs inside the sandbox. Its source is vendored
+  at `services/agent-desktop`.
 - The per-project SSH key never enters the guest, a session workload, the
   browser or logs.
 - The build removes the build key, cloud-init seed state, machine-id and SSH

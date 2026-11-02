@@ -360,6 +360,12 @@ try {
   for (const [source, destination] of desktopCopies) {
     await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop', source), `${rootfsContainer}:/opt/openlink/desktop/${destination}`], { timeout: 60_000 })
   }
+  // The real agent-desktop binary stays on the Project VM host. The session
+  // container receives a small Unix-socket client and a constrained bridge
+  // socket, because its PID namespace cannot inspect the host desktop.
+  await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop/desktop-tool-bridge.mjs'), `${rootfsContainer}:/opt/openlink/desktop/desktop-tool-bridge.mjs`], { timeout: 60_000 })
+  await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop/openlink-agent-desktop.mjs'), `${rootfsContainer}:/usr/local/bin/openlink-agent-desktop`], { timeout: 60_000 })
+  await run(docker, ['exec', rootfsContainer, 'chmod', '0755', '/usr/local/bin/openlink-agent-desktop'], { timeout: 30_000 })
   if (isT2) {
     // The headless session must hide GNOME's screen-sharing indicator: in T2
     // the RDP surface is the only display, and the indicator's stop action
@@ -401,6 +407,8 @@ try {
     '/usr/share/backgrounds/astreusn/astreusn-ubuntu-light-3840x2160.png',
     '/usr/share/backgrounds/astreusn/astreusn-ubuntu-dark-3840x2160.png',
     '/usr/share/gnome-background-properties/astreusn.xml',
+    '/usr/local/bin/openlink-agent-desktop',
+    '/opt/openlink/desktop/desktop-tool-bridge.mjs',
     ...(isT2 ? [
       '/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink/metadata.json',
       '/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink/extension.js',

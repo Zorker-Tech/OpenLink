@@ -124,6 +124,7 @@ else
     HOME=/home/openlink
     DISPLAY=:0
     XDG_RUNTIME_DIR=/run/user/1000
+    AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus
     XDG_SESSION_TYPE=x11
     XDG_CURRENT_DESKTOP=ubuntu:GNOME
     GNOME_SHELL_SESSION_MODE=ubuntu
@@ -168,6 +169,26 @@ else
     echo "Desktop session exited during startup" >&2
     exit 1
   fi
+  if [[ "${OPENLINK_DESKTOP_REQUIRE_GNOME:-0}" == "1" ]] && pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+    desktop_tool_socket=/run/user/1000/openlink-desktop-tool.sock
+    rm -f "$desktop_tool_socket"
+    start_background desktop-tool runuser -u openlink -- env \
+      HOME=/home/openlink \
+      DISPLAY=:0 \
+      XDG_RUNTIME_DIR=/run/user/1000 \
+      DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+      AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus \
+      XDG_SESSION_TYPE=x11 \
+      XDG_CURRENT_DESKTOP=ubuntu:GNOME \
+      OPENLINK_DESKTOP_TOOL_SOCKET="$desktop_tool_socket" \
+      /usr/local/bin/node /opt/openlink/desktop/desktop-tool-bridge.mjs
+    if ! wait_for_file "$desktop_tool_socket"; then
+      echo "T1 agent-desktop bridge did not start" >&2
+      tail -n 80 /tmp/openlink-desktop-desktop-tool.log >&2 || true
+      exit 1
+    fi
+  fi
+
   # Product desktop defaults: Chrome as the browser and the Astreusn
   # light/dark wallpaper pair. These apply to the GNOME session only; the E1
   # container fallback keeps its own desktop.

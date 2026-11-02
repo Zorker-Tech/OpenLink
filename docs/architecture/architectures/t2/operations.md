@@ -53,6 +53,7 @@ guest: ss -lnt | grep -E ':(3389|5900|6080)\b'
 guest: google-chrome-stable --version
 guest: agent-desktop version
 guest: agent-desktop status
+guest: ls -l /run/user/1000/openlink-desktop-tool.sock
 host:  curl -sf http://127.0.0.1:<desktop-port>/vnc.html
 ```
 
@@ -69,7 +70,7 @@ RDP port is loopback-only.
 | Dock missing | Verify the Ubuntu Dock extension is enabled and `dock-position` is `LEFT`; restart `openlink-desktop` |
 | Chrome does not open | Check `google-chrome-stable --version`, the Wayland ozone flags in `google-chrome.desktop`, and the GNOME session; Xwayland is intentionally off |
 | Wallpaper missing | Verify `/usr/share/backgrounds/astreusn/astreusn-ubuntu-*-3840x2160.png` and `astreusn.xml`; rebuild the T2 base if absent |
-| agent-desktop cannot see apps | Verify `agent-desktop status` reports accessibility granted and the AT-SPI bus belongs to the Ubuntu session |
+| agent-desktop cannot see apps | Verify `agent-desktop status` reports accessibility granted, the desktop-tool bridge is listening on `/run/user/1000/openlink-desktop-tool.sock`, and the AT-SPI bus belongs to the Ubuntu session |
 | RDP not listening | Check `gnome-remote-desktop.service`, keyring, certificate and `gnome-shell`; the bridge only starts after RDP listens |
 | Keyring locked | The service recreates and unlocks an empty login keyring at every start; check `org.freedesktop.secrets` on the user bus |
 | VNC endpoint 200 but no desktop | Check FreeRDP/Xvfb `:9`; RDP must be healthy first |
