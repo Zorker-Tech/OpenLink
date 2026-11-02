@@ -1,0 +1,16 @@
+{
+  "Cloud Computer 当前未运行。发送消息启动项目环境后再刷新预览。": "Cloud Computer n'est pas en cours d'exécution. Envoyez un message pour démarrer l'environnement du projet, puis actualisez l'aperçu.",
+  "Cloud 项目预览": "Aperçu du projet Cloud",
+  "Cloud 预览暂时无法连接，请稍后重试。": "L'aperçu Cloud ne peut pas se connecter pour le moment. Veuillez réessayer plus tard.",
+  "Cloud 预览隧道尚未配置。": "Le tunnel d'aperçu Cloud n'est pas encore configuré.",
+  "OpenLink 桌面环境": "Environnement de bureau OpenLink",
+  "{name} 项目预览": "Aperçu du projet {name}",
+  "未检测到正在运行的网站服务。启动项目 Web 服务后可自动预览。": "Aucun service web en cours d'exécution détecté. Démarrez le service web du projet pour activer l'aperçu automatique.",
+  "桌面环境未就绪": "Environnement de bureau non prêt",
+  "正在启动桌面环境": "Démarrage de l'environnement de bureau",
+  "正在检测活跃网站端口": "Détection des ports web actifs",
+  "正在检测项目网站服务…": "Détection du service web du projet…",
+  "该网站服务已停止，请刷新检测活跃端口。": "Ce service web s'est arrêté. Actualisez pour détecter les ports actifs.",
+  "重新检测": "Détecter à nouveau",
+  "项目预览暂不可用": "Aperçu du projet indisponible"
+}
