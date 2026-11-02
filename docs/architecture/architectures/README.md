@@ -2,15 +2,17 @@
 
 OpenLink has one durable Project VM per project. The desktop and session
 topology are selected explicitly at startup. This directory is the index for
-the supported runtime architectures; the binding decision is
-[ADR-0029](../ADR-0029-project-computer-t1-e1-modes.md).
+the supported runtime architectures; the binding decisions are
+[ADR-0029](../ADR-0029-project-computer-t1-e1-modes.md) for T1/E1 and
+[ADR-0030](../ADR-0030-t2-orion-wayland-preview.md) for the T2 preview.
 
 ## Modes
 
 | Mode | Status | Project VM | Desktop | Startup |
 | --- | --- | --- | --- | --- |
-| [`t1`](./t1/README.md) | Default | Ubuntu 24.04 LTS Project VM (GNOME 46 X11 + LTS generic kernel) + rootful Podman | One native Ubuntu project desktop shared by all chats | `pnpm dev:local`, `-t1` |
-| [`e1`](./e1/README.md) | Optional, explicit | Podman machine OS + rootful Podman | Per-chat container desktop (Xvfb + GNOME/Xfce) | `-e1` |
+| [`t1`](./t1/README.md) | Default, stable | Ubuntu 24.04 LTS Project VM (GNOME 46 X11 + LTS generic kernel) + rootful Podman | One native Ubuntu project desktop shared by all chats | `pnpm dev:local`, `-t1` |
+| [`t2`](./t2/README.md) | Preview, explicit | Ubuntu 26.10 Project VM (GNOME 51 Wayland + RDP bridge) + rootful Podman | One native GNOME 51 Wayland desktop shared by all chats | `pnpm dev:local:t2`, `-t2` |
+| [`e1`](./e1/README.md) | Optional, compatibility | Podman machine OS + rootful Podman | Per-chat container desktop (Xvfb + GNOME/Xfce) | `-e1` |
 | experimental ISO | Not a product support commitment | Session container + nested QEMU/KVM | Full Ubuntu Desktop guest per chat | Explicit legacy configuration only |
 
 ## Selection
@@ -19,12 +21,13 @@ the supported runtime architectures; the binding decision is
 
 ```bash
 pnpm dev:local          # T1 (default)
+pnpm dev:local:t2       # T2 preview
 pnpm dev:local:e1       # E1
 node scripts/openlink.mjs --mode development --profile local --arch e1
 node scripts/openlink.mjs --mode production -t1
 ```
 
-The resolved mode is exported as `OPENLINK_ARCHITECTURE` (`t1` or `e1`). The
+The resolved mode is exported as `OPENLINK_ARCHITECTURE` (`t1`, `t2` or `e1`). The
 Agent Host receives the corresponding `OPENLINK_PROJECT_VM_DRIVER` and desktop
 scope; the Web/BFF never needs a mode-specific code path.
 
@@ -41,11 +44,12 @@ scope; the Web/BFF never needs a mode-specific code path.
 5. Every fast path has the authoritative provisioning path as its fallback.
 6. Project VM state (disk, SSH identity, seed identity, runtime secrets) is
    backed up as one recovery unit.
-7. A project runtime is bound to the architecture that created it. Startup in
-   the other mode skips automatic restore and explicit provisioning fails with
-   an actionable error; it never runs two VMs for one project, overwrites the
-   other descriptor, or steals its ports. Switching requires stopping/removing
-   the owning runtime and restoring project data into the new VM.
+7. A project runtime is bound to the architecture that created it. T1 and T2
+   share the qemu-kvm backend but use separate state roots and release
+   identities. Startup in the other mode skips automatic restore and explicit
+   provisioning fails with an actionable error; it never runs two VMs for one
+   project, overwrites the other descriptor, or steals its ports. Switching
+   requires the one-command migration or stopping/removing the owning runtime.
 
 ## Switching architectures
 
@@ -84,7 +88,8 @@ traffic; it is not safe for interactive use.
 
 ## Documents per mode
 
-Each mode directory contains:
+T2 is a preview channel; its support and compatibility surface is narrower
+than T1. E1 remains the compatibility mode. Each mode directory contains:
 
 - `README.md` — architecture, lifecycle, security, support matrix;
 - `operations.md` — build, start, backup/restore, failure recovery and

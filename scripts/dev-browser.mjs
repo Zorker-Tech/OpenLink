@@ -28,8 +28,9 @@ const webRootPath = resolve(configuredWebRoot || rootPath)
 const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE ?? 'local').trim().toLowerCase()
 if (runtimeMode !== 'local' && runtimeMode !== 'cloud') throw new Error('OPENLINK_RUNTIME_MODE must be either local or cloud')
 const architecture = (process.env.OPENLINK_ARCHITECTURE ?? 't1').trim().toLowerCase()
-if (architecture !== 't1' && architecture !== 'e1') throw new Error('OPENLINK_ARCHITECTURE must be t1 or e1')
-const useUbuntuProjectVm = runtimeMode === 'local' && architecture === 't1'
+if (architecture !== 't1' && architecture !== 't2' && architecture !== 'e1') throw new Error('OPENLINK_ARCHITECTURE must be t1, t2 or e1')
+const useUbuntuProjectVm = runtimeMode === 'local' && (architecture === 't1' || architecture === 't2')
+const ubuntuProjectVmArchitecture = useUbuntuProjectVm ? architecture : undefined
 const hostPlatform = resolveHostPlatform()
 const localRuntimeCache = localRuntimeCacheRoot()
 const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
@@ -56,7 +57,9 @@ if (runtimeMode === 'local') {
   process.env.CONTAINERS_POLICY ||= podmanPolicy
   process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
 }
-const projectVmStateRoot = fileURLToPath(new URL('../.openlink-runtime/project-vms', import.meta.url))
+const projectVmStateRoot = ubuntuProjectVmArchitecture === 't2'
+  ? fileURLToPath(new URL('../.openlink-runtime/project-vms/t2/', import.meta.url))
+  : fileURLToPath(new URL('../.openlink-runtime/project-vms', import.meta.url))
 const projectImageRoot = process.env.OPENLINK_RUNTIME_IMAGE_ROOT?.trim()
   ? resolve(process.env.OPENLINK_RUNTIME_IMAGE_ROOT)
   : hostPlatform.platform === 'linux'
@@ -79,7 +82,7 @@ const projectSupabaseSeedPath = process.env.OPENLINK_PROJECT_SUPABASE_SEED?.trim
   : fileURLToPath(new URL('../.openlink-runtime/project-supabase/cache/seed.json', import.meta.url))
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
-const ubuntuProjectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/ubuntu/', import.meta.url))
+const ubuntuProjectVmBaseRoot = fileURLToPath(new URL(ubuntuProjectVmArchitecture === 't2' ? '../.openlink-runtime/project-vm-base/t2/' : '../.openlink-runtime/project-vm-base/ubuntu/', import.meta.url))
 const ubuntuProjectVmBaseManifestPath = `${ubuntuProjectVmBaseRoot}/manifest.json`
 const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120'
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
@@ -166,10 +169,10 @@ async function loadUbuntuProjectVmBase() {
   try {
     manifest = JSON.parse(await readFile(ubuntuProjectVmBaseManifestPath, 'utf8'))
   } catch {
-    throw new Error('OpenLink T1 Ubuntu Project VM image manifest is missing. Run `pnpm runtime:ubuntu-vm-image` or start E1 with `-e1`.')
+    throw new Error(`OpenLink ${architecture.toUpperCase()} Ubuntu Project VM image manifest is missing. Build the matching base artifact or start E1 with \`-e1\`.`)
   }
   const architectureName = UBUNTU_PROJECT_VM_ARCHITECTURE[process.arch]
-  if (!architectureName) throw new Error(`T1 does not support the ${process.arch} architecture; start E1 with -e1`)
+  if (!architectureName) throw new Error(`${architecture.toUpperCase()} does not support the ${process.arch} architecture; start E1 with -e1`)
   const validated = assertUbuntuProjectVmArtifactManifest(manifest, { architecture: architectureName })
   const diskPath = resolve(ubuntuProjectVmBaseRoot, validated.disk)
   const kernelPath = resolve(ubuntuProjectVmBaseRoot, validated.kernel.file)
@@ -183,10 +186,10 @@ async function loadUbuntuProjectVmBase() {
     try {
       metadata = await stat(path)
     } catch {
-      throw new Error(`OpenLink T1 Ubuntu Project VM ${label} image is missing: ${path}`)
+      throw new Error(`OpenLink ${architecture.toUpperCase()} Ubuntu Project VM ${label} image is missing: ${path}`)
     }
     if (!metadata.isFile() || metadata.size !== expected) {
-      throw new Error(`OpenLink T1 Ubuntu Project VM ${label} size does not match its manifest: ${path}`)
+      throw new Error(`OpenLink ${architecture.toUpperCase()} Ubuntu Project VM ${label} size does not match its manifest: ${path}`)
     }
   }
   return {
@@ -594,12 +597,12 @@ let ubuntuQemuImg
 let ubuntuMke2fs
 if (useUbuntuProjectVm) {
   if (process.platform !== 'linux') {
-    throw new Error('T1 requires Linux with QEMU/KVM. Start the existing E1 isolation architecture with `-e1` on this host.')
+    throw new Error(`${architecture.toUpperCase()} requires Linux with QEMU/KVM. Start the existing E1 isolation architecture with \`-e1\` on this host.`)
   }
   try {
     await access('/dev/kvm', constants.R_OK | constants.W_OK)
   } catch {
-    throw new Error('T1 requires readable/writable /dev/kvm. Enable host KVM, or start E1 with `-e1`.')
+    throw new Error(`${architecture.toUpperCase()} requires readable/writable /dev/kvm. Enable host KVM, or start E1 with \`-e1\`.`)
   }
   ubuntuQemuSystem = process.env.OPENLINK_QEMU_SYSTEM_COMMAND?.trim() || '/usr/bin/qemu-system-x86_64'
   ubuntuQemuImg = process.env.OPENLINK_QEMU_IMG_COMMAND?.trim() || '/usr/bin/qemu-img'
@@ -608,13 +611,13 @@ if (useUbuntuProjectVm) {
     try {
       await access(candidate, constants.X_OK)
     } catch {
-      throw new Error(`T1 requires ${candidate}. Install QEMU/OpenSSH or start E1 with \`-e1\`.`)
+      throw new Error(`${architecture.toUpperCase()} requires ${candidate}. Install QEMU/OpenSSH or start E1 with \`-e1\`.`)
     }
   }
   try {
     await access(projectSupabaseSeedPath, constants.R_OK)
   } catch {
-    throw new Error(`T1 requires the Project Supabase image seed at ${projectSupabaseSeedPath}. Export it from a verified E1 Project VM or set OPENLINK_PROJECT_SUPABASE_SEED.`)
+    throw new Error(`${architecture.toUpperCase()} requires the Project Supabase image seed at ${projectSupabaseSeedPath}. Export it from a verified E1 Project VM or set OPENLINK_PROJECT_SUPABASE_SEED.`)
   }
 } else {
   const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
@@ -802,7 +805,7 @@ if (!useUbuntuProjectVm) projectVmBase ||= await loadProjectVmBase()
 
 const shared = {
   ...process.env,
-  OPENLINK_DESKTOP_MODE: process.env.OPENLINK_DESKTOP_MODE?.trim() || 'ubuntu-container',
+  OPENLINK_DESKTOP_MODE: process.env.OPENLINK_DESKTOP_MODE?.trim() || (architecture === 't2' ? 'wayland-rdp' : 'ubuntu-container'),
   OPENLINK_DESKTOP_SCOPE: useUbuntuProjectVm ? 'project' : 'session',
   OPENLINK_ARCHITECTURE: architecture,
   OPENLINK_UBUNTU_DESKTOP_ISO: process.env.OPENLINK_UBUNTU_DESKTOP_ISO?.trim()

@@ -47,10 +47,10 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
   return action
 }
 
-function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' {
+function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp' {
   const mode = value?.trim().toLowerCase() || 'ubuntu-iso'
-  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso') {
-    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container or ubuntu-iso')
+  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso' && mode !== 'wayland-rdp') {
+    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container, ubuntu-iso or wayland-rdp')
   }
   return mode
 }
