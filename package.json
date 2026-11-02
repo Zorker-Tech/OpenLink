@@ -1,6 +1,6 @@
 {
   "name": "my-project",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "dev": "node scripts/openlink.mjs --mode development",
@@ -30,7 +30,7 @@
     "runtime:vm-image": "node scripts/run-with-env.mjs OPENLINK_BUILD_ARTIFACTS=1 -- node scripts/build-project-vm-base.mjs && node scripts/build-project-vm-disk.mjs",
     "runtime:ubuntu-vm-image": "node scripts/build-ubuntu-project-vm-base.mjs",
     "runtime:switch": "npm --prefix services/agent-host run build && node scripts/switch-project-architecture.mjs",
-    "runtime:architecture:test": "node --test scripts/test/architecture-mode.test.mjs",
+    "runtime:architecture:test": "node --test scripts/test/architecture-mode.test.mjs scripts/test/release-version.test.mjs",
     "runtime:project-supabase:sync": "node scripts/sync-project-supabase.mjs",
     "runtime:project-supabase:images": "node scripts/run-with-env.mjs OPENLINK_BUILD_ARTIFACTS=1 -- node scripts/build-project-supabase-images.mjs",
     "runtime:project-supabase:keygen": "node scripts/generate-project-supabase-release-key.mjs",
@@ -58,7 +58,10 @@
     "storybook": "pnpm storybook:inventory && storybook dev -p 6006 --no-open",
     "storybook:build": "pnpm storybook:inventory && storybook build",
     "storybook:test": "pnpm storybook:inventory && vitest run --project=storybook",
-    "build-storybook": "pnpm storybook:inventory && storybook build"
+    "build-storybook": "pnpm storybook:inventory && storybook build",
+    "dev:local:t2": "node scripts/openlink.mjs --mode development --profile local -t2",
+    "start:t2": "node scripts/openlink.mjs --mode production -t2",
+    "runtime:t2-vm-image": "OPENLINK_UBUNTU_PROJECT_VM_PROFILE=t2 node scripts/build-ubuntu-project-vm-base.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.147",

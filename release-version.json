@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "architectures": {
+    "t1": {
+      "channel": "stable",
+      "codename": "Crab",
+      "release": "T1-Crab-0.0.1"
+    },
+    "t2": {
+      "channel": "preview",
+      "codename": "Orion",
+      "release": "T2-Orion-0.0.1"
+    },
+    "e1": {
+      "channel": "compatibility",
+      "codename": null,
+      "release": "E1-0.0.1"
+    }
+  }
+}
