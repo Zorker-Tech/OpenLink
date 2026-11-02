@@ -64,6 +64,7 @@ import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
+import type { ChatSessionRun } from '@/lib/chat-session-runs.server'
 import type { CodexComposerResources, ComposerResources, RuntimeComposerResources, RuntimePromptResource } from '@/lib/composer-resources'
 import { deferInitialPromptSubmission, hasPersistedUserMessage, isRetryableInitialPromptFailure, retryableInitialPromptUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
@@ -166,6 +167,7 @@ interface ChatWorkspaceProps {
   autoStart: boolean
   autoStartModel: { providerId: string; modelId: string } | null
   initialEvents: OpenLinkAgentEvent[]
+  initialRun?: ChatSessionRun | null
   initialPrompt: string
   sessionId: string
   sessionTitle: string
@@ -467,6 +469,7 @@ function ChatTopbar({
   workspaceView,
   renameRequestVersion,
   sessionTitle,
+  sessionStatus,
   context,
   side,
   activeTab,
@@ -487,6 +490,7 @@ function ChatTopbar({
   workspaceView: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
   renameRequestVersion: number
   sessionTitle: string
+  sessionStatus: 'idle' | 'streaming'
   context: ChatContextStats | null
   side: 'chat' | 'workspace'
   activeTab: WorkspaceTabId
@@ -690,6 +694,10 @@ function ChatTopbar({
           <ToolbarButton aria-pressed={chatCollapsed} className={chatCollapsed ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''} label={t('评论')} onClick={onToggleChat}><MessageCircle className="size-4" /></ToolbarButton>
           <WorkspaceTabs activeTab={activeTab} onClose={onCloseWorkspaceTab} onReorder={onReorderWorkspaceTabs} onSelect={onSelectWorkspaceTab} openTabs={openTabs} />
           <WorkspaceTabLauncher onSelect={onSelectWorkspaceTab} />
+          <div className="ml-auto flex min-w-0 items-center gap-2 pr-2" data-session-status={sessionStatus}>
+            <span className="max-w-[180px] truncate text-[12px] text-[var(--app-muted)]" title={sessionTitle}>{sessionTitle}</span>
+            <span className={`size-1.5 shrink-0 rounded-full ${sessionStatus === 'streaming' ? 'bg-[var(--app-brand)]' : 'bg-[var(--app-subtle-foreground)]'}`} title={sessionStatus === 'streaming' ? t('运行中') : t('已就绪')} />
+          </div>
           {workspaceView === 'data' && localRuntime && <button aria-pressed={dataSurface === 'studio'} className={`flex h-[26px] shrink-0 items-center gap-1 rounded-full border border-[var(--app-control-border)] px-2.5 text-xs font-medium transition-colors ${dataSurface === 'studio' ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-foreground)]'}`} onClick={onToggleDataSurface} type="button"><ExternalLink className="size-3" />Studio</button>}
         </div>
       </div>
@@ -1562,6 +1570,7 @@ export function ChatWorkspace({
   autoStart,
   autoStartModel,
   initialEvents,
+  initialRun = null,
   initialPrompt,
   sessionId,
   sessionTitle,
@@ -1606,7 +1615,9 @@ export function ChatWorkspace({
   const [renameRequestVersion, setRenameRequestVersion] = useState(0)
   const [activeChatFlow, setActiveChatFlow] = useState<ActiveFlowStatus | null>(null)
   const [agentEvents, setAgentEvents] = useState<OpenLinkAgentEvent[]>(() => recoverInterruptedInitialEvents(initialEvents))
-  const [agentStreamStatus, setAgentStreamStatus] = useState<'idle' | 'streaming'>('idle')
+  const initialRunActive = initialRun?.status === 'running' && Date.now() - Date.parse(initialRun.heartbeatAt) < 90_000
+  const initialRunActiveRef = useRef(initialRunActive)
+  const [agentStreamStatus, setAgentStreamStatus] = useState<'idle' | 'streaming'>(initialRunActive ? 'streaming' : 'idle')
   const hasDurableUserMessage = agentEvents.some((event) =>
     event.type === 'message.user' && !event.id.includes(':optimistic-user:'),
   )
@@ -1686,11 +1697,14 @@ export function ChatWorkspace({
   }, [activeWorkspaceTabId, openWorkspaceTabs, selectWorkspaceTab])
 
   const interruptAgentMessage = useCallback(() => {
-    // Abort the browser-side stream immediately. The BFF abort listener sends
-    // the authenticated Worker cancellation and drains the final native frame,
-    // while the direct control request remains a redundant server-side stop.
+    // Stopping is explicit now that page navigation no longer owns the run.
+    void fetch(`/api/chat/${encodeURIComponent(sessionId)}/control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'interrupt' }),
+    }).catch(() => undefined)
     activeRequestAbortRef.current?.abort()
-  }, [])
+  }, [sessionId])
   const [gitVersions, setGitVersions] = useState<GitVersionOption[]>([])
   const [selectedGitRef, setSelectedGitRef] = useState<string | null>(null)
   const [gitVersionsLoading, setGitVersionsLoading] = useState(true)
@@ -1896,16 +1910,45 @@ export function ChatWorkspace({
   }, [flushStreamQueue])
 
   useEffect(() => () => {
-    // Navigating away must cancel the upstream fetch as well as the local
-    // animation queue. Without this, Next keeps the Agent Host request alive
-    // until Pi finishes, holding the Cloud session lease and its sandbox even
-    // though the chat page is gone.
-    activeRequestAbortRef.current?.abort()
-    activeRequestAbortRef.current = null
+    // The durable run belongs to the server, not this component. Do not abort
+    // it on navigation; just release this mount's local animation frame.
     if (streamFrameRef.current !== null) window.cancelAnimationFrame(streamFrameRef.current)
     streamFrameRef.current = null
     streamQueueRef.current = []
   }, [])
+
+  // If this page was opened while a durable run is already active, tail its
+  // persisted events until the run reaches a terminal state. This is also how
+  // a run continues after the user leaves and returns to the session.
+  useEffect(() => {
+    if (!initialRunActiveRef.current) return
+    let disposed = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const poll = async () => {
+      if (disposed) return
+      try {
+        const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/run?since=${nextClientSequenceRef.current}`, { cache: 'no-store' })
+        if (!response.ok) throw new Error('run poll failed')
+        const payload = await response.json() as { run?: ChatSessionRun | null; events?: OpenLinkAgentEvent[] }
+        if (disposed) return
+        if (payload.events?.length) appendAgentEvents(payload.events)
+        if (payload.run && payload.run.status !== 'running') {
+          initialRunActiveRef.current = false
+          setAgentStreamStatus('idle')
+          router.refresh()
+          return
+        }
+      } catch {
+        // Transient read failures must not turn a still-running session idle.
+      }
+      if (!disposed) timer = setTimeout(() => { void poll() }, 2_000)
+    }
+    timer = setTimeout(() => { void poll() }, 1_000)
+    return () => {
+      disposed = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [appendAgentEvents, router, sessionId])
 
   useEffect(() => {
     if (!localRuntime && (!hasDurableUserMessage || agentStreamStatus === 'streaming')) return
@@ -2099,6 +2142,7 @@ export function ChatWorkspace({
       }
       appendAgentEvents(streamQueueRef.current.splice(0))
       setAgentStreamStatus('idle')
+      router.refresh()
     }
     return accepted
   }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, router, sessionId, workspaceView])
@@ -2174,8 +2218,9 @@ export function ChatWorkspace({
       return false
     }
     setCurrentSessionTitle(result.title)
+    router.refresh()
     return true
-  }, [currentSessionTitle, sessionId])
+  }, [currentSessionTitle, router, sessionId])
 
   useEffect(() => {
     if (composerResources.agent !== 'codex' || titleRequestedRef.current || manualTitleRef.current) return
@@ -2297,6 +2342,7 @@ export function ChatWorkspace({
     openTabs: openWorkspaceTabs,
     renameRequestVersion,
     sessionTitle: currentSessionTitle,
+    sessionStatus: agentStreamStatus,
     workspaceView,
   }
 
@@ -2306,7 +2352,7 @@ export function ChatWorkspace({
         <Sidebar
           activeChatId={sessionId}
           activeChatLabel={currentSessionTitle}
-          activeChatRuntime={activeChatFlow ? { speed: 1, state: activeChatFlow.state } : { speed: 0.25, state: 'solving' }}
+          activeChatRuntime={activeChatFlow ? { speed: 1, state: activeChatFlow.state, status: 'running' } : undefined}
           activeWorkspace={activeWorkspace}
           avatarUrl={avatarUrl}
           chatSessions={chatSessions}

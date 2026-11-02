@@ -4,7 +4,7 @@ import type { AgentPromptAttachment, OpenLinkAgentEvent } from '@/lib/agent-runt
 import { isTerminalErrorEvent, missingTerminalEventMessage } from '@/lib/agent-runtime/stream-integrity'
 import { projectMessageRevisions } from '@/lib/agent-runtime/message-revisions'
 import { parsePromptAttachments } from '@/lib/agent-runtime/prompt-attachments'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import {
   getInitialPromptRecoveryState,
@@ -16,6 +16,7 @@ import {
   persistPiSessionDelta,
 } from '@/lib/chat-session-persistence.server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { finishChatSessionRun, getChatSessionRun, heartbeatChatSessionRun, startChatSessionRun } from '@/lib/chat-session-runs.server'
 import { resolvePromptFileAttachments, type ResolvedPromptAttachment } from '@/lib/chat-session-uploads.server'
 import { getT } from '@/lib/i18n/server'
 import { cloudComputerHostRequest, cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
@@ -274,55 +275,26 @@ export async function POST(
       return Response.json({ error: 'SESSION_EVENTS_WRITE_FAILED' }, { status: 500 })
     }
   }
+  const runId = randomUUID()
+  try {
+    await startChatSessionRun(supabase, { runId, sessionId, userId: user.id, processId: leaseHolder })
+  } catch (error) {
+    console.error('OpenLink chat session run start failed', error)
+    await releaseLease()
+    return Response.json({ error: 'SESSION_RUN_WRITE_FAILED' }, { status: 500 })
+  }
+
   const upstreamAbortController = new AbortController()
-  // Keep the BFF↔Agent Host stream alive briefly after the browser disconnects
-  // so the worker can flush its Pi-native JSONL delta. Cancellation is sent to
-  // Agent Host through its authenticated control endpoint; aborting this fetch
-  // immediately would discard the final snapshot and make the next reopen
-  // appear to have lost the turn.
+  // The durable run owns the Agent request, not the browser tab. A detached
+  // page only stops receiving NDJSON; the BFF keeps consuming, persisting, and
+  // heartbeating the run until the Agent reports a terminal state. Explicit
+  // user interrupts go through /control and stop the worker separately.
   const upstreamSignal = upstreamAbortController.signal
   let clientDisconnected = false
   let upstreamReady = false
-  let cancellationSent = false
-  let drainTimer: ReturnType<typeof setTimeout> | null = null
-  const cancelAgentPrompt = () => {
-    if (cancellationSent) return
-    cancellationSent = true
-    const cancellation = cloudMode
-      ? cloudComputerHostRequest(`/v1/agent/sessions/${sessionId}/cancel`, {
-        userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id, sessionId,
-      }, AbortSignal.timeout(5_000))
-      : fetch(`${host!.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/cancel`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${host!.apiToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id, sessionId }),
-        signal: AbortSignal.timeout(5_000),
-        cache: 'no-store',
-      })
-    void cancellation.catch((error) => {
-      console.error('OpenLink Agent cancellation request failed', error)
-    })
-  }
-  const scheduleClientDrain = () => {
-    cancelAgentPrompt()
-    if (drainTimer !== null) return
-    // A canceled Pi prompt normally emits its native-session delta within a
-    // few seconds. Bound the drain so a wedged worker cannot hold a lease
-    // forever after the user leaves the page.
-    drainTimer = setTimeout(() => {
-      drainTimer = null
-      upstreamAbortController.abort()
-    }, 15_000)
-    drainTimer.unref?.()
-  }
+  let runFinished = false
   const onRequestAbort = () => {
     clientDisconnected = true
-    // Send cancellation even if Agent Host is still provisioning. Its close
-    // safety timer covers the small race before the active worker controller
-    // is registered.
-    cancelAgentPrompt()
-    if (!upstreamReady) upstreamAbortController.abort()
-    else scheduleClientDrain()
   }
   request.signal.addEventListener('abort', onRequestAbort, { once: true })
   if (request.signal.aborted) onRequestAbort()
@@ -357,6 +329,9 @@ export async function POST(
     if (leaseReleased || leaseRenewalFailure || leaseRenewing) return
     leaseRenewing = true
     try {
+      await heartbeatChatSessionRun(supabase, { runId, userId: user.id }).catch((error) => {
+        console.error('OpenLink chat session run heartbeat failed', error)
+      })
       const { data, error } = await supabase
         .schema('openlink')
         .rpc('renew_chat_session_lease', {
@@ -382,6 +357,18 @@ export async function POST(
     leaseHeartbeat = setInterval(() => { void renewLease() }, CHAT_SESSION_LEASE_HEARTBEAT_MS)
     leaseHeartbeat.unref?.()
   }
+  const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, event: OpenLinkAgentEvent) => {
+    if (clientDisconnected) return
+    try { controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)) } catch { clientDisconnected = true }
+  }
+  const markRunFinished = async (status: 'completed' | 'failed' | 'cancelled', errorCode?: string) => {
+    if (runFinished) return
+    runFinished = true
+    await finishChatSessionRun(supabase, { runId, userId: user.id, status, ...(errorCode ? { errorCode } : {}) }).catch((error) => {
+      console.error('OpenLink chat session run finish failed', error)
+    })
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       startLeaseHeartbeat()
@@ -402,6 +389,7 @@ export async function POST(
       // durable Pi entries yet.
       let pendingCompletedEvents: OpenLinkAgentEvent[] = []
       let terminalErrorSeen = false
+      let terminalCancellation = false
       const emitSyntheticError = (message: string) => {
         if (terminalErrorSeen) return
         const adapted = adapter.adapt({ type: 'extension_error', error: message })[0]
@@ -434,7 +422,7 @@ export async function POST(
       try {
         if (request.signal.aborted && !clientDisconnected) throw new Error('REQUEST_ABORTED')
         // Confirm durable receipt before any runtime provisioning starts.
-        controller.enqueue(encoder.encode(`${JSON.stringify(canonicalUserEvent)}\n`))
+        safeEnqueue(controller, canonicalUserEvent)
         // Sandbox readiness alone may take 180s, followed by native Worker
         // initialization. Keep the outer budget larger than those inner
         // bounds; explicit cancellation remains immediate at every stage.
@@ -488,7 +476,6 @@ export async function POST(
           throw new Error('AGENT_HOST_FAILED')
         }
         upstreamReady = true
-        if (clientDisconnected) scheduleClientDrain()
         reader = upstream.body.getReader()
         activeReader = reader
         while (true) {
@@ -505,11 +492,17 @@ export async function POST(
               if (piSessionDelta) {
                 queuePersistence(() => persistPiSessionDelta(supabase, user.id, sessionId, piSessionDelta))
               } else {
-                const events = adapter.adapt(frame)
+                const adapted = adapter.adapt(frame)
+                const cancellation = adapted.some((event) => event.type === 'error' && /cancel(?:l)?ed|aborted/i.test(event.message))
+                if (cancellation) terminalCancellation = true
+                // An explicit interrupt is a terminal state, not an Agent
+                // failure. Keep the cancellation out of the persisted error
+                // stream and finish the run as cancelled.
+                const events = adapted.filter((event) => !(event.type === 'error' && /cancel(?:l)?ed|aborted/i.test(event.message)))
                 if (events.some(isTerminalErrorEvent)) terminalErrorSeen = true
                 const completedEvents = events.filter((event) => event.type === 'session.completed')
                 const liveEvents = events.filter((event) => event.type !== 'session.completed')
-                for (const event of liveEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+                for (const event of liveEvents) safeEnqueue(controller, event)
                 queueChatEvents(liveEvents)
                 if (completedEvents.length) {
                   pendingCompletedEvents.push(...completedEvents)
@@ -525,7 +518,7 @@ export async function POST(
         // incompatible runtime image can otherwise emit only frames that its
         // selected adapter does not recognize; the HTTP stream then closes
         // cleanly and the UI appears to erase the turn after "thinking".
-        if (!pendingCompletedEvents.length && !terminalErrorSeen) {
+        if (!pendingCompletedEvents.length && !terminalErrorSeen && !terminalCancellation) {
           emitSyntheticError(missingTerminalEventMessage(clientDisconnected))
         }
         queueChatEvents(pendingCompletedEvents)
@@ -533,15 +526,19 @@ export async function POST(
         // The completion event is the durable boundary. Drain the final
         // native snapshot and all chat events before exposing it to the UI.
         await persistenceQueue
-        for (const event of pendingCompletedEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-        controller.close()
+        for (const event of pendingCompletedEvents) safeEnqueue(controller, event)
+        await markRunFinished(terminalCancellation ? 'cancelled' : 'completed', terminalCancellation ? 'USER_CANCELLED' : undefined)
+        try { controller.close() } catch {}
       } catch (error) {
         const safeCloudCodes = new Set(['CLOUD_CONNECTION_NOT_CONFIGURED', 'CLOUD_CONNECTION_INACTIVE', 'CLOUD_CONNECTION_REAUTH_REQUIRED', 'CLOUD_COMPUTER_UNAVAILABLE', 'CLOUD_COMPUTER_PERMISSION_REQUIRED', 'CLOUD_PROJECT_NOT_LINKED', 'CLOUD_PROJECT_NOT_ACCESSIBLE', 'CLOUD_SDK_HOST_NOT_CONFIGURED', 'COMPUTER_AGENT_CAPABILITY_REQUIRED', 'COMPUTER_AGENT_UNAVAILABLE'])
         const hostCode = error instanceof Error && error.message.startsWith('AGENT_HOST_')
           ? error.message.slice('AGENT_HOST_'.length)
           : cloudMode && error instanceof Error && safeCloudCodes.has(error.message) ? error.message : null
         if (!upstreamReady) console.error('OpenLink Agent preparation failed', { sessionId, code: hostCode ?? (upstreamSignal.aborted ? 'PREPARATION_TIMEOUT' : 'TRANSPORT_FAILED') })
-        if (!leaseRenewalFailure && !persistenceFailure && !terminalErrorSeen) {
+        const cancelledElsewhere = await getChatSessionRun(supabase, user.id, sessionId)
+          .then((run) => run?.status === 'cancelled')
+          .catch(() => false)
+        if (!runFinished && !leaseRenewalFailure && !persistenceFailure && !terminalErrorSeen && !cancelledElsewhere) {
           emitSyntheticError(clientDisconnected || (error instanceof Error && error.message === 'REQUEST_ABORTED')
             ? 'Agent request was canceled'
             : !upstreamReady
@@ -553,6 +550,11 @@ export async function POST(
               : 'Agent worker stream failed before reporting a terminal state')
         }
         flushChatEvents()
+        const canceled = error instanceof Error && /cancel/i.test(error.message)
+        await markRunFinished(
+          canceled ? 'cancelled' : 'failed',
+          leaseRenewalFailure ? 'SESSION_LEASE_LOST' : persistenceFailure ? 'CHAT_PERSISTENCE_FAILED' : canceled ? 'USER_CANCELLED' : 'AGENT_STREAM_FAILED',
+        )
         if (leaseRenewalFailure) {
           controller.error(leaseRenewalFailure)
         } else {
@@ -571,10 +573,6 @@ export async function POST(
       } finally {
         stopLeaseHeartbeat()
         request.signal.removeEventListener('abort', onRequestAbort)
-        if (drainTimer !== null) {
-          clearTimeout(drainTimer)
-          drainTimer = null
-        }
         // Do not hand the session to a new prompt while already-received Pi
         // or UI events are still waiting on PostgreSQL. This is especially
         // important when the browser cancels a stream after seeing the first
@@ -589,10 +587,8 @@ export async function POST(
       }
     },
     cancel() {
-      if (!clientDisconnected) {
-        clientDisconnected = true
-        scheduleClientDrain()
-      }
+      // Detaching the consumer must not cancel the durable run.
+      clientDisconnected = true
       stopLeaseHeartbeat()
     },
   })

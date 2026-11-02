@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 import { forkPersistedChatEvents, parsePiSessionDelta, persistPiSessionDelta } from '@/lib/chat-session-persistence.server'
 import { cloudComputerHostRequest } from '@/lib/platform-cloud-host.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
+import { cancelRunningChatSessionRun } from '@/lib/chat-session-runs.server'
 
 export const runtime = 'nodejs'
 
@@ -33,6 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       const payload = await response.json().catch(() => null)
       const safeErrors = new Set(['SESSION_BUSY', 'AGENT_SESSION_NOT_ACTIVE', 'CONTROL_UNSUPPORTED', 'AGENT_CONTROL_UNAVAILABLE', 'AGENT_CANCEL_UNAVAILABLE'])
       if (!response.ok) return Response.json({ error: safeErrors.has(payload?.error) ? payload.error : 'AGENT_CONTROL_FAILED' }, { status: response.status })
+      if (body.action === 'interrupt') await cancelRunningChatSessionRun(supabase, { userId: user.id, sessionId }).catch(() => undefined)
       return Response.json(payload, { headers: { 'Cache-Control': 'no-store' } })
     } catch {
       return Response.json({ error: 'AGENT_CONTROL_UNAVAILABLE' }, { status: 502 })
@@ -57,6 +59,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       if (forkedSession) await deleteChatSession(supabase, user.id, forkedSession.id).catch(() => undefined)
       return Response.json({ error: 'AGENT_CONTROL_FAILED' }, { status: response.status })
     }
+    if (body.action === 'interrupt') await cancelRunningChatSessionRun(supabase, { userId: user.id, sessionId }).catch(() => undefined)
     if (session.agent === 'pi' && payload?.result?.nativeSession) {
       const delta = parsePiSessionDelta(payload.result.nativeSession)
       if (delta) await persistPiSessionDelta(supabase, user.id, sessionId, delta)

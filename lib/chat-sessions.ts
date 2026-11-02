@@ -3,6 +3,7 @@ import 'server-only'
 import { randomBytes } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
+import { effectiveChatSessionRunStatus, listLatestChatSessionRuns } from '@/lib/chat-session-runs.server'
 import { getT } from '@/lib/i18n/server'
 import type { Translator } from '@/lib/i18n/messages'
 import { ensureDraftProject, getProject } from '@/lib/projects'
@@ -89,7 +90,7 @@ export async function listChatSessions(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, project_id, title, initial_prompt, agent, updated_at')
+    .select('id, user_id, project_id, title, initial_prompt, agent, labels, updated_at')
     .eq('user_id', userId)
     .eq('workspace_id', workspaceId)
     .order('updated_at', { ascending: false })
@@ -103,6 +104,7 @@ export async function listChatSessions(
     title: string
     initial_prompt: string
     agent?: AgentKind
+    labels?: string[] | null
     updated_at: string
   }>
   const projectIds = [...new Set(sessions.map((session) => session.project_id).filter(Boolean))]
@@ -121,8 +123,10 @@ export async function listChatSessions(
     }
   }
 
+  const runs = await listLatestChatSessionRuns(supabase, userId, sessions.map((session) => session.id))
   const cloudMode = getRuntimeMode() === 'cloud'
   return sessions.map((session) => {
+    const run = runs.get(session.id) ?? null
     const project = projectById.get(session.project_id)
     return {
       id: session.id,
@@ -137,6 +141,10 @@ export async function listChatSessions(
       agent: cloudMode
         ? normalizedAgent(session.agent, CLOUD_AGENT_KINDS, 'pi')
         : normalizedAgent(session.agent, LOCAL_AGENT_KINDS, 'codex'),
+      labels: session.labels ?? [],
+      runStatus: effectiveChatSessionRunStatus(run),
+      ...(run?.processId ? { runProcessId: run.processId } : {}),
+      ...(run?.startedAt ? { runStartedAt: run.startedAt } : {}),
     }
   })
 }
