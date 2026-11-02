@@ -72,6 +72,7 @@ desktop_env=(
   HOME=/home/openlink
   XDG_RUNTIME_DIR=/run/user/1000
   DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus"
+  AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus
   XDG_SESSION_TYPE=wayland
   XDG_CURRENT_DESKTOP=ubuntu:GNOME
   XDG_SESSION_DESKTOP=ubuntu
@@ -222,6 +223,21 @@ if [[ "$session_ready" != true ]]; then
   exit 1
 fi
 
+# Expose agent-desktop to session containers through a constrained socket.
+# The real binary must run in this host PID namespace; the session container
+# only receives a CLI client and the socket.
+desktop_tool_socket=/run/user/1000/openlink-desktop-tool.sock
+rm -f "$desktop_tool_socket"
+start_background desktop-tool runuser -u openlink -- env "${desktop_env[@]}" \
+  WAYLAND_DISPLAY=wayland-0 \
+  OPENLINK_DESKTOP_TOOL_SOCKET="$desktop_tool_socket" \
+  /usr/local/bin/node /opt/openlink/desktop/desktop-tool-bridge.mjs
+if ! wait_for_file "$desktop_tool_socket"; then
+  echo "T2 agent-desktop bridge did not start" >&2
+  tail -n 80 /tmp/openlink-desktop-desktop-tool.log >&2 || true
+  exit 1
+fi
+
 # Configure the RDP server for the headless session.
 runuser -u openlink -- env "${desktop_env[@]}" grdctl rdp set-port 3389 >/dev/null
 runuser -u openlink -- env "${desktop_env[@]}" grdctl rdp set-auth-methods credentials >/dev/null
@@ -266,9 +282,11 @@ done
 
 websockify_pid="$(cat /tmp/openlink-desktop-websockify.pid)"
 rdp_pid="$(cat /tmp/openlink-desktop-rdp-bridge.pid)"
+tool_pid="$(cat /tmp/openlink-desktop-desktop-tool.pid)"
 while pgrep -u openlink -x gnome-shell >/dev/null 2>&1 \
   && kill -0 "$rdp_pid" 2>/dev/null \
-  && kill -0 "$websockify_pid" 2>/dev/null; do
+  && kill -0 "$websockify_pid" 2>/dev/null \
+  && kill -0 "$tool_pid" 2>/dev/null; do
   # The RDP server and the GNOME session are managed by systemd; require their
   # units to stay active while the bridge processes are alive.
   sleep 1

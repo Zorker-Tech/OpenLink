@@ -86,9 +86,12 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
   desktop session.
 - Chrome is the default browser and runs with the Wayland ozone backend; the
   image launcher passes `--ozone-platform=wayland` because Xwayland is off.
-- agent-desktop 1.0.2 is installed from its pinned Apache-2.0 release archive
-  and uses the session's AT-SPI bus. Its source is vendored at
-  `services/agent-desktop` with full upstream history.
+- agent-desktop 1.0.2 is installed from its pinned Apache-2.0 release archive.
+  The real binary runs in the Project VM host's PID namespace and exposes a
+  constrained Unix socket. Agent session containers receive only a CLI shim
+  and the socket, then discover the tool through the injected
+  `agent-desktop` skill. Its source is vendored at `services/agent-desktop`
+  with full upstream history.
 - The bundled wallpaper set lives under
   `/usr/share/backgrounds/astreusn`; `astreusn.xml` registers the light/dark
   pair with the GNOME background picker.
