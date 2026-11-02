@@ -99,7 +99,7 @@ test('matches resident Supabase containers by immutable image id instead of cano
   assert.equal(containerUsesImage({ ImageName: 'docker.io/supabase/postgres:17.6.1.136' }, `sha256:${id}`), false)
 })
 
-test('builds fixed Podman argv with loopback publications and mapped durable paths', () => {
+test('builds fixed Podman argv with VM-reachable publications and mapped durable paths', () => {
   const environment = { TOKEN: 'secret' }
   const common = {
     projectId,
@@ -122,7 +122,7 @@ test('builds fixed Podman argv with loopback publications and mapped durable pat
   }, environment, common)
   assert.deepEqual(args.slice(0, 5), ['create', '--name', 'openlink-project-supabase-api-gw', '--network', 'openlink-project-supabase'])
   assert.ok(args.includes('TOKEN=secret'))
-  assert.ok(args.includes('127.0.0.1:54321:8000/tcp'))
+  assert.ok(args.includes('0.0.0.0:54321:8000/tcp'))
   assert.ok(args.includes('/var/lib/openlink/project-supabase/configuration/volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro'))
   assert.ok(args.includes('io.openlink.project-supabase=true'))
   assert.ok(args.includes('label=disable'))
