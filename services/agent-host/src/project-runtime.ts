@@ -49,6 +49,13 @@ export interface ProjectSupabaseStudioProxyResponse {
 export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
 
 /**
+ * Bump whenever the resident Project runtime container configuration changes.
+ * Reattach treats an older descriptor as stale so the provisioning path
+ * rewrites the OpenSandbox config and reconciles its containers.
+ */
+const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-02-desktop-automation-v1'
+
+/**
  * Resolve the architecture of a persisted runtime. Older descriptors predate
  * the explicit field: qemu-kvm belonged to T1 and podman-machine to E1. T2 also
  * uses qemu-kvm, so new descriptors always persist `architecture`.
@@ -62,6 +69,8 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   status: 'ready'
   /** Release architecture that owns this durable Project VM. */
   architecture?: ProjectRuntimeArchitecture
+  /** Revision of the resident runtime container configuration. */
+  runtimeConfigRevision?: string
   /** Guest service ports reserved for this project for the lifetime of its VM. */
   servicePorts: ProjectRuntimeServicePorts
   opensandboxEndpoint: string
@@ -469,6 +478,11 @@ export class ProjectRuntimeManager {
     return this.withLifecycleLock(projectId, async () => {
       if (this.closing) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is shutting down', { retryable: true })
       let existing = this.active.get(projectId)
+      if (existing && existing.runtimeConfigRevision !== PROJECT_RUNTIME_CONFIG_REVISION) {
+        this.active.delete(projectId)
+        await this.closeForwards(projectId)
+        existing = undefined
+      }
       if (existing) {
         existing = await this.reconcileExistingRuntime(existing)
         this.active.set(projectId, existing)
@@ -936,11 +950,13 @@ export class ProjectRuntimeManager {
       let status: unknown
       let backend: unknown
       let architecture: unknown
+      let runtimeConfigRevision: unknown
       try {
         const persisted = JSON.parse(await readFile(resolve(projectsRoot, projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
         status = persisted.status
         backend = persisted.backend
         architecture = persisted.architecture
+        runtimeConfigRevision = persisted.runtimeConfigRevision
       } catch {
         continue
       }
@@ -960,7 +976,14 @@ export class ProjectRuntimeManager {
       // imports and disrupt unrelated interactive projects.
       if (status !== 'ready') continue
       try {
-        await this.ensure(projectId)
+        // A resident container configuration change must reconcile existing
+        // services, not take the fast reattach path with the old OpenSandbox
+        // config. Provisioning is idempotent and keeps the same VM/disk.
+        if (runtimeConfigRevision !== PROJECT_RUNTIME_CONFIG_REVISION) {
+          await this.provision(projectId, 'thin')
+        } else {
+          await this.ensure(projectId)
+        }
       } catch (error) {
         console.error(`OpenLink persisted Project VM restore failed for ${projectId}: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -1586,6 +1609,7 @@ export class ProjectRuntimeManager {
       const descriptor: ProjectRuntimeDescriptor = {
         ...vm,
         architecture: this.architecture,
+        runtimeConfigRevision: PROJECT_RUNTIME_CONFIG_REVISION,
         status: 'ready',
         servicePorts: ports,
         opensandboxEndpoint: `http://${this.publicHost}:${endpointPorts.opensandbox}`,
@@ -1882,6 +1906,7 @@ export class ProjectRuntimeManager {
       machineName: descriptor.machineName,
       workspacePath: descriptor.workspacePath,
       architecture: descriptor.architecture ?? this.architecture,
+      runtimeConfigRevision: descriptor.runtimeConfigRevision ?? PROJECT_RUNTIME_CONFIG_REVISION,
       backend: descriptor.backend,
       diskMode: descriptor.diskMode,
       status,
@@ -2441,8 +2466,11 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     // Recover from a host/process interruption during an earlier import.
     // /tmp is a small tmpfs on Project VMs and can be smaller than one of the
     // worker archives; stage large files on the disk-backed /var/tmp instead.
-    await runInMachine(input.machineName, 'find', ['/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete'])
-    await runInMachine(input.machineName, 'find', ['/var/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete'])
+    // Image transfer temp files are disposable. /tmp can also contain
+    // root-unreadable desktop helper files (for example FreeRDP clipboard
+    // entries); a failed sweep must not abort Project runtime provisioning.
+    await runInMachine(input.machineName, 'find', ['/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete']).catch(() => undefined)
+    await runInMachine(input.machineName, 'find', ['/var/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete']).catch(() => undefined)
     const imageNames = [input.opensandboxImage, input.browserHostImage, input.execdImage, input.egressImage, input.agentWorkerImage, input.agentRpcWorkerImage, input.codeServerImage]
     for (const image of imageNames) {
       const archive = input.imageArchives?.[image]
@@ -2571,7 +2599,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       `execd_image = "${input.execdImage}"`,
       '',
       '[storage]',
-      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}"]`,
+      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}", "/usr/local/bin/openlink-agent-desktop", "/run/user/1000/openlink-desktop-tool.sock"]`,
       'volume_default_size = "1Gi"',
       '',
       '[store]',
