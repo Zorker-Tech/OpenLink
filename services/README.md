@@ -115,10 +115,12 @@ its full upstream history. It is the Apache-2.0 Linux CLI that exposes a
 desktop application's AT-SPI accessibility tree as JSON and performs element
 actions without pixel matching.
 
-The T2 Project VM base installs the pinned `1.0.2` x86_64 release at
-`/usr/local/bin/agent-desktop` with its clipboard helper. It runs inside the
-project's Ubuntu GNOME session and uses the same AT-SPI bus as the desktop; it
-is not imported into the Next.js application or the browser runtime.
+The T1/T2 Project VM bases install the pinned `1.0.2` x86_64 release at
+`/usr/local/bin/agent-desktop` with its clipboard helper. The real binary runs
+on the Project VM host because its PID namespace owns the desktop processes.
+A constrained Unix-socket bridge is exposed to session containers, which
+receive only a small CLI shim plus the socket. Agent Host writes the
+`agent-desktop` skill into the Pi/Codex skill roots for every T1/T2 session.
 
 ## Browser Host
 
