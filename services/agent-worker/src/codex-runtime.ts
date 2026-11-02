@@ -45,6 +45,8 @@ export interface CodexRuntimeConfig {
   supabaseMcpUrl?: string
   supabaseMcpToken?: string
   browserMcpUrl?: string
+  desktopMcpUrl?: string
+  developerInstructions?: string
   turnIdleTimeoutMs?: number
 }
 
@@ -358,9 +360,11 @@ export class CodexAppServerRuntime {
       imageGeneration: false,
       // This is the same per-thread configuration passed to thread/start;
       // only expose display-safe identifiers, never URLs or bearer tokens.
-      mcpServers: this.config.supabaseMcpUrl && this.config.supabaseMcpToken
-        ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }]
-        : [],
+      mcpServers: [
+        ...(this.config.supabaseMcpUrl && this.config.supabaseMcpToken ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] : []),
+        ...(this.config.browserMcpUrl ? [{ id: 'openlink_browser', name: 'OpenLink Browser' }] : []),
+        ...(this.config.desktopMcpUrl ? [{ id: 'openlink_desktop', name: 'OpenLink Desktop' }] : []),
+      ],
       commands: capabilities.flatMap((command) => command ? [command] : []),
     }
   }
@@ -865,6 +869,17 @@ export class CodexAppServerRuntime {
         },
       }
     }
+
+    if (this.config.desktopMcpUrl) {
+      config.mcp_servers = {
+        ...asRecord(config.mcp_servers),
+        openlink_desktop: {
+          url: this.config.desktopMcpUrl,
+          bearer_token_env_var: 'OPENLINK_AGENT_WORKER_TOKEN',
+          default_tools_approval_mode: 'approve',
+        },
+      }
+    }
     return Object.keys(config).length ? config : undefined
   }
 
@@ -927,6 +942,7 @@ export class CodexAppServerRuntime {
           sandbox: this.sandboxPolicyFor(), approvalPolicy: this.approvalPolicyFor(),
           ...(this.modelName() ? { model: this.modelName() } : {}),
           modelProvider: this.providerKey(),
+          ...(this.config.developerInstructions ? { developerInstructions: this.config.developerInstructions } : {}),
           ...(this.threadConfig() ? { config: this.threadConfig() } : {}),
         }))
         const resumedId = stringValue(asRecord(result?.thread)?.id) || persisted
@@ -944,6 +960,7 @@ export class CodexAppServerRuntime {
       approvalPolicy: this.approvalPolicyFor(),
       ...(this.modelName() ? { model: this.modelName() } : {}),
       modelProvider: this.providerKey(),
+      ...(this.config.developerInstructions ? { developerInstructions: this.config.developerInstructions } : {}),
       ...(this.threadConfig() ? { config: this.threadConfig() } : {}),
     }) as Record<string, unknown> | undefined
     const thread = asRecord(result?.thread)

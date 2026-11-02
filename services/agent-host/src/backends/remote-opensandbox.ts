@@ -12,6 +12,7 @@ import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-
 import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
 import { agentToolsAvailable, agentToolRegistryEnvironment, agentToolRegistryVolume, agentToolsSkillDirectories, agentToolsSkillFiles } from '../agent-tools.js'
+import { runtimePolicyEnvironment } from '../runtime-policy.js'
 
 export interface RemoteOpenSandboxRpcConfig {
   domain: string
@@ -159,7 +160,9 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_AGENT_SESSION_ID: sessionId,
         OPENLINK_DESKTOP_MODE: desktopMode,
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
+        ...(desktopAutomation ? { OPENLINK_DESKTOP_EXTENSION_PATH: '/opt/openlink/agent-rpc-worker/extensions/openlink-desktop.ts' } : {}),
         ...(agentTools ? agentToolRegistryEnvironment() : {}),
+        ...(projectRuntime ? runtimePolicyEnvironment(projectRuntime) : {}),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',

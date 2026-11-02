@@ -21,6 +21,8 @@ interface Config {
   browserSessionId?: string
   browserControlToken?: string
   browserExtensionPath?: string
+  desktopExtensionPath?: string
+  runtimePolicy?: string
 }
 
 interface AgentExtensionUiResponse {
@@ -54,6 +56,8 @@ function loadConfig(): Config {
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
+    desktopExtensionPath: process.env.OPENLINK_DESKTOP_EXTENSION_PATH,
+    runtimePolicy: process.env.OPENLINK_AGENT_RUNTIME_POLICY?.trim() || undefined,
   }
 }
 
@@ -251,6 +255,8 @@ class RpcRuntime {
       throw new Error('OpenLink browser capability configuration is incomplete')
     }
     if (this.config.browserExtensionPath) args.push('--extension', this.config.browserExtensionPath)
+    if (this.config.desktopExtensionPath) args.push('--extension', this.config.desktopExtensionPath)
+    if (this.config.runtimePolicy) args.push('--append-system-prompt', this.config.runtimePolicy)
     const child = spawn(process.execPath, args, {
       cwd: this.config.workspaceRoot,
       env: { ...process.env, PI_CODING_AGENT_DIR: configDir },

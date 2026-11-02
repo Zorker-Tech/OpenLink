@@ -24,6 +24,10 @@ constraints.
    version, T1-Crab/T2-Orion release names, and compatibility-mode versioning.
 9. [`09-agent-tool-registry.md`](./09-agent-tool-registry.md) — project-scoped
    CLI tool registration, sandbox exposure and discovery.
+10. [`10-agent-runtime-policy.md`](./10-agent-runtime-policy.md) — capability
+    policy injection, native desktop tools and Pi/Codex parity.
+11. [`11-chat-session-runs.md`](./11-chat-session-runs.md) — durable run
+    status, background execution and session-bound UI state.
 
 ## Scope
 
