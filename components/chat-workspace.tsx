@@ -765,7 +765,7 @@ function BrowserNavigationBar({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[280px] rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
           <DropdownMenuItem className="h-9 cursor-pointer gap-2 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" disabled={!selectedGitRef} onClick={() => onSelectGitVersion(null)}>
-            <span className="min-w-0 flex-1 truncate">Latest</span>
+            <span className="min-w-0 flex-1 truncate">{t('最新')}</span>
             {!selectedGitRef && <span className="text-[11px] text-[var(--app-muted)]">{t('当前')}</span>}
           </DropdownMenuItem>
           {gitVersionsLoading && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">{t('正在读取 Git 版本…')}</div>}
@@ -1266,10 +1266,10 @@ export function ChatComposer({
     {statusPanelOpen && <section aria-label={t('会话状态')} className="absolute bottom-[calc(100%+8px)] left-0 z-[90] w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-3 text-xs text-[var(--app-foreground)] shadow-[0_12px_48px_var(--app-shadow)]">
       <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-medium">{t("会话状态")}</h2><button aria-label={t("关闭会话状态")} className="rounded-md p-1 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={() => setStatusPanelOpen(false)} type="button"><X aria-hidden className="size-3.5" /></button></div>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
-        <dt className="text-[var(--app-muted)]">Chat ID</dt><dd className="truncate font-mono" title={sessionId}>{sessionId}</dd>
+        <dt className="text-[var(--app-muted)]">{t('会话 ID')}</dt><dd className="truncate font-mono" title={sessionId}>{sessionId}</dd>
         <dt className="text-[var(--app-muted)]">Agent</dt><dd>{composerResources.agent === 'codex' ? 'Codex' : composerResources.agent === 'omp' ? 'Oh My Pi' : 'Pi'}</dd>
         <dt className="text-[var(--app-muted)]">{t('运行状态')}</dt><dd>{sessionPaused ? t('已暂停') : status === 'streaming' ? t('正在运行') : controlReady ? t('空闲') : t('正在连接')}</dd>
-        <dt className="text-[var(--app-muted)]">{t('模式')}</dt><dd>{sessionMode === 'plan' ? 'Plan' : 'Default'}</dd>
+        <dt className="text-[var(--app-muted)]">{t('模式')}</dt><dd>{sessionMode === 'plan' ? t('计划') : t('默认')}</dd>
         <dt className="text-[var(--app-muted)]">{t("模型")}</dt><dd className="truncate" title={selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : undefined}>{selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : t('未配置')}</dd>
         <dt className="text-[var(--app-muted)]">{t('访问权限')}</dt><dd>{accessMode}</dd>
         <dt className="text-[var(--app-muted)]">{t('上下文')}</dt><dd>{context?.usage.contextTokens == null ? t('尚无原生用量报告') : `${context.usage.contextTokens.toLocaleString()}${context.contextWindow == null ? ' tokens' : ` / ${context.contextWindow.toLocaleString()} tokens`}`}</dd>
@@ -1286,7 +1286,7 @@ export function ChatComposer({
       <div className="flex justify-end gap-3 text-xs"><button type="button" disabled={controlPending} onClick={() => setGoalEditorOpen(false)}>{t("取消")}</button><button type="submit" disabled={controlPending || !goalDraft.trim()}>{t('设置目标')}</button></div>
     </form>}
     {sessionPaused && <p role="status" className="px-1 text-xs text-[var(--app-muted)]">{t('会话已暂停 · /resume 恢复')}</p>}
-    {sessionMode === "plan" && <div className="px-1 text-xs" role="status"><button aria-label={t("退出 Plan 模式")} className="rounded-md px-1.5 py-1 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-50" disabled={controlPending || status === "streaming"} onClick={() => { void runControl("default") }} title={t("退出 Plan 模式")} type="button">Plan ×</button></div>}
+    {sessionMode === "plan" && <div className="px-1 text-xs" role="status"><button aria-label={t("退出 Plan 模式")} className="rounded-md px-1.5 py-1 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-50" disabled={controlPending || status === "streaming"} onClick={() => { void runControl("default") }} title={t("退出 Plan 模式")} type="button">{t('计划')} ×</button></div>}
     {goalObjective && <div className="flex min-w-0 items-center gap-2 px-1 text-xs" role="status"><button aria-label={t("清除 Goal")} className="min-w-0 truncate rounded-md px-1.5 py-1 text-left text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-50" disabled={controlPending || status === "streaming"} onClick={() => { void runControl("goal-clear") }} title={t("清除 Goal：{objective}", { objective: goalObjective })} type="button">Goal{goalStatus ? ` (${goalStatus})` : ""} ×</button><span className="min-w-0 flex-1 truncate" title={goalObjective}>{goalObjective}</span>{goalTokens !== null && <span className="shrink-0 tabular-nums text-[var(--app-muted)]">{goalTokens} tokens</span>}</div>}
     {controlError && <p role="alert" className="px-1 text-xs text-[var(--app-danger)]">{controlError}{t('；未确认操作成功，输入已保留。')}</p>}
     {queuedFollowUps.length > 0 && <div aria-label={t('消息队列')} className="relative z-0 mx-3 -mb-3 rounded-t-xl border border-b-0 border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 pb-4 pt-2 text-xs text-[var(--app-muted)]">

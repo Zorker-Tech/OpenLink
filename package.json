@@ -31,6 +31,7 @@
     "runtime:ubuntu-vm-image": "node scripts/build-ubuntu-project-vm-base.mjs",
     "runtime:switch": "npm --prefix services/agent-host run build && node scripts/switch-project-architecture.mjs",
     "runtime:architecture:test": "node --test scripts/test/architecture-mode.test.mjs scripts/test/release-version.test.mjs",
+    "i18n:test": "node --test scripts/test/i18n-catalog.test.mjs",
     "runtime:project-supabase:sync": "node scripts/sync-project-supabase.mjs",
     "runtime:project-supabase:images": "node scripts/run-with-env.mjs OPENLINK_BUILD_ARTIFACTS=1 -- node scripts/build-project-supabase-images.mjs",
     "runtime:project-supabase:keygen": "node scripts/generate-project-supabase-release-key.mjs",

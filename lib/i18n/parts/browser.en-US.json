@@ -1,0 +1,16 @@
+{
+  "Cloud Computer 当前未运行。发送消息启动项目环境后再刷新预览。": "Cloud Computer is not running. Send a message to start the project environment, then refresh the preview.",
+  "Cloud 项目预览": "Cloud project preview",
+  "Cloud 预览暂时无法连接，请稍后重试。": "The Cloud preview cannot connect right now. Please try again later.",
+  "Cloud 预览隧道尚未配置。": "The Cloud preview tunnel is not configured yet.",
+  "OpenLink 桌面环境": "OpenLink desktop environment",
+  "{name} 项目预览": "{name} project preview",
+  "未检测到正在运行的网站服务。启动项目 Web 服务后可自动预览。": "No running web service detected. Start the project web service to enable automatic preview.",
+  "桌面环境未就绪": "Desktop environment not ready",
+  "正在启动桌面环境": "Starting desktop environment",
+  "正在检测活跃网站端口": "Detecting active web ports",
+  "正在检测项目网站服务…": "Detecting the project web service…",
+  "该网站服务已停止，请刷新检测活跃端口。": "This web service has stopped. Refresh to detect active ports.",
+  "重新检测": "Detect again",
+  "项目预览暂不可用": "Project preview unavailable"
+}
