@@ -92,6 +92,9 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
   and the socket, then discover the tool through the injected
   `agent-desktop` skill. Its source is vendored at `services/agent-desktop`
   with full upstream history.
+- CLI tools are exposed through the project tool registry described by
+  [standard 09](../../standards/09-agent-tool-registry.md); the registry is
+  mounted read-only at `/openlink/agent-tools`.
 - The bundled wallpaper set lives under
   `/usr/share/backgrounds/astreusn`; `astreusn.xml` registers the light/dark
   pair with the GNOME background picker.

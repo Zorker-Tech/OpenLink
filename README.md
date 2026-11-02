@@ -147,6 +147,11 @@ for the data and recovery contract.
 Both Ubuntu desktop bases (T1 and T2) bundle Google Chrome 156, agent-desktop
 1.0.2 and the Astreusn light/dark wallpaper set. The build fails if any of
 those first-run dependencies is missing or fails its version check.
+
+Project owners can register additional CLI tools with
+`sudo openlink-agent-tool add <name> <path> "<description>" "<usage>"`. The
+project-scoped registry is mounted read-only at `/openlink/agent-tools` in
+every T1/T2/E1 session; see [standard 09](./docs/architecture/standards/09-agent-tool-registry.md).
 - Runtime image archives: `pnpm runtime:images`.
 - ZOKERBASE and Zero images: `pnpm runtime:zokerbase:images`,
   `pnpm runtime:zero:images`.

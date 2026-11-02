@@ -119,6 +119,8 @@ worker's `/desktop/start`.
   constrained Unix socket. Session containers receive only a CLI shim and the
   socket; the real binary never runs inside the sandbox. Its source is vendored
   at `services/agent-desktop`.
+- User-installed CLI tools live in `/var/lib/openlink/agent-tools` and are
+  exposed read-only to sessions; see [standard 09](../../standards/09-agent-tool-registry.md).
 - The per-project SSH key never enters the guest, a session workload, the
   browser or logs.
 - The build removes the build key, cloud-init seed state, machine-id and SSH
