@@ -148,22 +148,41 @@ async function downloadCloudImage() {
   await mkdir(cacheRoot, { recursive: true, mode: 0o700 })
   let expected
   const checksumsUrl = cloudImageUrl.replace(/[^/]+$/, 'SHA256SUMS')
-  try {
-    const response = await fetch(checksumsUrl, { signal: AbortSignal.timeout(60_000) })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const sums = await response.text()
-    const line = sums.split('\n').find((item) => {
-      const value = item.trim()
-      return value.endsWith(`*${basename(cloudImageUrl)}`) || value.endsWith(` ${basename(cloudImageUrl)}`)
-    })
-    expected = line?.trim().split(/\s+/)[0]
-  } catch (error) {
-    throw new Error(`Ubuntu cloud image checksum manifest is unavailable: ${error instanceof Error ? error.message : String(error)}`)
+  let checksumError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(checksumsUrl, { signal: AbortSignal.timeout(30_000) })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const sums = await response.text()
+      const line = sums.split('\n').find((item) => {
+        const value = item.trim()
+        return value.endsWith(`*${basename(cloudImageUrl)}`) || value.endsWith(` ${basename(cloudImageUrl)}`)
+      })
+      expected = line?.trim().split(/\s+/)[0]
+      checksumError = undefined
+      break
+    } catch (error) {
+      checksumError = error
+      if (attempt < 3) await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 2_000))
+    }
   }
-  if (!/^[a-f0-9]{64}$/i.test(expected ?? '')) throw new Error('Ubuntu cloud image checksum manifest is invalid')
+  const checksumSidecar = `${cloudImage}.sha256`
+  if (!/^[a-f0-9]{64}$/i.test(expected ?? '') && existsSync(checksumSidecar)) {
+    const cached = (await readFile(checksumSidecar, 'utf8')).trim()
+    if (/^[a-f0-9]{64}$/i.test(cached)) {
+      expected = cached
+      log('using the cached Ubuntu cloud image checksum after a manifest fetch failure')
+    }
+  }
+  if (!/^[a-f0-9]{64}$/i.test(expected ?? '')) {
+    throw new Error(`Ubuntu cloud image checksum manifest is unavailable: ${checksumError instanceof Error ? checksumError.message : String(checksumError)}`)
+  }
   if (existsSync(cloudImage)) {
     const actual = await sha256(cloudImage)
-    if (actual === expected) return { path: cloudImage, sha256: actual }
+    if (actual === expected) {
+      await writeFile(checksumSidecar, `${actual}\n`, { mode: 0o600 })
+      return { path: cloudImage, sha256: actual }
+    }
     log('cached cloud image checksum differs; downloading a fresh copy')
   }
   const partial = `${cloudImage}.partial-${process.pid}`
@@ -186,6 +205,7 @@ async function downloadCloudImage() {
   }
   await rename(partial, cloudImage)
   await chmod(cloudImage, 0o600)
+  await writeFile(`${cloudImage}.sha256`, `${actual}\n`, { mode: 0o600 })
   return { path: cloudImage, sha256: actual }
 }
 
