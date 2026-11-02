@@ -362,6 +362,23 @@ Prompt=never
 OPENLINK_RELEASE_UPGRADES
 rm -f /rootfs/etc/xdg/autostart/update-notifier.desktop
 
+# T2 runs a Wayland-only GNOME session. The worker userspace also carries the
+# E1 Xfce/X11 tools; hide their launchers so the Ubuntu application grid does
+# not offer applications that cannot run under --no-x11.
+for desktop_file in \
+  /rootfs/usr/share/applications/debian-xterm.desktop \
+  /rootfs/usr/share/applications/debian-uxterm.desktop \
+  /rootfs/usr/share/applications/thunar*.desktop \
+  /rootfs/usr/share/applications/xfce*.desktop \
+  /rootfs/usr/share/applications/xfreerdp.desktop \
+  /rootfs/usr/share/applications/x11vnc.desktop; do
+  if [ -f "$desktop_file" ]; then
+    # Desktop files may contain action groups after [Desktop Entry]. Mark the
+    # main entry, not the last action group, as hidden.
+    sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$desktop_file"
+  fi
+done
+
 mkdir -p /rootfs/etc/systemd/network
 cat >/rootfs/etc/systemd/network/20-wired.network <<'OPENLINK_NETWORK'
 [Match]
