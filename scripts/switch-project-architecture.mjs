@@ -32,6 +32,7 @@ const target = (option('--to') || '').trim().toLowerCase()
 const requestedSource = (option('--from') || '').trim().toLowerCase() || undefined
 const dryRun = args.includes('--dry-run')
 const allowRunningApp = args.includes('--allow-running-app')
+const recreateTarget = args.includes('--recreate-target')
 const rootful = process.env.OPENLINK_PROJECT_VM_ROOTFUL !== '0'
 const architectureBackends = new Map([['t1', 'qemu-kvm'], ['t2', 'qemu-kvm'], ['e1', 'podman-machine']])
 
@@ -270,6 +271,40 @@ async function clearTargetRuntimeState(stateRoot) {
   }
 }
 
+async function moveTargetVmStateAside(targetRuntime, targetStateRoot, timestamp) {
+  if (targetRuntime.architecture !== 't1' && targetRuntime.architecture !== 't2') {
+    fail('--recreate-target is supported only for T1/T2 targets')
+  }
+  const machineName = targetRuntime.vmManager.machineName(projectId)
+  await targetRuntime.machineDriver.stopMachine(machineName).catch(() => undefined)
+  const replacedRoot = resolve(targetStateRoot, 'replaced', `${timestamp}-${projectId}`)
+  const vmState = resolve(targetStateRoot, 'ubuntu-vms', machineName)
+  const projectState = resolve(targetStateRoot, 'projects', projectId)
+  const moved = []
+  for (const source of [vmState, projectState]) {
+    const metadata = await stat(source).catch(() => undefined)
+    if (!metadata) continue
+    await mkdir(replacedRoot, { recursive: true, mode: 0o700 })
+    const destination = resolve(replacedRoot, source === vmState ? 'vm' : 'project')
+    await rename(source, destination)
+    moved.push({ source, destination })
+  }
+  return { root: moved.length ? replacedRoot : null, moved }
+}
+
+async function assertTargetBase(targetRuntime, targetStateRoot) {
+  if (targetRuntime.architecture !== 't1' && targetRuntime.architecture !== 't2') return
+  const baseRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT
+    || resolve(root, `.openlink-runtime/project-vm-base/${targetRuntime.architecture === 't2' ? 't2' : 'ubuntu'}`))
+  const manifest = await readJson(resolve(baseRoot, 'manifest.json'))
+  if (!manifest.baseFingerprint) fail(`${targetRuntime.architecture.toUpperCase()} base manifest has no fingerprint`)
+  const machineName = targetRuntime.vmManager.machineName(projectId)
+  const record = await readJson(resolve(targetStateRoot, 'ubuntu-vms', machineName, 'vm.json'))
+  if (record.baseFingerprint !== manifest.baseFingerprint) {
+    fail(`${targetRuntime.architecture.toUpperCase()} target uses a stale base (${record.baseFingerprint}); current base is ${manifest.baseFingerprint}; rerun with --recreate-target to rebuild the target from the current base`)
+  }
+}
+
 async function verifyRuntime(runtime, descriptor) {
   const checks = [
     ['OpenSandbox', `${descriptor.opensandboxEndpoint}/health`, [200]],
@@ -297,13 +332,18 @@ async function main() {
   if (!projectId || !/^[a-f0-9-]{36}$/i.test(projectId)) fail('--project must be a project UUID')
   if (!architectureBackends.has(target)) fail('--to must be t1, t2 or e1')
   if (requestedSource && !architectureBackends.has(requestedSource)) fail('--from must be t1, t2 or e1')
+  if (recreateTarget && target === 'e1') fail('--recreate-target is supported only for T1/T2 targets')
+  if (recreateTarget && dryRun) fail('--recreate-target is not valid with --dry-run')
   await assertAppStopped()
   const releaseLock = await acquireMigrationLock(projectId)
   let sourceDescriptor
   let sourceArchitecture
   let source
+  let sourceRoot
+  let targetRoot
   let runtimeTarget
   let backupDirectory
+  let replacedTarget
   let sourceStopped = false
   let sourceQuiesced = false
   let sourceQuiesce
@@ -332,8 +372,8 @@ async function main() {
       sourceArchitecture = candidates[0].architecture
     }
     if (sourceArchitecture === target) fail(`project is already running ${target}`)
-    const sourceRoot = stateRootFor(sourceArchitecture)
-    const targetRoot = stateRootFor(target)
+    sourceRoot = stateRootFor(sourceArchitecture)
+    targetRoot = stateRootFor(target)
     const targetProjectRoot = resolve(targetRoot, 'projects', projectId)
     source = await createRuntime(sourceArchitecture, sourceRoot)
     runtimeTarget = await createRuntime(target, targetRoot)
@@ -383,6 +423,9 @@ async function main() {
     await source.manager.stop(projectId)
     sourceStopped = true
     await archiveRuntimeState(sourceDescriptor.backend, backupDirectory, sourceRoot)
+    if (recreateTarget) {
+      replacedTarget = await moveTargetVmStateAside(runtimeTarget, targetRoot, timestamp)
+    }
     await clearTargetRuntimeState(targetRoot)
     // Preserve the source runtime's OpenSandbox/Browser tokens. The Supabase
     // keys travel inside the guest state archive and are revalidated by the
@@ -390,6 +433,7 @@ async function main() {
     await copyFile(resolve(backupDirectory, 'runtime', 'runtime-secrets.json'), resolve(targetProjectRoot, 'runtime-secrets.json')).catch(() => undefined)
 
     const targetDescriptor = await runtimeTarget.manager.ensure(projectId, 'thin')
+    await assertTargetBase(runtimeTarget, targetRoot)
     targetQuiesce = await quiesceProjectContainers(runtimeTarget.machineDriver, runtimeTarget.vmManager.machineName(projectId), { rootful })
     let imported
     try {
@@ -424,6 +468,7 @@ async function main() {
           desktop: descriptor.desktopEndpoint ?? null,
         },
       },
+      ...(recreateTarget ? { replacedTarget } : {}),
       import: imported,
     }, null, 2)}\n`, { mode: 0o600 })
     process.stdout.write(`${JSON.stringify({
