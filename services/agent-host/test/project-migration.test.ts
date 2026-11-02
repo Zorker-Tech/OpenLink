@@ -54,7 +54,35 @@ test('accepts an intact migration manifest and rejects a tampered archive', asyn
   const root = await mkdtemp(join('/tmp', 'openlink-project-migration-manifest-'))
   try {
     const workspace = await archive(root, 'workspace.tar', 'workspace-archive')
+    const agentTools = await archive(root, 'agent-tools.tar', 'agent-tools-archive')
     const manifest: ProjectMigrationManifest = {
+      schemaVersion: 1,
+      projectId,
+      sourceArchitecture: 't1',
+      sourceBackend: 'qemu-kvm',
+      createdAt: new Date().toISOString(),
+      sourceMachineName: 'olp-test',
+      sourceWorkspacePath: '/home/openlink/openlink/projects/test/workspace',
+      sourceGuestUser: 'openlink',
+      workspace,
+      supabase: null,
+      agentTools,
+    }
+    await writeFile(join(root, 'manifest.json'), `${JSON.stringify(manifest)}\n`)
+    assert.deepEqual(await readProjectMigrationManifest(root), manifest)
+
+    await writeFile(join(root, 'agent-tools.tar'), 'tampered')
+    await assert.rejects(() => readProjectMigrationManifest(root), /archive checksum mismatch/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('accepts schema 1 archives created before the tool registry existed', async () => {
+  const root = await mkdtemp(join('/tmp', 'openlink-project-migration-legacy-'))
+  try {
+    const workspace = await archive(root, 'workspace.tar', 'workspace-archive')
+    const manifest = {
       schemaVersion: 1,
       projectId,
       sourceArchitecture: 't1',
@@ -68,9 +96,6 @@ test('accepts an intact migration manifest and rejects a tampered archive', asyn
     }
     await writeFile(join(root, 'manifest.json'), `${JSON.stringify(manifest)}\n`)
     assert.deepEqual(await readProjectMigrationManifest(root), manifest)
-
-    await writeFile(join(root, 'workspace.tar'), 'tampered')
-    await assert.rejects(() => readProjectMigrationManifest(root), /archive checksum mismatch/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
