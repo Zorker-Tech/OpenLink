@@ -18,16 +18,20 @@ export function resolveArchitecture(args, env = process.env) {
       architecture = 't1'
       continue
     }
+    if (argument === '-t2' || argument === '--t2' || argument === '--arch=t2' || argument === '--architecture=t2') {
+      architecture = 't2'
+      continue
+    }
     if (argument === '--arch' || argument === '--architecture') {
       const value = args[index + 1]?.trim().toLowerCase()
-      if (value !== 't1' && value !== 'e1') throw new Error('OpenLink architecture must be t1 or e1')
+      if (value !== 't1' && value !== 't2' && value !== 'e1') throw new Error('OpenLink architecture must be t1, t2 or e1')
       architecture = value
       index += 1
     }
   }
   architecture ||= env.OPENLINK_ARCHITECTURE?.trim().toLowerCase() || 't1'
-  if (architecture !== 't1' && architecture !== 'e1') {
-    throw new Error('OpenLink architecture must be t1 or e1')
+  if (architecture !== 't1' && architecture !== 't2' && architecture !== 'e1') {
+    throw new Error('OpenLink architecture must be t1, t2 or e1')
   }
   return architecture
 }

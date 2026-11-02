@@ -23,14 +23,21 @@ import {
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const args = process.argv.slice(2)
-const stateRoot = resolve(process.env.OPENLINK_PROJECT_VM_STATE_ROOT || resolve(root, '.openlink-runtime/project-vms'))
+const defaultStateRoot = resolve(process.env.OPENLINK_PROJECT_VM_STATE_ROOT || resolve(root, '.openlink-runtime/project-vms'))
+const t2StateRoot = resolve(process.env.OPENLINK_T2_PROJECT_VM_STATE_ROOT || resolve(root, '.openlink-runtime/project-vms/t2'))
+const migrationLockRoot = resolve(process.env.OPENLINK_PROJECT_MIGRATION_LOCK_ROOT || resolve(root, '.openlink-runtime/project-locks'))
 const migrationRoot = resolve(process.env.OPENLINK_PROJECT_MIGRATION_ROOT || resolve(root, '.openlink-runtime/project-migrations'))
 const projectId = option('--project') || option('--project-id')
 const target = (option('--to') || '').trim().toLowerCase()
+const requestedSource = (option('--from') || '').trim().toLowerCase() || undefined
 const dryRun = args.includes('--dry-run')
 const allowRunningApp = args.includes('--allow-running-app')
 const rootful = process.env.OPENLINK_PROJECT_VM_ROOTFUL !== '0'
-const architectureBackends = new Map([['t1', 'qemu-kvm'], ['e1', 'podman-machine']])
+const architectureBackends = new Map([['t1', 'qemu-kvm'], ['t2', 'qemu-kvm'], ['e1', 'podman-machine']])
+
+function stateRootFor(architecture) {
+  return architecture === 't2' ? t2StateRoot : defaultStateRoot
+}
 
 function option(name) {
   const index = args.indexOf(name)
@@ -47,9 +54,8 @@ async function bootId() {
 }
 
 async function acquireMigrationLock(projectId) {
-  const projectRoot = resolve(stateRoot, 'projects', projectId)
-  await mkdir(projectRoot, { recursive: true, mode: 0o700 })
-  const lockRoot = resolve(projectRoot, '.migration.lock')
+  await mkdir(migrationLockRoot, { recursive: true, mode: 0o700 })
+  const lockRoot = resolve(migrationLockRoot, `${projectId}.lock`)
   const currentBoot = await bootId()
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
@@ -118,10 +124,11 @@ function imageArchives() {
   }
 }
 
-function commonManagerOptions(vmManager, machineDriver, serviceDriver, projectDesktop) {
+function commonManagerOptions(stateRoot, vmManager, machineDriver, serviceDriver, projectDesktop, architecture) {
   return {
     stateRoot,
     vmManager,
+    architecture,
     machineDriver,
     serviceDriver,
     opensandboxImage: 'openlink/opensandbox-server:dev',
@@ -141,16 +148,17 @@ function commonManagerOptions(vmManager, machineDriver, serviceDriver, projectDe
   }
 }
 
-async function createT1Runtime() {
-  const baseRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT || resolve(root, '.openlink-runtime/project-vm-base/ubuntu'))
+async function createUbuntuRuntime(architecture, stateRoot) {
+  const baseRoot = resolve(process.env.OPENLINK_UBUNTU_PROJECT_VM_OUTPUT
+    || resolve(root, `.openlink-runtime/project-vm-base/${architecture === 't2' ? 't2' : 'ubuntu'}`))
   const manifest = await readJson(resolve(baseRoot, 'manifest.json'))
   for (const key of ['disk', 'kernel', 'initrd', 'rootDevice', 'baseFingerprint']) {
-    if (!manifest[key]) fail(`T1 manifest is missing ${key}`)
+    if (!manifest[key]) fail(`${architecture.toUpperCase()} manifest is missing ${key}`)
   }
   const diskPath = resolve(baseRoot, manifest.disk)
   const kernelPath = resolve(baseRoot, manifest.kernel.file)
   const initrdPath = resolve(baseRoot, manifest.initrd.file)
-  await Promise.all([requireFile(diskPath, 'T1 base disk'), requireFile(kernelPath, 'T1 kernel'), requireFile(initrdPath, 'T1 initrd')])
+  await Promise.all([requireFile(diskPath, `${architecture.toUpperCase()} base disk`), requireFile(kernelPath, `${architecture.toUpperCase()} kernel`), requireFile(initrdPath, `${architecture.toUpperCase()} initrd`)])
   const seed = resolve(process.env.OPENLINK_PROJECT_SUPABASE_SEED || resolve(root, '.openlink-runtime/project-supabase/cache/seed.json'))
   await requireFile(seed, 'Project Supabase seed')
   const machineDriver = new UbuntuQemuProjectVmDriver({
@@ -166,6 +174,7 @@ async function createT1Runtime() {
     scpCommand: process.env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
     sshKeygenCommand: process.env.OPENLINK_SSH_KEYGEN_COMMAND || '/usr/bin/ssh-keygen',
     mke2fsCommand: process.env.OPENLINK_MKE2FS_COMMAND || '/usr/sbin/mke2fs',
+    gpu: architecture === 't2',
     guestUser: 'openlink',
     bootstrap: true,
   })
@@ -178,13 +187,13 @@ async function createT1Runtime() {
   })
   const serviceDriver = new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true, publishAddress: '0.0.0.0' })
   const manager = new ProjectRuntimeManager({
-    ...commonManagerOptions(vmManager, machineDriver, serviceDriver, true),
+    ...commonManagerOptions(stateRoot, vmManager, machineDriver, serviceDriver, true, architecture),
     projectSupabaseSeed: seed,
   })
-  return { architecture: 't1', backend: 'qemu-kvm', machineDriver, vmManager, serviceDriver, manager }
+  return { architecture, backend: 'qemu-kvm', machineDriver, vmManager, serviceDriver, manager }
 }
 
-async function createE1Runtime() {
+async function createE1Runtime(stateRoot) {
   process.env.XDG_CONFIG_HOME ||= resolve(root, '.openlink-runtime/podman-config')
   process.env.XDG_DATA_HOME ||= resolve(root, '.openlink-runtime/podman-data')
   process.env.CONTAINERS_HELPER_BINARY_DIR ||= resolve(root, '.openlink-runtime/toolchain/bin')
@@ -210,20 +219,16 @@ async function createE1Runtime() {
     machineSpec: { cpus: Number(process.env.OPENLINK_PROJECT_VM_CPUS || 4), memoryMb: Number(process.env.OPENLINK_PROJECT_VM_MEMORY_MB || 8_192), diskGb: Number(process.env.OPENLINK_PROJECT_VM_DISK_GB || 64), diskMode: 'thin' },
   })
   const serviceDriver = new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true, publishAddress: '0.0.0.0' })
-  const manager = new ProjectRuntimeManager(commonManagerOptions(vmManager, machineDriver, serviceDriver, false))
+  const manager = new ProjectRuntimeManager(commonManagerOptions(stateRoot, vmManager, machineDriver, serviceDriver, false, 'e1'))
   return { architecture: 'e1', backend: 'podman-machine', machineDriver, vmManager, serviceDriver, manager }
 }
 
-function createRuntime(architecture) {
-  return architecture === 't1' ? createT1Runtime() : createE1Runtime()
+function createRuntime(architecture, stateRoot) {
+  return architecture === 'e1' ? createE1Runtime(stateRoot) : createUbuntuRuntime(architecture, stateRoot)
 }
 
-function architectureForBackend(backend) {
-  for (const [architecture, value] of architectureBackends) if (value === backend) return architecture
-  fail(`unsupported source backend ${backend}`)
-}
 
-async function archiveRuntimeState(backend, backupDirectory) {
+async function archiveRuntimeState(backend, backupDirectory, stateRoot) {
   const projectRoot = resolve(stateRoot, 'projects', projectId)
   const archiveRoot = resolve(projectRoot, 'architectures', backend)
   await mkdir(archiveRoot, { recursive: true, mode: 0o700 })
@@ -240,7 +245,7 @@ async function archiveRuntimeState(backend, backupDirectory) {
   }
 }
 
-async function restoreArchivedRuntime(backend, backupDirectory) {
+async function restoreArchivedRuntime(backend, backupDirectory, stateRoot) {
   const projectRoot = resolve(stateRoot, 'projects', projectId)
   const archiveRoot = resolve(projectRoot, 'architectures', backend)
   const runtimeBackup = resolve(backupDirectory, 'runtime')
@@ -258,7 +263,7 @@ async function restoreArchivedRuntime(backend, backupDirectory) {
   }
 }
 
-async function clearTargetRuntimeState() {
+async function clearTargetRuntimeState(stateRoot) {
   const projectRoot = resolve(stateRoot, 'projects', projectId)
   for (const name of ['runtime.json', 'ports.json', 'runtime-secrets.json']) {
     await rm(resolve(projectRoot, name), { force: true })
@@ -271,8 +276,8 @@ async function verifyRuntime(runtime, descriptor) {
     ['Browser Host', `${descriptor.browserHostEndpoint}/healthz`, [200, 204, 401, 403]],
     ['code-server', `${descriptor.codeServerEndpoint}/healthz`, [200, 204, 301, 302]],
   ]
-  if (runtime.architecture === 't1') {
-    if (!descriptor.desktopEndpoint) fail('T1 runtime did not publish a project desktop endpoint')
+  if (runtime.architecture === 't1' || runtime.architecture === 't2') {
+    if (!descriptor.desktopEndpoint) fail(`${runtime.architecture.toUpperCase()} runtime did not publish a project desktop endpoint`)
     checks.push(['desktop', `${descriptor.desktopEndpoint}/vnc.html`, [200]])
   } else if (descriptor.desktopEndpoint) {
     fail('E1 runtime unexpectedly published a project desktop endpoint')
@@ -290,7 +295,8 @@ async function verifyRuntime(runtime, descriptor) {
 
 async function main() {
   if (!projectId || !/^[a-f0-9-]{36}$/i.test(projectId)) fail('--project must be a project UUID')
-  if (!architectureBackends.has(target)) fail('--to must be t1 or e1')
+  if (!architectureBackends.has(target)) fail('--to must be t1, t2 or e1')
+  if (requestedSource && !architectureBackends.has(requestedSource)) fail('--from must be t1, t2 or e1')
   await assertAppStopped()
   const releaseLock = await acquireMigrationLock(projectId)
   let sourceDescriptor
@@ -303,18 +309,34 @@ async function main() {
   let sourceQuiesce
   let targetQuiesce
   try {
-    const projectRoot = resolve(stateRoot, 'projects', projectId)
-    const runtimePath = resolve(projectRoot, 'runtime.json')
-    try {
-      sourceDescriptor = await readJson(runtimePath)
-    } catch {
-      fail(`project ${projectId} has no runtime descriptor under ${runtimePath}; provision it before switching`)
+    const candidates = []
+    for (const candidateRoot of [...new Set([defaultStateRoot, t2StateRoot])]) {
+      try {
+        const descriptor = await readJson(resolve(candidateRoot, 'projects', projectId, 'runtime.json'))
+        if (descriptor.projectId !== projectId) continue
+        const architecture = descriptor.architecture === 't1' || descriptor.architecture === 't2' || descriptor.architecture === 'e1'
+          ? descriptor.architecture
+          : candidateRoot === t2StateRoot ? 't2' : descriptor.backend === 'podman-machine' ? 'e1' : 't1'
+        candidates.push({ architecture, descriptor, stateRoot: candidateRoot })
+      } catch {}
     }
-    if (sourceDescriptor.projectId !== projectId) fail('runtime descriptor projectId does not match --project')
-    sourceArchitecture = architectureForBackend(sourceDescriptor.backend)
+    if (requestedSource) {
+      const selected = candidates.find((candidate) => candidate.architecture === requestedSource)
+      if (!selected) fail(`project ${projectId} has no ${requestedSource} runtime descriptor`)
+      sourceDescriptor = selected.descriptor
+      sourceArchitecture = selected.architecture
+    } else {
+      if (candidates.length === 0) fail(`project ${projectId} has no runtime descriptor; provision it before switching`)
+      if (candidates.length > 1) fail(`project ${projectId} has runtime state in multiple architectures; pass --from t1|t2|e1`)
+      sourceDescriptor = candidates[0].descriptor
+      sourceArchitecture = candidates[0].architecture
+    }
     if (sourceArchitecture === target) fail(`project is already running ${target}`)
-    source = await createRuntime(sourceArchitecture)
-    runtimeTarget = await createRuntime(target)
+    const sourceRoot = stateRootFor(sourceArchitecture)
+    const targetRoot = stateRootFor(target)
+    const targetProjectRoot = resolve(targetRoot, 'projects', projectId)
+    source = await createRuntime(sourceArchitecture, sourceRoot)
+    runtimeTarget = await createRuntime(target, targetRoot)
     const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
     backupDirectory = resolve(migrationRoot, projectId, timestamp)
 
@@ -344,14 +366,14 @@ async function main() {
       machineDriver: source.machineDriver,
       machineName: source.vmManager.machineName(projectId),
       workspacePath: source.vmManager.workspacePath(projectId),
-      guestUser: sourceArchitecture === 't1' ? 'openlink' : 'core',
+      guestUser: sourceArchitecture === 'e1' ? 'core' : 'openlink',
       outputDirectory: backupDirectory,
       rootful,
     })
     await readProjectMigrationManifest(backupDirectory)
-    const sourceVmRecord = sourceArchitecture === 't1'
-      ? resolve(stateRoot, 'ubuntu-vms', source.vmManager.machineName(projectId), 'vm.json')
-      : undefined
+    const sourceVmRecord = sourceArchitecture === 'e1'
+      ? undefined
+      : resolve(sourceRoot, 'ubuntu-vms', source.vmManager.machineName(projectId), 'vm.json')
     if (sourceVmRecord) {
       await copyFile(sourceVmRecord, resolve(backupDirectory, 'vm.json')).catch(() => undefined)
     }
@@ -360,12 +382,12 @@ async function main() {
     sourceQuiesce = undefined
     await source.manager.stop(projectId)
     sourceStopped = true
-    await archiveRuntimeState(sourceDescriptor.backend, backupDirectory)
-    await clearTargetRuntimeState()
+    await archiveRuntimeState(sourceDescriptor.backend, backupDirectory, sourceRoot)
+    await clearTargetRuntimeState(targetRoot)
     // Preserve the source runtime's OpenSandbox/Browser tokens. The Supabase
     // keys travel inside the guest state archive and are revalidated by the
     // target controller after import.
-    await copyFile(resolve(backupDirectory, 'runtime', 'runtime-secrets.json'), resolve(projectRoot, 'runtime-secrets.json')).catch(() => undefined)
+    await copyFile(resolve(backupDirectory, 'runtime', 'runtime-secrets.json'), resolve(targetProjectRoot, 'runtime-secrets.json')).catch(() => undefined)
 
     const targetDescriptor = await runtimeTarget.manager.ensure(projectId, 'thin')
     targetQuiesce = await quiesceProjectContainers(runtimeTarget.machineDriver, runtimeTarget.vmManager.machineName(projectId), { rootful })
@@ -433,8 +455,8 @@ async function main() {
           await runtimeTarget.manager.stop(projectId).catch(() => undefined)
           await runtimeTarget.vmManager.stop(projectId).catch(() => undefined)
         }
-        await clearTargetRuntimeState()
-        await restoreArchivedRuntime(sourceDescriptor.backend, backupDirectory)
+        await clearTargetRuntimeState(targetRoot)
+        await restoreArchivedRuntime(sourceDescriptor.backend, backupDirectory, sourceRoot)
         await source.manager.ensure(projectId)
         rollback = 'restored-source'
       } catch (rollbackError) {

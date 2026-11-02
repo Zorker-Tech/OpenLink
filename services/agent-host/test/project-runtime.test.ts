@@ -573,19 +573,66 @@ test('refuses to provision one architecture over another architecture\'s project
   try {
     await assert.rejects(
       () => runtime.ensure(projectId, 'thin'),
-      /recorded for qemu-kvm, but this Agent Host runs podman-machine/,
+      /recorded for t1, but this Agent Host runs e1/,
     )
     assert.equal(ensureCalls, 0)
     await runtime.restorePersistedRuntimes()
     assert.equal(ensureCalls, 0)
-    assert.ok(warnings.some((warning) => warning.includes('recorded for qemu-kvm')))
+    assert.ok(warnings.some((warning) => warning.includes('recorded for t1')))
     await assert.rejects(
       () => runtime.remove(projectId),
-      /recorded for qemu-kvm, but this Agent Host runs podman-machine/,
+      /recorded for t1, but this Agent Host runs e1/,
     )
     assert.equal(ensureCalls, 0)
   } finally {
     console.warn = originalWarn
+    await runtime.close()
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('distinguishes T1 and T2 runtimes that share the qemu-kvm backend', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-t2-mode-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const runtimeRoot = join(stateRoot, 'projects', projectId)
+  await mkdir(runtimeRoot, { recursive: true })
+  await writeFile(join(runtimeRoot, 'runtime.json'), `${JSON.stringify({
+    projectId,
+    status: 'ready',
+    architecture: 't1',
+    backend: 'qemu-kvm',
+    machineName: 'olp-2c51ca263cd04cb4',
+    workspacePath: '/home/openlink/openlink/projects/2c51ca26-3cd0-4cb4-896d-2061de06098c/workspace',
+  })}
+`)
+  let ensureCalls = 0
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => { ensureCalls += 1 },
+    bootstrapToolchain: async () => undefined,
+    runInMachine: async () => ({ stdout: '', stderr: '' }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/home/openlink/openlink/projects', backend: 'qemu-kvm' })
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager,
+    machineDriver,
+    architecture: 't2',
+    serviceDriver: { supportsEgress: true, ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+  })
+  try {
+    await assert.rejects(
+      () => runtime.ensure(projectId, 'thin'),
+      /recorded for t1, but this Agent Host runs t2/,
+    )
+    assert.equal(ensureCalls, 0)
+  } finally {
     await runtime.close()
     await rm(stateRoot, { recursive: true, force: true })
   }

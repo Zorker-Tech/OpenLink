@@ -38,6 +38,8 @@ export interface UbuntuQemuProjectVmDriverOptions {
   rootDevice?: string
   /** mke2fs command used to build the per-project read-only cloud-init seed disk. */
   mke2fsCommand?: string
+  /** Expose a virtio-gpu DRM device (required by T2's Wayland/RDP capture). */
+  gpu?: boolean
   /** Manifest fingerprint recorded with each project disk. */
   baseFingerprint?: string
   /** Durable per-project QEMU state (disk, SSH identity, seed identity). */
@@ -215,6 +217,7 @@ local-hostname: ${input.name}
 
 export interface UbuntuProjectVmQemuArgumentsInput {
   name: string
+  gpu?: boolean
   diskPath: string
   cpus: number
   memoryMb: number
@@ -264,6 +267,7 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
     '-drive', `file=${input.seedImagePath},if=virtio,format=raw,readonly=on`,
     '-netdev', `user,id=net0,${hostfwd.join(',')}`,
     '-device', 'virtio-net-pci,netdev=net0',
+    ...(input.gpu ? ['-vga', 'none', '-device', 'virtio-gpu-pci'] : []),
     '-display', 'none',
     '-serial', `file:${input.consoleLog}`,
     '-qmp', `unix:${input.qmpPath},server=on,wait=off`,
@@ -300,6 +304,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   private readonly rootDevice: string
   private readonly mke2fs: string
   private readonly baseFingerprint: string
+  private readonly gpu: boolean
   private readonly stateRoot: string
   private readonly qemu: string
   private readonly qemuImg: string
@@ -343,6 +348,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     this.isProcessRunning = options.isProcessRunning ?? defaultIsProcessRunning
     this.socketRoot = resolve(options.socketRoot || tmpdir())
     this.baseFingerprint = options.baseFingerprint?.trim() || 'unversioned'
+    this.gpu = options.gpu === true
   }
 
   async ensureMachine(name: string, spec: ProjectVmMachineSpec): Promise<void> {
@@ -685,6 +691,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     await rm(qmpPath, { force: true }).catch(() => undefined)
     const args = ubuntuProjectVmQemuArguments({
       name: record.name,
+      gpu: this.gpu,
       diskPath: disk,
       cpus: record.cpus,
       memoryMb: record.memoryMb,

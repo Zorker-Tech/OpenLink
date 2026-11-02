@@ -46,8 +46,22 @@ export interface ProjectSupabaseStudioProxyResponse {
   bodyBase64: string
 }
 
+export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
+
+/**
+ * Resolve the architecture of a persisted runtime. Older descriptors predate
+ * the explicit field: qemu-kvm belonged to T1 and podman-machine to E1. T2 also
+ * uses qemu-kvm, so new descriptors always persist `architecture`.
+ */
+export function projectRuntimeArchitecture(backend: string, architecture?: unknown): ProjectRuntimeArchitecture {
+  if (architecture === 't1' || architecture === 'e1' || architecture === 't2') return architecture
+  return backend === 'podman-machine' ? 'e1' : 't1'
+}
+
 export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   status: 'ready'
+  /** Release architecture that owns this durable Project VM. */
+  architecture?: ProjectRuntimeArchitecture
   /** Guest service ports reserved for this project for the lifetime of its VM. */
   servicePorts: ProjectRuntimeServicePorts
   opensandboxEndpoint: string
@@ -163,6 +177,11 @@ export interface ProjectRuntimeManagerOptions {
   vmManager: ProjectVmManager
   machineDriver: ProjectVmMachineDriver
   serviceDriver: ProjectRuntimeServiceDriver
+  /**
+   * Release architecture of this Agent Host. T1 and T2 share the qemu-kvm
+   * backend, so the backend alone cannot identify the owning runtime.
+   */
+  architecture?: ProjectRuntimeArchitecture
   opensandboxImage: string
   browserHostImage: string
   execdImage: string
@@ -334,6 +353,7 @@ export class ProjectRuntimeManager {
   private readonly vmManager: ProjectVmManager
   private readonly machineDriver: ProjectVmMachineDriver
   private readonly serviceDriver: ProjectRuntimeServiceDriver
+  private readonly architecture: ProjectRuntimeArchitecture
   private readonly ubuntuDesktopIsoSource?: string
   private readonly projectSupabaseSeed?: string
   private readonly images: {
@@ -397,6 +417,7 @@ export class ProjectRuntimeManager {
     this.vmManager = options.vmManager
     this.machineDriver = options.machineDriver
     this.serviceDriver = options.serviceDriver
+    this.architecture = projectRuntimeArchitecture(this.vmManager.runtimeBackend, options.architecture)
     this.ubuntuDesktopIsoSource = options.ubuntuDesktopIsoSource?.trim() || undefined
     this.projectSupabaseSeed = options.projectSupabaseSeed?.trim()
       ? resolve(options.projectSupabaseSeed.trim())
@@ -541,7 +562,8 @@ export class ProjectRuntimeManager {
     const workspacePath = this.vmManager.workspacePath(projectId)
     if (persisted.machineName !== machineName
       || persisted.workspacePath !== workspacePath
-      || persisted.backend !== this.vmManager.runtimeBackend) return undefined
+      || persisted.backend !== this.vmManager.runtimeBackend
+      || projectRuntimeArchitecture(String(persisted.backend), persisted.architecture) !== this.architecture) return undefined
 
     const ports = persisted.servicePorts as Partial<ProjectRuntimeServicePorts> | undefined
     if (!ports || !this.isValidPortSet(ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler, ports.desktop)) return undefined
@@ -585,6 +607,7 @@ export class ProjectRuntimeManager {
       projectId,
       machineName,
       workspacePath,
+      architecture: this.architecture,
       backend: this.vmManager.runtimeBackend,
       diskMode,
       status: 'ready',
@@ -912,10 +935,12 @@ export class ProjectRuntimeManager {
     for (const projectId of projectIds) {
       let status: unknown
       let backend: unknown
+      let architecture: unknown
       try {
         const persisted = JSON.parse(await readFile(resolve(projectsRoot, projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
         status = persisted.status
         backend = persisted.backend
+        architecture = persisted.architecture
       } catch {
         continue
       }
@@ -923,8 +948,9 @@ export class ProjectRuntimeManager {
       // Never auto-provision the other mode during startup: the previous VM
       // may still be running, and silently replacing its descriptor can leave
       // two VMs on the same project and host port set.
-      if (backend !== undefined && backend !== this.vmManager.runtimeBackend) {
-        console.warn(`OpenLink persisted Project VM restore skipped ${projectId}: recorded for ${String(backend)}, this Agent Host runs ${this.vmManager.runtimeBackend}`)
+      const persistedArchitecture = typeof backend === 'string' ? projectRuntimeArchitecture(backend, architecture) : undefined
+      if (persistedArchitecture && persistedArchitecture !== this.architecture) {
+        console.warn(`OpenLink persisted Project VM restore skipped ${projectId}: recorded for ${persistedArchitecture}, this Agent Host runs ${this.architecture}`)
         continue
       }
       // Only a runtime which was successfully ready when the supervisor
@@ -1559,6 +1585,7 @@ export class ProjectRuntimeManager {
       }
       const descriptor: ProjectRuntimeDescriptor = {
         ...vm,
+        architecture: this.architecture,
         status: 'ready',
         servicePorts: ports,
         opensandboxEndpoint: `http://${this.publicHost}:${endpointPorts.opensandbox}`,
@@ -1854,6 +1881,7 @@ export class ProjectRuntimeManager {
       projectId: descriptor.projectId,
       machineName: descriptor.machineName,
       workspacePath: descriptor.workspacePath,
+      architecture: descriptor.architecture ?? this.architecture,
       backend: descriptor.backend,
       diskMode: descriptor.diskMode,
       status,
@@ -1984,20 +2012,21 @@ export class ProjectRuntimeManager {
    * architecture instead.
    */
   private async assertPersistedArchitecture(projectId: string): Promise<void> {
-    const recorded = await this.readPersistedRuntimeBackend(projectId)
-    if (recorded && recorded !== this.vmManager.runtimeBackend) {
+    const recorded = await this.readPersistedRuntimeArchitecture(projectId)
+    if (recorded && recorded !== this.architecture) {
       throw new AgentHostError(
         'PROVISIONING_FAILED',
-        `Project ${projectId} is recorded for ${recorded}, but this Agent Host runs ${this.vmManager.runtimeBackend}. Stop and remove the project runtime under ${recorded}, or use a different project, before switching architectures.`,
+        `Project ${projectId} is recorded for ${recorded}, but this Agent Host runs ${this.architecture}. Stop and remove the project runtime under ${recorded}, or use a different project, before switching architectures.`,
         { retryable: false },
       )
     }
   }
 
-  private async readPersistedRuntimeBackend(projectId: string): Promise<string | undefined> {
+  private async readPersistedRuntimeArchitecture(projectId: string): Promise<ProjectRuntimeArchitecture | undefined> {
     try {
       const persisted = JSON.parse(await readFile(resolve(this.stateRoot, 'projects', projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
-      return typeof persisted.backend === 'string' ? persisted.backend : undefined
+      if (typeof persisted.backend !== 'string') return undefined
+      return projectRuntimeArchitecture(persisted.backend, persisted.architecture)
     } catch {
       return undefined
     }
