@@ -41,6 +41,7 @@ each other's descriptor. Do not run both modes for the same project at once.
 
 ```text
 guest: systemctl status openlink-desktop
+guest: systemctl --user status gnome-session@ubuntu.target org.gnome.Shell@ubuntu.service
 guest: pgrep -a gnome-shell
 guest: pgrep -a gnome-remote-de
 guest: pgrep -a xfreerdp
@@ -58,7 +59,8 @@ RDP port is loopback-only.
 | Symptom | Action |
 | --- | --- |
 | T2 base missing | `pnpm runtime:t2-vm-image`; startup fails closed |
-| GNOME Shell crash | systemd restarts the desktop service; verify `openlink-desktop` and the VNC endpoint |
+| GNOME Shell crash | systemd `OnFailure` shuts down the user session; `openlink-desktop` exits and restarts a clean `gnome-session@ubuntu.target`. Verify the session units and VNC endpoint |
+| Dock missing | Verify the Ubuntu Dock extension is enabled and `dock-position` is `LEFT`; restart `openlink-desktop` |
 | RDP not listening | Check `gnome-remote-desktop.service`, keyring, certificate and `gnome-shell`; the bridge only starts after RDP listens |
 | Keyring locked | The service recreates and unlocks an empty login keyring at every start; check `org.freedesktop.secrets` on the user bus |
 | VNC endpoint 200 but no desktop | Check FreeRDP/Xvfb `:9`; RDP must be healthy first |

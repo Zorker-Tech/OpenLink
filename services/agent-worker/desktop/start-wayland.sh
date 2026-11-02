@@ -73,10 +73,27 @@ desktop_env=(
   XDG_RUNTIME_DIR=/run/user/1000
   DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus"
   XDG_SESSION_TYPE=wayland
-  XDG_CURRENT_DESKTOP=GNOME
-  GNOME_SHELL_SESSION_MODE=user
+  XDG_CURRENT_DESKTOP=ubuntu:GNOME
+  XDG_SESSION_DESKTOP=ubuntu
+  DESKTOP_SESSION=ubuntu
+  GNOME_SHELL_SESSION_MODE=ubuntu
   LIBGL_ALWAYS_SOFTWARE=1
 )
+
+# Always start from a clean session so the keyring, extension and settings
+# changes cannot be left in a half-applied state from a previous run.
+if runuser -u openlink -- env "${desktop_env[@]}" systemctl --user is-active --quiet gnome-session@ubuntu.target \
+  || pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+  runuser -u openlink -- env "${desktop_env[@]}" systemctl --user start gnome-session-shutdown.target >/dev/null 2>&1 || true
+  for _ in $(seq 1 75); do
+    if ! runuser -u openlink -- env "${desktop_env[@]}" systemctl --user is-active --quiet gnome-session@ubuntu.target \
+      && ! pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.2
+  done
+  pkill -TERM -u openlink -x gnome-shell 2>/dev/null || true
+fi
 
 # A headless session has no PAM login to unlock a keyring. Create/unlock an
 # empty-password login keyring so GNOME Remote Desktop can store and retrieve
@@ -99,11 +116,10 @@ for _ in $(seq 1 50); do
   sleep 0.2
 done
 
-# Ubuntu Shell extensions assume a GDM-managed seat and crash the headless
-# session. Load only the OpenLink extension, which hides the screen-sharing /
-# screen-recording top-bar indicators. In T2 the RDP surface is the only
-# display; the indicator's stop action would terminate it and leave a black
-# desktop with no way back except restarting the service.
+# Enable the Ubuntu desktop extensions plus the OpenLink headless extension.
+# The latter hides the screen-sharing / screen-recording top-bar indicators:
+# in T2 the RDP surface is the only display, so the indicator's stop action
+# would terminate it and leave a black desktop.
 extension_source=/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink
 extension_root=/home/openlink/.local/share/gnome-shell/extensions/openlink-headless@openlink
 if [[ ! -f "$extension_source/metadata.json" || ! -f "$extension_source/extension.js" ]]; then
@@ -117,7 +133,22 @@ chown -R openlink:openlink "$extension_root"
 chmod 0755 "$extension_root"
 chmod 0644 "$extension_root/metadata.json" "$extension_root/extension.js"
 runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell disable-user-extensions false >/dev/null
-runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell enabled-extensions "['openlink-headless@openlink']" >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell enabled-extensions \
+  "['openlink-headless@openlink','ubuntu-dock@ubuntu.com','ding@rastersoft.com','ubuntu-appindicators@ubuntu.com','tiling-assistant@ubuntu.com']" >/dev/null
+
+# Use the familiar always-visible Ubuntu dock on the left. Ubuntu 26.10 ships
+# the dock at the bottom with autohide enabled; a headless RDP user cannot
+# discover it reliably, and an empty desktop looks like a stripped GNOME
+# session.
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.extensions.dash-to-dock dock-position "'LEFT'" >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.extensions.dash-to-dock extend-height true >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed true >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.extensions.dash-to-dock autohide false >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell.extensions.dash-to-dock show-apps-at-top true >/dev/null
+# Use a normal Ubuntu application set. The worker userspace also carries the
+# E1 Xfce/X11 tools; those entries are hidden by the base image, and the
+# installer launcher is not useful on a provisioned project desktop.
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell favorite-apps   "['firefox_firefox.desktop','org.gnome.Nautilus.desktop','org.gnome.Terminal.desktop','org.gnome.Settings.desktop','snap-store_snap-store.desktop','org.gnome.Yelp.desktop','libreoffice-writer.desktop']" >/dev/null
 
 rdp_root=/var/lib/openlink/project-desktop/rdp
 mkdir -p "$rdp_root"
@@ -137,15 +168,39 @@ if [[ ! -s "$rdp_root/password" ]]; then
 fi
 rdp_password="$(cat "$rdp_root/password")"
 
-# Headless Wayland display server. It owns the virtual monitor and provides
-# the PipeWire screencast source consumed by GNOME Remote Desktop.
-start_background gnome runuser -u openlink -- env "${desktop_env[@]}" \
-  gnome-shell --headless --no-x11 --virtual-monitor 1280x800 --mode=user
-desktop_process_name=gnome-shell
-desktop_pid_file=/tmp/openlink-desktop-gnome.pid
-if ! wait_for_process "$desktop_process_name" "$desktop_pid_file"; then
-  echo "T2 GNOME Shell headless session did not start" >&2
-  tail -n 80 /tmp/openlink-desktop-gnome.log >&2 || true
+# Run the real Ubuntu session target rather than a bare gnome-shell process.
+# This starts gnome-session, settings daemons, portals and the shell as one
+# managed session, which is what Settings and the desktop expect.
+shell_dropin_dir=/home/openlink/.config/systemd/user/org.gnome.Shell@.service.d
+mkdir -p "$shell_dropin_dir"
+cat >"$shell_dropin_dir/openlink-headless.conf" <<'OPENLINK_SHELL_DROPIN'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/gnome-shell --headless --no-x11 --virtual-monitor 1280x800 --mode=%i
+OPENLINK_SHELL_DROPIN
+chown -R openlink:openlink /home/openlink/.config/systemd/user
+runuser -u openlink -- env "${desktop_env[@]}" systemctl --user set-environment \
+  XDG_SESSION_TYPE=wayland \
+  XDG_CURRENT_DESKTOP=ubuntu:GNOME \
+  XDG_SESSION_DESKTOP=ubuntu \
+  DESKTOP_SESSION=ubuntu \
+  GNOME_SHELL_SESSION_MODE=ubuntu \
+  LIBGL_ALWAYS_SOFTWARE=1 >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" systemctl --user daemon-reload
+
+runuser -u openlink -- env "${desktop_env[@]}" systemctl --user start gnome-session@ubuntu.target
+session_ready=false
+for _ in $(seq 1 150); do
+  if runuser -u openlink -- env "${desktop_env[@]}" systemctl --user is-active --quiet org.gnome.Shell@ubuntu.service \
+    && pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+    session_ready=true
+    break
+  fi
+  sleep 0.2
+done
+if [[ "$session_ready" != true ]]; then
+  echo "T2 Ubuntu GNOME session did not start" >&2
+  runuser -u openlink -- env "${desktop_env[@]}" systemctl --user status gnome-session@ubuntu.target org.gnome.Shell@ubuntu.service --no-pager -n 80 >&2 2>/dev/null || true
   exit 1
 fi
 
@@ -192,13 +247,12 @@ for _ in $(seq 1 30); do
 done
 
 websockify_pid="$(cat /tmp/openlink-desktop-websockify.pid)"
-desktop_pid="$(cat "$desktop_pid_file")"
 rdp_pid="$(cat /tmp/openlink-desktop-rdp-bridge.pid)"
-while kill -0 "$desktop_pid" 2>/dev/null \
+while pgrep -u openlink -x gnome-shell >/dev/null 2>&1 \
   && kill -0 "$rdp_pid" 2>/dev/null \
   && kill -0 "$websockify_pid" 2>/dev/null; do
-  # The RDP server is managed by systemd; require its socket only when a
-  # component has not already exited.
+  # The RDP server and the GNOME session are managed by systemd; require their
+  # units to stay active while the bridge processes are alive.
   sleep 1
 done
 echo "T2 desktop component exited" >&2
