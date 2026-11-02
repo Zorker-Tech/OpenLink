@@ -22,13 +22,20 @@ export interface DesktopAutomationSkillFile {
 
 export const AGENT_DESKTOP_SKILL = `---
 name: agent-desktop
-description: Observe and operate the project's Ubuntu desktop through its accessibility tree.
+description: Use the project's Ubuntu desktop for native GUI apps, windows, dialogs, menus, and visible desktop interaction.
 ---
 
 # Agent Desktop
 
-The project has a real Ubuntu GNOME desktop. \`agent-desktop\` reads its AT-SPI
-accessibility tree and acts on stable element refs without pixel matching.
+The project has a real Ubuntu GNOME desktop. Prefer the session's native
+\`desktop_*\` tools for GUI work; they use the same bridge as this CLI. Use the
+\`agent-desktop\` CLI as the shell fallback, especially when you need flags or
+diagnostics not exposed by the native tools.
+
+Use desktop tools when the task involves native applications, OS dialogs,
+windows, menus, or the visible desktop. For web-only work, prefer browser tools
+when they are available; use the desktop path when the user asks for visible
+browser or desktop interaction.
 
 Before the first snapshot in a session, read the version-matched guide:
 
@@ -68,6 +75,7 @@ export function desktopAutomationEnvironment(_runtime: ProjectRuntimeDescriptor)
   return {
     OPENLINK_DESKTOP_AUTOMATION: 'agent-desktop',
     OPENLINK_DESKTOP_TOOL_SOCKET: '/run/user/1000/openlink-desktop-tool.sock',
+    OPENLINK_DESKTOP_EXTENSION_PATH: '/opt/openlink/agent-worker/extensions/openlink-desktop.ts',
   }
 }
 

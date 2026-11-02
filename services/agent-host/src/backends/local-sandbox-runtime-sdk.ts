@@ -12,6 +12,7 @@ import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 import type { BrowserAgentSession } from '../browser-client.js'
 import { browserAgentBinding, browserHostNetworkTarget } from '../browser-binding.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import { runtimePolicyEnvironment } from '../runtime-policy.js'
 
 export interface DesktopNodeSdkConfig {
   nodeExecutable?: string
@@ -206,6 +207,7 @@ export class DesktopSandboxRuntimeNodeBackend {
       ...ambientProviderEnvironment(providerId),
       OPENLINK_BROWSER_EXTENSION_PATH: browserExtensionPath,
       OPENLINK_BROWSER_CAPABILITY_FILE: browserCapabilityFile,
+      ...(_projectRuntime ? runtimePolicyEnvironment(_projectRuntime) : {}),
       ...(projectId && this.config.supabaseMcp ? {
         OPENLINK_SUPABASE_EXTENSION_PATH: this.config.supabaseMcp.extensionPath,
         OPENLINK_SUPABASE_MCP_URL: this.config.supabaseMcp.urlFor(projectId),

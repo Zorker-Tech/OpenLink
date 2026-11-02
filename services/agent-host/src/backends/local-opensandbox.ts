@@ -21,6 +21,7 @@ import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions 
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
 import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
 import { agentToolsAvailable, agentToolRegistryEnvironment, agentToolRegistryVolume, agentToolsSkillDirectories, agentToolsSkillFiles } from '../agent-tools.js'
+import { runtimePolicyEnvironment } from '../runtime-policy.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -651,6 +652,7 @@ export class LocalOpenSandboxBackend {
         OPENLINK_DESKTOP_MODE: desktopMode,
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
         ...(agentTools ? agentToolRegistryEnvironment() : {}),
+        ...(projectRuntime ? runtimePolicyEnvironment(projectRuntime) : {}),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',

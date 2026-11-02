@@ -62,6 +62,23 @@ test('each access mode reaches Codex thread start as its exact sandbox and appro
   }
 })
 
+test('thread start carries the runtime policy and desktop MCP capability', async () => {
+  const dir = await mkdtemp('/tmp/openlink-codex-policy-')
+  try {
+    const runtime = new CodexAppServerRuntime({
+      workspaceRoot: dir, sessionRoot: dir, codexHome: dir, codexBin: 'unused', accessMode: 'restricted',
+      developerInstructions: 'OpenLink runtime policy',
+      desktopMcpUrl: 'http://127.0.0.1:43130/v1/desktop-mcp',
+    })
+    const calls = []
+    runtime.request = async (method, params) => { calls.push({ method, params }); return { thread: { id: 'policy-thread' } } }
+    assert.equal(await runtime.restoreOrStartThread(), 'policy-thread')
+    assert.equal(calls[0].method, 'thread/start')
+    assert.equal(calls[0].params.developerInstructions, 'OpenLink runtime policy')
+    assert.equal(calls[0].params.config?.mcp_servers?.openlink_desktop?.url, 'http://127.0.0.1:43130/v1/desktop-mcp')
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
 test('Plan questions round-trip answers and preserve native request id types', async () => {
   const runtime = new CodexAppServerRuntime({ workspaceRoot: '/unused', sessionRoot: '/unused', codexHome: '/unused', codexBin: 'unused', accessMode: 'restricted' })
   const frames = [], responses = []
