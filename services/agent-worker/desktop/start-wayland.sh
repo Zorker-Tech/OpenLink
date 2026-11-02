@@ -100,9 +100,24 @@ for _ in $(seq 1 50); do
 done
 
 # Ubuntu Shell extensions assume a GDM-managed seat and crash the headless
-# session. T2 runs the vanilla GNOME Shell session instead.
-runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell disable-user-extensions true >/dev/null 2>&1 || true
-runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell enabled-extensions "@as []" >/dev/null 2>&1 || true
+# session. Load only the OpenLink extension, which hides the screen-sharing /
+# screen-recording top-bar indicators. In T2 the RDP surface is the only
+# display; the indicator's stop action would terminate it and leave a black
+# desktop with no way back except restarting the service.
+extension_source=/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink
+extension_root=/home/openlink/.local/share/gnome-shell/extensions/openlink-headless@openlink
+if [[ ! -f "$extension_source/metadata.json" || ! -f "$extension_source/extension.js" ]]; then
+  echo "T2 headless GNOME extension is missing" >&2
+  exit 1
+fi
+mkdir -p "$extension_root"
+cp "$extension_source/metadata.json" "$extension_root/metadata.json"
+cp "$extension_source/extension.js" "$extension_root/extension.js"
+chown -R openlink:openlink "$extension_root"
+chmod 0755 "$extension_root"
+chmod 0644 "$extension_root/metadata.json" "$extension_root/extension.js"
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell disable-user-extensions false >/dev/null
+runuser -u openlink -- env "${desktop_env[@]}" gsettings set org.gnome.shell enabled-extensions "['openlink-headless@openlink']" >/dev/null
 
 rdp_root=/var/lib/openlink/project-desktop/rdp
 mkdir -p "$rdp_root"

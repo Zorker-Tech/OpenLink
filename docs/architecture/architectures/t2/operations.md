@@ -62,6 +62,7 @@ RDP port is loopback-only.
 | RDP not listening | Check `gnome-remote-desktop.service`, keyring, certificate and `gnome-shell`; the bridge only starts after RDP listens |
 | Keyring locked | The service recreates and unlocks an empty login keyring at every start; check `org.freedesktop.secrets` on the user bus |
 | VNC endpoint 200 but no desktop | Check FreeRDP/Xvfb `:9`; RDP must be healthy first |
+| Desktop turns black after clicking the orange top-bar pill | The GNOME screen-sharing indicator was stopped. T2 loads `openlink-headless@openlink`, which hides the screen-sharing/recording indicators; verify `gnome-extensions info openlink-headless@openlink` reports `Enabled: Yes` and restart `openlink-desktop` if needed |
 | X11 app cannot start | T2 runs `--no-x11`; use T1 or a Wayland app |
 | Port conflict | Stop the conflicting process or restart provisioning; T2 uses the same port allocator as T1 |
 | Project deletion | Remove the T2 VM state root and project runtime state; the shared base remains |

@@ -67,7 +67,10 @@ GNOME 51 Wayland → PipeWire screencast → RDP → FreeRDP → Xvfb → x11vnc
   exits under the current virtual GPU. **X11 applications are not supported**
   in the T2 desktop; use Wayland applications or T1.
 - Ubuntu Shell extensions that assume a GDM seat are disabled; T2 runs vanilla
-  GNOME Shell.
+  GNOME Shell with one OpenLink extension.
+- GNOME's screen-sharing and screen-recording top-bar indicators are hidden.
+  In T2 the RDP surface is the only display; the indicator's stop action
+  terminates that surface and leaves a black desktop.
 - T2 is preview: no stability or migration SLA beyond the supported one-command
   switch.
 
