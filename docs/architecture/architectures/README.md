@@ -44,7 +44,11 @@ scope; the Web/BFF never needs a mode-specific code path.
 5. Every fast path has the authoritative provisioning path as its fallback.
 6. Project VM state (disk, SSH identity, seed identity, runtime secrets) is
    backed up as one recovery unit.
-7. A project runtime is bound to the architecture that created it. T1 and T2
+7. User-installed CLI tools are exposed only through the project-scoped
+   `/var/lib/openlink/agent-tools` registry, mounted read-only as
+   `/openlink/agent-tools` with its `bin` directory on `PATH`. Host PATH and
+   package-manager trees are never mounted into a sandbox.
+8. A project runtime is bound to the architecture that created it. T1 and T2
    share the qemu-kvm backend but use separate state roots and release
    identities. Startup in the other mode skips automatic restore and explicit
    provisioning fails with an actionable error; it never runs two VMs for one

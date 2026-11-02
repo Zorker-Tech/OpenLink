@@ -22,6 +22,8 @@ constraints.
    reliability, performance, availability, security, and operability baseline.
 8. [`08-release-versioning.md`](./08-release-versioning.md) — shared product
    version, T1-Crab/T2-Orion release names, and compatibility-mode versioning.
+9. [`09-agent-tool-registry.md`](./09-agent-tool-registry.md) — project-scoped
+   CLI tool registration, sandbox exposure and discovery.
 
 ## Scope
 
