@@ -357,10 +357,16 @@ export function serviceCreateArgs(name, service, environment, options) {
     if (volume.read_only) suffix.push('ro')
     args.push('--volume', `${source}:${volume.target}${suffix.length ? `:${suffix.join(',')}` : ''}`)
   }
-  if (name === 'api-gw') args.push('--publish', `127.0.0.1:${options.gatewayPort}:8000/tcp`)
+  // Publish inside the Project VM's network namespace, not its loopback.
+  // QEMU/KVM host forwarding connects to the guest's routable address, so a
+  // 127.0.0.1 publication is unreachable from the host even though it works
+  // from inside the guest. The Project VM boundary plus the driver's explicit
+  // host forward remain the access-control boundary; no port is exposed on
+  // the host unless the runtime descriptor allocated one.
+  if (name === 'api-gw') args.push('--publish', `0.0.0.0:${options.gatewayPort}:8000/tcp`)
   if (name === 'supavisor') {
-    args.push('--publish', `127.0.0.1:${options.databasePort}:5432/tcp`)
-    args.push('--publish', `127.0.0.1:${options.poolerPort}:6543/tcp`)
+    args.push('--publish', `0.0.0.0:${options.databasePort}:5432/tcp`)
+    args.push('--publish', `0.0.0.0:${options.poolerPort}:6543/tcp`)
   }
   const health = service.healthcheck
   if (health) {
@@ -863,7 +869,10 @@ async function ensureRuntime(options) {
   const secrets = await loadOrCreateSecrets(options)
   const template = parseEnvTemplate(await readFile(resolve(options.immutableRoot, 'configuration/.env.example'), 'utf8'))
   const environment = projectEnvironment(template, secrets, options)
-  const desiredHash = sha256(JSON.stringify({ release: lock.release, spec, environment, ports: [options.gatewayPort, options.databasePort, options.poolerPort] }))
+  // The publication bind address is part of the container identity: changing
+  // it must recreate the resident API gateway and pooler instead of silently
+  // keeping an unreachable loopback-only listener.
+  const desiredHash = sha256(JSON.stringify({ release: lock.release, spec, environment, publishHost: '0.0.0.0', ports: [options.gatewayPort, options.databasePort, options.poolerPort] }))
   await ensureProjectFunctions(options)
   await ensurePaths(spec, options)
   try { podman(['network', 'inspect', NETWORK], { capture: true }) } catch { podman(['network', 'create', '--internal=false', NETWORK]) }
