@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
 import { createHash, randomBytes } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { Buffer } from 'node:buffer'
 import { createServer } from 'node:net'
 import { Readable, Transform } from 'node:stream'
@@ -10,6 +11,7 @@ import { pipeline } from 'node:stream/promises'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
+import { AGENT_TOOL_CLI } from './agent-tools.js'
 
 export interface ProjectRuntimeServicePorts {
   opensandbox: number
@@ -53,7 +55,7 @@ export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
  * Reattach treats an older descriptor as stale so the provisioning path
  * rewrites the OpenSandbox config and reconciles its containers.
  */
-const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-02-desktop-automation-v1'
+const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-02-agent-tool-registry-v2'
 
 /**
  * Resolve the architecture of a persisted runtime. Older descriptors predate
@@ -1576,6 +1578,7 @@ export class ProjectRuntimeManager {
         // Podman drivers always take the guest-path branch above.
         await mkdir(input.sessionStorageRoot, { recursive: true, mode: 0o700 })
       }
+      await this.ensureAgentToolRegistry(vm.machineName)
       const ubuntuDesktopIsoPath = await this.stageUbuntuDesktopIso(input)
       if (ubuntuDesktopIsoPath) input.ubuntuDesktopIsoPath = ubuntuDesktopIsoPath
       await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'starting_project_database', diskMode: vm.diskMode })
@@ -1785,6 +1788,39 @@ export class ProjectRuntimeManager {
 
   private vmSshPort(ports: ProjectRuntimeServicePorts): number {
     return port(ports.browserHost + 101, 'Project VM SSH port')
+  }
+
+  /**
+   * Install the project-scoped CLI registry controller and create its empty
+   * layout. It is copied at runtime so the same implementation works in T1/T2
+   * Ubuntu VMs and E1 Podman machines without rebuilding a base image.
+   */
+  private async ensureAgentToolRegistry(machineName: string): Promise<void> {
+    const copyToMachine = this.machineDriver.copyToMachine?.bind(this.machineDriver)
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!copyToMachine || !runner) return
+    const source = resolve(tmpdir(), `openlink-agent-tool-${process.pid}-${randomBytes(4).toString('hex')}.sh`)
+    await writeFile(source, AGENT_TOOL_CLI, { encoding: 'utf8', mode: 0o600 })
+    try {
+      await copyToMachine(machineName, source, '/tmp/openlink-agent-tool')
+      await runner(machineName, 'sudo', ['-n', 'sh', '-c', [
+        'set -e',
+        'cp /tmp/openlink-agent-tool /usr/local/bin/openlink-agent-tool',
+        'chmod 0755 /usr/local/bin/openlink-agent-tool',
+        'mkdir -p /var/lib/openlink/agent-tools/bin /var/lib/openlink/agent-tools/tools',
+        'chmod 0755 /var/lib/openlink/agent-tools /var/lib/openlink/agent-tools/bin /var/lib/openlink/agent-tools/tools',
+        'if [ ! -f /var/lib/openlink/agent-tools/manifest.tsv ]; then : > /var/lib/openlink/agent-tools/manifest.tsv; fi',
+        'chmod 0644 /var/lib/openlink/agent-tools/manifest.tsv',
+        'rm -f /tmp/openlink-agent-tool',
+      ].join('\n')])
+    } catch (error) {
+      // The registry is an additive capability; a VM without sudo must not be
+      // prevented from running its project services. The desktop/session skill
+      // remains harmless when the registry is empty.
+      console.error(`OpenLink project agent tool registry setup failed for ${machineName}: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      await rm(source, { force: true })
+    }
   }
 
   private async ensureProjectSupabase(machineName: string, projectId: string, workspacePath: string, ports: ProjectRuntimeServicePorts): Promise<ProjectRuntimeDescriptor['supabase']> {
@@ -2599,7 +2635,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       `execd_image = "${input.execdImage}"`,
       '',
       '[storage]',
-      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}", "/usr/local/bin/openlink-agent-desktop", "/run/user/1000/openlink-desktop-tool.sock"]`,
+      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}", "/usr/local/bin/openlink-agent-desktop", "/run/user/1000/openlink-desktop-tool.sock", "/var/lib/openlink/agent-tools"]`,
       'volume_default_size = "1Gi"',
       '',
       '[store]',
