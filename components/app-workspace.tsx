@@ -53,6 +53,7 @@ interface SidebarChatMenuProps {
 export interface SidebarChatRuntime {
   speed: number
   state: OrbState
+  status?: ChatSessionSummary['runStatus']
 }
 
 type ProjectRuntimeSnapshot = Pick<ProjectSummary,
@@ -95,7 +96,18 @@ function projectRuntimeSnapshot(project: ProjectSummary): ProjectRuntimeSnapshot
   }
 }
 
-const IDLE_CHAT_RUNTIME: SidebarChatRuntime = { speed: 0.25, state: 'solving' }
+const IDLE_CHAT_RUNTIME: SidebarChatRuntime = { speed: 0.25, state: 'solving', status: 'idle' }
+
+function persistedChatRuntime(chat: ChatSessionSummary): SidebarChatRuntime {
+  switch (chat.runStatus) {
+    case 'running': return { speed: 1, state: 'working', status: 'running' }
+    case 'interrupted': return { speed: 0.15, state: 'solving', status: 'interrupted' }
+    case 'failed': return { speed: 0.2, state: 'breathing', status: 'failed' }
+    case 'cancelled': return { speed: 0.2, state: 'breathing', status: 'cancelled' }
+    case 'completed': return { speed: 0.25, state: 'solving', status: 'completed' }
+    default: return IDLE_CHAT_RUNTIME
+  }
+}
 
 function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) {
   const t = useT()
@@ -149,13 +161,20 @@ function SidebarItem({
   chatMenu?: SidebarChatMenuProps
   onClick?: () => void
 }) {
+  const t = useT()
+  const runtimeLabel = chatRuntime?.status === 'running' ? t('运行中')
+    : chatRuntime?.status === 'completed' ? t('已完成')
+      : chatRuntime?.status === 'failed' ? t('失败')
+        : chatRuntime?.status === 'cancelled' ? t('已取消')
+          : chatRuntime?.status === 'interrupted' ? t('已中断')
+            : t('空闲')
   return (
-    <div className={`group relative flex h-9 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`} data-chat-row={chatMenu ? '' : undefined}>
+    <div data-chat-status={chatRuntime?.status} title={chatRuntime ? runtimeLabel : undefined} className={`group relative flex h-9 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`} data-chat-row={chatMenu ? '' : undefined}>
       <button aria-current={active ? 'page' : undefined} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-2 text-inherit" onClick={onClick} type="button">
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {chatRuntime
           ? <span className={`flex size-5 shrink-0 items-center justify-center transition-opacity duration-150 ease-out ${chatMenu ? 'group-hover:opacity-0 group-focus-within:opacity-0' : ''}`} data-chat-status-orb>
-              <ThinkingOrb aria-label={chatRuntime.state} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
+              <ThinkingOrb aria-label={runtimeLabel} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
             </span>
           : <img alt="" className="app-nav-icon size-4 shrink-0" src={icon} />}
       </button>
@@ -335,7 +354,7 @@ export function Sidebar({
                         <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden pl-4">
                           {group.chats.map((chat) => {
                             const active = activeChatId === chat.id
-                            return <SidebarItem active={active} chatMenu={chatMenuFor(chat, active)} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => { onCloseMobile(); router.push(`/${chat.userId}/chat/${chat.id}`) }} />
+                            return <SidebarItem active={active} chatMenu={chatMenuFor(chat, active)} chatRuntime={active ? activeChatRuntime ?? persistedChatRuntime(chat) : persistedChatRuntime(chat)} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => { onCloseMobile(); router.push(`/${chat.userId}/chat/${chat.id}`) }} />
                           })}
                         </div>
                       </div>

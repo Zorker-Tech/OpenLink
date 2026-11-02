@@ -1136,5 +1136,8 @@
   "ZeroLink 管理": "ZeroLink-Verwaltung",
   "ZIP 文件不能超过 5 MB。": "Die ZIP-Datei darf höchstens 5 MB groß sein.",
   "ZIP 中没有找到 SKILL.md。": "Im ZIP wurde keine SKILL.md gefunden.",
-  "Zorker home": "Zorker-Startseite"
+  "Zorker home": "Zorker-Startseite",
+  "运行中": "Läuft",
+  "已取消": "Abgebrochen",
+  "已中断": "Unterbrochen"
 }
