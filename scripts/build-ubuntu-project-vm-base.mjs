@@ -108,6 +108,8 @@ const guestPackages = [
   'xauth',
   'x11-xserver-utils',
   'fonts-ubuntu',
+  'fonts-noto-cjk',
+  'fonts-noto-cjk-extra',
   'fonts-noto-color-emoji',
   ...(isT2 ? [
     // T2 preview: Wayland GNOME Shell is captured through GNOME Remote
