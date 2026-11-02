@@ -1136,5 +1136,8 @@
   "ZeroLink 管理": "ZeroLink 管理",
   "ZIP 文件不能超过 5 MB。": "ZIP ファイルは 5 MB 以下にしてください。",
   "ZIP 中没有找到 SKILL.md。": "ZIP 内に SKILL.md が見つかりません。",
-  "Zorker home": "Zorker ホーム"
+  "Zorker home": "Zorker ホーム",
+  "运行中": "実行中",
+  "已取消": "キャンセル済み",
+  "已中断": "中断"
 }

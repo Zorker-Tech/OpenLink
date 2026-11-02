@@ -1,6 +1,7 @@
 import { ChatWorkspace } from '@/components/chat-workspace'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listPersistedChatEvents } from '@/lib/chat-session-persistence.server'
+import { getChatSessionRun } from '@/lib/chat-session-runs.server'
 import { listOrganizations } from '@/lib/organizations'
 import { getProject } from '@/lib/projects'
 import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
@@ -38,7 +39,7 @@ export default async function ChatSessionPage({
   const session = await observeChatStage('session.load', getChatSession(supabase, user.id, sessionId))
   if (!session) notFound()
 
-  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, initialEvents, skillSummaries, preferences] = await Promise.all([
+  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, initialEvents, skillSummaries, preferences, initialRun] = await Promise.all([
     observeChatStage('workspace.load', getAccessibleWorkspaceById(supabase, session.workspace_id)),
     observeChatStage('personal_workspace.load', getOwnedWorkspace(supabase, user.id)),
     observeChatStage('organizations.load', listOrganizations(supabase, user.id)),
@@ -54,6 +55,7 @@ export default async function ChatSessionPage({
     observeChatStage('events.load', listPersistedChatEvents(supabase, user.id, session.id)),
     observeChatStage('skills.load', listUserSkills(supabase, user.id)),
     observeChatStage('preferences.load', getUserPreferences(supabase, user.id)),
+    observeChatStage('run.load', getChatSessionRun(supabase, user.id, session.id)),
   ])
 
   if (!workspace || !personalWorkspace || !project) notFound()
@@ -80,6 +82,7 @@ export default async function ChatSessionPage({
       autoStart={shouldAutoStartInitialPrompt(query.run, session.initial_prompt, initialEvents)}
       autoStartModel={session.provider_id && session.model_id ? { providerId: session.provider_id, modelId: session.model_id } : null}
       initialEvents={initialEvents}
+      initialRun={initialRun}
       initialPrompt={session.initial_prompt}
       nickname={nickname}
       organizations={organizations}
