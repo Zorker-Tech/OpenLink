@@ -1,0 +1,7 @@
+{
+  "uuid": "openlink-headless@openlink",
+  "name": "OpenLink Headless Session",
+  "description": "Hide remote-session indicators that can terminate the T2 headless desktop.",
+  "shell-version": ["51"],
+  "version": 1
+}
