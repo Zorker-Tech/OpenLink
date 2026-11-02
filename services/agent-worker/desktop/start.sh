@@ -117,6 +117,19 @@ else
     exit 1
   fi
 
+  # agent-desktop reads the AT-SPI tree. Ubuntu does not enable the toolkit
+  # bridge by default. Enable it before GNOME starts; the accessibility bus is
+  # resolved after the session is up because a restart can allocate a new bus
+  # GUID.
+  desktop_atspi_address=unix:path=/run/user/1000/at-spi/bus_0
+  if [[ -S "$desktop_bus" ]]; then
+    runuser -u openlink -- env \
+      HOME=/home/openlink \
+      XDG_RUNTIME_DIR=/run/user/1000 \
+      DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+      gsettings set org.gnome.desktop.interface toolkit-accessibility true >/dev/null 2>&1 || true
+  fi
+
   start_background xvfb Xvfb :0 -screen 0 1280x800x24 -nolisten tcp -ac +extension RANDR
   wait_for_file /tmp/.X11-unix/X0
 
@@ -124,7 +137,8 @@ else
     HOME=/home/openlink
     DISPLAY=:0
     XDG_RUNTIME_DIR=/run/user/1000
-    AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus
+    AT_SPI_BUS_ADDRESS="$desktop_atspi_address"
+    GTK_MODULES=gail:atk-bridge
     XDG_SESSION_TYPE=x11
     XDG_CURRENT_DESKTOP=ubuntu:GNOME
     GNOME_SHELL_SESSION_MODE=ubuntu
@@ -170,6 +184,26 @@ else
     exit 1
   fi
   if [[ "${OPENLINK_DESKTOP_REQUIRE_GNOME:-0}" == "1" ]] && pgrep -u openlink -x gnome-shell >/dev/null 2>&1; then
+    if [[ -S "$desktop_bus" ]] && command -v dbus-send >/dev/null 2>&1; then
+      resolved_atspi_address="$(runuser -u openlink -- env \
+        HOME=/home/openlink \
+        XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        dbus-send --session --print-reply --dest=org.a11y.Bus /org/a11y/bus org.a11y.Bus.GetAddress 2>/dev/null \
+        | sed -n 's/.*string "\(.*\)".*/\1/p' || true)"
+      if [[ -n "$resolved_atspi_address" ]]; then
+        desktop_atspi_address="$resolved_atspi_address"
+      fi
+    fi
+    if [[ -x /usr/libexec/at-spi2-registryd ]]; then
+      pkill -u openlink -x at-spi2-registryd 2>/dev/null || true
+      start_background at-spi-registry runuser -u openlink -- env \
+        HOME=/home/openlink \
+        XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
+        AT_SPI_BUS_ADDRESS="$desktop_atspi_address" \
+        /usr/libexec/at-spi2-registryd
+    fi
     desktop_tool_socket=/run/user/1000/openlink-desktop-tool.sock
     rm -f "$desktop_tool_socket"
     start_background desktop-tool runuser -u openlink -- env \
@@ -177,7 +211,8 @@ else
       DISPLAY=:0 \
       XDG_RUNTIME_DIR=/run/user/1000 \
       DBUS_SESSION_BUS_ADDRESS=unix:path="$desktop_bus" \
-      AT_SPI_BUS_ADDRESS=unix:path=/run/user/1000/at-spi/bus \
+      AT_SPI_BUS_ADDRESS="$desktop_atspi_address" \
+      GTK_MODULES=gail:atk-bridge \
       XDG_SESSION_TYPE=x11 \
       XDG_CURRENT_DESKTOP=ubuntu:GNOME \
       OPENLINK_DESKTOP_TOOL_SOCKET="$desktop_tool_socket" \
