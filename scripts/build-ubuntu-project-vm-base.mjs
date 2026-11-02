@@ -319,6 +319,18 @@ try {
   for (const [source, destination] of desktopCopies) {
     await run(docker, ['cp', resolve(root, 'services/agent-worker/desktop', source), `${rootfsContainer}:/opt/openlink/desktop/${destination}`], { timeout: 60_000 })
   }
+  if (isT2) {
+    // The headless session must hide GNOME's screen-sharing indicator: in T2
+    // the RDP surface is the only display, and the indicator's stop action
+    // turns the user's desktop black.
+    const extensionSource = resolve(root, 'services/agent-worker/desktop/gnome-extensions/openlink-headless@openlink')
+    const extensionTarget = '/opt/openlink/desktop/gnome-extensions/openlink-headless@openlink'
+    await run(docker, ['exec', rootfsContainer, 'mkdir', '-p', extensionTarget], { timeout: 30_000 })
+    for (const file of ['metadata.json', 'extension.js']) {
+      await run(docker, ['cp', resolve(extensionSource, file), `${rootfsContainer}:${extensionTarget}/${file}`], { timeout: 60_000 })
+    }
+    await run(docker, ['exec', rootfsContainer, 'chmod', '-R', 'a+rX', '/opt/openlink/desktop/gnome-extensions'], { timeout: 30_000 })
+  }
   await run(docker, ['exec', rootfsContainer, 'sh', '-c', `chmod 0755 /usr/local/bin/node /opt/openlink/desktop/start.sh${isT2 ? '' : ' /opt/openlink/desktop/run-ubuntu-vm.sh'}`], { timeout: 30_000 })
 
   const rootfsTar = resolve(workRoot, 'rootfs.tar')
