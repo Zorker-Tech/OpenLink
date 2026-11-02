@@ -42,6 +42,14 @@
       "openlinkPatches": [
         "Honor XDG_CONFIG_HOME in the vendored Windows homedir adapter so Project VM configuration and disks remain in the product-owned runtime root."
       ]
+    },
+    "agent-desktop": {
+      "path": "services/agent-desktop",
+      "upstream": "https://github.com/vercel-labs/agent-desktop.git",
+      "sourceCommit": "9eb9b296192fcb70bda25e918cd6dd66abfa3d0d",
+      "version": "1.0.2",
+      "license": "Apache-2.0",
+      "openlinkPackaging": "Pinned Linux x86_64 release archive installed in the T2 Project VM base image."
     }
   }
 }
