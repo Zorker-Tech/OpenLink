@@ -48,6 +48,7 @@ test('injects the constrained desktop tool bridge environment', () => {
   assert.deepEqual(desktopAutomationEnvironment(runtime('t2')), {
     OPENLINK_DESKTOP_AUTOMATION: 'agent-desktop',
     OPENLINK_DESKTOP_TOOL_SOCKET: '/run/user/1000/openlink-desktop-tool.sock',
+    OPENLINK_DESKTOP_EXTENSION_PATH: '/opt/openlink/agent-worker/extensions/openlink-desktop.ts',
   })
   assert.deepEqual(desktopAutomationEnvironment(runtime('t1')), desktopAutomationEnvironment(runtime('t2')))
 })

@@ -18,6 +18,7 @@ import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici'
 import { CodexAppServerRuntime, stageCodexPromptFiles } from './codex-runtime.js'
 import { piPromptProtocolInput } from './prompt-protocol.js'
 import { handleBrowserMcpRequest } from './browser-mcp.js'
+import { handleDesktopMcpRequest } from './desktop-mcp.js'
 import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
 
 const FILE_PREVIEW_LIMIT = 192 * 1024
@@ -50,12 +51,15 @@ interface WorkerConfig {
   browserControlToken?: string
   browserExtensionPath?: string
   browserCapabilityFile?: string
+  desktopExtensionPath?: string
+  desktopToolSocket?: string
   supabaseExtensionPath?: string
   agent: 'pi' | 'codex'
   codexBin: string
   codexHome: string
   accessMode: 'restricted' | 'ask' | 'open'
   turnIdleTimeoutMs: number
+  runtimePolicy?: string
 }
 
 interface AgentExtensionUiResponse {
@@ -98,9 +102,9 @@ function config(): WorkerConfig {
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
-    browserCapabilityFile: process.env.OPENLINK_BROWSER_CAPABILITY_FILE
-      ? resolve(process.env.OPENLINK_BROWSER_CAPABILITY_FILE)
-      : undefined,
+    browserCapabilityFile: process.env.OPENLINK_BROWSER_CAPABILITY_FILE,
+    desktopExtensionPath: process.env.OPENLINK_DESKTOP_EXTENSION_PATH,
+    desktopToolSocket: process.env.OPENLINK_DESKTOP_TOOL_SOCKET,
     supabaseExtensionPath: process.env.OPENLINK_SUPABASE_EXTENSION_PATH,
     agent: process.env.OPENLINK_AGENT_KIND === 'codex' ? 'codex' : 'pi',
     codexBin: process.env.OPENLINK_CODEX_BIN || 'codex',
@@ -109,6 +113,10 @@ function config(): WorkerConfig {
     turnIdleTimeoutMs: Number.isFinite(configuredTurnIdleTimeout) && configuredTurnIdleTimeout >= 1_000
       ? configuredTurnIdleTimeout
       : 10 * 60_000,
+    runtimePolicy: (() => {
+      const policy = process.env.OPENLINK_AGENT_RUNTIME_POLICY?.trim()
+      return policy && policy.length <= 16_000 && !policy.includes('\0') ? policy : undefined
+    })(),
   }
 }
 
@@ -427,12 +435,14 @@ class SdkAgentRuntime {
     const extensions = await availableExtensionPaths([
       this.worker.browserExtensionPath,
       this.worker.supabaseExtensionPath,
+      this.worker.desktopExtensionPath,
     ])
     const resourceLoader = new DefaultResourceLoader({
       cwd: this.worker.workspaceRoot,
       agentDir: this.worker.sessionRoot,
       noExtensions: true,
       additionalExtensionPaths: extensions,
+      ...(this.worker.runtimePolicy ? { appendSystemPrompt: [this.worker.runtimePolicy] } : {}),
     })
     await resourceLoader.reload()
     const commands = [
@@ -748,7 +758,9 @@ class SdkAgentRuntime {
       additionalExtensionPaths: await availableExtensionPaths([
         this.worker.browserExtensionPath,
         this.worker.supabaseExtensionPath,
+        this.worker.desktopExtensionPath,
       ]),
+      ...(this.worker.runtimePolicy ? { appendSystemPrompt: [this.worker.runtimePolicy] } : {}),
     })
     await resourceLoader.reload()
     const { session } = await createAgentSession({
@@ -796,6 +808,8 @@ const runtime = worker.agent === 'codex'
     supabaseMcpUrl: process.env.OPENLINK_SUPABASE_MCP_URL,
     supabaseMcpToken: process.env.OPENLINK_SUPABASE_MCP_TOKEN,
     browserMcpUrl: worker.browserCapabilityFile ? `http://127.0.0.1:${worker.port}/v1/browser-mcp` : undefined,
+    desktopMcpUrl: worker.desktopExtensionPath ? `http://127.0.0.1:${worker.port}/v1/desktop-mcp` : undefined,
+    developerInstructions: worker.runtimePolicy,
     turnIdleTimeoutMs: worker.turnIdleTimeoutMs,
   })
   : new SdkAgentRuntime(worker)
@@ -980,6 +994,11 @@ const server = createServer((request, response) => {
     if (request.method === 'POST' && url.pathname === '/v1/browser-mcp') {
       if (!worker.browserCapabilityFile) throw new Error('Browser capability is not configured for this Agent')
       await handleBrowserMcpRequest(request, response, worker.browserCapabilityFile)
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/desktop-mcp') {
+      if (!worker.desktopToolSocket) throw new Error('Desktop automation is not configured for this Agent')
+      await handleDesktopMcpRequest(request, response, worker.desktopToolSocket)
       return
     }
     if (request.method === 'PUT' && url.pathname === '/v1/browser-capability') {
