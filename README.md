@@ -1,12 +1,12 @@
-# OpenLink
+# Zorker Openlink
 
-OpenLink is a project-scoped AI workspace: one durable Project VM per project,
-OpenSandbox chat sessions inside it, and a desktop surface for the user and the
-agents to share.
+Zorker Openlink is a project-scoped AI workspace: one durable Project VM per
+project, OpenSandbox chat sessions inside it, and a desktop surface for the user
+and the agents to share.
 
 ## Architecture modes
 
-OpenLink ships three explicit project-computer architectures. **T1 is the stable default.**
+Zorker Openlink ships three explicit project-computer architectures. **T1 is the stable default.**
 **T2 is the Wayland preview.**
 
 | Mode | Project VM | Session | Desktop | Startup |
@@ -132,6 +132,8 @@ for the data and recovery contract.
 - `scripts/` — lifecycle, artifact production and validation entry points.
 - `docs/architecture/` — standards, ADRs, per-architecture directories.
 - `.openlink-runtime/` — generated runtime state and artifacts; never commit.
+- `LICENSE`, `NOTICE`, `TRADEMARK.md`, `COMMERCIAL.md`, `CONTRIBUTING.md`,
+  `LICENSING-FAQ.md` — licensing and brand terms.
 
 ## Artifacts
 
@@ -175,6 +177,29 @@ operations documents:
 - [`T1 operations`](./docs/architecture/architectures/t1/operations.md)
 - [`T2 operations`](./docs/architecture/architectures/t2/operations.md)
 - [`E1 operations`](./docs/architecture/architectures/e1/operations.md)
+
+## License
+
+Zorker Openlink is **source-available**, not open source. The source is
+published so you can inspect, build, and use it under the terms of the
+[Zorker Openlink Source-Available License](./LICENSE).
+
+- **Personal use:** free for individuals for private, non-commercial use.
+- **Internal commercial use:** free for organizations with USD 3,000,000 or
+  less in annual net revenue (consolidated with affiliates).
+- **Commercial License required:** operational use (SaaS, hosting, managed
+  services), distribution, OEM/white-label, or internal commercial use at or
+  above the revenue threshold. See [COMMERCIAL.md](./COMMERCIAL.md).
+- **No redistribution** of the Software or modified versions. Internal
+  modifications are allowed.
+- **No external contributions.** See [CONTRIBUTING.md](./CONTRIBUTING.md).
+- **Trademarks:** no trademark rights are granted. See
+  [TRADEMARK.md](./TRADEMARK.md).
+- **Third-party components** remain under their own licenses. See
+  [NOTICE](./NOTICE) and [license/INDEX.md](./license/INDEX.md).
+
+The `code-prompt` component shipped in `@vtslx/platform-sdk` remains under the
+MIT License.
 
 ## Safety rules
 
