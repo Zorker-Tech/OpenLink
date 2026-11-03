@@ -1,0 +1,53 @@
+ZORKER OPENLINK
+Copyright (c) 2026 Haokir Inc. All rights reserved.
+
+This product is licensed under the Zorker Openlink Source-Available License,
+Version 1.0. See the LICENSE file.
+
+THIRD-PARTY AND SEPARATELY LICENSED COMPONENTS
+
+This product includes software, libraries, assets, container images, and
+operating-system components that are not owned by Haokir Inc. and are governed
+by their own license terms. A central index of license and notice copies is
+maintained in license/INDEX.md. The original license files remain in their
+respective component directories.
+
+All other components authored by Haokir Inc. that do not carry their own
+license terms are covered by the LICENSE in the repository root.
+
+Components that carry their own license terms include, without limitation:
+
+- backend/ -- Supabase and related packages (Apache-2.0; individual packages
+  under MIT or ISC as identified in their package.json files)
+- components/thinking/ -- thinking-orbs (MIT)
+- services/agent-desktop/ -- agent-desktop (Apache-2.0; upstream Vercel Labs)
+- services/code-server/ -- code-server (MIT)
+- services/linux/ -- Podman and vendored dependencies (Apache-2.0 and other
+  licenses identified in the component tree)
+- services/opensandbox/ -- OpenSandbox (Apache-2.0)
+- services/pi/ -- Pi (MIT)
+- services/sandbox-runtime/ -- @anthropic-ai/sandbox-runtime (Apache-2.0)
+- services/zero/ -- Milvus (Apache-2.0)
+- node_modules/ -- third-party npm packages (licenses identified in each
+  package)
+- video/zorker-openlink-demo/ -- private demo; not licensed under the Zorker
+  Openlink License (all rights reserved)
+
+The @vtslx/platform-sdk package is distributed under its own LICENSE.md. Its
+code-prompt component is licensed under the MIT License and is not relicensed
+under the Zorker Openlink License.
+
+Fonts, icons, images, models, and other assets may be third-party materials
+governed by their own licenses. See the license files accompanying those
+materials.
+
+Operating-system and container images (including Ubuntu, Podman, and related
+components) are governed by their own licenses. If you distribute an image,
+you are responsible for complying with those licenses, including any
+source-code, notice, and attribution obligations.
+
+TRADEMARKS
+
+Zorker, Zorker Openlink, Hydite, Cauiril, Haokir, and associated logos are
+trademarks of Haokir Inc. See TRADEMARK.md. The Zorker Openlink License does
+not grant any trademark rights.

@@ -2,6 +2,7 @@
   "name": "my-project",
   "version": "0.0.1",
   "private": true,
+  "license": "LicenseRef-Zorker-Openlink-1.0",
   "scripts": {
     "dev": "node scripts/openlink.mjs --mode development",
     "dev:web": "next dev --webpack",
