@@ -15,7 +15,7 @@ const requiredExports = [
 
 if (!existsSync(packagePath)) throw new Error('Platform SDK is not installed; run pnpm install through the internal npm consumer registry.')
 const metadata = JSON.parse(readFileSync(packagePath, 'utf8'))
-if (metadata.name !== '@vtslx/platform-sdk' || metadata.version !== '0.2.5' || metadata.engines?.node !== '>=22')
+if (metadata.name !== '@vtslx/platform-sdk' || metadata.version !== '0.2.6' || metadata.engines?.node !== '>=22')
   throw new Error('Unexpected installed Platform SDK identity or Node engine.')
 
 for (const exportName of requiredExports) {

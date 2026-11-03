@@ -1,0 +1,103 @@
+diff --git a/dist/auth.d.ts b/dist/auth.d.ts
+--- a/dist/auth.d.ts
++++ b/dist/auth.d.ts
+@@ -54,6 +54,8 @@
+     fetch?: typeof globalThis.fetch;
+     trustedOrigins?: readonly string[];
+     allowInsecureLoopback?: boolean;
++    /** Explicit HTTP redirect origins for trusted development environments. */
++    allowInsecureHttpRedirectOrigins?: readonly string[];
+     metadataTtlMs?: number;
+     maxResponseBytes?: number;
+     now?: () => number;
+diff --git a/dist/auth.js b/dist/auth.js
+--- a/dist/auth.js
++++ b/dist/auth.js
+@@ -79,7 +79,25 @@
+         throw new Error('OAuth scopes are invalid');
+     return [...new Set(normalized)];
+ }
+-function validateRedirectUri(value) {
++function validateInsecureRedirectOrigin(value) {
++    let url;
++    try {
++        url = new URL(value);
++    }
++    catch {
++        throw new Error('OAuth insecure redirect origin must be an absolute URL');
++    }
++    if (url.protocol !== 'http:' ||
++        url.username ||
++        url.password ||
++        url.pathname !== '/' ||
++        url.search ||
++        url.hash) {
++        throw new Error('OAuth insecure redirect origins must be HTTP origins without a path');
++    }
++    return url.origin;
++}
++function validateRedirectUri(value, allowedInsecureHttpOrigins = new Set()) {
+     let url;
+     try {
+         url = new URL(value);
+@@ -91,7 +109,7 @@
+         throw new Error('OAuth redirectUri must not contain credentials or a fragment');
+     }
+     const allowed = url.protocol === 'https:' ||
+-        (url.protocol === 'http:' && isLoopback(url)) ||
++        (url.protocol === 'http:' && (isLoopback(url) || allowedInsecureHttpOrigins.has(url.origin))) ||
+         (/^[a-z][a-z0-9+.-]*:$/.test(url.protocol) &&
+             !['data:', 'file:', 'javascript:', 'http:'].includes(url.protocol));
+     if (!allowed)
+@@ -350,7 +368,8 @@
+             throw new Error('OAuth clientId is required');
+         }
+         this.clientId = options.clientId;
+-        this.redirectUri = validateRedirectUri(options.redirectUri);
++        const allowedInsecureHttpOrigins = new Set((options.allowInsecureHttpRedirectOrigins ?? []).map(validateInsecureRedirectOrigin));
++        this.redirectUri = validateRedirectUri(options.redirectUri, allowedInsecureHttpOrigins);
+         this.scopes = uniqueScopes(options.scopes);
+         if (this.scopes.length === 0)
+             throw new Error('At least one OAuth scope is required');
+diff --git a/dist/computer-agent.d.ts b/dist/computer-agent.d.ts
+--- a/dist/computer-agent.d.ts
++++ b/dist/computer-agent.d.ts
+@@ -67,6 +67,8 @@
+ export type OpenComputerPiAgentOptions = {
+     /** Stable id for Pi's persistent session. Defaults to a new random id. */
+     agentSessionId?: string;
++    /** Absolute path to this session's isolated Pi configuration directory. */
++    agentDir?: string;
+     /** Idempotency key for opening this terminal. Reuse the key only to recover that terminal. */
+     terminalIdempotencyKey: string;
+     cwd?: string;
+diff --git a/dist/computer-agent.js b/dist/computer-agent.js
+--- a/dist/computer-agent.js
++++ b/dist/computer-agent.js
+@@ -195,6 +195,11 @@
+         const sessionId = options.agentSessionId ?? randomAgentSessionId();
+         if (!validAgentSessionId(sessionId))
+             throw new Error('Pi agent session ID is invalid');
++        if (options.agentDir !== undefined && (typeof options.agentDir !== 'string' ||
++            !/^\/[A-Za-z0-9._/-]{1,511}$/.test(options.agentDir) ||
++            options.agentDir.includes('//') || /(^|\/)\.{1,2}(\/|$)/.test(options.agentDir))) {
++            throw new Error('Pi agent configuration directory is invalid');
++        }
+         if (!/^[A-Za-z0-9._~-]{8,128}$/.test(options.terminalIdempotencyKey)) {
+             throw new Error('A bounded terminal idempotency key is required');
+         }
+@@ -213,9 +218,11 @@
+         });
+         const agent = new ComputerPiAgentSession(computer, terminal, sessionId, options, heartbeatIntervalMs);
+         try {
+-            // The command is fixed except for a validated Pi session identifier. No
+-            // caller-provided shell text or provider credential is interpolated here.
+-            await agent.writeInput(`stty -echo -icanon -icrnl -opost 2>/dev/null; exec /usr/local/bin/pi --mode rpc --session-id ${sessionId} 2>/dev/null\n`);
++            // The command is fixed except for a validated Pi session identifier and
++            // an absolute, shell-safe configuration directory. Credentials stay in
++            // the isolated auth.json file and are never interpolated into the command.
++            const agentDir = options.agentDir ? `PI_CODING_AGENT_DIR=${options.agentDir} ` : '';
++            await agent.writeInput(`stty -echo -icanon -icrnl -opost 2>/dev/null; ${agentDir}exec /usr/local/bin/pi --mode rpc --session-id ${sessionId} 2>/dev/null\n`);
+             agent.ready = true;
+             const state = await agent.getState({ timeoutMs: options.startupTimeoutMs ?? 30_000 });
+             if (state.sessionId !== sessionId)
