@@ -33,6 +33,7 @@ import {
   ChevronRight,
   CircleAlert,
   CircleCheck,
+  CircleSlash2,
   Clock3,
   Copy,
   FileText,
@@ -43,7 +44,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { AiBrain02Icon, BadgeCheckIcon, BookOpen01Icon, Edit01Icon, SquareTerminalIcon } from '@hugeicons/core-free-icons'
+import { BadgeCheckIcon, BookOpen01Icon, BulbIcon, Edit01Icon, SquareTerminalIcon } from '@hugeicons/core-free-icons'
 import type { ReactNode } from 'react'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
@@ -80,7 +81,7 @@ type ChangeTimelineItem = Extract<TimelineItem, { kind: 'change' }>
 
 interface TimelineState {
   items: TimelineItem[]
-  status: 'idle' | 'running' | 'settled' | 'error'
+  status: 'idle' | 'running' | 'settled' | 'error' | 'cancelled'
   source: 'pi' | 'codex' | 'demo'
   /** The canonical user message is the durable boundary of an agent turn. */
   activeRoundId?: string
@@ -115,6 +116,27 @@ function taskState(executions: TaskExecution[], fallback: ExecutionState): Execu
   if (executions.length > 0 && executions.every((execution) => execution.state === 'completed')) return 'completed'
   if (executions.some((execution) => execution.state === 'pending')) return 'pending'
   return fallback
+}
+
+function settleTimelineTasks(state: TimelineState, outcome: 'completed' | 'failed'): void {
+  state.items = state.items.map((item) => {
+    if (item.kind === 'task') {
+      const executions = item.executions.map((execution) => execution.state === 'active'
+        ? { ...execution, state: outcome }
+        : execution)
+      return { ...item, state: taskState(executions, outcome), executions }
+    }
+    if (item.kind === 'status' && item.state === 'active') {
+      return { ...item, state: outcome === 'completed' ? 'completed' as const : 'failed' as const }
+    }
+    if (item.kind === 'reasoning' && item.streaming) return { ...item, streaming: false }
+    if (item.kind === 'message' && item.streaming && outcome === 'completed') return { ...item, streaming: false }
+    return item
+  })
+}
+
+function isCancellationMessage(message: string): boolean {
+  return /cancel(?:l)?ed|aborted|interrupted/i.test(message)
 }
 
 function humanizeToolName(name: string) {
@@ -224,6 +246,7 @@ function buildTimeline(events: OpenLinkAgentEvent[]): TimelineState {
         break
       case 'session.completed':
         state.status = 'settled'
+        settleTimelineTasks(state, 'completed')
         break
       case 'message.user':
         // A user message begins a new durable turn. Reset transient grouping
@@ -401,10 +424,13 @@ function buildTimeline(events: OpenLinkAgentEvent[]): TimelineState {
       case 'checkpoint.created':
         state.items = replaceItem(state.items, event.checkpointId, () => ({ id: event.checkpointId, kind: 'checkpoint', label: event.label, timestamp: event.timestamp, metrics: event.metrics }))
         break
-      case 'error':
-        state.status = 'error'
+      case 'error': {
+        const cancelled = isCancellationMessage(event.message)
+        state.status = cancelled ? 'cancelled' : 'error'
+        settleTimelineTasks(state, cancelled ? 'completed' : 'failed')
         state.items = replaceItem(state.items, event.errorId, () => ({ id: event.errorId, kind: 'error', message: event.message }))
         break
+      }
     }
     return state
   }, { items: [], status: 'idle', source: 'demo', partTaskIds: {} })
@@ -427,7 +453,11 @@ function buildConversationRounds(timeline: TimelineState, t: Translator): Conver
     const isLast = index === groups.length - 1
     const state = isLast && timeline.status === 'running' ? 'working' : 'worked'
     const checkpoint = [...group.items].reverse().find((item): item is Extract<TimelineItem, { kind: 'checkpoint' }> => item.kind === 'checkpoint')
-    const assistantMessages = group.items.filter((item): item is MessageTimelineItem => item.kind === 'message' && item.role === 'assistant')
+    const assistantMessages = group.items.filter((item): item is MessageTimelineItem => (
+      item.kind === 'message'
+      && item.role === 'assistant'
+      && Boolean(item.text.trim() || item.attachments?.length)
+    ))
     const changes = group.items.filter((item): item is ChangeTimelineItem => item.kind === 'change')
     const ending = state === 'worked' ? assistantMessages.at(-1) : undefined
     const endingChange = state === 'worked' && changes.length ? mergeRoundChanges(group.id, changes, t) : undefined
@@ -449,6 +479,7 @@ function buildConversationRounds(timeline: TimelineState, t: Translator): Conver
           item !== checkpoint
           && item.kind !== 'change'
           && item !== ending
+          && (item.kind !== 'message' || Boolean(item.text.trim() || item.attachments?.length))
           && (item.kind !== 'task' || item.executions.length > 0)
         ))
       : []
@@ -692,6 +723,14 @@ function executionInput(execution: TaskExecution, t: Translator) {
   return { displayValue, primary, range, title: [primary, range, execution.error ?? execution.output].filter(Boolean).join(' · ') }
 }
 
+function LiveSweepText({ active, className = '', children }: { active: boolean; className?: string; children: ReactNode }) {
+  return (
+    <span className={`${active ? 'timeline-live-sweep ' : ''}${className}`} data-live-task-title={active ? 'true' : undefined}>
+      {children}
+    </span>
+  )
+}
+
 function StatusGlyph({ running, label, doneIcon, orbState = 'working' }: { running: boolean; label: string; doneIcon?: IconSvgElement; orbState?: OrbState }) {
   // Running tasks keep the animated orb; settled tasks switch to a static
   // HugeIcon SVG that corresponds to the task type. Both states share one
@@ -785,7 +824,7 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
       <TaskTrigger className="w-full" title={title}>
         <div className="flex h-7 w-full items-center gap-2 overflow-hidden rounded-md text-left text-[13px] leading-[21.125px] tracking-[-0.0762px] text-[var(--app-muted)] transition-colors hover:text-[var(--app-foreground)]">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={title} orbState={orbState} running={item.state === 'active'} />
-          <span className="min-w-0 flex-1 truncate">{title}</span>
+          <LiveSweepText active={item.state === 'active'} className="min-w-0 flex-1 truncate">{title}</LiveSweepText>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </div>
       </TaskTrigger>
@@ -807,7 +846,7 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
     <div className="flex h-7 min-w-0 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
       <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} />
       <p className="min-w-0 flex-1 truncate" title={[item.label, item.detail].filter(Boolean).join(' — ')}>
-        <span>{item.label}</span>
+        <LiveSweepText active={item.state === 'active'}>{item.label}</LiveSweepText>
         {item.detail ? <span className="ml-2 text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</span> : null}
       </p>
     </div>
@@ -1037,9 +1076,9 @@ function ErrorItem({
   const canRetryInitialPrompt = Boolean(onRetryInitialPrompt)
     && /Agent runtime could not start \(CLOUD_CONNECTION_(?:REAUTH_REQUIRED|INACTIVE)\); your message has been saved/.test(item.message)
   return (
-    <div className="py-0.5" data-expanded={open} data-slot="timeline-error">
+    <div data-expanded={open} data-slot="timeline-error">
       <div className="flex min-w-0 items-center gap-2">
-        <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
+        <button aria-controls={detailsId} aria-expanded={open} className="group flex h-7 min-w-0 flex-1 items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
           <CircleAlert className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
           {messages.length > 1 ? <span aria-label={t('{count} 次', { count: messages.length })} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
@@ -1074,7 +1113,7 @@ function TimelineItemView({
     content = (
       <Reasoning className="mb-0!" defaultOpen={false} duration={item.durationMs ? Math.max(1, Math.round(item.durationMs / 1000)) : undefined} isStreaming={item.streaming}>
         <ReasoningTrigger className="h-7 gap-2 text-[13px] leading-[21px] tracking-[-0.0762px]" getThinkingMessage={(streaming) => streaming ? <span>{t('Thinking…')}</span> : <span>{t('Thought for a moment')}</span>}>
-          <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? t('正在思考') : t('思考已完成')} orbState="solving" running={item.streaming} />
+          <StatusGlyph doneIcon={BulbIcon} label={item.streaming ? t('正在思考') : t('思考已完成')} orbState="solving" running={item.streaming} />
           <span>{item.streaming ? t('Thinking…') : t('Thought for a moment')}</span>
         </ReasoningTrigger>
         {showContent && item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
@@ -1153,7 +1192,7 @@ function WorkFlowGroup({
       <div className={`flex h-7 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
         <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={flow.label} orbState={flow.state} running={round.state === 'working'} />
-          <span className="truncate text-[14px] font-medium">{label}</span>
+          <LiveSweepText active={round.state === 'working'} className="truncate text-[14px] font-medium">{label}</LiveSweepText>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </button>
         {checkpoint ? <span className="hidden shrink-0 items-center gap-1 sm:flex"><Clock3 className="size-[13px]" />{open ? formatClockTime(checkpoint.timestamp) : formatRelativeTime(checkpoint.timestamp, t)}</span> : null}
@@ -1193,7 +1232,7 @@ function WorkFlowGroup({
       <div
         className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
       >
-        <div className="flex min-h-0 flex-col gap-2 overflow-hidden pb-2 pt-2">
+        <div className="flex min-h-0 flex-col gap-2 overflow-hidden pt-2">
           {children}
         </div>
       </div>
@@ -1203,12 +1242,30 @@ function WorkFlowGroup({
 
 function EndingSection({ round }: { round: ConversationRound }) {
   if (round.state !== 'worked' || (!round.ending && !round.endingChange)) return null
-  const hasWorkingGroup = round.workingItems.length > 0
 
   return (
-    <div className={`flex flex-col gap-3 ${hasWorkingGroup ? '-mt-1' : ''}`} data-message-phase="ending">
+    <div className="flex flex-col gap-2" data-message-phase="ending">
       {round.ending ? <div data-ending-item="summary"><TimelineMessageItem item={round.ending} /></div> : null}
       {round.endingChange ? <div data-ending-item="applied-changes"><ChangeItem item={round.endingChange} /></div> : null}
+    </div>
+  )
+}
+
+function TimelineEndMarker({ status }: { status: TimelineState['status'] }) {
+  const t = useT()
+  if (status === 'idle' || status === 'running') return null
+  const meta = status === 'settled'
+    ? { icon: CircleCheck, label: t('已完成'), tone: 'text-[var(--app-success)]' }
+    : status === 'cancelled'
+      ? { icon: CircleSlash2, label: t('已停止'), tone: 'text-[var(--app-muted)]' }
+      : { icon: CircleAlert, label: t('运行失败'), tone: 'text-[var(--app-danger)]' }
+  const Icon = meta.icon
+  return (
+    <div className="flex h-7 w-full items-center gap-2 text-[12px] text-[var(--app-muted)]" data-timeline-end={status}>
+      <span className="h-px flex-1 bg-[var(--app-border)]" />
+      <Icon aria-hidden className={`size-3.5 shrink-0 ${meta.tone}`} />
+      <span className={`shrink-0 ${meta.tone}`}>{meta.label}</span>
+      <span className="h-px w-8 bg-[var(--app-border)]" />
     </div>
   )
 }
@@ -1240,7 +1297,7 @@ export function ChatTimeline({
   const initialPromptMessageId = useMemo(() => {
     const prompt = initialPrompt.trim().slice(0, 10_000)
     if (!prompt) return null
-    return events.find((event) => event.type === 'message.user' && event.text === prompt)?.messageId ?? null
+    return events.find((event): event is Extract<OpenLinkAgentEvent, { type: 'message.user' }> => event.type === 'message.user' && event.text === prompt)?.messageId ?? null
   }, [events, initialPrompt])
   const activeFlow = useMemo(() => getActiveFlowStatus(timeline, t) ?? (isStreaming ? { label: t('正在思考'), state: 'solving' as OrbState } : null), [isStreaming, timeline])
 
@@ -1255,7 +1312,7 @@ export function ChatTimeline({
           const retryInitialPrompt = round.user?.id === initialPromptMessageId
             ? onRetryInitialPrompt
             : undefined
-          return <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>
+          return <section className="flex w-full flex-col gap-2" data-round-state={round.state} key={round.id}>
             {round.user ? <EditableUserMessage item={round.user} disabled={isStreaming} onEditMessage={onEditMessage} /> : null}
             {round.thinkingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} onRetryInitialPrompt={retryInitialPrompt} retryDisabled={isStreaming} />)}
             {isStreaming && round === rounds.at(-1) && !round.thinkingItems.length && !round.workingItems.length && !round.outputItems.length && !round.ending ? <StreamingThinkingItem /> : null}
@@ -1268,6 +1325,7 @@ export function ChatTimeline({
             <EndingSection round={round} />
           </section>
         })}
+        {rounds.length ? <TimelineEndMarker status={timeline.status} /> : null}
         <div className="h-px w-full" data-task-position="current" />
       </ConversationContent>
       <TaskPositionCapsule activeFlow={activeFlow} />

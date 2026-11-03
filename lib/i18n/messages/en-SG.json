@@ -1144,5 +1144,7 @@
   "会话和任务仍在后台正常运行。": "The conversation and task continue running in the background.",
   "恢复预览": "Resume preview",
   "暂停预览": "Pause preview",
-  "暂停只停止实时预览，会话和任务继续运行": "Pausing stops only the live preview; the session and task keep running"
+  "暂停只停止实时预览，会话和任务继续运行": "Pausing stops only the live preview; the session and task keep running",
+  "已停止": "Stopped",
+  "运行失败": "Run failed"
 }
