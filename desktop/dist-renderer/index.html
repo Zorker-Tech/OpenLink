@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="openlink-desktop" content="1" />
+    <title>OpenLink</title>
+    <script>
+      ;(function () {
+        try {
+          var theme = localStorage.getItem('openlink-theme') || 'system'
+          var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+          var classes = document.documentElement.classList
+          if (dark) classes.add('dark')
+          else classes.remove('dark')
+        } catch (_) {
+          document.documentElement.classList.add('dark')
+        }
+      })()
+    </script>
+    <script type="module" crossorigin src="/assets/index-CXfmaDGH.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="/assets/preload-helper-BZ1Pz5am.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-D32TOXHM-DF7KF6eS.js">
+    <link rel="modulepreload" crossorigin href="/assets/navigation-runtime-fihzoAZa.js">
+    <link rel="modulepreload" crossorigin href="/assets/katex-Cex5txLj.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-Y2CYZVJY-DsF7k-Jl.js">
+    <link rel="modulepreload" crossorigin href="/assets/src-B6xuSHsQ.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-DU6HZSFF-G-55oPAA.js">
+    <link rel="modulepreload" crossorigin href="/assets/dist-v5Q1xZ2K.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-75Z2AOVW-CCG88W_H.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-CLGD4ZFX-DPW4XqHa.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-P2QGCYS3-C6WnjuA_.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-PWAF6VOD-CU-7IoeM.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-GMAD6QVW-DQF0Dp2G.js">
+    <link rel="modulepreload" crossorigin href="/assets/rough.esm-Dy-Kn_BL.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-4HAMMTFA-DujlAtpx.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-GVQU2GXP-CvoeH4BO.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-L3NEJ4N5-ddQPW0JL.js">
+    <link rel="modulepreload" crossorigin href="/assets/path-fybaL0A-.js">
+    <link rel="modulepreload" crossorigin href="/assets/array-BifhSqXX.js">
+    <link rel="modulepreload" crossorigin href="/assets/line-BluWFVm_.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-OSK3NFVY-DGo3QIwS.js">
+    <link rel="modulepreload" crossorigin href="/assets/graphlib-DS17s2tU.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-2E4U76K2-DGgiJeq8.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-LNGE3PJU-5-SxdO55.js">
+    <link rel="modulepreload" crossorigin href="/assets/chunk-TLUHSLCS-OPFPuZX9.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-8wXh4-Sg.css">
+  </head>
+  <body class="antialiased">
+    <div id="root">
+      <main style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+        Opening OpenLink…
+      </main>
+    </div>
+  </body>
+</html>

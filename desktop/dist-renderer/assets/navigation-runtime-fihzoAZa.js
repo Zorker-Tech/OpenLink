@@ -1,0 +1,2 @@
+var e=new Set;function t(t){t?e.add(t):e.clear()}function n(t){if(t){for(let n of e){n(t);return}window.location.assign(t)}}export{t as n,n as t};
+//# sourceMappingURL=navigation-runtime-fihzoAZa.js.map
