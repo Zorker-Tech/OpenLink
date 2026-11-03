@@ -1139,5 +1139,10 @@
   "Zorker home": "Zorker home",
   "运行中": "Running",
   "已取消": "Cancelled",
-  "已中断": "Interrupted"
+  "已中断": "Interrupted",
+  "预览已暂停": "Preview paused",
+  "会话和任务仍在后台正常运行。": "The conversation and task continue running in the background.",
+  "恢复预览": "Resume preview",
+  "暂停预览": "Pause preview",
+  "暂停只停止实时预览，会话和任务继续运行": "Pausing stops only the live preview; the session and task keep running"
 }
