@@ -10,8 +10,9 @@ export async function POST(
   { params }: { params: Promise<{ session_id: string }> },
 ) {
   if (!isLocalRuntime()) return Response.json({ error: { code: 'LOCAL_STUDIO_UNAVAILABLE' } }, { status: 404 })
-  const requestHost = (new URL(request.url).hostname ?? request.headers.get('host') ?? '').split(':')[0].toLowerCase()
-  if (requestHost !== 'localhost') return Response.json({ error: { code: 'LOCAL_STUDIO_REQUIRES_LOCALHOST' } }, { status: 409 })
+  // The ticket is signed and user/project scoped, so Studio can be used from
+  // the same LAN host as the application. The origin always follows the
+  // request host; it is never taken from an untrusted query parameter.
   const origin = localStudioOrigin(request)
   const { session_id: sessionId } = await params
   if (!isChatSessionId(sessionId)) return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
@@ -28,7 +29,9 @@ export async function POST(
   // the Studio origin. The Domain=localhost cookie stays as a best-effort
   // fallback for engines that do apply it to subdomains.
   const response = Response.json({ iframeUrl: `${origin}/?${LOCAL_STUDIO_TICKET_PARAM}=${session.value}` })
-  response.headers.append('Set-Cookie', `${localStudioCookieName()}=${session.value}; Max-Age=${session.maxAge}; Domain=localhost; Path=/; HttpOnly; SameSite=Strict`)
+  // Cookies ignore ports. A host-only cookie from the app port is therefore
+  // available to the Studio port on the same hostname (localhost or LAN IP).
+  response.headers.append('Set-Cookie', `${localStudioCookieName()}=${session.value}; Max-Age=${session.maxAge}; Path=/; HttpOnly; SameSite=Strict`)
   response.headers.set('Cache-Control', 'no-store')
   return response
 }

@@ -13,9 +13,9 @@ export interface SessionUiState {
   dataSurface: 'panel' | 'studio'
   browserSurface: SessionBrowserSurface
   browserAddress: string
+  previewTargetId: string | null
   selectedGitRef: string | null
   chatPanelCollapsed: boolean
-  previewPaused: boolean
   composerDraft: string
 }
 
@@ -26,9 +26,9 @@ export const DEFAULT_SESSION_UI_STATE: SessionUiState = {
   dataSurface: 'panel',
   browserSurface: 'native-preview',
   browserAddress: '',
+  previewTargetId: null,
   selectedGitRef: null,
   chatPanelCollapsed: false,
-  previewPaused: false,
   composerDraft: '',
 }
 
@@ -61,9 +61,9 @@ export function sanitizeSessionUiState(value: unknown): SessionUiState {
       ? raw.browserSurface as SessionBrowserSurface
       : DEFAULT_SESSION_UI_STATE.browserSurface,
     browserAddress: safeString(raw.browserAddress, 8192),
+    previewTargetId: typeof raw.previewTargetId === 'string' && /^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/.test(raw.previewTargetId) ? raw.previewTargetId : null,
     selectedGitRef: typeof raw.selectedGitRef === 'string' && raw.selectedGitRef.length <= 256 ? raw.selectedGitRef : null,
     chatPanelCollapsed: raw.chatPanelCollapsed === true,
-    previewPaused: raw.previewPaused === true,
     composerDraft: safeString(raw.composerDraft, 10_000),
   }
 }

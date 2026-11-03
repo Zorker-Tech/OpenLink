@@ -20,11 +20,32 @@ interface BrowserMcpTool {
 
 const TOOLS: BrowserMcpTool[] = [
   {
+    name: 'browser_pages',
+    description: 'List every page in the shared browser and identify the active page. Use this first when a page id is unknown.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    readOnly: true,
+    action: () => ({ type: 'page.list' }),
+  },
+  {
     name: 'browser_open',
-    description: 'Open an absolute URL in the browser bound to this OpenLink session and return its page id.',
+    description: 'Open an absolute URL in the shared browser bound to this OpenLink session and return its page id.',
     inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false },
     readOnly: false,
     action: (args) => ({ type: 'page.open', url: args.url }),
+  },
+  {
+    name: 'browser_close',
+    description: 'Close a browser page by id.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'page.close', pageId: args.pageId }),
+  },
+  {
+    name: 'browser_activate',
+    description: 'Make a browser page the active page visible to the user.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'page.activate', pageId: args.pageId }),
   },
   {
     name: 'browser_read',
@@ -41,11 +62,39 @@ const TOOLS: BrowserMcpTool[] = [
     action: (args) => ({ type: 'page.navigate', pageId: args.pageId, url: args.url }),
   },
   {
+    name: 'browser_back',
+    description: 'Go back in a browser page history.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'page.back', pageId: args.pageId }),
+  },
+  {
+    name: 'browser_forward',
+    description: 'Go forward in a browser page history.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'page.forward', pageId: args.pageId }),
+  },
+  {
+    name: 'browser_reload',
+    description: 'Reload a browser page.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'page.reload', pageId: args.pageId }),
+  },
+  {
     name: 'browser_click',
     description: 'Click a browser element using a snapshot ref, selector, or viewport coordinates.',
-    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, ref: { type: 'string' }, selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, button: { type: 'string', enum: ['left', 'middle', 'right'] } }, required: ['pageId'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, ref: { type: 'string' }, selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, button: { type: 'string', enum: ['left', 'middle', 'right'] }, clickCount: { type: 'number' } }, required: ['pageId'], additionalProperties: false },
     readOnly: false,
     action: (args) => ({ type: 'element.click', ...args }),
+  },
+  {
+    name: 'browser_hover',
+    description: 'Hover a browser element using a snapshot ref, selector, or viewport coordinates.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, ref: { type: 'string' }, selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['pageId'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'element.hover', ...args }),
   },
   {
     name: 'browser_type',
@@ -55,11 +104,46 @@ const TOOLS: BrowserMcpTool[] = [
     action: (args) => ({ type: 'element.type', ...args }),
   },
   {
+    name: 'browser_insert_text',
+    description: 'Insert text at the current keyboard focus without replacing an element value.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, text: { type: 'string' } }, required: ['pageId', 'text'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'keyboard.insertText', pageId: args.pageId, text: args.text }),
+  },
+  {
+    name: 'browser_drag',
+    description: 'Drag between two viewport points.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, fromX: { type: 'number' }, fromY: { type: 'number' }, toX: { type: 'number' }, toY: { type: 'number' } }, required: ['pageId', 'fromX', 'fromY', 'toX', 'toY'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'element.drag', pageId: args.pageId, from: { x: args.fromX, y: args.fromY }, to: { x: args.toX, y: args.toY } }),
+  },
+  {
+    name: 'browser_key',
+    description: 'Press a keyboard key or shortcut, optionally with modifiers such as Control, Shift, Alt or Meta.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, key: { type: 'string' }, modifiers: { type: 'array', items: { type: 'string' } } }, required: ['pageId', 'key'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'keyboard.key', ...args }),
+  },
+  {
+    name: 'browser_scroll',
+    description: 'Scroll the page at a viewport point.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, deltaX: { type: 'number' }, deltaY: { type: 'number' } }, required: ['pageId', 'x', 'y', 'deltaX', 'deltaY'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'wheel', ...args }),
+  },
+  {
     name: 'browser_screenshot',
     description: 'Capture a browser page screenshot.',
     inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, fullPage: { type: 'boolean' } }, required: ['pageId'], additionalProperties: false },
     readOnly: true,
     action: (args) => ({ type: 'page.screenshot', ...args }),
+  },
+  {
+    name: 'browser_dialog',
+    description: 'Accept or dismiss the pending alert, confirmation or prompt dialog.',
+    inputSchema: { type: 'object', properties: { pageId: { type: 'string' }, accept: { type: 'boolean' }, promptText: { type: 'string' } }, required: ['pageId', 'accept'], additionalProperties: false },
+    readOnly: false,
+    action: (args) => ({ type: 'dialog.handle', ...args }),
   },
 ]
 

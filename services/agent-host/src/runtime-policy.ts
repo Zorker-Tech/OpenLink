@@ -8,14 +8,15 @@ import type { ProjectRuntimeDescriptor } from './project-runtime.js'
  * stays in the session skills. Its only job is capability truth and default
  * routing, so the model prefers project tools without guessing what is mounted.
  */
-export const RUNTIME_POLICY_REVISION = '2026-11-03-runtime-policy-v1'
+export const RUNTIME_POLICY_REVISION = '2026-11-03-runtime-policy-v2'
 
 export function runtimePolicyFor(runtime: ProjectRuntimeDescriptor | undefined): string | undefined {
   if (!runtime) return undefined
   const architecture = runtime.architecture ?? (runtime.backend === 'podman-machine' ? 'e1' : 't1')
   const desktop = desktopAutomationAvailable(runtime)
   const agentTools = agentToolsAvailable(runtime)
-  if (!desktop && !agentTools) return undefined
+  const browser = Boolean(runtime.browserHostEndpoint)
+  if (!desktop && !agentTools && !browser) return undefined
 
   const lines = [
     '## OpenLink Runtime Capabilities',
@@ -26,6 +27,12 @@ export function runtimePolicyFor(runtime: ProjectRuntimeDescriptor | undefined):
     'Routing rules:',
     '- Code, files, terminal work, and data inspection belong to the normal coding tools.',
   ]
+  if (browser) {
+    lines.push(
+      '- The Live Browser is always available for this session. Use browser_pages and browser_open to launch and inspect a real page; browser_navigate, browser_click, browser_type, browser_key, browser_scroll, browser_screenshot, and browser_dialog drive the same browser the user sees in the Realtime workspace.',
+      '- Do not use desktop automation for ordinary web pages when the browser tools can perform the task. Keep one browser page per logical task and close extra pages when finished.',
+    )
+  }
   if (desktop) {
     lines.push(
       '- For native GUI applications, OS dialogs, windows, menus, and tasks that require the visible Ubuntu desktop, use the desktop tools first (desktop_status, desktop_list_apps, desktop_snapshot, desktop_click, desktop_type, desktop_press, desktop_launch). The `agent-desktop` CLI is the equivalent shell fallback.',

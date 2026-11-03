@@ -12,7 +12,7 @@ const ACTIONS = new Set([
   'prepareSessionStorage', 'ensureProjectGitRepository', 'listGitVersions',
   'persistCodexThreadId',
   'listWorkspaceFiles', 'checkoutGitVersion', 'hasPersistedRuntime', 'restorePersistedRuntimes',
-  'discoverPreviewTarget', 'close',
+  'discoverPreviewTarget', 'discoverPreviewTargets', 'close',
 ])
 
 interface BrokerRequest { schemaVersion: 1; action: string; projectId?: string; payload?: unknown }
@@ -62,6 +62,10 @@ async function dispatch(controller: ProjectRuntimeController, request: BrokerReq
     case 'hasPersistedRuntime': return controller.hasPersistedRuntime(id!)
     case 'restorePersistedRuntimes': return controller.restorePersistedRuntimes()
     case 'discoverPreviewTarget': return controller.discoverPreviewTarget(id!)
+    case 'discoverPreviewTargets': {
+      if (payload.preferredSessionId !== undefined && typeof payload.preferredSessionId !== 'string') throw new AgentHostError('INVALID_BODY', 'preferredSessionId is invalid')
+      return controller.discoverPreviewTargets(id!, payload.preferredSessionId as string | undefined)
+    }
     case 'close': return controller.close({ stopRuntimes: payload.stopRuntimes === true })
   }
   throw new AgentHostError('INVALID_BODY', 'Project broker action is invalid')
@@ -150,5 +154,6 @@ export class ProjectContainerBrokerClient implements ProjectRuntimeController {
   hasPersistedRuntime(projectId: string) { return this.request<boolean>('hasPersistedRuntime', projectId) }
   async restorePersistedRuntimes() { await this.request('restorePersistedRuntimes') }
   discoverPreviewTarget(projectId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['discoverPreviewTarget']>>>('discoverPreviewTarget', projectId) }
+  discoverPreviewTargets(projectId: string, preferredSessionId?: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['discoverPreviewTargets']>>>('discoverPreviewTargets', projectId, preferredSessionId ? { preferredSessionId } : undefined) }
   async close(options: ProjectRuntimeCloseOptions = {}) { await this.request('close', undefined, { stopRuntimes: options.stopRuntimes === true }); this.active.clear() }
 }

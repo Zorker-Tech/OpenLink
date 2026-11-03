@@ -199,7 +199,7 @@ export class RemoteOpenSandboxRpcBackend {
         'openlink.workspace_id': scopedWorkspace,
         'openlink.session_id': scopedSession,
         'openlink.project_id': scopedProject,
-        ...(browser ? { 'openlink.browser_session_id': browser.sessionId } : {}),
+        ...(browser ? { 'openlink.browser_session_id': `b${browser.sessionId}x` } : {}),
         'openlink.runtime': 'pi-cli-rpc',
       },
       // Enable OpenSandbox's per-command bubblewrap isolation inside the

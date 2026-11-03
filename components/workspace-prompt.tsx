@@ -67,6 +67,10 @@ export interface WorkspacePromptProps {
    * app composer stays the canonical surface.
    */
   renderExtraTools?: ReactNode
+  /** Saved User Skills shown in the home composer capability menu. */
+  skills?: import('@/lib/user-skill-types').UserSkill[]
+  /** User preference text offered as an explicit instruction attachment. */
+  customInstructions?: string
   /** Invoked when the session is created without an authenticated user. */
   onUnauthenticated?: () => void
   /** Optional controlled input. When set, the textarea is controlled; the
@@ -93,6 +97,8 @@ export function WorkspacePrompt({
   onUnauthenticated,
   value,
   onValueChange,
+  skills = [],
+  customInstructions = '',
 }: WorkspacePromptProps) {
   const router = useRouter()
   const t = useT()
@@ -239,7 +245,17 @@ export function WorkspacePrompt({
       </PromptInputBody>
       <PromptInputFooter className="h-10 px-3 pb-3">
         <PromptInputTools className="min-w-0 flex-1 gap-0.5 overflow-hidden">
-          <PromptAddMenu variant="home" agent={agentKind} attachmentsEnabled />
+          <PromptAddMenu
+            accessMode={accessMode}
+            agent={agentKind}
+            attachmentsEnabled
+            customInstructions={customInstructions}
+            onAccessModeChange={setAccessMode}
+            onAddInstruction={(name, text) => updateInput(input ? `${input}\n\n${text}` : text)}
+            onInsertText={(text) => updateInput(input ? `${input}\n\n${text}` : text)}
+            skills={skills}
+            variant="home"
+          />
           <AccessModePicker value={accessMode} onChange={setAccessMode} />
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger

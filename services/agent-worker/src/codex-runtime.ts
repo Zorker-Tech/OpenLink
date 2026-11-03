@@ -7,6 +7,7 @@ import { CodexTurnLifecycle } from './codex-turn-lifecycle.js'
 import { codexReviewTarget } from './codex-review.js'
 import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
 import { instructionProtocolText } from './prompt-protocol.js'
+import { discoverInstructionResources } from './instruction-resources.js'
 
 const FILE_PREVIEW_LIMIT = 192 * 1024
 
@@ -353,6 +354,61 @@ export class CodexAppServerRuntime {
     ])
     capabilities.push({ name: 'review', description: 'Codex App Server · review/start', source: 'builtin' })
     capabilities.push({ name: 'fork', description: 'Codex App Server · thread/fork', source: 'builtin' })
+    // The composer's capability menu is a first-class inventory, not a set of
+    // static labels. Read the native App Server state once per resources
+    // request and keep every field display-safe.
+    const [mcpStatus, skillList, permissionList, instructions] = await Promise.all([
+      this.request('mcpServerStatus/list', { limit: 100, detail: 'toolsAndAuthOnly', threadId: this.threadId }, 5_000).catch(() => null),
+      this.request('skills/list', { cwds: [this.config.workspaceRoot] }, 5_000).catch(() => null),
+      this.request('permissionProfile/list', { cwd: this.config.workspaceRoot, limit: 100 }, 5_000).catch(() => null),
+      discoverInstructionResources(this.config.workspaceRoot),
+    ])
+    const mcpData = Array.isArray(asRecord(mcpStatus)?.data) ? asRecord(mcpStatus)!.data as unknown[] : []
+    const mcpServers = mcpData.flatMap((value) => {
+      const server = asRecord(value)
+      const name = stringValue(server?.name)
+      if (!name) return []
+      const runtimeStatus = stringValue(server?.runtimeStatus)
+      const authStatus = stringValue(server?.authStatus)
+      const tools = Array.isArray(server?.tools) ? server.tools : []
+      return [{
+        id: name,
+        name,
+        status: runtimeStatus === 'disabled' ? 'disabled' as const : runtimeStatus === 'failed' || runtimeStatus === 'error' ? 'error' as const : 'connected' as const,
+        auth: authStatus === 'notLoggedIn' ? 'required' as const : authStatus === 'bearerToken' || authStatus === 'oAuth' ? 'authenticated' as const : 'unsupported' as const,
+        toolCount: tools.length || (name === 'openlink_browser' ? 18 : name === 'openlink_desktop' ? 11 : name === 'openlink_supabase' ? 3 : 0),
+      }]
+    })
+    if (!mcpServers.some((server) => server.id === 'openlink_supabase') && this.config.supabaseMcpUrl && this.config.supabaseMcpToken) {
+      mcpServers.push({ id: 'openlink_supabase', name: 'OpenLink Supabase', status: 'connected', auth: 'authenticated', toolCount: 0 })
+    }
+    if (!mcpServers.some((server) => server.id === 'openlink_browser') && this.config.browserMcpUrl) {
+      mcpServers.push({ id: 'openlink_browser', name: 'OpenLink Browser', status: 'connected', auth: 'authenticated', toolCount: 18 })
+    }
+    if (!mcpServers.some((server) => server.id === 'openlink_desktop') && this.config.desktopMcpUrl) {
+      mcpServers.push({ id: 'openlink_desktop', name: 'OpenLink Desktop', status: 'connected', auth: 'authenticated', toolCount: 11 })
+    }
+    const skills = (Array.isArray(asRecord(skillList)?.data) ? asRecord(skillList)!.data as unknown[] : []).flatMap((entryValue) => {
+      const entry = asRecord(entryValue)
+      return (Array.isArray(entry?.skills) ? entry.skills : []).flatMap((value) => {
+        const skill = asRecord(value)
+        const name = stringValue(skill?.name)
+        if (!name || skill?.enabled === false) return []
+        const path = stringValue(skill?.path)
+        return [{
+          id: `skill:${path || name}`,
+          name,
+          description: stringValue(skill?.description),
+          source: path.includes('/plugins/') ? 'plugin' as const : 'builtin' as const,
+        }]
+      })
+    })
+    const permissionProfiles = (Array.isArray(asRecord(permissionList)?.data) ? asRecord(permissionList)!.data as unknown[] : []).flatMap((value) => {
+      const profile = asRecord(value)
+      const id = stringValue(profile?.id)
+      if (!id || profile?.allowed === false) return []
+      return [{ id, label: id, description: stringValue(profile?.description) }]
+    })
     return {
       agent: 'codex' as const,
       source: 'Codex App Server',
@@ -360,11 +416,15 @@ export class CodexAppServerRuntime {
       imageGeneration: false,
       // This is the same per-thread configuration passed to thread/start;
       // only expose display-safe identifiers, never URLs or bearer tokens.
-      mcpServers: [
-        ...(this.config.supabaseMcpUrl && this.config.supabaseMcpToken ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] : []),
-        ...(this.config.browserMcpUrl ? [{ id: 'openlink_browser', name: 'OpenLink Browser' }] : []),
-        ...(this.config.desktopMcpUrl ? [{ id: 'openlink_desktop', name: 'OpenLink Desktop' }] : []),
-      ],
+      mcpServers,
+      skills: skills.slice(0, 120),
+      permissionProfiles,
+      instructions,
+      computer: {
+        available: Boolean(this.config.desktopMcpUrl || this.config.browserMcpUrl),
+        desktop: Boolean(this.config.desktopMcpUrl),
+        browser: Boolean(this.config.browserMcpUrl),
+      },
       commands: capabilities.flatMap((command) => command ? [command] : []),
     }
   }
