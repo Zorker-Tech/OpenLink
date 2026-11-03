@@ -1,6 +1,6 @@
 # Cloud VTSLX Computer and Pi integration
 
-OpenLink Cloud uses `@vtslx/platform-sdk@0.2.5` to connect a user's linked
+OpenLink Cloud uses `@vtslx/platform-sdk@0.2.6` to connect a user's linked
 Hydite Studio account to the selected Studio project's Computer. OpenLink Host
 owns chat sessions and Pi RPC; the SDK supplies the project-authorized
 Computer stream, terminal transport, heartbeat, event stream, cancellation and
@@ -30,12 +30,12 @@ this Host.
 
 ## Package and configuration
 
-The root dependency and lockfile pin `@vtslx/platform-sdk@0.2.5`. The downloaded
+The root dependency and lockfile pin `@vtslx/platform-sdk@0.2.6`. The downloaded
 Nexus artifact is recorded in `packages/platform-sdk/manifest.json` with
-SHA-256 `33285c4a5a87b96bca9fd2e4e93cce2d7b84db00b3c13280a35f12e78d8bbd56`
+SHA-256 `2faddf8bc54c881295c6b612fa5e7d167b93aa067a00357196087cdd50387589`
 and its registry-matching SHA-512 integrity. The LAN OAuth callback patch is
 kept version-specific at
-`patches/@vtslx__platform-sdk@0.2.5.patch`.
+`patches/@vtslx__platform-sdk@0.2.6.patch`.
 
 Cloud startup provisions a protected internal Host token and a 32-byte
 checkpoint encryption key in the local OpenLink state directory when the
