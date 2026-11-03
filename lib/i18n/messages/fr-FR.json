@@ -1139,5 +1139,10 @@
   "Zorker home": "Accueil Zorker",
   "运行中": "En cours",
   "已取消": "Annulé",
-  "已中断": "Interrompu"
+  "已中断": "Interrompu",
+  "预览已暂停": "Aperçu en pause",
+  "会话和任务仍在后台正常运行。": "La conversation et la tâche continuent en arrière-plan.",
+  "恢复预览": "Reprendre l’aperçu",
+  "暂停预览": "Mettre l’aperçu en pause",
+  "暂停只停止实时预览，会话和任务继续运行": "La pause arrête uniquement l’aperçu en direct ; la session et la tâche continuent"
 }

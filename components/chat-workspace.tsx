@@ -60,6 +60,8 @@ import { useT } from '@/lib/i18n/client'
 import type { Translator } from '@/lib/i18n/messages'
 import { createPastedTextAttachment, insertRestoredPastedText, PASTED_TEXT_ATTACHMENT_MAX_COUNT, pastedTextByteLength, shouldAttachPastedText } from '@/lib/agent-runtime/pasted-text'
 import { recoverInterruptedInitialEvents } from '@/lib/agent-runtime/stream-integrity'
+import { useSessionUiState, type SessionWorkspaceTab, type SessionWorkspaceView } from '@/lib/session-ui-state'
+import { useTabVisibilityPause } from '@/lib/use-tab-visibility-pause'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
@@ -90,6 +92,8 @@ import {
   Monitor,
   MoreHorizontal,
   PanelLeft,
+  Pause,
+  Play,
   Plus,
   RotateCw,
   Send,
@@ -262,7 +266,7 @@ function ToolbarButton({ label, children, className = '', ...props }: { label: s
 /** Width of the inline session-title editor; the title slot animates to it. */
 const TITLE_EDITOR_WIDTH = 220
 
-type WorkspaceTabId = 'preview' | 'realtime' | 'desktop' | 'code' | 'database'
+type WorkspaceTabId = SessionWorkspaceTab
 
 type WorkspaceTabOption = { id: WorkspaceTabId; label: string; icon: typeof Globe2 }
 
@@ -466,6 +470,8 @@ function ChatTopbar({
   onToggleDataSurface,
   localRuntime,
   onSessionTitleChange,
+  onTogglePreviewPause,
+  previewPaused,
   workspaceView,
   renameRequestVersion,
   sessionTitle,
@@ -487,6 +493,8 @@ function ChatTopbar({
   onToggleDataSurface: () => void
   localRuntime: boolean
   onSessionTitleChange: (title: string) => Promise<boolean>
+  onTogglePreviewPause: () => void
+  previewPaused: boolean
   workspaceView: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
   renameRequestVersion: number
   sessionTitle: string
@@ -704,6 +712,13 @@ function ChatTopbar({
       )}
       {side === 'workspace' && (
       <div className="relative top-[1.5px] flex w-[150px] shrink-0 items-center gap-1 pr-2.5">
+        <ToolbarButton
+          aria-pressed={previewPaused}
+          className={previewPaused ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}
+          label={previewPaused ? t('恢复预览') : t('暂停预览')}
+          onClick={onTogglePreviewPause}
+          title={t('暂停只停止实时预览，会话和任务继续运行')}
+        >{previewPaused ? <Play className="size-4" /> : <Pause className="size-4" />}</ToolbarButton>
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label={t("更多")}><MoreHorizontal className="size-4" /></ToolbarButton>
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label={t("分享")}><Share2 className="size-4" /></ToolbarButton>
         <button className={`relative flex h-7 w-[70px] items-center justify-center gap-1.5 rounded-md border border-[var(--app-submit-background)] text-sm font-medium tracking-[-0.1504px] after:absolute after:-right-1 after:-top-1 after:size-3 after:rounded-full after:border-[1.5px] after:border-[var(--app-background)] after:bg-[var(--app-brand)] hover:opacity-90 ${theme('action')}`} type="button"><Globe2 className="size-4" />{t('发布')}</button>
@@ -838,6 +853,8 @@ export function ChatComposer({
   codexResources,
   onInstallPlugin,
   onInterrupt,
+  initialDraft,
+  onDraftChange,
 }: {
   initialModel: { providerId: string; modelId: string } | null
   models: ConfiguredModelOption[]
@@ -855,9 +872,11 @@ export function ChatComposer({
   codexResources: CodexComposerResources | null
   onInstallPlugin: (pluginId: string) => Promise<void>
   onInterrupt: () => void
+  initialDraft?: string
+  onDraftChange?: (draft: string) => void
 }) {
   const t = useT()
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialDraft ?? '')
   const [expanded, setExpanded] = useState(false)
   const [controlPending, setControlPending] = useState(false)
   const [controlReady, setControlReady] = useState(false)
@@ -875,6 +894,18 @@ export function ChatComposer({
   const [pastedTextAttachments, setPastedTextAttachments] = useState<Array<AgentPromptTextAttachment & { id: string }>>([])
   const [referenceAttachments, setReferenceAttachments] = useState<Array<AgentPromptReferenceAttachment & { id: string }>>([])
   const [instructionAttachments, setInstructionAttachments] = useState<Array<AgentPromptInstructionAttachment & { id: string }>>([])
+
+  const draftRestoredRef = useRef(false)
+  useEffect(() => {
+    if (draftRestoredRef.current || !initialDraft) return
+    draftRestoredRef.current = true
+    setInput((current) => current || initialDraft)
+  }, [initialDraft])
+  useEffect(() => {
+    if (!onDraftChange) return
+    const timer = window.setTimeout(() => onDraftChange(input), 300)
+    return () => window.clearTimeout(timer)
+  }, [input, onDraftChange])
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const forceSteerRef = useRef(false)
   const queueDrainRef = useRef(false)
@@ -1500,11 +1531,30 @@ export function ChatComposer({
   )
 }
 
+function PreviewPaused({ onResume }: { onResume: () => void }) {
+  const t = useT()
+  return (
+    <main aria-label={t('预览已暂停')} className={`flex size-full items-center justify-center p-6 ${theme('canvas')}`}>
+      <div className="flex max-w-sm flex-col items-center text-center">
+        <span className={`mb-4 flex size-12 items-center justify-center rounded-2xl ${theme('border', 'surface')}`}><Pause className="size-5" /></span>
+        <h2 className="text-sm font-medium">{t('预览已暂停')}</h2>
+        <p className={`mt-2 text-xs leading-5 ${theme('muted')}`}>{t('会话和任务仍在后台正常运行。')}</p>
+        <button className={`mt-4 inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs transition-colors ${theme('border', 'hover')}`} onClick={onResume} type="button"><Play className="size-3.5" />{t('恢复预览')}</button>
+      </div>
+    </main>
+  )
+}
+
 function PreviewCanvas({
   browserState,
   browserWorkbenchRef,
   cloudRuntime,
   view,
+  openTabs,
+  uiReady,
+  paused,
+  initialBrowserUrl,
+  onResumePreview,
   onBrowserStateChange,
   onToggleDeviceView,
   sessionId,
@@ -1520,7 +1570,12 @@ function PreviewCanvas({
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
   cloudRuntime: boolean
-  view: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
+  view: SessionWorkspaceView
+  openTabs: WorkspaceTabId[]
+  uiReady: boolean
+  paused: boolean
+  initialBrowserUrl: string
+  onResumePreview: () => void
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   onToggleDeviceView: () => void
   sessionId: string
@@ -1534,26 +1589,49 @@ function PreviewCanvas({
   panelProps: Pick<ChatWorkspaceProps, 'activeWorkspace' | 'avatarUrl' | 'chatSessions' | 'email' | 'nickname' | 'organizations' | 'personalWorkspace' | 'projectId' | 'userId'>
 }) {
   const t = useT()
-  if (view === 'code') return <CodeServerWorkbench chatSessionId={sessionId} />
-  if (view === 'desktop') return <DesktopWorkbench chatSessionId={sessionId} />
-  if (view === 'data') {
-    if (dataSurface === 'studio') return <ProjectSupabaseStudioFrame sessionId={sessionId} />
-    return <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />
-  }
+  if (!uiReady) return <div className="size-full" aria-busy="true" />
+
+  // code-server owns an iframe and editor layout. Keep it mounted for the life
+  // of its workspace tab; hiding it avoids a full editor reload when the user
+  // switches to another workspace surface.
+  const codeOpen = openTabs.includes('code')
+  const codeSurface = codeOpen ? (
+    <div aria-hidden={view !== 'code'} className={view === 'code' ? 'size-full' : 'hidden'} data-workspace-surface="code">
+      <CodeServerWorkbench chatSessionId={sessionId} />
+    </div>
+  ) : null
+  if (view === 'code') return <div className="size-full">{codeSurface}</div>
+
   const browserMode = view === 'browser'
+  const activeSurface = paused && (view === 'desktop' || browserMode || view === 'mobile')
+    ? <PreviewPaused onResume={onResumePreview} />
+    : view === 'desktop'
+      ? <DesktopWorkbench chatSessionId={sessionId} />
+      : view === 'data'
+        ? (dataSurface === 'studio'
+          ? <ProjectSupabaseStudioFrame sessionId={sessionId} />
+          : <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />)
+        : (
+          <div className="flex size-full min-w-0 flex-col" data-workspace-surface={browserMode ? 'browser' : 'mobile'}>
+            <BrowserNavigationBar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view} />
+            <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${browserMode ? theme('surface') : theme('editor')}`}>
+              <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
+                <div className={browserMode ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}>
+                  {cloudRuntime
+                    ? <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} />
+                    : <BrowserWorkbench chatSessionId={sessionId} initialSurface={browserState.surface} initialUrl={initialBrowserUrl || undefined} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />}
+                </div>
+              </div>
+            </main>
+          </div>
+        )
 
   return (
-    <div className="flex size-full min-w-0 flex-col">
-      <BrowserNavigationBar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view} />
-      <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${browserMode ? theme('surface') : theme('editor')}`}>
-        <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
-          <div className={browserMode ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}>
-            {cloudRuntime
-              ? <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} />
-              : <BrowserWorkbench chatSessionId={sessionId} initialSurface={browserState.surface} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />}
-          </div>
-        </div>
-      </main>
+    <div className="size-full min-h-0 min-w-0">
+      {codeSurface}
+      <div className="size-full" data-workspace-surface={view}>
+        {activeSurface}
+      </div>
     </div>
   )
 }
@@ -1584,12 +1662,20 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const router = useRouter()
   const t = useT()
+  const { state: persistedUi, update: updatePersistedUi, ready: uiReady } = useSessionUiState(sessionId)
+  const updateComposerDraft = useCallback((draft: string) => updatePersistedUi({ composerDraft: draft }), [updatePersistedUi])
+  const togglePreviewPause = useCallback(() => setPreviewPaused((value) => !value), [])
+  const uiStateAppliedRef = useRef(false)
+  const uiStatePersistArmedRef = useRef(false)
   const navigateToFork = useCallback((path: string) => router.push(path), [router])
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
+  const [previewPaused, setPreviewPaused] = useState(false)
+  const hiddenPreviewPaused = useTabVisibilityPause(15_000)
+  const previewSuspended = previewPaused || hiddenPreviewPaused
   const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)
   const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
   const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
@@ -1708,6 +1794,40 @@ export function ChatWorkspace({
   const [gitVersions, setGitVersions] = useState<GitVersionOption[]>([])
   const [selectedGitRef, setSelectedGitRef] = useState<string | null>(null)
   const [gitVersionsLoading, setGitVersionsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!uiReady || uiStateAppliedRef.current) return
+    uiStateAppliedRef.current = true
+    const tabs = [...persistedUi.openWorkspaceTabs]
+    if (persistedUi.workspaceView === 'code' && !tabs.includes('code')) tabs.push('code')
+    if (persistedUi.workspaceView === 'data' && !tabs.includes('database')) tabs.push('database')
+    setOpenWorkspaceTabs(tabs)
+    setWorkspaceView(persistedUi.workspaceView)
+    setDataSurface(persistedUi.dataSurface)
+    setBrowserState((current) => ({
+      ...current,
+      surface: persistedUi.browserSurface,
+      ...(persistedUi.browserAddress ? { address: persistedUi.browserAddress } : {}),
+    }))
+    setSelectedGitRef(persistedUi.selectedGitRef)
+    setChatPanelCollapsed(persistedUi.chatPanelCollapsed)
+    setPreviewPaused(persistedUi.previewPaused)
+    window.setTimeout(() => { uiStatePersistArmedRef.current = true }, 0)
+  }, [persistedUi.browserAddress, persistedUi.browserSurface, persistedUi.chatPanelCollapsed, persistedUi.dataSurface, persistedUi.openWorkspaceTabs, persistedUi.previewPaused, persistedUi.selectedGitRef, persistedUi.workspaceView, uiReady])
+
+  useEffect(() => {
+    if (!uiReady || !uiStatePersistArmedRef.current) return
+    updatePersistedUi({
+      openWorkspaceTabs,
+      workspaceView,
+      dataSurface,
+      browserSurface: browserState.surface,
+      browserAddress: browserState.address,
+      selectedGitRef,
+      chatPanelCollapsed,
+      previewPaused,
+    })
+  }, [browserState.address, browserState.surface, chatPanelCollapsed, dataSurface, openWorkspaceTabs, previewPaused, selectedGitRef, uiReady, updatePersistedUi, workspaceView])
   const [gitVersionError, setGitVersionError] = useState<string | null>(null)
   const [runtimeResources, setRuntimeResources] = useState<RuntimeComposerResources | null>(null)
   const [codexResources, setCodexResources] = useState<CodexComposerResources | null>(null)
@@ -2337,6 +2457,8 @@ export function ChatWorkspace({
     onReorderWorkspaceTabs: reorderWorkspaceTabs,
     onSessionTitleChange: updateSessionTitle,
     onToggleChat: toggleChatPanel,
+    onTogglePreviewPause: togglePreviewPause,
+    previewPaused: previewSuspended,
     onToggleDataSurface: () => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio'),
     onSelectWorkspaceTab: selectWorkspaceTab,
     openTabs: openWorkspaceTabs,
@@ -2411,7 +2533,7 @@ export function ChatWorkspace({
                         <div className="px-2 pb-2">
                           <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                           <AccessWritesBanner sessionId={sessionId} />
-                          <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                          <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2420,7 +2542,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <PreviewCanvas browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <PreviewCanvas browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} onResumePreview={() => setPreviewPaused(false)} openTabs={openWorkspaceTabs} paused={previewSuspended} uiReady={uiReady} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2441,7 +2563,7 @@ export function ChatWorkspace({
                   <div className="flex w-full max-w-3xl shrink-0 flex-col px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <AccessWritesBanner sessionId={sessionId} />
-                    <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                    <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} />
                   </div>
                 </motion.section>
               )}
@@ -2453,7 +2575,7 @@ export function ChatWorkspace({
               <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} />
               </div>
             </section>
           </div>
