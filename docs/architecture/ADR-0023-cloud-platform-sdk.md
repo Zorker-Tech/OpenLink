@@ -9,7 +9,7 @@ their production and browser acceptance gates remain open. See
 [`platform-cloud-oauth-storage.md`](../platform-cloud-oauth-storage.md).
 
 The Cloud Computer Host and Pi RPC chat path are now wired in source using
-`@vtslx/platform-sdk@0.2.4`; see
+`@vtslx/platform-sdk@0.2.6`; see
 [`platform-sdk-integration.md`](../platform-sdk-integration.md). This is not
 evidence that the VTSLX Worker grants `terminal`, or that end-to-end runtime and
 production acceptance have passed.

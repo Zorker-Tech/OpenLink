@@ -15,4 +15,4 @@ overrides:
   sharp: 0.35.0
 
 patchedDependencies:
-  '@vtslx/platform-sdk@0.2.5': patches/@vtslx__platform-sdk@0.2.5.patch
+  '@vtslx/platform-sdk@0.2.6': patches/@vtslx__platform-sdk@0.2.6.patch

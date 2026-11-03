@@ -3,7 +3,7 @@
 OpenLink Cloud consumes the built Hydite product SDK, not files imported from an
 adjacent repository and not Bifrost/Studio private implementation modules.
 
-The normal build consumes the immutable `@vtslx/platform-sdk@0.2.5` release from
+The normal build consumes the immutable `@vtslx/platform-sdk@0.2.6` release from
 the internal Nexus consumer registry:
 
 ```sh
