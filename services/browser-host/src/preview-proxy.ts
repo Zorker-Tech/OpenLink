@@ -64,6 +64,25 @@ function injectBridge(html: string, runtime: NativePreviewRuntime): string {
   return `${tag}${html}`
 }
 
+/**
+ * Map a public preview request path onto the upstream target path. The target
+ * may itself live under a base path (Project OpenSandbox proxy); that prefix
+ * must survive even though the public session prefix is stripped.
+ */
+export function previewUpstreamPath(input: {
+  publicPath: string
+  targetPath: string
+  pathMode: 'strip-session-prefix' | 'preserve-session-prefix'
+  url: URL
+}): string {
+  if (!input.url.pathname.startsWith(`${input.publicPath}/`)) throw new BrowserHostError('INVALID_PREVIEW_PATH', 'Preview path is outside the session', 404)
+  const path = input.pathMode === 'preserve-session-prefix'
+    ? input.url.pathname
+    : `/${input.url.pathname.slice(input.publicPath.length).replace(/^\/+/, '')}`
+  const basePath = input.targetPath.replace(/\/+$/, '')
+  return `${basePath}${path}${input.url.search}`
+}
+
 function rewriteSetCookie(value: string | string[] | undefined, publicPath: string): string[] | undefined {
   if (!value) return undefined
   return (Array.isArray(value) ? value : [value]).map((cookie) => {
@@ -222,10 +241,11 @@ export class NativePreviewProxy {
   }
 
   private upstreamPath(runtime: NativePreviewRuntime, url: URL): string {
-    if (!url.pathname.startsWith(`${runtime.publicPath}/`)) throw new BrowserHostError('INVALID_PREVIEW_PATH', 'Preview path is outside the session', 404)
-    const path = runtime.pathMode === 'preserve-session-prefix'
-      ? url.pathname
-      : `/${url.pathname.slice(runtime.publicPath.length).replace(/^\/+/, '')}`
-    return `${path}${url.search}`
+    return previewUpstreamPath({
+      publicPath: runtime.publicPath,
+      targetPath: runtime.target.pathname,
+      pathMode: runtime.pathMode,
+      url,
+    })
   }
 }

@@ -92,6 +92,8 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     inspectMode: false,
     status: 'connecting',
     surface: 'native-preview',
+    previewTargets: [],
+    previewTargetsLoading: true,
   })
   const currentPath = useRef('/')
   const tunnelOrigin = useRef<string | null>(null)
@@ -253,6 +255,18 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     void requestTunnel(service.id).then((url) => popup.location.replace(url)).catch(() => popup.close())
   }, [requestTunnel])
 
+  useEffect(() => {
+    setBrowserState((current) => ({
+      ...current,
+      previewTargets: services
+        .filter((service) => service.id.startsWith('web-') && service.status === 'running')
+        .map((service) => ({ id: `cloud-${service.port}`, label: service.name, port: service.port })),
+      ...(selectedService && selectedService.id.startsWith('web-') ? { activePreviewTargetId: `cloud-${selectedService.port}` } : {}),
+      previewTargetsLoading: discoveryInFlight.current,
+      ...(error ? { previewTargetsError: error } : {}),
+    }))
+  }, [error, selectedService, services])
+
   useImperativeHandle(ref, () => ({
     back: () => undefined,
     forward: () => undefined,
@@ -260,8 +274,16 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     openExternal,
     reload,
     setSurface: () => undefined,
+    selectPreviewTarget: (targetId: string) => {
+      const service = services.find((candidate) => `cloud-${candidate.port}` === targetId && candidate.status === 'running')
+      if (service) void openTunnel(service, '/').catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : 'CLOUD_COMPUTER_TUNNEL_UNAVAILABLE')
+        setBrowserState((current) => ({ ...current, status: 'failed' }))
+      })
+    },
+    refreshPreviewTargets: () => { void discoverAndOpen(true) },
     toggleInspector: () => undefined,
-  }), [navigate, openExternal, reload])
+  }), [discoverAndOpen, navigate, openExternal, openTunnel, reload, services])
 
   const displayedError = error === 'CLOUD_WEBSITE_NOT_RUNNING'
     ? t('未检测到正在运行的网站服务。启动项目 Web 服务后可自动预览。')

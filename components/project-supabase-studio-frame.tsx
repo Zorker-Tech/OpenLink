@@ -3,7 +3,7 @@
 import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { Loader2, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type StudioSessionResponse = { iframeUrl?: unknown; error?: { code?: unknown } } | null
 
@@ -17,8 +17,15 @@ export function ProjectSupabaseStudioFrame({ sessionId }: { sessionId: string })
   const [studioUrl, setStudioUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const requestInFlight = useRef(false)
 
   const openStudio = useCallback(async () => {
+    // React StrictMode mounts effects twice in development. Two tickets race
+    // and change the iframe src while the Studio bootstrap is navigating,
+    // which aborts its scripts and leaves a blank canvas. Keep one session
+    // request in flight per mounted Studio surface.
+    if (requestInFlight.current) return
+    requestInFlight.current = true
     setLoading(true)
     setError(null)
     try {
@@ -27,14 +34,21 @@ export function ProjectSupabaseStudioFrame({ sessionId }: { sessionId: string })
         cache: 'no-store',
       })
       const payload = await response.json().catch(() => null) as StudioSessionResponse
-      if (!response.ok || typeof payload?.iframeUrl !== 'string' || !payload.iframeUrl.startsWith('http://localhost:')) {
+      if (!response.ok || typeof payload?.iframeUrl !== 'string') {
         throw new Error(typeof payload?.error?.code === 'string' ? payload.error.code : 'LOCAL_STUDIO_UNAVAILABLE')
+      }
+      const nextUrl = new URL(payload.iframeUrl)
+      // Studio runs on a second port of the same hostname. Reject a cross-host
+      // URL so a compromised upstream descriptor cannot exfiltrate the ticket.
+      if (nextUrl.hostname !== window.location.hostname || nextUrl.protocol !== window.location.protocol) {
+        throw new Error('LOCAL_STUDIO_UNAVAILABLE')
       }
       setStudioUrl(payload.iframeUrl)
     } catch (reason) {
       setStudioUrl(null)
       setError(reason instanceof Error ? reason.message : 'LOCAL_STUDIO_UNAVAILABLE')
     } finally {
+      requestInFlight.current = false
       setLoading(false)
     }
   }, [sessionId])
@@ -51,7 +65,7 @@ export function ProjectSupabaseStudioFrame({ sessionId }: { sessionId: string })
           {loading
             ? <><Loader2 className="size-4 animate-spin text-[var(--app-muted)]" /><p className={`text-sm ${theme("muted")}`}>{t("正在建立受控 Studio 会话…")}</p></>
             : <>
-              <p className={`max-w-md text-center text-sm ${theme("muted")}`}>{error === "LOCAL_STUDIO_REQUIRES_LOCALHOST" ? t("请通过 http://localhost 打开 OpenLink 后使用 Supabase Studio。") : t("无法连接 Project VM 中的 Supabase Studio。")}</p>
+              <p className={`max-w-md text-center text-sm ${theme("muted")}`}>{t("无法连接 Project VM 中的 Supabase Studio。")}</p>
               <button className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium ${theme("action")}`} onClick={() => { void openStudio() }} type="button"><RefreshCw className="size-3.5" />{t("重试")}</button>
             </>}
         </div>

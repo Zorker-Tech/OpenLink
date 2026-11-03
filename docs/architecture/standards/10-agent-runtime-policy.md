@@ -28,12 +28,17 @@ environment routing only:
 
 - T1/T2 declare the project desktop; E1 must not.
 - Every Project VM session declares the read-only Agent Tool Registry.
-- Native GUI tasks prefer `desktop_*` tools; web-only tasks prefer browser
-  tools; code and file work keeps the normal coding tools.
+- Native GUI tasks prefer `desktop_*` tools.
+- The Live Browser is always available and includes launch (`browser_open`) and
+  page inventory (`browser_pages`); ordinary web tasks use browser tools, not
+  desktop automation. See `12-live-browser-and-preview.md` for ownership and
+  session lifetime.
+- Code and file work keeps the normal coding tools.
 - The model must not claim a capability absent from the policy.
 
 Policy text is bounded, contains no credentials, and is versioned by
-`OPENLINK_AGENT_RUNTIME_POLICY_REVISION`. Existing sessions receive a policy at
+`OPENLINK_AGENT_RUNTIME_POLICY_REVISION` (`runtime-policy-v2` declares the
+Agent-owned Live Browser). Existing sessions receive a policy at
 creation; a policy change takes effect for new sessions.
 
 ## Native desktop tools

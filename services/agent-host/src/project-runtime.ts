@@ -109,10 +109,15 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
 
 /** A verified HTTP service running inside one of a Project's session sandboxes. */
 export interface ProjectPreviewTarget {
+  id: string
+  label: string
+  source: 'sandbox'
+  sessionId?: string
   url: string
   headers: Record<string, string>
   port: number
   sandboxId: string
+  lastSeenAt: string
 }
 
 export interface ProjectGitVersion {
@@ -1259,6 +1264,15 @@ export class ProjectRuntimeManager {
    * the only upstream returned to Browser Host.
    */
   async discoverPreviewTarget(projectId: string): Promise<ProjectPreviewTarget | null> {
+    return (await this.discoverPreviewTargets(projectId))[0] ?? null
+  }
+
+  /**
+   * Locate all live development servers across the project's active session
+   * sandboxes. The returned URL and headers stay inside Agent Host; callers
+   * that face the browser receive only opaque target ids and labels.
+   */
+  async discoverPreviewTargets(projectId: string, preferredSessionId?: string): Promise<ProjectPreviewTarget[]> {
     const descriptor = await this.ensure(projectId)
     const listUrl = new URL('/v1/sandboxes', descriptor.opensandboxEndpoint)
     listUrl.searchParams.set('metadata', `openlink.project_id=${projectId}`)
@@ -1266,37 +1280,67 @@ export class ProjectRuntimeManager {
     const headers = { 'OPEN-SANDBOX-API-KEY': descriptor.opensandboxApiKey }
     const listed = await fetch(listUrl, { headers, signal: AbortSignal.timeout(5_000), cache: 'no-store' })
     if (!listed.ok) throw new AgentHostError('PROVISIONING_FAILED', `Could not inspect Project preview services (${listed.status})`, { retryable: true })
-    const body = await listed.json() as { items?: Array<{ id?: unknown; status?: { state?: unknown } }> }
-    const sandboxIds = (body.items ?? [])
+    const body = await listed.json() as {
+      items?: Array<{
+        id?: unknown
+        status?: { state?: unknown }
+        metadata?: Record<string, unknown>
+      }>
+    }
+    const sandboxes = (body.items ?? [])
       .filter((item) => typeof item.id === 'string' && !/failed|deleted|stopped/i.test(String(item.status?.state ?? '')))
-      .map((item) => item.id as string)
-    // Prefer conventional development-server ports. The fallback range covers
-    // common framework defaults while keeping discovery bounded and fast.
-    const ports = [5173, 3000, 3001, 4173, 8080, 8000, 4200, 4321, 8787, 4000]
-    for (const sandboxId of sandboxIds) {
-      for (const port of ports) {
-        const probe = new URL(`/v1/sandboxes/${encodeURIComponent(sandboxId)}/proxy/${port}/`, descriptor.opensandboxEndpoint)
+      .slice(0, 12)
+      .map((item) => ({
+        id: item.id as string,
+        sessionId: typeof item.metadata?.['openlink.session_id'] === 'string'
+          ? item.metadata['openlink.session_id'] as string
+          : undefined,
+      }))
+    if (preferredSessionId) {
+      sandboxes.sort((a, b) => Number(b.sessionId === preferredSessionId) - Number(a.sessionId === preferredSessionId))
+    }
+    const configuredPorts = (process.env.OPENLINK_PREVIEW_PORTS || '')
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((port) => Number.isSafeInteger(port) && port > 0 && port <= 65_535)
+    const conventionalPorts = [5173, 3000, 3001, 4173, 8080, 8000, 4200, 4321, 8787, 4000]
+    const ports = [...new Set([...configuredPorts, ...conventionalPorts])].slice(0, 16)
+    const tasks = sandboxes.flatMap((sandbox) => ports.map((port) => ({ sandbox, port })))
+    const targets: ProjectPreviewTarget[] = []
+    let next = 0
+    const probe = async () => {
+      while (next < tasks.length) {
+        const { sandbox, port } = tasks[next++]!
+        const probeUrl = new URL(`/v1/sandboxes/${encodeURIComponent(sandbox.id)}/proxy/${port}/`, descriptor.opensandboxEndpoint)
         try {
-          const response = await fetch(probe, { headers, signal: AbortSignal.timeout(2_500), redirect: 'manual', cache: 'no-store' })
-          // A redirect is a valid dev server response. 4xx/5xx means this is
-          // not an application listener (or it has not finished starting).
+          const response = await fetch(probeUrl, { headers, signal: AbortSignal.timeout(1_200), redirect: 'manual', cache: 'no-store' })
           if (response.status < 200 || response.status >= 400) continue
           if (response.body) await response.body.cancel().catch(() => undefined)
-          return {
-            // Browser Host is inside the Project VM and reaches the
-            // OpenSandbox service by its VM-published loopback gateway.
-            url: `http://host.containers.internal:${descriptor.servicePorts.opensandbox}/v1/sandboxes/${encodeURIComponent(sandboxId)}/proxy/${port}/`,
+          targets.push({
+            id: `${sandbox.id}:${port}`,
+            label: sandbox.sessionId ? `Session ${sandbox.sessionId} · :${port}` : `Sandbox ${sandbox.id.slice(0, 8)} · :${port}`,
+            source: 'sandbox',
+            ...(sandbox.sessionId ? { sessionId: sandbox.sessionId } : {}),
+            url: `http://host.containers.internal:${descriptor.servicePorts.opensandbox}/v1/sandboxes/${encodeURIComponent(sandbox.id)}/proxy/${port}/`,
             headers,
             port,
-            sandboxId,
-          }
+            sandboxId: sandbox.id,
+            lastSeenAt: new Date().toISOString(),
+          })
         } catch {
-          // A port probe is expected to fail until the app starts; continue
-          // scanning instead of treating that as a Project VM failure.
+          // An inactive port is the normal state while the app is starting.
         }
       }
     }
-    return null
+    await Promise.all(Array.from({ length: Math.min(24, tasks.length) }, () => probe()))
+    return targets.sort((a, b) => {
+      const current = preferredSessionId
+        ? Number(b.sessionId === preferredSessionId) - Number(a.sessionId === preferredSessionId)
+        : 0
+      if (current) return current
+      const portOrder = (target: ProjectPreviewTarget) => conventionalPorts.includes(target.port) ? conventionalPorts.indexOf(target.port) : 99
+      return portOrder(a) - portOrder(b) || a.id.localeCompare(b.id)
+    })
   }
 
   async remove(projectId: string): Promise<void> {

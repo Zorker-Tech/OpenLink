@@ -24,6 +24,7 @@ export interface ProjectRuntimeController {
   hasPersistedRuntime(projectId: string): Promise<boolean>
   restorePersistedRuntimes(): Promise<void>
   discoverPreviewTarget(projectId: string): Promise<ProjectPreviewTarget | null>
+  discoverPreviewTargets(projectId: string, preferredSessionId?: string): Promise<ProjectPreviewTarget[]>
   close(options?: ProjectRuntimeCloseOptions): Promise<void>
 }
 
@@ -324,6 +325,10 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async discoverPreviewTarget(projectIdValue: string) {
     return (await this.manager(projectIdValue)).discoverPreviewTarget(projectIdValue)
+  }
+
+  async discoverPreviewTargets(projectIdValue: string, preferredSessionId?: string) {
+    return (await this.manager(projectIdValue)).discoverPreviewTargets(projectIdValue, preferredSessionId)
   }
 
   async close(options: ProjectRuntimeCloseOptions = {}) {

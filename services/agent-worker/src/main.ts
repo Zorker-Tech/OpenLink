@@ -18,6 +18,7 @@ import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici'
 import { CodexAppServerRuntime, stageCodexPromptFiles } from './codex-runtime.js'
 import { piPromptProtocolInput } from './prompt-protocol.js'
 import { handleBrowserMcpRequest } from './browser-mcp.js'
+import { discoverInstructionResources } from './instruction-resources.js'
 import { handleDesktopMcpRequest } from './desktop-mcp.js'
 import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
 
@@ -467,9 +468,34 @@ class SdkAgentRuntime {
       imageGeneration: false,
       extensions: extensions.map((path) => path.split('/').pop() || path),
       commands,
-      mcpServers: this.worker.supabaseExtensionPath && extensions.includes(this.worker.supabaseExtensionPath)
-        ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }]
-        : [],
+      skills: resourceLoader.getSkills().skills.map((skill) => ({
+        id: `skill:${skill.name}`,
+        name: skill.name,
+        description: skill.description,
+        source: 'builtin' as const,
+      })),
+      mcpServers: [
+        ...(this.worker.supabaseExtensionPath && extensions.includes(this.worker.supabaseExtensionPath)
+          ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 3 }]
+          : []),
+        ...(this.worker.browserExtensionPath && extensions.includes(this.worker.browserExtensionPath)
+          ? [{ id: 'openlink_browser', name: 'OpenLink Browser', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 15 }]
+          : []),
+        ...(this.worker.desktopExtensionPath && extensions.includes(this.worker.desktopExtensionPath)
+          ? [{ id: 'openlink_desktop', name: 'OpenLink Desktop', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 11 }]
+          : []),
+      ],
+      permissionProfiles: [
+        { id: 'restricted', label: 'Restricted', description: 'Read-only workspace access' },
+        { id: 'ask', label: 'Ask', description: 'Workspace writes require confirmation' },
+        { id: 'open', label: 'Open', description: 'Full workspace and command access' },
+      ],
+      instructions: await discoverInstructionResources(this.worker.workspaceRoot),
+      computer: {
+        available: Boolean(this.worker.desktopExtensionPath || this.worker.browserExtensionPath),
+        desktop: Boolean(this.worker.desktopExtensionPath && extensions.includes(this.worker.desktopExtensionPath)),
+        browser: Boolean(this.worker.browserExtensionPath && extensions.includes(this.worker.browserExtensionPath)),
+      },
     }
   }
 

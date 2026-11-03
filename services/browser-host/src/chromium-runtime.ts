@@ -214,6 +214,12 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
       await this.setViewport(action.viewport)
       return this.ok(envelope)
     }
+    if (action.type === 'page.list') {
+      return this.ok(envelope, {
+        pages: await Promise.all([...this.pages.values()].map((tracked) => this.pageState(tracked))),
+        activePageId: this.runtimeContext.getState().activePageId,
+      })
+    }
 
     const tracked = this.requirePage('pageId' in action ? action.pageId : undefined)
     const { page, cdp } = tracked

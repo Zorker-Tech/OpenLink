@@ -32,7 +32,7 @@ test('Project Container broker exposes project operations without arbitrary exec
     async listWorkspaceFiles() { return ['README.md'] },
     async checkoutGitVersion(_id, ref) { return { ref, shortRef: ref.slice(0, 7), message: 'test', timestamp: new Date(0).toISOString(), current: true } },
     getActive() { return descriptor }, async hasPersistedRuntime() { return true }, async restorePersistedRuntimes() {},
-    async discoverPreviewTarget() { return null }, async close() {},
+    async discoverPreviewTarget() { return null }, async discoverPreviewTargets(_id, sessionId) { calls.push(`preview-targets:${sessionId ?? ''}`); return [] }, async close() {},
   }
   const broker = await serveProjectContainerBroker(join(root, 'control.sock'), controller)
   t.after(() => broker.close())
@@ -44,7 +44,8 @@ test('Project Container broker exposes project operations without arbitrary exec
   const codexThreadId = '019c6e27-e55b-73d1-87d8-4e01f1f75043'
   await client.persistCodexThreadId(projectId, 'user', 'workspace', 'newsession1', codexThreadId)
   assert.deepEqual(await client.listWorkspaceFiles(projectId), ['README.md'])
-  assert.deepEqual(calls, [`ensure:${projectId}`, `persist:user:workspace:newsession1:${codexThreadId}`])
+  assert.deepEqual(await client.discoverPreviewTargets(projectId, 'session-current'), [])
+  assert.deepEqual(calls, [`ensure:${projectId}`, `persist:user:workspace:newsession1:${codexThreadId}`, 'preview-targets:session-current'])
 })
 
 test('Project Container broker rejects malformed Codex thread identifiers', async (t) => {

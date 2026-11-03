@@ -19,6 +19,8 @@
   "Applied changes": "已应用的变更",
   "at work or school": "公司或学校使用的邮箱地址。",
   "Blank Project": "空白项目",
+  "Bot": "Bot",
+  "Bot（即将推出）": "Bot（即将推出）",
   "By proceeding, you agree to creating an Open Link account subject to our": "继续即表示你同意创建 Open Link 账户，并接受我们的",
   "Cancel": "取消",
   "Chat Position": "聊天位置",
@@ -152,5 +154,11 @@
   "暂停预览": "暂停预览",
   "暂停只停止实时预览，会话和任务继续运行": "暂停只停止实时预览，会话和任务继续运行",
   "已停止": "已停止",
-  "运行失败": "运行失败"
+  "运行失败": "运行失败",
+  "{count} MCP": "{count} 个 MCP",
+  "{count} tools": "{count} 个工具",
+  "Computer": "Computer",
+  "Desktop": "桌面",
+  "Browser": "浏览器",
+  "会话和任务仍在后台正常运行。返回页面后会自动恢复预览。": "会话和任务仍在后台正常运行。返回页面后会自动恢复预览。"
 }

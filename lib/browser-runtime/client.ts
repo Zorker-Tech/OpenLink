@@ -11,6 +11,13 @@ import {
   type BrowserSocketServerMessage,
 } from '@/packages/browser-protocol/src/index'
 
+export interface BrowserPreviewTarget {
+  id: string
+  label: string
+  port: number
+  sessionId?: string
+}
+
 export interface BrowserSessionConnectionDescriptor {
   session: BrowserSessionState
   connection: {
@@ -18,18 +25,26 @@ export interface BrowserSessionConnectionDescriptor {
     previewUrl?: string
     bridgeNonce?: string
   }
+  /** Active development server this surface attached to, when known. */
+  previewTarget?: BrowserPreviewTarget
 }
 
-const LOOPBACK_GATEWAY_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+// The gateway cookie is SameSite=Strict and scoped to the gateway origin.
+// A page opened through a different host alias (for example the user opens
+// 127.0.0.1 while the public gateway advertises the LAN IP) is cross-site,
+// so the browser drops that cookie and the preview shows an auth error. Keep
+// literal gateway hosts on the page's own hostname; DNS/HTTPS gateway origins
+// are left untouched.
+const REWRITABLE_GATEWAY_HOST = /^(?:localhost|\[::1\]|\d{1,3}(?:\.\d{1,3}){3})$/i
 
-/** Route local gateway URLs through the LAN-facing capability proxy. */
+/** Route local gateway URLs through the host the user's page actually uses. */
 export function browserReachableGatewayUrl(value: string): string {
   if (typeof window === 'undefined') return value
   try {
     const url = new URL(value)
-    if (!LOOPBACK_GATEWAY_HOSTS.has(url.hostname.toLowerCase())) return value
+    if (!REWRITABLE_GATEWAY_HOST.test(url.hostname)) return value
+    if (!url.port) url.port = '43125'
     url.hostname = window.location.hostname
-    url.port = '43125'
     return url.toString()
   } catch {
     return value
@@ -252,6 +267,7 @@ export async function createBrowserSession(input: {
   chatSessionId: string
   surface: 'native-preview' | 'chromium-stream'
   initialUrl?: string
+  previewTargetId?: string
   viewport?: { width: number; height: number; deviceScaleFactor: number }
 }): Promise<BrowserSessionConnectionDescriptor> {
   const response = await fetch('/api/browser/sessions', {
@@ -278,6 +294,26 @@ export async function createBrowserSession(input: {
         : {}),
     },
   }
+}
+
+export async function listBrowserPreviewTargets(chatSessionId: string): Promise<BrowserPreviewTarget[]> {
+  const response = await fetch(`/api/browser/preview-targets?chatSessionId=${encodeURIComponent(chatSessionId)}`, { cache: 'no-store' })
+  const payload = await response.json().catch(() => null) as { targets?: unknown; error?: { message?: string } } | null
+  if (!response.ok) throw new Error(payload?.error?.message || `Preview discovery failed (${response.status})`)
+  return Array.isArray(payload?.targets)
+    ? payload.targets.flatMap((value) => {
+        if (!value || typeof value !== 'object') return []
+        const target = value as Record<string, unknown>
+        return typeof target.id === 'string' && typeof target.label === 'string' && typeof target.port === 'number'
+          ? [{
+              id: target.id,
+              label: target.label,
+              port: target.port,
+              ...(typeof target.sessionId === 'string' ? { sessionId: target.sessionId } : {}),
+            }]
+          : []
+      })
+    : []
 }
 
 export async function deleteBrowserSession(chatSessionId: string, browserSessionId: string): Promise<void> {

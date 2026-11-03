@@ -13,6 +13,7 @@ import {
 } from '@/components/ai-elements/conversation'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
+import { Shimmer } from '@/components/ai-elements/shimmer'
 import { Task, TaskContent, TaskTrigger } from '@/components/ai-elements/task'
 import { ChatCodePreview } from '@/components/chat-code-preview'
 import { ThinkingOrb, type OrbState } from '@/components/thinking/src'
@@ -483,7 +484,12 @@ function buildConversationRounds(timeline: TimelineState, t: Translator): Conver
           && (item.kind !== 'task' || item.executions.length > 0)
         ))
       : []
-    const thinkingItems = hasToolExecution ? [] : groupTimelineErrors(nonMessageItems, t)
+    // A completed reasoning row is only useful when it sits next to visible
+    // work. For a conversational turn, "Thought for a moment" is noise; the
+    // live StreamingThinkingItem still covers the in-progress state.
+    const thinkingItems = hasToolExecution
+      ? []
+      : groupTimelineErrors(nonMessageItems.filter((item) => item.kind !== 'reasoning'), t)
     const outputItems = hasToolExecution ? [] : assistantMessages.filter((item) => item !== ending)
 
     return { id: group.id, state, user: group.user, thinkingItems, workingItems: groupTimelineErrors(workingItems, t), outputItems, ending, endingChange, checkpoint }
@@ -610,7 +616,8 @@ function latestFlowForItems(items: TimelineItem[], t: Translator): ActiveFlowSta
   for (const item of [...items].reverse()) {
     if (item.kind === 'task' && item.executions.length) {
       const execution = item.executions.findLast((candidate) => candidate.state === 'active') ?? item.executions.at(-1)!
-      return { label: dynamicTaskLabel(item.executions, item.state === 'active', t), state: executionOrbState(execution) }
+      const activity = item.state === 'active' ? executionActivity(execution) : undefined
+      return { label: dynamicTaskLabel(item.executions, item.state === 'active', t), state: executionOrbState(execution), ...(activity ? { activity } : {}) }
     }
   }
   for (const item of [...items].reverse()) {
@@ -625,11 +632,20 @@ function latestFlowForItems(items: TimelineItem[], t: Translator): ActiveFlowSta
 export interface ActiveFlowStatus {
   label: string
   state: OrbState
+  /** Native desktop or shared Live Browser activity, used by the composer. */
+  activity?: 'computer' | 'browser'
 }
 
 const IDLE_FLOW_STATUS: ActiveFlowStatus = { label: 'Solving', state: 'solving' }
 const CAPSULE_ORB_SIZE = 30
 const TASK_POSITION_TOLERANCE = 8
+
+function executionActivity(execution: TaskExecution): 'computer' | 'browser' | undefined {
+  const name = execution.label.toLowerCase()
+  if (/(^|[_:-])desktop|agent-desktop|computer/.test(name)) return 'computer'
+  if (/browser|playwright/.test(name)) return 'browser'
+  return undefined
+}
 
 function getActiveFlowStatus(timeline: TimelineState, t: Translator): ActiveFlowStatus | null {
   if (timeline.status !== 'running') return null
@@ -644,6 +660,7 @@ function getActiveFlowStatus(timeline: TimelineState, t: Translator): ActiveFlow
       return {
         label: execution ? `${toolActionLabel(execution, t)} · ${item.label}` : item.label,
         state: execution ? executionOrbState(execution) : 'working',
+        ...(execution && executionActivity(execution) ? { activity: executionActivity(execution) } : {}),
       }
     }
   }
@@ -684,7 +701,7 @@ function TaskPositionCapsule({ activeFlow }: { activeFlow: ActiveFlowStatus | nu
   return (
     <button
       aria-label={activeFlow ? t('返回正在工作的位置') : t('返回任务位置')}
-      className="absolute bottom-3 left-1/2 z-30 flex h-10 max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1.5 overflow-hidden rounded-full border border-[var(--app-status-glass-border)] bg-[var(--app-status-glass)] py-1 pl-1.5 pr-3 text-left text-[var(--app-status-glass-foreground)] shadow-[inset_0_0_50px_rgb(255_255_255_/_1%),0_16px_48px_var(--app-shadow)] backdrop-blur-xl"
+      className="absolute bottom-3 left-1/2 z-30 flex h-10 max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1.5 overflow-hidden rounded-full border border-[var(--app-status-glass-border)] bg-[var(--app-status-glass)] py-1 pl-1.5 pr-3 text-left text-[var(--app-status-glass-foreground)] shadow-[inset_0_0_50px_rgb(255_255_255_/_1%),0_16px_48px_var(--app-shadow)]"
       onClick={() => scrollToBottom()}
       type="button"
     >
@@ -723,12 +740,17 @@ function executionInput(execution: TaskExecution, t: Translator) {
   return { displayValue, primary, range, title: [primary, range, execution.error ?? execution.output].filter(Boolean).join(' · ') }
 }
 
-function LiveSweepText({ active, className = '', children }: { active: boolean; className?: string; children: ReactNode }) {
-  return (
-    <span className={`${active ? 'timeline-live-sweep ' : ''}${className}`} data-live-task-title={active ? 'true' : undefined}>
-      {children}
-    </span>
-  )
+function LiveTaskText({ active, className = '', children }: { active: boolean; className?: string; children: ReactNode }) {
+  // ai-elements Shimmer is the single live-title treatment. It is decorative;
+  // semantic status remains in the surrounding task row and accessible label.
+  if (active && typeof children === 'string') {
+    return (
+      <span className={className} data-live-task-title="true">
+        <Shimmer as="span" duration={2.2} spread={2.4}>{children}</Shimmer>
+      </span>
+    )
+  }
+  return <span className={className}>{children}</span>
 }
 
 function StatusGlyph({ running, label, doneIcon, orbState = 'working' }: { running: boolean; label: string; doneIcon?: IconSvgElement; orbState?: OrbState }) {
@@ -824,7 +846,7 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
       <TaskTrigger className="w-full" title={title}>
         <div className="flex h-7 w-full items-center gap-2 overflow-hidden rounded-md text-left text-[13px] leading-[21.125px] tracking-[-0.0762px] text-[var(--app-muted)] transition-colors hover:text-[var(--app-foreground)]">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={title} orbState={orbState} running={item.state === 'active'} />
-          <LiveSweepText active={item.state === 'active'} className="min-w-0 flex-1 truncate">{title}</LiveSweepText>
+          <LiveTaskText active={item.state === 'active'} className="min-w-0 flex-1 truncate">{title}</LiveTaskText>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </div>
       </TaskTrigger>
@@ -846,7 +868,7 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
     <div className="flex h-7 min-w-0 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
       <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} />
       <p className="min-w-0 flex-1 truncate" title={[item.label, item.detail].filter(Boolean).join(' — ')}>
-        <LiveSweepText active={item.state === 'active'}>{item.label}</LiveSweepText>
+        <LiveTaskText active={item.state === 'active'}>{item.label}</LiveTaskText>
         {item.detail ? <span className="ml-2 text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</span> : null}
       </p>
     </div>
@@ -1192,7 +1214,7 @@ function WorkFlowGroup({
       <div className={`flex h-7 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
         <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
           <StatusGlyph doneIcon={BadgeCheckIcon} label={flow.label} orbState={flow.state} running={round.state === 'working'} />
-          <LiveSweepText active={round.state === 'working'} className="truncate text-[14px] font-medium">{label}</LiveSweepText>
+          <LiveTaskText active={round.state === 'working'} className="truncate text-[14px] font-medium">{label}</LiveTaskText>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </button>
         {checkpoint ? <span className="hidden shrink-0 items-center gap-1 sm:flex"><Clock3 className="size-[13px]" />{open ? formatClockTime(checkpoint.timestamp) : formatRelativeTime(checkpoint.timestamp, t)}</span> : null}
@@ -1253,12 +1275,12 @@ function EndingSection({ round }: { round: ConversationRound }) {
 
 function TimelineEndMarker({ status }: { status: TimelineState['status'] }) {
   const t = useT()
-  if (status === 'idle' || status === 'running') return null
-  const meta = status === 'settled'
-    ? { icon: CircleCheck, label: t('已完成'), tone: 'text-[var(--app-success)]' }
-    : status === 'cancelled'
-      ? { icon: CircleSlash2, label: t('已停止'), tone: 'text-[var(--app-muted)]' }
-      : { icon: CircleAlert, label: t('运行失败'), tone: 'text-[var(--app-danger)]' }
+  // Successful turns end on their content, not on a terminal badge. Keep the
+  // marker only for abnormal states that still need an explanation.
+  if (status === 'idle' || status === 'running' || status === 'settled') return null
+  const meta = status === 'cancelled'
+    ? { icon: CircleSlash2, label: t('已停止'), tone: 'text-[var(--app-muted)]' }
+    : { icon: CircleAlert, label: t('运行失败'), tone: 'text-[var(--app-danger)]' }
   const Icon = meta.icon
   return (
     <div className="flex h-7 w-full items-center gap-2 text-[12px] text-[var(--app-muted)]" data-timeline-end={status}>
@@ -1305,8 +1327,15 @@ export function ChatTimeline({
     onFlowStatusChange?.(activeFlow)
   }, [activeFlow, onFlowStatusChange])
 
+  // Manual task expansion changes content height. Do not spring the scroll
+  // position while the user is reading a settled turn; only live token
+  // streaming keeps the smooth bottom lock.
   return (
-    <Conversation className="min-h-0 w-full flex-1" data-no-press-motion-scope>
+    <Conversation
+      className="min-h-0 w-full flex-1"
+      data-no-press-motion-scope
+      resize={isStreaming ? 'smooth' : 'instant'}
+    >
       <ConversationContent className={`min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px] ${contentClassName}`}>
         {rounds.map((round) => {
           const retryInitialPrompt = round.user?.id === initialPromptMessageId
