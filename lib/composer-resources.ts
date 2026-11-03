@@ -11,11 +11,50 @@ export interface ComposerResources {
   customInstructions: string
 }
 
+export interface RuntimeMcpServerResource {
+  id: string
+  name: string
+  status?: 'connected' | 'disabled' | 'error' | 'unknown'
+  auth?: 'authenticated' | 'required' | 'unsupported'
+  toolCount?: number
+}
+
+export interface RuntimeSkillResource {
+  id: string
+  name: string
+  description: string
+  source: 'builtin' | 'plugin'
+}
+
+export interface RuntimePermissionProfile {
+  id: string
+  label: string
+  description: string
+}
+
+export interface RuntimeInstructionResource {
+  id: string
+  name: string
+  description: string
+  text: string
+}
+
+export interface RuntimeComputerCapability {
+  available: boolean
+  desktop: boolean
+  browser: boolean
+}
+
 export interface RuntimeComposerResources {
   agent: AgentKind
   source: string
   accessMode: 'restricted' | 'ask' | 'open'
-  mcpServers: Array<{ id: string; name: string }>
+  mcpServers: RuntimeMcpServerResource[]
+  /** Native skills discovered inside the worker; saved Skills stay on `ComposerResources`. */
+  skills?: RuntimeSkillResource[]
+  permissionProfiles?: RuntimePermissionProfile[]
+  instructions?: RuntimeInstructionResource[]
+  computer?: RuntimeComputerCapability
   imageGeneration: boolean
   /** Native commands returned by this session's agent runtime. */
   commands: Array<{

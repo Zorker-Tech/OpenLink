@@ -28,6 +28,12 @@ constraints.
     policy injection, native desktop tools and Pi/Codex parity.
 11. [`11-chat-session-runs.md`](./11-chat-session-runs.md) — durable run
     status, background execution and session-bound UI state.
+12. [`12-live-browser-and-preview.md`](./12-live-browser-and-preview.md) —
+    Agent-owned Live Browser, full browser tool parity and multi-target
+    Project preview discovery.
+13. [`13-composer-capabilities.md`](./13-composer-capabilities.md) — runtime
+    capability inventory for permissions, MCP, skills, instructions and
+    Computer activity.
 
 ## Scope
 

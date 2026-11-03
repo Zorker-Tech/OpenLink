@@ -4,7 +4,7 @@ import { ChromiumStreamSurface } from '@/components/browser/chromium-stream-surf
 import { NativePreviewSurface } from '@/components/browser/native-preview-surface'
 import { ThinkingOrb } from '@/components/thinking/src'
 import { useT } from '@/lib/i18n/client'
-import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, type BrowserConnectionStatus } from '@/lib/browser-runtime/client'
+import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, listBrowserPreviewTargets, type BrowserConnectionStatus, type BrowserPreviewTarget } from '@/lib/browser-runtime/client'
 import type { BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -29,6 +29,11 @@ export interface BrowserWorkbenchUiState {
   inspectMode: boolean
   status: BrowserConnectionStatus
   surface: 'native-preview' | 'chromium-stream'
+  /** Live development servers discovered in this chat's Project runtime. */
+  previewTargets: BrowserPreviewTarget[]
+  activePreviewTargetId?: string
+  previewTargetsLoading: boolean
+  previewTargetsError?: string
 }
 
 export interface BrowserWorkbenchHandle {
@@ -38,6 +43,8 @@ export interface BrowserWorkbenchHandle {
   openExternal: () => void
   reload: () => void
   setSurface: (surface: 'native-preview' | 'chromium-stream') => void
+  selectPreviewTarget: (targetId: string) => void
+  refreshPreviewTargets: () => void
   toggleInspector: () => void
 }
 
@@ -47,14 +54,17 @@ interface BrowserWorkbenchProps {
   initialSurface?: BrowserWorkbenchUiState['surface']
   /** Last user-visible URL, used when a paused/recreated session must resume. */
   initialUrl?: string
+  /** Last selected development server for the Preview surface. */
+  initialPreviewTargetId?: string
   onStateChange?: (state: BrowserWorkbenchUiState) => void
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', initialUrl, onStateChange, viewportMode }, ref) {
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, onStateChange, viewportMode }, ref) {
   const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
   const initialUrlRef = useRef(initialUrl ?? '')
+  const initialPreviewTargetIdRef = useRef(initialPreviewTargetId)
   const [surface, setSurface] = useState<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [connection, setConnection] = useState<BrowserConnection | null>(null)
   const [sessionState, setSessionState] = useState<BrowserSessionState | null>(null)
@@ -63,10 +73,31 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const [address, setAddress] = useState('')
   const [inspectMode, setInspectMode] = useState(false)
   const [selectedElement, setSelectedElement] = useState<ElementReference | null>(null)
+  const [previewTargets, setPreviewTargets] = useState<BrowserPreviewTarget[]>([])
+  const [activePreviewTargetId, setActivePreviewTargetId] = useState<string | undefined>(initialPreviewTargetId)
+  const [previewTargetsLoading, setPreviewTargetsLoading] = useState(true)
+  const [previewTargetsError, setPreviewTargetsError] = useState<string | undefined>()
   const requestVersion = useRef(0)
   const connectionRef = useRef<BrowserConnection | null>(null)
 
-  const openSession = useCallback(async (nextSurface: 'native-preview' | 'chromium-stream', initialUrl?: string) => {
+  const refreshPreviewTargets = useCallback(async () => {
+    setPreviewTargetsLoading(true)
+    setPreviewTargetsError(undefined)
+    try {
+      const targets = await listBrowserPreviewTargets(chatSessionId)
+      setPreviewTargets(targets)
+      setActivePreviewTargetId((current) => current && targets.some((target) => target.id === current)
+        ? current
+        : targets.find((target) => target.sessionId === chatSessionId)?.id ?? targets[0]?.id)
+    } catch (error) {
+      setPreviewTargets([])
+      setPreviewTargetsError(error instanceof Error ? error.message : t('无法发现项目开发服务器'))
+    } finally {
+      setPreviewTargetsLoading(false)
+    }
+  }, [chatSessionId, t])
+
+  const openSession = useCallback(async (nextSurface: 'native-preview' | 'chromium-stream', initialUrl?: string, previewTargetId?: string) => {
     const version = ++requestVersion.current
     setError(null)
     setStatus('connecting')
@@ -75,29 +106,34 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     const previous = connectionRef.current
     connectionRef.current = null
     previous?.close()
-    // Chromium sessions use a durable profile keyed by the chat session.
-    // Wait for the old Browser Host runtime to release that profile before
-    // creating the replacement surface; launching two persistent contexts
-    // against the same profile races Chromium's lock file and makes switching
-    // between Preview/Realtime intermittently fail with a black canvas.
-    if (previous) await deleteBrowserSession(chatSessionId, previous.state.id).catch(() => undefined)
+    // A native Preview is a UI-only surface over one fixed upstream. Close it
+    // when switching targets to avoid leaking one tunnel per probe. The
+    // Chromium session is the Agent's stable browser capability and is never
+    // deleted by the UI; hidden tabs and pauses only close the transport.
+    if (previous?.state.surface === 'native-preview') {
+      await deleteBrowserSession(chatSessionId, previous.state.id).catch(() => undefined)
+    }
     try {
       const descriptor = await createBrowserSession({
         chatSessionId,
         surface: nextSurface,
         initialUrl: nextSurface === 'chromium-stream' ? normalizeAddress(initialUrl || address || 'about:blank') : undefined,
+        ...(previewTargetId ? { previewTargetId } : {}),
         viewport: viewportMode === 'mobile'
           ? { width: 391, height: 835, deviceScaleFactor: 1 }
           : { width: Math.max(240, window.innerWidth - 390), height: Math.max(240, window.innerHeight - 50), deviceScaleFactor: Math.min(4, Math.max(0.5, window.devicePixelRatio || 1)) },
       })
       if (version !== requestVersion.current) {
-        void deleteBrowserSession(chatSessionId, descriptor.session.id)
+        // A stale open request must not delete the session: it can be the
+        // Agent's browser or the current UI session reused through its
+        // stable Chromium profile key.
         return
       }
       const next = new BrowserConnection(descriptor)
       connectionRef.current = next
       setConnection(next)
       setSessionState(descriptor.session)
+      if (descriptor.previewTarget?.id) setActivePreviewTargetId(descriptor.previewTarget.id)
       setAddress(descriptor.session.pages.find((page) => page.active)?.url || initialUrl || '')
       next.onStatus(setStatus)
       next.onState((state) => {
@@ -125,6 +161,15 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       next.connect()
     } catch (sessionError) {
       if (version !== requestVersion.current) return
+      // A persisted target may have stopped since the last visit. Refresh the
+      // inventory and let discovery choose the current/first live server
+      // instead of leaving Preview pinned to a stale target.
+      if (previewTargetId && sessionError instanceof BrowserSessionCreateError && sessionError.code === 'PREVIEW_TARGET_NOT_FOUND') {
+        setActivePreviewTargetId(undefined)
+        await refreshPreviewTargets()
+        await openSession(nextSurface, initialUrl)
+        return
+      }
       // A Project preview is optional, but the session-scoped Browser agent
       // capability is not. Fall back to the realtime Chromium surface when no
       // project web server is listening so @Browser can still navigate and
@@ -141,7 +186,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       setStatus('failed')
       setError(sessionError instanceof Error ? sessionError.message : String(sessionError))
     }
-  }, [address, chatSessionId, t, viewportMode])
+  }, [address, chatSessionId, refreshPreviewTargets, t, viewportMode])
 
   const openSessionRef = useRef(openSession)
   useEffect(() => {
@@ -149,15 +194,21 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [openSession])
 
   useEffect(() => {
-    void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined)
+    void refreshPreviewTargets()
+    void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined, initialPreviewTargetIdRef.current)
     return () => {
       requestVersion.current += 1
       const current = connectionRef.current
       connectionRef.current = null
+      // Close this client transport. The Chromium Browser Session is retained
+      // for the Agent and for a fast reconnect; only a UI-only native Preview
+      // tunnel is released.
       current?.close()
-      if (current) void deleteBrowserSession(chatSessionId, current.state.id).catch(() => undefined)
+      if (current?.state.surface === 'native-preview') {
+        void deleteBrowserSession(chatSessionId, current.state.id).catch(() => undefined)
+      }
     }
-  }, [chatSessionId])
+  }, [chatSessionId, refreshPreviewTargets])
 
   useEffect(() => {
     if (!connection || connection.state.surface !== 'chromium-stream') return
@@ -205,6 +256,15 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     void openSession(next, address)
   }, [address, openSession, surface])
 
+  const selectPreviewTarget = useCallback((targetId: string) => {
+    setActivePreviewTargetId(targetId)
+    // A different development server is an authenticated target resolved by
+    // Agent Host. The native Preview surface is recreated against it so the
+    // proxy receives the correct signing headers and browser path prefix.
+    setSurface('native-preview')
+    void openSession('native-preview', undefined, targetId)
+  }, [openSession])
+
   const openExternal = useCallback(() => {
     if (externalUrl) window.open(externalUrl, '_blank', 'noopener,noreferrer')
   }, [externalUrl])
@@ -216,8 +276,10 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     openExternal,
     reload: () => sendPageAction('page.reload'),
     setSurface: setNextSurface,
+    selectPreviewTarget,
+    refreshPreviewTargets: () => { void refreshPreviewTargets() },
     toggleInspector: () => setInspectMode((value) => !value),
-  }), [navigate, openExternal, sendPageAction, setNextSurface])
+  }), [navigate, openExternal, refreshPreviewTargets, selectPreviewTarget, sendPageAction, setNextSurface])
 
   useEffect(() => {
     onStateChange?.({
@@ -230,8 +292,12 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       inspectMode,
       status,
       surface,
+      previewTargets,
+      ...(activePreviewTargetId ? { activePreviewTargetId } : {}),
+      previewTargetsLoading,
+      ...(previewTargetsError ? { previewTargetsError } : {}),
     })
-  }, [activePage?.canGoBack, activePage?.canGoForward, address, connection, externalUrl, inspectMode, onStateChange, status, surface])
+  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, onStateChange, previewTargets, previewTargetsError, previewTargetsLoading, status, surface])
 
   return (
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">

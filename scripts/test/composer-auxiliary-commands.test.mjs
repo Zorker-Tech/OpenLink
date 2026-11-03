@@ -12,7 +12,7 @@ test('rename is an empty-composer client action backed by the existing title edi
 
 test('status opens a local status surface and refreshes native runtime state', () => {
   assert.match(workspace, /label: '\/status'.*action: 'status-panel'/)
-  assert.match(workspace, /aria-label="会话状态"/)
+  assert.match(workspace, /aria-label=\{t\('会话状态'\)\}/)
   assert.match(workspace, /setStatusPanelOpen\(true\); void runControl\('status'\)/)
   assert.match(workspace, /当前 Provider 未提供/)
 })
@@ -39,9 +39,9 @@ test('manual native controls share the same running-state allowlist as command c
 })
 
 test('Plan and Goal footer indicators execute their native inverse actions', () => {
-  assert.match(workspace, /aria-label="退出 Plan 模式".*runControl\('default'\)/)
-  assert.match(workspace, /aria-label="清除 Goal".*runControl\('goal-clear'\)/)
-  assert.match(workspace, /disabled=\{controlPending \|\| status === 'streaming'\}/)
+  assert.match(workspace, /aria-label=\{t\("退出 Plan 模式"\)\}.*runControl\("default"\)/)
+  assert.match(workspace, /aria-label=\{t\("清除 Goal"\)\}.*runControl\("goal-clear"\)/)
+  assert.match(workspace, /disabled=\{controlPending \|\| status === "streaming"\}/)
 })
 
 test('permission changes are blocked during turns and report only verified runtime state', () => {
@@ -52,7 +52,41 @@ test('permission changes are blocked during turns and report only verified runti
   assert.match(menu, /disabled=\{accessModeChangeDisabled \|\| permissions === mode\}/)
 })
 
-test('runtime lease does not reuse an unmounted browser workbench session', () => {
-  assert.match(workspace, /\(workspaceView === 'browser' \|\| workspaceView === 'mobile'\) && browserState\.browserSessionId/)
-  assert.match(workspace, /\[accessMode, agentStreamStatus, browserState\.browserSessionId, sessionId, workspaceView\]/)
+test('the Agent owns the Live Browser session instead of binding a transient preview', () => {
+  // Agent Host creates a stable Chromium session for every Agent runtime. The
+  // UI must not rebind that capability to its own native-preview session or
+  // release it when the workbench unmounts.
+  assert.doesNotMatch(workspace, /browserSessionId: browserState\.browserSessionId/)
+  assert.doesNotMatch(workspace, /deleteBrowserSession\(chatSessionId, current\.state\.id\)/)
+  const workbench = readFileSync(new URL('../../components/browser/browser-workbench.tsx', import.meta.url), 'utf8')
+  assert.match(workbench, /previous\?\.state\.surface === 'native-preview'/)
+  assert.match(workbench, /listBrowserPreviewTargets\(chatSessionId\)/)
+  assert.match(workbench, /selectPreviewTarget/)
+})
+
+test('the prompt add menu is a runtime capability inventory, not a static menu', () => {
+  const menu = readFileSync(new URL('../../components/prompt-add-menu.tsx', import.meta.url), 'utf8')
+  const workspace = readFileSync(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
+  const route = readFileSync(new URL('../../app/api/chat/[session_id]/runtime-resources/route.ts', import.meta.url), 'utf8')
+  assert.match(menu, /runtimeResources\?\.permissionProfiles/)
+  assert.match(menu, /runtimeResources\?\.instructions/)
+  assert.match(menu, /server\.status === 'connected'/)
+  assert.match(menu, /server\.auth === 'required'/)
+  assert.match(menu, /runtimeResources\?\.skills/)
+  assert.match(route, /permissionProfiles/)
+  assert.match(route, /instructions/)
+  assert.match(route, /toolCount/)
+  assert.match(workspace, /正在使用 Computer/)
+  assert.match(workspace, /activeFlow\?\.activity/)
+})
+
+test('the Live Browser MCP surface covers launch, pages and full interaction', () => {
+  const browserMcp = readFileSync(new URL('../../services/agent-worker/src/browser-mcp.ts', import.meta.url), 'utf8')
+  const piExtension = readFileSync(new URL('../../services/agent-browser-extension/openlink-browser.ts', import.meta.url), 'utf8')
+  for (const tool of ['browser_pages', 'browser_open', 'browser_close', 'browser_activate', 'browser_navigate', 'browser_back', 'browser_forward', 'browser_reload', 'browser_click', 'browser_hover', 'browser_type', 'browser_insert_text', 'browser_drag', 'browser_key', 'browser_scroll', 'browser_screenshot', 'browser_dialog']) {
+    assert.match(browserMcp, new RegExp(`name: '${tool}'`))
+  }
+  for (const tool of ['browser_pages', 'browser_open', 'browser_close', 'browser_activate', 'browser_history', 'browser_insert_text']) {
+    assert.match(piExtension, new RegExp(`name: '${tool}'`))
+  }
 })

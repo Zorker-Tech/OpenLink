@@ -989,6 +989,57 @@ test('discovers the authenticated Project preview target without exposing it to 
   }
 })
 
+test('lists every active Project preview target without exposing proxy credentials', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-preview-targets-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  let preferredSessionId: string | undefined
+  const projectRuntimeManager = {
+    discoverPreviewTargets: async (id: string, sessionId?: string) => {
+      assert.equal(id, projectId)
+      preferredSessionId = sessionId
+      return [
+        {
+          id: 'sandbox-current:5173', label: 'Current session · :5173', source: 'sandbox',
+          sessionId: 'session-current', url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-current/proxy/5173/',
+          headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' }, port: 5173, sandboxId: 'sandbox-current', lastSeenAt: '2026-11-03T10:00:00.000Z',
+        },
+        {
+          id: 'sandbox-other:3000', label: 'Other session · :3000', source: 'sandbox',
+          sessionId: 'session-other', url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-other/proxy/3000/',
+          headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' }, port: 3000, sandboxId: 'sandbox-other', lastSeenAt: '2026-11-03T10:00:01.000Z',
+        },
+      ]
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/projects/${projectId}/preview-targets?sessionId=session-current`, {
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough' },
+    })
+    assert.equal(response.status, 200)
+    const payload = await response.json() as { targets?: Array<Record<string, unknown>> }
+    assert.equal(preferredSessionId, 'session-current')
+    assert.equal(payload.targets?.length, 2)
+    assert.equal(payload.targets?.[0]?.id, 'sandbox-current:5173')
+    assert.equal(payload.targets?.[0]?.port, 5173)
+    assert.equal(payload.targets?.[0]?.url, undefined)
+    assert.equal(payload.targets?.[0]?.headers, undefined)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
 test('exposes only the safe Project Supabase connection material to authenticated callers', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-route-test-'))
   const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'

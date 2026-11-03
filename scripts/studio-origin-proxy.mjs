@@ -15,6 +15,9 @@ import { createServer, request } from 'node:http'
 
 const upstreamPort = Number(process.env.OPENLINK_WEB_PORT || 3001)
 const listenPort = Number(process.env.OPENLINK_STUDIO_PORT || 3002)
+// Bind on the LAN interface as well: the Studio iframe must be reachable from
+// the same hostname the user opened the application with.
+const listenHost = process.env.OPENLINK_STUDIO_HOST || '0.0.0.0'
 
 const FORWARDED_HEADERS = new Set([
   'accept',
@@ -62,7 +65,7 @@ function proxyRequest(clientRequest, clientResponse) {
 }
 
 const server = createServer((req, res) => proxyRequest(req, res))
-server.listen(listenPort, '127.0.0.1', () => {
+server.listen(listenPort, listenHost, () => {
   console.log(`OpenLink Studio origin proxy listening on http://127.0.0.1:${listenPort}`)
 })
 

@@ -73,7 +73,22 @@ function DesktopCanvas({
 
     async function connect() {
       try {
-        const { default: RFB } = await import('@novnc/novnc')
+        // noVNC binds its logger to console.error when the module first loads.
+        // Install the narrow secure-context filter before that import, not just
+        // around the constructor, or LAN HTTP always prints the generic
+        // "Expect crashes" error even though this WebSocket is capability
+        // authenticated and real failures are surfaced by the events below.
+        const originalConsoleError = console.error
+        console.error = (...args: unknown[]) => {
+          if (typeof args[0] === 'string' && args[0].includes('noVNC requires a secure context')) return
+          originalConsoleError(...args)
+        }
+        let RFB: typeof import('@novnc/novnc').default
+        try {
+          ({ default: RFB } = await import('@novnc/novnc'))
+        } finally {
+          console.error = originalConsoleError
+        }
         if (disposed || !target) return
 
         const previous = rfb
@@ -85,7 +100,10 @@ function DesktopCanvas({
         rfb = connection
         connection.background = '#000000'
         connection.scaleViewport = true
-        connection.resizeSession = true
+        // GNOME Remote Desktop treats SetDesktopSize as a session change and
+        // can restart the stream. Let the local viewport scale the fixed remote
+        // framebuffer instead of requesting repeated remote resizes.
+        connection.resizeSession = false
         connection.focusOnClick = true
         connection.addEventListener('connect', () => {
           if (rfb !== connection) return

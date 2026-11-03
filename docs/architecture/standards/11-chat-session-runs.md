@@ -73,8 +73,8 @@ the live view; it does not own the run.
 
 - Session UI state is stored in `sessionStorage` under
   `openlink:session-ui:v1:<sessionId>`: open workspace tabs, active tab,
-  browser surface and URL, selected Git ref, panel collapse, composer draft and
-  the user's explicit preview-pause preference.
+  browser surface and URL, selected Git ref, panel collapse and composer
+  draft.
 - Session title, run status, process id and event history remain server
   authoritative and are never restored from client storage.
 - A hidden browser tab pauses live browser and desktop transports after a
@@ -85,5 +85,7 @@ the live view; it does not own the run.
 - code-server is kept mounted while its workspace tab is open, including while
   another workspace tab is active, so the editor iframe and its local layout do
   not reload.
-- The explicit pause control pauses only the live preview. It never sends
-  `/cancel`, stops a container, releases a lease or changes the run status.
+- Preview suspension is automatic: after the tab has been hidden for a short
+  grace period, only the live transports pause. It never sends `/cancel`,
+  stops a container, releases a lease or changes the run status. There is no
+  manual pause control.

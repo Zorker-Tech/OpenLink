@@ -484,12 +484,17 @@ function parseBrowserSessionBody(value: unknown) {
   const surface = body.surface === 'native-preview' || body.surface === 'chromium-stream' ? body.surface : null
   if (!surface) throw new AgentHostError('INVALID_BODY', 'Browser surface is invalid')
   if (body.viewport !== undefined && (!body.viewport || typeof body.viewport !== 'object')) throw new AgentHostError('INVALID_BODY', 'Browser viewport is invalid')
-  if (surface === 'native-preview' && (!body.preview || typeof body.preview !== 'object')) throw new AgentHostError('INVALID_BODY', 'Preview configuration is required')
+  const previewTargetId = body.previewTargetId === undefined ? undefined : (() => {
+    if (typeof body.previewTargetId !== 'string' || !/^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/.test(body.previewTargetId)) throw new AgentHostError('INVALID_BODY', 'previewTargetId is invalid')
+    return body.previewTargetId
+  })()
+  if (surface === 'native-preview' && !previewTargetId && (!body.preview || typeof body.preview !== 'object')) throw new AgentHostError('INVALID_BODY', 'Preview configuration is required')
   if (surface === 'chromium-stream' && body.chromium !== undefined && (!body.chromium || typeof body.chromium !== 'object')) throw new AgentHostError('INVALID_BODY', 'Chromium configuration is invalid')
   return {
     ownerId,
     workspaceId,
     profileKey,
+    previewTargetId,
     surface: surface as 'native-preview' | 'chromium-stream',
     viewport: body.viewport,
     preview: body.preview,
@@ -844,6 +849,45 @@ export async function startPromptHttpServer(
     await rename(temporary, path)
   }
 
+  async function ensureAgentBrowser(request: PreparedSessionRequest): Promise<BrowserAgentSession | undefined> {
+    // Every agent session receives a real Chromium Browser capability even
+    // when no Browser tab is open. This is what lets the Agent launch the
+    // Live Browser itself. The stable profile key is the chat session id, so
+    // opening Realtime later reuses the exact same Browser Host session
+    // instead of creating a second browser.
+    if (process.env.OPENLINK_AGENT_BROWSER_AUTO_LAUNCH === 'false') return undefined
+    if (!config.projectRuntimeManager || !request.projectRuntime) return undefined
+    try {
+      const browser = new BrowserHostClient({
+        baseUrl: request.projectRuntime.browserHostEndpoint,
+        serviceToken: request.projectRuntime.browserApiToken,
+      })
+      return await browser.createSession({
+        ownerId: request.userId,
+        workspaceId: request.workspaceId,
+        projectId: request.projectId,
+        profileKey: request.sessionId,
+        surface: 'chromium-stream',
+        chromium: {
+          initialUrl: 'about:blank',
+          headless: true,
+          preserveProfile: true,
+          networkPolicy: {
+            allowedDomains: (process.env.OPENLINK_BROWSER_ALLOWED_DOMAINS || '').split(',').map((value) => value.trim()).filter(Boolean),
+            deniedDomains: (process.env.OPENLINK_BROWSER_DENIED_DOMAINS || '').split(',').map((value) => value.trim()).filter(Boolean),
+            allowLoopback: process.env.OPENLINK_BROWSER_ALLOW_LOOPBACK === 'true',
+            allowPrivateNetworks: process.env.OPENLINK_BROWSER_ALLOW_PRIVATE_NETWORKS !== 'false',
+          },
+        },
+      })
+    } catch (error) {
+      // Browser capability is additive. A Browser Host problem must never
+      // prevent the code Agent from starting.
+      console.warn(`OpenLink Agent browser auto-launch failed for ${request.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
+  }
+
   async function createEntry(request: PreparedSessionRequest): Promise<{ entry: SessionEntry; created: boolean }> {
     return withSessionCreationLock(request.baseKey, async () => {
       const updateBrowser = async (entry: SessionEntry): Promise<boolean> => {
@@ -878,6 +922,7 @@ export async function startPromptHttpServer(
       }
       creatingSessions += 1
       try {
+        const autoBrowser = request.browser ?? await ensureAgentBrowser(request)
         const recoveredRuntime = await backend.recoverSession?.(
           request.userId,
           request.workspaceId,
@@ -886,11 +931,11 @@ export async function startPromptHttpServer(
           request.nativeSession,
           request.projectId,
           request.projectRuntime,
-          request.browser,
+          autoBrowser,
           { agent: request.agent, accessMode: request.accessMode },
         )
         if (recoveredRuntime) {
-          const entry: SessionEntry = { runtime: recoveredRuntime, sessionId: request.sessionId, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: request.browserSessionId }
+          const entry: SessionEntry = { runtime: recoveredRuntime, sessionId: request.sessionId, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: autoBrowser?.state.id ?? request.browserSessionId }
           sessions.set(request.key, entry)
           prewarmDesktop(entry)
           return { entry, created: false }
@@ -907,7 +952,7 @@ export async function startPromptHttpServer(
             request.nativeSession,
             request.projectId,
             request.projectRuntime,
-            request.browser,
+            autoBrowser,
             { agent: request.agent, accessMode: request.accessMode },
           ),
           sessionId: request.sessionId,
@@ -915,7 +960,7 @@ export async function startPromptHttpServer(
           busy: false,
           paused: false,
           userPaused: await readUserPause(request),
-          browserSessionId: request.browserSessionId,
+          browserSessionId: autoBrowser?.state.id ?? request.browserSessionId,
         }
         sessions.set(request.key, entry)
         prewarmDesktop(entry)
@@ -1029,6 +1074,21 @@ export async function startPromptHttpServer(
     }
     activePromptControllers.set(activeControllerKey, abortController)
     try {
+      // Browser Host is in-memory and can restart independently of the Agent
+      // Worker. Reuse-or-create the Chromium session before every turn and
+      // re-bind it, so a restart self-heals the capability instead of leaving
+      // the Agent with a dead browser-session id.
+      if (!prepared.browserSessionId && entry.runtime.setBrowser) {
+        const browser = await ensureAgentBrowser(prepared)
+        if (browser) {
+          try {
+            await entry.runtime.setBrowser(browser)
+            entry.browserSessionId = browser.state.id
+          } catch (browserError) {
+            console.warn(`OpenLink Agent browser rebind failed for ${entry.sessionId}: ${browserError instanceof Error ? browserError.message : String(browserError)}`)
+          }
+        }
+      }
       await runPrompt(entry)
     } catch (error) {
       // OpenSandbox may expire a workload independently of this process (for
@@ -1073,6 +1133,32 @@ export async function startPromptHttpServer(
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const body = parseBrowserSessionBody(await readJson(request))
     const runtime = await config.projectRuntimeManager.ensure(projectId, 'thin')
+    let preview = body.preview as Record<string, unknown> | undefined
+    let chromium = body.chromium as Record<string, unknown> | undefined
+    if (body.previewTargetId) {
+      // Target ids are resolved inside Agent Host. The browser never receives
+      // the sandbox proxy URL or its authenticated request headers.
+      const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId)
+      const target = targets.find((candidate) => candidate.id === body.previewTargetId)
+      if (!target) throw new AgentHostError('BROWSER_SESSION_FAILED', 'The selected preview target is no longer active', { retryable: true })
+      if (body.surface === 'native-preview') {
+        preview = {
+          targetUrl: target.url,
+          targetHeaders: target.headers,
+          pathMode: process.env.OPENLINK_PREVIEW_PATH_MODE === 'preserve-session-prefix' ? 'preserve-session-prefix' : 'strip-session-prefix',
+        }
+      } else {
+        chromium = {
+          ...(chromium ?? {}),
+          initialUrl: target.url,
+          initialRequestHeaders: target.headers,
+          networkPolicy: {
+            ...((chromium?.networkPolicy && typeof chromium.networkPolicy === 'object') ? chromium.networkPolicy as Record<string, unknown> : {}),
+            allowPrivateNetworks: true,
+          },
+        }
+      }
+    }
     const browser = new BrowserHostClient({ baseUrl: runtime.browserHostEndpoint, serviceToken: runtime.browserApiToken })
     const session = await browser.createSession({
       ownerId: body.ownerId,
@@ -1081,8 +1167,8 @@ export async function startPromptHttpServer(
       profileKey: body.profileKey,
       surface: body.surface,
       viewport: body.viewport as never,
-      preview: body.preview as Record<string, unknown> | undefined,
-      chromium: body.chromium as Record<string, unknown> | undefined,
+      preview,
+      chromium,
     })
     let publicSession
     try {
@@ -1110,11 +1196,38 @@ export async function startPromptHttpServer(
     }
     json(response, 200, {
       target: {
+        id: target.id,
+        label: target.label,
+        source: target.source,
+        sessionId: target.sessionId,
         url: target.url,
         headers: target.headers,
         port: target.port,
         sandboxId: target.sandboxId,
+        lastSeenAt: target.lastSeenAt,
       },
+    })
+  }
+
+  async function handleProjectPreviewTargets(
+    response: import('node:http').ServerResponse,
+    projectId: string,
+    preferredSessionId?: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId, preferredSessionId)
+    // List responses are safe for UI discovery (project VM probe URLs stay
+    // behind this boundary).
+    json(response, 200, {
+      targets: targets.map((target) => ({
+        id: target.id,
+        label: target.label,
+        source: target.source,
+        sessionId: target.sessionId,
+        port: target.port,
+        sandboxId: target.sandboxId,
+        lastSeenAt: target.lastSeenAt,
+      })),
     })
   }
 
@@ -1220,7 +1333,10 @@ export async function startPromptHttpServer(
       })()
       if (!bound) {
         const state = await browser.get(browserSessionId)
-        if (!state || state.ownerId !== identity.ownerId || state.workspaceId !== identity.workspaceId || state.projectId !== projectId) {
+        // Browser Host is in-memory. A stale UI cleanup after a Browser Host
+        // restart is already effectively deleted; treating the missing
+        // session as an ownership error leaked 503s into the workbench.
+        if (state && (state.ownerId !== identity.ownerId || state.workspaceId !== identity.workspaceId || state.projectId !== projectId)) {
           throw new AgentHostError('BROWSER_SESSION_FAILED', 'Browser session does not belong to this project')
         }
       }
@@ -1678,6 +1794,15 @@ export async function startPromptHttpServer(
         const projectId = decodeURIComponent(projectBrowserCreate[1]!)
         if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
         await handleBrowserCreate(request, response, projectId)
+        return
+      }
+      const projectPreviewTargets = /^\/v1\/projects\/([^/]+)\/preview-targets$/.exec(url.pathname)
+      if (request.method === 'GET' && projectPreviewTargets) {
+        const projectId = decodeURIComponent(projectPreviewTargets[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        const preferredSessionId = url.searchParams.get('sessionId') ?? undefined
+        if (preferredSessionId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(preferredSessionId)) throw new AgentHostError('INVALID_BODY', 'sessionId is invalid')
+        await handleProjectPreviewTargets(response, projectId, preferredSessionId)
         return
       }
       const projectPreviewTarget = /^\/v1\/projects\/([^/]+)\/preview-target$/.exec(url.pathname)
