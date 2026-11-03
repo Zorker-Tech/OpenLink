@@ -1144,5 +1144,7 @@
   "会话和任务仍在后台正常运行。": "Unterhaltung und Aufgabe laufen im Hintergrund weiter.",
   "恢复预览": "Vorschau fortsetzen",
   "暂停预览": "Vorschau pausieren",
-  "暂停只停止实时预览，会话和任务继续运行": "Pausieren stoppt nur die Live-Vorschau; Sitzung und Aufgabe laufen weiter"
+  "暂停只停止实时预览，会话和任务继续运行": "Pausieren stoppt nur die Live-Vorschau; Sitzung und Aufgabe laufen weiter",
+  "已停止": "Gestoppt",
+  "运行失败": "Ausführung fehlgeschlagen"
 }
