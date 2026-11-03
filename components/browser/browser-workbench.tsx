@@ -45,13 +45,16 @@ interface BrowserWorkbenchProps {
   chatSessionId: string
   /** Surface to launch when this workbench is mounted from a newly opened tab. */
   initialSurface?: BrowserWorkbenchUiState['surface']
+  /** Last user-visible URL, used when a paused/recreated session must resume. */
+  initialUrl?: string
   onStateChange?: (state: BrowserWorkbenchUiState) => void
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', onStateChange, viewportMode }, ref) {
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', initialUrl, onStateChange, viewportMode }, ref) {
   const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
+  const initialUrlRef = useRef(initialUrl ?? '')
   const [surface, setSurface] = useState<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [connection, setConnection] = useState<BrowserConnection | null>(null)
   const [sessionState, setSessionState] = useState<BrowserSessionState | null>(null)
@@ -146,7 +149,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [openSession])
 
   useEffect(() => {
-    void openSessionRef.current(initialSurfaceRef.current)
+    void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined)
     return () => {
       requestVersion.current += 1
       const current = connectionRef.current
