@@ -1,0 +1,303 @@
+ZORKER OPENLINK SOURCE-AVAILABLE LICENSE
+Version 1.0, November 3, 2026
+Copyright (c) 2026 Haokir Inc. All rights reserved.
+
+PREAMBLE
+
+This License governs the use of the Zorker Openlink software made available by
+Haokir Inc. ("Haokir", "we", "us", or "our"). It is a source-available license,
+not an open source license. It grants limited rights for personal use and for
+internal commercial use below a revenue threshold. It does not grant the right
+to distribute the Software, to make it available to third parties, or to use it
+to provide services to third parties. Those rights require a separate written
+Commercial License from Haokir.
+
+By accessing, reproducing, building, running, modifying, or otherwise using the
+Software, You accept and agree to this License. If You do not agree, do not use
+the Software.
+
+1. DEFINITIONS
+
+1.1 "Software" means the original source code, build scripts, configuration
+files, documentation, and assets of Zorker Openlink that Haokir makes available
+in its official repository, together with any object code and updates that
+Haokir makes available under this License, excluding Separately Licensed
+Components. The Software does not include third-party services, APIs, models,
+data, or content.
+
+1.2 "Separately Licensed Components" means any software, library, asset,
+container image, or operating-system component included in or distributed with
+the Software that is governed by its own license terms, including (a)
+third-party components identified in the NOTICE file, in license/INDEX.md, or
+in their own LICENSE files, and (b) components that Haokir has released under a
+separate license, including the code-prompt component of @vtslx/platform-sdk
+(MIT). Separately Licensed Components are not licensed under this License.
+
+1.3 "Derivative Work" means any work that is based on, incorporates, links to,
+or is otherwise derived from the Software, including modifications,
+adaptations, translations, combinations, and works that embed or call the
+Software.
+
+1.4 "Personal Use" means use by a natural person solely for that person's own
+private, non-commercial purposes, and not on behalf of, for the benefit of, or
+in connection with any organization, business, or revenue-generating activity.
+
+1.5 "Commercial Use" means any use in connection with a business, trade,
+profession, or other revenue-generating activity, including use in Your
+internal business operations. Commercial Use does not include Distribution or
+Operational Use, which are separately defined and separately restricted.
+
+1.6 "Internal Use" means use by You and Your Affiliates, and by Your and their
+employees, contractors, and agents, solely for Your and Your Affiliates'
+internal business purposes, provided that such persons are bound by written
+obligations at least as protective as this License. Contractors may access the
+Software only to the extent necessary to provide services to You and may not
+use it for their own benefit or for any other client. Internal Use does not
+include making the Software available to any third party.
+
+1.7 "Operational Use" means hosting, operating, or making the Software or any
+Derivative Work available to any third party, or using it to provide any
+service to any third party, including software-as-a-service,
+platform-as-a-service, infrastructure-as-a-service, managed hosting,
+outsourcing, service bureau, API service, or any similar arrangement, whether
+or not for a fee.
+
+1.8 "Distribution" means selling, reselling, licensing, sublicensing,
+publishing, distributing, transferring, or otherwise making the Software or any
+Derivative Work available to any third party, including through app stores,
+package registries, marketplaces, or as part of a product, service, or
+deliverable. Distribution does not include Internal Use.
+
+1.9 "Affiliate" means any entity that controls, is controlled by, or is under
+common control with You, where "control" means ownership of more than fifty
+percent (50%) of the voting interests or the power to direct management.
+
+1.10 "Annual Net Revenue" means the total revenue recognized by You and Your
+Affiliates on a consolidated basis during Your most recently completed fiscal
+year, determined in accordance with generally accepted accounting principles
+(GAAP) or International Financial Reporting Standards (IFRS), consistently
+applied, less (a) returns, allowances, discounts, and rebates, and (b) sales,
+use, value-added, and similar taxes. Intercompany revenue among You and Your
+Affiliates is excluded. If Your fiscal year is shorter or longer than twelve
+months, Annual Net Revenue is annualized. Amounts in other currencies are
+converted to U.S. dollars at the average exchange rate for the fiscal year. If
+You do not prepare consolidated financial statements, use the combined revenue
+of You and Your Affiliates, eliminating intercompany revenue. If You do not
+have a fiscal year, Your fiscal year is the twelve-month period ending on
+December 31.
+
+1.11 "Revenue Threshold" means three million U.S. dollars (USD 3,000,000).
+
+1.12 "Commercial License" means a separate written license granted by Haokir
+that authorizes Commercial Use above the Revenue Threshold, Operational Use,
+Distribution, or other rights not granted by this License.
+
+1.13 "Haokir Products" means products owned, controlled, or operated by Haokir
+Inc., including Hydite, Zorker, Zorker Openlink, and Cauiril, and any other
+product that Haokir designates in writing as a Haokir Product.
+
+1.14 "Brand" means the names, logos, and other trademarks of Haokir Inc.,
+including Zorker, Zorker Openlink, Hydite, Cauiril, and Haokir.
+
+2. GRANT OF RIGHTS
+
+2.1 Personal Use Grant. Subject to Your compliance with this License, Haokir
+grants You a non-exclusive, non-transferable, non-sublicensable, worldwide,
+royalty-free license to access, reproduce, build, run, and modify the Software
+solely for Personal Use.
+
+2.2 Internal Commercial Use Grant (Within Threshold). Subject to Your
+compliance with this License, if Your Annual Net Revenue does not exceed the
+Revenue Threshold, Haokir grants You a non-exclusive, non-transferable,
+non-sublicensable, worldwide, royalty-free license to access, reproduce, build,
+run, and modify the Software solely for Commercial Use as Internal Use.
+
+2.3 Above Threshold. If Your Annual Net Revenue exceeds the Revenue Threshold,
+You may not engage in Commercial Use unless You have obtained a Commercial
+License. Personal Use remains available under Section 2.1.
+
+2.4 Haokir Products. Haokir Inc. and Haokir Products may use, reproduce,
+modify, and distribute the Software without regard to the restrictions in
+Sections 3.1, 3.2, 3.3, and 3.6, subject to the terms of any Separately
+Licensed Components.
+
+2.5 No Other Rights. This License does not grant any right to Distribution,
+Operational Use, sublicensing, or any other use not expressly permitted. All
+rights not expressly granted are reserved by Haokir.
+
+2.6 No Support or Updates. Haokir has no obligation to provide support,
+maintenance, updates, fixes, or any other services under this License.
+
+3. CONDITIONS AND RESTRICTIONS
+
+3.1 No Distribution. You may not distribute the Software or any Derivative
+Work to any third party without a Commercial License.
+
+3.2 No Operational Use. You may not engage in Operational Use without a
+Commercial License.
+
+3.3 No Third-Party Availability. You may not make the Software or any
+Derivative Work available to any third party, including as part of a product,
+service, integration, deliverable, or hosted environment, except as expressly
+permitted in a Commercial License or as part of Internal Use under Section 1.6.
+
+3.4 Internal Modifications. You may modify the Software for Personal Use or
+Internal Use. Modifications and Derivative Works remain subject to this
+License. You may not use a modification to circumvent any restriction in this
+License.
+
+3.5 Notices. You must retain all copyright, license, attribution, and other
+notices in the Software and in any Derivative Work, and clearly mark modified
+versions as modified. You may not remove, obscure, or alter any notice.
+
+3.6 Revenue Certification and Notice. If You engage in Commercial Use, You
+must, upon Haokir's reasonable written request (no more than once per fiscal
+year), certify Your Annual Net Revenue and provide reasonable supporting
+information. If Your Annual Net Revenue exceeds the Revenue Threshold in any
+fiscal year, You must notify Haokir in writing within thirty (30) days
+after the end of that fiscal year and obtain a Commercial License within sixty
+(60) days after the end of that fiscal year. Commercial Use after that sixty-day
+period without a Commercial License is a breach of this License. You must
+maintain records sufficient to verify Your Annual Net Revenue for at least
+twenty-four (24) months after the end of the relevant fiscal year.
+
+3.7 Audit. Haokir may, upon at least thirty (30) days' prior written notice and
+no more than once per fiscal year, audit Your records solely to verify
+compliance with the Revenue Threshold. The audit will be conducted during
+normal business hours, in a manner that minimizes disruption, and subject to
+confidentiality obligations. Haokir will bear the cost of the audit unless the
+audit reveals an underpayment or revenue exceedance of more than five percent
+(5%), in which case You will reimburse Haokir's reasonable audit costs.
+
+3.8 No Misrepresentation. You may not state or imply that the Software is open
+source, that Haokir endorses You or Your use, or that You have rights greater
+than those granted by this License.
+
+3.9 No Brand Use. This License grants no rights to the Brand. You must comply
+with TRADEMARK.md. Modified versions and forks must be renamed and must not use
+the Brand or any confusingly similar name or logo.
+
+3.10 Contributions. Haokir does not accept external contributions to the
+Software. You may not submit patches, pull requests, or other contributions
+unless Haokir has agreed in writing in advance.
+
+3.11 Feedback. If You provide suggestions or feedback, You grant Haokir a
+perpetual, irrevocable, worldwide, royalty-free license to use it without
+restriction or obligation.
+
+3.12 Compliance. You must comply with all applicable export control,
+sanctions, and other laws in connection with Your use of the Software.
+
+4. SEPARATELY LICENSED COMPONENTS
+
+4.1 The Software includes Separately Licensed Components. Your rights to those
+components are governed by their own licenses, not this License. Nothing in
+this License limits, restricts, or supersedes the rights granted to You under
+those licenses.
+
+4.2 Haokir does not grant any license, warranty, or indemnity with respect to
+Separately Licensed Components.
+
+4.3 If You distribute a Separately Licensed Component, You must comply with its
+license, including notice, attribution, source-code, and other obligations.
+This License does not authorize You to distribute any Separately Licensed
+Component.
+
+5. TERM AND TERMINATION
+
+5.1 This License is effective until terminated.
+
+5.2 This License terminates automatically if You breach Section 3.1, 3.2, or
+3.3. For any other breach, Haokir may terminate this License if You fail to
+cure the breach within thirty (30) days after receiving written notice.
+
+5.3 On termination, You must stop all use of the Software and Derivative Works
+and destroy all copies in Your possession or control, except that You may
+retain one archival copy solely to verify compliance, and except for copies
+subject to a Commercial License.
+
+5.4 Sections 3.5, 3.8, 3.10, 3.11, 4, 5.3, 6, 7, 8, 9, and 10 survive
+termination.
+
+6. DISCLAIMER OF WARRANTIES
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR
+A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, AND QUIET ENJOYMENT.
+HAAKIR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, SECURE, OR
+UNINTERRUPTED, OR THAT IT WILL MEET YOUR REQUIREMENTS. YOU BEAR ALL RISKS
+ASSOCIATED WITH YOUR USE OF THE SOFTWARE.
+
+7. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, HAAKIR WILL NOT BE LIABLE FOR ANY
+INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR LOSS
+OF PROFITS, REVENUE, DATA, OR GOODWILL, ARISING OUT OF OR RELATING TO THIS
+LICENSE OR THE SOFTWARE, EVEN IF HAAKIR HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES. HAAKIR'S AGGREGATE LIABILITY UNDER THIS LICENSE WILL NOT EXCEED
+THE GREATER OF (A) THE AMOUNTS YOU PAID TO HAAKIR UNDER THIS LICENSE IN THE
+TWELVE (12) MONTHS PRECEDING THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS
+(USD 100).
+
+8. INTELLECTUAL PROPERTY
+
+8.1 Haokir and its licensors own all rights, title, and interest in and to the
+Software, including all copyrights, patents, trademarks, and other intellectual
+property rights.
+
+8.2 Subject to Section 8.3, Haokir grants You a limited, non-exclusive,
+non-transferable, non-sublicensable patent license solely to the extent
+necessary to exercise the rights expressly granted under this License.
+
+8.3 The patent license in Section 8.2 terminates immediately if You or any of
+Your Affiliates assert a patent claim against Haokir, any Haokir Product, or
+any of their respective users or licensors alleging that the Software or a
+Haokir Product infringes a patent.
+
+9. GOVERNING LAW AND DISPUTE RESOLUTION
+
+9.1 This License is governed by the laws of the State of Delaware, United
+States of America, without regard to its conflict-of-laws rules.
+
+9.2 Any dispute arising out of or relating to this License or the Software will
+be finally resolved by arbitration administered by the American Arbitration
+Association (AAA) under its Commercial Arbitration Rules, with a seat in
+Wilmington, Delaware, USA, conducted in English by a single arbitrator. The
+arbitrator's award will be final and binding. Either party may seek injunctive
+or other equitable relief in a court of competent jurisdiction to prevent
+irreparable harm.
+
+9.3 The United Nations Convention on Contracts for the International Sale of
+Goods does not apply.
+
+10. GENERAL
+
+10.1 Entire Agreement. This License, together with the NOTICE file,
+TRADEMARK.md, and any Commercial License, is the entire agreement between You
+and Haokir regarding the Software.
+
+10.2 Severability. If any provision is held invalid or unenforceable, the
+remaining provisions remain in effect.
+
+10.3 No Waiver. Failure to enforce a provision is not a waiver of that
+provision or any other provision.
+
+10.4 Assignment. You may not assign this License without Haokir's prior written
+consent. Haokir may assign this License without restriction.
+
+10.5 No Agency. Nothing in this License creates an agency, partnership, joint
+venture, or employment relationship.
+
+10.6 Headings. Headings are for convenience only and do not affect
+interpretation.
+
+10.7 Language. This License is in English. Any translation is for convenience
+only, and the English version controls.
+
+10.8 Future Versions. This License is Version 1.0. Haokir may make future
+versions of the Software available under different terms.
+
+10.9 Contact. Questions about this License may be directed to Haokir Inc. at
+https://www.hydite.com.
+
+END OF LICENSE

@@ -2,6 +2,8 @@
 
 This directory groups tracked LICENSE, COPYING, and NOTICE files by the upstream project or brand. Original files remain beside their source projects; these copies preserve the source path under each group for review and distribution mapping.
 
+This directory covers third-party and separately licensed components only. Zorker Openlink original code is licensed under the `LICENSE` file in the repository root.
+
 Total source files: 296
 
 ## Groups
