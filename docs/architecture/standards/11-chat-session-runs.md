@@ -65,3 +65,25 @@ this record.
 4. A stale heartbeat is shown as `interrupted`, never as an indefinitely
    running process.
 5. Two sessions maintain independent statuses and process ids in the sidebar.
+
+## Client live-view state
+
+A session may have several workspace surfaces open. The browser tab owns only
+the live view; it does not own the run.
+
+- Session UI state is stored in `sessionStorage` under
+  `openlink:session-ui:v1:<sessionId>`: open workspace tabs, active tab,
+  browser surface and URL, selected Git ref, panel collapse, composer draft and
+  the user's explicit preview-pause preference.
+- Session title, run status, process id and event history remain server
+  authoritative and are never restored from client storage.
+- A hidden browser tab pauses live browser and desktop transports after a
+  short grace period. The preview component may unmount, but the server-side
+  browser session, project desktop and Agent run stay alive.
+- Returning to the tab restores the persisted surface and reconnects it. The
+  browser URL is reused when the surface session must be recreated.
+- code-server is kept mounted while its workspace tab is open, including while
+  another workspace tab is active, so the editor iframe and its local layout do
+  not reload.
+- The explicit pause control pauses only the live preview. It never sends
+  `/cancel`, stops a container, releases a lease or changes the run status.
