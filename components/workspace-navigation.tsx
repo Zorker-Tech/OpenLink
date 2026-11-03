@@ -32,6 +32,7 @@ export function WorkspaceNavigationRail({ activePage, footer, onCloseMobile, onH
     <nav aria-label={t('工作区导航')} className="workspace-navigation-rail" style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <div className="flex flex-1 flex-col items-center gap-4">
         <Link aria-current={!activePage || activePage === t('首页') ? 'page' : undefined} aria-label={t('首页')} className={railClass} href={`/app/${workspaceSlug}`} onMouseEnter={onPeek} onMouseLeave={onLeave} onClick={onCloseMobile} title={t('首页')}><img alt="" className="app-nav-icon" src={`${iconPath}home.svg`} /></Link>
+        <button aria-label={t('Bot')} aria-disabled="true" className={railClass} title={t('Bot（即将推出）')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}bot.svg`} /></button>
         <button aria-label={t('库')} aria-disabled="true" className={railClass} title={t('库（即将推出）')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}library.svg`} /></button>
         <Link aria-current={activePage === t('项目') ? 'page' : undefined} aria-label={t('项目')} className={railClass} href={`/app/${workspaceSlug}/projects`} onClick={onCloseMobile} title={t('项目')}><img alt="" className="app-nav-icon" src={`${iconPath}projects.svg`} /></Link>
         <button aria-label={t('搜索聊天')} className={railClass} onClick={onHistory} title={t('搜索聊天')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}history.svg`} /></button>
