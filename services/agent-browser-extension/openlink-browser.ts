@@ -88,6 +88,12 @@ function textResult(result: unknown) {
 /** OpenLink's scoped Browser Host tools. The capability is injected per Pi session. */
 export default function openLinkBrowserExtension(pi: ExtensionAPI) {
   pi.registerTool(defineTool({
+    name: 'browser_pages', label: 'List browser pages',
+    description: 'List every page in the shared OpenLink browser and identify the active page.',
+    parameters: Type.Object({}),
+    async execute(_id, _params, signal) { return textResult(await invoke({ type: 'page.list' }, signal)) },
+  }))
+  pi.registerTool(defineTool({
     name: 'browser_open', label: 'Open browser page',
     description: 'Open a URL in the shared OpenLink browser. Returns a page id for subsequent browser tools.',
     promptSnippet: 'Open and interact with pages in the shared OpenLink browser.',
@@ -103,9 +109,24 @@ export default function openLinkBrowserExtension(pi: ExtensionAPI) {
     },
   }))
   pi.registerTool(defineTool({
+    name: 'browser_close', label: 'Close browser page', description: 'Close a browser page by id.',
+    parameters: Type.Object({ pageId: Type.String() }),
+    async execute(_id, params, signal) { return textResult(await invoke({ type: 'page.close', pageId: params.pageId }, signal)) },
+  }))
+  pi.registerTool(defineTool({
+    name: 'browser_activate', label: 'Activate browser page', description: 'Make a browser page the active page visible to the user.',
+    parameters: Type.Object({ pageId: Type.String() }),
+    async execute(_id, params, signal) { return textResult(await invoke({ type: 'page.activate', pageId: params.pageId }, signal)) },
+  }))
+  pi.registerTool(defineTool({
     name: 'browser_navigate', label: 'Navigate browser page', description: 'Navigate an existing page to an absolute URL.',
     parameters: Type.Object({ pageId: Type.String(), url: Type.String() }),
     async execute(_id, params, signal) { return textResult(await invoke({ type: 'page.navigate', ...params }, signal)) },
+  }))
+  pi.registerTool(defineTool({
+    name: 'browser_history', label: 'Browser history navigation', description: 'Go back, go forward or reload an existing browser page.',
+    parameters: Type.Object({ pageId: Type.String(), direction: Type.Union([Type.Literal('back'), Type.Literal('forward'), Type.Literal('reload')]) }),
+    async execute(_id, params, signal) { return textResult(await invoke({ type: `page.${params.direction}`, pageId: params.pageId }, signal)) },
   }))
   pi.registerTool(defineTool({
     name: 'browser_click', label: 'Click browser element', description: 'Click using a browser_read ref, CSS selector, or viewport point.',
@@ -125,6 +146,11 @@ export default function openLinkBrowserExtension(pi: ExtensionAPI) {
     name: 'browser_hover', label: 'Hover browser element', description: 'Hover using a ref, selector, or viewport point.',
     parameters: Type.Object({ pageId: Type.String(), ref: Type.Optional(Type.String()), selector: Type.Optional(Type.String()), x: Type.Optional(Type.Number()), y: Type.Optional(Type.Number()) }),
     async execute(_id, params, signal) { return textResult(await invoke({ type: 'element.hover', ...params }, signal)) },
+  }))
+  pi.registerTool(defineTool({
+    name: 'browser_insert_text', label: 'Insert browser text', description: 'Insert text at the current keyboard focus without replacing an element value.',
+    parameters: Type.Object({ pageId: Type.String(), text: Type.String() }),
+    async execute(_id, params, signal) { return textResult(await invoke({ type: 'keyboard.insertText', ...params }, signal)) },
   }))
   pi.registerTool(defineTool({
     name: 'browser_drag', label: 'Drag browser element', description: 'Drag from one viewport point to another.',

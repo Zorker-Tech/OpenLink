@@ -63,13 +63,23 @@ export function verifyLocalStudioSession(value: string | undefined): LocalStudio
     || !validId(valueObject.userId, /^[0-9a-f-]{8,}$/i)
     || typeof valueObject.expiresAt !== 'number' || !Number.isSafeInteger(valueObject.expiresAt)
     || valueObject.expiresAt < Math.floor(Date.now() / 1000)) return null
-  return valueObject as LocalStudioSession
+  return valueObject as unknown as LocalStudioSession
 }
 
-export function localStudioOrigin(_request: Request): string | null {
-  // Studio is served on a second port of the SAME `localhost` host so its
-  // SameSite cookie flows into the iframe (same host => same site; ports are
-  // not part of the site). `studio.localhost` would be a different site and
-  // would never receive the cookie.
-  return process.env.OPENLINK_STUDIO_ORIGIN || 'http://localhost:3002'
+export function localStudioOrigin(request?: Request): string {
+  // Studio is served on a second port of the SAME host the user opened. Ports
+  // are not part of a cookie's site, so a host-only ticket cookie is shared
+  // with the Studio origin while its separate root namespace stays isolated.
+  // Deriving the hostname also makes LAN access work; a hard-coded localhost
+  // origin is unreachable from another machine.
+  const configured = process.env.OPENLINK_STUDIO_ORIGIN || 'http://localhost:3002'
+  const configuredUrl = new URL(configured)
+  const port = configuredUrl.port || '3002'
+  if (!request) return `${configuredUrl.protocol}//${configuredUrl.hostname}:${port}`
+  const requestUrl = new URL(request.url)
+  const forwardedHost = request.headers.get('x-forwarded-host') ?? request.headers.get('host')
+  const hostname = forwardedHost?.split(':')[0]?.trim() || requestUrl.hostname || 'localhost'
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const protocol = forwardedProto === 'https' || requestUrl.protocol === 'https:' ? 'https:' : 'http:'
+  return `${protocol}//${hostname}:${port}`
 }

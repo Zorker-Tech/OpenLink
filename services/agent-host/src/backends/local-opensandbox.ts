@@ -692,7 +692,7 @@ export class LocalOpenSandboxBackend {
         'openlink.workspace_id': workspaceId,
         'openlink.session_id': sessionId,
         ...(projectId ? { 'openlink.project_id': projectId } : {}),
-        ...(browser ? { 'openlink.browser_session_id': browser.sessionId } : {}),
+        ...(browser ? { 'openlink.browser_session_id': `b${browser.sessionId}x` } : {}),
         'openlink.runtime': 'node-sdk',
       },
       // Ask the OpenSandbox Docker provider to grant the narrowly scoped

@@ -42,6 +42,8 @@ interface AppWorkspaceProps {
   projects: ProjectSummary[]
   runtimeMode: 'local' | 'cloud'
   workspaceSlug: string
+  composerSkills?: import('@/lib/user-skill-types').UserSkill[]
+  customInstructions?: string
 }
 
 interface SidebarChatMenuProps {
@@ -398,6 +400,8 @@ export function AppWorkspace({
   projects,
   runtimeMode,
   workspaceSlug,
+  composerSkills = [],
+  customInstructions = '',
 }: AppWorkspaceProps) {
   const t = useT()
   const router = useRouter()
@@ -555,6 +559,7 @@ export function AppWorkspace({
           <PageTransition className="flex w-full justify-center">
             <WorkspacePrompt
               configuredModels={configuredModels}
+              customInstructions={customInstructions}
               defaultProject={currentDefaultProject}
               key={composerVersion}
               initialProjectId={initialProjectId}
@@ -562,6 +567,7 @@ export function AppWorkspace({
               pollRuntimeStatus={false}
               projects={currentProjects}
               runtimeMode={runtimeMode}
+              skills={composerSkills}
               workspaceSlug={workspaceSlug}
             />
           </PageTransition>

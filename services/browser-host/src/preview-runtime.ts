@@ -110,6 +110,17 @@ export class NativePreviewRuntime implements BrowserRuntimeSession {
   }
 
   async perform(envelope: BrowserActionEnvelope): Promise<BrowserActionResult> {
+    if (envelope.action.type === 'page.list') {
+      const state = this.context.getState()
+      return {
+        version: BROWSER_PROTOCOL_VERSION,
+        actionId: envelope.actionId,
+        sessionId: envelope.sessionId,
+        ok: true,
+        pages: state.pages,
+        activePageId: state.activePageId,
+      }
+    }
     if (envelope.action.type === 'page.open') {
       throw new BrowserHostError('PREVIEW_SINGLE_PAGE', 'Native preview owns one page; navigate the preview page instead', 409)
     }

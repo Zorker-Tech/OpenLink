@@ -73,7 +73,10 @@ async function handler(request: Request): Promise<Response> {
   }
   const headers = new Headers({
     'Cache-Control': 'no-store',
-    'Content-Security-Policy': "frame-ancestors http://localhost:*",
+    // The ticket is only handed to the authenticated app iframe, so the
+    // Studio document may be framed by the app's current host (localhost, a
+    // LAN IP or a private deployment hostname). Never let it be indexed.
+    'Content-Security-Policy': "frame-ancestors *",
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
   })
@@ -97,7 +100,7 @@ async function handler(request: Request): Promise<Response> {
       return new Response(`<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${safeLocation}">`, { status: 200, headers: bootstrapHeaders })
     }
   }
-  return new Response(request.method === 'HEAD' ? null : Buffer.from(payload.bodyBase64, 'base64url'), { status: payload.status, headers })
+  return new Response(request.method === 'HEAD' ? null : Buffer.from(payload.bodyBase64, 'base64url'), { status: payload.status as number, headers })
 }
 
 export const GET = handler

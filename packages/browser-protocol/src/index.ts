@@ -73,6 +73,7 @@ export interface ElementReference {
 }
 
 export type BrowserAction =
+  | { type: 'page.list' }
   | { type: 'page.open'; url: string }
   | { type: 'page.close'; pageId: string }
   | { type: 'page.activate'; pageId: string }
@@ -108,6 +109,8 @@ export interface BrowserActionResult {
   sessionId: string
   ok: boolean
   page?: BrowserPageState
+  pages?: BrowserPageState[]
+  activePageId?: string | null
   element?: ElementReference
   snapshot?: string
   image?: { mimeType: 'image/png' | 'image/jpeg'; data: string; width?: number; height?: number }
@@ -201,6 +204,7 @@ export function isBrowserActionEnvelope(value: unknown): value is BrowserActionE
   const url = () => isString(action.url) && action.url.length <= 8192
   const point = (candidate: unknown) => isRecord(candidate) && isFiniteNumber(candidate.x) && isFiniteNumber(candidate.y)
   switch (action.type) {
+    case 'page.list': return true
     case 'page.open': return url()
     case 'page.close':
     case 'page.activate':
