@@ -1,13 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="openlink-desktop" content="1" />
     <title>OpenLink</title>
+    <script>
+      ;(function () {
+        try {
+          var theme = localStorage.getItem('openlink-theme') || 'system'
+          var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+          var classes = document.documentElement.classList
+          if (dark) classes.add('dark')
+          else classes.remove('dark')
+        } catch (_) {
+          document.documentElement.classList.add('dark')
+        }
+      })()
+    </script>
   </head>
-  <body>
-    <main id="status" aria-live="polite">Opening OpenLink…</main>
-    <script type="module" src="./index.mjs"></script>
+  <body class="antialiased">
+    <div id="root">
+      <main style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+        Opening OpenLink…
+      </main>
+    </div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>
