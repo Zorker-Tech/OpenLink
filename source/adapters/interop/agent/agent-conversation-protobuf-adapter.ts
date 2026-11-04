@@ -16,6 +16,7 @@ import {
 import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { ProtobufBlobSerde } from "./protobuf-blob-serde-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
+import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
@@ -39,7 +40,6 @@ import {
 
 const todoItemSerde = new ProtobufBlobSerde(TodoItem)
 const userMessageSerde = new ProtobufBlobSerde(UserMessage)
-const conversationStepSerde = new ProtobufBlobSerde(ConversationStep)
 const conversationSummarySerde = new ProtobufBlobSerde(ConversationSummary)
 const shellCommandSerde = new ProtobufBlobSerde(ShellCommand)
 const shellOutputSerde = new ProtobufBlobSerde(ShellOutput)
@@ -178,7 +178,7 @@ export async function deriveInteropConversationStateFromStructure<Context>(
       const steps: InstanceType<typeof ConversationStep>[] = []
       for (const stepBlobId of turnStructure.stepBlobIds) {
         const stepBlob = await blobStore.getBlob(ctx, stepBlobId)
-        if (stepBlob) steps.push(conversationStepSerde.deserialize(stepBlob))
+        if (stepBlob) steps.push(deserializeSlateConversationStepInterop(stepBlob))
       }
       turn = new ConversationTurn({
         turn: {

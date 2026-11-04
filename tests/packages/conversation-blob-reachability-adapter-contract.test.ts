@@ -3,16 +3,19 @@ import { createHash } from "node:crypto"
 import { test } from "node:test"
 
 import {
-  AssistantMessage,
   AgentConversationTurnStructure,
-  ConversationStep,
   ConversationStateStructure,
   ConversationTurnStructure,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
+import { createSlateConversationStepSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
+import { createRedactedString } from "../../source/packages/redaction/create.ts"
+import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
   collectReachableBlobHexIds,
   EDGES_NOT_WALKED_SO_REFERENTS_COLLECT,
@@ -70,11 +73,13 @@ test("reachability follows nested turn and user records but skips back-links and
   assert.equal(result.reachableHexIds.has(hex(omittedArchive)), false)
 })
 
-test("reachability follows turn and step refs from Slate-encoded turn blobs", () => {
+test("reachability follows turn and step refs from Slate-encoded blobs", () => {
   const userBytes = new UserMessage({ text: "question" }).toBinary()
-  const stepBytes = new ConversationStep({
-    message: { case: "assistantMessage", value: new AssistantMessage({ text: "answer" }) },
-  }).toBinary()
+  const stepBytes = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(
+    createSlateAssistantMessageStep(
+      createRedactedString("answer", DataClassification.CODE, "text", PrivacyMode.NO_STORAGE),
+    ),
+  )
   const userId = digest(userBytes)
   const stepId = digest(stepBytes)
   const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
