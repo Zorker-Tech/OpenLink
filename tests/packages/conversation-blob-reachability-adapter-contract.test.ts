@@ -17,6 +17,7 @@ import {
   createSlateConversationPlanSerde,
   createSlateUserMessageSerde,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { createSlateTodoItemSerde } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
@@ -127,6 +128,24 @@ test("reachability validates both Slate and legacy plan blobs without treating t
     assert.deepEqual([...result.reachableHexIds], [hex(planId)])
     assert.equal(result.unresolvedProtoRefs, 0)
   }
+})
+
+test("reachability validates Slate todo blobs referenced by a checkpoint", () => {
+  const todoBytes = createSlateTodoItemSerde(PrivacyMode.NO_STORAGE).serialize({
+    id: "todo-1",
+    content: "reachable todo",
+    status: "pending",
+    createdAt: 1n,
+    updatedAt: 2n,
+  })
+  const todoId = digest(todoBytes)
+  const rootBytes = new ConversationStateStructure({ todos: [todoId] }).toBinary()
+  const result = collectReachableBlobHexIds({
+    rootBytes,
+    getBlobByHexId: key => key === hex(todoId) ? todoBytes : undefined,
+  })
+  assert.deepEqual([...result.reachableHexIds], [hex(todoId)])
+  assert.equal(result.unresolvedProtoRefs, 0)
 })
 
 test("missing typed child blobs are retained as unresolved references", () => {

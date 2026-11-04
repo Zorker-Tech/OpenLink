@@ -16,9 +16,8 @@ import {
   createPlanExecutionMessage,
   createPlanRegistryEntry,
   decodeExecutePlanAction,
-  isInteropPlanTodoComplete,
   toInteropAgentMode,
-  toRedactedPlanTodos,
+  toSlatePlanTodos,
 } from "../../../adapters/interop/agent/execute-plan-action-adapter.ts";
 import { unavailablePlanDocumentUri } from "../../../adapters/interop/agent/plan-file-uri-adapter.ts";
 import { projectBackgroundAgentSource } from "../../../adapters/interop/agent/background-agent-source-adapter.ts";
@@ -259,7 +258,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     rootPromptExecutor.appendMessages(effectivePriorMessages);
     if (!unredResolvedPlanContent) throw new Error("No plan content available for ExecutePlanAction (missing state and planFileContent)");
     if (stateHandler.todos.length === 0) {
-      const todos = toRedactedPlanTodos(
+      const todos = toSlatePlanTodos(
         collectPlanTodoDrafts(unredResolvedPlanContent),
         stateHandler.getPrivacyMode(),
       );
@@ -304,7 +303,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     await this.runTurnLoop(ctx, rootPromptExecutor, stateHandler, turn, configAny.toolsGenerator, mergedMcpTools, requestContext.repositoryInfo, requestContext, onStateUpdate);
     const finalTodos = await Promise.all(stateHandler.todos.map((todoRef: Any) => todoRef.get(ctx)));
     const finalStatusByTodoId = new Map(finalTodos.map((todo: Any) => [todo.id, todo.status]));
-    getAgentEventTracker(ctx).trackPlanModeModelFinished(ctx, { durationInMode: Math.max(0, performance.now() - planExecutionStartTime), todosProposed: initialTodoIds.length, todosCompleted: initialTodoIds.filter((todoId: string) => isInteropPlanTodoComplete(finalStatusByTodoId.get(todoId))).length, userMessagesDuringExecution: Math.max(0, stateHandler.turns.length - initialTurnCount), modelName: configAny.modelId, requestId: getRequestId(ctx), conversationId: getConversationId(ctx), planId });
+    getAgentEventTracker(ctx).trackPlanModeModelFinished(ctx, { durationInMode: Math.max(0, performance.now() - planExecutionStartTime), todosProposed: initialTodoIds.length, todosCompleted: initialTodoIds.filter((todoId: string) => finalStatusByTodoId.get(todoId) === "completed").length, userMessagesDuringExecution: Math.max(0, stateHandler.turns.length - initialTurnCount), modelName: configAny.modelId, requestId: getRequestId(ctx), conversationId: getConversationId(ctx), planId });
     return await stateHandler.computeNewStructure(ctx);
   }
 

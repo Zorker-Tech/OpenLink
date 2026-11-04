@@ -21,7 +21,6 @@ import {
   ToolCall,
   UserMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
@@ -60,6 +59,9 @@ import { RedactedBytes, RedactedString } from "../../../packages/redaction/redac
 import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import { conversationStateStructureSerde } from "./agent-conversation-state-serdes-adapter.ts"
+import { createSlateTodoItemSerde, redactSlateTodoItem } from "./todo-schema-adapter.ts"
+export { deserializeSlateTodoItemInterop } from "./todo-schema-adapter.ts"
+export { redactSlateTodoItem } from "./todo-schema-adapter.ts"
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
 import {
   createSlateAssistantMessageStep,
@@ -1673,7 +1675,7 @@ export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
     conversationSummary: createRedactedProtoSerde(ConversationSummary, toRedactedConversationSummary, serdeDecoder(fromRedactedConversationSummary), privacyMode),
     conversationSummaryArchive: createRedactedProtoSerde(ConversationSummaryArchive, toRedactedConversationSummaryArchive, serdeDecoder(fromRedactedConversationSummaryArchive), privacyMode),
     conversationPlan: createSlateConversationPlanSerde(privacyMode),
-    todoItem: createRedactedProtoSerde(TodoItem, toRedactedTodoItem, serdeDecoder(fromRedactedTodoItem), privacyMode),
+    todoItem: createSlateTodoItemSerde(privacyMode),
     subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, serdeDecoder(fromRedactedSubagentPersistedState), privacyMode),
   }
 }

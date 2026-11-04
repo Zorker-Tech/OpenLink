@@ -5,11 +5,11 @@ import { createUpdateTodosTool, type UpdateTodosStateHandler } from "../../sourc
 import { ToolCallArgParseError } from "../../source/packages/agent/tools/tool-support.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
-import { fromRedactedTodoItem, toRedactedTodoItem } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
 import { PlanRegistryEntry, ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { TodoItem, TodoStatus, UpdateTodosResult, UpdateTodosToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
+import { cloneSlateTodoItem, type SlateTodoItem } from "../../source/packages/agent/tools/core/todo/contracts.ts"
+import { fromInteropTodoItem, toInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
@@ -19,13 +19,12 @@ import type { TextResult } from "../../source/packages/chat-inference/prompt-exe
 // the harness
 // ---------------------------------------------------------------------------------------------
 
-type RedactedTodo = Parameters<typeof fromRedactedTodoItem>[0]
 type Tool = ReturnType<typeof createUpdateTodosTool>
 
 const PLAN_FRONTMATTER = 'todos:\n  - id: "1"\n    status: pending'
 
 function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?: string } = {}) {
-  let stored: RedactedTodo[] = (options.todos ?? []).map(todo => toRedactedTodoItem(todo, PrivacyMode.NO_STORAGE))
+  let stored: SlateTodoItem[] = (options.todos ?? []).map(fromInteropTodoItem)
   const reads: Array<{ path: string; toolCallId?: string }> = []
   const writes: Array<{ path: string; text?: string }> = []
   const accessor = {
@@ -58,7 +57,7 @@ function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?:
     // The list is read afresh on every call, so the refs always see what the last call stored.
     get todos() { return stored.map(item => ({ get: async () => item })) },
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
-    setTodos(next: readonly unknown[]) { stored = next as RedactedTodo[] },
+    setTodos(next: readonly SlateTodoItem[]) { stored = next.map(cloneSlateTodoItem) },
     mode: SlateMode.AGENT,
     plans: options.planPath === undefined
       ? new Map()
@@ -70,7 +69,7 @@ function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?:
     reads,
     writes,
     /** The stored list as plain items, which is what a caller of the tool would see. */
-    list: () => stored.map(item => fromRedactedTodoItem(item, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
+    list: () => stored.map(toInteropTodoItem),
     build: (promptVersion?: string) => createUpdateTodosTool(
       accessor as never,
       stateHandler as unknown as UpdateTodosStateHandler,
