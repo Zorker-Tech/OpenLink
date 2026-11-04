@@ -8,28 +8,33 @@ import {
   type SendMessage,
 } from "./send-message-shaping.ts";
 import type { TranscriptEntry } from "./transcript-hub.ts";
+
+interface SendReplyRuntime {
+  readonly turnRuntime: {
+    resolveReplyTarget(entries: readonly TranscriptEntry[], id: string): string | undefined;
+    buildReplyContext(entries: readonly TranscriptEntry[], id?: string): unknown;
+  };
+}
+
+interface AutoThreadRuntime {
+  readonly turnRuntime: { readonly replyThreadTargets: ReadonlyMap<object, string> };
+}
+
+function transcriptContains(entries: readonly TranscriptEntry[], targetId: string): boolean {
+  return entries.some(entry => entry.id === targetId);
+}
+
 export function resolveSendReplyThreading(
-  tm: {
-    turnRuntime: {
-      resolveReplyTarget(
-        entries: readonly TranscriptEntry[],
-        id: string,
-      ): string | undefined;
-      buildReplyContext(
-        entries: readonly TranscriptEntry[],
-        id?: string,
-      ): unknown;
-    };
-  },
+  tm: SendReplyRuntime,
   replyToIdOption: string | undefined,
   isForkOption: boolean,
   readAddressedTranscript: () => readonly TranscriptEntry[],
 ): { replyToId?: string; replyContext: unknown; isFork: boolean } {
-  const entries = replyToIdOption ? readAddressedTranscript() : [],
-    replyToId = replyToIdOption
-      ? tm.turnRuntime.resolveReplyTarget(entries, replyToIdOption)
-      : undefined,
-    replyContext = tm.turnRuntime.buildReplyContext(entries, replyToId);
+  const addressedEntries = replyToIdOption ? readAddressedTranscript() : [];
+  const replyToId = replyToIdOption
+    ? tm.turnRuntime.resolveReplyTarget(addressedEntries, replyToIdOption)
+    : undefined;
+  const replyContext = tm.turnRuntime.buildReplyContext(addressedEntries, replyToId);
   return {
     ...(replyToId == null ? {} : { replyToId }),
     replyContext,
@@ -42,21 +47,18 @@ export function validateAiReplyTarget<T extends SendMessage>(
   entries: readonly TranscriptEntry[],
 ): T {
   const target = message.reply_to;
-  return target == null || target.length === 0
-    ? message
-    : target === inFlightId || !entries.some((entry) => entry.id === target)
-      ? stripReplyTo(message)
-      : message;
+  if (target == null || target.length === 0) return message;
+  if (target === inFlightId || !transcriptContains(entries, target)) return stripReplyTo(message);
+  return message;
 }
 export function applyAutoReplyThread<T extends SendMessage>(
-  tm: { turnRuntime: { replyThreadTargets: ReadonlyMap<object, string> } },
+  tm: AutoThreadRuntime,
   message: T,
   session: object | null,
   entries: readonly TranscriptEntry[],
 ): T {
   if (message.reply_to || session == null) return message;
   const target = tm.turnRuntime.replyThreadTargets.get(session);
-  return target != null && entries.some((entry) => entry.id === target)
-    ? withReplyTo(message, target)
-    : message;
+  if (target == null || !transcriptContains(entries, target)) return message;
+  return withReplyTo(message, target);
 }

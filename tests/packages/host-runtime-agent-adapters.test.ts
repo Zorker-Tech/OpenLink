@@ -6,11 +6,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { requestIdKey } from "../../source/packages/chat-inference-proto/client.ts";
+import { requestIdKey } from "../../source/adapters/interop/chat-inference-proto/client.ts";
 import { createContext } from "../../source/packages/context/context.ts";
-import { rootParentRequestIdKey } from "../../source/packages/agent/utils/request-scope.ts";
-import { SubagentBackgroundReason, ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { ShellArgs } from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts";
+import { withRootParentRequestId } from "../../source/packages/agent/utils/request-scope.ts";
+import { SubagentBackgroundReason, ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
+import { computeSubagentRequestId } from "../../source/host/runner/subagent-runtime.ts";
 import { SlateSubagentDispatchError, SlateRequestContextExecutor, SlateSubagentHostAdapter, ForwardingInteractionListener, deriveSlateSubagentRequestLineage, type SubagentAdapterArgs } from "../../source/host/runner/agent-adapters.ts";
 
 const args = (over: Partial<SubagentAdapterArgs> = {}): SubagentAdapterArgs => ({ subagentType: "generalPurpose", toolCallId: "call-1", prompt: "look into it", ...over });
@@ -21,7 +22,7 @@ describe("where a subagent came from", () => {
     const withRequest = createContext().with(requestIdKey, "request-1");
     assert.deepEqual(deriveSlateSubagentRequestLineage(withRequest, "call-1"), { parentRequestId: "request-1", rootParentRequestId: "request-1", parentAgentToolCallId: "call-1" });
     // The root is the outermost request the platform remembers, and a call with no id of its own carries none.
-    const rooted = createContext().with(requestIdKey, "request-2").with(rootParentRequestIdKey, "request-0");
+    const rooted = withRootParentRequestId(createContext().with(requestIdKey, "request-2"), "request-0");
     const lineage = deriveSlateSubagentRequestLineage(rooted, "");
     assert.deepEqual({ parent: lineage?.parentRequestId, root: lineage?.rootParentRequestId, toolCall: lineage?.parentAgentToolCallId }, { parent: "request-2", root: "request-0", toolCall: undefined });
     // An empty request id is treated as none at all.
@@ -47,6 +48,10 @@ describe("the context a turn runs under", () => {
     const bareResult = await bare.execute();
     const bareContext = bareResult.result.case === "success" ? bareResult.result.value.requestContext : undefined;
     assert.deepEqual({ folder: bareContext?.env?.agentTranscriptsFolder, autoMode: bareContext?.env?.smartModeClassifierAutoModeEnabled, rules: bareContext?.rules?.length, complete: bareContext?.rulesInfoComplete, skills: bareContext?.agentSkills?.length }, { folder: "", autoMode: false, rules: 1, complete: true, skills: 0 });
+    const noRules = new SlateRequestContextExecutor({ resolve: () => ({}), resolveRules: async () => [] }, false, false);
+    const noRulesResult = await noRules.execute();
+    const noRulesContext = noRulesResult.result.case === "success" ? noRulesResult.result.value.requestContext : undefined;
+    assert.deepEqual({ rules: noRulesContext?.rules, complete: noRulesContext?.rulesInfoComplete }, { rules: [], complete: true });
   });
 });
 
@@ -57,7 +62,10 @@ describe("the subagent sessions a host keeps", () => {
     const windows = new Set<string>();
     const adapter = new SlateSubagentHostAdapter(
       sessions,
-      (id, sessionArgs) => { calls.push(["create", id, sessionArgs.prompt]); return { run: async () => ({ text: "done" }) } as never; },
+      (id, sessionArgs) => {
+        calls.push(["create", id, sessionArgs.prompt]);
+        return { run: async (prompt: string, runOptions: unknown) => { calls.push(["run", id, prompt, runOptions]); return { text: "done" }; } } as never;
+      },
       {
         isRunning: (id) => { calls.push(["is-running", id]); return running.has(id); },
         allocateComputerUseWindow: (id) => { calls.push(["allocate", id]); if (windows.size > 0) return null; windows.add(id); return { window: id }; },
@@ -83,6 +91,8 @@ describe("the subagent sessions a host keeps", () => {
     const made = await world.adapter.createOrResumeSession(undefined, args({ prompt: "check the release" }));
     assert.equal(made.startsWith("subagent-"), true);
     assert.deepEqual(world.kinds("create").map((call) => call[2]), ["check the release"]);
+    assert.equal(await world.adapter.createOrResumeSession(undefined, args({ resumeAgentId: "subagent-not-yet-created" })), "subagent-not-yet-created");
+    assert.deepEqual(world.kinds("create").map((call) => [call[1], call[2]]), [[made, "check the release"], ["subagent-not-yet-created", "look into it"]]);
     // Only one computer-use subagent may hold the box's desktop, whichever way its type is spelled.
     assert.equal(await world.adapter.createOrResumeSession(undefined, args({ subagentType: "computerUse" })).then(() => "made"), "made");
     // The next one, however its type is spelled, cannot have it.
@@ -128,6 +138,29 @@ describe("the subagent sessions a host keeps", () => {
     // The run it was given calls the session's runner with what the caller selected and against the same request.
     const outcome = await dispatched.run();
     assert.equal(outcome.text, "done");
+    const run = allowed.kinds("run")[0] as [string, string, string, { selectedVideos?: readonly unknown[]; inferenceRequestId?: string; lineage?: { parentRequestId: string } }] | undefined;
+    assert.deepEqual({ prompt: run?.[2], videos: run?.[3].selectedVideos, request: run?.[3].inferenceRequestId, parent: run?.[3].lineage?.parentRequestId }, {
+      prompt: "check it",
+      videos: ["one.mov"],
+      request: computeSubagentRequestId("call-9"),
+      parent: "request-9",
+    });
+
+    const noCallId = harness();
+    const noCallIdSession = await noCallId.adapter.createOrResumeSession(undefined, args({ toolCallId: "" }));
+    await noCallId.adapter.runSession(createContext(), noCallIdSession, args({ toolCallId: "" }));
+    const noCallDispatch = noCallId.kinds("dispatch")[0]?.[1] as { lineage?: unknown; run(): Promise<{ text: string }> };
+    assert.equal(noCallDispatch.lineage, undefined);
+    assert.equal(Object.hasOwn(noCallDispatch, "lineage"), false);
+    await noCallDispatch.run();
+    const noCallRun = noCallId.kinds("run")[0] as [string, string, string, { inferenceRequestId?: string; lineage?: unknown }] | undefined;
+    assert.deepEqual({ prompt: noCallRun?.[2], request: noCallRun?.[3].inferenceRequestId, lineage: noCallRun?.[3].lineage }, { prompt: "look into it", request: undefined, lineage: undefined });
+
+    const desktopDenied = harness();
+    const desktopSession = await desktopDenied.adapter.createOrResumeSession(undefined, args({ subagentType: "computerUse" }));
+    desktopDenied.adapter.setLaunchReviewer(async () => ({ allowed: false, reason: "desktop launch refused" }));
+    assert.deepEqual(await desktopDenied.adapter.runSession(undefined, desktopSession, args({ subagentType: "computerUse" })), { status: "error", error: "desktop launch refused" });
+    assert.deepEqual({ retained: desktopDenied.sessions.has(desktopSession), windows: desktopDenied.windows.size, freed: desktopDenied.kinds("free").map((call) => call[1]) }, { retained: false, windows: 0, freed: [desktopSession] });
     // A subagent whose type was left out is a general one.
     const plain = harness();
     const plainId = await plain.adapter.createOrResumeSession(undefined, args({ subagentType: "" }));

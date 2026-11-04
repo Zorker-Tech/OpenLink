@@ -1,59 +1,189 @@
-/**
- * The box the host reaches over a loopback port.
- *
- * It answers the capability questions from what it can see of the box's own daemon and windows, and reports an
- * unreachable daemon with the outcome it ended in rather than as a generic failure.
- */
-import { readFile } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
-import { createContext, type Context } from "../../packages/context/context.ts";
-import { findSystemErrno } from "../../shared/system-errno.ts";
-import { BOX_FORK_NOVNC_PORT, BOX_PRIMARY_NOVNC_PORT } from "../../packages/constants/box-endpoints.ts";
-import { SlateBoxDaemonUnreachableError, isPrimaryWindowIndex } from "../ports/box.ts";
-import { assertPathOutsideProtectedRoots } from "./protected-path-guard.ts";
+/** The local loopback implementation of the host's box capabilities. */
+import type { Context } from "../../packages/context/context.ts";
+import { SLATE_BOX_MAX_WINDOWS, type ShellAccessor } from "./box-windows.ts";
 import type { BoxEnvironmentUpdate } from "./box-env.ts";
-import { BoxFileUnreadableError, resolveBoxWorkspacePath } from "./box-transfer.ts";
-import { SLATE_BOX_DISPLAY_HEADER, SLATE_BOX_FORK_ROUTER_PORT, SLATE_BOX_MAX_WINDOWS, SLATE_BOX_WINDOW_OWNER_HEADER, clearAgentWindowConnections, primaryBoxWindow, runStartWindow, runStopWindow, boxDisplayToken, boxWindowKey, type ShellAccessor } from "./box-windows.ts";
+import {
+  BOX_TERMINALS_FOLDER,
+  DAEMON_READY_TIMEOUT_MS,
+  DAEMON_WATCHDOG_INTERVAL_MS,
+  DEFAULT_AUTH_TOKEN,
+  EXEC_DAEMON_PORT,
+  VNC_PORT,
+  type BoxEndpoint,
+  type LoopbackBoxOptions,
+  type LoopbackTelemetry,
+} from "./loopback-box-contracts.ts";
+import { LoopbackBoxFileAccess } from "./loopback-box-file-access.ts";
+import { LoopbackDaemonReadiness, daemonPingReadinessState } from "./loopback-daemon-readiness.ts";
+import { LoopbackBoxWindows } from "./loopback-box-windows.ts";
 
-export const EXEC_DAEMON_PORT = 1337;
-export const VNC_PORT = BOX_PRIMARY_NOVNC_PORT;
-export const DEFAULT_AUTH_TOKEN = "local";
-export const BOX_TERMINALS_FOLDER = "/root/.cursor/projects/workspace/terminals";
-export const DAEMON_READY_TIMEOUT_MS = 90_000;
-export const DAEMON_WATCHDOG_INTERVAL_MS = 30_000;
-
-export type DaemonPingOutcome = "ok" | "refused" | "timeout" | "dns" | "disconnected" | string;
-export interface BoxEndpoint { host: string; port: number; authToken: string; headers?: Record<string, string> }
-export interface PingResult { outcome: DaemonPingOutcome; causeSummary?: string }
-export interface DaemonPingReport { outcome: string; attempts: number; durationMs: number; unreadyDurationMs: number; readinessState: string; target: string; causeSummary?: string }
-export interface LoopbackTelemetry { reportDaemonPing(report: DaemonPingReport): void }
-export interface LoopbackOperations<Accessor extends ShellAccessor = ShellAccessor> { ping(ctx: Context, endpoint: BoxEndpoint): Promise<PingResult>; createRemoteAccessor(endpoint: BoxEndpoint): Accessor; protectRemoteAccessor(accessor: Accessor, assertFileReadAllowed: (path: string) => Promise<void>): Accessor; applyEnvironment?(ctx: Context, endpoint: BoxEndpoint, update: BoxEnvironmentUpdate): Promise<void>; loadMcpServers?(ctx: Context, endpoint: BoxEndpoint, configJson: string): Promise<string[]>; uploadFile?(ctx: Context, accessor: Accessor, path: string, data: Uint8Array): Promise<void>; sleep?(ms: number, signal?: AbortSignal): Promise<void>; now?(): number }
-export interface LoopbackBoxOptions<Accessor extends ShellAccessor = ShellAccessor> { host?: string; authToken?: string; telemetry?: LoopbackTelemetry; readyTimeoutMs?: number; pollIntervalMs?: number; watchdogIntervalMs?: number; protectedBoxPaths?: readonly string[]; operations: LoopbackOperations<Accessor> }
-export function daemonPingReadinessState(outcome: string): string { if (outcome === "refused") return "up_but_exec_refused"; if (outcome === "timeout") return "up_but_exec_unresponsive"; return "up_but_exec_disconnected"; }
+export {
+  BOX_TERMINALS_FOLDER,
+  DAEMON_READY_TIMEOUT_MS,
+  DAEMON_WATCHDOG_INTERVAL_MS,
+  DEFAULT_AUTH_TOKEN,
+  EXEC_DAEMON_PORT,
+  VNC_PORT,
+  daemonPingReadinessState,
+};
+export type {
+  BoxEndpoint,
+  DaemonPingOutcome,
+  DaemonPingReport,
+  LoopbackBoxOptions,
+  LoopbackOperations,
+  LoopbackTelemetry,
+  PingResult,
+} from "./loopback-box-contracts.ts";
 
 export class LoopbackBox<Accessor extends ShellAccessor = ShellAccessor> {
-  readonly host: string; readonly authToken: string; readonly readyTimeoutMs: number; readonly pollIntervalMs: number; readonly watchdogIntervalMs: number; readonly protectedBoxPaths: readonly string[]; private telemetry: LoopbackTelemetry = { reportDaemonPing() {} }; private hasTelemetry = false; private daemonWatchdogStarted = false; private readonly daemonWatchdogAbort = new AbortController(); private daemonWatchdogRun: Promise<void> | undefined; private daemonWatchdogPoll: Promise<void> | undefined; private daemonForegroundReadyWaits = 0; private daemonWatchdogState: "ready" | "unready" | undefined; private daemonWatchdogUnreadySince: number | undefined; private daemonWatchdogUnreadyAttempts = 0; private readonly windowConnections = new Map<string, { window: { windowIndex: number; computerUse: Accessor; vncUrl: string }; endpoint: BoxEndpoint; ownerToken?: string }>();
-  constructor(readonly options: LoopbackBoxOptions<Accessor>) { this.host = options.host ?? "127.0.0.1"; this.authToken = options.authToken ?? DEFAULT_AUTH_TOKEN; if (options.telemetry != null) this.setTelemetry(options.telemetry); this.readyTimeoutMs = options.readyTimeoutMs ?? DAEMON_READY_TIMEOUT_MS; this.pollIntervalMs = options.pollIntervalMs ?? 500; this.watchdogIntervalMs = options.watchdogIntervalMs ?? DAEMON_WATCHDOG_INTERVAL_MS; this.protectedBoxPaths = options.protectedBoxPaths ?? []; }
-  private now(): number { return this.options.operations.now?.() ?? Date.now(); } private async sleep(ms: number, signal?: AbortSignal): Promise<void> { if (this.options.operations.sleep != null) return this.options.operations.sleep(ms, signal); await delay(ms, undefined, signal == null ? { ref: false } : { ref: false, signal }); }
-  setTelemetry(telemetry: LoopbackTelemetry): void { this.telemetry = telemetry; this.hasTelemetry = true; }
-  async assertFileReadAllowed(boxPath: string): Promise<void> { await assertPathOutsideProtectedRoots(this.protectedBoxPaths, boxPath, "/workspace"); }
-  protectRemoteAccessor(remoteAccessor: Accessor): Accessor { return this.options.operations.protectRemoteAccessor(remoteAccessor, path => this.assertFileReadAllowed(path)); }
-  describe(): { backend: "loopback" } { return { backend: "loopback" }; } getTerminalsFolder(): string { return BOX_TERMINALS_FOLDER; } async isAvailable(): Promise<true> { return true; }
-  primaryEndpoint(): BoxEndpoint { return { host: this.host, port: EXEC_DAEMON_PORT, authToken: this.authToken }; }
-  async ensureReady(ctx: Context, _agentId: string): Promise<{ remoteAccessor: Accessor; vncUrl: string; terminalsFolder: string }> { const endpoint = this.primaryEndpoint(); await this.waitUntilReady(ctx, endpoint); return { remoteAccessor: this.protectRemoteAccessor(this.options.operations.createRemoteAccessor(endpoint)), vncUrl: `http://${this.host}:${VNC_PORT}/vnc.html`, terminalsFolder: BOX_TERMINALS_FOLDER }; }
-  async applyEnvironment(ctx: Context, update: BoxEnvironmentUpdate): Promise<void> { const endpoint = this.primaryEndpoint(); await this.waitUntilReady(ctx, endpoint); if (this.options.operations.applyEnvironment == null) throw new Error("loopback environment transport is unavailable"); await this.options.operations.applyEnvironment(ctx, endpoint, update); }
-  async loadMcpServers(ctx: Context, configJson: string): Promise<string[]> { const endpoint = this.primaryEndpoint(); await this.waitUntilReady(ctx, endpoint); if (this.options.operations.loadMcpServers == null) throw new Error("loopback MCP transport is unavailable"); return this.options.operations.loadMcpServers(ctx, endpoint, configJson); }
-  async mcpResourceAccessor(ctx: Context): Promise<Accessor> { const endpoint = this.primaryEndpoint(); await this.waitUntilReady(ctx, endpoint); return this.options.operations.createRemoteAccessor(endpoint); }
-  maxWindows(): number { return SLATE_BOX_MAX_WINDOWS; }
-  async ensureWindow(ctx: Context, agentId: string, windowIndex: number, opts?: { ownerToken?: string }): Promise<{ windowIndex: number; computerUse: Accessor; vncUrl: string }> { if (isPrimaryWindowIndex(windowIndex)) return primaryBoxWindow(await this.ensureReady(ctx, agentId)); const ownerToken = opts?.ownerToken, key = boxWindowKey(agentId, windowIndex), cached = this.windowConnections.get(key); if (cached != null && cached.ownerToken === ownerToken && (await this.options.operations.ping(ctx, cached.endpoint)).outcome === "ok") return cached.window; this.windowConnections.delete(key); const primary = await this.ensureReady(ctx, agentId); await runStartWindow(ctx, primary.remoteAccessor, windowIndex, ownerToken); const token = boxDisplayToken(windowIndex), headers: Record<string, string> = { [SLATE_BOX_DISPLAY_HEADER]: token }; if (ownerToken != null) headers[SLATE_BOX_WINDOW_OWNER_HEADER] = ownerToken; const endpoint = { host: this.host, port: SLATE_BOX_FORK_ROUTER_PORT, authToken: this.authToken, headers }; await this.waitUntilReady(ctx, endpoint); const window = { windowIndex, computerUse: this.protectRemoteAccessor(this.options.operations.createRemoteAccessor(endpoint)), vncUrl: `http://${this.host}:${BOX_FORK_NOVNC_PORT}/vnc.html?path=${encodeURIComponent(`websockify?token=${token}`)}` }; this.windowConnections.set(key, ownerToken == null ? { window, endpoint } : { window, endpoint, ownerToken }); return window; }
-  async releaseWindow(ctx: Context, agentId: string, windowIndex: number): Promise<void> { if (windowIndex == null || isPrimaryWindowIndex(windowIndex)) return; this.windowConnections.delete(boxWindowKey(agentId, windowIndex)); try { await runStopWindow(ctx, (await this.ensureReady(ctx, agentId)).remoteAccessor, windowIndex); } catch {} }
-  async hibernate(_ctx: Context, agentId: string): Promise<void> { clearAgentWindowConnections(this.windowConnections, agentId); } async runState(): Promise<"running"> { return "running"; } async listBoxes(): Promise<Array<{ agentId: string; running: boolean }>> { return [{ agentId: "", running: true }]; }
-  async dispose(): Promise<void> { this.daemonWatchdogAbort.abort(); await this.daemonWatchdogRun; }
-  async uploadFile(ctx: Context, agentId: string, boxPath: string, data: Uint8Array): Promise<void> { const connection = await this.ensureReady(ctx, agentId); if (this.options.operations.uploadFile == null) throw new Error("loopback upload transport is unavailable"); await this.options.operations.uploadFile(ctx, connection.remoteAccessor, resolveBoxWorkspacePath(boxPath), data); }
-  async downloadFile(_ctx: Context, _agentId: string, boxPath: string): Promise<Buffer> { const resolved = resolveBoxWorkspacePath(boxPath); await this.assertFileReadAllowed(resolved); try { return await readFile(resolved); } catch (error) { if (findSystemErrno(error) === "ENOENT") throw new BoxFileUnreadableError(`download from box ${resolved} failed (file missing)`, { cause: error }); throw error; } }
-  async waitUntilReady(ctx: Context, endpoint: BoxEndpoint, timeoutMs = this.readyTimeoutMs): Promise<void> { if (endpoint.port !== EXEC_DAEMON_PORT) return this.waitUntilReadyUncoordinated(ctx, endpoint, timeoutMs); this.daemonForegroundReadyWaits += 1; try { await this.daemonWatchdogPoll; return await this.waitUntilReadyUncoordinated(ctx, endpoint, timeoutMs); } finally { this.daemonForegroundReadyWaits -= 1; } }
-  async waitUntilReadyUncoordinated(ctx: Context, endpoint: BoxEndpoint, timeoutMs: number): Promise<void> { const start = this.now(), target = `${endpoint.host}:${endpoint.port}`; let attempts = 0, last: PingResult | undefined, unreadySince: number | undefined; while (this.now() - start < timeoutMs) { attempts += 1; last = await this.options.operations.ping(ctx, endpoint); if (last.outcome === "ok") { const primary = endpoint.port === EXEC_DAEMON_PORT, watchdogOutage = primary && this.daemonWatchdogState === "unready"; if (attempts > 1 || watchdogOutage) { const episodeStart = watchdogOutage ? this.daemonWatchdogUnreadySince ?? start : unreadySince ?? start; this.telemetry.reportDaemonPing({ outcome: "ok", attempts: watchdogOutage ? this.daemonWatchdogUnreadyAttempts + attempts : attempts, durationMs: this.now() - (watchdogOutage ? episodeStart : start), unreadyDurationMs: this.now() - episodeStart, readinessState: "ready_after_retry", target }); } if (primary) { this.daemonWatchdogState = "ready"; this.daemonWatchdogUnreadySince = undefined; this.daemonWatchdogUnreadyAttempts = 0; this.startDaemonWatchdog(endpoint); } return; } unreadySince ??= this.now(); await this.sleep(this.pollIntervalMs); } const outcome = last == null || last.outcome === "ok" ? "refused" : last.outcome, now = this.now(); this.telemetry.reportDaemonPing({ outcome, attempts, durationMs: now - start, unreadyDurationMs: now - (unreadySince ?? start), readinessState: daemonPingReadinessState(outcome), target, ...(last?.causeSummary == null ? {} : { causeSummary: last.causeSummary }) }); if (endpoint.port === EXEC_DAEMON_PORT && this.daemonWatchdogStarted) { if (this.daemonWatchdogState === "ready") { this.daemonWatchdogUnreadySince = unreadySince ?? start; this.daemonWatchdogUnreadyAttempts = attempts; } else this.daemonWatchdogUnreadyAttempts += attempts; this.daemonWatchdogState = "unready"; } throw new SlateBoxDaemonUnreachableError(outcome, `loopback slate box exec-daemon at ${target} not ready within ${timeoutMs}ms (last ping: ${outcome}${last?.causeSummary == null ? "" : ` [${last.causeSummary}]`})`); }
-  private startDaemonWatchdog(endpoint: BoxEndpoint): void { if (!this.hasTelemetry || this.daemonWatchdogStarted || this.watchdogIntervalMs <= 0) return; this.daemonWatchdogState = "ready"; this.daemonWatchdogStarted = true; this.daemonWatchdogRun = this.runDaemonWatchdog(endpoint); }
-  private async runDaemonWatchdog(endpoint: BoxEndpoint): Promise<void> { try { while (!this.daemonWatchdogAbort.signal.aborted) { await this.sleep(this.watchdogIntervalMs, this.daemonWatchdogAbort.signal); if (this.daemonForegroundReadyWaits > 0) continue; const poll = this.pollDaemonWatchdog(endpoint); this.daemonWatchdogPoll = poll; try { await poll; } finally { if (this.daemonWatchdogPoll === poll) this.daemonWatchdogPoll = undefined; } } } catch (error) { if (!this.daemonWatchdogAbort.signal.aborted) throw error; } }
-  async pollDaemonWatchdog(endpoint: BoxEndpoint): Promise<void> { const started = this.now(), result = await this.options.operations.ping(createContext(), endpoint), now = this.now(), target = `${endpoint.host}:${endpoint.port}`; if (result.outcome === "ok") { if (this.daemonWatchdogState === "unready") { const since = this.daemonWatchdogUnreadySince ?? started; this.telemetry.reportDaemonPing({ outcome: "ok", attempts: this.daemonWatchdogUnreadyAttempts + 1, durationMs: now - since, unreadyDurationMs: now - since, readinessState: "ready_after_retry", target }); } this.daemonWatchdogState = "ready"; this.daemonWatchdogUnreadySince = undefined; this.daemonWatchdogUnreadyAttempts = 0; return; } if (this.daemonWatchdogState === "ready") { this.daemonWatchdogState = "unready"; this.daemonWatchdogUnreadySince = started; this.daemonWatchdogUnreadyAttempts = 1; this.telemetry.reportDaemonPing({ outcome: result.outcome, attempts: 1, durationMs: now - started, unreadyDurationMs: now - started, readinessState: daemonPingReadinessState(result.outcome), target, ...(result.causeSummary == null ? {} : { causeSummary: result.causeSummary }) }); } else this.daemonWatchdogUnreadyAttempts += 1; }
+  readonly host: string;
+  readonly authToken: string;
+  readonly readyTimeoutMs: number;
+  readonly pollIntervalMs: number;
+  readonly watchdogIntervalMs: number;
+  readonly protectedBoxPaths: readonly string[];
+
+  private readonly readiness: LoopbackDaemonReadiness;
+  private readonly windows: LoopbackBoxWindows<Accessor>;
+  private readonly fileAccess: LoopbackBoxFileAccess<Accessor>;
+
+  constructor(readonly options: LoopbackBoxOptions<Accessor>) {
+    this.host = options.host ?? "127.0.0.1";
+    this.authToken = options.authToken ?? DEFAULT_AUTH_TOKEN;
+    this.readyTimeoutMs = options.readyTimeoutMs ?? DAEMON_READY_TIMEOUT_MS;
+    this.pollIntervalMs = options.pollIntervalMs ?? 500;
+    this.watchdogIntervalMs = options.watchdogIntervalMs ?? DAEMON_WATCHDOG_INTERVAL_MS;
+    this.protectedBoxPaths = options.protectedBoxPaths ?? [];
+
+    this.readiness = new LoopbackDaemonReadiness({
+      operations: options.operations,
+      readyTimeoutMs: this.readyTimeoutMs,
+      pollIntervalMs: this.pollIntervalMs,
+      watchdogIntervalMs: this.watchdogIntervalMs,
+      ...(options.telemetry === undefined ? {} : { telemetry: options.telemetry }),
+    });
+    this.fileAccess = new LoopbackBoxFileAccess({
+      protectedPaths: this.protectedBoxPaths,
+      operations: options.operations,
+      ensureReady: (ctx, agentId) => this.ensureReady(ctx, agentId),
+    });
+    this.windows = new LoopbackBoxWindows({
+      host: this.host,
+      authToken: this.authToken,
+      operations: options.operations,
+      executeWindowCommand: options.operations.executeWindowCommand,
+      ensurePrimary: (ctx, agentId) => this.ensureReady(ctx, agentId),
+      waitUntilReady: (ctx, endpoint) => this.waitUntilReady(ctx, endpoint),
+      protect: accessor => this.protectRemoteAccessor(accessor),
+    });
+  }
+
+  setTelemetry(telemetry: LoopbackTelemetry): void {
+    this.readiness.setTelemetry(telemetry);
+  }
+
+  async assertFileReadAllowed(boxPath: string): Promise<void> {
+    await this.fileAccess.assertFileReadAllowed(boxPath);
+  }
+
+  protectRemoteAccessor(remoteAccessor: Accessor): Accessor {
+    return this.fileAccess.protectRemoteAccessor(remoteAccessor);
+  }
+
+  describe(): { backend: "loopback" } {
+    return { backend: "loopback" };
+  }
+
+  getTerminalsFolder(): string {
+    return BOX_TERMINALS_FOLDER;
+  }
+
+  async isAvailable(): Promise<true> {
+    return true;
+  }
+
+  primaryEndpoint(): BoxEndpoint {
+    return { host: this.host, port: EXEC_DAEMON_PORT, authToken: this.authToken };
+  }
+
+  async ensureReady(ctx: Context, _agentId: string): Promise<{ remoteAccessor: Accessor; vncUrl: string; terminalsFolder: string }> {
+    const endpoint = this.primaryEndpoint();
+    await this.waitUntilReady(ctx, endpoint);
+    return {
+      remoteAccessor: this.protectRemoteAccessor(this.options.operations.createRemoteAccessor(endpoint)),
+      vncUrl: `http://${this.host}:${VNC_PORT}/vnc.html`,
+      terminalsFolder: BOX_TERMINALS_FOLDER,
+    };
+  }
+
+  async applyEnvironment(ctx: Context, update: BoxEnvironmentUpdate): Promise<void> {
+    const endpoint = this.primaryEndpoint();
+    await this.waitUntilReady(ctx, endpoint);
+    const apply = this.options.operations.applyEnvironment;
+    if (apply === undefined) throw new Error("loopback environment transport is unavailable");
+    await apply(ctx, endpoint, update);
+  }
+
+  async loadMcpServers(ctx: Context, configJson: string): Promise<string[]> {
+    const endpoint = this.primaryEndpoint();
+    await this.waitUntilReady(ctx, endpoint);
+    const load = this.options.operations.loadMcpServers;
+    if (load === undefined) throw new Error("loopback MCP transport is unavailable");
+    return load(ctx, endpoint, configJson);
+  }
+
+  async mcpResourceAccessor(ctx: Context): Promise<Accessor> {
+    const endpoint = this.primaryEndpoint();
+    await this.waitUntilReady(ctx, endpoint);
+    return this.options.operations.createRemoteAccessor(endpoint);
+  }
+
+  maxWindows(): number {
+    return SLATE_BOX_MAX_WINDOWS;
+  }
+
+  ensureWindow(ctx: Context, agentId: string, windowIndex: number, options?: { ownerToken?: string }): Promise<{ windowIndex: number; computerUse: Accessor; vncUrl: string }> {
+    return this.windows.ensureWindow(ctx, agentId, windowIndex, options);
+  }
+
+  releaseWindow(ctx: Context, agentId: string, windowIndex: number): Promise<void> {
+    return this.windows.releaseWindow(ctx, agentId, windowIndex);
+  }
+
+  async hibernate(_ctx: Context, agentId: string): Promise<void> {
+    this.windows.hibernate(agentId);
+  }
+
+  async runState(): Promise<"running"> {
+    return "running";
+  }
+
+  async listBoxes(): Promise<Array<{ agentId: string; running: boolean }>> {
+    return [{ agentId: "", running: true }];
+  }
+
+  dispose(): Promise<void> {
+    return this.readiness.dispose();
+  }
+
+  uploadFile(ctx: Context, agentId: string, boxPath: string, data: Uint8Array): Promise<void> {
+    return this.fileAccess.upload(ctx, agentId, boxPath, data);
+  }
+
+  async downloadFile(_ctx: Context, _agentId: string, boxPath: string): Promise<Buffer> {
+    return this.fileAccess.download(boxPath);
+  }
+
+  waitUntilReady(ctx: Context, endpoint: BoxEndpoint, timeoutMs = this.readyTimeoutMs): Promise<void> {
+    return this.readiness.waitUntilReady(ctx, endpoint, timeoutMs);
+  }
+
+  waitUntilReadyUncoordinated(ctx: Context, endpoint: BoxEndpoint, timeoutMs: number): Promise<void> {
+    return this.readiness.waitUntilReadyUncoordinated(ctx, endpoint, timeoutMs);
+  }
+
+  pollDaemonWatchdog(endpoint: BoxEndpoint): Promise<void> {
+    return this.readiness.pollDaemonWatchdog(endpoint);
+  }
 }

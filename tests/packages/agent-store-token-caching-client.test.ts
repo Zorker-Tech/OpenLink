@@ -8,7 +8,8 @@ import { describe, it } from "node:test";
 
 import { AgentStoreUnauthorizedError } from "../../source/packages/agent-store-sync/bcs-client.ts";
 import { TokenCachingAgentStoreClient } from "../../source/packages/agent-store-sync/token-caching-client.ts";
-import type { AgentStoreMintTarget, AgentStoreToken } from "../../source/packages/agent-store-sync/bcs-transport.ts";
+import type { TokenCachingAgentStoreTransport } from "../../source/packages/agent-store-sync/token-caching-client.ts";
+import type { AgentStoreMintTarget, AgentStoreToken } from "../../source/packages/agent-store-sync/agent-store-sync-contracts.ts";
 
 const token = (expiresAtMs: number, storeIds: readonly string[] = ["store-1"]): AgentStoreToken => ({ token: "t", expiresAtMs, storeIds });
 /** The ids the platform hands out: a store, a bare uuid, a cloud store, a user's store and a team's. */
@@ -50,7 +51,7 @@ function clientWorld(options: { now?: () => number; refreshBufferMs?: number; ba
     ...(options.without?.includes("abortMultipartWrites") === true ? {} : { abortMultipartWrites: async (args: Record<string, unknown>) => (calls.push(["abortMultipartWrites", args]), answerFor("abortMultipartWrites")) }),
     ...(options.without?.includes("invalidateListCache") === true ? {} : { invalidateListCache: (args: { storeId: string; shareId?: string }) => void invalidations.push(args) }),
   };
-  const client = new TokenCachingAgentStoreClient(transport, {
+  const client = new TokenCachingAgentStoreClient(transport as unknown as TokenCachingAgentStoreTransport, {
     now: options.now ?? (() => now),
     ...(options.refreshBufferMs === undefined ? {} : { refreshBufferMs: options.refreshBufferMs }),
     ...(options.baseMs === undefined ? {} : { mintNegativeCacheBaseMs: options.baseMs }),

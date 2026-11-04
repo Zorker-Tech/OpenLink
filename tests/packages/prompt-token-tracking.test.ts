@@ -44,8 +44,8 @@ test("an attached skill is inlined with its name, its path and its content", () 
     { fullPath: "/p/.cursor/skills/release-notes/SKILL.md", content: "---\nname: x\n---\nWrite the notes" },
   ])
   assert.match(rendered!, /^<manually_attached_skills>/)
-  assert.match(rendered!, /Skill Name: release-notes/)
-  assert.match(rendered!, /Path: \/p\/\.cursor\/skills\/release-notes\/SKILL\.md/)
+  assert.match(rendered!, /### release-notes/)
+  assert.match(rendered!, /File: \/p\/\.cursor\/skills\/release-notes\/SKILL\.md/)
   assert.match(rendered!, /Write the notes/)
   // The frontmatter is metadata about the skill, not part of its instructions.
   assert.doesNotMatch(rendered!, /name: x/)
@@ -57,14 +57,14 @@ test("a skill whose path is not a SKILL.md is still named, and several are separ
     { fullPath: "/p/other/thing.md", content: "one" },
     { fullPath: "/p/.cursor/skills/second/SKILL.md", content: "two" },
   ])
-  assert.match(rendered!, /Skill Name: Skill/)
+  assert.match(rendered!, /### Skill/)
   assert.equal(rendered!.includes("\n\n---\n\n"), true)
   assert.equal(rendered!.includes("two"), true)
 })
 
 test("a skill with no frontmatter keeps all of its content", () => {
   const rendered = renderManuallyAttachedSkillsSection([{ fullPath: "/p/a/SKILL.md", content: "  plain text  " }])
-  assert.equal(rendered!.includes("SKILL.md content:\nplain text\n</manually_attached_skills>"), true)
+  assert.equal(rendered!.includes("File: /p/a/SKILL.md\n\nplain text\n</manually_attached_skills>"), true)
 })
 
 // ---------------------------------------------------------------------------------------------

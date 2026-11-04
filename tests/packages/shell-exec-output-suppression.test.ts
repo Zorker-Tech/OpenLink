@@ -18,7 +18,7 @@ describe("when shell output is suppressed", () => {
   });
 
   it("tells the user why the output stopped", () => {
-    assert.equal(SHELL_OUTPUT_SUPPRESSED_NOTICE, "\n[This shell is producing too much output to stream. The command will still run.]\n");
+    assert.equal(SHELL_OUTPUT_SUPPRESSED_NOTICE, "\n[Output is being limited to keep the stream readable. The command will continue running.]\n");
     assert.equal(SHELL_OUTPUT_SUPPRESSED_NOTICE.startsWith("\n["), true);
     assert.equal(SHELL_OUTPUT_SUPPRESSED_NOTICE.endsWith("]\n"), true);
   });

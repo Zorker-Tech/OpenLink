@@ -16,11 +16,10 @@ import { isCoordinatorMainMethod } from "../shared/rpc/coordinator-main.ts";
 import { SLATE_WEBAUTHN_HEARTBEAT_INTERVAL_MS, type WebAuthnCeremony } from "../shared/webauthn-gateway.ts";
 import { createRealExpiryPolicy, createRealPollingPolicy, createRealRetryPolicy, realClock } from "../host/extensions/scheduling.ts";
 import { adoptCarrier, type CarrierIntake, type CarrierIntakeHandlers } from "./carrier.ts";
-import { ClientSideToolV2Relay } from "./client-side-tool-v2-relay.ts";
+import { ClientSideToolV2Relay } from "../adapters/interop/agent/client-side-tool-v2-relay-adapter.ts";
 import { createControlPortClient } from "./control-port-client.ts";
 import { CoordinatorGatewayClient, createCoordinatorGatewayClientTiming, HOST_ACCOUNT_SLOT, type GatewayConnection } from "./gateway/gateway-client.ts";
 import { createGatewayDnsDiagnosticReporter } from "./gateway/gateway-dns-diagnostics.ts";
-import { familyOnChannel } from "./gateway/gateway-event-families.ts";
 import { createGatewayRequestDispatch } from "./gateway/gateway-request-dispatcher.ts";
 import { createCoordinatorHostSupervisorTiming, SlateHostSupervisor } from "./gateway/host-supervisor.ts";
 import { createCoordinatorInferenceRouter } from "./inference-router.ts";
@@ -30,40 +29,11 @@ import { createRendererPortServer } from "./renderer-port-server.ts";
 import { createTransportStageRecorder } from "./telemetry/transport-stage-recorder.ts";
 import { createWebAuthnProvider } from "./webauthn/provider.ts";
 import { createSpawnedWebAuthnSigner, resolveWebAuthnSignerPath } from "./webauthn/signer.ts";
+import { webAuthnReconnectSchedule, type PendingMcpAuthorization } from "./main-policies.ts";
+import { applyCoordinatorTransportSignal, routeCoordinatorGatewayNotice, seedCoordinatorAgentRoster } from "./main-gateway-events.ts";
+import { createCoordinatorCrashHandler, createCoordinatorStopHandler, observeCoordinatorPort } from "./main-lifecycle.ts";
 
 const STDERR_PREFIX = "node-agent-coordinator: ";
-
-export interface McpOAuthPending {
-  readonly serverName: string;
-  readonly redirectUrl: string;
-  readonly state: string;
-}
-
-/** A pending OAuth ceremony, when the payload says all three things it has to say. */
-export function asMcpOAuthPending(payload: unknown): McpOAuthPending | null {
-  if (typeof payload !== "object" || payload == null) return null;
-  const { serverName, redirectUrl, state } = payload as Record<string, unknown>;
-  if (typeof serverName !== "string" || serverName.length === 0) return null;
-  if (typeof redirectUrl !== "string" || redirectUrl.length === 0) return null;
-  if (typeof state !== "string" || state.length === 0) return null;
-  return { serverName, redirectUrl, state };
-}
-
-/** The user's own message coming back is what tells a send it landed; anything else is somebody else's event. */
-export function recordEchoIfUserEcho(payload: unknown, recorder: { recordSendEcho(key: { accountSlot: string; clientNonce: string }): void }): void {
-  if (typeof payload !== "object" || payload == null) return;
-  const event = payload as { readonly type?: unknown; readonly entry?: Record<string, unknown> };
-  if (event.type !== "appended") return;
-  const entry = event.entry;
-  if (typeof entry?.clientNonce !== "string" || entry.clientNonce.length === 0) return;
-  const isUserEcho = (entry.kind === "message" && entry.role === "user") || entry.kind === "user-attachment";
-  if (isUserEcho) recorder.recordSendEcho({ accountSlot: HOST_ACCOUNT_SLOT, clientNonce: entry.clientNonce });
-}
-
-/** How the WebAuthn signer is reconnected: as often as it takes, waiting a little longer each time. */
-export function createWebAuthnReconnectPolicy() {
-  return createRealRetryPolicy({ name: "slate-webauthn-reconnect", maxAttempts: Number.MAX_SAFE_INTEGER, initialDelayMs: 1_000, maxDelayMs: 30_000 });
-}
 
 type Commands = Record<string, (args: unknown) => Promise<unknown>>;
 
@@ -111,61 +81,34 @@ export async function composeCoordinator(dependencies: ComposeCoordinatorDepende
     isTransportLive: () => isGatewayStreamLive,
     onReachability: reportReachability,
   });
-  const oauthPendingHandlers = new Set<(pending: McpOAuthPending) => void>();
+  const oauthPendingHandlers = new Set<(pending: PendingMcpAuthorization) => void>();
   let server: ReturnType<typeof createRendererPortServer>;
   let localExecSupervisor: ReturnType<typeof createLocalExecDaemonSupervisor>;
   const toolRelay = new ClientSideToolV2Relay((family, payload) => server.postEvent(family, payload));
 
-  /** One event from the gateway's stream, sent where it belongs: a ceremony, an echo, the relay, or a surface. */
-  function handleGatewaySseEvent(event: { channel: string; payload: unknown }): void {
-    if (event.channel === "mcp-oauth-pending") {
-      const pending = asMcpOAuthPending(event.payload);
-      if (pending != null) for (const handler of oauthPendingHandlers) handler(pending);
-      return;
-    }
-    if (event.channel === "transcript") recordEchoIfUserEcho(event.payload, recorder);
-    if (event.channel === "client-side-tool-v2") {
-      toolRelay.accept(event.payload);
-      return;
-    }
-    if (event.channel === "agents") controlClient.postEvent("agents-event", { kind: "agents", event: event.payload });
-    if (event.channel === "agent-upserted") controlClient.postEvent("agents-event", { kind: "agent-upserted", event: event.payload });
-    const family = familyOnChannel(event.channel);
-    if (family != null) server.postEvent(family, event.payload);
-  }
-
-  /** What the host's agent roster is, handed to the main port as soon as the stream is up. */
-  async function seedAgentsRosterToMain(): Promise<void> {
-    try {
-      const agents = await gatewayClient.dispatchCommand("listAgents", {});
-      controlClient.postEvent("agents-roster-seed", { agents });
-    } catch (error) {
-      // A roster that could not be read is a seed that was skipped, not a reason to take the stream down.
-      process.stderr.write(`${STDERR_PREFIX}agents roster seed skipped: ${String(error)}\n`);
-    }
-  }
-
-  /** The transport's own state: told to the main port, and the local-exec daemon refreshed with it. */
-  function handleTransportEvent(raw: unknown): void {
-    if (typeof raw !== "object" || raw == null) return;
-    const event = raw as { family: string; payload: unknown };
-    controlClient.postEvent(event.family, event.payload);
-    if (event.family === "transport-down") {
-      isGatewayStreamLive = false;
-      hostSupervisor.invalidateHealthCache();
-      server.postEvent(COORDINATOR_TRANSPORT_STATE_FAMILY, { state: "down" });
-      return;
-    }
-    isGatewayStreamLive = true;
-    void localExecSupervisor.refreshConnection();
-    void seedAgentsRosterToMain();
-    server.postEvent(COORDINATOR_TRANSPORT_STATE_FAMILY, { state: "connected" });
-  }
-
   const gatewayClient = new CoordinatorGatewayClient({
     resolveConnection: (signal) => hostSupervisor.ensureConnection(signal) as Promise<GatewayConnection>,
-    onEvent: handleGatewaySseEvent,
-    onTransportEvent: handleTransportEvent,
+    onEvent: (event) => routeCoordinatorGatewayNotice(event, {
+      authorizationListeners: oauthPendingHandlers,
+      echoRecorder: recorder,
+      toolRelay,
+      controlEvents: controlClient,
+      rendererEvents: server,
+    }),
+    onTransportEvent: (event) => {
+      const streamLive = applyCoordinatorTransportSignal(event, {
+        controlEvents: controlClient,
+        invalidateHealth: () => hostSupervisor.invalidateHealthCache(),
+        refreshLocalExec: () => localExecSupervisor.refreshConnection(),
+        seedAgentRoster: () => seedCoordinatorAgentRoster(
+          () => gatewayClient.dispatchCommand("listAgents", {}),
+          (family, payload) => controlClient.postEvent(family, payload),
+          (message) => process.stderr.write(`${STDERR_PREFIX}${message}\n`),
+        ),
+        rendererEvents: server,
+      });
+      if (streamLive !== undefined) isGatewayStreamLive = streamLive;
+    },
     onTransportRetry: () => hostSupervisor.invalidateHealthCache(),
     recordTransportStage: (report) => recorder.recordTransportStage(report as Parameters<typeof recorder.recordTransportStage>[0]),
     onReachability: reportReachability,
@@ -225,7 +168,7 @@ export async function composeCoordinator(dependencies: ComposeCoordinatorDepende
         },
       }),
       heartbeatPolicy: createRealPollingPolicy({ name: "slate-webauthn-heartbeat", intervalMs: SLATE_WEBAUTHN_HEARTBEAT_INTERVAL_MS }),
-      reconnectPolicy: createWebAuthnReconnectPolicy(),
+      reconnectPolicy: webAuthnReconnectSchedule(),
       deliveryPolicy: createRealRetryPolicy({ name: "slate-webauthn-delivery", maxAttempts: 5, initialDelayMs: 250, maxDelayMs: 4_000 }),
       label: hostname(),
     });
@@ -279,52 +222,46 @@ export async function composeCoordinator(dependencies: ComposeCoordinatorDepende
     },
   );
 
-  let exitSettled = false;
-  /** The one place the process ends: everything let go, then the carrier's own exit. */
-  function settleProcess(exitCode: number): void {
-    if (exitSettled) return;
-    exitSettled = true;
-    gatewayClient.close();
-    toolRelay.clear();
-    localExecSupervisor.dispose();
-    oauthForwarder.dispose();
-    controlClient.shutdown();
-    server.handlePortClosed();
-    mainServer.handlePortClosed();
-    carrier.control.close();
-    carrier.data.close();
-    carrier.mainData.close();
-    carrier.exitProcess(exitCode);
-  }
-  // A port that broke its protocol is a failure of the process, not a quiet end.
-  void server.settled.then((settlement) => {
-    if (settlement.outcome === "protocol-breach") {
-      process.stderr.write(`${STDERR_PREFIX}protocol breach: ${settlement.detail}\n`);
-      settleProcess(1);
-    } else settleProcess(0);
+  const stopCoordinator = createCoordinatorStopHandler({
+    closeGateway: () => gatewayClient.close(),
+    clearToolRelay: () => toolRelay.clear(),
+    disposeLocalExec: () => localExecSupervisor.dispose(),
+    disposeOAuthForwarder: () => oauthForwarder.dispose(),
+    stopControlPort: () => controlClient.shutdown(),
+    closeRendererPort: () => server.handlePortClosed(),
+    closeMainPort: () => mainServer.handlePortClosed(),
+    closeCarrierControl: () => carrier.control.close(),
+    closeCarrierData: () => carrier.data.close(),
+    closeCarrierMainData: () => carrier.mainData.close(),
+    exitProcess: (code) => carrier.exitProcess(code),
   });
-  void mainServer.settled.then((settlement) => {
-    if (settlement.outcome === "protocol-breach") {
-      process.stderr.write(`${STDERR_PREFIX}main-data protocol breach: ${settlement.detail}\n`);
-      settleProcess(1);
-    } else settleProcess(0);
+  const report = (message: string): void => { process.stderr.write(message); };
+  observeCoordinatorPort(server.settled, {
+    prefix: STDERR_PREFIX,
+    breachLabel: "protocol breach",
+    report,
+    stop: stopCoordinator,
   });
-  void controlClient.settled.then((settlement) => {
-    if (settlement.outcome === "protocol-breach") {
-      process.stderr.write(`${STDERR_PREFIX}control protocol breach: ${settlement.detail}\n`);
-      settleProcess(1);
-    } else settleProcess(0);
+  observeCoordinatorPort(mainServer.settled, {
+    prefix: STDERR_PREFIX,
+    breachLabel: "main-data protocol breach",
+    report,
+    stop: stopCoordinator,
   });
-  /** A crash is written down through the control port before the process goes, so the reason outlives it. */
-  const settleOnCrash = (kind: "uncaughtException" | "unhandledRejection", value: unknown): void => {
-    const error = value instanceof Error ? value : new Error(String(value));
-    process.stderr.write(`${STDERR_PREFIX}${kind}: ${error.stack ?? String(error)}\n`);
-    void command(commands, "reportProcessCrash", { kind, errorName: error.name, errorMessage: error.message, errorStack: error.stack ?? null })
-      .catch((reportError) => process.stderr.write(`${STDERR_PREFIX}crash report undelivered: ${String(reportError)}\n`));
-    settleProcess(1);
-  };
-  process.on("uncaughtException", (value) => settleOnCrash("uncaughtException", value));
-  process.on("unhandledRejection", (value) => settleOnCrash("unhandledRejection", value));
+  observeCoordinatorPort(controlClient.settled, {
+    prefix: STDERR_PREFIX,
+    breachLabel: "control protocol breach",
+    report,
+    stop: stopCoordinator,
+  });
+  const onCoordinatorCrash = createCoordinatorCrashHandler({
+    prefix: STDERR_PREFIX,
+    report,
+    submitReport: (crash) => command(commands, "reportProcessCrash", crash),
+    stop: stopCoordinator,
+  });
+  process.on("uncaughtException", (value) => onCoordinatorCrash("uncaughtException", value));
+  process.on("unhandledRejection", (value) => onCoordinatorCrash("unhandledRejection", value));
 
   const handlers: CarrierIntakeHandlers = {
     onControlFrame: (frame) => controlClient.handleMessage(frame),

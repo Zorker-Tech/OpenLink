@@ -15,10 +15,10 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { shellStreamExecutorResource } from "../../source/packages/agent-exec/shell-stream-operation.ts"
 import {
   ShellStream,
-} from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts"
-import { SandboxPolicy_Type } from "../../source/packages/proto/generated/agent/v1/sandbox_pb.ts"
-import type { ShellResult } from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts"
-import { ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { SandboxPolicy_Type } from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts"
+import type { ShellResult } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness

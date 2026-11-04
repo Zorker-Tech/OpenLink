@@ -16,21 +16,22 @@
  * A run emits through the transport, and the runner decides what a run produced: the text it streamed, the messages it
  * sent, whether it reacted. That accounting belongs here because it is per run, not per update.
  */
-import { randomUUID } from "node:crypto";
+import { RunnerTurnAttempt, type RunnerTurnAttemptOptions, type RunnerUpdate, type SlateAgentRunnerResult } from "./runner-turn-attempt.ts";
+import type { RunnerServiceBindings } from "./runner-service-bindings.ts";
+import { runFallbackStepLoop } from "./runner-fallback-step-loop.ts";
+import { RunnerIdentity } from "./runner-identity.ts";
 import type { Context } from "../../packages/context/context.ts";
 import { CONNECTOR_MANIFESTS, type ConnectorManifest } from "../channels/channels.ts";
 import { InMemoryBlobStore } from "../../packages/agent-kv/blob-store.ts";
 import type { BlobStore } from "../../packages/agent-kv/blob-store.ts";
 import { createBackgroundWatches, type BackgroundWatchesHost } from "./background-work.ts";
 import {
-  createShellWatchGeneratedStateProjection,
-  createShellWatchReadAccessor,
   pollShellTerminalFile,
   type ConfirmedUserTurnWatermark,
   type ShellTerminalWatchHost,
-  type ShellWatchResourceAccessor,
 } from "./shell-terminal-watch.ts";
-import { ConversationStateStructure, type ConversationStateStructure as ConversationStateStructureMessage } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
+import { createShellWatchGeneratedStateProjection, createShellWatchReadAccessor } from "../../adapters/interop/agent/shell-terminal-watch-adapter.ts";
+import { cloneInteropRunnerConversationState, type InteropRunnerConversationState } from "../../adapters/interop/agent/runner-conversation-state-adapter.ts";
 import { createSubagentRuntime, type BackgroundSubagentCompletion, type RunningSubagentInfo, type SubagentRuntimeHost } from "./subagent-runtime.ts";
 import { createToolCallIdentity } from "./tool-call-identity.ts";
 import { createComputerUseCoordination } from "./computer-use.ts";
@@ -84,7 +85,7 @@ export interface AgentConversationActionReceiver {
 }
 
 interface RunnerShellWatchBox {
-  ensureReady(context: Context, agentId: string): Promise<{ readonly remoteAccessor: ShellWatchResourceAccessor<Context>; readonly terminalsFolder: string }>;
+  ensureReady(context: Context, agentId: string): Promise<{ readonly remoteAccessor: unknown; readonly terminalsFolder: string }>;
 }
 
 type RunnerBackgroundWatches = ReturnType<typeof createBackgroundWatches>;
@@ -104,26 +105,7 @@ export interface RunnerTransport {
   lastSentMessageId?(): string | undefined;
 }
 
-export type RunnerUpdate =
-  | { readonly type: "text-delta"; readonly text: string }
-  | { readonly type: "thinking-delta"; readonly text: string }
-  | { readonly type: "tool-call"; readonly id: string; readonly name?: string; readonly status?: string; readonly summary?: string; readonly args?: string }
-  | { readonly type: "send-message"; readonly message: Readonly<Record<string, unknown>> & { readonly type: string }; readonly timestampMs: number }
-  | { readonly type: "turn-ended"; readonly usage?: unknown }
-  | { readonly type: "react-to-message"; readonly messageAddress: string; readonly emoji: string }
-  | { readonly type: "request-id"; readonly requestId: string }
-  | { readonly type: "retrying" };
-
-/** What one run produced, for callers that report on it rather than on the conversation. */
-export interface SlateAgentRunnerResult {
-  readonly text: string;
-  readonly sentMessageCount: number;
-  readonly reacted: boolean;
-  readonly aborted: boolean;
-  readonly quiescedForUpgrade?: boolean;
-  readonly awaitingUserSelection?: boolean;
-  readonly streamOutputProduced?: boolean;
-}
+export type { RunnerUpdate, SlateAgentRunnerResult } from "./runner-turn-attempt.ts";
 
 export interface SlateAgentRunnerOptions<T = unknown> {
   /** The Agent stream path this runner hands the shell; the shell never builds one. */
@@ -201,20 +183,6 @@ export interface SlateAgentRunnerOptions<T = unknown> {
 }
 
 /** One run in flight: what it is, what it may still do, and what it has produced so far. */
-interface ActiveRun {
-  readonly requestId: string;
-  readonly controller: AbortController;
-  readonly generation: number;
-  dispatched: boolean;
-  recoveryShaped: boolean;
-  awaitingUserSelection: boolean;
-  quiescedForUpgrade: boolean;
-  text: string;
-  sentMessageCount: number;
-  reacted: boolean;
-  streamOutputProduced: boolean;
-}
-
 function emptyConversationState(): RunnerConversationState {
   return { turns: [], summaryArchives: [], turnTimings: [] };
 }
@@ -224,20 +192,29 @@ function subagentTypeIs(type: string | undefined, expected: string): boolean {
   return type != null && type.replace(/[-_ ]/g, "").toLowerCase() === expected;
 }
 
+function applyRunnerSlotBindings<Group extends object>(
+  source: Group | undefined,
+  targets: Partial<Record<keyof Group, (value: unknown) => void>>,
+): void {
+  if (source === undefined) return;
+  for (const [key, bind] of Object.entries(targets) as Array<[keyof Group, ((value: unknown) => void) | undefined]>) {
+    if (bind !== undefined && Object.prototype.hasOwnProperty.call(source, key)) bind(Reflect.get(source, key));
+  }
+}
+
 export class SlateAgentRunner<T = unknown> {
   #state: RunnerConversationState;
   #runGeneration = 0;
-  #fallbackConversationId = `slate-${randomUUID()}`;
+  readonly #identity: RunnerIdentity;
   #fallbackBlobStore = new InMemoryBlobStore();
   #blobStore: BlobStore<unknown>;
-  #productionConversationStateStructure: ConversationStateStructureMessage | undefined;
-  #activeRun: ActiveRun | null = null;
+  #productionConversationStateStructure: InteropRunnerConversationState | undefined;
+  #currentAttempt: RunnerTurnAttempt | null = null;
   #quiescingForUpgrade = false;
   #awaitingUserSelection = false;
-  #activeRunInterrupted = false;
+  #runInterrupted = false;
   #activeTurnRequestSource: string | undefined;
   #activeTurnAutomationId: string | undefined;
-  #streamOutputProducedThisAttempt = false;
   #clearFirstTokenDeadline: (() => void) | undefined;
   #resetFirstTokenDeadline: (() => void) | undefined;
   #observeFirstToken: (() => void) | undefined;
@@ -265,7 +242,6 @@ export class SlateAgentRunner<T = unknown> {
   #automationStore: unknown;
   #workflowStore: unknown;
   #channelStore: unknown;
-  #boxTerminalsFolder: string | undefined;
   #computerUse: ReturnType<typeof createComputerUseCoordination<Context>> | undefined;
 
   #onComputerUseUsage: ((event: unknown) => void) | undefined;
@@ -288,6 +264,7 @@ export class SlateAgentRunner<T = unknown> {
   readonly toolCallIdentity;
 
   constructor(readonly options: SlateAgentRunnerOptions<T>) {
+    this.#identity = new RunnerIdentity(options);
     this.#state = options.initialState ?? emptyConversationState();
     this.#blobStore = options.blobStore ?? this.#fallbackBlobStore;
     this.isSubagentRunner = options.isSubagent ?? false;
@@ -313,8 +290,8 @@ export class SlateAgentRunner<T = unknown> {
 
     this.observation = createTurnObservation({
       getConversationId: () => this.getConversationId(),
-      isActiveRunCanceled: () => this.#activeRun?.controller.signal.aborted ?? false,
-      isActiveRunInterrupted: () => this.#activeRunInterrupted,
+      isActiveRunCanceled: () => this.#currentAttempt?.signal.aborted ?? false,
+      isActiveRunInterrupted: () => this.#runInterrupted,
       subagentRegistryEntries: () => this.subagents.registryEntries(),
       isSubagentAborting: (id) => this.subagents.isAborting(id),
       listBackgroundShellWork: () => this.#backgroundWatches?.listRegisteredShellWork({ kind: "shell" }) ?? [],
@@ -375,7 +352,7 @@ export class SlateAgentRunner<T = unknown> {
         },
         beginAutoReviewUserMessageEpoch: () => this.beginAutoReviewUserMessageEpoch(),
         setActiveRunInterrupted: (value) => {
-          this.#activeRunInterrupted = value;
+          this.#runInterrupted = value;
         },
         setAwaitingUserSelection: (value) => {
           this.#awaitingUserSelection = value;
@@ -444,12 +421,12 @@ export class SlateAgentRunner<T = unknown> {
     return this.options.turnStreamPath;
   }
 
-  runTurnStream(input: TurnStreamStartInput): Promise<ConversationStateStructureMessage> {
+  runTurnStream(input: TurnStreamStartInput): Promise<InteropRunnerConversationState> {
     if (this.options.turnStreamPath === undefined) throw new Error("this runner has no turn stream path");
     return this.options.turnStreamPath.startStream(input);
   }
 
-  runTurnStreamLifecycle(input: TurnStreamLifecycleInput, context: Context): Promise<ConversationStateStructureMessage> {
+  runTurnStreamLifecycle(input: TurnStreamLifecycleInput, context: Context): Promise<InteropRunnerConversationState> {
     if (this.options.turnStreamPath === undefined) throw new Error("this runner has no turn stream path");
     return this.options.turnStreamPath.createLifecycle(input).run(context);
   }
@@ -460,7 +437,7 @@ export class SlateAgentRunner<T = unknown> {
 
   /** The generation the settle owner should observe: the active run's, or the runner's when no run is in flight. */
   get currentRunGeneration(): number {
-    return this.#activeRun?.generation ?? this.#runGeneration;
+    return this.#currentAttempt?.epoch ?? this.#runGeneration;
   }
 
   /** The latest prompt messages the active turn session kept, for callers that report on them. */
@@ -505,66 +482,35 @@ export class SlateAgentRunner<T = unknown> {
     this.autoReviewController?.expire("session_end");
   }
 
-  setAgentStore(agentStore: unknown, agentProfileProvider?: unknown): void {
-    this.#agentStore = agentStore;
-    this.#agentProfileProvider = agentProfileProvider;
-    this.#runGeneration += 1;
-  }
-
-  setAttachmentIngestor(ingest: unknown): void {
-    this.#attachmentIngestor = ingest;
-  }
-
-  setImagePersister(persistImage: unknown): void {
-    this.#persistImage = persistImage;
-  }
-
-  setMediaBytesPersister(persistMediaBytes: unknown): void {
-    this.#persistMediaBytes = persistMediaBytes;
-  }
-
-  setMcp(mcp: unknown): void {
-    this.#mcp = mcp;
-  }
-
-  setMcpManagement(mcpManagement: unknown): void {
-    this.#mcpManagement = mcpManagement;
-  }
-
-  setMemoryStore(memoryStore: unknown): void {
-    this.#memoryStore = memoryStore;
-  }
-
-  setUserMemory(userMemory: unknown): void {
-    this.#userMemory = userMemory;
-  }
-
-  setProjectMemory(projectMemory: unknown): void {
-    this.#projectMemory = projectMemory;
-  }
-
-  setMemorySnapshotStore(memorySnapshots: unknown): void {
-    this.#memorySnapshots = memorySnapshots;
-  }
-
-  setProfilePromptSnapshotStore(profilePromptSnapshots: unknown): void {
-    this.#profilePromptSnapshots = profilePromptSnapshots;
-  }
-
-  setEpisodeProgress(episodeProgress: unknown): void {
-    this.#episodeProgress = episodeProgress;
-  }
-
-  setAutomationStore(automationStore: unknown): void {
-    this.#automationStore = automationStore;
-  }
-
-  setWorkflowStore(workflowStore: unknown): void {
-    this.#workflowStore = workflowStore;
-  }
-
-  setChannelStore(channelStore: unknown): void {
-    this.#channelStore = channelStore;
+  bindSessionServices(bindings: RunnerServiceBindings): void {
+    const { agentState, memory, automation, toolAccess, attachments } = bindings;
+    if (agentState !== undefined) {
+      this.#agentStore = agentState.store;
+      this.#agentProfileProvider = agentState.profileProvider;
+      this.#runGeneration += 1;
+    }
+    applyRunnerSlotBindings(memory, {
+      primary: value => { this.#memoryStore = value },
+      user: value => { this.#userMemory = value },
+      project: value => { this.#projectMemory = value },
+      snapshots: value => { this.#memorySnapshots = value },
+      profileSnapshots: value => { this.#profilePromptSnapshots = value },
+      episodeProgress: value => { this.#episodeProgress = value },
+    });
+    applyRunnerSlotBindings(automation, {
+      automations: value => { this.#automationStore = value },
+      workflows: value => { this.#workflowStore = value },
+      channels: value => { this.#channelStore = value },
+    });
+    applyRunnerSlotBindings(toolAccess, {
+      mcp: value => { this.#mcp = value },
+      management: value => { this.#mcpManagement = value },
+    });
+    applyRunnerSlotBindings(attachments, {
+      ingestor: value => { this.#attachmentIngestor = value },
+      imagePersister: value => { this.#persistImage = value },
+      mediaPersister: value => { this.#persistMediaBytes = value },
+    });
   }
 
   setBackgroundSubagentHandler(handler: (completion: BackgroundSubagentCompletion) => void): void {
@@ -738,19 +684,23 @@ export class SlateAgentRunner<T = unknown> {
    * The generated state, as a copy: a caller that reads it cannot mutate the store's live checkpoint through it, which is
    * what makes it safe to hand to a poll loop.
    */
-  getAgentConversationStateStructure(): ConversationStateStructureMessage {
+  getAgentConversationStateStructure(): InteropRunnerConversationState {
     if (this.#productionConversationStateStructure !== undefined) {
-      return ConversationStateStructure.fromBinary(this.#productionConversationStateStructure.toBinary());
+      const snapshot = cloneInteropRunnerConversationState(this.#productionConversationStateStructure);
+      if (snapshot === undefined) throw new TypeError("the production Agent conversation state is not bound");
+      return snapshot;
     }
-    const owner = this.#agentStore as { getConversationStateStructure?: () => ConversationStateStructureMessage } | undefined;
+    const owner = this.#agentStore as { getConversationStateStructure?: () => unknown } | undefined;
     if (typeof owner?.getConversationStateStructure !== "function") throw new TypeError("the production Agent conversation state is not bound");
-    const structure = owner.getConversationStateStructure();
-    if (structure == null || typeof structure.toBinary !== "function") throw new TypeError("the production Agent conversation state is not bound");
-    return ConversationStateStructure.fromBinary(structure.toBinary());
+    const snapshot = cloneInteropRunnerConversationState(owner.getConversationStateStructure());
+    if (snapshot === undefined) throw new TypeError("the production Agent conversation state is not bound");
+    return snapshot;
   }
 
-  setAgentConversationStateStructure(structure: ConversationStateStructureMessage): void {
-    this.#productionConversationStateStructure = ConversationStateStructure.fromBinary(structure.toBinary());
+  setAgentConversationStateStructure(structure: InteropRunnerConversationState): void {
+    const snapshot = cloneInteropRunnerConversationState(structure);
+    if (snapshot === undefined) throw new TypeError("the production Agent conversation state is not bound");
+    this.#productionConversationStateStructure = snapshot;
   }
 
   getBlobStore(): BlobStore<unknown> {
@@ -799,11 +749,11 @@ export class SlateAgentRunner<T = unknown> {
   }
 
   getConversationId(): string {
-    return this.options.getAgentId?.() ?? this.options.conversationId ?? this.#fallbackConversationId;
+    return this.#identity.getConversationId();
   }
 
   resolveBoxId(): string {
-    return this.options.getBoxId?.() ?? this.options.boxId ?? this.getConversationId();
+    return this.#identity.resolveBoxId();
   }
 
   cloudAgentsDisabledByTeam(): boolean {
@@ -815,17 +765,15 @@ export class SlateAgentRunner<T = unknown> {
   }
 
   resolveBoxTerminalsFolder(): string | undefined {
-    return this.#boxTerminalsFolder ?? this.options.getBoxTerminalsFolder?.();
+    return this.#identity.resolveTerminalsFolder();
   }
 
   setRemoteBoxTerminalsFolder(folder: string): void {
-    this.#boxTerminalsFolder = folder;
+    this.#identity.setRemoteTerminalsFolder(folder);
   }
 
   resolveBoxBrowser(): { readonly display: string; readonly cdpUrl: string } | null {
-    const windowIndex = this.options.getBoxWindowIndex?.(this.resolveBoxId());
-    if (windowIndex === undefined) return null;
-    return { display: `:${windowIndex}`, cdpUrl: `http://127.0.0.1:${BOX_CDP_PORT_BASE + windowIndex}` };
+    return this.#identity.resolveBrowserEndpoint(BOX_CDP_PORT_BASE);
   }
 
   emitRunLifecycle(event: { readonly type: "started" | "ended"; readonly requestId: string }): void {
@@ -837,42 +785,32 @@ export class SlateAgentRunner<T = unknown> {
    * and the transport hears about it. A widget, a secret request or an approval also pauses the run for the user.
    */
   emitUpdate(update: RunnerUpdate): void {
-    const active = this.#activeRun;
-    if (active != null && (update.type === "text-delta" || update.type === "thinking-delta" || update.type === "tool-call") && !active.streamOutputProduced) {
-      active.streamOutputProduced = true;
-      this.#streamOutputProducedThisAttempt = true;
+    const attempt = this.#currentAttempt;
+    const effects = attempt?.observe(update);
+    if (effects?.firstVisibleOutput === true) {
       this.#clearFirstTokenDeadline?.();
       this.#clearFirstTokenDeadline = undefined;
       this.#resetFirstTokenDeadline = undefined;
       this.#observeFirstToken?.();
       this.#observeFirstToken = undefined;
     }
-
-    if (active != null) {
-      if (update.type === "text-delta") {
-        active.text += update.text;
-      } else if (update.type === "send-message") {
-        active.sentMessageCount += 1;
-        if (update.message.type === "widget" || update.message.type === "secret-request" || update.message.type === "auto-review-approval") {
-          active.awaitingUserSelection = true;
-          this.#awaitingUserSelection = true;
-        }
-      }
-    }
+    if (effects?.needsUserInput === true) this.#awaitingUserSelection = true;
 
     if (this.isComputerUseSubagent && update.type === "turn-ended") this.#computerUse?.recordTurnEnded(update.usage as TurnUsage | undefined);
 
     this.options.transport?.onUpdate(update);
-    if (active != null && update.type === "react-to-message" && this.options.transport?.lastReactionApplied?.() === true) active.reacted = true;
+    if (attempt != null && update.type === "react-to-message") {
+      attempt.noteReactionApplied(this.options.transport?.lastReactionApplied?.() === true);
+    }
   }
 
   interrupt(reason: string, supersede?: { readonly carriesRecovery: boolean }): boolean {
     if (this.#productionTurnRunShell !== undefined) return this.#productionTurnRunShell.interrupt(reason, supersede);
-    const active = this.#activeRun;
-    if (active == null) return false;
-    if (!active.dispatched && supersede != null && (!supersede.carriesRecovery || !active.recoveryShaped)) return false;
-    this.#activeRunInterrupted = true;
-    active.controller.abort({ intentional: true, reason });
+    const attempt = this.#currentAttempt;
+    if (attempt == null) return false;
+    if (!attempt.dispatchStarted && supersede != null && (!supersede.carriesRecovery || !attempt.recoverableReplay)) return false;
+    this.#runInterrupted = true;
+    attempt.cancel({ intentional: true, reason });
     return true;
   }
 
@@ -932,46 +870,28 @@ export class SlateAgentRunner<T = unknown> {
     if (this.#quiescingForUpgrade) return { text: "", sentMessageCount: 0, reacted: false, aborted: false, quiescedForUpgrade: true };
     if (this.#productionTurnRunShell !== undefined) return this.#productionTurnRunShell.run(prompt, runOptions);
 
-    const active = this.startActiveRun(runOptions, trimmed);
-    this.#activeRun = active;
-    this.emitRunLifecycle({ type: "started", requestId: active.requestId });
+    const attempt = this.beginAttempt(runOptions, trimmed);
+    this.#currentAttempt = attempt;
+    this.emitRunLifecycle({ type: "started", requestId: attempt.runId });
     this.observation.turnStarted();
 
     try {
-      await this.options.prepare?.();
-      if (active.controller.signal.aborted) return this.resultOf(active, true);
-
-      active.dispatched = true;
-      if (this.options.runStep == null) return undefined;
-      const maxSteps = this.options.maxSteps ?? SLATE_AGENT_MAX_STEPS;
-      let result: T | undefined;
-      let completed = false;
-      for (let step = 0; step < maxSteps; step += 1) {
-        const stepResult = await this.options.runStep(step, {
-          signal: active.controller.signal,
-          emitUpdate: (update) => this.emitUpdate(update),
-          prompt: trimmed,
-          runOptions,
-          requestId: active.requestId,
-          state: this.#state,
-          setState: (state) => {
-            this.#state = state;
-          },
-        });
-        if (stepResult.done) {
-          result = stepResult.value;
-          completed = true;
-          break;
-        }
-      }
-      if (!completed) throw new Error(`Agent exceeded ${maxSteps} steps.`);
-      await this.options.settle?.(result);
-      const produced = active.text.length > 0 || active.sentMessageCount > 0 || active.reacted;
-      return produced ? this.resultOf(active, active.controller.signal.aborted && !active.awaitingUserSelection && !active.quiescedForUpgrade) : result;
+      return await runFallbackStepLoop<T, RunnerConversationState, typeof runOptions>({
+        attempt,
+        prompt: trimmed,
+        runOptions,
+        maxSteps: this.options.maxSteps ?? SLATE_AGENT_MAX_STEPS,
+        state: this.#state,
+        setState: (state) => { this.#state = state },
+        emitUpdate: (update) => this.emitUpdate(update),
+        ...(this.options.prepare !== undefined ? { prepare: this.options.prepare.bind(this.options) } : {}),
+        ...(this.options.runStep !== undefined ? { runStep: this.options.runStep.bind(this.options) } : {}),
+        ...(this.options.settle !== undefined ? { settle: this.options.settle.bind(this.options) } : {}),
+      });
     } finally {
-      this.emitRunLifecycle({ type: "ended", requestId: active.requestId });
-      if (this.#activeRun === active) this.#activeRun = null;
-      this.#activeRunInterrupted = false;
+      this.emitRunLifecycle({ type: "ended", requestId: attempt.runId });
+      if (this.#currentAttempt === attempt) this.#currentAttempt = null;
+      this.#runInterrupted = false;
       this.#activeTurnRequestSource = undefined;
       this.#activeTurnAutomationId = undefined;
       this.#latestPromptMessagesGetter = undefined;
@@ -983,48 +903,12 @@ export class SlateAgentRunner<T = unknown> {
   }
 
   /** The run as it starts: its identity, its controller, and whether it is the user's own message re-sent unchanged. */
-  private startActiveRun(runOptions: { readonly inferenceRequestId?: string; readonly messageId?: string; readonly recentUserMessages?: readonly { readonly id: string; readonly text: string }[]; readonly selectedImages?: readonly unknown[]; readonly attachedFilePaths?: readonly string[]; readonly selectedVideos?: readonly unknown[]; readonly replyContext?: unknown; readonly requestSource?: string }, trimmed: string): ActiveRun {
-    const rawTranscriptText = runOptions.messageId == null ? undefined : runOptions.recentUserMessages?.find((message) => message.id === runOptions.messageId)?.text;
-    const active: ActiveRun = {
-      requestId: runOptions.inferenceRequestId ?? randomUUID(),
-      controller: new AbortController(),
-      generation: this.#runGeneration,
-      dispatched: false,
-      recoveryShaped:
-        runOptions.messageId != null &&
-        (runOptions.selectedImages?.length ?? 0) === 0 &&
-        (runOptions.attachedFilePaths?.length ?? 0) === 0 &&
-        (runOptions.selectedVideos?.length ?? 0) === 0 &&
-        runOptions.replyContext == null &&
-        rawTranscriptText === trimmed,
-      awaitingUserSelection: false,
-      quiescedForUpgrade: false,
-      text: "",
-      sentMessageCount: 0,
-      reacted: false,
-      streamOutputProduced: false,
-    };
-    this.#activeRunInterrupted = false;
+  private beginAttempt(runOptions: RunnerTurnAttemptOptions, trimmed: string): RunnerTurnAttempt {
+    this.#runInterrupted = false;
     this.#awaitingUserSelection = false;
-    this.#streamOutputProducedThisAttempt = false;
     this.#activeTurnRequestSource = runOptions.requestSource ?? this.inheritedRequestSource;
     this.#activeTurnAutomationId = this.inheritedAutomationId;
-    return active;
-  }
-
-  /** What a run answers with, when it produced something the caller reports on rather than a value of its own. */
-  private resultOf(active: ActiveRun, aborted: boolean): SlateAgentRunnerResult {
-    return {
-      text: active.text,
-      sentMessageCount: active.sentMessageCount,
-      reacted: active.reacted,
-      aborted,
-      ...presentOptions({
-        awaitingUserSelection: active.awaitingUserSelection ? true : undefined,
-        quiescedForUpgrade: active.quiescedForUpgrade ? true : undefined,
-        streamOutputProduced: active.streamOutputProduced ? true : undefined,
-      }),
-    };
+    return new RunnerTurnAttempt({ generation: this.#runGeneration, prompt: trimmed, runOptions });
   }
 
   createDeadlineTimer(fire: () => void, milliseconds: number): { cancel(): void; restart(): void } {
@@ -1046,26 +930,18 @@ export class SlateAgentRunner<T = unknown> {
   }
 
   stampInheritableRunAttributes<C extends Record<string, unknown>>(context: C, inferenceRequestId: string, turnType: string): C & { inheritableAttributes: Record<string, string> } {
-    const inheritableAttributes = {
-      ...(typeof context.inheritableAttributes === "object" && context.inheritableAttributes != null ? (context.inheritableAttributes as Record<string, string>) : {}),
-      "slate.conversation_id": this.getConversationId(),
-      "slate.request_id": inferenceRequestId,
-      "slate.turn_type": turnType,
-      ...(this.isSubagentRunner && this.subagentType != null ? { "slate.subagent_type": this.subagentType } : {}),
-    };
-    return { ...context, inheritableAttributes };
+    return this.#identity.stampInheritableAttributes(context, inferenceRequestId, turnType, {
+      isSubagentRunner: this.isSubagentRunner,
+      ...presentOptions({ subagentType: this.subagentType }),
+    });
   }
 
   stampCallerTurnRootRequestId(span: { setAttribute(key: string, value: string): void }, inferenceRequestId: string): void {
-    try {
-      span.setAttribute("slate.request_id", inferenceRequestId);
-    } catch {
-      // A span that cannot take an attribute (already ended, or not the real thing) must not fail the turn.
-    }
+    this.#identity.stampRootRequestId(span, inferenceRequestId);
   }
 
   getTranscriptId(): string {
-    return this.subagentTranscriptId ?? this.getConversationId();
+    return this.#identity.getTranscriptId();
   }
 
   getComputerUseUsageSnapshot(): { readonly modelId?: string; readonly turnEndedCount: number; readonly usage?: unknown } {

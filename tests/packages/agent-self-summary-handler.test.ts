@@ -352,7 +352,7 @@ test("an input too small to shrink is sent as it is", async () => {
 test("the conversation is split with the last user message kept back", () => {
   const harnessed = stateHandler()
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  const partitioned = summarizer.partitionMessages(conversation(), {} as never)
+  const partitioned = summarizer.separateMessages(conversation(), {} as never)
   assert.equal(partitioned.systemMessage?.role, "system")
   assert.equal(partitioned.preservedTailMessages.length, 1)
   assert.equal(
@@ -364,14 +364,14 @@ test("the conversation is split with the last user message kept back", () => {
 test("a conversation too short to summarize is refused", () => {
   const harnessed = stateHandler()
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  assert.throws(() => summarizer.partitionMessages(conversation(2), {} as never), /at least 3 messages/)
+  assert.throws(() => summarizer.separateMessages(conversation(2), {} as never), /at least 3 messages/)
 })
 
 test("the carrier message says what it is and how many summaries there have been", () => {
   const harnessed = stateHandler({ selfSummaryCount: 2 })
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  const partitioned = summarizer.partitionMessages(conversation(), {} as never)
-  const built = summarizer.buildSummaryMessage({ text: "the summary" }, partitioned, { skillBlocks: [] } as never)
+  const partitioned = summarizer.separateMessages(conversation(), {} as never)
+  const built = summarizer.formatSummaryCarrier({ text: "the summary" }, partitioned, { skillBlocks: [] } as never)
   const content = fromRedactedCoreMessage(built.message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).content as string
   assert.match(content, /Your conversation was summarized due to context constraints/)
   assert.match(content, /<summary_content>\nthe summary\n<\/summary_content>/)
@@ -383,8 +383,8 @@ test("the carrier message says what it is and how many summaries there have been
 test("the carrier message carries the blocks a summary cannot", () => {
   const harnessed = stateHandler()
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  const partitioned = summarizer.partitionMessages(conversation(), {} as never)
-  const built = summarizer.buildSummaryMessage({ text: "the summary" }, partitioned, {
+  const partitioned = summarizer.separateMessages(conversation(), {} as never)
+  const built = summarizer.formatSummaryCarrier({ text: "the summary" }, partitioned, {
     skillBlocks: [],
     modePrompt: "the mode",
     projectRootPrompt: "the root",
@@ -397,8 +397,8 @@ test("the carrier message carries the blocks a summary cannot", () => {
 test("the summary is stored as a carrier the platform can recognize", () => {
   const harnessed = stateHandler()
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  const partitioned = summarizer.partitionMessages(conversation(), {} as never)
-  const built = summarizer.buildSummaryMessage({ text: "the summary" }, partitioned, { skillBlocks: [] } as never)
+  const partitioned = summarizer.separateMessages(conversation(), {} as never)
+  const built = summarizer.formatSummaryCarrier({ text: "the summary" }, partitioned, { skillBlocks: [] } as never)
   assert.equal(built.message.role, "user")
   assert.equal((built.message.providerOptions as { cursor?: { isSummary?: boolean } }).cursor?.isSummary, true)
 })
@@ -406,9 +406,9 @@ test("the summary is stored as a carrier the platform can recognize", () => {
 test("the conversation becomes the summary with the tail it kept", () => {
   const harnessed = stateHandler()
   const summarizer = new SelfSummarizer(promptSession([]).session, harnessed.state, listener, [], {}, "model-1")
-  const partitioned = summarizer.partitionMessages(conversation(), {} as never)
+  const partitioned = summarizer.separateMessages(conversation(), {} as never)
   const summary = message("user", "the summary")
-  const assembled = summarizer.assembleFinalMessages(partitioned, summary)
+  const assembled = summarizer.rebuildConversation(partitioned, summary)
   assert.deepEqual(assembled.map(entry => entry.role), ["system", "user", "user"])
   assert.equal(assembled.at(-1), summary)
 })

@@ -83,7 +83,7 @@ describe("the managed setup's production extras", () => {
     const auth = { getAccessToken: async () => "token", getMachineId: () => "machine-1", peekAccessToken: () => null };
     // What the platform manages is a service the extension can drive, kept under the platform's own root.
     const skills = world.extras.createManagedSkills({ getAccessToken: async () => null, report: (event: unknown) => void world.reported.push(event) });
-    assert.deepEqual([typeof (skills as { ensureSkill: unknown }).ensureSkill, typeof (skills as { dispose: unknown }).dispose], ["function", "function"]);
+    assert.deepEqual([typeof (skills as { ensureSkillIsCached: unknown }).ensureSkillIsCached, typeof (skills as { dispose: unknown }).dispose], ["function", "function"]);
     // What the platform manages is kept where the platform keeps everything of its own.
     const options = (skills as unknown as { options: { getCacheDir(): string } }).options;
     assert.equal(options.getCacheDir(), join(platformRoot, "managed-skills"));

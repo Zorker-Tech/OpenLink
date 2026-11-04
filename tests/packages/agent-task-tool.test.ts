@@ -5,8 +5,8 @@ import { createTaskTool } from "../../source/packages/agent/tools/task.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
-import { SubagentType, SubagentTypeExplore, SubagentTypeUnspecified } from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
-import { SubagentBackgroundReason, TaskResult, TaskSuccess } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { SubagentType, SubagentTypeExplore, SubagentTypeUnspecified } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
+import { SubagentBackgroundReason, TaskResult, TaskSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 // The task tool hands work to a subagent. Building one needs a configuration, a parent state and the
 // subagent configs it may offer; the assertions below are about what the tool looks like to the model and
@@ -108,15 +108,15 @@ test("a description that was built for a placement is not built again", () => {
   assert.equal(reads, 0)
 })
 
-test("a catalogue that lives in the user info is pointed at rather than repeated", () => {
+test("model choices in user info are referenced rather than repeated", () => {
   const props = { allTools: {} }
   // With no models to list, the tool says so where the catalogue belongs to it...
   const inTool = createTool().descriptionGenerator(props, { promptVisible: true })
-  assert.match(inTool, /No alternative models are available/)
+  assert.match(inTool, /No alternative child model is available/)
   // ...and says where the catalogue is instead, when it belongs to the user info.
   const inUserInfo = createTool({ subagentModelsInUserInfo: true }).descriptionGenerator(props, { promptVisible: true })
-  assert.doesNotMatch(inUserInfo, /No alternative models are available/)
-  assert.match(inUserInfo, /initial user-info message/)
+  assert.doesNotMatch(inUserInfo, /No alternative child model is available/)
+  assert.match(inUserInfo, /Agent model choices are in <available_subagent_models> near the beginning/)
 })
 
 test("arguments that name no subagent the tool offers are refused", async () => {

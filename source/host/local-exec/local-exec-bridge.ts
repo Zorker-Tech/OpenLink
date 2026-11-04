@@ -1,87 +1,165 @@
-/**
- * The bridge between the host and the local-exec daemon.
- *
- * Calls travel over the daemon's own connection, each bounded by a deadline, and a daemon that is not there is reported
- * rather than left to look like a call that never answered.
- */
+/** Routes host requests to the selected local machine and returns its matching frames. */
 import { randomUUID } from "node:crypto";
-
-import type { Clock, IdleWatchdogPolicy } from "../extensions/scheduling.ts";
-import { DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES, SLATE_LOCAL_EXEC_LIVENESS_WINDOW_MS, SLATE_NO_LOCAL_MACHINE_MESSAGE, slateComputerUnavailableMessage } from "../../shared/local-exec-gateway.ts";
+import type { IdleWatchdogPolicy } from "../extensions/scheduling.ts";
 import { SlateLocalExecError } from "./local-exec-error.ts";
+import { LocalExecProviderDirectory } from "./local-exec-provider-directory.ts";
+import { LocalExecResponseChannels } from "./local-exec-response-channels.ts";
+import { slateComputerUnavailableMessage } from "../../shared/local-exec-gateway.ts";
+import type {
+  LocalExecBridgeContext,
+  LocalExecBridgeDeps,
+  LocalExecBridgeFrame,
+  LocalExecComputer,
+  LocalExecProviderInfo,
+} from "./local-exec-bridge-contracts.ts";
 
-export const SUPERVISED_RANK = 4;
-export const VARIANT_RANKS: Readonly<Record<string, number>> = { slate: 2, "slate-lab": 1 };
-export const TELEMETRY_VARIANTS = new Set(["slate", "slate-lab", "slate-dev"]);
-export const DEFAULT_SLATE_COMPUTER_ID = "this-computer";
-
-export interface LocalExecBridgeContext { readonly signal: AbortSignal; readonly agentId?: string; }
-export interface LocalExecComputer { readonly id: string; readonly label: string; readonly connected: boolean; }
-export interface LocalExecProviderInfo { readonly localRoot: string; readonly terminalsFolder: string; }
-export interface LocalExecBridgeFrame { readonly kind: string; readonly requestId?: string; readonly [key: string]: unknown; }
-export interface LocalExecProviderReport { readonly phase: "registered" | "detached" | "hello"; readonly providerId: string; readonly providerCount: number; readonly [key: string]: unknown; }
-export interface LocalExecRefusedReport { readonly cause: "no_providers" | "computer_unknown" | "stale_heartbeat"; readonly site: string; readonly providerCount: number; readonly liveProviderCount: number; readonly everRegistered: boolean; readonly [key: string]: unknown; }
-export interface LocalExecBridgeDeps {
-  readonly clock: Clock; readonly responseWatchdog: IdleWatchdogPolicy; readonly blockedReason: () => string | undefined;
-  readonly report?: { readonly provider?: (report: LocalExecProviderReport) => void; readonly refused?: (report: LocalExecRefusedReport) => void };
-  readonly randomId?: () => string;
-}
-
-class FrameQueue implements AsyncIterable<LocalExecBridgeFrame> {
-  private readonly buffer: LocalExecBridgeFrame[] = []; private wake: (() => void) | undefined; private closed = false;
-  push(frame: LocalExecBridgeFrame): void { if (this.closed) return; this.buffer.push(frame); this.wake?.(); this.wake = undefined; }
-  close(): void { this.closed = true; this.wake?.(); this.wake = undefined; }
-  async *[Symbol.asyncIterator](): AsyncIterator<LocalExecBridgeFrame> { for (;;) { const frame = this.buffer.shift(); if (frame !== undefined) { yield frame; continue; } if (this.closed) return; await new Promise<void>((resolve) => { this.wake = resolve; }); } }
-}
-
-interface Provider {
-  readonly id: string; readonly send: (frame: LocalExecBridgeFrame) => void; readonly registeredAt: number;
-  lastSeenAt: number; hasHeartbeat: boolean; info?: LocalExecProviderInfo; computerId?: string; label?: string; supervised?: boolean; variant?: string;
-}
-
-export function localExecProviderRank(signals: { readonly supervised?: boolean; readonly variant?: string }): number { return (signals.supervised === true ? SUPERVISED_RANK : 0) + (signals.variant == null ? 0 : VARIANT_RANKS[signals.variant] ?? 0); }
-export function boundedLocalExecVariant(variant: string | undefined): string | undefined { return variant === undefined ? undefined : TELEMETRY_VARIANTS.has(variant) ? variant : "unknown"; }
+export {
+  DEFAULT_SLATE_COMPUTER_ID,
+  SUPERVISED_RANK,
+  TELEMETRY_VARIANTS,
+  VARIANT_RANKS,
+  boundedLocalExecVariant,
+  localExecProviderRank,
+} from "./local-exec-bridge-contracts.ts";
+export type {
+  LocalExecBridgeContext,
+  LocalExecBridgeDeps,
+  LocalExecBridgeFrame,
+  LocalExecComputer,
+  LocalExecProviderInfo,
+  LocalExecProviderReport,
+  LocalExecRefusedReport,
+} from "./local-exec-bridge-contracts.ts";
 
 export class SlateLocalExecBridge {
-  private readonly providers = new Set<Provider>(); private readonly byId = new Map<string, Provider>(); private readonly pending = new Map<string, FrameQueue>(); private everRegistered = false; private emptySince: number;
-  constructor(private readonly deps: LocalExecBridgeDeps) { this.emptySince = deps.clock.now(); }
-  registerProvider(send: (frame: LocalExecBridgeFrame) => void): () => void {
-    const provider: Provider = { id: this.deps.randomId?.() ?? randomUUID(), send, registeredAt: this.deps.clock.now(), lastSeenAt: this.deps.clock.now(), hasHeartbeat: false };
-    this.providers.add(provider); this.byId.set(provider.id, provider); this.everRegistered = true; this.deps.report?.provider?.({ phase: "registered", providerId: provider.id, providerCount: this.providers.size });
-    try { send({ kind: "welcome", providerId: provider.id }); } catch {}
-    return () => { if (!this.providers.delete(provider)) return; this.byId.delete(provider.id); const now = this.deps.clock.now(); if (this.providers.size === 0) this.emptySince = now; this.deps.report?.provider?.({ phase: "detached", providerId: provider.id, providerCount: this.providers.size, ageMs: now - provider.registeredAt, hadHello: provider.info !== undefined, hasHeartbeat: provider.hasHeartbeat, wasLive: this.isLive(provider, now), emptied: this.providers.size === 0 }); };
+  private readonly providerDirectory: LocalExecProviderDirectory;
+  private readonly responses = new LocalExecResponseChannels();
+
+  constructor(private readonly deps: LocalExecBridgeDeps) {
+    this.providerDirectory = new LocalExecProviderDirectory({
+      clock: deps.clock,
+      ...(deps.report === undefined ? {} : { report: deps.report }),
+      ...(deps.randomId === undefined ? {} : { randomId: deps.randomId }),
+    });
   }
-  hasProvider(): boolean { return this.providers.size > 0; }
-  isComputerLive(computerId: string): boolean { return this.resolveProvider(computerId) !== undefined; }
-  assertComputerAvailable(computerId: string | undefined, gate: { readonly site: string; readonly agentId?: string }): void { this.requireProvider(computerId, gate); }
-  checkLiveComputerForAsk(agentId?: string): boolean { if (this.resolveProvider(undefined) !== undefined) return true; this.reportRefused(this.providers.size === 0 ? "no_providers" : "stale_heartbeat", { site: "ask_gate", ...(agentId === undefined ? {} : { agentId }) }); return false; }
-  private requireProvider(computerId: string | undefined, gate: { readonly site: string; readonly agentId?: string }): Provider { const provider = this.resolveProvider(computerId); if (provider !== undefined) return provider; if (this.providers.size === 0) { this.reportRefused("no_providers", gate); throw new SlateLocalExecError(SLATE_NO_LOCAL_MACHINE_MESSAGE); } if (computerId !== undefined && !this.hasComputerId(computerId)) { this.reportRefused("computer_unknown", gate); throw new SlateLocalExecError(SLATE_NO_LOCAL_MACHINE_MESSAGE); } this.reportRefused("stale_heartbeat", gate); throw new SlateLocalExecError(slateComputerUnavailableMessage(this.routeLabel(computerId))); }
-  private reportRefused(cause: LocalExecRefusedReport["cause"], gate: { readonly site: string; readonly agentId?: string }): void { this.deps.report?.refused?.({ cause, site: gate.site, ...(gate.agentId === undefined ? {} : { conversationId: gate.agentId }), providerCount: this.providers.size, liveProviderCount: this.liveProviders().length, everRegistered: this.everRegistered, ...(cause === "no_providers" ? { emptyForMs: this.deps.clock.now() - this.emptySince } : {}) }); }
-  private providerComputerId(provider: Provider): string { return provider.computerId ?? DEFAULT_SLATE_COMPUTER_ID; }
-  private isLive(provider: Provider, now = this.deps.clock.now()): boolean { return !provider.hasHeartbeat || now - provider.lastSeenAt <= SLATE_LOCAL_EXEC_LIVENESS_WINDOW_MS; }
-  private liveProviders(): Provider[] { const now = this.deps.clock.now(); return [...this.providers].filter((provider) => this.isLive(provider, now)); }
-  private best(candidates: readonly Provider[]): Provider | undefined { let best: Provider | undefined; for (const provider of candidates) { if (best === undefined || localExecProviderRank(provider) > localExecProviderRank(best) || (localExecProviderRank(provider) === localExecProviderRank(best) && provider.lastSeenAt >= best.lastSeenAt)) best = provider; } return best; }
-  listComputers(): LocalExecComputer[] { const now = this.deps.clock.now(); const byComputerId = new Map<string, Provider>(); for (const provider of this.providers) { const id = this.providerComputerId(provider); const existing = byComputerId.get(id); if (existing === undefined || provider.lastSeenAt >= existing.lastSeenAt) byComputerId.set(id, provider); } return [...byComputerId].map(([id, provider]) => ({ id, label: provider.label ?? "this computer", connected: this.isLive(provider, now) })); }
-  activeComputer(): LocalExecComputer | undefined { const provider = this.resolveProvider(undefined); return provider === undefined ? undefined : { id: this.providerComputerId(provider), label: provider.label ?? "this computer", connected: true }; }
-  private hasComputerId(id: string): boolean { return [...this.providers].some((provider) => this.providerComputerId(provider) === id); }
-  private routeLabel(computerId?: string): string | undefined { if (computerId !== undefined) return [...this.providers].find((provider) => this.providerComputerId(provider) === computerId)?.label ?? computerId; return this.best([...this.providers])?.label; }
-  private resolveProvider(computerId?: string): Provider | undefined { const live = this.liveProviders(); return computerId === undefined ? this.best(live) : this.best(live.filter((provider) => this.providerComputerId(provider) === computerId)); }
-  getProviderInfo(): LocalExecProviderInfo | undefined { return (this.resolveProvider(undefined) ?? [...this.providers].at(-1))?.info; }
+
+  registerProvider(send: (frame: LocalExecBridgeFrame) => void): () => void {
+    return this.providerDirectory.register(send);
+  }
+
+  hasProvider(): boolean {
+    return this.providerDirectory.hasProvider();
+  }
+
+  isComputerLive(computerId: string): boolean {
+    return this.providerDirectory.isComputerLive(computerId);
+  }
+
+  assertComputerAvailable(computerId: string | undefined, gate: { readonly site: string; readonly agentId?: string }): void {
+    this.providerDirectory.assertComputerAvailable(computerId, gate);
+  }
+
+  checkLiveComputerForAsk(agentId?: string): boolean {
+    return this.providerDirectory.checkLiveComputerForAsk(agentId);
+  }
+
+  listComputers(): LocalExecComputer[] {
+    return this.providerDirectory.listComputers();
+  }
+
+  activeComputer(): LocalExecComputer | undefined {
+    return this.providerDirectory.activeComputer();
+  }
+
+  getProviderInfo(): LocalExecProviderInfo | undefined {
+    return this.providerDirectory.getProviderInfo();
+  }
+
   submitResponses(batch: { readonly providerId?: string; readonly frames?: readonly LocalExecBridgeFrame[] }): void {
-    const provider = this.providerForBatch(batch.providerId);
+    const provider = this.providerDirectory.providerForBatch(batch.providerId);
     for (const frame of batch.frames ?? []) {
-      if (frame.kind === "hello") { if (provider !== undefined && typeof frame.localRoot === "string" && typeof frame.terminalsFolder === "string") { const rehello = provider.info !== undefined; provider.info = { localRoot: frame.localRoot, terminalsFolder: frame.terminalsFolder }; if (typeof frame.computerId === "string" && frame.computerId.length > 0) provider.computerId = frame.computerId; if (typeof frame.label === "string" && frame.label.length > 0) provider.label = frame.label; if (typeof frame.supervised === "boolean") provider.supervised = frame.supervised; if (typeof frame.variant === "string" && frame.variant.length > 0) provider.variant = frame.variant; provider.lastSeenAt = this.deps.clock.now(); const variant = boundedLocalExecVariant(provider.variant); this.deps.report?.provider?.({ phase: "hello", providerId: provider.id, providerCount: this.providers.size, helloDelayMs: provider.lastSeenAt - provider.registeredAt, computerIdPresent: provider.computerId !== undefined, rehello, ...(provider.supervised === undefined ? {} : { supervised: provider.supervised }), ...(variant === undefined ? {} : { variant }) }); } continue; }
-      if (frame.kind === "ping") { if (provider !== undefined) { provider.hasHeartbeat = true; provider.lastSeenAt = this.deps.clock.now(); if (typeof frame.supervised === "boolean") provider.supervised = frame.supervised; } continue; }
-      if (typeof frame.requestId === "string") this.pending.get(frame.requestId)?.push(frame);
+      if (frame.kind === "hello") {
+        if (provider !== undefined) this.providerDirectory.acceptHello(provider, frame);
+        continue;
+      }
+      if (frame.kind === "ping") {
+        if (provider !== undefined) this.providerDirectory.acceptHeartbeat(provider, frame);
+        continue;
+      }
+      this.responses.route(frame);
     }
   }
-  private providerForBatch(providerId?: string): Provider | undefined { return (providerId === undefined ? undefined : this.byId.get(providerId)) ?? [...this.providers].at(-1); }
-  retireApproval(approvalId: string): void { for (const provider of this.providers) { try { provider.send({ kind: "retire-approval", requestId: this.deps.randomId?.() ?? randomUUID(), approvalId }); } catch {} } }
-  async *request(context: LocalExecBridgeContext, frame: LocalExecBridgeFrame, computerId?: string, options?: { readonly watchResponse?: boolean }): AsyncGenerator<LocalExecBridgeFrame> {
-    const blocked = this.deps.blockedReason(); if (blocked !== undefined) throw new SlateLocalExecError(blocked); const provider = this.requireProvider(computerId, { site: frame.kind, ...(context.agentId === undefined ? {} : { agentId: context.agentId }) }); const requestId = this.deps.randomId?.() ?? randomUUID(); const queue = new FrameQueue(); this.pending.set(requestId, queue);
-    const sendCancel = () => { try { provider.send({ kind: "cancel", requestId }); } catch {} }; const onAbort = () => { sendCancel(); queue.close(); }; if (context.signal.aborted) onAbort(); else context.signal.addEventListener("abort", onAbort, { once: true }); let timedOut = false; let responseWatchdog: ReturnType<IdleWatchdogPolicy["arm"]> | undefined;
-    const armResponseWatchdog = () => { if (options?.watchResponse !== true) return; if (responseWatchdog === undefined) responseWatchdog = this.deps.responseWatchdog.arm(() => { timedOut = true; sendCancel(); queue.close(); }); else responseWatchdog.kick(); };
-    try { provider.send({ requestId, ...frame }); armResponseWatchdog(); for await (const response of queue) { armResponseWatchdog(); yield response; } if (timedOut) throw new SlateLocalExecError(slateComputerUnavailableMessage(provider.label)); }
-    finally { responseWatchdog?.dispose(); this.pending.delete(requestId); queue.close(); context.signal.removeEventListener("abort", onAbort); if (!context.signal.aborted) sendCancel(); }
+
+  retireApproval(approvalId: string): void {
+    for (const provider of this.providerDirectory.all()) {
+      try {
+        provider.send({ kind: "retire-approval", requestId: this.nextId(), approvalId });
+      } catch {
+        // One disconnected provider must not prevent other machines from retiring the approval.
+      }
+    }
+  }
+
+  async *request(
+    context: LocalExecBridgeContext,
+    frame: LocalExecBridgeFrame,
+    computerId?: string,
+    options?: { readonly watchResponse?: boolean },
+  ): AsyncGenerator<LocalExecBridgeFrame> {
+    if (context.signal.aborted) return;
+    const blockedReason = this.deps.blockedReason();
+    if (blockedReason !== undefined) throw new SlateLocalExecError(blockedReason);
+
+    const provider = this.providerDirectory.require(computerId, {
+      site: frame.kind,
+      ...(context.agentId === undefined ? {} : { agentId: context.agentId }),
+    });
+    const requestId = this.nextId();
+    const replies = this.responses.open(requestId);
+    const cancelRemote = () => {
+      try {
+        provider.send({ kind: "cancel", requestId });
+      } catch {
+        // Cancellation is best effort because the provider may already have closed.
+      }
+    };
+    const abortRequest = () => {
+      cancelRemote();
+      this.responses.close(requestId);
+    };
+    context.signal.addEventListener("abort", abortRequest, { once: true });
+
+    let timedOut = false;
+    let responseWatchdog: ReturnType<IdleWatchdogPolicy["arm"]> | undefined;
+    const refreshWatchdog = () => {
+      if (options?.watchResponse !== true) return;
+      if (responseWatchdog === undefined) {
+        responseWatchdog = this.deps.responseWatchdog.arm(() => {
+          timedOut = true;
+          abortRequest();
+        });
+      } else {
+        responseWatchdog.kick();
+      }
+    };
+
+    try {
+      provider.send({ requestId, ...frame });
+      refreshWatchdog();
+      for await (const response of replies) {
+        refreshWatchdog();
+        yield response;
+      }
+      if (timedOut) throw new SlateLocalExecError(slateComputerUnavailableMessage(provider.label));
+    } finally {
+      responseWatchdog?.dispose();
+      this.responses.close(requestId);
+      context.signal.removeEventListener("abort", abortRequest);
+      if (!context.signal.aborted) cancelRemote();
+    }
+  }
+
+  private nextId(): string {
+    return this.deps.randomId?.() ?? randomUUID();
   }
 }

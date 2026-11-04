@@ -3,14 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "description": "The Work platform: persistent agents, transcripts, runs, automation, workflow, rooms, channels and boxes. Ships with the desktop app; independent of the Code agent.",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm run extension-ids:check && pnpm run rewrite:check && pnpm run interop:check && tsc --noEmit",
     "test": "node --experimental-transform-types --no-warnings --test \"tests/**/*.test.ts\"",
     "rewrite:overlap": "node scripts/rewrite-overlap.mjs",
-    "schema:generate": "cd source/packages/proto && buf generate",
+    "rewrite:check": "node scripts/rewrite-overlap.mjs check",
+    "interop:check": "node scripts/check-interop-boundary.mjs",
+    "interop:baseline": "node scripts/check-interop-boundary.mjs --write-baseline",
+    "schema:generate": "cd source/adapters/interop/proto && buf generate",
     "redaction:generate": "node --experimental-transform-types --no-warnings scripts/generate-redacted-protos.mjs",
+    "extension-ids:generate": "node scripts/generate-extension-ids.mjs",
+    "extension-ids:check": "node scripts/generate-extension-ids.mjs check",
     "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/host/main.js",
     "smoke": "node scripts/smoke.mjs",
     "rewrite:triage": "node scripts/rewrite-triage.mjs"
   },
@@ -32,6 +41,7 @@
     "@opentelemetry/otlp-transformer": "^0.222.0",
     "@opentelemetry/sdk-logs": "^0.222.0",
     "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@slate/work-domain": "workspace:*",
     "@slate/work-protocol": "workspace:*",
     "@streamparser/json": "^0.0.22",
     "ai": "^4.3.17",
@@ -50,6 +60,7 @@
     "tar": "^6.2.1",
     "tree-sitter": "^0.21.1",
     "tree-sitter-bash": "^0.21.0",
+    "ws": "^8.21.3",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.5"
   },

@@ -15,28 +15,25 @@
 
 import { createSpan } from "../../context/telemetry.ts"
 import type { Context } from "../../context/context.ts"
-import { PrivacyCapability } from "../../redaction/classification.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import {
-  fromRedactedPromptTokenBreakdownSnapshot,
-  toRedactedPromptContextUsageTree,
-  toRedactedPromptTokenBreakdownSnapshot,
-} from "../../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { buildPromptContextUsageTree } from "./prompt-context-usage-tree.ts"
 import { buildPromptTokenBreakdownSnapshot, type PromptTokenBreakdownParams } from "./prompt-token-breakdown.ts"
 
-type RedactedBreakdown = ReturnType<typeof toRedactedPromptTokenBreakdownSnapshot>
-type RedactedUsageTree = ReturnType<typeof toRedactedPromptContextUsageTree>
-
-export interface RedactedPromptTokenDetails {
-  breakdown?: RedactedBreakdown | undefined
-  promptContextUsageTree?: RedactedUsageTree | undefined
+export interface PromptTokenDetailsRedactionCodec<Snapshot, UsageTree, StoredBreakdown, StoredUsageTree> {
+  decodeBreakdown(value: StoredBreakdown): Snapshot
+  encodeBreakdown(value: Snapshot, privacyMode: PrivacyMode): StoredBreakdown
+  encodeUsageTree(value: UsageTree, privacyMode: PrivacyMode): StoredUsageTree
 }
 
-export interface PromptTokenDetailsState {
+export interface RedactedPromptTokenDetails<StoredBreakdown = unknown, StoredUsageTree = unknown> {
+  breakdown?: StoredBreakdown | undefined
+  promptContextUsageTree?: StoredUsageTree | undefined
+}
+
+export interface PromptTokenDetailsState<StoredBreakdown = unknown, StoredUsageTree = unknown> {
   // The same field also carries the running counts the summarizer watches, so it is described as the
   // redacted details plus those counts rather than as the details alone.
-  tokenDetails: RedactedPromptTokenDetails & {
+  tokenDetails: RedactedPromptTokenDetails<StoredBreakdown, StoredUsageTree> & {
     readonly usedTokens?: number | undefined
     readonly maxTokens?: number | undefined
   }
@@ -47,12 +44,18 @@ export interface PromptTokenDetailsConfig {
   featureFlags?: { promptContextUsageTree?: boolean | undefined } | undefined
 }
 
-export function computeNextRedactedPromptContextDetails(
+export function computeNextRedactedPromptContextDetails<StoredBreakdown, StoredUsageTree>(
   ctx: Context,
   config: PromptTokenDetailsConfig,
-  stateHandler: PromptTokenDetailsState,
+  stateHandler: PromptTokenDetailsState<StoredBreakdown, StoredUsageTree>,
   params: PromptTokenBreakdownParams,
-): RedactedPromptTokenDetails {
+  codec: PromptTokenDetailsRedactionCodec<
+    ReturnType<typeof buildPromptTokenBreakdownSnapshot>,
+    ReturnType<typeof buildPromptContextUsageTree>,
+    StoredBreakdown,
+    StoredUsageTree
+  >,
+): RedactedPromptTokenDetails<StoredBreakdown, StoredUsageTree> {
   using span = createSpan(ctx.withName("nextRedactedPromptContextDetails"))
   const tracedCtx = span.ctx
   const previousRedacted = stateHandler.tokenDetails.breakdown
@@ -60,14 +63,14 @@ export function computeNextRedactedPromptContextDetails(
   const promptContextUsageTreeEnabled = config.featureFlags?.promptContextUsageTree === true
   span.span.setAttribute("promptContextUsageTreeEnabled", promptContextUsageTreeEnabled)
   const previousSnapshot = previousRedacted
-    ? fromRedactedPromptTokenBreakdownSnapshot(previousRedacted, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
+    ? codec.decodeBreakdown(previousRedacted)
     : undefined
   const breakdownSnapshot = buildPromptTokenBreakdownSnapshot(tracedCtx, { ...params, previousSnapshot })
   const privacyMode = stateHandler.getPrivacyMode()
   return {
-    breakdown: toRedactedPromptTokenBreakdownSnapshot(breakdownSnapshot, privacyMode),
+    breakdown: codec.encodeBreakdown(breakdownSnapshot, privacyMode),
     promptContextUsageTree: promptContextUsageTreeEnabled
-      ? toRedactedPromptContextUsageTree(
+      ? codec.encodeUsageTree(
         buildPromptContextUsageTree({
           messages: params.messages,
           tools: params.tools,

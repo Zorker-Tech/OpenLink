@@ -9,8 +9,7 @@
  * and the platform's own native tools, which are what a session needs in hand.
  */
 
-import { ToolCall } from "../../proto/generated/agent/v1/agent_pb.ts"
-import { isSubagentExcludedPlatformCommunicationToolName } from "../automations/platform-communication-tools.ts"
+import { isSubagentExcludedPlatformCommunicationToolName } from "../../../adapters/interop/automation/platform-communication-tool-policy-adapter.ts"
 import { isForcedStaticContext } from "./tool-execution.ts"
 
 type ToolLike = {
@@ -20,10 +19,6 @@ type ToolLike = {
   readonly customToolFormat?: unknown
   readonly contextType?: { readonly type?: string }
 }
-
-const TOOL_CALL_TOOL_FIELDS = ToolCall.fields
-  .list()
-  .filter(field => field.oneof?.localName === "tool")
 
 const BASE_STATIC_NATIVE_TOOL_IDENTIFIERS = new Set([
   "ANTHROPIC_COMPUTER_USE",
@@ -58,9 +53,6 @@ function shouldOffloadTool(profile: "all-static" | "final", toolIdentifier: stri
     }
   }
 }
-
-/** The tool names the agent protocol knows, for callers that need to recognize one by name. */
-export const AGENT_PROTO_TOOL_NAMES: readonly string[] = TOOL_CALL_TOOL_FIELDS.map(field => field.name)
 
 export function partitionDynamicTools(
   tools: readonly ToolLike[],

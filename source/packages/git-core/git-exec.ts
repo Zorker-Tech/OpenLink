@@ -1,35 +1,37 @@
-/**
- * Running one git command and reading what it said.
- *
- * The subcommand is picked out of the arguments first — past the options that take a value of their
- * own — because it is what the environment hands to the hooks git may run. Everything else is the
- * platform's own child process handling: no shell, a pinned environment, and output decoded as text.
- */
-
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 
 import { createGitProcessEnv } from "./process-env.ts"
 
-const execFileAsync = promisify(execFile)
+const execute = promisify(execFile)
+const ARGUMENT_OPTIONS = new Set(["-c", "-C", "--git-dir", "--work-tree"])
 
-const OPTIONS_WITH_VALUE = new Set(["-c", "-C", "--git-dir", "--work-tree"])
+export function findGitSubcommand(arguments_: readonly string[]): string | undefined {
+  let operandBelongsToOption = false
 
-function gitSubcommand(args: readonly string[]): string | undefined {
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index]!
-    if (OPTIONS_WITH_VALUE.has(arg)) {
-      index++
+  for (const value of arguments_) {
+    if (operandBelongsToOption) {
+      operandBelongsToOption = false
       continue
     }
-    if (arg.startsWith("-")) continue
-    return arg
+
+    if (ARGUMENT_OPTIONS.has(value)) {
+      operandBelongsToOption = true
+      continue
+    }
+
+    if (value.startsWith("-")) continue
+    return value
   }
+
   return undefined
 }
 
-function withGitEnv(args: readonly string[], env: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
-  return createGitProcessEnv({ command: gitSubcommand(args), optionsEnv: env })
+function gitEnvironment(arguments_: readonly string[], supplied: NodeJS.ProcessEnv | undefined) {
+  return createGitProcessEnv({
+    command: findGitSubcommand(arguments_),
+    optionsEnv: supplied,
+  })
 }
 
 export interface GitExecFileOptions {
@@ -42,14 +44,18 @@ export interface GitExecFileOptions {
 
 export async function gitExecFile(
   file: string,
-  args: readonly string[],
+  arguments_: readonly string[],
   options?: GitExecFileOptions,
 ): Promise<{ stdout: string; stderr: string }> {
-  const { env, encoding = "utf8", ...rest } = options ?? {}
-  const result = await execFileAsync(file, [...args], {
-    ...rest,
+  const { env: supplied, encoding = "utf8", ...processOptions } = options ?? {}
+  const result = await execute(file, Array.from(arguments_), {
+    ...processOptions,
     encoding,
-    env: withGitEnv(args, env),
+    env: gitEnvironment(arguments_, supplied),
   })
-  return { stdout: String(result.stdout), stderr: String(result.stderr) }
+
+  return {
+    stdout: String(result.stdout),
+    stderr: String(result.stderr),
+  }
 }

@@ -4,11 +4,9 @@
  * A run of an automation is described by what woke it and what it changed, so a review can judge a change that happened
  * without anyone present.
  */
-import { Struct } from "@bufbuild/protobuf";
 import { describeTrigger } from "../../shared/automation-schedule.ts";
 import { triggerSchedule, type AutomationTrigger } from "../../shared/automations.ts";
 import { serializeStoredTrigger } from "../automations/automation-trigger.ts";
-import { SmartModeRiskTarget } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
 import {
   fingerprintSlateAutoReviewTarget,
   type SlateAutoReviewController,
@@ -17,6 +15,7 @@ import {
 } from "./slate-auto-review.ts";
 import type { AutoReviewClassifierDecision } from "./slate-auto-review-classifier-run.ts";
 import { summarizeSlateAutomationWriteAction } from "./slate-auto-review-summaries.ts";
+import { createSlateAutoReviewRiskTarget, type SlateAutoReviewRiskTarget } from "./auto-review-classifier-contracts.ts";
 import { buildProjectPermissionsContext } from "./slate-computer-auto-review.ts";
 import type { InstructionPermissions } from "./slate-subagent-auto-review.ts";
 
@@ -52,7 +51,7 @@ interface AutomationRiskArgs {
 }
 
 /** The classifier sees the routine exactly as it would be stored, plus who references it. */
-function automationArgumentsRecord(input: AutomationRiskArgs): unknown {
+function automationArgumentsRecord(input: AutomationRiskArgs): Record<string, unknown> {
   const { operation, id, spec, referencedWorkflows, referencingRoutines } = input.target;
   return JSON.parse(JSON.stringify({
     surface: "automation_write",
@@ -75,14 +74,14 @@ function automationArgumentsRecord(input: AutomationRiskArgs): unknown {
       prompt: routine.prompt,
     })) ?? [],
     project_permissions: buildProjectPermissionsContext(input),
-  }));
+  })) as Record<string, unknown>;
 }
 
-export function buildSlateAutomationWriteRiskTarget(input: AutomationRiskArgs) {
-  return new SmartModeRiskTarget({
-    action: SLATE_AUTOMATION_WRITE_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(automationArgumentsRecord(input) as never),
-  });
+export function buildSlateAutomationWriteRiskTarget(input: AutomationRiskArgs): SlateAutoReviewRiskTarget {
+  return createSlateAutoReviewRiskTarget(
+    SLATE_AUTOMATION_WRITE_CLASSIFIER_TARGET_ACTION,
+    automationArgumentsRecord(input),
+  );
 }
 
 

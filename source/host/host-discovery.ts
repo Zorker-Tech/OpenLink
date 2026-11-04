@@ -7,7 +7,50 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { getGatewayDiscoveryPath } from "./host-paths.ts";
-export interface GatewayDiscoveryInfo { readonly port: number; readonly pid: number; readonly startedAt: number; readonly scheme?: "http" | "https"; readonly host?: string; readonly token?: string; }
-export function isGatewayDiscoveryInfo(value: unknown): value is GatewayDiscoveryInfo { if (typeof value !== "object" || value == null || Array.isArray(value)) return false; const v = value as Record<string, unknown>; return typeof v.port === "number" && Number.isInteger(v.port) && v.port > 0 && typeof v.pid === "number" && Number.isInteger(v.pid) && v.pid > 0 && typeof v.startedAt === "number" && (v.scheme === undefined || v.scheme === "http" || v.scheme === "https") && (v.host === undefined || typeof v.host === "string") && (v.token === undefined || typeof v.token === "string"); }
-export async function writeGatewayDiscovery(info: GatewayDiscoveryInfo, path = getGatewayDiscoveryPath()): Promise<void> { if (!isGatewayDiscoveryInfo(info)) throw new TypeError("invalid gateway discovery info"); await mkdir(dirname(path), { recursive: true }); const temp = `${path}.${process.pid}.tmp`; await writeFile(temp, JSON.stringify(info, null, 2), "utf8"); await rename(temp, path); }
-export async function clearGatewayDiscovery(path = getGatewayDiscoveryPath()): Promise<void> { await rm(path, { force: true }); }
+
+export interface GatewayDiscoveryInfo {
+  readonly port: number;
+  readonly pid: number;
+  readonly startedAt: number;
+  readonly scheme?: "http" | "https";
+  readonly host?: string;
+  readonly token?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isOptionalText(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+export function isGatewayDiscoveryInfo(value: unknown): value is GatewayDiscoveryInfo {
+  if (!isRecord(value)) return false;
+  if (!isPositiveInteger(value.port) || !isPositiveInteger(value.pid)) return false;
+  if (typeof value.startedAt !== "number") return false;
+
+  const supportedScheme = value.scheme === undefined || value.scheme === "http" || value.scheme === "https";
+  return supportedScheme && isOptionalText(value.host) && isOptionalText(value.token);
+}
+
+export async function writeGatewayDiscovery(
+  info: GatewayDiscoveryInfo,
+  discoveryPath = getGatewayDiscoveryPath(),
+): Promise<void> {
+  if (!isGatewayDiscoveryInfo(info)) throw new TypeError("invalid gateway discovery info");
+
+  await mkdir(dirname(discoveryPath), { recursive: true });
+  const stagedPath = `${discoveryPath}.${process.pid}.tmp`;
+  const serialized = JSON.stringify(info, null, 2);
+  await writeFile(stagedPath, serialized, "utf8");
+  await rename(stagedPath, discoveryPath);
+}
+
+export async function clearGatewayDiscovery(discoveryPath = getGatewayDiscoveryPath()): Promise<void> {
+  await rm(discoveryPath, { force: true });
+}

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { SLATE_BROWSER_DRIVER_BOX_DIR, SLATE_BROWSER_DRIVER_BOX_PATH, SLATE_BROWSER_DRIVER_SOURCE, SLATE_BROWSER_DRIVER_VERSION, SLATE_BROWSER_RESULT_MARKER } from "../../source/host/runner/tools/slate-browser-driver-source.ts";
+import { SLATE_BROWSER_DRIVER_BOX_DIR, SLATE_BROWSER_DRIVER_BOX_PATH, SLATE_BROWSER_DRIVER_SOURCE, SLATE_BROWSER_DRIVER_VERSION, SLATE_BROWSER_RESULT_MARKER } from "../../source/adapters/interop/browser/browser-driver-source-adapter.ts";
 
 describe("the source of the browser driver", () => {
   it("is put in the box under our own directory, named by version", () => {

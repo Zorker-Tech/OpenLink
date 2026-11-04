@@ -1,22 +1,52 @@
-/**
- * Reading a transcript out of an agent's database, one page at a time.
- *
- * A page, a window and a tail are read by their own statements, and every row is parsed through the same reader the
- * rest of the store uses, so a page cannot show an entry the store would not.
- */
-import { parseTranscriptEntry } from "./agent-db-serde.ts";
+import type {
+  AgentTranscriptPageRequest,
+  AgentTranscriptPageResult,
+  AgentTranscriptSqlStatements,
+  AgentTranscriptEntry,
+} from "./agent-transcript-page-contracts.ts"
+import {
+  boundedTranscriptPageSize,
+  finiteTranscriptCursor,
+  projectTranscriptRows,
+} from "./agent-transcript-page-projections.ts"
 
-interface Row { seq?: number; entry?: string }
-interface Statement { all(...parameters: unknown[]): Row[] }
-export interface TranscriptPageStatements { listTranscriptPage: Statement; listTranscriptWindow: Statement; listTranscriptTail: Statement }
-export interface TranscriptPageQuery { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }
-type TranscriptEntry = Record<string, unknown>;
+export type { AgentTranscriptEntry, AgentTranscriptPageRequest, AgentTranscriptPageResult, AgentTranscriptSqlStatements } from "./agent-transcript-page-contracts.ts"
+export { boundedTranscriptPageSize, finiteTranscriptCursor, projectTranscriptRows } from "./agent-transcript-page-projections.ts"
 
-function page(rows: Row[], limit: number): { entries: TranscriptEntry[]; nextBeforeSeq?: number } {
-  const hasMore = rows.length > limit, selected = rows.slice(0, limit), entries: TranscriptEntry[] = [];
-  for (const row of selected.toReversed()) if (typeof row.entry === "string") { const entry = parseTranscriptEntry(row.entry); if (entry != null) entries.push(entry); }
-  const oldestSeq = selected.at(-1)?.seq; return { entries, ...(hasMore && typeof oldestSeq === "number" ? { nextBeforeSeq: oldestSeq } : {}) };
+/** Reads one page under the transcript's time and sequence filters. */
+export function loadAgentTranscriptPage(
+  statements: AgentTranscriptSqlStatements,
+  request: AgentTranscriptPageRequest,
+): AgentTranscriptPageResult {
+  const beforeSequence = request.beforeSeq ?? null
+  const earliestTimestamp = request.sinceMs ?? null
+  const rows = statements.listTranscriptPage.all(
+    beforeSequence,
+    beforeSequence,
+    earliestTimestamp,
+    earliestTimestamp,
+    request.untilMs,
+    request.limit + 1,
+  )
+  return projectTranscriptRows(rows, request.limit)
 }
-export function readTranscriptPage(statements: TranscriptPageStatements, query: TranscriptPageQuery): { entries: TranscriptEntry[]; nextBeforeSeq?: number } { const before = query.beforeSeq ?? null, since = query.sinceMs ?? null; return page(statements.listTranscriptPage.all(before, before, since, since, query.untilMs, query.limit + 1), query.limit); }
-export function readTranscriptWindow(statements: TranscriptPageStatements, query: Pick<TranscriptPageQuery, "beforeSeq" | "limit">, threadCountsFor: (entries: readonly TranscriptEntry[]) => unknown): { entries: TranscriptEntry[]; nextBeforeSeq?: number; threadCounts: unknown } { const before = typeof query.beforeSeq === "number" && Number.isFinite(query.beforeSeq) ? query.beforeSeq : null, limit = Number.isInteger(query.limit) && query.limit > 0 ? Math.min(query.limit, 5_000) : 500; const result = page(statements.listTranscriptWindow.all(before, before, limit + 1), limit); return { ...result, threadCounts: threadCountsFor(result.entries) }; }
-export function readTranscriptTail(statements: TranscriptPageStatements, query: Pick<TranscriptPageQuery, "beforeSeq" | "limit">): { entries: TranscriptEntry[]; nextBeforeSeq?: number } { const before = typeof query.beforeSeq === "number" && Number.isFinite(query.beforeSeq) ? query.beforeSeq : null, limit = Number.isInteger(query.limit) && query.limit > 0 ? Math.min(query.limit, 5_000) : 500; return page(statements.listTranscriptTail.all(before, before, limit + 1), limit); }
+
+export function loadAgentTranscriptWindow(
+  statements: AgentTranscriptSqlStatements,
+  request: Pick<AgentTranscriptPageRequest, "beforeSeq" | "limit">,
+  countThreads: (entries: readonly AgentTranscriptEntry[]) => unknown,
+): AgentTranscriptPageResult & { threadCounts: unknown } {
+  const beforeSequence = finiteTranscriptCursor(request.beforeSeq)
+  const limit = boundedTranscriptPageSize(request.limit)
+  const page = projectTranscriptRows(statements.listTranscriptWindow.all(beforeSequence, beforeSequence, limit + 1), limit)
+  return { ...page, threadCounts: countThreads(page.entries) }
+}
+
+export function loadAgentTranscriptTail(
+  statements: AgentTranscriptSqlStatements,
+  request: Pick<AgentTranscriptPageRequest, "beforeSeq" | "limit">,
+): AgentTranscriptPageResult {
+  const beforeSequence = finiteTranscriptCursor(request.beforeSeq)
+  const limit = boundedTranscriptPageSize(request.limit)
+  return projectTranscriptRows(statements.listTranscriptTail.all(beforeSequence, beforeSequence, limit + 1), limit)
+}

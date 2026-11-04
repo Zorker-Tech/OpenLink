@@ -48,6 +48,7 @@ test("a tool result is fenced with where it came from, and the fence cannot be f
   // A source that carries the fence itself cannot close it early.
   assert.equal(sanitizeSource(`x ${SPOTLIGHT_TAG} y`).includes(SPOTLIGHT_TAG), false)
   assert.equal(stripSpotlightTag(`a ${SPOTLIGHT_TAG} b`), `a ${SPOTLIGHT_TAG_REDACTION} b`)
+  assert.equal(stripSpotlightTag(SPOTLIGHT_TAG.toUpperCase()), SPOTLIGHT_TAG_REDACTION)
 
   // Text parts are fenced as one run, and parts that are not text keep their place inside the fence.
   const fenced = spotlightToolResultContent("a source", [
@@ -67,6 +68,9 @@ test("what the fence means is said in the prompt, with the one exception", () =>
   const section = spotlightPromptSection()
   assert.match(section, /Untrusted content/)
   assert.match(section, /never an instruction to you/)
+  assert.match(section, /text visible inside a screenshot/)
+  assert.match(section, /do not send or post messages/)
+  assert.match(section, /You may read, summarize, quote, and answer questions/)
   // A notice about the model's own blocked call is from the platform, not from the outside.
   assert.match(section, /is from Slate, not from the outside source/)
   // Without SendMessage the model reports what was asked rather than acting on it.
@@ -110,6 +114,8 @@ test("the credentials an earlier version kept beside the MCP configuration are r
   try {
     assert.equal(isLegacyMcpAuthFile(LEGACY_MCP_AUTH_FILENAME), true)
     assert.equal(isLegacyMcpAuthFile(`${LEGACY_MCP_AUTH_FILENAME}.backup`), true)
+    assert.equal(isLegacyMcpAuthFile(`${LEGACY_MCP_AUTH_FILENAME}x`), false)
+    assert.equal(isLegacyMcpAuthFile(`old-${LEGACY_MCP_AUTH_FILENAME}`), false)
     assert.equal(isLegacyMcpAuthFile("mcp.json"), false)
 
     // A root that never had one is not an error.
@@ -124,6 +130,23 @@ test("the credentials an earlier version kept beside the MCP configuration are r
     assert.equal((await cleanupLegacyMcpAuthCredentials(path.join(dir, "nope"))).outcome, "not_found")
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("cleanup reports non-missing root errors and partial removal failures", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "slate-mcp-auth-errors-"))
+  const file = path.join(root, "not-a-directory")
+  fs.writeFileSync(file, "x")
+  try {
+    assert.deepEqual(await cleanupLegacyMcpAuthCredentials(file), { outcome: "error", removedCount: 0 })
+
+    fs.writeFileSync(path.join(root, LEGACY_MCP_AUTH_FILENAME), "secret")
+    fs.mkdirSync(path.join(root, `${LEGACY_MCP_AUTH_FILENAME}.folder`))
+    assert.deepEqual(await cleanupLegacyMcpAuthCredentials(root), { outcome: "error", removedCount: 1 })
+    assert.equal(fs.existsSync(path.join(root, LEGACY_MCP_AUTH_FILENAME)), false)
+    assert.equal(fs.statSync(path.join(root, `${LEGACY_MCP_AUTH_FILENAME}.folder`)).isDirectory(), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
   }
 })
 
@@ -232,10 +255,22 @@ test("the backends a request can go to are the ones the platform knows", () => {
   assert.deepEqual([...SLATE_INFERENCE_PROVIDERS], ["slate", "claude-code", "codex", "openrouter"])
   assert.equal(isSlateInferenceProvider("slate"), true)
   assert.equal(isSlateInferenceProvider("someone-else"), false)
+  assert.equal(isSlateInferenceProvider(4), false)
   // A fresh count is zero for every backend, and says nothing was used yet.
   const usage = emptySlateInferenceRouterUsage()
+  const nextUsage = emptySlateInferenceRouterUsage()
   assert.equal(usage.schemaVersion, 1)
   assert.deepEqual(Object.keys(usage.providers).sort(), ["claude-code", "codex", "openrouter", "slate"])
-  assert.equal(usage.providers.slate?.requests, 0)
-  assert.equal(usage.providers.slate?.lastUsedAt, null)
+  for (const provider of SLATE_INFERENCE_PROVIDERS) {
+    assert.deepEqual(usage.providers[provider], {
+      requests: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      lastUsedAt: null,
+    })
+  }
+  assert.notEqual(usage.providers.slate, nextUsage.providers.slate)
+  assert.equal(nextUsage.providers.slate.requests, 0)
 })

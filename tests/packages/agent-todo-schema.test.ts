@@ -1,12 +1,12 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { TodoStatus, UpdateTodosSuccess } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
 import {
   createSchemaTowardsModel,
   renderUpdateTodosSuccessMessage,
   todoToolSchemaForParsing,
 } from "../../source/packages/agent/tools/core/todo/schema.ts"
+import type { SlateTodoResult, SlateTodoStatus, TodoPromptProfile } from "../../source/packages/agent/tools/core/todo/contracts.ts"
 import {
   getRequiredPermissionsSchema,
   hasNetworkAllowlist,
@@ -16,28 +16,41 @@ import {
 // the todo schema the model is shown
 // ---------------------------------------------------------------------------------------------
 
-test("every prompt version gets a schema it was trained on", () => {
-  const early = createSchemaTowardsModel("dsv3-1018")
+function profile(overrides: Partial<TodoPromptProfile> = {}): TodoPromptProfile {
+  return {
+    toolName: "Tasks",
+    description: "Manage the session task list.",
+    mergeFirst: false,
+    contentOptionalInPrompt: false,
+    successDisplay: "text",
+    ...overrides,
+  }
+}
+
+test("the inference profile controls task schema shape and property order", () => {
+  const early = createSchemaTowardsModel(profile({ mergeFirst: true, contentOptionalInPrompt: true }))
   assert.deepEqual(Object.keys(early.shape), ["merge", "todos"])
+  assert.deepEqual(Object.keys(early.shape.todos.element.shape), ["content", "status", "id"])
 
-  const later = createSchemaTowardsModel("dsv3-1205")
+  const later = createSchemaTowardsModel(profile())
   assert.deepEqual(Object.keys(later.shape), ["todos", "merge"])
+  assert.deepEqual(Object.keys(later.shape.todos.element.shape), ["id", "content", "status"])
 
-  const defaultOrder = createSchemaTowardsModel("something-else")
+  const defaultOrder = createSchemaTowardsModel(profile())
   assert.deepEqual(Object.keys(defaultOrder.shape), ["todos", "merge"])
-  const mergeFirst = createSchemaTowardsModel("something-else", { mergeTodosFirst: true })
+  const mergeFirst = createSchemaTowardsModel(profile({ mergeFirst: true }))
   assert.deepEqual(Object.keys(mergeFirst.shape), ["merge", "todos"])
 })
 
-test("the early version allows a merge that updates only a status", () => {
-  const early = createSchemaTowardsModel("dsv3-1018")
+test("a profile may allow an update that only changes status", () => {
+  const early = createSchemaTowardsModel(profile({ contentOptionalInPrompt: true }))
   assert.equal(early.safeParse({ merge: true, todos: [{ id: "a", status: "in_progress" }] }).success, true)
-  const later = createSchemaTowardsModel("dsv3-1205")
+  const later = createSchemaTowardsModel(profile())
   assert.equal(later.safeParse({ merge: true, todos: [{ id: "a", status: "in_progress" }] }).success, false)
 })
 
-test("a minimum number of items is enforced only when asked for", () => {
-  const withMin = createSchemaTowardsModel("x", { minTodos: 2 })
+test("a minimum list size is enforced only when the profile requires it", () => {
+  const withMin = createSchemaTowardsModel(profile({ minimumTodoCount: 2 }))
   assert.equal(withMin.safeParse({ merge: false, todos: [{ id: "a", content: "a", status: "pending" }] }).success, false)
   assert.equal(
     withMin.safeParse({ merge: false, todos: [{ id: "a", content: "a", status: "pending" }, { id: "b", content: "b", status: "pending" }] }).success,
@@ -73,54 +86,53 @@ test("a value that is not an object at all is passed to the schema to refuse", (
 // the message that comes back
 // ---------------------------------------------------------------------------------------------
 
-function success(todos: Array<{ id: string; content: string; status: TodoStatus }>, wasMerge?: boolean): UpdateTodosSuccess {
-  return new UpdateTodosSuccess({
+function success(
+  todos: Array<{ id: string; content: string; status: SlateTodoStatus }>,
+  wasMerge = true,
+): Extract<SlateTodoResult, { readonly kind: "success" }> {
+  return {
+    kind: "success",
     todos: todos.map(todo => ({ ...todo, createdAt: 0n, updatedAt: 0n })),
-    ...(wasMerge !== undefined ? { wasMerge } : {}),
-  } as never)
+    totalCount: todos.length,
+    wasMerge,
+  }
 }
 
 test("the list comes back as lines, and a list with nothing in progress is called out", () => {
   const message = renderUpdateTodosSuccessMessage(success([
-    { id: "a", content: "first", status: TodoStatus.PENDING },
-  ]), "something-else")
-  assert.match(message, /Successfully updated TODOs/)
-  assert.match(message, /No TODOs are marked in-progress/)
+    { id: "a", content: "first", status: "pending" },
+  ]), profile())
+  assert.match(message, /Task list updated/)
+  assert.match(message, /No task is marked in progress/)
   assert.match(message, /- \*\*PENDING\*\*: first \(id: a\)/)
 })
 
 test("a list with something in progress is not called out", () => {
   const message = renderUpdateTodosSuccessMessage(success([
-    { id: "a", content: "first", status: TodoStatus.IN_PROGRESS },
-  ]), "something-else")
-  assert.doesNotMatch(message, /No TODOs are marked in-progress/)
+    { id: "a", content: "first", status: "in_progress" },
+  ]), profile())
+  assert.doesNotMatch(message, /No task is marked in progress/)
 })
 
 test("many finished items earn one reminder, not one each", () => {
-  const many = Array.from({ length: 25 }, (_, index) => ({ id: `t${index}`, content: "done", status: TodoStatus.COMPLETED }))
-  const message = renderUpdateTodosSuccessMessage(success(many), "something-else")
-  assert.equal(message.match(/Consider cleaning up old ones/g)?.length, 1)
+  const many = Array.from({ length: 25 }, (_, index) => ({ id: "t" + index, content: "done", status: "completed" as const }))
+  const message = renderUpdateTodosSuccessMessage(success(many), profile())
+  assert.equal(message.match(/consider removing old entries/g)?.length, 1)
 })
 
 test("a few finished items do not", () => {
-  const few = Array.from({ length: 3 }, (_, index) => ({ id: `t${index}`, content: "done", status: TodoStatus.COMPLETED }))
-  assert.doesNotMatch(renderUpdateTodosSuccessMessage(success(few), "something-else"), /cleaning up old ones/)
+  const few = Array.from({ length: 3 }, (_, index) => ({ id: "t" + index, content: "done", status: "completed" as const }))
+  assert.doesNotMatch(renderUpdateTodosSuccessMessage(success(few), profile()), /removing old entries/)
 })
 
-test("the early version reads its list back as JSON, and only after a merge", () => {
-  const todos = [{ id: "a", content: "first", status: TodoStatus.PENDING }]
-  const merged = renderUpdateTodosSuccessMessage(success(todos, true), "dsv3-1018")
+test("a profile may read the merged task list back as JSON", () => {
+  const todos = [{ id: "a", content: "first", status: "pending" as const }]
+  const jsonProfile = profile({ successDisplay: "json-on-merge" })
+  const merged = renderUpdateTodosSuccessMessage(success(todos, true), jsonProfile)
   assert.match(merged, /\[\{"id":"a","content":"first","status":"pending"\}\]/)
 
-  const replaced = renderUpdateTodosSuccessMessage(success(todos, false), "dsv3-1018")
-  assert.doesNotMatch(replaced, /latest contents of your todo list/)
-})
-
-test("a merge that was not reported reads as no merge, since the flag defaults to false", () => {
-  const message = renderUpdateTodosSuccessMessage(success([
-    { id: "a", content: "first", status: TodoStatus.PENDING },
-  ]), "dsv3-1018")
-  assert.doesNotMatch(message, /latest contents of your todo list/)
+  const replaced = renderUpdateTodosSuccessMessage(success(todos, false), jsonProfile)
+  assert.doesNotMatch(replaced, /Current task list/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -137,6 +149,7 @@ test("a network allowlist is its defaults or an explicit entry", () => {
 test("a read-only session may ask for the network and nothing else", () => {
   const schema = getRequiredPermissionsSchema({ isReadonly: true })
   assert.equal(schema.safeParse(["full_network"]).success, true)
+  assert.equal(schema.safeParse(["network"]).success, true)
   assert.equal(schema.safeParse(["all"]).success, false)
   assert.equal(schema.safeParse(["git_write"]).success, false)
   assert.equal(schema.safeParse(undefined).success, true)
@@ -162,4 +175,19 @@ test("a single permission written as a bare word is read as a list", () => {
   assert.deepEqual(schema.parse("git_write"), ["git_write"])
   // Two items written as one string are not a list anyone can read, so they are refused.
   assert.equal(schema.safeParse("full_network, all").success, false)
+})
+
+test("each session policy describes its available permissions", () => {
+  assert.equal(
+    getRequiredPermissionsSchema({ isReadonly: true }).description,
+    "Optional list of permissions to request if the command needs them (full_network).",
+  )
+  assert.equal(
+    getRequiredPermissionsSchema({ isReadonly: false, strict: true }).description,
+    "Optional list of permissions to request if the command needs them (full_network, all).",
+  )
+  assert.equal(
+    getRequiredPermissionsSchema({ isReadonly: false }).description,
+    "Optional list of permissions to request if the command needs them (full_network, all).",
+  )
 })

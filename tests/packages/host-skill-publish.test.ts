@@ -9,26 +9,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { GetTeamsRequest, PublishPluginRequest, UnpublishPluginRequest } from "../../source/packages/proto/generated/aiserver/v1/dashboard_pb.ts";
 import { getGlobalWorkflowsDir, type GlobalWorkflowRecord } from "../../source/host/workflows/workflow-library.ts";
+import { createSlateSkillPublishClient } from "../../source/adapters/interop/agent/skill-publish-dashboard-adapter.ts";
 import {
   CONFIRM_PUBLISH_MAX_ATTEMPTS,
-  createSlateSkillPublishClient,
-  errorMessage,
-  publishableTeams,
   PUBLISH_SKILL_RPC_TIMEOUT_MS,
   PUBLISH_TARGETS_RPC_TIMEOUT_MS,
-  readManifestName,
-  readSkillFrontmatter,
-  requireManifestName,
-  SlateSkillPublishService,
-  skillsRootRelativePath,
-  stageSkillDirForPublish,
+  explainPublishFailure,
+  selectPublishableTeams,
+  readPluginPackageName,
+  readSkillIdentity,
+  requirePluginPackageName,
+  SkillMarketplacePublisher,
+  relativeSkillPackagePath,
+  stageSkillDirectory,
   UNPUBLISHABLE_FILES,
   type SkillPublishClient,
-  type SlateSkillPublishServiceOptions,
+  type SkillMarketplacePublisherOptions,
 } from "../../source/host/skills/skill-publish.ts";
 import type { PluginSkillRecord, PluginSkillsCache } from "../../source/host/skills/plugin-skills-cache.ts";
+import type { SkillPublishPayload, UnpublishSkillRequest } from "../../source/host/skills/skill-publish-contracts.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "slate-skill-publish-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -45,20 +45,20 @@ let worldCount = 0;
 function publishWorld(options: { teams?: readonly { id: number; isDirectMember: boolean; name: string }[]; teamsFail?: boolean; pluginId?: string; commitSha?: string; publishFails?: unknown; index?: PluginSkillsCache | null } = {}) {
   // Every world gets a platform root of its own: a test that writes one must not be read by another.
   const slateRootDir = join(scratch, `root-${worldCount++}`);
-  const calls: { name: string; args: unknown; timeoutMs?: number }[] = [];
+  const calls: { name: string; args: unknown }[] = [];
   const client: SkillPublishClient = {
-    getTeams: async (request: GetTeamsRequest, given) => {
-      calls.push({ name: "getTeams", args: request, timeoutMs: given.timeoutMs });
+    getTeams: async () => {
+      calls.push({ name: "getTeams", args: {} });
       if (options.teamsFail === true) throw new Error("the backend is unreachable");
       return { teams: options.teams ?? [{ id: 7, isDirectMember: true, name: "Team Seven" }] };
     },
-    publishPlugin: async (request: PublishPluginRequest, given) => {
-      calls.push({ name: "publishPlugin", args: request, timeoutMs: given.timeoutMs });
+    publishPlugin: async (request) => {
+      calls.push({ name: "publishPlugin", args: request });
       if (options.publishFails !== undefined) throw options.publishFails;
       return { pluginId: options.pluginId ?? "42", commitSha: options.commitSha ?? "sha-1" };
     },
-    unpublishPlugin: async (request: UnpublishPluginRequest, given) => {
-      calls.push({ name: "unpublishPlugin", args: request, timeoutMs: given.timeoutMs });
+    unpublishPlugin: async (request) => {
+      calls.push({ name: "unpublishPlugin", args: request });
       return {};
     },
   };
@@ -66,7 +66,7 @@ function publishWorld(options: { teams?: readonly { id: number; isDirectMember: 
   const edgeFailures: { stage: string; errorClass: string }[] = [];
   let index = options.index ?? null;
   const syncs: string[] = [];
-  const service = new SlateSkillPublishService({
+  const service = new SkillMarketplacePublisher({
     slateRootDir,
     client,
     pluginSkills: {
@@ -97,7 +97,7 @@ const pluginSkill = (overrides: Partial<PluginSkillRecord> = {}): PluginSkillRec
 const cacheWith = (skills: readonly PluginSkillRecord[], currentUserId: number | null = 5): PluginSkillsCache => ({ fetchedAt: 1, currentUserId, skills: [...skills], authBlocked: [] });
 
 /** The service reads its library from the options; a test hands one in the same way. */
-const useLibrary = (world: { service: SlateSkillPublishService }, library: SkillPublishLibrary): void => {
+const useLibrary = (world: { service: SkillMarketplacePublisher }, library: SkillPublishLibrary): void => {
   (world.service as unknown as { library: SkillPublishLibrary }).library = library;
 };
 
@@ -107,17 +107,17 @@ interface SkillPublishLibrary {
 }
 
 /** The service keeps its options; a test hands a changed one in the same way. */
-const useOptions = (world: { service: SlateSkillPublishService }, options: SlateSkillPublishServiceOptions): void => {
-  (world.service as unknown as { options: SlateSkillPublishServiceOptions }).options = options;
+const useOptions = (world: { service: SkillMarketplacePublisher }, options: SkillMarketplacePublisherOptions): void => {
+  (world.service as unknown as { options: SkillMarketplacePublisherOptions }).options = options;
 };
 
 describe("the pure pieces of publishing", () => {
   it("takes the teams the account is a direct member of", () => {
-    assert.deepEqual(publishableTeams({ teams: [{ id: 1, isDirectMember: true, name: "One" }, { id: 2, isDirectMember: false, name: "Two" }, { id: 0, isDirectMember: true, name: "Zero" }, { id: 3, isDirectMember: true, name: "Three" }] }), [{ teamId: 1, name: "One" }, { teamId: 3, name: "Three" }]);
+    assert.deepEqual(selectPublishableTeams({ teams: [{ id: 1, isDirectMember: true, name: "One" }, { id: 2, isDirectMember: false, name: "Two" }, { id: 0, isDirectMember: true, name: "Zero" }, { id: 3, isDirectMember: true, name: "Three" }] }), [{ teamId: 1, name: "One" }, { teamId: 3, name: "Three" }]);
     assert.deepEqual([PUBLISH_SKILL_RPC_TIMEOUT_MS, PUBLISH_TARGETS_RPC_TIMEOUT_MS, CONFIRM_PUBLISH_MAX_ATTEMPTS], [60_000, 10_000, 5]);
     assert.deepEqual([...UNPUBLISHABLE_FILES].sort(), ["runs.json", "workflow.md"]);
-    assert.equal(errorMessage(new Error("boom")), "boom");
-    assert.equal(errorMessage("boom"), "boom");
+    assert.equal(explainPublishFailure(new Error("boom")), "boom");
+    assert.equal(explainPublishFailure("boom"), "boom");
   });
 
   it("stages a skill without the files a marketplace does not take, keeping nested ones", async () => {
@@ -127,7 +127,7 @@ describe("the pure pieces of publishing", () => {
     writeFileSync(join(skillDir, "runs.json"), "[]");
     writeFileSync(join(skillDir, "workflow.md"), "legacy");
     writeFileSync(join(skillDir, "nested", "runs.json"), "[]");
-    const staged = await stageSkillDirForPublish({ skillDir, targetDir: join(scratch, "staging", "out") });
+    const staged = await stageSkillDirectory({ skillDir, targetDir: join(scratch, "staging", "out") });
     assert.equal(staged, join(scratch, "staging", "out", "skill-one"));
     assert.deepEqual(readdirSync(staged).sort(), ["SKILL.md", "nested"]);
     assert.deepEqual(readdirSync(join(staged, "nested")), ["runs.json"]);
@@ -135,38 +135,38 @@ describe("the pure pieces of publishing", () => {
 
   it("reads what a skill calls itself, and refuses one whose file says nothing", () => {
     const path = skillFile(join(scratch, "frontmatter"), "Named Skill", "does things");
-    assert.deepEqual(readSkillFrontmatter(path), { name: "Named Skill", description: "does things" });
+    assert.deepEqual(readSkillIdentity(path), { name: "Named Skill", description: "does things" });
     const empty = join(scratch, "frontmatter", "empty", "SKILL.md");
     mkdirSync(join(scratch, "frontmatter", "empty"), { recursive: true });
     writeFileSync(empty, "");
-    assert.throws(() => readSkillFrontmatter(empty), /could not be read/);
-    assert.throws(() => readSkillFrontmatter(join(scratch, "frontmatter", "missing", "SKILL.md")), /could not be read/);
+    assert.throws(() => readSkillIdentity(empty), /could not be read/);
+    assert.throws(() => readSkillIdentity(join(scratch, "frontmatter", "missing", "SKILL.md")), /could not be read/);
   });
 
   it("reads a plugin's manifest name, and refuses to sync without one", async () => {
     const named = join(scratch, "manifest", "named");
     mkdirSync(named, { recursive: true });
     writeFileSync(join(named, "plugin.json"), JSON.stringify({ name: "plugin-one" }));
-    assert.equal(await readManifestName(named), "plugin-one");
-    assert.equal(await requireManifestName(named), "plugin-one");
+    assert.equal(await readPluginPackageName(named), "plugin-one");
+    assert.equal(await requirePluginPackageName(named), "plugin-one");
     const blank = join(scratch, "manifest", "blank");
     mkdirSync(blank, { recursive: true });
     writeFileSync(join(blank, "plugin.json"), JSON.stringify({ name: "  " }));
-    assert.equal(await readManifestName(blank), null);
-    assert.equal(await readManifestName(join(scratch, "manifest", "missing")), null);
-    await assert.rejects(requireManifestName(blank), /risk publishing a duplicate/);
+    assert.equal(await readPluginPackageName(blank), null);
+    assert.equal(await readPluginPackageName(join(scratch, "manifest", "missing")), null);
+    await assert.rejects(requirePluginPackageName(blank), /risk publishing a duplicate/);
   });
 
   it("works out where a skill sits inside its plugin, and refuses a path it cannot re-pack", () => {
-    assert.equal(skillsRootRelativePath("skills/skill-one/SKILL.md"), "skill-one");
-    assert.equal(skillsRootRelativePath("skill-one/SKILL.md"), "skill-one");
-    assert.equal(skillsRootRelativePath("skills/a/b/SKILL.md"), "a/b");
+    assert.equal(relativeSkillPackagePath("skills/skill-one/SKILL.md"), "skill-one");
+    assert.equal(relativeSkillPackagePath("skill-one/SKILL.md"), "skill-one");
+    assert.equal(relativeSkillPackagePath("skills/a/b/SKILL.md"), "a/b");
     // A backslash is not a separator this platform's path handling knows, so the whole thing is the file name.
-    assert.equal(skillsRootRelativePath("skills\\skill-one\\SKILL.md"), ".");
+    assert.equal(relativeSkillPackagePath("skills\\skill-one\\SKILL.md"), ".");
     // A bare file name has no directory to strip, and a path that is only the root cannot be re-packed.
-    assert.equal(skillsRootRelativePath("SKILL.md"), ".");
-    assert.throws(() => skillsRootRelativePath("skills/SKILL.md"), /cannot re-pack/);
-    assert.throws(() => skillsRootRelativePath("skills//SKILL.md"), /cannot re-pack/);
+    assert.equal(relativeSkillPackagePath("SKILL.md"), ".");
+    assert.throws(() => relativeSkillPackagePath("skills/SKILL.md"), /cannot re-pack/);
+    assert.throws(() => relativeSkillPackagePath("skills//SKILL.md"), /cannot re-pack/);
   });
 });
 
@@ -174,7 +174,7 @@ describe("the service", () => {
   it("lists the teams a skill may go to, and says which failure it was", async () => {
     const world = publishWorld();
     assert.deepEqual(await world.service.listTargets(), { teams: [{ teamId: 7, name: "Team Seven" }], unavailableReason: null });
-    assert.deepEqual(world.named("getTeams")[0]!.timeoutMs, PUBLISH_TARGETS_RPC_TIMEOUT_MS);
+    assert.deepEqual(world.named("getTeams")[0]!.args, {});
     // A backend that could not be reached is not the same as an account with no team.
     const unreachable = publishWorld({ teamsFail: true });
     assert.deepEqual(await unreachable.service.listTargets(), { teams: [], unavailableReason: "Could not reach Slate to check your teams." });
@@ -195,10 +195,9 @@ describe("the service", () => {
     assert.deepEqual(await world.service.publish({ workflowId: "skill-one", teamId: 7 }), { pluginId: "42", commitSha: "sha-1", promotedWorkflowId: null });
     assert.deepEqual(removed, []);
     assert.match(world.logs.at(-1)!, /kept the library copy of skill-one: commit sha-1 was not confirmed installed/);
-    const published = world.named("publishPlugin")[0]!.args as PublishPluginRequest;
+    const published = world.named("publishPlugin")[0]!.args as SkillPublishPayload;
     assert.deepEqual([published.teamId, published.name, published.displayName, published.description], [7, "skill-one", "Skill One", "does one thing"]);
-    assert.equal(published.pluginTarGz.byteLength > 0, true);
-    assert.deepEqual(world.named("publishPlugin")[0]!.timeoutMs, PUBLISH_SKILL_RPC_TIMEOUT_MS);
+    assert.equal(published.pluginArchive.byteLength > 0, true);
     // Once the plugin really is installed, the library copy stands down.
     const landed = publishWorld();
     const landedDir = join(landed.slateRootDir, "workflows", "skill-one");
@@ -222,7 +221,7 @@ describe("the service", () => {
     for (const teamId of [0, -1, 1.5]) {
       await assert.rejects(world.service.publish({ workflowId: "skill-one", teamId }), /Choose a team to publish this skill to/);
     }
-    await assert.rejects(world.service.upload({ skillDir, skillRelativePath: "skill-one", name: "N", description: "   ", teamId: 7, pluginName: "p" }), /Add a description before publishing/);
+    await assert.rejects(world.service.publishArchive({ skillDir, skillRelativePath: "skill-one", name: "N", description: "   ", teamId: 7, pluginName: "p" }), /Add a description before publishing/);
     assert.deepEqual(world.named("publishPlugin"), []);
   });
 
@@ -230,7 +229,7 @@ describe("the service", () => {
     const world = publishWorld({ publishFails: new Error("the team has no seats") });
     const skillDir = join(world.slateRootDir, "workflows", "skill-two");
     skillFile(skillDir, "Skill Two", "does two things");
-    await assert.rejects(world.service.upload({ skillDir, skillRelativePath: "skill-two", name: "Skill Two", description: "does two things", teamId: 7, pluginName: "plugin-two" }), /no seats/);
+    await assert.rejects(world.service.publishArchive({ skillDir, skillRelativePath: "skill-two", name: "Skill Two", description: "does two things", teamId: 7, pluginName: "plugin-two" }), /no seats/);
     // The staged copy is gone: nothing of the temporary work is left in the platform's temporary directory.
     const leftovers = readdirSync(tmpdir()).filter((name) => name.startsWith("slate-publish-skill-"));
     assert.equal(leftovers.filter((name) => readFileSync(join(tmpdir(), name, "staged", "SKILL.md"), "utf8").includes("two things")).length, 0);
@@ -247,14 +246,14 @@ describe("the service", () => {
     const order: string[] = [];
     useLibrary(world, { get: () => (order.push("library-get"), null), remove: () => false });
     const originalUnpublish = world.service.options.client.unpublishPlugin;
-    useOptions(world, { ...world.service.options, client: { ...world.service.options.client, unpublishPlugin: async (request: UnpublishPluginRequest, given: { timeoutMs: number }) => (order.push("unpublish"), await originalUnpublish(request, given)) } });
+    useOptions(world, { ...world.service.options, client: { ...world.service.options.client, unpublishPlugin: async (request: UnpublishSkillRequest) => (order.push("unpublish"), await originalUnpublish(request)) } });
     const result = await world.service.unpublish({ workflowId: "skill-one" });
     assert.equal(typeof result.restoredWorkflowId, "string");
     assert.equal(existsSync(join(getGlobalWorkflowsDir(world.slateRootDir), result.restoredWorkflowId!, "SKILL.md")), true);
     // The skill is restored first: the library is read, and the plugin only goes down after that.
     assert.deepEqual(order, ["library-get", "unpublish"]);
-    const unpublished = world.named("unpublishPlugin")[0]!.args as UnpublishPluginRequest & { pluginId: bigint };
-    assert.deepEqual([unpublished.teamId, unpublished.pluginId], [7, 42n]);
+    const unpublished = world.named("unpublishPlugin")[0]!.args as UnpublishSkillRequest;
+    assert.deepEqual([unpublished.teamId, unpublished.pluginId], [7, "42"]);
     assert.deepEqual(world.syncs, ["install"]);
     // A skill the library already has is not restored twice.
     const again = publishWorld();
@@ -290,7 +289,7 @@ describe("the service", () => {
     writeFileSync(join(installPath, "plugin.json"), JSON.stringify({ name: "plugin-one" }));
     world.setIndex(cacheWith([pluginSkill({ filePath, installPath })]));
     assert.deepEqual(await world.service.resync({ workflowId: "skill-one" }), { pluginId: "42", commitSha: "sha-1", promotedWorkflowId: null });
-    const published = world.named("publishPlugin")[0]!.args as PublishPluginRequest;
+    const published = world.named("publishPlugin")[0]!.args as SkillPublishPayload;
     assert.deepEqual([published.name, published.displayName, published.description], ["plugin-one", "Renamed Skill", "does one thing now"]);
     assert.deepEqual(world.syncs, ["install"]);
     // A skill whose file says nothing about a name keeps the name it had.
@@ -302,19 +301,19 @@ describe("the service", () => {
     writeFileSync(unnamedPath, "---\ndescription: only a description\n---\n\nbody\n");
     unnamed.setIndex(cacheWith([pluginSkill({ filePath: unnamedPath, installPath: unnamedInstall })]));
     await unnamed.service.resync({ workflowId: "skill-one" });
-    assert.equal((unnamed.named("publishPlugin")[0]!.args as PublishPluginRequest).displayName, "Skill One");
+    assert.equal((unnamed.named("publishPlugin")[0]!.args as SkillPublishPayload).displayName, "Skill One");
   });
 
   it("reports a sync that failed without failing what the caller asked for", async () => {
     const world = publishWorld();
     useOptions(world, { ...world.service.options, pluginSkills: { currentIndex: () => null, sync: async () => { throw new Error("the index is broken"); } } });
-    await world.service.syncBestEffort();
+    await world.service.syncPluginIndexWithoutFailing();
     assert.deepEqual(world.edgeFailures, [{ stage: "sync", errorClass: "Error" }]);
     assert.match(world.logs.at(-1)!, /plugin-skills sync after publish failed: the index is broken/);
     // A confirm that never sees the commit gives up after the platform's own bound.
     const never = publishWorld();
     never.setIndex(cacheWith([pluginSkill({ pluginVersion: "other" })]));
-    assert.equal(await never.service.confirmPublishLanded({ pluginId: "42", commitSha: "sha-1" }), null);
+    assert.equal(await never.service.waitForPublishedSkill({ pluginId: "42", commitSha: "sha-1" }), null);
     assert.equal(never.syncs.length, CONFIRM_PUBLISH_MAX_ATTEMPTS);
   });
 
@@ -325,9 +324,5 @@ describe("the service", () => {
     assert.equal(typeof client.publishPlugin, "function");
     assert.equal(typeof client.unpublishPlugin, "function");
     assert.deepEqual(asked, []);
-    // The request types the client speaks are the platform's own.
-    assert.equal(new GetTeamsRequest({ activeOnly: true }).activeOnly, true);
-    assert.equal(new PublishPluginRequest({ teamId: 7, name: "n", displayName: "N", description: "d" }).teamId, 7);
-    assert.equal(new UnpublishPluginRequest({ pluginId: 42n, teamId: 7 }).teamId, 7);
   });
 });

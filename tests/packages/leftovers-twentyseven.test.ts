@@ -6,11 +6,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createWebSocket, EGRESS_TUNNEL_OPEN_READY_STATE } from "../../source/shared/node/egress-tunnel/websocket-client.ts";
+import { createWebSocket, constructEgressWebSocket, EGRESS_TUNNEL_OPEN_READY_STATE, type EgressWebSocketConstructor } from "../../source/adapters/interop/egress-tunnel/websocket-client-adapter.ts";
+import type { ExitWebSocket } from "../../source/shared/node/egress-tunnel/exit-client.ts";
 import { createGatewayRequestDispatch, GATEWAY_COMMAND_FAILED, GATEWAY_TRANSPORT_FAILED, GATEWAY_UNREACHABLE } from "../../source/coordinator/gateway/gateway-request-dispatcher.ts";
 import { FileWorkflowStore, LEGACY_WORKFLOWS_DIRNAME, MANAGED_SKILLS_CHANGE_DEBOUNCE_MS } from "../../source/host/workflows/workflow-store.ts";
 import { NOTIFY_STREAM_STALL_MS } from "../../source/host/extensions/notify-bus/extension.ts";
-import { createSlateRpcTracingInterceptor, SLATE_RPC_TRACE_WINDOW_DURATION_MS } from "../../source/shared/node/cursor-backend/rpc-tracing.ts";
+import { createSlateRpcTracingInterceptor, SLATE_RPC_TRACE_WINDOW_DURATION_MS } from "../../source/adapters/interop/cursor-backend/rpc-tracing.ts";
 import { DEFAULT_SLATE_COMPUTER_ID, SSE_RECONNECT_MAX_MS, SSE_RECONNECT_MIN_MS } from "../../source/host/local-exec/local-exec-provider.ts";
 import { DNS_PROBE_MIN_INTERVAL_MS, DNS_PROBE_TIMEOUT_MS, GENERAL_CONTROL_HOSTNAME } from "../../source/coordinator/gateway/gateway-dns-diagnostics.ts";
 
@@ -18,6 +19,26 @@ describe("a websocket over the egress tunnel", () => {
   it("opens in the ready state the tunnel defines", () => {
     assert.equal(typeof createWebSocket, "function");
     assert.equal(EGRESS_TUNNEL_OPEN_READY_STATE, 1);
+  });
+
+  it("forwards the address and headers to the supplied websocket implementation", () => {
+    const socket = {} as ExitWebSocket;
+    let received: unknown;
+    const FakeWebSocket = function (url: string, options: { headers: Record<string, string> }): unknown {
+      received = { url, options };
+      return socket;
+    } as unknown as EgressWebSocketConstructor;
+    const client = constructEgressWebSocket(
+      FakeWebSocket,
+      "wss://exit.example/tunnel",
+      { headers: { Authorization: "Bearer test" } },
+    );
+
+    assert.equal(client, socket);
+    assert.deepEqual(received, {
+      url: "wss://exit.example/tunnel",
+      options: { headers: { Authorization: "Bearer test" } },
+    });
   });
 });
 

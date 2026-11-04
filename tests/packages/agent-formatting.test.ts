@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { LsDirectoryTreeNode, LsDirectoryTreeNode_File } from "../../source/packages/proto/generated/agent/v1/ls_exec_pb.ts"
+import { LsDirectoryTreeNode, LsDirectoryTreeNode_File } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
 import { renderAttachedFoldersContext } from "../../source/packages/agent/context/attached-folders-context.ts"
 import { formatCodeBlock } from "../../source/packages/agent/tools/core/formatting.ts"
 
@@ -100,6 +100,16 @@ test("detailed lines keep their own numbers, and an unknown one is an ellipsis",
     formatCodeBlock({ ...block, formattingOptions: { enableLineNumbers: false } }, {}),
     "a\nb\nc",
   )
+})
+
+test("Codex numbering wins when styles overlap and keeps unknown detailed lines padded", () => {
+  const block = {
+    content: "",
+    startLineNumber: 10,
+    detailedLines: [{ lineNumber: 10, text: "a" }, { text: "b" }, { lineNumber: 12, text: "c" }],
+    formattingOptions: { gpt5CodexCatN: true, gpt5StyleLineNumbers: true, sparseLineNumbers: 2 },
+  }
+  assert.equal(formatCodeBlock(block, {}), "    10  a\n   ...\n    12  c")
 })
 
 test("the lines not shown are counted above and below when asked for", () => {

@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 
 import { isLoopbackHost, parseCommandArgs, SLATE_GATEWAY_COMMANDS, SLATE_GATEWAY_SLIM_COMMANDS } from "../../source/gateway/gateway-protocol.ts";
 import { BOOTSTRAP_FLAG, isPortLike } from "../../source/coordinator/carrier.ts";
-import { ClientSideToolV2Relay } from "../../source/coordinator/client-side-tool-v2-relay.ts";
+import { ClientSideToolV2Relay } from "../../source/adapters/interop/agent/client-side-tool-v2-relay-adapter.ts";
 import { probeAgentStoreObject } from "../../source/packages/agent-store-sync/object-probe.ts";
 import { TranscriptMirrorProtobufDecodeError } from "../../source/host/transcript/mirror/conversation-state-binary.ts";
 

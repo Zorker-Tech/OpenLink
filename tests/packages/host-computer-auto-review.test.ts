@@ -28,7 +28,7 @@ import {
 } from "../../source/host/runner/slate-computer-auto-review.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { smartModeClassifierExecutorResource } from "../../source/packages/agent-exec/smart-mode-classifier-operation.ts";
-import { SmartModeClassifierResult, SmartModeClassifierDecision } from "../../source/packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+import { SmartModeClassifierResult, SmartModeClassifierDecision } from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
 
 const action = (fields: Record<string, unknown>) => ({ action: "click", x: 10, y: 20, ...fields }) as never;
 const boxIdentity = { boxId: "box-1", windowGeneration: "gen-1" };
@@ -102,9 +102,9 @@ test("project permissions merge, trim and drop empties", () => {
 
 test("the classifier risk target names the computer surface and carries the arguments", () => {
   const canonical = buildSlateComputerAutoReviewCanonicalTarget({ exactAction: action({ text: "hello", button: "left", count: 2 }), description: "open settings", boxIdentity, displayStateIdentity: "state-1" });
-  const target = buildSlateComputerClassifierRiskTarget({ canonicalTarget: canonical, personalInstructions: { allowInstructions: ["ok"] } }) as { action: string; arguments?: { toJson(): Record<string, unknown> } };
+  const target = buildSlateComputerClassifierRiskTarget({ canonicalTarget: canonical, personalInstructions: { allowInstructions: ["ok"] } });
   assert.equal(target.action, SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION);
-  const fields = target.arguments!.toJson() as Record<string, unknown>;
+  const fields = target.arguments as Record<string, unknown>;
   assert.equal(fields.surface, "computer");
   assert.equal(fields.action_kind, "click");
   assert.deepEqual(fields.coordinates, { x: 10, y: 20 });
@@ -115,7 +115,7 @@ test("the classifier risk target names the computer surface and carries the argu
 test("blocked actions are summarized per action kind", () => {
   const canonical = buildSlateComputerAutoReviewCanonicalTarget({ exactAction: action({ action: "drag", x2: 30, y2: 40 }), boxIdentity, displayStateIdentity: "s" });
   assert.deepEqual(summarizeBlockedAction(canonical, "fp", "reason"), { surface: "computer", fingerprint: "fp", reason: "reason", summary: "Drag from (10, 20) to (30, 40) on Slate's computer" });
-  assert.equal(summarizeBlockedAction(buildSlateComputerAutoReviewCanonicalTarget({ exactAction: action({ action: "type", text: "hello there" }), boxIdentity, displayStateIdentity: "s" }), "fp", "r").summary, "Type 11 characters (\u201chello there\u201d) on Slate's computer");
+  assert.equal(summarizeBlockedAction(buildSlateComputerAutoReviewCanonicalTarget({ exactAction: action({ action: "type", text: "hello there" }), boxIdentity, displayStateIdentity: "s" }), "fp", "r").summary, "Enter 11 characters (\u201chello there\u201d) in Slate's hosted workspace");
   assert.equal(summarizeBlockedAction(buildSlateComputerAutoReviewCanonicalTarget({ exactAction: action({ action: "key", key: "Meta+C" }), boxIdentity, displayStateIdentity: "s" }), "fp", "r").summary, "Press Meta+C on Slate's computer");
 });
 

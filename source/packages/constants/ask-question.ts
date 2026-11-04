@@ -1,44 +1,58 @@
-/**
- * Questions the agent asked, and the answer it gives itself when nobody replies.
- *
- * A question can be answered by the user or by a timeout; the two have to be distinguishable later,
- * so an automatic answer carries a marker in its reason. The marker is prefixed onto the text rather
- * than replacing it: a reader of the transcript should see why the agent moved on.
- */
+/** How a turn records that it continued after an unanswered question. */
+export const ASK_QUESTION_AUTO_ANSWER_MARKER = "ask_question_auto_answer";
 
-export const ASK_QUESTION_AUTO_ANSWER_MARKER = "ask_question_auto_answer"
-export const ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX = "No response was received within the time limit"
-export const ASK_QUESTION_AUTO_ANSWER_REASON_BODY = `${ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX}. Proceed with the recommended option(s) you offered for each question, or your best judgment based on the information already available.`
+/** Stable prefix recognized in transcripts written before the marker format was introduced. */
+export const ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX = "No response was received within the time limit";
+
+export const ASK_QUESTION_AUTO_ANSWER_REASON_BODY =
+  `${ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX}. Continue with a suggested choice where one was offered, and use the context already available for the rest.`;
+
+const AUTO_ANSWER_KINDS = ["timeout", "other"] as const;
+type AutoAnswerKind = (typeof AUTO_ANSWER_KINDS)[number];
 
 export interface AskQuestionAutoAnswerIdentity {
-  readonly marker: typeof ASK_QUESTION_AUTO_ANSWER_MARKER
-  readonly kind: "timeout" | "other"
+  readonly marker: typeof ASK_QUESTION_AUTO_ANSWER_MARKER;
+  readonly kind: AutoAnswerKind;
+}
+
+function isAutoAnswerKind(value: string): value is AutoAnswerKind {
+  return AUTO_ANSWER_KINDS.includes(value as AutoAnswerKind);
 }
 
 export function createAskQuestionAutoAnswerIdentity(
-  kind: AskQuestionAutoAnswerIdentity["kind"] = "timeout",
+  kind: AutoAnswerKind = "timeout",
 ): AskQuestionAutoAnswerIdentity {
-  return { marker: ASK_QUESTION_AUTO_ANSWER_MARKER, kind }
+  return { marker: ASK_QUESTION_AUTO_ANSWER_MARKER, kind };
+}
+
+function encodeIdentity(identity: AskQuestionAutoAnswerIdentity): string {
+  return `${identity.marker}:${identity.kind}`;
 }
 
 export function formatAskQuestionAutoAnswerReason(
   identity: AskQuestionAutoAnswerIdentity = createAskQuestionAutoAnswerIdentity(),
 ): string {
-  return `${identity.marker}:${identity.kind}|${ASK_QUESTION_AUTO_ANSWER_REASON_BODY}`
+  return `${encodeIdentity(identity)}|${ASK_QUESTION_AUTO_ANSWER_REASON_BODY}`;
 }
 
 export function parseAskQuestionAutoAnswerIdentity(
   reason: string | null | undefined,
 ): AskQuestionAutoAnswerIdentity | undefined {
-  const trimmed = (reason ?? "").trim()
-  const match = trimmed.match(new RegExp(`^${ASK_QUESTION_AUTO_ANSWER_MARKER}:(timeout|other)\\|`))
-  return match === null ? undefined : createAskQuestionAutoAnswerIdentity(match[1] as AskQuestionAutoAnswerIdentity["kind"])
+  const normalized = (reason ?? "").trim();
+  const prefix = `${ASK_QUESTION_AUTO_ANSWER_MARKER}:`;
+  if (!normalized.startsWith(prefix)) return undefined;
+
+  const kindEnd = normalized.indexOf("|", prefix.length);
+  if (kindEnd < 0) return undefined;
+  const kind = normalized.slice(prefix.length, kindEnd);
+  return isAutoAnswerKind(kind) ? createAskQuestionAutoAnswerIdentity(kind) : undefined;
 }
 
-/** True for a marked answer and for the unmarked prefix an older transcript may carry. */
+/** Also recognizes unmarked reasons already stored in older transcripts. */
 export function isAskQuestionAutoAnswerReason(reason: string | null | undefined): boolean {
-  if (parseAskQuestionAutoAnswerIdentity(reason) !== undefined) return true
-  return (reason ?? "").trim().startsWith(ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX)
+  const normalized = (reason ?? "").trim();
+  return normalized.startsWith(ASK_QUESTION_AUTO_ANSWER_REASON_PREFIX) ||
+    parseAskQuestionAutoAnswerIdentity(normalized) !== undefined;
 }
 
-export const ASK_QUESTION_AUTO_ANSWER_REASON = formatAskQuestionAutoAnswerReason()
+export const ASK_QUESTION_AUTO_ANSWER_REASON = formatAskQuestionAutoAnswerReason();

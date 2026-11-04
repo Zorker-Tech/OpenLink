@@ -1,0 +1,32 @@
+// agent.v1 — agent/v1/start_grind_execution_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message StartGrindExecutionToolCall {
+  optional .agent.v1.StartGrindExecutionArgs args = 1 [json_name = "args"];
+  optional .agent.v1.StartGrindExecutionResult result = 2 [json_name = "result"];
+}
+
+message StartGrindExecutionArgs {
+  optional string explanation = 1 [json_name = "explanation"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message StartGrindExecutionResult {
+  oneof result {
+    .agent.v1.StartGrindExecutionSuccess success = 1 [json_name = "success"];
+    .agent.v1.StartGrindExecutionError error = 2 [json_name = "error"];
+  }
+}
+
+message StartGrindExecutionSuccess {
+}
+
+message StartGrindExecutionError {
+  string error = 1 [json_name = "error"];
+}

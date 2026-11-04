@@ -9,14 +9,9 @@
  */
 import { resolve } from "node:path";
 import type { Context } from "../context/context.ts";
-import { BackgroundShellSpawnError, BackgroundShellSpawnResult, BackgroundShellSpawnSuccess } from "../proto/generated/agent/v1/background_shell_exec_pb.ts";
-import { ShellPermissionDenied, ShellRejected, ShellSandboxUnsupported } from "../proto/generated/agent/v1/shell_exec_pb.ts";
-import { ShellCommandParsingResult } from "../proto/generated/agent/v1/shell_exec_pb.ts";
-import type { SandboxPolicy as ProtoSandboxPolicy } from "../proto/generated/agent/v1/sandbox_pb.ts";
-import { getShellHookApprovalRequirement } from "../agent-exec/shell-hook-approval.ts";
+import type { BackgroundShellSpawnInput, BackgroundShellSpawnOutcome } from "./background-shell-contracts.ts";
 import { analyzeShellCommand } from "../shell-exec/shell-parser.ts";
 import { SandboxUnsupportedError } from "../shell-exec/sandbox/errors.ts";
-import { convertProtoToInternalPolicy } from "./sandbox-conversion.ts";
 import { isForcedShellEgressEnabled, forcedShellSandboxPolicy } from "./forced-egress.ts";
 import { getModelShellAdminCommandDenylistBlockReason } from "./services/admin-command-denylist.ts";
 import { shellBlockReasonMessage } from "./utils/edit-block-handler.ts";
@@ -139,7 +134,7 @@ export class LocalBackgroundShellExecutor {
   constructor(
     private readonly permissionChecks: BackgroundPermissions,
     private readonly coreExecutor: LocalBackgroundExecutorPort,
-    private readonly ignoreSource: { getCursorIgnoreMapping(): Promise<unknown> },
+    private readonly ignoreSource: { getWorkspaceIgnoreMapping(): Promise<unknown> },
     private readonly workspaceDir: string,
     factory?: BackgroundShellFactory,
     workRegistry?: BackgroundWorkRegistry,
@@ -156,55 +151,24 @@ export class LocalBackgroundShellExecutor {
   getManager(): BackgroundShellManager { return this.shellManager; }
   dispose(): void { this.shellManager.dispose(); }
 
-  async execute(ctx: Context, args: {
-    command: string;
-    workingDirectory?: string;
-    toolCallId?: string;
-    conversationId?: string;
-    sandboxPolicy?: ProtoSandboxPolicy;
-    adminCommandDenylist?: readonly string[];
-    skipApproval?: boolean;
-    smartModeApproval?: { reason?: string; requestId?: string };
-    classifierResult?: unknown;
-    enableWriteShellStdinTool?: boolean;
-    description?: string;
-    outputNotification?: unknown;
-    hookApprovalRequirement?: import("../proto/generated/agent/v1/shell_exec_pb.ts").ShellHookApprovalRequirement;
-  }): Promise<BackgroundShellSpawnResult> {
+  async execute(ctx: Context, args: BackgroundShellSpawnInput): Promise<BackgroundShellSpawnOutcome> {
     const command = args.command;
     const workingDirectory = resolve(args.workingDirectory || await this.coreExecutor.getCwd());
     const parsedCommand = analyzeShellCommand(command).structured;
-    const parsingResult = new ShellCommandParsingResult({
-      parsingFailed: parsedCommand.parsingFailed,
-      executableCommands: parsedCommand.executableCommands.map((item) => ({
-        name: item.name,
-        fullText: item.fullText,
-        args: item.args.map((arg) => ({ type: arg.type, value: arg.value })),
-      })),
-      hasRedirects: parsedCommand.hasRedirects,
-      hasCommandSubstitution: parsedCommand.hasCommandSubstitution,
-      ...(parsedCommand.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: parsedCommand.allRedirectsAreDevNull }),
-      redirects: parsedCommand.redirects.map((item) => ({
-        operator: item.operator,
-        destinationFds: [...item.destinationFds],
-        targetNodeType: item.targetNodeType,
-        ...(item.targetText === undefined ? {} : { targetText: item.targetText }),
-      })),
-    });
-    const denylistReason = getModelShellAdminCommandDenylistBlockReason({ command, parsingResult: parsingResult, blockedCommands: args.adminCommandDenylist ?? [] });
-    if (denylistReason !== undefined) return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: denylistReason }) } });
-    let sandboxRule = args.sandboxPolicy ? convertProtoToInternalPolicy(args.sandboxPolicy) : undefined;
+    const denylistReason = getModelShellAdminCommandDenylistBlockReason({ command, parsingResult: parsedCommand, blockedCommands: args.adminCommandDenylist ?? [] });
+    if (denylistReason !== undefined) return { kind: "rejected", command, workingDirectory, reason: denylistReason };
+    let sandboxRule = args.sandboxPolicy;
     const preflightDecision = args.skipApproval
-      ? await this.permissionChecks.shouldEnforceShellInvariantBlocks(ctx, { workingDirectory, skipUnsafeWorkingDirectoryBlock: true, command, parsingResult: parsingResult, toolCallId: args.toolCallId }, sandboxRule)
-      : await this.permissionChecks.shouldBlockShellCommand(ctx, command, { workingDirectory, timeout: 0, parsingResult: parsingResult, toolCallId: args.toolCallId, classifierResult: args.classifierResult, smartModeApprovalReason: args.smartModeApproval?.reason, smartModeApprovalRequestId: args.smartModeApproval?.requestId, hookApprovalRequirement: getShellHookApprovalRequirement(args) }, sandboxRule);
+      ? await this.permissionChecks.shouldEnforceShellInvariantBlocks(ctx, { workingDirectory, skipUnsafeWorkingDirectoryBlock: true, command, parsingResult: parsedCommand, toolCallId: args.toolCallId }, sandboxRule)
+      : await this.permissionChecks.shouldBlockShellCommand(ctx, command, { workingDirectory, timeout: 0, parsingResult: parsedCommand, toolCallId: args.toolCallId, classifierResult: args.classifierResult, smartModeApprovalReason: args.smartModeApproval?.reason, smartModeApprovalRequestId: args.smartModeApproval?.requestId, hookApprovalRequirement: args.hookApprovalRequirement }, sandboxRule);
     if (preflightDecision.kind === "block") {
-      if (preflightDecision.reason.type === "permissionsConfig") return new BackgroundShellSpawnResult({ result: { case: "permissionDenied", value: new ShellPermissionDenied({ command, workingDirectory, error: "Command blocked by permissions configuration", isReadonly: preflightDecision.reason.isReadonly ?? false }) } });
-      return new BackgroundShellSpawnResult({ result: { case: "rejected", value: new ShellRejected({ command, workingDirectory, reason: shellBlockReasonMessage(preflightDecision.reason) }) } });
+      if (preflightDecision.reason.type === "permissionConfiguration") return { kind: "permission_denied", command, workingDirectory, error: "Command blocked by permissions configuration", isReadonly: preflightDecision.reason.isReadOnly ?? false };
+      return { kind: "rejected", command, workingDirectory, reason: shellBlockReasonMessage(preflightDecision.reason) };
     }
     sandboxRule = preflightDecision.policy;
     if (isForcedShellEgressEnabled()) {
-      sandboxRule = forcedShellSandboxPolicy(command, parsingResult);
-      if (sandboxRule.type !== "insecure_none") sandboxRule = { ...sandboxRule, ignoreMapping: await this.ignoreSource.getCursorIgnoreMapping() };
+      sandboxRule = forcedShellSandboxPolicy(command, parsedCommand);
+      if (sandboxRule.type !== "insecure_none") sandboxRule = { ...sandboxRule, ignoreMapping: await this.ignoreSource.getWorkspaceIgnoreMapping() };
     }
     try {
       const shellId = this.shellManager.generateShellId();
@@ -220,13 +184,13 @@ export class LocalBackgroundShellExecutor {
         ...(args.description === undefined ? {} : { description: args.description }),
         ...(args.outputNotification === undefined ? {} : { outputNotification: args.outputNotification }),
       }, this.coreExecutor);
-      return new BackgroundShellSpawnResult({ result: { case: "success", value: new BackgroundShellSpawnSuccess({ shellId, command, workingDirectory, ...(spawn.pid === undefined ? {} : { pid: spawn.pid }) }) } });
+      return { kind: "success", shellId, command, workingDirectory, ...(spawn.pid === undefined ? {} : { pid: spawn.pid }) };
     } catch (error) {
       if (error instanceof SandboxUnsupportedError) {
         const type = sandboxRule?.type ?? "unknown";
-        return new BackgroundShellSpawnResult({ result: { case: "sandboxUnsupported", value: new ShellSandboxUnsupported({ command, workingDirectory, sandboxPolicyType: type, reason: error.reason ?? error.message, isReadonly: type === "workspace_readonly" }) } });
+        return { kind: "sandbox_unsupported", command, workingDirectory, sandboxPolicyType: type, reason: error.reason ?? error.message, isReadonly: type === "workspace_readonly" };
       }
-      return new BackgroundShellSpawnResult({ result: { case: "error", value: new BackgroundShellSpawnError({ command, workingDirectory, error: error instanceof Error ? error.message : "Unknown error" }) } });
+      return { kind: "error", command, workingDirectory, error: error instanceof Error ? error.message : "Unknown error" };
     }
   }
 

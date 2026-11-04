@@ -35,7 +35,7 @@ describe("reading a message", () => {
   });
 
   it("knows which messages a reminder this build injected", () => {
-    for (const mark of ["slateSendMessageReminder", "slateEarlyResultReminder", "slateStartOfTurnAckReminder", "slateDiskPressureReminder"]) {
+    for (const mark of ["slateSendMessageReminder", "slateEarlyResultReminder", "slateOpeningMessageReminder", "slateStartOfTurnAckReminder", "slateDiskPressureReminder"]) {
       assert.equal(isInjectedReminderMessage(marked(mark)), true, mark);
     }
     assert.equal(isInjectedReminderMessage(textOnly(SEND_MESSAGE_REMINDER_MESSAGE)), true, "by its text, too");

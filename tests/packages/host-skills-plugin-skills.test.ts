@@ -5,7 +5,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -20,14 +20,16 @@ import {
   publisherFactsFromListing,
   skillNameFromPath,
   skillRecordsIdentity,
+  pruneUninstalledPluginDirs,
   SlatePluginSkillsService,
   toPluginSkillInfo,
   type InstalledPlugin,
   type LoadedPlugins,
 } from "../../source/host/skills/plugin-skills.ts";
 import { getPluginSkillsDir, readPluginSkillsCache } from "../../source/host/skills/plugin-skills-cache.ts";
+import { getPluginInstallCachePath } from "../../source/packages/plugin-install/marketplace.ts";
 
-const firstParty = (pluginDbId: string, version = "1.0.0") => ({ source: "cursor-first-party", sourceInfo: { name: "plugin-name", pluginDbId, version } });
+const firstParty = (pluginDbId: string, version = "1.0.0") => ({ source: "first-party", sourceInfo: { name: "plugin-name", pluginDbId, version } });
 
 function plugin(overrides: Partial<InstalledPlugin> & { identifier?: InstalledPlugin["identifier"] } = {}): InstalledPlugin {
   return {
@@ -76,10 +78,12 @@ describe("a plugin's skills as the platform's own records", () => {
       plugins: [
         { plugin: { id: 12n, publisher: { ownerUserId: 34 }, marketplace: { teamId: 56 } } },
         { plugin: { id: "13", publisher: { ownerUserId: 0 }, marketplace: { teamId: null } } },
+        { plugin: {} },
         { plugin: null },
       ],
     });
     assert.deepEqual([...facts.entries()], [["12", { publisherUserId: 34, marketplaceTeamId: 56 }], ["13", { publisherUserId: null, marketplaceTeamId: null }]]);
+    assert.deepEqual([...publisherFactsFromListing({}).entries()], [], "an absent listing does not invent publisher facts");
     // A clone that needed the user's own git access is the only one worth asking about, once each.
     const blocks = pluginAuthBlocksFromFailures([
       { pluginDbId: "db-1", pluginName: "Nice Plugin", marketplaceName: "team-market", errorMessage: "fatal: could not read Username for 'https://example': terminal prompts disabled" },
@@ -92,6 +96,29 @@ describe("a plugin's skills as the platform's own records", () => {
       { pluginId: "db-2", pluginName: "Other" },
     ]);
     assert.deepEqual([EFFECTIVE_PLUGINS_RPC_TIMEOUT_MS, CURRENT_USER_RPC_TIMEOUT_MS, PLUGIN_SKILLS_REFRESH_INTERVAL_MS], [15_000, 10_000, 24 * 60 * 60 * 1_000]);
+  });
+
+  it("removes uninstalled cache folders but keeps listed and still-indexed installations", () => {
+    const root = mkdtempSync(join(tmpdir(), "slate-plugin-prune-"));
+    try {
+      const keep = getPluginInstallCachePath(root, { marketplaceSlug: "team-market", pluginId: "listed" });
+      const stillUsed = join(root, "team-market", "indexed");
+      const remove = join(root, "team-market", "uninstalled");
+      for (const directory of [keep, stillUsed, remove]) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(join(directory, "marker"), "present", "utf8");
+      }
+
+      pruneUninstalledPluginDirs(
+        root,
+        [{ marketplaceSlug: "team-market", pluginId: "listed" }],
+        [join(stillUsed, "skills", "one", "SKILL.md")],
+      );
+      assert.deepEqual([existsSync(keep), existsSync(stillUsed), existsSync(remove)], [true, true, false]);
+      assert.doesNotThrow(() => pruneUninstalledPluginDirs(join(root, "missing"), [], []));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

@@ -24,7 +24,7 @@ import {
   type SlateLocalExecProviderOptions,
 } from "../../source/host/local-exec/local-exec-provider.ts";
 import type { LocalExecConnection } from "../../source/host/local-exec/local-exec-daemon-protocol.ts";
-import { GATEWAY_AUTH_SCHEME } from "../../source/shared/gateway-wire.ts";
+import { SLATE_GATEWAY } from "../../source/shared/gateway-wire.ts";
 import { DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES, GATEWAY_LOCAL_EXEC_REQUESTS_PATH, GATEWAY_LOCAL_EXEC_RESPONSES_PATH, localExecFileTooLargeMessage } from "../../source/shared/local-exec-gateway.ts";
 
 interface CapturedFetch {
@@ -87,7 +87,20 @@ function postedBodies(calls: readonly CapturedFetch[]): Array<{ providerId?: str
 }
 
 function postedFrames(calls: readonly CapturedFetch[]): LocalExecResponseFrame[] {
-  return postedBodies(calls).flatMap((body) => body.frames);
+  return postedBodies(calls).flatMap((body) => body.frames.map(unwrappedFrame));
+}
+
+function unwrappedFrame(frame: LocalExecResponseFrame): LocalExecResponseFrame {
+  if (frame.kind !== "client" && frame.kind !== "control") return frame;
+  const message = frame.message;
+  if (
+    typeof message === "object"
+    && message !== null
+    && "schema" in message
+    && message.schema === "slate.local-exec.legacy.v1"
+    && "data" in message
+  ) return { ...frame, message: message.data } as LocalExecResponseFrame;
+  return frame;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -120,7 +133,7 @@ describe("the machine-local execution provider", () => {
     };
 
     assert.deepEqual(withLocalExecAuth(supplied, connection), {
-      authorization: `${GATEWAY_AUTH_SCHEME} secret`,
+      authorization: `${SLATE_GATEWAY.authentication.scheme} secret`,
       "x-client": "caller",
       "x-gateway": "yes",
     });
@@ -202,7 +215,14 @@ describe("the machine-local execution provider", () => {
     assert.deepEqual(inflight, [1, 0]);
     assert.deepEqual(postedBodies(calls)[0], {
       providerId: "provider-7",
-      frames: [{ kind: "client", requestId: "exec-1", message: { completed: 1 } }],
+      frames: [{
+        kind: "client",
+        requestId: "exec-1",
+        message: {
+          schema: "slate.local-exec.legacy.v1",
+          data: { completed: 1 },
+        },
+      }],
     });
     const post = calls.find((call) => call.init?.method === "POST");
     assert.equal(post?.url, `https://gateway.example.test${GATEWAY_LOCAL_EXEC_RESPONSES_PATH}`);
@@ -235,7 +255,9 @@ describe("the machine-local execution provider", () => {
     resolveFirstPost(new Response(null, { status: 200 }));
     await waitFor(() => posts.length === 2);
 
-    const allFrames = posts.flatMap((post) => JSON.parse(String(post.init?.body)).frames as LocalExecResponseFrame[]);
+    const allFrames = posts
+      .flatMap((post) => JSON.parse(String(post.init?.body)).frames as LocalExecResponseFrame[])
+      .map(unwrappedFrame);
     assert.deepEqual(allFrames.map((frame) => frame.kind === "client" ? [frame.requestId, frame.message] : []), [
       ["first", { id: 1 }],
       ["second", { id: 2 }],
@@ -506,7 +528,7 @@ describe("the machine-local execution provider", () => {
     const streamCall = calls.find((call) => call.init?.method !== "POST");
     assert.equal(streamCall?.url, `https://gateway.example.test${GATEWAY_LOCAL_EXEC_REQUESTS_PATH}`);
     assert.equal(new Headers(streamCall?.init?.headers).get("accept"), "text/event-stream");
-    assert.equal(new Headers(streamCall?.init?.headers).get("authorization"), `${GATEWAY_AUTH_SCHEME} local-token`);
+    assert.equal(new Headers(streamCall?.init?.headers).get("authorization"), `${SLATE_GATEWAY.authentication.scheme} local-token`);
     assert.equal(resetCount, 1);
     assert.deepEqual(retired, ["approval-sse"]);
     const hello = postedFrames(calls).find((frame) => frame.kind === "hello");
@@ -516,6 +538,7 @@ describe("the machine-local execution provider", () => {
       terminalsFolder: join(root, "terminals"),
       computerId: "machine-1",
       label: "Test machine",
+      protocolVersion: 1,
       supervised: true,
       variant: "test-variant",
     });

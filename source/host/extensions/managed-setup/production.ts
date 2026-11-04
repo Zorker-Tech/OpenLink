@@ -7,11 +7,11 @@
  * platform's own root.
  */
 
-import { getSlateInferenceBackendUrl } from "../../../shared/node/cursor-backend/cursor-inference.ts";
-import { createDashboardClient } from "../../../shared/node/marketplace/cursor-marketplace-client.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { createDashboardClient } from "../../../adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import type { HostExtensionContext } from "../host-extensions.ts";
-import { fetchSkillCatalog, fetchSlateManagedSkills, type ManagedSkillsClient } from "./skills-marketplace.ts";
+import { fetchSkillCatalog, fetchSlateManagedSkills, type ManagedSkillsClient, type ManagedSkillsCatalogReport } from "./skills-marketplace.ts";
 import type { ManagedSetupContext } from "./extension.ts";
 import { getManagedSkillsDir } from "./managed-skills-cache.ts";
 import { SlateManagedSkillsService } from "./managed-skills-service.ts";
@@ -24,31 +24,42 @@ type ProductionContext = HostExtensionContext<unknown> & {
   readonly deps: ManagedSetupContext["deps"];
 };
 
-export function createManagedSetupProductionExtras(context: ProductionContext): Omit<ManagedSetupContext, "deps" | "onStop"> {
+function dashboardClientFactory(context: ProductionContext): () => ManagedSetupDashboardClient {
   const auth = context.deps.auth;
-  /** The account's credential, or nothing: a token that could not be read is not a reason to fail a fetch. */
-  const bestEffortToken = async (): Promise<string | null> => {
+  const optionalCredential = async (): Promise<string | null> => {
     try {
-      const token = await auth.getAccessToken({ backendUrl: getSlateInferenceBackendUrl() });
-      return token.length > 0 ? token : null;
+      const backendUrl = getSlateInferenceBackendUrl();
+      const credential = await auth.getAccessToken({ backendUrl });
+      return credential.length === 0 ? null : credential;
     } catch {
       return null;
     }
   };
-  const createClient = (): ManagedSetupDashboardClient => createDashboardClient(bestEffortToken, async () => await auth.getMachineId()) as unknown as ManagedSetupDashboardClient;
+
+  return () => createDashboardClient(
+    optionalCredential,
+    async () => await auth.getMachineId(),
+  ) as unknown as ManagedSetupDashboardClient;
+}
+
+export function createManagedSetupProductionExtras(context: ProductionContext): Omit<ManagedSetupContext, "deps" | "onStop"> {
+  const dashboard = dashboardClientFactory(context);
+  const managedSkillsPath = () => getManagedSkillsDir(getSlateRootDir());
+  const reportCatalogDiagnostic = (event: ManagedSkillsCatalogReport): void => {
+    context.deps.telemetry?.logs.reportHostExtensionDiagnostic(event);
+  };
 
   return {
     createManagedSkills({ report }) {
       return new SlateManagedSkillsService({
-        // What the platform manages is kept where the platform keeps everything of its own.
-        getCacheDir: () => getManagedSkillsDir(getSlateRootDir()),
-        fetch: () => fetchSlateManagedSkills({ client: createClient() }),
+        getCacheDir: managedSkillsPath,
+        fetch: () => fetchSlateManagedSkills({ client: dashboard() }),
         report,
       });
     },
     createTeamRules({ report }) {
-      return createSlateTeamRulesResolver({ client: createClient(), report });
+      return createSlateTeamRulesResolver({ client: dashboard(), report });
     },
-    fetchSkillCatalog: async () => await fetchSkillCatalog(createClient(), (event) => context.deps.telemetry?.logs.reportHostExtensionDiagnostic(event)),
+    fetchSkillCatalog: () => fetchSkillCatalog(dashboard(), reportCatalogDiagnostic),
   };
 }

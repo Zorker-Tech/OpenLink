@@ -17,16 +17,9 @@
  */
 
 import {
-  AgentMode,
-  ConversationAction,
-  SubagentPersistedState,
-  TaskResult,
-  TaskSuccess,
-  UserMessage,
-  UserMessageAction,
-  type ConversationStateStructure,
-} from "../../proto/generated/agent/v1/agent_pb.ts"
-import type { SelectedContext } from "../../proto/generated/agent/v1/selected_context_pb.ts"
+  createTaskSubagentFollowupActionInterop,
+  createTaskSubagentSuccessResultInterop,
+} from "../../../adapters/interop/agent/task-subagent-completion-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import {
   collectConversationStepsWithToolCallCount,
@@ -34,9 +27,9 @@ import {
   extractLastAssistantMessage,
   type ConversationBlobStore,
 } from "./task-runtime.ts"
+import { createSlateSubagentConversationState } from "../subagent-persisted-state.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
-import type { SubagentType } from "../../proto/generated/agent/v1/subagents_pb.ts"
 
 /** How far into its run a subagent has got: its turns so far, whether the stream is done, whether it was told to stop. */
 export interface TaskSubagentIterationState {
@@ -60,7 +53,7 @@ export interface TaskSubagentCompletionContext {
   readonly isParallel: boolean
   readonly parentModelName: string
   readonly resultSuffix?: string
-  readonly selectedContext?: SelectedContext
+  readonly selectedContext?: unknown
   readonly plugin?: string
   readonly marketplace?: string
   readonly pluginId?: string
@@ -87,8 +80,13 @@ export interface TaskSubagentCompletionDependencies {
 /** What one turn of a subagent answers with: carry on with an action, or stop with a result. */
 export interface TaskSubagentIterationResult {
   readonly shouldContinue: boolean
-  readonly nextAction?: ConversationAction
-  readonly finalResult?: TaskResult
+  readonly nextAction?: unknown
+  readonly finalResult?: unknown
+}
+
+/** The completion policy only needs the turn identifiers; the runner's full state stays opaque here. */
+export interface TaskSubagentConversationState {
+  readonly turns: readonly Uint8Array[]
 }
 
 /** How long the subagent has been running, measured from the moment it was started. */
@@ -155,21 +153,14 @@ export function buildFollowupAction(request: {
   readonly toolCallId: string
   readonly loopCount: number
   readonly useAskMode: boolean
-  readonly selectedContext?: SelectedContext
-}): ConversationAction {
-  return new ConversationAction({
-    action: {
-      case: "userMessageAction",
-      value: new UserMessageAction({
-        userMessage: new UserMessage({
-          text: request.followupMessage,
-          // The id is derived from the call and the turn it belongs to, so a retry produces the same one.
-          messageId: generateSeededUuid(`${request.toolCallId}-followup-${request.loopCount}`),
-          mode: request.useAskMode ? AgentMode.ASK : AgentMode.AGENT,
-          ...(request.selectedContext !== undefined ? { selectedContext: request.selectedContext } : {}),
-        }),
-      }),
-    },
+  readonly selectedContext?: unknown
+}): unknown {
+  return createTaskSubagentFollowupActionInterop({
+    text: request.followupMessage,
+    // The id is derived from the call and the turn it belongs to, so a retry produces the same one.
+    messageId: generateSeededUuid(`${request.toolCallId}-followup-${request.loopCount}`),
+    useAskMode: request.useAskMode,
+    ...(request.selectedContext !== undefined ? { selectedContext: request.selectedContext } : {}),
   })
 }
 
@@ -208,25 +199,20 @@ function postToolUseRequest(
 /** The success result a completed subagent produces from the turns it added. */
 function successResult(
   completion: TaskSubagentCompletionContext,
-  conversationSteps: TaskSuccess["conversationSteps"],
+  conversationSteps: readonly unknown[],
   durationMs: number,
-): TaskResult {
-  return new TaskResult({
-    result: {
-      case: "success",
-      value: new TaskSuccess({
-        conversationSteps,
-        agentId: completion.subagentId,
-        durationMs: BigInt(durationMs),
-        ...(completion.resultSuffix !== undefined ? { resultSuffix: completion.resultSuffix } : {}),
-      }),
-    },
+): unknown {
+  return createTaskSubagentSuccessResultInterop({
+    agentId: completion.subagentId,
+    conversationSteps,
+    durationMs,
+    ...(completion.resultSuffix !== undefined ? { resultSuffix: completion.resultSuffix } : {}),
   })
 }
 
 /** Finishes a subagent that ended successfully: collects its work, cleans it up, reports it and answers with the result. */
 async function buildFinalResult(
-  currentState: ConversationStateStructure,
+  currentState: TaskSubagentConversationState,
   completion: TaskSubagentCompletionContext,
   dependencies: TaskSubagentCompletionDependencies,
 ): Promise<TaskSubagentIterationResult> {
@@ -255,7 +241,7 @@ async function buildFinalResult(
  * cannot be resumed is worse than one whose stop hook failed.
  */
 export async function processSubagentIterationSuccess(
-  currentState: ConversationStateStructure,
+  currentState: TaskSubagentConversationState,
   turnsAtStartOfIteration: number,
   iteration: TaskSubagentIterationState,
   completion: TaskSubagentCompletionContext,
@@ -263,16 +249,16 @@ export async function processSubagentIterationSuccess(
   persistState: (
     ctx: Context,
     subagentId: string,
-    subagentType: SubagentType,
-    persistedState: SubagentPersistedState,
+    subagentType: unknown,
+    persistedState: unknown,
   ) => void,
-  subagentType: SubagentType,
+  subagentType: unknown,
 ): Promise<TaskSubagentIterationResult> {
   persistState(
     dependencies.ctx,
     completion.subagentId,
     subagentType,
-    new SubagentPersistedState({
+    createSlateSubagentConversationState({
       conversationState: currentState,
       modelId: completion.overriddenModelId,
     }),
@@ -311,7 +297,7 @@ export async function processSubagentIterationSuccess(
 /** The run stream failed: the subagent is told it stopped, and the failure is passed on unchanged. */
 export async function handleSubagentRunStreamError(
   runStreamError: unknown,
-  currentState: ConversationStateStructure,
+  currentState: TaskSubagentConversationState,
   iteration: TaskSubagentIterationState,
   completion: TaskSubagentCompletionContext,
   dependencies: TaskSubagentCompletionDependencies,
@@ -336,7 +322,7 @@ export async function handleSubagentRunStreamError(
 /** Execution failed before there was a state to report, so the hook only runs when there is one. */
 export async function handleSubagentExecutionError(
   error: unknown,
-  state: ConversationStateStructure | undefined,
+  state: TaskSubagentConversationState | undefined,
   iteration: TaskSubagentIterationState,
   completion: TaskSubagentCompletionContext,
   dependencies: TaskSubagentCompletionDependencies,

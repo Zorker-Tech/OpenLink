@@ -2,7 +2,8 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { HookAdditionalContext } from "../../source/packages/proto/generated/agent/v1/hook_additional_context_pb.ts"
+import { toInteropHookContextMessages } from "../../source/adapters/interop/agent/hook-context-adapter.ts"
+import type { HookContextEntry } from "../../source/packages/hooks-carriers/hook-additional-context.ts"
 import {
   ExecClientControlMessage,
   ExecClientMessage,
@@ -10,13 +11,13 @@ import {
   ExecuteHookArgs,
   ExecuteHookRequest,
   ExecuteHookResult,
-} from "../../source/packages/proto/generated/agent/v1/exec_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import {
   createClientDeserializer,
   createClientSerializer,
   createServerDeserializer,
   createServerSerializer,
-} from "../../source/packages/agent-exec/exec-serialization.ts"
+} from "../../source/adapters/interop/agent/exec-message-adapter.ts"
 import {
   CombinedResourceAccessor,
   RegistryResourceAccessor,
@@ -35,7 +36,7 @@ import {
   SimpleControlledExecHandler,
   SimpleControlledExecManager,
   SimpleControlledStreamExecHandler,
-} from "../../source/packages/agent-exec/controlled-exec.ts"
+} from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts"
 import { hookExecutorResource } from "../../source/packages/agent-exec/hook-executor.ts"
 
 const ctx = (): Context => createContext()
@@ -46,8 +47,12 @@ async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
   return items
 }
 
-function hookCarrier(content: string, hookEventName = "preToolUse"): HookAdditionalContext {
-  return new HookAdditionalContext({ hookEventName, content })
+function hookCarrier(text: string, event = "preToolUse"): HookContextEntry {
+  return { event, text }
+}
+
+function wireHookCarrier(text: string, event = "preToolUse") {
+  return toInteropHookContextMessages([hookCarrier(text, event)])[0]!
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -86,8 +91,32 @@ test("a deserializer answers only for the case it was built for", () => {
 test("a client deserializer hands back the value or nothing", () => {
   const deserialize = createClientDeserializer("executeHookResult")
   const result = new ExecuteHookResult()
-  assert.equal(deserialize(new ExecClientMessage({ id: 1, message: { case: "executeHookResult", value: result } })), result)
-  assert.equal(deserialize(new ExecClientMessage({ id: 2, message: { case: undefined } })), undefined)
+  assert.deepEqual(
+    deserialize(new ExecClientMessage({ id: 1, message: { case: "executeHookResult", value: result } })),
+    { value: result },
+  )
+  assert.deepEqual(
+    deserialize(new ExecClientMessage({ id: 2, message: { case: undefined } })),
+    { value: undefined },
+  )
+  assert.deepEqual(
+    deserialize(new ExecClientMessage({
+      id: 3,
+      message: { case: undefined },
+      hookAdditionalContexts: [wireHookCarrier("carried by a different operation")],
+    })),
+    {
+      value: undefined,
+      hookContexts: [hookCarrier("carried by a different operation")],
+    },
+  )
+  assert.deepEqual(
+    deserialize({
+      id: 4,
+      message: { case: "executeHookResult", value: result },
+    } as unknown as ExecClientMessage),
+    { value: result },
+  )
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -192,10 +221,10 @@ test("a stream that never carries this call's answer is reported as such", async
 })
 
 test("hook context attached to any message is drained into the caller's collector", async () => {
-  const collected: HookAdditionalContext[] = []
+  const collected: HookContextEntry[] = []
   const manager = fakeExecManager({
     messages: [
-      new ExecClientMessage({ id: 1, message: { case: undefined }, hookAdditionalContexts: [hookCarrier("first")] }),
+      new ExecClientMessage({ id: 1, message: { case: undefined }, hookAdditionalContexts: [wireHookCarrier("first")] }),
       new ExecClientMessage({ id: 11, message: { case: "executeHookResult", value: new ExecuteHookResult() } }),
     ],
   })
@@ -205,7 +234,7 @@ test("hook context attached to any message is drained into the caller's collecto
     createClientDeserializer("executeHookResult"),
   )
   await executor.execute(ctx(), new ExecuteHookArgs(), { hookContextCollector: collected })
-  assert.deepEqual(collected.map(carrier => carrier.content), ["first"])
+  assert.deepEqual(collected.map(carrier => carrier.text), ["first"])
 })
 
 test("the host is asked for hook context only when the caller has somewhere to put it", async () => {
@@ -224,12 +253,12 @@ test("the host is asked for hook context only when the caller has somewhere to p
 })
 
 test("a streaming call yields every event it recognizes and ignores the rest", async () => {
-  const collected: HookAdditionalContext[] = []
+  const collected: HookContextEntry[] = []
   const manager = fakeExecManager({
     messages: [
       new ExecClientMessage({ id: 1, message: { case: "executeHookResult", value: new ExecuteHookResult() } }),
       new ExecClientMessage({ id: 2, message: { case: undefined } }),
-      new ExecClientMessage({ id: 3, message: { case: "executeHookResult", value: new ExecuteHookResult() }, hookAdditionalContexts: [hookCarrier("mid")] }),
+      new ExecClientMessage({ id: 3, message: { case: "executeHookResult", value: new ExecuteHookResult() }, hookAdditionalContexts: [wireHookCarrier("mid")] }),
     ],
   })
   const executor = new StreamExecutorResource<ExecuteHookArgs, ExecuteHookResult>(
@@ -239,7 +268,7 @@ test("a streaming call yields every event it recognizes and ignores the rest", a
   )
   const events = await collect(executor.execute(ctx(), new ExecuteHookArgs(), { hookContextCollector: collected }))
   assert.equal(events.length, 2)
-  assert.deepEqual(collected.map(carrier => carrier.content), ["mid"])
+  assert.deepEqual(collected.map(carrier => carrier.text), ["mid"])
 })
 
 // ---------------------------------------------------------------------------------------------

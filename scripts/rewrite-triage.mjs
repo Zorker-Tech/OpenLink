@@ -10,7 +10,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { overlapOf } from "./rewrite-overlap.mjs";
+import { overlapOf, sourcePathsOf } from "./rewrite-overlap.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [argument, ...flags] = process.argv.slice(2);
@@ -64,22 +64,24 @@ if (entry === null) {
   console.log(`${argument}: not a landed file (or the baseline is not laid out here)`);
   process.exit(1);
 }
-const ours = String(entry.rewritten ?? "").replace(/^source\//, "") || entry.port;
+const sources = sourcePathsOf(entry);
 const baselineText = (await read(`reference/derived/${entry.port}`)) ?? (await read(`reference/derived/${entry.reference}`));
-const ourText = await read(`source/${ours}`);
-const numbers = baselineText !== null && ourText !== null ? overlapOf(baselineText, ourText) : null;
-const basename = path.basename(ours).replace(/\.ts$/, "");
+const ourTexts = await Promise.all(sources.map((source) => read(`source/${source}`)));
+const ourText = ourTexts.filter((text) => text !== null).join("\n");
+const numbers = baselineText !== null && ourTexts.every((text) => text !== null) ? overlapOf(baselineText, ourTexts) : null;
+const ours = sources.map((source) => "source/" + source).join(", ");
+const basename = path.basename(sources[0] ?? entry.port).replace(/\.ts$/, "");
 const specifier = `/${basename}.ts`;
 const importers = await consumers(specifier);
 const tests = await existingTests(basename);
 
 console.log(`port        ${entry.port}`);
-console.log(`ours        source/${ours}`);
+console.log("ours        " + ours);
 console.log(`lines       ${String(ourText?.split("\n").length ?? "?").padStart(5)}  (baseline ${entry.lines})`);
 console.log(`overlap     ${numbers === null ? "no baseline" : numbers.overlap.toFixed(3)}${numbers?.identical ? "  identical" : ""}`);
 console.log(`importers   ${importers.length}${importers.length > 0 ? `  ${importers.slice(0, 6).join(", ")}${importers.length > 6 ? ", …" : ""}` : ""}`);
 console.log(`tests       ${tests.length === 0 ? "none yet" : tests.join(", ")}`);
-if (baselineText !== null && ourText !== null && numbers?.identical !== true) {
+if (baselineText !== null && ourTexts.every((text) => text !== null) && numbers?.identical !== true) {
   const baselineCode = baselineText.split("\n");
   const ourCode = ourText.split("\n");
   const head = baselineCode.slice(0, diffLines).join("\n");

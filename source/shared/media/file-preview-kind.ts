@@ -7,13 +7,6 @@ import {
 import { attachmentExtension } from "./attachment-open-policy.ts";
 import { isTextPreviewableName } from "./attachment-preview.ts";
 
-const IMAGE_EXTENSIONS = new Set(Object.keys(IMAGE_MIME_FROM_EXTENSION).map((extension) => extension.slice(1)));
-const VIDEO_EXTENSIONS = new Set(Object.keys(VIDEO_MIME_FROM_EXTENSION).map((extension) => extension.slice(1)));
-const AUDIO_EXTENSIONS = new Set(Object.keys(AUDIO_MIME_FROM_EXTENSION).map((extension) => extension.slice(1)));
-const MARKDOWN_EXTENSIONS = new Set(["md", "markdown", "mdx"]);
-const JSON_EXTENSIONS = new Set(["json"]);
-const TABLE_EXTENSIONS = new Set(["csv", "tsv", "xlsx", "xls"]);
-
 export type FilePreviewKind =
   | "image"
   | "video"
@@ -26,21 +19,45 @@ export type FilePreviewKind =
   | "text"
   | "unknown";
 
+type ExtensionGroup = readonly [kind: FilePreviewKind, extensions: readonly string[]]
+
+const EXTENSIONS_BY_KIND: readonly ExtensionGroup[] = [
+  ["image", Object.keys(IMAGE_MIME_FROM_EXTENSION).map(extension => extension.slice(1))],
+  ["video", Object.keys(VIDEO_MIME_FROM_EXTENSION).map(extension => extension.slice(1))],
+  ["audio", Object.keys(AUDIO_MIME_FROM_EXTENSION).map(extension => extension.slice(1))],
+  ["pdf", ["pdf"]],
+  ["table", ["csv", "tsv", "xlsx", "xls"]],
+  ["json", ["json"]],
+  ["markdown", ["md", "markdown", "mdx"]],
+  ["docx", ["docx"]],
+]
+
+const EXPLICIT_EXTENSION_KINDS = new Map<string, FilePreviewKind>()
+for (const [kind, extensions] of EXTENSIONS_BY_KIND) {
+  for (const extension of extensions) {
+    if (EXPLICIT_EXTENSION_KINDS.has(extension)) continue
+    EXPLICIT_EXTENSION_KINDS.set(extension, kind)
+  }
+}
+
+const BYTE_READ_PREVIEW_KINDS = new Set<FilePreviewKind>([
+  "pdf",
+  "table",
+  "docx",
+  "text",
+  "json",
+  "markdown",
+])
+
 export function getFilePreviewKind(nameOrPath: string): FilePreviewKind {
   const extension = attachmentExtension(nameOrPath);
   if (extension == null) return "unknown";
-  if (IMAGE_EXTENSIONS.has(extension)) return "image";
-  if (VIDEO_EXTENSIONS.has(extension)) return "video";
-  if (AUDIO_EXTENSIONS.has(extension)) return "audio";
-  if (extension === "pdf") return "pdf";
-  if (TABLE_EXTENSIONS.has(extension)) return "table";
-  if (JSON_EXTENSIONS.has(extension)) return "json";
-  if (MARKDOWN_EXTENSIONS.has(extension)) return "markdown";
-  if (extension === "docx") return "docx";
+  const knownKind = EXPLICIT_EXTENSION_KINDS.get(extension);
+  if (knownKind !== undefined) return knownKind;
   if (isTextPreviewableName(nameOrPath)) return "text";
   return "unknown";
 }
 
 export function previewKindNeedsBytes(kind: FilePreviewKind): boolean {
-  return kind === "pdf" || kind === "table" || kind === "docx" || kind === "text" || kind === "json" || kind === "markdown";
+  return BYTE_READ_PREVIEW_KINDS.has(kind)
 }

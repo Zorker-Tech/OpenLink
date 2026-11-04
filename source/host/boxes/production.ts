@@ -5,22 +5,12 @@
 import { errorLogTag } from "../../shared/errors/summary.ts";
 import { reportHostDiagnostic } from "../host-diagnostics.ts";
 import type { HostBoxInner } from "./forever-box/host-box.ts";
-import {
-  applyBoxEnvironmentViaTransport,
-  type BoxEnvironmentControlClient,
-  type BoxEnvironmentUpdate
-} from "./box-env.ts";
-import { uploadFileViaExecDaemon, type FileTransferAccessor } from "./box-file-transfer.ts";
+import type { BoxEnvironmentControlClient } from "./box-environment-control.ts";
+import type { FileTransferAccessor } from "./box-file-transfer.ts";
 import { applySharedDesktop, createBox } from "./box-factory.ts";
+import type { BoxMcpPort } from "./box-mcp.ts";
 import {
-  loadBoxMcpServersViaTransport,
-  type BoxMcpControlClient
-} from "./box-mcp.ts";
-import {
-  createBoxRemoteResourceAccessorFromTransport,
   createBoxTransport,
-  pingBoxTransportClassified,
-  type BoxControlClientFactory,
   type BoxPingControlClient,
   type BoxRemoteExecClient,
   type BoxRemoteExecManager,
@@ -29,13 +19,15 @@ import {
 import type {
   BoxEndpoint,
   LoopbackTelemetry,
-  PingResult
 } from "./loopback-slate-box.ts";
 import type { ShellAccessor } from "./box-windows.ts";
+import { createProductionBoxOperations } from "./production-box-operations.ts";
+import { decodeBoxEnvironmentUpdate } from "./production-box-environment.ts";
+import { createSingleWindowBoxInner } from "./production-box-standalone.ts";
 
 export type ProductionBoxControlClient = BoxPingControlClient &
   BoxEnvironmentControlClient &
-  BoxMcpControlClient;
+  BoxMcpPort;
 
 /**
  * The generated pieces this build hangs a box on: how a box is reached, what it is asked, and what may be done
@@ -81,66 +73,6 @@ export type ProductionBoxInner = HostBoxInner & {
   dispose(): Promise<void>;
 };
 
-function createStandaloneProductionBoxInner<
-  Accessor extends ShellAccessor & FileTransferAccessor
->(
-  loopback: ReturnType<typeof createBox<Accessor>>,
-  withNoMonitorComputerUse: (accessor: Accessor) => Accessor
-): ProductionBoxInner {
-  return {
-    ensureReady: async (ctx, agentId) => {
-      const primary = await loopback.ensureReady(ctx, agentId);
-      return {
-        ...primary,
-        remoteAccessor: withNoMonitorComputerUse(primary.remoteAccessor),
-        vncUrl: "",
-      };
-    },
-    runState: () => loopback.runState(),
-    listBoxes: () => loopback.listBoxes(),
-    uploadFile: (ctx, agentId, boxPath, data) =>
-      loopback.uploadFile(ctx, agentId, boxPath, data),
-    downloadFile: (ctx, agentId, boxPath) =>
-      loopback.downloadFile(ctx, agentId, boxPath),
-    releaseWindow: async () => {},
-    getAgentWindowIndex: () => 1,
-    maxWindows: () => 1,
-    getTerminalsFolder: () => loopback.getTerminalsFolder(),
-    isAvailable: () => loopback.isAvailable(),
-    describe: () => loopback.describe(),
-    applyEnvironment: (ctx, update) =>
-      loopback.applyEnvironment(ctx, decodeBoxEnvironmentUpdate(update)),
-    loadMcpServers: (ctx, configJson) =>
-      loopback.loadMcpServers(ctx, configJson),
-    mcpResourceAccessor: ctx => loopback.mcpResourceAccessor(ctx),
-    dispose: () => loopback.dispose(),
-  };
-}
-
-function decodeBoxEnvironmentUpdate(value: unknown): BoxEnvironmentUpdate {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new TypeError("box environment update must be an object");
-  }
-  const rawEnvironment = Reflect.get(value, "env");
-  const replace = Reflect.get(value, "replace");
-  if (
-    typeof rawEnvironment !== "object" ||
-    rawEnvironment === null ||
-    Array.isArray(rawEnvironment) ||
-    typeof replace !== "boolean"
-  ) {
-    throw new TypeError("box environment update has an invalid shape");
-  }
-  const env: Record<string, string> = {};
-  for (const [name, entry] of Object.entries(rawEnvironment)) {
-    if (typeof entry !== "string") {
-      throw new TypeError(`box environment value for ${name} must be a string`);
-    }
-    env[name] = entry;
-  }
-  return { env, replace };
-}
-
 /**
  * What this build's box is made of: the primitives above composed into one box, with the desktop a shared desktop
  * build offers laid over it and the window assignments kept across a restart.
@@ -152,8 +84,6 @@ export function createProductionBoxInner<
   options: ProductionBoxProviderOptions<Transport, Accessor>
 ): ProductionBoxInner {
   const { generated } = options;
-  const createControlClient: BoxControlClientFactory<Transport> = transport =>
-    generated.createControlClient(transport);
   const transportFor = (endpoint: BoxEndpoint): Transport =>
     createBoxTransport(endpoint, generated.createTransport);
 
@@ -162,51 +92,11 @@ export function createProductionBoxInner<
     ...(options.authToken === undefined ? {} : { authToken: options.authToken }),
     telemetry: options.telemetry,
     protectedBoxPaths: options.protectedBoxPaths,
-    operations: {
-      async ping(ctx, endpoint): Promise<PingResult> {
-        const result = await pingBoxTransportClassified(
-          ctx,
-          transportFor(endpoint),
-          createControlClient
-        );
-        return result.causeSummary === undefined
-          ? { outcome: result.outcome }
-          : { outcome: result.outcome, causeSummary: result.causeSummary };
-      },
-      createRemoteAccessor(endpoint): Accessor {
-        const transport = transportFor(endpoint);
-        return createBoxRemoteResourceAccessorFromTransport(transport, {
-          createExecClient: generated.createExecClient,
-          createResourceAccessor: generated.createResourceAccessor
-        });
-      },
-      protectRemoteAccessor(accessor, assertFileReadAllowed): Accessor {
-        return generated.withFileReadGuard(accessor, assertFileReadAllowed);
-      },
-      async applyEnvironment(ctx, endpoint, update): Promise<void> {
-        await applyBoxEnvironmentViaTransport(
-          ctx,
-          transportFor(endpoint),
-          update,
-          generated.createControlClient
-        );
-      },
-      async loadMcpServers(ctx, endpoint, configJson): Promise<string[]> {
-        return await loadBoxMcpServersViaTransport(
-          ctx,
-          transportFor(endpoint),
-          configJson,
-          generated.createControlClient
-        );
-      },
-      async uploadFile(ctx, accessor, path, data): Promise<void> {
-        await uploadFileViaExecDaemon(ctx, accessor, path, data);
-      }
-    }
+    operations: createProductionBoxOperations(generated, transportFor),
   });
 
   if (options.sharedDesktop === false) {
-    return createStandaloneProductionBoxInner(
+    return createSingleWindowBoxInner(
       loopback,
       accessor => generated.withNoMonitorComputerUse(accessor)
     );

@@ -9,21 +9,21 @@ test("a conversation with an id is told exactly where its transcript is", () => 
   const text = formatTranscriptLocation(FOLDER, { conversationId: "conversation-1" })
   assert.match(text, /### Transcript location:/)
   assert.match(text, new RegExp(`${FOLDER}/conversation-1/conversation-1\\.jsonl`))
-  // The folder is not named on its own, since the file inside it is what the model should open.
-  assert.equal(text.includes(`past conversations with the user (pre- and post-summary): ${FOLDER}\n`), false)
+  // The full file is named, so the model has a concrete path to open.
+  assert.equal(text.includes(`${FOLDER}\n`), false)
 })
 
 test("a conversation with no id is told the folder and how it is laid out", () => {
   const text = formatTranscriptLocation(FOLDER)
-  assert.match(text, new RegExp(`full transcripts of past conversations with the user \\(pre- and post-summary\\): ${FOLDER}`))
-  assert.match(text, /Each conversation is stored as a <convoId>\/<convoId>\.jsonl/)
+  assert.match(text, new RegExp(`This directory holds full conversation histories, including the parts before and after summaries: ${FOLDER}`))
+  assert.match(text, /Open a conversation's JSONL file at <conversation-id>\/<conversation-id>\.jsonl/)
 })
 
 test("the model is told how to use the transcript rather than read it", () => {
   const text = formatTranscriptLocation(FOLDER, { conversationId: "conversation-1" })
-  assert.match(text, /Search first for relevant keywords/)
-  assert.match(text, /Avoid reading linearly end-to-end/)
-  assert.match(text, /tool calls and results are excluded/)
+  assert.match(text, /Search for a distinctive filename, identifier, tool, phrase, or error first/)
+  assert.match(text, /Avoid scanning the full file/)
+  assert.match(text, /Tool requests and results are not recorded here/)
 })
 
 test("the tag form is the same text without the heading or the indentation", () => {
@@ -48,6 +48,10 @@ test("an id that could address another directory is still one path component", (
 test("asking for a tag with no options at all still gives the folder form", () => {
   const tagged = formatTranscriptLocation(FOLDER, { useXml: true })
   assert.match(tagged, /^<transcript_location>|^\n\n<transcript_location>/)
-  assert.match(tagged, /This folder contains full transcripts/)
+  assert.match(tagged, /This directory holds full conversation histories/)
   assert.equal(tagged.includes("### Transcript location:"), false)
+})
+
+test("null options also choose the folder representation", () => {
+  assert.equal(formatTranscriptLocation(FOLDER, null), formatTranscriptLocation(FOLDER))
 })

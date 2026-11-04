@@ -21,16 +21,11 @@ import path from "node:path"
 
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/index.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
 import {
-  SelectedDocument,
-  type SelectedDocument as SelectedDocumentValue,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
-import {
-  hydrateSelectedAttachmentData,
-  type AttachmentBlobStore,
+  hydrateAttachmentContent,
+  type AttachmentContentStore,
 } from "./attachment-hydration.ts"
+import type { SlateDocumentAttachment } from "./document-attachment-contracts.ts"
 import { getSafeErrorType } from "../attachment-error-type.ts"
 import { appendRandomUploadSuffix } from "./attachment-filenames.ts"
 import {
@@ -38,25 +33,17 @@ import {
   type AttachmentPathRequestContext,
 } from "./path-trust.ts"
 
-interface DocumentWriteExecutor {
-  execute(ctx: Context, args: WriteArgs): Promise<unknown>
-}
-
-export interface DocumentResourceAccessor {
-  get(resource: typeof writeExecutorResource): DocumentWriteExecutor
-}
-
 export interface ProcessDocumentAttachmentArgs {
   readonly ctx: Context
-  readonly blobStore: AttachmentBlobStore<Context> | undefined
-  readonly selectedDocument: SelectedDocumentValue
+  readonly blobStore: AttachmentContentStore<Context> | undefined
+  readonly selectedDocument: SlateDocumentAttachment
   readonly index: number
   readonly requestContext: AttachmentPathRequestContext | undefined
-  readonly resourceAccessor: DocumentResourceAccessor | undefined
+  readonly writeWorkspaceFile?: ((context: Context, path: string, bytes: Uint8Array) => Promise<void>) | undefined
 }
 
 export interface ProcessedDocumentAttachment {
-  readonly selectedDocument: SelectedDocumentValue | undefined
+  readonly selectedDocument: SlateDocumentAttachment | undefined
   readonly docData: Uint8Array | undefined
   readonly mimeType: string
   readonly filename: string
@@ -74,7 +61,7 @@ export async function processDocumentAttachment({
   selectedDocument,
   index,
   requestContext,
-  resourceAccessor,
+  writeWorkspaceFile,
 }: ProcessDocumentAttachmentArgs): Promise<ProcessedDocumentAttachment> {
   const selectedDocPath = selectedDocument.path.trim()
   const trimmedFilename = selectedDocument.filename.trim()
@@ -83,25 +70,22 @@ export async function processDocumentAttachment({
   const displayFilename = trimmedFilename && !path.isAbsolute(trimmedFilename)
     ? trimmedFilename
     : path.basename(readablePath)
-  const hydratedDocument = await hydrateSelectedAttachmentData({
+  const hydratedDocument = await hydrateAttachmentContent({
     ctx,
     blobStore: blobStore!,
     attachment: selectedDocument,
-    dataOrBlobId: selectedDocument.dataOrBlobId,
+    contentReference: selectedDocument.content,
     missingBlobError: "Document not found in blob store",
     sizeErrorLabel: "Document",
-    withBlobId: (blobId: Uint8Array) => new SelectedDocument({
+    withBlobId: (blobId: Uint8Array) => ({
       ...selectedDocument,
-      dataOrBlobId: {
-        case: "blobId",
-        value: blobId,
-      },
+      content: { kind: "stored-blob" as const, blobId },
     }),
   })
   const docData = hydratedDocument.data
-  let processedSelectedDocument = hydratedDocument.processedAttachment
+  let processedSelectedDocument = hydratedDocument.attachment
   // A document with no bytes is only usable as a path, and only when that path is trusted.
-  const pathOnlyDocument = !selectedDocument.dataOrBlobId?.case
+  const pathOnlyDocument = selectedDocument.content === undefined
     ? await resolveTrustedPathOnlyAttachmentPath(
       ctx,
       readablePath,
@@ -111,10 +95,7 @@ export async function processDocumentAttachment({
     )
     : { hasPathOnlyPayload: false, trustedPath: undefined }
   if (pathOnlyDocument.trustedPath !== undefined) {
-    processedSelectedDocument = new SelectedDocument({
-      ...selectedDocument,
-      path: pathOnlyDocument.trustedPath,
-    })
+    processedSelectedDocument = { ...selectedDocument, path: pathOnlyDocument.trustedPath }
   }
   let documentFilePath: string | undefined
   const filename = displayFilename || `document-${Date.now()}-${index}`
@@ -122,22 +103,14 @@ export async function processDocumentAttachment({
     const projectFolder = requestContext?.env?.projectFolder
     const workspaceRootPath = requestContext?.env?.workspacePaths?.[0]
     const documentRootPath = projectFolder ?? workspaceRootPath
-    if (resourceAccessor && documentRootPath !== undefined) {
+    if (writeWorkspaceFile !== undefined && documentRootPath !== undefined) {
       try {
         const safeFilename = appendRandomUploadSuffix(filename, `document-${Date.now()}-${index}`)
         const uploadsDir = path.join(documentRootPath, UPLOADS_DIR)
         const filePath = path.join(uploadsDir, safeFilename)
-        const writeExecutor = resourceAccessor.get(writeExecutorResource)
-        await writeExecutor.execute(ctx, new WriteArgs({
-          path: filePath,
-          fileBytes: new Uint8Array(docData),
-          returnFileContentAfterWrite: false,
-        }))
+        await writeWorkspaceFile(ctx, filePath, new Uint8Array(docData))
         documentFilePath = filePath
-        processedSelectedDocument = new SelectedDocument({
-          ...(processedSelectedDocument ?? selectedDocument),
-          path: filePath,
-        })
+        processedSelectedDocument = { ...(processedSelectedDocument ?? selectedDocument), path: filePath }
       } catch (error) {
         // The document is dropped rather than the turn: the attachment note is still there.
         logger.warn(ctx, "Failed to write document to filesystem", {

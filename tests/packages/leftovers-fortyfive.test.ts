@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { ROOM_TOMBSTONE_MIN_RETENTION_MS, SlateXuserDepartureObligations } from "../../source/host/rooms/xuser-departure-obligations.ts";
-import { ClientSideToolV2Producer } from "../../source/host/transcript/client-side-tool-v2-producer.ts";
+import { ClientSideToolV2Producer } from "../../source/adapters/interop/agent/client-side-tool-v2-producer-adapter.ts";
 import { DEFAULT_SLATE_COMPUTER_ID, SlateLocalExecBridge, SUPERVISED_RANK, VARIANT_RANKS } from "../../source/host/local-exec/local-exec-bridge.ts";
 import { isKnownTimeZone, SettingsService } from "../../source/host/settings/settings-service.ts";
 import { LINK_PREVIEW_USER_AGENT, MAX_REDIRECTS, MAX_URL_LENGTH, SlateLinkPreviewError } from "../../source/host/attachments/safe-link-preview-fetch.ts";

@@ -5,8 +5,9 @@
  * response that is not an object is reported once, as itself, rather than once per expected field.
  */
 
-import { createValidationResult, isObject, type ValidationResult } from "./validation.ts"
+import { isObject, type ValidationResult } from "./validation.ts"
 
-export function validateBaseHookResponse(value: unknown): ValidationResult {
-  return isObject(value) ? createValidationResult(true) : createValidationResult(false, ["Expected an object"])
+export function validateHookResponseEnvelope(candidate: unknown): ValidationResult {
+  const valid = isObject(candidate)
+  return { isValid: valid, errors: valid ? [] : ["Expected an object"] }
 }

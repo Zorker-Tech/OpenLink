@@ -8,7 +8,7 @@ import {
 import { ConversationStateHandle } from "../../source/packages/agent/state.ts";
 import { createContext, type Context } from "../../source/packages/context/context.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
-import { toRedactedConversationStateStructure } from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts";
+import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts";
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts";
 import {
   AgentConversationTurnStructure,
@@ -18,15 +18,15 @@ import {
   ConversationTurnStructure,
   SimulatedMsgReason,
   UserMessage,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { SelectedContext, SelectedCursorCommand } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts";
-import { AgentSkill } from "../../source/packages/proto/generated/agent/v1/agent_skills_pb.ts";
-import { ProtoSerde } from "../../source/packages/agent-kv/serde.ts";
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { SelectedContext, SelectedCursorCommand } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
+import { AgentSkill } from "../../source/adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts";
+import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts";
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts";
 
-const stepSerde = new ProtoSerde(ConversationStep);
-const turnSerde = new ProtoSerde(ConversationTurnStructure);
-const userMessageSerde = new ProtoSerde(UserMessage);
+const stepSerde = new ProtobufBlobSerde(ConversationStep);
+const turnSerde = new ProtobufBlobSerde(ConversationTurnStructure);
+const userMessageSerde = new ProtobufBlobSerde(UserMessage);
 
 interface TurnSpec {
   userText?: string;

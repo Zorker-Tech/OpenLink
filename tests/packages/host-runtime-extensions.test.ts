@@ -14,21 +14,21 @@ import { Value } from "@bufbuild/protobuf";
 
 import { mcpExecutorResource, mcpStateExecutorResource } from "../../source/packages/agent-exec/mcp-operations.ts";
 import { createContext } from "../../source/packages/context/context.ts";
-import { McpArgs, McpResult, McpStateError, McpStateExecArgs, McpStateExecResult, McpStateServer, McpStateSuccess, McpSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts";
-import { McpToolDefinition } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts";
+import { McpArgs, McpResult, McpStateError, McpStateExecArgs, McpStateExecResult, McpStateServer, McpStateSuccess, McpSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts";
+import { McpToolDefinition } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 import { createDeadlinePolicy, createExpiryPolicy, createIdleWatchdogPolicy, createPollingPolicy, type Clock } from "../../source/host/extensions/scheduling.ts";
 import { createBridgeUserComputers, FALLBACK_TERMINALS_FOLDER, GatewayLocalExecBox, type GatewayExecControl, type GatewayLocalExecCodec, type GatewayLocalExecManager } from "../../source/host/local-exec/gateway-local-exec-slate-box.ts";
 import { SlateLocalExecBridge, type LocalExecBridgeFrame } from "../../source/host/local-exec/local-exec-bridge.ts";
 import { SlateLocalExecError } from "../../source/host/local-exec/local-exec-error.ts";
-import { BoxMcpExecError, createBoxSlateMcpExec, errorLabel } from "../../source/host/mcp/box-mcp-exec.ts";
+import { BoxMcpExecError, createBoxSlateMcpExec, errorLabel } from "../../source/adapters/interop/agent/box-mcp-exec-adapter.ts";
 import { SELF_IDENTITY_RETRY_MS, SlateXuserSharingService, STATE_RECONCILE_INTERVAL_MS } from "../../source/host/rooms/xuser-sharing-service.ts";
 import { settingsExtension } from "../../source/host/settings/extension.ts";
 import { SettingsService } from "../../source/host/settings/settings-service.ts";
 import { coerceObligation, finiteNumber, parseAckObligationsFile, SlateAckObligationStore } from "../../source/host/transcript/slate-ack-obligation-store.ts";
 import { EMPTY_SLATE_SHARING_STATE } from "../../source/shared/agents/sharing.ts";
 import { DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES } from "../../source/shared/local-exec-gateway.ts";
-import { slateLocalToolScopeKey } from "../../source/shared/local-tool-permission-machinery.ts";
+import { SlateLocalToolPermissionDeniedError, slateLocalToolScopeKey } from "../../source/shared/local-tool-permission-machinery.ts";
 import type { SharingDependencies, SharingManager } from "../../source/host/rooms/xuser-sharing-service.ts";
 import type { Context } from "../../source/packages/context/context.ts";
 
@@ -155,7 +155,7 @@ describe("running an MCP tool on a box", () => {
 });
 
 describe("the host's own machine behind the local-exec bridge", () => {
-  function hostMachine(options: { blocked?: string; requiresApproval?: boolean } = {}) {
+  function hostMachine(options: { blocked?: string; requiresApproval?: boolean; maxFileBytes?: number } = {}) {
     let ids = 0;
     const clock = testClock();
     const sent: LocalExecBridgeFrame[] = [];
@@ -175,7 +175,11 @@ describe("the host's own machine behind the local-exec bridge", () => {
       decodeControl: (json) => json as GatewayExecControl,
       createRemoteAccessor: (manager) => manager,
     };
-    const box = new GatewayLocalExecBox<Client, GatewayLocalExecManager<Client>>(bridge, { gate, codec });
+    const box = new GatewayLocalExecBox<Client, GatewayLocalExecManager<Client>>(bridge, {
+      gate,
+      codec,
+      ...(options.maxFileBytes === undefined ? {} : { maxFileBytes: options.maxFileBytes }),
+    });
     const detach = bridge.registerProvider((frame) => sent.push(frame));
     const speak = () => bridge.submitResponses({ frames: [{ kind: "hello", localRoot: "/home/user", terminalsFolder: "/home/user/terminals", computerId: "computer-1", label: "My laptop" }] });
     const last = (kind: string): LocalExecBridgeFrame => { const frame = [...sent].reverse().find((item) => item.kind === kind); assert.ok(frame !== undefined, `no ${kind} frame was sent`); return frame; };
@@ -221,8 +225,18 @@ describe("the host's own machine behind the local-exec bridge", () => {
     assert.deepEqual(approvals.map((request) => [request.action, request.target]), [["write-file", "/home/user/note.txt"], ["read-file", "/home/user/note.txt"]]);
   });
 
+  it("allows a file exactly at the configured byte limit", async () => {
+    const { box, bridge, last } = hostMachine({ maxFileBytes: 3 });
+    const upload = box.uploadFile(createContext().withName("upload"), "agent-1", "/home/user/tiny.bin", new Uint8Array([1, 2, 3]));
+    await settle();
+    const frame = last("upload");
+    assert.equal(Buffer.from(String(frame.bytesBase64), "base64").byteLength, 3);
+    bridge.submitResponses({ frames: [{ kind: "file", requestId: String(frame.requestId) }] });
+    await upload;
+  });
+
   it("refuses a file too large to move, a machine that is not there, and a gate that is closed", async () => {
-    const { box, last, bridge } = hostMachine();
+    const { box, last, bridge, sent } = hostMachine();
     const context = createContext().withName("upload");
     await box.uploadFile(context, "agent-1", "/home/user/big.bin", new Uint8Array(DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES + 1)).then(
       () => assert.fail("a file past the limit was moved"),
@@ -239,7 +253,18 @@ describe("the host's own machine behind the local-exec bridge", () => {
     const closed = new GatewayLocalExecBox(bridge, { gate: { blockedReason: () => "Local tools are turned off.", requiresApproval: () => true, authorize: async () => ({ allowed: true, reason: "" }) }, codec: { decodeClient: (json) => json, decodeControl: (json) => json as GatewayExecControl, createRemoteAccessor: (manager) => manager } });
     await closed.uploadFile(context, "agent-1", "/x.txt", new Uint8Array([1])).then(() => assert.fail("a closed gate let a file through"), (error: Error) => { assert.equal(error.name, "SlateLocalToolPermissionDeniedError"); assert.equal((error as Error & { reason: string }).reason, "Local tools are turned off."); });
     const ready = await closed.ensureReady(context, "agent-1");
-    await (async () => { for await (const _client of ready.remoteAccessor.createExecInstance(context, () => shellArgs)) { /* nothing */ } })().then(() => assert.fail("a closed gate let a command through"), (error: Error) => assert.equal(error.name, "SlateLocalToolPermissionDeniedError"));
+    const commandRun = (async () => {
+      for await (const _client of ready.remoteAccessor.createExecInstance(context, () => shellArgs)) { /* nothing */ }
+    })();
+    const commandOutcome = commandRun.then(() => ({ rejected: false as const }), (error: unknown) => ({ rejected: true as const, error }));
+    await settle();
+    const execFrame = sent.find((frame) => frame.kind === "exec");
+    if (execFrame !== undefined) {
+      bridge.submitResponses({ frames: [{ kind: "control", requestId: String(execFrame.requestId), message: { case: "streamClose" } }] });
+    }
+    const refusal = await commandOutcome;
+    assert.equal(refusal.rejected, true);
+    assert.equal(refusal.rejected && (refusal.error as Error).name, "SlateLocalToolPermissionDeniedError");
   });
 
   /** The message a caller serializes for the machine, as the exec manager takes it. */
@@ -294,6 +319,51 @@ describe("the host's own machine behind the local-exec bridge", () => {
     assert.deepEqual(await ran.outcome, { ok: true });
   });
 
+  it("consumes an exec request id before rejecting a malformed message and sends no frame", async () => {
+    const { box, bridge, sent } = hostMachine();
+    const context = createContext().withName("exec");
+    const ready = await box.ensureReady(context, "agent-1");
+    const manager = ready.remoteAccessor;
+    const requestIds: number[] = [];
+    let serialized = 0;
+    const malformed: ExecArgs = {
+      message: { case: "shellStreamArgs", value: [] as unknown as Record<string, unknown> },
+      toJson() { serialized += 1; return {}; },
+    };
+    const invalid = (async () => {
+      for await (const _client of manager.createExecInstance(context, (id) => { requestIds.push(id); return malformed; })) {
+        void _client;
+      }
+    })();
+    const invalidOutcome = invalid.then(
+      () => ({ rejected: false as const }),
+      (error: unknown) => ({ rejected: true as const, error }),
+    );
+    await settle();
+    const invalidFrame = sent.find((frame) => frame.kind === "exec");
+    if (invalidFrame !== undefined) {
+      bridge.submitResponses({ frames: [{ kind: "control", requestId: String(invalidFrame.requestId), message: { case: "streamClose" } }] });
+    }
+    const result = await invalidOutcome;
+    assert.equal(result.rejected, true);
+    assert.equal(result.rejected && result.error instanceof SlateLocalToolPermissionDeniedError, true);
+    assert.deepEqual(requestIds, [0]);
+    assert.equal(serialized, 0, "an undescribable request is refused before it is serialized for the bridge");
+    assert.equal(sent.some((frame) => frame.kind === "exec"), false);
+
+    const followUp = (async () => {
+      for await (const _client of manager.createExecInstance(context, (id) => { requestIds.push(id); return shellArgs; })) {
+        void _client;
+      }
+    })();
+    await settle();
+    const frame = sent.find((item) => item.kind === "exec");
+    assert.ok(frame !== undefined);
+    assert.deepEqual(requestIds, [0, 1]);
+    bridge.submitResponses({ frames: [{ kind: "control", requestId: String(frame.requestId), message: { case: "streamClose" } }] });
+    await followUp;
+  });
+
   it("reports a command the machine refused, with the site and the conversation it happened in", async () => {
     const reports: unknown[] = [];
     const clock = testClock();
@@ -308,7 +378,10 @@ describe("the host's own machine behind the local-exec bridge", () => {
     await settle();
     const frame = sent.find((item) => item.kind === "exec");
     assert.ok(frame !== undefined);
-    bridge.submitResponses({ frames: [{ kind: "control", requestId: String(frame.requestId), message: { case: "throw", error: "command not found", stackTrace: "at sh" } }] });
+    bridge.submitResponses({ frames: [
+      { kind: "control", requestId: String(frame.requestId), message: { case: "throw", error: "command not found", stackTrace: "at sh" } },
+      { kind: "control", requestId: String(frame.requestId), message: { case: "streamClose" } },
+    ] });
     const settled = await outcome;
     assert.equal(settled.ok, false);
     assert.equal(settled.ok === false ? (settled.error as Error).message : "", "command not found");
@@ -676,5 +749,56 @@ describe("sharing a room with another user's computer", () => {
     const off = harness({ enabled: false });
     assert.equal(off.service.buildManagerDelegate().isEnabled(), false);
     off.restore();
+  });
+
+  it("starts once, and stop clears transient typing timers before a later start", async () => {
+    const { service, calls, clock, emits, restore } = harness();
+    await service.start();
+    await service.start();
+    assert.equal(calls.filter((call) => call.path === "/slate/share-state").length, 1);
+
+    await service.handleEvent({
+      kind: "room-typing",
+      isTyping: true,
+      user: { roomId: "room-1", authId: "user-2", name: "Bob", expiresAtMs: clock.now() + 5_000 },
+    });
+    assert.equal(service.typingExpiryHandles.size, 1);
+    const emissionCount = emits.length;
+    service.stop();
+    assert.equal(service.typingExpiryHandles.size, 0);
+    assert.equal(service.getState().typingUsers.length, 0);
+    await clock.advance(6_000);
+    assert.equal(emits.length, emissionCount, "the disposed timer cannot publish a second expiry");
+
+    await service.start();
+    assert.equal(calls.filter((call) => call.path === "/slate/share-state").length, 2);
+    service.stop();
+    restore();
+  });
+
+  it("installs approved room events and abandons a room after a member leaves", async () => {
+    const { service, managerCalls, restore } = harness({ rooms: [] });
+    await service.start();
+    const announced = { ...room, roomId: "announced-room" };
+    await service.handleEvent({ kind: "room-upsert", room: announced });
+    assert.equal(managerCalls.some(([name, args]) => name === "ensureHostedSharedRoom" && (args as { roomId?: string })?.roomId === "announced-room"), true);
+
+    const approved = { ...room, roomId: "approved-room" };
+    await service.handleEvent({ kind: "room-join-decision", isApproved: true, room: approved });
+    assert.equal(service.isRoomAbandoned("approved-room"), false);
+    await service.handleEvent({ kind: "member-left", roomId: "approved-room" });
+    assert.equal(service.isRoomAbandoned("approved-room"), true);
+    assert.equal(managerCalls.some(([name, args]) => name === "markMirrorRoomRevoked" && args === "approved-room"), true);
+    restore();
+  });
+
+  it("treats unknown event kinds as handled without calling inherited object properties", async () => {
+    const { service, managerCalls, restore } = harness();
+    await service.start();
+    const callsBefore = managerCalls.length;
+    assert.equal(await service.handleEvent({ kind: "toString" }), true);
+    assert.equal(await service.handleEvent({ kind: "unknown-room-event" }), true);
+    assert.equal(managerCalls.length, callsBefore);
+    restore();
   });
 });

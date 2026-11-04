@@ -5,25 +5,57 @@
  * the tab the platform uses for it.
  */
 import type { SlateAutoReviewEvent } from "../../runner/slate-auto-review.ts";
+import type { ReviewAwaitingSink, ReviewAwaitingState } from "./auto-review-awaiting-contracts.ts";
+import {
+  AUTO_REVIEW_AWAITING_TAB_ID,
+  awaitingReasonFor,
+  mostRecentAwaitingReason,
+} from "./auto-review-awaiting-policy.ts";
 
-export const SLATE_AUTO_REVIEW_AWAITING_TAB_ID = "auto-review";
-export interface SlateAutoReviewAwaitingState { readonly tabId: string; readonly reason: string; readonly since: number }
-export interface SlateAutoReviewAwaitingSink { trySetForTab(agentId: string, state: SlateAutoReviewAwaitingState): void; clearForTab(agentId: string, tabId: string, options?: { readonly ifSinceBefore?: number }): void }
+export { AUTO_REVIEW_AWAITING_TAB_ID } from "./auto-review-awaiting-policy.ts";
+export { awaitingReasonFor } from "./auto-review-awaiting-policy.ts";
+export type { ReviewAwaitingSink, ReviewAwaitingState } from "./auto-review-awaiting-contracts.ts";
 
-export function buildSlateAutoReviewAwaitingReason(summary: string): string { return `Approval needed: ${summary}`; }
+export class ReviewAwaitingBridge {
+  private readonly pendingByAgent = new Map<string, Map<string, string>>();
 
-export class SlateAutoReviewAwaitingBridge {
-  readonly #pendingByAgent = new Map<string, Map<string, string>>();
-  constructor(private readonly sink: SlateAutoReviewAwaitingSink, private readonly now: () => number = Date.now) {}
+  constructor(private readonly sink: ReviewAwaitingSink, private readonly now: () => number = Date.now) {}
 
   handleEvent(event: SlateAutoReviewEvent): void {
     const { agentId, id, summary } = event.approval;
-    if (event.type === "created") { const pending = this.#pendingByAgent.get(agentId) ?? new Map<string, string>(); this.#pendingByAgent.set(agentId, pending); pending.set(id, buildSlateAutoReviewAwaitingReason(summary)); this.#assert(agentId, pending); return; }
-    const pending = this.#pendingByAgent.get(agentId); if (pending == null || !pending.delete(id)) return;
-    if (pending.size === 0) { this.#pendingByAgent.delete(agentId); this.sink.clearForTab(agentId, SLATE_AUTO_REVIEW_AWAITING_TAB_ID); return; }
-    this.#assert(agentId, pending);
+    if (event.type === "created") {
+      const approvals = this.pendingByAgent.get(agentId) ?? new Map<string, string>();
+      this.pendingByAgent.set(agentId, approvals);
+      approvals.set(id, awaitingReasonFor(summary));
+      this.publishLatest(agentId, approvals);
+      return;
+    }
+
+    const approvals = this.pendingByAgent.get(agentId);
+    if (approvals === undefined || !approvals.delete(id)) return;
+    if (approvals.size === 0) {
+      this.pendingByAgent.delete(agentId);
+      this.sink.clearForTab(agentId, AUTO_REVIEW_AWAITING_TAB_ID);
+      return;
+    }
+    this.publishLatest(agentId, approvals);
   }
 
-  pendingAwaitingState(agentId: string): SlateAutoReviewAwaitingState | null { const reason = [...(this.#pendingByAgent.get(agentId)?.values() ?? [])].at(-1); return reason == null ? null : { tabId: SLATE_AUTO_REVIEW_AWAITING_TAB_ID, reason, since: this.now() }; }
-  #assert(agentId: string, pending: ReadonlyMap<string, string>): void { const reason = [...pending.values()].at(-1); if (reason != null) this.sink.trySetForTab(agentId, { tabId: SLATE_AUTO_REVIEW_AWAITING_TAB_ID, reason, since: this.now() }); }
+  pendingAwaitingState(agentId: string): ReviewAwaitingState | null {
+    const approvals = this.pendingByAgent.get(agentId);
+    const reason = approvals === undefined ? undefined : mostRecentAwaitingReason(approvals);
+    return reason === undefined
+      ? null
+      : { tabId: AUTO_REVIEW_AWAITING_TAB_ID, reason, since: this.now() };
+  }
+
+  private publishLatest(agentId: string, approvals: ReadonlyMap<string, string>): void {
+    const reason = mostRecentAwaitingReason(approvals);
+    if (reason === undefined) return;
+    this.sink.trySetForTab(agentId, {
+      tabId: AUTO_REVIEW_AWAITING_TAB_ID,
+      reason,
+      since: this.now(),
+    });
+  }
 }

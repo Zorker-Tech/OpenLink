@@ -11,14 +11,7 @@
  * through the same adaptation so the three entry points cannot disagree.
  */
 
-import { createRedactedUserMessageAction } from "../../redacted-protos/generated/agent/v1/agent_redacted.ts"
-
-interface SubscriptionNotificationAction {
-  readonly _privacyMode: unknown
-  readonly notifications: readonly unknown[]
-  readonly requestContext?: unknown
-  readonly sendToInteractionListener?: unknown
-}
+import { adaptSubscriptionWakeup } from "../../../adapters/interop/agent/subscription-notification-action-adapter.ts"
 
 interface UserMessageActionHandler {
   handle(...args: unknown[]): Promise<unknown> | unknown
@@ -26,7 +19,7 @@ interface UserMessageActionHandler {
   handleModelStep(...args: unknown[]): Promise<unknown> | unknown
 }
 
-export class SubscriptionNotificationActionHandler {
+export class SubscriptionWakeupActionHandler {
   constructor(readonly userMessageActionHandler: UserMessageActionHandler) {}
 
   getUserMessageActionHandler(): UserMessageActionHandler {
@@ -35,79 +28,83 @@ export class SubscriptionNotificationActionHandler {
 
   async handle(
     ctx: unknown,
-    action: SubscriptionNotificationAction,
+    action: unknown,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
     onStateUpdate: unknown,
   ): Promise<unknown> {
-    return await this.userMessageActionHandler.handle(
+    return await this.forward(
+      "handle",
       ctx,
-      adaptSubscriptionNotificationAction(action),
+      action,
       rootPromptExecutor,
       stateHandler,
       mcpTools,
       onStateUpdate,
-      delegateOptions(action),
     )
   }
 
   async handleSingleStep(
     ctx: unknown,
-    action: SubscriptionNotificationAction,
+    action: unknown,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
     onStateUpdate: unknown,
   ): Promise<unknown> {
-    return await this.userMessageActionHandler.handleSingleStep(
+    return await this.forward(
+      "handleSingleStep",
       ctx,
-      adaptSubscriptionNotificationAction(action),
+      action,
       rootPromptExecutor,
       stateHandler,
       mcpTools,
       onStateUpdate,
-      delegateOptions(action),
     )
   }
 
   async handleModelStep(
     ctx: unknown,
-    action: SubscriptionNotificationAction,
+    action: unknown,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
     onStateUpdate: unknown,
   ): Promise<unknown> {
-    return await this.userMessageActionHandler.handleModelStep(
+    return await this.forward(
+      "handleModelStep",
       ctx,
-      adaptSubscriptionNotificationAction(action),
+      action,
       rootPromptExecutor,
       stateHandler,
       mcpTools,
       onStateUpdate,
-      delegateOptions(action),
     )
   }
-}
 
-function delegateOptions(action: SubscriptionNotificationAction) {
-  return {
-    forcePrependedUserMessages: true,
-    maxPrependedUserMessages: action.notifications.length,
-    isSyntheticWakeup: true,
+  private async forward(
+    method: "handle" | "handleSingleStep" | "handleModelStep",
+    ctx: unknown,
+    action: unknown,
+    rootPromptExecutor: unknown,
+    stateHandler: unknown,
+    mcpTools: unknown,
+    onStateUpdate: unknown,
+  ): Promise<unknown> {
+    const adapted = adaptSubscriptionWakeup(action);
+    return await this.userMessageActionHandler[method](
+      ctx,
+      adapted.userMessageAction,
+      rootPromptExecutor,
+      stateHandler,
+      mcpTools,
+      onStateUpdate,
+      {
+        forcePrependedUserMessages: true,
+        maxPrependedUserMessages: adapted.notificationCount,
+        isSyntheticWakeup: true,
+      },
+    );
   }
-}
-
-function adaptSubscriptionNotificationAction(action: SubscriptionNotificationAction) {
-  const userMessage = action.notifications.at(-1)
-  if (userMessage === undefined) {
-    throw new Error("Subscription notification action requires at least one notification")
-  }
-  return createRedactedUserMessageAction(action._privacyMode, {
-    userMessage,
-    prependUserMessages: action.notifications.slice(0, -1),
-    requestContext: action.requestContext,
-    sendToInteractionListener: action.sendToInteractionListener,
-  })
 }

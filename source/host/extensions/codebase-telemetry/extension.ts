@@ -12,8 +12,8 @@
  */
 
 import { join } from "node:path";
-import { createCursorChecksum, getSlateInferenceBackendUrl } from "../../../shared/node/cursor-backend/cursor-inference.ts";
-import { getSlateBackendClientHeaders } from "../../../shared/node/slate-client-metadata.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { createCodebaseTelemetryUploadCredentialsAdapter } from "../../../adapters/interop/telemetry/codebase-telemetry-upload-credentials-adapter.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import { defineHostExtension } from "../host-extensions.ts";
 import { HostExtensions } from "../extension-ids.generated.ts";
@@ -55,14 +55,7 @@ export function codebaseTelemetryAdapterOptions(options: {
     spawnCsnaps,
     uploadPolling: createRealPollingPolicy({ name: "codebase-snapshot-upload", intervalMs: SNAPSHOT_UPLOAD_INTERVAL_MS }),
     // Every upload carries the account's own credential and the headers the backend expects of this host.
-    createUploadCredentials: async (): Promise<Record<string, unknown>> => ({
-      authToken: options.credentials.authToken,
-      requestHeaders: {
-        ...getSlateBackendClientHeaders(),
-        "x-cursor-checksum": createCursorChecksum(await options.auth.getMachineId()),
-        "x-ghost-mode": "false",
-      },
-    }),
+    createUploadCredentials: () => createCodebaseTelemetryUploadCredentialsAdapter(options),
     logger: options.logger,
     signal: options.signal,
   };

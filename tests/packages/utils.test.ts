@@ -1,18 +1,18 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { attemptSync } from "../../source/packages/utils/attempt.ts"
+import { captureSync } from "../../source/packages/utils/attempt.ts"
 import { getFirstItem } from "../../source/packages/utils/async-iterator.ts"
-import { isManagedCanvasPath, normalizeCanvasPath } from "../../source/packages/utils/canvas-paths.ts"
+import { canonicalizeWorkspacePath, isWorkspaceCanvasDocument } from "../../source/packages/utils/canvas-paths.ts"
 import {
   getAdminCommandDenylistRuleError,
   normalizeAdminCommandDenylistText,
   parseAdminCommandDenylistColonRule,
 } from "../../source/packages/utils/command-denylist.ts"
-import { matchesCommandGlob } from "../../source/packages/utils/command-glob.ts"
+import { commandMatchesPattern } from "../../source/packages/utils/command-glob.ts"
 import { getSafeConversationId, MAX_CONVERSATION_ID_LENGTH } from "../../source/packages/utils/conversation-paths.ts"
 import { findActualExecutable } from "../../source/packages/utils/executable-lookup.ts"
 import {
@@ -24,21 +24,21 @@ import {
   parseBitbucketRepositoryPathSegments,
   parseGitHubRepositoryPathSegments,
   parseGitLabRepositoryPathSegments,
-} from "../../source/packages/utils/git-hosts.ts"
+} from "../../source/adapters/interop/scm/git-host-url-adapter.ts"
 import { MAX_IMAGE_DIMENSION, resizeImageBufferIfNeeded, targetDimensions } from "../../source/packages/utils/image-resize.ts"
 import { getImageCodecs } from "../../source/packages/utils/image-codecs.ts"
 import { extractTerminalId, isAgentToolOutputFile, isAgentTranscriptPath, isTerminalsDirectory, sanitizeFilename } from "../../source/packages/utils/managed-paths.ts"
-import { isLargeContextModel, TOOL_MARKER_TOKENS } from "../../source/packages/utils/model-markers.ts"
+import { isLargeContextModel } from "../../source/packages/utils/model-markers.ts"
 import { isPathWithin, isWorktreesPath, normalizeToUnixPath, resolvePath, resolveRealPathStrict, shouldBlockWorktreePath, WORKTREE_GUARD_ERROR } from "../../source/packages/utils/paths.ts"
 import { asyncMapValues, PromiseQueue, TimeoutError, withTimeout } from "../../source/packages/utils/promise-tools.ts"
 import { spawnPromise } from "../../source/packages/utils/process-spawn.ts"
-import { shouldRerenderUserInfoForLocalPrCreationForge } from "../../source/packages/utils/pull-request-guidance.ts"
+import { shouldRebuildUserInfoForPullRequestRule } from "../../source/packages/utils/pull-request-guidance.ts"
 import { ReplayableAsyncIterable } from "../../source/packages/utils/replayable-async-iterable.ts"
 import { buildWebSearchYearGuidance, getIsoDateYearString } from "../../source/packages/utils/search-year-guidance.ts"
 import { countLines, getFormatForFile, isVideoFilePath, readText } from "../../source/packages/utils/text-encoding.ts"
 import { LATIN1_ENCODING, mapToIconvEncoding, normalizeEncodingName, stripUtf8Bom, UTF8_ENCODING } from "../../source/packages/utils/encoding-names.ts"
 import { TTLCache } from "../../source/packages/utils/ttl-cache.ts"
-import { isWebp, webpSize, registerWebpCodec } from "../../source/packages/utils/webp.ts"
+import { decodeWebp, encodeWebp, isWebp, webpSize, registerWebpCodec } from "../../source/packages/utils/webp.ts"
 import { createWritableIterable, WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 
 async function withTempDirectory<T>(run: (directory: string) => Promise<T>): Promise<T> {
@@ -132,6 +132,19 @@ test("a writable iterable hands values to its reader in order and wakes it on cl
   await assert.rejects(closed.write(1), WriteIterableClosedError)
 })
 
+test("a writable iterable preserves falsy failure reasons for waiting readers and later writes", async () => {
+  for (const reason of [undefined, null, false, 0, ""] as const) {
+    const stream = createWritableIterable<number>()
+    const reader = stream[Symbol.asyncIterator]()
+    const waiting = reader.next()
+    stream.throw(reason)
+
+    assert.deepEqual(await Promise.allSettled([waiting]), [{ status: "rejected", reason }])
+    assert.deepEqual(await Promise.allSettled([reader.next()]), [{ status: "rejected", reason }])
+    assert.deepEqual(await Promise.allSettled([stream.write(1)]), [{ status: "rejected", reason }])
+  }
+})
+
 test("a replayable iterable gives every consumer the whole sequence", async () => {
   async function* source() {
     yield "a"
@@ -183,14 +196,23 @@ test("a TTL cache expires entries on the injected clock", () => {
   cache.set("b", 2)
   assert.equal(cache.delete("b"), true)
   assert.equal(cache.get("b"), undefined)
+  assert.equal(cache.delete("b"), false)
   cache.set("c", 3)
   cache.clear()
   assert.equal(cache.get("c"), undefined)
 
   assert.throws(() => new TTLCache({ ttlMs: 0 }), /positive ttlMs/)
+  assert.throws(() => new TTLCache({ ttlMs: -1 }), /positive ttlMs/)
+  assert.throws(() => new TTLCache({ ttlMs: Number.NaN }), /positive ttlMs/)
+  assert.throws(() => new TTLCache({ ttlMs: Number.POSITIVE_INFINITY }), /positive ttlMs/)
   const dynamic = new TTLCache<string, number>({ ttlMs: () => 100, now: () => now })
   dynamic.set("d", 4)
   assert.equal(dynamic.get("d"), 4)
+
+  const absentValue = new TTLCache<string, undefined>({ ttlMs: 10, now: () => now })
+  absentValue.set("present", undefined)
+  assert.equal(absentValue.get("present"), undefined)
+  assert.equal(absentValue.has("present"), true)
 })
 
 test("bounded concurrency keeps order and never exceeds its bound", async () => {
@@ -235,6 +257,27 @@ test("a promise queue runs work with a bound and drains on close", async () => {
   await assert.rejects(queue.enqueue(() => 1), /PromiseQueue is closed/)
 })
 
+test("closing waits for running work and rejects new submissions immediately", async () => {
+  const queue = new PromiseQueue({ max: 1 })
+  let releaseWork!: () => void
+  const task = queue.enqueue(async () => {
+    await new Promise<void>(resolve => { releaseWork = resolve })
+    return "completed"
+  })
+  await new Promise<void>(resolve => setImmediate(resolve))
+
+  let closed = false
+  const closing = queue.close().then(() => { closed = true })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(closed, false, "close stays pending while the task is running")
+  await assert.rejects(queue.enqueue(() => "too late"), /PromiseQueue is closed/)
+
+  releaseWork()
+  assert.equal(await task, "completed")
+  await closing
+  assert.equal(closed, true)
+})
+
 test("a failing task rejects its own promise without stopping the queue", async () => {
   const queue = new PromiseQueue({ max: 1 })
   const failing = queue.enqueue(() => { throw new Error("task failed") })
@@ -275,6 +318,36 @@ test("a bare executable name is resolved against PATH and remembered", () => {
   assert.notEqual(resolved.cmd, "node", "a bare name is resolved to a path")
   assert.equal(findActualExecutable(process.execPath, ["x"]).cmd, process.execPath, "a path is already resolved")
   assert.equal(findActualExecutable("definitely-not-a-command-xyz", []).cmd, "definitely-not-a-command-xyz")
+})
+
+test("an executable path with a separator bypasses PATH lookup and keeps its arguments", () => {
+  const executable = path.join("tools", "missing-command")
+  const args = ["--mode", "fast"]
+  assert.deepEqual(findActualExecutable(executable, args), { cmd: executable, args })
+})
+
+test("a path matcher skips nonmatching PATH entries and resolves the first match", async () => {
+  await withTempDirectory(async directory => {
+    const firstDirectory = path.join(directory, "first")
+    const matchingDirectory = path.join(directory, "matching")
+    await mkdir(firstDirectory)
+    await mkdir(matchingDirectory)
+    const executable = `slate-executable-${process.pid}`
+    const firstCandidate = path.join(firstDirectory, executable)
+    const matchingCandidate = path.join(matchingDirectory, executable)
+    await writeFile(firstCandidate, "first")
+    await writeFile(matchingCandidate, "matching")
+
+    const previousPath = process.env.PATH
+    try {
+      process.env.PATH = [firstDirectory, matchingDirectory].join(path.delimiter)
+      const args = ["--flag"]
+      assert.deepEqual(findActualExecutable(executable, args, /matching/), { cmd: matchingCandidate, args })
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH
+      else process.env.PATH = previousPath
+    }
+  })
 })
 
 test("paths are resolved, and the worktree guard knows which checkouts are siblings", async () => {
@@ -330,9 +403,13 @@ test("the platform's managed files are recognized by shape", () => {
   assert.equal(isAgentToolOutputFile(`${base}/agent-tools/out.txt`), true)
   assert.equal(isAgentToolOutputFile(`${base}/agent-tools/out.log`), false)
   assert.equal(sanitizeFilename("a b/c.txt"), "a_b_c.txt")
-  assert.equal(normalizeCanvasPath("a/./b/../c"), "a/c")
-  assert.equal(isManagedCanvasPath(`${base}/canvases/board.canvas.tsx`), true)
-  assert.equal(isManagedCanvasPath(`${base}/canvases/board.tsx`), false)
+  assert.equal(canonicalizeWorkspacePath("a/./b/../c"), "a/c")
+  assert.equal(canonicalizeWorkspacePath("a\\b/./c/../d"), "a/b/d")
+  assert.equal(isWorkspaceCanvasDocument(`${base}/canvases/board.canvas.tsx`), true)
+  assert.equal(isWorkspaceCanvasDocument(`${base}/canvases/board.CANVAS.TSX`), true)
+  assert.equal(isWorkspaceCanvasDocument(`${base}/canvases/board.tsx`), false)
+  assert.equal(isWorkspaceCanvasDocument(`${base}/canvases/board.canvas.tsx/child`), false)
+  assert.equal(isWorkspaceCanvasDocument(`${base}/canvases/../documents/board.canvas.tsx`), false)
 })
 
 test("a conversation id becomes a safe path component", () => {
@@ -353,9 +430,15 @@ test("command rules are normalized and refused when they are too broad", () => {
   assert.match(getAdminCommandDenylistRuleError(":rm") ?? "", /executable before/)
   assert.match(getAdminCommandDenylistRuleError("x".repeat(600)) ?? "", /cannot exceed/)
 
-  assert.equal(matchesCommandGlob("git *", "git status"), true)
-  assert.equal(matchesCommandGlob("git *", "git"), false)
-  assert.equal(matchesCommandGlob("a.b", "axb"), false, "regex metacharacters match literally")
+  assert.equal(commandMatchesPattern("git *", "git status"), true)
+  assert.equal(commandMatchesPattern("git *", "git"), false)
+  assert.equal(commandMatchesPattern("a.b", "a.b"), true)
+  assert.equal(commandMatchesPattern("a.b", "axb"), false, "regex metacharacters match literally")
+  assert.equal(commandMatchesPattern(" git * ", "git status"), true, "only pattern-edge whitespace is removed")
+  assert.equal(commandMatchesPattern("git status", "git status "), false, "the command itself is compared exactly")
+  assert.equal(commandMatchesPattern("", ""), true)
+  assert.equal(commandMatchesPattern("*", ""), true)
+  assert.equal(commandMatchesPattern("*", "line\nbreak"), false, "wildcards do not cross line breaks")
 })
 
 test("repository URLs are split the way each forge lays them out", () => {
@@ -421,11 +504,14 @@ test("webp is recognized from its header, and needs a codec to decode", () => {
   assert.equal(isWebp(header), true)
   assert.deepEqual(webpSize(header), { width: 640, height: 480 })
   assert.equal(webpSize(Buffer.from("not a webp")), undefined)
+  assert.throws(() => decodeWebp(header), /not registered/)
 
   registerWebpCodec({
     decode: () => ({ data: new Uint8Array(4), width: 1, height: 1 }),
     encode: () => Buffer.from([1, 2, 3]),
   })
+  assert.deepEqual(decodeWebp(header), { data: new Uint8Array(4), width: 1, height: 1 })
+  assert.deepEqual(encodeWebp({ data: new Uint8Array(4), width: 1, height: 1 }), Buffer.from([1, 2, 3]))
   assert.equal(isWebp(header), true)
 })
 
@@ -436,21 +522,24 @@ test("the platform's guidance strings are ours", () => {
   assert.match(guidance, /Today's date is 2026-09-25/)
   assert.match(guidance, /React documentation 2026", NOT "React documentation 2025"/)
 
-  assert.equal(shouldRerenderUserInfoForLocalPrCreationForge({ userInfoContent: "<user_rule>Preferred pull request host:</user_rule>" }), true)
-  assert.equal(shouldRerenderUserInfoForLocalPrCreationForge({ forgeRuleContent: "rule", userInfoContent: "<user_rule>rule</user_rule>" }), false)
-  assert.equal(shouldRerenderUserInfoForLocalPrCreationForge({ forgeRuleContent: "rule", userInfoContent: "<user_rule>other</user_rule>" }), true)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ renderedUserInfo: "<user_rule>Preferred pull request host:</user_rule>" }), true)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ renderedUserInfo: "<user_rule>Pull request forge (Creation Provider):</user_rule>" }), true)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ renderedUserInfo: "<user_rule>unrelated</user_rule>" }), false)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ selectedRule: "rule", renderedUserInfo: "<user_rule>rule</user_rule>" }), false)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ selectedRule: "rule", renderedUserInfo: "<user_rule>other</user_rule>" }), true)
+  assert.equal(shouldRebuildUserInfoForPullRequestRule({ selectedRule: "", renderedUserInfo: "<user_rule>Preferred pull request host:</user_rule>" }), true)
 
   assert.equal(isLargeContextModel("dsv3-0324"), true)
   assert.equal(isLargeContextModel("kimi-k2p5-turbo"), true)
   assert.equal(isLargeContextModel("some-other-model"), false)
   assert.equal(isLargeContextModel(undefined), false)
-  assert.equal(TOOL_MARKER_TOKENS.length, 18)
-  assert.equal(TOOL_MARKER_TOKENS.every(token => token.startsWith("<") && token.endsWith(">")), true)
 })
 
-test("attempt reports failures instead of throwing", () => {
-  assert.deepEqual(attemptSync(() => 41 + 1), { ok: true, value: 42 })
-  const failure = attemptSync(() => { throw new Error("nope") })
+test("sync work returns its value or captures whatever it threw", () => {
+  assert.deepEqual(captureSync(() => 41 + 1), { ok: true, value: 42 })
+  const failure = captureSync(() => { throw new Error("nope") })
   assert.equal(failure.ok, false)
-  assert.match((failure as { error: Error }).error.message, /nope/)
+  if (failure.ok) assert.fail("the throwing operation must be represented as a failure")
+  assert.match((failure.error as Error).message, /nope/)
+  assert.deepEqual(captureSync(() => { throw "plain failure" }), { ok: false, error: "plain failure" })
 })

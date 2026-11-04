@@ -21,12 +21,12 @@ import {
 } from "../../agent-summarization/durable-blocks.ts"
 import { getRetryDirective } from "../../agent-summarization/error-handling.ts"
 import {
-  runSummarizationPipeline,
-  type SummarizationEnrichments,
-  type SummarizationPipelineOptions,
+  runSummaryPass,
+  type SummaryCarryData,
+  type SummaryRunOptions,
 } from "../../agent-summarization/pipeline.ts"
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts"
-import { collectAllSkillBlocks } from "../../agent-summarization/skill-persistence.ts"
+import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
 import { SUMMARIZATION_CURSOR_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
 import type { Context } from "../../context/context.ts"
 import { createLogger, createSpan } from "../../context/index.ts"
@@ -126,9 +126,9 @@ export class OpenAICompactionHandler {
   getMetricsModelLabel(): string { return this.modelId }
 
   /** Everything is summarized; what is kept is the user's own most recent requests, within a budget. */
-  partitionMessages(conversationMessages: readonly RedactedCoreMessage[], _pipelineOptions: SummarizationPipelineOptions): OpenAIPartition {
+  separateMessages(conversationMessages: readonly RedactedCoreMessage[], _pipelineOptions: SummaryRunOptions): OpenAIPartition {
     const { systemMessage, userInfoMessage, messagesForSummarization } = prepareMessagesForCompaction(conversationMessages)
-    const skillBlocks = collectAllSkillBlocks(messagesForSummarization)
+    const skillBlocks = collectAttachedSkillBlocksFromConversation(messagesForSummarization)
     const preservedTailMessages = recentRequestsWithinBudget(
       messagesForSummarization,
       COMPACT_USER_MESSAGE_MAX_TOKENS,
@@ -145,7 +145,7 @@ export class OpenAICompactionHandler {
   async generateSummary(
     ctx: Context,
     partition: OpenAIPartition,
-    _pipelineOptions: SummarizationPipelineOptions,
+    _pipelineOptions: SummaryRunOptions,
   ): Promise<OpenAIRawSummary> {
     if (!partition.systemMessage) throw new Error("Expected system message in conversation")
     // The privacy of the compaction follows the newest thing that will remain in the conversation.
@@ -191,10 +191,10 @@ export class OpenAICompactionHandler {
     return { text: summaryText, inputTokens, outputTokens }
   }
 
-  buildSummaryMessage(
+  formatSummaryCarrier(
     raw: OpenAIRawSummary,
     partition: OpenAIPartition,
-    enrichment: SummarizationEnrichments,
+    enrichment: SummaryCarryData,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
     const blocks = renderDurableBlocks(
       "openai-compaction",
@@ -219,7 +219,7 @@ ${raw.text}`
   }
 
   /** The kept user messages come before the summary, since they are what the next model is answering. */
-  assembleFinalMessages(
+  rebuildConversation(
     partition: OpenAIPartition,
     summaryMessage: RedactedCoreMessage,
   ): readonly RedactedCoreMessage[] {
@@ -235,7 +235,7 @@ ${raw.text}`
   async summarize(
     ctx: Context,
     conversationMessages: readonly RedactedCoreMessage[],
-    pipelineOptions: SummarizationPipelineOptions,
+    pipelineOptions: SummaryRunOptions,
   ): Promise<Record<string, unknown>> {
     using span = createSpan(ctx.withName("OpenAICompactionHandler.summarize"))
     const scopedContext = span.ctx
@@ -245,7 +245,7 @@ ${raw.text}`
       modelId: this.modelId,
     })
     try {
-      const pipelineOutcome = await runSummarizationPipeline(this, scopedContext, conversationMessages, pipelineOptions)
+      const pipelineOutcome = await runSummaryPass(this, scopedContext, conversationMessages, pipelineOptions)
       const summaryValue = createRedactedString(
         pipelineOutcome.rawSummary.text,
         DataClassification.CODE,

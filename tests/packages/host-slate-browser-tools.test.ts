@@ -19,7 +19,7 @@ import {
   toBrowserReviewAction,
   toDriverResponse,
 } from "../../source/host/runner/tools/slate-browser-tools.ts";
-import { SLATE_BROWSER_DRIVER_BOX_DIR, SLATE_BROWSER_DRIVER_BOX_PATH, SLATE_BROWSER_RESULT_MARKER } from "../../source/host/runner/tools/slate-browser-driver-source.ts";
+import { SLATE_BROWSER_DRIVER_BOX_DIR, SLATE_BROWSER_DRIVER_BOX_PATH, SLATE_BROWSER_RESULT_MARKER } from "../../source/adapters/interop/browser/browser-driver-source-adapter.ts";
 
 const MARKER = SLATE_BROWSER_RESULT_MARKER;
 

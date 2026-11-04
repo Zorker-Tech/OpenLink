@@ -1,25 +1,44 @@
-/** The search index's health, in the shape the telemetry backend reports it, with the kinds that are only a warning made explicit. */
 export const SEARCH_INDEX_HEALTH_EVENT = "slate.search_index.health";
+
 export const SEARCH_INDEX_WARN_KINDS = new Set([
   "dispose_drain_cut",
   "worker_terminate_failed",
   "job_retry",
 ]);
-export interface SearchIndexHealthReport {
+
+interface IndexProblem {
   kind: string;
   stage?: string;
   errorClass?: string;
+}
+
+interface IndexMeasure {
   count?: number | null;
 }
+
+export interface SearchIndexHealthReport extends IndexProblem, IndexMeasure {}
+
+function levelFor(kind: string): "warn" | "error" {
+  return SEARCH_INDEX_WARN_KINDS.has(kind) ? "warn" : "error";
+}
+
+function countMetadata(count: number | null | undefined): string | undefined {
+  return count == null ? undefined : String(count);
+}
+
+function healthMetadata(report: SearchIndexHealthReport) {
+  return {
+    kind: report.kind,
+    stage: report.stage,
+    error_class: report.errorClass,
+    count: countMetadata(report.count),
+  };
+}
+
 export function searchIndexHealthTelemetry(report: SearchIndexHealthReport) {
   return {
-    level: SEARCH_INDEX_WARN_KINDS.has(report.kind) ? "warn" : "error",
+    level: levelFor(report.kind),
     event: SEARCH_INDEX_HEALTH_EVENT,
-    metadata: {
-      kind: report.kind,
-      stage: report.stage,
-      error_class: report.errorClass,
-      count: report.count != null ? String(report.count) : undefined,
-    },
+    metadata: healthMetadata(report),
   };
 }

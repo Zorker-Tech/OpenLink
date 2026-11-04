@@ -130,7 +130,12 @@ function createColorPalette(enabled: boolean): ColorPalette {
   }
   return {
     ...base,
-    level: (level, value) => levelStyles[level](value),
+    level: (level, value) => {
+      if (!Object.prototype.hasOwnProperty.call(levelStyles, level)) {
+        throw new Error(`Unhandled log level: ${String(level)}`)
+      }
+      return levelStyles[level](value)
+    },
   }
 }
 

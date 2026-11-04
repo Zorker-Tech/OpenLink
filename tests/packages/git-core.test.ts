@@ -8,7 +8,7 @@ import path from "node:path"
 import { redactHttpUrlUserinfo } from "../../source/packages/git-core/url-redaction.ts"
 import { appendGitDiagnostics } from "../../source/packages/git-core/error-diagnostics.ts"
 import { createGitProcessEnv } from "../../source/packages/git-core/process-env.ts"
-import { gitExecFile } from "../../source/packages/git-core/git-exec.ts"
+import { findGitSubcommand, gitExecFile } from "../../source/packages/git-core/git-exec.ts"
 
 // ---------------------------------------------------------------------------------------------
 // git-core: credentials never leave in a URL
@@ -30,6 +30,15 @@ test("the query and fragment go with the userinfo, because a token hides there t
     redactHttpUrlUserinfo("https://user:token@host.example/repo?access_token=abc#main"),
     "https://host.example/repo",
   )
+})
+
+test("query and fragment values are removed even when the authority has no userinfo", () => {
+  assert.equal(redactHttpUrlUserinfo("https://host.example/repo?access_token=abc#main"), "https://host.example/repo")
+  assert.equal(redactHttpUrlUserinfo("https://host.example/repo#fragment"), "https://host.example/repo")
+})
+
+test("the URL scheme and host spelling survive userinfo removal", () => {
+  assert.equal(redactHttpUrlUserinfo("HTTPS://USER:TOKEN@HOST.EXAMPLE/repo?private=1"), "HTTPS://HOST.EXAMPLE/repo")
 })
 
 test("punctuation around a url stays outside it", () => {
@@ -103,6 +112,19 @@ test("a long stderr is capped and says it was capped", () => {
   const annotated = appendGitDiagnostics("failed", { exitCode: 1, stderr }, { includeStderr: true })
   assert.match(annotated, /\[truncated to 2048 chars\]$/)
   assert.equal(annotated.length < stderr.length + 100, true)
+})
+
+test("stderr alone does not create a git diagnostic suffix", () => {
+  assert.equal(appendGitDiagnostics("failed", { stderr: "permission denied" }, { includeStderr: true }), "failed")
+})
+
+test("stderr at the cap is kept whole and the next character is marked as omitted", () => {
+  const exact = appendGitDiagnostics("failed", { exitCode: 1, stderr: "x".repeat(2_048) }, { includeStderr: true })
+  assert.equal(exact.endsWith("x".repeat(2_048)), true)
+  assert.doesNotMatch(exact, /truncated to/)
+
+  const beyond = appendGitDiagnostics("failed", { exitCode: 1, stderr: "x".repeat(2_049) }, { includeStderr: true })
+  assert.match(beyond, /x… \[truncated to 2048 chars\]$/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -206,7 +228,26 @@ test("a failing git command rejects with what git said", async () => {
 })
 
 test("the subcommand is found past the options that take a value", async () => {
-  // `-c` and `-C` consume the next argument, so the command is the one after them.
+  // Global options consume their operand before the command name is considered.
+  assert.equal(
+    findGitSubcommand([
+      "-c", "core.pager=cat",
+      "-C", "/tmp/repository",
+      "--git-dir", "/tmp/repository/.git",
+      "--work-tree", "/tmp/repository",
+      "--no-pager",
+      "status", "--short",
+    ]),
+    "status",
+  )
+
   const result = await gitExecFile("git", ["-c", "core.pager=cat", "--version"])
   assert.match(result.stdout, /^git version /)
+})
+
+test("only the first non-option is the command and option operands cannot become commands", () => {
+  assert.equal(findGitSubcommand(["--no-pager", "-C", "status", "log"]), "log")
+  assert.equal(findGitSubcommand(["--git-dir", "/repo/.git", "--work-tree=/repo", "status"]), "status")
+  assert.equal(findGitSubcommand(["--no-pager", "-c"]), undefined)
+  assert.equal(findGitSubcommand([]), undefined)
 })

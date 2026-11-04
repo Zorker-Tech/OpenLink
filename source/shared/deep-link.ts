@@ -1,22 +1,18 @@
-import { buildSlatePluginDeepLink, isSlateDeepLinkPluginId, SLATE_PLUGIN_DEEP_LINK_PATH } from "./desktop.ts";
+import { parseDeepLinkUrl } from "./deep-link-url-parser.ts";
+import type { ParsedSlateDeepLink } from "./deep-link-contracts.ts";
 
-export const SLATE_DEEP_LINK_SCHEME = "slate"; export const SLATE_DEEP_LINK_AUTHORITY = "app"; export const SLATE_HTTPS_DEEP_LINK_ORIGIN = "https://slate.invalid"; export const SLATE_HTTPS_DEEP_LINK_PATH_PREFIX = "/slate/link"; export const SLATE_DEEP_LINK_MAX_LENGTH = 2_048;
-const CUSTOM_INFO_ROUTE_PATH = "/v1/info"; const CUSTOM_OPEN_ROUTE_PATH = "/v1/open"; const HTTPS_INFO_ROUTE_PATH = `${SLATE_HTTPS_DEEP_LINK_PATH_PREFIX}${CUSTOM_INFO_ROUTE_PATH}`; const HTTPS_PLUGIN_ADD_ROUTE_PATH = `${SLATE_HTTPS_DEEP_LINK_PATH_PREFIX}${SLATE_PLUGIN_DEEP_LINK_PATH}`; const HTTPS_OPEN_ROUTE_PATH = `${SLATE_HTTPS_DEEP_LINK_PATH_PREFIX}${CUSTOM_OPEN_ROUTE_PATH}`;
-export type SlateDeepLink = { readonly version: 1; readonly route: "info"; readonly topic: "deep-links"; readonly source: "protocol" | "https" } | { readonly version: 1; readonly route: "plugin-add"; readonly pluginId: string; readonly source: "protocol" | "https" } | { readonly version: 1; readonly route: "open"; readonly source: "protocol" | "https" };
-export interface ParsedSlateDeepLink { readonly link: SlateDeepLink; readonly canonicalUrl: string }
-function isPrintableAscii(value: string): boolean { for (let index = 0; index < value.length; index += 1) { const code = value.charCodeAt(index); if (code < 33 || code > 126) return false; } return true; }
-function hasValidPercentEncoding(value: string): boolean { return !/%(?![0-9A-Fa-f]{2})/.test(value); }
-function hasCanonicalPathSection(raw: string): boolean { const queryStart = raw.indexOf("?"); const beforeQuery = queryStart === -1 ? raw : raw.slice(0, queryStart); return !beforeQuery.includes("%") && !/\/\.{1,2}(?:\/|$)/.test(beforeQuery); }
-function readAllowlistedQuery(url: URL, allowlist: Readonly<Record<string, readonly string[]>>): Record<string, string> | null { const seen: Record<string, string> = {}; for (const [key, value] of url.searchParams) { const allowed = allowlist[key]; if (allowed == null || key in seen || !allowed.includes(value)) return null; seen[key] = value; } for (const key of Object.keys(allowlist)) if (!(key in seen)) return null; return seen; }
-export const SLATE_OPEN_DEEP_LINK_URL = `${SLATE_DEEP_LINK_SCHEME}://${SLATE_DEEP_LINK_AUTHORITY}${CUSTOM_OPEN_ROUTE_PATH}`;
-export function canonicalSlateDeepLinkUrl(link: SlateDeepLink): string { switch (link.route) { case "info": return `${SLATE_DEEP_LINK_SCHEME}://${SLATE_DEEP_LINK_AUTHORITY}/v1/info?topic=${link.topic}`; case "plugin-add": return buildSlatePluginDeepLink(link.pluginId); case "open": return SLATE_OPEN_DEEP_LINK_URL; } }
-function parsePluginAddLink(url: URL, source: "protocol" | "https"): ParsedSlateDeepLink | null { const entries = [...url.searchParams]; if (entries.length !== 1) return null; const entry = entries[0]; if (entry == null || entry[0] !== "id" || !isSlateDeepLinkPluginId(entry[1])) return null; const link: SlateDeepLink = { version: 1, route: "plugin-add", pluginId: entry[1], source }; return { link, canonicalUrl: canonicalSlateDeepLinkUrl(link) }; }
-function parseOpenLink(url: URL, source: "protocol" | "https"): ParsedSlateDeepLink | null { if (readAllowlistedQuery(url, {}) == null) return null; const link: SlateDeepLink = { version: 1, route: "open", source }; return { link, canonicalUrl: canonicalSlateDeepLinkUrl(link) }; }
+export {
+  SLATE_DEEP_LINK_AUTHORITY,
+  SLATE_DEEP_LINK_MAX_LENGTH,
+  SLATE_DEEP_LINK_SCHEME,
+  SLATE_HTTPS_DEEP_LINK_ORIGIN,
+  SLATE_HTTPS_DEEP_LINK_PATH_PREFIX,
+  SLATE_OPEN_DEEP_LINK_URL,
+  type ParsedSlateDeepLink,
+  type SlateDeepLink,
+} from "./deep-link-contracts.ts";
+export { canonicalSlateDeepLinkUrl } from "./deep-link-canonical.ts";
+
 export function parseSlateDeepLink(raw: unknown): ParsedSlateDeepLink | null {
-  if (typeof raw !== "string" || raw.length === 0 || raw.length > SLATE_DEEP_LINK_MAX_LENGTH || !isPrintableAscii(raw) || raw.includes("#") || raw.includes("\\") || !hasValidPercentEncoding(raw) || !hasCanonicalPathSection(raw)) return null;
-  const lower = raw.toLowerCase(); const source = lower.startsWith(`${SLATE_DEEP_LINK_SCHEME}:`) ? "protocol" : lower.startsWith("https:") ? "https" : null; if (source == null) return null;
-  let url: URL; try { url = new URL(raw); } catch { return null; } if (url.username !== "" || url.password !== "" || url.port !== "") return null;
-  if (source === "protocol") { if (url.protocol !== `${SLATE_DEEP_LINK_SCHEME}:` || url.host !== SLATE_DEEP_LINK_AUTHORITY) return null; if (url.pathname === SLATE_PLUGIN_DEEP_LINK_PATH) return parsePluginAddLink(url, source); if (url.pathname === CUSTOM_OPEN_ROUTE_PATH) return parseOpenLink(url, source); if (url.pathname !== CUSTOM_INFO_ROUTE_PATH) return null; }
-  else { if (url.protocol !== "https:" || url.host !== new URL(SLATE_HTTPS_DEEP_LINK_ORIGIN).host) return null; if (url.pathname === HTTPS_PLUGIN_ADD_ROUTE_PATH) return parsePluginAddLink(url, source); if (url.pathname === HTTPS_OPEN_ROUTE_PATH) return parseOpenLink(url, source); if (url.pathname !== HTTPS_INFO_ROUTE_PATH) return null; }
-  if (readAllowlistedQuery(url, { topic: ["deep-links"] }) == null) return null; const link: SlateDeepLink = { version: 1, route: "info", topic: "deep-links", source }; return { link, canonicalUrl: canonicalSlateDeepLinkUrl(link) };
+  return parseDeepLinkUrl(raw);
 }

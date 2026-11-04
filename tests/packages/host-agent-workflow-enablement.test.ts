@@ -86,6 +86,17 @@ describe("per-agent workflow access", () => {
     assert.equal(access.hasWorkflowFlags(), true);
   });
 
+  it("lets an explicit disabled id override the same id in the legacy enabled list", () => {
+    const directory = agentDirectory();
+    writeState(directory, { disabled: ["daily"], enabled: ["daily"] });
+    const access = new AgentWorkflowAccess(directory);
+
+    assert.equal(access.isWorkflowEnabled("daily"), false);
+    access.setWorkflowEnabled("daily", true);
+    assert.deepEqual(readState(directory), { disabled: [], enabled: ["daily"] });
+    assert.equal(access.isWorkflowEnabled("daily"), true);
+  });
+
   it("recognizes the legacy enabled list even when nothing is disabled", () => {
     const directory = agentDirectory();
     writeState(directory, { enabled: ["legacy"], disabled: [] });

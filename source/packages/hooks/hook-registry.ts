@@ -9,7 +9,7 @@
  */
 
 import { HookStep } from "./hook-step.ts"
-import { validateBaseHookResponse } from "./validators/base-hook-response.ts"
+import { validateHookResponseEnvelope } from "./validators/base-hook-response.ts"
 import {
   validateBeforePromptSubmitResponse,
   validateGatedActionResponse,
@@ -22,7 +22,7 @@ import {
   validateStopResponse,
   validateSubagentStartResponse,
   validateWorkspaceOpenResponse,
-} from "./validators/hook-responses.ts"
+} from "../../adapters/interop/hooks/foreign-hook-response-adapter.ts"
 import type { ValidationResult } from "./validators/validation.ts"
 
 export type HookResponseValidator = (value: unknown) => ValidationResult
@@ -52,7 +52,7 @@ export const HOOK_RESPONSE_VALIDATORS: Readonly<Record<HookStep, HookResponseVal
 }
 
 export function validateHookResponse(step: HookStep, value: unknown): ValidationResult {
-  return (HOOK_RESPONSE_VALIDATORS[step] ?? validateBaseHookResponse)(value)
+  return (HOOK_RESPONSE_VALIDATORS[step] ?? validateHookResponseEnvelope)(value)
 }
 
 /** The steps whose response may add context to the model's conversation. */

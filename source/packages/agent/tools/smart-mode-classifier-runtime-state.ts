@@ -10,12 +10,12 @@
  * three, and they are created here when the caller did not bring its own.
  */
 
-import type { RequestContext } from "../../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import {
   createDevSmartModeClassifierBlockState,
   createDevSmartModeClassifierDelayState,
   type OneShotState,
+  type SmartModeClassifierControls,
 } from "./dev-smart-mode-classifier-block.ts"
 
 export interface SmartModeClassifierRuntimeState {
@@ -28,14 +28,14 @@ export interface SmartModeClassifierRuntimeState {
 
 export function getSmartModeClassifierRuntimeState({
   agentType,
-  requestContext,
+  controls,
   smartModeClassifierMode,
   smartModeClassifierShadowMode,
   devBlockState,
   devDelayState,
 }: {
   readonly agentType: AgentType
-  readonly requestContext?: Pick<RequestContext, "env"> | undefined
+  readonly controls?: SmartModeClassifierControls | undefined
   readonly smartModeClassifierMode: boolean
   readonly smartModeClassifierShadowMode: boolean
   readonly devBlockState?: OneShotState | undefined
@@ -43,13 +43,13 @@ export function getSmartModeClassifierRuntimeState({
 }): SmartModeClassifierRuntimeState {
   const isBackgroundAgent = agentType === AgentType.BACKGROUND
   const autoModeSelected = smartModeClassifierMode === true &&
-    requestContext?.env?.smartModeClassifierAutoModeEnabled === true
+    controls?.automaticModeEnabled === true
   const enabled = !isBackgroundAgent && autoModeSelected
   return {
     autoModeSelected,
     enabled,
     shadowEnabled: !isBackgroundAgent && !enabled && smartModeClassifierShadowMode === true,
-    devBlockState: devBlockState ?? createDevSmartModeClassifierBlockState(requestContext),
-    devDelayState: devDelayState ?? createDevSmartModeClassifierDelayState(requestContext),
+    devBlockState: devBlockState ?? createDevSmartModeClassifierBlockState(controls?.blockNextToken),
+    devDelayState: devDelayState ?? createDevSmartModeClassifierDelayState(controls?.delayNextToken),
   }
 }

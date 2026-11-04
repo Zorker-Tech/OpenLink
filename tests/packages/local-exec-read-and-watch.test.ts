@@ -179,12 +179,12 @@ test("a text file is read with the lines it has", async () => {
     const executor = new LocalReadExecutor(allowAll, workspace)
     const result = await executor.execute(createContext(), { path: "notes.txt" })
 
-    assert.equal(result.result.case, "success")
-    assert.equal(result.result.value?.output.case, "content")
-    assert.equal(result.result.value?.output.value, "one\ntwo\nthree\n")
-    assert.equal(result.result.value?.totalLines, 4)
-    assert.equal(result.result.value?.fileSize, 14n)
-    assert.equal(result.result.value?.truncated, false)
+    assert.equal(result.kind, "success")
+    assert.equal(result.kind === "success" ? result.output.kind : "", "text")
+    assert.equal(result.kind === "success" && result.output.kind === "text" ? result.output.text : "", "one\ntwo\nthree\n")
+    assert.equal(result.kind === "success" ? result.totalLines : 0, 4)
+    assert.equal(result.kind === "success" ? result.fileSize : 0, 14)
+    assert.equal(result.kind === "success" ? result.truncated : true, false)
   })
 })
 
@@ -194,8 +194,8 @@ test("a range is applied to what was read", async () => {
     const executor = new LocalReadExecutor(allowAll, workspace)
     const result = await executor.execute(createContext(), { path: "notes.txt", offset: 2, limit: 2 })
 
-    const success = result.result.case === "success" ? result.result.value : undefined
-    assert.equal(success?.output.value, "two\nthree")
+    const success = result.kind === "success" ? result : undefined
+    assert.equal(success?.output.kind === "text" ? success.output.text : undefined, "two\nthree")
     assert.equal(success?.totalLines, 5)
     assert.equal(success?.rangeApplied, true)
   })
@@ -207,18 +207,18 @@ test("what cannot be read is reported as its own answer", async () => {
     const executor = new LocalReadExecutor(allowAll, workspace)
 
     const missing = await executor.execute(createContext(), { path: "not-here.txt" })
-    assert.equal(missing.result.case, "fileNotFound")
+    assert.equal(missing.kind, "not_found")
 
     const directory = await executor.execute(createContext(), { path: "a-directory" })
-    assert.equal(directory.result.case, "invalidFile")
-    assert.match(directory.result.value?.reason ?? "", /is a directory/)
+    assert.equal(directory.kind, "invalid_file")
+    assert.match(directory.kind === "invalid_file" ? directory.reason : "", /is a directory/)
 
     // A file whose bytes say it is a binary the model cannot read is refused rather than shown as mojibake.
     // A format that is binary and that the model has no way to read: an archive.
     fs.writeFileSync(path.join(workspace, "blob.bin"), Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0, 0, 0, 0, 0]))
     const binary = await executor.execute(createContext(), { path: "blob.bin" })
-    assert.equal(binary.result.case, "invalidFile")
-    assert.match(binary.result.value?.reason ?? "", /Binary files of type .bin are not supported/)
+    assert.equal(binary.kind, "invalid_file")
+    assert.match(binary.kind === "invalid_file" ? binary.reason : "", /Binary files of type .bin are not supported/)
   })
 })
 
@@ -228,7 +228,7 @@ test("a file that claims to be an image but cannot be decoded fails rather than 
     const executor = new LocalReadExecutor(allowAll, workspace)
     const result = await executor.execute(createContext(), { path: "broken.png" })
     // The read is bounded by the watchdog, so a file that cannot be decoded is an answer rather than a wait.
-    assert.equal(result.result.case, "error")
+    assert.equal(result.kind, "error")
   })
 })
 
@@ -238,8 +238,8 @@ test("a path the user may not read is refused before anything is read", async ()
     const executor = new LocalReadExecutor({ shouldBlockRead: (candidate) => candidate.endsWith("secret.txt") }, workspace)
     const result = await executor.execute(createContext(), { path: "secret.txt" })
 
-    assert.equal(result.result.case, "permissionDenied")
-    assert.equal(result.result.value?.path, path.join(workspace, "secret.txt"))
+    assert.equal(result.kind, "permission_denied")
+    assert.equal(result.kind === "permission_denied" ? result.path : "", path.join(workspace, "secret.txt"))
   })
 })
 
@@ -252,9 +252,9 @@ test("a terminal's output is read as records rather than as text", async () => {
 
     const executor = new LocalReadExecutor(allowAll, workspace)
     const result = await executor.execute(createContext(), { path: ".slate/projects/workspace-1/terminals/42.txt" })
-    assert.equal(result.result.case, "success")
-    assert.equal(result.result.value?.output.case, "content")
-    assert.equal(result.result.value?.output.value, "the command's output\nsecond line\n")
+    assert.equal(result.kind, "success")
+    assert.equal(result.kind === "success" ? result.output.kind : "", "text")
+    assert.equal(result.kind === "success" && result.output.kind === "text" ? result.output.text : "", "the command's output\nsecond line\n")
   })
 })
 

@@ -19,14 +19,12 @@ import {
 interface ReadAnswer { kind: "content" | "other" | "failure"; content?: string; totalLines?: number; truncated?: boolean }
 function accessor(answers: ReadAnswer[], calls: any[]) {
   return {
-    get: () => ({
-      execute: async (context: unknown, args: any) => {
-        calls.push({ context, path: args.path, toolCallId: args.toolCallId, offset: args.offset, limit: args.limit });
-        const answer = answers.shift() ?? { kind: "failure" };
-        if (answer.kind === "failure") return { result: { case: "failure", value: {} } };
-        return { result: { case: "success", value: { output: answer.kind === "content" ? { case: "content", value: answer.content ?? "" } : { case: "url", value: "x" }, totalLines: answer.totalLines ?? 0, truncated: answer.truncated ?? false } } };
-      },
-    }),
+    async read(context: unknown, args: { path: string; toolCallId: string; offset: number; limit: number }) {
+      calls.push({ context, ...args });
+      const answer = answers.shift() ?? { kind: "failure" };
+      if (answer.kind !== "content") return undefined;
+      return { content: answer.content ?? "", totalLines: answer.totalLines ?? 0, truncated: answer.truncated ?? false };
+    },
   };
 }
 

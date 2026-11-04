@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { createComputerUseCoordination } from "../../source/host/runner/computer-use.ts";
-import { computerUseExecutorResource } from "../../source/packages/agent-exec/computer-use.ts";
+import { computerUseExecutorResource } from "../../source/adapters/interop/agent/computer-use-executor-adapter.ts";
 import { shellExecutorResource } from "../../source/packages/agent-exec/shell.ts";
 import { noMonitorComputerUseExecutor } from "../../source/host/ports/box.ts";
 

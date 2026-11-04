@@ -1,0 +1,9 @@
+export const AGENT_DATABASE_FILE = "store.db";
+export const CONVERSATION_BLOB_DATABASE_FILE = "conversation-blobs.db";
+export const LIVE_CONVERSATION_ROOT_MARKER_BYTES = new TextEncoder().encode("slate-live-conversation-root-v1__");
+export const STALE_ROOT_GC_SCHEMA_VERSION = 1;
+export const ACTIVE_AGENT_FILE = "active-agent.json";
+export const HIDDEN_ENTRY_FIX_SCHEMA_VERSION = 1;
+export const LEGACY_GROUP_MEMBER_FOLDER = "members";
+export const CONNECTOR_SECRET_ROOT_FOLDER = "connector-secrets";
+export const TRANSCRIPT_FOLDER = "agent-transcripts";

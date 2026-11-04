@@ -19,10 +19,10 @@ import {
   type RetryPolicy,
 } from "../../../host/extensions/scheduling.ts";
 import {
-  isDeadlineExceededConnectError,
-  isRateLimitConnectError,
-  isTransientConnectError,
-} from "../../connect-errors.ts";
+  isSlateDeadlineExceededError,
+  isSlateRateLimitError,
+  isSlateTransientRemoteError,
+} from "../../network/remote-rpc-error.ts";
 import { brandedEnumOf } from "../../errors/bounded-values.ts";
 import { SlateError } from "../../errors/registry.ts";
 import {
@@ -113,7 +113,7 @@ export function createSlateMcpOAuthLoopback(deps: {
         initialDelayMs: MCP_OAUTH_COMPLETION_RETRY_DELAY_MS,
         maxDelayMs: MCP_OAUTH_COMPLETION_RETRY_DELAY_MS,
         shouldRetry: (error) =>
-          isTransientConnectError(error) && !isRateLimitConnectError(error),
+          isSlateTransientRemoteError(error) && !isSlateRateLimitError(error),
       }),
     bindRetry =
       deps.bindRetry ??
@@ -205,14 +205,14 @@ export function createSlateMcpOAuthLoopback(deps: {
       return { kind: "success" };
     } catch (error) {
       fail(
-        isDeadlineExceededConnectError(error)
+        isSlateDeadlineExceededError(error)
           ? "completion_timeout"
           : "completion_rejected",
       );
       deps.log(
         `[slate:mcp] loopback OAuth completion failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      if (isTransientConnectError(error)) flow.completing = null;
+      if (isSlateTransientRemoteError(error)) flow.completing = null;
       else forgetState(state);
       return { kind: "failed" };
     }

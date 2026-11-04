@@ -1,31 +1,27 @@
-/**
- * The console output the user attached, as context.
- *
- * A user debugging a page attaches the console, and what makes it useful is the order and the moment: the
- * level and the time are kept on each line so a failure can be placed relative to what preceded it. The
- * times are rendered in the reader's own zone rather than as raw timestamps, because the agent is
- * reasoning about a sequence the user watched.
- */
-
-import type { SelectedConsoleLog } from "../../proto/generated/agent/v1/selected_context_pb.ts"
+export interface ConsoleLogPromptInput {
+  readonly level: string
+  readonly timestamp: number
+  readonly message: string
+}
 
 export interface ConsoleLogsTextContent {
   readonly type: "text"
   readonly text: string
 }
 
+function formatLogLine(log: ConsoleLogPromptInput): string {
+  const localTime = new Date(log.timestamp).toLocaleTimeString()
+  return `${log.level} ${localTime}: ${log.message}`
+}
+
 export function renderConsoleLogsContext(
-  consoleLogs: readonly SelectedConsoleLog[],
+  logs: readonly ConsoleLogPromptInput[],
 ): ConsoleLogsTextContent | undefined {
-  if (consoleLogs.length === 0) return undefined
-  const logsText = consoleLogs
-    .map(log => `${log.level} ${new Date(log.timestamp).toLocaleTimeString()}: ${log.message}`)
-    .join("\n")
+  if (logs.length === 0) return undefined
+
+  const renderedLogs = logs.map(formatLogLine).join("\n")
   return {
     type: "text",
-    text: `<console_logs_context>
-Recent logs from the runtime connected to the AI agent.
-${logsText}
-</console_logs_context>`,
+    text: `<console_logs_context>\nConsole output attached from the runtime:\n${renderedLogs}\n</console_logs_context>`,
   }
 }

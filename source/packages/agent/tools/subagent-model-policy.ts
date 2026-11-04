@@ -7,12 +7,22 @@
  * picker may pick, but only within the family.
  */
 
-export const SubagentModelForcePolicy = {
-  None: "none",
-  /** The credential or harness covers one model, so the subagent must use it. */
-  ParentPin: "parent_pin",
-  /** A request-based session: the family is fixed, and the picker may choose within it. */
-  RequestBasedComposer: "request_based_composer",
-} as const
+const policyValues = ["none", "parent_pin", "request_based_composer"] as const
 
-export type SubagentModelForcePolicy = (typeof SubagentModelForcePolicy)[keyof typeof SubagentModelForcePolicy]
+export type SubagentModelForcePolicy = (typeof policyValues)[number]
+
+export const SubagentModelForcePolicy = Object.freeze({
+  None: policyValues[0],
+  ParentPin: policyValues[1],
+  RequestBasedComposer: policyValues[2],
+})
+
+export const SUBAGENT_MODEL_FORCE_POLICIES: readonly SubagentModelForcePolicy[] = [
+  SubagentModelForcePolicy.None,
+  SubagentModelForcePolicy.ParentPin,
+  SubagentModelForcePolicy.RequestBasedComposer,
+]
+
+export function isSubagentModelForcePolicy(value: unknown): value is SubagentModelForcePolicy {
+  return typeof value === "string" && (SUBAGENT_MODEL_FORCE_POLICIES as readonly string[]).includes(value)
+}

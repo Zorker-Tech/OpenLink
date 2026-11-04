@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { ADMIN_BROADCAST_WAKE_CUE, AGENT_DIRECTORY_PROMPT_LIMIT, AGENT_INBOUND_WAKE_CUE, AGENT_MESSAGE_MAX_TEXT_LENGTH } from "../../source/host/agents/agent-messaging.ts";
-import { describeParamIncompatibilities, findCatalogEntry, mapAvailableModels, toSlateModelCatalogEntry } from "../../source/shared/agents/model-catalog.ts";
+import { describeParamIncompatibilities, findCatalogEntry } from "../../source/shared/agents/model-catalog.ts";
 import { AgentError, CancelledError, classifyError, NonRetriableError, RetriableError } from "../../source/packages/agent-client/errors.ts";
 import { AnalyticsBuffer } from "../../source/packages/analytics-client/buffer.ts";
 import { createContextPropagatingClient } from "../../source/packages/context-rpc/index.ts";
@@ -22,11 +22,9 @@ describe("passing a message to an agent", () => {
 });
 
 describe("the models the platform offers", () => {
-  it("describes what a model takes, and maps a backend entry into ours", () => {
+  it("describes what a model takes, and finds it by its Slate id", () => {
     assert.equal(typeof describeParamIncompatibilities, "function");
-    assert.equal(typeof toSlateModelCatalogEntry, "function");
     assert.equal(typeof findCatalogEntry, "function");
-    assert.equal(typeof mapAvailableModels, "function");
   });
 });
 
@@ -75,7 +73,7 @@ describe("events waiting to be sent", () => {
     const requests: string[][] = [];
     const buffer = new AnalyticsBuffer({
       client: { trackEvents: async request => {
-        requests.push((request as { events: { eventName: string }[] }).events.map(event => event.eventName));
+        requests.push((request as { events: readonly { eventName: string }[] }).events.map(event => event.eventName));
         if (requests.length === 1) await firstRequest;
       } },
       tokenProvider: { getAccessToken: async () => "token" },

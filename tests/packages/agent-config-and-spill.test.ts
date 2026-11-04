@@ -6,7 +6,7 @@ import {
   estimateTokenCount as estimateSelfSummaryTokenCount,
   extractTextContent,
 } from "../../source/packages/agent/self-summary/token-estimate.ts"
-import { spillLargeMcpTextOutput } from "../../source/packages/agent/tools/mcp/mcp-output-spill.ts"
+import { spillLargeMcpTextOutput } from "../../source/adapters/interop/agent/mcp-output-spill-adapter.ts"
 import { MAX_AGENT_STEPS } from "../../source/packages/agent/constants.ts"
 import { DISABLED_BACKGROUND_SUMMARIZATION_PROPS } from "../../source/packages/agent-summarization/background-summarization.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
@@ -19,8 +19,8 @@ import {
   McpSuccess,
   McpTextContent,
   McpToolResultContentItem,
-} from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
-import { MCP_TEXT_FILE_THRESHOLD_BYTES } from "../../source/packages/agent-exec/agent-tools-file.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { MCP_TEXT_FILE_THRESHOLD_BYTES } from "../../source/packages/agent/tools/mcp/mcp-output-spill-policy.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------

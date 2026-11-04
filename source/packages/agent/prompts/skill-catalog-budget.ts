@@ -47,7 +47,7 @@ interface TruncatedDescriptionsResult {
 }
 
 /** Which of the three fits the catalogue ended up in: it was under budget, shortened, dropped or omitted. */
-type SkillCatalogBudgetStrategy = "under_budget" | "shortened_descriptions" | "dropped_descriptions" | "omitted_skills"
+export type SkillCatalogBudgetStrategy = "under_budget" | "shortened_descriptions" | "dropped_descriptions" | "omitted_skills"
 
 const INITIAL_SKILL_CATALOG_CONTEXT_FRACTION = 0.02
 const FALLBACK_AGENT_TOKEN_LIMIT = 200_000

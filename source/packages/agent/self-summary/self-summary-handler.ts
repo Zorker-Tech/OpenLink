@@ -34,17 +34,17 @@ import {
   NoSummaryResponseError,
 } from "../../agent-summarization/error-handling.ts"
 import {
-  runSummarizationPipeline,
-  type SummarizationEnrichments,
-  type SummarizationPipelineOptions,
+  runSummaryPass,
+  type SummaryCarryData,
+  type SummaryRunOptions,
 } from "../../agent-summarization/pipeline.ts"
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts"
-import { collectAllSkillBlocks } from "../../agent-summarization/skill-persistence.ts"
+import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
 import {
   SHORTER_OUTPUT_RETRY_PROMPT,
   SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
 } from "../../agent-summarization/summarization-handler.ts"
-import { toUnredactedInteractionListener } from "../../agent-core/redacted-interaction-listener.ts"
+import { toUnredactedInteractionListener } from "../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import { createLogger, createSpan } from "../../context/index.ts"
 import { createCounter, createHistogram } from "../../metrics/index.ts"
@@ -532,7 +532,7 @@ export class SelfSummarizer {
    * which is kept because the model is about to answer it — a self-summary that swallowed the question would
    * leave the model with nothing to do.
    */
-  partitionMessages(messages: readonly RedactedCoreMessage[], _options: SummarizationPipelineOptions): SelfSummaryPartition {
+  separateMessages(messages: readonly RedactedCoreMessage[], _options: SummaryRunOptions): SelfSummaryPartition {
     if (messages.length < 3) {
       throw new Error(`Self-summary requires at least 3 messages, got ${messages.length}`)
     }
@@ -542,7 +542,7 @@ export class SelfSummarizer {
     }
     const lastUserIndex = findLastUserMessageIndex(messages as SelfSummaryMessage[])
     const lastUserQuery = messages[lastUserIndex]
-    const skillBlocks = collectAllSkillBlocks(messagesForSummarization)
+    const skillBlocks = collectAttachedSkillBlocksFromConversation(messagesForSummarization)
     return {
       systemMessage,
       userInfoMessage,
@@ -555,7 +555,7 @@ export class SelfSummarizer {
   async generateSummary(
     ctx: Context,
     partitioned: SelfSummaryPartition,
-    _options: SummarizationPipelineOptions,
+    _options: SummaryRunOptions,
   ): Promise<SelfSummaryRawResult> {
     if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
     // The instruction is the last message, so the model reads the conversation and then the request to
@@ -594,10 +594,10 @@ export class SelfSummarizer {
     return { text: summaryText }
   }
 
-  buildSummaryMessage(
+  formatSummaryCarrier(
     rawSummary: SelfSummaryRawResult,
     partitioned: SelfSummaryPartition,
-    enrichments: SummarizationEnrichments,
+    enrichments: SummaryCarryData,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
     const summaryNumber = this.stateHandler.selfSummaryCount + 1
     const blocks = renderDurableBlocks("self-summary", enrichments as DurableBlockEnrichments, {
@@ -629,7 +629,7 @@ If the task is complete, respond to the user. Otherwise, continue working on the
   }
 
   /** The summary goes last: the preserved tail is what the model was about to answer, and it answers it. */
-  assembleFinalMessages(
+  rebuildConversation(
     partitioned: SelfSummaryPartition,
     summaryEntry: RedactedCoreMessage,
   ): readonly RedactedCoreMessage[] {
@@ -645,7 +645,7 @@ If the task is complete, respond to the user. Otherwise, continue working on the
   async summarize(
     ctx: Context,
     messages: readonly RedactedCoreMessage[],
-    options: SummarizationPipelineOptions,
+    options: SummaryRunOptions,
   ): Promise<Record<string, unknown>> {
     using spanContext = createSpan(ctx.withName("SelfSummarizer.summarize"))
     const workCtx = spanContext.ctx
@@ -654,7 +654,7 @@ If the task is complete, respond to the user. Otherwise, continue working on the
       summarization: { messageCount: messages.length, modelId: this.modelId },
     })
     try {
-      const pipelineOutcome = await runSummarizationPipeline(this, workCtx, messages, options)
+      const pipelineOutcome = await runSummaryPass(this, workCtx, messages, options)
       const summaryCode = createRedactedString(
         pipelineOutcome.rawSummary.text,
         DataClassification.CODE,

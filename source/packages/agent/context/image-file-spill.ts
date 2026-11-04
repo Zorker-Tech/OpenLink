@@ -17,17 +17,10 @@
 import path from "node:path"
 
 import type { Context } from "../../context/context.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
+import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
 import { sanitizeFilename } from "../../utils/managed-paths.ts"
 
-interface ImageWriteExecutor {
-  execute(ctx: Context, args: WriteArgs): Promise<unknown>
-}
-
-export interface ImageResourceAccessor {
-  get(resource: typeof writeExecutorResource): ImageWriteExecutor
-}
+export type ImageResourceAccessor = InteropWorkspaceFileWriteAccessor
 
 export interface SelectedImageFilePathInput {
   readonly ctx: Context
@@ -101,12 +94,7 @@ export function writeSelectedImageToProjectAssets({
         if (imageFilePath === undefined) {
           const filePath = path.join(requestContext.env.projectFolder, "assets", fileName)
           imageFilePath = filePath
-          const writeExecutor = resourceAccessor.get(writeExecutorResource)
-          void writeExecutor.execute(ctx, new WriteArgs({
-            path: filePath,
-            fileBytes: new Uint8Array(imageData),
-            returnFileContentAfterWrite: false,
-          })).then(() => {}).catch(() => {})
+          void writeWorkspaceBytesThroughInterop(resourceAccessor, ctx, filePath, imageData).catch(() => {})
         }
       } catch (_error) {
         // A path that cannot be derived is absent, which the caller already handles.

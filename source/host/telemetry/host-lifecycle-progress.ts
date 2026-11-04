@@ -4,91 +4,65 @@
  * Each phase is reported once with what it completed — plugins, boxes, agents — and the phases the platform walks
  * through are the same ones the host's own ports name.
  */
-import {
-  SlateError,
-  type SlateErrorValue,
-} from "../../shared/errors/registry.ts";
 import { SLATE_HOST_LIFECYCLE_PHASES } from "../ports/telemetry.ts";
+import {
+  completedPhaseReport,
+  interruptedPhaseReport,
+} from "./host-lifecycle-report-policy.ts";
+import type {
+  CompletedStartupPhase,
+  LifecycleTimerHandle,
+  StartupPhaseReport,
+  StartupProgressPorts,
+} from "./host-lifecycle-contracts.ts";
+
 export { SLATE_HOST_LIFECYCLE_PHASES };
-export interface Disposable {
-  dispose(): void;
-}
-export interface HostLifecycleCompletion {
-  phase: string;
-  pluginCount?: number;
-  entryCount?: number;
-}
-export type HostLifecycleReport =
-  | (HostLifecycleCompletion & {
-      outcome: "completed";
-      durationMs: number;
-    })
-  | {
-      phase: string;
-      outcome: "failed" | "stuck";
-      durationMs: number;
-      error: SlateErrorValue;
-    };
-export class HostLifecycleProgress {
+export type { StartupPhaseReport } from "./host-lifecycle-contracts.ts";
+
+export class HostStartupProgress {
   private phaseIndex = 0;
   private phaseStartedAt: number;
-  private watchdogHandle: Disposable | undefined;
-  constructor(
-    private readonly options: {
-      startedAt: number;
-      now(): number;
-      report(report: HostLifecycleReport): void;
-      watchdog: { arm(listener: () => void): Disposable };
-    },
-  ) {
-    this.phaseStartedAt = options.startedAt;
-    this.armWatchdog();
+  private watchdogHandle: LifecycleTimerHandle | undefined;
+
+  constructor(private readonly ports: StartupProgressPorts) {
+    this.phaseStartedAt = ports.startedAt;
+    this.armPhaseWatchdog();
   }
-  complete(completion: HostLifecycleCompletion): void {
-    const phase = this.currentPhase();
-    if (phase !== completion.phase)
-      throw new Error(
-        `Host lifecycle phase ${completion.phase} completed while ${phase ?? "none"} was active`,
-      );
+
+  complete(completion: CompletedStartupPhase): void {
+    const phase = this.activePhase();
+    if (phase !== completion.phase) {
+      throw new Error(`Startup phase ${completion.phase} cannot finish while ${phase ?? "none"} is active`);
+    }
     this.watchdogHandle?.dispose();
     this.watchdogHandle = undefined;
-    this.options.report({
-      ...completion,
-      outcome: "completed",
-      durationMs: this.elapsedMs(),
-    });
+    this.ports.report(completedPhaseReport(completion, this.elapsedMilliseconds()));
     this.phaseIndex += 1;
-    this.phaseStartedAt = this.options.now();
-    this.armWatchdog();
+    this.phaseStartedAt = this.ports.now();
+    this.armPhaseWatchdog();
   }
+
   fail(): void {
-    const phase = this.currentPhase();
+    const phase = this.activePhase();
     if (phase === undefined) return;
     this.watchdogHandle?.dispose();
     this.watchdogHandle = undefined;
-    this.options.report({
-      phase,
-      outcome: "failed",
-      durationMs: this.elapsedMs(),
-      error: SlateError.hostLifecycleFailed(),
-    });
+    this.ports.report(interruptedPhaseReport(phase, this.elapsedMilliseconds(), "failed"));
   }
-  armWatchdog(): void {
-    const phase = this.currentPhase();
+
+  armPhaseWatchdog(): void {
+    const phase = this.activePhase();
     if (phase === undefined) return;
-    this.watchdogHandle = this.options.watchdog.arm(() =>
-      this.options.report({
-        phase,
-        outcome: "stuck",
-        durationMs: this.elapsedMs(),
-        error: SlateError.hostLifecycleStalled(),
-      }),
+    this.watchdogHandle = this.ports.watchdog.arm(() =>
+      this.ports.report(interruptedPhaseReport(phase, this.elapsedMilliseconds(), "stuck")),
     );
   }
-  currentPhase(): string | undefined {
+
+  activePhase(): string | undefined {
     return SLATE_HOST_LIFECYCLE_PHASES[this.phaseIndex];
   }
-  elapsedMs(): number {
-    return Math.max(0, Math.round(this.options.now() - this.phaseStartedAt));
+
+  elapsedMilliseconds(): number {
+    return Math.max(0, Math.round(this.ports.now() - this.phaseStartedAt));
   }
 }

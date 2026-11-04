@@ -17,7 +17,10 @@ import {
 import { SLATE_HIDDEN_PROMPT_MARKER, SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER } from "./slate-prompt-markers.ts";
 import { appendUserReplyReminder, buildAttachedFilesNote, buildReplyContextNote, buildUserMessageAddressNote } from "./system-prompt.ts";
 import { bytesLookLikeVideoContainer } from "./video-container.ts";
-import { collectPrependUserMessages, type ShellTerminalWatchHost } from "./shell-terminal-watch.ts";
+import type { ShellTerminalWatchHost } from "./shell-terminal-watch.ts";
+import { collectPrependUserMessages } from "../../adapters/interop/agent/shell-terminal-watch-adapter.ts";
+import { generatedTurnActionFromSlate, hydrateInteropSelectedVideos } from "../../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnActionAssembly as GeneratedTurnActionAssembly, InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import { SLATE_BOX_WORKSPACE_ROOT } from "../cloud-agents/cloud-agent-images.ts";
 import { downloadBoxFiles, type TransferBox } from "../boxes/box-transfer.ts";
 import {
@@ -26,16 +29,8 @@ import {
   type AutomationRecord,
 } from "../automations/automation.ts";
 import type { AutomationStatusSource, AutomationTimeZoneResolver } from "../automations/automation-status-reminder.ts";
-import {
-  ConversationAction,
-  UserMessage,
-  UserMessageAction,
-} from "../../packages/proto/generated/agent/v1/agent_pb.ts";
-import {
-  SelectedContext,
-  SelectedImage,
-  SelectedVideo as GeneratedSelectedVideo,
-} from "../../packages/proto/generated/agent/v1/selected_context_pb.ts";
+
+export type { GeneratedTurnActionAssembly, GeneratedTurnPromptOptions };
 
 export class SlateVideoAttachmentError extends Error {}
 
@@ -103,7 +98,7 @@ export interface PromptCollectorHost<Context = unknown> {
   collectGeneratedPrependUserMessages?(
     recent: readonly { readonly id: string; readonly text: string; readonly richText?: string }[],
     messageId?: string,
-  ): Promise<readonly UserMessage[]>;
+  ): Promise<readonly unknown[]>;
   traceSendPhase?<T>(context: unknown, name: string, operation: () => Promise<T>): Promise<T>;
   isSpotlightEnabled?: (() => boolean) | undefined;
 }
@@ -122,19 +117,6 @@ export interface TurnActionAssembly {
       };
     };
   };
-  readonly automationStatusReminder: string | null;
-  readonly automationStatusCompactionEpoch: number;
-}
-
-export interface GeneratedTurnPromptOptions extends AttachedFileChoices, PromptNoteChoices {
-  readonly selectedImages?: readonly ChosenImage[];
-  readonly selectedVideos?: readonly GeneratedSelectedVideo[];
-  readonly recentUserMessages?: readonly { readonly id: string; readonly text: string; readonly richText?: string }[];
-}
-
-/** A turn's generated action, with the prompt parts of its own around it. */
-export interface GeneratedTurnActionAssembly {
-  readonly action: ConversationAction;
   readonly automationStatusReminder: string | null;
   readonly automationStatusCompactionEpoch: number;
 }
@@ -382,28 +364,6 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
     return resolved;
   }
 
-  /** A subagent's generated video attachments, with bytes read into the ones that carry none yet. */
-  async function resolveGeneratedSelectedVideos(videos: readonly GeneratedSelectedVideo[]): Promise<GeneratedSelectedVideo[]> {
-    if (videos.length === 0 || host.isSubagentRunner !== true) return [...videos];
-    const resolved: GeneratedSelectedVideo[] = [];
-    for (const video of videos) {
-      if (video.dataOrBlobId.case !== undefined) { resolved.push(video); continue; }
-      const videoPath = video.path.trim();
-      const bytes = await videoBytesForReview(videoPath);
-      if (bytes == null) throw videoReviewError(video.filename || (videoPath || "unknown"));
-      resolved.push(new GeneratedSelectedVideo({
-        uuid: video.uuid,
-        path: video.path,
-        ...(video.fps === undefined ? {} : { fps: video.fps }),
-        mimeType: video.mimeType,
-        filename: video.filename,
-        materializeToFilesystem: video.materializeToFilesystem,
-        dataOrBlobId: { case: "data", value: bytes },
-      }));
-    }
-    return resolved;
-  }
-
   /** The files a turn stages into the box, empty when it has none or the box cannot take them now. */
   async function stageAttachedFiles(files: readonly string[]): Promise<Map<string, string>> {
     if (files.length === 0 || host.uploadAttachmentsIntoBox == null || host.getRemoteBoxAvailable?.() !== true) return new Map();
@@ -483,7 +443,7 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
   }
 
   /** The earlier user messages a generated turn carries, from the shell watch or the host's own collector. */
-  async function collectPrependMessages(runCtx: unknown, options: GeneratedTurnPromptOptions): Promise<UserMessage[]> {
+  async function collectPrependMessages(runCtx: unknown, options: GeneratedTurnPromptOptions): Promise<readonly unknown[]> {
     const collect = async () => host.shellWatchHost != null
       ? await collectPrependUserMessages(host.shellWatchHost(), options.recentUserMessages, options.messageId)
       : [...(await host.collectGeneratedPrependUserMessages?.(options.recentUserMessages ?? [], options.messageId) ?? [])];
@@ -501,32 +461,26 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
   }): Promise<GeneratedTurnActionAssembly> {
     const { options } = args;
     const { text, routineStatus, compactionEpoch } = await composeTurnText(args);
-    const selectedImages = (options.selectedImages ?? []).map((image) => new SelectedImage({
-      dataOrBlobId: { case: "data", value: image.data },
-      path: image.path ?? "",
-      mimeType: image.mimeType ?? "",
-    }));
-    const selectedVideos = await resolveGeneratedSelectedVideos(options.selectedVideos ?? []);
-    const selectedContext = selectedImages.length > 0 || selectedVideos.length > 0
-      ? new SelectedContext({ selectedImages, selectedVideos })
-      : undefined;
+    const selectedVideos = await hydrateInteropSelectedVideos({
+      videos: options.selectedVideos ?? [],
+      isSubagentRunner: host.isSubagentRunner === true,
+      readBytes: videoBytesForReview,
+      missingVideoError: videoReviewError,
+    });
     const richText = options.richText?.trim();
     const prepended = await collectPrependMessages(args.runCtx, options);
     const unanswered = unansweredQuestions(options);
-    if (unanswered.length > 0) prepended.push(new UserMessage({ text: unansweredQuestionsNote(unanswered) }));
-    const userMessage = new UserMessage({
+    return generatedTurnActionFromSlate({
       text,
-      messageId: options.messageId ?? "",
+      ...(options.messageId === undefined ? {} : { messageId: options.messageId }),
       ...(richText != null && richText.length > 0 ? { richText } : {}),
-      ...(selectedContext == null ? {} : { selectedContext }),
+      selectedImages: options.selectedImages ?? [],
+      selectedVideos,
+      prependUserMessages: prepended,
+      ...(unanswered.length > 0 ? { unansweredQuestionsNote: unansweredQuestionsNote(unanswered) } : {}),
+      automationStatusReminder: routineStatus,
+      automationStatusCompactionEpoch: compactionEpoch,
     });
-    const action = new ConversationAction({
-      action: {
-        case: "userMessageAction",
-        value: new UserMessageAction({ userMessage, prependUserMessages: prepended }),
-      },
-    });
-    return { action, automationStatusReminder: routineStatus, automationStatusCompactionEpoch: compactionEpoch };
   }
 
   return {

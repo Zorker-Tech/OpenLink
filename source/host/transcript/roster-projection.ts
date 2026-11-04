@@ -11,7 +11,7 @@ import {
   type Clock,
   type DebouncePolicy,
 } from "../extensions/scheduling.ts";
-import { isSlateSubagentId } from "../../shared/agents/subagents.ts";
+import { isManagedSubagentConversationId } from "../../shared/agents/subagents.ts";
 import { transcriptReplicaKey } from "../../shared/ordering.ts";
 import { SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME } from "../runner/conversation-outline.ts";
 import { mergeAsyncTasks } from "./async-task-union.ts";
@@ -266,7 +266,7 @@ export class RosterProjection {
   }
 
   async getConversationOutline(agentId: string): Promise<any[]> {
-    if (isSlateSubagentId(agentId)) {
+    if (isManagedSubagentConversationId(agentId)) {
       let items: any[] = [];
       for (const taskSource of this.tm.runnerRegistry.runners.values()) {
         if (!taskSource.hasSubagent(agentId)) continue;

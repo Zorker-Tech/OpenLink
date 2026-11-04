@@ -127,12 +127,23 @@ test("a role or part shape this build does not model is refused, not guessed at"
     /Unhandled user content part type: audio/,
   )
   assert.throws(
-    () => fromRedactedCoreMessage({ _privacyMode: 1, role: "developer", content: "x" }, read),
+    () => fromRedactedCoreMessage({ _privacyMode: PrivacyMode.NO_STORAGE, role: "developer", content: "x" }, read),
     /Unhandled RedactedCoreMessage role: developer/,
   )
   assert.throws(
-    () => fromRedactedCoreMessage({ _privacyMode: 1, role: "user", content: "not redacted" }, read),
+    () => fromRedactedCoreMessage({ _privacyMode: PrivacyMode.NO_STORAGE, role: "user", content: "not redacted" }, read),
     /Expected content parts for a user message/,
+  )
+})
+
+test("an unwrapped text part cannot enter through a redacted message", () => {
+  assert.throws(
+    () => fromRedactedCoreMessage({
+      _privacyMode: PrivacyMode.NO_STORAGE,
+      role: "user",
+      content: [{ type: "text", text: "plain text bypass" }],
+    }, read),
+    /Expected a redacted string for user text/,
   )
 })
 

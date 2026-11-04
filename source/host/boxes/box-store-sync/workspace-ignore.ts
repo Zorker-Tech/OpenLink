@@ -1,22 +1,15 @@
-/**
- * Which files of a workspace a box's store leaves alone.
- *
- * Patterns come from the workspace's ignore file and from the defaults, are compiled into rules with the directory
- * semantics of an ignore file, and answer two questions: whether a path is ignored, and whether a directory can be
- * pruned without looking inside it. A negation that could reach a path keeps its directory from being pruned.
- */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS, WORKSPACE_IGNORE_FILE_NAME } from "../../../packages/constants/box-archive.ts";
-export { BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS, WORKSPACE_IGNORE_FILE_NAME };
-export interface WorkspaceIgnore { ignores(relPath: string): boolean; canPruneDir(relDir: string): boolean }
-export const IGNORE_NOTHING: WorkspaceIgnore = { ignores: () => false, canPruneDir: () => false };
-interface Reach { everywhere: boolean; literalPrefix: string } interface Rule { negated: boolean; fileRe: RegExp; dirRe: RegExp; negationReach?: Reach }
-export function parseIgnorePatterns(text: string): string[] { return text.split(/\r?\n/).map((line) => line.replace(/\s+$/, "")).filter((line) => line !== "" && !line.startsWith("#")); }
-export function compileWorkspaceIgnore(patterns: readonly string[]): WorkspaceIgnore { const rules: Rule[] = []; for (const pattern of patterns) { try { const rule = compileRule(pattern); if (rule != null) rules.push(rule); } catch { if (pattern.startsWith("!")) return IGNORE_NOTHING; } } if (!rules.length) return IGNORE_NOTHING; const positiveDirs = rules.filter((rule) => !rule.negated).map((rule) => rule.dirRe), negations = rules.filter((rule) => rule.negated); return { ignores(relPath) { let ignored = false; for (const rule of rules) if (rule.fileRe.test(relPath)) ignored = !rule.negated; return ignored; }, canPruneDir(relDir) { return positiveDirs.some((regex) => regex.test(relDir)) && !negations.some((rule) => negationReaches(rule.negationReach, relDir)); } }; }
-export function loadWorkspaceIgnore(workspaceDir: string, defaults: readonly string[] = BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS): WorkspaceIgnore { const patterns = [...defaults]; try { patterns.push(...parseIgnorePatterns(readFileSync(join(workspaceDir, WORKSPACE_IGNORE_FILE_NAME), "utf8"))); } catch {} return compileWorkspaceIgnore(patterns); }
-export function compileRule(rawPattern: string): Rule | null { let pattern = rawPattern, negated = false; if (pattern.startsWith("!")) { negated = true; pattern = pattern.slice(1); } else if (pattern.startsWith("\\!") || pattern.startsWith("\\#")) pattern = pattern.slice(1); let isDir = false; if (pattern.endsWith("/")) { isDir = true; pattern = pattern.slice(0, -1); } let anchored = false; if (pattern.startsWith("/")) { anchored = true; pattern = pattern.slice(1); } if (!pattern) return null; if (pattern.includes("/")) anchored = true; const body = globToRegexBody(pattern), prefix = anchored ? "^" : "^(?:.*/)?"; return { negated, fileRe: new RegExp(`${prefix}${body}${isDir ? "/.*" : "(?:/.*)?"}$`), dirRe: new RegExp(`${prefix}${body}(?:/.*)?$`), ...(negated ? { negationReach: computeNegationReach(pattern, anchored) } : {}) }; }
-export function computeNegationReach(pattern: string, anchored: boolean): Reach { if (!anchored) return { everywhere: true, literalPrefix: "" }; const literal: string[] = []; for (const segment of pattern.split("/")) { if (/[*?[]/.test(segment)) break; literal.push(segment); } return literal.length ? { everywhere: false, literalPrefix: literal.join("/") } : { everywhere: true, literalPrefix: "" }; }
-export function negationReaches(reach: Reach | undefined, relDir: string): boolean { if (reach == null) return false; if (reach.everywhere) return true; const prefix = reach.literalPrefix; return prefix === relDir || prefix.startsWith(`${relDir}/`) || relDir.startsWith(`${prefix}/`); }
-export function globToRegexBody(glob: string): string { let regex = "", index = 0; while (index < glob.length) { const char = glob[index]; if (char === "*") { let end = index; while (end < glob.length && glob[end] === "*") end += 1; const double = end - index >= 2, aligned = index === 0 || glob[index - 1] === "/"; if (double && aligned && glob[end] === "/") { regex += "(?:.*/)?"; index = end + 1; } else if (double && aligned) { regex += ".*"; index = end; } else { regex += "[^/]*"; index = end; } } else if (char === "?") { regex += "[^/]"; index += 1; } else if (char === "[") { const cls = readCharClass(glob, index); if (cls == null) { regex += "\\["; index += 1; } else { regex += cls.regex; index = cls.end; } } else if (char === "/") { regex += "/"; index += 1; } else { regex += /[.*+?^${}()|[\]\\]/.test(char ?? "") ? `\\${char}` : char; index += 1; } } return regex; }
-function readCharClass(glob: string, start: number): { regex: string; end: number } | null { let end = start + 1, negate = false; if (glob[end] === "!" || glob[end] === "^") { negate = true; end += 1; } const contentStart = end; if (glob[end] === "]") end += 1; while (end < glob.length && glob[end] !== "]") end += 1; return end >= glob.length ? null : { regex: `[${negate ? "^" : ""}${glob.slice(contentStart, end)}]`, end: end + 1 }; }
+/** Public workspace ignore parser and policy used by box-store scans. */
+
+export { REGENERABLE_WORKSPACE_PATH_PATTERNS } from "../../../adapters/interop/box/workspace-archive-layout-adapter.ts";
+export { WORKSPACE_IGNORE_FILE_NAME } from "../../../packages/constants/box-archive.ts";
+export { IGNORE_NOTHING } from "./workspace-ignore-contracts.ts";
+export type { WorkspaceIgnore } from "./workspace-ignore-contracts.ts";
+
+export {
+  parseIgnorePatterns,
+  compileRule,
+  computeNegationReach,
+  globToRegexBody,
+} from "./workspace-ignore-patterns.ts";
+export { compileWorkspaceIgnore, negationReaches } from "./workspace-ignore-policy.ts";
+export { loadWorkspaceIgnore } from "./workspace-ignore-loader.ts";

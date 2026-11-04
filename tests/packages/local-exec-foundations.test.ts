@@ -11,27 +11,27 @@ import { toHostPath } from "../../source/packages/local-exec/git-repo-identity.t
 import { resolvePathForIgnoreService } from "../../source/packages/local-exec/ignore-path.ts"
 import { sanitizeServerName } from "../../source/packages/local-exec/mcp.ts"
 import { DEFAULT_SHELL_FOREGROUND_TIMEOUT_MS, resolveShellTimeoutMs } from "../../source/packages/local-exec/shell-timeout.ts"
-import { MAX_TOOL_ANNOTATION_TITLE_LENGTH, toolAnnotationsJsonField } from "../../source/packages/local-exec/mcp-tool-annotations.ts"
+import { MAX_TOOL_ANNOTATION_TITLE_LENGTH, normalizeToolAnnotations } from "../../source/packages/local-exec/mcp-tool-annotations.ts"
 import { sanitizeToolCallId, validateAndNormalizeSaveAsFilename } from "../../source/packages/local-exec/record-screen-paths.ts"
 import { PointScaler } from "../../source/packages/local-exec/computer-use/scaling.ts"
 import { exec } from "../../source/packages/local-exec/computer-use/shell.ts"
 import { LocalLsExecutor, MissingLsTraversalBindingError } from "../../source/packages/local-exec/ls.ts"
 import { forcedShellSandboxPolicy, isForcedShellEgressEnabled } from "../../source/packages/local-exec/forced-egress.ts"
 import { getModelShellAdminCommandDenylistBlockReason } from "../../source/packages/local-exec/services/admin-command-denylist.ts"
-import { convertInternalToProtoPolicy, convertProtoToInternalPolicy } from "../../source/packages/local-exec/sandbox-conversion.ts"
-import { DEFAULT_AGENT_DATA_CLEANUP_INTERVAL_MS, DEFAULT_AGENT_DATA_TTL_MS } from "../../source/packages/local-exec/agent-data-cleanup.ts"
+import {
+  adaptSandboxPolicyFromInterop as convertProtoToInternalPolicy,
+  adaptSandboxPolicyToInterop as convertInternalToProtoPolicy,
+} from "../../source/adapters/interop/agent/sandbox-policy-adapter.ts"
 import { MAX_BUFFER_SIZE, MAX_OFS_FILE_SIZE } from "../../source/packages/local-exec/constants.ts"
-import { CLOUD_SPECIFIC_INSTRUCTIONS_HEADER, CLOUD_SPECIFIC_INSTRUCTIONS_SEPARATOR } from "../../source/packages/local-exec/services/cloud-rules-service.ts"
 import { SLATE_PROJECTS_ROOT, SLATE_WORKTREES_ROOT } from "../../source/packages/local-exec/internal-paths.ts"
 import { isRipgrepInvocationRecordingEnabled, recordRipgrepInvocation } from "../../source/packages/local-exec/ripgrep-invocation-recorder.ts"
 import { createContext } from "../../source/packages/context/context.ts"
-import { RequestedFilePathRejectedReason } from "../../source/packages/proto/generated/agent/v1/record_screen_exec_pb.ts"
 import {
   NetworkPolicy as NetworkPolicyProto,
   NetworkPolicy_DefaultAction,
   SandboxPolicy,
   SandboxPolicy_Type,
-} from "../../source/packages/proto/generated/agent/v1/sandbox_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // Numbers and names the executor works with
@@ -137,14 +137,13 @@ test("a timeout of zero is only allowed where there is something else to stop th
 
 test("tool annotations are bounded to what the wire holds", () => {
   const long = "x".repeat(MAX_TOOL_ANNOTATION_TITLE_LENGTH + 50)
-  const json = toolAnnotationsJsonField({ title: long, readOnlyHint: true, destructiveHint: "yes" as never, extra: 1 })
-  const parsed = JSON.parse(json.annotationsJson!) as Record<string, unknown>
-  assert.equal((parsed.title as string).length, MAX_TOOL_ANNOTATION_TITLE_LENGTH)
-  assert.equal(parsed.readOnlyHint, true)
-  assert.equal("destructiveHint" in parsed, false)
+  const normalized = normalizeToolAnnotations({ title: long, readOnlyHint: true, destructiveHint: "yes" as never, extra: 1 })
+  assert.equal(normalized?.title?.length, MAX_TOOL_ANNOTATION_TITLE_LENGTH)
+  assert.equal(normalized?.readOnlyHint, true)
+  assert.equal(normalized?.destructiveHint, undefined)
   // A tool that said nothing carries no annotations at all.
-  assert.deepEqual(toolAnnotationsJsonField(undefined), {})
-  assert.deepEqual(toolAnnotationsJsonField({}), {})
+  assert.equal(normalizeToolAnnotations(undefined), undefined)
+  assert.equal(normalizeToolAnnotations({}), undefined)
 })
 
 test("a recording's file name is taken relative to the artifacts directory and kept usable", () => {
@@ -154,11 +153,19 @@ test("a recording's file name is taken relative to the artifacts directory and k
   assert.deepEqual(validateAndNormalizeSaveAsFilename("/artifacts/demo.mp4", dir), { success: true, filename: "demo.mp4" })
   // An extension the recording does not have is replaced by the one it does.
   assert.deepEqual(validateAndNormalizeSaveAsFilename("demo.mov", dir), { success: true, filename: "demo.mov.mp4" })
-  assert.deepEqual(validateAndNormalizeSaveAsFilename("  ", dir), { success: false, reason: RequestedFilePathRejectedReason.UNSPECIFIED })
+  assert.deepEqual(validateAndNormalizeSaveAsFilename("  ", dir), { success: false, reason: "empty" })
   // A name that tries to leave the directory is refused rather than written elsewhere.
   assert.deepEqual(validateAndNormalizeSaveAsFilename("../outside.mp4", dir), {
     success: false,
-    reason: RequestedFilePathRejectedReason.SLASHES_NOT_ALLOWED,
+    reason: "path-separators",
+  })
+  assert.deepEqual(validateAndNormalizeSaveAsFilename("record\\take.mp4", dir), {
+    success: false,
+    reason: "path-separators",
+  })
+  assert.deepEqual(validateAndNormalizeSaveAsFilename("cam?era.MP4", dir), {
+    success: true,
+    filename: "cam_era.MP4",
   })
 })
 
@@ -418,14 +425,11 @@ test("a policy that is not there stays absent rather than becoming an empty one"
 // ---------------------------------------------------------------------------------------------
 
 test("the executor's own constants are the ones it promises", () => {
-  assert.equal(DEFAULT_AGENT_DATA_TTL_MS, 30 * 24 * 60 * 60 * 1_000)
-  assert.equal(DEFAULT_AGENT_DATA_CLEANUP_INTERVAL_MS, 24 * 60 * 60 * 1_000)
   assert.equal(MAX_BUFFER_SIZE, 1_048_576)
   assert.equal(MAX_OFS_FILE_SIZE, 50 * 1024 * 1024)
   // The projects and worktrees the platform manages are its own directories.
   assert.equal(SLATE_PROJECTS_ROOT.endsWith(path.join(".slate", "projects")), true)
   assert.equal(SLATE_WORKTREES_ROOT.endsWith(path.join(".slate", "worktrees")), true)
-  assert.equal(CLOUD_SPECIFIC_INSTRUCTIONS_SEPARATOR, `\n\n${CLOUD_SPECIFIC_INSTRUCTIONS_HEADER}\n`)
 })
 
 test("nothing is recorded about ripgrep until a caller asks to watch it", () => {

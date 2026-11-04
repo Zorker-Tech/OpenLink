@@ -145,7 +145,7 @@ export class CloudAgentModelCatalogCache {
 
   constructor(private readonly options: {
     readonly clock: Clock
-    readonly getCursorAccessToken: (options: { readonly backendUrl: string }) => Promise<string>
+    readonly getAccessToken: (options: { readonly backendUrl: string }) => Promise<string>
     readonly getMachineId: () => Promise<string>
     readonly onRequestId?: (requestId: string) => void
     readonly modelCatalogForTesting?: readonly CatalogModel[]
@@ -156,7 +156,7 @@ export class CloudAgentModelCatalogCache {
     const now = this.options.clock.monotonicNow()
     if (this.cache !== undefined && now - this.cache.fetchedAtMs < MODEL_CATALOG_TTL_MS) return this.cache.catalog
     const catalog = await fetchSlateModelCatalog({
-      getAccessToken: this.options.getCursorAccessToken,
+      getAccessToken: this.options.getAccessToken,
       getMachineId: this.options.getMachineId,
       ...(this.options.onRequestId === undefined ? {} : { onRequestId: this.options.onRequestId }),
     })

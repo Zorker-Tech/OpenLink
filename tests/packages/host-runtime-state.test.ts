@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { boxAgentWindowIndex, boxApplyEnvironment, boxDescription, boxIsAvailable, boxIsPreparing, boxLoadMcpServers, boxMaxWindows, boxMcpResourceAccessor, boxSupportsMultiWindow, boxTerminalsFolder } from "../../source/host/boxes/box-capabilities.ts";
-import { HostMcpAuthCompletion, type HostMcpAuthCompletionEvent } from "../../source/host/mcp/host-mcp-auth-completion.ts";
+import { HostMcpAuthCompletion, type HostMcpAuthCompletionEvent } from "../../source/adapters/interop/mcp/auth-completion-adapter.ts";
 import { fetchedManagedSkillToSlateSkill } from "../../source/host/extensions/managed-setup/slate-managed-skills.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 import { expirePendingAutoReviewApprovalEntries, expirePendingLocalToolPermissionAskEntries } from "../../source/host/extensions/session/pending-card-sweeps.ts";
@@ -22,9 +22,10 @@ import { pinSessionDiagnosticsReporter, reportSessionDiagnostic, type SessionDia
 import { createInMemoryXuserTurnDedupe, SlateXuserTurnDedupeStore, XUSER_TURN_DEDUPE_TTL_MS } from "../../source/host/rooms/xuser-turn-dedupe-store.ts";
 import { loadSelectedImageInputs } from "../../source/host/selected-image-inputs.ts";
 import { assertMembersAreNotGroups, buildGroupMemberSystemPrompt, buildGroupRedriveNote, buildGroupTurnPrompt, describeGroup, formatGroupChatTag, formatGroupHistory, formatGroupLine, GROUP_CHAT_TAG_PREFIX, GROUP_CONFIG_VERSION, GROUP_MAX_MEMBER_TURNS, GROUP_MAX_MESSAGES_PER_TURN, GROUP_MAX_ROUNDS, GROUP_PROMPT_HISTORY_LIMIT, groupDisplayName, isGroupTurnPromptText, isPassContent, isPotentialPassPrefix, isSameMemberSet, memberMentionHandles, messagesSinceMemberLastSpoke, orderRoundSpeakers, parseGroupMentions, resolveResponders, SHARED_ROOM_HISTORY_LIMIT, SLATE_HIDDEN_PROMPT_MARKER, SlateGroupNestingError, type GroupMessage } from "../../source/host/groups/group-chat.ts";
-import { createProductionRunnerContext } from "../../source/host/runner-context-production-provider.ts";
+import { createRunnerContext } from "../../source/host/runner-context-production-provider.ts";
 import { BROWSER_USE_SUBAGENT_DESCRIPTION, BROWSER_USE_SUBAGENT_TYPE, createSlateBrowserUseSubagentConfig, isBrowserUseSubagentType } from "../../source/host/runner/tools/slate-browser-use-subagent.ts";
-import { hostEventBusTelemetry, HOST_EVENT_BUS_EVENT } from "../../source/host/telemetry/host-event-bus-telemetry.ts";
+import { mapHostEventBusFailure } from "../../source/host/telemetry/host-event-bus-telemetry.ts";
+import { HOST_EVENT_BUS_EVENT } from "../../source/shared/observability/telemetry-events.ts";
 import { createInMemoryXuserPendingDepartures, departureKey, parseDepartureFile, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME, SlateXuserPendingDepartureStore } from "../../source/host/rooms/xuser-pending-departure-store.ts";
 import { SlateXuserStateReconcile, type XuserRoom, type XuserStateReconcileHost } from "../../source/host/rooms/xuser-state-reconcile.ts";
 import { adoptRemoteParent, beginGatewayCommandTrace, beginSendTrace, setHostTraceFactory, SLATE_TURN_ROOT_SPAN_NAME } from "../../source/host/send-trace-host.ts";
@@ -33,7 +34,7 @@ import { BoxFileUnreadableError, BOX_PATH_ROOTS, DEFAULT_BOX_TRANSFER_MAX_BYTES,
 import { BOX_STORE_MANIFEST_VERSION, boxStoreManifestEntriesEqual, isBoxStoreManifestFileEntry, isBoxStoreManifestSymlinkEntry, isSymlinkManifestValue, manifestSchema } from "../../source/host/boxes/box-store-sync/box-store-manifest-format.ts";
 import { buildCloudAgentRequestedModel, buildRepoFromRemote, normalizeRepoReference, resolveCloudAgentEnvironmentFields, resolveLaunchRepoReference, sanitizeRemoteUrl, sanitizeRemoteUrlForHttpUrl } from "../../source/host/cloud-agents/cloud-agent-request-composition.ts";
 import { createUaTokenKillSwitchReconciler, UA_TOKEN_DISABLED_MARKER_PATH } from "../../source/host/extensions/browser-ua/ua-token-kill-switch-service.ts";
-import { clearHostBundleVersionCache, fetchHostBundleTarball, fetchLatestHostBundleVersion, HOST_BUNDLE_PREFIX, hostBundleBaseUrl, hostBundleTarballUrl, HOST_BUNDLE_REGION, HOST_BUNDLE_BUCKET, resolveHostBundleSource, SlateHostBundleSourceError } from "../../source/host/extensions/host-upgrade/host-bundle-source.ts";
+import { clearHostBundleVersionCache, fetchHostBundleTarball, fetchLatestHostBundleVersion, HOST_BUNDLE_PREFIX, hostBundleBaseUrl, hostBundleTarballUrl, HOST_BUNDLE_REGION, HOST_BUNDLE_BUCKET, latestHostBundleVersionUrl, resolveHostBundleSource, SlateHostBundleSourceError } from "../../source/host/extensions/host-upgrade/host-bundle-source.ts";
 import { getLoggerBackend } from "../../source/packages/context/logging.ts";
 import { SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION } from "../../source/shared/node/experiments/slate-model-experiment.ts";
 import type { SlateAgentModelSelection } from "../../source/shared/agents/slate-agent-model.ts";
@@ -75,14 +76,14 @@ describe("what a box can do", () => {
 describe("an OAuth flow that finished somewhere else", () => {
   const completion: HostMcpAuthCompletionEvent = { serverId: "srv-1", serverName: "linear", accountKey: "acct", outcome: "authorized" };
 
-  function harness(options: { watchAgentId?: string | null } = {}) {
+  function harness(options: { watchAgentId?: string | null; restartFails?: boolean } = {}) {
     const resumed: string[] = [];
     const restarts: string[] = [];
     const noted: string[] = [];
     const service = new HostMcpAuthCompletion({
       getMcp: () => ({
         noteAuthCompletedElsewhere: (serverId, accountKey) => { noted.push(`${serverId}/${accountKey}`); return options.watchAgentId ?? null; },
-        management: { restart: async () => { restarts.push("restart"); } },
+        management: { restart: async () => { restarts.push("restart"); if (options.restartFails) throw new Error("restart failed"); } },
       }),
       getTranscript: () => ({ resumeAfterMcpAuth: async (agentId) => { resumed.push(agentId); } }),
     });
@@ -108,12 +109,27 @@ describe("an OAuth flow that finished somewhere else", () => {
     assert.deepEqual(resumed, ["a2"]);
   });
 
+  it("uses the watched server target when no request or connect-card owner exists", async () => {
+    const { service, resumed } = harness({ watchAgentId: "watching-agent" });
+    service.resolve(completion);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(resumed, ["watching-agent"]);
+  });
+
   it("restarts the management side before resolving a flow that came from the desktop", async () => {
     const { service, resumed, restarts } = harness();
     service.registerConnectCard({ agentId: "a3", connector: "linear" });
     await service.resolveDesktop(completion);
     assert.deepEqual(restarts, ["restart"]);
     assert.deepEqual(resumed, ["a3"]);
+  });
+
+  it("still resolves the desktop flow when the management restart fails", async () => {
+    const { service, resumed, restarts } = harness({ restartFails: true });
+    service.registerConnectCard({ agentId: "a4", connector: "linear" });
+    await service.resolveDesktop(completion);
+    assert.deepEqual(restarts, ["restart"]);
+    assert.deepEqual(resumed, ["a4"]);
   });
 });
 
@@ -228,10 +244,10 @@ describe("which model an experiment arm puts a turn on", () => {
   const configured: SlateAgentModelSelection = { modelId: "chosen", maxMode: false, parameters: [] };
 
   it("changes nothing while it is off or in control, and keeps the user's choice in treatment", () => {
-    assert.equal(selectSlateModelExperimentModel(undefined, undefined, configured), undefined);
-    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "control" }, undefined, configured), SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION);
-    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "treatment" }, undefined, configured), configured);
-    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "treatment" }, undefined, undefined), SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION);
+    assert.equal(selectSlateModelExperimentModel(undefined, configured), undefined);
+    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "control" }, configured), SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION);
+    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "treatment" }, configured), configured);
+    assert.equal(selectSlateModelExperimentModel({ active: true, arm: "treatment" }, undefined), SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION);
   });
 
   it("reads the model a turn's source would have used", () => {
@@ -242,6 +258,19 @@ describe("which model an experiment arm puts a turn on", () => {
       selectSlateExperimentTurnModel({ state: { active: true, arm: "treatment" }, requestSource: SLATE_AUTOMATION_REQUEST_SOURCE, readConfiguredDefaultModel: () => configured, readConfiguredAutomationsModel: () => automations }),
       automations,
     );
+    assert.equal(
+      selectSlateExperimentTurnModel({ state: { active: true, arm: "treatment" }, requestSource: SLATE_AUTOMATION_REQUEST_SOURCE, readConfiguredDefaultModel: () => configured, readConfiguredAutomationsModel: () => undefined }),
+      configured,
+    );
+    let defaultReads = 0;
+    let automationReads = 0;
+    selectSlateExperimentTurnModel({
+      state: { active: true, arm: "control" },
+      requestSource: SLATE_AUTOMATION_REQUEST_SOURCE,
+      readConfiguredDefaultModel: () => { defaultReads += 1; return configured; },
+      readConfiguredAutomationsModel: () => { automationReads += 1; return automations; },
+    });
+    assert.deepEqual([defaultReads, automationReads], [0, 0]);
     assert.equal(SLATE_AUTOMATION_REQUEST_SOURCE, "automation");
   });
 });
@@ -564,7 +593,7 @@ describe("a conversation between the members of a group", () => {
 
 describe("the context the host's runner runs in", () => {
   it("carries a logger that keeps quiet", () => {
-    const created = createProductionRunnerContext();
+    const created = createRunnerContext();
     assert.equal(typeof created, "object");
     const backend = getLoggerBackend(created);
     assert.equal(typeof backend?.log, "function");
@@ -624,7 +653,7 @@ describe("the subagent that drives the box's browser", () => {
 describe("an event-bus failure", () => {
   it("is reported with the fields the backend takes", () => {
     assert.equal(HOST_EVENT_BUS_EVENT, "slate.host.event_bus");
-    assert.deepEqual(hostEventBusTelemetry({ kind: "publish", topic: "room", errorClass: "EPIPE" }), {
+    assert.deepEqual(mapHostEventBusFailure({ kind: "publish", topic: "room", errorClass: "EPIPE" }), {
       level: "error",
       event: "slate.host.event_bus",
       metadata: { kind: "publish", topic: "room", error_class: "EPIPE" },
@@ -1074,6 +1103,30 @@ describe("where a host bundle comes from", () => {
     assert.equal(await fetchLatestHostBundleVersion((async () => ({ ok: false, text: async () => "" })) as unknown as typeof fetch), undefined);
     assert.equal(await fetchLatestHostBundleVersion((async () => { throw new Error("offline"); }) as unknown as typeof fetch), undefined);
     assert.equal(await resolveHostBundleSource((async () => ({ ok: false, text: async () => "" })) as unknown as typeof fetch), undefined);
+    clearHostBundleVersionCache();
+  });
+
+  it("resolves a version before lazily downloading its tarball", async () => {
+    clearHostBundleVersionCache();
+    const requests: string[] = [];
+    const fetchBundle = (async (input: unknown) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === latestHostBundleVersionUrl()) {
+        return { ok: true, text: async () => "def5678" };
+      }
+      return { ok: true, arrayBuffer: async () => new Uint8Array([7, 8]).buffer };
+    }) as unknown as typeof fetch;
+
+    const source = await resolveHostBundleSource(fetchBundle);
+    assert.ok(source);
+    assert.equal(source.version, "def5678");
+    assert.deepEqual(requests, [latestHostBundleVersionUrl()]);
+    assert.deepEqual([...await source.loadBundleBytes()], [7, 8]);
+    assert.deepEqual(requests, [
+      latestHostBundleVersionUrl(),
+      hostBundleTarballUrl("def5678"),
+    ]);
     clearHostBundleVersionCache();
   });
 

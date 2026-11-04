@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { extractRepoNameFromGitUrl } from "../../source/packages/agent-analytics/commit-scoring/git-repo-utils.ts";
 import { ANYRUN_NETWORK_TOKEN_HEADER, configsEqual, OFF_STATUS } from "../../source/shared/node/egress-tunnel/egress-tunnel-controller.ts";
 import { isSyncRoundStoodAsideError, SyncRoundScheduler, SyncRoundStoodAsideError } from "../../source/packages/agent-store-sync/sync-round-scheduler.ts";
-import { runMemoryExtraction, runTurnMemory } from "../../source/host/runner/turn-memory.ts";
+import { extractCompletedTurnMemories, settleCompletedTurnMemory } from "../../source/host/runner/turn-memory.ts";
 import { INCREMENTAL_VACUUM_PAGES, SlateSearchIndexWriter, STORE_FILENAME } from "../../source/host/extensions/content-search/search-index-writer.ts";
 
 describe("reading a repository out of a git remote", () => {
@@ -40,8 +40,8 @@ describe("one sync round at a time", () => {
 
 describe("what a turn leaves behind", () => {
   it("offers the memory it extracted and the turn it belongs to", () => {
-    assert.equal(typeof runMemoryExtraction, "function");
-    assert.equal(typeof runTurnMemory, "function");
+    assert.equal(typeof extractCompletedTurnMemories, "function");
+    assert.equal(typeof settleCompletedTurnMemory, "function");
   });
 });
 

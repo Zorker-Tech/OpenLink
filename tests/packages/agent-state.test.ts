@@ -11,24 +11,34 @@ import {
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
-import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import {
+  fromRedactedUserMessage,
   toRedactedConversationStateStructure,
   toRedactedShellCommand,
   toRedactedShellOutput,
-} from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
+} from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import {
   AgentMode,
+  CloudSubagentReference,
   ConversationStateStructure,
   GoalState,
   PlanRegistryEntry,
   ShellCommand,
   ShellOutput,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
-import { toRedactedTodoItem } from "../../source/packages/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { SubagentType, SubagentTypeUnspecified } from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
+  SubagentRunState,
+  SubagentRunStatus,
+  SubagentPersistedState,
+  SubagentExecutionEnvironment,
+  NewCloudVmTarget,
+  TargetMachine,
+  UserMessage,
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { TodoItem } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
+import { toRedactedTodoItem } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
+import { SubagentType, SubagentTypeUnspecified } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the state handle over a blob store
@@ -127,7 +137,7 @@ test("a handle reports the session it was built for", () => {
   const harnessed = harness()
   assert.equal(harnessed.handle.getPrivacyMode(), PrivacyMode.NO_STORAGE)
   assert.equal(harnessed.handle.getBlobStore(), (harnessed.handle as unknown as { blobStore: unknown }).blobStore)
-  assert.equal(harnessed.handle.isDsv3(), false)
+  assert.equal(harnessed.handle.usesLargeContextTreatment(), false)
 })
 
 test("the paths read in a turn are remembered and deduplicated", () => {
@@ -157,8 +167,43 @@ test("the turn's usage is accumulated and then reset", () => {
 
 test("the mode of the conversation is set and read back", () => {
   const harnessed = harness()
-  harnessed.handle.setMode(AgentMode.PLAN)
-  assert.equal(harnessed.handle.mode, AgentMode.PLAN)
+  harnessed.handle.setMode(SlateMode.PLAN)
+  assert.equal(harnessed.handle.mode, SlateMode.PLAN)
+  assert.equal(harnessed.handle.slateMode, SlateMode.PLAN)
+  assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.PLAN)
+})
+
+test("a persisted wire mode is projected once into the Slate mode vocabulary", () => {
+  const harnessed = harness(new ConversationStateStructure({ mode: AgentMode.MULTITASK }))
+  assert.equal(harnessed.handle.slateMode, SlateMode.MULTITASK)
+  assert.equal(harnessed.handle.mode, SlateMode.MULTITASK)
+  assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.MULTITASK)
+})
+
+test("an unknown persisted wire mode is normalized before policy runs", () => {
+  const harnessed = harness(new ConversationStateStructure({ mode: 987654 as AgentMode }))
+  assert.equal(harnessed.handle.slateMode, SlateMode.UNSPECIFIED)
+  assert.equal(harnessed.handle.mode, SlateMode.UNSPECIFIED)
+  assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.UNSPECIFIED)
+  assert.equal(harnessed.handle.conversationStateStructure.unknownModeCode, 987654)
+})
+
+test("setting a new Slate mode clears an unknown persisted mode code", async () => {
+  const harnessed = harness(new ConversationStateStructure({ mode: 987654 as AgentMode }))
+  harnessed.handle.setMode(SlateMode.CHAT)
+
+  assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.CHAT)
+  assert.equal(harnessed.handle.conversationStateStructure.unknownModeCode, undefined)
+  assert.equal((await harnessed.handle.computeNewStructure(createContext())).mode, AgentMode.ASK)
+})
+
+test("a new persisted snapshot encodes the Slate mode instead of dropping it", async () => {
+  const harnessed = harness()
+  harnessed.handle.setMode(SlateMode.PLAN)
+
+  const snapshot = await harnessed.handle.computeNewStructure(createContext())
+
+  assert.equal(snapshot.mode, AgentMode.PLAN)
 })
 
 test("a plan is stored, replaced and cleared", async () => {
@@ -208,6 +253,43 @@ test("the most recent subagent of a type is the one a resume mode finds", () => 
   assert.equal(harnessed.handle.getSubagentIdToResume("explore", "LAST_AGENT_SAME_TYPE"), undefined)
 })
 
+test("a legacy persisted subagent is restored into Slate state and written back compatibly", async () => {
+  const subagentType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+  const harnessed = harness(new ConversationStateStructure({
+    subagentStates: {
+      "subagent-1": new SubagentPersistedState({
+        conversationState: new ConversationStateStructure({ turns: [new Uint8Array([1])] }),
+        createdTimestampMs: BigInt(10),
+        lastUsedTimestampMs: BigInt(20),
+        subagentType,
+        modelId: "model-1",
+        environment: SubagentExecutionEnvironment.CLOUD,
+        cloudSubagent: new CloudSubagentReference({ bcId: "worker-1" }),
+        machine: new TargetMachine({
+          machine: { case: "newCloudVm", value: new NewCloudVmTarget({ baseBranch: "main" }) },
+        }),
+      }),
+    },
+  }))
+
+  const restored = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
+  assert.equal(restored?.conversationState?.turns.length, 1)
+  assert.equal(restored?.createdTimestampMs, BigInt(10))
+  assert.equal(restored?.lastUsedTimestampMs, BigInt(20))
+  assert.equal(restored?.modelId, "model-1")
+  assert.equal(restored?.environment, "cloud")
+  assert.equal(restored?.cloudSubagent?.bcId, "worker-1")
+  assert.deepEqual(restored?.machine, { type: "new_cloud_vm", base_branch: "main" })
+
+  const snapshot = await harnessed.handle.computeNewStructure(createContext())
+  const persisted = snapshot.subagentStates?.get("subagent-1") as SubagentPersistedState | undefined
+  assert.equal(persisted?.conversationState?.turns.length, 1)
+  assert.equal(persisted?.createdTimestampMs, BigInt(10))
+  assert.equal(persisted?.modelId, "model-1")
+  assert.equal(persisted?.environment, SubagentExecutionEnvironment.CLOUD)
+  assert.equal(persisted?.cloudSubagent?.bcId, "worker-1")
+})
+
 test("a file's state is recorded and read back", async () => {
   const harnessed = harness()
   assert.equal(await harnessed.handle.getFileState(createContext(), "/repo/a.ts"), undefined)
@@ -240,6 +322,84 @@ test("a shell turn's serialized form is a shell conversation turn", async () => 
   const bytes = turn.serialize()
   assert.equal(bytes instanceof Uint8Array, true)
   assert.equal(Buffer.from(bytes).length > 0, true)
+})
+
+test("an agent turn persists a user message through the Slate compatibility boundary", async () => {
+  const harnessed = harness()
+  const ctx = createContext()
+  const turn = await harnessed.handle.createAgentTurn(
+    ctx,
+    new UserMessage({
+      text: "hello",
+      messageId: "message-1",
+      mode: AgentMode.PLAN,
+    }),
+    { env: {}, gitRepos: [] } as never,
+    {
+      enableTerminalFiles: false,
+      enableAgentNotes: false,
+      enableImageFiles: false,
+      enableLongCodeSelectionSpillToFile: false,
+      formattingOptions: {},
+      planSystemReminderGenerator: () => "",
+      askSystemReminderGenerator: () => "",
+      debugSystemReminderGenerator: () => "",
+      triageSystemReminderGenerator: () => "",
+      webScraperService: { getContentInWebsiteFast: async () => null },
+      documentationHydrationService: { hydrate: async () => undefined },
+    } as never,
+    undefined,
+  )
+
+  const stored = await turn.userMessage.get(ctx)
+  const plain = fromRedactedUserMessage(
+    stored as Parameters<typeof fromRedactedUserMessage>[0],
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.equal(plain.text, "hello")
+  assert.equal(plain.messageId, "message-1")
+  assert.equal(plain.mode, AgentMode.PLAN)
+  assert.ok(harnessed.written.length > 0)
+})
+
+test("an agent turn records assistant and thinking steps in Slate's step vocabulary", async () => {
+  const harnessed = harness()
+  const ctx = createContext()
+  const turn = await harnessed.handle.createAgentTurn(
+    ctx,
+    new UserMessage({ text: "hello", messageId: "message-1" }),
+    { env: {}, gitRepos: [] } as never,
+    {
+      enableTerminalFiles: false,
+      enableAgentNotes: false,
+      enableImageFiles: false,
+      enableLongCodeSelectionSpillToFile: false,
+      formattingOptions: {},
+      planSystemReminderGenerator: () => "",
+      askSystemReminderGenerator: () => "",
+      debugSystemReminderGenerator: () => "",
+      triageSystemReminderGenerator: () => "",
+      webScraperService: { getContentInWebsiteFast: async () => null },
+      documentationHydrationService: { hydrate: async () => undefined },
+    } as never,
+    undefined,
+  )
+
+  await turn.recordText(ctx, "answer")
+  await turn.recordText(ctx, " continued")
+  await turn.recordThinking(ctx, "reason", 0)
+  const steps = await Promise.all(turn.steps.map((step) => step.get(ctx)))
+
+  assert.equal(steps[0]?.kind, "assistant-message")
+  if (steps[0]?.kind === "assistant-message") {
+    assert.equal(steps[0].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "answer continued")
+  }
+  assert.equal(steps[1]?.kind, "thinking-message")
+  if (steps[1]?.kind === "thinking-message") {
+    assert.equal(steps[1].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "reason")
+    assert.equal(steps[1].durationMs, 0)
+  }
 })
 
 test("a new structure keeps the turns the conversation already had", async () => {
@@ -298,7 +458,7 @@ test("a turn handle without a change writes nothing new", async () => {
 /** Restoring a handle through the static path, over the same fake blob store the harness uses. */
 async function restored(
   state: ConversationStateStructure = new ConversationStateStructure({}),
-  runtimeAgentType: ReturnType<typeof import("../../source/packages/agent/state-agent-type.ts").parseAgentType> = undefined,
+  runtimeAgentType: ReturnType<typeof import("../../source/packages/agent/state-agent-type.ts").resolveAgentType> = undefined,
   options: Record<string, unknown> = {},
 ) {
   const blobs = new Map<string, Uint8Array>()
@@ -344,9 +504,9 @@ test("the next message index counts the messages already loaded", () => {
   assert.equal(harnessed.handle.getNextMessageIndex(), 2)
 })
 
-test("a large-context model is the kind this handle calls dsv3", () => {
+test("a large-context model enables the handle's large-context treatment", () => {
   const small = harness()
-  assert.equal(small.handle.isDsv3(), false)
+  assert.equal(small.handle.usesLargeContextTreatment(), false)
   const large = new ConversationStateHandle(
     (small.handle as unknown as { blobStore: unknown }).blobStore as never,
     (small.handle as unknown as { conversationStateStructure: unknown }).conversationStateStructure as never,
@@ -354,7 +514,7 @@ test("a large-context model is the kind this handle calls dsv3", () => {
     {},
     "dsv3-composer",
   )
-  assert.equal(large.isDsv3(), true)
+  assert.equal(large.usesLargeContextTreatment(), true)
 })
 
 test("the active branch name is kept", () => {
@@ -404,6 +564,80 @@ test("a restore keeps its read paths, plans, skipped-prompt flag and agent-type 
   assert.equal(withoutBlobs.handle.skippedRootPromptBlobs, true)
 })
 
+test("a persisted subagent run is restored into Slate state and written back compatibly", async () => {
+  const harnessed = harness(new ConversationStateStructure({
+    subagentRunsByParentToolCallId: {
+      "call-1": new SubagentRunState({
+        parentToolCallId: "call-1",
+        subagentId: "agent-1",
+        status: SubagentRunStatus.BACKGROUNDED,
+        title: "research",
+      }),
+    },
+  }))
+
+  assert.deepEqual(harnessed.handle.subagentRunsByParentToolCallId.get("call-1"), {
+    parentToolCallId: "call-1",
+    subagentId: "agent-1",
+    environment: "unspecified",
+    status: "backgrounded",
+    title: "research",
+  })
+
+  const snapshot = await harnessed.handle.computeNewStructure(createContext())
+  assert.ok(snapshot.subagentRunsByParentToolCallId instanceof Map)
+  const persisted = snapshot.subagentRunsByParentToolCallId.get("call-1") as SubagentRunState | undefined
+  assert.ok(persisted)
+  assert.equal(persisted.parentToolCallId, "call-1")
+  assert.equal(persisted.subagentId, "agent-1")
+  assert.equal(persisted.status, SubagentRunStatus.BACKGROUNDED)
+  assert.equal(
+    (persisted.title as unknown as { unwrap(purpose: PrivacyCapability): string }).unwrap(
+      PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    ),
+    "research",
+  )
+})
+
+test("a finished subagent completion updates Slate's durable run record", () => {
+  const harnessed = harness()
+  const subagentType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+  harnessed.handle.persistSubagentState(createContext(), "agent-1", subagentType, {
+    environment: "cloud",
+    cloudSubagent: new CloudSubagentReference({
+      bcId: "worker-1",
+      transcriptPath: "/repo/transcript.jsonl",
+    }),
+  })
+
+  harnessed.handle.recordSubagentRunCompletion({
+    kind: "subagent",
+    status: "success",
+    taskId: "task-1",
+    title: "  research  ",
+    toolCallId: "call-1",
+    subagentId: "agent-1",
+    outputPath: "/repo/output.txt",
+    reason: "worker-reparented",
+  })
+
+  const run = harnessed.handle.subagentRunsByParentToolCallId.get("call-1")
+  assert.ok(run)
+  assert.deepEqual({
+    ...run,
+    completedTimestampMs: typeof run.completedTimestampMs,
+  }, {
+    parentToolCallId: "call-1",
+    subagentId: "agent-1",
+    environment: "cloud",
+    status: "success",
+    title: "research",
+    transcriptPath: "/repo/transcript.jsonl",
+    outputPath: "/repo/output.txt",
+    completedTimestampMs: "bigint",
+    completionReason: "worker-reparented",
+  })
+})
 
 test("self-summary suppression becomes due at the recorded token count", () => {
   const harnessed = harness()

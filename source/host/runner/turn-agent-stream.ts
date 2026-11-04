@@ -26,20 +26,23 @@ import {
   type OuterStreamPersistence,
   type StreamAttemptHost,
 } from "./stream-attempt.ts";
-import type { ConversationAction, ConversationStateStructure } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
+import type {
+  AgentConversationAction,
+  AgentConversationState,
+} from "../../adapters/interop/agent/agent-turn-stream-contract-adapter.ts";
 
 /** What one stream start needs: the run's context, where to resume from, and where checkpoints go. */
 export interface TurnStreamStartInput {
   readonly runCtx: Context;
-  readonly resumeFrom?: ConversationStateStructure;
-  readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: ConversationStateStructure) => Promise<void> | void;
+  readonly resumeFrom?: AgentConversationState;
+  readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: AgentConversationState) => Promise<void> | void;
 }
 
 /** What a reused path is built from: the Agent, how its action is made, its state, redaction and MCP tools. */
 export interface TurnStreamPathInput {
   readonly builtAgent: Pick<BuiltTurnAgentForRun, "agent">;
-  readonly assembleGeneratedTurnAction: (runCtx: Context) => Promise<ConversationAction>;
-  readonly getConversationState: () => ConversationStateStructure;
+  readonly assembleGeneratedTurnAction: (runCtx: Context) => Promise<AgentConversationAction>;
+  readonly getConversationState: () => AgentConversationState;
   readonly privacyMode: PrivacyMode;
   readonly mcp?: TurnAgentMcpTurnProvider;
   readonly onMcpDiscoveryFailed?: (error: unknown) => void;
@@ -47,26 +50,26 @@ export interface TurnStreamPathInput {
 
 /** What the outer attempt owns: the attempt host, how checkpoints persist, and the optional ends of a run. */
 export interface TurnStreamOuterInput {
-  readonly attempt: Omit<StreamAttemptHost<Context, ConversationStateStructure, ConversationStateStructure>, "startStream" | "persistCheckpoint">;
-  readonly persistence: OuterStreamPersistence<Context, ConversationStateStructure>;
+  readonly attempt: Omit<StreamAttemptHost<Context, AgentConversationState, AgentConversationState>, "startStream" | "persistCheckpoint">;
+  readonly persistence: OuterStreamPersistence<Context, AgentConversationState>;
   readonly cleanup?: () => void | Promise<void>;
-  readonly onCompleted?: (state: ConversationStateStructure) => void | Promise<void>;
+  readonly onCompleted?: (state: AgentConversationState) => void | Promise<void>;
 }
 
 export interface TurnStreamLifecycleInput extends TurnStreamPathInput, TurnStreamOuterInput {}
 
 /** A stream start that has already projected its action and built its redacted start. */
 interface TurnStreamStart {
-  startStream(runCtx: Context, resumeFrom: ConversationStateStructure | undefined, persistCheckpoint: TurnStreamStartInput["persistCheckpoint"]): Promise<ConversationStateStructure>;
+  startStream(runCtx: Context, resumeFrom: AgentConversationState | undefined, persistCheckpoint: TurnStreamStartInput["persistCheckpoint"]): Promise<AgentConversationState>;
 }
 
 export interface TurnStreamPath {
-  startStream(input: TurnStreamStartInput): Promise<ConversationStateStructure>;
-  createLifecycle(input: TurnStreamOuterInput): ReturnType<typeof createOuterStreamLifecycle<Context, ConversationStateStructure>>;
+  startStream(input: TurnStreamStartInput): Promise<AgentConversationState>;
+  createLifecycle(input: TurnStreamOuterInput): ReturnType<typeof createOuterStreamLifecycle<Context, AgentConversationState>>;
 }
 
 export interface TurnStreamLifecycle {
-  run(context: Context): Promise<ConversationStateStructure>;
+  run(context: Context): Promise<AgentConversationState>;
 }
 
 /** The projection and the stream start it feeds, for one run: the part both lifetimes do the same way. */
@@ -89,12 +92,12 @@ async function turnStreamStartFor(input: TurnStreamPathInput, runCtx: Context): 
 
 /** The outer attempt around one stream start: checkpoints, cleanup and completion are the caller's, unchanged. */
 function outerLifecycleFor(startStream: TurnStreamStart, input: TurnStreamOuterInput) {
-  const attempt: OuterStreamLifecycleInput<Context, ConversationStateStructure>["attempt"] = {
+  const attempt: OuterStreamLifecycleInput<Context, AgentConversationState>["attempt"] = {
     ...input.attempt,
     startStream: (runCtx, resumeFrom, persistCheckpoint) =>
       startStream.startStream(runCtx, resumeFrom === undefined ? undefined : resumeFrom, persistCheckpoint),
   };
-  return createOuterStreamLifecycle<Context, ConversationStateStructure>({
+  return createOuterStreamLifecycle<Context, AgentConversationState>({
     attempt,
     persistence: input.persistence,
     ...(input.cleanup === undefined ? {} : { cleanup: input.cleanup }),

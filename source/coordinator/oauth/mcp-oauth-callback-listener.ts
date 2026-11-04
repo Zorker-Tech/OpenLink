@@ -6,18 +6,17 @@
  * then stops listening — with the first result winning, since a flow that is answered twice is answered once.
  */
 import { errorMessage } from "../../shared/errors/summary.ts";
-import { renderMcpOAuthErrorPage, renderMcpOAuthSuccessPage } from "../../shared/mcp-oauth-callback-page.ts";
+import type { ServerResponse } from "node:http";
 import type { CoordinatorLogger, McpOAuthLoopbackRegistry } from "./mcp-oauth-loopback-registry.ts";
+import type { McpOAuthCallbackListener, McpOAuthCallbackPorts } from "./mcp-oauth-callback-contracts.ts";
+import { sendMcpOAuthErrorPage, sendMcpOAuthSuccessPage } from "./mcp-oauth-callback-response.ts";
 
-export interface McpOAuthCallbackListenerArgs {
-  redirectUrl: string;
-  resolve(state: string): { serverName: string } | undefined;
-  onCallback(value: { code: string; state: string }): Promise<void>;
-  onSettled(state: string): void;
-  log: CoordinatorLogger;
-}
+export type { McpOAuthCallbackPorts } from "./mcp-oauth-callback-contracts.ts";
 
-export async function startMcpOAuthCallbackListener(args: McpOAuthCallbackListenerArgs, registry: McpOAuthLoopbackRegistry): Promise<{ close(): void }> {
+export async function startMcpOAuthCallbackListener(
+  args: McpOAuthCallbackPorts,
+  registry: McpOAuthLoopbackRegistry,
+): Promise<McpOAuthCallbackListener> {
   const redirectUrl = new URL(args.redirectUrl);
   const release = await registry.acquire(redirectUrl, async (requestUrl, _request, response) => {
     if (requestUrl.pathname !== redirectUrl.pathname) return false;
@@ -28,23 +27,19 @@ export async function startMcpOAuthCallbackListener(args: McpOAuthCallbackListen
     try {
       const error = requestUrl.searchParams.get("error");
       if (error != null) {
-        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-        response.end(renderMcpOAuthErrorPage({ serverName }));
+        sendMcpOAuthErrorPage(response as ServerResponse, serverName, 400);
         return true;
       }
       const code = requestUrl.searchParams.get("code");
       if (code == null || code.length === 0) {
-        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-        response.end(renderMcpOAuthErrorPage({ serverName }));
+        sendMcpOAuthErrorPage(response as ServerResponse, serverName, 400);
         return true;
       }
       await args.onCallback({ code, state });
-      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(renderMcpOAuthSuccessPage({ serverName }));
+      sendMcpOAuthSuccessPage(response as ServerResponse, serverName);
       return true;
     } catch (error) {
-      response.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(renderMcpOAuthErrorPage({ serverName }));
+      sendMcpOAuthErrorPage(response as ServerResponse, serverName, 500);
       args.log.warn({ kind: "callback-forward-failed", detail: errorMessage(error) });
       return true;
     } finally {

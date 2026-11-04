@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { WatchedDirectory } from "../../source/host/watched-directory.ts";
-import { UNRESOLVED_PLAN_RETRY_MS, WallpaperToneScheduler } from "../../source/host/extensions/wallpaper/wallpaper-service.ts";
+import { SLATE_WALLPAPER_PLAN_RETRY_MS, SlateWallpaperSchedule } from "../../source/host/extensions/wallpaper/wallpaper-service.ts";
 import { BOX_SECRETS_FILENAME, BoxSecretsValidationError, SECRETS_APPLY_WAIT_MS, SECRETS_RETRY_INITIAL_MS } from "../../source/host/extensions/secrets/secrets-service.ts";
 import { DEFAULT_MAX_SNAPSHOT_BYTES, isStateBackstopEnabled, SLATE_STATE_BACKSTOP_REL_PATH, STATE_BACKSTOP_DEBOUNCE_MS } from "../../source/host/extensions/state-backstop/state-backstop-service.ts";
 
@@ -18,8 +18,8 @@ describe("a directory the host watches", () => {
 
 describe("the wallpaper scheduler", () => {
   it("waits a minute before trying a plan it could not resolve", () => {
-    assert.equal(UNRESOLVED_PLAN_RETRY_MS, 60_000);
-    assert.equal(typeof WallpaperToneScheduler, "function");
+    assert.equal(SLATE_WALLPAPER_PLAN_RETRY_MS, 60_000);
+    assert.equal(typeof SlateWallpaperSchedule, "function");
   });
 });
 

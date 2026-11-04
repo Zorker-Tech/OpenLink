@@ -14,21 +14,28 @@ import { fromRedactedCoreMessage } from "../redaction/message-redaction.ts";
 
 type RedactedCoreMessage = Parameters<typeof fromRedactedCoreMessage>[0];
 
-const USER_INFO_TAG_REGEX = /<user_info>[\s\S]*<\/user_info>/;
+const USER_INFO_OPEN = "<user_info>";
+const USER_INFO_CLOSE = "</user_info>";
 
-function hasUserInfoTag(message: RedactedCoreMessage): boolean {
+function messageText(message: RedactedCoreMessage): unknown {
   const unredactedMessage = fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
   const content = unredactedMessage.content;
-  const textContent = Array.isArray(content)
-    ? (content as readonly Record<string, unknown>[])
-      .filter(part => part.type === "text")
-      .map(part => part.text)
-      .join("\n")
-    : content;
-  return USER_INFO_TAG_REGEX.test(textContent as string);
+  if (!Array.isArray(content)) return content;
+
+  const textParts: unknown[] = [];
+  for (const part of content as readonly Record<string, unknown>[]) {
+    if (part.type === "text") textParts.push(part.text);
+  }
+  return textParts.join("\n");
 }
 
-function isEmptyAssistantMessage(message: RedactedCoreMessage): boolean {
+function hasUserInfoBlock(message: RedactedCoreMessage): boolean {
+  const text = String(messageText(message));
+  const openAt = text.indexOf(USER_INFO_OPEN);
+  return openAt >= 0 && text.indexOf(USER_INFO_CLOSE, openAt + USER_INFO_OPEN.length) >= 0;
+}
+
+function isAssistantWithoutContent(message: RedactedCoreMessage): boolean {
   if (message.role !== "assistant") return false;
   const unredacted = fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
   const content = unredacted.content;
@@ -37,22 +44,24 @@ function isEmptyAssistantMessage(message: RedactedCoreMessage): boolean {
   return false;
 }
 
+function firstMessageIsUserInfo(messages: readonly RedactedCoreMessage[]): boolean {
+  const candidate = messages[0];
+  return candidate !== undefined &&
+    candidate.role === "user" &&
+    messages[1]?.role === "user" &&
+    hasUserInfoBlock(candidate);
+}
+
 export function prepareMessagesForCompaction(messages: readonly RedactedCoreMessage[]): {
   systemMessage: RedactedCoreMessage | undefined;
   userInfoMessage: RedactedCoreMessage | undefined;
   messagesForSummarization: RedactedCoreMessage[];
 } {
   const systemMessage = messages.find(message => message.role === "system");
-  let messagesForSummarization = messages.filter(message => message.role !== "system" && !isEmptyAssistantMessage(message));
-  let userInfoMessage: RedactedCoreMessage | undefined;
-  if (
-    messagesForSummarization.length >= 2 &&
-    messagesForSummarization[0]!.role === "user" &&
-    messagesForSummarization[1]!.role === "user" &&
-    hasUserInfoTag(messagesForSummarization[0]!)
-  ) {
-    userInfoMessage = messagesForSummarization[0];
-    messagesForSummarization = messagesForSummarization.slice(1);
-  }
+  const conversation = messages.filter(message =>
+    message.role !== "system" && !isAssistantWithoutContent(message));
+  const keepUserInfoSeparate = firstMessageIsUserInfo(conversation);
+  const userInfoMessage = keepUserInfoSeparate ? conversation[0] : undefined;
+  const messagesForSummarization = keepUserInfoSeparate ? conversation.slice(1) : conversation;
   return { systemMessage, userInfoMessage, messagesForSummarization };
 }

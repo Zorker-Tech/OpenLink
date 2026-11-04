@@ -14,6 +14,7 @@ import {
   getSpanContextData,
   recordCompletedSpanIfParented,
   reportEvent,
+  TelemetrySpanKind,
   withInheritableAttribute,
   withSpan,
   withSuppressedChildSpans,
@@ -63,7 +64,7 @@ test("suppression flattens a subtree onto the enclosing span", () => {
   assert.equal(getSpan(flattened), getSpan(ctx), "no new span is started below a suppressed context")
   assert.equal(getSpanContextData(suppressed)?.traceFlags, 0, "peers are told not to link into it")
 
-  const disposable = createSpan(suppressed, { kind: SpanKind.INTERNAL })
+  const disposable = createSpan(suppressed, { kind: TelemetrySpanKind.INTERNAL })
   disposable[Symbol.dispose]()
   assert.equal(exporter.getFinishedSpans().length, 0, "disposing a suppressed span leaves its parent open")
 
@@ -87,7 +88,7 @@ test("inheritable attributes reach the current span and everything below it", ()
 test("a disposable span ends itself on dispose, even when the scope throws", () => {
   const ctx = createContext().withName("scoped")
   try {
-    using span = createSpan(ctx, { kind: SpanKind.INTERNAL })
+    using span = createSpan(ctx, { kind: TelemetrySpanKind.INTERNAL })
     assert.equal(getSpan(span.ctx), span.span)
     assert.equal(exporter.getFinishedSpans().length, 0)
     throw new Error("work failed")
@@ -100,7 +101,7 @@ test("a disposable span ends itself on dispose, even when the scope throws", () 
 })
 
 test("a completed span is only recorded when there is a parent to attach it to", () => {
-  assert.equal(recordCompletedSpanIfParented(createContext(), { kind: SpanKind.INTERNAL }), undefined)
+  assert.equal(recordCompletedSpanIfParented(createContext(), { kind: TelemetrySpanKind.INTERNAL }), undefined)
   assert.equal(exporter.getFinishedSpans().length, 0, "a bare context is not the start of a trace")
 
   const withParent = withSpan(createContext().withName("run"))

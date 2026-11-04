@@ -45,7 +45,7 @@ describe("the errno values the platform reports", () => {
 describe("an id that is safe to report", () => {
   it("admits opaque and short, and refuses anything that could carry a message", () => {
     for (const id of ["abc", "a.b_c-d:e|f", "a".repeat(128), "0"]) assert.equal(brandedId(id), id, id);
-    for (const id of ["", "a b", "with\"quote", "line\nbreak", "a".repeat(129), "ünï"]) assert.equal(brandedId(id), undefined, JSON.stringify(id));
+    for (const id of ["", "a b", "with\"quote", "line\nbreak", "safe\n", "a".repeat(129), "ünï"]) assert.equal(brandedId(id), undefined, JSON.stringify(id));
     assert.equal(brandedId(undefined), undefined);
   });
 });

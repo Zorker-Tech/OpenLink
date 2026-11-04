@@ -6,31 +6,29 @@ import {
   buildMcpCallSchemas,
   indexMcpDescriptors,
 } from "../../source/packages/agent/tools/mcp/mcp-call-options.ts";
-import { McpDescriptor, McpToolDescriptor } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts";
 
-const tool = (toolName: string, definitionPath?: string) => new McpToolDescriptor(definitionPath === undefined ? { toolName } : { toolName, definitionPath });
-const descriptor = (serverIdentifier: string, tools: McpToolDescriptor[], extra: Record<string, unknown> = {}) => new McpDescriptor({ serverIdentifier, serverName: serverIdentifier + "-name", tools, ...extra });
+const tool = (toolName: string, definitionPath?: string) => ({ toolName, ...(definitionPath === undefined ? {} : { definitionPath }) });
+const descriptor = (serverIdentifier: string, tools: ReturnType<typeof tool>[]) => ({ serverIdentifier, serverName: serverIdentifier + "-name", tools });
 
 describe("indexing the MCP descriptors", () => {
-  it("reads the descriptors from the meta tool or the file system options", () => {
+  it("indexes Slate server descriptors and remembers definition paths", () => {
     const serverA = descriptor("a", [tool("one", "/defs/a/one.json")]);
-    const fromMeta = indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: { mcpDescriptors: [serverA] } as never });
+    const fromMeta = indexMcpDescriptors({ descriptors: [serverA] });
     assert.deepEqual([...fromMeta.serverDescriptors.keys()], ["a"]);
     assert.deepEqual([...fromMeta.toolDefinitionPaths.entries()], [["a:one", "/defs/a/one.json"]]);
-    const fromFiles = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: [serverA] } as never });
-    assert.deepEqual([...fromFiles.serverDescriptors.keys()], ["a"]);
+    assert.equal(fromMeta.serverDescriptors.get("a")?.serverName, "a-name");
   });
 
   it("filters the sign-in tool unless the session is interactive", () => {
     const authTool = tool(MCP_AUTH_VIRTUAL_TOOL_NAME, "/defs/auth.json");
     const ordinary = tool("read");
-    const server = descriptor("a", [authTool, ordinary], { serverUseInstructions: "use it" });
-    const closed = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: [server] } as never });
+    const server = descriptor("a", [authTool, ordinary]);
+    const closed = indexMcpDescriptors({ descriptors: [server] });
     const filtered = closed.serverDescriptors.get("a")!;
     assert.deepEqual(filtered.tools.map((value) => value.toolName), ["read"]);
-    assert.equal(filtered.serverUseInstructions, "use it");
+    assert.equal(filtered.serverIdentifier, "a");
     assert.deepEqual([...closed.toolDefinitionPaths.keys()], []);
-    const interactive = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: [server] } as never, allowInteractiveMcpAuth: true });
+    const interactive = indexMcpDescriptors({ descriptors: [server], allowInteractiveMcpAuth: true });
     assert.deepEqual(interactive.serverDescriptors.get("a")!.tools.map((value) => value.toolName), [MCP_AUTH_VIRTUAL_TOOL_NAME, "read"]);
   });
 });

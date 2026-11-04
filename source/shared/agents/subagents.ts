@@ -1,6 +1,6 @@
-/** The prefix the platform's own subagent ids carry, and how one is recognized. */
-export const SLATE_SUBAGENT_ID_PREFIX = "slate-subagent-";
+const MANAGED_SUBAGENT_ID_MARKER = "slate-subagent-"
 
-export function isSlateSubagentId(id: string): boolean {
-  return id.startsWith(SLATE_SUBAGENT_ID_PREFIX);
+/** Identifies conversation ids allocated to subagents owned by this host. */
+export function isManagedSubagentConversationId(id: string): boolean {
+  return id.startsWith(MANAGED_SUBAGENT_ID_MARKER)
 }

@@ -11,7 +11,7 @@ import { withAutomationRunAnalytics } from "../../source/host/telemetry/analytic
 import { createHostEvents, defineHostExtension, HostExtensionGraphError, resolveHostExtensionBootOrder } from "../../source/host/extensions/host-extensions.ts";
 import { SEND_DISPATCH_EVENT, QUEUE_ACCEPTED_EVENT } from "../../source/host/telemetry/queue-telemetry-mappers.ts";
 import { SLATE_SEND_MESSAGE_TOOL_NAME } from "../../source/host/runner/tools/send-message-tool.ts";
-import { CLIENT_SIDE_TOOL_V2_ACCOUNT_SLOT, CLIENT_SIDE_TOOL_V2_FAMILY, CLIENT_SIDE_TOOL_V2_WIRE_VERSION } from "../../source/shared/rpc/client-side-tool-v2-transport.ts";
+import { CLIENT_SIDE_TOOL_V2_ACCOUNT_SLOT, CLIENT_SIDE_TOOL_V2_FAMILY, CLIENT_SIDE_TOOL_V2_WIRE_VERSION } from "../../source/adapters/interop/agent/client-side-tool-v2-transport-adapter.ts";
 
 describe("where an MCP server's definition comes from", () => {
   it("tells a server the platform ships from one the user configured, and neither from nothing", () => {

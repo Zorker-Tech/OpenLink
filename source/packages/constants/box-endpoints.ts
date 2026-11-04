@@ -23,10 +23,11 @@ export function buildBoxNoVncUrl(
   token?: string,
   specialTreatment = false,
 ): string {
-  const tokenParam = token === undefined ? "" : `token=${token}&`
-  const websockifyPath = `websockify?${tokenParam}network_token=${networkToken}&${RESUME_WINDOW}`
+  const tokenParam = token === undefined ? "" : `token=${encodeURIComponent(token)}&`
+  const encodedNetworkToken = encodeURIComponent(networkToken)
+  const websockifyPath = `websockify?${tokenParam}network_token=${encodedNetworkToken}&${RESUME_WINDOW}`
   const viewerPath = specialTreatment ? BOX_SPECIAL_TREATMENT_NOVNC_PATH : "vnc.html"
-  return `${proxyBaseUrl}/${viewerPath}?network_token=${networkToken}&${RESUME_WINDOW}&path=${encodeURIComponent(websockifyPath)}`
+  return `${proxyBaseUrl}/${viewerPath}?network_token=${encodedNetworkToken}&${RESUME_WINDOW}&path=${encodeURIComponent(websockifyPath)}`
 }
 
 export function isBoxSpecialTreatmentNoVncUrl(value: string): boolean {

@@ -14,46 +14,56 @@ export function snapshotReasonKey(reason: SnapshotReason): string {
   return JSON.stringify([reason.type, reason.requestId]);
 }
 
-interface SnapshotSession {
+interface SnapshotRequestPort {
   snapshot(reason: SnapshotReason): Promise<void>;
 }
 
 export interface CodebaseSnapshotTriggerOptions {
-  getSession(): SnapshotSession | undefined;
+  getSession(): SnapshotRequestPort | undefined;
   logger: { debug(message: string): void; warn(message: string, error?: unknown): void };
 }
 
 export class CodebaseSnapshotTrigger {
-  private readonly handled = new Set<string>();
-  private failureCount = 0;
-  private nextFailureLogAt = 1;
+  private readonly recentReasons = new Set<string>();
+  private failedAttempts = 0;
+  private nextWarningAt = 1;
 
-  constructor(private readonly options: CodebaseSnapshotTriggerOptions) {}
+  constructor(private readonly dependencies: CodebaseSnapshotTriggerOptions) {}
 
   handle(reason: SnapshotReason): void {
-    const session = this.options.getSession();
+    const session = this.dependencies.getSession();
     if (session == null) {
-      this.options.logger.debug(`snapshot trigger dropped (telemetry inactive): ${reason.type}`);
+      this.dependencies.logger.debug(`snapshot trigger dropped (telemetry inactive): ${reason.type}`);
       return;
     }
-    const key = snapshotReasonKey(reason);
-    if (this.handled.has(key)) return;
-    this.handled.add(key);
-    this.forgetOldestReasonWhenFull();
-    void session.snapshot(reason).catch((error) => {
-      this.handled.delete(key);
-      this.failureCount += 1;
-      if (this.failureCount >= this.nextFailureLogAt) {
-        this.nextFailureLogAt *= 2;
-        this.options.logger.warn(`snapshot trigger failed (failure #${this.failureCount})`, error);
-      }
-    });
+    const identity = snapshotReasonKey(reason);
+    if (this.recentReasons.has(identity)) return;
+
+    this.remember(identity);
+    this.requestSnapshot(session, reason, identity);
   }
 
-  /** A session that lives long enough to see more reasons than the bound keeps the most recent ones. */
-  private forgetOldestReasonWhenFull(): void {
-    if (this.handled.size <= MAX_HANDLED_REASONS) return;
-    const oldest = this.handled.values().next().value;
-    if (oldest != null) this.handled.delete(oldest);
+  private remember(identity: string): void {
+    this.recentReasons.add(identity);
+    if (this.recentReasons.size <= MAX_HANDLED_REASONS) return;
+    const oldest = this.recentReasons.values().next().value;
+    if (oldest !== undefined) this.recentReasons.delete(oldest);
+  }
+
+  private requestSnapshot(session: SnapshotRequestPort, reason: SnapshotReason, identity: string): void {
+    try {
+      void session.snapshot(reason).catch((cause) => this.onFailure(identity, cause));
+    } catch (cause) {
+      this.onFailure(identity, cause);
+    }
+  }
+
+  private onFailure(identity: string, cause: unknown): void {
+    this.recentReasons.delete(identity);
+    const attempt = ++this.failedAttempts;
+    if (attempt < this.nextWarningAt) return;
+
+    this.nextWarningAt *= 2;
+    this.dependencies.logger.warn(`snapshot trigger failed (failure #${attempt})`, cause);
   }
 }

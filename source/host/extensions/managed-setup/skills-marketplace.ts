@@ -9,8 +9,8 @@
  */
 
 import { errorLogTag } from "../../../shared/errors/summary.ts";
-import { CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../../shared/node/marketplace/cursor-marketplace-client.ts";
-import { rememberPluginLogoUrl } from "../../../shared/node/marketplace/cursor-marketplace-logo-registry.ts";
+import { MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../../adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
+import { rememberMarketplaceLogoSource } from "../../../shared/node/marketplace/marketplace-logo-registry.ts";
 
 /** A skill the platform manages, as the dashboard hands it over. */
 export interface ManagedSkillRecord {
@@ -55,7 +55,7 @@ export interface ManagedSkillsCatalogReport {
 
 /** The skills the platform manages, with one it said nothing about taken as enabled. */
 export async function fetchSlateManagedSkills(options: { client: ManagedSkillsClient }): Promise<Array<{ id: string; description: string; content: string; enabled: boolean }>> {
-  const response = await options.client.getManagedSkills({}, { timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS });
+  const response = await options.client.getManagedSkills({}, { timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS });
   return response.skills.map((skill) => ({ id: skill.id, description: skill.description, content: skill.content, enabled: skill.enabled ?? true }));
 }
 
@@ -74,7 +74,7 @@ export async function fetchSkillCatalog(client: ManagedSkillsClient, report?: (e
   const entries: SkillCatalogEntry[] = [];
   const listedNames = new Set<string>();
   try {
-    const response = await client.listMarketplacePlugins({ excludeCloudAgentPlugins: true }, { timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS });
+    const response = await client.listMarketplacePlugins({ excludeCloudAgentPlugins: true }, { timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS });
     for (const plugin of response.plugins) {
       const iconUrl = pluginLogoUrl(plugin);
       for (const skill of plugin.skills) {
@@ -83,7 +83,7 @@ export async function fetchSkillCatalog(client: ManagedSkillsClient, report?: (e
         const name = skill.name.toLowerCase();
         if (listedNames.has(name)) continue;
         listedNames.add(name);
-        if (iconUrl != null) rememberPluginLogoUrl(iconUrl);
+        if (iconUrl != null) rememberMarketplaceLogoSource(iconUrl);
         entries.push({
           id: `plugin:${plugin.id.toString()}:${skill.name}`,
           name: skill.name,

@@ -2,32 +2,30 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  collectPrependUserMessages,
-  createShellWatchGeneratedStateProjection,
-  createShellWatchReadAccessor,
   findConfirmedUserTurnWatermark,
   pollShellTerminalFile,
   readShellTerminalSnapshot,
   turnRefsEqual,
 } from "../../source/host/runner/shell-terminal-watch.ts";
-import { UserMessage } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
+import { collectPrependUserMessages, createShellWatchGeneratedStateProjection, createShellWatchReadAccessor } from "../../source/adapters/interop/agent/shell-terminal-watch-adapter.ts";
+import { UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { SlateLocalToolPermissionDeniedError } from "../../source/shared/local-tool-permission-machinery.ts";
 
 const contentWith = (footer: string) => "some output\n---\n" + footer + "\n---";
-const readResult = (result: any) => ({ result } as never);
-const captured = { read: async () => readResult({ case: "fileNotFound" }) } as never;
+const interopReadResult = (result: any) => ({ result } as never);
+const captured = { read: async () => ({ kind: "missing" }) } as never;
 
 describe("reading a terminal file", () => {
   it("turns the three read answers into existence and content", async () => {
-    assert.deepEqual(await readShellTerminalSnapshot({} as never, { read: async () => readResult({ case: "success", value: { output: { case: "content", value: "hello" } } }) } as never, "/terms/x.txt", "CTX"), { exists: true, content: "hello" });
-    assert.deepEqual(await readShellTerminalSnapshot({} as never, { read: async () => readResult({ case: "success", value: { output: { case: "data", value: new Uint8Array([104, 105]) } } }) } as never, "/terms/x.txt", "CTX"), { exists: true, content: "hi" });
+    assert.deepEqual(await readShellTerminalSnapshot({} as never, { read: async () => ({ kind: "success", text: "hello" }) } as never, "/terms/x.txt", "CTX"), { exists: true, content: "hello" });
+    assert.deepEqual(await readShellTerminalSnapshot({} as never, { read: async () => ({ kind: "success", bytes: new Uint8Array([104, 105]) }) } as never, "/terms/x.txt", "CTX"), { exists: true, content: "hi" });
     assert.deepEqual(await readShellTerminalSnapshot({} as never, captured, "/terms/x.txt", "CTX"), { exists: false, content: "" });
-    await assert.rejects(readShellTerminalSnapshot({} as never, { read: async () => readResult({ case: "permissionDenied" }) } as never, "/terms/x.txt", "CTX"), { name: "Error", message: "terminal file read failed (permissionDenied)" });
+    await assert.rejects(readShellTerminalSnapshot({} as never, { read: async () => ({ kind: "failure", resultName: "permissionDenied" }) } as never, "/terms/x.txt", "CTX"), { name: "Error", message: "terminal file read failed (permissionDenied)" });
   });
 
   it("passes the read on with the empty call id", async () => {
     const seen: any[] = [];
-    const accessor = createShellWatchReadAccessor({ get: () => ({ execute: async (_ctx: any, args: any) => { seen.push(args); return readResult({ case: "fileNotFound" }); } }) } as never);
+    const accessor = createShellWatchReadAccessor({ get: () => ({ execute: async (_ctx: any, args: any) => { seen.push(args); return interopReadResult({ case: "fileNotFound" }); } }) } as never);
     await accessor.read("CTX", { path: "/terms/x.txt", toolCallId: "call-1" });
     assert.deepEqual(seen.map((args) => [args.path, args.toolCallId]), [["/terms/x.txt", "call-1"]]);
   });
@@ -52,8 +50,8 @@ describe("polling until the command ends", () => {
         reads.push(args.path);
         if (options.readThrows) throw options.readThrows;
         const answer = typeof options.content === "function" ? options.content(reads.length) : options.content ?? contentWith("exit_code: 0");
-        if (answer === "missing") return readResult({ case: "fileNotFound" });
-        return readResult({ case: "success", value: { output: { case: "content", value: answer } } });
+        if (answer === "missing") return { kind: "missing" };
+        return { kind: "success", text: answer };
       } } }),
       now: () => nowMs,
       delay: async () => { nowMs += options.advance ?? 1_000; },
@@ -92,7 +90,7 @@ describe("knowing the confirmed user turn", () => {
       getConfirmedUserTurnWatermarkCache: () => cache,
       setConfirmedUserTurnWatermarkCache: () => undefined,
       getBlob: async (_ctx: any, ref: Uint8Array) => blobs[ref[0] ?? -1] ?? null,
-      decodeConversationTurn: (bytes: Uint8Array) => ({ turn: { case: "agentConversationTurn", value: { userMessage: bytes } } }) as never,
+      decodeConversationTurn: (bytes: Uint8Array) => ({ kind: "agent", userMessageBlobId: bytes }),
       decodeUserMessage: (bytes: Uint8Array) => ({ text: Buffer.from(bytes).toString("utf8").split("|")[0]!, messageId: Buffer.from(bytes).toString("utf8").split("|")[1]! }),
     };
   }
@@ -115,7 +113,7 @@ describe("knowing the confirmed user turn", () => {
       getConfirmedUserTurnWatermarkCache: () => undefined,
       setConfirmedUserTurnWatermarkCache: () => undefined,
       getBlob: async () => null,
-      decodeConversationTurn: () => ({ turn: { case: "otherTurn" } }),
+      decodeConversationTurn: () => ({ kind: "other" }),
       decodeUserMessage: () => ({ text: "", messageId: "" }),
     };
     const messages = await collectPrependUserMessages(host, [{ id: "m1", text: "first" }, { id: "m2", text: "second", richText: "<b>second</b>" }], "m2");

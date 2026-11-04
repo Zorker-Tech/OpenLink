@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createWebFetchTool, type WebFetchServiceResult } from "../../source/packages/agent/tools/core/web-fetch.ts";
+import { createWebFetchTool } from "../../source/adapters/interop/agent/web-fetch-tool-adapter.ts";
+import type { WebFetchServiceResult } from "../../source/packages/agent/tools/core/web-fetch.ts";
 import { createContext, type Context } from "../../source/packages/context/context.ts";
 import { ToolCallRejectedError } from "../../source/packages/agent/tools/tool-errors.ts";
-import { WebFetchResult } from "../../source/packages/proto/generated/agent/v1/web_fetch_tool_pb.ts";
+import { Responses, type SlateInteractionQuery } from "../../source/packages/agent-core/interaction-queries.ts";
+import { WebFetchResult } from "../../source/adapters/interop/proto/generated/agent/v1/web_fetch_tool_pb.ts";
 
 function world(options: { answer?: WebFetchServiceResult; rejectQuery?: string; projectFolder?: string; minimal?: boolean; promptVersion?: string; stripCredentials?: boolean } = {}) {
   const calls: Array<{ toolCall: { toJson(): unknown }; toolCallId: string }> = [];
@@ -28,8 +30,10 @@ function world(options: { answer?: WebFetchServiceResult; rejectQuery?: string; 
   });
   const handler = {
     listener: {
-      async query() {
-        return { result: { case: "webFetchRequestResponse", value: { result: options.rejectQuery === undefined ? { case: "approved", value: {} } : { case: "rejected", value: { reason: options.rejectQuery } } } } };
+      async query(_ctx: Context, query: SlateInteractionQuery) {
+        return options.rejectQuery === undefined
+          ? Responses.webFetchApproved(query.id)
+          : Responses.webFetchRejected(query.id, options.rejectQuery);
       },
     },
     emitPartialToolCall() {},

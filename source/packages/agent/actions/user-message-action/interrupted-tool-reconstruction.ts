@@ -19,10 +19,9 @@
 
 import { PrivacyCapability } from "../../../redaction/classification.ts"
 import { toRedactedCoreMessages } from "../../../redaction/message-redaction.ts"
-import { fromRedactedInterruptedPendingToolCallResolution } from "../../../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { getExecutableTools } from "../../tools/tool-execution.ts"
-import { renderShellResultToString, formatShellPartialOutputSection } from "../../tools/core/shell/formatters.ts"
-import { renderTaskResultToString } from "../../tools/task-client.ts"
+import { formatShellPartialOutputSection } from "../../tools/core/shell/formatters.ts"
+import { indexInterruptedToolResolutions, renderInterruptedToolResolution } from "../../../../adapters/interop/agent/interrupted-tool-resolution-adapter.ts"
 import { getInterruptedShellOutputSnapshot, clearInterruptedShellOutputSnapshot } from "../../tools/core/shell/interrupted-shell-output.ts"
 import type { PrivacyMode } from "../../../redaction/privacy-mode.ts"
 
@@ -50,11 +49,6 @@ interface ParsedPendingMessage {
       readonly highLevelToolCallResult?: unknown
     } | undefined
   } | undefined
-}
-
-type RedactedInterruptedResolution = Parameters<typeof fromRedactedInterruptedPendingToolCallResolution>[0]
-type RedactedInterruptedResolutions = {
-  readonly resolutions: readonly RedactedInterruptedResolution[]
 }
 
 function elapsedForPendingCall(pendingMessage: {
@@ -103,43 +97,6 @@ function interruptedToolText(args: {
   }
 }
 
-/** The host's own record of what the interrupted call produced, rendered as the result the model reads. */
-function resolvedToolText(args: {
-  readonly resolution: RedactedInterruptedResolution | undefined
-  readonly terminalsFolder: string | undefined
-}): { readonly result: string; readonly isError: boolean } | undefined {
-  if (args.resolution === undefined) return undefined
-  const hostResolution = fromRedactedInterruptedPendingToolCallResolution(args.resolution, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined).resolution
-  switch (hostResolution.case) {
-    case "shellResult": {
-      const recordedShell = hostResolution.value
-      const outcomeCase = recordedShell.result.case
-      if (outcomeCase === undefined) return { result: "Unknown error", isError: true }
-      // A recorded shell result may not know where its terminals live; the session's own folder fills that in.
-      recordedShell.terminalsFolder = recordedShell.terminalsFolder ?? args.terminalsFolder!
-      return {
-        result: renderShellResultToString({
-          result: { case: outcomeCase, value: recordedShell.result.value },
-          ...(recordedShell.sandboxPolicy !== undefined ? { sandboxPolicy: recordedShell.sandboxPolicy } : {}),
-          ...(recordedShell.isBackground !== undefined ? { isBackground: recordedShell.isBackground } : {}),
-          ...(recordedShell.terminalsFolder !== undefined ? { terminalsFolder: recordedShell.terminalsFolder } : {}),
-        }, { autoBackgroundedForInterruption: true }),
-        isError: recordedShell.result.case !== "success",
-      }
-    }
-    case "taskResult":
-      return {
-        result: renderTaskResultToString(hostResolution.value),
-        isError: hostResolution.value.result.case === "error",
-      }
-    case undefined: return undefined
-    default: {
-      const exhaustive: never = hostResolution
-      return exhaustive
-    }
-  }
-}
-
 /** Which tool was interrupted decides how its result reads, and an unknown tool is its own kind. */
 function toolKindFor(toolName: string, toolsByName: Record<string, ToolLike>): string {
   return toolsByName[toolName]?.toolIdentifier ?? "other"
@@ -148,16 +105,14 @@ function toolKindFor(toolName: string, toolsByName: Record<string, ToolLike>): s
 export function buildInterruptedPendingToolCallMessages(
   stateHandler: InterruptedToolStateHandler,
   executableTools: ReturnType<typeof getExecutableTools>,
-  hostResolutions: RedactedInterruptedResolutions | undefined,
+  hostResolutions: unknown,
   terminalsFolder: string | undefined,
 ) {
   const rawPending = stateHandler.getRawPendingMessages() ?? []
   if (rawPending.length === 0) return []
   const appendedMessages: ParsedPendingMessage[] = []
   const toolsByName: Record<string, ToolLike> = Object.fromEntries(executableTools.map(tool => [tool.name, tool]))
-  const resolutionsByCall = new Map(
-    hostResolutions?.resolutions.map(hostResolution => [hostResolution.toolCallId, hostResolution]) ?? [],
-  )
+  const resolutionsByCall = indexInterruptedToolResolutions(hostResolutions)
   for (const pendingMessage of rawPending) {
     let parsedPending: ParsedPendingMessage
     try {
@@ -179,7 +134,7 @@ export function buildInterruptedPendingToolCallMessages(
       const pendingCall = contentPart as { readonly toolCallId?: unknown; readonly toolName?: unknown }
       if (typeof pendingCall.toolCallId !== "string" || typeof pendingCall.toolName !== "string") continue
       const toolIdentifier = toolKindFor(pendingCall.toolName, toolsByName)
-      const hostText = resolvedToolText({ resolution: resolutionsByCall.get(pendingCall.toolCallId), terminalsFolder })
+      const hostText = renderInterruptedToolResolution(resolutionsByCall.get(pendingCall.toolCallId), terminalsFolder)
       const result = hostText?.result ?? interruptedToolText({
         toolCallId: pendingCall.toolCallId,
         toolName: pendingCall.toolName,

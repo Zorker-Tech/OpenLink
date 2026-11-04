@@ -9,7 +9,7 @@ import {
   provisionalMcpAccountServerIdentifier,
   stripMarkupAndBoundConnectorError,
 } from "../../mcp.ts";
-import { isDeadlineExceededConnectError } from "../../connect-errors.ts";
+import { isSlateDeadlineExceededError } from "../../network/remote-rpc-error.ts";
 import { brandedEnumOf } from "../../errors/bounded-values.ts";
 import { SlateError } from "../../errors/registry.ts";
 import {
@@ -21,10 +21,8 @@ import {
   type PollingPolicy,
 } from "../../../host/extensions/scheduling.ts";
 import { validateAuthorizationUrl } from "./mcp-catalog-cache.ts";
-import {
-  normalizeAccountKey,
-  type DisplayServer,
-} from "./mcp-display-runtime.ts";
+import type { SlateMcpDisplayRow } from "./mcp-display-contracts.ts";
+import { normalizeAccountLabel } from "./mcp-account-display-policy.ts";
 import { authWatchKey } from "./mcp-auth-watch.ts";
 import { MCP_OAUTH_LOOPBACK_CALLBACK_URL } from "./mcp-oauth-loopback.ts";
 import { parseInt32McpServerId, validateMcpServerId } from "./mcp-server-id.ts";
@@ -70,7 +68,7 @@ interface AuthWatchDependencies {
   resolveDisplayServer(
     id: string,
     options?: { requireFreshRead: boolean },
-  ): Promise<DisplayServer | undefined>;
+  ): Promise<SlateMcpDisplayRow | undefined>;
   reload(): Promise<void>;
   onConnectorAuth?(event: Record<string, unknown>): void;
   clock?: Clock;
@@ -127,7 +125,7 @@ export class SlateMcpAuthWatchLifecycle {
   }
 
   /** Reports a card click, when that is what started the flow. */
-  private reportCardClicked(serverId: string, displayServer: DisplayServer | undefined): void {
+  private reportCardClicked(serverId: string, displayServer: SlateMcpDisplayRow | undefined): void {
     this.dependencies.onConnectorAuth?.({
       phase: "card_clicked",
       outcome: "ok",
@@ -153,7 +151,7 @@ export class SlateMcpAuthWatchLifecycle {
   }
 
   /** The answer for a server the team admin has blocked. */
-  private async adminBlockedStart(serverId: string, displayServer: DisplayServer): Promise<any> {
+  private async adminBlockedStart(serverId: string, displayServer: SlateMcpDisplayRow): Promise<any> {
     const watches = this.clearPendingAuthWatchesForServer(serverId);
     await this.reloadQuietly();
     watches.forEach((watch) => this.notifyWatchCancelled(watch));
@@ -167,7 +165,7 @@ export class SlateMcpAuthWatchLifecycle {
   }
 
   /** The answer for a connector that runs on this computer instead of signing in through a browser. */
-  private stdioUnsupportedStart(serverId: string, displayServer: DisplayServer): RefusedStart {
+  private stdioUnsupportedStart(serverId: string, displayServer: SlateMcpDisplayRow): RefusedStart {
     this.refused("stdio_unsupported", serverId, displayServer.name);
     return {
       status: "not-supported",
@@ -190,7 +188,7 @@ export class SlateMcpAuthWatchLifecycle {
   /** Reports a probe that did not answer, naming the kind of failure it was. */
   private reportAuthStartFailure(
     serverId: string,
-    displayServer: DisplayServer,
+    displayServer: SlateMcpDisplayRow,
     error: unknown,
   ): void {
     this.dependencies.onConnectorAuth?.({
@@ -200,7 +198,7 @@ export class SlateMcpAuthWatchLifecycle {
       serverId,
       error: SlateError.connectorAuthStartFailed({
         reason: startFailureReason(
-          isDeadlineExceededConnectError(error)
+          isSlateDeadlineExceededError(error)
             ? "rpc_timeout"
             : "probe_failed",
         ),
@@ -223,7 +221,7 @@ export class SlateMcpAuthWatchLifecycle {
   }
 
   /** The account identifier a watch is filed under, taking the stored slot or a provisional one. */
-  private watchIdentifier(displayServer: DisplayServer, accountKey: string): string | undefined {
+  private watchIdentifier(displayServer: SlateMcpDisplayRow, accountKey: string): string | undefined {
     const stored = displayServer.accounts?.find((slot) => slot.accountKey === accountKey)?.serverIdentifier;
     if (stored != null) return stored;
     if (displayServer.serverIdentifier == null) return undefined;
@@ -238,7 +236,7 @@ export class SlateMcpAuthWatchLifecycle {
     trigger: string | null = null,
   ): Promise<any> {
     const serverId = validateMcpServerId(rawId);
-    const accountKey = normalizeAccountKey(rawKey);
+    const accountKey = normalizeAccountLabel(rawKey);
     const displayServer = await this.dependencies.resolveDisplayServer(serverId);
     if (trigger === "connector_card") this.reportCardClicked(serverId, displayServer);
     if (displayServer == null) return this.notConfiguredStart(serverId);
@@ -367,7 +365,7 @@ export class SlateMcpAuthWatchLifecycle {
     let id: string, key: string;
     try {
       id = validateMcpServerId(rawId);
-      key = normalizeAccountKey(rawKey);
+      key = normalizeAccountLabel(rawKey);
     } catch {
       return null;
     }
@@ -426,7 +424,7 @@ export class SlateMcpAuthWatchLifecycle {
   }
 
   /** The server as it is now, and whether reading it failed rather than answering. */
-  private async freshDisplayServer(watch: Watch): Promise<{ current: DisplayServer | undefined; failed: boolean }> {
+  private async freshSlateMcpDisplayRow(watch: Watch): Promise<{ current: SlateMcpDisplayRow | undefined; failed: boolean }> {
     try {
       const current = await this.pollDeadline.run(() =>
         this.dependencies.resolveDisplayServer(watch.serverId, { requireFreshRead: true }),
@@ -466,7 +464,7 @@ export class SlateMcpAuthWatchLifecycle {
     try {
       const landed = await this.tokenLanded(watch);
       if (!landed || this.watches.get(key) !== watch) return;
-      const { current, failed } = await this.freshDisplayServer(watch);
+      const { current, failed } = await this.freshSlateMcpDisplayRow(watch);
       if (this.watches.get(key) !== watch) return;
       if (!failed && (current == null || current.disabledByTeamAdminPolicy)) {
         this.clearPendingAuthWatchCancelled(watch.serverId, watch.accountKey);

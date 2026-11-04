@@ -11,7 +11,7 @@ import { slateErrorDetail } from "../ports/telemetry.ts";
 import { raisesUserActivity } from "../../shared/transcript.ts";
 import { describeAgentRunError } from "./agent-run-error.ts";
 import { loadAgentInboundImages } from "./send-message-shaping.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript } from "./transcript-store.ts";
 import { classifyAgentError } from "./turn-runtime.ts";
 import type { TranscriptManagerLike } from "./transcript-hub.ts";
@@ -270,7 +270,7 @@ export class AgentToAgentMessaging {
       conversation.db.addConversationPartner(message.from.id);
       const transcriptEntry = {
         kind: "message",
-        id: nextEntryId(transcriptFor(conversation, onActiveSession), "user-message"),
+        id: allocateTranscriptEntryId(transcriptFor(conversation, onActiveSession), "user-message"),
         role: "user",
         content: message.text,
         isStreaming: false,
@@ -300,7 +300,7 @@ export class AgentToAgentMessaging {
     const onActiveSession = conversation.id === this.tm.sessions.activeSession?.id;
     const transcriptEntry = {
       kind: "message",
-      id: nextEntryId(transcriptFor(conversation, onActiveSession), "assistant-message"),
+      id: allocateTranscriptEntryId(transcriptFor(conversation, onActiveSession), "assistant-message"),
       role: "assistant",
       content: text,
       isStreaming: false,

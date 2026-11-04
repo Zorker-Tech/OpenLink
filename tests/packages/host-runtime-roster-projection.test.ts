@@ -8,7 +8,6 @@ import { describe, it } from "node:test";
 
 import { SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME } from "../../source/host/runner/conversation-outline.ts";
 import { OUTLINE_STREAM_COALESCE_MS, RosterProjection } from "../../source/host/transcript/roster-projection.ts";
-import { SLATE_SUBAGENT_ID_PREFIX } from "../../source/shared/agents/subagents.ts";
 
 /** A transcript manager as the projection uses one, with the pieces it composes around a conversation. */
 function harness(options: { runners?: Map<string, unknown>; outlines?: Map<string, unknown[]>; pendingWakes?: unknown[]; resetValue?: unknown; sessionId?: string } = {}) {
@@ -244,7 +243,7 @@ describe("what an agent is doing in the background", () => {
   });
 
   it("answers with a subagent's outline from the runner that has it, and with nothing when nothing does", async () => {
-    const subagentId = `${SLATE_SUBAGENT_ID_PREFIX}abc`;
+    const subagentId = "slate-subagent-abc";
     const runner = { hasSubagent: (id: string) => id === subagentId, getSubagentOutline: async () => [{ id: "step-1" }] };
     const throwing = { hasSubagent: () => true, getSubagentOutline: async () => { throw new Error("gone"); } };
     const world = harness({ runners: new Map<string, unknown>([["parent", runner]]) });
@@ -254,7 +253,7 @@ describe("what an agent is doing in the background", () => {
     assert.deepEqual(outlines, [["snapshot", subagentId]]);
     // A runner that cannot answer for its subagent leaves an empty outline rather than an error.
     const failing = harness({ runners: new Map<string, unknown>([["parent", throwing]]) });
-    assert.deepEqual(await failing.projection.getConversationOutline(`${SLATE_SUBAGENT_ID_PREFIX}xyz`), []);
+    assert.deepEqual(await failing.projection.getConversationOutline("slate-subagent-xyz"), []);
     // An agent that is not the conversation on screen is read from the store.
     const stored = harness({ outlines: new Map([["agent-9", [{ id: "stored" }]]]) });
     assert.deepEqual(await stored.projection.getConversationOutline("agent-9"), [{ id: "stored" }]);

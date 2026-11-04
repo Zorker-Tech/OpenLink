@@ -23,7 +23,7 @@ const enrichment = { skillBlocks: [] } as never;
 describe("compacting a conversation", () => {
   it("keeps the newest requests and summarizes the rest", () => {
     const instance = handler();
-    const partition = instance.partitionMessages([message("system", "s"), message("user", "<user_query>old</user_query>"), message("user", "<user_query>newest</user_query>")], {} as never);
+    const partition = instance.separateMessages([message("system", "s"), message("user", "<user_query>old</user_query>"), message("user", "<user_query>newest</user_query>")], {} as never);
     assert.equal(partition.systemMessage?.role, "system");
     assert.equal(partition.preservedTailMessages.length, 2);
     assert.equal(partition.messagesToSummarize.length, 2);
@@ -31,7 +31,7 @@ describe("compacting a conversation", () => {
   });
 
   it("keeps only the request part of a wrapped user message", () => {
-    const partition = handler().partitionMessages([message("system", "s"), message("user", "platform framing <user_query>the real ask</user_query> trailing")], {} as never);
+    const partition = handler().separateMessages([message("system", "s"), message("user", "platform framing <user_query>the real ask</user_query> trailing")], {} as never);
     assert.deepEqual(partition.preservedTailMessages.map(plainText), ["<user_query>the real ask</user_query>"]);
   });
 
@@ -40,29 +40,29 @@ describe("compacting a conversation", () => {
     for (let index = 0; index < 12; index += 1) {
       messages.push(message("user", "<user_query>" + (index === 5 ? "x".repeat(200_000) : "small request " + index) + "</user_query>"));
     }
-    const partition = handler().partitionMessages(messages, {} as never);
+    const partition = handler().separateMessages(messages, {} as never);
     assert.equal(partition.preservedTailMessages.length, 6, "the older requests fit, the huge one ends the walk and the ones before it are left out");
   });
 
   it("drops a request with no query wrapper", () => {
-    const partition = handler().partitionMessages([message("system", "s"), message("user", "no wrapper here")], {} as never);
+    const partition = handler().separateMessages([message("system", "s"), message("user", "no wrapper here")], {} as never);
     assert.deepEqual(partition.preservedTailMessages, []);
   });
 
   it("assembles the final messages with the kept requests before the summary", () => {
     const instance = handler();
-    const partition = instance.partitionMessages([message("system", "s"), message("user", "<user_query>x</user_query>")], {} as never);
-    const assembled = instance.assembleFinalMessages(partition, message("user", "summary"));
+    const partition = instance.separateMessages([message("system", "s"), message("user", "<user_query>x</user_query>")], {} as never);
+    const assembled = instance.rebuildConversation(partition, message("user", "summary"));
     assert.deepEqual(assembled.map((entry: any) => entry.role), ["system", "user", "user"]);
     assert.equal(assembled.at(-1), (assembled.at(-1) as any), "the summary is last");
-    const empty = instance.partitionMessages([], {} as never);
-    assert.throws(() => instance.assembleFinalMessages(empty, message("user", "summary")), { message: "Expected system message in conversation" });
+    const empty = instance.separateMessages([], {} as never);
+    assert.throws(() => instance.rebuildConversation(empty, message("user", "summary")), { message: "Expected system message in conversation" });
   });
 
   it("builds the summary message with the handoff prefix", () => {
     const instance = handler();
-    const partition = instance.partitionMessages([message("system", "s"), message("user", "<user_query>x</user_query>")], {} as never);
-    const result = instance.buildSummaryMessage({ text: "the handoff", inputTokens: 1, outputTokens: 2 }, partition, enrichment);
+    const partition = instance.separateMessages([message("system", "s"), message("user", "<user_query>x</user_query>")], {} as never);
+    const result = instance.formatSummaryCarrier({ text: "the handoff", inputTokens: 1, outputTokens: 2 }, partition, enrichment);
     assert.equal(typeof result.summaryTextLength, "number");
     const text = plainText(result.message);
     assert.equal(text.includes("CONTEXT CHECKPOINT"), false);

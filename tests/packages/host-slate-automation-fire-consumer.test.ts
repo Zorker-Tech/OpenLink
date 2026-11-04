@@ -87,7 +87,10 @@ test("a slack fire context is normalized with its optional fields", () => {
 });
 
 test("a github fire context requires a repo and a known kind", () => {
-  assert.deepEqual(parseFireTriggerEvent({ source: "github", repo: "r", kind: GITHUB_KIND(), title: "t", actor: "a", url: "u", detail: "d", prOwner: "p", branch: "b" }), { source: "github", repo: "r", kind: GITHUB_KIND(), title: "t", actor: "a", url: "u", detail: "d", prOwner: "p", branch: "b", timestampMs: Date.now() });
+  const parsed = parseFireTriggerEvent({ source: "github", repo: "r", kind: GITHUB_KIND(), title: "t", actor: "a", url: "u", detail: "d", prOwner: "p", branch: "b" });
+  assert.ok(parsed);
+  assert.deepEqual({ ...parsed, timestampMs: undefined }, { source: "github", repo: "r", kind: GITHUB_KIND(), title: "t", actor: "a", url: "u", detail: "d", prOwner: "p", branch: "b", timestampMs: undefined });
+  assert.equal(typeof parsed.timestampMs, "number");
   assert.equal(parseFireTriggerEvent({ source: "github", repo: "", kind: GITHUB_KIND() }), null);
   assert.equal(parseFireTriggerEvent({ source: "github", repo: "r", kind: "unknown-kind" }), null);
 });

@@ -24,66 +24,69 @@
  * because a turn that is missing one attachment is better than a turn that does not start.
  */
 
-import path from "node:path"
-
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/index.ts"
 import { createHistogram } from "../../metrics/index.ts"
 import { getBlobId, type BlobStore } from "../../agent-kv/blob-store.ts"
-import { asyncMapValues } from "../../utils/promise-tools.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
-import { AgentMode, type SimulatedMsgReason as SimulatedMsgReasonValue } from "../../proto/generated/agent/v1/agent_pb.ts"
-import {
-  InvocationContext,
-  SelectedDocument,
-  SelectedGitPRDiffSelection,
-  SelectedPullRequest,
-  SelectedVideo,
-  type SelectedContext,
-  type SelectedDocument as SelectedDocumentValue,
-  type SelectedImage as SelectedImageValue,
-  type SelectedVideo as SelectedVideoValue,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
-import { BackgroundComposerSource } from "../../proto/generated/aiserver/v1/background_composer_pb.ts"
+import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
+import type {
+  SelectedContextEntryInterop,
+  SelectedContextEntryModeInterop,
+  SelectedContextSimulatedReasonInterop,
+  SelectedContextImageInterop,
+  SelectedContextVideoInterop,
+  SelectedContextDocumentInterop,
+} from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { AgentType } from "../utils/agent-config.ts"
-import { getFilenameWithoutExtension, getSkillSourceFromPath } from "../utils/common-helpers.ts"
-import { sanitizeFilename } from "../../utils/managed-paths.ts"
+import { getFilenameWithoutExtension } from "../utils/common-helpers.ts"
+import { classifyInteropSkillSourcePath } from "../../../adapters/interop/agent/skill-source-path-adapter.ts"
 import { getSkillIdFromPath } from "../skill-id.ts"
 import { recordSkillApplied } from "../utils/event-tracking.ts"
 import { getInlineVideoMaxBytes, getSignedUrlVideoMaxBytes, isSignedUrlStorageAllowed } from "../attached-media.ts"
 import { detectImageMimeType } from "../tools/core/read/image-utils.ts"
 import { renderAgentNotesContext } from "./agent-notes-context.ts"
+import { toAgentNotesPromptInput } from "../../../adapters/interop/agent/agent-notes-context-adapter.ts"
 import { renderSelectedCodeSelections } from "./code-selection-context.ts"
 import { renderConsoleLogsContext } from "./console-logs-context.ts"
-import { renderSelectedCursorCommands } from "./cursor-commands-context.ts"
-import { processDocumentAttachment } from "./document-attachment.ts"
-import { hydrateSelectedDocumentation, type DocumentationHydrationService } from "./documentation-hydration.ts"
+import { processInteropDocumentAttachment } from "../../../adapters/interop/agent/document-attachment-adapter.ts"
+import type { DocumentationHydrationService } from "./documentation-hydration.ts"
+import { hydrateSelectedDocumentation } from "../../../adapters/interop/agent/selected-documentation-hydration-adapter.ts"
 import { renderDocumentationContext, type DocumentationResult } from "./documentation-context.ts"
 import { hydrateSelectedExtraContext } from "./extra-context-hydration.ts"
 import { renderExternalLinksContext } from "./external-links-context.ts"
 import { renderAttachedFoldersContext } from "./attached-folders-context.ts"
-import { hydrateSelectedImageData } from "./image-data-hydration.ts"
+import { hydrateSelectedImageData } from "../../../adapters/interop/agent/selected-image-blob-adapter.ts"
 import { writeSelectedImageToProjectAssets } from "./image-file-spill.ts"
-import { hydrateSelectedInvocationContext } from "./invocation-hydration.ts"
-import { renderGithubPrInvocationContext } from "./github-pr-context.ts"
+import { hydrateSelectedInvocationContext } from "../../../adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
 import { renderInvocationPlatformContext } from "./invocation-platforms.ts"
+import { toSlateInvocationContext } from "../../../adapters/interop/agent/invocation-platforms-adapter.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
 import { appendNonMediaSelectedContextContent } from "./non-media-assembly.ts"
-import { hydrateGitPrDiffSelections, hydrateSelectedPullRequests } from "./pr-hydration.ts"
+import { projectSelectedNonMediaContext } from "../../../adapters/interop/agent/selected-non-media-context-adapter.ts"
+import { renderInteropSimulatedMessagePrompts } from "../../../adapters/interop/agent/git-action-prompt-adapter.ts"
+import { hydrateGitPrDiffSelections, hydrateSelectedPullRequests } from "../../../adapters/interop/agent/pull-request-hydration-adapter.ts"
+import { projectSelectedPullRequestsForPrompt } from "../../../adapters/interop/agent/pull-request-prompt-adapter.ts"
 import { renderPrReviewContext } from "./pr-review-context.ts"
 import { renderRecentAgentsContext } from "./recent-agents-context.ts"
-import { resolveSelectedContextSkillSections } from "../selected-context-skills.ts"
+import { resolveSkillAttachments } from "../skill-attachment-policy.ts"
+import { decodeSelectedContextSkillAttachments } from "../../../adapters/interop/agent/selected-context-skills-adapter.ts"
+import { toSelectedUIElementInputs } from "../../../adapters/interop/agent/selected-ui-elements-adapter.ts"
+import { toRecentAgentPromptInputs } from "../../../adapters/interop/agent/recent-agents-adapter.ts"
+import { toPrReviewInputs } from "../../../adapters/interop/agent/selected-pr-review-adapter.ts"
+import { toBrowserTabPromptInputs } from "../../../adapters/interop/agent/selected-browsers-adapter.ts"
+import { toSubagentNameInputs } from "../../../adapters/interop/agent/selected-subagents-adapter.ts"
+import { toConsoleLogPromptInputs } from "../../../adapters/interop/agent/selected-console-logs-adapter.ts"
 import { renderSelectedBrowsersContext } from "./selected-browsers-context.ts"
 import { renderSelectedSubagentDelegation } from "./selected-subagents-context.ts"
-import { renderSimulatedMessagePrompts } from "../simulated-message-prompts.ts"
 import { renderSelectedTerminalContext } from "./terminal-context.ts"
 import { renderSelectedUIElementsContext } from "./ui-elements-context.ts"
 import { renderUploadedDocumentsContext } from "./uploaded-documents.ts"
-import { processVideoAttachment } from "./video-attachment.ts"
-import { processSelectedVideoPathOnly } from "./video-path-processing.ts"
+import { processInteropVideoAttachment } from "../../../adapters/interop/agent/video-attachment-adapter.ts"
+import { enrichExternalLinks, type ExternalLinkPage } from "./external-link-enrichment.ts"
+import { processSelectedVideoPathOnly } from "../../../adapters/interop/agent/selected-video-path-adapter.ts"
 import { canUseWatchVideoSubagent } from "./watch-video-eligibility.ts"
+import { backgroundSourceForVideoPolicy } from "../../../adapters/interop/agent/watch-video-eligibility-adapter.ts"
 import type { AttachmentPathRequestContext } from "./path-trust.ts"
 import type { AttachedMediaUrlProvider } from "./video-attachment.ts"
 import type { CodeSelectionFormattingOptions } from "./code-selection-context.ts"
@@ -98,21 +101,11 @@ interface ImagePart {
 }
 type UserContentPart = TextPart | ImagePart;
 
-interface ResourceAccessor {
-  get(resource: typeof writeExecutorResource): { execute(ctx: Context, args: WriteArgs): Promise<unknown> };
-}
+type ResourceAccessor = InteropWorkspaceFileWriteAccessor
 
 interface ProcessRequestContext extends AttachmentPathRequestContext {
   readonly conversationNotesListing?: string;
   readonly sharedNotesListing?: string;
-}
-
-interface WebPageData {
-  readonly pageUrl: string;
-  readonly pageTitle: string;
-  readonly partialParsedPageContents: string;
-  readonly imageData?: Uint8Array;
-  readonly imageMimeType?: string;
 }
 
 interface ContextProcessingConfig {
@@ -122,7 +115,7 @@ interface ContextProcessingConfig {
   readonly enableLongCodeSelectionSpillToFile: boolean;
   readonly formattingOptions: CodeSelectionFormattingOptions;
   readonly agentType?: AgentType;
-  readonly backgroundAgentSource?: BackgroundComposerSource;
+  readonly backgroundAgentSource?: unknown;
   readonly modelInfo?: TaskToolModelInfo & {
     readonly isComposerMatterhorn?: boolean;
     readonly isRawTrainingSlug?: boolean;
@@ -135,13 +128,13 @@ interface ContextProcessingConfig {
     readonly environmentParamForSubagent?: boolean;
     readonly babysitV2Prompt?: boolean;
     readonly prCreationForgeGuidance?: boolean;
-    readonly enableSlackVideoAttachments?: boolean;
+    readonly enableBackgroundVideoAttachments?: boolean;
     readonly enableWatchVideoInIdeSubagent?: boolean;
-    readonly geminiVideoAttachmentInlineMaxBytes?: number;
-    readonly geminiVideoAttachmentSignedUrlMaxBytes?: number;
+    readonly videoAttachmentInlineMaxBytes?: number;
+    readonly videoAttachmentSignedUrlMaxBytes?: number;
   };
   readonly webScraperService: {
-    getContentInWebsiteFast(ctx: Context, url: string): Promise<WebPageData | null>;
+    getContentInWebsiteFast(ctx: Context, url: string): Promise<ExternalLinkPage | null>;
   };
   readonly documentationHydrationService: DocumentationHydrationService<DocumentationResult>;
 }
@@ -167,7 +160,7 @@ const blobHydrationDuration = createHistogram("agent.ttft.blobHydrationMs", {
   labelNames: ["hasImages", "hasVideos", "hasDocs"],
 });
 const invocationContextDuration = createHistogram("agent.ttft.invocationContextMs", {
-  description: "Time to hydrate and process invocation context (Slack thread, GitHub PR, IDE state)", labelNames: ["kind"],
+  description: "Time to hydrate and process invocation context (conversation thread, pull request, editor state)", labelNames: ["kind"],
 });
 const processSelectedContextDuration = createHistogram("agent.ttft.processSelectedContextMs", {
   description: "Total wall-clock time for the entire processSelectedContext function",
@@ -176,35 +169,32 @@ const postEnrichmentAssemblyDuration = createHistogram("agent.ttft.postEnrichmen
   description: "Time for sync context assembly after enrichment (rules, skills, git diffs, PRs, etc.)",
 });
 const MAX_RULE_LENGTH = 100_000;
-const EXTERNAL_LINK_ENRICHMENT_MAX_CONCURRENCY = 4;
-const EXTERNAL_LINK_INLINE_LIMIT = 20_000;
-const EXTERNAL_LINK_CONTENT_TRUNCATION_LIMIT = 500_000;
 
 export async function processSelectedContext(
   ctx: Context,
-  selectedContext: SelectedContext,
+  selectedContext: SelectedContextEntryInterop,
   blobStore: BlobStore<Context> | undefined,
   config: ContextProcessingConfig,
   requestContext: ProcessRequestContext | undefined,
   resourceAccessor: ResourceAccessor | undefined,
-  mode: AgentMode,
+  mode: SelectedContextEntryModeInterop,
   _modelId: string | undefined,
   conversationQuery: string,
-  simulatedMsgReason: SimulatedMsgReasonValue,
+  simulatedMsgReason: SelectedContextSimulatedReasonInterop,
   privacyMode: PrivacyMode,
 ): Promise<{
   userContent: UserContentPart[];
-  selectedImages: SelectedImageValue[];
-  selectedVideos: SelectedVideoValue[];
-  selectedDocuments: SelectedDocumentValue[];
+  selectedImages: SelectedContextImageInterop[];
+  selectedVideos: SelectedContextVideoInterop[];
+  selectedDocuments: SelectedContextDocumentInterop[];
   imageFilePaths: string[];
   videoFilePaths: string[];
   documentFilePaths: string[];
 }> {
   const userContent: UserContentPart[] = [];
-  const selectedImages: SelectedImageValue[] = [];
-  const selectedVideos: SelectedVideoValue[] = [];
-  const selectedDocuments: SelectedDocumentValue[] = [];
+  const selectedImages: SelectedContextImageInterop[] = [];
+  const selectedVideos: SelectedContextVideoInterop[] = [];
+  const selectedDocuments: SelectedContextDocumentInterop[] = [];
   const imageFilePaths: string[] = [];
   const videoFilePaths: string[] = [];
   const documentFilePaths: string[] = [];
@@ -216,22 +206,23 @@ export async function processSelectedContext(
     invocationContext: selectedContext.invocationContext,
     blobStore,
   });
-  if (resolvedInvocationContext) {
-    const invocationContent = resolvedInvocationContext.data.case === "githubPr"
-      ? { type: "text" as const, text: renderGithubPrInvocationContext(resolvedInvocationContext.data.value) }
-      : renderInvocationPlatformContext(resolvedInvocationContext, config.enableTerminalFiles);
+  const invocation = resolvedInvocationContext === undefined
+    ? undefined
+    : toSlateInvocationContext(resolvedInvocationContext)
+  if (invocation !== undefined) {
+    const invocationContent = renderInvocationPlatformContext(invocation, config.enableTerminalFiles)
     if (invocationContent) userContent.push(invocationContent);
   }
   invocationContextDuration.histogram(ctx, performance.now() - invocationStart, {
-    kind: resolvedInvocationContext?.data.case ?? "none",
+    kind: invocation === undefined || invocation.kind === "unsupported" ? "none" : invocation.kind,
   });
-  const agentNotes = renderAgentNotesContext({
+  const agentNotes = renderAgentNotesContext(toAgentNotesPromptInput({
     mode,
     enableAgentNotes: config.enableAgentNotes,
     metaAgentNotes: config.featureFlags?.metaAgentNotes === true,
     conversationNotesListing: requestContext?.conversationNotesListing,
     sharedNotesListing: requestContext?.sharedNotesListing,
-  });
+  }));
   if (agentNotes) userContent.push(agentNotes);
 
   const hasImages = selectedContext.selectedImages.length > 0;
@@ -258,7 +249,7 @@ export async function processSelectedContext(
     if (pathOnly !== undefined) return pathOnly;
     const useSignedUrl = !selectedVideo.materializeToFilesystem &&
       isSignedUrlStorageAllowed(privacyMode) && config.attachedMediaUrlProvider !== undefined;
-    return processVideoAttachment({
+    return processInteropVideoAttachment({
       ctx,
       blobStore: blobStore!,
       selectedVideo,
@@ -274,7 +265,7 @@ export async function processSelectedContext(
       ...(config.conversationId === undefined ? {} : { conversationId: config.conversationId }),
     });
   }));
-  const documentProcessingPromise = Promise.all(selectedContext.selectedDocuments.map((selectedDocument, index) => processDocumentAttachment({
+  const documentProcessingPromise = Promise.all(selectedContext.selectedDocuments.map((selectedDocument, index) => processInteropDocumentAttachment({
     ctx,
     blobStore,
     selectedDocument,
@@ -347,72 +338,32 @@ export async function processSelectedContext(
     userContent.push({ type: "text", text: `<attached_files>\n${attachedFilesContent.map(part => part.text).join("\n")}\n</attached_files>` });
   }
 
-  const externalLinksTask = async () => {
-    if (selectedContext.externalLinks.length === 0) return { links: [], documents: [], images: [] };
-    const indexedLinks = selectedContext.externalLinks.map((link, index) => ({ link, index }));
-    const results = await asyncMapValues(indexedLinks, async ({ link, index }) => {
-      const page = await config.webScraperService.getContentInWebsiteFast(ctx, link.url);
-      if (page === null) return { linkContent: undefined, documentInfo: undefined, imageData: undefined };
-      if (page.imageData && page.imageData.length > 0 && page.imageMimeType) {
-        return { linkContent: undefined, documentInfo: undefined, imageData: { imageBytes: page.imageData, mimeType: page.imageMimeType } };
-      }
-      if (page.partialParsedPageContents.length <= EXTERNAL_LINK_INLINE_LIMIT) {
-        return { linkContent: { url: page.pageUrl, title: page.pageTitle, content: page.partialParsedPageContents }, documentInfo: undefined, imageData: undefined };
-      }
-      const basename = (() => {
-        try {
-          const parsed = new URL(page.pageUrl);
-          return decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? parsed.hostname);
-        } catch { return "link"; }
-      })();
-      const withExtension = /\.(md|txt|html|htm|json|xml|csv|tsv|yaml|yml|rst|tex|log)$/i.test(basename) ? basename : `${basename}.md`;
-      const safe = sanitizeFilename(withExtension) || "link.md";
-      const dot = safe.lastIndexOf(".");
-      const fileName = `${safe.slice(0, dot)}-${index}${safe.slice(dot)}`;
-      const rootPath = requestContext?.env?.projectFolder ?? requestContext?.env?.workspacePaths?.[0];
-      if (resourceAccessor && rootPath !== undefined) {
-        try {
-          const filePath = path.join(rootPath, "uploads", fileName);
-          const content = page.partialParsedPageContents.length > 500_000
-            ? page.partialParsedPageContents.slice(0, 500_000) + `\n\n[${(page.partialParsedPageContents.length - 500_000).toLocaleString()} characters truncated due to size]`
-            : page.partialParsedPageContents;
-          await resourceAccessor.get(writeExecutorResource).execute(ctx, new WriteArgs({
-            path: filePath,
-            fileBytes: new TextEncoder().encode(`Source URL: ${page.pageUrl}\nTitle: ${page.pageTitle}\n\n${content}`),
-            returnFileContentAfterWrite: false,
-          }));
-          return { linkContent: undefined, documentInfo: { path: filePath }, imageData: undefined };
-        } catch (error) {
-          logger.warn(ctx, "Failed to write external link content to file", { url: page.pageUrl, error: error instanceof Error ? error.message : String(error) });
-        }
-      }
-      const content = page.partialParsedPageContents.length > EXTERNAL_LINK_INLINE_LIMIT
-        ? page.partialParsedPageContents.slice(0, EXTERNAL_LINK_INLINE_LIMIT) + `\n\n[${(page.partialParsedPageContents.length - EXTERNAL_LINK_INLINE_LIMIT).toLocaleString()} characters truncated due to size]`
-        : page.partialParsedPageContents;
-      return { linkContent: { url: page.pageUrl, title: page.pageTitle, content }, documentInfo: undefined, imageData: undefined };
-    }, { max: EXTERNAL_LINK_ENRICHMENT_MAX_CONCURRENCY });
-    const links: Array<{ url: string; title: string; content: string }> = [];
-    const documents: Array<{ path: string }> = [];
-    const images: Array<{ imageBytes: Uint8Array; mimeType: string }> = [];
-    for (const result of results) {
-      if (result.linkContent) links.push(result.linkContent);
-      if (result.documentInfo) documents.push(result.documentInfo);
-      if (result.imageData) images.push(result.imageData);
-    }
-    return { links, documents, images };
-  };
   const hasExternalLinks = selectedContext.externalLinks.length > 0;
   const hasDocumentation = selectedContext.documentations.length > 0;
   const hasBlobStoreWork = selectedContext.selectedPullRequests.length > 0 || selectedContext.gitPrDiffSelections.length > 0 || selectedContext.extraContextEntries.length > 0 || selectedContext.extraContext.length > 0;
   const enrichStart = performance.now();
   const externalStart = performance.now();
-  const externalResult = await externalLinksTask();
+  const externalResult = await enrichExternalLinks({
+    urls: selectedContext.externalLinks.map(link => link.url),
+    fetchPage: url => config.webScraperService.getContentInWebsiteFast(ctx, url),
+    ...(requestContext?.env?.projectFolder === undefined && requestContext?.env?.workspacePaths?.[0] === undefined
+      ? {}
+      : { workspaceRoot: requestContext.env?.projectFolder ?? requestContext.env?.workspacePaths?.[0] }),
+    ...(resourceAccessor === undefined ? {} : {
+      writeFile: (filePath, bytes) => writeWorkspaceBytesThroughInterop(resourceAccessor, ctx, filePath, bytes),
+    }),
+    onWriteFailure: (url, error) => logger.warn(ctx, "Failed to write external link content to file", {
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  });
   enrichContextExternalLinksDuration.histogram(ctx, performance.now() - externalStart, { hasWork: hasExternalLinks ? "true" : "false" });
   const documentationStart = performance.now();
   const documentationResult = await hydrateSelectedDocumentation({ ctx, documentations: selectedContext.documentations, documentationHydrationService: config.documentationHydrationService, conversationQuery });
   enrichContextDocumentationDuration.histogram(ctx, performance.now() - documentationStart, { hasWork: hasDocumentation ? "true" : "false" });
   const blobStart = performance.now();
   const hydratedSelectedPullRequests = await hydrateSelectedPullRequests({ ctx, selectedPullRequests: selectedContext.selectedPullRequests, blobStore });
+  const pullRequestPrompts = projectSelectedPullRequestsForPrompt(hydratedSelectedPullRequests);
   const hydratedGitPrDiffSelections = await hydrateGitPrDiffSelections({ ctx, gitPrDiffSelections: selectedContext.gitPrDiffSelections, blobStore });
   const extraContextsToInclude = await hydrateSelectedExtraContext(ctx, selectedContext, blobStore);
   enrichContextBlobStoreDuration.histogram(ctx, performance.now() - blobStart, { hasWork: hasBlobStoreWork ? "true" : "false" });
@@ -428,53 +379,70 @@ export async function processSelectedContext(
   if (uploadedDocumentsText) userContent.push({ type: "text", text: uploadedDocumentsText });
   if (allVideoInfos.length > 0) {
     const videosList = allVideoInfos.map(video => `- ${video.path}`).join("\n");
-    const watch = canUseWatchVideoSubagent({ agentType: config.agentType, backgroundAgentSource: config.backgroundAgentSource, featureFlags: config.featureFlags })
+    const watch = canUseWatchVideoSubagent({
+      agentType: config.agentType,
+      backgroundAgentSource: backgroundSourceForVideoPolicy(config.backgroundAgentSource),
+      featureFlags: config.featureFlags,
+    })
       ? " You can watch them using your WatchVideo subagent." : "";
     userContent.push({ type: "text", text: `<attached_videos>\nThe following videos have been attached by the user and saved to your filesystem.${watch}\n${videosList}\n</attached_videos>` });
   }
   const documentationText = renderDocumentationContext(documentationResult);
   if (documentationText) userContent.push({ type: "text", text: documentationText });
-  const { selectedSkills, regularRules } = resolveSelectedContextSkillSections(selectedContext);
+  const { skills: selectedSkills, rules: regularRules } = resolveSkillAttachments(
+    decodeSelectedContextSkillAttachments(selectedContext),
+  );
   const dropCustomPromptContext = config.featureFlags?.dropCustomPromptContext === true;
   if (!dropCustomPromptContext && regularRules.length > 0) {
-    const rulesText = regularRules.map(rule => `Rule Name: ${rule.fullPath ? getFilenameWithoutExtension(rule.fullPath) : "Cursor Rule"}\nDescription: ${rule.content?.slice(0, MAX_RULE_LENGTH) ?? ""}`).join("\n\n");
-    userContent.push({ type: "text", text: `<cursor_rules_context>\nCursor Rules are extra documentation provided by the user to help the AI understand the codebase.\nUse them if they seem useful to the users most recent query, but do not use them if they seem unrelated to the current query.\n\n${rulesText}\n</cursor_rules_context>\n` });
+    const rulesText = regularRules.map(rule => `Rule Name: ${rule.path ? getFilenameWithoutExtension(rule.path) : "Workspace Rule"}\nDescription: ${rule.text?.slice(0, MAX_RULE_LENGTH) ?? ""}`).join("\n\n");
+    userContent.push({ type: "text", text: `<workspace_rules_context>\nProject rules are supplemental context supplied with the workspace.\nUse each rule only when it helps answer the current request.\n\n${rulesText}\n</workspace_rules_context>\n` });
   }
   if (!dropCustomPromptContext && selectedSkills.length > 0) {
-    const attachedSkills = selectedSkills.filter((skill): skill is typeof skill & { fullPath: string; content: string } =>
-      typeof skill.fullPath === "string" && typeof skill.content === "string");
+    const attachedSkills = selectedSkills;
     const seen = new Set<string>();
     for (const skill of attachedSkills) {
-      const fullPath = skill.fullPath.trim();
-      if (!fullPath || seen.has(fullPath)) continue;
-      seen.add(fullPath);
+      const path = skill.path.trim();
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
       recordSkillApplied(ctx, {
         entrypoint: "manually_attached",
-        skillId: getSkillIdFromPath(fullPath),
-        skillSource: getSkillSourceFromPath(fullPath),
-        ...(typeof skill.plugin === "string" ? { plugin: skill.plugin } : {}),
-        ...(typeof skill.marketplace === "string" ? { marketplace: skill.marketplace } : {}),
+        skillId: getSkillIdFromPath(path),
+        skillSource: classifyInteropSkillSourcePath(path),
+        ...(typeof skill.pluginName === "string" ? { plugin: skill.pluginName } : {}),
+        ...(typeof skill.marketplaceName === "string" ? { marketplace: skill.marketplaceName } : {}),
         ...(typeof skill.pluginId === "string" ? { pluginId: skill.pluginId } : {}),
         ...(typeof skill.marketplaceId === "string" ? { marketplaceId: skill.marketplaceId } : {}),
       });
     }
-    const skillsText = renderManuallyAttachedSkillsSection(attachedSkills);
+    const skillsText = renderManuallyAttachedSkillsSection(attachedSkills.map(skill => ({
+      fullPath: skill.path,
+      content: skill.text,
+    })));
     if (skillsText) userContent.push({ type: "text", text: skillsText });
   }
   const nonMediaContent: TextPart[] = [];
-  appendNonMediaSelectedContextContent({
-    userContent: nonMediaContent,
+  const simulatedMessagePrompts = renderInteropSimulatedMessagePrompts({
     selectedContext,
-    hydratedSelectedPullRequests,
-    hydratedGitPrDiffSelections,
-    extraContextsToInclude,
-    isComposerMatterhorn: config.modelInfo?.isComposerMatterhorn === true,
-    isRawTrainingSlug: config.modelInfo?.isRawTrainingSlug === true,
     simulatedMsgReason,
     modelInfo: config.modelInfo,
     environmentParamForSubagent: config.featureFlags?.environmentParamForSubagent === true,
     babysitV2Prompt: config.featureFlags?.babysitV2Prompt === true,
     enablePrCreationForgeGuidance: config.featureFlags?.prCreationForgeGuidance === true,
+  });
+  appendNonMediaSelectedContextContent({
+    userContent: nonMediaContent,
+    selectedContext: projectSelectedNonMediaContext(selectedContext),
+    simulatedMessagePrompts,
+    recentAgents: toRecentAgentPromptInputs(selectedContext.recentAgentsContext?.recentAgents ?? []),
+    selectedUIElements: toSelectedUIElementInputs(selectedContext.uiElements),
+    selectedBrowsers: toBrowserTabPromptInputs(selectedContext.selectedBrowsers),
+    selectedSubagents: toSubagentNameInputs(selectedContext.selectedSubagents),
+    consoleLogs: toConsoleLogPromptInputs(selectedContext.consoleLogs),
+    pullRequestPrompts,
+    prReviewSelections: toPrReviewInputs(hydratedGitPrDiffSelections),
+    extraContextsToInclude,
+    isComposerMatterhorn: config.modelInfo?.isComposerMatterhorn === true,
+    isRawTrainingSlug: config.modelInfo?.isRawTrainingSlug === true,
   });
   userContent.push(...nonMediaContent);
   postEnrichmentAssemblyDuration.histogram(ctx, performance.now() - postEnrichmentStart);
@@ -484,19 +452,19 @@ export async function processSelectedContext(
 
 function createAttachedMediaConfig(config: ContextProcessingConfig): {
   readonly featureFlags?: {
-    readonly geminiVideoAttachmentInlineMaxBytes?: number;
-    readonly geminiVideoAttachmentSignedUrlMaxBytes?: number;
+    readonly videoAttachmentInlineMaxBytes?: number;
+    readonly videoAttachmentSignedUrlMaxBytes?: number;
   };
 } {
-  const inline = config.featureFlags?.geminiVideoAttachmentInlineMaxBytes;
-  const signed = config.featureFlags?.geminiVideoAttachmentSignedUrlMaxBytes;
+  const inline = config.featureFlags?.videoAttachmentInlineMaxBytes;
+  const signed = config.featureFlags?.videoAttachmentSignedUrlMaxBytes;
   if (inline === undefined && signed === undefined) {
     return {};
   }
   return {
     featureFlags: {
-      ...(inline === undefined ? {} : { geminiVideoAttachmentInlineMaxBytes: inline }),
-      ...(signed === undefined ? {} : { geminiVideoAttachmentSignedUrlMaxBytes: signed }),
+      ...(inline === undefined ? {} : { videoAttachmentInlineMaxBytes: inline }),
+      ...(signed === undefined ? {} : { videoAttachmentSignedUrlMaxBytes: signed }),
     },
   };
 }

@@ -4,11 +4,11 @@ import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { processDocumentAttachment } from "../../source/packages/agent/context/document-attachment.ts"
-import type { AttachmentBlobStore } from "../../source/packages/agent/context/attachment-hydration.ts"
+import { processInteropDocumentAttachment } from "../../source/adapters/interop/agent/document-attachment-adapter.ts"
+import type { AttachmentContentStore } from "../../source/packages/agent/context/attachment-hydration.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { SelectedDocument } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
-import type { WriteArgs } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { SelectedDocument } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
+import type { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@ import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 // ---------------------------------------------------------------------------------------------
 
 interface BlobHarness {
-  readonly store: AttachmentBlobStore<Context>
+  readonly store: AttachmentContentStore<Context>
   readonly blobs: Map<string, Uint8Array>
 }
 
@@ -91,7 +91,7 @@ async function process(
     projectFolder?: string
     index?: number
   } = {},
-): Promise<ReturnType<typeof processDocumentAttachment>> {
+): Promise<ReturnType<typeof processInteropDocumentAttachment>> {
   const blobs = options.blobs ?? blobHarness()
   const writes = options.writes ?? writeHarness()
   const env = options.workspaceRoot === undefined && options.projectFolder === undefined
@@ -100,7 +100,7 @@ async function process(
       ...(options.projectFolder === undefined ? {} : { projectFolder: options.projectFolder }),
       workspacePaths: options.workspaceRoot === undefined ? [] : [options.workspaceRoot],
     }
-  return await processDocumentAttachment({
+  return await processInteropDocumentAttachment({
     ctx: createContext(),
     blobStore: blobs.store,
     selectedDocument,
@@ -179,7 +179,7 @@ test("bytes that cannot be written into the workspace are dropped, and the turn 
 })
 
 test("a document is not written anywhere when the session has nowhere to write it", async () => {
-  const withNoAccessor = await processDocumentAttachment({
+  const withNoAccessor = await processInteropDocumentAttachment({
     ctx: createContext(),
     blobStore: blobHarness().store,
     selectedDocument: document({ data: bytesOf("x") }),

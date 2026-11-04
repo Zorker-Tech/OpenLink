@@ -87,15 +87,24 @@ test("an attachment's kind is said in words, singular or plural", () => {
 
 test("a file's preview kind follows what it is", () => {
   assert.equal(getFilePreviewKind("photo.png"), "image")
+  assert.equal(getFilePreviewKind("C:\\photos\\PHOTO.SVG"), "image")
   assert.equal(getFilePreviewKind("clip.mp4"), "video")
+  assert.equal(getFilePreviewKind("voice.opus"), "audio")
+  assert.equal(getFilePreviewKind("report.docx"), "docx")
   assert.equal(getFilePreviewKind("notes.md"), "markdown")
   assert.equal(getFilePreviewKind("data.json"), "json")
   assert.equal(getFilePreviewKind("sheet.csv"), "table")
   assert.equal(getFilePreviewKind("report.pdf"), "pdf")
+  assert.equal(getFilePreviewKind("src/Tool.ts"), "text")
+  assert.equal(getFilePreviewKind(".hidden"), "unknown")
+  assert.equal(getFilePreviewKind("trailing."), "unknown")
   assert.equal(getFilePreviewKind("mystery.xyzzy"), "unknown")
-  // Only the kinds that have to be sniffed are read as bytes.
-  assert.equal(previewKindNeedsBytes("text"), true)
-  assert.equal(previewKindNeedsBytes("image"), false)
+  for (const kind of ["pdf", "table", "docx", "text", "json", "markdown"] as const) {
+    assert.equal(previewKindNeedsBytes(kind), true, kind)
+  }
+  for (const kind of ["image", "video", "audio", "unknown"] as const) {
+    assert.equal(previewKindNeedsBytes(kind), false, kind)
+  }
 })
 
 // ---------------------------------------------------------------------------------------------

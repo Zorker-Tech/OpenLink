@@ -7,13 +7,14 @@
  * question does not arise.
  */
 
+export type ThreadSessionKind = "thread" | "other"
+
 type ThreadBoundSessionProps = {
   readonly isThreadSurface?: boolean | undefined
-  readonly namedAgentSessionKind?: string | undefined
+  readonly sessionKind?: ThreadSessionKind | undefined
 }
 
 export function isThreadBoundSession(props: ThreadBoundSessionProps): boolean {
   if (props.isThreadSurface !== true) return false
-  const sessionKind = props.namedAgentSessionKind?.trim() ?? ""
-  return sessionKind === "" || sessionKind === "slack_thread"
+  return props.sessionKind === undefined || props.sessionKind === "thread"
 }

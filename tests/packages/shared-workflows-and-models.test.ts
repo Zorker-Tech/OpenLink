@@ -8,7 +8,7 @@ import { imageContentType, readCappedImageBytes } from "../../source/shared/node
 import { LISTENER_PLATFORMS } from "../../source/shared/listener-integrations.ts"
 import { previewTextOf } from "../../source/shared/media/markdown-preview.ts"
 import { isWebUrl, openableExternalUrl } from "../../source/shared/external-url-policy.ts"
-import { decideBoxHandBack } from "../../source/shared/forever-box.ts"
+import { planBoxReturn } from "../../source/shared/forever-box.ts"
 import { isValidVncLivenessReport, VNC_LIVENESS_CHANNEL, VNC_LIVENESS_MIN_IMPACTFUL_INPUTS, VNC_LIVENESS_WINDOW_MS } from "../../source/shared/vnc-liveness.ts"
 import { isCoordinatorMainMethod, COORDINATOR_MAIN_METHOD_TABLE } from "../../source/shared/rpc/coordinator-main.ts"
 import { renderMcpOAuthErrorPage, renderMcpOAuthSuccessPage } from "../../source/shared/mcp-oauth-callback-page.ts"
@@ -67,8 +67,14 @@ test("the experiment's arms are read from the words the environment uses, and th
 })
 
 test("the model an agent runs on by default is one the platform names", () => {
-  assert.equal(SLATE_DEFAULT_MODEL_SELECTION.modelId, SLATE_DEFAULT_MODEL_ID)
-  assert.equal(SLATE_DEFAULT_MODEL_SELECTION.parameters.length > 0, true)
+  assert.deepEqual(SLATE_DEFAULT_MODEL_SELECTION, {
+    modelId: SLATE_DEFAULT_MODEL_ID,
+    maxMode: true,
+    parameters: [
+      { id: "effort", value: "high" },
+      { id: "fast", value: "true" },
+    ],
+  })
 })
 
 test("a model configuration is checked before it is used", () => {
@@ -124,22 +130,33 @@ test("only the links a browser can be handed safely are opened", () => {
   assert.equal(openableExternalUrl("https://example.com") !== null, true)
   assert.equal(openableExternalUrl("mailto:a@example.com") !== null, true)
   assert.equal(openableExternalUrl("obsidian://open?vault=v") !== null, true)
+  assert.equal(openableExternalUrl("OBSIDIAN://open?vault=v") !== null, true)
   // Something a document could use to run anything else on the machine is not opened.
   assert.equal(openableExternalUrl("javascript:alert(1)"), null)
   assert.equal(openableExternalUrl("file:///etc/passwd"), null)
   assert.equal(openableExternalUrl("not a url"), null)
   assert.equal(isWebUrl("https://example.com"), true)
   assert.equal(isWebUrl("mailto:a@example.com"), false)
+  assert.equal(isWebUrl(new URL("https://example.com/path")), false)
 })
 
 test("an attachment is previewed as text only when it is one", () => {
   assert.equal(isTextPreviewableName("notes.txt"), true)
   assert.equal(isTextPreviewableName("script.ts"), true)
+  assert.equal(isTextPreviewableName("C:\\src\\README.MD"), true)
   assert.equal(isTextPreviewableName("archive.zip"), false)
   assert.equal(isTextPreviewableName("photo.png"), false)
+  assert.equal(isTextPreviewableName(".hidden"), false)
+  assert.equal(isTextPreviewableName("trailing."), false)
   // Bytes that look like a binary are not shown as text, whatever the name says.
   assert.equal(looksLikeBinary(new TextEncoder().encode("hello")), false)
   assert.equal(looksLikeBinary(new Uint8Array(Array.from({ length: 100 }, () => 0))), true)
+  assert.equal(looksLikeBinary(new Uint8Array([9, 10, 11, 12, 13, 65, 66, 67, 68, 69])), false)
+  assert.equal(looksLikeBinary(new Uint8Array([1, 2, 3, 65, 66, 67, 68, 69, 70, 71])), false)
+  assert.equal(looksLikeBinary(new Uint8Array([1, 2, 3, 4, 65, 66, 67, 68, 69, 70])), true)
+  const afterSampleWindow = new Uint8Array(BINARY_SNIFF_BYTE_WINDOW + 1).fill(65)
+  afterSampleWindow[BINARY_SNIFF_BYTE_WINDOW] = 0
+  assert.equal(looksLikeBinary(afterSampleWindow), false)
   assert.equal(BINARY_SNIFF_BYTE_WINDOW > 0, true)
   assert.equal(BINARY_CONTROL_BYTE_RATIO > 0 && BINARY_CONTROL_BYTE_RATIO < 1, true)
 })
@@ -149,18 +166,19 @@ test("an attachment is previewed as text only when it is one", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a box comes back only when the user decided something", () => {
-  assert.deepEqual(decideBoxHandBack({ requestId: "req-1" }, "dismissed"), {
-    kind: "resume",
+  assert.deepEqual(planBoxReturn({ requestId: "req-1" }, "dismissed"), {
+    type: "resume",
     requestId: "req-1",
-    trigger: "dismissed",
-    resolution: "dismissed",
+    cause: "dismissed",
+    outcome: "dismissed",
   })
   // Giving it back deliberately is the other way it comes back, and anything else is no decision at all.
-  const handedBack = decideBoxHandBack({ requestId: "req-1" }, "handed_back")
-  assert.equal(handedBack.kind === "resume" && handedBack.resolution, "handed_back")
+  const handedBack = planBoxReturn({ requestId: "req-1" }, "handed_back")
+  assert.equal(handedBack.type === "resume" && handedBack.cause, "handed_back")
+  assert.equal(handedBack.type === "resume" && handedBack.outcome, "handed_back")
   // Nothing was handed over, so there is nothing to resume.
-  assert.deepEqual(decideBoxHandBack(undefined, "dismissed"), { kind: "none" })
-  assert.deepEqual(decideBoxHandBack(null, "handed_back"), { kind: "none" })
+  assert.deepEqual(planBoxReturn(undefined, "dismissed"), { type: "untracked" })
+  assert.deepEqual(planBoxReturn(null, "handed_back"), { type: "untracked" })
 })
 
 test("a remote desktop that stopped answering is reported as stalled", () => {

@@ -1,0 +1,106 @@
+// agent.v1 — agent/v1/grep_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/sandbox.proto";
+
+message GrepArgs {
+  string pattern = 1 [json_name = "pattern"];
+  optional string path = 2 [json_name = "path"];
+  optional string glob = 3 [json_name = "glob"];
+  optional string output_mode = 4 [json_name = "outputMode"];
+  optional int32 context_before = 5 [json_name = "contextBefore"];
+  optional int32 context_after = 6 [json_name = "contextAfter"];
+  optional int32 context = 7 [json_name = "context"];
+  optional bool case_insensitive = 8 [json_name = "caseInsensitive"];
+  optional string type = 9 [json_name = "type"];
+  optional int32 head_limit = 10 [json_name = "headLimit"];
+  optional bool multiline = 11 [json_name = "multiline"];
+  optional string sort = 12 [json_name = "sort"];
+  optional bool sort_ascending = 13 [json_name = "sortAscending"];
+  string tool_call_id = 14 [json_name = "toolCallId"];
+  optional .agent.v1.SandboxPolicy sandbox_policy = 15 [json_name = "sandboxPolicy"];
+  optional int32 offset = 16 [json_name = "offset"];
+}
+
+message GrepResult {
+  oneof result {
+    .agent.v1.GrepSuccess success = 1 [json_name = "success"];
+    .agent.v1.GrepError error = 2 [json_name = "error"];
+  }
+}
+
+message GrepSuccess {
+  string pattern = 1 [json_name = "pattern"];
+  string path = 2 [json_name = "path"];
+  string output_mode = 3 [json_name = "outputMode"];
+  map<string, .agent.v1.GrepUnionResult> workspace_results = 4 [json_name = "workspaceResults"];
+  optional .agent.v1.GrepUnionResult active_editor_result = 5 [json_name = "activeEditorResult"];
+}
+
+message GrepError {
+  string error = 1 [json_name = "error"];
+}
+
+message GrepUnionResult {
+  oneof result {
+    .agent.v1.GrepCountResult count = 1 [json_name = "count"];
+    .agent.v1.GrepFilesResult files = 2 [json_name = "files"];
+    .agent.v1.GrepContentResult content = 3 [json_name = "content"];
+  }
+}
+
+message GrepCountResult {
+  repeated .agent.v1.GrepFileCount counts = 1 [json_name = "counts"];
+  int32 total_files = 2 [json_name = "totalFiles"];
+  int32 total_matches = 3 [json_name = "totalMatches"];
+  bool client_truncated = 4 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 5 [json_name = "ripgrepTruncated"];
+  optional int32 head_limit_applied = 6 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 7 [json_name = "offsetApplied"];
+}
+
+message GrepFilesResult {
+  repeated string files = 1 [json_name = "files"];
+  int32 total_files = 2 [json_name = "totalFiles"];
+  bool client_truncated = 3 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 4 [json_name = "ripgrepTruncated"];
+  optional int32 head_limit_applied = 5 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 6 [json_name = "offsetApplied"];
+}
+
+message GrepContentResult {
+  repeated .agent.v1.GrepFileMatch matches = 1 [json_name = "matches"];
+  int32 total_lines = 2 [json_name = "totalLines"];
+  int32 total_matched_lines = 3 [json_name = "totalMatchedLines"];
+  bool client_truncated = 4 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 5 [json_name = "ripgrepTruncated"];
+  optional int32 head_limit_applied = 6 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 7 [json_name = "offsetApplied"];
+}
+
+message GrepFileMatch {
+  string file = 1 [json_name = "file"];
+  repeated .agent.v1.GrepContentMatch matches = 2 [json_name = "matches"];
+}
+
+message GrepContentMatch {
+  int32 line_number = 1 [json_name = "lineNumber"];
+  string content = 2 [json_name = "content"];
+  bool content_truncated = 3 [json_name = "contentTruncated"];
+  bool is_context_line = 4 [json_name = "isContextLine"];
+}
+
+message GrepFileCount {
+  string file = 1 [json_name = "file"];
+  int32 count = 2 [json_name = "count"];
+}
+
+message GrepStream {
+  string pattern = 1 [json_name = "pattern"];
+}

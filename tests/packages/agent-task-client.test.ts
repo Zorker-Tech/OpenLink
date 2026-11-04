@@ -16,7 +16,8 @@ import type { TaskRawArguments, TaskSubagentResolution } from "../../source/pack
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey, conversationGroupIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { subagentExecutorResource, RUNNING_SUBAGENT_FOLLOWUP_ERROR, RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT } from "../../source/packages/agent-exec/subagent.ts"
+import { subagentExecutorResource } from "../../source/adapters/interop/agent/subagent-exec-adapter.ts"
+import { RUNNING_SUBAGENT_FOLLOWUP_ERROR, RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT } from "../../source/packages/agent-exec/subagent.ts"
 import { forceBackgroundSubagentExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts"
 import { WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 import {
@@ -30,19 +31,20 @@ import {
   TaskSuccess,
   ToolCall,
   type ConversationStep as ConversationStepValue,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
+  ClientContinuationConfig,
   ForceBackgroundSubagentStatus,
   SubagentArgs,
   SubagentResult,
   SubagentSuccess,
-} from "../../source/packages/proto/generated/agent/v1/subagent_exec_pb.ts"
-import { SendFinalSummaryArgs, SendFinalSummaryToolCall } from "../../source/packages/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
+import { SendFinalSummaryArgs, SendFinalSummaryToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
 import {
   SubagentType,
   SubagentTypeCustom,
   SubagentTypeUnspecified,
-} from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -140,19 +142,19 @@ function executionHarness(options: {
   const stateHandler: ClientTaskStateHandler = {
     turns: [],
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
-    persistSubagentState(_ctx, subagentId, _type, state) { persisted.push({ subagentId, state }) },
+    persistSubagentState(_ctx, subagentId, _type, state) { persisted.push({ subagentId, state: state as SubagentPersistedState }) },
   }
   const signal = {
     pending: false,
     hasPendingUserInjections: () => signal.pending,
     onUserInjectionAdmitted(listener: () => void) { injections.push(listener); return () => { injections.splice(injections.indexOf(listener), 1) } },
   }
-  const run = (args: {
+  const run = async (args: {
     ctx?: Context
     raw?: Partial<TaskRawArguments>
     resolved?: Record<string, unknown>
     signal?: boolean
-  } = {}) => executeClientSideTaskSubagent({
+  } = {}) => await executeClientSideTaskSubagent({
     ctx: args.ctx ?? createContext(),
     toolCallId: "call-1",
     rawArgs: rawArgs(args.raw),
@@ -161,7 +163,7 @@ function executionHarness(options: {
     stateHandler,
     parentModelName: "parent-model",
     ...(args.signal === true ? { contextInjectionSignal: signal } : {}),
-  } as ClientTaskExecutionArgs)
+  } as ClientTaskExecutionArgs) as TaskResult
   return { run, executed, handoffs, persisted, signal, injections, stateHandler }
 }
 
@@ -271,13 +273,17 @@ test("a rendered result carries whether it failed", () => {
 })
 
 test("a thrown failure is serialized into the call's own error result", () => {
-  const call = serializeError(new Error("no subagent to run"))
+  const call = serializeError(new Error("no subagent to run")) as ToolCall
   assert.equal(call.tool.case, "taskToolCall")
   const value = (call.tool as { value: { result?: TaskResult } }).value
   assert.equal(value.result?.result?.case, "error")
   assert.equal((value.result?.result as { value: { error: string } }).value.error, "no subagent to run")
-  assert.equal((serializeError("just a string").tool as { value: { result: { result: { value: { error: string } } } } }).value.result.result.value.error, "just a string")
+  assert.equal(((serializeError("just a string") as ToolCall).tool as { value: { result: { result: { value: { error: string } } } } }).value.result.result.value.error, "just a string")
 })
+
+function continuationConfigOf(value: unknown): ClientContinuationConfig | undefined {
+  return value as ClientContinuationConfig | undefined
+}
 
 // ---------------------------------------------------------------------------------------------
 // how a long-running subagent is kept going
@@ -288,10 +294,10 @@ test("a subagent with no continuation policy is not continued", () => {
 })
 
 test("a policy's nudge and escape messages reach the platform", () => {
-  const config = buildClientContinuationConfig({
+  const config = continuationConfigOf(buildClientContinuationConfig({
     subagent_type: GENERAL_PURPOSE,
     continuationPolicy: { idleThreshold: 3, continuationMessage: "keep going" },
-  })
+  }))
   assert.equal(config?.idleThreshold, 3)
   assert.equal(config?.maxLoops, 0)
   assert.equal(config?.nudgeMessage, "keep going")
@@ -301,7 +307,7 @@ test("a policy's nudge and escape messages reach the platform", () => {
 
 test("a message written as a function is asked for both of its forms", () => {
   const asked: Array<{ isEscapeHatch: boolean; idleCount: number; escapeToken: string }> = []
-  const config = buildClientContinuationConfig({
+  const config = continuationConfigOf(buildClientContinuationConfig({
     subagent_type: GENERAL_PURPOSE,
     continuationPolicy: {
       idleThreshold: 5,
@@ -311,7 +317,7 @@ test("a message written as a function is asked for both of its forms", () => {
         return args.isEscapeHatch ? `stop after ${args.idleCount} with ${args.escapeToken}` : "keep going"
       },
     },
-  })
+  }))
   assert.deepEqual(asked.map(entry => entry.isEscapeHatch), [false, true])
   assert.equal(config?.nudgeMessage, "keep going")
   // The sentinels the function saw are replaced with the placeholders the platform fills in.
@@ -321,10 +327,10 @@ test("a message written as a function is asked for both of its forms", () => {
 
 test("only a coordinator is told about the children it left running", () => {
   const policy = { idleThreshold: 1, continuationMessage: "keep going" }
-  const coordinator = buildClientContinuationConfig({ subagent_type: COORDINATOR, continuationPolicy: policy })
+  const coordinator = continuationConfigOf(buildClientContinuationConfig({ subagent_type: COORDINATOR, continuationPolicy: policy }))
   assert.equal(coordinator?.collectBackgroundChildren, true)
   assert.match(coordinator?.childrenCompletedMessageTemplate ?? "", /background agents have completed/)
-  const other = buildClientContinuationConfig({ subagent_type: GENERAL_PURPOSE, continuationPolicy: policy })
+  const other = continuationConfigOf(buildClientContinuationConfig({ subagent_type: GENERAL_PURPOSE, continuationPolicy: policy }))
   assert.equal(other?.childrenCompletedMessageTemplate, "")
 })
 
@@ -408,6 +414,23 @@ test("a background run has no answer to show and keeps its transcript", async ()
   assert.equal(success.transcriptPath, "/tmp/transcript.jsonl")
 })
 
+test("an unrecognized background reason stays background and round-trips through the result", async () => {
+  const unknownReason = 4096 as SubagentBackgroundReason
+  const harnessed = executionHarness({
+    result: new SubagentResult({
+      result: {
+        case: "success",
+        value: new SubagentSuccess({ agentId: "agent-unknown", backgroundReason: unknownReason }),
+      },
+    }),
+  })
+  const result = await harnessed.run()
+  const success = (result.result as { value: TaskSuccess }).value
+  assert.equal(success.isBackground, true)
+  assert.equal(success.backgroundReason, unknownReason)
+  assert.deepEqual(success.conversationSteps, [])
+})
+
 test("a run's identity is recorded so a follow-up reaches it", async () => {
   const harnessed = executionHarness()
   await harnessed.run()
@@ -424,7 +447,7 @@ test("a cloud run records the box it ran in", async () => {
   })
   await harnessed.run({ resolved: { effectiveEnvironment: SubagentExecutionEnvironment.CLOUD } })
   const state = harnessed.persisted[0]?.state
-  assert.equal(state?.environment, SubagentExecutionEnvironment.CLOUD)
+  assert.equal(state?.environment, "cloud")
   assert.equal(state?.cloudSubagent?.bcId, "bc-9")
 })
 

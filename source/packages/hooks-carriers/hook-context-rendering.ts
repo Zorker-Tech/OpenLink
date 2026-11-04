@@ -1,56 +1,38 @@
-/**
- * Turning carried hook context into what the model actually reads.
- *
- * Context arrives as protobuf messages so it can cross the wire, and reaches the model as text inside
- * a `<system_reminder>` block — the same shape the platform's own reminders use, which is why the
- * content is sanitized on the way in. There are two ways it lands: appended to a tool result, so the
- * model sees it next to the call that caused it, or as a reminder of its own.
- */
+/** Turn hook context into the short system notices shown to the model. */
 
-import type { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
+import type { HookContextEntry } from "./hook-additional-context.ts"
+import { HOOK_CONTEXT_MAX_CHARACTERS } from "./hook-additional-context.ts"
 import { sanitizeSystemReminderContent } from "../hooks/system-reminder-sanitizing.ts"
-import { HOOK_ADDITIONAL_CONTEXT_MAX_CHARS } from "./hook-additional-context.ts"
 
-export function renderHookAdditionalContextContents(
-  hookAdditionalContexts: readonly HookAdditionalContext[],
-): string[] {
-  return hookAdditionalContexts
-    .map(context => context.content.trim())
-    .filter(content => content.length > 0)
+export function renderHookContextTexts(entries: readonly HookContextEntry[]): string[] {
+  return entries.map(entry => entry.text.trim()).filter(text => text.length > 0)
 }
 
-export function renderHookAdditionalContextSystemReminders(
-  hookAdditionalContexts: readonly HookAdditionalContext[],
-): string[] {
-  return renderHookAdditionalContextContents(hookAdditionalContexts)
-    .map(content => `<system_reminder>\n${sanitizeSystemReminderContent(content)}\n</system_reminder>`)
+export function renderHookContextReminders(entries: readonly HookContextEntry[]): string[] {
+  return renderHookContextTexts(entries)
+    .map(text => `<system_reminder>\n${sanitizeSystemReminderContent(text)}\n</system_reminder>`)
 }
 
-export function appendHookContextRemindersToCoreToolResult(
+export function appendHookContextRemindersToToolOutput(
   textParts: string[],
-  toolResultContent: Array<{ type: "text"; text: string }>,
-  contexts: readonly HookAdditionalContext[],
+  resultParts: Array<{ type: "text"; text: string }>,
+  entries: readonly HookContextEntry[],
 ): void {
-  const reminders = renderHookAdditionalContextSystemReminders(contexts)
-  for (const text of reminders) {
+  for (const text of renderHookContextReminders(entries)) {
     textParts.push(text)
-    toolResultContent.push({ type: "text", text })
+    resultParts.push({ type: "text", text })
   }
 }
 
-/**
- * The same reminder for a single piece of content, where oversize is a caller's decision: the callback
- * is told both numbers so it can report the loss, and nothing is rendered.
- */
-export function renderHookAdditionalContextSystemReminder(
-  content: string | null | undefined,
-  onOversize?: ((actualLength: number, maxLength: number) => void) | undefined,
+export function renderHookContextReminder(
+  text: string | null | undefined,
+  onOversize?: ((actualCharacters: number, maximumCharacters: number) => void) | undefined,
 ): string | undefined {
-  const normalized = content?.trim()
-  if (!normalized) return undefined
-  if (normalized.length > HOOK_ADDITIONAL_CONTEXT_MAX_CHARS) {
-    onOversize?.(normalized.length, HOOK_ADDITIONAL_CONTEXT_MAX_CHARS)
+  const value = text?.trim()
+  if (value === undefined || value.length === 0) return undefined
+  if (value.length > HOOK_CONTEXT_MAX_CHARACTERS) {
+    onOversize?.(value.length, HOOK_CONTEXT_MAX_CHARACTERS)
     return undefined
   }
-  return `<system_reminder>\n${sanitizeSystemReminderContent(normalized)}\n</system_reminder>`
+  return `<system_reminder>\n${sanitizeSystemReminderContent(value)}\n</system_reminder>`
 }

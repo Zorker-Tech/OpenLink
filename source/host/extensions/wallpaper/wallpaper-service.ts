@@ -1,4 +1,85 @@
-/** The wallpaper as a host extension: it paints the box's desktop with the tone the platform resolved. */
-import type { Clock } from "../scheduling.ts";
-export const UNRESOLVED_PLAN_RETRY_MS = 60_000; export interface WallpaperPlan { readonly tone: string; readonly msUntilNextBoundary: number; }
-export class WallpaperToneScheduler { private pendingWake: { dispose(): void } | undefined; private unsubscribe: (() => void) | undefined; private generation = 0; private syncing = false; private disposed = false; constructor(private readonly deps: { readonly clock: Clock; readonly resolvePlan: () => Promise<WallpaperPlan | undefined>; readonly paint: () => Promise<void>; readonly subscribeToTimeZoneChange: (listener: () => void) => () => void; readonly log: (message: string) => void }) {} start(): void { this.unsubscribe = this.deps.subscribeToTimeZoneChange(() => this.beginSync()); this.beginSync(); } dispose(): void { this.disposed = true; this.cancelPendingWake(); this.unsubscribe?.(); this.unsubscribe = undefined; } beginSync(): void { if (this.disposed) return; this.cancelPendingWake(); this.generation += 1; if (!this.syncing) void this.drainSyncs(); } private async drainSyncs(): Promise<void> { this.syncing = true; try { let synced = 0; while (!this.disposed && synced !== this.generation) { synced = this.generation; await this.sync(synced); } } finally { this.syncing = false; } } private cancelPendingWake(): void { this.pendingWake?.dispose(); this.pendingWake = undefined; } private async sync(generation: number): Promise<void> { const plan = await this.deps.resolvePlan(); if (this.isStale(generation)) return; if (plan === undefined) return this.armWake(UNRESOLVED_PLAN_RETRY_MS, generation); const started = this.deps.clock.monotonicNow(); await this.deps.paint(); if (this.isStale(generation)) return; const remainingMs = Math.max(0, plan.msUntilNextBoundary - (this.deps.clock.monotonicNow() - started)); this.deps.log(`wallpaper: painted tone ${plan.tone}; next boundary in ${Math.round(remainingMs / 1_000)}s`); this.armWake(remainingMs, generation); } private isStale(generation: number): boolean { return this.disposed || generation !== this.generation; } private armWake(delayMs: number, generation: number): void { this.cancelPendingWake(); this.pendingWake = this.deps.clock.schedule(delayMs, () => { this.pendingWake = undefined; if (!this.isStale(generation)) this.beginSync(); }); } }
+import type { SlateWallpaperSchedulePorts, SlateWallpaperTonePlan } from "./wallpaper-schedule-contracts.ts"
+import { delayUntilNextWallpaperBoundary, SLATE_WALLPAPER_PLAN_RETRY_MS } from "./wallpaper-schedule-policy.ts"
+
+export { delayUntilNextWallpaperBoundary, SLATE_WALLPAPER_PLAN_RETRY_MS } from "./wallpaper-schedule-policy.ts"
+export type { SlateWallpaperSchedulePorts, SlateWallpaperTonePlan } from "./wallpaper-schedule-contracts.ts"
+
+export class SlateWallpaperSchedule {
+  private wakeHandle: { dispose(): void } | undefined
+  private removeTimeZoneListener: (() => void) | undefined
+  private revision = 0
+  private resolving = false
+  private stopped = false
+
+  constructor(private readonly ports: SlateWallpaperSchedulePorts) {}
+
+  start(): void {
+    this.removeTimeZoneListener = this.ports.subscribeToTimeZoneChange(() => this.requestRefresh())
+    this.requestRefresh()
+  }
+
+  dispose(): void {
+    this.stopped = true
+    this.cancelWake()
+    this.removeTimeZoneListener?.()
+    this.removeTimeZoneListener = undefined
+  }
+
+  requestRefresh(): void {
+    if (this.stopped) return
+    this.cancelWake()
+    this.revision += 1
+    if (!this.resolving) void this.drainRefreshes()
+  }
+
+  private async drainRefreshes(): Promise<void> {
+    this.resolving = true
+    try {
+      let appliedRevision = 0
+      while (!this.stopped && appliedRevision !== this.revision) {
+        appliedRevision = this.revision
+        await this.refresh(appliedRevision)
+      }
+    } finally {
+      this.resolving = false
+    }
+  }
+
+  private cancelWake(): void {
+    this.wakeHandle?.dispose()
+    this.wakeHandle = undefined
+  }
+
+  private isCurrent(revision: number): boolean {
+    return this.stopped || revision !== this.revision
+  }
+
+  private async refresh(revision: number): Promise<void> {
+    const plan = await this.ports.resolvePlan()
+    if (this.isCurrent(revision)) return
+    if (plan === undefined) {
+      this.scheduleRefresh(SLATE_WALLPAPER_PLAN_RETRY_MS, revision)
+      return
+    }
+
+    const paintStartedAt = this.ports.clock.monotonicNow()
+    await this.ports.paint()
+    if (this.isCurrent(revision)) return
+
+    const remainingMs = delayUntilNextWallpaperBoundary(
+      plan,
+      paintStartedAt,
+      this.ports.clock.monotonicNow(),
+    )
+    this.ports.log(`wallpaper: painted tone ${plan.tone}; next boundary in ${Math.round(remainingMs / 1_000)}s`)
+    this.scheduleRefresh(remainingMs, revision)
+  }
+
+  private scheduleRefresh(delayMs: number, revision: number): void {
+    this.cancelWake()
+    this.wakeHandle = this.ports.clock.schedule(delayMs, () => {
+      this.wakeHandle = undefined
+      if (!this.isCurrent(revision)) this.requestRefresh()
+    })
+  }
+}

@@ -1,31 +1,31 @@
-/**
- * The surface a run step uses to account for prompt tokens.
- *
- * Accounting is reported, never blocking: a step calls this with everything it knows (the tools it
- * offered, the request context, the messages, the limits) and the tracker decides what to record. The
- * contract is written down here so the step and the tracker can be read independently — the step owns
- * the values, the tracker owns what they mean.
- */
+/** Inputs needed to estimate and report the prompt size for one model call. */
 
-import type { Context } from "../../context/context.ts"
-import type { RequestContext } from "../../proto/generated/agent/v1/request_context_exec_pb.ts"
-import type { CoreMessageLike } from "../../redaction/message-redaction.ts"
+import type { Context } from "../../context/context.ts";
+import type { CoreMessageLike } from "../../redaction/message-redaction.ts";
 
-export interface TrackPromptTokenUsageInput {
-  readonly ctx: Context
-  readonly mcpTools: readonly unknown[]
-  readonly requestContext: RequestContext
-  readonly messages: readonly CoreMessageLike[]
-  readonly selectedContext: unknown
-  readonly userInfoDisplayOptions: unknown
-  readonly agentTokenLimit: number | undefined
-  readonly readToolName: string | undefined
-  readonly invocationId: string
-  readonly modelInfo: unknown
-  readonly featureFlags: unknown
-  readonly stateHandler: {
-    lastSkillCatalogBudgetStrategy?: string | undefined
-  }
+export interface PromptTokenRequestDetails {
+  readonly applicableRules?: readonly unknown[] | undefined;
+  readonly availableSkills?: readonly unknown[] | undefined;
+  readonly workspaceContext?: unknown;
+  readonly toolDiscoverySettings?: unknown;
+  readonly fileSystemSettings?: unknown;
 }
 
-export type TrackPromptTokenUsage = (params: TrackPromptTokenUsageInput) => void
+export interface TrackPromptTokenUsageInput {
+  readonly ctx: Context;
+  readonly availableTools: readonly unknown[];
+  readonly requestDetails: PromptTokenRequestDetails;
+  readonly promptMessages: readonly CoreMessageLike[];
+  readonly attachedContext: unknown;
+  readonly userInfoDisplayOptions: unknown;
+  readonly tokenBudget: number | undefined;
+  readonly fileReadToolName: string | undefined;
+  readonly invocationId: string;
+  readonly modelCapabilities: unknown;
+  readonly behaviorFlags: unknown;
+  readonly conversationState: {
+    skillCatalogBudgetChoice?: string | undefined;
+  };
+}
+
+export type TrackPromptTokenUsage = (input: TrackPromptTokenUsageInput) => void;

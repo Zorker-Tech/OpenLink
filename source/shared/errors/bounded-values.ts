@@ -28,40 +28,23 @@ export function brandLiteralEnum<const Value extends string>(value: Value): Valu
   return value
 }
 
-/** Opaque and short: no whitespace, no quoting, nothing that could carry a message. */
-const OPAQUE_ID = /^[0-9A-Za-z._:|-]{1,128}$/
+const MAXIMUM_OPAQUE_ID_LENGTH = 128
+const OPAQUE_ID_CHARACTER = /^[0-9A-Za-z._:|-]$/
 
-/** An id that is safe to report, or `undefined` when the value is not one. */
 export function brandedId(value: string | undefined): string | undefined {
-  if (value === undefined || !OPAQUE_ID.test(value)) return undefined
+  if (value === undefined || value.length === 0 || value.length > MAXIMUM_OPAQUE_ID_LENGTH) return undefined
+  for (const character of value) {
+    if (!OPAQUE_ID_CHARACTER.test(character)) return undefined
+  }
   return value
 }
 
-/** The errno values the platform reports; anything else collapses to the fallback. */
-export const SLATE_ERRNO_TAGS = [
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ECONNABORTED",
-  "ETIMEDOUT",
-  "EPIPE",
-  "ENETRESET",
-  "ENETDOWN",
-  "ENETUNREACH",
-  "EHOSTUNREACH",
-  "EHOSTDOWN",
-  "EAI_AGAIN",
-  "ENOTFOUND",
-  "EADDRINUSE",
-  "EACCES",
-  "EPERM",
-  "ENOENT",
-  "ENOSPC",
-  "EDQUOT",
-  "EROFS",
-  "EBUSY",
-  "EMFILE",
-  "EIO",
-] as const
+const admittedErrnoNames =
+  "ECONNREFUSED ECONNRESET ECONNABORTED ETIMEDOUT EPIPE ENETRESET ENETDOWN ENETUNREACH " +
+  "EHOSTUNREACH EHOSTDOWN EAI_AGAIN ENOTFOUND EADDRINUSE EACCES EPERM ENOENT ENOSPC " +
+  "EDQUOT EROFS EBUSY EMFILE EIO"
+
+export const SLATE_ERRNO_TAGS: readonly string[] = Object.freeze(admittedErrnoNames.split(" "))
 
 export const SLATE_ERRNO_FALLBACK = "E_OTHER" as const
 

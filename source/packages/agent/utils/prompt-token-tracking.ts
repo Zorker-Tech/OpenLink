@@ -17,15 +17,18 @@
  */
 
 import { PrivacyCapability } from "../../redaction/classification.ts"
-import { fromRedactedLsDirectoryTreeNode } from "../../../adapters/interop/redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
+import { decodeRedactedDirectoryTree } from "../../../adapters/interop/agent/redacted-ls-directory-tree-adapter.ts"
 import type { Context } from "../../context/context.ts"
-import type { AgentSkill } from "../../../adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts"
-import type { CursorRule } from "../../../adapters/interop/proto/generated/agent/v1/rules_pb.ts"
+import {
+  projectInteropAgentSkills,
+  projectInteropCursorRules,
+  projectInteropEnvironment,
+} from "../../../adapters/interop/agent/user-info-input-adapter.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
 import { resolveSkillAttachments } from "../skill-attachment-policy.ts"
 import { decodeSelectedContextSkillAttachments } from "../../../adapters/interop/agent/selected-context-skills-adapter.ts"
 import { buildAvailableSkillsPromptSection } from "../prompts/available-skills-section.ts"
-import { categorizeCursorRules } from "../prompts/rule-categorization.ts"
+import { categorizePromptRules } from "../prompts/rule-categorization.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
 import type { PromptNode } from "../../prompt-jsx/index.ts"
 import { getAgentEventTracker } from "./event-tracking.ts"
@@ -61,9 +64,9 @@ interface McpPromptTrackingOptions {
 }
 
 interface McpPromptTrackingRequestContext {
-  readonly rules: CursorRule[]
-  readonly agentSkills?: AgentSkill[] | undefined
-  readonly env?: { readonly workspacePaths?: readonly string[] | undefined } | undefined
+  readonly rules: readonly unknown[]
+  readonly agentSkills?: readonly unknown[] | undefined
+  readonly env?: unknown
   readonly mcpMetaToolOptions?: McpPromptTrackingOptions | undefined
   readonly mcpFileSystemOptions?: McpPromptTrackingOptions | undefined
 }
@@ -106,7 +109,7 @@ interface PromptTokenTrackingDisplayOptions {
   readonly agentType?: AgentType | undefined
   readonly computerUseSubagentSurface?: boolean | undefined
   readonly displaySkills?: boolean | undefined
-  readonly displayCursorRules?: boolean | undefined
+  readonly displayWorkspaceRules?: boolean | undefined
 }
 
 interface PromptTokenTrackingFeatureFlags {
@@ -127,11 +130,6 @@ interface PromptTokenTrackingParams {
   readonly featureFlags: PromptTokenTrackingFeatureFlags | undefined
   readonly stateHandler: { lastSkillCatalogBudgetStrategy?: string | undefined }
 }
-
-const decodeRedactedLsDirectoryTreeNode = fromRedactedLsDirectoryTreeNode as unknown as (
-  message: unknown,
-  purpose: PrivacyCapability,
-) => unknown
 
 export function countConversationHistoryTokens(
   messages: readonly PromptMessageLike[],
@@ -225,7 +223,7 @@ function countFileAttachmentTokens(
       fileAttachmentTokens += estimateRedactedStringTokenCount(value)
     }
     if (attachment.tree) {
-      const decodedTree = decodeRedactedLsDirectoryTreeNode(attachment.tree, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      const decodedTree = decodeRedactedDirectoryTree(attachment.tree, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
       fileAttachmentTokens += estimateStringTokenCount(JSON.stringify(decodedTree))
     }
   }
@@ -265,14 +263,14 @@ function renderSection(section: PromptNode): string {
 }
 
 function countCursorRuleTokens(params: {
-  readonly rules: CursorRule[]
+  readonly rules: readonly unknown[]
   readonly requestContext: McpPromptTrackingRequestContext
   readonly userInfoDisplayOptions: PromptTokenTrackingDisplayOptions | undefined
 }): { readonly ruleTokens: number; readonly ruleCount: number } {
   let ruleTokens = 0
-  const workspacePaths = params.requestContext.env?.workspacePaths ?? []
-  const { globalRules, agentRequestableRules, userRules } = categorizeCursorRules(
-    params.rules,
+  const workspacePaths = projectInteropEnvironment(params.requestContext.env)?.workspacePaths ?? []
+  const { globalRules, agentRequestableRules, userRules } = categorizePromptRules(
+    projectInteropCursorRules(params.rules),
     workspacePaths,
     params.userInfoDisplayOptions?.agentType,
   )
@@ -297,10 +295,10 @@ function countAvailableSkillPromptUsage(params: {
 }): { readonly availableSkillTokens: number; readonly availableSkillCount: number } {
   const { section, skillCount, renderedEstimatedTokens, uncappedEstimatedTokens, omittedSkillCount, strategy } =
     buildAvailableSkillsPromptSection({
-      cursorRules: params.requestContext.rules,
-      agentSkills: params.requestContext.agentSkills,
+      workspaceRules: projectInteropCursorRules(params.requestContext.rules),
+      agentSkills: projectInteropAgentSkills(params.requestContext.agentSkills),
       displayOptions: params.userInfoDisplayOptions,
-      env: params.requestContext.env,
+      env: projectInteropEnvironment(params.requestContext.env),
       agentTokenLimit: params.agentTokenLimit,
       featureFlags: params.featureFlags,
       modelInfo: params.modelInfo,

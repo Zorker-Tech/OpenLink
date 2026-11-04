@@ -7,8 +7,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 
-import { readExecutorResource } from "../../packages/agent-exec/read-operation.ts";
-import { ReadArgs, type ReadResult } from "../../packages/proto/generated/agent/v1/read_exec_pb.ts";
 
 export const SLATE_SHELL_ENRICHMENT_MAX_CHARS = 8_000;
 export const SLATE_SHELL_ENRICHMENT_MAX_LINES = 200;
@@ -30,9 +28,10 @@ export type SlateShellEnrichmentCandidate =
   };
 
 export interface SlateShellReadAccessor<Context> {
-  get(resource: typeof readExecutorResource): {
-    execute(turnContext: Context, input: ReadArgs, options?: unknown): Promise<ReadResult>;
-  };
+  read(
+    turnContext: Context,
+    request: { readonly path: string; readonly toolCallId: string; readonly offset: number; readonly limit: number },
+  ): Promise<BoundedText | undefined>;
 }
 
 export interface BoundedText {
@@ -206,38 +205,21 @@ export function parseSlateShellEnrichmentCandidate(
     : { kind: "executable", path: resolve(currentDirectory, targetPath) };
 }
 
-/** The readText text a successful read answered with, or nothing when the read failed. */
-function successfulTextRead(readAnswer: ReadResult): {
-  readonly content: string;
-  readonly totalLines: number;
-  readonly truncated: boolean;
-} | undefined {
-  if (readAnswer.result.case !== "success") return undefined;
-  const answerValue = readAnswer.result.value;
-  const output = answerValue.output;
-  if (output.case !== "content") return undefined;
-  return {
-    content: output.value,
-    totalLines: answerValue.totalLines,
-    truncated: answerValue.truncated,
-  };
-}
-
 export async function readBoundedText<Context>(
   turnContext: Context,
   reads: SlateShellReadAccessor<Context>,
   path: string,
   callId: string,
 ): Promise<BoundedText | undefined> {
-  const readText = successfulTextRead(await reads.get(readExecutorResource).execute(
+  const readText = await reads.read(
     turnContext,
-    new ReadArgs({
+    {
       path,
       toolCallId: callId,
       offset: 1,
       limit: SLATE_SHELL_ENRICHMENT_MAX_LINES,
-    }),
-  ));
+    },
+  );
   if (readText == null) return undefined;
   return {
     content: readText.content.slice(0, SLATE_SHELL_ENRICHMENT_MAX_CHARS),
@@ -264,15 +246,15 @@ export async function hashFullText<Context>(
     offsetLine <= Math.max(1, totalLines);
     offsetLine += SLATE_SHELL_APPROVAL_HASH_CHUNK_LINES
   ) {
-    const readChunk = successfulTextRead(await reads.get(readExecutorResource).execute(
+    const readChunk = await reads.read(
       turnContext,
-      new ReadArgs({
+      {
         path,
         toolCallId: callId,
         offset: offsetLine,
         limit: SLATE_SHELL_APPROVAL_HASH_CHUNK_LINES,
-      }),
-    ));
+      },
+    );
     if (readChunk == null || readChunk.truncated) return undefined;
     hash.update(String(offsetLine)).update("\0").update(readChunk.content).update("\0");
     if (keepsContent && keptContent.length + readChunk.content.length <= SLATE_SHELL_APPROVAL_PARSE_MAX_CHARS) {

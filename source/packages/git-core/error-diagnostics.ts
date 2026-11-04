@@ -1,40 +1,51 @@
-/**
- * What a git failure adds to the message that carries it.
- *
- * A git error arrives as an exit code and a stderr that the caller usually never sees, so a failure
- * that says only "command failed" cannot be acted on. The error's own code and exit code are appended
- * in one bracketed suffix — once, since the message may already have been annotated — and the stderr
- * can be added behind a marker when the caller asked for it, capped and with credentials stripped
- * because it is going into a log.
- */
-
+/** Add actionable, credential-safe details to a Git failure message. */
 import { redactHttpUrlUserinfo } from "./url-redaction.ts"
 
-const GIT_DIAGNOSTICS_PREFIX = " [git: "
-const GIT_DIAGNOSTICS_RE = / \[git: ([^\]]*)\]/
-const GIT_STDERR_LOG_CAP = 2_048
+const DIAGNOSTIC_MARKER = " [git: "
+const HAS_GIT_DIAGNOSTICS = / \[git: ([^\]]*)\]/
+const MAX_STDERR_CHARS = 2_048
 
-const capStderr = (stderr: string): string =>
-  stderr.length <= GIT_STDERR_LOG_CAP ? stderr : `${stderr.slice(0, GIT_STDERR_LOG_CAP)}… [truncated to ${GIT_STDERR_LOG_CAP} chars]`
+interface GitFailureFields {
+  readonly gitErrorCode?: unknown
+  readonly exitCode?: unknown
+  readonly stderr?: unknown
+}
+
+function readFailureFields(error: unknown): GitFailureFields | undefined {
+  return typeof error === "object" && error !== null ? error as GitFailureFields : undefined
+}
+
+function diagnosticParts(fields: GitFailureFields): string[] {
+  const parts: string[] = []
+  if (typeof fields.gitErrorCode === "string" && fields.gitErrorCode.length > 0) {
+    parts.push(`gitErrorCode=${fields.gitErrorCode}`)
+  }
+  if (typeof fields.exitCode === "number" && Number.isFinite(fields.exitCode)) {
+    parts.push(`exitCode=${fields.exitCode}`)
+  }
+  return parts
+}
+
+function stderrDetail(fields: GitFailureFields, enabled: boolean): string | undefined {
+  if (!enabled || typeof fields.stderr !== "string" || fields.stderr.length === 0) return undefined
+  const redacted = redactHttpUrlUserinfo(fields.stderr)
+  if (redacted.length <= MAX_STDERR_CHARS) return redacted
+  return `${redacted.slice(0, MAX_STDERR_CHARS)}… [truncated to ${MAX_STDERR_CHARS} chars]`
+}
 
 export function appendGitDiagnostics(
   message: string,
   error: unknown,
-  options?: { includeStderr?: boolean },
+  options?: { readonly includeStderr?: boolean | undefined },
 ): string {
-  if (typeof error !== "object" || error === null || GIT_DIAGNOSTICS_RE.test(message)) return message
-  const candidate = error as { gitErrorCode?: unknown; exitCode?: unknown; stderr?: unknown }
-  const parts: string[] = []
-  if (typeof candidate.gitErrorCode === "string" && candidate.gitErrorCode.length > 0) {
-    parts.push(`gitErrorCode=${candidate.gitErrorCode}`)
-  }
-  if (typeof candidate.exitCode === "number" && Number.isFinite(candidate.exitCode)) {
-    parts.push(`exitCode=${candidate.exitCode}`)
-  }
-  if (parts.length === 0) return message
-  let annotated = `${message}${GIT_DIAGNOSTICS_PREFIX}${parts.join(" ")}]`
-  if (options?.includeStderr === true && typeof candidate.stderr === "string" && candidate.stderr.length > 0) {
-    annotated += `\n--- git stderr ---\n${capStderr(redactHttpUrlUserinfo(candidate.stderr))}`
-  }
-  return annotated
+  if (HAS_GIT_DIAGNOSTICS.test(message)) return message
+  const fields = readFailureFields(error)
+  if (fields === undefined) return message
+
+  const details = diagnosticParts(fields)
+  if (details.length === 0) return message
+
+  const annotated = `${message}${DIAGNOSTIC_MARKER}${details.join(" ")}]`
+  const stderr = stderrDetail(fields, options?.includeStderr === true)
+  return stderr === undefined ? annotated : `${annotated}\n--- git stderr ---\n${stderr}`
 }

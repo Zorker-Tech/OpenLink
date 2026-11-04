@@ -6,8 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { readAgentStoreExclusiveMutationClaimOwner } from "../../source/packages/agent-store-sync/exclusive-mutation-lock.ts";
-import { ProtoPromptBuilder, ProtoPromptExecutor, ProtoSessionProvider } from "../../source/packages/chat-inference-proto/client.ts";
+import { readCurrentAgentStoreMutationOwner } from "../../source/packages/agent-store-sync/exclusive-mutation-lock.ts";
+import { ProtoPromptBuilder, ProtoPromptExecutor, ProtoSessionProvider } from "../../source/adapters/interop/chat-inference-proto/client.ts";
 import { createTurnSettle, TranscriptAppendAfterCheckpointError } from "../../source/host/runner/turn-settle.ts";
 import { CONNECTOR_AUTH_START_FAILURE_REASONS, CONNECTOR_AUTH_START_REFUSAL_REASONS, SlateMcpAuthWatchLifecycle } from "../../source/shared/node/mcp/mcp-auth-watch-lifecycle.ts";
 import { MAX_DEGRADED_WINDOWS, MAX_RECORDS, NONCE_DIGEST_MISMATCH, PromptAcceptanceLedger } from "../../source/host/transcript/prompt-acceptance-ledger.ts";
@@ -16,13 +16,13 @@ import { renderAgentProfileUpdate } from "../../source/host/runner/slate-agent-p
 import { SLATE_HIDDEN_PROMPT_MARKER, SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER } from "../../source/host/runner/slate-prompt-markers.ts";
 import { appendUserReplyReminder, buildAttachedFilesNote } from "../../source/host/runner/system-prompt.ts";
 import { renderAutomationClearedStatusReminder } from "../../source/host/automations/automation.ts";
-import { SelectedVideo as GeneratedSelectedVideo } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts";
-import { UserMessage } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
+import { SelectedVideo as GeneratedSelectedVideo } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
+import { UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { buildServerConfigJson, MCP_AWAITING_SELECTION_MESSAGE, PLUGIN_QUERY_MIN_TOKEN_LENGTH } from "../../source/host/runner/tools/slate-mcp-management-tools.ts";
 
 describe("a lock around one mutating operation", () => {
   it("reads who holds the claim", () => {
-    assert.equal(typeof readAgentStoreExclusiveMutationClaimOwner, "function");
+    assert.equal(typeof readCurrentAgentStoreMutationOwner, "function");
   });
 });
 
@@ -300,7 +300,7 @@ describe("gathering a turn's prompt", () => {
     // A staging failure leaves the files on the user's computer only.
     const failingStage = createPromptCollectorGlue(host({ uploadAttachmentsIntoBox: async () => { throw new Error("no box"); }, getRemoteBoxAvailable: () => true }));
     const unstaged = await failingStage.assembleTurnAction({ trimmedPrompt: "hello", options: { attachedFilePaths: ["/host/a.txt"] }, compactionEpoch: () => 1 });
-    assert.equal(unstaged.action.action.value.userMessage.text.includes("not on your box"), true);
+    assert.equal(unstaged.action.action.value.userMessage.text.includes("on the user's computer"), true);
   });
 
   it("assembles the generated turn action with generated messages", async () => {

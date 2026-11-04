@@ -1,19 +1,2 @@
-/**
- * An agent's profile as the session list sees it.
- *
- * The profile and its picture are read from the agent's own directory, with an avatar that a previous version stored
- * under a different name still found, so an agent that was renamed or moved is still shown as itself.
- */
-import { basename } from "node:path";
-import { readAvatarBytesWithinDir as readAvatarBytes, readAvatarWithinDir as readAvatar, resolveDerivedAvatarFilename } from "../../agents/agent-avatar.ts";
-import { getSlateProfilePath, readLegacyProfileAvatarField, readSlateProfileFile, type SlateAgentProfile } from "../../agents/agent-profile.ts";
-import { buildSummary, loadAgentDbExtras, type DbExtras } from "./session-summaries.ts";
-const safeReadAvatar=(dir:string,path:string|null)=>path==null?Promise.resolve(null):readAvatar(dir,path);
-const safeReadAvatarBytes=(dir:string,path:string|null)=>path==null?Promise.resolve(null):readAvatarBytes(dir,path);
-export async function updateAgentProfile(host:{memory:{agentHasContent(dir:string):boolean};withAgentDb<T>(id:string,fn:(db:UpdateProfileDb,path:string)=>Promise<T>):Promise<T>;statOpenDb(args:{dbPath:string;agentId:string}):Promise<{size:number;mtimeMs:number}|undefined>;writeAgentProfileFile(id:string,profile:Partial<SlateAgentProfile> & {name:string;description:string}):void},agentId:string,profile:Partial<SlateAgentProfile> & {name:string;description:string}){return host.withAgentDb(agentId,async(db,dbPath)=>{host.writeAgentProfileFile(agentId,profile);const dbStats=await host.statOpenDb({dbPath,agentId});return await buildSummary({extras:loadAgentDbExtras(db,dbPath,agentId,dbStats),dbPath,dirName:agentId,...(dbStats==null?{}:{dbStats}),includeBlank:true,agentHasMemory:(dir)=>host.memory.agentHasContent(dir)})})}
-interface UpdateProfileDb { get(key:string):unknown; getTranscriptEntries():Record<string,unknown>[]; getUnreadState():DbExtras["unreadState"]; getAwaitingUserResponse?():unknown; getAgentOrigin?():unknown; getAgentPurpose?():unknown; getConversationPartnerIds?():string[]; getSlateProfile?():{description:string;avatarPath:string|null} }
-export function getAgentProfileText(host:{getAgentDir(id:string):string},agentId:string){const profile=readSlateProfileFile(getSlateProfilePath(host.getAgentDir(agentId)));return profile==null?null:{name:profile.name,description:profile.description,title:profile.title,avatarShape:profile.avatarShape,avatarColor:profile.avatarColor}}
-export async function readLegacyStoredAvatar<T>(host:{agentExists(id:string):boolean;getAgentDir(id:string):string;withAgentDb<R>(id:string,fn:(db:{getSlateProfile():{avatarPath:string|null}})=>Promise<R>):Promise<R>},agentId:string,read:(dir:string,path:string|null)=>Promise<T|null>):Promise<T|null>{if(!host.agentExists(agentId))return null;return host.withAgentDb(agentId,async(db)=>read(host.getAgentDir(agentId),db.getSlateProfile().avatarPath))}
-export async function getAgentAvatar(host:{agentExists(id:string):boolean;getAgentDir(id:string):string;withAgentDb<R>(id:string,fn:(db:{getSlateProfile():{avatarPath:string|null}})=>Promise<R>):Promise<R>},agentId:string){const dir=host.getAgentDir(agentId),derived=resolveDerivedAvatarFilename(dir,readLegacyProfileAvatarField(getSlateProfilePath(dir))),avatar=await safeReadAvatar(dir,derived)??await readLegacyStoredAvatar(host,agentId,safeReadAvatar);return{version:avatar?.version??null,dataUrl:avatar?.dataUrl??null}}
-export async function getAgentAvatarPng(host:{agentExists(id:string):boolean;getAgentDir(id:string):string;withAgentDb<R>(id:string,fn:(db:{getSlateProfile():{avatarPath:string|null}})=>Promise<R>):Promise<R>},agentId:string):Promise<Uint8Array|null>{const dir=host.getAgentDir(agentId),derived=resolveDerivedAvatarFilename(dir,readLegacyProfileAvatarField(getSlateProfilePath(dir)));return await safeReadAvatarBytes(dir,derived)??await readLegacyStoredAvatar(host,agentId,safeReadAvatarBytes)}
-export const avatarBasename=(path:string):string=>basename(path);
+export { avatarBasename, getAgentAvatar, getAgentAvatarPng, getAgentProfileText, readLegacyStoredAvatar } from "./session-avatar-reads.ts";
+export { updateAgentProfile } from "./session-profile-update.ts";

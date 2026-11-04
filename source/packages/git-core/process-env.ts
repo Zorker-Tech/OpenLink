@@ -15,42 +15,47 @@
 
 import { devNull } from "node:os"
 
-const PINNED_GIT_CONFIG_ENTRIES = [
+const REQUIRED_CONFIG_VALUES = [
   ["safe.bareRepository", "explicit"],
   ["core.fsmonitor", "false"],
   ["core.hooksPath", devNull],
   ["core.attributesFile", devNull],
 ] as const
 
-function readGitConfigCount(env: NodeJS.ProcessEnv): number {
-  const raw = env.GIT_CONFIG_COUNT
-  if (raw === undefined || raw === "") return 0
-  const parsed = Number.parseInt(String(raw), 10)
-  return !Number.isFinite(parsed) || parsed < 0 ? 0 : parsed
+const REQUIRED_CONFIG_BY_NAME = new Map<string, string>(REQUIRED_CONFIG_VALUES)
+
+function existingConfigCount(environment: NodeJS.ProcessEnv): number {
+  const encoded = environment.GIT_CONFIG_COUNT
+  if (!encoded) return 0
+  const count = Number.parseInt(encoded, 10)
+  return Number.isFinite(count) && count >= 0 ? count : 0
 }
 
-function applyPinnedGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const count = readGitConfigCount(env)
-  const result = { ...env }
-  const foundKeys = new Set<string>()
-  for (let index = 0; index < count; index++) {
-    const existingKey = result[`GIT_CONFIG_KEY_${index}`]
-    for (const [pinnedKey, pinnedValue] of PINNED_GIT_CONFIG_ENTRIES) {
-      if (existingKey === pinnedKey) {
-        result[`GIT_CONFIG_VALUE_${index}`] = pinnedValue
-        foundKeys.add(pinnedKey)
-      }
-    }
+function enforceRequiredGitConfig(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const output = { ...environment }
+  const count = existingConfigCount(environment)
+  const alreadySet = new Set<string>()
+
+  for (let slot = 0; slot < count; slot++) {
+    const key = output[`GIT_CONFIG_KEY_${slot}`]
+    const requiredValue = key === undefined ? undefined : REQUIRED_CONFIG_BY_NAME.get(key)
+    if (key === undefined || requiredValue === undefined) continue
+    output[`GIT_CONFIG_VALUE_${slot}`] = requiredValue
+    alreadySet.add(key)
   }
-  let nextIndex = count
-  for (const [pinnedKey, pinnedValue] of PINNED_GIT_CONFIG_ENTRIES) {
-    if (foundKeys.has(pinnedKey)) continue
-    result[`GIT_CONFIG_KEY_${nextIndex}`] = pinnedKey
-    result[`GIT_CONFIG_VALUE_${nextIndex}`] = pinnedValue
-    nextIndex++
+
+  let slot = count
+  let appended = 0
+  for (const [key, value] of REQUIRED_CONFIG_VALUES) {
+    if (alreadySet.has(key)) continue
+    output[`GIT_CONFIG_KEY_${slot}`] = key
+    output[`GIT_CONFIG_VALUE_${slot}`] = value
+    slot += 1
+    appended += 1
   }
-  if (nextIndex !== count) result.GIT_CONFIG_COUNT = String(nextIndex)
-  return result
+
+  if (appended > 0) output.GIT_CONFIG_COUNT = String(slot)
+  return output
 }
 
 export function createGitProcessEnv(options: {
@@ -58,15 +63,15 @@ export function createGitProcessEnv(options: {
   readonly optionsEnv?: NodeJS.ProcessEnv | undefined
   readonly command?: string | undefined
 }): NodeJS.ProcessEnv {
-  const merged: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...options.spawnerEnv,
+  const childEnvironment: NodeJS.ProcessEnv = Object.assign({}, process.env)
+  Object.assign(childEnvironment, options.spawnerEnv, {
     LC_ALL: "en_US.UTF-8",
     LANG: "en_US.UTF-8",
     GIT_PAGER: "cat",
-    ...options.optionsEnv,
-  }
-  if (options.command !== undefined) merged.SLATE_GIT_COMMAND = options.command
-  else delete merged.SLATE_GIT_COMMAND
-  return applyPinnedGitConfig(merged)
+  }, options.optionsEnv)
+
+  if (options.command === undefined) delete childEnvironment.SLATE_GIT_COMMAND
+  else childEnvironment.SLATE_GIT_COMMAND = options.command
+
+  return enforceRequiredGitConfig(childEnvironment)
 }

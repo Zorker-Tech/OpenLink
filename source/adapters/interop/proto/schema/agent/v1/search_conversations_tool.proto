@@ -1,0 +1,15 @@
+// agent.v1 — agent/v1/search_conversations_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/conversation_search_exec.proto";
+
+message SearchConversationsToolCall {
+  optional .agent.v1.ConversationSearchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ConversationSearchResult result = 2 [json_name = "result"];
+}

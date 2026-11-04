@@ -9,24 +9,16 @@
  * namespaces with tools. The namespace form also records where each namespace came from — the platform's
  * own tools or an MCP server — since that changes what the model can expect from it.
  *
- * One filter lives here rather than in the catalogue: a project's workspace mutation tools are removed
- * when the conversation is scoped to a project, because moving the agent to another root is not
- * something a project conversation should be able to do.
+ * Project conversations arrive with root-changing tools removed by the boundary adapter, so the
+ * catalogue only renders the snapshot it receives.
  */
 
-import { McpDescriptor, type McpDescriptor as McpDescriptorValue } from "../../proto/generated/agent/v1/mcp_pb.ts"
 import { jsx, jsxs, Fragment, type PromptNode } from "../../prompt-jsx/index.ts"
 import { DYNAMIC_TOOLS_NAMESPACE } from "../../agent-exec/mcp-operations.ts"
-
-const APP_CONTROL_MCP_SERVER_ID = "cursor-app-control"
-const WORKSPACE_MUTATION_TOOLS = new Set([
-  "move_agent_to_root",
-  "move_agent_to_cloned_root",
-  "create_project",
-])
+import type { UserInfoMcpDescriptor } from "./user-info-data-contracts.ts"
 
 function buildMcpMetaToolServerEntries(
-  mcpDescriptors: readonly McpDescriptorValue[],
+  mcpDescriptors: readonly UserInfoMcpDescriptor[],
   useDynamicToolNamespaces: boolean,
 ): string {
   return mcpDescriptors.map(descriptor => {
@@ -44,33 +36,13 @@ function buildMcpMetaToolServerEntries(
 }
 
 export function McpMetaToolServerList(
-  mcpDescriptors: readonly McpDescriptor[],
+  mcpDescriptors: readonly UserInfoMcpDescriptor[],
   useDynamicToolNamespaces = false,
 ): string {
   if (mcpDescriptors.length === 0) return ""
   const serverEntries = buildMcpMetaToolServerEntries(mcpDescriptors, useDynamicToolNamespaces)
   if (useDynamicToolNamespaces) return `<dynamic_tool_namespaces>\n${serverEntries}\n</dynamic_tool_namespaces>`
   return `<mcp_meta_tool_servers>\n${serverEntries}\n</mcp_meta_tool_servers>`
-}
-
-function isProjectWorkspaceMutationMcpTool(args: {
-  readonly serverIdentifier: string
-  readonly toolName: string
-}): boolean {
-  return args.serverIdentifier.toLowerCase() === APP_CONTROL_MCP_SERVER_ID &&
-    WORKSPACE_MUTATION_TOOLS.has(args.toolName.toLowerCase())
-}
-
-export function filterProjectWorkspaceMutationMcpDescriptors(
-  descriptors: readonly McpDescriptorValue[],
-): McpDescriptorValue[] {
-  return descriptors.map(descriptor => new McpDescriptor({
-    ...descriptor,
-    tools: descriptor.tools.filter(tool => !isProjectWorkspaceMutationMcpTool({
-      serverIdentifier: descriptor.serverIdentifier,
-      toolName: tool.toolName,
-    })),
-  }))
 }
 
 interface SnapshotToolNames {
@@ -80,7 +52,7 @@ interface SnapshotToolNames {
 }
 
 interface McpMetaToolCatalogOptions {
-  readonly mcpDescriptors: readonly McpDescriptorValue[]
+  readonly mcpDescriptors: readonly UserInfoMcpDescriptor[]
   readonly snapshotToolNames?: SnapshotToolNames | undefined
 }
 

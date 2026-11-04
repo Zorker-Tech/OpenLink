@@ -1,0 +1,38 @@
+// agent.v1 — agent/v1/pi_edit_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/pi_edit_tool.proto";
+
+message PiEditExecArgs {
+  string path = 1 [json_name = "path"];
+  repeated .agent.v1.PiEditReplacement edits = 2 [json_name = "edits"];
+}
+
+message PiEditExecResult {
+  oneof result {
+    .agent.v1.PiEditExecSuccess success = 1 [json_name = "success"];
+    .agent.v1.PiEditExecError error = 2 [json_name = "error"];
+    .agent.v1.PiEditExecRejected rejected = 3 [json_name = "rejected"];
+  }
+}
+
+message PiEditExecSuccess {
+  string output = 1 [json_name = "output"];
+  string diff = 2 [json_name = "diff"];
+  string patch = 3 [json_name = "patch"];
+  optional uint32 first_changed_line = 4 [json_name = "firstChangedLine"];
+}
+
+message PiEditExecError {
+  string error = 1 [json_name = "error"];
+}
+
+message PiEditExecRejected {
+  string reason = 1 [json_name = "reason"];
+}

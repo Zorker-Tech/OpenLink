@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { parseRemoteAgentId, REMOTE_AGENT_ID_PREFIX, SLATE_SHARED_ROOM_IMAGE_BYTES_MAX } from "../../source/host/rooms/xuser-entry-publisher.ts";
-import { BOOT_TURN, nextEntryId } from "../../source/host/transcript/transcript-entry-ids.ts";
+import { INITIAL_TRANSCRIPT_TURN_KEY, allocateTranscriptEntryId } from "../../source/host/transcript/transcript-entry-ids.ts";
 import { EXECUTOR_SUBAGENT_TYPE, resolveMultitaskEnabled } from "../../source/host/slate-multitask.ts";
 import { MAX_TRAYS, TrayManager } from "../../source/host/notifications/trays/trays-service.ts";
 import { SlateLocalExecPathError } from "../../source/host/local-exec/local-exec-machine.ts";
@@ -27,11 +27,11 @@ describe("what leaves the host for a shared room", () => {
 
 describe("how a transcript entry is named", () => {
   it("says what it is and where it belongs, and never names the same thing twice", () => {
-    assert.equal(BOOT_TURN, "b");
-    assert.equal(nextEntryId([], "assistant-message"), "tba0");
-    const first = nextEntryId([{ id: "tba0", kind: "assistant-message" }] as never, "assistant-message");
+    assert.equal(INITIAL_TRANSCRIPT_TURN_KEY, "b");
+    assert.equal(allocateTranscriptEntryId([], "assistant-message"), "tba0");
+    const first = allocateTranscriptEntryId([{ id: "tba0", kind: "assistant-message" }] as never, "assistant-message");
     assert.notEqual(first, "tba0");
-    assert.equal(nextEntryId([{ id: "b1", kind: "user-message", turnId: "b" }] as never, "user-message").startsWith("t"), true);
+    assert.equal(allocateTranscriptEntryId([{ id: "b1", kind: "user-message", turnId: "b" }] as never, "user-message").startsWith("t"), true);
   });
 });
 

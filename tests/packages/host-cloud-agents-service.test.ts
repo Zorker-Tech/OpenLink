@@ -57,7 +57,7 @@ function managerWorld(options: { info?: unknown; infoFails?: unknown; teams?: re
     getTeams: async () => ({ teams: options.teams ?? [{ id: 7, name: "Seven", isDirectMember: true }] }),
   } as unknown as DashboardClient;
   const manager = new SlateCloudAgentManager({
-    getCursorAccessToken: async () => "token",
+    getAccessToken: async () => "token",
     getMachineId: async () => "machine-1",
     completionPolling: { start: () => ({ dispose: () => {} }) },
     clock: { monotonicNow: () => 0 },

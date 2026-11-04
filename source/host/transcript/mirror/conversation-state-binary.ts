@@ -1,3 +1,6 @@
+import { deserializeSlateAgentCheckpoint } from "../../../packages/agent-kv/agent-checkpoint-schema.ts";
+import { fromHex } from "../../../packages/agent-kv/serde.ts";
+
 /**
  * A conversation's state, as it is stored.
  *
@@ -149,6 +152,23 @@ function collectLengthDelimited(bytes: Uint8Array, wanted: ReadonlySet<number>):
 
 /** The three reference lists a stored conversation state holds; a list the record does not carry is empty. */
 export function decodeTranscriptMirrorConversationState(bytes: Uint8Array): TranscriptMirrorConversationState {
+  let slateCheckpoint;
+  try {
+    slateCheckpoint = deserializeSlateAgentCheckpoint(bytes);
+  } catch {
+    throw new TranscriptMirrorProtobufDecodeError("Slate conversation checkpoint is invalid");
+  }
+  if (slateCheckpoint !== undefined) {
+    const prompts = slateCheckpoint.interopSnapshot.rootPromptMessagesJson;
+    if (prompts !== undefined && (!Array.isArray(prompts) || prompts.some(value => typeof value !== "string"))) {
+      throw new TranscriptMirrorProtobufDecodeError("Slate checkpoint prompt references are invalid");
+    }
+    return {
+      rootPromptMessagesJson: ((prompts as readonly string[] | undefined) ?? []).map(value => new Uint8Array(Buffer.from(value, "base64"))),
+      turns: slateCheckpoint.conversation.turnBlobIds.map(fromHex),
+      summaryArchives: slateCheckpoint.conversation.summaryArchiveBlobIds.map(fromHex),
+    };
+  }
   const fields = collectLengthDelimited(bytes, new Set(Object.values(STATE)));
   return {
     rootPromptMessagesJson: fields.get(STATE.rootPromptMessagesJson) ?? [],

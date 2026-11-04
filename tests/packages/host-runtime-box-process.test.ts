@@ -4,20 +4,20 @@
  */
 
 import assert from "node:assert/strict";
-import { createServer } from "node:net";
+import { createConnection, createServer } from "node:net";
 import { chmodSync, existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 
-import { computerUseExecutorResource } from "../../source/packages/agent-exec/computer-use.ts";
+import { computerUseExecutorResource } from "../../source/adapters/interop/agent/computer-use-executor-adapter.ts";
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { createBoxTransport } from "../../source/host/boxes/box-remote-accessor.ts";
 import { BOX_DAEMON_ENTRY_FROM_HOST, BOX_DAEMON_READY_TIMEOUT_MS, BOX_DAEMON_STOP_GRACE_MS, launchBoxExecDaemon, resolveBoxDaemonEntryFromHost } from "../../source/host/boxes/exec-daemon-process.ts";
 import { createForeverBoxExtension, foreverBoxExtension, imageWatchIntervalMs, imageWatchJitterRatio, initialImageWatchDelayMs, isHostBundleAutoUpdateEnabled, isImageAutoUpdateEnabled, jitteredImageWatchIntervalMs } from "../../source/host/boxes/forever-box/extension.ts";
-import { BOX_GENERATED_PACKAGE_VERSIONS, productionBoxGeneratedPorts } from "../../source/host/boxes/generated-production.ts";
+import { SLATE_BOX_PROTOCOL_VERSION, productionSlateBoxPorts } from "../../source/host/boxes/slate-production.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 import { isNoMonitorComputerUseExecutor } from "../../source/host/ports/box.ts";
 
@@ -104,6 +104,21 @@ describe("the box's exec daemon as a process this host owns", () => {
     return { workspaceRoot: join(root, "workspace"), terminalsDirectory: join(root, "terminals") };
   };
 
+  function waitForTcpListener(host: string, port: number, timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const socket = createConnection({ host, port });
+      socket.setTimeout(timeoutMs, () => {
+        socket.destroy();
+        reject(new Error("box listener did not open before the probe timed out"));
+      });
+      socket.once("connect", () => {
+        socket.end();
+        resolve();
+      });
+      socket.once("error", reject);
+    });
+  }
+
   it("resolves the daemon's entry beside the host's own", () => {
     assert.equal(BOX_DAEMON_ENTRY_FROM_HOST, "../box-exec/main.cjs");
     assert.equal(BOX_DAEMON_READY_TIMEOUT_MS, 20_000);
@@ -122,13 +137,76 @@ describe("the box's exec daemon as a process this host owns", () => {
     }
   });
 
+  it("owns and closes a standalone daemon child without relying on a Node TypeScript loader", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(join(tmpdir(), "slate-box-owned-daemon-"));
+    const entryPath = join(root, "daemon.cjs");
+    writeFileSync(entryPath, [
+      'const net = require("node:net");',
+      'console.log(JSON.stringify({ port: process.env.SLATE_BOX_EXEC_DAEMON_PORT, token: process.env.SLATE_BOX_EXEC_DAEMON_AUTH_TOKEN, workspace: process.env.SLATE_BOX_WORKSPACE_ROOT, terminals: process.env.SLATE_BOX_TERMINALS_DIRECTORY }));',
+      'const server = net.createServer(socket => socket.end());',
+      'server.listen(Number(process.env.SLATE_BOX_EXEC_DAEMON_PORT), "127.0.0.1");',
+      'setInterval(() => {}, 1_000);',
+    ].join("\n"));
+    const { workspaceRoot, terminalsDirectory } = workspace();
+    const logs: string[] = [];
+    const rpcPorts = {
+      createTransport: (options: { readonly baseUrl: string }) => {
+        const endpoint = new URL(options.baseUrl);
+        return { host: endpoint.hostname, port: Number(endpoint.port) };
+      },
+      createControlClient: (endpoint: { readonly host: string; readonly port: number }) => ({
+        ping: async (_context: unknown, _request: unknown, options: { readonly timeoutMs: number }) =>
+          await waitForTcpListener(endpoint.host, endpoint.port, options.timeoutMs),
+      }),
+    };
+    const daemon = await launchBoxExecDaemon({
+      daemonEntryPath: entryPath,
+      rpcPorts: rpcPorts as never,
+      bindPort: port,
+      workspaceDirectory: workspaceRoot,
+      terminalDirectory: terminalsDirectory,
+      nodeExecutable: process.execPath,
+      controlToken: "launch-token",
+      readinessTimeoutMs: 1_000,
+      processEnvironment: {
+        SLATE_BOX_EXEC_DAEMON_PORT: String(port === 65_535 ? port - 1 : port + 1),
+        SLATE_BOX_EXEC_DAEMON_AUTH_TOKEN: "inherited-token",
+        SLATE_BOX_WORKSPACE_ROOT: "/inherited/workspace",
+        SLATE_BOX_TERMINALS_DIRECTORY: "/inherited/terminals",
+      },
+      output: { log: line => logs.push(line), error: () => {} },
+    });
+
+    try {
+      await daemon.ready;
+      assert.equal(typeof daemon.pid, "number");
+      assert.equal(daemon.daemonEntryPath, entryPath);
+      const outputDeadline = Date.now() + 1_000;
+      while (logs.length === 0 && Date.now() < outputDeadline) await new Promise(resolve => setTimeout(resolve, 10));
+      const startup = JSON.parse(logs.join("\n").split("[box-exec-daemon] ").at(-1) ?? "{}") as Record<string, string>;
+      assert.deepEqual(startup, {
+        port: String(port),
+        token: "launch-token",
+        workspace: workspaceRoot,
+        terminals: terminalsDirectory,
+      });
+
+      await daemon.close();
+      await daemon.close();
+      await assert.rejects(waitForTcpListener("127.0.0.1", port, 100));
+    } finally {
+      await daemon.close().catch(() => {});
+    }
+  });
+
   it("starts the daemon, waits until it answers an authenticated call, and stops it again", async () => {
     const port = await freePort();
     const { workspaceRoot, terminalsDirectory } = workspace();
     const daemonLogs: string[] = [];
     const daemon = await launchBoxExecDaemon({
       daemonEntryPath: join(sourceRoot, "source/box-exec/cli.ts"),
-      rpcPorts: productionBoxGeneratedPorts,
+      rpcPorts: productionSlateBoxPorts,
       bindPort: port,
       workspaceDirectory: workspaceRoot,
       terminalDirectory: terminalsDirectory,
@@ -154,7 +232,7 @@ describe("the box's exec daemon as a process this host owns", () => {
       assert.equal(daemonLogs.some(line => line.includes(workspaceRoot)), true);
       assert.equal(daemonLogs.some(line => line.includes(terminalsDirectory)), true);
       // It answers the box's own control call with the token it was started with, and the machine it was given.
-      const control = productionBoxGeneratedPorts.createControlClient(createBoxTransport({ host: "127.0.0.1", port, authToken: "test-token" }, productionBoxGeneratedPorts.createTransport));
+      const control = productionSlateBoxPorts.createControlClient(createBoxTransport({ host: "127.0.0.1", port, authToken: "test-token" }, productionSlateBoxPorts.createTransport));
       assert.deepEqual(await control.ping(createContext(), {}, { timeoutMs: 2_000 }).then(() => "answered"), "answered");
       // It is the process this host owns: it stops when asked, and leaves nothing listening.
       await daemon.close();
@@ -175,7 +253,7 @@ describe("the box's exec daemon as a process this host owns", () => {
     try {
       await launchBoxExecDaemon({
         daemonEntryPath: join(sourceRoot, "source/box-exec/main.ts"),
-        rpcPorts: productionBoxGeneratedPorts,
+        rpcPorts: productionSlateBoxPorts,
         bindPort: address.port,
         workspaceDirectory: workspaceRoot,
         terminalDirectory: terminalsDirectory,
@@ -197,7 +275,7 @@ describe("the box's exec daemon as a process this host owns", () => {
     const { workspaceRoot, terminalsDirectory } = workspace();
     await launchBoxExecDaemon({
       daemonEntryPath: join(workspaceRoot, "no-such-daemon.ts"),
-      rpcPorts: productionBoxGeneratedPorts,
+      rpcPorts: productionSlateBoxPorts,
       bindPort: port,
       workspaceDirectory: workspaceRoot,
       terminalDirectory: terminalsDirectory,
@@ -224,7 +302,7 @@ describe("the box's exec daemon as a process this host owns", () => {
     try {
       await launchBoxExecDaemon({
         daemonEntryPath: entryPath,
-        rpcPorts: productionBoxGeneratedPorts,
+        rpcPorts: productionSlateBoxPorts,
         bindPort: port,
         workspaceDirectory: workspaceRoot,
         terminalDirectory: terminalsDirectory,
@@ -263,7 +341,7 @@ describe("the box's exec daemon as a process this host owns", () => {
     await assert.rejects(
       launchBoxExecDaemon({
         daemonEntryPath: entryPath,
-        rpcPorts: productionBoxGeneratedPorts,
+        rpcPorts: productionSlateBoxPorts,
         bindPort: port,
         workspaceDirectory: workspaceRoot,
         terminalDirectory: terminalsDirectory,
@@ -288,17 +366,20 @@ describe("the box's exec daemon as a process this host owns", () => {
     const port = await freePort();
     const root = mkdtempSync(join(tmpdir(), "slate-box-forced-stop-"));
     const entryPath = join(root, "hold-open.cjs");
-    const daemonCli = pathToFileURL(join(sourceRoot, "source/box-exec/cli.ts")).href;
+    const daemonCliPath = join(sourceRoot, "source/box-exec/cli.ts");
+    const daemonCli = pathToFileURL(daemonCliPath).href;
     const keepAliveAfterReady = join(root, "ready");
     writeFileSync(entryPath, [
       "const fs = require(\"node:fs\");",
       `process.on("SIGTERM", () => { if (fs.existsSync(${JSON.stringify(keepAliveAfterReady)})) setInterval(() => {}, 1_000); else process.exit(0); });`,
+      // The daemon CLI starts only when Node's entry path matches the imported file.
+      `process.argv[1] = ${JSON.stringify(daemonCliPath)};`,
       `import(${JSON.stringify(daemonCli)});`,
     ].join("\n"));
     const { workspaceRoot, terminalsDirectory } = workspace();
     const daemon = await launchBoxExecDaemon({
       daemonEntryPath: entryPath,
-      rpcPorts: productionBoxGeneratedPorts,
+      rpcPorts: productionSlateBoxPorts,
       bindPort: port,
       workspaceDirectory: workspaceRoot,
       terminalDirectory: terminalsDirectory,
@@ -315,15 +396,14 @@ describe("the box's exec daemon as a process this host owns", () => {
 
 describe("the generated pieces a box is built from", () => {
   it("binds this build's own package versions", () => {
-    assert.equal(Object.isFrozen(BOX_GENERATED_PACKAGE_VERSIONS), true);
-    assert.deepEqual(BOX_GENERATED_PACKAGE_VERSIONS, { protobuf: "1.10.1", connect: "1.6.1", connectNode: "1.6.1" });
-    assert.deepEqual(Object.keys(productionBoxGeneratedPorts), ["createTransport", "createControlClient", "createExecClient", "createResourceAccessor", "withFileReadGuard", "withNoMonitorComputerUse"]);
+    assert.equal(SLATE_BOX_PROTOCOL_VERSION, 1);
+    assert.deepEqual(Object.keys(productionSlateBoxPorts), ["createTransport", "createControlClient", "createExecClient", "createResourceAccessor", "withFileReadGuard", "withNoMonitorComputerUse"]);
   });
 
   it("checks a read before it happens, and takes computer use out of the box's own hands", async () => {
     const calls: Array<[string, unknown]> = [];
     const base = { get: (resource: unknown) => ({ execute: async (_ctx: unknown, args: unknown) => { calls.push([resource === readExecutorResource ? "read" : resource === computerUseExecutorResource ? "computer-use" : "other", args]); return { result: { case: "success", value: { from: "base" } } }; } }) };
-    const guarded = productionBoxGeneratedPorts.withFileReadGuard(base as never, async (path: string) => {
+    const guarded = productionSlateBoxPorts.withFileReadGuard(base as never, async (path: string) => {
       calls.push(["guard", path]);
       if (path === "/secret") throw new Error("that path is not readable here");
     });
@@ -339,7 +419,7 @@ describe("the generated pieces a box is built from", () => {
     assert.deepEqual(calls, [["guard", "/secret"]]);
 
     calls.length = 0;
-    const unmonitored = productionBoxGeneratedPorts.withNoMonitorComputerUse(base as never);
+    const unmonitored = productionSlateBoxPorts.withNoMonitorComputerUse(base as never);
     // A box without a private desktop says so instead of pretending it took a screenshot.
     assert.equal(isNoMonitorComputerUseExecutor(unmonitored.get(computerUseExecutorResource)), true);
     await unmonitored.get(computerUseExecutorResource).execute(createContext(), { action: "screenshot" } as never, undefined).then(
@@ -350,9 +430,9 @@ describe("the generated pieces a box is built from", () => {
   });
 
   it("builds an accessor and a client over what the box is given", () => {
-    const accessor = productionBoxGeneratedPorts.createResourceAccessor({} as never);
+    const accessor = productionSlateBoxPorts.createResourceAccessor({} as never);
     assert.equal(typeof accessor.get, "function");
-    const client = productionBoxGeneratedPorts.createExecClient({} as never);
+    const client = productionSlateBoxPorts.createExecClient({} as never);
     assert.equal(typeof client.exec, "function");
   });
 });

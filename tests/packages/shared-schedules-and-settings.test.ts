@@ -12,7 +12,6 @@ import {
   VIDEO_BYTE_LIMIT,
 } from "../../source/shared/media/attachment-limits.ts"
 import { MutableGateProperty } from "../../source/shared/node/experiments/gate-property.ts"
-import { NO_SLATE_PR_REVIEW_PREFERENCES } from "../../source/shared/pr-review.ts"
 import { findSystemErrno } from "../../source/shared/system-errno.ts"
 import {
   availableUpdateTracks,
@@ -25,11 +24,12 @@ import {
   SLATE_UPDATE_TRACKS,
   toManagedUpdateTrack,
 } from "../../source/shared/update-track.ts"
-import { accountSlot } from "../../source/shared/auth.ts"
+import { authenticatedAccountKey } from "../../source/shared/auth.ts"
 import { isBoxVncMethod, BOX_VNC_METHOD_TABLE } from "../../source/shared/rpc/vnc.ts"
 import { BoxSettingsField } from "../../source/shared/host-settings-field.ts"
 import { introductionFailedTrayKey, SLATE_ONBOARDING_KICKSTART_PROMPT } from "../../source/shared/agents/onboarding.ts"
-import { boundedConnectorTag, connectorAuthTelemetry, OTHER_CONNECTOR_TAG, UNKNOWN_CONNECTOR_TAG } from "../../source/shared/observability/connector-auth-telemetry.ts"
+import { connectorAuthTelemetry } from "../../source/shared/observability/connector-auth-telemetry.ts"
+import { boundedConnectorTag, OTHER_CONNECTOR_TAG, UNKNOWN_CONNECTOR_TAG } from "../../source/adapters/interop/mcp/connector-auth-tag-adapter.ts"
 import { isSameBoxMigrationOperation, parseBoxMigrationOperationId } from "../../source/shared/box-migration.ts"
 import { hasNonPublicHostnameSuffix } from "../../source/shared/link-preview-policy.ts"
 import {
@@ -121,11 +121,13 @@ test("a gate tells its listeners when it changes, and one bad listener does not 
   assert.deepEqual(other, [true])
 })
 
-test("an account's slot is its id, or its email, and nothing when it is not signed in", () => {
-  assert.equal(accountSlot({ kind: "logged-in", authId: "auth-1", email: "a@example.com" }), "auth-1")
-  assert.equal(accountSlot({ kind: "logged-in", email: "a@example.com" }), "a@example.com")
-  assert.equal(accountSlot({ kind: "logged-in" }), null)
-  assert.equal(accountSlot({ kind: "logged-out", email: "a@example.com" }), null)
+test("an authenticated account key prefers its id, then email, and is absent while signed out", () => {
+  assert.equal(authenticatedAccountKey({ kind: "logged-in", authId: "auth-1", email: "a@example.com" }), "auth-1")
+  assert.equal(authenticatedAccountKey({ kind: "logged-in", email: "a@example.com" }), "a@example.com")
+  assert.equal(authenticatedAccountKey({ kind: "logged-in" }), null)
+  assert.equal(authenticatedAccountKey({ kind: "logged-in", authId: "", email: "a@example.com" }), null)
+  assert.equal(authenticatedAccountKey({ kind: "logged-in", authId: "  " }), "  ")
+  assert.equal(authenticatedAccountKey({ kind: "logged-out", email: "a@example.com" }), null)
 })
 
 test("an operating system error code is found however deep the failure was wrapped", () => {

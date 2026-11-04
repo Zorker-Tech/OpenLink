@@ -3,17 +3,19 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 
 import {
-  SLATE_TOOL_MARKER,
   buildErrorResult,
   buildSuccessResult,
   completedToolCall,
-  defineCommunicateTool,
   emptyToolCall,
   encodeError,
   encodeSlateStep,
   encodeSuccess,
-  makeRender,
   toolCallWrapper,
+  SLATE_TOOL_MARKER,
+} from "../../source/adapters/interop/agent/communicate-tool-protocol-adapter.ts";
+import {
+  defineCommunicateTool,
+  makeCommunicateRender as makeRender,
   type CommunicateInteractionHandler,
 } from "../../source/host/runner/tools/communicate-tool.ts";
 import { createContext } from "../../source/packages/context/context.ts";

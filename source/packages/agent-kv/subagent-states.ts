@@ -8,8 +8,6 @@
  */
 
 import { createLogger } from "../context/logging.ts"
-import type { ConversationStateStructure, SubagentPersistedState as SubagentPersistedStateMessage } from "../proto/generated/agent/v1/agent_pb.ts"
-import { SubagentPersistedState } from "../proto/generated/agent/v1/agent_pb.ts"
 import { asyncMapValues } from "../utils/promise-tools.ts"
 import { BlobNotFoundError } from "./blob-not-found-error.ts"
 import type { BlobStore } from "./blob-store.ts"
@@ -18,22 +16,28 @@ import { toHex } from "./serde.ts"
 const SUBAGENT_STATE_BLOB_FETCH_CONCURRENCY = 8
 const logger = createLogger("agent-kv:subagent-states")
 
-type LoadResult =
-  | { kind: "loaded"; subagentId: string; state: SubagentPersistedStateMessage }
+export interface AgentSubconversationReferences<State> {
+  readonly subagentStates: Readonly<Record<string, State>>
+  readonly subagentStateRefs: Readonly<Record<string, Uint8Array>>
+}
+
+type LoadResult<State> =
+  | { kind: "loaded"; subagentId: string; state: State }
   | { kind: "fallback" }
   | { kind: "missing"; blobIdHex: string }
   | { kind: "failed"; error: unknown }
 
-export async function resolveSubagentPersistedStates<Context>(
+export async function resolveSubagentPersistedStates<Context, State>(
   ctx: Context,
-  state: ConversationStateStructure,
+  state: AgentSubconversationReferences<State>,
   blobStore: Pick<BlobStore<Context>, "getBlob">,
-): Promise<Record<string, SubagentPersistedStateMessage>> {
-  const resolved: Record<string, SubagentPersistedStateMessage> = { ...state.subagentStates }
+  deserializeState: (blob: Uint8Array) => State,
+): Promise<Record<string, State>> {
+  const resolved: Record<string, State> = { ...state.subagentStates }
   const refs = Object.entries(state.subagentStateRefs) as Array<[string, Uint8Array]>
   if (refs.length === 0) return resolved
 
-  const loads = await asyncMapValues<[string, Uint8Array], LoadResult>(
+  const loads = await asyncMapValues<[string, Uint8Array], LoadResult<State>>(
     refs,
     async ([subagentId, blobId]) => {
       const blob = await blobStore.getBlob(ctx, blobId)
@@ -43,7 +47,7 @@ export async function resolveSubagentPersistedStates<Context>(
         return { kind: "fallback" }
       }
       try {
-        return { kind: "loaded", subagentId, state: SubagentPersistedState.fromBinary(blob) }
+        return { kind: "loaded", subagentId, state: deserializeState(blob) }
       } catch (error) {
         return { kind: "failed", error }
       }

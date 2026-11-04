@@ -19,14 +19,7 @@ import {
   type RetryPolicy
 } from "../../host/extensions/scheduling.ts";
 import { findBoxBlockedMessage, SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE } from "../../shared/gateway-reachability.ts";
-import {
-  GATEWAY_API_PREFIX,
-  GATEWAY_AUTH_SCHEME,
-  GATEWAY_EVENTS_PATH,
-  GATEWAY_MINT_DEDUPE_HEADER,
-  GATEWAY_SLIM_AVATARS_HEADER,
-  GATEWAY_TRACEPARENT_HEADER
-} from "../../shared/gateway-wire.ts";
+import { SLATE_GATEWAY } from "../../shared/gateway-wire.ts";
 import { deriveChildTraceparent } from "../../shared/observability/send-trace.ts";
 import { proxifyForeverBoxStatus, type ForeverBoxStatus, type VncProxyDescriptor } from "./box-vnc-proxy.ts";
 import { SlateGatewayCommandError } from "./gateway-errors.ts";
@@ -101,7 +94,7 @@ export interface GatewayConnection {
 
 export function withAuth(headers: Record<string, string>, link: GatewayConnection): Record<string, string> {
   const merged = { ...headers, ...(link.headers ?? {}) };
-  if (link.token != null && link.token.length > 0) merged.authorization = `${GATEWAY_AUTH_SCHEME} ${link.token}`;
+  if (link.token != null && link.token.length > 0) merged.authorization = `${SLATE_GATEWAY.authentication.scheme} ${link.token}`;
   return merged;
 }
 
@@ -149,7 +142,7 @@ export class CoordinatorGatewayClient {
 
   requestHeaders(base: Record<string, string>, link: GatewayConnection): Record<string, string> {
     const headers = withAuth(base, link);
-    if (!this.slimAvatarsOff) headers[GATEWAY_SLIM_AVATARS_HEADER] = "1";
+    if (!this.slimAvatarsOff) headers[SLATE_GATEWAY.headers.slimAvatars] = "1";
     return headers;
   }
 
@@ -265,9 +258,9 @@ export class CoordinatorGatewayClient {
       const traceparent = child?.traceparent ?? root;
       fetchStartMono = this.settings.timing.clock.monotonicNow();
       fetchStartEpoch = this.settings.timing.clock.now();
-      const reply = await fetch(`${link.baseUrl}${GATEWAY_API_PREFIX}/${method}`, {
+      const reply = await fetch(`${link.baseUrl}${SLATE_GATEWAY.paths.api}/${method}`, {
         method: "POST",
-        headers: this.requestHeaders({ "content-type": "application/json", ...(traceparent === undefined ? {} : { [GATEWAY_TRACEPARENT_HEADER]: traceparent }) }, link),
+        headers: this.requestHeaders({ "content-type": "application/json", ...(traceparent === undefined ? {} : { [SLATE_GATEWAY.headers.traceparent]: traceparent }) }, link),
         body: JSON.stringify(payload ?? {}),
         ...(requestInit?.signal == null ? {} : { signal: requestInit.signal })
       });
@@ -278,7 +271,7 @@ export class CoordinatorGatewayClient {
         throw new SlateGatewayUnreachableError("http_5xx", message, { httpStatus: reply.status, attemptedBaseUrl: link.baseUrl });
       }
       const outcome = await reply.json() as unknown;
-      if (reply.headers.get(GATEWAY_MINT_DEDUPE_HEADER) === "1") this.mintProvenBaseUrls.add(link.baseUrl);
+      if (reply.headers.get(SLATE_GATEWAY.headers.mintDedupe) === "1") this.mintProvenBaseUrls.add(link.baseUrl);
       this.reportSpan(method, spanTrace, { startEpochMs: fetchStartEpoch, durationMs: this.settings.timing.clock.monotonicNow() - fetchStartMono, isError: false });
       return { result: outcome, connection: link };
     } catch (error) {
@@ -380,7 +373,7 @@ export class CoordinatorGatewayClient {
     try {
       state.postStarted = true;
       const outcome = await this.settings.timing.sendPostDeadline.run(async (signal) => {
-        const reply = await fetch(`${link.baseUrl}${GATEWAY_API_PREFIX}/sendWithDedupe`, { method: "POST", headers: this.requestHeaders({ "content-type": "application/json" }, link), body: JSON.stringify(payload), signal });
+        const reply = await fetch(`${link.baseUrl}${SLATE_GATEWAY.paths.api}/sendWithDedupe`, { method: "POST", headers: this.requestHeaders({ "content-type": "application/json" }, link), body: JSON.stringify(payload), signal });
         if (!reply.ok) {
           const detail = await reply.text().catch(() => reply.statusText);
           throw new SlateGatewayCommandError(extractGatewayErrorMessage(detail) ?? `gateway sendWithDedupe failed: ${detail}`);
@@ -431,7 +424,7 @@ export class CoordinatorGatewayClient {
         linkHandshake = await this.settings.timing.connectDeadline.run(async (deadlineSignal) => {
           const resolved = await this.resolveConnection(deadlineSignal);
           link = resolved;
-          const reply = await fetch(`${resolved.baseUrl}${GATEWAY_EVENTS_PATH}`, { headers: this.requestHeaders({ accept: "text/event-stream" }, resolved), signal: controller.signal });
+          const reply = await fetch(`${resolved.baseUrl}${SLATE_GATEWAY.paths.events}`, { headers: this.requestHeaders({ accept: "text/event-stream" }, resolved), signal: controller.signal });
           if (controller.signal.aborted || attemptEpoch !== this.reconnectEpoch) {
             void reply.body?.cancel().catch(() => {});
             throw new Error("gateway connect superseded");

@@ -11,6 +11,7 @@ import {
   DEFAULT_SLATE_SYSTEM_PROMPT,
   formatAttachedFileSize,
   isMediaReviewSubagentType,
+  SLATE_CLOUD_AGENTS_DISABLED_PROMPT_SECTION,
   SLATE_MCP_MULTI_ACCOUNT_PROMPT_SECTION,
   SLATE_SUBAGENT_SAFETY_PROMPT_SECTION,
   SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED,
@@ -18,6 +19,8 @@ import {
 } from "../../source/host/runner/system-prompt.ts"
 
 test("a reply reminder is appended when a reply is expected, and can be switched off", () => {
+  assert.match(USER_MESSAGE_REPLY_REMINDER, /SendMessage/)
+  assert.match(USER_MESSAGE_REPLY_REMINDER, /private/)
   assert.equal(appendUserReplyReminder("hello", {}), "hello\n\n" + USER_MESSAGE_REPLY_REMINDER)
   assert.equal(appendUserReplyReminder("", {}), USER_MESSAGE_REPLY_REMINDER)
   assert.equal(appendUserReplyReminder("hello", { SLATE_DISABLE_USER_REPLY_REMINDER: "1" }), "hello")
@@ -39,15 +42,15 @@ test("a file size is said in the unit that reads it best", () => {
 test("the attached-files note says where the files are and which were staged", () => {
   const plain = buildAttachedFilesNote(["/a.png", " /b.jpg "])
   assert.match(plain, /^The user attached these files\. /)
-  assert.match(plain, /they are not on your box/)
+  assert.match(plain, /on the user's computer/)
   assert.match(plain, /\n- \/a\.png\n- \/b\.jpg$/)
   const staged = buildAttachedFilesNote(["/a.png"], new Map([["/a.png", "/box/a.png"]]), new Map([["/a.png", 1_024]]))
   assert.match(staged, /^The user attached a file\. /)
-  assert.match(staged, /also copied into your box at \/box\/a\.png/)
+  assert.match(staged, /copied to the Slate workspace at \/box\/a\.png/)
   assert.match(staged, /\(1\.0 KB\)/)
   assert.equal(buildAttachedFilesNote(["  "]), "")
   const mixed = buildAttachedFilesNote(["/a.png", "/b.jpg"], new Map([["/a.png", "/box/a.png"]]))
-  assert.match(mixed, /the ones marked/, "one staged file is enough to explain the staging")
+  assert.match(mixed, /workspace path shown/, "one staged file is enough to explain the workspace copy")
   assert.doesNotMatch(mixed, /not on your box/)
 })
 
@@ -56,6 +59,7 @@ test("the reply context, the message address and the media reviewer are read fro
   assert.equal(buildReplyContextNote({ targetId: " a ", quote: " b " }), '[In reply to a: "b"]')
   assert.equal(buildReplyContextNote({ targetId: "", quote: "b" }), "")
   assert.equal(buildReplyContextNote({ targetId: "a" }), "")
+  assert.equal(buildReplyContextNote({ targetId: "a", quote: null }), "")
   assert.equal(buildReplyContextNote(null), "")
   assert.equal(buildUserMessageAddressNote(" a "), "[a]")
   assert.equal(buildUserMessageAddressNote("  "), "")
@@ -64,15 +68,35 @@ test("the reply context, the message address and the media reviewer are read fro
   for (const type of [undefined, "", "review", "video reviewer"]) assert.equal(isMediaReviewSubagentType(type), false, String(type))
 })
 
-test("the prompts say who the model is, and what changes when cloud agents are off", () => {
+test("Slate prompts describe their own tools and policy boundaries", () => {
   assert.equal(typeof SLATE_SUBAGENT_SAFETY_PROMPT_SECTION, "string")
-  assert.match(SLATE_SUBAGENT_SAFETY_PROMPT_SECTION, /## Staying safe while you work/)
-  assert.match(buildSlateSubagentSystemPrompt({ subagentType: "explore", readonly: true }), /running as the explore subagent/)
-  assert.match(buildSlateSubagentSystemPrompt({ readonly: true }), /readonly mode/)
-  assert.doesNotMatch(buildSlateSubagentSystemPrompt({ subagentType: "explore" }), /readonly mode/, "a writable subagent is not told it cannot write")
-  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /cloud agent/i)
-  assert.match(SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED, /Cursor cloud agents are disabled/)
-  assert.match(SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED, /cloud agent/i)
-  assert.match(SLATE_MCP_MULTI_ACCOUNT_PROMPT_SECTION, /## MCP server accounts/)
-  assert.match(buildSlateBaseSystemPrompt({ cloudAgentsEnabled: false }), /Cursor cloud agents are disabled/)
+  assert.match(SLATE_SUBAGENT_SAFETY_PROMPT_SECTION, /## Safety while working/)
+  assert.match(SLATE_SUBAGENT_SAFETY_PROMPT_SECTION, /safer, lower-privilege/i)
+  assert.match(SLATE_SUBAGENT_SAFETY_PROMPT_SECTION, /retry that exact action/i)
+  assert.match(buildSlateSubagentSystemPrompt({ subagentType: "explore", readonly: true }), /running as Slate's explore subagent/)
+  assert.match(buildSlateSubagentSystemPrompt({ readonly: true }), /read-only mode/)
+  assert.doesNotMatch(buildSlateSubagentSystemPrompt({ subagentType: "explore" }), /read-only mode/, "a writable subagent is not told it cannot write")
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /CloudAgent tool/)
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /SendMessage/)
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /before using tools/)
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /CloudAgent tool/)
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /Never invent figures, quotes, citations, source attributions, tool output, or interface details/)
+  assert.match(DEFAULT_SLATE_SYSTEM_PROMPT, /prefer its MCP tools over browser interaction/)
+  assert.match(SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED, /remote agents are unavailable/i)
+  assert.match(SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED, /team policy/i)
+  assert.doesNotMatch(SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED, /CloudAgent tool/)
+  assert.match(SLATE_MCP_MULTI_ACCOUNT_PROMPT_SECTION, /## Connected service accounts/)
+  assert.match(SLATE_MCP_MULTI_ACCOUNT_PROMPT_SECTION, /account_label/)
+  assert.match(buildSlateBaseSystemPrompt({ cloudAgentsEnabled: false }), /remote agents are unavailable/i)
+  const promptText = [
+    DEFAULT_SLATE_SYSTEM_PROMPT,
+    SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED,
+    SLATE_CLOUD_AGENTS_DISABLED_PROMPT_SECTION,
+    SLATE_MCP_MULTI_ACCOUNT_PROMPT_SECTION,
+    SLATE_SUBAGENT_SAFETY_PROMPT_SECTION,
+  ].join("\n")
+  assert.doesNotMatch(promptText, /\bCursor\b|cursor\.com|\bGitHub\b|\bNotion\b|\bOrigin\b/i)
+  assert.doesNotMatch(promptText, /https?:\/\//i)
+  assert.match(promptText, /same action/i)
+  assert.match(promptText, /approval/i)
 })

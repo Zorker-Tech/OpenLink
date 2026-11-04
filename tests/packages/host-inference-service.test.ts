@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { createHostInference, GEMINI_VIDEO_DEVELOPER_API_GATE, usageCountsFrom, wrapExecutorWithUsageRecording, type HostInferenceOptions } from "../../source/host/extensions/inference/inference-service.ts";
+import { createHostInference, usageCountsFrom, wrapExecutorWithUsageRecording, type HostInferenceOptions } from "../../source/host/extensions/inference/inference-service.ts";
+import { VIDEO_ATTACHMENT_FEATURE_GATE } from "../../source/adapters/interop/inference/slate-inference-session-adapter.ts";
 import { SLATE_DEFAULT_MODEL_ID } from "../../source/shared/agents/agent-model.ts";
 import { SlateSettingsStore } from "../../source/shared/node/settings/slate-settings-store.ts";
 import type { PromptExecutor } from "../../source/host/extensions/inference/slate-labeling.ts";
@@ -93,7 +94,7 @@ describe("the inference a host offers", () => {
     const options = {
       auth: { getAccessToken: async () => "token", getMachineId: () => "machine" },
       experiments: {
-        checkFeatureGate: (name: string) => name === GEMINI_VIDEO_DEVELOPER_API_GATE,
+        checkFeatureGate: (name: string) => name === VIDEO_ATTACHMENT_FEATURE_GATE,
         getComputerUseModelOverride: () => undefined,
         getBrowserUseModelOverride: () => undefined,
         getSlateModelExperimentState: () => null,
@@ -145,12 +146,16 @@ describe("the inference a host offers", () => {
     assert.deepEqual(hydrated.applied, ["applied"]);
   });
 
-  it("takes the platform's video gate for what it is", async () => {
+  it("reads the video attachment feature gate through the interop adapter", async () => {
     const world = hostWorld("slate");
-    // The gate the service asks is the platform's own, and it is asked per session rather than once.
-    assert.equal(GEMINI_VIDEO_DEVELOPER_API_GATE, "gemini_video_developer_api");
-    assert.equal(world.options.experiments.checkFeatureGate(GEMINI_VIDEO_DEVELOPER_API_GATE), true);
-    assert.equal(world.options.experiments.checkFeatureGate("something_else"), false);
+    const checked: string[] = [];
+    (world.options.experiments as HostInferenceOptions["experiments"]).checkFeatureGate = (name) => {
+      checked.push(name);
+      return name === VIDEO_ATTACHMENT_FEATURE_GATE;
+    };
+    world.inference.createSession(() => {}, { inferenceReason: { event: "review" } });
+    world.inference.createSession(() => {});
+    assert.deepEqual(checked, [VIDEO_ATTACHMENT_FEATURE_GATE, VIDEO_ATTACHMENT_FEATURE_GATE]);
   });
 
   it("wraps the platform's own session's executor, and writes nothing down for one that reported nothing", async () => {

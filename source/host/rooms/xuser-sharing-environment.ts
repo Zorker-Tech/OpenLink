@@ -1,9 +1,4 @@
-/**
- * When sharing a room with another user's computer is allowed.
- *
- * It is a development feature: the switch that turns it on is read from the environment, and against the production
- * backend it needs a second switch, so a development build cannot share into production by accident.
- */
+/** Decides whether this host may open cross-account room sharing under its current build and backend. */
 import { DEFAULT_BACKEND_URL } from "../../shared/node/slate-token.ts";
 
 export const SLATE_DEV_XUSER_SHARING_ENV = "SLATE_DEV_XUSER_SHARING";
@@ -14,9 +9,27 @@ export interface XuserSharingEnvironment {
   readonly reason?: string;
 }
 
+function developerBuild(env: NodeJS.ProcessEnv): boolean {
+  return env.SLATE_PACKAGED !== "1" || env.SLATE_HOST_DEV_ERROR_DETAIL === "1";
+}
+
+function switchIsOn(env: NodeJS.ProcessEnv, key: string): boolean {
+  return env[key] === "1";
+}
+
+function blockReasonForDeveloperBuild(): string {
+  return `Sharing another user's computer is disabled on developer builds. A second box under this account can consume relay events needed by the active room. Set ${SLATE_DEV_XUSER_SHARING_ENV}=1 for a deliberate local test.`;
+}
+
+function blockReasonForProductionBackend(): string {
+  return `This developer build is pointed at Slate's production backend. A second local sharing box can interfere with live room delivery. Set ${SLATE_XUSER_SHARING_ALLOW_PROD_ENV}=1 only for a deliberate production test.`;
+}
+
 export function isProductionBackendUrl(backendUrl: string): boolean {
   try {
-    return new URL(backendUrl).origin === new URL(DEFAULT_BACKEND_URL).origin;
+    const requestedOrigin = new URL(backendUrl).origin;
+    const productionOrigin = new URL(DEFAULT_BACKEND_URL).origin;
+    return requestedOrigin === productionOrigin;
   } catch {
     return true;
   }
@@ -27,18 +40,11 @@ export function resolveXuserSharingEnvironment(args: {
   readonly env?: NodeJS.ProcessEnv;
 }): XuserSharingEnvironment {
   const env = args.env ?? process.env;
-  const isDevBuild = env.SLATE_PACKAGED !== "1" || env.SLATE_HOST_DEV_ERROR_DETAIL === "1";
-  if (!isDevBuild) return { isAllowed: true };
-  if (env[SLATE_DEV_XUSER_SHARING_ENV] !== "1") {
-    return {
-      isAllowed: false,
-      reason: `cross-user sharing stays OFF on this dev host: a second live box on the same account drains the account's relay events and corrupts prod room delivery. Set ${SLATE_DEV_XUSER_SHARING_ENV}=1 to opt this box in anyway.`,
-    };
+  if (!developerBuild(env)) return { isAllowed: true };
+  if (!switchIsOn(env, SLATE_DEV_XUSER_SHARING_ENV)) {
+    return { isAllowed: false, reason: blockReasonForDeveloperBuild() };
   }
   if (!isProductionBackendUrl(args.backendUrl)) return { isAllowed: true };
-  if (env[SLATE_XUSER_SHARING_ALLOW_PROD_ENV] === "1") return { isAllowed: true };
-  return {
-    isAllowed: false,
-    reason: `this dev host is pointed at the PRODUCTION backend; cross-user sharing stays off so it cannot ingest (or steal relay events from) the account's production rooms. Set ${SLATE_XUSER_SHARING_ALLOW_PROD_ENV}=1 to opt in deliberately.`,
-  };
+  if (switchIsOn(env, SLATE_XUSER_SHARING_ALLOW_PROD_ENV)) return { isAllowed: true };
+  return { isAllowed: false, reason: blockReasonForProductionBackend() };
 }

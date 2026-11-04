@@ -1,0 +1,317 @@
+// aiserver.v1 — aiserver/v1/inference messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+message AgentFollowupCategorizationRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string replying_to_request_id = 2 [json_name = "replyingToRequestId"];
+  repeated .aiserver.v1.InferenceCoreMessage messages = 3 [json_name = "messages"];
+  optional string conversation_id = 4 [json_name = "conversationId"];
+  optional string agent_mode = 5 [json_name = "agentMode"];
+  optional string model_name = 6 [json_name = "modelName"];
+}
+
+message AgentPostTurnLabelingRequest {
+  string request_id = 1 [json_name = "requestId"];
+  repeated .aiserver.v1.InferenceCoreMessage messages = 2 [json_name = "messages"];
+  optional string conversation_id = 3 [json_name = "conversationId"];
+  optional string agent_mode = 4 [json_name = "agentMode"];
+  optional string model_name = 5 [json_name = "modelName"];
+}
+
+message InferenceAgentTool {
+  string name = 1 [json_name = "name"];
+  string description = 2 [json_name = "description"];
+  optional .google.protobuf.Struct parameters = 3 [json_name = "parameters"];
+  optional .aiserver.v1.InferenceCustomToolFormat custom_tool_format = 4 [json_name = "customToolFormat"];
+}
+
+message InferenceAnthropicOptions {
+  optional .aiserver.v1.InferenceCacheControl cache_control = 1 [json_name = "cacheControl"];
+}
+
+message InferenceCacheControl {
+  string type = 1 [json_name = "type"];
+}
+
+message InferenceContentPart {
+  oneof part {
+    .aiserver.v1.InferenceTextPart text = 1 [json_name = "text"];
+    .aiserver.v1.InferenceImagePart image = 2 [json_name = "image"];
+    .aiserver.v1.InferenceFilePart file = 3 [json_name = "file"];
+  }
+}
+
+message InferenceContentParts {
+  repeated .aiserver.v1.InferenceContentPart parts = 1 [json_name = "parts"];
+}
+
+message InferenceCoreMessage {
+  .aiserver.v1.InferenceMessageRole role = 1 [json_name = "role"];
+  repeated .aiserver.v1.InferenceToolCall tool_calls = 4 [json_name = "toolCalls"];
+  repeated .aiserver.v1.InferenceReasoningPart reasoning_parts = 7 [json_name = "reasoningParts"];
+  optional string model_provider_message_id = 8 [json_name = "modelProviderMessageId"];
+  optional string openai_phase = 9 [json_name = "openaiPhase"];
+  optional bool openai_phase_null = 10 [json_name = "openaiPhaseNull"];
+  oneof content {
+    string text = 2 [json_name = "text"];
+    .aiserver.v1.InferenceContentParts parts = 3 [json_name = "parts"];
+    .aiserver.v1.InferenceToolResultContent tool_content = 6 [json_name = "toolContent"];
+  }
+}
+
+message InferenceCursorOptions {
+  optional string image_description = 1 [json_name = "imageDescription"];
+  map<int32, string> image_descriptions = 2 [json_name = "imageDescriptions"];
+}
+
+message InferenceCustomToolFormat {
+  string type = 1 [json_name = "type"];
+  string definition = 2 [json_name = "definition"];
+  string syntax = 3 [json_name = "syntax"];
+}
+
+message InferenceExtendedUsageInfo {
+  int32 input_tokens = 1 [json_name = "inputTokens"];
+  int32 output_tokens = 2 [json_name = "outputTokens"];
+  int32 cache_read_tokens = 3 [json_name = "cacheReadTokens"];
+  int32 cache_write_tokens = 4 [json_name = "cacheWriteTokens"];
+  int32 max_tokens = 5 [json_name = "maxTokens"];
+}
+
+message InferenceExtraData {
+  repeated .aiserver.v1.InferenceTokenLogprobs token_logprobs = 1 [json_name = "tokenLogprobs"];
+  repeated .aiserver.v1.InferenceTokenIds token_ids = 2 [json_name = "tokenIds"];
+  repeated .aiserver.v1.InferenceTokenIds prompt_token_ids = 3 [json_name = "promptTokenIds"];
+  repeated .aiserver.v1.InferenceTokenIds extra_tokens = 4 [json_name = "extraTokens"];
+  repeated .aiserver.v1.InferenceTokenLogprobs extra_logprobs = 5 [json_name = "extraLogprobs"];
+  repeated .aiserver.v1.InferenceRoutingRow routing_matrix = 6 [json_name = "routingMatrix"];
+}
+
+message InferenceFilePart {
+  string data = 1 [json_name = "data"];
+  string media_type = 2 [json_name = "mediaType"];
+  optional string filename = 3 [json_name = "filename"];
+  optional .aiserver.v1.InferenceProviderOptions provider_options = 4 [json_name = "providerOptions"];
+}
+
+message InferenceImageDescription {
+  int32 message_index = 1 [json_name = "messageIndex"];
+  int32 part_index = 2 [json_name = "partIndex"];
+  optional int32 exp_content_index = 3 [json_name = "expContentIndex"];
+  string description = 4 [json_name = "description"];
+}
+
+message InferenceImageDescriptionsInfo {
+  repeated .aiserver.v1.InferenceImageDescription descriptions = 1 [json_name = "descriptions"];
+}
+
+message InferenceImagePart {
+  string data = 1 [json_name = "data"];
+  optional string mime_type = 2 [json_name = "mimeType"];
+  optional .aiserver.v1.InferenceProviderOptions provider_options = 3 [json_name = "providerOptions"];
+}
+
+message InferenceInvocationIdInfo {
+  string invocation_id = 1 [json_name = "invocationId"];
+}
+
+enum InferenceMessageRole {
+  INFERENCE_MESSAGE_ROLE_UNSPECIFIED = 0;
+  INFERENCE_MESSAGE_ROLE_USER = 1;
+  INFERENCE_MESSAGE_ROLE_ASSISTANT = 2;
+  INFERENCE_MESSAGE_ROLE_TOOL = 3;
+  INFERENCE_MESSAGE_ROLE_SYSTEM = 4;
+}
+
+message InferenceModelConfig {
+  optional int32 max_tokens = 1 [json_name = "maxTokens"];
+  optional float temperature = 2 [json_name = "temperature"];
+  optional float top_p = 3 [json_name = "topP"];
+  repeated string stop_sequences = 4 [json_name = "stopSequences"];
+}
+
+message InferenceModelParameterValue {
+  string id = 1 [json_name = "id"];
+  string value = 2 [json_name = "value"];
+}
+
+message InferenceNamedProviderDefinedTool {
+  string name = 1 [json_name = "name"];
+  string id = 2 [json_name = "id"];
+  string type = 3 [json_name = "type"];
+  optional .google.protobuf.Struct options = 4 [json_name = "options"];
+}
+
+message InferenceProviderMetadataInfo {
+  optional .google.protobuf.Struct metadata = 1 [json_name = "metadata"];
+}
+
+message InferenceProviderOptions {
+  optional .aiserver.v1.InferenceAnthropicOptions anthropic = 1 [json_name = "anthropic"];
+  optional .aiserver.v1.InferenceCursorOptions cursor = 2 [json_name = "cursor"];
+}
+
+enum InferenceReason {
+  INFERENCE_REASON_UNSPECIFIED = 0;
+  INFERENCE_REASON_GEMINI_VIDEO_SUBAGENT = 1;
+}
+
+message InferenceReasoningPart {
+  bool is_redacted = 1 [json_name = "isRedacted"];
+  string text = 2 [json_name = "text"];
+  optional string signature = 3 [json_name = "signature"];
+  optional string redacted_data = 4 [json_name = "redactedData"];
+  optional string model_name = 5 [json_name = "modelName"];
+}
+
+message InferenceRequestedModel {
+  string model_id = 1 [json_name = "modelId"];
+  bool max_mode = 2 [json_name = "maxMode"];
+  repeated .aiserver.v1.InferenceModelParameterValue parameters = 3 [json_name = "parameters"];
+  bool built_in_model = 4 [json_name = "builtInModel"];
+  bool is_variant_string_representation = 5 [json_name = "isVariantStringRepresentation"];
+}
+
+message InferenceResponseInfo {
+  string id = 1 [json_name = "id"];
+  string model = 2 [json_name = "model"];
+  int64 created_at = 3 [json_name = "createdAt"];
+  repeated .aiserver.v1.InferenceResponseMessage messages = 4 [json_name = "messages"];
+  optional string error_message = 5 [json_name = "errorMessage"];
+  optional .aiserver.v1.InferenceExtraData inference_extra_data = 6 [json_name = "inferenceExtraData"];
+}
+
+message InferenceResponseMessage {
+  string id = 1 [json_name = "id"];
+  .aiserver.v1.InferenceMessageRole role = 2 [json_name = "role"];
+  optional string content = 3 [json_name = "content"];
+  repeated .aiserver.v1.InferenceToolCall tool_calls = 4 [json_name = "toolCalls"];
+  optional .aiserver.v1.InferenceToolResultContent tool_result = 5 [json_name = "toolResult"];
+  repeated .aiserver.v1.InferenceReasoningPart reasoning_parts = 6 [json_name = "reasoningParts"];
+}
+
+message InferenceRoutingRow {
+  repeated string values = 1 [json_name = "values"];
+}
+
+message InferenceStreamError {
+  string message = 1 [json_name = "message"];
+  string code = 2 [json_name = "code"];
+  bool is_input_token_limit_error = 3 [json_name = "isInputTokenLimitError"];
+  bool is_output_token_limit_error = 4 [json_name = "isOutputTokenLimitError"];
+  .aiserver.v1.InferenceStreamErrorType error_type = 5 [json_name = "errorType"];
+}
+
+enum InferenceStreamErrorType {
+  INFERENCE_STREAM_ERROR_TYPE_UNSPECIFIED = 0;
+  INFERENCE_STREAM_ERROR_TYPE_UNKNOWN = 1;
+  INFERENCE_STREAM_ERROR_TYPE_INPUT_TOKEN_LIMIT = 2;
+  INFERENCE_STREAM_ERROR_TYPE_OUTPUT_TOKEN_LIMIT = 3;
+  INFERENCE_STREAM_ERROR_TYPE_RATE_LIMIT = 4;
+  INFERENCE_STREAM_ERROR_TYPE_AUTHENTICATION = 5;
+  INFERENCE_STREAM_ERROR_TYPE_PERMISSION = 6;
+  INFERENCE_STREAM_ERROR_TYPE_OVERLOADED = 7;
+  INFERENCE_STREAM_ERROR_TYPE_CONTENT_FILTER = 8;
+}
+
+message InferenceStreamRequest {
+  repeated .aiserver.v1.InferenceCoreMessage messages = 1 [json_name = "messages"];
+  repeated .aiserver.v1.InferenceAgentTool tools = 2 [json_name = "tools"];
+  repeated .aiserver.v1.InferenceNamedProviderDefinedTool provider_defined_tools = 3 [json_name = "providerDefinedTools"];
+  optional .aiserver.v1.InferenceModelConfig model_config = 4 [json_name = "modelConfig"];
+  optional string model_id = 5 [json_name = "modelId"];
+  optional string invocation_id = 6 [json_name = "invocationId"];
+  optional .aiserver.v1.InferenceRequestedModel requested_model = 7 [json_name = "requestedModel"];
+  optional string conversation_id = 8 [json_name = "conversationId"];
+  repeated string accepted_unadvertised_tool_names = 9 [json_name = "acceptedUnadvertisedToolNames"];
+  optional string automation_id = 10 [json_name = "automationId"];
+  optional .aiserver.v1.InferenceReason inference_reason = 11 [json_name = "inferenceReason"];
+}
+
+message InferenceStreamResponse {
+  oneof response {
+    .aiserver.v1.InferenceTextStreamPart text_part = 1 [json_name = "textPart"];
+    .aiserver.v1.InferenceToolCallStreamPart tool_call_part = 2 [json_name = "toolCallPart"];
+    .aiserver.v1.InferenceUsageInfo usage = 3 [json_name = "usage"];
+    .aiserver.v1.InferenceResponseInfo response_info = 4 [json_name = "responseInfo"];
+    .aiserver.v1.InferenceExtendedUsageInfo extended_usage = 5 [json_name = "extendedUsage"];
+    .aiserver.v1.InferenceProviderMetadataInfo provider_metadata = 6 [json_name = "providerMetadata"];
+    .aiserver.v1.InferenceInvocationIdInfo invocation_id = 7 [json_name = "invocationId"];
+    .aiserver.v1.InferenceStreamError error = 8 [json_name = "error"];
+    .aiserver.v1.InferenceThinkingStreamPart thinking_part = 9 [json_name = "thinkingPart"];
+    .aiserver.v1.InferenceImageDescriptionsInfo image_descriptions = 10 [json_name = "imageDescriptions"];
+  }
+}
+
+message InferenceTextPart {
+  string text = 1 [json_name = "text"];
+  optional .aiserver.v1.InferenceProviderOptions provider_options = 2 [json_name = "providerOptions"];
+}
+
+message InferenceTextStreamPart {
+  string text = 1 [json_name = "text"];
+  bool is_final = 2 [json_name = "isFinal"];
+}
+
+message InferenceThinkingStreamPart {
+  string text = 1 [json_name = "text"];
+  optional string signature = 2 [json_name = "signature"];
+  bool is_final = 3 [json_name = "isFinal"];
+}
+
+message InferenceTokenIds {
+  repeated int64 values = 1 [json_name = "values"];
+}
+
+message InferenceTokenLogprobs {
+  repeated double values = 1 [json_name = "values"];
+}
+
+message InferenceToolCall {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  optional .google.protobuf.Struct args = 3 [json_name = "args"];
+  optional string raw_tool_call_args = 4 [json_name = "rawToolCallArgs"];
+}
+
+message InferenceToolCallStreamPart {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  string args = 3 [json_name = "args"];
+  bool is_complete = 4 [json_name = "isComplete"];
+  optional int32 tool_index = 5 [json_name = "toolIndex"];
+}
+
+message InferenceToolResultContent {
+  repeated .aiserver.v1.InferenceToolResultPart parts = 1 [json_name = "parts"];
+}
+
+message InferenceToolResultPart {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  optional .google.protobuf.Value result = 3 [json_name = "result"];
+  bool is_error = 4 [json_name = "isError"];
+  repeated .aiserver.v1.InferenceContentPart experimental_content = 5 [json_name = "experimentalContent"];
+  optional .aiserver.v1.InferenceProviderOptions provider_options = 6 [json_name = "providerOptions"];
+}
+
+message InferenceUsageInfo {
+  int32 prompt_tokens = 1 [json_name = "promptTokens"];
+  int32 completion_tokens = 2 [json_name = "completionTokens"];
+  optional int32 total_tokens = 3 [json_name = "totalTokens"];
+}
+
+service InferenceService {
+  rpc Stream(.aiserver.v1.InferenceStreamRequest) returns (stream .aiserver.v1.InferenceStreamResponse);
+  rpc RecordAgentFollowupClassification(.aiserver.v1.AgentFollowupCategorizationRequest) returns (.google.protobuf.Empty);
+  rpc RecordAgentPostTurnLabeling(.aiserver.v1.AgentPostTurnLabelingRequest) returns (.google.protobuf.Empty);
+}

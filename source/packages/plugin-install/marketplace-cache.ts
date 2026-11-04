@@ -12,7 +12,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, stat, utimes } from "node:fs/
 import { dirname, join } from "node:path";
 import { withTimeout } from "../utils/promise-tools.ts";
 import { sanitizeFilename } from "../utils/managed-paths.ts";
-import { resolveGitRemoteRef } from "./git-remote-ref-resolve.ts";
+import { resolvePluginSourceRevision } from "./git-remote-ref-resolve.ts";
 import {
   isSparseCheckoutRepo,
   materializeSparseDirs,
@@ -25,7 +25,7 @@ import {
   execGitNonInteractive,
   resolveExtraGitConfig,
   type ExtraGitConfigProvider,
-} from "./git-subprocess-env.ts";
+} from "./git-command.ts";
 import { canonicalRepoHost, parseAndValidateScmUrl, parseGitUrl, toScmSshUrl } from "./git-url-parsing.ts";
 import {
   MARKETPLACE_MANIFEST_PATHS,
@@ -234,14 +234,14 @@ export class MarketplaceCacheManager {
     let sshUrl = !remoteUrl.startsWith("git@") && !remoteUrl.startsWith("ssh://") ? toScmSshUrl(remoteUrl) : null;
     let fullSha: string;
     if (sshUrl !== null) {
-      try { fullSha = (await resolveGitRemoteRef(sshUrl, requestedRef, { sshBatchMode: true, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha; }
+      try { fullSha = (await resolvePluginSourceRevision(sshUrl, requestedRef, { sshBatchMode: true, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha; }
       catch (error) {
         if (this.sparsePluginClones && isKilledSubprocessError(error)) throw error;
         metricsLogger.log("error", "Failed to resolve remote ref using SSH URL, falling back to HTTPS", { gitUrl: remoteUrl, ref, error: String(error), errorCategory: classifyCloneError(error) });
         sshUrl = null;
-        fullSha = (await resolveGitRemoteRef(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
+        fullSha = (await resolvePluginSourceRevision(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
       }
-    } else fullSha = (await resolveGitRemoteRef(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
+    } else fullSha = (await resolvePluginSourceRevision(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
     const checkoutDir = this.getCanonicalCloneDir(remoteUrl, fullSha), oldCloneDir = this.getLegacyCloneDir(sourceId, requestedRef);
     metricsLogger.log("info", `MarketplaceCacheManager: Resolved clone directory for ${sourceId} at ${remoteUrl}@${ref} to ${checkoutDir}`, { marketplaceId: sourceId, resolvedRef: fullSha, originalRef: requestedRef });
     const startedAt = performance.now();

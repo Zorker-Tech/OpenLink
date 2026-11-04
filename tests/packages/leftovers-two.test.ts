@@ -7,18 +7,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { BackoffScheduler } from "../../source/packages/agent-store-sync/backoff-scheduler.ts";
-import { classifyTokenLimitErrorFromMessage } from "../../source/packages/chat-inference/token-limit-error-classification.ts";
+import { AgentStoreRetrySchedule } from "../../source/packages/agent-store-sync/backoff-scheduler.ts";
+import { classifyTokenLimitErrorFromMessage } from "../../source/adapters/interop/chat-inference-proto/token-limit-error-classifier-adapter.ts";
 import { getAgentDbPath, getConnectorSecretsRoot, getSlateTranscriptsDir, STORE_FILENAME } from "../../source/host/extensions/session/session-paths.ts";
-import { normalizeAccountKey, validateMarketplacePluginId } from "../../source/shared/node/mcp/mcp-display-runtime.ts";
+import { normalizeAccountLabel, parseMarketplacePluginIdentifier } from "../../source/shared/node/mcp/mcp-account-display-policy.ts";
 import { BasePromptBuilder } from "../../source/packages/chat-inference/base.ts";
 
 describe("how long a sync waits before trying again", () => {
   it("offers a next delay it can be asked about", () => {
-    const backoff = new BackoffScheduler({ baseDelayMs: 100, maxDelayMs: 400, jitter: 0 } as never);
+    const backoff = new AgentStoreRetrySchedule({ initialDelayMs: 100, maximumDelayMs: 400, jitterFraction: 0 });
     assert.equal(typeof backoff.peekNextDelayMs, "function");
-    assert.equal(typeof backoff.recordFailure, "function");
-    assert.equal(typeof backoff.recordSuccess, "function");
+    assert.equal(typeof backoff.noteFailure, "function");
+    assert.equal(typeof backoff.noteSuccess, "function");
     assert.equal(backoff.peekNextDelayMs(), 100);
   });
 });
@@ -41,12 +41,12 @@ describe("where a session's own files are", () => {
 
 describe("what an MCP server looks like to the runtime", () => {
   it("keeps a marketplace plugin id digits only", () => {
-    assert.equal(validateMarketplacePluginId("12"), "12");
-    assert.throws(() => validateMarketplacePluginId("p1"), Error);
+    assert.equal(parseMarketplacePluginIdentifier("12"), "12");
+    assert.throws(() => parseMarketplacePluginIdentifier("p1"), Error);
   });
 
   it("normalizes an account key", () => {
-    assert.equal(typeof normalizeAccountKey("  Account  "), "string");
+    assert.equal(typeof normalizeAccountLabel("  Account  "), "string");
   });
 });
 

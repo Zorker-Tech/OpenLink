@@ -9,20 +9,14 @@ import {
   type TaskSchemaSubagentConfig,
 } from "../../source/packages/agent/tools/task-tool-schema.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
-import {
-  SubagentType,
-  SubagentTypeCustom,
-  SubagentTypeExplore,
-  SubagentTypeUnspecified,
-} from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the arguments the task tool accepts
 // ---------------------------------------------------------------------------------------------
 
-const generalPurpose: TaskSchemaSubagentConfig = { subagent_type: new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }) }
-const explore: TaskSchemaSubagentConfig = { subagent_type: new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore({}) } }), description: "Search the codebase." }
-const custom: TaskSchemaSubagentConfig = { subagent_type: new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "releaseBot" }) } }) }
+const generalPurpose: TaskSchemaSubagentConfig = { typeName: "generalPurpose" }
+const explore: TaskSchemaSubagentConfig = { typeName: "explore", description: "Search the codebase." }
+const custom: TaskSchemaSubagentConfig = { typeName: "releaseBot" }
 
 const models = createSubagentModels({
   standard: { slug: "standard-model" },
@@ -124,7 +118,7 @@ test("a type that is not in the catalogue is refused with the ones that are", ()
   assert.equal(result.success, false)
   assert.match(JSON.stringify(result.error?.issues), /Invalid value\. Expected one of: generalPurpose, explore/)
 
-  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagent_type"), "Subagent type to use for this task. Must be one of: generalPurpose, explore.")
+  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagent_type"), "Agent type for this task. Choose one of: generalPurpose, explore.")
 })
 
 test("when the catalogue lives in the user-info message the type is not pinned to a list", () => {
@@ -132,7 +126,7 @@ test("when the catalogue lives in the user-info message the type is not pinned t
   assert.equal(schemas.schemaTowardsModel.safeParse({ description: "tidy", prompt: "go", subagent_type: "anything" }).success, true)
   // Parsing still checks it against the catalogue, because that is where the lookup happens.
   assert.equal(schemas.schemaForParsing.safeParse({ prompt: "go", subagent_type: "anything" }).success, false)
-  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagent_type"), "Subagent type to use for this task. Available types are listed in the initial user-info message.")
+  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagent_type"), "Agent type for this task. The available choices appear in the opening user-info message.")
 })
 
 test("a null model is read as no model rather than as a value", () => {
@@ -168,8 +162,8 @@ test("what the background argument says about itself follows the session's behav
   }
   assert.doesNotMatch(descriptionOf({}), /Defaults true/)
   assert.match(descriptionOf({ defaultSubagentsRunInBackground: true }), /Defaults true\./)
-  assert.match(descriptionOf({ enableMultitaskMode: true }), /If the user is currently in Multitask Mode, always set this parameter to True\./)
-  assert.match(descriptionOf({ taskToolNotificationHintsEnabled: true }), /the background subagent will send a notification when it completes/)
+  assert.match(descriptionOf({ enableMultitaskMode: true }), /During Multitask Mode, set this to True\./)
+  assert.match(descriptionOf({ taskToolNotificationHintsEnabled: true }), /A notification arrives when the background run completes\./)
 })
 
 test("placement is offered as a machine object to a session that targets cloud machines", () => {
@@ -257,31 +251,31 @@ const baseArgs = { toolLabel: "Task", readToolName: "Read", globToolName: "Glob"
 
 test("the base description points at the read and search tools for work they do better", () => {
   const text = buildTaskToolDescriptionBase(baseArgs)
-  assert.match(text, /If you want to read a specific file path, use the Read or Glob tool instead of the Task tool/)
-  assert.match(text, /If you are searching for a specific class definition like "class Foo", use the Glob tool instead of the Task tool/)
-  assert.match(text, /Always include a short description \(3-5 words\)/)
+  assert.match(text, /For one known file, use Read or Glob to locate the relevant section/)
+  assert.match(text, /To find a named declaration such as "class Foo", search with Glob/)
+  assert.match(text, /Give each run a clear title of about 3-5 words/)
 })
 
 test("the base description only names the tools the session actually has", () => {
   const onlyRead = buildTaskToolDescriptionBase({ toolLabel: "Task", readToolName: "Read" })
-  assert.match(onlyRead, /use the Read tool instead of the Task tool/)
+  assert.match(onlyRead, /For one known file, use Read to locate the relevant section/)
   assert.doesNotMatch(onlyRead, /Glob/)
 
   const noTools = buildTaskToolDescriptionBase({ toolLabel: "Task" })
-  assert.doesNotMatch(noTools, /instead of the Task tool, to find the match more quickly/)
+  assert.doesNotMatch(noTools, /starting a Task run/)
 })
 
 test("the explore recommendation is made only where exploring is worth recommending", () => {
   const recommended = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true })
-  assert.match(recommended, /VERY IMPORTANT: When broadly exploring the codebase/)
+  assert.match(recommended, /For broad codebase discovery on substantial work/)
   assert.match(recommended, /subagent_type="explore"/)
 
   const notRecommended = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true, subagentExperimentGroup: "no-subagent-unless-asked" })
-  assert.doesNotMatch(notRecommended, /VERY IMPORTANT/)
-  assert.match(notRecommended, /If the query is a narrow or specific question/)
+  assert.doesNotMatch(notRecommended, /For broad codebase discovery on substantial work/)
+  assert.match(notRecommended, /Handle a focused question directly/)
 
   const catalogueElsewhere = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true, subagentModelsInUserInfo: true })
-  assert.doesNotMatch(catalogueElsewhere, /VERY IMPORTANT/)
+  assert.doesNotMatch(catalogueElsewhere, /For broad codebase discovery on substantial work/)
 
   const withoutExplore = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: false })
   assert.doesNotMatch(withoutExplore, /subagent_type="explore"/)
@@ -289,10 +283,10 @@ test("the explore recommendation is made only where exploring is worth recommend
 
 test("the description tells the model what happens to a subagent's result", () => {
   const defaultText = buildTaskToolDescriptionBase(baseArgs)
-  assert.match(defaultText, /The result returned by the agent is not visible to the user\./)
+  assert.match(defaultText, /Its result is not shown automatically/)
 
   const notified = buildTaskToolDescriptionBase({ ...baseArgs, taskToolNotificationHintsEnabled: true })
-  assert.match(notified, /do not summarize or restate a single background subagent's result by default/)
+  assert.match(notified, /Do not repeat a single agent's result unless asked/)
 
   const hidden = buildTaskToolDescriptionBase({ ...baseArgs, taskToolNotificationHintsEnabled: true, hideAsyncSubagentTaskNotifications: true })
   assert.doesNotMatch(hidden, /do not summarize or restate/)
@@ -300,62 +294,62 @@ test("the description tells the model what happens to a subagent's result", () =
 
 test("the description says whether resuming may interrupt a running agent", () => {
   const serverSide = buildTaskToolDescriptionBase(baseArgs)
-  assert.match(serverSide, /the agent continues with its full previous context preserved/)
+  assert.match(serverSide, /Continuing an agent restores its earlier conversation/)
 
   const clientSide = buildTaskToolDescriptionBase({ ...baseArgs, useClientSideSubagent: true })
-  assert.match(clientSide, /If the agent is still running, the request fails; wait for completion before resuming\./)
+  assert.match(clientSide, /An active run cannot be resumed yet, so wait for it to finish\./)
 
   const interruptible = buildTaskToolDescriptionBase({ ...baseArgs, useClientSideSubagent: true, enableSubagentInterrupt: true })
-  assert.match(interruptible, /the request fails unless `interrupt` is true/)
+  assert.match(interruptible, /An active run can be stopped first by setting `interrupt` to true/)
 })
 
 test("the description offers forking the current conversation only where it is allowed", () => {
   assert.doesNotMatch(buildTaskToolDescriptionBase(baseArgs), /fork the current parent agent/)
   const forking = buildTaskToolDescriptionBase({ ...baseArgs, allowResumeSelfFork: true })
-  assert.match(forking, /set `resume` to "self" to fork the current parent agent into a new child subagent/)
+  assert.match(forking, /Set resume="self" to start a child with this conversation's history/)
 
   // The argument itself says what the sentinel means, which is where a model reading the schema finds it.
   assert.doesNotMatch(fieldDescription(schemasOf([generalPurpose]).schemaTowardsModel, "resume"), /self-fork/)
   const schemaWithFork = schemasOf([generalPurpose], { allowResumeSelfFork: true }).schemaTowardsModel
-  assert.match(fieldDescription(schemaWithFork, "resume"), /Use "self" to start a new agent with your own entire conversation history as a starting point \(aka 'self-fork'\)\./)
+  assert.match(fieldDescription(schemaWithFork, "resume"), /Set "self" to create a new agent with a copy of this conversation's history\./)
 })
 
 test("the description links to agents only where links work", () => {
-  assert.doesNotMatch(buildTaskToolDescriptionBase(baseArgs), /you may link to agents and subagents/)
-  assert.match(buildTaskToolDescriptionBase({ ...baseArgs, enableAgentChatLinks: true }), /you may link to agents and subagents with the `\[Name\]\(id\)` format\./)
+  assert.doesNotMatch(buildTaskToolDescriptionBase(baseArgs), /Link to agents or subagents/)
+  assert.match(buildTaskToolDescriptionBase({ ...baseArgs, enableAgentChatLinks: true }), /Link to agents or subagents in user-facing text with the \[Name\]\(id\) format\./)
 })
 
 test("the catalogue of subagent types is listed, or pointed at when it lives in the user-info message", () => {
   const listed = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT" })
   assert.match(listed.subagentTypeDescriptionsText, /^- generalPurpose$/m)
   assert.match(listed.subagentTypeDescriptionsText, /^- explore: Search the codebase\.$/m)
-  assert.match(listed.fullDescription, /Available subagent_types and a quick description of what they do:/)
+  assert.match(listed.fullDescription, /Agent types and a short note about each:/)
   assert.match(listed.fullDescription, /standard-model/)
 
   const pointedAt = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", catalogsInUserInfo: true })
-  assert.match(pointedAt.fullDescription, /Available subagent_types and descriptions are listed in <available_subagent_types> in the initial user-info message at the start of this conversation\./)
-  assert.match(pointedAt.fullDescription, /Available model slugs for subagents are listed in <available_subagent_models> in the initial user-info message at the start of this conversation\./)
+  assert.match(pointedAt.fullDescription, /Agent types and descriptions are in <available_subagent_types> near the beginning of this conversation\./)
+  assert.match(pointedAt.fullDescription, /Agent model choices are in <available_subagent_models> near the beginning of this conversation\./)
   const pointsByDefault = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", subagentModelsInUserInfo: true })
-  assert.match(pointsByDefault.fullDescription, /listed in <available_subagent_types> in the initial user-info message/, "the user-info message is where the catalogues live when that setting says so")
+  assert.match(pointsByDefault.fullDescription, /are in <available_subagent_types> near the beginning/, "the user-info message is where the catalogues live when that setting says so")
   // The catalogue text is still produced, because a caller may want to render it elsewhere.
   assert.match(pointedAt.subagentTypeDescriptionsText, /^- explore: Search the codebase\.$/m)
 })
 
 test("a type that resumes by itself says so beside its name", () => {
   const listed = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [explore, custom], defaultResumeMode: "LAST_AGENT" })
-  assert.match(listed.subagentTypeDescriptionsText, /^- explore: Search the codebase\. \(Auto-resumes most recent agent; `resume` arg is ignored\)$/m)
+  assert.match(listed.subagentTypeDescriptionsText, /^- explore: Search the codebase\. \(Continues the newest agent automatically; ignores `resume`\)$/m)
   // A type with no description of its own gets the note where its description would be, spacing and all.
-  assert.match(listed.subagentTypeDescriptionsText, /^- releaseBot: +\(Auto-resumes most recent agent; `resume` arg is ignored\)$/m)
+  assert.match(listed.subagentTypeDescriptionsText, /^- releaseBot: +\(Continues the newest agent automatically; ignores `resume`\)$/m)
 
   const sameType = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [explore], defaultResumeMode: "LAST_AGENT_SAME_TYPE" })
-  assert.match(sameType.subagentTypeDescriptionsText, /Auto-resumes most recent agent of this type/)
+  assert.match(sameType.subagentTypeDescriptionsText, /Continues the newest agent of this type automatically/)
 
   const overridden = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [{ ...explore, resumeModeOverride: "DEFAULT" }], defaultResumeMode: "LAST_AGENT" })
   assert.doesNotMatch(overridden.subagentTypeDescriptionsText, /Auto-resumes/)
 
   const noCatalogue = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [], defaultResumeMode: "DEFAULT" })
   assert.equal(noCatalogue.subagentTypeDescriptionsText, "")
-  assert.doesNotMatch(noCatalogue.fullDescription, /Available subagent_types/)
+  assert.doesNotMatch(noCatalogue.fullDescription, /Agent types and/)
 })
 
 test("the parts description passes the session's own names and flags through to the base", () => {
@@ -370,17 +364,17 @@ test("the parts description passes the session's own names and flags through to 
     enableAgentChatLinks: true,
   })
   assert.match(parts.baseDescription, /Read or Glob/)
-  assert.match(parts.baseDescription, /fork the current parent agent/)
+  assert.match(parts.baseDescription, /start a child with this conversation's history/)
   assert.equal(parts.fullDescription, [parts.baseDescription, parts.subagentTypeDescriptionsText, parts.modelsDescription].join("\n\n"), "the full description is the three parts, in order")
 })
 
 test("the models section says to skip rather than substitute when the model is not offered", () => {
   const parts = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose], defaultResumeMode: "DEFAULT" })
   assert.match(parts.modelsDescription, /standard-model/)
-  assert.match(parts.fullDescription, /do NOT substitute a different model or guess/)
+  assert.match(parts.fullDescription, /do not substitute another model or guess/)
 
   const inheriting = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose], defaultResumeMode: "DEFAULT", subagentInheritGuidance: true })
-  assert.match(inheriting.modelsDescription, /inherit \(default; required unless the user explicitly requested another model\)/)
+  assert.match(inheriting.modelsDescription, /inherit — default; keep the parent model unless the user requests a different one/)
 
   const noModels = buildTaskToolDescriptionParts({
     ...baseArgs,
@@ -388,5 +382,5 @@ test("the models section says to skip rather than substitute when the model is n
     defaultResumeMode: "DEFAULT",
     subagentModels: createSubagentModels({}),
   })
-  assert.equal(noModels.modelsDescription, "No alternative models are available. Subagents will inherit the parent model.")
+  assert.equal(noModels.modelsDescription, "No alternative child model is available. Children use the parent model.")
 })

@@ -8,14 +8,15 @@ describe("what a transcript leaves out", () => {
   it("names the context tags it strips, in the order the platform declares them", () => {
     assert.deepEqual([...CONTEXT_TAGS_TO_STRIP], [
       "user_info", "project_layout", "rules", "always_applied_workspace_rules", "agent_requestable_workspace_rules", "user_rules", "agent_skills", "available_skills",
-      "cloud_instructions", "cloud_task_instructions", "open_and_recently_viewed_files", "system_reminder", "system-reminder", "mcp_instructions", "mcp_file_system",
-      "mcp_file_system_servers", "git_status", "agent_transcripts", "cursor_rules_context", "attached_files", "system_notification", "task_notification", "agent_notification",
+      "cloud_instructions", "cloud_task_instructions", "open_and_recently_viewed_files", "workspace_editor_context", "system_reminder", "system-reminder", "mcp_instructions", "mcp_file_system",
+      "mcp_file_system_servers", "git_status", "agent_transcripts", "workspace_rules_context", "cursor_rules_context", "attached_files", "system_notification", "task_notification", "agent_notification",
     ]);
     assert.deepEqual(Object.keys(stripping).sort(), ["CONTEXT_TAGS_TO_STRIP", "stripContextTags", "stripTags"]);
   });
 
   it("takes a context block out and keeps the words around it", () => {
     assert.equal(stripContextTags("<user_info>private profile</user_info>"), "");
+    assert.equal(stripContextTags("<workspace_editor_context>file list</workspace_editor_context>"), "");
     assert.equal(stripContextTags("hello\n\n<user_info>profile</user_info>\n\nbye"), "hello\n\nbye");
     assert.equal(stripContextTags("before <rules>a rule</rules> after"), "before  after");
     // Attributes are part of the element, and so is content across lines.

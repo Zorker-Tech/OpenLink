@@ -16,22 +16,22 @@ import path from "node:path"
 
 import type { Context } from "../../context/context.ts"
 import {
-  SelectedVideo,
-  type SelectedVideo as SelectedVideoValue,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
-import {
   resolveTrustedPathOnlyAttachmentPath,
   type AttachmentPathRequestContext,
 } from "./path-trust.ts"
 
-export interface ProcessSelectedVideoPathOnlyArgs {
+export interface ProcessVideoPathOnlyArgs {
   readonly ctx: Context
-  readonly selectedVideo: SelectedVideoValue
+  readonly path: string
+  readonly hasStoredContent: boolean
+  readonly mimeType: string
+  readonly filename: string
+  readonly fps: number | undefined
   readonly requestContext: AttachmentPathRequestContext | undefined
 }
 
-export interface ProcessedSelectedVideoPathOnly {
-  readonly processedSelectedVideo: SelectedVideoValue | undefined
+export interface ProcessedVideoPathOnly {
+  readonly trustedPath: string | undefined
   readonly videoData: undefined
   readonly mimeType: string
   readonly fps: number | undefined
@@ -39,39 +39,39 @@ export interface ProcessedSelectedVideoPathOnly {
   readonly localFilePath: string | undefined
 }
 
-export async function processSelectedVideoPathOnly({
+export async function processVideoPathOnlyAttachment({
   ctx,
-  selectedVideo,
+  path: candidatePath,
+  hasStoredContent,
+  mimeType,
+  filename,
+  fps,
   requestContext,
-}: ProcessSelectedVideoPathOnlyArgs): Promise<ProcessedSelectedVideoPathOnly | undefined> {
-  const readableVideoPath = selectedVideo.path.trim()
-  const pathOnlyVideo = !selectedVideo.dataOrBlobId?.case
-    ? await resolveTrustedPathOnlyAttachmentPath(ctx, readableVideoPath, requestContext, "video", true)
+}: ProcessVideoPathOnlyArgs): Promise<ProcessedVideoPathOnly | undefined> {
+  const readablePath = candidatePath.trim()
+  const attachment = !hasStoredContent
+    ? await resolveTrustedPathOnlyAttachmentPath(ctx, readablePath, requestContext, "video", true)
     : { hasPathOnlyPayload: false, trustedPath: undefined }
-  const displayFilename = selectedVideo.filename
-  const mimeType = selectedVideo.mimeType
-  const fps = selectedVideo.fps
-  if (!pathOnlyVideo.hasPathOnlyPayload) return undefined
-  if (pathOnlyVideo.trustedPath === undefined) {
+  if (!attachment.hasPathOnlyPayload) return undefined
+  if (attachment.trustedPath === undefined) {
     return {
-      processedSelectedVideo: undefined,
+      trustedPath: undefined,
       videoData: undefined,
       mimeType,
       fps,
-      filename: displayFilename,
+      filename,
       localFilePath: undefined,
     }
   }
-  const trustedPathOnlyVideoPath = pathOnlyVideo.trustedPath
   if (!mimeType || !mimeType.startsWith("video/")) {
     throw new Error(`Video attachments require a video/* mime type, got ${mimeType}`)
   }
   return {
-    processedSelectedVideo: new SelectedVideo({ ...selectedVideo, path: trustedPathOnlyVideoPath }),
+    trustedPath: attachment.trustedPath,
     videoData: undefined,
     mimeType,
     fps,
-    localFilePath: trustedPathOnlyVideoPath,
-    filename: displayFilename || path.basename(trustedPathOnlyVideoPath),
+    localFilePath: attachment.trustedPath,
+    filename: filename || path.basename(attachment.trustedPath),
   }
 }

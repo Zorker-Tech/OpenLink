@@ -11,46 +11,47 @@
  * by hand is not offered for the model to request: they already chose it.
  */
 
-import { CursorRuleSource, type CursorRule } from "../../proto/generated/agent/v1/rules_pb.ts"
-import { filterByAgentEnvironment } from "../utils/environment-filtering.ts"
+import { filterItemsForRunEnvironment } from "../utils/environment-filtering.ts"
 import { isFileScopedRule } from "../utils/rule-matching.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import { hasDisableModelInvocation, isSkillPath } from "./rule-predicates.ts"
+import type { UserInfoRule } from "./user-info-data-contracts.ts"
 
 export interface CategorizedRules {
-  readonly globalRules: CursorRule[]
-  readonly agentRequestableRules: CursorRule[]
-  readonly userRules: CursorRule[]
-  readonly skills: CursorRule[]
+  readonly globalRules: UserInfoRule[]
+  readonly agentRequestableRules: UserInfoRule[]
+  readonly userRules: UserInfoRule[]
+  readonly skills: UserInfoRule[]
 }
 
-export function categorizeCursorRules(
-  cursorRules: CursorRule[],
+export function categorizePromptRules(
+  workspaceRules: readonly UserInfoRule[],
   workspacePaths: readonly string[] = [],
   agentType?: AgentType,
 ): CategorizedRules {
-  const filteredRules = filterByAgentEnvironment(cursorRules, agentType)
-  const globalRules: CursorRule[] = []
-  const agentRequestableRules: CursorRule[] = []
-  const userRules: CursorRule[] = []
-  const skills: CursorRule[] = []
+  const filteredRules = filterItemsForRunEnvironment([...workspaceRules], agentType)
+  const globalRules: UserInfoRule[] = []
+  const agentRequestableRules: UserInfoRule[] = []
+  const userRules: UserInfoRule[] = []
+  const skills: UserInfoRule[] = []
   for (const rule of filteredRules) {
+    const ruleType = rule.type?.type?.case
     if (isSkillPath(rule.fullPath)) {
       // A skill that is always in force is a global rule; one that refused invocation is not offered.
-      if (rule.type?.type.case === "global") globalRules.push(rule)
+      if (ruleType === "global") globalRules.push(rule)
       else if (!hasDisableModelInvocation(rule)) skills.push(rule)
       continue
     }
-    if (rule.source === CursorRuleSource.USER) {
+    if (rule.source === "user") {
       userRules.push(rule)
       continue
     }
-    if (rule.source === CursorRuleSource.TEAM) {
+    if (rule.source === "team") {
       globalRules.push(rule)
       continue
     }
-    if (rule.type?.type.case === "manuallyAttached") continue
-    if (rule.type?.type.case !== "global") {
+    if (ruleType === "manuallyAttached") continue
+    if (ruleType !== "global") {
       agentRequestableRules.push(rule)
       continue
     }

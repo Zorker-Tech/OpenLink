@@ -167,7 +167,7 @@ test("a commit a listing cannot resolve is a failure of that plugin alone", asyn
   assert.equal(listed.listFailures.length, 1);
   assert.equal(listed.listFailures[0]!.pluginName, "broken");
   assert.equal(listed.listFailures[0]!.errorType, "clone");
-  assert.match(listed.listFailures[0]!.errorMessage, /Failed to resolve git ref "main" for \/no\/such\/repository-here/);
+  assert.match(listed.listFailures[0]!.errorMessage, /Could not resolve plugin revision "main" from \/no\/such\/repository-here/);
   assert.equal(calls.filter(call => call.method === "exception").length, 1, "the failure is reported once");
   assert.match(loggedMessages(calls, "error").join("\n"), /Failed to resolve version for plugin broken@main, skipping plugin/);
 });

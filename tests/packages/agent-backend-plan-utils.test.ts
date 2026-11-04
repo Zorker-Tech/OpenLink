@@ -12,15 +12,12 @@ import {
   updateTodoStatusArray,
 } from "../../source/packages/agent/tools/core/create-plan/backend-plan-utils.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { toRedactedTodoItem } from "../../source/packages/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { PlanRegistryEntry } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
-import { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { PlanRegistryEntry } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the frontmatter a plan carries
@@ -66,24 +63,18 @@ test("the latest plan is the last one the registry holds", () => {
 // the todo statuses the conversation knows
 // ---------------------------------------------------------------------------------------------
 
-const redactedTodo = (id: string, status: number) =>
-  toRedactedTodoItem(new TodoItem({ id, content: `todo ${id}`, status: status as never }), PrivacyMode.NO_STORAGE)
-
 test("the statuses are read from the conversation's own todo list", async () => {
-  const ctx = createContext()
-  const statuses = await buildTodoStatusMap(ctx, {
-    todos: [
-      { get: async () => redactedTodo("1", 1) },
-      { get: async () => redactedTodo("2", 2) },
-    ] as never,
-  })
+  const statuses = await buildTodoStatusMap([
+    { id: "1", status: "pending" },
+    { id: "2", status: "in_progress" },
+  ])
   assert.equal(statuses.size, 2)
   assert.equal(statuses.get("1"), "pending")
   assert.equal(statuses.get("2"), "in_progress")
 })
 
 test("a conversation with no todos yields no statuses", async () => {
-  assert.equal((await buildTodoStatusMap(createContext(), { todos: [] })).size, 0)
+  assert.equal((await buildTodoStatusMap([])).size, 0)
 })
 
 test("a todo whose status changed is updated in place", () => {
@@ -168,21 +159,25 @@ function sync(
   options: {
     /** A session with no plan at all is asked for with null, since leaving it out means the usual path. */
     planPath?: string | null
-    todos?: Array<{ id: string; status: number }>
-    mode?: number
+    todos?: Array<{ id: string; status: "pending" | "in_progress" | "completed" | "cancelled" | "unspecified" }>
+    mode?: SlateMode
   } = {},
 ) {
   const planPath = options.planPath === null ? undefined : options.planPath ?? "/repo/plan.md"
-  const todos = (options.todos ?? [{ id: "1", status: 2 }]).map(todo => ({ get: async () => redactedTodo(todo.id, todo.status) }))
+  const todos = (options.todos ?? [{ id: "1", status: "in_progress" }]).map(todo => ({
+    ...todo,
+    content: "task " + todo.id,
+    createdAt: 1n,
+    updatedAt: 1n,
+  }))
   return syncLatestPlanTodosToFile({
     ctx: createContext(),
     resourceAccessor: harnessed.accessor as never,
     toolCallId: "call-1",
+    todos,
     stateHandler: {
-      mode: options.mode ?? AgentMode.AGENT,
+      mode: options.mode ?? SlateMode.AGENT,
       plans: planPath === undefined ? new Map() : new Map([["plan-1", new PlanRegistryEntry({ id: "plan-1", path: planPath })]]),
-      todos,
-      setTodos() {},
       recordFileState() {},
     } as never,
   })
@@ -266,11 +261,10 @@ test("the write goes through the same path as any other edit", async () => {
     ctx: createContext(),
     resourceAccessor: accessor as never,
     toolCallId: "call-1",
+    todos: [{ id: "1", content: "task 1", status: "in_progress", createdAt: 1n, updatedAt: 1n }],
     stateHandler: {
-      mode: AgentMode.AGENT,
+      mode: SlateMode.AGENT,
       plans: new Map([["plan-1", new PlanRegistryEntry({ id: "plan-1", path: "/repo/plan.md" })]]),
-      todos: [{ get: async () => redactedTodo("1", 2) }],
-      setTodos() {},
       recordFileState() {},
     } as never,
   })

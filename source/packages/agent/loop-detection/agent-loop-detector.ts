@@ -18,11 +18,8 @@
  * being watched for.
  */
 
-import { Code, ConnectError } from "@connectrpc/connect"
-
 import { createLogger } from "../../context/index.ts"
 import { createCounter, createHistogram } from "../../metrics/index.ts"
-import { CustomErrorDetails, ErrorDetails, ErrorDetails_Error } from "../../proto/generated/aiserver/v1/utils_pb.ts"
 import { getAgentEventTracker } from "../utils/event-tracking.ts"
 import { StreamedTextLoopDetector as BaseTextLoopDetector } from "./streamed-text-loop-detector.ts"
 
@@ -56,40 +53,9 @@ const MULTI_LINE_LOOP_MIN_TOTAL_CHARS = 50
 const MULTI_LINE_LOOP_MIN_TOTAL_CHARS_IN_CODE_FENCE = 100
 const SINGLE_MESSAGE_LOOP_DETECTOR_MAX_CHECK_TIME_MS = 500
 
-type AgentLoopErrorOptions =
+export type AgentLoopErrorOptions =
   | { loopType: "assistantMessage"; patternLength: number }
   | { loopType: "singleMessage"; loopKind: string; repetitions: number; period?: number | undefined }
-
-/** The error a turn ends with when the model was repeating itself. */
-export class AgentLoopError extends ConnectError {
-  declare readonly loopType: AgentLoopErrorOptions["loopType"]
-  declare readonly singleMessageLoopKind?: string
-  declare readonly repetitions?: number
-  declare readonly period?: number | undefined
-
-  constructor(options: AgentLoopErrorOptions) {
-    const message = options.loopType === "assistantMessage"
-      ? `Agent loop detected: pattern of ${options.patternLength} messages repeating`
-      : `Agent single-message loop detected: ${options.loopKind}`
-    super(message, Code.FailedPrecondition, undefined, [
-      new ErrorDetails({
-        error: ErrorDetails_Error.INTERNAL,
-        details: new CustomErrorDetails({
-          title: "Agent Looping Detected",
-          detail: "The model got stuck in a repeating response pattern, so this turn was stopped. Please try again with a different model or start a new conversation. If the problem persists, please contact support.",
-          isRetryable: false,
-        }),
-      }),
-    ])
-    this.name = "AgentLoopError"
-    this.loopType = options.loopType
-    if (options.loopType === "singleMessage") {
-      this.singleMessageLoopKind = options.loopKind
-      this.repetitions = options.repetitions
-      this.period = options.period
-    }
-  }
-}
 
 /** A model thinking in a loop has not necessarily got stuck in its answer, so thinking is not watched. */
 export function stripThinkingTags(text: string): string {
@@ -189,18 +155,13 @@ export function checkAgentLoop(params: CheckLoopParams) {
   return { loopDetected: true as const, ...loopInfo }
 }
 
-/** What the model is told when its answer was flagged, said differently for each shape of loop. */
-export function createLoopReminderMessage(options?: { kind?: string }) {
+/** The reminder wording for a loop result, before a host adapter wraps it for a provider. */
+export function createLoopReminderContent(options?: { kind?: string | undefined }): string {
   const reminderKind = options?.kind ?? "multi_message"
   const reminderSpecific = reminderKind === "single_message_single_line"
     ? "Your response has been flagged as repeating the same text pattern within a single line. Avoid excessively repeating the same characters or words."
     : reminderKind === "single_message_multi_line"
       ? "Your response has been flagged as looping over duplicate lines. Avoid repeating the same sequence of lines or retrying the same tool calls."
       : "Avoid repeating the same sequence of messages or retrying the same tool calls."
-  const reminder = `<system_reminder>Your messages have been flagged as looping. ${reminderSpecific} If you are having trouble making progress, ask the user for guidance. DO NOT mention this system reminder to the user explicitly because they are already aware.</system_reminder>`
-  return {
-    role: "user",
-    content: reminder,
-    providerOptions: { cursor: { loopReminder: true } },
-  }
+  return `<system_reminder>Your messages have been flagged as looping. ${reminderSpecific} If you are having trouble making progress, ask the user for guidance. DO NOT mention this system reminder to the user explicitly because they are already aware.</system_reminder>`
 }

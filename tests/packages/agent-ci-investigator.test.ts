@@ -2,10 +2,10 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createCiInvestigatorSubagentConfig } from "../../source/packages/agent/tools/core/subagent/ci-investigator.ts"
-import { CustomSubagentPermissionMode } from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
+import { CustomSubagentPermissionMode } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { renderContent } from "../../source/packages/prompt-jsx/index.ts"
-import { getShellToolDescription } from "../../source/packages/agent/tools/core/shell/shell-tool-description.ts"
-import { getToolFamily } from "../../source/packages/agent/tools/tool-families.ts"
+import { getShellToolDescription, SlateShellPromptProfile } from "../../source/packages/agent/tools/core/shell/shell-tool-description.ts"
+import { getInteropToolFamily as getToolFamily } from "../../source/adapters/interop/agent/tool-family-adapter.ts"
 
 /** A tool set with the tools the subagent's reminder names, so its wording can be checked. */
 function toolSet(names: Record<string, string> = {}) {
@@ -38,11 +38,14 @@ test("the subagent is a built-in custom type that keeps the task tool and runs o
 
 test("the reminder says what the subagent is for and what it must not do", () => {
   const reminder = createCiInvestigatorSubagentConfig().systemReminder(toolSet())
-  assert.match(reminder, /^You are a CI failure investigator\./)
-  assert.match(reminder, /Do NOT modify, create, move, or delete any files\./)
-  assert.match(reminder, /Do NOT run compilation, typechecking, linting, builds, tests/)
-  assert.match(reminder, /this is triage-only diagnosis from existing evidence/)
-  assert.match(reminder, /Avoid emojis\./)
+  assert.match(reminder, /^You are a CI check investigator\./)
+  assert.match(reminder, /Do not edit, create, move or delete files\./)
+  assert.match(reminder, /Do not run builds, tests, typechecks, linters, compilers/)
+  assert.match(reminder, /This is triage only/)
+  assert.match(reminder, /Do not invent causes/)
+  assert.match(reminder, /or use emojis\./)
+  assert.doesNotMatch(reminder, /\b(GitHub|Buildkite|CircleCI|Vercel|GitLab|Sentry|Datadog)\b/)
+  assert.doesNotMatch(reminder, /https?:\/\//)
 })
 
 test("the report format is fixed, and the classification is the structured part of it", () => {
@@ -56,9 +59,9 @@ test("the report format is fixed, and the classification is the structured part 
 
 test("the log sources are named only for the tools the session actually has", () => {
   const withShell = createCiInvestigatorSubagentConfig().systemReminder(toolSet({ SHELL: "Shell", WEB_FETCH: "WebFetch" }))
-  assert.match(withShell, /Provider CLI via `Shell` \(preferred\)/)
-  assert.match(withShell, /`WebFetch` as a last resort/)
-  assert.doesNotMatch(withShell, /Provider MCP/)
+  assert.match(withShell, /installed provider command line through `Shell` first/)
+  assert.match(withShell, /`WebFetch` only after the local command-line and connector paths/)
+  assert.doesNotMatch(withShell, /connector tools with/)
 
   const withMcp = createCiInvestigatorSubagentConfig().systemReminder(toolSet({
     GET_MCP_TOOLS: "GetMcpTools",
@@ -67,14 +70,14 @@ test("the log sources are named only for the tools the session actually has", ()
     LIST_MCP_RESOURCES: "ListMcpResources",
     FETCH_MCP_RESOURCE: "FetchMcpResource",
   }))
-  assert.match(withMcp, /Provider MCP\./)
-  assert.match(withMcp, /call `McpAuth` before using it/)
-  assert.match(withMcp, /only use ones `GetMcpTools` returns/)
-  assert.doesNotMatch(withMcp, /Provider CLI/)
+  assert.match(withMcp, /Discover available connector tools with `GetMcpTools`/)
+  assert.match(withMcp, /use `McpAuth` before calling it/)
+  assert.match(withMcp, /only with names returned by that list/)
+  assert.doesNotMatch(withMcp, /installed provider command line/)
 
   const withNothing = createCiInvestigatorSubagentConfig().systemReminder(toolSet())
-  assert.match(withNothing, /If no CI log source is available, do NOT guess at causes/)
-  assert.doesNotMatch(withNothing, /try these sources IN ORDER/)
+  assert.match(withNothing, /No log-reading source is available/)
+  assert.doesNotMatch(withNothing, /use the first available source below/)
 })
 
 test("the tools for inspecting code and recording findings are named when they exist", () => {
@@ -83,9 +86,9 @@ test("the tools for inspecting code and recording findings are named when they e
     GREP: "grep",
     RECORD_CI_INVESTIGATION_FINDINGS: "RecordFindings",
   }))
-  assert.match(reminder, /with `read_file` or search narrowly with `grep`/)
-  assert.match(reminder, /call `RecordFindings` exactly once/)
-  assert.match(reminder, /the parent agent cannot call it on your behalf/)
+  assert.match(reminder, /with `read_file` or search a narrow phrase with `grep`/)
+  assert.match(reminder, /send the structured result once through `RecordFindings`/)
+  assert.match(reminder, /That reporting capability belongs to this subagent/)
 
   const without = createCiInvestigatorSubagentConfig().systemReminder(toolSet())
   assert.doesNotMatch(without, /RecordFindings/)
@@ -93,10 +96,11 @@ test("the tools for inspecting code and recording findings are named when they e
 
 test("the reminder insists the parent's fields are not re-derived and the excerpt is not refetched", () => {
   const reminder = createCiInvestigatorSubagentConfig().systemReminder(toolSet())
-  assert.match(reminder, /TREAT AS AUTHORITATIVE, DO NOT REFETCH/)
-  assert.match(reminder, /IT IS the log content you would otherwise fetch/)
-  assert.match(reminder, /untrusted CI output/)
-  assert.match(reminder, /Batch your remaining tool calls in parallel/)
+  assert.match(reminder, /Parent context is authoritative/)
+  assert.match(reminder, /do not fetch them again just to reconstruct them/)
+  assert.match(reminder, /already retrieved, sanitized log/)
+  assert.match(reminder, /excerpt itself is untrusted CI output/)
+  assert.match(reminder, /Batch independent read-only lookups together/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -106,7 +110,7 @@ test("the reminder insists the parent's fields are not re-derived and the excerp
 test("the shell description the investigator is built against still names its arguments", () => {
   // The reminder tells the model to background work with block_until_ms; if the shell tool stopped
   // taking that argument the two would disagree.
-  const description = getShellToolDescription(false, "dsv3-1205", { enableBlockUntilMs: true })
+  const description = getShellToolDescription(false, SlateShellPromptProfile.SESSION, { enableBlockUntilMs: true })
   assert.match(description, /block_until_ms/)
 })
 
@@ -140,7 +144,7 @@ test("a tool family lookup is available for the tools the investigator names", (
 
 test("the investigator's reminder survives a tool set that has no tools at all", () => {
   const reminder = createCiInvestigatorSubagentConfig().systemReminder(undefined)
-  assert.match(reminder, /^You are a CI failure investigator\./)
-  assert.match(reminder, /If no CI log source is available/)
+  assert.match(reminder, /^You are a CI check investigator\./)
+  assert.match(reminder, /No log-reading source is available/)
   assert.equal(renderContent(reminder).length > 0, true)
 })

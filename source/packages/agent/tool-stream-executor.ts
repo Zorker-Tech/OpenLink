@@ -27,10 +27,11 @@
  */
 
 import { DYNAMIC_TOOLS_NAMESPACE } from "../agent-exec/mcp-operations.ts"
+import { AGENT_STORE_CONFLICT_HOOK_EVENT_NAME } from "../agent-store-sync/agent-store-sync-contracts.ts"
 import { InteractionListenerStreamClosedError } from "../agent-core/interaction-listener.ts"
 import { createKey, type Context } from "../context/context.ts"
 import { createLogger } from "../context/logging.ts"
-import { appendHookContextRemindersToCoreToolResult } from "../hooks-carriers/hook-context-rendering.ts"
+import { appendHookContextRemindersToToolOutput } from "../hooks-carriers/hook-context-rendering.ts"
 import { isMcpToolNotFoundError } from "../mcp-agent-exec/mcp-tool-not-found-error.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
@@ -57,7 +58,7 @@ import {
   type ToolExecutionSet,
 } from "./tools/tool-execution.ts"
 import { ToolErrorClassification } from "./tools/tool-errors.ts"
-import { getToolFamily } from "./tools/tool-families.ts"
+import { getInteropToolFamily as getToolFamily } from "../../adapters/interop/agent/tool-family-adapter.ts"
 import { RetryableToolOrchestrationError, truncateOutput } from "./tools/tool-support.ts"
 import { isAgentStreamStartTimeoutRecoveryTurnError } from "./tools/connect-errors.ts"
 import { getAgentEventTracker } from "./utils/event-tracking.ts"
@@ -133,7 +134,6 @@ const TOOL_CALL_ID_CONTEXT_KEY = createKey<string | undefined>(
   undefined,
 )
 const SEMANTIC_SEARCH_TOOL_NAME = "semantic_search"
-const AGENT_STORE_CONFLICT_HOOK_EVENT_NAME = "agentStoreConflict"
 const RAW_ERROR_MESSAGE_CHARACTER_BUDGET = 20_000
 
 interface HookCarrier {
@@ -781,7 +781,7 @@ export async function executeDeferredToolCall(
       : carrierCollector.filter(
         carrier => carrier.hookEventName === AGENT_STORE_CONFLICT_HOOK_EVENT_NAME,
       )
-    appendHookContextRemindersToCoreToolResult(
+    appendHookContextRemindersToToolOutput(
       textChunks,
       resultContent as Array<{ type: "text"; text: string }>,
       carriers as never[],

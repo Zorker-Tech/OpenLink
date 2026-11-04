@@ -9,44 +9,42 @@
  * was written for is only a file taking up space.
  */
 
-import * as crypto from "node:crypto"
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
+import { randomBytes } from "node:crypto"
+import { chmodSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { join, resolve } from "node:path"
 
-const SANDBOX_POLICY_DIR_NAME = "sandbox-policies"
-const SANDBOX_POLICY_DIR_ENV = "SLATE_SANDBOX_POLICY_DIR"
-const STALE_POLICY_MAX_AGE_MS = 60 * 60 * 1_000
+const POLICY_FILE = {
+  directoryName: "sandbox-policies",
+  directoryMode: 0o700,
+  fileMode: 0o600,
+  environmentKey: "SLATE_SANDBOX_POLICY_DIR",
+  maxAgeMs: 60 * 60 * 1_000,
+  prefix: "sandbox-policy-",
+  randomBytes: 8,
+} as const
 
-function getSandboxPolicyDirectory(): string {
-  const override = process.env[SANDBOX_POLICY_DIR_ENV]?.trim()
-  if (override) {
-    return path.resolve(override)
-  }
-  return path.resolve(path.join(os.homedir(), ".slate", SANDBOX_POLICY_DIR_NAME))
+function resolvePolicyDirectory(): string {
+  const override = process.env[POLICY_FILE.environmentKey]?.trim()
+  const location = override || join(homedir(), ".slate", POLICY_FILE.directoryName)
+  return resolve(location)
 }
 
-function pruneStaleSandboxPolicyFiles(dir: string): void {
-  let entries: string[]
+function pruneExpiredPolicies(directory: string): void {
+  let names: string[]
   try {
-    entries = fs.readdirSync(dir)
+    names = readdirSync(directory)
   } catch {
     return
   }
-  const now = Date.now()
-  for (const name of entries) {
-    if (!name.startsWith("sandbox-policy-")) {
-      continue
-    }
-    const fullPath = path.join(dir, name)
+
+  const expirationTime = Date.now() - POLICY_FILE.maxAgeMs
+  for (const name of names) {
+    if (!name.startsWith(POLICY_FILE.prefix)) continue
+    const candidate = join(directory, name)
     try {
-      const stat = fs.statSync(fullPath)
-      if (!stat.isFile()) {
-        continue
-      }
-      if (now - stat.mtimeMs > STALE_POLICY_MAX_AGE_MS) {
-        fs.unlinkSync(fullPath)
-      }
+      const metadata = statSync(candidate)
+      if (metadata.isFile() && metadata.mtimeMs < expirationTime) unlinkSync(candidate)
     } catch {
       // A file that cannot be examined is left where it is rather than removed on a guess.
     }
@@ -54,21 +52,21 @@ function pruneStaleSandboxPolicyFiles(dir: string): void {
 }
 
 export function ensureSandboxPolicyDirectory(): string {
-  const dir = getSandboxPolicyDirectory()
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+  const directory = resolvePolicyDirectory()
+  mkdirSync(directory, { recursive: true, mode: POLICY_FILE.directoryMode })
   try {
-    fs.chmodSync(dir, 0o700)
+    chmodSync(directory, POLICY_FILE.directoryMode)
   } catch {
     // A directory that already existed may not be ours to change; the files inside are still private.
   }
-  pruneStaleSandboxPolicyFiles(dir)
-  return dir
+  pruneExpiredPolicies(directory)
+  return directory
 }
 
 export function writeSandboxPolicyFile(policyJson: string): string {
-  const dir = ensureSandboxPolicyDirectory()
-  const suffix = crypto.randomBytes(8).toString("hex")
-  const filePath = path.join(dir, `sandbox-policy-${suffix}`)
-  fs.writeFileSync(filePath, policyJson, { encoding: "utf-8", mode: 0o600 })
+  const directory = ensureSandboxPolicyDirectory()
+  const suffix = randomBytes(POLICY_FILE.randomBytes).toString("hex")
+  const filePath = join(directory, `${POLICY_FILE.prefix}${suffix}`)
+  writeFileSync(filePath, policyJson, { encoding: "utf8", mode: POLICY_FILE.fileMode })
   return filePath
 }

@@ -5,7 +5,7 @@ import { Code, ConnectError } from "@connectrpc/connect"
 import { z } from "zod"
 
 import { createContext, createKey } from "../../source/packages/context/context.ts"
-import { ErrorDetails, ErrorDetails_Error } from "../../source/packages/proto/generated/aiserver/v1/utils_pb.ts"
+import { ErrorDetails, ErrorDetails_Error } from "../../source/adapters/interop/proto/generated/aiserver/v1/utils_pb.ts"
 import {
   CustomToolCallError,
   RetryableToolEnvironmentOrchestrationError,
@@ -241,21 +241,21 @@ test("the guard never reaches the tier it is guarding, even at the top tier", ()
 
 test("the timeout message names the tool, the limit in seconds, and the way out for a shell", () => {
   const shell = buildToolCallExecutionTimedOutMessage({ toolName: "shell", executionTimeoutMs: 900_000 })
-  assert.match(shell, /^The shell tool call timed out after 900 seconds and was terminated\./)
+  assert.match(shell, /^The shell tool call exceeded its 900-second limit and was stopped\./)
   assert.match(shell, /block_until_ms/)
 
   const read = buildToolCallExecutionTimedOutMessage({ toolName: "read_file", executionTimeoutMs: 900_000 })
-  assert.match(read, /^The read_file tool call timed out after 900 seconds/)
+  assert.match(read, /^The read_file tool call exceeded its 900-second limit/)
   assert.doesNotMatch(read, /block_until_ms/)
 
   const rounded = buildToolCallExecutionTimedOutMessage({ toolName: "shell", executionTimeoutMs: 1_500 })
-  assert.match(rounded, /after 2 seconds/)
+  assert.match(rounded, /2-second limit/)
 })
 
 test("a zero limit means the call never started, and says so", () => {
   const message = buildToolCallExecutionTimedOutMessage({ toolName: "shell", executionTimeoutMs: 0 })
-  assert.match(message, /could not start because activity setup exceeded the per-call time limit/)
-  assert.doesNotMatch(message, /timed out after/)
+  assert.match(message, /could not start because preparing its execution context exhausted the per-call limit/)
+  assert.doesNotMatch(message, /exceeded its .* limit and was stopped/)
 })
 
 test("the shell hint is matched case-insensitively on the tool name", () => {
@@ -266,12 +266,12 @@ test("a fused step guard timeout reports its own budget in seconds", () => {
   const error = new FusedStepGuardTimeoutError(90_000)
   assert.equal(error.name, "FusedStepGuardTimeoutError")
   assert.equal(error.fuseGuardMs, 90_000)
-  assert.equal(error.message, "Fused model/tool step exceeded guard timeout after 90 seconds")
+  assert.equal(error.message, "The combined model and tool step exceeded its 90-second guard limit")
   assert.equal(isFusedStepGuardTimeoutReason(error), true)
 })
 
 test("a fused step guard timeout is recognized by name when it crossed a boundary", () => {
-  const lookalike = new Error("Fused model/tool step exceeded guard timeout after 5 seconds")
+  const lookalike = new Error("The combined model and tool step exceeded its 5-second guard limit")
   lookalike.name = "FusedStepGuardTimeoutError"
   ;(lookalike as unknown as { fuseGuardMs: number }).fuseGuardMs = 5_000
   assert.equal(isFusedStepGuardTimeoutReason(lookalike), true)

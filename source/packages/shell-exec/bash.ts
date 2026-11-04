@@ -81,7 +81,7 @@ export async function initBashState(settings?: BashInitOptions): Promise<BashSta
     "-O",
     "extglob",
     "-ilc",
-    `${dumpBashState} builtin printf '${stateMark}\\n'; dump_bash_state`,
+    `${dumpBashState} builtin printf '${stateMark}\\n'; write_shell_snapshot`,
   ];
   const shellPath = getBashPath(settings?.userTerminalHint);
   if (!shellPath) throw new Error("Can't find Bash");
@@ -160,8 +160,8 @@ class BashState {
     }
     const loaderScript = localFileTransport ? 'snap=$(command cat "$SLATE_STATE_INPUT_FILE")' : "snap=$(command cat <&3)";
     const writerScript = localFileTransport
-      ? 'mkdir -p "$(dirname "$SLATE_STATE_OUTPUT_FILE")" 2>/dev/null; dump_bash_state > "$SLATE_STATE_OUTPUT_FILE"'
-      : "dump_bash_state >&4";
+      ? 'mkdir -p "$(dirname "$SLATE_STATE_OUTPUT_FILE")" 2>/dev/null; write_shell_snapshot > "$SLATE_STATE_OUTPUT_FILE"'
+      : "write_shell_snapshot >&4";
     const script = `${loaderScript} && builtin shopt -s extglob && builtin eval -- "$snap" && { builtin set +u 2>/dev/null || true; builtin eval "\${__SLATE_SANDBOX_ENV_RESTORE:-}" 2>/dev/null; builtin export PWD="$(builtin pwd)"; builtin shopt -s expand_aliases 2>/dev/null; ${aliasPrefix}${evalCore}; }; COMMAND_EXIT_CODE=$?; ${writerScript}; builtin exit $COMMAND_EXIT_CODE`;
     const spawnArgs = ["-O", "extglob", "-c", script, "--", userCommand];
     const shellPath = getBashPath(this.userTerminalHint);

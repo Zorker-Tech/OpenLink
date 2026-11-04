@@ -18,14 +18,14 @@
  * as large as the prompt.
  */
 
-import {
-  PromptContextNode,
-  PromptContextSourceRef,
-  PromptContextUsageTree,
-} from "../../proto/generated/agent/v1/agent_pb.ts"
 import { buildDescriptionGeneratorProps, toAgentTools } from "../tools/tool-execution.ts"
 import { PROMPT_TOKEN_CATEGORIES } from "./prompt-token-breakdown.ts"
-import type { PromptTokenBreakdownSnapshot } from "../../proto/generated/agent/v1/agent_pb.ts"
+import type {
+  PromptContextNodeValue,
+  PromptContextSourceValue,
+  PromptContextUsageTreeValue,
+  PromptTokenBreakdownSnapshotValue,
+} from "./prompt-usage-contracts.ts"
 import { extractCompleteTagRanges, extractCompleteTagRangesMatching, extractMcpServerTagRanges } from "./prompt-tags.ts"
 import { estimateStringTokenCount } from "./token-estimate.ts"
 import type { PromptMessageLike, PromptToolLike } from "./prompt-shapes.ts"
@@ -49,15 +49,15 @@ export interface PromptContextUsageTreeParams {
   messages: readonly PromptMessageLike[]
   tools: readonly PromptToolLike[]
   descriptionProps?: Record<string, unknown> | undefined
-  breakdown: PromptTokenBreakdownSnapshot
+  breakdown: PromptTokenBreakdownSnapshotValue
 }
 
-export function buildPromptContextUsageTree(params: PromptContextUsageTreeParams): PromptContextUsageTree {
-  const nodes: PromptContextNode[] = []
+export function buildPromptContextUsageTree(params: PromptContextUsageTreeParams): PromptContextUsageTreeValue {
+  const nodes: PromptContextNodeValue[] = []
   const categoryById = indexBreakdownCategoriesById(params.breakdown)
   for (const category of PROMPT_TOKEN_CATEGORIES) {
     const breakdownCategory = categoryById.get(category.id)
-    nodes.push(new PromptContextNode({
+    nodes.push({
       id: categoryNodeId(category.id),
       kind: "category",
       label: category.label,
@@ -65,11 +65,11 @@ export function buildPromptContextUsageTree(params: PromptContextUsageTreeParams
       estimatedTokens: breakdownCategory?.estimatedTokens ?? 0,
       characterCount: breakdownCategory?.characterCount ?? 0,
       contentAvailable: false,
-    }))
+    })
   }
   appendMessageOverviewNodes(nodes, params.messages)
   appendToolOverviewNodes(nodes, params.tools, params.descriptionProps)
-  return new PromptContextUsageTree({ schemaVersion: PROMPT_CONTEXT_USAGE_TREE_SCHEMA_VERSION, nodes })
+  return { schemaVersion: PROMPT_CONTEXT_USAGE_TREE_SCHEMA_VERSION, nodes }
 }
 
 /** One piece of a message's content, with the path it sits at and what kind of part it was. */
@@ -83,14 +83,14 @@ interface OverviewSegment {
 
 interface BlobCarrier {
   kind: "blob"
-  source: PromptContextSourceRef
+  source: PromptContextSourceValue
 }
 
 interface InlineCarrier {
   kind: "inline"
 }
 
-function appendMessageOverviewNodes(nodes: PromptContextNode[], messages: readonly PromptMessageLike[]): void {
+function appendMessageOverviewNodes(nodes: PromptContextNodeValue[], messages: readonly PromptMessageLike[]): void {
   let initialUserPromptSeen = false
   const pairings = pairToolCallsAndResults(messages)
   messages.forEach((message, messageIndex) => {
@@ -237,7 +237,7 @@ function formatOverviewMessageLabel(role: string): string {
 }
 
 /** A call and its result are one thing to a reader, so they hang under one node. */
-function appendToolCallPairNodes(nodes: PromptContextNode[], params: {
+function appendToolCallPairNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   callSegment: OverviewSegment
   pairedResult: { messageIndex: number; segment: OverviewSegment } | undefined
@@ -248,7 +248,7 @@ function appendToolCallPairNodes(nodes: PromptContextNode[], params: {
   if (nodes.length + 2 > MAX_NODES) return
   const parentNodeId = `tool_call_pair:${messageIndex}:${toolCallId}`
   const toolName = callSegment.toolName ?? "tool"
-  nodes.push(new PromptContextNode({
+  nodes.push({
     id: parentNodeId,
     parentId: categoryNodeId("conversation"),
     kind: "tool_call_pair",
@@ -257,7 +257,7 @@ function appendToolCallPairNodes(nodes: PromptContextNode[], params: {
     estimatedTokens: 0,
     characterCount: 0,
     contentAvailable: false,
-  }))
+  })
   appendOverviewNode(nodes, {
     id: `${parentNodeId}:call`,
     parentId: parentNodeId,
@@ -303,7 +303,7 @@ const TAGGED_PROMPT_ITEM_BLOCKS: readonly TaggedPromptItemBlock[] = [
   },
 ]
 
-function appendTaggedPromptBlockNodes(nodes: PromptContextNode[], params: {
+function appendTaggedPromptBlockNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   segment: OverviewSegment
   isInitialUserPrompt: boolean
@@ -320,7 +320,7 @@ function appendTaggedPromptBlockNodes(nodes: PromptContextNode[], params: {
 }
 
 /** Each rule and each skill becomes its own node, labelled with the name it declares. */
-function appendTaggedBlockItemNodes(nodes: PromptContextNode[], params: {
+function appendTaggedBlockItemNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   segment: OverviewSegment
   block: TaggedPromptItemBlock
@@ -381,7 +381,7 @@ const MCP_OVERVIEW_WRAPPER_TAGS = new Set([
   "dynamic_tool_namespace",
 ])
 
-function appendMcpBlockOverviewNodes(nodes: PromptContextNode[], params: {
+function appendMcpBlockOverviewNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   segment: OverviewSegment
 }): void {
@@ -405,7 +405,7 @@ function appendMcpBlockOverviewNodes(nodes: PromptContextNode[], params: {
 }
 
 /** A server entry names itself, so it is labelled with that name rather than its tag. */
-function appendMcpServerEntryNodes(nodes: PromptContextNode[], params: {
+function appendMcpServerEntryNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   segment: OverviewSegment
 }): void {
@@ -425,7 +425,7 @@ function appendMcpServerEntryNodes(nodes: PromptContextNode[], params: {
 }
 
 /** The blocks inside a block: a namespace's tools, a server's own description. */
-function appendMcpBlockChildNodes(nodes: PromptContextNode[], params: {
+function appendMcpBlockChildNodes(nodes: PromptContextNodeValue[], params: {
   messageIndex: number
   segment: OverviewSegment
   parentNodeId: string
@@ -456,7 +456,7 @@ function appendMcpBlockChildNodes(nodes: PromptContextNode[], params: {
 }
 
 function appendToolOverviewNodes(
-  nodes: PromptContextNode[],
+  nodes: PromptContextNodeValue[],
   tools: readonly PromptToolLike[],
   descriptionProps: Record<string, unknown> | undefined,
 ): void {
@@ -485,7 +485,7 @@ function appendToolOverviewNodes(
  * The subagent definitions inside a task tool's description. Each bullet is a subagent type, and when
  * the text has no bullets it is shown whole rather than as nothing.
  */
-function appendSubagentOverviewNodes(nodes: PromptContextNode[], params: {
+function appendSubagentOverviewNodes(nodes: PromptContextNodeValue[], params: {
   toolIndex: number
   toolName: string
   text: string
@@ -530,7 +530,7 @@ function extractSubagentBulletLines(text: string): Array<{ label: string; line: 
 }
 
 /** A node whose size is known from its text alone, with nothing to open: a tool definition. */
-function appendTokenEstimateOverviewNode(nodes: PromptContextNode[], params: {
+function appendTokenEstimateOverviewNode(nodes: PromptContextNodeValue[], params: {
   id: string
   parentId: string
   kind: string
@@ -539,7 +539,7 @@ function appendTokenEstimateOverviewNode(nodes: PromptContextNode[], params: {
   text: string
 }): void {
   if (params.text.length === 0 || nodes.length >= MAX_NODES) return
-  nodes.push(new PromptContextNode({
+  nodes.push({
     id: params.id,
     parentId: params.parentId,
     kind: params.kind,
@@ -548,7 +548,7 @@ function appendTokenEstimateOverviewNode(nodes: PromptContextNode[], params: {
     estimatedTokens: estimateStringTokenCount(params.text),
     characterCount: params.text.length,
     contentAvailable: false,
-  }))
+  })
 }
 
 /**
@@ -556,7 +556,7 @@ function appendTokenEstimateOverviewNode(nodes: PromptContextNode[], params: {
  * limit; a blob node carries a reference into the prompt instead, because the text is already there
  * and sending it twice would double the size of the tree.
  */
-function appendOverviewNode(nodes: PromptContextNode[], params: {
+function appendOverviewNode(nodes: PromptContextNodeValue[], params: {
   id: string
   parentId: string
   kind: string
@@ -570,7 +570,7 @@ function appendOverviewNode(nodes: PromptContextNode[], params: {
   const inlineContent = params.carrier.kind === "inline"
     ? truncated ? params.text.slice(0, INLINE_CONTENT_CHARS) : params.text
     : undefined
-  nodes.push(new PromptContextNode({
+  nodes.push({
     id: params.id,
     parentId: params.parentId,
     kind: params.kind,
@@ -581,21 +581,21 @@ function appendOverviewNode(nodes: PromptContextNode[], params: {
     contentAvailable: true,
     ...(inlineContent !== undefined ? { inlineContent } : {}),
     ...(params.carrier.kind === "blob" ? { source: params.carrier.source } : {}),
-  }))
+  })
 }
 
 function rootPromptMessageSourceRef(
   messageIndex: number,
   segment: OverviewSegment,
   range?: { start: number; end: number },
-): PromptContextSourceRef {
-  return new PromptContextSourceRef({
+): PromptContextSourceValue {
+  return {
     sourceType: "root_prompt_message",
     messageIndex,
     contentPath: segment.contentPath,
     startOffset: range?.start ?? 0,
     endOffset: range?.end ?? segment.text.length,
-  })
+  }
 }
 
 function categoryNodeId(categoryId: string): string {
@@ -617,7 +617,7 @@ function stringifyOverviewValue(value: unknown): string {
 }
 
 function indexBreakdownCategoriesById(
-  snapshot: PromptTokenBreakdownSnapshot,
+  snapshot: PromptTokenBreakdownSnapshotValue,
 ): Map<string, { estimatedTokens: number; characterCount: number }> {
   const index = new Map<string, { estimatedTokens: number; characterCount: number }>()
   for (const category of snapshot.categories) {

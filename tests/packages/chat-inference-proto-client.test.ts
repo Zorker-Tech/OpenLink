@@ -21,7 +21,7 @@ import {
   requestIdKey,
   requestedModelKey,
   stampImageDescriptionsOnMessage,
-} from "../../source/packages/chat-inference-proto/client.ts";
+} from "../../source/adapters/interop/chat-inference-proto/client.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { withSpan } from "../../source/packages/context/telemetry.ts";
 import {
@@ -39,7 +39,7 @@ import {
   InferenceThinkingStreamPart,
   InferenceToolCallStreamPart,
   InferenceUsageInfo,
-} from "../../source/packages/proto/generated/aiserver/v1/inference_pb.ts";
+} from "../../source/adapters/interop/proto/generated/aiserver/v1/inference_pb.ts";
 
 const MODEL = {
   modelId: "probe-model",

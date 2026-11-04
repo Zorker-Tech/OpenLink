@@ -10,8 +10,8 @@
 
 import { createDeadlinePolicy, realClock, type DeadlinePolicy } from "../../../host/extensions/scheduling.ts";
 import { responseToImageDataUrl } from "../http-image.ts";
-import { CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS } from "../marketplace/cursor-marketplace-client.ts";
-import { isKnownPluginLogoUrl } from "../marketplace/cursor-marketplace-logo-registry.ts";
+import { MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../../adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
+import { isMarketplaceLogoSourceKnown } from "../marketplace/marketplace-logo-registry.ts";
 
 export const LOGO_MAX_BYTES = 512 * 1024;
 export const LOGO_FETCH_CONCURRENCY = 6;
@@ -21,7 +21,7 @@ const logoCache = new Map<string, string | null>();
 let activeFetches = 0;
 const waiting: Array<() => void> = [];
 
-const defaultDeadline = createDeadlinePolicy(realClock, { name: "mcp-marketplace-logo-fetch", timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS });
+const defaultDeadline = createDeadlinePolicy(realClock, { name: "mcp-marketplace-logo-fetch", timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS });
 
 export interface PluginLogoDependencies {
   isKnownPluginLogoUrl(url: string): boolean;
@@ -32,10 +32,10 @@ export interface PluginLogoDependencies {
 }
 
 const defaultLogoDependencies: PluginLogoDependencies = {
-  isKnownPluginLogoUrl,
+  isKnownPluginLogoUrl: isMarketplaceLogoSourceKnown,
   fetch: (url, signal) => fetch(url, { signal }),
   responseToImageDataUrl,
-  timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS,
+  timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS,
   deadline: defaultDeadline,
 };
 

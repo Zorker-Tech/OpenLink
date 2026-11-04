@@ -26,18 +26,27 @@ import { Buffer } from "node:buffer"
 import { basename, extname, join } from "node:path"
 import { z } from "zod"
 
-import { ToolCall } from "../../../proto/generated/agent/v1/agent_pb.ts"
 import {
-  GenerateImageArgs,
-  GenerateImageError,
-  GenerateImageResult,
-  GenerateImageSuccess,
-  GenerateImageToolCall,
-} from "../../../proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { ReadArgs } from "../../../proto/generated/agent/v1/read_exec_pb.ts"
-import { WriteArgs, type WriteResult } from "../../../proto/generated/agent/v1/write_exec_pb.ts"
+  createGenerateImageErrorInterop,
+  createGenerateImageReadArgsInterop,
+  createGenerateImageSuccessInterop,
+  createGenerateImageToolCallInterop,
+  createGenerateImageWriteArgsInterop,
+  emptyGenerateImageToolCallInterop,
+  generateImageResultTextInterop,
+  mergeGenerateImageToolCallInterop,
+  projectGenerateImageResultInterop,
+  projectGenerateImageWriteResultInterop,
+  projectReferenceImageReadResultInterop,
+  serializeGenerateImageErrorInterop,
+  wrapGenerateImageToolCallInterop,
+  writeResultCaseNameInterop,
+  type GenerateImageEnvelopeInterop,
+  type GenerateImageResultInterop,
+  type GenerateImageToolCallInterop,
+} from "../../../../adapters/interop/agent/generate-image-protocol-adapter.ts"
 import type { Context } from "../../../context/context.ts"
-import { getAbortReasonInfo } from "../../../context/abort.ts"
+import { summarizeAbortReason } from "../../../context/abort.ts"
 import { createSpan } from "../../../context/telemetry.ts"
 import { createLogger } from "../../../context/index.ts"
 import { createCounter, createHistogram } from "../../../metrics/index.ts"
@@ -128,7 +137,7 @@ function finishForStage(stage: FailureStage): string {
   }
 }
 
-function abortKindOf(reasonInfo: ReturnType<typeof getAbortReasonInfo>): string {
+function abortKindOf(reasonInfo: ReturnType<typeof summarizeAbortReason>): string {
   // Only an abort reason that was an error carries a name; the rest carry a message or nothing.
   const errorName = "abortReasonName" in reasonInfo ? reasonInfo.abortReasonName : "";
   const reasonMessage = "abortReasonMessage" in reasonInfo ? reasonInfo.abortReasonMessage : "";
@@ -139,17 +148,9 @@ function abortKindOf(reasonInfo: ReturnType<typeof getAbortReasonInfo>): string 
   return "internal_error";
 }
 
-function abortFinishOf(reason: unknown): { reasonInfo: ReturnType<typeof getAbortReasonInfo>; finishOutcome: string } {
-  const reasonInfo = getAbortReasonInfo(reason);
+function abortFinishOf(reason: unknown): { reasonInfo: ReturnType<typeof summarizeAbortReason>; finishOutcome: string } {
+  const reasonInfo = summarizeAbortReason(reason);
   return { reasonInfo, finishOutcome: abortKindOf(reasonInfo) };
-}
-
-function permissionLabelsOf(writeResult: WriteResult): { operation: string; isReadonly: string } {
-  if (writeResult.result.case !== "permissionDenied") return { operation: "n/a", isReadonly: "n/a" };
-  return {
-    operation: writeResult.result.value.operation || "unknown",
-    isReadonly: writeResult.result.value.isReadonly ? "true" : "false",
-  };
 }
 
 export interface GenerateImageRequestContext {
@@ -161,7 +162,7 @@ export interface GenerateImageRequestContext {
 }
 
 export interface GenerateImageStateHandler {
-  isDsv3?(): boolean;
+  usesLargeContextTreatment?(): boolean;
   getPrivacyMode?(): PrivacyModeValue;
   addTurnUsage?(usage: unknown): void;
 }
@@ -223,8 +224,8 @@ export function createImageGenerationConcurrencyLimiter(
   };
 }
 
-function generateImageCall(toolCall: GenerateImageToolCall): ToolCall {
-  return new ToolCall({ tool: { case: "generateImageToolCall", value: toolCall } });
+function generateImageCall(toolCall: GenerateImageToolCallInterop): GenerateImageEnvelopeInterop {
+  return wrapGenerateImageToolCallInterop(toolCall);
 }
 
 function toolNameForVersion(promptVersion: string): string {
@@ -395,19 +396,19 @@ async function readReferenceImages(
   const results = await Promise.all(paths.map(async path => {
     const logImagePath = logPath(path, privacyMode, "image_path");
     try {
-      const result = await readExecutor.execute(context, new ReadArgs({ path, toolCallId }));
-      if (result.result.case !== "success") {
+      const result = await readExecutor.execute(context, createGenerateImageReadArgsInterop({ path, toolCallId }));
+      const view = projectReferenceImageReadResultInterop(result);
+      if (view.kind === "failed") {
         logger.warn(context, "[generate-image] ref image read failed", { imagePath: logImagePath });
         return null;
       }
-      const output = result.result.value.output;
-      if (output.case !== "data" || !output.value || output.value.length === 0) {
+      if (view.kind === "empty") {
         logger.warn(context, "[generate-image] ref image read empty", { imagePath: logImagePath });
         return null;
       }
-      logger.info(context, "[generate-image] ref image read success", { imagePath: logImagePath, dataLength: output.value.length });
+      logger.info(context, "[generate-image] ref image read success", { imagePath: logImagePath, dataLength: view.data.length });
       return {
-        data: Buffer.from(output.value).toString("base64"),
+        data: Buffer.from(view.data).toString("base64"),
         mimeType: mimeTypeOfPath(path),
       };
     } catch (error) {
@@ -441,55 +442,61 @@ async function writeGeneratedImage(
     readonly artifactsFolder?: string;
     readonly privacyMode?: PrivacyModeValue;
   },
-): Promise<GenerateImageResult> {
+): Promise<GenerateImageResultInterop> {
   const { folder, filePath, imageData, artifactsFolder } = options;
   const targetLocation = artifactsFolder ? "artifacts" : "project";
   const path = imageOutputPathOf({ folder, filename: portableBaseName(filePath), ...(artifactsFolder === undefined ? {} : { artifactsFolder }) });
   const binaryBytes = Buffer.from(stripDataUri(imageData), "base64");
   const privacyMode = options.privacyMode ?? PrivacyMode.UNSPECIFIED;
-  const result = await writeExecutor.execute(context, new WriteArgs({
+  const result = await writeExecutor.execute(context, createGenerateImageWriteArgsInterop({
     path,
     fileBytes: new Uint8Array(binaryBytes),
-    returnFileContentAfterWrite: false,
   }));
-  const caseName = result.result.case ?? "undefined";
-  const permissionState = permissionLabelsOf(result);
+  const writeView = projectGenerateImageWriteResultInterop(result);
+  const caseName = writeResultCaseNameInterop(result);
+  const permissionState = writeView.kind === "permission-denied"
+    ? { operation: writeView.operation, isReadonly: writeView.isReadonly ? "true" : "false" }
+    : { operation: "n/a", isReadonly: "n/a" };
   writeResultCounter.increment(context, 1, {
     result: caseName,
     targetLocation,
     operation: permissionState.operation,
     is_readonly: permissionState.isReadonly,
   });
-  if (result.result.case === "success") {
+  if (writeView.kind === "success") {
     logger.info(context, "[generate-image] write success", { outputPath: logPath(path, privacyMode, "output_path"), size: binaryBytes.length });
-    return new GenerateImageResult({ result: { case: "success", value: new GenerateImageSuccess({ filePath: path, imageData: artifactsFolder ? "" : imageData }) } });
+    return createGenerateImageSuccessInterop({ filePath: path, imageData: artifactsFolder ? "" : imageData });
   }
-  if (result.result.case === "permissionDenied" && result.result.value.isReadonly) {
-    return new GenerateImageResult({ result: { case: "error", value: new GenerateImageError({ error: ASK_MODE_MODEL_ERROR }) } });
+  if (writeView.kind === "permission-denied" && writeView.isReadonly) {
+    return createGenerateImageErrorInterop(ASK_MODE_MODEL_ERROR);
   }
   let failureText: string;
   let failure: Error;
-  switch (result.result.case) {
+  switch (writeView.kind) {
     case "error":
-      failureText = result.result.value.error;
+      failureText = writeView.error;
       failure = new Error(`Failed to save generated image: ${failureText}`);
       break;
-    case "permissionDenied":
-      failureText = `permission denied (operation=${result.result.value.operation}, isReadonly=${result.result.value.isReadonly}, error=${result.result.value.error})`;
+    case "permission-denied":
+      failureText = `permission denied (operation=${writeView.operation}, isReadonly=${writeView.isReadonly}, error=${writeView.error})`;
       failure = new ToolCallUnexpectedEnvironmentError(`Failed to save generated image: ${failureText}`);
       break;
     case "rejected": {
-      failureText = `rejected (reason=${result.result.value.reason})`;
+      failureText = `rejected (reason=${writeView.reason})`;
       const message = `Failed to save generated image: ${failureText}`;
-      failure = result.result.value.reason.includes("Failed to find tool call context") ? new Error(message) : new ToolCallRejectedError(message);
+      failure = writeView.reason.includes("Failed to find tool call context") ? new Error(message) : new ToolCallRejectedError(message);
       break;
     }
-    case "noSpace":
+    case "no-space":
       failureText = "No space left on device";
       failure = new CustomToolCallError(ToolErrorClassification.BAD_USER_DEVICE_STATE, { clientVisibleErrorMessage: `Failed to save generated image: ${failureText}`, modelVisibleErrorMessage: `Failed to save generated image: ${failureText}`, error: `Failed to save generated image: ${failureText}` });
       break;
-    case undefined:
+    case "unknown":
       failureText = "unknown result case";
+      failure = new Error(`Failed to save generated image: ${failureText}`);
+      break;
+    case "unhandled":
+      failureText = "unhandled case";
       failure = new Error(`Failed to save generated image: ${failureText}`);
       break;
     default:
@@ -501,13 +508,8 @@ async function writeGeneratedImage(
   throw failure;
 }
 
-function resultTextOf(result: GenerateImageResult): string {
-  switch (result.result.case) {
-    case "success": return `Successfully generated image at: ${result.result.value.filePath}
-Always use this absolute path when referring to the image. Do not repeat this image as a Markdown reference; it is already displayed to the user.`;
-    case "error": return `Failed to generate image, error: ${result.result.value.error}`;
-    case undefined: return "An unknown error occurred.";
-  }
+function resultTextOf(result: GenerateImageResultInterop): string {
+  return generateImageResultTextInterop(result)
 }
 
 function isGenerateImageOptions(value: unknown): value is GenerateImageToolDependencies {
@@ -561,10 +563,10 @@ export function createGenerateImageTool(
   });
   const execute = async (
     parentCtx: Context,
-    interactionHandler: { executeToolCall: (context: Context, toolCall: ReturnType<typeof generateImageCall>, toolCallId: string, run: (context: Context) => Promise<GenerateImageResult>, merge: (result: GenerateImageResult) => ReturnType<typeof generateImageCall>) => Promise<GenerateImageResult> },
+    interactionHandler: { executeToolCall: (context: Context, toolCall: ReturnType<typeof generateImageCall>, toolCallId: string, run: (context: Context) => Promise<GenerateImageResultInterop>, merge: (result: GenerateImageResultInterop) => ReturnType<typeof generateImageCall>) => Promise<GenerateImageResultInterop> },
     inputArgs: z.infer<typeof parameters>,
     callMeta: { readonly toolCallId: string; readonly stateHandler?: GenerateImageStateHandler },
-  ): Promise<GenerateImageResult> => {
+  ): Promise<GenerateImageResultInterop> => {
     using executionSpan = createSpan(parentCtx.withName("generateImageExecute"));
     const startedAtMs = Date.now();
     let finishLogged = false;
@@ -580,7 +582,7 @@ export function createGenerateImageTool(
       recordExecuteFinish(parentCtx, outcome);
       finishLogged = true;
       executeDuration.histogram(parentCtx, Date.now() - startedAtMs, { outcome: outcome });
-      return new GenerateImageResult({ result: { case: "error", value: new GenerateImageError({ error: MODEL_RESTRICTED_ERROR }) } });
+      return createGenerateImageErrorInterop(MODEL_RESTRICTED_ERROR);
     }
     if (looksUnintended) {
       shortDescriptionCounter.increment(parentCtx, 1, { word_count: String(wordCount) });
@@ -589,17 +591,21 @@ export function createGenerateImageTool(
       recordExecuteFinish(parentCtx, outcome);
       finishLogged = true;
       executeDuration.histogram(parentCtx, Date.now() - startedAtMs, { outcome: outcome });
-      return new GenerateImageResult({ result: { case: "error", value: new GenerateImageError({ error: "Image generation was not performed — the tool call appears to be unintended. Do not retry or call GenerateImage again unless the user explicitly asks for an image." }) } });
+      return createGenerateImageErrorInterop("Image generation was not performed — the tool call appears to be unintended. Do not retry or call GenerateImage again unless the user explicitly asks for an image.");
     }
     if (isReadonly) {
       outcome = "readonly_rejected";
       recordExecuteFinish(parentCtx, outcome);
       finishLogged = true;
       executeDuration.histogram(parentCtx, Date.now() - startedAtMs, { outcome: outcome });
-      return new GenerateImageResult({ result: { case: "error", value: new GenerateImageError({ error: ASK_MODE_MODEL_ERROR }) } });
+      return createGenerateImageErrorInterop(ASK_MODE_MODEL_ERROR);
     }
-    const argsProto = new GenerateImageArgs({ description: inputArgs.description, referenceImagePaths: inputArgs.reference_image_paths ?? [], ...(inputArgs.filename === undefined ? {} : { filePath: inputArgs.filename }), ...(inputArgs.aspect_ratio === undefined ? {} : { aspectRatio: inputArgs.aspect_ratio }) });
-    const baseCall = new GenerateImageToolCall({ args: argsProto });
+    const baseCall = createGenerateImageToolCallInterop({
+      description: inputArgs.description,
+      ...(inputArgs.reference_image_paths === undefined ? {} : { referenceImagePaths: inputArgs.reference_image_paths }),
+      ...(inputArgs.filename === undefined ? {} : { filename: inputArgs.filename }),
+      ...(inputArgs.aspect_ratio === undefined ? {} : { aspectRatio: inputArgs.aspect_ratio }),
+    });
     try {
       const result = await interactionHandler.executeToolCall(executionSpan.ctx, generateImageCall(baseCall), callMeta.toolCallId, async context => {
         const env = requestContext?.env;
@@ -625,7 +631,7 @@ export function createGenerateImageTool(
         try {
           let generatedImage: GeneratedImageToolResult;
           try {
-            generatedImage = await generateImage(executionSpan.ctx, argsProto.description, inputArgs.filename, readImages.length > 0 || legacyObjectForm ? readImages : undefined, inputArgs.aspect_ratio);
+            generatedImage = await generateImage(executionSpan.ctx, inputArgs.description, inputArgs.filename, readImages.length > 0 || legacyObjectForm ? readImages : undefined, inputArgs.aspect_ratio);
             if (generatedImage.usage !== undefined) callMeta.stateHandler?.addTurnUsage?.(generatedImage.usage);
           } catch (error) {
             failureStage = "provider_inference";
@@ -642,7 +648,7 @@ export function createGenerateImageTool(
         } finally {
           imageGenerationConcurrencyLimiter?.release();
         }
-      }, result => generateImageCall(new GenerateImageToolCall({ ...baseCall, result })));
+      }, result => generateImageCall(mergeGenerateImageToolCallInterop(baseCall, result)));
       outcome = "success";
       recordExecuteFinish(parentCtx, outcome);
       finishLogged = true;
@@ -682,17 +688,18 @@ export function createGenerateImageTool(
     contextType: { type: "dynamic" },
     descriptionGenerator: () => descriptionForVersion(version),
     parameters,
-    execute: withSafeParsedArgs(parameters, execute as never, generateImageCall(new GenerateImageToolCall())),
-    render: async (context: Context, result: GenerateImageResult) => {
+    execute: withSafeParsedArgs(parameters, execute as never, generateImageCall(emptyGenerateImageToolCallInterop())),
+    render: async (context: Context, result: GenerateImageResultInterop) => {
       let renderOutcome = "internal_error";
       try {
-        if (result.result.case === "success") {
-          const { filePath, imageData } = result.result.value;
-        const artifactsFolder = requestContext?.env?.artifactsFolder;
-        if (artifactsFolder && filePath.startsWith(artifactsFolder)) {
-          renderOutcome = "success";
-          return createStringResult(`Successfully generated image. Display it in your response using:\n<img src="${filePath}" alt="Generated image" />`);
-        }
+        const resultView = projectGenerateImageResultInterop(result);
+        if (resultView.kind === "success") {
+          const { filePath, imageData } = resultView;
+          const artifactsFolder = requestContext?.env?.artifactsFolder;
+          if (artifactsFolder && filePath.startsWith(artifactsFolder)) {
+            renderOutcome = "success";
+            return createStringResult(`Successfully generated image. Display it in your response using:\n<img src="${filePath}" alt="Generated image" />`);
+          }
           if (version === "dsv3-1018" || version === "dsv3-1205" || version === "cursor-0226") {
             renderOutcome = "success";
             return createStringResult(resultTextOf(result));
@@ -710,7 +717,7 @@ export function createGenerateImageTool(
             throw error;
           }
         }
-        if (result.result.case === "error" && result.result.value.error === ASK_MODE_MODEL_ERROR) {
+        if (resultView.kind === "error" && resultView.error === ASK_MODE_MODEL_ERROR) {
           renderOutcome = "success";
           return createStringResult(ASK_MODE_MODEL_ERROR);
         }
@@ -720,6 +727,6 @@ export function createGenerateImageTool(
         recordRenderFinish(context, renderOutcome);
       }
     },
-      serializeError: (error: unknown) => generateImageCall(new GenerateImageToolCall({ result: new GenerateImageResult({ result: { case: "error", value: new GenerateImageError({ error: error instanceof ToolCallError ? error.clientVisibleErrorMessage : baseMessageOf(error) }) } }) })),
+      serializeError: (error: unknown) => serializeGenerateImageErrorInterop(error instanceof ToolCallError ? error.clientVisibleErrorMessage : baseMessageOf(error)),
   });
 }

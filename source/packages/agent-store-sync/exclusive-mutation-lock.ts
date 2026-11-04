@@ -1,16 +1,15 @@
-/** A lock around one mutating operation in a store, so two writers cannot interleave on the same object. */
+/** Locate and inspect the one-at-a-time claim used by agent-store mutations. */
 import * as path from "node:path";
 import { AGENT_STORE_SYNC_DIR_NAME } from "./paths.ts";
 import { readActiveStoreLockOwner, type StoreLockOwner } from "./store-lock.ts";
 
-const AGENT_STORE_EXCLUSIVE_MUTATION_LOCK_FILE_NAME = "exclusive-mutation.lock";
+const MUTATION_LOCK_FILE_NAME = "exclusive-mutation.lock";
 
-function exclusiveMutationLockPathForFilesDir(filesDir: string): string {
-  return path.join(path.dirname(path.resolve(filesDir)), AGENT_STORE_SYNC_DIR_NAME, AGENT_STORE_EXCLUSIVE_MUTATION_LOCK_FILE_NAME);
+export function resolveAgentStoreMutationLockPath(filesDirectory: string): string {
+  const storeRoot = path.dirname(path.resolve(filesDirectory));
+  return path.join(storeRoot, AGENT_STORE_SYNC_DIR_NAME, MUTATION_LOCK_FILE_NAME);
 }
 
-export async function readAgentStoreExclusiveMutationClaimOwner(args: { readonly filesDir: string }): Promise<StoreLockOwner | undefined> {
-  return await readActiveStoreLockOwner({
-    lockPath: exclusiveMutationLockPathForFilesDir(args.filesDir),
-  });
+export function readCurrentAgentStoreMutationOwner(args: { readonly filesDirectory: string }): Promise<StoreLockOwner | undefined> {
+  return readActiveStoreLockOwner({ lockPath: resolveAgentStoreMutationLockPath(args.filesDirectory) });
 }

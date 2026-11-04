@@ -1,40 +1,29 @@
-/**
- * Which links the platform will open in the user's browser.
- *
- * Only the protocols a browser can be handed safely are allowed — the web, mail, telephone, and the note-taking scheme
- * the platform integrates with — so a document cannot make the platform open something else on the user's machine.
- */
+import { EXTERNAL_NOTE_APP_SCHEME } from "../adapters/interop/note-app/external-link-scheme-adapter.ts"
 
-/** The protocols a link may name if the platform is to open it at all. */
-export const OPENABLE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "obsidian:", "tel:"]);
+const browserSchemes = new Set(["http:", "https:"])
+const addressSchemes = new Set(["mailto:", "tel:"])
 
-/** The two a link must name to be a web page, which is what most callers mean by "external". */
-const WEB_PROTOCOLS: ReadonlySet<string> = new Set(["http:", "https:"]);
+export const OPENABLE_PROTOCOLS: ReadonlySet<string> = new Set([
+  ...browserSchemes,
+  ...addressSchemes,
+  EXTERNAL_NOTE_APP_SCHEME,
+])
 
-/** A link read from whatever a caller was given, or nothing when it is not a link. */
-function externalUrl(value: unknown): URL | null {
-  if (typeof value !== "string" || value.length === 0) return null;
+function parseExternalUrl(candidate: unknown): URL | null {
+  if (typeof candidate !== "string" || candidate.length === 0) return null
   try {
-    return new URL(value);
+    return new URL(candidate)
   } catch {
-    return null;
+    return null
   }
 }
 
-/**
- * The link as the address a browser is given, or nothing when the platform will not open it.
- *
- * What comes back is the parsed address rather than the text that was handed in, so a caller opens exactly what was
- * checked.
- */
 export function openableExternalUrl(value: unknown): string | null {
-  const url = externalUrl(value);
-  if (url == null || !OPENABLE_PROTOCOLS.has(url.protocol)) return null;
-  return url.href;
+  const parsed = parseExternalUrl(value)
+  return parsed !== null && OPENABLE_PROTOCOLS.has(parsed.protocol) ? parsed.href : null
 }
 
-/** Whether this link is a web page, which is the only thing a browser is handed without asking. */
 export function isWebUrl(value: unknown): boolean {
-  const url = externalUrl(value);
-  return url !== null && WEB_PROTOCOLS.has(url.protocol);
+  const parsed = parseExternalUrl(value)
+  return parsed !== null && browserSchemes.has(parsed.protocol)
 }

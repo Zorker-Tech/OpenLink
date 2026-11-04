@@ -8,13 +8,13 @@
  */
 
 export class TTLCache<K, V> {
-  private readonly entries = new Map<K, { value: V; expiresAtMs: number }>()
-  private readonly ttlMs: () => number
-  private readonly now: () => number
+  private readonly cacheEntries = new Map<K, { value: V; expiresAtMs: number }>()
+  private readonly readTtl: () => number
+  private readonly clockNow: () => number
 
   constructor(options: { ttlMs: number | (() => number); now?: () => number }) {
-    this.ttlMs = typeof options.ttlMs === "function" ? options.ttlMs : TTLCache.fixed(options.ttlMs)
-    this.now = options.now ?? Date.now
+    this.readTtl = typeof options.ttlMs === "function" ? options.ttlMs : TTLCache.fixed(options.ttlMs)
+    this.clockNow = options.now ?? Date.now
   }
 
   private static fixed(ttlMs: number): () => number {
@@ -22,35 +22,34 @@ export class TTLCache<K, V> {
     return () => ttlMs
   }
 
-  get(key: K): V | undefined {
-    const entry = this.entries.get(key)
+  private currentEntry(key: K): { value: V; expiresAtMs: number } | undefined {
+    const entry = this.cacheEntries.get(key)
     if (entry === undefined) return undefined
-    if (entry.expiresAtMs <= this.now()) {
-      this.entries.delete(key)
+    if (entry.expiresAtMs <= this.clockNow()) {
+      this.cacheEntries.delete(key)
       return undefined
     }
-    return entry.value
+    return entry
+  }
+
+  get(key: K): V | undefined {
+    return this.currentEntry(key)?.value
   }
 
   has(key: K): boolean {
-    const entry = this.entries.get(key)
-    if (entry === undefined) return false
-    if (entry.expiresAtMs <= this.now()) {
-      this.entries.delete(key)
-      return false
-    }
-    return true
+    return this.currentEntry(key) !== undefined
   }
 
   set(key: K, value: V): void {
-    this.entries.set(key, { value, expiresAtMs: this.now() + this.ttlMs() })
+    const expiresAtMs = this.clockNow() + this.readTtl()
+    this.cacheEntries.set(key, { value, expiresAtMs })
   }
 
   delete(key: K): boolean {
-    return this.entries.delete(key)
+    return this.cacheEntries.delete(key)
   }
 
   clear(): void {
-    this.entries.clear()
+    this.cacheEntries.clear()
   }
 }

@@ -1,25 +1,17 @@
 /**
- * The inference-protocol package's door, the runner's prompt glue, the blob reference table and the
- * conversation blob collector.
+ * The inference-protocol package's door, the blob reference table and the conversation blob collector.
  */
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createRunnerPromptGlue } from "../../source/host/runner/runner-prompt-glue.ts";
-import { collectReachableBlobHexIds, EDGES_NOT_WALKED_SO_REFERENTS_COLLECT, toHexId } from "../../source/host/agents/isolation/conversation-blob-gc.ts";
-import { BLOB_REFERENCE_MESSAGE_TYPE_BY_NAME, BLOB_REFERENCE_METADATA_BY_MESSAGE_ID, isProtoBlobReferenceTypeName } from "../../source/packages/proto/blob-reference-metadata.ts";
-import * as inferenceProto from "../../source/packages/chat-inference-proto/index.ts";
+import { collectReachableBlobHexIds, EDGES_NOT_WALKED_SO_REFERENTS_COLLECT, toHexId } from "../../source/adapters/interop/agent/conversation-blob-reachability-adapter.ts";
+import { BLOB_REFERENCE_MESSAGE_TYPE_BY_NAME, BLOB_REFERENCE_METADATA_BY_MESSAGE_ID, isProtoBlobReferenceTypeName } from "../../source/adapters/interop/agent/blob-reference-metadata.ts";
+import * as inferenceProto from "../../source/adapters/interop/chat-inference-proto/index.ts";
 
 describe("the inference-protocol package's door", () => {
   it("is what the client, the converters and the provider options offer", () => {
     assert.equal(Object.keys(inferenceProto).length > 50, true);
-  });
-});
-
-describe("the prompt glue the runner hands a turn", () => {
-  it("is wired once, so a turn asks for its prompt rather than building one", () => {
-    assert.equal(typeof createRunnerPromptGlue, "function");
   });
 });
 

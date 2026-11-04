@@ -1,14 +1,14 @@
 /**
- * A cheap estimate of how many tokens a string costs.
+ * A quick estimate of the token budget represented by a string.
  *
  * Used where an exact count is not available (or not worth the round trip): prompt budgets, warnings,
- * and comparisons between two prompts. Four characters per token is the usual rule of thumb for code
- * and prose alike, and being approximate is the point — the caller needs to know "roughly how full"
- * something is.
+ * and comparisons between two prompts. The ratio is four characters per estimate unit; the half-unit bias
+ * rounds the result to the nearest integer so small fragments still contribute proportionally.
  */
 
-const CHARACTERS_PER_TOKEN = 4
+const CHARACTER_BUDGET_PER_TOKEN = 4
+const HALF_TOKEN_WIDTH = CHARACTER_BUDGET_PER_TOKEN / 2
 
 export function estimateStringTokenCount(value: string): number {
-  return Math.round(value.length / CHARACTERS_PER_TOKEN)
+  return Math.floor((value.length + HALF_TOKEN_WIDTH) / CHARACTER_BUDGET_PER_TOKEN)
 }

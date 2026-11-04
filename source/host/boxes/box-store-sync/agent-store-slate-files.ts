@@ -27,7 +27,7 @@ import { BcsAgentStoreTransport } from "../../../packages/agent-store-sync/bcs-t
 import { AGENT_STORE_SYNC_CLIENT_CONFIG_DEFAULTS } from "../../../packages/agent-store-sync/sync-client-config.ts";
 import { TokenCachingAgentStoreClient } from "../../../packages/agent-store-sync/token-caching-client.ts";
 import { normalizeS3Etag } from "../../../packages/agent-store-sync/etag.ts";
-import { createSlateBackendTransport, getSlateInferenceBackendUrl } from "../../../shared/node/cursor-backend/cursor-inference.ts";
+import { createSlateBackendTransport, getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
 import { sha256Hex } from "../../sha256.ts";
 import { reportBoxStoreDiagnostic } from "./box-store-diagnostics.ts";
 import { BoxStoreSyncError } from "./box-store-sync-error.ts";

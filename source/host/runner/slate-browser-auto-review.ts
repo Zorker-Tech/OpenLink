@@ -4,17 +4,17 @@
  * The pages it visited and what it read are summarized into what a reader needs to judge the visit, and a page that was
  * not what it claimed to be is called out rather than passed over.
  */
-import { Struct } from "@bufbuild/protobuf";
 import type { Context } from "../../packages/context/context.ts";
 import type { RemoteExecManager } from "../../packages/agent-exec/executor-resources.ts";
 import type { ResourceAccessor } from "../../packages/agent-exec/resource-provider.ts";
 import { tryExtractSlateAutoReviewClassifierConversationContext } from "../../packages/agent/smart-mode-classifier-context.ts";
 import { withToolExecutionTimeoutSuspended } from "../../packages/agent/tools/tool-timeout-suspension.ts";
-import { SmartModeRiskTarget, type SmartModeClassifierConversationMessage } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+import type { SlateClassifierConversationMessage } from "../../packages/agent/smart-mode-classifier-context.ts";
 import { fingerprintSlateAutoReviewTarget, type SlateAutoReviewController, type SlateAutoReviewMode } from "./slate-auto-review.ts";
 import type { AutoReviewClassifierDecision } from "./slate-auto-review-classifier-run.ts";
 import { runSlateAutoReviewClassifier } from "./slate-auto-review-classifier-run.ts";
 import { summarizeSlateBrowserAutoReviewAction } from "./slate-auto-review-summaries.ts";
+import { createSlateAutoReviewRiskTarget, type SlateAutoReviewRiskTarget } from "./auto-review-classifier-contracts.ts";
 import {
   buildProjectPermissionsContext,
   SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION,
@@ -138,7 +138,7 @@ function toClassifierArguments(args: {
   readonly personalInstructions?: RiskInstructions;
   readonly userAutoRunInstructions?: RiskInstructions;
   readonly projectAutoRunInstructions?: RiskInstructions;
-}): unknown {
+}): SlateAutoReviewRiskTarget {
   const action = args.canonicalTarget.exactAction;
   const plainArguments = JSON.parse(JSON.stringify({
     surface: "browser",
@@ -172,12 +172,9 @@ function toClassifierArguments(args: {
       display_state_identity: args.canonicalTarget.displayStateIdentity,
     },
     project_permissions: buildProjectPermissionsContext(args),
-  }));
+  })) as Record<string, unknown>;
 
-  return new SmartModeRiskTarget({
-    action: SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(plainArguments),
-  });
+  return createSlateAutoReviewRiskTarget(SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION, plainArguments);
 }
 
 export function buildSlateBrowserClassifierRiskTarget(args: {
@@ -185,7 +182,7 @@ export function buildSlateBrowserClassifierRiskTarget(args: {
   readonly personalInstructions?: RiskInstructions;
   readonly userAutoRunInstructions?: RiskInstructions;
   readonly projectAutoRunInstructions?: RiskInstructions;
-}): unknown {
+}): SlateAutoReviewRiskTarget {
   return toClassifierArguments(args);
 }
 
@@ -198,7 +195,7 @@ export interface SlateBrowserAutoReviewOptions {
   readonly personalInstructions?: RiskInstructions;
   readonly userAutoRunInstructions?: RiskInstructions;
   readonly projectAutoRunInstructions?: RiskInstructions;
-  readonly extractConversationContext?: (ctx: Context, stateHandler: unknown) => Promise<readonly SmartModeClassifierConversationMessage[]>;
+  readonly extractConversationContext?: (ctx: Context, stateHandler: unknown) => Promise<readonly SlateClassifierConversationMessage[]>;
   readonly getApprovalExpiryPolicy?: () => "park" | "ttl";
 }
 
@@ -219,7 +216,7 @@ function purposeIsRequired(action: BrowserAction): boolean {
   return action.op === "click" || action.op === "mouse_click_xy" || action.op === "drag";
 }
 
-async function readClassifierConversation(args: BrowserReviewPreflightArgs): Promise<SmartModeClassifierConversationMessage[]> {
+async function readClassifierConversation(args: BrowserReviewPreflightArgs): Promise<SlateClassifierConversationMessage[]> {
   if (args.stateHandler === undefined) return [];
   if (args.options.extractConversationContext !== undefined) {
     return [...await args.options.extractConversationContext(args.ctx, args.stateHandler)];
@@ -227,14 +224,14 @@ async function readClassifierConversation(args: BrowserReviewPreflightArgs): Pro
   return [...await tryExtractSlateAutoReviewClassifierConversationContext(args.ctx, args.stateHandler as never)];
 }
 
-function classifierTarget(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget): SmartModeRiskTarget {
+function classifierTarget(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget): SlateAutoReviewRiskTarget {
   const options = args.options;
   return buildSlateBrowserClassifierRiskTarget({
     canonicalTarget: canonical,
     ...(options.personalInstructions === undefined ? {} : { personalInstructions: options.personalInstructions }),
     ...(options.userAutoRunInstructions === undefined ? {} : { userAutoRunInstructions: options.userAutoRunInstructions }),
     ...(options.projectAutoRunInstructions === undefined ? {} : { projectAutoRunInstructions: options.projectAutoRunInstructions }),
-  }) as SmartModeRiskTarget;
+  });
 }
 
 function classifierFor(args: BrowserReviewPreflightArgs, canonical: CanonicalBrowserTarget, mode: "shadow" | "enforce") {

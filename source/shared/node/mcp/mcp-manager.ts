@@ -17,15 +17,16 @@
 
 import { isEffectivePluginInstalled } from "../../mcp.ts";
 import { mergeUnresolvedAccountServers } from "./account-display-cache.ts";
-import { BUILTIN_MCP_SERVER_NAMES } from "./builtin-mcp.ts";
+import { SLATE_BUILTIN_MCP_SERVERS } from "./builtin-mcp.ts";
 import { SlateMcpAccountSlotLifecycle } from "./mcp-account-slot-lifecycle.ts";
 import { SlateMcpAuthWatchLifecycle } from "./mcp-auth-watch-lifecycle.ts";
 import { AUTH_WATCH_POLL_INTERVAL_MS, AUTH_WATCH_POLL_TIMEOUT_MS, AUTH_WATCH_TIMEOUT_MS } from "./mcp-auth-watch.ts";
-import { SlateMcpCatalogFlow } from "./mcp-catalog-flow.ts";
+import { SlateMcpCatalogFlow, type McpCatalogInstallPort } from "./mcp-catalog-flow.ts";
 import { SlateMcpConfigError } from "./mcp-config-error.ts";
 import { backendEntryBelongsToRow, SlateMcpDefinitionSource, type McpRuntimeConfig } from "./mcp-definition-source.ts";
 import { reportMcpHostEdgeFailure } from "./mcp-diagnostics.ts";
-import { runtimeConfigFromDisplay, validateMarketplacePluginId, type AccountDisplayConfig, type DisplayServer, type McpServerConfig } from "./mcp-display-runtime.ts";
+import { projectAccountRuntimeConfig, parseMarketplacePluginIdentifier } from "./mcp-account-display-policy.ts";
+import type { SlateMcpAccountDisplay, SlateMcpDisplayRow, SlateMcpServerConfig } from "./mcp-display-contracts.ts";
 import { SlateMcpInstructionsAndToggles, type McpSettingsPort } from "./mcp-instructions-and-toggles.ts";
 import { SlateMcpListingSummaries } from "./mcp-listing-summaries.ts";
 import { validateMcpServerId } from "./mcp-server-id.ts";
@@ -108,9 +109,9 @@ export interface McpBoxRuntimePort {
 
 /** The signed-in account's own MCP configuration, as the writer reads and writes it. */
 export interface McpAccountWriterPort {
-  getConfigForEdit(): Promise<{ config: { mcpServers: Record<string, unknown> }; serverIdsByName: Record<string, string | number | bigint> }>;
-  setConfig(config: { mcpServers: Record<string, unknown> }, serverIdsByName: Record<string, string | number | bigint>): Promise<void>;
-  uninstallPlugin(args: { pluginId: bigint }): Promise<void>;
+  getConfigForEdit(): Promise<{ config: { mcpServers: Record<string, unknown> }; serverIdsByName: Record<string, string> }>;
+  setConfig(config: { mcpServers: Record<string, unknown> }, serverIdsByName: Record<string, string>): Promise<void>;
+  uninstallPlugin(args: { pluginId: string }): Promise<void>;
 }
 
 /** One plugin as the account's effective-plugin list reports it. */
@@ -150,16 +151,17 @@ export interface McpManagerOptions {
   boxRuntime?: McpBoxRuntimePort;
   backendMcpExec?: McpBackendExecPort;
   accountMcpWriter?: McpAccountWriterPort;
+  catalogInstallPort?: McpCatalogInstallPort;
   effectivePluginsProvider?: () => Promise<EffectivePluginRow[]>;
   /** The account's servers; when it is wired the display and the configuration both come from it. */
-  accountServersProvider?: () => Promise<AccountDisplayConfig | null>;
+  accountServersProvider?: () => Promise<SlateMcpAccountDisplay | null>;
   /** The display the host reads when it has no account-servers provider of its own. */
-  accountDisplayConfigProvider?: () => Promise<AccountDisplayConfig | null>;
+  accountDisplayConfigProvider?: () => Promise<SlateMcpAccountDisplay | null>;
   /** The account's configuration the host reads when it has no account-servers provider of its own. */
   accountConfigProvider?: () => Promise<McpRuntimeConfig | null>;
   includeBuiltins?: boolean;
   /** How a server's configuration is parsed out of the JSON a user typed. */
-  parseServerConfig: (value: unknown) => McpServerConfig;
+  parseServerConfig: (value: unknown) => SlateMcpServerConfig;
   getMachineId: () => Promise<string> | string;
   onConnectorAuth?(event: Record<string, unknown>): void;
   onAccountScopeApplied?(): void;
@@ -170,12 +172,12 @@ export interface McpManagerOptions {
 }
 
 /** A visible row that carries a server identifier, paired with it so the filters stay readable. */
-type TransportRow = { readonly row: DisplayServer; readonly identifier: string };
+type TransportRow = { readonly row: SlateMcpDisplayRow; readonly identifier: string };
 
-const rowsFromRuntimeConfig = (runtime: Record<string, McpServerConfig>): DisplayServer[] =>
+const rowsFromRuntimeConfig = (runtime: Record<string, SlateMcpServerConfig>): SlateMcpDisplayRow[] =>
   Object.entries(runtime).map(([serverIdentifier, config]) => ({ id: "0", name: serverIdentifier, serverIdentifier, config, isTeamServer: false, disabledByTeamAdminPolicy: false }));
 
-const transportRows = (rows: readonly DisplayServer[], kind: "url" | "command"): TransportRow[] =>
+const transportRows = (rows: readonly SlateMcpDisplayRow[], kind: "url" | "command"): TransportRow[] =>
   rows.flatMap((row) => row.serverIdentifier != null && row.disabledByTeamAdminPolicy !== true && kind in row.config ? [{ row, identifier: row.serverIdentifier }] : []);
 
 export class SlateMcpManager {
@@ -184,12 +186,13 @@ export class SlateMcpManager {
   private readonly backendMcpExec: McpBackendExecPort | undefined;
   private readonly definitionSource: SlateMcpDefinitionSource;
   private readonly accountWriter: McpAccountWriterPort | undefined;
+  private readonly catalogInstallPort: McpCatalogInstallPort | undefined;
   private readonly effectivePluginsProvider: (() => Promise<EffectivePluginRow[]>) | undefined;
-  private readonly accountServersProvider: (() => Promise<AccountDisplayConfig | null>) | undefined;
-  private readonly accountDisplayConfigProvider: (() => Promise<AccountDisplayConfig | null>) | undefined;
-  private accountPromise: Promise<AccountDisplayConfig | null> | undefined;
+  private readonly accountServersProvider: (() => Promise<SlateMcpAccountDisplay | null>) | undefined;
+  private readonly accountDisplayConfigProvider: (() => Promise<SlateMcpAccountDisplay | null>) | undefined;
+  private accountPromise: Promise<SlateMcpAccountDisplay | null> | undefined;
   private generation = 0;
-  private lastDisplay: AccountDisplayConfig | null = null;
+  private lastDisplay: SlateMcpAccountDisplay | null = null;
   private lastState: McpListingState | null = null;
   private lastBackendTools: McpBackendTool[] = [];
   private lastScope: string | undefined;
@@ -204,6 +207,7 @@ export class SlateMcpManager {
     this.boxRuntime = options.boxRuntime;
     this.backendMcpExec = options.backendMcpExec;
     this.accountWriter = options.accountMcpWriter;
+    this.catalogInstallPort = options.catalogInstallPort;
     this.effectivePluginsProvider = options.effectivePluginsProvider;
     this.accountServersProvider = options.accountServersProvider;
     // With the account's own servers wired, the display is read through the shared account read; without it the host's
@@ -211,7 +215,7 @@ export class SlateMcpManager {
     this.accountDisplayConfigProvider = options.accountServersProvider == null ? options.accountDisplayConfigProvider : () => this.loadAccountServers();
     this.definitionSource = new SlateMcpDefinitionSource(
       options.includeBuiltins ?? true,
-      options.accountServersProvider == null ? options.accountConfigProvider : async () => runtimeConfigFromDisplay(await this.loadAccountServers()),
+      options.accountServersProvider == null ? options.accountConfigProvider : async () => projectAccountRuntimeConfig(await this.loadAccountServers()),
     );
     this.authWatches = new SlateMcpAuthWatchLifecycle({
       backendMcpExec: this.backendMcpExec,
@@ -236,7 +240,7 @@ export class SlateMcpManager {
     this.catalog = new SlateMcpCatalogFlow({
       getMachineId: options.getMachineId,
       listEffectivePlugins: () => this.listEffectivePlugins(),
-      requireAccountWriter: () => this.requireAccountWriter(),
+      ...(this.catalogInstallPort === undefined ? {} : { catalogInstallPort: this.catalogInstallPort }),
       reloadServers: () => this.reloadServers(),
     });
     this.slots = new SlateMcpAccountSlotLifecycle({
@@ -264,7 +268,7 @@ export class SlateMcpManager {
    * moved on is dropped in favour of what the current scope already had, and an account that could not be read leaves
    * the last display in place — and is asked again next time.
    */
-  private loadAccountServers(): Promise<AccountDisplayConfig | null> {
+  private loadAccountServers(): Promise<SlateMcpAccountDisplay | null> {
     if (this.accountPromise != null) return this.accountPromise;
     const generation = ++this.generation;
     const promise = (this.accountServersProvider?.() ?? Promise.resolve(null)).then((display) => this.adoptAccountDisplay(display, generation));
@@ -276,7 +280,7 @@ export class SlateMcpManager {
     return promise;
   }
 
-  private adoptAccountDisplay(display: AccountDisplayConfig | null, generation: number): AccountDisplayConfig | null {
+  private adoptAccountDisplay(display: SlateMcpAccountDisplay | null, generation: number): SlateMcpAccountDisplay | null {
     const cached = this.cachedDisplayFor(display);
     if (generation !== this.generation) return cached;
     if (display == null) {
@@ -290,13 +294,13 @@ export class SlateMcpManager {
     }
     const resolved = mergeUnresolvedAccountServers(display, cached);
     this.lastDisplay = resolved;
-    this.definitionSource.adoptAccountConfig(runtimeConfigFromDisplay(resolved));
+    this.definitionSource.adoptAccountConfig(projectAccountRuntimeConfig(resolved));
     this.instructions.migrateCustomInstructions(resolved.servers);
     return resolved;
   }
 
   /** What this account already showed, when the read carries the scope it was made under. */
-  private cachedDisplayFor(display: AccountDisplayConfig | null): AccountDisplayConfig | null {
+  private cachedDisplayFor(display: SlateMcpAccountDisplay | null): SlateMcpAccountDisplay | null {
     return display?.cacheScope !== undefined && display.cacheScope === this.lastScope ? this.lastDisplay : null;
   }
 
@@ -323,7 +327,7 @@ export class SlateMcpManager {
     return this.definitionSource;
   }
 
-  lastAccountDisplayConfigView(): AccountDisplayConfig | null {
+  lastAccountDisplayConfigView(): SlateMcpAccountDisplay | null {
     return this.lastDisplay;
   }
 
@@ -354,7 +358,7 @@ export class SlateMcpManager {
     const effectiveDisplay = display ?? (this.accountServersProvider == null ? this.lastDisplay : null);
     const runtime = await this.definitionSource.getUserServerConfigs();
     const rows = effectiveDisplay?.servers ?? (this.accountServersProvider == null ? rowsFromRuntimeConfig(runtime) : []);
-    const visible = rows.filter((server) => server.serverIdentifier == null || !BUILTIN_MCP_SERVER_NAMES.has(server.serverIdentifier));
+    const visible = rows.filter((server) => server.serverIdentifier == null || !SLATE_BUILTIN_MCP_SERVERS.has(server.serverIdentifier));
     this.instructions.migrateCustomInstructions(visible);
     const http = transportRows(visible, "url");
     const stdio = transportRows(visible, "command");
@@ -386,7 +390,7 @@ export class SlateMcpManager {
     }
   }
 
-  private summariseServer(server: DisplayServer, backend: readonly McpBackendToolEntry[], box: { byName: Map<string, McpBoxServerEntry>; unavailable: boolean }): McpServerSummary[] {
+  private summariseServer(server: SlateMcpDisplayRow, backend: readonly McpBackendToolEntry[], box: { byName: Map<string, McpBoxServerEntry>; unavailable: boolean }): McpServerSummary[] {
     if (server.disabledByTeamAdminPolicy === true) return [this.summaries.createAdminDisabledServerSummary(server)];
     if (!("url" in server.config)) return [this.summaries.createBoxServerSummary(server, boxEntryFor(box.byName, server.serverIdentifier), box.unavailable)];
     return this.summaries.createBackendServerSummaries(server, backend.filter((entry) => backendEntryBelongsToRow(entry, server.serverIdentifier ?? "")));
@@ -417,7 +421,7 @@ export class SlateMcpManager {
 
   private validateInstallableName(name: string): string {
     const validated = validateServerName(name);
-    if (BUILTIN_MCP_SERVER_NAMES.has(validated)) throw new SlateMcpConfigError(`MCP server name "${validated}" is reserved for a built-in Slate server.`);
+    if (SLATE_BUILTIN_MCP_SERVERS.has(validated)) throw new SlateMcpConfigError(`MCP server name "${validated}" is reserved for a built-in Slate server.`);
     return validated;
   }
 
@@ -426,7 +430,7 @@ export class SlateMcpManager {
     return this.accountWriter;
   }
 
-  private async addServersToAccount(servers: Record<string, McpServerConfig>): Promise<void> {
+  private async addServersToAccount(servers: Record<string, SlateMcpServerConfig>): Promise<void> {
     const writer = this.requireAccountWriter();
     const { config, serverIdsByName } = await writer.getConfigForEdit();
     await writer.setConfig({ mcpServers: { ...config.mcpServers, ...servers } }, serverIdsByName);
@@ -466,7 +470,7 @@ export class SlateMcpManager {
 
   /** Uninstalling a plugin: the account's rows of it are gone, and the plugin is not installed for this account. */
   async uninstallPlugin(raw: string): Promise<RemoveOutcome> {
-    const id = validateMarketplacePluginId(raw);
+    const id = parseMarketplacePluginIdentifier(raw);
     const state = await this.performPluginUninstall(id);
     let gone = this.effectivePluginsProvider == null;
     if (!gone)
@@ -493,7 +497,7 @@ export class SlateMcpManager {
     if (rows.some((row) => row.isRequired === true) || (effective ?? []).some((plugin) => plugin.pluginId === id && plugin.installMode === "team-required"))
       throw new SlateMcpConfigError("This plugin is required by the user's team and can't be uninstalled.");
     const attributedRows = rows.filter((row) => row.isTeamServer !== true);
-    await writer.uninstallPlugin({ pluginId: BigInt(id) });
+    await writer.uninstallPlugin({ pluginId: id });
     for (const row of attributedRows) {
       this.authWatches.clearPendingAuthWatchesForServer(row.id);
       const sameNameRows = display?.servers.filter((server) => server.name === row.name).length ?? 1;
@@ -504,7 +508,7 @@ export class SlateMcpManager {
   }
 
   /** What the account shows and what the plugin list says, each read on its own so one failing read is not the other. */
-  private async pluginPolicySnapshot(): Promise<{ display: AccountDisplayConfig | null; effective: EffectivePluginRow[] | null }> {
+  private async pluginPolicySnapshot(): Promise<{ display: SlateMcpAccountDisplay | null; effective: EffectivePluginRow[] | null }> {
     let display = this.accountDisplayConfigProvider == null ? this.lastDisplay : null;
     if (display == null && this.accountDisplayConfigProvider != null) {
       try {
@@ -578,7 +582,7 @@ export class SlateMcpManager {
    * The display row a server id names. A caller that needs a fresh read gets one and is refused rather than answered
    * from memory; everyone else reads the display and falls back to the last one only when there is no account reader.
    */
-  async resolveDisplayServer(raw: string, options?: { requireFreshRead: boolean }): Promise<DisplayServer | undefined> {
+  async resolveDisplayServer(raw: string, options?: { requireFreshRead: boolean }): Promise<SlateMcpDisplayRow | undefined> {
     const id = validateMcpServerId(raw);
     if (options?.requireFreshRead === true && this.accountServersProvider != null) {
       const display = await this.accountServersProvider();
@@ -589,7 +593,7 @@ export class SlateMcpManager {
       if (options?.requireFreshRead === true) throw new SlateMcpConfigError("no account display config provider");
       return undefined;
     }
-    let display: AccountDisplayConfig | null = null;
+    let display: SlateMcpAccountDisplay | null = null;
     try {
       display = await this.accountDisplayConfigProvider();
     } catch (error) {

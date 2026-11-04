@@ -11,9 +11,10 @@ import {
   SELF_SUMMARY_CONTEXT_WINDOW_FRACTION,
   SELF_SUMMARY_NUM_TURNS,
 } from "../../source/packages/agent/self-summary/constants.ts"
-import { EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT, configOverridesKey } from "../../source/packages/agent/utils/config-overrides.ts"
+import { EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT } from "../../source/packages/agent/utils/config-overrides.ts"
+import { slateConfigOverridesKey } from "../../source/packages/agent/utils/config-override-reader.ts"
 import { BackgroundSummarizationMode } from "../../source/packages/agent-summarization/background-summarization.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"
@@ -41,6 +42,12 @@ test("a summary is not a user message unless the caller wants it to count", () =
   const messages = [message("user", "the real question"), message("user", "an earlier summary", { isSummary: true })]
   assert.equal(findLastUserMessageIndex(messages), 0)
   assert.equal(findLastUserMessageIndex(messages, { includeSummaryMessages: true }), 1)
+
+  const truthyMarker = toRedactedCoreMessage(
+    { role: "user", content: "an earlier summary", providerOptions: { cursor: { isSummary: "marked" } } },
+    PrivacyMode.NO_STORAGE,
+  ) as SelfSummaryMessage
+  assert.equal(findLastUserMessageIndex([messages[0]!, truthyMarker]), 0)
 })
 
 test("a conversation with enough turns is summarized whatever its size", () => {
@@ -54,6 +61,23 @@ test("a summary of an earlier conversation is not a turn", () => {
   assert.equal(shouldPerformSelfSummary(messages, undefined, undefined, undefined), false)
 })
 
+test("the turn threshold counts only conversation messages that compaction keeps", () => {
+  const userInfo = message("user", "<user_info>fixed context</user_info>")
+  const conversation = [
+    message("system", "fixed instructions"),
+    userInfo,
+    ...turns(SELF_SUMMARY_NUM_TURNS - 1),
+    message("assistant", ""),
+  ]
+  const tokenDetails = { usedTokens: 1, maxTokens: 1_000_000 }
+
+  assert.equal(shouldPerformSelfSummary(conversation, tokenDetails, undefined, undefined), false)
+  assert.equal(
+    shouldPerformSelfSummary([...conversation, message("user", "one more turn")], tokenDetails, undefined, undefined),
+    true,
+  )
+})
+
 test("a conversation past the session's own limit is summarized", () => {
   const messages = [message("user", "a question")]
   assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 100, maxTokens: 1_000 }, undefined, 100), true)
@@ -61,7 +85,7 @@ test("a conversation past the session's own limit is summarized", () => {
 })
 
 test("an override a test harness imposes wins over the session's limit", () => {
-  const ctx = createContext().with(configOverridesKey, { evalServiceEnforcedSelfSummaryTokenLimit: 10 })
+  const ctx = createContext().with(slateConfigOverridesKey, { evalServiceEnforcedSelfSummaryTokenLimit: 10 })
   assert.equal(EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT(ctx), 10)
   assert.equal(shouldPerformSelfSummary([message("user", "a question")], { usedTokens: 10, maxTokens: 1_000 }, ctx, 1_000_000), true)
   // Without the override the session's own limit is what decides.
@@ -130,7 +154,7 @@ function summarizeHarness(options: {
   }
   let messages = options.messages ?? [{ role: "user", content: "the question" }]
   const stateHandler = {
-    mode: AgentMode.AGENT,
+    mode: SlateMode.AGENT,
     get tokenDetails() { return holder.tokenDetails },
     getBlobStore: () => undefined,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
@@ -208,7 +232,7 @@ test("a prompt with nothing in it has nothing to summarize", async () => {
     {},
     { getMessages: () => [], appendMessages() {} } as never,
     {
-      mode: AgentMode.AGENT,
+      mode: SlateMode.AGENT,
       tokenDetails: {},
       getBlobStore: () => undefined,
       getPrivacyMode: () => PrivacyMode.NO_STORAGE,
@@ -282,7 +306,7 @@ test("the token details are recomputed from what is left after the summary", asy
   const harnessed = summarizeHarness({ summary: "the summary" })
   const tokenDetails: unknown[] = []
   const stateHandler = {
-    mode: AgentMode.AGENT,
+    mode: SlateMode.AGENT,
     tokenDetails: { usedTokens: 900, maxTokens: 1_000 },
     getBlobStore: () => undefined,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,

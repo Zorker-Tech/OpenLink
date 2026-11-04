@@ -1,0 +1,49 @@
+// agent.v1 — agent/v1/kv messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/exec.proto";
+
+message KvServerMessage {
+  uint32 id = 1 [json_name = "id"];
+  optional .agent.v1.SpanContext span_context = 4 [json_name = "spanContext"];
+  oneof message {
+    .agent.v1.GetBlobArgs get_blob_args = 2 [json_name = "getBlobArgs"];
+    .agent.v1.SetBlobArgs set_blob_args = 3 [json_name = "setBlobArgs"];
+  }
+}
+
+message GetBlobArgs {
+  bytes blob_id = 1 [json_name = "blobId"];
+}
+
+message SetBlobArgs {
+  bytes blob_id = 1 [json_name = "blobId"];
+  bytes blob_data = 2 [json_name = "blobData"];
+}
+
+message KvClientMessage {
+  uint32 id = 1 [json_name = "id"];
+  oneof message {
+    .agent.v1.GetBlobResult get_blob_result = 2 [json_name = "getBlobResult"];
+    .agent.v1.SetBlobResult set_blob_result = 3 [json_name = "setBlobResult"];
+  }
+}
+
+message GetBlobResult {
+  optional bytes blob_data = 1 [json_name = "blobData"];
+  optional .agent.v1.Error error = 2 [json_name = "error"];
+}
+
+message SetBlobResult {
+  optional .agent.v1.Error error = 1 [json_name = "error"];
+}
+
+message Error {
+  string message = 1 [json_name = "message"];
+}

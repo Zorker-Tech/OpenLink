@@ -29,6 +29,16 @@ test("the role components produce a conversation, not one long string", () => {
   ])
 })
 
+test("the built-in registry contains each prompt role and layout component once", () => {
+  assert.deepEqual(Object.keys(builtinComponents), ["System", "User", "Assistant", "Tool", "Conversation", "Fragment"])
+  assert.equal(builtinComponents.System, System)
+  assert.equal(builtinComponents.User, User)
+  assert.equal(builtinComponents.Assistant, Assistant)
+  assert.equal(builtinComponents.Tool, Tool)
+  assert.equal(builtinComponents.Conversation, Conversation)
+  assert.equal(builtinComponents.Fragment, Fragment)
+})
+
 test("a named message keeps its name and a Conversation is transparent", () => {
   const messages = renderToMessages(jsx(Conversation, {
     children: [jsx(User, { name: "planner", children: "plan" }), jsx(System, { name: "house", children: "rules" })],

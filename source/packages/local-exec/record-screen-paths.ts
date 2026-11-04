@@ -5,39 +5,55 @@
  * leave it, reduced to characters a file name may hold, kept to a length that fits, and given the extension the
  * recording actually has. Every refusal says which of those rules was broken.
  */
-import { RequestedFilePathRejectedReason } from "../proto/generated/agent/v1/record_screen_exec_pb.ts";
+export type SaveAsFilenameRejection = "empty" | "path-separators";
 
-export function sanitizeToolCallId(toolCallId: string): string {
-  return toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_");
+export type SaveAsFilenameResult =
+  | { readonly success: true; readonly filename: string }
+  | { readonly success: false; readonly reason: SaveAsFilenameRejection };
+
+const MAX_RECORDING_FILENAME_LENGTH = 128;
+
+export function sanitizeToolCallId(identifier: string): string {
+  return identifier.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-export function validateAndNormalizeSaveAsFilename(saveAsFilename: string, artifactsDir: string):
-  | { readonly success: true; readonly filename: string }
-  | { readonly success: false; readonly reason: RequestedFilePathRejectedReason } {
-  let filename = saveAsFilename.trim();
-  if (filename.startsWith(artifactsDir)) {
-    filename = filename.slice(artifactsDir.length);
-    if (filename.startsWith("/")) {
-      filename = filename.slice(1);
-    }
+export function validateAndNormalizeSaveAsFilename(input: string, artifactsDirectory: string): SaveAsFilenameResult {
+  const relativeName = removeArtifactsPrefix(input, artifactsDirectory);
+  if (relativeName.length === 0) return { success: false, reason: "empty" };
+  if (containsPathSeparator(relativeName)) return { success: false, reason: "path-separators" };
+
+  const safeName = replaceUnsupportedCharacters(relativeName);
+  if (safeName.length === 0) return { success: false, reason: "empty" };
+
+  return {
+    success: true,
+    filename: ensureRecordingExtension(limitFilenameLength(safeName)),
+  };
+}
+
+function removeArtifactsPrefix(input: string, artifactsDirectory: string): string {
+  let filename = input.trim();
+  if (filename.startsWith(artifactsDirectory)) {
+    filename = filename.slice(artifactsDirectory.length);
+    if (filename.startsWith("/")) filename = filename.slice(1);
   }
-  filename = filename.trim();
-  if (filename.length === 0) {
-    return { success: false, reason: RequestedFilePathRejectedReason.UNSPECIFIED };
-  }
-  if (filename.includes("/") || filename.includes("\\")) {
-    return { success: false, reason: RequestedFilePathRejectedReason.SLASHES_NOT_ALLOWED };
-  }
-  filename = filename.replace(/[^a-zA-Z0-9 ._-]/g, "_");
-  filename = filename.trim();
-  if (filename.length === 0) {
-    return { success: false, reason: RequestedFilePathRejectedReason.UNSPECIFIED };
-  }
-  if (filename.length > 128) {
-    filename = filename.slice(0, 128).trim();
-  }
-  if (!filename.toLowerCase().endsWith(".mp4")) {
-    filename = `${filename}.mp4`;
-  }
-  return { success: true, filename };
+  return filename.trim();
+}
+
+function containsPathSeparator(filename: string): boolean {
+  return filename.includes("/") || filename.includes("\\");
+}
+
+function replaceUnsupportedCharacters(filename: string): string {
+  return filename.replace(/[^a-zA-Z0-9 ._-]/g, "_").trim();
+}
+
+function limitFilenameLength(filename: string): string {
+  return filename.length > MAX_RECORDING_FILENAME_LENGTH
+    ? filename.slice(0, MAX_RECORDING_FILENAME_LENGTH).trim()
+    : filename;
+}
+
+function ensureRecordingExtension(filename: string): string {
+  return filename.toLowerCase().endsWith(".mp4") ? filename : `${filename}.mp4`;
 }

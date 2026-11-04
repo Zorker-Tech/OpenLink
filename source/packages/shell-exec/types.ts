@@ -1,11 +1,27 @@
-/**
- * The shells this platform can drive, and the environment a command runs in.
- *
- * A shell is named for the implementation that drives it rather than for the binary, since two entries may
- * run the same program differently — one snapshotting a full interactive state and one taking a lighter
- * version of the same. The environment overrides are what a command is given regardless of the user's own
- * settings: output that a terminal would colorize is written plainly, because nothing here is a terminal.
- */
+/** Runtime identifiers used by the local shell selection policy. */
+const SHELL_EXECUTOR_VALUES = {
+  Zsh: "zsh",
+  ZshLight: "zsh-light",
+  Bash: "bash",
+  PowerShell: "powershell",
+  Naive: "naive",
+} as const;
 
-export enum KnownShellExecutor { Zsh = "zsh", ZshLight = "zsh-light", Bash = "bash", PowerShell = "powershell", Naive = "naive" }
-export const SHELL_ENV_OVERRIDES = { TERM: "dumb", NO_COLOR: "1", FORCE_COLOR: "0", _ZO_DOCTOR: "0" } as const
+export const KnownShellExecutor = SHELL_EXECUTOR_VALUES;
+export type KnownShellExecutor = (typeof SHELL_EXECUTOR_VALUES)[keyof typeof SHELL_EXECUTOR_VALUES];
+
+const CHILD_PROCESS_ENVIRONMENT = [
+  ["TERM", "dumb"],
+  ["NO_COLOR", "1"],
+  ["FORCE_COLOR", "0"],
+  ["_ZO_DOCTOR", "0"],
+] as const;
+
+type ShellEnvironmentOverrides = {
+  readonly TERM: "dumb";
+  readonly NO_COLOR: "1";
+  readonly FORCE_COLOR: "0";
+  readonly _ZO_DOCTOR: "0";
+};
+
+export const SHELL_ENV_OVERRIDES = Object.fromEntries(CHILD_PROCESS_ENVIRONMENT) as ShellEnvironmentOverrides;

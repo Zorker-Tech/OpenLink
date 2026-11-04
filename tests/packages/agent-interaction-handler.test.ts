@@ -4,10 +4,10 @@ import assert from "node:assert/strict"
 import { InteractionHandler } from "../../source/packages/agent/interaction-handler.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { InputTokenLimitError } from "../../source/packages/chat-inference/prompt-executor.ts"
-import { AgentLoopError } from "../../source/packages/agent/loop-detection/agent-loop-detector.ts"
+import { AgentLoopError } from "../../source/adapters/interop/agent/agent-loop-presentation-adapter.ts"
 import { ToolCallAbortedError } from "../../source/packages/agent/tools/tool-errors.ts"
-import { EditArgs } from "../../source/packages/proto/generated/agent/v1/edit_tool_pb.ts"
-import { ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { EditArgs } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts"
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the handler over a fake interaction provider and recorder

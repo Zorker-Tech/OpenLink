@@ -5,9 +5,9 @@ import { Value } from "@bufbuild/protobuf"
 
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
-import { RequestContext, RequestContextArgs, RequestContextResult } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts"
-import { toRedactedRequestContext } from "../../source/packages/redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
+import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
+import { RequestContext, RequestContextArgs, RequestContextResult } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts"
+import { toRedactedRequestContext } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
 import {
   BROWSER_MCP_PROVIDER_IDS,
   CUSTOM_USER_TOOLS_PROVIDER_ID,
@@ -23,13 +23,16 @@ import {
 } from "../../source/packages/agent-exec/mcp-operations.ts"
 import {
   buildUserDefinedToolsInstructions,
+} from "../../source/packages/agent/utils/mcp-user-defined-tools.ts"
+import {
   getMcpMetaToolOptionsWithUserDefinedTools,
   mergeUserDefinedToolsIntoMetaToolOptions,
-} from "../../source/packages/agent/utils/mcp-user-defined-tools.ts"
+} from "../../source/adapters/interop/agent/mcp-user-defined-tools-adapter.ts"
 import {
   getMcpMetaToolSnapshotToolNames,
   withToolSetMcpSnapshot,
 } from "../../source/packages/agent/utils/mcp-meta-tool-options.ts"
+import { projectTurnToolsIntoInteropMetaOptions } from "../../source/adapters/interop/agent/mcp-meta-tool-options-adapter.ts"
 import {
   getRedactedRequestContext,
   getRequestContext,
@@ -205,6 +208,34 @@ test("the meta tool is left off when it is off and nothing needs it", () => {
   assert.equal(options?.enabled, false)
 })
 
+test("the turn's Slate catalog is serialized into sorted Agent MCP descriptors", () => {
+  const options = projectTurnToolsIntoInteropMetaOptions([
+    {
+      providerIdentifier: "server-a",
+      toolName: "write",
+      description: "writes data",
+      inputSchema: { type: "object" },
+      plugin: "plugin-one",
+      marketplace: "market-one",
+      pluginId: "plugin-id",
+      marketplaceId: "market-id",
+    },
+    { providerIdentifier: "server-a", toolName: "read", inputSchema: Value.fromJson({ type: "string" }) },
+    { providerIdentifier: "server-a", toolName: "list" },
+  ])
+
+  assert.equal(options.enabled, true)
+  assert.deepEqual(options.mcpDescriptors.map(server => server.serverIdentifier), ["server-a"])
+  const server = options.mcpDescriptors[0]!
+  assert.deepEqual(server.tools.map(tool => tool.toolName), ["list", "read", "write"])
+  assert.deepEqual(
+    [server.plugin, server.marketplace, server.pluginDbId, server.marketplaceId],
+    ["plugin-one", "market-one", "plugin-id", "market-id"],
+  )
+  assert.deepEqual(server.tools[1]?.inputSchema?.toJson(), { type: "string" })
+  assert.deepEqual(server.tools[2]?.inputSchema?.toJson(), { type: "object" })
+})
+
 // ---------------------------------------------------------------------------------------------
 // mcp-meta-tool-options: the names the instructions need
 // ---------------------------------------------------------------------------------------------
@@ -309,7 +340,8 @@ test("the session's own on-demand tools replace whatever was under the reserved 
     registry: { getMcpDescriptor: () => builtin },
   }))
   assert.equal(patched?.mcpDescriptors.length, 1)
-  assert.equal(patched?.mcpDescriptors[0], builtin)
+  assert.ok(patched?.mcpDescriptors[0] instanceof McpDescriptor)
+  assert.deepEqual(patched?.mcpDescriptors[0]?.toJson(), builtin.toJson())
 })
 
 // ---------------------------------------------------------------------------------------------

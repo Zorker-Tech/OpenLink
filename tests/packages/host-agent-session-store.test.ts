@@ -70,3 +70,48 @@ test("deleting a session takes its directory with it", async () => {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test("marking a viewed session seeds legacy activity from its database file before recording the view", async () => {
+  const root = mkdtempSync(join(tmpdir(), "slate-session-store-test-"))
+  try {
+    const store = new SlateAgentSessionStore(root)
+    store.statOpenDb = async () => ({ mtimeMs: 20 }) as never
+    const calls: Array<readonly unknown[]> = []
+    const session = {
+      id: "a",
+      dbPath: join(root, "a.db"),
+      db: {
+        getUnreadState: () => ({ lastActivityAt: 0 }),
+        get: (key: string) => key === "latestRootBlobId" ? new Uint8Array([1]) : key === "createdAt" ? 10 : undefined,
+        markActivity: (at: number) => calls.push(["activity", at]),
+        markViewed: (at: number, options: unknown) => calls.push(["viewed", at, options]),
+      },
+      agentStore: { dispose: async () => {} },
+    }
+
+    await store.markSessionViewed(session as never, 30)
+    assert.deepEqual(calls, [["activity", 20], ["viewed", 30, {}]])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("the synchronous viewed mark leaves the filesystem activity seed to the listing path", () => {
+  const root = mkdtempSync(join(tmpdir(), "slate-session-store-test-"))
+  try {
+    const store = new SlateAgentSessionStore(root)
+    store.statOpenDb = async () => { assert.fail("synchronous view must not stat the store file") };
+    const calls: Array<readonly unknown[]> = []
+    const session = {
+      id: "a",
+      dbPath: join(root, "a.db"),
+      db: { markViewed: (at: number, options: unknown) => calls.push([at, options]) },
+      agentStore: { dispose: async () => {} },
+    }
+
+    store.markSessionViewedNow(session as never, 31)
+    assert.deepEqual(calls, [[31, {}]])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

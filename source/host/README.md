@@ -22,3 +22,12 @@ The platform itself: persistent agents and everything they do.
 State ownership rule: agents, transcripts, automations, workflows, rooms, boxes and gateway
 lifecycle are persisted here. Nothing in this layer may be expressed as an option on a chat
 session.
+
+## Run the production host
+
+Build first, then run `pnpm --filter @slate/work-host start` with Node.js 24 or newer. The
+`host/main.ts` entry composes the concrete production providers and explicit extension registry,
+starts the host and its gateway, and owns signal-driven shutdown. `pnpm --filter @slate/work-host
+smoke` exercises that process with an isolated data root, checks the gateway health route, and
+verifies clean shutdown alongside a real built agent-store worker and the box-exec and local-exec
+daemons.

@@ -17,10 +17,10 @@
  *
  * Two markers end a turn's output: a line saying how the turn ended, and an overview the caller can supply a way to make.
  */
-import { ConversationSummaryArchive, AgentMode } from "../../../packages/proto/generated/agent/v1/agent_pb.ts"
+import { summaryMessageBlobIdsFromInterop } from "../../../adapters/interop/agent/transcript-summary-archive-adapter.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import { createSpan, withSuppressedChildSpans } from "../../../packages/context/telemetry.ts"
-import { getTranscriptRelativePath } from "./paths.ts"
+import { transcriptFilePath } from "./paths.ts"
 import { stripContextTags } from "./context-stripping.ts"
 
 /** One part of a message: what the model read or wrote, in the shape the transcript records it. */
@@ -38,8 +38,8 @@ interface TranscriptMessage {
   readonly providerOptions?: { readonly cursor?: { readonly isSummary?: boolean } }
 }
 
-interface TranscriptState {
-  readonly mode?: AgentMode
+export interface TranscriptState {
+  readonly mode?: string
   readonly rootPromptMessagesJson: readonly Uint8Array[]
   readonly summaryArchives: readonly Uint8Array[]
 }
@@ -83,18 +83,8 @@ const APPEND_FALLBACK = "[TranscriptStore] Failed to append transcript, falling 
 const OVERVIEW_FAILED = "[TranscriptStore] Failed to generate transcript overview:"
 
 /** What each mode is called in a transcript, which is the mode's lower-case name; unspecified and unknown are agent. */
-const AGENT_MODE_NAMES: ReadonlyMap<AgentMode, string> = new Map([
-  [AgentMode.AGENT, "agent"],
-  [AgentMode.ASK, "ask"],
-  [AgentMode.PLAN, "plan"],
-  [AgentMode.DEBUG, "debug"],
-  [AgentMode.TRIAGE, "triage"],
-  [AgentMode.PROJECT, "project"],
-  [AgentMode.MULTITASK, "multitask"],
-  [AgentMode.CUSTOM, "custom"],
-])
-
-const agentModeName = (mode: AgentMode | undefined): string => (mode == null ? "agent" : AGENT_MODE_NAMES.get(mode) ?? "agent")
+const TRANSCRIPT_MODES = new Set(["agent", "ask", "plan", "debug", "triage", "project", "multitask", "custom"])
+const agentModeName = (mode: string | undefined): string => (mode !== undefined && TRANSCRIPT_MODES.has(mode) ? mode : "agent")
 
 const hexOf = (bytes: Uint8Array): string => Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("")
 
@@ -218,20 +208,17 @@ async function hydrateBlobIds(ctx: Context, blobStore: TranscriptBlobStore, blob
   return { messages, stats }
 }
 
-/** The summarize-away part of a conversation, read through its archives. A malformed archive is omitted like a bad blob. */
+/** The summarize-away part of a conversation, read through its archive references. A malformed archive is omitted. */
 async function hydrateSummaryArchives(ctx: Context, blobStore: TranscriptBlobStore, archiveRefs: readonly Uint8Array[]): Promise<HydratedArchives> {
   let getBlobCount = 0
   const archives = await Promise.all(archiveRefs.map(async (archiveRef) => {
     getBlobCount += 1
     const archiveBlob = await blobStore.getBlob(ctx, archiveRef)
     if (!archiveBlob) return undefined
-    try {
-      const archive = ConversationSummaryArchive.fromBinary(archiveBlob)
-      getBlobCount += archive.summarizedMessages.length
-      return hydrateBlobIds(ctx, blobStore, archive.summarizedMessages)
-    } catch {
-      return undefined
-    }
+    const summarizedMessageBlobIds = summaryMessageBlobIdsFromInterop(archiveBlob)
+    if (summarizedMessageBlobIds === undefined) return undefined
+    getBlobCount += summarizedMessageBlobIds.length
+    return hydrateBlobIds(ctx, blobStore, summarizedMessageBlobIds)
   }))
   const messages: TranscriptMessage[] = []
   let stats = emptyHydrationStats()
@@ -462,7 +449,7 @@ export class TranscriptStore {
 
   resolveFilePath(conversationId: string, ext: string): string {
     if (this.options.pathResolver !== undefined) return this.options.pathResolver(conversationId, ext)
-    const relative = getTranscriptRelativePath({ conversationId, ext, kind: "primary" })
+    const relative = transcriptFilePath({ conversationId, ext, kind: "primary" })
     return `${this.projectDir}/${relative}`
   }
 

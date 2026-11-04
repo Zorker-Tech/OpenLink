@@ -6,23 +6,33 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fetchMarketplaceMcpPlugins, fetchPluginServers, marketplacePluginToView, normalizePluginConfig, normalizeServer, toRawGithubUrl, type MarketplaceDeps, type SlateMarketplacePlugin } from "../../source/shared/node/mcp/mcp-marketplace.ts";
+import { fetchMarketplaceMcpPlugins, fetchPluginServers, marketplacePluginToView, normalizePluginConfig, normalizeServer, resolvePublishedConfigSourceUrl, type MarketplaceDeps, type MarketplacePluginSource, type MarketplaceRemoteClient, type SlateMarketplacePlugin } from "../../source/shared/node/mcp/mcp-marketplace.ts";
 
 /** A plugin as the marketplace sends it, with everything a plugin may carry. */
-function wirePlugin(overrides: Record<string, unknown> = {}) {
+function wirePlugin(overrides: Partial<MarketplacePluginSource> = {}): MarketplacePluginSource {
   return {
-    id: 7,
-    name: "plugin-name",
-    displayName: "",
-    description: null,
-    mcpServers: [{ name: "server-one", description: null, sourceUrl: "https://github.com/o/r/blob/main/mcp.json" }, { name: "server-two" }],
-    skills: [{ name: "skill-one", description: null, sourceUrl: "" }, { name: "skill-two", sourceUrl: "https://example.test/skill" }],
-    variables: { toJson: () => ({ properties: { token: { title: "Token", format: "password" } }, required: ["token"] }) },
-    curatedCategoryKeys: ["", "dev_tools"],
-    repositoryUrl: "https://repo.test/p",
-    logoUrl: "https://logo.test/plugin.png",
+    id: "7",
+    slug: "plugin-name",
+    title: "",
+    summary: null,
+    servers: [{ slug: "server-one", summary: null, configurationSource: "https://github.com/o/r/blob/main/mcp.json" }, { slug: "server-two" }],
+    skills: [{ slug: "skill-one", summary: null, source: "" }, { slug: "skill-two", source: "https://example.test/skill" }],
+    variableSchema: { properties: { token: { title: "Token", format: "password" } }, required: ["token"] },
+    topicKeys: ["", "dev_tools"],
+    homepage: "https://repo.test/p",
+    icon: "https://logo.test/plugin.png",
     publisher: null,
-    marketplace: null,
+    collection: null,
+    ...overrides,
+  };
+}
+
+function remoteClient(overrides: Partial<MarketplaceRemoteClient> = {}): MarketplaceRemoteClient {
+  return {
+    listPublicPlugins: async () => [],
+    listOwnedCollections: async () => [],
+    listPluginsInCollection: async () => [],
+    readPluginServerConfig: async () => undefined,
     ...overrides,
   };
 }
@@ -34,9 +44,9 @@ describe("a plugin as the marketplace sent it", () => {
     const seen: string[] = [];
     const listed = await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => undefined,
-      createClient: () => ({ listMarketplacePlugins: async () => ({ plugins: [wirePlugin()] }) }),
+      createClient: () => remoteClient({ listPublicPlugins: async () => [wirePlugin()] }),
       timeoutMs: 12_000,
-      rememberPluginLogoUrl: (url) => void seen.push(url),
+      rememberLogoSource: (url) => void seen.push(url),
     });
     assert.deepEqual(seen, ["https://logo.test/plugin.png"]);
     assert.deepEqual(listed.plugins, [
@@ -60,17 +70,15 @@ describe("a plugin as the marketplace sent it", () => {
   it("takes a plugin with neither a server nor a skill as no plugin, and names one by what it calls itself", async () => {
     const listed = await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => undefined,
-      createClient: () => ({
-        listMarketplacePlugins: async () => ({
-          plugins: [
-            wirePlugin({ id: 1, mcpServers: [], skills: [] }),
-            wirePlugin({ id: 2, displayName: "Two", mcpServers: [], skills: [{ name: "s" }], curatedCategoryKeys: [], name: "fallback" }),
-            wirePlugin({ id: 3, displayName: "One", publisher: { name: "pub", displayName: "", isUserOwned: true, websiteUrl: "https://pub.test", logoUrl: "" }, marketplace: { name: "m", displayName: "", teamId: 4, userId: null } }),
-          ],
-        }),
+      createClient: () => remoteClient({
+        listPublicPlugins: async () => [
+          wirePlugin({ id: "1", servers: [], skills: [] }),
+          wirePlugin({ id: "2", title: "Two", servers: [], skills: [{ slug: "s" }], topicKeys: [], slug: "fallback" }),
+          wirePlugin({ id: "3", title: "One", publisher: { slug: "pub", title: "", isUserOwned: true, homepage: "https://pub.test", icon: "" }, collection: { id: "m", slug: "m", title: "", ownerType: "team" } }),
+        ],
       }),
       timeoutMs: 12_000,
-      rememberPluginLogoUrl: () => {},
+      rememberLogoSource: () => {},
     });
     assert.deepEqual(listed.plugins.map((plugin) => [plugin.pluginId, plugin.displayName, plugin.name, plugin.category, plugin.homepage]), [
       ["3", "One", "server-one", "Dev Tools", "https://repo.test/p"],
@@ -81,17 +89,17 @@ describe("a plugin as the marketplace sent it", () => {
     // A plugin with no repository falls back to its publisher's site, and a marketplace a user owns says so.
     const fallbacks = await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => undefined,
-      createClient: () => ({ listMarketplacePlugins: async () => ({ plugins: [wirePlugin({ repositoryUrl: "", publisher: { name: "pub", displayName: "Pub", isUserOwned: false, websiteUrl: "https://pub.test" }, marketplace: { name: "m", displayName: "M", teamId: null, userId: 5 } })] }) }),
+      createClient: () => remoteClient({ listPublicPlugins: async () => [wirePlugin({ homepage: "", publisher: { slug: "pub", title: "Pub", isUserOwned: false, homepage: "https://pub.test" }, collection: { id: "m", slug: "m", title: "M", ownerType: "user" } })] }),
       timeoutMs: 12_000,
-      rememberPluginLogoUrl: () => {},
+      rememberLogoSource: () => {},
     });
     assert.deepEqual([fallbacks.plugins[0]!.homepage, fallbacks.plugins[0]!.marketplace?.ownership], ["https://pub.test", "user"]);
     // A marketplace nobody owns is not one a plugin is in.
     const unowned = await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => undefined,
-      createClient: () => ({ listMarketplacePlugins: async () => ({ plugins: [wirePlugin({ marketplace: { name: "m", displayName: "M", teamId: null, userId: null } })] }) }),
+      createClient: () => remoteClient({ listPublicPlugins: async () => [wirePlugin({ collection: { id: "m", slug: "m", title: "M" } })] }),
       timeoutMs: 12_000,
-      rememberPluginLogoUrl: () => {},
+      rememberLogoSource: () => {},
     });
     assert.equal("marketplace" in unowned.plugins[0]!, false);
     // The view leaves the fields a user can fill in and the two maybes out when there are none.
@@ -105,42 +113,54 @@ describe("a plugin as the marketplace sent it", () => {
   it("adds what the account's private marketplaces offer, one unreadable marketplace at a time", async () => {
     const asked: unknown[] = [];
     const client = {
-      listMarketplacePlugins: async (request: { marketplaceId?: string; excludeCloudAgentPlugins: boolean }, options: { timeoutMs: number }) => {
-        asked.push({ ...request, timeoutMs: options.timeoutMs });
-        if (request.marketplaceId === "bad") throw new Error("the marketplace is down");
-        if (request.marketplaceId === "team-1") return { plugins: [wirePlugin({ id: 9, displayName: "Zed" })] };
-        return { plugins: [wirePlugin({ id: 8, displayName: "Alpha" })] };
+      listPublicPlugins: async (timeoutMs: number) => {
+        asked.push({ scope: "public", timeoutMs });
+        return [wirePlugin({ id: "8", title: "Alpha" })];
       },
-      listMarketplaces: async () => ({ marketplaces: [{ id: "team-1", teamId: 3, userId: null }, { id: "bad", teamId: null, userId: 5 }, { id: "public", teamId: null, userId: null }] }),
+      listOwnedCollections: async (timeoutMs: number) => {
+        asked.push({ scope: "owned", timeoutMs });
+        return [
+          { id: "team-1", slug: "team-1", ownerType: "team" as const },
+          { id: "bad", slug: "bad", ownerType: "user" as const },
+        ];
+      },
+      listPluginsInCollection: async (collectionId: string, timeoutMs: number) => {
+        asked.push({ scope: "collection", collectionId, timeoutMs });
+        if (collectionId === "bad") throw new Error("the marketplace is down");
+        if (collectionId === "team-1") return [wirePlugin({ id: "9", title: "Zed" })];
+        return [wirePlugin({ id: "8", title: "Alpha" })];
+      },
+      readPluginServerConfig: async () => undefined,
     };
     const listed = await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => "token",
       createClient: () => client,
       timeoutMs: 5_000,
-      rememberPluginLogoUrl: () => {},
+      rememberLogoSource: () => {},
     });
     assert.deepEqual(listed.plugins.map((plugin) => plugin.pluginId), ["8", "9"]);
     assert.equal(listed.includesPrivateMarketplaces, true);
     // The public listing, then the two owned marketplaces — never the one nobody owns, and both under the timeout.
     assert.deepEqual(asked, [
-      { excludeCloudAgentPlugins: true, timeoutMs: 5_000 },
-      { marketplaceId: "team-1", excludeCloudAgentPlugins: true, timeoutMs: 5_000 },
-      { marketplaceId: "bad", excludeCloudAgentPlugins: true, timeoutMs: 5_000 },
+      { scope: "public", timeoutMs: 5_000 },
+      { scope: "owned", timeoutMs: 5_000 },
+      { scope: "collection", collectionId: "team-1", timeoutMs: 5_000 },
+      { scope: "collection", collectionId: "bad", timeoutMs: 5_000 },
     ]);
     assert.deepEqual(listed.plugins.map((plugin) => plugin.displayName), ["Alpha", "Zed"]);
     // An account without a credential is not asked which marketplaces it has: there are none to read.
     let marketplaceReads = 0;
     await fetchMarketplaceMcpPlugins(account.getAccessToken, account.getMachineId, {
       bestEffortToken: async () => undefined,
-      createClient: () => ({
-        listMarketplacePlugins: async () => ({ plugins: [wirePlugin()] }),
-        listMarketplaces: async () => {
+      createClient: () => remoteClient({
+        listPublicPlugins: async () => [wirePlugin()],
+        listOwnedCollections: async () => {
           marketplaceReads += 1;
-          return { marketplaces: [] };
+          return [];
         },
       }),
       timeoutMs: 12_000,
-      rememberPluginLogoUrl: () => {},
+      rememberLogoSource: () => {},
     });
     assert.equal(marketplaceReads, 0);
   });
@@ -167,10 +187,10 @@ describe("a published server entry", () => {
     assert.deepEqual(normalizePluginConfig({ one: "not an object", two: [1, 2], three: 3, four: { command: "x" } }, permissive), { four: { command: "x" } });
   });
 
-  it("turns a github blob link into the raw address behind it", () => {
-    assert.equal(toRawGithubUrl("https://github.com/o/r/blob/main/dir/mcp.json"), "https://raw.githubusercontent.com/o/r/main/dir/mcp.json");
+  it("turns a published config location into the address the source adapter fetches", () => {
+    assert.equal(resolvePublishedConfigSourceUrl("https://github.com/o/r/blob/main/dir/mcp.json"), "https://raw.githubusercontent.com/o/r/main/dir/mcp.json");
     assert.deepEqual(
-      [toRawGithubUrl("not a url"), toRawGithubUrl("https://gitlab.com/o/r/blob/main/mcp.json"), toRawGithubUrl("https://github.com/o/r"), toRawGithubUrl("https://github.com/o/r/tree/main/dir")],
+      [resolvePublishedConfigSourceUrl("not a url"), resolvePublishedConfigSourceUrl("https://gitlab.com/o/r/blob/main/mcp.json"), resolvePublishedConfigSourceUrl("https://github.com/o/r"), resolvePublishedConfigSourceUrl("https://github.com/o/r/tree/main/dir")],
       [null, null, null, null],
     );
   });
@@ -193,9 +213,9 @@ describe("where a plugin's servers are read from", () => {
   const safeParse = (value: unknown) => (typeof (value as { url?: unknown }).url === "string" ? { success: true, data: value as never } : { success: false });
   const deps = (overrides: Partial<MarketplaceDeps> = {}): MarketplaceDeps => ({
     bestEffortToken: async () => "token",
-    createClient: () => ({ getPluginMcpConfig: async () => ({ configJson: JSON.stringify({ mcpServers: { one: { url: "https://from.test" } } }) }) }),
+    createClient: () => remoteClient({ readPluginServerConfig: async () => JSON.stringify({ mcpServers: { one: { url: "https://from.test" } } }) }),
     timeoutMs: 12_000,
-    rememberPluginLogoUrl: () => {},
+    rememberLogoSource: () => {},
     safeParseServer: safeParse,
     fetch: async () => ({ ok: true, text: async () => "{}" }) as never,
     fetchTimeoutMs: 12_000,
@@ -209,7 +229,7 @@ describe("where a plugin's servers are read from", () => {
     assert.deepEqual(fetched, []);
     // An answer that holds no config is no answer: the published config is read instead.
     const fromSource = await fetchPluginServers(plugin, account.getAccessToken, account.getMachineId, deps({
-      createClient: () => ({ getPluginMcpConfig: async () => ({ configJson: "{}" }) }),
+      createClient: () => remoteClient({ readPluginServerConfig: async () => "{}" }),
       fetch: async (url) => ({ ok: true, text: async () => JSON.stringify({ mcpServers: { two: { url: url.toString() } } }) }) as never,
     }));
     assert.deepEqual(fromSource, { two: { url: "https://raw.githubusercontent.com/o/r/main/mcp.json" } });
@@ -259,7 +279,7 @@ describe("where a plugin's servers are read from", () => {
     assert.deepEqual(nothing, {});
     // A credential the backend refuses does not stop the published config being read.
     const refused = await fetchPluginServers(plugin, account.getAccessToken, account.getMachineId, deps({
-      createClient: () => ({ getPluginMcpConfig: async () => { throw new Error("no"); } }),
+      createClient: () => remoteClient({ readPluginServerConfig: async () => { throw new Error("no"); } }),
       fetch: async () => ({ ok: true, text: async () => JSON.stringify({ mcpServers: { one: { url: "https://fallback.test" } } }) }) as never,
     }));
     assert.deepEqual(refused, { one: { url: "https://fallback.test" } });

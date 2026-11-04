@@ -1,14 +1,6 @@
-/**
- * Loading a transcript once, when the host starts.
- *
- * The load is shared: everyone who asks while it runs waits for the same one, so a transcript is not opened twice at
- * startup. A database another process holds is retried, and a failure that is not retryable is reported with the
- * message the caller's own reporter gives it.
- */
-import {
-  isSqliteBusyError,
-  retrySqliteBusy
-} from "./storage/sqlite-busy.ts";
+/** Restore the conversation log before the host begins serving requests. */
+
+import { isSqliteBusyError, retrySqliteBusy } from "./storage/sqlite-busy.ts";
 
 export interface InitialTranscriptLoader<Entry = unknown> {
   ensureLoaded(): Promise<readonly Entry[]>;
@@ -19,41 +11,55 @@ export interface InitialTranscriptLoadOptions {
   readonly logError?: (message: string, error?: unknown) => void;
 }
 
-/**
- * Loads the initial transcript while preserving the shipped host's degraded
- * startup behavior. A locked database and an exhausted agent limit keep the
- * gateway alive so the desktop can still show the roster and delete agents.
- * Every other error remains a fatal startup failure.
- */
+type DegradedStartup =
+  | { readonly kind: "locked-store"; readonly message: string; readonly error: unknown }
+  | { readonly kind: "agent-capacity"; readonly message: string };
+
+const DEFAULT_REPORTER: NonNullable<InitialTranscriptLoadOptions["logError"]> = (message, error) => {
+  if (error === undefined) console.error(message);
+  else console.error(message, error);
+};
+
+function recoveryForLoadFailure(
+  error: unknown,
+  isAgentLimitError: (error: unknown) => boolean,
+): DegradedStartup | undefined {
+  if (isSqliteBusyError(error)) {
+    return {
+      kind: "locked-store",
+      message: "[slate-host] transcript store stayed locked; continuing without restored entries",
+      error,
+    };
+  }
+  if (isAgentLimitError(error)) {
+    return {
+      kind: "agent-capacity",
+      message: "[slate-host] account capacity is full; transcript restore was skipped so agents remain manageable",
+    };
+  }
+  return undefined;
+}
+
+function reportDegradedStartup(
+  recovery: DegradedStartup,
+  reportError: NonNullable<InitialTranscriptLoadOptions["logError"]>,
+): void {
+  if (recovery.kind === "locked-store") reportError(recovery.message, recovery.error);
+  else reportError(recovery.message);
+}
+
+/** Expected lock contention and an exhausted account limit leave the host available with no restored entries. */
 export async function loadInitialTranscriptResiliently<Entry>(
   transcript: InitialTranscriptLoader<Entry>,
-  options: InitialTranscriptLoadOptions = {}
+  options: InitialTranscriptLoadOptions = {},
 ): Promise<number> {
-  const isAgentLimitError = options.isAgentLimitError ?? (() => false);
-  const logError = options.logError ?? ((message, error) => {
-    if (error === undefined) console.error(message);
-    else console.error(message, error);
-  });
-
   try {
     const entries = await retrySqliteBusy(() => transcript.ensureLoaded());
     return entries.length;
   } catch (error) {
-    if (isSqliteBusyError(error)) {
-      logError(
-        "[slate-host] initial transcript load still locked after retries (kept alive):",
-        error
-      );
-      return 0;
-    }
-
-    if (isAgentLimitError(error)) {
-      logError(
-        "[slate-host] no session at the agent cap; starting without one so the roster and delete stay reachable"
-      );
-      return 0;
-    }
-
-    throw error;
+    const recovery = recoveryForLoadFailure(error, options.isAgentLimitError ?? (() => false));
+    if (recovery === undefined) throw error;
+    reportDegradedStartup(recovery, options.logError ?? DEFAULT_REPORTER);
+    return 0;
   }
 }

@@ -5,11 +5,10 @@
  * turn that was already settled is not settled again.
  */
 import { turnEndedOnSilentToolCalls } from "./turn-shape.ts";
-import { StepTiming } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
 import {
-  runTurnMemory,
-  type EpisodeProgress,
-  type TurnMemoryStore,
+  settleCompletedTurnMemory,
+  type MemoryEpisodeProgress,
+  type SlateTurnMemoryStore,
 } from "./turn-memory.ts";
 import type { AgentProfilePromptSnapshot } from "./slate-agent-profile-prompt.ts";
 
@@ -36,7 +35,13 @@ export interface TokenDetails {
 export interface TurnCheckpoint {
   readonly summaryArchives: readonly unknown[];
   tokenDetails?: TokenDetails | undefined;
-  turnTimings: StepTiming[];
+  turnTimings: SlateTurnTiming[];
+}
+
+/** A Slate-owned record of when a turn ended and how long it ran. */
+export interface SlateTurnTiming {
+  readonly timestampMs: bigint;
+  readonly durationMs: bigint;
 }
 
 export interface ProfileIdentity {
@@ -99,19 +104,21 @@ export interface TurnSettleHost {
     stage: "post_turn_record";
     errorClass: string;
   }): void;
+  /** Materializes the record in the external wire format at the production boundary. */
+  createTurnTiming?(timing: SlateTurnTiming): SlateTurnTiming;
 }
 
 export interface TurnSettleScope {
   readonly conversationId: string;
   readonly profilePromptSnapshots: unknown;
-  readonly memoryStore?: TurnMemoryStore;
-  readonly episodeProgress?: EpisodeProgress | null;
+  readonly memoryStore?: SlateTurnMemoryStore;
+  readonly episodeProgress?: MemoryEpisodeProgress | null;
   readonly isMemorableExchange?: (prompt: string) => boolean;
 }
 
 export interface TurnSession {
   getModelId(): string;
-  getExecutor(): ReturnType<import("./turn-memory.ts").MemorySession["getExecutor"]>;
+  getExecutor(): ReturnType<import("./turn-memory.ts").TurnMemorySession["getExecutor"]>;
 }
 
 export interface CompletedTurnArgs {
@@ -314,10 +321,11 @@ export function createTurnSettle(
 
   /** Records when the turn ended, in its own timing list. */
   function appendTurnTiming(state: TurnCheckpoint, turnStartedAtMs: number, turnEndedAtMs: number): void {
-    state.turnTimings.push(new StepTiming({
+    const timing: SlateTurnTiming = {
       timestampMs: BigInt(turnEndedAtMs),
       durationMs: BigInt(Math.max(0, turnEndedAtMs - turnStartedAtMs)),
-    }));
+    };
+    state.turnTimings.push(runner.createTurnTiming?.(timing) ?? timing);
   }
 
   /** Notes whether the turn ended because its last tool calls had nothing to say. */
@@ -373,7 +381,7 @@ export function createTurnSettle(
     recordPostTurnLabeling(turnArgs);
 
     if (worthRemembering(turnArgs) && settleScope.memoryStore != null) {
-      await runTurnMemory(
+      await settleCompletedTurnMemory(
         settleScope.memoryStore,
         settleScope.episodeProgress,
         turnArgs.session,

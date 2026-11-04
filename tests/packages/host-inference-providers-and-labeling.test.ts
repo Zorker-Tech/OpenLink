@@ -17,12 +17,12 @@ import {
   wrapPromptSessionWithSlateFollowupLabeling,
 } from "../../source/host/extensions/inference/slate-labeling.ts";
 import { createProviderPromptSession, runRoutedProviderText } from "../../source/host/extensions/inference/provider-session.ts";
-import { createCursorInferencePromptSession } from "../../source/shared/node/cursor-backend/cursor-inference.ts";
+import { createCursorInferencePromptSession } from "../../source/adapters/interop/cursor-backend/cursor-inference.ts";
 import { boxLifecycleExtension } from "../../source/host/boxes/box-lifecycle/extension.ts";
 import { BoxLifecycleService } from "../../source/host/boxes/box-lifecycle/box-lifecycle-service.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 import { SLATE_DATA_ROOT_ENV } from "../../source/host/host-paths.ts";
-import { conversationIdKey, requestIdKey } from "../../source/packages/chat-inference-proto/client.ts";
+import { conversationIdKey, requestIdKey } from "../../source/adapters/interop/chat-inference-proto/client.ts";
 import { SlateSettingsStore } from "../../source/shared/node/settings/slate-settings-store.ts";
 import type { LabelMessage } from "../../source/host/extensions/inference/slate-labeling.ts";
 import { pinHostDiagnosticsReporter, type HostDiagnostic } from "../../source/host/host-diagnostics.ts";

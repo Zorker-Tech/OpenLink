@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-import { synthesizeSkillPluginDir } from "../../source/packages/plugin-install/skill-plugin-synthesizer.ts"
+import { writeLocalSkillPackage } from "../../source/packages/plugin-install/skill-plugin-synthesizer.ts"
 import { isSparseCheckoutRepo, materializeSpecForGitPaths, serverIgnoredFilter } from "../../source/packages/plugin-install/git-sparse-clone.ts"
 import {
   PLUGIN_MCP_CONFIG_FILE_NAMES,
@@ -30,10 +30,10 @@ test("the skills a workspace holds are written out as one plugin", async () => {
     fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# review")
 
     const target = path.join(root, "plugin")
-    const written = await synthesizeSkillPluginDir({
-      skills: [{ dir: skillDir, relativePath: "review" }],
-      targetDir: target,
-      pluginName: "My Skills",
+    const written = await writeLocalSkillPackage({
+      skills: [{ sourceDirectory: skillDir, packagePath: "review" }],
+      targetDirectory: target,
+      name: "My Skills",
       displayName: "My Skills",
     })
 
@@ -57,22 +57,46 @@ test("a skill path that would leave the plugin is refused", async () => {
     const target = path.join(root, "plugin")
 
     await assert.rejects(
-      () => synthesizeSkillPluginDir({ skills: [{ dir: skillDir, relativePath: "/etc" }], targetDir: target, pluginName: "mine" }),
+      () => writeLocalSkillPackage({ skills: [{ sourceDirectory: skillDir, packagePath: "/etc" }], targetDirectory: target, name: "mine" }),
       /must be relative to the skills root/,
     )
     await assert.rejects(
-      () => synthesizeSkillPluginDir({ skills: [{ dir: skillDir, relativePath: "../elsewhere" }], targetDir: target, pluginName: "mine" }),
+      () => writeLocalSkillPackage({ skills: [{ sourceDirectory: skillDir, packagePath: "../elsewhere" }], targetDirectory: target, name: "mine" }),
       /resolves to an unsafe path/,
     )
     await assert.rejects(
-      () => synthesizeSkillPluginDir({ skills: [], targetDir: target, pluginName: "mine" }),
+      () => writeLocalSkillPackage({ skills: [{ sourceDirectory: skillDir, packagePath: "C:\\outside" }], targetDirectory: target, name: "mine" }),
+      /must be relative to the skills root/,
+    )
+    await assert.rejects(
+      () => writeLocalSkillPackage({ skills: [], targetDirectory: target, name: "mine" }),
       /At least one skill directory is required/,
     )
     // A name that has nothing a name can hold is refused rather than written as something else.
     await assert.rejects(
-      () => synthesizeSkillPluginDir({ skills: [{ dir: skillDir, relativePath: "review" }], targetDir: target, pluginName: "!!!" }),
+      () => writeLocalSkillPackage({ skills: [{ sourceDirectory: skillDir, packagePath: "review" }], targetDirectory: target, name: "!!!" }),
       /has no usable characters/,
     )
+  })
+})
+
+test("skill package planning rejects colliding destinations before creating output", async () => {
+  await withTempDir("slate-skill-package-", async (root) => {
+    const skillDir = path.join(root, "skills", "review")
+    fs.mkdirSync(skillDir, { recursive: true })
+    const target = path.join(root, "plugin")
+    await assert.rejects(
+      () => writeLocalSkillPackage({
+        skills: [
+          { sourceDirectory: skillDir, packagePath: "team/review" },
+          { sourceDirectory: skillDir, packagePath: "team\\review" },
+        ],
+        targetDirectory: target,
+        name: "My Skills",
+      }),
+      /would pack to the same path: skills\/team\/review/,
+    )
+    assert.equal(fs.existsSync(target), false)
   })
 })
 

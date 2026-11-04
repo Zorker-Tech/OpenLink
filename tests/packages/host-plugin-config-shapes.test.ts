@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mcpConfigSchema, mcpServerConfigSchema, noopPluginMetricsLogger } from "../../source/packages/plugin-install/types.ts";
+import { externalPluginMcpConfigSchema as mcpConfigSchema, externalPluginMcpServerConfigSchema as mcpServerConfigSchema } from "../../source/adapters/interop/plugin-marketplace/plugin-mcp-config-adapter.ts";
+import { noopPluginMetricsLogger } from "../../source/packages/plugin-install/types.ts";
 
 describe("the shapes a plugin's MCP configuration takes", () => {
   it("takes a server that is a command, with what it needs around it", () => {

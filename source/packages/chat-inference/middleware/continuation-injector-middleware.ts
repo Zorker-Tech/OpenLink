@@ -1,31 +1,37 @@
-/**
- * Telling a model that a turn was cut off.
- *
- * A turn that ended because it hit its limit is continued rather than restarted: what is injected says so, so the model
- * picks up where it stopped instead of repeating the work.
- */
+/** Continue a non-empty assistant turn that ended before the response finished. */
 import { BaseMiddleware, type PromptExecutor, type PromptMessage } from "../base.ts";
+import { isEmptyAssistantMessage } from "./prompt-message-policy.ts";
+
+export { isEmptyAssistantMessage } from "./prompt-message-policy.ts";
 
 const logger = {
   name: "@slate/chat-inference/continuation-injector-middleware",
   info(_ctx: unknown, message: string, metadata: unknown): void { console.info(message, metadata); },
 };
-export const CONTINUATION_MESSAGE = "Your previous response was interrupted. Continue from where you left off.";
-export const isEmptyAssistantMessage = (message: PromptMessage): boolean => message.role === "assistant" && message.content.length === 0;
+export const CONTINUATION_MESSAGE = "The previous answer ended before it was complete. Continue from the point where it stopped, without repeating completed work.";
+
 export function needsContinuationMessage(messages: readonly PromptMessage[]): boolean {
-  const lastMessage = messages.at(-1);
-  return lastMessage !== undefined && lastMessage.role === "assistant" && !isEmptyAssistantMessage(lastMessage);
+  const latest = messages[messages.length - 1];
+  if (latest === undefined || latest.role !== "assistant") return false;
+  return !isEmptyAssistantMessage(latest);
 }
 
 export class ContinuationInjectorMiddleware extends BaseMiddleware<PromptMessage> {
   override stream(...args: readonly unknown[]): unknown {
     const messages = this.innerExecutor.getMessages();
-    if (needsContinuationMessage(messages)) {
-      logger.info(args[0], "[continuation-injector] last message is assistant; injecting continuation prompt", { messageCount: messages.length });
-      this.innerExecutor.appendMessages({ role: "user", content: CONTINUATION_MESSAGE });
-    }
+    if (needsContinuationMessage(messages)) this.appendContinuation(messages.length, args[0]);
     return this.innerExecutor.stream(...args);
   }
+
+  private appendContinuation(messageCount: number, context: unknown): void {
+    logger.info(context, "[continuation-injector] final assistant message is incomplete; continuing the turn", { messageCount });
+    this.innerExecutor.appendMessages({ role: "user", content: CONTINUATION_MESSAGE });
+  }
 }
-export const createContinuationInjectorMiddleware = () => (executor: PromptExecutor<PromptMessage>): ContinuationInjectorMiddleware => new ContinuationInjectorMiddleware(executor);
+
+export function createContinuationInjectorMiddleware() {
+  return (executor: PromptExecutor<PromptMessage>): ContinuationInjectorMiddleware =>
+    new ContinuationInjectorMiddleware(executor);
+}
+
 export const continuationInjectorMiddleware = createContinuationInjectorMiddleware();

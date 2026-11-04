@@ -6,4 +6,7 @@
  * reached. It carries nothing beyond the message, since the reason is what the caller acts on.
  */
 
-export class SlateGatewayCommandError extends Error {}
+const GatewayCommandErrorType = class SlateGatewayCommandError extends Error {};
+
+export const SlateGatewayCommandError = GatewayCommandErrorType;
+export type SlateGatewayCommandError = InstanceType<typeof GatewayCommandErrorType>;

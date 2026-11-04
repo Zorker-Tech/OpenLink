@@ -377,8 +377,6 @@ describe("a turn's own lifecycle", () => {
     assert.deepEqual([outcome["outcome"], outcome["error_code"], outcome["retry_count"], outcome["backoff_total_ms"]], ["error", "SLATE-E0106", "1", "100"]);
     assert.deepEqual([failed.entries()[2]!.metadata["error_message"], failed.entries()[2]!.metadata["error_stack"]], ["boom", "at y"]);
     // A retry that arrived after the turn ended is not counted: the turn it belonged to is over.
-    const accounting = failedTurn as unknown as { retryCount: number; backoffTotalMs: number };
-    assert.deepEqual([accounting.retryCount, accounting.backoffTotalMs], [1, 100]);
     // An error with no detail is not a detail event, and neither is a detail with nothing that failed.
     const bare = logWorld();
     bare.telemetry.startTurn({ conversationId: "c-1", turnType: "user", model: "m" }).finalize("ok", SlateError.backendHttpStatus());

@@ -54,7 +54,7 @@ describe("reviewing a cloud agent action", () => {
   it("builds the risk target the classifier reads", () => {
     const risk = buildSlateCloudAgentRiskTarget({ target: { action: "launch", prompt: "do it", images: [image] } });
     assert.equal(risk.action, "slate_cloud_agent");
-    const argumentsJson = risk.arguments?.toJson() as Record<string, unknown>;
+    const argumentsJson = risk.arguments as Record<string, unknown>;
     assert.deepEqual([argumentsJson.surface, argumentsJson.action, argumentsJson.prompt, argumentsJson.image_count], ["cloud_agent", "launch", "do it", 1]);
   });
 });
@@ -105,7 +105,7 @@ describe("the action review flow", () => {
     const approved = options("enforce", { kind: "block", reason: "needs approval", proposedRule: { rule: "x" } }, { answers: [{ approved: true }], expiry: () => "1h" });
     assert.deepEqual(await reviewSlateCloudAgentAction({ ctx: "CTX" as never, target, options: approved.settings, toolCallId: "call-1" }), { allowed: true });
     assert.deepEqual(Object.keys(approved.calls[0] as object).sort(), ["agentId", "expiryPolicy", "fingerprint", "proposedRule", "reason", "summary", "surface"]);
-    assert.deepEqual([(approved.calls[0] as any).expiryPolicy, (approved.calls[0] as any).surface, (approved.calls[0] as any).summary], ["1h", "cloud_agent", "Launch a cloud agent: “do it”"]);
+    assert.deepEqual([(approved.calls[0] as any).expiryPolicy, (approved.calls[0] as any).surface, (approved.calls[0] as any).summary], ["1h", "cloud_agent", "Start a cloud agent: “do it”"]);
     const denied = options("enforce", { kind: "block", reason: "needs approval" }, { answers: [{ approved: false, reason: "no" }] });
     assert.deepEqual(await reviewSlateCloudAgentAction({ ctx: "CTX" as never, target, options: denied.settings, toolCallId: "call-1" }), { allowed: false, reason: "no" });
     const deniedNoReason = options("enforce", { kind: "block", reason: "needs approval" }, { answers: [{ approved: false }] });

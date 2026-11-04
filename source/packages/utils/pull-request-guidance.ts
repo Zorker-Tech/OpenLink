@@ -1,27 +1,24 @@
-/**
- * Telling the agent which tool opens pull requests here.
- *
- * A team can pin the guidance the agent receives about creating pull requests; when it changes, the
- * user-info block a session was built with is stale and has to be rendered again. The comparison is
- * against the rendered block, so it notices both a changed rule and a rule that was removed.
- */
+/** Rule address and headings used to refresh pull-request guidance in the first user-info block. */
 
-export const LOCAL_PR_CREATION_FORGE_RULE_PATH = "slate://internal/local-pr-creation-forge"
-export const LOCAL_PR_CREATION_FORGE_GUIDANCE_HEADER = "Preferred pull request host:"
-export const LEGACY_LOCAL_PR_CREATION_FORGE_GUIDANCE_HEADER = "Pull request forge (Creation Provider):"
+export const PULL_REQUEST_GUIDANCE_RULE_PATH = "slate://internal/local-pr-creation-forge";
+export const PULL_REQUEST_GUIDANCE_HEADER = "Preferred pull request host:";
+export const LEGACY_PULL_REQUEST_GUIDANCE_HEADER = "Pull request forge (Creation Provider):";
 
-export const FORGE_CLI_GLOSSARY = [
-  "Slate can open new pull requests on GitHub with the `gh` CLI (`gh pr create`).",
-  "Prefer `gh` over `gt`; if you use `gt`, you MUST pass `--github` for the intended host.",
-].join("\n")
+export const PULL_REQUEST_CREATION_GUIDANCE = [
+  "Use the repository host configured for this workspace.",
+  "Choose the target repository and branch explicitly when multiple remotes are available.",
+].join("\n");
 
-export function shouldRerenderUserInfoForLocalPrCreationForge(args: {
-  forgeRuleContent?: string
-  userInfoContent: string
-}): boolean {
-  if (args.forgeRuleContent === undefined || args.forgeRuleContent.length === 0) {
-    return [LOCAL_PR_CREATION_FORGE_GUIDANCE_HEADER, LEGACY_LOCAL_PR_CREATION_FORGE_GUIDANCE_HEADER]
-      .some(header => args.userInfoContent.includes(`<user_rule>${header}`))
+interface UserInfoPullRequestRuleState {
+  readonly selectedRule?: string;
+  readonly renderedUserInfo: string;
+}
+
+export function shouldRebuildUserInfoForPullRequestRule(state: UserInfoPullRequestRuleState): boolean {
+  const { selectedRule, renderedUserInfo } = state;
+  if (selectedRule === undefined || selectedRule.length === 0) {
+    return [PULL_REQUEST_GUIDANCE_HEADER, LEGACY_PULL_REQUEST_GUIDANCE_HEADER]
+      .some((heading) => renderedUserInfo.includes(`<user_rule>${heading}`));
   }
-  return !args.userInfoContent.includes(`<user_rule>${args.forgeRuleContent}</user_rule>`)
+  return !renderedUserInfo.includes(`<user_rule>${selectedRule}</user_rule>`);
 }

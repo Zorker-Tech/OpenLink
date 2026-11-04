@@ -1,31 +1,17 @@
-/**
- * Counting the tool calls a turn made, and how they went.
- *
- * The counts are what the platform reports about a turn — how many tools it used, how many failed, and
- * how many failed in ways that suggest the environment rather than the request — so they have to be
- * taken from the same place the results are recorded, rather than from a second pass that could
- * disagree. That is what the middleware is: the executor wrapped so that every recorded result is
- * counted, with the classification that came with it.
- *
- * The two "unexpected" classifications are separated from the rest because they mean the turn should not
- * be judged on its outcome: a timeout, a provider failure or a device out of space is not the model's
- * mistake.
- */
-
-import { ToolErrorClassification } from "./tools/tool-errors.ts"
+import { ToolErrorClassification } from "./tools/tool-errors.ts";
 
 type ToolResultRecorder = (
   ctx: unknown,
   result: unknown,
   loggedToolName: unknown,
   errorClassification: ToolErrorClassification | undefined,
-) => Promise<void>
+) => Promise<void>;
 
 interface ToolCountingExecutor {
-  appendMessages(messages: unknown): unknown
-  getState(): unknown
-  getMessages(): unknown
-  clearMessages(): unknown
+  appendMessages(messages: unknown): unknown;
+  getState(): unknown;
+  getMessages(): unknown;
+  clearMessages(): unknown;
   executeToolStream(
     ctx: unknown,
     convState: unknown,
@@ -35,7 +21,7 @@ interface ToolCountingExecutor {
     recordToolCallResult: ToolResultRecorder,
     descriptionProps: unknown,
     firstToolCallHook: unknown,
-  ): unknown
+  ): unknown;
   executeModelStreamOnly(
     ctx: unknown,
     convState: unknown,
@@ -43,50 +29,82 @@ interface ToolCountingExecutor {
     tools: unknown,
     descriptionProps: unknown,
     firstToolCallHook: unknown,
-  ): unknown
-  stream(ctx: unknown, invocationId: unknown, tools: unknown, options: unknown): unknown
+  ): unknown;
+  stream(ctx: unknown, invocationId: unknown, tools: unknown, options: unknown): unknown;
+}
+
+const ENVIRONMENT_FAILURES = [
+  ToolErrorClassification.TIMEOUT,
+  ToolErrorClassification.PROVIDER_ERROR,
+  ToolErrorClassification.BAD_USER_DEVICE_STATE,
+  ToolErrorClassification.OTHER_ERROR,
+] as const;
+
+function addCounts(counts: Iterable<number>): number {
+  let total = 0;
+  for (const count of counts) total += count;
+  return total;
+}
+
+function classificationTotal(
+  counts: ReadonlyMap<ToolErrorClassification, number>,
+  classes: readonly ToolErrorClassification[],
+): number {
+  return addCounts(classes.map((classification) => counts.get(classification) ?? 0));
+}
+
+function flag(value: boolean): "true" | "false" {
+  return value ? "true" : "false";
 }
 
 export class ToolCountingStateTracker {
-  toolCallCount = 0
-  readonly resultClassificationCounts = new Map<ToolErrorClassification, number>()
+  toolCallCount = 0;
+  readonly resultClassificationCounts = new Map<ToolErrorClassification, number>();
 
   getFailedToolCallCount(): number {
-    return Array.from(this.resultClassificationCounts.values()).reduce((sum, count) => sum + count, 0)
+    return addCounts(this.resultClassificationCounts.values());
   }
 
   getUnexpectedToolCallErrorCount(): number {
-    return (this.resultClassificationCounts.get(ToolErrorClassification.TIMEOUT) ?? 0) +
-      (this.resultClassificationCounts.get(ToolErrorClassification.PROVIDER_ERROR) ?? 0) +
-      (this.resultClassificationCounts.get(ToolErrorClassification.BAD_USER_DEVICE_STATE) ?? 0) +
-      (this.resultClassificationCounts.get(ToolErrorClassification.OTHER_ERROR) ?? 0)
+    return classificationTotal(this.resultClassificationCounts, ENVIRONMENT_FAILURES);
   }
 
   hasFailedToolCalls(): "true" | "false" {
-    return this.getFailedToolCallCount() > 0 ? "true" : "false"
+    return flag(this.getFailedToolCallCount() > 0);
   }
 
   hasUnexpectedToolCallErrors(): "true" | "false" {
-    return this.getUnexpectedToolCallErrorCount() > 0 ? "true" : "false"
+    return flag(this.getUnexpectedToolCallErrorCount() > 0);
   }
+}
+
+function countRecordedResult(state: ToolCountingStateTracker, record: ToolResultRecorder): ToolResultRecorder {
+  return async (ctx, result, loggedToolName, classification) => {
+    await record(ctx, result, loggedToolName, classification);
+    state.toolCallCount += 1;
+
+    if (classification === undefined) return;
+    const previousCount = state.resultClassificationCounts.get(classification) ?? 0;
+    state.resultClassificationCounts.set(classification, previousCount + 1);
+  };
 }
 
 export function createToolCountingMiddleware(
   state: ToolCountingStateTracker,
 ): (executor: ToolCountingExecutor) => ToolCountingExecutor {
-  return executor => ({
+  return (executor) => ({
     appendMessages(messages) {
-      executor.appendMessages(messages)
-      return this
+      executor.appendMessages(messages);
+      return this;
     },
     getState() {
-      return executor.getState()
+      return executor.getState();
     },
     getMessages() {
-      return executor.getMessages()
+      return executor.getMessages();
     },
     clearMessages() {
-      executor.clearMessages()
+      executor.clearMessages();
     },
     executeToolStream(ctx, convState, interactionHandler, tools, extraT, recordToolCallResult, descriptionProps, firstToolCallHook) {
       return executor.executeToolStream(
@@ -95,25 +113,16 @@ export function createToolCountingMiddleware(
         interactionHandler,
         tools,
         extraT,
-        async (innerCtx, result, loggedToolName, errorClassification) => {
-          await recordToolCallResult(innerCtx, result, loggedToolName, errorClassification)
-          state.toolCallCount++
-          if (errorClassification !== undefined) {
-            state.resultClassificationCounts.set(
-              errorClassification,
-              (state.resultClassificationCounts.get(errorClassification) ?? 0) + 1,
-            )
-          }
-        },
+        countRecordedResult(state, recordToolCallResult),
         descriptionProps,
         firstToolCallHook,
-      )
+      );
     },
     executeModelStreamOnly(ctx, convState, interactionHandler, tools, descriptionProps, firstToolCallHook) {
-      return executor.executeModelStreamOnly(ctx, convState, interactionHandler, tools, descriptionProps, firstToolCallHook)
+      return executor.executeModelStreamOnly(ctx, convState, interactionHandler, tools, descriptionProps, firstToolCallHook);
     },
     stream(ctx, invocationId, tools, options) {
-      return executor.stream(ctx, invocationId, tools, options)
+      return executor.stream(ctx, invocationId, tools, options);
     },
-  })
+  });
 }

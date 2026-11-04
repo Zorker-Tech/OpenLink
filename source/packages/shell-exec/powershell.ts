@@ -33,7 +33,7 @@ import {
   type TerminalEvent,
   type TerminalExecuteOptions,
 } from "./naive.ts";
-import dumpPowerShellState from "./dump_powershell_state.ts";
+import { buildShellCommandStateWrapper } from "../../adapters/interop/shell/powershell-state-wrapper-adapter.ts";
 
 type SandboxPolicySources = NonNullable<Parameters<typeof resolveSandboxPolicyForWorkspace>[1]>;
 type OutputLimiterOptions = Parameters<typeof attachShellOutputStreams>[0]["outputLimiterOptions"];
@@ -90,7 +90,7 @@ class PowerShellSession {
     const convertedCommand = shouldEnableSudoAskpass(env) ? transformSudoCommand(command) : command;
     const tempDirectory = tmpdir();
     const stateFilePath = join(tempDirectory, `ps-state-out-${randomUUID()}.txt`);
-    const wrapperScript = dumpPowerShellState(this.state, scriptCwd, convertedCommand, stateFilePath);
+    const wrapperScript = buildShellCommandStateWrapper(this.state, scriptCwd, convertedCommand, stateFilePath);
     const scriptPath = join(tempDirectory, `ps-script-${randomUUID()}.ps1`);
     await writeScriptWithBom(scriptPath, wrapperScript);
     const launcherArgs = ["-ExecutionPolicy", "Bypass"];

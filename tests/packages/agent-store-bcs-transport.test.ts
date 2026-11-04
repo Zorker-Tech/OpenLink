@@ -16,7 +16,7 @@ import {
   AgentStoreDirectoryListingMode,
   AgentStoreMultipartOperationFailureCode,
   AgentStoreSourceKind,
-} from "../../source/packages/proto/generated/aiserver/v1/background_composer_pb.ts";
+} from "../../source/adapters/interop/proto/generated/aiserver/v1/background_composer_pb.ts";
 
 const token: AgentStoreToken = { token: "token-1", expiresAtMs: 5_000, storeIds: ["store-1"] };
 const file = (relPath: string, extra: Record<string, unknown> = {}) => ({ relPath, etag: `"${relPath}-etag"`, size: 10, serverMtimeMs: 1_000, ...extra });

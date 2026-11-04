@@ -7,9 +7,9 @@
  * one of the variants.
  */
 
-import { CLOUD_AGENT_ARTIFACTS_DIR } from "../../constants/cloud-agent-paths.ts"
+import { AGENT_RUNTIME_PATHS } from "../../constants/cloud-agent-paths.ts"
 import { Fragment, jsx, jsxs } from "../../prompt-jsx/index.ts"
-import { noRepositoryAccessBullets } from "./repository-access-bullets.ts"
+import { repositoryAccessGuidance } from "./repository-access-bullets.ts"
 
 interface PromptArtifactProps {
   readonly env?: { readonly artifactsFolder?: string | undefined } | undefined
@@ -23,7 +23,7 @@ function normalizePromptArtifactsDir(artifactsDir: string): string {
 
 export function resolvePromptArtifactsDir(props: PromptArtifactProps): string {
   const reported = props.env?.artifactsFolder?.trim()
-  const artifactsDir = reported !== undefined && reported.length > 0 ? reported : CLOUD_AGENT_ARTIFACTS_DIR
+  const artifactsDir = reported !== undefined && reported.length > 0 ? reported : AGENT_RUNTIME_PATHS.artifactCollectionDirectory
   return normalizePromptArtifactsDir(artifactsDir)
 }
 
@@ -135,10 +135,10 @@ interface GitInstructionsProps {
 }
 
 function NoRepositoryAccessInstructions() {
-  const [mainBullet, redirectBullet] = noRepositoryAccessBullets()
+  const { boundary, nextStep } = repositoryAccessGuidance()
   return [
-    jsx("li", { children: mainBullet }),
-    jsx("li", { children: redirectBullet }),
+    jsx("li", { children: boundary }),
+    jsx("li", { children: nextStep }),
   ]
 }
 

@@ -7,7 +7,7 @@
  */
 
 import { SLATE_DEFAULT_MODEL_ID } from "../../shared/agents/agent-model.ts";
-import { createCursorGenerateImageService } from "../../shared/node/cursor-backend/cursor-generate-image.ts";
+import { createCursorGenerateImageService } from "../../adapters/interop/cursor-backend/cursor-generate-image.ts";
 
 export class SlateGenerateImagePersistError extends Error {}
 
@@ -21,18 +21,31 @@ export interface GeneratedImage {
   readonly mimeType: string;
 }
 
+export interface GenerateImageReferenceImage {
+  readonly data: string;
+  readonly mimeType: string;
+}
+
 export interface PersistedImage {
   readonly absolutePath: string;
 }
 
-/** How the platform's own image generator is built; a caller may hand one in instead. */
-export type GenerateImageFactory = (options: {
+export interface GenerateImageFactoryOptions {
   readonly getAccessToken: () => Promise<string>;
   readonly getMachineId: () => Promise<string>;
   readonly modelId: string;
   readonly maxMode: boolean;
   readonly onRequestId?: (id: string) => void;
-}) => ReturnType<typeof createCursorGenerateImageService>;
+}
+
+export type GenerateImageRunner = (
+  context: unknown,
+  description: string,
+  referenceImages: readonly GenerateImageReferenceImage[],
+) => Promise<GeneratedImage>;
+
+/** Build the provider call through an adapter while keeping its result behind a Slate-owned contract. */
+export type GenerateImageFactory = (options: GenerateImageFactoryOptions) => GenerateImageRunner;
 
 export interface GenerateImageServiceOptions {
   readonly persistImage: (bytes: Uint8Array, mimeType: string) => Promise<PersistedImage | null>;
@@ -41,19 +54,33 @@ export interface GenerateImageServiceOptions {
 }
 
 export function createSlateGenerateImageService<Context>(auth: GenerateImageAuth, options: GenerateImageServiceOptions) {
-  const build = options.generateImage ?? createCursorGenerateImageService;
-  const generateImage = build({
+  const buildGenerator = options.generateImage ?? createCursorGenerateImageService;
+  const generate = buildGenerator(generatorOptions(auth, options.onRequestId));
+  return (context: Context, description: string, _filePath: string, referenceImages: readonly GenerateImageReferenceImage[]) =>
+    generateAndPersistImage(context, description, referenceImages, generate, options.persistImage);
+}
+
+function generatorOptions(auth: GenerateImageAuth, onRequestId?: (id: string) => void): GenerateImageFactoryOptions {
+  return {
     getAccessToken: auth.getAccessToken,
     getMachineId: auth.getMachineId,
-    // The turn's own model when there is one, and the platform's default otherwise.
     modelId: process.env.SLATE_AGENT_MODEL ?? SLATE_DEFAULT_MODEL_ID,
     maxMode: true,
-    ...(options.onRequestId === undefined ? {} : { onRequestId: options.onRequestId }),
-  });
-  return async (ctx: Context, description: string, _filePath: string, referenceImages: readonly { data: string; mimeType: string }[]) => {
-    const generated = await generateImage(ctx, description, referenceImages);
-    const persisted = await options.persistImage(Buffer.from(generated.imageData, "base64"), generated.mimeType);
-    if (persisted == null) throw new SlateGenerateImagePersistError("Failed to save the generated image into the agent's media store.");
-    return { filePath: persisted.absolutePath, imageData: generated.imageData };
+    ...(onRequestId === undefined ? {} : { onRequestId }),
   };
+}
+
+async function generateAndPersistImage(
+  context: unknown,
+  description: string,
+  referenceImages: readonly GenerateImageReferenceImage[],
+  generate: GenerateImageRunner,
+  persist: GenerateImageServiceOptions["persistImage"],
+): Promise<{ readonly filePath: string; readonly imageData: string }> {
+  const image = await generate(context, description, referenceImages);
+  const saved = await persist(Buffer.from(image.imageData, "base64"), image.mimeType);
+  if (saved == null) {
+    throw new SlateGenerateImagePersistError("Failed to save the generated image into the agent's media store.");
+  }
+  return { filePath: saved.absolutePath, imageData: image.imageData };
 }

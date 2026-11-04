@@ -11,6 +11,7 @@ import { createWebAuthnProvider } from "../../source/coordinator/webauthn/provid
 function createRegistry() {
   let handler: ((requestUrl: URL, request: unknown, response: unknown) => Promise<boolean>) | undefined
   let released = 0
+  const responses: ReturnType<typeof createResponse>[] = []
   const registry = {
     acquire: async (_redirectUrl: URL, next: (requestUrl: URL, request: unknown, response: unknown) => Promise<boolean>) => {
       handler = next
@@ -19,7 +20,16 @@ function createRegistry() {
       }
     },
   }
-  return { registry, invoke: (url: string) => handler!(new URL(url), {}, createResponse()), released: () => released }
+  return {
+    registry,
+    responses,
+    invoke: (url: string) => {
+      const response = createResponse()
+      responses.push(response)
+      return handler!(new URL(url), {}, response)
+    },
+    released: () => released,
+  }
 }
 
 function createResponse() {
@@ -88,6 +98,31 @@ test("a callback that is not the flow's own is refused rather than answered", as
   assert.equal(await invoke("http://127.0.0.1:41234/callback?code=abc"), false)
   assert.equal(callbacks.length, 0)
 })
+
+test("OAuth denial, missing code and completion failure settle with the expected response status", async () => {
+  const { registry, invoke, responses } = createRegistry()
+  const callbackResults: Array<{ code: string; state: string }> = []
+  const settled: string[] = []
+  const warnings: unknown[] = []
+  await startMcpOAuthCallbackListener({
+    redirectUrl: "http://127.0.0.1:41234/callback",
+    resolve: (state: string) => ({ serverName: state }),
+    onCallback: async (result: { code: string; state: string }) => {
+      if (result.code === "broken") throw new Error("completion failed")
+      callbackResults.push(result)
+    },
+    onSettled: (state: string) => settled.push(state),
+    log: { info: () => {}, warn: (event: unknown) => warnings.push(event), error: () => {} },
+  } as never, registry as never)
+
+  assert.equal(await invoke("http://127.0.0.1:41234/callback?state=denied&error=access_denied"), true)
+  assert.equal(await invoke("http://127.0.0.1:41234/callback?state=missing-code"), true)
+  assert.equal(await invoke("http://127.0.0.1:41234/callback?state=failed&code=broken"), true)
+  assert.deepEqual(responses.map((response) => response.status), [400, 400, 500])
+  assert.deepEqual(callbackResults, [])
+  assert.deepEqual(settled, ["denied", "missing-code", "failed"])
+  assert.equal(warnings.length, 1)
+});
 
 // ---------------------------------------------------------------------------------------------
 // Asking the user to touch their key

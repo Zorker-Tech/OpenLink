@@ -8,7 +8,7 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
   FeedbackRequestCategory,
   FeedbackRequestCategoryGroup,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts"
 import { RedactedUpdates } from "../../source/packages/agent-core/redacted-interaction-updates.ts"
 import * as agentCore from "../../source/packages/agent-core/index.ts"
@@ -176,8 +176,8 @@ test("redacted feedback categories carry the mode with each entry", () => {
     })],
   )
   const value = update.message.value as unknown as {
-    categories: { _privacyMode?: number; id?: unknown }[]
-    categoryGroups: { _privacyMode?: number; categories: { _privacyMode?: number }[] }[]
+    categories: { _privacyMode?: PrivacyMode; id?: unknown }[]
+    categoryGroups: { _privacyMode?: PrivacyMode; categories: { _privacyMode?: PrivacyMode }[] }[]
     showFormImmediately?: boolean
   }
   assert.equal(value.categories[0]?._privacyMode, mode)
@@ -193,6 +193,17 @@ test("a conversation with no queue behind it reports nothing queued", async () =
   assert.equal(await receiver.pop(context), undefined)
 })
 
+test("the action inbox keeps its message shape owned by the caller", async () => {
+  type Action = { readonly kind: "resume"; readonly requestId: string }
+  const action: Action = { kind: "resume", requestId: "request-1" }
+  const inbox: agentCore.AgentActionInbox<Action> = {
+    async peek() { return { action } },
+    async pop() { return undefined },
+  }
+  assert.deepEqual(await inbox.peek(createContext()), { action })
+  assert.equal(await inbox.pop(createContext()), undefined)
+})
+
 test("the module's surface is reachable from one place", () => {
   for (const name of [
     "Updates",
@@ -201,10 +212,10 @@ test("the module's surface is reachable from one place", () => {
     "NoopInteractionListener",
     "buildGoalPursuitGuidelines",
     "goalElapsedMs",
-    "toRedactedInteractionListener",
     "queryWebSearch",
     "NoopConversationActionReceiver",
   ]) {
     assert.equal(name in agentCore, true, `${name} is exported`)
   }
+  assert.equal("toRedactedInteractionListener" in agentCore, false, "the generated-message bridge stays in interop")
 })

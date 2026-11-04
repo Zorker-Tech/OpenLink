@@ -12,14 +12,14 @@
 
 import { buildReminderContext, type ReminderContext } from "./context-builder.ts"
 
-interface MutableToolResultContentPart {
+interface ToolResultContentPart {
   readonly type?: string
   readonly experimental_content?: Array<{ type: string; text: string }>
 }
 
-interface MutableReminderMessage {
+interface ReminderMessage {
   readonly role: string
-  readonly content?: MutableToolResultContentPart[] | unknown
+  readonly content?: unknown
 }
 
 interface Reminder<TTodo> {
@@ -28,31 +28,34 @@ interface Reminder<TTodo> {
 }
 
 export async function applyRemindersToToolResults<TTodo = unknown>(
-  responseMessages: MutableReminderMessage[],
+  responseMessages: ReminderMessage[],
   reminders: readonly Reminder<TTodo>[],
   currentTodos: readonly TTodo[],
-  conversationMessages: readonly MutableReminderMessage[],
+  conversationMessages: readonly ReminderMessage[],
 ): Promise<void> {
   if (reminders.length === 0) return
   const context = buildReminderContext(conversationMessages, currentTodos, responseMessages)
-  const triggeredReminders: string[] = []
+
+  const messagesToAttach: string[] = []
   for (const reminder of reminders) {
-    if (reminder.shouldTrigger(context)) {
-      const text = reminder.generate(context)
-      if (text && text.length > 0) triggeredReminders.push(text)
-    }
+    if (!reminder.shouldTrigger(context)) continue
+    const text = reminder.generate(context)
+    if (text !== undefined && text.length > 0) messagesToAttach.push(text)
   }
-  if (triggeredReminders.length === 0) return
-  const combinedReminderText = triggeredReminders.join("\n\n")
-  const toolMessages = responseMessages.filter(message => message.role === "tool" && Array.isArray(message.content))
-  if (toolMessages.length === 0) return
-  const lastToolMessage = toolMessages[toolMessages.length - 1]
-  if (lastToolMessage && Array.isArray(lastToolMessage.content)) {
-    const lastToolResult = lastToolMessage.content[lastToolMessage.content.length - 1]
-    if (lastToolResult && lastToolResult.type === "tool-result") {
-      if (Array.isArray(lastToolResult.experimental_content)) {
-        lastToolResult.experimental_content.push({ type: "text", text: combinedReminderText })
-      }
-    }
+  if (messagesToAttach.length === 0) return
+
+  appendToLastToolResult(responseMessages, messagesToAttach.join("\n\n"))
+}
+
+function appendToLastToolResult(messages: readonly ReminderMessage[], text: string): void {
+  let target: ReminderMessage | undefined
+  for (const message of messages) {
+    if (message.role === "tool" && Array.isArray(message.content)) target = message
   }
+  if (target === undefined || !Array.isArray(target.content)) return
+
+  const parts = target.content as ToolResultContentPart[]
+  const finalPart = parts[parts.length - 1]
+  if (finalPart?.type !== "tool-result" || !Array.isArray(finalPart.experimental_content)) return
+  finalPart.experimental_content.push({ type: "text", text })
 }

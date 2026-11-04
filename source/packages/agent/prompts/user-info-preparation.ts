@@ -16,13 +16,11 @@
 
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import { fromRedactedCoreMessage } from "../../redaction/message-redaction.ts"
-import { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts"
 import {
-  getGeneratedUserRulesForModel,
-  type UserRuleFeatureFlags,
-  type UserRuleModelInfo,
-  type UserRuleOptions,
-} from "./custom-user-rules.ts"
+  adaptInteropUserRuleProfile,
+} from "../../../adapters/interop/agent/user-rule-profile-adapter.ts"
+import { buildGeneratedUserRules } from "./custom-user-rules.ts"
+import type { SlateUserRuleProfile, UserRuleToolNames } from "./user-rule-profile-contract.ts"
 import {
   parseRequestContextCompletenessMetadata,
   parseUserInfoSummarizationEpochMetadata,
@@ -56,7 +54,7 @@ export type PriorUserInfoMessage = Parameters<typeof fromRedactedCoreMessage>[0]
   } | undefined
 }
 
-type UserInfoRerenderOptions = UserRuleOptions & {
+type UserInfoRerenderOptions = UserRuleToolNames & {
   readonly availableSubagentModelsDescription?: string | undefined
   readonly availableSubagentTypesDescription?: string | undefined
   readonly skipDynamicToolSnapshotCheck?: boolean | undefined
@@ -69,15 +67,24 @@ function stripWhitespace(value: string): string {
 
 // A generated rule is recognized by its own text, whitespace-insensitively: the block may have been
 // reflowed since it was written, and that is not a reason to rebuild the message.
-const GENERATED_RULES_PRESENCE_SENTINEL = stripWhitespace(
-  getGeneratedUserRulesForModel(undefined, { enableComposer2CustomUserRules: true })[0] ?? "",
-)
-const FINAL_RESPONSE_RULE_SENTINEL = stripWhitespace(
-  getGeneratedUserRulesForModel(undefined, { enableTahomaUserRuleIntervention: true })[0] ?? "",
-)
-const FRONTEND_DESIGN_RULE_SENTINEL = stripWhitespace(
-  getGeneratedUserRulesForModel(undefined, { enableVegaFrontendUserRuleIntervention: true })[0] ?? "",
-)
+const GENERATED_RULES_PRESENCE_SENTINEL = stripWhitespace(buildGeneratedUserRules({
+  ruleSet: "general",
+  includeFinalResponseGuidance: false,
+  includeInterfaceGuidance: false,
+  preventBroadGlobSearch: false,
+} satisfies SlateUserRuleProfile)[0] ?? "")
+const FINAL_RESPONSE_RULE_SENTINEL = stripWhitespace(buildGeneratedUserRules({
+  ruleSet: "none",
+  includeFinalResponseGuidance: true,
+  includeInterfaceGuidance: false,
+  preventBroadGlobSearch: false,
+} satisfies SlateUserRuleProfile)[0] ?? "")
+const FRONTEND_DESIGN_RULE_SENTINEL = stripWhitespace(buildGeneratedUserRules({
+  ruleSet: "none",
+  includeFinalResponseGuidance: false,
+  includeInterfaceGuidance: true,
+  preventBroadGlobSearch: false,
+} satisfies SlateUserRuleProfile)[0] ?? "")
 
 function userInfoHasAnyGeneratedCustomUserRules(content: string): boolean {
   const stripped = stripWhitespace(content)
@@ -89,19 +96,19 @@ function userInfoHasAnyGeneratedCustomUserRules(content: string): boolean {
 /** Whether the block carries exactly the generated rules this session's flags and model ask for. */
 function userInfoHasExpectedCustomUserRules(
   content: string,
-  modelInfo: UserRuleModelInfo | undefined,
-  featureFlags: UserRuleFeatureFlags | undefined,
+  modelInfo: unknown,
+  featureFlags: unknown,
   options: UserInfoRerenderOptions | undefined,
 ): boolean {
   const stripped = stripWhitespace(content)
-  const resolvedFeatureFlags = { enableComposer2CustomUserRules: true, ...featureFlags }
-  const rules = getGeneratedUserRulesForModel(modelInfo, resolvedFeatureFlags, options)
+  const profile = adaptInteropUserRuleProfile(modelInfo, featureFlags, options, { defaultCustomRulesWhenUnspecified: true })
+  const rules = buildGeneratedUserRules(profile)
   const strippedRules = rules.map(stripWhitespace)
-  const expectsFinalResponseRule = featureFlags?.enableTahomaUserRuleIntervention === true
+  const expectsFinalResponseRule = profile.includeFinalResponseGuidance
   const hasFinalResponseRule = stripped.includes(FINAL_RESPONSE_RULE_SENTINEL)
-  const expectsFrontendDesignRule = featureFlags?.enableVegaFrontendUserRuleIntervention === true
+  const expectsFrontendDesignRule = profile.includeInterfaceGuidance
   const hasFrontendDesignRule = stripped.includes(FRONTEND_DESIGN_RULE_SENTINEL)
-  const expectsGeneratedRules = strippedRules.some(rule => rule === GENERATED_RULES_PRESENCE_SENTINEL)
+  const expectsGeneratedRules = profile.ruleSet === "general" || profile.ruleSet === "tool-aware"
   const hasGeneratedRules = stripped.includes(GENERATED_RULES_PRESENCE_SENTINEL)
   if (
     hasFinalResponseRule !== expectsFinalResponseRule ||
@@ -117,9 +124,9 @@ export function shouldRerenderUserInfo(
   hasExistingNonSystemMessages: boolean,
   priorMessages: readonly PriorUserInfoMessage[],
   expectedCustomUserRules: readonly string[],
-  modelInfo: UserRuleModelInfo | undefined,
+  modelInfo: unknown,
   forceRerender: boolean,
-  featureFlags: UserRuleFeatureFlags | undefined,
+  featureFlags: unknown,
   options: UserInfoRerenderOptions | undefined,
 ): boolean {
   if (!hasExistingNonSystemMessages || priorMessages.length === 0) return false
@@ -196,15 +203,15 @@ export function userInfoHasMultitaskModeEnterReminder(content: string): boolean 
  */
 export function shouldMigrateMultitaskEnterReminderToUserInfo(params: {
   readonly hasExistingNonSystemMessages: boolean
-  readonly previousTurnMode: AgentMode | undefined
-  readonly resolvedTurnMode: AgentMode
+  readonly previousTurnWasMultitask: boolean
+  readonly resolvedTurnIsMultitask: boolean
   readonly priorMessages: readonly PriorUserInfoMessage[]
   readonly firstUserInfoContent: string | undefined
   readonly userInfoAlreadyHasMultitaskEnterReminder: boolean
 }): boolean {
   return params.hasExistingNonSystemMessages &&
-    params.previousTurnMode === AgentMode.MULTITASK &&
-    params.resolvedTurnMode === AgentMode.MULTITASK &&
+    params.previousTurnWasMultitask &&
+    params.resolvedTurnIsMultitask &&
     params.firstUserInfoContent !== undefined &&
     !params.userInfoAlreadyHasMultitaskEnterReminder &&
     hasSummaryCarrierMessage(params.priorMessages)

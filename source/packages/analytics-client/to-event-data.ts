@@ -1,26 +1,18 @@
 /**
- * Turning an event's properties into the shape the backend takes.
+ * Normalizing a Slate analytics event's properties.
  *
- * Properties are flattened into the fields the analytics service reads, and what cannot be represented is left out
- * rather than sent as something it is not.
+ * The host keeps only primitive properties in its own event contract. The interop adapter encodes those values for
+ * the external wire message.
  */
-import { EventData } from "../proto/generated/aiserver/v1/analytics_pb.ts";
+import type { AnalyticsEventProperties, AnalyticsEventProperty } from "./events.ts"
 
-export type AnalyticsEventProperties = Readonly<Record<string, unknown>>;
-
-export function toEventData(props: AnalyticsEventProperties | null | undefined): Record<string, EventData> {
-  const out: Record<string, EventData> = {};
-  if (!props) return out;
+export function toAnalyticsEventProperties(props: AnalyticsEventProperties | null | undefined): Readonly<Record<string, AnalyticsEventProperty>> {
+  const out: Record<string, AnalyticsEventProperty> = {}
+  if (!props) return out
   for (const [key, value] of Object.entries(props)) {
-    if (typeof value === "string") {
-      out[key] = new EventData({ data: { case: "stringValue", value } });
-    } else if (typeof value === "number") {
-      out[key] = new EventData({ data: { case: "doubleValue", value } });
-    } else if (typeof value === "boolean") {
-      out[key] = new EventData({ data: { case: "boolValue", value } });
-    } else if (typeof value === "bigint") {
-      out[key] = new EventData({ data: { case: "intValue", value } });
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+      out[key] = value
     }
   }
-  return out;
+  return out
 }

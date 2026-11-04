@@ -12,11 +12,11 @@ import { writeExecutorResource } from "../../source/packages/agent-exec/write-op
 import type { ResourceAccessor, RemoteResource } from "../../source/packages/agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts"
 import { createContext } from "../../source/packages/context/context.ts"
-import type { BackgroundShellSpawnResult } from "../../source/packages/proto/generated/agent/v1/background_shell_exec_pb.ts"
-import type { DeleteResult } from "../../source/packages/proto/generated/agent/v1/delete_exec_pb.ts"
-import type { McpResult } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
-import type { ShellResult, ShellStream } from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts"
-import type { WriteResult } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import type { BackgroundShellSpawnResult } from "../../source/adapters/interop/proto/generated/agent/v1/background_shell_exec_pb.ts"
+import type { DeleteResult } from "../../source/adapters/interop/proto/generated/agent/v1/delete_exec_pb.ts"
+import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
+import type { ShellResult, ShellStream } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import type { WriteResult } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness

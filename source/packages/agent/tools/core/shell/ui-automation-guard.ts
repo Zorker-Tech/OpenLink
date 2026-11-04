@@ -1,35 +1,32 @@
-/**
- * What a shell command may not do while it is the model's only way to reach the desktop.
- *
- * Driving the desktop by script — xdotool and its relatives, or a browser started with a debugging port
- * so it can be puppeteered — is a way to reach the user's screen without the platform's own desktop tool
- * seeing it: no approval, no screenshot, no record. So those commands are refused with an explanation
- * that names the tool to use instead.
- *
- * One exception exists, and it is not a loophole: a command that asks the platform's own host to take a
- * screenshot is the platform taking it, so it is allowed through the same check that would otherwise
- * refuse a screenshot tool.
- */
+/** Refuse shell commands that try to control the desktop outside the visible computer capability. */
 
-export const MODEL_FACING_SHELL_UI_AUTOMATION_BLOCK_REASON =
-  "Direct UI automation through Shell is blocked. Use the Computer tool for pixel-level actions on the desktop."
+export const SHELL_DESKTOP_CONTROL_REFUSAL =
+  "Shell commands that manipulate the desktop or drive a browser are blocked. Use the Computer tool for visible, user-approved actions."
 
-const UI_AUTOMATION_TOOL_PATTERN =
+const DESKTOP_CONTROL_COMMAND_PATTERN =
   /\b(xdotool|wmctrl|xte|ydotool|osascript|cliclick|pyautogui|pynput|robotjs|sikuli)\b|Quartz\.CGEvent|ApplicationServices\.framework/i
-const BROWSER_REMOTE_DEBUG_PATTERN =
+const BROWSER_CONTROL_CHANNEL_PATTERN =
   /--remote-debugging-port\b|--remote-debugging-pipe\b|chrome-devtools-protocol|puppeteer|playwright(?:@[^\s]+)?\s+(?:codegen|open)\b|chromedriver\b|selenium-server\b/i
 const INTERNAL_HOST_SCREENSHOT_PATTERN = /control-slate(?:\.mjs)?\b[^\n]*\bscreenshot\b/i
 
-export function isInternalHostScreenshotShellCommand(command: string): boolean {
+export function isHostOwnedScreenshotCommand(command: string): boolean {
   return INTERNAL_HOST_SCREENSHOT_PATTERN.test(command)
 }
 
-export function checkModelFacingShellUiAutomation(
+function needsVisibleComputerControl(command: string): boolean {
+  return DESKTOP_CONTROL_COMMAND_PATTERN.test(command) || BROWSER_CONTROL_CHANNEL_PATTERN.test(command)
+}
+
+export type ShellUiAutomationDecision =
+  | { readonly allow: true }
+  | { readonly allow: false; readonly reason: string }
+
+export function checkShellDesktopControl(
   command: string,
-): { allow: true } | { allow: false; reason: string } {
-  if (UI_AUTOMATION_TOOL_PATTERN.test(command) || BROWSER_REMOTE_DEBUG_PATTERN.test(command)) {
-    return { allow: false, reason: MODEL_FACING_SHELL_UI_AUTOMATION_BLOCK_REASON }
+): ShellUiAutomationDecision {
+  if (needsVisibleComputerControl(command)) {
+    return { allow: false, reason: SHELL_DESKTOP_CONTROL_REFUSAL }
   }
-  if (isInternalHostScreenshotShellCommand(command)) return { allow: true }
+  if (isHostOwnedScreenshotCommand(command)) return { allow: true }
   return { allow: true }
 }

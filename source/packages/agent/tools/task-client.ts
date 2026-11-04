@@ -22,46 +22,42 @@
  * so rather than looking like a dead end.
  */
 
-import {
-  AssistantMessage,
-  ConversationStep,
-  SubagentExecutionEnvironment,
-  SubagentPersistedState,
-  SubagentBackgroundReason,
-  TaskError,
-  TaskResult,
-  TaskSuccess,
-  TaskToolCall,
-  ToolCall,
-  type ConversationStep as ConversationStepValue,
-  type SubagentPersistedState as SubagentPersistedStateValue,
-} from "../../proto/generated/agent/v1/agent_pb.ts"
-import {
-  ClientContinuationConfig,
-  ForceBackgroundSubagentArgs,
-  ForceBackgroundSubagentStatus,
-  SubagentArgs,
-  type SubagentResult,
-} from "../../proto/generated/agent/v1/subagent_exec_pb.ts"
 import type { Context } from "../../context/context.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import { fromRedactedSelectedContext } from "../../redacted-protos/generated/agent/v1/selected_context_redacted.ts"
 import type { ResourceAccessor } from "../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts"
-import { forceBackgroundSubagentExecutorResource } from "../../agent-exec/subagent-control.ts"
-import { subagentExecutorResource } from "../../agent-exec/subagent.ts"
 import { getConversationGroupId, getConversationId } from "../utils/request-scope.ts"
-import { isGeminiVideoSubagentType, getSubagentTypeName } from "./core/subagent/subagent-config.ts"
+import {
+  isVideoReviewSubagentType,
+  slateSubagentTypeName,
+  type SlateSubagentTypeLike,
+} from "../subagent-type.ts"
+import {
+  createSerializedTaskToolCallErrorInterop,
+  createTaskClientAssistantStepInterop,
+  createTaskClientContinuationConfigInterop,
+  createTaskClientErrorResultInterop,
+  createTaskClientSuccessResultInterop,
+  createTaskToolCallInterop,
+  getVideoPathsFromRedactedSelectedContextInterop,
+  isCloudSubagentEnvironmentInterop,
+  normalizeTaskClientBackgroundReasonInterop,
+  projectTaskClientResultInterop,
+  requestSubagentBackgroundHandoffInterop,
+  runClientSubagentInterop,
+  type TaskClientResultView,
+  type TaskClientSubagentRunView,
+} from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
+import {
+  createSlateCloudSubagentPersistedState,
+  createSlateLocalSubagentPersistedState,
+} from "../subagent-persisted-state.ts"
 import {
   buildClientSubagentAttachmentsContext,
   type TaskRawArguments,
   type TaskSubagentResolution,
 } from "./task-subagent-preparation.ts"
-import {
-  buildCloudSubagentPersistedState,
-  type TaskTargetMachine,
-} from "./task-runtime.ts"
 import {
   RUNNING_SUBAGENT_FOLLOWUP_ERROR,
   RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT,
@@ -78,31 +74,15 @@ export interface TaskResultRenderingOptions {
   readonly enableAgentChatLinks?: boolean
 }
 
-/** The last chosenSummary the subagent asked to show the user, read back out of its own tool calls. */
-function extractFinalSummaryFromSteps(steps: readonly ConversationStepValue[]): string | undefined {
-  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
-    const conversationStep = steps[stepIndex]
-    if (conversationStep?.message.case !== "toolCall") continue
-    const tool = conversationStep.message.value.tool
-    if (tool.case !== "sendFinalSummaryToolCall" && tool.case !== "communicateUpdateToolCall") continue
-    const chosenSummary = tool.value.args?.finalSummary?.trim()
-    if (chosenSummary !== undefined && chosenSummary.length > 0) return chosenSummary
-  }
-  return undefined
-}
-
 function getTaskSuccessResultText(
-  successValue: TaskSuccess,
+  successValue: Extract<TaskClientResultView, { readonly kind: "success" }>,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
-  const finalAssistantText = [...successValue.conversationSteps]
-    .reverse()
-    .map((conversationStep) => (conversationStep.message.case === "assistantMessage" ? conversationStep.message.value?.text : undefined))
-    .find((text) => text !== undefined)
+  const finalAssistantText = successValue.finalAssistantText
   const answerBody = finalAssistantText ?? "No output"
   // The subagent's own chosenSummary is shown above its answer when the platform is showing notifications at all.
   if (renderOptions?.hideAsyncSubagentTaskNotifications !== true) {
-    const summaryText = extractFinalSummaryFromSteps(successValue.conversationSteps)
+    const summaryText = successValue.chosenSummary
     if (summaryText !== undefined) {
       return [
         "response:",
@@ -123,24 +103,24 @@ function getTaskSuccessResultText(
 }
 
 export function formatSubagentBackgroundMessage(
-  reason: SubagentBackgroundReason,
+  reason: unknown,
   transcriptPath: string | undefined,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
+  const backgroundReason = normalizeTaskClientBackgroundReasonInterop(reason)
   let intro: string
-  switch (reason) {
-    case SubagentBackgroundReason.USER_REQUEST:
+  switch (backgroundReason) {
+    case "user_request":
       intro = "The user manually backgrounded the subagent. It is still running; you can continue with other work."
       break
-    case SubagentBackgroundReason.QUEUED_FOLLOW_UP:
+    case "queued_follow_up":
       intro = RUNNING_SUBAGENT_FOLLOWUP_ERROR
       break
-    case SubagentBackgroundReason.AGENT_REQUEST:
-    case SubagentBackgroundReason.UNSPECIFIED:
+    case "agent_request":
+    case "unspecified":
+    case "unknown":
       intro = "Subagent is running in the background."
       break
-    default:
-      intro = "Subagent is running in the background."
   }
   const displayTranscriptPath = transcriptPath?.trim()
   if (!displayTranscriptPath) return intro
@@ -152,7 +132,14 @@ export function formatSubagentBackgroundMessage(
 }
 
 export function renderTaskResultToString(
-  resultValue: TaskResult,
+  resultValue: unknown,
+  renderOptions?: TaskResultRenderingOptions,
+): string {
+  return renderTaskResultView(projectTaskClientResultInterop(resultValue), renderOptions)
+}
+
+function renderTaskResultView(
+  resultValue: TaskClientResultView,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
   const enableAgentChatLinks = renderOptions?.enableAgentChatLinks ?? true
@@ -160,37 +147,34 @@ export function renderTaskResultToString(
     renderOptions?.hideAsyncSubagentTaskNotifications === true
       ? `\`[Name](${agentId})\`. Don't use a generic label such as \`[agent]\`, \`[worker]\`, or \`[subagent]\`. For cloud subagents, when the agent has edited code, link to \`[Review](${agentId}#changes)\`, or, if you know the exact added and deleted line counts, \`[Review +A −D](${agentId}#changes)\`, replacing A and D with those counts. Never write A or D literally. Use \`[Try Live](${agentId}#desktop)\` only when the agent used computer use`
       : `\`[label](${agentId})\``
-  switch (resultValue.result.case) {
+  switch (resultValue.kind) {
     case "success": {
-      const successValue = resultValue.result.value
       // The agent id is what makes a follow-up or a link possible, so it is handed over with its uses.
-      const agentIdInfo = successValue.agentId
-        ? `\n\nAgent ID: ${successValue.agentId} (can be used with the \`resume\` parameter to send a follow-up after it completes${enableAgentChatLinks ? `, or to link to this agent/subagent in user-facing text with ${chatLinkExample(successValue.agentId)}` : ""})`
+      const agentIdInfo = resultValue.agentId
+        ? `\n\nAgent ID: ${resultValue.agentId} (can be used with the \`resume\` parameter to send a follow-up after it completes${enableAgentChatLinks ? `, or to link to this agent/subagent in user-facing text with ${chatLinkExample(resultValue.agentId)}` : ""})`
         : ""
-      const suffixInfo = successValue.resultSuffix ? `\n\n${successValue.resultSuffix}` : ""
-      if (successValue.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED) {
-        return `${formatSubagentBackgroundMessage(successValue.backgroundReason, successValue.transcriptPath, renderOptions)}${agentIdInfo}${suffixInfo}`
+      const suffixInfo = resultValue.resultSuffix ? `\n\n${resultValue.resultSuffix}` : ""
+      if (resultValue.backgroundReason !== "unspecified") {
+        return `${formatSubagentBackgroundMessage(resultValue.backgroundReason, resultValue.transcriptPath, renderOptions)}${agentIdInfo}${suffixInfo}`
       }
-      return `This is the output of the subagent:\n\n${getTaskSuccessResultText(successValue, renderOptions)}${agentIdInfo}${suffixInfo}`
+      return `This is the output of the subagent:\n\n${getTaskSuccessResultText(resultValue, renderOptions)}${agentIdInfo}${suffixInfo}`
     }
     case "error":
-      return `Error: ${resultValue.result.value.error}`
-    case undefined:
+      return `Error: ${resultValue.error}`
+    case "unknown":
       return "Unknown error"
-    default:
-      throw new Error(`Unhandled result case: ${resultValue.result}`)
+    case "unsupported":
+      throw new Error(`Unhandled result case: ${resultValue.resultCase}`)
   }
 }
 
-export function createTaskToolCall(taskTool: TaskToolCall): ToolCall {
-  return new ToolCall({ tool: { case: "taskToolCall", value: taskTool } })
+export function createTaskToolCall(taskTool: unknown): unknown {
+  return createTaskToolCallInterop(taskTool)
 }
 
-export function serializeError(error: unknown): ToolCall {
+export function serializeError(error: unknown): unknown {
   const failureMessage = error instanceof Error ? error.message : String(error)
-  return createTaskToolCall(new TaskToolCall({
-    result: new TaskResult({ result: { case: "error", value: new TaskError({ error: failureMessage }) } }),
-  }))
+  return createSerializedTaskToolCallErrorInterop(failureMessage)
 }
 
 export interface ClientContinuationPolicy {
@@ -200,13 +184,13 @@ export interface ClientContinuationPolicy {
 }
 
 interface ContinuationSubagentConfig {
-  readonly subagent_type: Parameters<typeof getSubagentTypeName>[0]
+  readonly subagent_type: SlateSubagentTypeLike
   readonly continuationPolicy?: ClientContinuationPolicy
 }
 
 export function buildClientContinuationConfig(
   subagentConfig: ContinuationSubagentConfig,
-): ClientContinuationConfig | undefined {
+): unknown {
   const continuationPolicy = subagentConfig.continuationPolicy
   if (!continuationPolicy) return undefined
   const continuationMessage = continuationPolicy.continuationMessage
@@ -220,8 +204,8 @@ export function buildClientContinuationConfig(
       .replace(String(sentinelIdle), "{idle_count}")
       .replace(sentinelToken, "{escape_token}")
     : "You've made {idle_count} responses without tool calls. If you're done, respond with exactly: {escape_token}\nIf not, continue working."
-  const isCoordinator = getSubagentTypeName(subagentConfig.subagent_type) === "coordinator-agent"
-  return new ClientContinuationConfig({
+  const isCoordinator = slateSubagentTypeName(subagentConfig.subagent_type) === "coordinator-agent"
+  return createTaskClientContinuationConfigInterop({
     idleThreshold: continuationPolicy.idleThreshold,
     maxLoops: continuationPolicy.maxLoops ?? 0,
     nudgeMessage: nudgeText,
@@ -246,7 +230,7 @@ export function maybeAppendInterruptRetryHint(
 export interface ClientTaskStateHandler {
   readonly turns: readonly ClientTaskTurnHandle[]
   getPrivacyMode(): PrivacyMode
-  persistSubagentState(ctx: Context, subagentId: string, subagentType: Parameters<typeof getSubagentTypeName>[0], state: SubagentPersistedStateValue): void
+  persistSubagentState(ctx: Context, subagentId: string, subagentType: SlateSubagentTypeLike, state: unknown): void
 }
 
 export interface ClientTaskTurnHandle {
@@ -266,9 +250,9 @@ export interface ClientTaskExecutionArgs {
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>
   readonly stateHandler: ClientTaskStateHandler
   readonly parentModelName: string
-  readonly subagentCredentials?: SubagentArgs["credentials"]
+  readonly subagentCredentials?: unknown
   readonly attachedMediaUrlProvider?: import("../context/video-attachment.ts").AttachedMediaUrlProvider
-  readonly geminiVideoAttachedMediaUrlProvider?: ClientTaskExecutionArgs["attachedMediaUrlProvider"]
+  readonly videoReviewAttachedMediaUrlProvider?: ClientTaskExecutionArgs["attachedMediaUrlProvider"]
   readonly inlineVideoMaxBytes?: number
   readonly signedUrlVideoMaxBytes?: number
   readonly trustedVideoAttachmentRoots?: readonly string[]
@@ -285,9 +269,12 @@ function getUserAttachedVideoPaths(ctx: Context, stateHandler: ClientTaskStateHa
       const turn = await turnHandle.get(ctx)
       const userMessage = turn.userMessage === undefined ? undefined : await turn.userMessage.get(ctx)
       if (userMessage?.isSimulatedMsg === true || userMessage?.selectedContext === undefined) continue
-      const attachedContext = fromRedactedSelectedContext(userMessage.selectedContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, {})
-      for (const selectedVideo of attachedContext.selectedVideos) {
-        const videoPath = selectedVideo.path.trim()
+      const selectedVideoPaths = getVideoPathsFromRedactedSelectedContextInterop(
+        userMessage.selectedContext,
+        PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+      )
+      for (const selectedVideoPath of selectedVideoPaths) {
+        const videoPath = selectedVideoPath.trim()
         if (videoPath.length > 0) videoPaths.add(videoPath)
       }
     }
@@ -311,7 +298,7 @@ function modelParameters(value: readonly unknown[] | undefined): Array<{ id: str
   })
 }
 
-export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArgs): Promise<TaskResult> {
+export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArgs): Promise<unknown> {
   const {
     ctx,
     rawArgs: rawInput,
@@ -322,7 +309,6 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     contextInjectionSignal,
   } = args
   const startedAt = Date.now()
-  const executorResource = resourceAccessor.get(subagentExecutorResource)
   const continuationConfig = buildClientContinuationConfig(resolved.subagentConfig)
   const parentConversation = getConversationId(ctx)
   const rootParentConversation = getConversationGroupId(ctx)
@@ -334,10 +320,10 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       resolvedModelId: resolved.resolvedModelId,
       privacyMode: stateHandler.getPrivacyMode(),
       // A model that watches video gets the bytes or a signed URL; which provider can do that depends on
-      // the subagent type, so the gemini-specific provider is preferred for the types that need it.
-      ...(isGeminiVideoSubagentType(resolved.subagentConfig.subagent_type)
-        ? (args.geminiVideoAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider) !== undefined
-          ? { attachedMediaUrlProvider: args.geminiVideoAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider }
+      // the subagent type, so the video-review provider is preferred for the types that need it.
+      ...(isVideoReviewSubagentType(resolved.subagentConfig.subagent_type)
+        ? (args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider) !== undefined
+          ? { attachedMediaUrlProvider: args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider }
           : {}
         : args.attachedMediaUrlProvider !== undefined ? { attachedMediaUrlProvider: args.attachedMediaUrlProvider } : {}),
       ...(parentConversation !== undefined ? { conversationId: parentConversation } : {}),
@@ -360,9 +346,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       handoffRunning = true
       void (async () => {
         try {
-          const handoffExecutor = resourceAccessor.get(forceBackgroundSubagentExecutorResource)
-          const result = await handoffExecutor.execute(ctx, new ForceBackgroundSubagentArgs({ toolCallId: args.toolCallId }))
-          if (result.status === ForceBackgroundSubagentStatus.ACCEPTED) handoffGranted = true
+          handoffGranted = await requestSubagentBackgroundHandoffInterop(ctx, resourceAccessor, args.toolCallId)
         } catch {
           // A missing or torn-down handoff resource is intentionally fail-closed.
         } finally {
@@ -386,9 +370,9 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     if (contextInjectionSignal.hasPendingUserInjections()) requestHandoff()
   }
   try {
-    let result: SubagentResult
+    let result: TaskClientSubagentRunView
     try {
-      result = await executorResource.execute(ctx, new SubagentArgs({
+      result = await runClientSubagentInterop(ctx, resourceAccessor, {
         toolCallId: args.toolCallId,
         subagentType: resolved.typeName,
         modelId: resolved.resolvedModelId,
@@ -415,45 +399,53 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
           : rawInput.cloud_base_branch !== undefined ? { cloudBaseBranch: rawInput.cloud_base_branch } : {}),
         ...(modelParameters(resolved.resolvedModelParameters) !== undefined ? { modelParameters: modelParameters(resolved.resolvedModelParameters)! } : {}),
         ...(args.subagentCredentials !== undefined ? { credentials: args.subagentCredentials } : {}),
-      }))
+      })
     } finally {
       stopHandoff?.()
     }
-    if (result.result.case === "error") {
-      throw new Error(maybeAppendInterruptRetryHint(result.result.value.error || "Unknown subagent error", args.enableSubagentInterrupt === true, args.interrupt === true))
+    if (result.kind === "error") {
+      throw new Error(maybeAppendInterruptRetryHint(result.error || "Unknown subagent error", args.enableSubagentInterrupt === true, args.interrupt === true))
     }
-    if (result.result.case !== "success") throw new Error("Unknown subagent result")
-    const successResult = result.result.value
+    if (result.kind !== "success") throw new Error("Unknown subagent result")
+    const successResult = result
     // A follow-up that arrived while the subagent was still running is an error the model should read as
     // one, since the run it meant to steer never took it.
-    if (successResult.backgroundReason === SubagentBackgroundReason.QUEUED_FOLLOW_UP) {
-      return new TaskResult({ result: { case: "error", value: new TaskError({ error: maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true) }) } })
+    if (successResult.backgroundReason === "queued_follow_up") {
+      return createTaskClientErrorResultInterop(maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true))
     }
     // A cloud run's identity is the box it ran in; a local one keeps the id it already had.
-    const runAgentId = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
+    const isCloudRun = isCloudSubagentEnvironmentInterop(resolved.effectiveEnvironment)
+    const runAgentId = isCloudRun
       ? successResult.agentId
       : successResult.agentId ?? resolved.subagentId
     if (runAgentId !== undefined && runAgentId.length > 0) {
-      const savedState = resolved.effectiveEnvironment === SubagentExecutionEnvironment.CLOUD
-        ? buildCloudSubagentPersistedState({ bcId: runAgentId, modelId: resolved.resolvedModelId, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}), machine: resolved.effectiveTargetMachine })
-        : new SubagentPersistedState({ modelId: resolved.resolvedModelId })
+      const savedState = isCloudRun
+        ? createSlateCloudSubagentPersistedState({ bcId: runAgentId, modelId: resolved.resolvedModelId, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}), machine: resolved.effectiveTargetMachine })
+        : createSlateLocalSubagentPersistedState(resolved.resolvedModelId)
       stateHandler.persistSubagentState(ctx, runAgentId, resolved.subagentConfig.subagent_type, savedState)
     }
-    const wentToBackground = successResult.backgroundReason !== SubagentBackgroundReason.UNSPECIFIED
-    const conversationSteps: ConversationStep[] = []
+    const wentToBackground = successResult.backgroundReason !== "unspecified"
+    const conversationSteps: unknown[] = []
     // A background run has not answered yet, so its final message is not an answer to show.
     if (!wentToBackground && successResult.finalMessage) {
-      conversationSteps.push(new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text: successResult.finalMessage }) } }))
+      conversationSteps.push(createTaskClientAssistantStepInterop(successResult.finalMessage))
     }
-    return new TaskResult({ result: { case: "success", value: new TaskSuccess({ conversationSteps, durationMs: BigInt(Date.now() - startedAt), ...(runAgentId !== undefined ? { agentId: runAgentId } : {}), isBackground: wentToBackground, backgroundReason: successResult.backgroundReason, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}) }) } })
+    return createTaskClientSuccessResultInterop({
+      conversationSteps,
+      durationMs: Date.now() - startedAt,
+      ...(runAgentId === undefined ? {} : { agentId: runAgentId }),
+      run: successResult,
+      isBackground: wentToBackground,
+    })
   } catch (error) {
     const failureMessage = isWritableIterableClosedError(error)
       ? SUBAGENT_STREAM_CLOSED_ERROR
       : error instanceof Error ? error.message : String(error)
-    return new TaskResult({ result: { case: "error", value: new TaskError({ error: failureMessage }) } })
+    return createTaskClientErrorResultInterop(failureMessage)
   }
 }
 
-export function renderClientTaskResult(result: TaskResult, renderOptions?: TaskResultRenderingOptions): TextResult {
-  return createStringResult(renderTaskResultToString(result, renderOptions), result.result.case === "error")
+export function renderClientTaskResult(result: unknown, renderOptions?: TaskResultRenderingOptions): TextResult {
+  const view = projectTaskClientResultInterop(result)
+  return createStringResult(renderTaskResultView(view, renderOptions), view.kind === "error")
 }

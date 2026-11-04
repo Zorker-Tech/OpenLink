@@ -10,7 +10,7 @@ import { triggerMatchesEvent } from "./automation-trigger.ts";
 import { brandedErrno } from "../../shared/errors/bounded-values.ts";
 import { SlateError } from "../../shared/errors/registry.ts";
 import { findSystemErrno } from "../../shared/system-errno.ts";
-import { getSlateBackendClientHeaders } from "../../shared/node/slate-client-metadata.ts";
+import { getSlateBackendClientHeaders } from "../../adapters/interop/backend/slate-client-metadata-adapter.ts";
 import { createNoopSlateTelemetry, slateErrorDetail } from "../ports/telemetry.ts";
 import { isServerSchedulable, slateCloudDefinition, type ScheduledCloudAutomation } from "./slate-automation-cloud-sync.ts";
 export const ERROR_BACKOFF_MS = 30_000, MAX_NEXT_POLL_DELAY_MS = 60_000, MAX_REPORTED_REJECTED_FIRES = 256;

@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 import type { DebouncePolicy } from "../extensions/scheduling.ts";
 import { MEMORY_PROFILE_PROMPT_LIMIT, formatMemoryDate, memoryDedupeKey, normalizeMemoryContent } from "../runner/slate-memory.ts";
 import { WatchedDirectory } from "../watched-directory.ts";
-import type { AgentProjectMembership } from "./project-membership.ts";
+import type { AgentProjectMembershipStore } from "./project-membership.ts";
 
 export const MEMORY_DIRNAME = "memory";
 export const PROFILE_FILENAME = "profile.md";
@@ -150,7 +150,7 @@ export class UserMemoryStore {
   recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }) { const profile: Array<MemoryRecord & { agentId: string; agentName: string }> = [], recent: Array<MemoryRecord & { agentId: string; agentName: string }> = []; let shardIds: string[] = []; try { shardIds = readdirSync(getUserMemoryShardsDir(this.slateRoot)); } catch {} for (const id of shardIds) { const store = new FileMemoryStore(getUserMemoryShardDir(this.slateRoot, id), this.debounce), recalledMemories = store.recall(limits.recent); profile.push(...recalledMemories.profile.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); recent.push(...recalledMemories.recent.map((item) => ({ ...item, agentId: id, agentName: this.resolveAgentName(id) }))); } return { profile: profile.slice(0, limits.profile), recent: recent.sort((left, right) => right.createdAt - left.createdAt).slice(0, limits.recent) }; }
 }
 export class ProjectMemoryStore {
-  constructor(readonly slateRoot: string, readonly ownAgentId: string, readonly membership: AgentProjectMembership, readonly resolveAgentName: (id: string) => string, readonly debounce: DebouncePolicy) {}
+  constructor(readonly slateRoot: string, readonly ownAgentId: string, readonly membership: AgentProjectMembershipStore, readonly resolveAgentName: (id: string) => string, readonly debounce: DebouncePolicy) {}
   getLocation(): string { return getProjectsRootDir(this.slateRoot); }
   recall(limits: { profile: number; recent: number } = { profile: 50, recent: 20 }, cap = 100) { const collected: Array<{ project: string; agentId: string; agentName: string; memory: MemoryRecord }> = []; for (const slug of this.membership.read()) { let shardIds: string[] = []; try { shardIds = readdirSync(getProjectMemoryShardsDir(this.slateRoot, slug)); } catch {} for (const id of shardIds) { const store = new FileMemoryStore(getProjectMemoryShardDir(this.slateRoot, slug, id), this.debounce), recalledMemories = store.recall(limits.recent); for (const memory of [...recalledMemories.profile, ...recalledMemories.recent]) collected.push({ project: slug, agentId: id, agentName: this.resolveAgentName(id), memory }); } } return collected.sort((a, b) => b.memory.createdAt - a.memory.createdAt).slice(0, cap); }
 }

@@ -39,7 +39,7 @@ test("the risk target names the subagent surface and mirrors the target fields",
   const target = launch({ prompt: "do it", subagentType: "researcher", readonly: true, resume: true })!;
   const risk = buildSlateSubagentRiskTarget({ target });
   assert.equal(risk.action, SLATE_SUBAGENT_CLASSIFIER_TARGET_ACTION);
-  const fields = risk.arguments!.toJson() as unknown as Record<string, unknown>;
+  const fields = risk.arguments as Record<string, unknown>;
   assert.equal(fields.surface, "subagent");
   assert.equal(fields.action, "launch");
   assert.equal(fields.prompt, "do it");
@@ -51,11 +51,11 @@ test("the risk target names the subagent surface and mirrors the target fields",
 test("the risk target merges project permissions", () => {
   const target = steer({ message: "go", subagentAgentId: "a1" })!;
   const risk = buildSlateSubagentRiskTarget({ target, personalInstructions: { allowInstructions: [" a ", "a"], blockInstructions: ["b"] }, projectAutoRunInstructions: { blockInstructions: ["c"] } });
-  const fields = risk.arguments!.toJson() as unknown as { project_permissions?: { auto_run?: { allow_instructions?: string[]; block_instructions?: string[] } } };
+  const fields = risk.arguments as { project_permissions?: { auto_run?: { allow_instructions?: string[]; block_instructions?: string[] } } };
   assert.deepEqual(fields.project_permissions?.auto_run?.allow_instructions, ["a"]);
   assert.deepEqual(fields.project_permissions?.auto_run?.block_instructions, ["b", "c"]);
   const emptyRisk = buildSlateSubagentRiskTarget({ target, personalInstructions: { allowInstructions: [" "] } });
-  const emptyFields = (emptyRisk.arguments ?? { toJson: () => ({}) }).toJson() as unknown as Record<string, unknown>;
+  const emptyFields = emptyRisk.arguments as Record<string, unknown>;
   assert.equal(emptyFields.project_permissions, undefined);
 });
 

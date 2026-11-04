@@ -1,34 +1,47 @@
-/**
- * Keeping credentials out of anything that came back from git.
- *
- * Git echoes the remote it talked to, and a remote URL may carry a user name and token in its
- * userinfo — `https://user:token@host/…` — which then travels into logs, error messages and the
- * transcript. Every http(s) URL in a string is rewritten with its userinfo removed, and trailing
- * punctuation is left outside the URL so a sentence keeps its own characters.
- */
+/** Remove credentials and query data from HTTP links echoed by Git. */
 
-const HTTP_URL_PATTERN = /https?:\/\/\S+/gi
-const TRAILING_URL_WRAPPER = /[)"'<>,.;:\]}]$/
+const HTTP_LINK = /https?:\/\/\S+/gi
+const TRAILING_SENTENCE_MARK = /[)"'<>,.;:\]}]$/
 
-function splitTrailingUrlWrappers(candidate: string): { url: string; wrappers: string } {
-  let urlEnd = candidate.length
-  while (urlEnd > 0 && TRAILING_URL_WRAPPER.test(candidate.slice(urlEnd - 1, urlEnd))) urlEnd -= 1
-  return { url: candidate.slice(0, urlEnd), wrappers: candidate.slice(urlEnd) }
+interface LinkToken {
+  readonly address: string
+  readonly closingMarks: string
 }
 
-function redactHttpUrlCandidate(candidate: string): string {
-  const { url, wrappers } = splitTrailingUrlWrappers(candidate)
-  // Anything from the query or fragment on is dropped with the userinfo: it can carry a token too.
-  const sensitiveSuffixStart = url.search(/[?#]/)
-  const clean = sensitiveSuffixStart === -1 ? url : url.slice(0, sensitiveSuffixStart)
-  const authorityStart = clean.indexOf("//") + 2
-  const delimiter = clean.slice(authorityStart).search(/[/?#]/)
-  const authorityEnd = delimiter === -1 ? clean.length : authorityStart + delimiter
-  const userinfoEnd = clean.lastIndexOf("@", authorityEnd - 1)
-  return userinfoEnd < authorityStart
-    ? clean + wrappers
-    : clean.slice(0, authorityStart) + clean.slice(userinfoEnd + 1) + wrappers
+function separateClosingMarks(value: string): LinkToken {
+  let addressEnd = value.length
+  while (addressEnd > 0 && TRAILING_SENTENCE_MARK.test(value.slice(addressEnd - 1, addressEnd))) {
+    addressEnd -= 1
+  }
+  return {
+    address: value.slice(0, addressEnd),
+    closingMarks: value.slice(addressEnd),
+  }
 }
 
-export const redactHttpUrlUserinfo = (value: string): string =>
-  value.replace(HTTP_URL_PATTERN, redactHttpUrlCandidate)
+function withoutSearchData(address: string): string {
+  const queryOrFragment = address.search(/[?#]/)
+  return queryOrFragment < 0 ? address : address.slice(0, queryOrFragment)
+}
+
+function authorityEnd(address: string, authorityStart: number): number {
+  const boundary = address.slice(authorityStart).search(/[/?#]/)
+  return boundary < 0 ? address.length : authorityStart + boundary
+}
+
+function stripAuthorityCredentials(address: string): string {
+  const authorityStart = address.indexOf("//") + 2
+  const end = authorityEnd(address, authorityStart)
+  const lastAt = address.lastIndexOf("@", end - 1)
+  if (lastAt < authorityStart) return address
+  return address.slice(0, authorityStart) + address.slice(lastAt + 1)
+}
+
+function sanitizeLinkToken(token: string): string {
+  const { address, closingMarks } = separateClosingMarks(token)
+  return stripAuthorityCredentials(withoutSearchData(address)) + closingMarks
+}
+
+export function redactHttpUrlUserinfo(text: string): string {
+  return text.replace(HTTP_LINK, sanitizeLinkToken)
+}

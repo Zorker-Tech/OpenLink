@@ -28,8 +28,13 @@ export type PromptNode =
   | null
   | undefined
 
-function isRenderable(child: PromptNode): boolean {
-  return child != null && typeof child !== "boolean" && child !== ""
+function keepPromptChild(child: PromptNode): boolean {
+  return child !== null && child !== undefined && typeof child !== "boolean" && child !== ""
+}
+
+function childrenToRead(declared: PromptProps["children"], positional: PromptNode[]): PromptNode[] {
+  if (declared === undefined) return positional
+  return Array.isArray(declared) ? declared : [declared]
 }
 
 export function jsx(
@@ -37,18 +42,14 @@ export function jsx(
   props: PromptProps | null | undefined,
   ...children: PromptNode[]
 ): PromptElement {
-  const normalizedProps = props || {}
-  const propChildren = normalizedProps.children
-  const allChildren = propChildren
-    ? Array.isArray(propChildren) ? propChildren : [propChildren]
-    : children
-  const kept = allChildren.filter(isRenderable)
+  const baseProps = props ?? {}
+  const visibleChildren = childrenToRead(baseProps.children, children).filter(keepPromptChild)
+  const childValue = visibleChildren.length === 0 ? undefined : visibleChildren
+
   return {
     type,
-    props: Object.assign({}, normalizedProps, {
-      children: kept.length > 0 ? kept : undefined,
-    }),
-    children: kept.length > 0 ? kept : undefined,
+    props: { ...baseProps, children: childValue },
+    children: childValue,
   }
 }
 

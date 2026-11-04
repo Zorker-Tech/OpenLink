@@ -1,129 +1,119 @@
-/**
- * The client the host uses to reach the notification bus.
- *
- * What it publishes is a wake for an agent, and a bus that cannot be reached is reported rather than leaving a caller to
- * assume the wake was delivered.
- */
-import type { IdleWatchdogPolicy, RetryPolicy } from "../scheduling.ts";
-import { getSlateBackendClientHeaders } from "../../../shared/node/slate-client-metadata.ts";
+/** Client for Slate's host notification stream, with reconnect and idle-watchdog lifecycle. */
+import { getSlateBackendClientHeaders } from "../../../adapters/interop/backend/slate-client-metadata-adapter.ts";
+import {
+  HEALTHY_CONNECTION_MIN_LIFETIME_MS,
+  SlateNotifyStreamError,
+  type SlateNotifyBusClientDependencies,
+  type SlateNotifyFrame,
+} from "./notify-bus-contracts.ts";
+import { parseNotifyFrame } from "./notify-bus-frame.ts";
+import { consumeNotifyEventStream } from "./notify-bus-sse.ts";
 
-export const SLATE_NOTIFY_TOPIC_FLAGS = { "automation-fires": true, "listener-events": true, "xuser-events": true } as const;
-export type SlateNotifyTopic = keyof typeof SLATE_NOTIFY_TOPIC_FLAGS;
-export const SLATE_NOTIFY_TOPICS = Object.keys(SLATE_NOTIFY_TOPIC_FLAGS) as SlateNotifyTopic[];
-export const HEALTHY_CONNECTION_MIN_LIFETIME_MS = 30_000;
-
-export function isSlateNotifyTopic(value: unknown): value is SlateNotifyTopic {
-  return typeof value === "string" && SLATE_NOTIFY_TOPICS.includes(value as SlateNotifyTopic);
-}
-
-export class SlateNotifyStreamError extends Error {
-  constructor(readonly status: number) { super(`slate notify stream failed: ${status}`); this.name = "SlateNotifyStreamError"; }
-}
-
-export type SlateNotifyFrame = { readonly kind: "connected" } | { readonly kind: "notify"; readonly topic: SlateNotifyTopic } | { readonly kind: "ignored" };
-
-export function parseNotifyFrame(frame: string): SlateNotifyFrame {
-  let dataRaw: string | null = null;
-  for (const line of frame.split("\n")) if (line.startsWith("data: ")) dataRaw = line.slice("data: ".length);
-  if (dataRaw == null) return { kind: "ignored" };
-  let payload: unknown;
-  try { payload = JSON.parse(dataRaw) as unknown; } catch { return { kind: "ignored" }; }
-  if (typeof payload !== "object" || payload == null || Array.isArray(payload)) return { kind: "ignored" };
-  const record = payload as Record<string, unknown>;
-  if (record.kind === "connected") return { kind: "connected" };
-  if (record.kind === "notify" && isSlateNotifyTopic(record.topic)) return { kind: "notify", topic: record.topic };
-  return { kind: "ignored" };
-}
+export {
+  SLATE_NOTIFY_TOPIC_FLAGS,
+  SLATE_NOTIFY_TOPICS,
+  HEALTHY_CONNECTION_MIN_LIFETIME_MS,
+  SlateNotifyStreamError,
+} from "./notify-bus-contracts.ts";
+export type { SlateNotifyTopic, SlateNotifyFrame } from "./notify-bus-contracts.ts";
+export { isSlateNotifyTopic, parseNotifyFrame } from "./notify-bus-frame.ts";
 
 export class SlateNotifyBusClient {
   private readonly fetchImpl: typeof fetch;
+  readonly #ports: SlateNotifyBusClientDependencies;
   private stopController: AbortController | null = null;
   private streamController: AbortController | null = null;
-  private connectedAtMs: number | null = null;
+  #connectedSince: number | null = null;
 
-  constructor(private readonly deps: {
-    readonly getBackendUrl: () => string;
-    readonly getAccessToken: (options: { readonly backendUrl: string }) => Promise<string>;
-    readonly onConnected: () => void;
-    readonly onNotify: (topic: SlateNotifyTopic) => void;
-    readonly onStreamError: (error: unknown) => void;
-    readonly reconnectBackoff: RetryPolicy;
-    readonly stallWatchdog: IdleWatchdogPolicy;
-    readonly fetchImpl?: typeof fetch;
-    readonly now?: () => number;
-  }) { this.fetchImpl = deps.fetchImpl ?? fetch; }
+  constructor(ports: SlateNotifyBusClientDependencies) {
+    this.#ports = ports;
+    this.fetchImpl = ports.fetchImpl ?? fetch;
+  }
 
-  isConnected(): boolean { return this.connectedAtMs != null; }
+  isConnected(): boolean {
+    return this.#connectedSince != null;
+  }
+
   start(): void {
     if (this.stopController != null) return;
     this.stopController = new AbortController();
-    void this.runLoop(this.stopController.signal);
+    void this.runUntilStopped(this.stopController.signal);
   }
+
   stop(): void {
     this.stopController?.abort();
     this.stopController = null;
     this.streamController?.abort();
     this.streamController = null;
-    this.connectedAtMs = null;
-  }
-
-  private async runLoop(stopSignal: AbortSignal): Promise<void> {
-    let attempt = 0;
-    while (!stopSignal.aborted) {
-      try { await this.streamOnce(stopSignal); }
-      catch (error) { if (!stopSignal.aborted) this.deps.onStreamError(error); }
-      if (stopSignal.aborted) return;
-      const now = this.deps.now ?? Date.now;
-      const wasHealthy = this.connectedAtMs != null && now() - this.connectedAtMs >= HEALTHY_CONNECTION_MIN_LIFETIME_MS;
-      this.connectedAtMs = null;
-      attempt = wasHealthy ? 0 : attempt + 1;
-      if (attempt > 0) {
-        const delay = this.deps.reconnectBackoff.schedule(attempt, stopSignal);
-        try { await delay.elapsed; }
-        catch (error) { if (!stopSignal.aborted) this.deps.onStreamError(error); return; }
-        finally { delay.dispose(); }
-      }
-    }
+    this.#connectedSince = null;
   }
 
   async streamOnce(stopSignal: AbortSignal): Promise<void> {
-    const backendUrl = this.deps.getBackendUrl();
-    const accessToken = await this.deps.getAccessToken({ backendUrl });
+    const backendUrl = this.#ports.getBackendUrl();
+    const accessToken = await this.#ports.getAccessToken({ backendUrl });
     if (stopSignal.aborted) return;
+
     const controller = new AbortController();
     this.streamController = controller;
-    const handleFrame = (frame: string) => {
-      if (stopSignal.aborted) return;
-      const parsed = parseNotifyFrame(frame);
-      if (parsed.kind === "connected") { this.connectedAtMs = (this.deps.now ?? Date.now)(); this.deps.onConnected(); }
-      else if (parsed.kind === "notify") this.deps.onNotify(parsed.topic);
-    };
-    const watchdog = this.deps.stallWatchdog.arm(() => controller.abort());
+    const watchdog = this.#ports.stallWatchdog.arm(() => controller.abort());
     try {
       const response = await this.fetchImpl(new URL("/slate/notify", backendUrl).toString(), {
-        headers: { authorization: `Bearer ${accessToken}`, accept: "text/event-stream", ...getSlateBackendClientHeaders() },
-        signal: controller.signal
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "text/event-stream",
+          ...getSlateBackendClientHeaders(),
+        },
+        signal: controller.signal,
       });
       if (!response.ok || response.body == null) throw new SlateNotifyStreamError(response.status);
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        watchdog.kick();
-        buffer += decoder.decode(value, { stream: true });
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          const frame = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          boundary = buffer.indexOf("\n\n");
-          handleFrame(frame);
-        }
-      }
+
+      await consumeNotifyEventStream(response.body, watchdog, (frame) => this.handleFrame(stopSignal, frame));
     } finally {
       watchdog.dispose();
       if (this.streamController === controller) this.streamController = null;
+    }
+  }
+
+  private async runUntilStopped(stopSignal: AbortSignal): Promise<void> {
+    let attempt = 0;
+    while (!stopSignal.aborted) {
+      try {
+        await this.streamOnce(stopSignal);
+      } catch (error) {
+        if (!stopSignal.aborted) this.#ports.onStreamError(error);
+      }
+      if (stopSignal.aborted) return;
+
+      const now = this.#ports.now ?? Date.now;
+      const connectionWasHealthy = this.#connectedSince != null
+        && now() - this.#connectedSince >= HEALTHY_CONNECTION_MIN_LIFETIME_MS;
+      this.#connectedSince = null;
+      attempt = connectionWasHealthy ? 0 : attempt + 1;
+      if (attempt > 0 && !await this.waitBeforeReconnect(attempt, stopSignal)) return;
+    }
+  }
+
+  private async waitBeforeReconnect(attempt: number, stopSignal: AbortSignal): Promise<boolean> {
+    const delay = this.#ports.reconnectBackoff.schedule(attempt, stopSignal);
+    try {
+      await delay.elapsed;
+      return true;
+    } catch (error) {
+      if (!stopSignal.aborted) this.#ports.onStreamError(error);
+      return false;
+    } finally {
+      delay.dispose();
+    }
+  }
+
+  private handleFrame(stopSignal: AbortSignal, frame: string): void {
+    if (stopSignal.aborted) return;
+    const message: SlateNotifyFrame = parseNotifyFrame(frame);
+    if (message.kind === "connected") {
+      this.#connectedSince = (this.#ports.now ?? Date.now)();
+      this.#ports.onConnected();
+    } else if (message.kind === "notify") {
+      this.#ports.onNotify(message.topic);
     }
   }
 }

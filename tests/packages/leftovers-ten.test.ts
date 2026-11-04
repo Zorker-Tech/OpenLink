@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { SlateHostEventBus } from "../../source/host/host-event-bus.ts";
-import { HOST_EXTENSION_ORDER } from "../../source/host/extensions/registry.ts";
+import { WORK_HOST_EXTENSION_REGISTRATION_ORDER } from "../../source/host/extensions/registry.ts";
 import { SlateMcpInstructionsAndToggles } from "../../source/shared/node/mcp/mcp-instructions-and-toggles.ts";
 
 describe("the bus the host's extensions talk over", () => {
@@ -20,8 +20,8 @@ describe("the bus the host's extensions talk over", () => {
 
 describe("the extensions this build registers", () => {
   it("names the order they start in, and names each of them once", () => {
-    assert.equal(HOST_EXTENSION_ORDER.length > 5, true);
-    assert.equal(new Set(HOST_EXTENSION_ORDER).size, HOST_EXTENSION_ORDER.length);
+    assert.equal(WORK_HOST_EXTENSION_REGISTRATION_ORDER.length > 5, true);
+    assert.equal(new Set(WORK_HOST_EXTENSION_REGISTRATION_ORDER).size, WORK_HOST_EXTENSION_REGISTRATION_ORDER.length);
   });
 });
 

@@ -6,13 +6,53 @@
  */
 import { createHostEvents } from "./extensions/host-extensions.ts";
 import { errorLogTag } from "../shared/errors/summary.ts";
+
+type HostEventFailureKind = "listener_failed" | "subscriber_failed"
+type TopicEmitOptions = { readonly failureMode?: "reject" }
+
 export class SlateHostEventBus<Event = unknown> {
-  private readonly listeners = new Set<(event: Event) => void>();
-  private readonly capabilityEvents = createHostEvents({ onHandlerFailure: (topic, error) => this.reportFailure({ kind: "subscriber_failed", topic, errorClass: errorLogTag(error) }) });
-  constructor(private readonly reportFailure: (failure: Readonly<Record<string, unknown>>) => void = () => {}) {}
+  private readonly broadcastListeners = new Set<(event: Event) => void>()
+  private readonly topicEvents: ReturnType<typeof createHostEvents>
+
+  constructor(private readonly reportFailure: (failure: Readonly<Record<string, unknown>>) => void = () => {}) {
+    this.topicEvents = createHostEvents({
+      onHandlerFailure: (topic, error) => {
+        this.reportDispatchFailure("subscriber_failed", error, topic)
+      },
+    })
+  }
+
   emit(event: Event): void;
-  emit(topic: string, payload: unknown, options?: { failureMode?: "reject" }): Promise<void>;
-  emit(eventOrTopic: Event | string, payload?: unknown, options?: { failureMode?: "reject" }): void | Promise<void> { if (arguments.length !== 1) return this.capabilityEvents.emit(eventOrTopic as string, payload, options); for (const listener of this.listeners) { try { listener(eventOrTopic as Event); } catch (error) { this.reportFailure({ kind: "listener_failed", errorClass: errorLogTag(error) }); } } }
-  on(topic: string, handler: (payload: unknown) => unknown): () => void { return this.capabilityEvents.on(topic, handler); }
-  subscribe(listener: (event: Event) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  emit(topic: string, payload: unknown, options?: TopicEmitOptions): Promise<void>;
+  emit(signalOrTopic: Event | string, body?: unknown, delivery?: TopicEmitOptions): void | Promise<void> {
+    if (arguments.length > 1) return this.topicEvents.emit(signalOrTopic as string, body, delivery)
+    this.publishToBroadcastListeners(signalOrTopic as Event)
+  }
+
+  on(topic: string, handler: (payload: unknown) => unknown): () => void {
+    return this.topicEvents.on(topic, handler)
+  }
+
+  subscribe(listener: (event: Event) => void): () => void {
+    this.broadcastListeners.add(listener)
+    return () => {
+      this.broadcastListeners.delete(listener)
+    }
+  }
+
+  private publishToBroadcastListeners(signal: Event): void {
+    for (const observer of this.broadcastListeners) {
+      try {
+        observer(signal)
+      } catch (error) {
+        this.reportDispatchFailure("listener_failed", error)
+      }
+    }
+  }
+
+  private reportDispatchFailure(kind: HostEventFailureKind, error: unknown, topic?: string): void {
+    const failure: Record<string, unknown> = { kind, errorClass: errorLogTag(error) }
+    if (topic !== undefined) failure.topic = topic
+    this.reportFailure(failure)
+  }
 }

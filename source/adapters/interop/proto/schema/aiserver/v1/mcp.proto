@@ -1,0 +1,42 @@
+// aiserver.v1 — aiserver/v1/mcp messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+message McpOAuthStoredData {
+  optional string refresh_token = 1 [json_name = "refreshToken"];
+  string client_id = 2 [json_name = "clientId"];
+  optional string client_secret = 3 [json_name = "clientSecret"];
+  repeated string redirect_uris = 4 [json_name = "redirectUris"];
+  optional string access_token = 5 [json_name = "accessToken"];
+}
+
+message GetKnownServersRequest {
+}
+
+message GetKnownServersResponse {
+  repeated .aiserver.v1.MCPServerRegistration servers = 1 [json_name = "servers"];
+}
+
+message MCPKnownServerInfo {
+  string name = 1 [json_name = "name"];
+  string description = 2 [json_name = "description"];
+  string icon = 3 [json_name = "icon"];
+  string endpoint = 4 [json_name = "endpoint"];
+  bool is_featured = 5 [json_name = "isFeatured"];
+}
+
+message MCPServerRegistration {
+  repeated string domains = 1 [json_name = "domains"];
+  optional .aiserver.v1.MCPKnownServerInfo info = 2 [json_name = "info"];
+}
+
+message McpOAuthStoredClientInfo {
+  string client_id = 1 [json_name = "clientId"];
+  optional string client_secret = 2 [json_name = "clientSecret"];
+  repeated string redirect_uris = 3 [json_name = "redirectUris"];
+}

@@ -10,8 +10,26 @@ import { join } from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
 
 import { SLATE_COMPUTER_USE_MODEL_SELECTION, SLATE_COMPUTER_USE_SUBAGENT_MODEL_ID } from "../../source/shared/agents/slate-agent-model.ts";
-import { createCursorSlateInference, createScriptedMockSession, parseSlateMockScript, resolveSlateRequestedModel, SLATE_DEFAULT_MODEL_ID, SLATE_DEFAULT_MODEL_SELECTION } from "../../source/host/extensions/inference/cursor-session.ts";
+import { createSlateInferenceSessionFactory, createScriptedMockSession, parseSlateMockScript, resolveSlateRequestedModel, SLATE_DEFAULT_MODEL_ID, SLATE_DEFAULT_MODEL_SELECTION, type SlateInferenceSessionFactoryOptions, type SlateInferenceSessionInteropPort } from "../../source/host/extensions/inference/slate-inference-session.ts";
 import { SlateSettingsStore } from "../../source/shared/node/settings/slate-settings-store.ts";
+import { createMockPromptExecutor } from "../../source/packages/chat-inference/mock-prompt-executor.ts";
+
+const testInterop: SlateInferenceSessionInteropPort = {
+  resolvePrivacyMode: () => "safe",
+  createAttachedMediaUrlProvider: () => ({ getUrl: async () => "media-url" }),
+  createPromptSession: ({ requestedModel }) => ({
+    getModelId: () => requestedModel.modelId,
+    getExecutor: () => createMockPromptExecutor(() => ({ response: "answer" })),
+  }),
+  createLabelingClient: () => ({
+    recordFollowupClassification: async () => undefined,
+    recordPostTurnLabeling: async () => undefined,
+  }),
+};
+
+function createInference(options: Partial<Omit<SlateInferenceSessionFactoryOptions, "interop">> = {}) {
+  return createSlateInferenceSessionFactory({ interop: testInterop, ...options });
+}
 
 const scratch = mkdtempSync(join(tmpdir(), "slate-inference-session-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -110,7 +128,7 @@ describe("a scripted mock response", () => {
 describe("the inference a host offers", () => {
   it("stands a mock response in for the model, so a turn can be driven without inference", async () => {
     process.env["SLATE_AGENT_MOCK_RESPONSE"] = '{"sendMessage":"scripted answer"}';
-    const inference = createCursorSlateInference({ getAccessToken: async () => "token", getMachineId: () => "machine" });
+    const inference = createInference();
     const scripted = inference.createSession(() => {}, { modelId: "some-model" });
     assert.equal(scripted.getModelId(), "some-model");
     assert.deepEqual(await scriptedCalls(scripted.getExecutor()), [["mock-tool-1", "SendMessage"]]);
@@ -126,7 +144,7 @@ describe("the inference a host offers", () => {
     mkdirSync(root, { recursive: true });
     process.env["SLATE_DATA_ROOT"] = root;
     try {
-      const inference = createCursorSlateInference({ getAccessToken: async () => "token", getMachineId: () => "machine" });
+      const inference = createInference();
       // No settings at all means the platform's own provider, and the platform's own session.
       const own = inference.createSession(() => {});
       assert.equal(typeof own.getModelId(), "string");
@@ -134,10 +152,10 @@ describe("the inference a host offers", () => {
       // model the routed provider carries is its own — which is how the session can be told from the platform's.
       new SlateSettingsStore(join(root, "settings.json")).setInferenceProvider("openrouter");
       process.env["SLATE_OPENROUTER_MODEL"] = "openai/routed-model";
-      const routed = createCursorSlateInference({ getAccessToken: async () => "token", getMachineId: () => "machine" });
+      const routed = createInference();
       assert.equal(routed.createSession(() => {}).getModelId(), "openai/routed-model");
-      assert.equal(routed.getGeminiVideoAttachedMediaUrlProvider(), undefined);
-      assert.equal(routed.getGeminiVideoAttachedMediaUrlProvider() === undefined, true);
+      assert.equal(routed.getAttachedMediaUrlProvider(), undefined);
+      assert.equal(routed.getAttachedMediaUrlProvider() === undefined, true);
     } finally {
       delete process.env["SLATE_OPENROUTER_MODEL"];
       if (savedEnv.root === undefined) delete process.env["SLATE_DATA_ROOT"];
@@ -148,10 +166,10 @@ describe("the inference a host offers", () => {
   it("offers the attached-media provider only when the video API is on", () => {
     process.env["SLATE_DATA_ROOT"] = join(scratch, "empty-root");
     try {
-      const off = createCursorSlateInference({ getAccessToken: async () => "token", getMachineId: () => "machine" });
-      const on = createCursorSlateInference({ getAccessToken: async () => "token", getMachineId: () => "machine", isGeminiVideoDeveloperApiEnabled: () => true });
-      assert.equal(off.getGeminiVideoAttachedMediaUrlProvider(), undefined);
-      assert.equal(on.getGeminiVideoAttachedMediaUrlProvider() !== undefined, true);
+      const off = createInference();
+      const on = createInference({ isVideoAttachmentEnabled: () => true });
+      assert.equal(off.getAttachedMediaUrlProvider(), undefined);
+      assert.equal(on.getAttachedMediaUrlProvider() !== undefined, true);
     } finally {
       if (savedEnv.root === undefined) delete process.env["SLATE_DATA_ROOT"];
       else process.env["SLATE_DATA_ROOT"] = savedEnv.root;

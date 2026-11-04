@@ -24,8 +24,9 @@ export function getBrowserToolNames(mcpTools: readonly McpToolDescriptor[]): str
 /** The provider a browser tool came from: the prefix before the tool's own `-browser_` marker. */
 export function getBrowserMcpProviderName(browserTools: readonly string[] | undefined): string | undefined {
   if (!browserTools?.length) return undefined
-  const prefixedTool = browserTools.find(tool => tool.includes("-browser_"))
-  if (prefixedTool === undefined) return undefined
-  const index = prefixedTool.indexOf("-browser_")
-  return index > 0 ? prefixedTool.substring(0, index) : undefined
+  for (const tool of browserTools) {
+    const index = tool.indexOf("-browser_")
+    if (index > 0) return tool.substring(0, index)
+  }
+  return undefined
 }

@@ -1,105 +1,38 @@
-/**
- * Fetching only the parts of a repository a plugin needs.
- *
- * A plugin may name the paths it wants from a repository, and fetching the whole repository to take a few directories
- * is wasteful: the clone is made sparse, the wanted paths are materialized, and the rest of the tree stays as metadata
- * until someone asks for it. A server that does not support filtering is noticed from what git says and the clone falls
- * back to the ordinary one, and a repository that is already sparse is recognized rather than re-planned. The whole
- * behavior can be turned off from the environment, which is what a caller does when sparse clones are misbehaving.
- */
-import { access } from "node:fs/promises";
-import { join } from "node:path";
-import { execGitNonInteractive, type ExecGitNonInteractiveOptions } from "./git-subprocess-env.ts";
-import { MARKETPLACE_MANIFEST_PATHS } from "./manifest-parser.ts";
+import { execGitNonInteractive } from "./git-command.ts"
+import { MARKETPLACE_MANIFEST_PATHS } from "./manifest-parser.ts"
+import {
+  initialSparseDirectories,
+  materializeSpecForGitPaths as normalizeGitPaths,
+  serverIgnoredFilter,
+} from "./sparse-clone-path-policy.ts"
+import { createSparseCloneSupportProbe } from "./sparse-clone-support.ts"
+import { isSparseCheckoutRepo, materializeSparseDirs, setSparseCheckoutDirs } from "./sparse-clone-repository.ts"
+import type { MaterializeSpec } from "./sparse-clone-path-policy.ts"
 
-const DISABLE_SPARSE_PLUGIN_CLONES_ENV = "SLATE_DISABLE_SPARSE_PLUGIN_CLONES";
-const ALWAYS_SPARSE_DIRS = MARKETPLACE_MANIFEST_PATHS.map(path => path.split("/")[0]!);
-const MIN_SPARSE_GIT = { major: 2, minor: 26 };
-let sparseSupportPromise: Promise<boolean> | undefined;
+export type { MaterializeSpec } from "./sparse-clone-path-policy.ts"
+export { isSparseCheckoutRepo, materializeSparseDirs, serverIgnoredFilter, setSparseCheckoutDirs }
 
-function parseGitVersion(stdout: string): { major: number; minor: number } | null {
-  const match = /git version (\d+)\.(\d+)/.exec(stdout);
-  return match === null ? null : { major: Number(match[1]), minor: Number(match[2]) };
-}
+const DISABLE_SPARSE_PLUGIN_CLONES_ENV = "SLATE_DISABLE_SPARSE_PLUGIN_CLONES"
 
-async function isSparseCloneSupported(): Promise<boolean> {
-  if (process.env[DISABLE_SPARSE_PLUGIN_CLONES_ENV]) return false;
-  sparseSupportPromise ??= (async () => {
-    try {
-      const { stdout } = await execGitNonInteractive(["--version"]);
-      const version = parseGitVersion(stdout);
-      return version !== null && (version.major > MIN_SPARSE_GIT.major || version.major === MIN_SPARSE_GIT.major && version.minor >= MIN_SPARSE_GIT.minor);
-    } catch { return false; }
-  })();
-  return sparseSupportPromise;
-}
+const supportsSparseCheckout = createSparseCloneSupportProbe({
+  isDisabled: () => Boolean(process.env[DISABLE_SPARSE_PLUGIN_CLONES_ENV]),
+  readVersion: async () => (await execGitNonInteractive(["--version"])).stdout,
+})
 
-function normalizeSparseCheckoutDir(dir: string): string | null {
-  let normalized = dir.trim().replaceAll("\\", "/");
-  while (normalized.startsWith("./")) normalized = normalized.slice(2);
-  normalized = normalized.replace(/\/+$/, "");
-  if (normalized === "" || normalized === "." || normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) return null;
-  const segments = normalized.split("/");
-  return segments.some(segment => segment === "" || segment === "." || segment === "..") ? null : normalized;
-}
-
-export type MaterializeSpec = "all" | string[];
 export function materializeSpecForGitPaths(gitPaths: readonly string[]): MaterializeSpec {
-  const dirs: string[] = [];
-  for (const gitPath of gitPaths) {
-    const normalized = normalizeSparseCheckoutDir(gitPath);
-    if (normalized === null) return "all";
-    dirs.push(normalized);
-  }
-  return dirs;
+  return normalizeGitPaths(gitPaths)
 }
-
-function sparseDirsForInitialCheckout(dirs: readonly string[]): string[] { return [...new Set([...ALWAYS_SPARSE_DIRS, ...dirs])]; }
 
 export async function resolveSparseClonePlan(
   requested: MaterializeSpec,
   sparsePluginClones: boolean,
+  supportProbe: () => Promise<boolean> = supportsSparseCheckout,
 ): Promise<{ materialize: MaterializeSpec; sparse: boolean; sparseDirs: string[] }> {
-  const materialize = requested === "all" ? "all" : materializeSpecForGitPaths(requested);
-  const sparse = sparsePluginClones && materialize !== "all" && await isSparseCloneSupported();
-  return { materialize, sparse, sparseDirs: sparse ? sparseDirsForInitialCheckout(materialize) : [] };
-}
-
-export function serverIgnoredFilter(stderr: string): boolean { return stderr.toLowerCase().includes("filtering not recognized by server"); }
-
-export async function setSparseCheckoutDirs(
-  repoDir: string,
-  dirs: readonly string[],
-  execOpts?: ExecGitNonInteractiveOptions,
-): Promise<void> {
-  await execGitNonInteractive(["sparse-checkout", "set", "--cone", "--", ...dirs], { ...execOpts, cwd: repoDir });
-}
-
-export async function isSparseCheckoutRepo(repoDir: string): Promise<boolean> {
-  try { await access(join(repoDir, ".git", "info", "sparse-checkout")); }
-  catch { return false; }
-  try {
-    const { stdout } = await execGitNonInteractive(["config", "--bool", "--get", "core.sparseCheckout"], { cwd: repoDir });
-    return stdout.trim() === "true";
-  } catch { return false; }
-}
-
-export async function materializeSparseDirs(
-  repoDir: string,
-  spec: MaterializeSpec,
-  execOpts?: ExecGitNonInteractiveOptions,
-): Promise<void> {
-  if (spec !== "all" && spec.length === 0) return;
-  if (!await isSparseCheckoutRepo(repoDir)) return;
-  const gitOpts: ExecGitNonInteractiveOptions = { ...execOpts, cwd: repoDir, sshBatchMode: true };
-  if (spec === "all") {
-    await execGitNonInteractive(["sparse-checkout", "disable"], gitOpts);
-    return;
+  const materialize = requested === "all" ? "all" : normalizeGitPaths(requested)
+  const sparse = sparsePluginClones && materialize !== "all" && await supportProbe()
+  return {
+    materialize,
+    sparse,
+    sparseDirs: sparse ? initialSparseDirectories(materialize, MARKETPLACE_MANIFEST_PATHS) : [],
   }
-  const dirs = materializeSpecForGitPaths(spec);
-  if (dirs === "all") {
-    await execGitNonInteractive(["sparse-checkout", "disable"], gitOpts);
-    return;
-  }
-  await execGitNonInteractive(["sparse-checkout", "add", "--", ...dirs], gitOpts);
 }

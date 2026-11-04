@@ -12,27 +12,17 @@
 
 import type { Context } from "../../../context/context.ts"
 import { createLogger } from "../../../context/logging.ts"
+import { readCounterpartMessageTraceIds } from "../../../../adapters/interop/cursor-backend/summary-origin-marker-adapter.ts"
 import { isSyntheticUserMessage } from "./synthetic-user-message.ts"
-
-interface CursorProviderOptions {
-  readonly isSummary?: boolean
-  readonly messageId?: string
-  readonly requestId?: string
-}
 
 interface Message {
   readonly role: string
   readonly content?: unknown
-  readonly providerOptions?: { readonly cursor?: CursorProviderOptions }
 }
 
 const logger = createLogger("agent/user-message-run-warning")
 const CONSECUTIVE_USER_MESSAGE_WARNING_THRESHOLD = 3
 const TAIL_INSPECTION_WINDOW = 12
-
-function extractCursorProviderOptions(message: Message): CursorProviderOptions | undefined {
-  return message.providerOptions?.cursor
-}
 
 export function warnIfLongTrailingUserMessageRun(
   ctx: Context,
@@ -58,15 +48,15 @@ export function warnIfLongTrailingUserMessageRun(
   }
   const tailMessages = messages.slice(-TAIL_INSPECTION_WINDOW)
   const tailRoles = tailMessages.map(message => message.role)
-  const tailCursorMessageIds: string[] = []
-  const tailCursorRequestIds: string[] = []
+  const tailProviderMessageIds: string[] = []
+  const tailProviderRequestIds: string[] = []
   for (const message of tailMessages) {
-    const cursor = extractCursorProviderOptions(message)
-    if (cursor?.messageId !== undefined) tailCursorMessageIds.push(cursor.messageId)
-    if (cursor?.requestId !== undefined) tailCursorRequestIds.push(cursor.requestId)
+    const traceIds = readCounterpartMessageTraceIds(message)
+    if (traceIds?.messageId !== undefined) tailProviderMessageIds.push(traceIds.messageId)
+    if (traceIds?.requestId !== undefined) tailProviderRequestIds.push(traceIds.requestId)
   }
-  const tailDistinctCursorMessageIdCount = new Set(tailCursorMessageIds).size
-  const tailDistinctCursorRequestIdCount = new Set(tailCursorRequestIds).size
+  const distinctTailMessageIds = new Set(tailProviderMessageIds).size
+  const distinctTailRequestIds = new Set(tailProviderRequestIds).size
   logger.warn(ctx, "Turn contains unusually long trailing run of consecutive user messages", {
     trailingConsecutiveUserMessages,
     threshold: CONSECUTIVE_USER_MESSAGE_WARNING_THRESHOLD,
@@ -75,11 +65,11 @@ export function warnIfLongTrailingUserMessageRun(
     distanceToLastAssistant,
     tailInspectionWindow: TAIL_INSPECTION_WINDOW,
     tailRoles,
-    tailCursorMessageIdCount: tailCursorMessageIds.length,
-    tailDistinctCursorMessageIdCount,
-    hasDuplicateTailCursorMessageIds: tailDistinctCursorMessageIdCount < tailCursorMessageIds.length,
-    tailCursorRequestIdCount: tailCursorRequestIds.length,
-    tailDistinctCursorRequestIdCount,
-    hasDuplicateTailCursorRequestIds: tailDistinctCursorRequestIdCount < tailCursorRequestIds.length,
+    tailProviderMessageIdCount: tailProviderMessageIds.length,
+    distinctTailProviderMessageIdCount: distinctTailMessageIds,
+    hasDuplicateTailProviderMessageIds: distinctTailMessageIds < tailProviderMessageIds.length,
+    tailProviderRequestIdCount: tailProviderRequestIds.length,
+    distinctTailProviderRequestIdCount: distinctTailRequestIds,
+    hasDuplicateTailProviderRequestIds: distinctTailRequestIds < tailProviderRequestIds.length,
   })
 }

@@ -26,7 +26,7 @@ import {
   shouldNotifyAutomationFailure,
 } from "./slate-automation-failure.ts";
 import { createUserMessage } from "./send-message-shaping.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript } from "./transcript-store.ts";
 import { classifyAgentError } from "./turn-runtime.ts";
 import type { TranscriptManagerLike } from "./transcript-hub.ts";
@@ -82,7 +82,7 @@ export class AutomationRunPath {
       ? getTranscript()
       : conversation.db.getTranscriptEntries();
     const seed = createUserMessage(
-      nextEntryId(transcriptEntries, "user-message"),
+      allocateTranscriptEntryId(transcriptEntries, "user-message"),
       buildGroupAutomationSeed(automation, events),
       {},
     );

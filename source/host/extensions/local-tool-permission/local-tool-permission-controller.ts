@@ -1,94 +1,371 @@
 /**
- * Deciding whether a local tool may run on this machine.
- *
- * A request is matched against the permissions the user granted, a request that needs an answer is given one identifier
- * and remembered while it waits, and a machine that has no local-exec at all is refused with the message that says so.
+ * Applies local-execution permission settings, reuses active approvals and resolves user asks for one agent turn.
  */
-import { createHash, randomBytes } from "node:crypto";
 
-import { SLATE_NO_LOCAL_MACHINE_MESSAGE } from "../../../shared/local-exec-gateway.ts";
+import { randomBytes } from "node:crypto";
+import {
+  SLATE_NO_LOCAL_MACHINE_MESSAGE,
+} from "../../../shared/local-exec-gateway.ts";
 import type { SlateLocalToolPermission } from "../../../shared/local-tool-permission.ts";
 import {
-  SLATE_LOCAL_TOOL_ASK_TTL_MS, SLATE_LOCAL_TOOLS_ABANDONED_MESSAGE,
-  SLATE_LOCAL_TOOLS_ASK_EXPIRED_MESSAGE, SLATE_LOCAL_TOOLS_ASK_UNAVAILABLE_MESSAGE, SLATE_LOCAL_TOOLS_DENIED_MESSAGE,
-  SLATE_LOCAL_TOOLS_DISABLED_MESSAGE, SLATE_LOCAL_TOOLS_PREPARATORY_MESSAGE, SLATE_LOCAL_TOOLS_STALE_TASK_MESSAGE,
-  SLATE_LOCAL_TOOLS_TARGET_TOO_LARGE_MESSAGE, SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE, localToolApprovalCovers,
-  normalizeLocalToolResourcePath, type SlateLocalToolApproval, type SlateLocalToolRequest, type SlateLocalToolScope
+  SLATE_LOCAL_TOOL_ASK_TTL_MS,
+  SLATE_LOCAL_TOOLS_ASK_EXPIRED_MESSAGE,
+  SLATE_LOCAL_TOOLS_ABANDONED_MESSAGE,
+  SLATE_LOCAL_TOOLS_ASK_UNAVAILABLE_MESSAGE,
+  SLATE_LOCAL_TOOLS_DENIED_MESSAGE,
+  SLATE_LOCAL_TOOLS_DISABLED_MESSAGE,
+  SLATE_LOCAL_TOOLS_PREPARATORY_MESSAGE,
+  SLATE_LOCAL_TOOLS_TARGET_TOO_LARGE_MESSAGE,
+  SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE,
+  localToolApprovalCovers,
+  normalizeLocalToolResourcePath,
+  type SlateLocalToolApproval,
+  type SlateLocalToolRequest,
+  type SlateLocalToolScope,
 } from "../../../shared/local-tool-permission-machinery.ts";
+import {
+  SLATE_LOCAL_TOOL_TARGET_MAX_CHARS,
+  SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE,
+  type LocalToolScope,
+  type PendingLocalToolAsk,
+  type SlateLocalToolPermissionControllerOptions,
+  type SlateLocalToolRequestStatus,
+  type SlateLocalToolResolution,
+  type SlateLocalToolDecision,
+  type SlateLocalToolAskRequest,
+  type SlateLocalToolControllerEvent,
+} from "./local-tool-permission-controller-contracts.ts";
+import { LocalToolPendingAskQueue } from "./local-tool-pending-ask-queue.ts";
+import { LocalToolRefusalMemory } from "./local-tool-permission-refusal-memory.ts";
 
-export const SLATE_LOCAL_TOOL_SETTLED_ID_MEMORY = 64;
-export const SLATE_LOCAL_TOOL_REFUSAL_DIRECTION_WINDOW = 64;
-export const SLATE_LOCAL_TOOL_REFUSED_ACTION_MEMORY_PER_AGENT = 512;
-export const SLATE_LOCAL_TOOL_FORGOTTEN_AGENT_MEMORY = 256;
-export const SLATE_LOCAL_TOOL_TARGET_MAX_CHARS = 10_000;
-export const SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE = "The request to use the user's computer was cancelled before the user answered.";
+export {
+  SLATE_LOCAL_TOOL_FORGOTTEN_AGENT_MEMORY,
+  SLATE_LOCAL_TOOL_REFUSAL_DIRECTION_WINDOW,
+  SLATE_LOCAL_TOOL_REFUSED_ACTION_MEMORY_PER_AGENT,
+  SLATE_LOCAL_TOOL_SETTLED_ID_MEMORY,
+  SLATE_LOCAL_TOOL_TARGET_MAX_CHARS,
+  SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE,
+} from "./local-tool-permission-controller-contracts.ts";
+export type {
+  SlateLocalToolAskRequest,
+  SlateLocalToolControllerEvent,
+  SlateLocalToolDecision,
+  SlateLocalToolPermissionControllerOptions,
+  SlateLocalToolRequestStatus,
+  SlateLocalToolResolution,
+} from "./local-tool-permission-controller-contracts.ts";
 
-export type SlateLocalToolResolution = "allow-once" | "deny" | "always" | "never";
-export type SlateLocalToolRequestStatus = "pending" | "allowed" | "denied" | "always" | "never" | "expired";
-export interface SlateLocalToolAskRequest { readonly id: string; readonly agentId: string; readonly action: SlateLocalToolRequest["action"]; readonly target: string; readonly status: SlateLocalToolRequestStatus; readonly createdAtMs: number; readonly expiresAtMs: number; readonly description?: string; }
-export interface SlateLocalToolDecision { readonly allowed: boolean; readonly reason?: string; readonly approvalId?: string; }
-export interface SlateLocalToolControllerEvent { readonly type: "created" | "settled"; readonly request: SlateLocalToolAskRequest; }
-interface StoredApproval extends SlateLocalToolApproval { readonly id: string; readonly agentId: string; readonly toolCallId: string; readonly outlivesScope: boolean; }
-interface Pending { request: SlateLocalToolAskRequest; readonly waiters: Set<(decision: SlateLocalToolDecision) => void>; readonly expiryAbort: AbortController; readonly toolCallId: string; readonly resourcePath?: string; readonly outlivesScope: boolean; readonly directionEpoch: number; }
-export interface SlateLocalToolPermissionControllerOptions {
-  readonly getPermission: () => SlateLocalToolPermission; readonly setPermission: (permission: "always" | "never") => void;
-  readonly canAsk?: (agentId: string) => boolean; readonly hasLiveComputer?: (agentId: string) => boolean; readonly onApprovalRetired?: (approvalId: string) => void;
-  readonly askTtlMs?: number; readonly now?: () => number; readonly randomId?: () => string;
+type SettledRequestStatus = Exclude<SlateLocalToolRequestStatus, "pending" | "expired">;
+type ResolutionStatusMap = Readonly<Record<SlateLocalToolResolution, SettledRequestStatus>>;
+
+interface StoredApproval extends SlateLocalToolApproval {
+  readonly id: string;
+  readonly agentId: string;
+  readonly toolCallId: string;
+  readonly outlivesScope: boolean;
 }
 
-const SETTLED_STATUS_OF_RESOLUTION: Readonly<Record<SlateLocalToolResolution, Exclude<SlateLocalToolRequestStatus, "pending" | "expired">>> = { "allow-once": "allowed", deny: "denied", always: "always", never: "never" };
-function askKey(scope: Required<Pick<SlateLocalToolScope, "agentId" | "toolCallId">>, request: SlateLocalToolRequest): string { return `${scope.agentId}\0${scope.toolCallId}\0${request.action}\0${request.target}`; }
-function refusalKey(agentId: string, action: SlateLocalToolRequest["action"], target: string): string { return `${agentId}\0${action}\0${createHash("sha256").update(target, "utf8").digest("hex")}`; }
-function delay(ms: number, signal: AbortSignal): Promise<void> { return new Promise((resolve) => { if (signal.aborted) return resolve(); const timer = setTimeout(resolve, ms); timer.unref?.(); signal.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true }); }); }
+const STATUS_FOR_RESOLUTION: ResolutionStatusMap = {
+  "allow-once": "allowed",
+  deny: "denied",
+  always: "always",
+  never: "never",
+};
 
 export class SlateLocalToolPermissionController {
-  private readonly pendingByKey = new Map<string, Pending>(); private readonly pendingById = new Map<string, string>(); private readonly approvalsById = new Map<string, StoredApproval>(); private readonly directionEpochs = new Map<string, number>();
-  private readonly refusedActions = new Map<string, { agentId: string; directionEpoch: number }>(); private readonly saturatedDirections = new Map<string, number>(); private readonly alwaysGrantedAtEpoch = new Map<string, number>(); private readonly forgottenAgents = new Set<string>();
-  private notedPermission: SlateLocalToolPermission | undefined; private readonly settledIds = new Set<string>(); private readonly listeners = new Set<(event: SlateLocalToolControllerEvent) => void>(); private readonly askTtlMs: number; private readonly now: () => number;
-  constructor(private readonly options: SlateLocalToolPermissionControllerOptions) { this.askTtlMs = options.askTtlMs ?? SLATE_LOCAL_TOOL_ASK_TTL_MS; this.now = options.now ?? Date.now; }
-  permission(): SlateLocalToolPermission { return this.options.getPermission(); }
-  blockedReason(): string | undefined { return this.permission() === "never" ? SLATE_LOCAL_TOOLS_DISABLED_MESSAGE : undefined; }
-  requiresApproval(): boolean { return this.permission() === "ask"; }
-  async awaitDesktopStandingDecision(args: { readonly agentId: string; readonly toolCallId: string; readonly command?: string; readonly description?: string; readonly signal?: AbortSignal }): Promise<SlateLocalToolDecision> { const permission = this.permission(); if (permission === "never") return { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE }; if (permission === "always") return { allowed: true }; return this.authorize({ agentId: args.agentId, toolCallId: args.toolCallId, action: "run-command", directionEpoch: this.directionEpoch(args.agentId) }, { action: "run-command", target: args.command ?? "", ...(args.description == null || args.description.length === 0 ? {} : { description: args.description }), ...(args.signal === undefined ? {} : { signal: args.signal }) }); }
-  async authorize(scope: SlateLocalToolScope | undefined, request: SlateLocalToolRequest): Promise<SlateLocalToolDecision> { const permission = this.permission(); if (permission === "never") return { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE }; if (scope !== undefined) { const refusal = this.refusalFor(scope, request); if (refusal !== undefined) return { allowed: false, reason: refusal }; } if (permission === "always" && !this.predatesStandingGrant(scope)) return { allowed: true }; if (scope === undefined) return { allowed: false, reason: SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE }; if (scope.toolCallId === undefined) { const attached = this.findApprovalForResource(scope.agentId, request.attachToResourcePath); return attached === undefined ? { allowed: false, reason: SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE } : { allowed: true, approvalId: attached.id }; } return this.ask(scope as SlateLocalToolScope & { toolCallId: string }, request); }
-  completeScope(scope?: SlateLocalToolScope): void { if (scope?.toolCallId === undefined) return; for (const approval of [...this.approvalsById.values()]) if (approval.agentId === scope.agentId && approval.toolCallId === scope.toolCallId && !approval.outlivesScope) this.retireApproval(approval.id); }
-  beginTurn(agentId: string): void { this.forgottenAgents.delete(agentId); this.directionEpochs.set(agentId, this.directionEpoch(agentId) + 1); for (const approval of [...this.approvalsById.values()]) if (approval.agentId === agentId) this.retireApproval(approval.id); for (const pending of [...this.pendingByKey.values()]) if (pending.request.agentId === agentId) this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_EXPIRED_MESSAGE }); }
-  directionEpoch(agentId: string): number { return this.directionEpochs.get(agentId) ?? 0; }
-  forgetAgent(agentId: string): void { this.beginTurn(agentId); this.directionEpochs.delete(agentId); this.saturatedDirections.delete(agentId); this.alwaysGrantedAtEpoch.delete(agentId); for (const [key, refused] of this.refusedActions) if (refused.agentId === agentId) this.refusedActions.delete(key); this.forgottenAgents.add(agentId); if (this.forgottenAgents.size > SLATE_LOCAL_TOOL_FORGOTTEN_AGENT_MEMORY) { const oldest = this.forgottenAgents.values().next(); if (!oldest.done) this.forgottenAgents.delete(oldest.value); } }
-  rememberedRefusalCount(): number { return this.refusedActions.size; }
-  retainedAgentIds(): string[] { return [...new Set([...this.directionEpochs.keys(), ...this.saturatedDirections.keys(), ...this.alwaysGrantedAtEpoch.keys(), ...[...this.refusedActions.values()].map((v) => v.agentId), ...[...this.approvalsById.values()].map((v) => v.agentId), ...[...this.pendingByKey.values()].map((v) => v.request.agentId)])]; }
-  notePermissionChanged(): void { const permission = this.permission(); const previous = this.notedPermission; this.noteStandingPermission(permission); if (permission === "ask") { if (previous === "never") this.refusedActions.clear(); return; } const allowed = permission === "always"; if (!allowed) for (const id of [...this.approvalsById.keys()]) this.retireApproval(id); for (const pending of [...this.pendingByKey.values()]) { if (allowed && this.isStalePending(pending)) { this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ABANDONED_MESSAGE }); continue; } this.settle(pending, allowed ? "always" : "never", allowed ? { allowed: true } : { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE }, allowed ? undefined : { rememberRefusal: false }); } }
-  resolveRequest(requestId: string, initialResolution: SlateLocalToolResolution): SlateLocalToolAskRequest | undefined { const key = this.pendingById.get(requestId); const pending = key === undefined ? undefined : this.pendingByKey.get(key); if (pending === undefined || pending.request.id !== requestId) return undefined; let resolution = initialResolution; if (resolution === "always" || resolution === "never") { try { this.options.setPermission(resolution); } catch {} if (resolution === "always" && this.permission() !== "always") resolution = "allow-once"; } const allowed = resolution === "allow-once" || resolution === "always"; if (allowed) this.approvalsById.set(requestId, { id: requestId, agentId: pending.request.agentId, toolCallId: pending.toolCallId, outlivesScope: pending.outlivesScope, action: pending.request.action, target: pending.request.target, ...(pending.resourcePath === undefined ? {} : { resourcePath: pending.resourcePath }) }); const deniedReason = resolution === "never" ? SLATE_LOCAL_TOOLS_DISABLED_MESSAGE : SLATE_LOCAL_TOOLS_DENIED_MESSAGE; const settled = this.settle(pending, SETTLED_STATUS_OF_RESOLUTION[resolution], allowed ? { allowed: true, approvalId: requestId } : { allowed: false, reason: deniedReason }); if (resolution === "always" || resolution === "never") this.notePermissionChanged(); return settled; }
-  getPendingRequestForAgent(agentId: string): SlateLocalToolAskRequest | undefined { return [...this.pendingByKey.values()].find((pending) => pending.request.agentId === agentId)?.request; }
-  getPendingRequestById(id: string): SlateLocalToolAskRequest | undefined { const key = this.pendingById.get(id); return key === undefined ? undefined : this.pendingByKey.get(key)?.request; }
-  wasSettled(id: string): boolean { return this.settledIds.has(id); }
-  liveApprovalIds(): string[] { return [...this.approvalsById.keys()]; }
-  subscribe(listener: (event: SlateLocalToolControllerEvent) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
-  findApprovalForResource(agentId: string, resourcePath?: string): StoredApproval | undefined { const normalized = normalizeLocalToolResourcePath(resourcePath); return normalized === undefined ? undefined : [...this.approvalsById.values()].find((approval) => approval.agentId === agentId && normalizeLocalToolResourcePath(approval.resourcePath) === normalized); }
-  retireApproval(id: string): void { if (!this.approvalsById.delete(id)) return; this.options.onApprovalRetired?.(id); }
-  private scopeEpoch(scope: SlateLocalToolScope): number { return scope.directionEpoch ?? this.directionEpoch(scope.agentId); }
-  refusalFor(scope: SlateLocalToolScope, request: SlateLocalToolRequest): string | undefined { if (this.forgottenAgents.has(scope.agentId)) return SLATE_LOCAL_TOOLS_STALE_TASK_MESSAGE; const epoch = this.scopeEpoch(scope); const saturatedAt = this.saturatedDirections.get(scope.agentId); if (saturatedAt !== undefined && epoch <= saturatedAt) return SLATE_LOCAL_TOOLS_STALE_TASK_MESSAGE; const refused = this.refusedActions.get(refusalKey(scope.agentId, request.action, request.target)); return refused !== undefined && refused.directionEpoch >= epoch ? SLATE_LOCAL_TOOLS_ABANDONED_MESSAGE : undefined; }
-  private predatesStandingGrant(scope?: SlateLocalToolScope): boolean { if (scope === undefined) return false; const grantedAt = this.alwaysGrantedAtEpoch.get(scope.agentId); return grantedAt !== undefined && this.scopeEpoch(scope) < grantedAt; }
-  private isStalePending(pending: Pending): boolean { return pending.directionEpoch < this.directionEpoch(pending.request.agentId); }
-  private noteStandingPermission(permission: SlateLocalToolPermission): void { const widened = permission === "always" && this.notedPermission !== "always"; this.notedPermission = permission; if (!widened) return; this.alwaysGrantedAtEpoch.clear(); for (const [agentId, epoch] of this.directionEpochs) this.alwaysGrantedAtEpoch.set(agentId, epoch); }
-  private noteRefusalForgotten(refused: { agentId: string; directionEpoch: number }): void { const marker = this.saturatedDirections.get(refused.agentId); if (marker === undefined || refused.directionEpoch > marker) this.saturatedDirections.set(refused.agentId, refused.directionEpoch); }
-  private rememberRefusedAction(pending: Pending): void { const agentId = pending.request.agentId; const key = refusalKey(agentId, pending.request.action, pending.request.target); const remembered = this.refusedActions.get(key); this.refusedActions.set(key, { agentId, directionEpoch: remembered === undefined ? pending.directionEpoch : Math.max(remembered.directionEpoch, pending.directionEpoch) }); this.reclaimRefusedActions(agentId); }
-  private reclaimRefusedActions(agentId: string): void { const mine = [...this.refusedActions].filter(([, refused]) => refused.agentId === agentId); let held = mine.length; if (held <= SLATE_LOCAL_TOOL_REFUSED_ACTION_MEMORY_PER_AGENT) return; const current = this.directionEpoch(agentId); const forget = (key: string, refused: { agentId: string; directionEpoch: number }) => { this.refusedActions.delete(key); this.noteRefusalForgotten(refused); held -= 1; }; for (const [key, refused] of mine) { if (held <= SLATE_LOCAL_TOOL_REFUSED_ACTION_MEMORY_PER_AGENT) break; if (current - refused.directionEpoch > SLATE_LOCAL_TOOL_REFUSAL_DIRECTION_WINDOW) forget(key, refused); } for (const [key, refused] of mine) { if (held <= SLATE_LOCAL_TOOL_REFUSED_ACTION_MEMORY_PER_AGENT) break; if (this.refusedActions.has(key)) forget(key, refused); } }
-  private async ask(scope: SlateLocalToolScope & { toolCallId: string }, request: SlateLocalToolRequest): Promise<SlateLocalToolDecision> {
-    const covered = [...this.approvalsById.values()].find((approval) => approval.agentId === scope.agentId && (approval.toolCallId === scope.toolCallId || approval.resourcePath !== undefined) && localToolApprovalCovers(approval, request));
-    if (covered !== undefined) { if (request.outlivesScope === true && !covered.outlivesScope) this.approvalsById.set(covered.id, { ...covered, outlivesScope: true }); return { allowed: true, approvalId: covered.id }; }
-    if (this.options.canAsk?.(scope.agentId) === false) return { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_UNAVAILABLE_MESSAGE };
-    if (this.options.hasLiveComputer?.(scope.agentId) === false) return { allowed: false, reason: SLATE_NO_LOCAL_MACHINE_MESSAGE };
-    const scopeApproved = scope.action !== undefined && [...this.approvalsById.values()].some((approval) => approval.agentId === scope.agentId && approval.toolCallId === scope.toolCallId && approval.action === scope.action);
-    if (scope.action !== undefined && scope.action !== request.action && !scopeApproved) return { allowed: false, reason: SLATE_LOCAL_TOOLS_PREPARATORY_MESSAGE };
-    if (request.signal?.aborted === true) return { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE };
-    if (request.target.length > SLATE_LOCAL_TOOL_TARGET_MAX_CHARS) return { allowed: false, reason: SLATE_LOCAL_TOOLS_TARGET_TOO_LARGE_MESSAGE };
-    const key = askKey(scope, request); const existing = this.pendingByKey.get(key); if (existing !== undefined) return this.join(existing, request.signal);
-    const createdAtMs = this.now(); const description = request.description?.trim(); const resourcePath = normalizeLocalToolResourcePath(request.resourcePath);
-    const pending: Pending = { request: { id: this.options.randomId?.() ?? randomBytes(32).toString("hex"), agentId: scope.agentId, action: request.action, target: request.target, status: "pending", createdAtMs, expiresAtMs: createdAtMs + this.askTtlMs, ...(description == null || description.length === 0 ? {} : { description }) }, waiters: new Set(), expiryAbort: new AbortController(), toolCallId: scope.toolCallId, ...(resourcePath === undefined ? {} : { resourcePath }), outlivesScope: request.outlivesScope === true, directionEpoch: this.scopeEpoch(scope) };
-    this.pendingByKey.set(key, pending); this.pendingById.set(pending.request.id, key); void delay(this.askTtlMs, pending.expiryAbort.signal).then(() => { if (!pending.expiryAbort.signal.aborted) this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_EXPIRED_MESSAGE }); }); this.emit({ type: "created", request: pending.request }); return this.join(pending, request.signal);
+  private readonly pendingAsks: LocalToolPendingAskQueue;
+  private readonly approvalsById = new Map<string, StoredApproval>();
+  private readonly refusalMemory = new LocalToolRefusalMemory();
+  private readonly listeners = new Set<(event: SlateLocalToolControllerEvent) => void>();
+  private readonly askTtlMs: number;
+  private readonly now: () => number;
+
+  constructor(private readonly options: SlateLocalToolPermissionControllerOptions) {
+    this.askTtlMs = options.askTtlMs ?? SLATE_LOCAL_TOOL_ASK_TTL_MS;
+    this.now = options.now ?? Date.now;
+    this.pendingAsks = new LocalToolPendingAskQueue({
+      ttlMs: this.askTtlMs,
+      now: this.now,
+      newId: options.randomId ?? (() => randomBytes(32).toString("hex")),
+      onSettledRequest: (pending) => this.rememberRefusal(pending),
+      onEvent: (event) => this.emit(event),
+    });
   }
-  private async join(pending: Pending, signal?: AbortSignal): Promise<SlateLocalToolDecision> { return new Promise((resolve) => { const settleWaiter = (decision: SlateLocalToolDecision) => { pending.waiters.delete(settleWaiter); signal?.removeEventListener("abort", onAbort); resolve(decision); if (pending.waiters.size === 0 && this.pendingById.has(pending.request.id)) this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE }); }; const onAbort = () => settleWaiter({ allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE }); pending.waiters.add(settleWaiter); if (signal !== undefined) { if (signal.aborted) onAbort(); else signal.addEventListener("abort", onAbort, { once: true }); } }); }
-  private settle(pending: Pending, status: Exclude<SlateLocalToolRequestStatus, "pending">, decision: SlateLocalToolDecision, options?: { readonly rememberRefusal?: boolean }): SlateLocalToolAskRequest { pending.expiryAbort.abort(); const key = this.pendingById.get(pending.request.id); if (key !== undefined && this.pendingByKey.get(key) === pending) this.pendingByKey.delete(key); this.pendingById.delete(pending.request.id); const settled = { ...pending.request, status }; pending.request = settled; if (options?.rememberRefusal ?? (status !== "allowed" && status !== "always")) this.rememberRefusedAction(pending); this.settledIds.add(pending.request.id); if (this.settledIds.size > SLATE_LOCAL_TOOL_SETTLED_ID_MEMORY) { const oldest = this.settledIds.values().next(); if (!oldest.done) this.settledIds.delete(oldest.value); } for (const waiter of [...pending.waiters]) waiter(decision); pending.waiters.clear(); this.emit({ type: "settled", request: settled }); return settled; }
-  private emit(event: SlateLocalToolControllerEvent): void { for (const listener of this.listeners) listener(event); }
+
+  permission(): SlateLocalToolPermission {
+    return this.options.getPermission();
+  }
+
+  blockedReason(): string | undefined {
+    return this.permission() === "never" ? SLATE_LOCAL_TOOLS_DISABLED_MESSAGE : undefined;
+  }
+
+  requiresApproval(): boolean {
+    return this.permission() === "ask";
+  }
+
+  async awaitDesktopStandingDecision(args: {
+    readonly agentId: string;
+    readonly toolCallId: string;
+    readonly command?: string;
+    readonly description?: string;
+    readonly signal?: AbortSignal;
+  }): Promise<SlateLocalToolDecision> {
+    const permission = this.permission();
+    if (permission === "never") return { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE };
+    if (permission === "always") return { allowed: true };
+
+    return this.authorize(
+      {
+        agentId: args.agentId,
+        toolCallId: args.toolCallId,
+        action: "run-command",
+        directionEpoch: this.directionEpoch(args.agentId),
+      },
+      {
+        action: "run-command",
+        target: args.command ?? "",
+        ...(args.description == null || args.description.length === 0 ? {} : { description: args.description }),
+        ...(args.signal === undefined ? {} : { signal: args.signal }),
+      },
+    );
+  }
+
+  async authorize(
+    scope: SlateLocalToolScope | undefined,
+    request: SlateLocalToolRequest,
+  ): Promise<SlateLocalToolDecision> {
+    const permission = this.permission();
+    if (permission === "never") return { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE };
+
+    if (scope !== undefined) {
+      const refusal = this.refusalMemory.refusalFor(scope, request);
+      if (refusal !== undefined) return { allowed: false, reason: refusal };
+    }
+
+    if (permission === "always" && !this.refusalMemory.predatesStandingGrant(scope)) return { allowed: true };
+    if (scope === undefined) return { allowed: false, reason: SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE };
+
+    if (scope.toolCallId === undefined) {
+      const approval = this.findApprovalForResource(scope.agentId, request.attachToResourcePath);
+      return approval === undefined
+        ? { allowed: false, reason: SLATE_LOCAL_TOOLS_UNAPPROVED_MESSAGE }
+        : { allowed: true, approvalId: approval.id };
+    }
+
+    return this.ask(scope as LocalToolScope, request);
+  }
+
+  completeScope(scope?: SlateLocalToolScope): void {
+    if (scope?.toolCallId === undefined) return;
+    for (const approval of [...this.approvalsById.values()]) {
+      if (approval.agentId === scope.agentId && approval.toolCallId === scope.toolCallId && !approval.outlivesScope) {
+        this.retireApproval(approval.id);
+      }
+    }
+  }
+
+  beginTurn(agentId: string): void {
+    this.refusalMemory.advanceDirection(agentId);
+    for (const approval of [...this.approvalsById.values()]) {
+      if (approval.agentId === agentId) this.retireApproval(approval.id);
+    }
+    for (const pending of this.pendingAsks.allPending()) {
+      if (pending.request.agentId === agentId) {
+        this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_EXPIRED_MESSAGE });
+      }
+    }
+  }
+
+  directionEpoch(agentId: string): number {
+    return this.refusalMemory.directionEpoch(agentId);
+  }
+
+  forgetAgent(agentId: string): void {
+    this.beginTurn(agentId);
+    this.refusalMemory.forgetAgent(agentId);
+  }
+
+  rememberedRefusalCount(): number {
+    return this.refusalMemory.refusalCount();
+  }
+
+  retainedAgentIds(): string[] {
+    return [
+      ...new Set([
+        ...this.refusalMemory.retainedAgentIds(),
+        ...[...this.approvalsById.values()].map((approval) => approval.agentId),
+        ...this.pendingAsks.allPending().map((pending) => pending.request.agentId),
+      ]),
+    ];
+  }
+
+  notePermissionChanged(): void {
+    const permission = this.permission();
+    this.refusalMemory.notePermission(permission);
+    if (permission === "ask") return;
+
+    const nowAllowed = permission === "always";
+    if (!nowAllowed) {
+      for (const approvalId of [...this.approvalsById.keys()]) this.retireApproval(approvalId);
+    }
+
+    for (const pending of this.pendingAsks.allPending()) {
+      if (nowAllowed && this.refusalMemory.isStalePending(pending.request.agentId, pending.directionEpoch)) {
+        this.settle(pending, "expired", { allowed: false, reason: SLATE_LOCAL_TOOLS_ABANDONED_MESSAGE }, { rememberRefusal: false });
+        continue;
+      }
+
+      const decision = nowAllowed
+        ? { allowed: true }
+        : { allowed: false, reason: SLATE_LOCAL_TOOLS_DISABLED_MESSAGE };
+      this.settle(pending, nowAllowed ? "always" : "never", decision, {
+        rememberRefusal: false,
+      });
+    }
+  }
+
+  resolveRequest(requestId: string, initialResolution: SlateLocalToolResolution): SlateLocalToolAskRequest | undefined {
+    const pending = this.pendingAsks.recordById(requestId);
+    if (pending === undefined || pending.request.id !== requestId) return undefined;
+
+    let resolution = initialResolution;
+    if (resolution === "always" || resolution === "never") {
+      try {
+        this.options.setPermission(resolution);
+      } catch {
+        // The individual answer still applies when a settings write cannot be saved.
+      }
+      if (resolution === "always" && this.permission() !== "always") resolution = "allow-once";
+    }
+
+    const allowed = resolution === "allow-once" || resolution === "always";
+    if (allowed) {
+      this.approvalsById.set(requestId, {
+        id: requestId,
+        agentId: pending.request.agentId,
+        toolCallId: pending.toolCallId,
+        outlivesScope: pending.outlivesScope,
+        action: pending.request.action,
+        target: pending.request.target,
+        ...(pending.resourcePath === undefined ? {} : { resourcePath: pending.resourcePath }),
+      });
+    }
+
+    const deniedReason = resolution === "never"
+      ? SLATE_LOCAL_TOOLS_DISABLED_MESSAGE
+      : SLATE_LOCAL_TOOLS_DENIED_MESSAGE;
+    const settled = this.settle(
+      pending,
+      STATUS_FOR_RESOLUTION[resolution],
+      allowed ? { allowed: true, approvalId: requestId } : { allowed: false, reason: deniedReason },
+    );
+    if (resolution === "always" || resolution === "never") this.notePermissionChanged();
+    return settled;
+  }
+
+  getPendingRequestForAgent(agentId: string): SlateLocalToolAskRequest | undefined {
+    return this.pendingAsks.pendingForAgent(agentId);
+  }
+
+  getPendingRequestById(id: string): SlateLocalToolAskRequest | undefined {
+    return this.pendingAsks.pendingById(id);
+  }
+
+  wasSettled(id: string): boolean {
+    return this.pendingAsks.wasSettled(id);
+  }
+
+  liveApprovalIds(): string[] {
+    return [...this.approvalsById.keys()];
+  }
+
+  subscribe(listener: (event: SlateLocalToolControllerEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  findApprovalForResource(agentId: string, resourcePath?: string): StoredApproval | undefined {
+    const normalizedResource = normalizeLocalToolResourcePath(resourcePath);
+    if (normalizedResource === undefined) return undefined;
+    return [...this.approvalsById.values()].find(
+      (approval) => approval.agentId === agentId
+        && normalizeLocalToolResourcePath(approval.resourcePath) === normalizedResource,
+    );
+  }
+
+  retireApproval(id: string): void {
+    if (!this.approvalsById.delete(id)) return;
+    this.options.onApprovalRetired?.(id);
+  }
+
+  refusalFor(scope: SlateLocalToolScope, request: SlateLocalToolRequest): string | undefined {
+    return this.refusalMemory.refusalFor(scope, request);
+  }
+
+  private scopeEpoch(scope: SlateLocalToolScope): number {
+    return scope.directionEpoch ?? this.directionEpoch(scope.agentId);
+  }
+
+  private rememberRefusal(pending: PendingLocalToolAsk): void {
+    this.refusalMemory.rememberRefusal({
+      agentId: pending.request.agentId,
+      action: pending.request.action,
+      target: pending.request.target,
+      directionEpoch: pending.directionEpoch,
+    });
+  }
+
+  private async ask(scope: LocalToolScope, request: SlateLocalToolRequest): Promise<SlateLocalToolDecision> {
+    const covered = [...this.approvalsById.values()].find((approval) =>
+      approval.agentId === scope.agentId
+      && (approval.toolCallId === scope.toolCallId || approval.resourcePath !== undefined)
+      && localToolApprovalCovers(approval, request));
+    if (covered !== undefined) {
+      if (request.outlivesScope === true && !covered.outlivesScope) {
+        this.approvalsById.set(covered.id, { ...covered, outlivesScope: true });
+      }
+      return { allowed: true, approvalId: covered.id };
+    }
+
+    if (this.options.canAsk?.(scope.agentId) === false) {
+      return { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_UNAVAILABLE_MESSAGE };
+    }
+    if (this.options.hasLiveComputer?.(scope.agentId) === false) {
+      return { allowed: false, reason: SLATE_NO_LOCAL_MACHINE_MESSAGE };
+    }
+
+    const scopeAlreadyApproved = scope.action !== undefined
+      && [...this.approvalsById.values()].some((approval) =>
+        approval.agentId === scope.agentId
+        && approval.toolCallId === scope.toolCallId
+        && approval.action === scope.action);
+    if (scope.action !== undefined && scope.action !== request.action && !scopeAlreadyApproved) {
+      return { allowed: false, reason: SLATE_LOCAL_TOOLS_PREPARATORY_MESSAGE };
+    }
+    if (request.signal?.aborted === true) {
+      return { allowed: false, reason: SLATE_LOCAL_TOOLS_ASK_CANCELLED_MESSAGE };
+    }
+    if (request.target.length > SLATE_LOCAL_TOOL_TARGET_MAX_CHARS) {
+      return {
+        allowed: false,
+        reason: SLATE_LOCAL_TOOLS_TARGET_TOO_LARGE_MESSAGE,
+      };
+    }
+
+    return this.pendingAsks.request(scope, request, this.scopeEpoch(scope));
+  }
+
+  private settle(
+    pending: PendingLocalToolAsk,
+    status: Exclude<SlateLocalToolRequestStatus, "pending">,
+    decision: SlateLocalToolDecision,
+    options?: { readonly rememberRefusal?: boolean },
+  ): SlateLocalToolAskRequest {
+    return this.pendingAsks.settle(pending, status, decision, options);
+  }
+
+  private emit(event: SlateLocalToolControllerEvent): void {
+    for (const listener of this.listeners) listener(event);
+  }
 }

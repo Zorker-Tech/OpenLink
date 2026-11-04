@@ -1,21 +1,78 @@
-/** The departures a host still owes: leaving a room or removing an agent is remembered until it is acknowledged. */
-import { SlateXuserRelayHttpError } from "./xuser-relay.ts";
+/** Keep room departures durable until the remote service acknowledges them. */
+import type { XuserDepartureHost } from "./xuser-departure-contracts.ts";
 import type { XuserDeparture, XuserPendingDepartureStore } from "./xuser-pending-departure-store.ts";
 import type { XuserRoomTombstoneStore } from "./xuser-room-tombstone-store.ts";
+import { resolveActingXuserAuthId, resolveXuserDeparture, deliverXuserDeparture } from "./xuser-departure-resolution.ts";
+import {
+  hasOwedRoomDeparture,
+  isXuserRoomAbandoned,
+  markXuserRoomAbandonedLocally,
+  clearOwnedRoomTombstones,
+  pruneObsoleteRoomTombstones,
+} from "./xuser-departure-room-state.ts";
+import { XuserDepartureFlushLane } from "./xuser-departure-flush.ts";
 
-export const ROOM_TOMBSTONE_MIN_RETENTION_MS = 48 * 60 * 60_000;
-interface Room { roomId: string; members: Array<{ kind: string; authId: string; agentId?: string }> }
-export interface XuserDepartureHost { relay: { leaveRoom(roomId: string): Promise<unknown>; removeDeletedAgent(agentId: string): Promise<{ rooms: Room[] }> }; manager: { getSharedRoomIdForAgent(agentId: string): Promise<string | null>; listRoomAgentIds(roomId: string): Promise<string[]>; markMirrorRoomRevoked(roomId: string): Promise<void> }; clock: { now(): number }; isEnabled(): boolean; getSelfAuthId(): string | null; setSelfAuthId(id: string): void; readSelfAuthId(operation: string): Promise<string | null>; getRooms(): Room[]; setRooms(rooms: Room[]): void; emit(): void; installRoom(room: Room): Promise<void> }
+export { ROOM_TOMBSTONE_MIN_RETENTION_MS } from "./xuser-departure-contracts.ts";
+export type { XuserDepartureHost } from "./xuser-departure-contracts.ts";
+
+/** Record deletion work, settle it when possible, and track rooms already abandoned locally. */
 export class SlateXuserDepartureObligations {
-  private isFlushingDepartures = false; constructor(readonly host: XuserDepartureHost, readonly pendingDepartures: XuserPendingDepartureStore, readonly roomTombstones: XuserRoomTombstoneStore) {}
-  async noteAgentDeleted(agentId: string): Promise<void> { if (!this.host.isEnabled()) return; const ownerAuthId = await this.resolveActingAuthId(), departure = await this.resolveDeparture(agentId, ownerAuthId); if (departure == null) return; this.pendingDepartures.record(departure); if (departure.kind === "leave-room") await this.host.manager.markMirrorRoomRevoked(departure.roomId).catch(() => {}); await this.flushPendingDepartures(); }
-  async resolveActingAuthId(): Promise<string | null> { const authId = await this.host.readSelfAuthId("acting-identity resolve"); if (authId != null) this.host.setSelfAuthId(authId); return authId; }
-  async resolveDeparture(agentId: string, ownerAuthId: string | null): Promise<XuserDeparture | null> { const owner = ownerAuthId == null ? {} : { ownerAuthId }, roomId = await this.host.manager.getSharedRoomIdForAgent(agentId).catch(() => null); if (roomId != null) { const bound = await this.host.manager.listRoomAgentIds(roomId).catch(() => []); return bound.every((id) => id === agentId) ? { kind: "leave-room", ...owner, roomId, agentId } : null; } const member = ownerAuthId != null && this.host.getRooms().some((room) => room.members.some((item) => item.kind === "agent" && item.authId === ownerAuthId && item.agentId === agentId)); return member ? { kind: "remove-agent", ...owner, agentId } : null; }
-  isDepartureOwed(roomId: string): boolean { return this.pendingDepartures.list().some((value) => value.kind === "leave-room" && value.roomId === roomId && (value.ownerAuthId == null || value.ownerAuthId === this.host.getSelfAuthId())); }
-  isRoomAbandoned(roomId: string): boolean { return this.roomTombstones.list().some((value) => value.roomId === roomId && (value.ownerAuthId == null || value.ownerAuthId === this.host.getSelfAuthId())) || this.isDepartureOwed(roomId); }
-  abandonRoomLocally(roomId: string): void { const selfAuthId = this.host.getSelfAuthId(); this.roomTombstones.record({ roomId, ...(selfAuthId == null ? {} : { ownerAuthId: selfAuthId }), tornDownAtMs: this.host.clock.now() }); const rooms = this.host.getRooms(), remaining = rooms.filter((room) => room.roomId !== roomId); if (remaining.length !== rooms.length) { this.host.setRooms(remaining); this.host.emit(); } }
-  clearRoomTombstones(roomId: string): void { for (const value of this.roomTombstones.list()) if (value.roomId === roomId && (value.ownerAuthId == null || value.ownerAuthId === this.host.getSelfAuthId())) this.roomTombstones.clear(value); }
-  pruneRoomTombstones(registryRoomIds: ReadonlySet<string>): void { const now = this.host.clock.now(); for (const value of this.roomTombstones.list()) if ((value.ownerAuthId == null || value.ownerAuthId === this.host.getSelfAuthId()) && !registryRoomIds.has(value.roomId) && now - value.tornDownAtMs >= ROOM_TOMBSTONE_MIN_RETENTION_MS) this.roomTombstones.clear(value); }
-  async flushPendingDepartures(): Promise<void> { if (this.isFlushingDepartures) return; const owed = this.pendingDepartures.list(); if (owed.length === 0) return; this.isFlushingDepartures = true; try { const actingAuthId = await this.resolveActingAuthId(); if (actingAuthId == null) return; for (const record of owed) { if (record.ownerAuthId != null && record.ownerAuthId !== actingAuthId) continue; let departure = record; if (departure.ownerAuthId == null) { departure = { ...departure, ownerAuthId: actingAuthId }; this.pendingDepartures.clear(record); this.pendingDepartures.record(departure); } if (!await this.landDeparture(departure)) continue; this.pendingDepartures.clear(departure); if (departure.kind === "leave-room") this.abandonRoomLocally(departure.roomId); } } finally { this.isFlushingDepartures = false; } }
-  async landDeparture(departure: XuserDeparture): Promise<boolean> { try { if (departure.kind === "leave-room") await this.host.relay.leaveRoom(departure.roomId); else { const result = await this.host.relay.removeDeletedAgent(departure.agentId); for (const room of result.rooms) await this.host.installRoom(room); } return true; } catch (error) { return error instanceof SlateXuserRelayHttpError && error.status === 404; } }
+  readonly #flushLane: XuserDepartureFlushLane;
+
+  constructor(
+    readonly host: XuserDepartureHost,
+    readonly pendingDepartures: XuserPendingDepartureStore,
+    readonly roomTombstones: XuserRoomTombstoneStore,
+  ) {
+    this.#flushLane = new XuserDepartureFlushLane(host, { pendingDepartures, roomTombstones });
+  }
+
+  async noteAgentDeleted(agentId: string): Promise<void> {
+    if (!this.host.isEnabled()) return;
+    const ownerAuthId = await this.resolveActingAuthId();
+    const departure = await this.resolveDeparture(agentId, ownerAuthId);
+    if (departure == null) return;
+
+    this.pendingDepartures.record(departure);
+    if (departure.kind === "leave-room") {
+      await this.host.manager.markMirrorRoomRevoked(departure.roomId).catch(() => {});
+    }
+    await this.flushPendingDepartures();
+  }
+
+  resolveActingAuthId(): Promise<string | null> {
+    return resolveActingXuserAuthId(this.host);
+  }
+
+  resolveDeparture(agentId: string, ownerAuthId: string | null): Promise<XuserDeparture | null> {
+    return resolveXuserDeparture(this.host, agentId, ownerAuthId);
+  }
+
+  isDepartureOwed(roomId: string): boolean {
+    return hasOwedRoomDeparture(this.host, this.pendingDepartures, roomId);
+  }
+
+  isRoomAbandoned(roomId: string): boolean {
+    return isXuserRoomAbandoned(this.host, this.pendingDepartures, this.roomTombstones, roomId);
+  }
+
+  abandonRoomLocally(roomId: string): void {
+    markXuserRoomAbandonedLocally(this.host, this.roomTombstones, roomId);
+  }
+
+  clearRoomTombstones(roomId: string): void {
+    clearOwnedRoomTombstones(this.host, this.roomTombstones, roomId);
+  }
+
+  pruneRoomTombstones(registryRoomIds: ReadonlySet<string>): void {
+    pruneObsoleteRoomTombstones(this.host, this.roomTombstones, registryRoomIds);
+  }
+
+  flushPendingDepartures(): Promise<void> {
+    return this.#flushLane.flush();
+  }
+
+  landDeparture(departure: XuserDeparture): Promise<boolean> {
+    return deliverXuserDeparture(this.host, departure);
+  }
 }

@@ -67,6 +67,7 @@ test("brandedId admits opaque ids and refuses anything that could carry text", (
   assert.equal(brandedId(""), undefined, "empty")
   assert.equal(brandedId("has space"), undefined)
   assert.equal(brandedId("line\nbreak"), undefined)
+  assert.equal(brandedId("line\n"), undefined, "an end anchor does not admit a trailing newline")
   assert.equal(brandedId("quote\"and'quote"), undefined)
   assert.equal(brandedId(undefined), undefined)
 })

@@ -8,30 +8,30 @@ import { describe, it } from "node:test";
 
 import type { PartialMessage } from "@bufbuild/protobuf";
 
-import { ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { EditToolCall } from "../../source/packages/proto/generated/agent/v1/edit_tool_pb.ts";
-import { ClientSideToolV2, RunTerminalCommandEndedReason } from "../../source/packages/proto/generated/aiserver/v1/tools_pb.ts";
-import { EditRejected, EditResult, EditSuccess, EditWritePermissionDenied } from "../../source/packages/proto/generated/agent/v1/edit_tool_pb.ts";
-import { ReadToolError, ReadToolResult, ReadToolSuccess } from "../../source/packages/proto/generated/agent/v1/read_tool_pb.ts";
-import { ReadToolCall } from "../../source/packages/proto/generated/agent/v1/read_tool_pb.ts";
-import { ShellRejected, ShellResult, ShellSuccess } from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts";
-import { ShellToolCall } from "../../source/packages/proto/generated/agent/v1/shell_tool_pb.ts";
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { EditToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts";
+import { ClientSideToolV2, RunTerminalCommandEndedReason } from "../../source/adapters/interop/proto/generated/aiserver/v1/tools_pb.ts";
+import { EditRejected, EditResult, EditSuccess, EditWritePermissionDenied } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts";
+import { ReadToolError, ReadToolResult, ReadToolSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_tool_pb.ts";
+import { ReadToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/read_tool_pb.ts";
+import { ShellRejected, ShellResult, ShellSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
+import { ShellToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/shell_tool_pb.ts";
 import { Struct } from "@bufbuild/protobuf";
 
-import { TaskResult, TaskSuccess, TaskToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { AskQuestionResult, AskQuestionSuccess, AskQuestionToolCall } from "../../source/packages/proto/generated/agent/v1/ask_question_tool_pb.ts";
-import { ComputerUseResult, ComputerUseToolCall } from "../../source/packages/proto/generated/agent/v1/computer_use_tool_pb.ts";
-import { GenerateImageResult, GenerateImageSuccess, GenerateImageToolCall } from "../../source/packages/proto/generated/agent/v1/generate_image_tool_pb.ts";
-import { GetMcpToolsAgentResult, GetMcpToolsSuccess, GetMcpToolsToolCall } from "../../source/packages/proto/generated/agent/v1/get_mcp_tools_tool_pb.ts";
-import { McpAuthResult, McpAuthSuccess, McpAuthToolCall } from "../../source/packages/proto/generated/agent/v1/mcp_auth_tool_pb.ts";
-import { ListMcpResourcesSuccess, McpSuccess, ReadMcpResourceSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts";
-import { ListMcpResourcesToolCall, ReadMcpResourceToolCall } from "../../source/packages/proto/generated/agent/v1/mcp_resource_tool_pb.ts";
-import { McpToolCall, McpToolResult } from "../../source/packages/proto/generated/agent/v1/mcp_tool_pb.ts";
-import { RecordScreenResult, RecordScreenStartSuccess } from "../../source/packages/proto/generated/agent/v1/record_screen_exec_pb.ts";
-import { RecordScreenToolCall } from "../../source/packages/proto/generated/agent/v1/record_screen_tool_pb.ts";
-import { WebFetchResult, WebFetchSuccess, WebFetchToolCall } from "../../source/packages/proto/generated/agent/v1/web_fetch_tool_pb.ts";
-import { WebSearchResult, WebSearchSuccess, WebSearchToolCall } from "../../source/packages/proto/generated/agent/v1/web_search_tool_pb.ts";
-import { projectAgentToolCallToClientSideToolV2 } from "../../source/host/transcript/client-side-tool-v2-projection.ts";
+import { TaskResult, TaskSuccess, TaskToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { AskQuestionResult, AskQuestionSuccess, AskQuestionToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts";
+import { ComputerUseResult, ComputerUseToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/computer_use_tool_pb.ts";
+import { GenerateImageResult, GenerateImageSuccess, GenerateImageToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/generate_image_tool_pb.ts";
+import { GetMcpToolsAgentResult, GetMcpToolsSuccess, GetMcpToolsToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/get_mcp_tools_tool_pb.ts";
+import { McpAuthResult, McpAuthSuccess, McpAuthToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_auth_tool_pb.ts";
+import { ListMcpResourcesSuccess, McpSuccess, ReadMcpResourceSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts";
+import { ListMcpResourcesToolCall, ReadMcpResourceToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_resource_tool_pb.ts";
+import { McpToolCall, McpToolResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_tool_pb.ts";
+import { RecordScreenResult, RecordScreenStartSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/record_screen_exec_pb.ts";
+import { RecordScreenToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/record_screen_tool_pb.ts";
+import { WebFetchResult, WebFetchSuccess, WebFetchToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/web_fetch_tool_pb.ts";
+import { WebSearchResult, WebSearchSuccess, WebSearchToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/web_search_tool_pb.ts";
+import { projectAgentToolCallToClientSideToolV2 } from "../../source/adapters/interop/agent/client-side-tool-v2-projection-adapter.ts";
 
 /** What a projected result says to the user, when it says anything. */
 const deniedMessage = (projected: { kind: string; value: { error?: { clientVisibleErrorMessage: string } } }) => projected.value.error?.clientVisibleErrorMessage ?? "";

@@ -44,9 +44,9 @@ import { PrivacyMode } from "../redaction/privacy-mode.ts"
 import { isRedactedString, type RedactedString } from "../redaction/redacted-values.ts"
 import { BackgroundSummarizationMode } from "./background-summarization.ts"
 import {
-  buildDeterministicSummaryText,
-  computeDeterministicFallbackMaxChars,
-  DEFAULT_DETERMINISTIC_FALLBACK_WINDOW_RATIO,
+  composeTranscriptSnapshot,
+  maximumTranscriptSnapshotChars,
+  DEFAULT_TRANSCRIPT_SNAPSHOT_SHARE,
 } from "./deterministic-summary-builder.ts"
 import {
   appendDurableBlocks,
@@ -60,9 +60,9 @@ import {
   type SummarizationImageMessage,
 } from "./latest-image.ts"
 import {
-  runSummarizationPipeline,
-  type SummarizationEnrichments,
-  type SummarizationPipelineOptions,
+  runSummaryPass,
+  type SummaryCarryData,
+  type SummaryRunOptions,
 } from "./pipeline.ts"
 import { prepareMessagesForCompaction } from "./prepare-messages.ts"
 import {
@@ -70,7 +70,7 @@ import {
   MAX_SUMMARIZATION_PROMPT_CHARS,
   truncatePromptFairly,
 } from "./prompt-truncation.ts"
-import { collectAllSkillBlocks } from "./skill-persistence.ts"
+import { collectAttachedSkillBlocksFromConversation } from "../../adapters/interop/agent/compaction-skill-message-adapter.ts"
 
 export type RedactedCoreMessage = ReturnType<typeof toRedactedCoreMessage>
 
@@ -122,7 +122,7 @@ export interface SummarizationHandlerOptions {
   readonly maxOutputTokens?: number | undefined
 }
 
-export interface SummarizationRunOptions extends SummarizationPipelineOptions {
+export interface SummarizationRunOptions extends SummaryRunOptions {
   readonly backgroundSummarizationMode: BackgroundSummarizationMode
   readonly triggerReason: string
   readonly contextWindowTokens?: number | undefined
@@ -974,7 +974,7 @@ export class SummarizationHandler {
     this.metricsModelLabel = options?.metricsModelLabel
     this.enableDeterministicFallback = options?.enableDeterministicFallback ?? false
     this.deterministicFallbackWindowRatio = options?.deterministicFallbackWindowRatio ??
-      DEFAULT_DETERMINISTIC_FALLBACK_WINDOW_RATIO
+      DEFAULT_TRANSCRIPT_SNAPSHOT_SHARE
     // A fallback to the main model is not given its own output cap, since the main model's limits apply.
     this.maxOutputTokens = this.isFallbackToMainModel ? undefined : options?.maxOutputTokens
   }
@@ -996,7 +996,7 @@ export class SummarizationHandler {
    * not a split, so the whole conversation is summarized instead; and when the split leaves no tail at all,
    * the last user message is moved into the tail rather than being summarized away with everything else.
    */
-  partitionMessages(
+  separateMessages(
     conversation: readonly RedactedCoreMessage[],
     runOptions: SummarizationRunOptions,
   ): PartitionedConversation {
@@ -1032,7 +1032,7 @@ export class SummarizationHandler {
         tail = [summarized[lastUserAt]!]
       }
     }
-    const skills = collectAllSkillBlocks(candidates)
+    const skills = collectAttachedSkillBlocksFromConversation(candidates)
     return {
       systemMessage,
       userInfoMessage,
@@ -1095,11 +1095,11 @@ export class SummarizationHandler {
     kind: string | undefined,
   ): string | null {
     const metricsLabel = this.getMetricsModelLabel()
-    const charBudget = computeDeterministicFallbackMaxChars(
+    const charBudget = maximumTranscriptSnapshotChars(
       runOptions.contextWindowTokens,
       this.deterministicFallbackWindowRatio,
     )
-    const fallback = buildDeterministicSummaryText(ctx, conversationParts.messagesToSummarize, { maxChars: charBudget })
+    const fallback = composeTranscriptSnapshot(ctx, conversationParts.messagesToSummarize, charBudget)
     if (fallback === null) {
       handlerLog.warn(
         ctx,
@@ -1134,9 +1134,9 @@ export class SummarizationHandler {
         windowRatio: this.deterministicFallbackWindowRatio,
         charBudget,
         fallbackTextLength: fallback.text.length,
-        fullyPreservedMessageCount: fallback.fullyPreservedMessageCount,
-        truncatedCount: fallback.truncatedCount,
-        droppedCount: fallback.droppedCount,
+        fullyPreservedMessageCount: fallback.wholeMessages,
+        truncatedCount: fallback.shortenedMessages,
+        droppedCount: fallback.omittedMessages,
         totalMessages: conversationParts.messagesToSummarize.length,
       },
     })
@@ -1148,10 +1148,10 @@ export class SummarizationHandler {
    * summary so the platform can tell it apart from something the user said, and the mode, root, plan,
    * transcript and todo list are appended to it, since those are not messages and would otherwise be lost.
    */
-  buildSummaryMessage(
+  formatSummaryCarrier(
     raw: SummarizationRawResult,
     conversationParts: PartitionedConversation,
-    extra: SummarizationEnrichments,
+    extra: SummaryCarryData,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
     const durableText = renderDurableBlocks(
       "external",
@@ -1190,7 +1190,7 @@ export class SummarizationHandler {
   }
 
   /** What the conversation becomes: the two messages that were set aside, the summaryBody, and the tail. */
-  assembleFinalMessages(
+  rebuildConversation(
     conversationParts: PartitionedConversation,
     carrier: RedactedCoreMessage,
   ): readonly RedactedCoreMessage[] {
@@ -1248,7 +1248,7 @@ export class SummarizationHandler {
       }
     }
     try {
-      const outcome = await runSummarizationPipeline(this, context, conversation, runOptions)
+      const outcome = await runSummaryPass(this, context, conversation, runOptions)
       const { rawSummary, summaryTextLength } = outcome
       const durationMs = performance.now() - startedAt
       this.recordMetrics(context, {

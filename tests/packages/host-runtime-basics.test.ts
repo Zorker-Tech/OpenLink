@@ -13,12 +13,13 @@ import { after, describe, it } from "node:test";
 import { normalizeSlateUserFullName, renderUserIdentitySystemPrompt, MAX_FULL_NAME_LENGTH } from "../../source/host/slate-user-identity.ts";
 import { publishTranscriptMutation, subscribeTranscriptMutations, type TranscriptMutation } from "../../source/host/transcript/transcript-mutation-events.ts";
 import { StatKeyedParseCache, RACY_MTIME_TICK_WINDOW_MS, mtimeTickCouldStillHideAnEdit } from "../../source/host/workflows/stat-keyed-parse-cache.ts";
-import { applyBoxEnvironmentViaTransport, type BoxEnvironmentControlClient } from "../../source/host/boxes/box-env.ts";
-import { buildHostShellArgs } from "../../source/host/boxes/box-shell-command.ts";
+import { applyBoxEnvironmentViaTransport, type BoxEnvironmentControlClient } from "../../source/adapters/interop/agent/box-environment-transport-adapter.ts";
+import { buildHostShellArgs } from "../../source/adapters/interop/agent/box-shell-command-adapter.ts";
 import { assertPathOutsideProtectedRoots, SlateProtectedPathError } from "../../source/host/boxes/protected-path-guard.ts";
 import { augmentWatchResultWithTranscriptDump, cloudAgentTranscriptDumpPath, dumpCloudAgentTranscript, formatCloudAgentDumpCompletionLine } from "../../source/host/cloud-agents/cloud-agent-transcript-dump.ts";
 import { GROUP_MAX_MEMBERS, getSlateGroupPath, isSlateGroupDir, normalizeMemberIds, normalizeRemoteMembers, readSlateGroupConfig, writeSlateGroupConfig } from "../../source/host/groups/group-store.ts";
-import { createSlateMobilePushSender, SlateMobilePushNotifier, SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS, type MobilePushInput } from "../../source/host/notifications/mobile-push-notifier.ts";
+import { createSlateMobilePushSender } from "../../source/adapters/interop/cursor-backend/mobile-push-adapter.ts";
+import { SlateMobilePushNotifier, SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS, type MobilePushInput } from "../../source/host/notifications/mobile-push-notifier.ts";
 import { createSlateTransport } from "../../source/host/ports/transport.ts";
 import { bucketClockSkewDeltaMs, sanitizeCrossClockDurationMs, SEND_DISPATCH_MAX_PLAUSIBLE_MS } from "../../source/host/runner/clock-skew-guard.ts";
 import { visitedSiteHost, withSiteVisitTracking, type AuditRecord } from "../../source/host/runner/site-visit-tracking.ts";
@@ -51,8 +52,9 @@ describe("the user, as the agent is told them", () => {
     assert.equal(renderUserIdentitySystemPrompt(undefined), "");
     assert.equal(renderUserIdentitySystemPrompt("  "), "");
     const prompt = renderUserIdentitySystemPrompt("Ada");
-    assert.match(prompt, /Your user is Ada;/);
-    assert.match(prompt, /speak as them/);
+    assert.match(prompt, /You are acting for Ada\./);
+    assert.match(prompt, /write from their perspective/);
+    assert.match(prompt, /do not describe them as an outside person/);
   });
 });
 
@@ -153,12 +155,30 @@ describe("paths that belong to the host", () => {
     await assert.doesNotReject(() => assertPathOutsideProtectedRoots([], join(root, "state.json"), scratch));
   });
 
+  it("treats the protected root itself as inside, and resolves relative traversal against its base", async () => {
+    const root = join(scratch, "host-state");
+    mkdirSync(root, { recursive: true });
+
+    await assert.rejects(() => assertPathOutsideProtectedRoots([root], root, scratch), SlateProtectedPathError);
+    await assert.rejects(() => assertPathOutsideProtectedRoots([root], "host-state/../host-state/state.json", scratch), SlateProtectedPathError);
+    await assert.doesNotReject(() => assertPathOutsideProtectedRoots([root], "../outside/state.json", root));
+  });
+
   it("refuses a symlink that leads into a protected root", async () => {
     const root = join(scratch, "protected-real");
     mkdirSync(root, { recursive: true });
     const link = join(scratch, "looks-harmless");
     symlinkSync(root, link);
     await assert.rejects(() => assertPathOutsideProtectedRoots([root], join(link, "state.json"), scratch), SlateProtectedPathError);
+  });
+
+  it("recognizes a protected root through a symlink alias", async () => {
+    const root = join(scratch, "protected-alias-target");
+    mkdirSync(root, { recursive: true });
+    const alias = join(scratch, "protected-alias");
+    symlinkSync(root, alias);
+
+    await assert.rejects(() => assertPathOutsideProtectedRoots([alias], join(root, "state.json"), scratch), SlateProtectedPathError);
   });
 });
 
@@ -388,14 +408,14 @@ describe("asking the user for a secret", () => {
     assert.equal(clampSecretLabel("x".repeat(SECRET_REQUEST_MAX_LABEL_LENGTH + 10)).length, SECRET_REQUEST_MAX_LABEL_LENGTH);
     assert.equal(clampSecretDescription("  first\n\n\n\nsecond  "), "first\n\n\n\nsecond");
     assert.equal(clampSecretDescription("y".repeat(SECRET_REQUEST_MAX_DESCRIPTION_LENGTH + 10)).length, SECRET_REQUEST_MAX_DESCRIPTION_LENGTH);
-    assert.equal(summarizeSecretRequest({ label: "GitHub token" }), "Requested a secret from the user securely: GitHub token");
+    assert.equal(summarizeSecretRequest({ label: "GitHub token" }), "Secure secret input requested: GitHub token");
   });
 
   it("acknowledges a provided secret as one the agent never sees", () => {
     const ack = buildSecretProvidedAck({ label: "GitHub token", target: { kind: "connector" } });
-    assert.match(ack, /\[The user securely provided the requested secret: "GitHub token"\./);
-    assert.match(ack, /you never see the value and it is not in this conversation\.\]/);
-    assert.match(ack, /Confirm to the user that it is set/);
+    assert.match(ack, /\[GitHub token was supplied through the secure input and saved directly to connector;/);
+    assert.match(ack, /the value is not available here and was not added to the conversation/);
+    assert.match(ack, /Tell the user it is set/);
   });
 });
 

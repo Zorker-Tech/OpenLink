@@ -47,7 +47,7 @@ import { TurnRuntime } from "./turn-runtime.ts";
 import { UpgradeRecreateResume } from "./upgrade-recreate-resume.ts";
 import { WidgetResponses } from "./widget-responses.ts";
 import { WorkflowCommands } from "./workflow-commands.ts";
-import { ClientSideToolV2Producer } from "./client-side-tool-v2-producer.ts";
+import { ClientSideToolV2Producer } from "../../adapters/interop/agent/client-side-tool-v2-producer-adapter.ts";
 
 export interface TaskBoundary {
   settled(): Promise<void>;

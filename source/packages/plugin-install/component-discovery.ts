@@ -10,7 +10,7 @@ import { basename } from "node:path";
 import yaml from "js-yaml";
 import { isPathSafe, type PluginManifest } from "./manifest-parser.ts";
 import { PLUGIN_MCP_CONFIG_FILE_NAMES, resolvePluginMcpConfigFromReader } from "./mcp-parser.ts";
-import { inferMcpPlaceholderVariables, type PlaceholderProperty } from "./mcp-placeholder-variables.ts";
+import { inferMcpPlaceholderVariables, type PlaceholderProperty } from "../../adapters/interop/plugin-marketplace/mcp-placeholder-variable-adapter.ts";
 
 const MARKDOWN_SUFFIXES = [".md", ".mdc", ".markdown"];
 const COMMAND_SUFFIXES = [...MARKDOWN_SUFFIXES, ".txt"];

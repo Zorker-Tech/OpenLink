@@ -6,7 +6,8 @@ import path from "node:path"
 
 import { readMcpDiskCatalogToolNamesForProjectDir } from "../../source/packages/local-exec/mcp-disk-catalog-read.ts"
 import { API_WIDTH, buildResolutionConfig, parseDisplayNum, parseXrandrOutput } from "../../source/packages/local-exec/computer-use/display.ts"
-import { shellBlockReasonMessage, shellCommandBlockResult } from "../../source/packages/local-exec/utils/edit-block-handler.ts"
+import { shellBlockReasonMessage } from "../../source/packages/local-exec/utils/edit-block-handler.ts"
+import { shellCommandBlockResultForInterop } from "../../source/adapters/interop/agent/shell-block-result-adapter.ts"
 import { parseGrepContentOutput, parseGrepCountOutput, parseGrepFilesOutput, splitGrepLines } from "../../source/packages/local-exec/grep-output.ts"
 import { BaseShellCoreExecutor, type ShellCoreArgs } from "../../source/packages/local-exec/shell-core.ts"
 import { McpFileSystemWriter } from "../../source/packages/local-exec/mcp-file-system-writer.ts"
@@ -25,17 +26,38 @@ test("a project's MCP catalog is read back from the files it holds", async () =>
 
     const toolsDir = path.join(projectDir, "mcps", "my_server", "tools")
     fs.mkdirSync(toolsDir, { recursive: true })
+    assert.deepEqual(await readMcpDiskCatalogToolNamesForProjectDir(projectDir, "my server"), { toolNames: [], toolsDirExists: true })
     fs.writeFileSync(path.join(toolsDir, "b.json"), JSON.stringify({ name: "second" }))
     fs.writeFileSync(path.join(toolsDir, "a.json"), JSON.stringify({ name: "first" }))
+    fs.writeFileSync(path.join(toolsDir, "c.json"), JSON.stringify({ name: "first" }))
+    fs.writeFileSync(path.join(toolsDir, "fallback.json"), JSON.stringify({ toolName: "third" }))
+    fs.mkdirSync(path.join(toolsDir, "folder.json"))
     // Only the definition files count, however much a file that is not one looks like JSON.
     fs.writeFileSync(path.join(toolsDir, "notes.txt"), JSON.stringify({ name: "not-a-definition" }))
+    fs.writeFileSync(path.join(toolsDir, "ignored.JSON"), JSON.stringify({ name: "wrong-case-extension" }))
     fs.writeFileSync(path.join(toolsDir, "broken.json"), "{ not json")
 
     const catalog = await readMcpDiskCatalogToolNamesForProjectDir(projectDir, "my server")
     assert.equal(catalog.toolsDirExists, true)
     // The names are sorted, the entries that are not definitions are left out, and the server's name is the
     // sanitized one it is filed under.
-    assert.deepEqual(catalog.toolNames, ["first", "second"])
+    assert.deepEqual(catalog.toolNames, ["first", "second", "third"])
+  } finally {
+    fs.rmSync(projectDir, { recursive: true, force: true })
+  }
+})
+
+test("a catalog path that exists as a file reports the directory error", async () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-catalog-file-path-"))
+  try {
+    const serverDir = path.join(projectDir, "mcps", "my_server")
+    fs.mkdirSync(serverDir, { recursive: true })
+    fs.writeFileSync(path.join(serverDir, "tools"), "not a directory")
+
+    await assert.rejects(
+      readMcpDiskCatalogToolNamesForProjectDir(projectDir, "my server"),
+      (error: NodeJS.ErrnoException) => error.code === "ENOTDIR",
+    )
   } finally {
     fs.rmSync(projectDir, { recursive: true, force: true })
   }
@@ -68,6 +90,12 @@ test("the active mode is the one the display reports", () => {
   assert.throws(() => parseXrandrOutput("nothing useful here"), /Could not detect display resolution/)
 })
 
+test("display parsing keeps a valid active refresh rate and uses the default for unusable values", () => {
+  assert.deepEqual(parseXrandrOutput("  1920x1080  59.94*+"), { width: 1920, height: 1080, refreshRate: 60 })
+  assert.deepEqual(parseXrandrOutput("  1920x1080  501.00*+"), { width: 1920, height: 1080, refreshRate: 60 })
+  assert.equal(parseDisplayNum("display.example:3:12.0"), 12)
+})
+
 test("the API keeps the display's shape at a fixed width", () => {
   const resolution = buildResolutionConfig(2_560, 1_440)
   assert.equal(resolution.display.width, 2_560)
@@ -80,21 +108,22 @@ test("the API keeps the display's shape at a fixed width", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a blocked command reports the reason it was blocked", () => {
-  assert.equal(shellBlockReasonMessage({ type: "userRejected", reason: "not now" }), "not now")
-  assert.equal(shellBlockReasonMessage({ type: "unsafeResolution", message: "unsafe" }), "unsafe")
-  assert.match(shellBlockReasonMessage({ type: "adminCommandDenylist", pattern: "npm:install *" }), /denylist rule: npm:install \*/)
-  assert.equal(shellBlockReasonMessage({ type: "needsApproval" }), "Command is not allowed")
-  assert.equal(shellBlockReasonMessage({ type: "cursorIgnore" }), "Command is not allowed")
+  assert.equal(shellBlockReasonMessage({ type: "userDeclined", detail: "not now" }), "not now")
+  assert.equal(shellBlockReasonMessage({ type: "unsafeWorkingDirectory", message: "unsafe" }), "unsafe")
+  assert.match(shellBlockReasonMessage({ type: "administratorCommandRule", pattern: "npm:install *" }), /denylist rule: npm:install \*/)
+  assert.equal(shellBlockReasonMessage({ type: "approvalRequired" }), "Command is not allowed")
+  assert.equal(shellBlockReasonMessage({ type: "ignorePolicy" }), "Command is not allowed")
+  assert.equal(shellBlockReasonMessage({ type: "managedInstructionFiles" }), "Command is not allowed")
 })
 
 test("a command blocked by a read-only session is a permission denial rather than a rejection", () => {
-  const denied = shellCommandBlockResult("rm -rf /", "/repo", { type: "permissionsConfig", isReadonly: true })
+  const denied = shellCommandBlockResultForInterop("rm -rf /", "/repo", { type: "permissionConfiguration", isReadOnly: true })
   assert.equal(denied.case, "permissionDenied")
   assert.equal(denied.value?.isReadonly, true)
   assert.equal(denied.value?.command, "rm -rf /")
 
   // The same block without the read-only marker is an ordinary rejection.
-  const rejected = shellCommandBlockResult("rm -rf /", "/repo", { type: "permissionsConfig" })
+  const rejected = shellCommandBlockResultForInterop("rm -rf /", "/repo", { type: "permissionConfiguration" })
   assert.equal(rejected.case, "rejected")
   assert.equal(rejected.value?.reason, "Command is not allowed")
 })
@@ -153,6 +182,25 @@ function shellCoreEvents(events: readonly Record<string, unknown>[]) {
   }
 }
 
+function shellCoreProbe(events: readonly Record<string, unknown>[], cwd = "/repo", failure?: Error) {
+  const calls: Array<{ command: string; options: Record<string, unknown> }> = []
+  const executor = {
+    async getCwd() { return cwd },
+    async *execute(_ctx: unknown, command: string, options: Record<string, unknown> = {}) {
+      calls.push({ command, options })
+      for (const event of events) yield event
+      if (failure !== undefined) throw failure
+    },
+  }
+  return { executor, calls }
+}
+
+async function collectShellCore(core: BaseShellCoreExecutor, args: ShellCoreArgs) {
+  const events: Array<Record<string, unknown>> = []
+  for await (const event of core.execute(createContext(), args)) events.push(event as Record<string, unknown>)
+  return events
+}
+
 test("a command runs with the session in its environment", async () => {
   let seen: { env?: NodeJS.ProcessEnv; workingDirectory?: string } = {}
   const executor = {
@@ -203,9 +251,11 @@ test("the agent store's own folders are added to whatever may be written", async
   assert.deepEqual(policy, { perRepo: { type: "workspace_readwrite" } })
 
   const withEnv = new BaseShellCoreExecutor(executor as never, undefined, undefined, undefined, () => env)
-  for await (const _event of withEnv.execute(createContext(), { command: "ls", sandboxPolicy: { perRepo: { type: "workspace_readwrite" } } })) {
-    void _event
+  const events: Array<Record<string, unknown>> = []
+  for await (const event of withEnv.execute(createContext(), { command: "ls", sandboxPolicy: { perRepo: { type: "workspace_readwrite" } } })) {
+    events.push(event as Record<string, unknown>)
   }
+  assert.deepEqual(events[0], { type: "start", sandboxed: true })
   const added = (policy as { perUser?: { additionalReadwritePaths?: string[]; additionalReadonlyPaths?: string[] } }).perUser
   assert.deepEqual(added?.additionalReadwritePaths, ["/store/files"])
   assert.deepEqual(added?.additionalReadonlyPaths, ["/store/shared"])
@@ -280,6 +330,205 @@ test("a suppressed output is reported once", async () => {
 
   const notices = events.filter(event => event.type === "stdout" && event.data === SHELL_OUTPUT_SUPPRESSED_NOTICE)
   assert.equal(notices.length, 1)
+})
+
+test("sandbox start is yielded before execution and the core forwards command options and terminal events", async () => {
+  const stdin = { marker: "stdin" }
+  const deny = { path: "/workspace/blocked" }
+  const denies = [deny]
+  const limiter = { maximumBufferedBytes: 48 }
+  const signal = new AbortController().signal
+  const fixture = shellCoreProbe([
+    { type: "stdin_ready", stdin, pid: 42 },
+    { type: "sandbox_denies", events: denies },
+    { type: "exit", code: null, aborted: true },
+  ])
+  const core = new BaseShellCoreExecutor(
+    fixture.executor as never,
+    "/workspace/project",
+    undefined,
+    { bufferOutputEvents: true, outputLimiterOptions: limiter },
+  )
+  const iterator = core.execute(createContext(), {
+    command: "build",
+    workingDirectory: "../checkout",
+    signal,
+    sandboxPolicy: {},
+    pipeStdin: true,
+  })[Symbol.asyncIterator]()
+
+  const start = await iterator.next()
+  assert.deepEqual(start.value, { type: "start", sandboxed: false })
+  assert.equal(fixture.calls.length, 0, "the executor is not started until the consumer asks for the next event")
+
+  const ready = await iterator.next()
+  assert.equal(ready.value?.type, "stdin_ready")
+  assert.equal((ready.value as { stdin?: unknown }).stdin, stdin)
+  assert.equal((ready.value as { pid?: number }).pid, 42)
+  const denyEvent = await iterator.next()
+  assert.equal(denyEvent.value?.type, "sandbox_denies")
+  assert.equal((denyEvent.value as { events?: unknown }).events, denies)
+  const exit = await iterator.next()
+  assert.deepEqual(exit.value && { type: exit.value.type, code: (exit.value as { code?: unknown }).code, aborted: (exit.value as { aborted?: unknown }).aborted }, {
+    type: "exit", code: null, aborted: true,
+  })
+
+  const call = fixture.calls[0]!
+  assert.equal(call.command, "build")
+  assert.equal(call.options.workingDirectory, "/workspace/checkout")
+  assert.equal(call.options.signal, signal)
+  assert.equal(call.options.pipeStdin, true)
+  assert.equal(call.options.bufferOutputEvents, true)
+  assert.equal(call.options.outputLimiterOptions, limiter)
+  assert.equal((await iterator.next()).done, true)
+})
+
+test("the environment restore command combines earlier hooks and safely quotes request-scoped values", async () => {
+  const oldRestore = process.env.__SLATE_SANDBOX_ENV_RESTORE
+  process.env.__SLATE_SANDBOX_ENV_RESTORE = "global restore"
+  try {
+    const fixture = shellCoreProbe([{ type: "exit", code: 0, aborted: false }])
+    const core = new BaseShellCoreExecutor(fixture.executor as never, undefined, "/project", undefined, () => ({
+      SLATE_AGENT: "caller-agent-marker",
+      SLATE_CONVERSATION_ID: "request's id",
+      SLATE_AGENT_STORE_FILES_DIR: "/store/files",
+      __SLATE_SANDBOX_ENV_RESTORE: "provided restore",
+    }))
+    await collectShellCore(core, {
+      command: "whoami",
+      conversationId: "ignored-by-provider",
+      askpassConfig: { helperPath: "/helper", socketPath: "/socket", secret: "secret" },
+    })
+
+    const env = fixture.calls[0]!.options.env as NodeJS.ProcessEnv
+    assert.equal(env.SLATE_AGENT, "caller-agent-marker", "extra environment values are applied after built-ins")
+    assert.equal(env.SLATE_CONVERSATION_ID, "request's id")
+    const restore = String(env.__SLATE_SANDBOX_ENV_RESTORE)
+    assert.ok(restore.startsWith("global restore; provided restore; builtin unset SLATE_CONVERSATION_ID SLATE_AGENT_STORE_FILES_DIR SLATE_AGENT_STORE_SHARED_PATHS"))
+    assert.ok(restore.includes("builtin export SLATE_CONVERSATION_ID='request'\\''s id'"))
+    assert.ok(restore.includes("builtin export SLATE_AGENT_STORE_FILES_DIR='/store/files'"))
+    assert.equal(env.SUDO_ASKPASS, process.platform === "win32" ? undefined : "/helper")
+    assert.equal(env.SLATE_ASKPASS_SOCKET, process.platform === "win32" ? undefined : "/socket")
+  } finally {
+    if (oldRestore === undefined) delete process.env.__SLATE_SANDBOX_ENV_RESTORE
+    else process.env.__SLATE_SANDBOX_ENV_RESTORE = oldRestore
+  }
+})
+
+test("agent-store paths are deduplicated and follow the effective workspace mode", async () => {
+  const entries = [
+    { path: "/store/files", readOnly: false },
+    { path: "/store/shared", readOnly: true },
+    { path: "/store/ignored", readOnly: "yes" },
+  ]
+  const fixture = shellCoreProbe([{ type: "exit", code: 0, aborted: false }])
+  const core = new BaseShellCoreExecutor(fixture.executor as never, undefined, undefined, undefined, () => ({
+    SLATE_AGENT_STORE_FILES_DIR: "/store/files",
+    SLATE_AGENT_STORE_SHARED_PATHS: JSON.stringify(entries),
+  }))
+  const original = {
+    perRepo: { type: "workspace_readonly" as const, additionalReadPaths: ["/repo/read"] },
+    perUser: { type: "workspace_readwrite" as const, additionalReadwritePaths: ["/already/write"], additionalReadonlyPaths: ["/already/read"] },
+  }
+  await collectShellCore(core, { command: "list", sandboxPolicy: original })
+
+  const policy = fixture.calls[0]!.options.sandboxPolicy as typeof original
+  assert.deepEqual(policy, {
+    perRepo: original.perRepo,
+    perUser: {
+      type: "workspace_readonly",
+      additionalReadwritePaths: ["/already/write"],
+      additionalReadonlyPaths: ["/already/read", "/store/files", "/store/shared"],
+    },
+  })
+  assert.deepEqual(original.perUser.additionalReadonlyPaths, ["/already/read"], "the caller policy is not mutated")
+})
+
+test("an invalid shared-path payload leaves a non-workspace policy untouched", async () => {
+  const fixture = shellCoreProbe([{ type: "exit", code: 0, aborted: false }])
+  const core = new BaseShellCoreExecutor(fixture.executor as never, undefined, undefined, undefined, () => ({
+    SLATE_AGENT_STORE_FILES_DIR: "/store/files",
+    SLATE_AGENT_STORE_SHARED_PATHS: "{broken",
+  }))
+  const policy = { perRepo: { type: "insecure_none" as const } }
+  await collectShellCore(core, { command: "list", sandboxPolicy: policy })
+  assert.equal(fixture.calls[0]!.options.sandboxPolicy, policy)
+})
+
+test("stream buffers accept the exact limit once, then trim each output channel independently", async () => {
+  const fixture = shellCoreProbe([
+    { type: "stdout", data: Buffer.alloc(1_048_576, "x") },
+    { type: "stdout", data: Buffer.from("too much") },
+    { type: "stderr", data: Buffer.from("error") },
+    { type: "stderr", data: Buffer.alloc(1_048_572, "y") },
+    { type: "stderr", data: Buffer.from("after trim") },
+    { type: "exit", code: 0, aborted: false },
+  ])
+  const core = new BaseShellCoreExecutor(fixture.executor as never)
+  const events = await collectShellCore(core, { command: "noisy" })
+
+  assert.equal((events.find((event) => event.type === "stdout")?.data as string).length, 1_048_576)
+  assert.equal(events.filter((event) => event.type === "stdout_trimmed").length, 1)
+  assert.equal(events.filter((event) => event.type === "stderr_trimmed").length, 1)
+  assert.equal(events.some((event) => event.type === "stdout" && event.data === "too much"), false)
+  assert.equal(events.some((event) => event.type === "stderr" && event.data === "error"), true)
+  assert.equal(events.some((event) => event.type === "stderr" && event.data === "after trim"), false)
+})
+
+test("file output combines both streams in arrival order and opens only after crossing its threshold", async () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-core-ordered-output-"))
+  try {
+    const fixture = shellCoreProbe([
+      { type: "stdout", data: Buffer.from("ab") },
+      { type: "stderr", data: Buffer.from("c\n") },
+      { type: "stdout", data: Buffer.from("d") },
+      { type: "exit", code: 0, aborted: false },
+    ])
+    const core = new BaseShellCoreExecutor(fixture.executor as never, undefined, projectDir)
+    const events = await collectShellCore(core, { command: "build", fileOutputThresholdBytes: 3 })
+    const output = events.at(-1)?.outputLocation as { filePath: string; sizeBytes: bigint; lineCount: bigint } | undefined
+
+    assert.ok(output)
+    assert.equal(fs.readFileSync(output.filePath, "utf8"), "abc\nd")
+    assert.equal(output.sizeBytes, 5n)
+    assert.equal(output.lineCount, 1n)
+  } finally {
+    fs.rmSync(projectDir, { recursive: true, force: true })
+  }
+})
+
+test("output that never crosses the threshold and output without a project stay in memory", async () => {
+  const fixture = shellCoreProbe([
+    { type: "stdout", data: Buffer.from("abc") },
+    { type: "exit", code: 0, aborted: false },
+  ])
+  const core = new BaseShellCoreExecutor(fixture.executor as never, undefined, "/project")
+  const events = await collectShellCore(core, { command: "short", fileOutputThresholdBytes: 3 })
+  assert.equal(events.at(-1)?.outputLocation, undefined)
+  assert.equal(events.some((event) => event.type === "stdout" && event.data === "abc"), true)
+
+  const withoutProject = new BaseShellCoreExecutor(fixture.executor as never)
+  const noProjectEvents = await collectShellCore(withoutProject, { command: "short", fileOutputThresholdBytes: 1 })
+  assert.equal(noProjectEvents.at(-1)?.outputLocation, undefined)
+})
+
+test("the executor error reaches the iterator and does not become a synthetic exit", async () => {
+  const failure = new Error("terminal disconnected")
+  const fixture = shellCoreProbe([{ type: "stdout", data: Buffer.from("partial") }], "/repo", failure)
+  const core = new BaseShellCoreExecutor(fixture.executor as never)
+  const events: Array<Record<string, unknown>> = []
+  await assert.rejects(async () => {
+    for await (const event of core.execute(createContext(), { command: "run" })) events.push(event as Record<string, unknown>)
+  }, failure)
+  assert.deepEqual(events, [{ type: "stdout", data: "partial" }])
+})
+
+test("cwd access is forwarded and an unconfigured workspace has an explicit error", async () => {
+  const fixture = shellCoreProbe([])
+  const core = new BaseShellCoreExecutor(fixture.executor as never)
+  assert.equal(await core.getCwd(), "/repo")
+  assert.throws(() => core.getWorkspacePath(), { message: "Workspace path is not configured" })
+  assert.equal(new BaseShellCoreExecutor(fixture.executor as never, "/workspace").getWorkspacePath(), "/workspace")
 })
 
 // ---------------------------------------------------------------------------------------------

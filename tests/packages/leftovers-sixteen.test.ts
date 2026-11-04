@@ -6,23 +6,23 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildSlateAutoReviewAwaitingReason, SLATE_AUTO_REVIEW_AWAITING_TAB_ID } from "../../source/host/extensions/auto-review/slate-auto-review-awaiting.ts";
-import { createAutoReviewGate, SlateAutoReviewPendingApprovalError } from "../../source/host/runner/auto-review-gate.ts";
-import { defineCommunicateTool, SLATE_TOOL_MARKER } from "../../source/host/runner/tools/communicate-tool.ts";
+import { awaitingReasonFor, AUTO_REVIEW_AWAITING_TAB_ID } from "../../source/host/extensions/auto-review/slate-auto-review-awaiting.ts";
+import { createAutoReviewGate, AutoReviewApprovalWaitError } from "../../source/host/runner/auto-review-gate.ts";
+import { defineCommunicateTool, SLATE_TOOL_MARKER } from "../../source/adapters/interop/agent/communicate-tool-adapter.ts";
 import { MAX_TRAY_ACTIONS, PROVIDER_OVERLOAD_ERROR_TITLE, SLATE_WEBSITE_ORIGIN } from "../../source/host/transcript/agent-run-error.ts";
 import { MirrorRouter } from "../../source/host/transcript/mirror/transcript-mirror-router.ts";
 
 describe("an agent whose review is waiting", () => {
   it("is shown in the tab the platform keeps for it", () => {
-    assert.equal(SLATE_AUTO_REVIEW_AWAITING_TAB_ID, "auto-review");
-    assert.equal(typeof buildSlateAutoReviewAwaitingReason, "function");
+    assert.equal(AUTO_REVIEW_AWAITING_TAB_ID, "auto-review");
+    assert.equal(typeof awaitingReasonFor, "function");
   });
 });
 
 describe("the gate a reviewed turn waits at", () => {
   it("names the error a pending approval raises", () => {
     assert.equal(typeof createAutoReviewGate, "function");
-    assert.equal(typeof SlateAutoReviewPendingApprovalError, "function");
+    assert.equal(typeof AutoReviewApprovalWaitError, "function");
   });
 });
 

@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ClientSideToolV2Call, ClientSideToolV2Result } from "../../source/packages/proto/generated/aiserver/v1/tools_pb.ts";
+import { ClientSideToolV2Call, ClientSideToolV2Result } from "../../source/adapters/interop/proto/generated/aiserver/v1/tools_pb.ts";
 import {
   CLIENT_SIDE_TOOL_V2_ACCOUNT_SLOT, CLIENT_SIDE_TOOL_V2_FAMILY, CLIENT_SIDE_TOOL_V2_WIRE_VERSION,
   encodeClientSideToolV2Message, decodeClientSideToolV2Message, parseClientSideToolV2TransportEvent,
   materializeClientSideToolV2RendererEvent,
-} from "../../source/shared/rpc/client-side-tool-v2-transport.ts";
+} from "../../source/adapters/interop/agent/client-side-tool-v2-transport-adapter.ts";
 
 const call = new ClientSideToolV2Call({ toolCallId: "call-1", name: "test", rawArgs: "{}" });
 const update = (message=encodeClientSideToolV2Message("call",call)) => ({version:1,kind:"call",accountSlot:"host",agentId:"agent",epoch:"epoch",sequence:1,message});

@@ -32,28 +32,6 @@ export interface CatalogModel {
   readonly variants: readonly (readonly ParameterChoice[])[];
 }
 
-/** A model as the backend describes it: parameter types nested under a `parameterType` case, variants under `parameterValues`. */
-export interface WireModel {
-  readonly name: string;
-  readonly clientDisplayName?: string | null;
-  readonly idAliases: readonly string[];
-  readonly parameterDefinitions: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly parameterType?: {
-      readonly booleanParameter?: { readonly values: readonly ParameterOption[] };
-      readonly enumParameter?: { readonly values: readonly ParameterOption[] };
-    };
-  }[];
-  readonly variants: readonly { readonly parameterValues: readonly ParameterChoice[] }[];
-}
-
-/** The trimmed value, or nothing: a display name that is only spaces is no display name. */
-const trimmedOrUndefined = (value: string | null | undefined): string | undefined => {
-  const trimmed = value?.trim();
-  return trimmed !== undefined && trimmed.length > 0 ? trimmed : undefined;
-};
-
 /** A model's entry, by its own id or by one of its aliases — a case-insensitive match, and an empty id matches nothing. */
 export function findCatalogEntry(catalog: readonly CatalogModel[], modelId: string): CatalogModel | undefined {
   const needle = modelId.trim().toLowerCase();
@@ -151,39 +129,4 @@ export function describeParamIncompatibilities(entry: CatalogModel): string[] {
     }
   }
   return notes;
-}
-
-/** One parameter of a wire model, or nothing when it offers no values at all (a parameter nothing can select is noise). */
-function parameterFrom(definition: WireModel["parameterDefinitions"][number]): ModelParameter | null {
-  const booleanDefinition = definition.parameterType?.booleanParameter;
-  const enumDefinition = definition.parameterType?.enumParameter;
-  const values = (booleanDefinition?.values ?? enumDefinition?.values ?? []).map((option) => {
-    const displayName = trimmedOrUndefined(option.displayName);
-    return { value: option.value, ...(displayName === undefined ? {} : { displayName }) };
-  });
-  if (values.length === 0) return null;
-  const name = trimmedOrUndefined(definition.name);
-  return {
-    id: definition.id,
-    ...(name === undefined ? {} : { name }),
-    type: booleanDefinition != null ? "boolean" : "enum",
-    values,
-  };
-}
-
-/** A wire model as the catalogue holds it. */
-export function toSlateModelCatalogEntry(model: WireModel): CatalogModel {
-  const displayName = trimmedOrUndefined(model.clientDisplayName);
-  return {
-    id: model.name,
-    ...(displayName === undefined ? {} : { displayName }),
-    aliases: [...model.idAliases],
-    params: model.parameterDefinitions.map(parameterFrom).filter((parameter): parameter is ModelParameter => parameter !== null),
-    variants: model.variants.map((variant) => variant.parameterValues.map(({ id, value }) => ({ id, value }))),
-  };
-}
-
-/** The catalogue of a backend's answer: a model with no name is not a model. */
-export function mapAvailableModels(models: readonly WireModel[]): CatalogModel[] {
-  return models.filter((model) => model.name.trim().length > 0).map(toSlateModelCatalogEntry);
 }

@@ -48,10 +48,10 @@ function fakeFactory(behaviour: string) {
 function permissions(block: string | undefined) {
   const calls: unknown[] = [];
   const impl: BackgroundPermissions = {
-    async shouldEnforceShellInvariantBlocks(_ctx, options) { calls.push({ invariant: options }); return block === "permissions" ? { kind: "block", reason: { type: "permissionsConfig", isReadonly: true } } : { kind: "allow", policy: { type: "insecure_none" } as never }; },
+    async shouldEnforceShellInvariantBlocks(_ctx, options) { calls.push({ invariant: options }); return block === "permissions" ? { kind: "block", reason: { type: "permissionConfiguration", isReadOnly: true } } : { kind: "allow", policy: { type: "insecure_none" } as never }; },
     async shouldBlockShellCommand(_ctx, command, options) {
       calls.push({ command, options });
-      if (block === "permissions") return { kind: "block", reason: { type: "permissionsConfig", isReadonly: true } };
+      if (block === "permissions") return { kind: "block", reason: { type: "permissionConfiguration", isReadOnly: true } };
       if (block === "rule") return { kind: "block", reason: { type: "commandDenylist", match: "rm", command: "rm -rf /" } as never };
       return { kind: "allow", policy: { type: "workspace_readwrite" } as never };
     },
@@ -63,7 +63,7 @@ function localExecutor(block: string | undefined, factoryBehaviour = "ok") {
   const factory = fakeFactory(factoryBehaviour);
   const permission = permissions(block);
   const localCore = { async getCwd() { return "/work"; }, execute() { return events([stdinReady(), exitEvent(0)]); } };
-  const executor = new LocalBackgroundShellExecutor(permission.impl, localCore as never, { async getCursorIgnoreMapping() { return {}; } } as never, "/repo", factory.factory as never);
+  const executor = new LocalBackgroundShellExecutor(permission.impl, localCore as never, { async getWorkspaceIgnoreMapping() { return {}; } } as never, "/repo", factory.factory as never);
   return { executor, factory, permission };
 }
 
@@ -115,62 +115,61 @@ test("an adopted shell is wired to its own event stream", async () => {
 test("a denied-by-model command is rejected before any permission check", async () => {
   const world = localExecutor(undefined);
   const result = await world.executor.execute(ctx, { command: "echo hi", adminCommandDenylist: ["echo"] });
-  assert.equal(result.result.case, "rejected");
+  assert.equal(result.kind, "rejected");
   assert.equal(world.permission.calls.length, 0);
 });
 
 test("a permission refusal is reported as a permission denial", async () => {
   const world = localExecutor("permissions");
   const result = await world.executor.execute(ctx, { command: "rm -rf /" });
-  assert.equal(result.result.case, "permissionDenied");
-  assert.equal((result.result as { value: { error: string } }).value.error, "Command blocked by permissions configuration");
+  assert.equal(result.kind, "permission_denied");
+  assert.equal(result.error, "Command blocked by permissions configuration");
 });
 
 test("a skipped approval asks the invariant check instead of the full check", async () => {
   const world = localExecutor(undefined);
   const result = await world.executor.execute(ctx, { command: "rm -rf /", skipApproval: true });
-  assert.equal(result.result.case, "success");
+  assert.equal(result.kind, "success");
   assert.equal((world.permission.calls[0] as { invariant?: unknown }).invariant !== undefined, true);
 });
 
 test("a rule refusal is a rejected result carrying the block message", async () => {
   const world = localExecutor("rule");
   const result = await world.executor.execute(ctx, { command: "rm -rf /" });
-  assert.equal(result.result.case, "rejected");
+  assert.equal(result.kind, "rejected");
 });
 
 test("a successful spawn answers with the shell id, command and working directory", async () => {
   const world = localExecutor(undefined);
   const result = await world.executor.execute(ctx, { command: "sleep 10", workingDirectory: "/work", toolCallId: "call-1", conversationId: "conv-1", enableWriteShellStdinTool: true, description: "sleeps" });
-  assert.equal(result.result.case, "success");
-  const value = (result.result as { value: { shellId: number; command: string; workingDirectory: string; pid?: number } }).value;
-  assert.equal(value.command, "sleep 10");
-  assert.equal(value.workingDirectory, "/work");
-  assert.equal(value.pid, 43);
-  assert.equal(typeof value.shellId, "number");
+  assert.equal(result.kind, "success");
+  assert.equal(result.command, "sleep 10");
+  assert.equal(result.workingDirectory, "/work");
+  assert.equal(result.pid, 43);
+  assert.equal(typeof result.shellId, "number");
   assert.equal(world.factory.calls.length, 1);
 });
 
 test("a missing working directory comes from the core", async () => {
   const world = localExecutor(undefined);
   const result = await world.executor.execute(ctx, { command: "sleep 10" });
-  assert.equal((result.result as { value: { workingDirectory: string } }).value.workingDirectory, "/work");
+  assert.equal(result.kind, "success");
+  assert.equal(result.workingDirectory, "/work");
 });
 
 test("a sandbox refusal at spawn is a sandboxUnsupported result", async () => {
   const world = localExecutor(undefined, "sandbox");
   const result = await world.executor.execute(ctx, { command: "sleep 10" });
-  assert.equal(result.result.case, "sandboxUnsupported");
-  const value = (result.result as { value: { sandboxPolicyType: string; isReadonly: boolean } }).value;
-  assert.equal(value.sandboxPolicyType, "workspace_readwrite");
-  assert.equal(value.isReadonly, false);
+  assert.equal(result.kind, "sandbox_unsupported");
+  assert.equal(result.sandboxPolicyType, "workspace_readwrite");
+  assert.equal(result.isReadonly, false);
 });
 
 test("any other spawn failure is an error result", async () => {
   const world = localExecutor(undefined, "error");
   const result = await world.executor.execute(ctx, { command: "sleep 10" });
-  assert.equal(result.result.case, "error");
-  assert.equal((result.result as { value: { error: string } }).value.error, "spawn failed");
+  assert.equal(result.kind, "error");
+  assert.equal(result.error, "spawn failed");
 });
 
 test("the executor exposes its manager and can be disposed", () => {
@@ -201,8 +200,8 @@ test("the skipped-approval check is told to skip the unsafe directory block", as
 test("the full check is given the parsed command including redirects", async () => {
   const world = localExecutor(undefined);
   await world.executor.execute(ctx, { command: "echo hi > /tmp/out" });
-  const options = (world.permission.calls[0] as { options: { parsingResult: { toJson(): Record<string, unknown> } } }).options;
-  const parsed = options.parsingResult.toJson() as { hasRedirects: boolean; redirects: Array<{ targetText?: string }> };
+  const options = (world.permission.calls[0] as { options: { parsingResult: { hasRedirects: boolean; redirects: Array<{ targetText?: string }> } } }).options;
+  const parsed = options.parsingResult;
   assert.equal(parsed.hasRedirects, true);
   assert.equal(parsed.redirects[0]?.targetText, "/tmp/out");
 });
@@ -211,10 +210,10 @@ test("the default factory starts a real shell over the injected core", async () 
   const permission = permissions(undefined);
   const localCore = { async getCwd() { return "/work"; }, execute() { return events([stdinReady(), exitEvent(0)]); } };
   const dir = await mkdtemp(join(tmpdir(), "background-shell-"));
-  const executor = new LocalBackgroundShellExecutor(permission.impl, localCore as never, { async getCursorIgnoreMapping() { return {}; } } as never, dir);
+  const executor = new LocalBackgroundShellExecutor(permission.impl, localCore as never, { async getWorkspaceIgnoreMapping() { return {}; } } as never, dir);
   const result = await executor.execute(ctx, { command: "sleep 10" });
-  assert.equal(result.result.case, "success");
-  assert.equal((result.result as { value: { pid?: number } }).value.pid, 42);
+  assert.equal(result.kind, "success");
+  assert.equal(result.pid, 42);
   executor.dispose();
 });
 
@@ -234,14 +233,14 @@ test("a missing core executor is refused with its exact message", async () => {
 test("the parsed command leaves an absent redirect summary out", async () => {
   const world = localExecutor(undefined);
   await world.executor.execute(ctx, { command: "echo hi" });
-  const options = (world.permission.calls[0] as { options: { parsingResult: { toJson(): Record<string, unknown> } } }).options;
-  const parsed = options.parsingResult.toJson();
+  const options = (world.permission.calls[0] as { options: { parsingResult: Record<string, unknown> } }).options;
+  const parsed = options.parsingResult;
   assert.equal("allRedirectsAreDevNull" in parsed, false);
 });
 
 test("a failure that is not an error says Unknown error", async () => {
   const world = localExecutor(undefined, "stringError");
   const result = await world.executor.execute(ctx, { command: "sleep 10" });
-  assert.equal(result.result.case, "error");
-  assert.equal((result.result as { value: { error: string } }).value.error, "Unknown error");
+  assert.equal(result.kind, "error");
+  assert.equal(result.error, "Unknown error");
 });

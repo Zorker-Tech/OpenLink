@@ -12,44 +12,22 @@ import { join } from "node:path";
 import { createRealPollingPolicy } from "../extensions/scheduling.ts";
 import { defineHostExtension } from "../extensions/host-extensions.ts";
 import { getConfiguredBackendUrl } from "../../shared/node/slate-token.ts";
-import { AutomationsService } from "../../packages/proto/generated/aiserver/v1/automations_connect.ts";
-import { createSlateCursorBackendClient } from "../../shared/node/cursor-backend/cursor-inference.ts";
+import { createAutomationCloudSyncClient } from "../../adapters/interop/automation/automations-cloud-sync-client-adapter.ts";
+import { getBoxUptimeMs, reconcileWhenAuthenticated } from "./automation-extension-policies.ts";
 import { inspectAgentAutomationDefinitions } from "./automation-store.ts";
 import { getSlateAgentsRootDir } from "../storage/agent-paths.ts";
 import { HostExtensions } from "../extensions/extension-ids.generated.ts";
 import { createBackendRelaySources } from "./backend-relay-source.ts";
 import { ListenerConnectWatcher } from "./listener-connect-watcher.ts";
 import { createListenerIntegrationReads } from "./listener-integrations.automations.ts";
-import { SlateAutomationCloudSync, type CloudSyncClient, type ScheduledCloudAutomation } from "./slate-automation-cloud-sync.ts";
+import { SlateAutomationCloudSync, type ScheduledCloudAutomation } from "./slate-automation-cloud-sync.ts";
 import { SlateAutomationFireConsumer } from "./slate-automation-fire-consumer.ts";
 import { SlateTriggerHub } from "./slate-trigger-hub.ts";
 
 export const HUB_RECONCILE_INTERVAL_MS = 15_000;
 export const RELAY_POLL_INTERVAL_MS = 4_000;
 export const CONNECT_WATCH_POLL_INTERVAL_MS = 5_000;
-export const SLATE_BOX_BOOT_STARTED_AT_MS_ENV = "SLATE_BOX_BOOT_STARTED_AT_MS";
-
-/** How long the box has been up, when the box said when it booted. */
-export function getBoxUptimeMs(): number | undefined {
-  const bootedAt = process.env[SLATE_BOX_BOOT_STARTED_AT_MS_ENV]?.trim();
-  if (!bootedAt) return undefined;
-  const startedAtMs = Number(bootedAt);
-  if (!Number.isFinite(startedAtMs) || startedAtMs <= 0) return undefined;
-  return Math.max(0, Date.now() - startedAtMs);
-}
-
-/** Reconciles once the host has a credential, and not again: the first signed-in moment is the one that matters. */
-export function reconcileWhenAuthenticated(args: { auth: { peekAccessToken(): string | null; subscribeToRenewal(listener: () => void): () => void }; reconcile(): void }): () => void {
-  let reconciled = false;
-  const once = (): void => {
-    if (reconciled || args.auth.peekAccessToken() == null) return;
-    reconciled = true;
-    args.reconcile();
-  };
-  const unsubscribe = args.auth.subscribeToRenewal(once);
-  once();
-  return unsubscribe;
-}
+export { getBoxUptimeMs, reconcileWhenAuthenticated, SLATE_BOX_BOOT_STARTED_AT_MS_ENV } from "./automation-extension-policies.ts";
 
 interface AutomationTranscript {
   listAgents(): Promise<readonly { id: string }[]>;
@@ -111,10 +89,7 @@ export const automationsExtension = defineHostExtension({
     let schedulingAuthorityChanged = (): void => {};
 
     const cloudSync = new SlateAutomationCloudSync({
-      client: createSlateCursorBackendClient(AutomationsService, {
-        getAccessToken: deps.auth.getAccessToken,
-        getMachineId: async () => await deps.auth.getMachineId(),
-      }) as unknown as CloudSyncClient,
+      client: createAutomationCloudSyncClient(deps.auth),
       reportDiagnostic: (diagnostic) => deps.telemetry.logs.reportHostExtensionDiagnostic(diagnostic),
       hasCredential: () => deps.auth.peekAccessToken() != null,
       listAgentIds: async () => (await deps.transcript.listAgents()).map(({ id }) => id),

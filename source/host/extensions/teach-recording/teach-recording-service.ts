@@ -10,7 +10,7 @@ import { shellExecutorResource, type ShellExecutor } from "../../../packages/age
 import { IDLE_TEACH_RECORDING_STATUS, SLATE_TEACH_MAX_DURATION_MS } from "../../../shared/agents/teach-recording.ts";
 import { WORKFLOW_REFERENCE_NODE_TYPE } from "../../../shared/workflows.ts";
 import { SLATE_MONITOR_HEIGHT, SLATE_MONITOR_WIDTH } from "../../boxes/box-monitor-layout.ts";
-import { buildHostShellArgs } from "../../boxes/box-shell-command.ts";
+import { buildHostShellArgs } from "../../../adapters/interop/agent/box-shell-command-adapter.ts";
 import { SLATE_BOX_FIRST_FORK_WINDOW_INDEX, SlateBoxNoMonitorAvailableError } from "../../ports/box.ts";
 
 export const TEACH_SESSIONS_DIR = "/workspace/teach-sessions";

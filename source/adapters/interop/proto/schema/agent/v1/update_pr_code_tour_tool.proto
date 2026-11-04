@@ -1,0 +1,42 @@
+// agent.v1 — agent/v1/update_pr_code_tour_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message UpdatePrCodeTourToolCall {
+  optional .agent.v1.UpdatePrCodeTourArgs args = 1 [json_name = "args"];
+  optional .agent.v1.UpdatePrCodeTourResult result = 2 [json_name = "result"];
+}
+
+message UpdatePrCodeTourArgs {
+  string feedback = 1 [json_name = "feedback"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message UpdatePrCodeTourResult {
+  oneof result {
+    .agent.v1.UpdatePrCodeTourSuccess success = 1 [json_name = "success"];
+    .agent.v1.UpdatePrCodeTourError error = 2 [json_name = "error"];
+  }
+}
+
+message UpdatePrCodeTourSuccess {
+  string revision_id = 1 [json_name = "revisionId"];
+  string message = 2 [json_name = "message"];
+  .agent.v1.UpdatePrCodeTourExecutionMode execution_mode = 3 [json_name = "executionMode"];
+}
+
+message UpdatePrCodeTourError {
+  string error = 1 [json_name = "error"];
+}
+
+enum UpdatePrCodeTourExecutionMode {
+  UPDATE_PR_CODE_TOUR_EXECUTION_MODE_UNSPECIFIED = 0;
+  UPDATE_PR_CODE_TOUR_EXECUTION_MODE_SERVER_SCHEDULED = 1;
+  UPDATE_PR_CODE_TOUR_EXECUTION_MODE_CLIENT_REQUIRED = 2;
+  UPDATE_PR_CODE_TOUR_EXECUTION_MODE_SKIPPED = 3;
+}

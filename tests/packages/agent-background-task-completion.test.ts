@@ -16,13 +16,11 @@ import {
   summarizeBackgroundTaskCompletions,
   type BackgroundCompletionFormatOptions,
 } from "../../source/packages/agent/actions/background-task-completion.ts"
-import {
-  BackgroundTaskCompletion,
-  BackgroundTaskCompletionReason,
-  BackgroundTaskKind,
-  BackgroundTaskNotificationContext,
-  BackgroundTaskStatus,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import type {
+  SlateBackgroundTaskCompletion,
+  SlateBackgroundTaskKind,
+  SlateBackgroundTaskStatus,
+} from "../../source/packages/agent/actions/background-task-completion-contracts.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../source/packages/constants/system-notification.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -38,37 +36,36 @@ const options = (overrides: Partial<BackgroundCompletionFormatOptions> = {}): Ba
 })
 
 type CompletionOverrides = Partial<{
-  kind: number
-  status: number
+  kind: SlateBackgroundTaskKind
+  status: SlateBackgroundTaskStatus
   taskId: string
   title: string
   toolCallId: string
   subagentId: string
   detail: string
   outputPath: string
-  reason: number
+  reason: "task-progress" | "worker-reparented"
   threadId: string
-  notificationContext: number
+  notificationContext: "user-driven-interactive-child" | "other"
   /** A field set to nothing is left out of the message rather than carried as undefined. */
   omitTitle: boolean
   omitDetail: boolean
   omitOutputPath: boolean
 }>
 
-const completion = (overrides: CompletionOverrides = {}): BackgroundTaskCompletion =>
-  new BackgroundTaskCompletion({
-    kind: (overrides.kind ?? BackgroundTaskKind.SUBAGENT) as never,
-    status: (overrides.status ?? BackgroundTaskStatus.SUCCESS) as never,
-    taskId: overrides.taskId ?? "task-1",
-    ...(overrides.omitTitle === true ? {} : { title: overrides.title ?? "the thing" }),
-    ...(overrides.toolCallId === undefined ? {} : { toolCallId: overrides.toolCallId }),
-    ...(overrides.subagentId === undefined ? {} : { subagentId: overrides.subagentId }),
-    ...(overrides.detail === undefined || overrides.omitDetail === true ? {} : { detail: overrides.detail }),
-    ...(overrides.outputPath === undefined || overrides.omitOutputPath === true ? {} : { outputPath: overrides.outputPath }),
-    ...(overrides.reason === undefined ? {} : { reason: overrides.reason as never }),
-    ...(overrides.threadId === undefined ? {} : { threadId: overrides.threadId }),
-    ...(overrides.notificationContext === undefined ? {} : { notificationContext: overrides.notificationContext as never }),
-  })
+const completion = (overrides: CompletionOverrides = {}): SlateBackgroundTaskCompletion => ({
+  kind: overrides.kind ?? "subagent",
+  status: overrides.status ?? "success",
+  taskId: overrides.taskId ?? "task-1",
+  title: overrides.omitTitle === true ? "" : overrides.title ?? "the thing",
+  ...(overrides.toolCallId === undefined ? {} : { toolCallId: overrides.toolCallId }),
+  ...(overrides.subagentId === undefined ? {} : { subagentId: overrides.subagentId }),
+  ...(overrides.detail === undefined || overrides.omitDetail === true ? {} : { detail: overrides.detail }),
+  ...(overrides.outputPath === undefined || overrides.omitOutputPath === true ? {} : { outputPath: overrides.outputPath }),
+  ...(overrides.reason === undefined ? {} : { reason: overrides.reason }),
+  ...(overrides.threadId === undefined ? {} : { threadId: overrides.threadId }),
+  ...(overrides.notificationContext === undefined ? {} : { notificationContext: overrides.notificationContext }),
+})
 
 test("a finished task is written as a notification naming what finished and how it ended", () => {
   const text = formatBackgroundCompletions([completion({
@@ -96,12 +93,12 @@ test("several tasks are introduced in the plural", () => {
 })
 
 test("a task that only reported progress is introduced as a notification rather than a finish", () => {
-  const text = formatBackgroundCompletions([completion({ reason: BackgroundTaskCompletionReason.TASK_PROGRESS })], options())
+  const text = formatBackgroundCompletions([completion({ reason: "task-progress" })], options())
   assert.match(text, /The following task has notified\./)
 })
 
 test("a reparented worker says so", () => {
-  const text = formatBackgroundCompletions([completion({ reason: BackgroundTaskCompletionReason.WORKER_REPARENTED })], options())
+  const text = formatBackgroundCompletions([completion({ reason: "worker-reparented" })], options())
   assert.match(text, /reason: worker_reparented/)
 })
 
@@ -147,7 +144,7 @@ test("a subagent whose result is hidden is asked for whatever follow-up it needs
 })
 
 test("a shell task is acknowledged as a result rather than as a subagent's", () => {
-  const text = getNotificationAcknowledgementUserQuery([completion({ kind: BackgroundTaskKind.SHELL })], options())
+  const text = getNotificationAcknowledgementUserQuery([completion({ kind: "shell" })], options())
   assert.match(text, /Briefly inform the user about the task result and perform any follow-up actions/)
   // The composer family is told not to state that there is nothing to follow up.
   assert.doesNotMatch(text, /don't explicitly say that/)
@@ -161,7 +158,7 @@ test("the composer family gets the wording that omits the no-follow-up note", ()
 
 test("a subagent the user is driving is recorded rather than reported", () => {
   const text = getNotificationAcknowledgementUserQuery(
-    [completion({ notificationContext: BackgroundTaskNotificationContext.USER_DRIVEN_INTERACTIVE_CHILD })],
+    [completion({ notificationContext: "user-driven-interactive-child" })],
     options(),
   )
   assert.match(text, /The user is actively driving this Project child\./)
@@ -219,22 +216,22 @@ test("a meta-parent subagent whose result is visible is not repeated", () => {
 })
 
 test("the labels a notification uses are the ones the protocol spells", () => {
-  assert.equal(backgroundTaskKindLabel(BackgroundTaskKind.SHELL), "shell")
-  assert.equal(backgroundTaskKindLabel(BackgroundTaskKind.SUBAGENT), "subagent")
-  assert.equal(backgroundTaskKindLabel(BackgroundTaskKind.UNSPECIFIED), "unknown")
+  assert.equal(backgroundTaskKindLabel("shell"), "shell")
+  assert.equal(backgroundTaskKindLabel("subagent"), "subagent")
+  assert.equal(backgroundTaskKindLabel("unknown"), "unknown")
   assert.equal(backgroundTaskKindLabel(99 as never), "unknown")
-  assert.equal(backgroundTaskStatusLabel(BackgroundTaskStatus.SUCCESS), "success")
-  assert.equal(backgroundTaskStatusLabel(BackgroundTaskStatus.ERROR), "error")
-  assert.equal(backgroundTaskStatusLabel(BackgroundTaskStatus.ABORTED), "aborted")
+  assert.equal(backgroundTaskStatusLabel("success"), "success")
+  assert.equal(backgroundTaskStatusLabel("error"), "error")
+  assert.equal(backgroundTaskStatusLabel("aborted"), "aborted")
   assert.equal(backgroundTaskStatusLabel(99 as never), "unknown")
 })
 
 test("the completions are summarized by kind and status", () => {
   const summary = summarizeBackgroundTaskCompletions([
-    completion({ kind: BackgroundTaskKind.SHELL, status: BackgroundTaskStatus.SUCCESS }),
-    completion({ kind: BackgroundTaskKind.SUBAGENT, status: BackgroundTaskStatus.ERROR }),
-    completion({ kind: BackgroundTaskKind.UNSPECIFIED, status: BackgroundTaskStatus.ABORTED }),
-    completion({ kind: BackgroundTaskKind.SUBAGENT, status: BackgroundTaskStatus.SUCCESS }),
+    completion({ kind: "shell", status: "success" }),
+    completion({ kind: "subagent", status: "error" }),
+    completion({ kind: "unknown", status: "aborted" }),
+    completion({ kind: "subagent", status: "success" }),
   ])
   assert.equal(summary.num_completions, 4)
   assert.deepEqual(summary.kind_counts, { shell: 1, subagent: 2, unknown: 1 })
@@ -242,7 +239,7 @@ test("the completions are summarized by kind and status", () => {
 })
 
 test("only a progress notification is a shell output completion", () => {
-  assert.equal(isShellOutputCompletion(completion({ reason: BackgroundTaskCompletionReason.TASK_PROGRESS })), true)
+  assert.equal(isShellOutputCompletion(completion({ reason: "task-progress" })), true)
   assert.equal(isShellOutputCompletion(completion()), false)
 })
 
@@ -275,13 +272,13 @@ test("a hidden subagent without cloud view links is not told to link a cloud vie
 })
 
 test("a shell acknowledgement is wrapped as the model's user query", () => {
-  const text = getNotificationAcknowledgementUserQuery([completion({ kind: BackgroundTaskKind.SHELL })], options())
+  const text = getNotificationAcknowledgementUserQuery([completion({ kind: "shell" })], options())
   assert.equal(text.startsWith("<user_query>"), true)
   assert.equal(text.endsWith("</user_query>"), true)
 })
 
 test("a meta-parent result with nothing to say leaves an empty response block", () => {
-  const text = formatMetaParentBackgroundCompletions([new BackgroundTaskCompletion({ kind: BackgroundTaskKind.SHELL, taskId: "task-empty" })], options())
+  const text = formatMetaParentBackgroundCompletions([completion({ kind: "shell", taskId: "task-empty", omitTitle: true })], options())
   assert.equal(text.includes("<response>"), true)
   assert.equal(text.includes("No output"), true)
 })

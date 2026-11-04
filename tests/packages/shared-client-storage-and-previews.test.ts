@@ -8,7 +8,7 @@ import {
   decodeClientPersistenceFileName,
   encodeClientPersistenceFileName,
 } from "../../source/shared/client-persistence-store.ts"
-import { commandCarriesLocalExecGeneration, LOCAL_EXEC_GENERATION_TOKEN_ARG, LOCAL_EXEC_GENERATION_TOKEN_ENV, sameLocalExecProcessIdentity } from "../../source/shared/local-exec-process-identity.ts"
+import { discoveryBelongsToProcessWindow, processCommandHasExpectedIdentity, LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX, LOCAL_EXEC_IDENTITY_ENV_KEY, processIdentitiesMatch } from "../../source/shared/local-exec-process-identity.ts"
 import { SLATE_LOCAL_TOOLS_UNDESCRIBABLE_MESSAGE } from "../../source/shared/local-tool-permission-machinery.ts"
 import { decodeMcpAccountLabelArgument, encodeMcpAccountLabelForListing, normalizeMcpAccountLabel, DEFAULT_MCP_ACCOUNT_KEY } from "../../source/shared/mcp.ts"
 import { connectorsPreviewText, sendMessagePreviewText, SLATE_AGENT_FALLBACK_PREVIEW, slateAgentPreviewText } from "../../source/shared/send-message-preview.ts"
@@ -37,20 +37,31 @@ test("a client's stored keys are the ones the platform owns", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a process is the one that was expected only when its generation matches", () => {
-  assert.equal(LOCAL_EXEC_GENERATION_TOKEN_ENV, "SLATE_LOCAL_EXEC_GENERATION_TOKEN")
-  assert.equal(LOCAL_EXEC_GENERATION_TOKEN_ARG, "--slate-local-exec-generation=")
+  assert.equal(LOCAL_EXEC_IDENTITY_ENV_KEY, "SLATE_LOCAL_EXEC_GENERATION_TOKEN")
+  assert.equal(LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX, "--slate-local-exec-generation=")
   const identity = { pid: 42, startEpochMs: 1_000, command: "node daemon.js", entryRealpath: "/opt/daemon.js", generationToken: "gen-1" }
-  assert.equal(sameLocalExecProcessIdentity(identity, { ...identity }), true)
+  assert.equal(processIdentitiesMatch(identity, { ...identity }), true)
   // A process that was replaced, and one that merely looks like it, are not the same process.
-  assert.equal(sameLocalExecProcessIdentity(identity, { ...identity, generationToken: "gen-2" }), false)
-  assert.equal(sameLocalExecProcessIdentity(identity, { ...identity, pid: 43 }), false)
-  assert.equal(sameLocalExecProcessIdentity(identity, { ...identity, startEpochMs: 2_000 }), false)
+  assert.equal(processIdentitiesMatch(identity, { ...identity, generationToken: "gen-2" }), false)
+  assert.equal(processIdentitiesMatch(identity, { ...identity, pid: 43 }), false)
+  assert.equal(processIdentitiesMatch(identity, { ...identity, startEpochMs: 2_000 }), false)
 
   // A command carries the generation only when both the entry point and the token are exact arguments.
-  const command = `node ${identity.entryRealpath} ${LOCAL_EXEC_GENERATION_TOKEN_ARG}${identity.generationToken}`
-  assert.equal(commandCarriesLocalExecGeneration(command, identity.entryRealpath, identity.generationToken), true)
-  assert.equal(commandCarriesLocalExecGeneration(command, identity.entryRealpath, "gen-2"), false)
-  assert.equal(commandCarriesLocalExecGeneration(`node other.js`, identity.entryRealpath, identity.generationToken), false)
+  const command = `node ${identity.entryRealpath} ${LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX}${identity.generationToken}`
+  assert.equal(processCommandHasExpectedIdentity(command, identity.entryRealpath, identity.generationToken), true)
+  assert.equal(processCommandHasExpectedIdentity(command, identity.entryRealpath, "gen-2"), false)
+  assert.equal(processCommandHasExpectedIdentity(`node other.js`, identity.entryRealpath, identity.generationToken), false)
+  const punctuationPath = "/opt/app.(prod)/daemon.js"
+  assert.equal(processCommandHasExpectedIdentity(`node ${punctuationPath} ${LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX}gen-3`, punctuationPath, "gen-3"), true)
+  assert.equal(processCommandHasExpectedIdentity(`node prefix${punctuationPath}suffix ${LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX}gen-3`, punctuationPath, "gen-3"), false)
+})
+
+test("daemon discovery timestamps stay inside the publication window", () => {
+  assert.equal(discoveryBelongsToProcessWindow(100, 100, 100), true)
+  assert.equal(discoveryBelongsToProcessWindow(99, 100, 200), false)
+  assert.equal(discoveryBelongsToProcessWindow(60_101, 100, 60_200), false)
+  assert.equal(discoveryBelongsToProcessWindow(101, 100, 100), false)
+  assert.equal(discoveryBelongsToProcessWindow(Number.NaN, 100, 200), false)
 })
 
 // ---------------------------------------------------------------------------------------------

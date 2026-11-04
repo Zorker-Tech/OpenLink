@@ -17,37 +17,38 @@
 
 import { z } from "zod"
 
-import { McpDescriptor, type McpFileSystemOptions, type McpMetaToolOptions } from "../../../proto/generated/agent/v1/mcp_pb.ts"
 import { parseArgumentsLeniently } from "./argument-repair.ts"
 
 /** The tool a client offers for signing in to a server, which only an interactive session may call. */
 export const MCP_AUTH_VIRTUAL_TOOL_NAME = "mcp_auth"
 
 export interface McpDescriptorIndex {
-  readonly serverDescriptors: ReadonlyMap<string, McpDescriptor>
+  readonly serverDescriptors: ReadonlyMap<string, McpServerDescriptor>
   readonly toolDefinitionPaths: ReadonlyMap<string, string>
+}
+
+/** Slate's minimal server and tool view needed to authorize calls and read their definitions. */
+export interface McpServerDescriptor {
+  readonly serverIdentifier: string
+  readonly serverName?: string | undefined
+  readonly folderPath?: string | undefined
+  readonly tools: readonly {
+    readonly toolName: string
+    readonly definitionPath?: string | undefined
+  }[]
 }
 
 /** The servers and tools this session can call, keyed by the server's own identifier. */
 export function indexMcpDescriptors({
-  mcpMetaToolEnabled,
-  mcpMetaToolOptions,
-  mcpFileSystemOptions,
+  descriptors,
   allowInteractiveMcpAuth: allowInteractiveAuth = false,
 }: {
-  readonly mcpMetaToolEnabled: boolean
-  readonly mcpMetaToolOptions?: McpMetaToolOptions | undefined
-  readonly mcpFileSystemOptions?: McpFileSystemOptions | undefined
+  readonly descriptors: readonly McpServerDescriptor[]
   readonly allowInteractiveMcpAuth?: boolean | undefined
 }): McpDescriptorIndex {
-  const serverDescriptors = new Map<string, McpDescriptor>()
+  const serverDescriptors = new Map<string, McpServerDescriptor>()
   const toolDefinitionPaths = new Map<string, string>()
-  // The meta tool carries its own descriptor list; without it the session's filesystem options do.
-  const descriptorList = mcpMetaToolEnabled
-    ? mcpMetaToolOptions?.mcpDescriptors ?? []
-    : mcpFileSystemOptions?.mcpDescriptors ?? []
-
-  for (const descriptor of descriptorList) {
+  for (const descriptor of descriptors) {
     const originalTools = descriptor.tools
     const keptTools = allowInteractiveAuth
       ? originalTools
@@ -56,17 +57,12 @@ export function indexMcpDescriptors({
     // from the fields a descriptor is allowed to carry, so the removed tool cannot leak back in.
     const descriptorToRegister = allowInteractiveAuth || keptTools.length === originalTools.length
       ? descriptor
-      : new McpDescriptor({
+      : {
         serverIdentifier: descriptor.serverIdentifier,
-        serverName: descriptor.serverName,
-        ...(descriptor.plugin !== undefined ? { plugin: descriptor.plugin } : {}),
-        ...(descriptor.marketplace !== undefined ? { marketplace: descriptor.marketplace } : {}),
-        ...(descriptor.serverUseInstructions !== undefined ? { serverUseInstructions: descriptor.serverUseInstructions } : {}),
-        ...(descriptor.folderPath !== undefined ? { folderPath: descriptor.folderPath } : {}),
-        ...(descriptor.pluginDbId !== undefined ? { pluginDbId: descriptor.pluginDbId } : {}),
-        ...(descriptor.marketplaceId !== undefined ? { marketplaceId: descriptor.marketplaceId } : {}),
+        ...(descriptor.serverName === undefined ? {} : { serverName: descriptor.serverName }),
+        ...(descriptor.folderPath === undefined ? {} : { folderPath: descriptor.folderPath }),
         tools: keptTools,
-      })
+      }
     serverDescriptors.set(descriptor.serverIdentifier, descriptorToRegister)
     for (const tool of keptTools) {
       if (tool.definitionPath !== undefined) {

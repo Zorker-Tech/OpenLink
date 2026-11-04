@@ -12,8 +12,8 @@ import { ensureFinitePositive } from "../../source/packages/agent-store-sync/val
 import { stripS3EtagQuotes } from "../../source/packages/agent-store-sync/etag.ts";
 import { NOOP_RESILIENCE_LISTENER } from "../../source/packages/agent-store-sync/resilience-events.ts";
 import { DeferredAnalyticsBuffer } from "../../source/packages/analytics-client/deferred-buffer.ts";
-import { getProviderModelName } from "../../source/packages/chat-inference-proto/model-provider-options.ts";
-import { DAEMON_INVARIANT_VIOLATION_EVENT } from "../../source/local-exec/invariant-violation-log.ts";
+import { getProviderModelName } from "../../source/adapters/interop/chat-inference-proto/model-provider-options.ts";
+import { LOCAL_EXEC_DAEMON_INVARIANT_EVENT_NAME, writeLocalExecInvariantRecord } from "../../source/local-exec/invariant-violation-log.ts";
 
 describe("the store sync's own helpers", () => {
   it("bounds what it remembers and evicts in a batch", () => {
@@ -62,7 +62,10 @@ describe("the model a request names", () => {
 });
 
 describe("a broken invariant in the local-exec daemon", () => {
-  it("is logged under our own event name", () => {
-    assert.equal(DAEMON_INVARIANT_VIOLATION_EVENT, "slate.local_exec_daemon.invariant_violation");
+  it("is logged as one JSON line under its stable event name", () => {
+    assert.equal(LOCAL_EXEC_DAEMON_INVARIANT_EVENT_NAME, "slate.local_exec_daemon.invariant_violation");
+    const lines: string[] = [];
+    writeLocalExecInvariantRecord({ name: "SlateInvariantViolation" }, (line) => lines.push(line));
+    assert.deepEqual(lines, ['{"event":"slate.local_exec_daemon.invariant_violation","name":"SlateInvariantViolation"}\n']);
   });
 });

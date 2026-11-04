@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { composeCoordinator, createWebAuthnReconnectPolicy, asMcpOAuthPending, recordEchoIfUserEcho } from "../../source/coordinator/main.ts";
+import { composeCoordinator } from "../../source/coordinator/main.ts";
+import { webAuthnReconnectSchedule, parsePendingMcpAuthorization, recordTranscriptEcho } from "../../source/coordinator/main-policies.ts";
 import { HOST_ACCOUNT_SLOT } from "../../source/coordinator/gateway/gateway-client.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "slate-coordinator-main-"));
@@ -19,7 +20,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("a pending OAuth ceremony", () => {
   it("is read only when it says all three things it has to", () => {
-    assert.deepEqual(asMcpOAuthPending({ serverName: "srv", redirectUrl: "https://redirect.test", state: "st-1" }), { serverName: "srv", redirectUrl: "https://redirect.test", state: "st-1" });
+    assert.deepEqual(parsePendingMcpAuthorization({ serverName: "srv", redirectUrl: "https://redirect.test", state: "st-1" }), { serverName: "srv", redirectUrl: "https://redirect.test", state: "st-1" });
     // Anything missing, empty or of the wrong kind is not a ceremony.
     for (const payload of [
       null,
@@ -31,7 +32,7 @@ describe("a pending OAuth ceremony", () => {
       { serverName: "srv", redirectUrl: "https://redirect.test", state: "" },
       { serverName: 1, redirectUrl: "https://redirect.test", state: "st-1" },
     ]) {
-      assert.equal(asMcpOAuthPending(payload), null, JSON.stringify(payload));
+      assert.equal(parsePendingMcpAuthorization(payload), undefined, JSON.stringify(payload));
     }
   });
 });
@@ -40,8 +41,8 @@ describe("the user's own echo", () => {
   it("is recorded for the account's slot, and nothing else is", () => {
     const recorded: { accountSlot: string; clientNonce: string }[] = [];
     const recorder = { recordSendEcho: (key: { accountSlot: string; clientNonce: string }) => void recorded.push(key) };
-    recordEchoIfUserEcho({ type: "appended", entry: { kind: "message", role: "user", clientNonce: "n-1" } }, recorder);
-    recordEchoIfUserEcho({ type: "appended", entry: { kind: "user-attachment", clientNonce: "n-2" } }, recorder);
+    recordTranscriptEcho({ type: "appended", entry: { kind: "message", role: "user", clientNonce: "n-1" } }, recorder);
+    recordTranscriptEcho({ type: "appended", entry: { kind: "user-attachment", clientNonce: "n-2" } }, recorder);
     assert.deepEqual(recorded, [{ accountSlot: HOST_ACCOUNT_SLOT, clientNonce: "n-1" }, { accountSlot: HOST_ACCOUNT_SLOT, clientNonce: "n-2" }]);
     // Somebody else's message, an assistant's answer, an entry with no nonce, and an update rather than an append
     // are all not the user's echo.
@@ -55,7 +56,7 @@ describe("the user's own echo", () => {
       null,
       "not an event",
     ]) {
-      recordEchoIfUserEcho(payload, recorder);
+      recordTranscriptEcho(payload, recorder);
     }
     assert.equal(recorded.length, 2);
   });
@@ -63,7 +64,7 @@ describe("the user's own echo", () => {
 
 describe("the signer's reconnects", () => {
   it("wait a little longer each time, and never give up", () => {
-    const policy = createWebAuthnReconnectPolicy();
+    const policy = webAuthnReconnectSchedule();
     assert.equal(policy.name, "slate-webauthn-reconnect");
     const first = policy.schedule(1);
     const second = policy.schedule(2);

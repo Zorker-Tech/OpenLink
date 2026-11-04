@@ -2,15 +2,16 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createContext } from "../../source/packages/context/context.ts"
+import { loggerKey, type ContextLogEntry } from "../../source/packages/context/logging.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/subagent-model-policy.ts"
-import { tryResolveForcedSubagentModel } from "../../source/packages/agent/tools/subagent-forced-model-resolution.ts"
-import { classifyMcpErrorMessage } from "../../source/packages/agent/tools/mcp/mcp-error-classification.ts"
+import { resolveForcedSubagentModel } from "../../source/packages/agent/tools/subagent-forced-model-resolution.ts"
+import { classifyMcpErrorMessage } from "../../source/packages/agent/tools/mcp/error-classification.ts"
 import {
-  computeSmartModeMcpApprovalTargetFingerprint,
-  createSmartModeMcpApprovalRequest,
-  cancelSmartModeMcpApprovalRequest,
+  fingerprintMcpApprovalTarget,
+  createMcpApprovalRequest,
+  cancelMcpApprovalRequest,
 } from "../../source/packages/agent/tools/mcp/smart-mode-approval.ts"
 import { warnIfLongTrailingUserMessageRun } from "../../source/packages/agent/actions/user-message-action/user-message-run-warning.ts"
 import { partitionDynamicTools } from "../../source/packages/agent/tools/exclude-tools.ts"
@@ -20,7 +21,7 @@ import {
   createRunStreamStateUpdateWithFlush,
   shouldTrackAgentTypeChange,
 } from "../../source/packages/agent/run-stream-lifecycle.ts"
-import { SubscriptionNotificationActionHandler } from "../../source/packages/agent/actions/subscription-notification-action-handler.ts"
+import { SubscriptionWakeupActionHandler } from "../../source/packages/agent/actions/subscription-notification-action-handler.ts"
 import {
   DETAILED_COMPACTION_PROMPT,
   MAX_SELF_SUMMARY_RETRIES,
@@ -30,6 +31,7 @@ import {
   TAGGED_COMPACTION_INSTRUCTIONS,
 } from "../../source/packages/agent/self-summary/constants.ts"
 import { buildGitPullRequestsUserContent } from "../../source/packages/agent/git-pr-processing.ts"
+import type { GitPullRequestPromptInput } from "../../source/packages/agent/git-pr-processing-contracts.ts"
 import {
   createStreamingTodoParser,
   createTodoItem,
@@ -37,13 +39,19 @@ import {
   stringToTodoStatus,
   todoStatusToString,
 } from "../../source/packages/agent/tools/core/todo/common.ts"
-import { TodoItem, TodoStatus } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
-import { ConversationStateStructure } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { toRedactedConversationStateStructure } from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { createContext as makeContext } from "../../source/packages/context/context.ts"
-import { toRedactedTodoItem } from "../../source/packages/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
 
 const ctx = () => createContext()
+
+function contextWithLogs() {
+  const entries: ContextLogEntry[] = []
+  const context = createContext().with(loggerKey, {
+    log: (_context, entry) => { entries.push(entry) },
+  })
+  return { context, entries }
+}
 
 // ---------------------------------------------------------------------------------------------
 // which model a subagent may be forced onto
@@ -70,22 +78,22 @@ function forceArgs(overrides: Record<string, unknown> = {}) {
 
 test("no policy means no forced model", async () => {
   const { args } = forceArgs({ subagentModelForcePolicy: SubagentModelForcePolicy.None })
-  assert.equal(await tryResolveForcedSubagentModel(args as never), undefined)
+  assert.equal(await resolveForcedSubagentModel(args as never), undefined)
 })
 
 test("a pinned model is used when it is usable, and reported as such", async () => {
   const { args, logged } = forceArgs()
-  assert.equal(await tryResolveForcedSubagentModel(args as never), "composer-2.5")
+  assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5")
   assert.equal(logged[0]?.modelResolutionReason, "force_model")
 
   const blocked = forceArgs({ isModelBlocked: () => true })
-  assert.equal(await tryResolveForcedSubagentModel(blocked.args as never), undefined)
+  assert.equal(await resolveForcedSubagentModel(blocked.args as never), undefined)
 
   const incompatible = forceArgs({ isMaxModeCompatible: async () => false })
-  assert.equal(await tryResolveForcedSubagentModel(incompatible.args as never), undefined)
+  assert.equal(await resolveForcedSubagentModel(incompatible.args as never), undefined)
 
   const missing = forceArgs({ forceModelId: undefined })
-  assert.equal(await tryResolveForcedSubagentModel(missing.args as never), undefined)
+  assert.equal(await resolveForcedSubagentModel(missing.args as never), undefined)
 })
 
 test("a request-based session prefers the user's own pick of the family", async () => {
@@ -93,7 +101,7 @@ test("a request-based session prefers the user's own pick of the family", async 
     subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
     userRequestedModelId: "composer-2.5-fast",
   })
-  assert.equal(await tryResolveForcedSubagentModel(args as never), "composer-2.5-fast")
+  assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5-fast")
   assert.equal(logged[0]?.modelResolutionReason, "force_model_user_composer_selection")
 })
 
@@ -102,7 +110,7 @@ test("a pick outside the family falls back to the pinned model", async () => {
     subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
     userRequestedModelId: "gpt-5",
   })
-  assert.equal(await tryResolveForcedSubagentModel(args as never), "composer-2.5")
+  assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5")
   assert.equal(logged[0]?.modelResolutionReason, "force_model")
 
   // A pick that is not in the catalogue falls back to the pinned model.
@@ -111,7 +119,7 @@ test("a pick outside the family falls back to the pinned model", async () => {
     userRequestedModelId: "composer-2.5",
     isModelValid: () => false,
   })
-  assert.equal(await tryResolveForcedSubagentModel(unknownPick.args as never), "composer-2.5")
+  assert.equal(await resolveForcedSubagentModel(unknownPick.args as never), "composer-2.5")
 
   // When the pinned model itself is unusable there is nothing to fall back to, whatever the pick was.
   for (const unusable of [
@@ -123,13 +131,13 @@ test("a pick outside the family falls back to the pinned model", async () => {
       userRequestedModelId: "composer-2.5",
       ...unusable,
     })
-    assert.equal(await tryResolveForcedSubagentModel(attempt.args as never), undefined)
+    assert.equal(await resolveForcedSubagentModel(attempt.args as never), undefined)
   }
 })
 
 test("a policy this build does not know is refused rather than ignored", async () => {
   const { args } = forceArgs({ subagentModelForcePolicy: "something-new" })
-  await assert.rejects(tryResolveForcedSubagentModel(args as never), /Unhandled subagent model force policy/)
+  await assert.rejects(resolveForcedSubagentModel(args as never), /Unhandled subagent model force policy/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -174,16 +182,25 @@ test("the fingerprint depends on the call's values and not on their shape", () =
   }
   const reordered = { ...base, mcpArguments: { a: 1, b: 2 } }
   assert.equal(
-    computeSmartModeMcpApprovalTargetFingerprint(base),
-    computeSmartModeMcpApprovalTargetFingerprint(reordered),
+    fingerprintMcpApprovalTarget(base),
+    fingerprintMcpApprovalTarget(reordered),
   )
   assert.notEqual(
-    computeSmartModeMcpApprovalTargetFingerprint(base),
-    computeSmartModeMcpApprovalTargetFingerprint({ ...base, toolName: "other" }),
+    fingerprintMcpApprovalTarget(base),
+    fingerprintMcpApprovalTarget({ ...base, toolName: "other" }),
   )
   assert.notEqual(
-    computeSmartModeMcpApprovalTargetFingerprint(base),
-    computeSmartModeMcpApprovalTargetFingerprint({ ...base, mcpArguments: { a: 2, b: 2 } }),
+    fingerprintMcpApprovalTarget(base),
+    fingerprintMcpApprovalTarget({ ...base, mcpArguments: { a: 2, b: 2 } }),
+  )
+  assert.equal(
+    fingerprintMcpApprovalTarget(base),
+    fingerprintMcpApprovalTarget({ ...base, blockReason: "a new display explanation" }),
+    "a changed explanation does not turn the same tool request into a different action",
+  )
+  assert.notEqual(
+    fingerprintMcpApprovalTarget(base),
+    fingerprintMcpApprovalTarget({ ...base, toolDefinitionHash: "new-definition" }),
   )
 })
 
@@ -202,7 +219,7 @@ test("an approval is recorded and can be cancelled", async () => {
     (await import("../../source/packages/agent/utils/request-scope.ts")).conversationIdKey,
     "conv-1",
   )
-  const result = await createSmartModeMcpApprovalRequest(context, store as never, {
+  const result = await createMcpApprovalRequest(context, store as never, {
     serverIdentifier: "s",
     toolName: "t",
     mcpMode: "meta",
@@ -213,14 +230,14 @@ test("an approval is recorded and can be cancelled", async () => {
   assert.equal(created.length, 1)
   assert.equal((created[0] as { fingerprint: string }).fingerprint, result.fingerprint)
 
-  await cancelSmartModeMcpApprovalRequest(context, store as never, result.requestId)
+  await cancelMcpApprovalRequest(context, store as never, result.requestId)
   assert.deepEqual(deleted, [result.requestId])
 })
 
 test("a conversation with no id cannot have an approval", async () => {
   const store = { createPendingRequest: async () => {}, deletePendingRequest: async () => {} }
   await assert.rejects(
-    createSmartModeMcpApprovalRequest(ctx(), store as never, {
+    createMcpApprovalRequest(ctx(), store as never, {
       serverIdentifier: "s",
       toolName: "t",
       mcpMode: "meta",
@@ -235,28 +252,77 @@ test("a conversation with no id cannot have an approval", async () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a run of user messages with no answer in between is reported", () => {
-  const messages = Array.from({ length: 5 }, (_, index) => ({ role: "user", content: `m${index}` }))
-  warnIfLongTrailingUserMessageRun(ctx(), messages, "inv-1")
+  const { context, entries } = contextWithLogs()
+  const messages = [{ role: "assistant", content: "previous answer" }, ...Array.from({ length: 5 }, (_, index) => ({ role: "user", content: `m${index}` }))]
+  warnIfLongTrailingUserMessageRun(context, messages, "inv-1")
+
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0]?.level, "warn")
+  assert.equal(entries[0]?.message, "Turn contains unusually long trailing run of consecutive user messages")
+  assert.deepEqual(entries[0]?.metadata, {
+    trailingConsecutiveUserMessages: 5,
+    threshold: 3,
+    totalMessages: 6,
+    invocationId: "inv-1",
+    distanceToLastAssistant: 5,
+    tailInspectionWindow: 12,
+    tailRoles: ["assistant", "user", "user", "user", "user", "user"],
+    tailProviderMessageIdCount: 0,
+    distinctTailProviderMessageIdCount: 0,
+    hasDuplicateTailProviderMessageIds: false,
+    tailProviderRequestIdCount: 0,
+    distinctTailProviderRequestIdCount: 0,
+    hasDuplicateTailProviderRequestIds: false,
+  })
 })
 
 test("a normal conversation, and a run of summaries, are not reported", () => {
-  warnIfLongTrailingUserMessageRun(ctx(), [{ role: "user", content: "hi" }, { role: "assistant", content: "ok" }], "inv-1")
-  warnIfLongTrailingUserMessageRun(ctx(), [{ role: "assistant", content: "ok" }], "inv-1")
+  const { context, entries } = contextWithLogs()
+  warnIfLongTrailingUserMessageRun(context, [{ role: "user", content: "hi" }, { role: "assistant", content: "ok" }], "inv-1")
+  warnIfLongTrailingUserMessageRun(context, [{ role: "assistant", content: "ok" }], "inv-1")
   const summaries = Array.from({ length: 5 }, () => ({
     role: "user",
     content: "s",
     providerOptions: { cursor: { isSummary: true } },
   }))
-  warnIfLongTrailingUserMessageRun(ctx(), summaries, "inv-1")
+  warnIfLongTrailingUserMessageRun(context, summaries, "inv-1")
+  const notifications = Array.from({ length: 5 }, () => ({
+    role: "user",
+    content: '<system_notification source="test">wake</system_notification>',
+  }))
+  warnIfLongTrailingUserMessageRun(context, notifications, "inv-1")
+  assert.deepEqual(entries, [])
+})
+
+test("the warning begins after three real trailing user messages", () => {
+  const { context, entries } = contextWithLogs()
+  warnIfLongTrailingUserMessageRun(context, Array.from({ length: 3 }, () => ({ role: "user", content: "m" })), "at-limit")
+  assert.equal(entries.length, 0)
+
+  warnIfLongTrailingUserMessageRun(context, Array.from({ length: 4 }, () => ({ role: "user", content: "m" })), "over-limit")
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0]?.metadata?.trailingConsecutiveUserMessages, 4)
+  assert.equal(entries[0]?.metadata?.threshold, 3)
 })
 
 test("the report counts duplicates among the tail's message ids", () => {
-  const tail = Array.from({ length: 4 }, () => ({
+  const { context, entries } = contextWithLogs()
+  const tail = [{ role: "assistant", content: "old answer" }, ...Array.from({ length: 13 }, () => ({
     role: "user",
     content: "m",
     providerOptions: { cursor: { messageId: "same", requestId: "req" } },
-  }))
-  warnIfLongTrailingUserMessageRun(ctx(), tail, "inv-1")
+  }))]
+  warnIfLongTrailingUserMessageRun(context, tail, "inv-1")
+  const metadata = entries[0]?.metadata
+  assert.equal(metadata?.distanceToLastAssistant, 13)
+  assert.deepEqual(metadata?.tailRoles, Array.from({ length: 12 }, () => "user"))
+  assert.equal(metadata?.tailInspectionWindow, 12)
+  assert.equal(metadata?.tailProviderMessageIdCount, 12)
+  assert.equal(metadata?.distinctTailProviderMessageIdCount, 1)
+  assert.equal(metadata?.hasDuplicateTailProviderMessageIds, true)
+  assert.equal(metadata?.tailProviderRequestIdCount, 12)
+  assert.equal(metadata?.distinctTailProviderRequestIdCount, 1)
+  assert.equal(metadata?.hasDuplicateTailProviderRequestIds, true)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -318,6 +384,25 @@ test("an assistant message with one text part collapses back to its text", () =>
   assert.deepEqual(messages, [{ role: "assistant", content: "hello" }])
 })
 
+test("an assistant with no parts is empty, and several text parts stay separate", () => {
+  const messages = conversationHistoryToCoreMessages({
+    messages: [
+      historyMessage("assistant", { content: [] }),
+      historyMessage("assistant", { content: [
+        { content: { case: "text", value: { text: "first" } } },
+        { content: { case: "text", value: { text: "second" } } },
+      ] }),
+    ],
+  })
+  assert.deepEqual(messages, [
+    { role: "assistant", content: "" },
+    { role: "assistant", content: [
+      { type: "text", text: "first" },
+      { type: "text", text: "second" },
+    ] },
+  ])
+})
+
 test("several parts stay parts, with reasoning and tool calls restored", () => {
   const messages = conversationHistoryToCoreMessages({
     messages: [historyMessage("assistant", {
@@ -369,11 +454,39 @@ test("a tool result keeps its text, its parts and its error flag", () => {
 })
 
 test("an unknown content case is passed through rather than dropped", () => {
-  const unknown = { case: "somethingNew", value: {} }
+  for (const unknown of [{ case: "somethingNew", value: {} }, { case: "toString", value: {} }]) {
+    const messages = conversationHistoryToCoreMessages({
+      messages: [historyMessage("user", { content: [{ content: unknown }] })],
+    })
+    assert.deepEqual(messages[0]!.content, unknown)
+  }
+})
+
+test("an unknown top-level message ends history conversion, and malformed tool-call JSON is rejected", () => {
+  for (const unknownMessage of [
+    { case: "futureRole", value: { opaque: true } },
+    { case: "toString", value: { opaque: true } },
+  ]) {
+    assert.deepEqual(conversationHistoryToCoreMessages({ messages: [{ message: unknownMessage }] }), unknownMessage)
+  }
+
+  assert.throws(() => conversationHistoryToCoreMessages({
+    messages: [historyMessage("assistant", { content: [{ content: { case: "toolCall", value: { argsJson: "{bad" } } }] })],
+  }), SyntaxError)
+})
+
+test("an unknown tool-result part is kept as one experimental part", () => {
+  const unknown = { case: "futurePart", value: { opaque: true } }
   const messages = conversationHistoryToCoreMessages({
-    messages: [historyMessage("user", { content: [{ content: unknown }] })],
+    messages: [historyMessage("tool", {
+      toolCallId: "c1",
+      toolName: "future-tool",
+      content: [{ content: unknown }],
+    })],
   })
-  assert.deepEqual(messages[0]!.content, unknown)
+  const result = (messages[0]!.content as Array<Record<string, unknown>>)[0]!
+  assert.equal(result.result, undefined)
+  assert.deepEqual(result.experimental_content, [unknown])
 })
 
 test("no history at all is no messages", () => {
@@ -440,7 +553,7 @@ test("a checkpoint that fails is not the action's failure", async () => {
 
 test("a notification becomes a user message with the earlier ones prepended", async () => {
   const calls: unknown[][] = []
-  const handler = new SubscriptionNotificationActionHandler({
+  const handler = new SubscriptionWakeupActionHandler({
     handle: async (...args: unknown[]) => {
       calls.push(args)
       return "handled"
@@ -469,7 +582,7 @@ test("a notification becomes a user message with the earlier ones prepended", as
 })
 
 test("a notification action with nothing in it is refused", async () => {
-  const handler = new SubscriptionNotificationActionHandler({
+  const handler = new SubscriptionWakeupActionHandler({
     handle: async () => "handled",
     handleSingleStep: async () => "single",
     handleModelStep: async () => "model",
@@ -499,26 +612,42 @@ test("the summarization prompts ask for what a continuation needs", () => {
 // attached pull requests
 // ---------------------------------------------------------------------------------------------
 
+const gitPullRequestPrompt = (overrides: Partial<GitPullRequestPromptInput> = {}): GitPullRequestPromptInput => ({
+  number: 1,
+  url: "",
+  folderPath: "",
+  summary: { kind: "absent" },
+  ...overrides,
+})
+
 test("nothing is rendered when no pull request was attached", () => {
   assert.deepEqual(buildGitPullRequestsUserContent([]), { type: "text", text: "" })
 })
 
 test("a pull request is described with its branches, its size and its files", () => {
-  const summary = JSON.stringify({
-    headRef: "feature",
-    baseRef: "main",
-    description: "A change",
-    totalFiles: 2,
-    totalDiffLines: 30,
-    totalDiffSizeChars: 900,
-    files: [
-      { path: "src/a.ts", status: "modified", diffLines: 20, diffSizeChars: 600, originalSizeChars: 100 },
-      { path: "src/b.ts", diffFileName: "custom.diff", status: "added", diffLines: 10, diffSizeBytes: 300 },
-    ],
-  })
   const rendered = buildGitPullRequestsUserContent([
-    { number: 7, title: "Fix", url: "https://pr.test/7", folderPath: "/w/pr", summaryJson: summary },
-  ] as never)
+    gitPullRequestPrompt({
+      number: 7,
+      title: "Fix",
+      url: "https://pr.test/7",
+      folderPath: "/w/pr",
+      summary: {
+        kind: "available",
+        value: {
+          headBranch: "feature",
+          baseBranch: "main",
+          description: "A change",
+          totalFiles: 2,
+          totalDiffLines: 30,
+          diffCharacters: 900,
+          files: [
+            { path: "src/a.ts", changeKind: "modified", changedLines: 20, diffCharacters: 600, originalCharacters: 100 },
+            { path: "src/b.ts", diffFileName: "custom.diff", changeKind: "added", changedLines: 10, diffCharacters: 300 },
+          ],
+        },
+      },
+    }),
+  ])
   assert.match(rendered.text, /^<attached_pull_requests>/)
   assert.match(rendered.text, /Attached Pull Request:/)
   assert.match(rendered.text, /PR #7: Fix/)
@@ -530,29 +659,38 @@ test("a pull request is described with its branches, its size and its files", ()
 })
 
 test("a long description is cut and points at the full one", () => {
-  const summary = JSON.stringify({ description: "x".repeat(600), totalFiles: 1, totalDiffLines: 1, totalDiffSizeChars: 1 })
-  const rendered = buildGitPullRequestsUserContent([{ number: 1, summaryJson: summary }] as never)
+  const rendered = buildGitPullRequestsUserContent([gitPullRequestPrompt({
+    summary: {
+      kind: "available",
+      value: { description: "x".repeat(600), totalFiles: 1, totalDiffLines: 1, diffCharacters: 1 },
+    },
+  })])
   assert.match(rendered.text, /truncated, full description in summary\.json/)
   assert.equal(rendered.text.includes("x".repeat(600)), false)
 })
 
 test("a summary that does not parse falls back to describing the folder", () => {
   const rendered = buildGitPullRequestsUserContent([
-    { number: 1, folderPath: "/w/pr", summaryJson: "{not json" },
-  ] as never)
+    gitPullRequestPrompt({ folderPath: "/w/pr", summary: { kind: "invalid" } }),
+  ])
   assert.match(rendered.text, /PR details are available in the folder \/w\/pr/)
   assert.match(rendered.text, /Read summary\.json/)
 })
 
 test("a pull request with no summary still names the folder and its contents", () => {
-  const rendered = buildGitPullRequestsUserContent([{ number: 2, folderPath: "/w/pr2" }] as never)
+  const rendered = buildGitPullRequestsUserContent([
+    gitPullRequestPrompt({ number: 2, folderPath: "/w/pr2" }),
+  ])
   assert.match(rendered.text, /PR #2/)
   assert.match(rendered.text, /all\.diff/)
   assert.match(rendered.text, /summary\.json/)
 })
 
 test("several pull requests are separated and named in the plural", () => {
-  const rendered = buildGitPullRequestsUserContent([{ number: 1 }, { number: 2 }] as never)
+  const rendered = buildGitPullRequestsUserContent([
+    gitPullRequestPrompt({ number: 1 }),
+    gitPullRequestPrompt({ number: 2 }),
+  ])
   assert.match(rendered.text, /Attached Pull Requests:/)
   assert.match(rendered.text, /PR #1[\s\S]*PR #2/)
 })
@@ -562,21 +700,27 @@ test("several pull requests are separated and named in the plural", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a todo status goes both ways", () => {
-  assert.equal(stringToTodoStatus("pending"), TodoStatus.PENDING)
-  assert.equal(stringToTodoStatus("in_progress"), TodoStatus.IN_PROGRESS)
-  assert.equal(stringToTodoStatus("completed"), TodoStatus.COMPLETED)
-  assert.equal(stringToTodoStatus("cancelled"), TodoStatus.CANCELLED)
-  assert.equal(todoStatusToString(TodoStatus.PENDING), "pending")
-  assert.equal(todoStatusToString(TodoStatus.CANCELLED), "cancelled")
-  assert.equal(todoStatusToString(TodoStatus.UNSPECIFIED), "unspecified")
+  assert.equal(stringToTodoStatus("pending"), "pending")
+  assert.equal(stringToTodoStatus("in_progress"), "in_progress")
+  assert.equal(stringToTodoStatus("completed"), "completed")
+  assert.equal(stringToTodoStatus("cancelled"), "cancelled")
+  assert.equal(todoStatusToString("pending"), "pending")
+  assert.equal(todoStatusToString("cancelled"), "cancelled")
+  assert.equal(todoStatusToString("unspecified"), "unspecified")
 })
 
 test("an item keeps the content and creation time it did not restate", () => {
-  const existing = new TodoItem({ id: "t1", content: "old content", status: TodoStatus.PENDING, createdAt: 5n })
+  const existing = {
+    id: "t1",
+    content: "old content",
+    status: "pending" as const,
+    createdAt: 5n,
+    updatedAt: 5n,
+  }
   const kept = createTodoItem({ id: "t1", status: "in_progress" }, existing)
   assert.equal(kept.content, "old content")
   assert.equal(kept.createdAt, 5n)
-  assert.equal(kept.status, TodoStatus.IN_PROGRESS)
+  assert.equal(kept.status, "in_progress")
 
   const fresh = createTodoItem({ id: "t2", content: "new", status: "pending" })
   assert.equal(fresh.content, "new")
@@ -586,8 +730,8 @@ test("an item keeps the content and creation time it did not restate", () => {
 test("the list is summarized with its statuses and ids", () => {
   assert.equal(formatTodosForSummarization([]), undefined)
   const summarized = formatTodosForSummarization([
-    toRedactedTodoItem(new TodoItem({ id: "t1", content: "do it", status: TodoStatus.IN_PROGRESS }), PrivacyMode.UNSPECIFIED),
-  ] as never)
+    { id: "t1", content: "do it", status: "in_progress", createdAt: 1n, updatedAt: 1n },
+  ])
   assert.equal(summarized, "- **IN_PROGRESS**: do it (id: t1)")
 })
 
@@ -609,6 +753,6 @@ test("each complete streamed item is shown as the list so far", () => {
   parser.write('{"id":"t2","content":"second","status":"completed"}]}')
   assert.equal(streamedTodos.length, 2)
   assert.equal(emitted.length, 2)
-  const last = emitted.at(-1) as { toolCall: { tool: { value: { args: { todos: unknown[] } } } } }
-  assert.equal(last.toolCall.tool.value.args.todos.length, 2)
+  const last = emitted.at(-1) as { toolCall: { args?: { todos?: readonly unknown[] } } }
+  assert.equal(last.toolCall.args?.todos?.length, 2)
 })

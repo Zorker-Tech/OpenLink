@@ -1,14 +1,92 @@
-/** Watching the browser's session files so a change to them reaches the store. */
-import { statSync, watch, type FSWatcher } from "node:fs";
-import { join } from "node:path";
-import type { DebouncePolicy } from "../../extensions/scheduling.ts";
-export interface ChromeSessionWatcherDependencies { watchDir: string; sessionDbNames: readonly string[]; debounce: DebouncePolicy; onSessionChange(): void; startWatch?(dir: string, listener: (filename: string | null) => void): { close(): void }; statMtimeMs?(path: string): number | undefined; log?(message: string): void }
-export class ChromeSessionWatcher { private watcher: Pick<FSWatcher, "close"> | undefined; private stopped = false; private readonly startWatch: NonNullable<ChromeSessionWatcherDependencies["startWatch"]>; private readonly trigger: (() => void) & { dispose(): void }; private readonly statMtimeMs: NonNullable<ChromeSessionWatcherDependencies["statMtimeMs"]>; private readonly log: NonNullable<ChromeSessionWatcherDependencies["log"]>; readonly lastMtimes = new Map<string, number>();
-  constructor(readonly deps: ChromeSessionWatcherDependencies) { this.startWatch = deps.startWatch ?? ((dir, listener) => watch(dir, { persistent: false }, (_event, name) => listener(typeof name === "string" ? name : null))); this.trigger = deps.debounce.wrap(() => { if (this.stopped) return; try { deps.onSessionChange(); } catch (error) { this.log(`onSessionChange threw (ignored): ${String(error)}`); } }); this.statMtimeMs = deps.statMtimeMs ?? ((path) => { try { return statSync(path).mtimeMs; } catch { return undefined; } }); this.log = deps.log ?? ((message) => console.log(`[chrome-session-watcher] ${message}`)); }
-  start(): void { if (this.stopped || this.watcher != null) return; this.refreshSessionDbMtimes(); try { this.watcher = this.startWatch(this.deps.watchDir, (name) => this.handleFsEvent(name)); this.log(`watching ${this.deps.watchDir} for session-db changes`); } catch (error) { this.log(`watch could not arm (periodic cycle is the backstop): ${String(error)}`); } }
-  handleFsEvent(filename: string | null): void { if (this.stopped) return; if (filename === null) { if (!this.sessionDbChangedSinceLastCheck()) return; } else if (!this.isSessionDbFile(filename)) return; this.trigger(); }
-  isSessionDbFile(filename: string): boolean { return this.deps.sessionDbNames.some((name) => filename.startsWith(name)); }
-  sessionDbChangedSinceLastCheck(): boolean { let changed = false; for (const name of this.deps.sessionDbNames) { const mtime = this.statMtimeMs(join(this.deps.watchDir, name)); if (mtime == null) continue; const last = this.lastMtimes.get(name); if (last == null || mtime > last) { this.lastMtimes.set(name, mtime); changed = true; } } return changed; }
-  refreshSessionDbMtimes(): void { for (const name of this.deps.sessionDbNames) { const mtime = this.statMtimeMs(join(this.deps.watchDir, name)); if (mtime != null) this.lastMtimes.set(name, mtime); } }
-  stop(): void { this.stopped = true; this.trigger.dispose(); try { this.watcher?.close(); } catch {} this.watcher = undefined; }
+import { statSync, watch, type FSWatcher } from "node:fs"
+import {
+  advancedSessionMtimes,
+  existingSessionMtimes,
+  sessionDatabaseNameMatches,
+} from "./chrome-session-watcher-state.ts"
+import type { ChromeSessionWatcherDependencies } from "./chrome-session-watcher-contracts.ts"
+
+export type { ChromeSessionWatcherDependencies } from "./chrome-session-watcher-contracts.ts"
+
+type CloseableWatcher = Pick<FSWatcher, "close">
+type DebouncedAction = (() => void) & { dispose(): void }
+
+export class ChromeSessionWatcher {
+  private watcher: CloseableWatcher | undefined
+  private stopped = false
+  private readonly openWatch: NonNullable<ChromeSessionWatcherDependencies["startWatch"]>
+  private readonly notifyAfterQuiet: DebouncedAction
+  private readonly readMtime: NonNullable<ChromeSessionWatcherDependencies["statMtimeMs"]>
+  private readonly report: NonNullable<ChromeSessionWatcherDependencies["log"]>
+  readonly lastMtimes = new Map<string, number>()
+
+  constructor(readonly deps: ChromeSessionWatcherDependencies) {
+    this.openWatch = deps.startWatch ?? ((dir, listener) =>
+      watch(dir, { persistent: false }, (_event, name) => listener(typeof name === "string" ? name : null)))
+    this.notifyAfterQuiet = deps.debounce.wrap(() => {
+      if (this.stopped) return
+      try {
+        deps.onSessionChange()
+      } catch (error) {
+        this.report(`onSessionChange threw (ignored): ${String(error)}`)
+      }
+    })
+    this.readMtime = deps.statMtimeMs ?? ((filePath) => {
+      try {
+        return statSync(filePath).mtimeMs
+      } catch {
+        return undefined
+      }
+    })
+    this.report = deps.log ?? ((message) => console.log(`[session-file-watcher] ${message}`))
+  }
+
+  start(): void {
+    if (this.stopped || this.watcher !== undefined) return
+    this.refreshSessionDbMtimes()
+    try {
+      this.watcher = this.openWatch(this.deps.watchDir, (filename) => this.handleFsEvent(filename))
+      this.report(`watching ${this.deps.watchDir} for session database changes`)
+    } catch (error) {
+      this.report(`watch could not arm (periodic cycle is the backstop): ${String(error)}`)
+    }
+  }
+
+  handleFsEvent(filename: string | null): void {
+    if (this.stopped) return
+    const relevant = filename === null
+      ? this.sessionDbChangedSinceLastCheck()
+      : this.isSessionDbFile(filename)
+    if (relevant) this.notifyAfterQuiet()
+  }
+
+  isSessionDbFile(filename: string): boolean {
+    return sessionDatabaseNameMatches(this.deps.sessionDbNames, filename)
+  }
+
+  sessionDbChangedSinceLastCheck(): boolean {
+    const result = advancedSessionMtimes(
+      this.deps.watchDir,
+      this.deps.sessionDbNames,
+      this.lastMtimes,
+      this.readMtime,
+    )
+    for (const [name, mtime] of result.updates) this.lastMtimes.set(name, mtime)
+    return result.changed
+  }
+
+  refreshSessionDbMtimes(): void {
+    const current = existingSessionMtimes(this.deps.watchDir, this.deps.sessionDbNames, this.readMtime)
+    for (const [name, mtime] of current) this.lastMtimes.set(name, mtime)
+  }
+
+  stop(): void {
+    this.stopped = true
+    this.notifyAfterQuiet.dispose()
+    try {
+      this.watcher?.close()
+    } catch {
+    }
+    this.watcher = undefined
+  }
 }

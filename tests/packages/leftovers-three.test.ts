@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 
 import { conversationHardLimitBytes, conversationSoftLimitBytes, blobDbPathFor, HARD_LIMIT_DEFAULT_BYTES, SOFT_LIMIT_DEFAULT_BYTES, SlateConversationTooLargeError } from "../../source/host/extensions/session/conversation-size-limits.ts";
 import { listAgents, summarizeAgentById } from "../../source/host/extensions/session/session-roster.ts";
-import { conversationBlobsPath } from "../../source/host/extensions/session/conversation-blobs-path.ts";
+import { resolveConversationBlobStorePath } from "../../source/host/extensions/session/conversation-blobs-path.ts";
 import { validateServerName } from "../../source/shared/node/mcp/mcp-validation.ts";
 import { isEmptyAssistantMessage, trailingEmptyAssistantRemovalMiddleware } from "../../source/packages/chat-inference/middleware/trailing-empty-assistant-removal-middleware.ts";
 import { CONTINUATION_MESSAGE, needsContinuationMessage } from "../../source/packages/chat-inference/middleware/continuation-injector-middleware.ts";
@@ -33,7 +33,7 @@ describe("the sessions this host knows about", () => {
   });
 
   it("builds a conversation's blob path beside its store", () => {
-    assert.equal(typeof conversationBlobsPath, "function");
+    assert.equal(typeof resolveConversationBlobStorePath, "function");
   });
 });
 

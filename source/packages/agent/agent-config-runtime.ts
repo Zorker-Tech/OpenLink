@@ -1,41 +1,71 @@
 import { DISABLED_BACKGROUND_SUMMARIZATION_PROPS } from "../agent-summarization/background-summarization.ts";
 import { MAX_AGENT_STEPS } from "./constants.ts";
-import { filterByActorIdentity } from "./utils/rule-scoping.ts";
+import { filterByActorIdentity, type ScopedItem } from "./utils/rule-scoping.ts";
 
-type Any = any;
+export interface AgentRuntimeNonFileRule extends ScopedItem {
+  readonly fullPath: string;
+}
 
-/**
- * The defaults a session is given before its own configuration is applied.
- *
- * A session's configuration arrives as whatever the caller had to say, and everything it did not mention has
- * to have a value: the generators that produce nothing until a mode or a debug session asks for something,
- * the formatting options that decide how code is written out, and the switches that are off unless a session
- * turns them on. They are applied here rather than at each use so that a missing field is a default rather
- * than a crash, and the one field that has no sensible default — the system prompt generator — is refused
- * rather than defaulted, because a session with no instructions is not a session.
- *
- * Two of the defaults are computed rather than fixed. The step ceiling comes from the platform's own
- * constant, and the rules a session carries are filtered by who the session is, since a rule scoped to
- * somebody else must not be applied just because it was in the list.
- */
-export function normalizeAgentConfig(config: Any): Any {
-  if (config.systemPromptGenerator === undefined) {
-    throw new Error("systemPromptGenerator is required");
-  }
+export interface AgentRuntimeConfigInput {
+  readonly systemPromptGenerator?: unknown;
+  readonly maxSteps?: number | null;
+  readonly actorIdentity?: { readonly email: string } | undefined;
+  readonly nonFileRules?: readonly AgentRuntimeNonFileRule[] | undefined;
+  readonly [setting: string]: unknown;
+}
 
-  const normalized = {
+interface ReminderGenerators {
+  readonly planSystemReminderGenerator: () => string;
+  readonly askSystemReminderGenerator: (options: unknown) => string;
+  readonly debugSystemReminderGenerator: (mode: unknown, isFirstMessage: unknown) => string;
+  readonly triageSystemReminderGenerator: () => string;
+  readonly projectSystemReminderGenerator: () => string;
+}
+
+interface RuntimeSwitches {
+  readonly immediatelyUpdateStateOnNewTurn: boolean;
+  readonly smartModeClassifierMode: boolean;
+  readonly smartModeClassifierShadowMode: boolean;
+  readonly doNotFailOnMaxSteps: boolean;
+  readonly enableAgentNotes: boolean;
+  readonly enableTerminalFiles: boolean;
+  readonly enableImageFiles: boolean;
+  readonly enableLongCodeSelectionSpillToFile: boolean;
+  readonly enableToolArgPreservation: boolean;
+  readonly strictArgParsing: boolean;
+  readonly enableExecuteHookExec: boolean;
+  readonly enableTranscriptInSummary: boolean;
+  readonly summarizeActionClearTurns: boolean;
+  readonly fireAndForgetCheckpoints: boolean;
+  readonly skipErrorStateCheckpoint: boolean;
+  readonly enablePrependedUserActions: boolean;
+}
+
+interface RuntimeConfigDefaults extends ReminderGenerators, RuntimeSwitches {
+  readonly backgroundSummarizationProps: typeof DISABLED_BACKGROUND_SUMMARIZATION_PROPS;
+  readonly formattingOptions: Record<string, unknown>;
+  readonly nonFileRules: AgentRuntimeNonFileRule[];
+}
+
+export interface NormalizedAgentConfig extends Record<string, unknown>, RuntimeConfigDefaults {
+  readonly systemPromptGenerator: unknown;
+  readonly maxSteps: number;
+  readonly actorIdentity?: { readonly email: string } | undefined;
+  readonly nonFileRules: AgentRuntimeNonFileRule[];
+}
+
+function createReminderGenerators(): ReminderGenerators {
+  return {
     planSystemReminderGenerator: () => "",
-    askSystemReminderGenerator: (_options: Any) => "",
-    debugSystemReminderGenerator: (_debugModeConfig: Any, _isFirstDebugModeMessage: Any) => "",
+    askSystemReminderGenerator: (_options) => "",
+    debugSystemReminderGenerator: (_mode, _isFirstMessage) => "",
     triageSystemReminderGenerator: () => "",
     projectSystemReminderGenerator: () => "",
-    backgroundSummarizationProps: DISABLED_BACKGROUND_SUMMARIZATION_PROPS,
-    formattingOptions: {
-      shouldUseFormatCodeblock: true,
-      gpt5StyleLineNumbers: false,
-      gpt5CodexCatN: false,
-    },
-    nonFileRules: [],
+  };
+}
+
+function createRuntimeSwitches(): RuntimeSwitches {
+  return {
     immediatelyUpdateStateOnNewTurn: false,
     smartModeClassifierMode: false,
     smartModeClassifierShadowMode: false,
@@ -52,13 +82,40 @@ export function normalizeAgentConfig(config: Any): Any {
     fireAndForgetCheckpoints: false,
     skipErrorStateCheckpoint: false,
     enablePrependedUserActions: true,
+  };
+}
+
+function createRuntimeDefaults(): RuntimeConfigDefaults {
+  return {
+    ...createReminderGenerators(),
+    backgroundSummarizationProps: DISABLED_BACKGROUND_SUMMARIZATION_PROPS,
+    formattingOptions: {
+      shouldUseFormatCodeblock: true,
+      gpt5StyleLineNumbers: false,
+      gpt5CodexCatN: false,
+    },
+    nonFileRules: [],
+    ...createRuntimeSwitches(),
+  };
+}
+
+function applyActorScope(rules: readonly AgentRuntimeNonFileRule[], actor: AgentRuntimeConfigInput["actorIdentity"]): AgentRuntimeNonFileRule[] {
+  return filterByActorIdentity(rules, actor);
+}
+
+export function normalizeAgentConfig(config: AgentRuntimeConfigInput): NormalizedAgentConfig {
+  if (config.systemPromptGenerator === undefined) {
+    throw new Error("systemPromptGenerator is required");
+  }
+
+  const merged = {
+    ...createRuntimeDefaults(),
     ...config,
     maxSteps: config.maxSteps ?? MAX_AGENT_STEPS,
-  };
+  } as NormalizedAgentConfig;
 
-  normalized.nonFileRules = filterByActorIdentity(
-    normalized.nonFileRules,
-    normalized.actorIdentity,
-  );
-  return normalized;
+  return {
+    ...merged,
+    nonFileRules: applyActorScope(merged.nonFileRules, merged.actorIdentity),
+  };
 }

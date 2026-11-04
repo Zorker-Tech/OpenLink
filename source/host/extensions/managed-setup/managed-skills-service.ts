@@ -1,33 +1,71 @@
-/**
- * Keeping the platform's managed skills fresh.
- *
- * A refresh is triggered by startup, by an authentication change or on demand, and what it fetches is written through
- * the cache so the agent reads the same files the cache describes; a refresh that cannot fetch leaves the previous
- * cache in place rather than emptying it.
- */
-import { readManagedSkillsCache, writeManagedSkillsCache, type ManagedSkill } from "./managed-skills-cache.ts";
-import { fetchedManagedSkillToSlateSkill, type FetchedManagedSkill } from "./slate-managed-skills.ts";
+import { readManagedSkillsCache, writeManagedSkillsCache } from "./managed-skills-cache.ts"
+import { projectFetchedSkills } from "./managed-skills-service-projection.ts"
+import type { ManagedSkillRefreshReason, SlateManagedSkillsServicePorts } from "./managed-skills-service-contracts.ts"
 
-export type ManagedSkillsRefreshTrigger = "startup" | "auth_change" | "on_demand";
-export interface ManagedSkillsServiceOptions {
-  getCacheDir(): string;
-  fetch(): Promise<readonly FetchedManagedSkill[]>;
-  report?(event: { extension: "managed_setup"; kind: "managed_skills"; errorClass: string }): void;
+export type { ManagedSkillRefreshReason, SlateManagedSkillsServicePorts } from "./managed-skills-service-contracts.ts"
+
+function errorKind(error: unknown): string {
+  return error instanceof Error ? error.name || "Error" : typeof error
 }
-function errorClass(error: unknown): string { return error instanceof Error ? error.name || "Error" : typeof error; }
 
 export class SlateManagedSkillsService {
-  private isDisposed = false;
-  private refreshPromise: Promise<void> | null = null;
-  private pendingTrigger: ManagedSkillsRefreshTrigger | null = null;
-  constructor(readonly options: ManagedSkillsServiceOptions) {}
-  start(): void { void this.refresh("startup"); }
-  handleAuthChange(): void { void this.refresh("auth_change"); }
-  async ensureSkill(id: string): Promise<boolean> { if (readManagedSkillsCache(this.options.getCacheDir())?.skills.some((skill) => skill.id === id)) return true; await this.refresh("on_demand"); return readManagedSkillsCache(this.options.getCacheDir())?.skills.some((skill) => skill.id === id) === true; }
-  dispose(): void { this.isDisposed = true; }
-  async refresh(trigger: ManagedSkillsRefreshTrigger): Promise<void> { if (this.isDisposed) return; if (this.refreshPromise != null) { this.pendingTrigger = trigger; return await this.refreshPromise; } this.refreshPromise = this.runRefreshes(trigger); try { await this.refreshPromise; } finally { this.refreshPromise = null; } }
-  private async runRefreshes(trigger: ManagedSkillsRefreshTrigger): Promise<void> {
-    let nextTrigger: ManagedSkillsRefreshTrigger | null = trigger;
-    while (nextTrigger != null && !this.isDisposed) { nextTrigger = null; try { const fetched = await this.options.fetch(); if (this.isDisposed) return; const skills: ManagedSkill[] = []; for (const skill of fetched) { const normalized = fetchedManagedSkillToSlateSkill(skill); if (normalized != null) skills.push(normalized); } writeManagedSkillsCache(this.options.getCacheDir(), skills); } catch (error) { this.options.report?.({ extension: "managed_setup", kind: "managed_skills", errorClass: errorClass(error) }); } finally { nextTrigger = this.pendingTrigger; this.pendingTrigger = null; } }
+  private stopped = false
+  private activeRefresh: Promise<void> | null = null
+  private pendingReason: ManagedSkillRefreshReason | null = null
+
+  constructor(readonly options: SlateManagedSkillsServicePorts) {}
+
+  start(): void {
+    void this.synchronize("startup")
+  }
+
+  onAuthenticationReady(): void {
+    void this.synchronize("auth_change")
+  }
+
+  async ensureSkillIsCached(skillId: string): Promise<boolean> {
+    const cached = readManagedSkillsCache(this.options.getCacheDir())
+    if (cached?.skills.some((skill) => skill.id === skillId) === true) return true
+
+    await this.synchronize("on_demand")
+    return readManagedSkillsCache(this.options.getCacheDir())?.skills.some((skill) => skill.id === skillId) === true
+  }
+
+  dispose(): void {
+    this.stopped = true
+  }
+
+  async synchronize(reason: ManagedSkillRefreshReason): Promise<void> {
+    if (this.stopped) return
+    if (this.activeRefresh !== null) {
+      this.pendingReason = reason
+      await this.activeRefresh
+      return
+    }
+
+    this.activeRefresh = this.drainPendingRefreshes(reason)
+    try {
+      await this.activeRefresh
+    } finally {
+      this.activeRefresh = null
+    }
+  }
+
+  private async drainPendingRefreshes(reason: ManagedSkillRefreshReason): Promise<void> {
+    let nextReason: ManagedSkillRefreshReason | null = reason
+
+    while (nextReason !== null && !this.stopped) {
+      nextReason = null
+      try {
+        const fetched = await this.options.fetch()
+        if (this.stopped) return
+        writeManagedSkillsCache(this.options.getCacheDir(), projectFetchedSkills(fetched))
+      } catch (error) {
+        this.options.report?.({ extension: "managed_setup", kind: "managed_skills", errorClass: errorKind(error) })
+      } finally {
+        nextReason = this.pendingReason
+        this.pendingReason = null
+      }
+    }
   }
 }

@@ -7,7 +7,7 @@ import {
   SHIPPED_CLIENT_SIDE_TOOL_V2_UNION,
   UNPROJECTED_AGENT_TOOL_CALL_ONEOFS,
   UNPROJECTED_CLIENT_SIDE_TOOL_V2_VARIANTS,
-} from "../../source/host/transcript/client-side-tool-v2-inventory.ts";
+} from "../../source/adapters/interop/agent/client-side-tool-v2-inventory-adapter.ts";
 
 const inventory = CLIENT_SIDE_TOOL_V2_PROJECTION_INVENTORY;
 

@@ -9,16 +9,17 @@ import { ToolErrorClassification } from "../../source/packages/agent/tools/tool-
 import { DYNAMIC_TOOLS_NAMESPACE, mcpStateExecutorResource } from "../../source/packages/agent-exec/mcp-operations.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { AgentMode, ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import {
   McpDescriptor,
   McpInstructions,
   McpToolDescriptor,
   type McpMetaToolOptions,
-} from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
-import { McpStateExecResult, McpStateSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
-import { GetMcpToolsAgentResult, GetMcpToolsError } from "../../source/packages/proto/generated/agent/v1/get_mcp_tools_tool_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
+import { McpStateExecResult, McpStateSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import { GetMcpToolsAgentResult, GetMcpToolsError } from "../../source/adapters/interop/proto/generated/agent/v1/get_mcp_tools_tool_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -359,10 +360,10 @@ test("a project conversation is not offered the tools that move its workspace", 
       toolDescriptor("other", "Something else."),
     ]),
   ]
-  const payload = await harness({ descriptors, stateHandler: { mode: AgentMode.PROJECT } }).payloadOf({ server: "cursor-app-control" })
+  const payload = await harness({ descriptors, stateHandler: { mode: SlateMode.PROJECT } }).payloadOf({ server: "cursor-app-control" })
   assert.deepEqual((payload.tools as Array<Record<string, unknown>>).map(tool => tool.tool), ["other"])
   // A conversation that is not a project's keeps them.
-  const kept = await harness({ descriptors, stateHandler: { mode: AgentMode.AGENT } }).payloadOf({ server: "cursor-app-control" })
+  const kept = await harness({ descriptors, stateHandler: { mode: SlateMode.AGENT } }).payloadOf({ server: "cursor-app-control" })
   assert.deepEqual((kept.tools as Array<Record<string, unknown>>).map(tool => tool.tool), ["create_project", "move_agent_to_root", "other"])
 })
 

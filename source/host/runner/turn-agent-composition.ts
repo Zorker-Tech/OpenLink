@@ -36,35 +36,34 @@ import {
   type TurnToolsetHostFactoryProvider,
 } from "./tools/turn-toolset.ts";
 import type { Context } from "../../packages/context/context.ts";
-import { requestIdKey } from "../../packages/chat-inference-proto/client.ts";
+import { requestIdKey } from "../../adapters/interop/chat-inference-proto/client.ts";
 import { AgentRoot } from "../../packages/agent/index.ts";
 import { SimplePromptToolExecutor } from "../../packages/agent/tool-stream-executor.ts";
 import { NoopConversationActionReceiver } from "../../packages/agent-core/conversation-actions/remote-receiver.ts";
-import { toRedactedInteractionListener } from "../../packages/agent-core/redacted-interaction-listener.ts";
+import { toRedactedInteractionListener } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 import type { PrivacyMode } from "../../packages/redaction/privacy-mode.ts";
-import type { RedactedString } from "../../packages/redaction/redacted-values.ts";
-import { toRedactedConversationAction, toRedactedConversationStateStructure } from "../../packages/redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { ConversationStateStructure } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
-import type { ConversationAction } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
-import { RESUME_TURN_ACTION } from "./turn-run-shell.ts";
+import {
+  cloneInteropConversationState,
+  projectInteropTurnRun,
+  type InteropConversationAction,
+  type InteropConversationState,
+  type RedactedAgentAction,
+  type RedactedAgentConversationState,
+} from "../../adapters/interop/agent/turn-agent-run-projection-adapter.ts";
+import { RESUME_TURN_ACTION } from "../../adapters/interop/agent/turn-resume-action-adapter.ts";
 import { SLATE_BOX_SHELL_TOOL_NAME, SLATE_EXTERNAL_SHELL_TOOL_NAME } from "../slate-activity.ts";
 import type { SummarizationPromptSession } from "../../packages/agent-summarization/summarization-handler.ts";
 import type { CloudAgentToolDeps } from "../cloud-agents/cloud-agent-tool.ts";
 import type { BackgroundWatchesHost } from "./background-work.ts";
 import type { BlobStore } from "../../packages/agent-kv/blob-store.ts";
 import { CombinedResourceAccessor, resourceEntry, type RemoteResource, type ResourceAccessor } from "../../packages/agent-exec/resource-provider.ts";
-import type { Executor, ExecutorOptions, RemoteExecManager, StreamExecutor } from "../../packages/agent-exec/executor-resources.ts";
-import { createSubagentExecutor, subagentExecutorResource } from "../../packages/agent-exec/subagent.ts";
+import type { ExecutorOptions, RemoteExecManager } from "../../packages/agent-exec/executor-resources.ts";
+import { createInteropSubagentExecutor, subagentExecutorResource } from "../../adapters/interop/agent/subagent-exec-adapter.ts";
 import { backgroundShellExecutorResource } from "../../packages/agent-exec/background-shell.ts";
 import { requestContextExecutorResource } from "../../packages/agent-exec/request-context-operation.ts";
 import { shellStreamExecutorResource } from "../../packages/agent-exec/shell-stream-operation.ts";
-import { smartModeClassifierExecutorResource } from "../../packages/agent-exec/smart-mode-classifier-operation.ts";
+import { smartModeClassifierExecutorResource, type SmartModeClassifierExecutor } from "../../packages/agent-exec/smart-mode-classifier-operation.ts";
 import { mcpExecutorResource, mcpStateExecutorResource } from "../../packages/agent-exec/mcp-operations.ts";
-import type { BackgroundShellSpawnArgs, BackgroundShellSpawnResult } from "../../packages/proto/generated/agent/v1/background_shell_exec_pb.ts";
-import type { RequestContextArgs, RequestContextResult } from "../../packages/proto/generated/agent/v1/request_context_exec_pb.ts";
-import type { ShellArgs, ShellStream } from "../../packages/proto/generated/agent/v1/shell_exec_pb.ts";
-import type { SmartModeClassifierArgs, SmartModeClassifierResult } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
-import type { McpArgs, McpResult, McpStateExecArgs, McpStateExecResult } from "../../packages/proto/generated/agent/v1/mcp_exec_pb.ts";
 import {
   ForwardingInteractionListener,
   SlateRequestContextExecutor,
@@ -74,7 +73,6 @@ import {
   type SubagentAdapterArgs,
   type SubagentDispatcher,
 } from "./agent-adapters.ts";
-import type { AgentSkill } from "../../packages/proto/generated/agent/v1/agent_skills_pb.ts";
 import type { SubagentSession } from "./subagent-runtime.ts";
 import { SubagentRegistry, subagentRegistryResource } from "../../packages/agent/tools/subagent-registry.ts";
 import { NoopDocumentationHydrationService, NoopWebScraperService } from "../../packages/agent/utils/agent-config.ts";
@@ -86,10 +84,8 @@ import {
   type MessageLike,
   type PromptExecutor as ReminderPromptExecutor,
 } from "./send-message-reminder-middleware.ts";
-import { createStartOfTurnAckReminderMiddleware } from "./start-of-turn-ack-reminder-middleware.ts";
-import { createSlateBrowserUseSubagentConfig } from "./tools/slate-browser-use-subagent.ts";
-import { createSlateComputerUseSubagentConfig } from "./tools/slate-computer-use-subagent.ts";
-import { createSlateExecutorSubagentConfig } from "../slate-multitask.ts";
+import { createOpeningMessageReminder } from "./start-of-turn-ack-reminder-middleware.ts";
+import { buildSlateSubagentConfigsForRun } from "./turn-subagent-configs.ts";
 import {
   buildSlateSubagentLaunchReviewTarget,
   buildSlateSubagentRiskTarget,
@@ -99,8 +95,11 @@ import {
 } from "./slate-subagent-auto-review.ts";
 import { runSlateAutoReviewClassifier } from "./slate-auto-review-classifier-run.ts";
 import type { SlateAutoReviewController, SlateAutoReviewExpiryPolicy, SlateAutoReviewMode } from "./slate-auto-review.ts";
-import type { SmartModeClassifierConversationMessage } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+import type { SlateClassifierConversationMessage } from "../../packages/agent/smart-mode-classifier-context.ts";
 import { maybeEntry, presentOptions } from "./optional-options.ts";
+import { shellCommandFromInteropRequest } from "../../adapters/interop/agent/local-shell-stream-executor-adapter.ts";
+import { turnMcpExecutorPortFromInterop, turnMcpResourceImplementationFromInterop } from "../../adapters/interop/mcp/turn-mcp-executor-adapter.ts";
+import type { TurnMcpCall, TurnMcpResultView } from "./turn-mcp-execution-contracts.ts";
 
 export const SLATE_AGENT_MAX_STEPS = 5_000;
 
@@ -140,7 +139,7 @@ export function createTurnToolSession(input: TurnAgentToolSessionInput): TurnAge
       const base = input.getExecutor();
       const withDiskPressure = input.diskPressureReminderEpisodeId == null ? base : createDiskPressureReminderMiddleware(input.diskPressureReminderEpisodeId)(base);
       if (input.isSubagentRunner || input.isSilenceAllowed) return new SimplePromptToolExecutor(withDiskPressure);
-      const executor = createStartOfTurnAckReminderMiddleware()(createSendMessageReminderMiddleware()(withDiskPressure));
+      const executor = createOpeningMessageReminder()(createSendMessageReminderMiddleware()(withDiskPressure));
       const toolExecutor = new SimplePromptToolExecutor(executor);
       input.onLatestPromptMessages?.(() => toolExecutor.getMessages());
       return toolExecutor;
@@ -222,7 +221,7 @@ export function createSlateAgentStaticConfig(input: TurnAgentStaticConfigInputs)
     documentationHydrationService: new NoopDocumentationHydrationService(),
     userInfoDisplayOptions: {
       disable: input.isBoxScopedSubagent,
-      displayCursorRules: true,
+      displayWorkspaceRules: true,
       displaySkills: !input.isSubagentRunner && !input.isSharedRoomRunner,
       excludeAgentTranscripts: input.isSubagentRunner || input.transcriptsFolderAvailable === false,
     },
@@ -405,27 +404,27 @@ export interface BuiltTurnAgentForRun {
   readonly subagentModels: ReturnType<typeof createSubagentModels>;
   readonly toolsGenerator: (props: TurnToolsetBuildProps) => ReturnType<typeof buildTurnTools>;
   readonly getActiveStateHandler: () => unknown;
-  readonly runStream: (input: TurnAgentRunStreamInput) => Promise<ConversationStateStructure>;
+  readonly runStream: (input: TurnAgentRunStreamInput) => Promise<InteropConversationState>;
 }
 
 export interface TurnAgentRunStreamInput {
   readonly attemptCtx: Context;
-  readonly state: TurnRedactedConversationState;
-  readonly action: TurnRedactedConversationAction;
+  readonly state: RedactedAgentConversationState;
+  readonly action: RedactedAgentAction;
   readonly mcpTools: readonly unknown[];
-  readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: ConversationStateStructure) => Promise<void> | void;
+  readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: InteropConversationState) => Promise<void> | void;
 }
 
 export interface TurnAgentStreamStartInput {
   readonly agent: Pick<BuiltTurnAgentForRun, "agent">;
-  readonly baseState: ConversationStateStructure;
-  readonly action: ConversationAction;
+  readonly baseState: InteropConversationState;
+  readonly action: InteropConversationAction;
   readonly privacyMode: PrivacyMode;
   readonly mcpTools: readonly unknown[];
 }
 
 export interface TurnAgentStreamStart {
-  startStream(attemptCtx: Context, resumeFrom: ConversationStateStructure | undefined, persistCheckpoint: TurnAgentRunStreamInput["persistCheckpoint"]): Promise<ConversationStateStructure>;
+  startStream(attemptCtx: Context, resumeFrom: InteropConversationState | undefined, persistCheckpoint: TurnAgentRunStreamInput["persistCheckpoint"]): Promise<InteropConversationState>;
 }
 
 /**
@@ -456,15 +455,15 @@ export interface TurnAgentMcpTurnProvider {
 
 export interface TurnAgentRunInputProjectionFactoryInput {
   readonly runCtx: Context;
-  readonly createAction: (runCtx: Context) => Promise<ConversationAction>;
+  readonly createAction: (runCtx: Context) => Promise<InteropConversationAction>;
   readonly mcp?: TurnAgentMcpTurnProvider;
   readonly onMcpDiscoveryFailed?: (error: unknown) => void;
-  readonly getConversationState: () => ConversationStateStructure;
+  readonly getConversationState: () => InteropConversationState;
 }
 
 export interface TurnAgentRunInputProjection {
-  readonly action: ConversationAction;
-  readonly baseState: ConversationStateStructure;
+  readonly action: InteropConversationAction;
+  readonly baseState: InteropConversationState;
   readonly mcpTools: readonly unknown[];
 }
 
@@ -487,20 +486,26 @@ export async function createTurnAgentRunInputProjection(input: TurnAgentRunInput
     input.mcp.refreshAccountConfig();
   }
   const conversationState = input.getConversationState();
-  return { action, baseState: ConversationStateStructure.fromBinary(conversationState.toBinary()), mcpTools };
+  return { action, baseState: cloneInteropConversationState(conversationState), mcpTools };
 }
 
 /** The stream's own input: the state and the action projected to their redacted forms, the tools forwarded as they are. */
 export function createTurnAgentRunStreamInput(input: {
   readonly attemptCtx: Context;
-  readonly baseState: ConversationStateStructure;
-  readonly action: ConversationAction;
-  readonly resumeFrom?: ConversationStateStructure;
+  readonly baseState: InteropConversationState;
+  readonly action: InteropConversationAction;
+  readonly resumeFrom?: InteropConversationState;
   readonly privacyMode: PrivacyMode;
   readonly mcpTools: readonly unknown[];
   readonly persistCheckpoint: TurnAgentRunStreamInput["persistCheckpoint"];
 }): TurnAgentRunStreamInput {
-  const projection = createTurnRedactedRunProjection(input);
+  const projection = projectInteropTurnRun({
+    baseState: input.baseState,
+    action: input.action,
+    ...presentOptions({ resumeFrom: input.resumeFrom }),
+    resumeAction: RESUME_TURN_ACTION,
+    privacyMode: input.privacyMode,
+  });
   return {
     attemptCtx: input.attemptCtx,
     state: projection.state,
@@ -531,7 +536,7 @@ export function buildAgentForRun(input: TurnAgentBuildForRunInput): BuiltTurnAge
     config,
     preserveLatestImage: input.preserveLatestImage ?? input.staticConfig.isBoxScopedSubagent,
   });
-  const runStream = async (streamInput: TurnAgentRunStreamInput): Promise<ConversationStateStructure> =>
+  const runStream = async (streamInput: TurnAgentRunStreamInput): Promise<InteropConversationState> =>
     agent.runStream(streamInput.attemptCtx, streamInput.state, streamInput.action, streamInput.mcpTools, streamInput.persistCheckpoint);
   return {
     agent,
@@ -755,49 +760,6 @@ export function createTurnAgentScopeProjection(input: {
   };
 }
 
-export interface TurnRedactedConversationAction {
-  readonly _privacyMode: PrivacyMode;
-  readonly triggeringAuthId?: string | undefined;
-  readonly triggeringUserInfo?: Readonly<Record<string, unknown>> | undefined;
-  readonly requestContextParts?: Readonly<Record<string, unknown>> | undefined;
-  readonly action: { readonly case: string | undefined; readonly value?: Readonly<Record<string, unknown>> | undefined };
-}
-
-export interface TurnRedactedConversationState {
-  readonly _privacyMode: PrivacyMode;
-  readonly rootPromptMessagesJson: readonly Uint8Array[];
-  readonly turns: readonly Uint8Array[];
-  readonly todos: readonly Uint8Array[];
-  readonly pendingToolCalls: readonly RedactedString[];
-  readonly previousWorkspaceUris: readonly RedactedString[];
-  readonly summaryArchives: readonly Uint8Array[];
-  readonly turnTimings: readonly Readonly<Record<string, unknown>>[];
-  readonly readPaths: readonly RedactedString[];
-  readonly [field: string]: unknown;
-}
-
-export interface TurnRedactedRunProjection {
-  readonly state: TurnRedactedConversationState;
-  readonly action: TurnRedactedConversationAction;
-  readonly isResume: boolean;
-}
-
-/**
- * The state and action the stream is given, redacted. A retry resumes from the checkpoint that was accepted and sends the
- * canonical empty resume action — a resumed stream is a continuation, not a second copy of the original request.
- */
-export function createTurnRedactedRunProjection(input: {
-  readonly baseState: ConversationStateStructure;
-  readonly action: ConversationAction;
-  readonly resumeFrom?: ConversationStateStructure;
-  readonly privacyMode: PrivacyMode;
-}): TurnRedactedRunProjection {
-  const isResume = input.resumeFrom !== undefined;
-  const state = toRedactedConversationStateStructure(input.resumeFrom ?? input.baseState, input.privacyMode);
-  const action = toRedactedConversationAction(isResume ? RESUME_TURN_ACTION : input.action, input.privacyMode);
-  return { state, action, isResume };
-}
-
 export interface TurnAgentCompositionHost {
   readonly toolHost: TurnToolsetHost;
   readonly isSubagentRunner: boolean;
@@ -852,27 +814,15 @@ export interface TurnScopedConnectorCardEmission extends ConnectorCardEmission {
   readonly cancelThisRun: TurnAgentScope["cancelThisRun"];
 }
 
-export interface TurnMcpResult {
-  readonly result: { readonly case: string | undefined; readonly value?: unknown };
-}
-
-function hasMcpErrorMessage(value: unknown): value is { error: string } {
-  return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
-}
-
 /**
  * The MCP executor as the turn sees it: every call is observed (so a slow connector is visible), an error result is
  * classified, and a connector that needs authentication gets its connect card emitted once — with a note appended to the
  * error telling the model to end its turn instead of reaching around the auth.
  */
-export function createTurnMcpExecutorGuard<
-  ExecContext extends Context,
-  Args extends { readonly providerIdentifier: string; readonly serverIdentifier: string; readonly toolCallId?: string },
-  Result extends TurnMcpResult,
->(dependencies: {
+export function createTurnMcpExecutorGuard<ExecContext extends Context>(dependencies: {
   readonly isSubagentRunner: boolean;
   readonly assertNoPendingApproval: () => void;
-  readonly execute: (context: ExecContext, args: Args, options?: ExecutorOptions) => Promise<Result>;
+  readonly execute: (context: ExecContext, call: TurnMcpCall, options?: ExecutorOptions) => Promise<TurnMcpResultView>;
   readonly beginObservation: (args: { toolCallId: string; connector: string; requestId?: string | undefined }) => (errorClass?: string) => void;
   readonly boundedConnectorTag: (providerIdentifier: string) => string;
   readonly mcpErrorClassOf: (error: unknown) => string;
@@ -884,70 +834,79 @@ export function createTurnMcpExecutorGuard<
 }) {
   const connectCardEmittedForServer = new Set<string>();
 
-  async function surfaceNeedsAuthCard(providerIdentifier: string): Promise<string | null> {
+  async function surfaceNeedsAuthCard(connectorId: string): Promise<string | null> {
     if (dependencies.isSubagentRunner || dependencies.resolveNeedsAuthSlot == null) return null;
-    if (providerIdentifier.length === 0 || connectCardEmittedForServer.has(providerIdentifier)) return null;
-    const slot = await dependencies.resolveNeedsAuthSlot(providerIdentifier);
+    if (connectorId.length === 0 || connectCardEmittedForServer.has(connectorId)) return null;
+    const slot = await dependencies.resolveNeedsAuthSlot(connectorId);
     if (slot == null) return null;
-    connectCardEmittedForServer.add(providerIdentifier);
+    connectCardEmittedForServer.add(connectorId);
     dependencies.emitConnectorCard({ connector: slot.serverName, serverId: slot.serverId, variant: "connect" });
     return `"${slot.serverName}" needs authentication; its connect card is now in the chat. Finish unrelated work, then end your turn \u2014 you're resumed automatically when the user authorizes. Don't call AuthenticateMcpServer, send a link, or reach the service another way meanwhile.`;
   }
 
   return {
-    async execute(context: ExecContext, args: Args, options?: ExecutorOptions): Promise<Result> {
+    async execute(context: ExecContext, call: TurnMcpCall, options?: ExecutorOptions): Promise<unknown> {
       dependencies.assertNoPendingApproval();
-      const providerIdentifier = args.providerIdentifier.length > 0 ? args.providerIdentifier : args.serverIdentifier;
+      const connectorId = call.connectorId.length > 0 ? call.connectorId : call.serverId;
       const settleObservation = dependencies.beginObservation({
-        toolCallId: args.toolCallId ?? "",
-        connector: dependencies.boundedConnectorTag(providerIdentifier),
+        toolCallId: call.callId ?? "",
+        connector: dependencies.boundedConnectorTag(connectorId),
         ...presentOptions({ requestId: context.get(requestIdKey) }),
       });
-      let result: Result;
+      let result: TurnMcpResultView;
       try {
-        result = await dependencies.execute(context, args, options);
+        result = await dependencies.execute(context, call, options);
       } catch (error) {
         settleObservation(dependencies.mcpErrorClassOf(error));
         throw error;
       }
-      if (result.result.case !== "error") {
+      if (result.kind !== "error") {
         settleObservation();
-        return result;
+        return result.encodedResult;
       }
-      settleObservation(dependencies.takeMcpExecErrorClass(args.toolCallId ?? ""));
+      settleObservation(dependencies.takeMcpExecErrorClass(call.callId ?? ""));
       try {
-        const note = await surfaceNeedsAuthCard(providerIdentifier);
-        if (note != null && hasMcpErrorMessage(result.result.value)) result.result.value.error = `${result.result.value.error}\n${note}`;
+        const note = await surfaceNeedsAuthCard(connectorId);
+        if (note != null) result.appendAuthenticationNote(note);
       } catch (cardError) {
         // A card that could not be emitted must not turn a tool error into a thrown one: it is reported and the result
         // goes back as the connector answered it.
         dependencies.reportDiagnostic({ kind: "mcp_connect_card_failed", errorClass: dependencies.errorLogTag(cardError) });
       }
-      return result;
+      return result.encodedResult;
     },
     surfaceNeedsAuthCard,
   };
 }
 
 /** A shell executor that refuses to run while an approval is pending, and writes down what it ran. */
-export function wrapTurnShellExecutorForAudit<TContext, Args extends { readonly command: string }, Result>(
-  base: { execute(context: TContext, args: Args, options: unknown): Result },
+export function wrapTurnShellExecutorForAudit(
+  base: unknown,
   dependencies: {
     readonly assertNoPendingApproval: () => void;
     readonly auditShellCommand: (kind: "foreground" | "background", command: string, surface: "user_machine") => void;
   },
   kind: "foreground" | "background",
 ) {
+  const execute = typeof base === "object" && base !== null ? Reflect.get(base, "execute") : undefined;
+  if (typeof execute !== "function") throw new TypeError("turn shell executor is not executable");
   return {
-    execute(context: TContext, args: Args, options: unknown): Result {
+    execute(context: unknown, args: unknown, options?: ExecutorOptions): unknown {
       dependencies.assertNoPendingApproval();
-      dependencies.auditShellCommand(kind, args.command, "user_machine");
-      return base.execute(context, args, options);
+      dependencies.auditShellCommand(kind, shellCommandFromInteropRequest(args), "user_machine");
+      return execute.call(base, context, args, options);
     },
   };
 }
 
 type TurnLocalResourceEntry = readonly [RemoteResource<unknown, RemoteExecManager>, unknown];
+
+function opaqueResourceEntry(resource: unknown, implementation: unknown): TurnLocalResourceEntry {
+  if (typeof resource !== "object" || resource === null || typeof Reflect.get(resource, "remoteImplementation") !== "function") {
+    throw new TypeError("turn resource descriptor is not remote");
+  }
+  return [resource as RemoteResource<unknown, RemoteExecManager>, implementation];
+}
 
 export interface TurnLocalResourceProjectionInput {
   readonly baseAccessor: ResourceAccessor<RemoteExecManager>;
@@ -959,12 +918,12 @@ export interface TurnLocalResourceProjectionInput {
   readonly subagentReview?: TurnSubagentLaunchReviewInput;
   readonly requestContext: RequestContextProvider;
   /** Workflow-derived skills are resolved per request-context execution. */
-  readonly resolveAgentSkills?: () => AgentSkill[];
+  readonly resolveAgentSkills?: () => readonly unknown[];
   readonly includeTranscripts: boolean;
   readonly autoReviewEnforceEnabled: boolean;
-  readonly smartModeClassifierExecutor?: Executor<SmartModeClassifierArgs, SmartModeClassifierResult>;
-  readonly shellStreamExecutor: StreamExecutor<ShellArgs, ShellStream>;
-  readonly backgroundShellExecutor: Executor<BackgroundShellSpawnArgs, BackgroundShellSpawnResult>;
+  readonly smartModeClassifierExecutor?: SmartModeClassifierExecutor;
+  readonly shellStreamExecutor: unknown;
+  readonly backgroundShellExecutor: unknown;
   readonly autoReviewGate: { readonly assertNoPendingApproval: () => void };
   readonly actionAuditor: { readonly record: (record: unknown) => void };
   readonly agentId: string;
@@ -983,7 +942,7 @@ export interface TurnSubagentLaunchReviewInput {
   readonly userAutoRunInstructions?: InstructionPermissions;
   readonly projectAutoRunInstructions?: InstructionPermissions;
   readonly getActiveStateHandler?: () => unknown;
-  readonly extractConversationContext?: (context: Context, stateHandler: unknown) => Promise<SmartModeClassifierConversationMessage[]>;
+  readonly extractConversationContext?: (context: Context, stateHandler: unknown) => Promise<SlateClassifierConversationMessage[]>;
   readonly workspacePaths?: readonly string[];
   readonly reportShadowFailure?: (error: unknown) => void;
   readonly suspendToolExecutionTimeout?: <T>(context: Context, operation: () => Promise<T>) => Promise<T>;
@@ -1061,8 +1020,8 @@ export function createTurnSubagentLaunchReviewer(
 }
 
 export interface TurnMcpForTurn {
-  readonly createExecutor: (persistImage: unknown, spillLargeText: unknown, auditIdentity: { readonly agentId: string }) => Executor<McpArgs, McpResult>;
-  readonly createStateExecutor: () => Executor<McpStateExecArgs, McpStateExecResult>;
+  readonly createExecutor: (persistImage: unknown, spillLargeText: unknown, auditIdentity: { readonly agentId: string }) => unknown;
+  readonly createStateExecutor: () => unknown;
   readonly resolveNeedsAuthSlot?: (providerIdentifier: string) => Promise<{ readonly serverName: string; readonly serverId: string } | null>;
 }
 
@@ -1119,17 +1078,17 @@ export function createTurnLocalResourceProjection(input: TurnLocalResourceProjec
     auditShellCommand: (kind: "foreground" | "background", command: string) => auditShellCommand(kind, command),
   };
   const localEntries: TurnLocalResourceEntry[] = [
-    resourceEntry(subagentExecutorResource, createSubagentExecutor(adapter)),
+    resourceEntry(subagentExecutorResource, createInteropSubagentExecutor(adapter)),
     resourceEntry(requestContextExecutorResource, requestContextExecutor),
     resourceEntry(subagentRegistryResource, subagentRegistry),
   ];
   if (input.smartModeClassifierExecutor !== undefined) localEntries.push(resourceEntry(smartModeClassifierExecutorResource, input.smartModeClassifierExecutor));
   if (input.mcp !== undefined) {
-    const mcpExecutor = input.mcp.mcpForTurn.createExecutor(input.mcp.persistImage, input.mcp.textSpiller, { agentId: input.agentId });
+    const mcpExecutor = turnMcpExecutorPortFromInterop(input.mcp.mcpForTurn.createExecutor(input.mcp.persistImage, input.mcp.textSpiller, { agentId: input.agentId }));
     const guardedMcpExecutor = createTurnMcpExecutorGuard({
       isSubagentRunner: input.mcp.isSubagentRunner,
       assertNoPendingApproval: input.autoReviewGate.assertNoPendingApproval,
-      execute: (context: Context, args: McpArgs, options?: ExecutorOptions) => mcpExecutor.execute(context, args, options),
+      execute: (context, call, options) => mcpExecutor.execute(context, call, options),
       beginObservation: input.mcp.beginObservation,
       boundedConnectorTag: input.mcp.boundedConnectorTag,
       mcpErrorClassOf: input.mcp.mcpErrorClassOf,
@@ -1144,11 +1103,12 @@ export function createTurnLocalResourceProjection(input: TurnLocalResourceProjec
       reportDiagnostic: input.mcp.reportDiagnostic,
       errorLogTag: input.mcp.errorLogTag,
     });
-    localEntries.push(resourceEntry(mcpExecutorResource, guardedMcpExecutor), resourceEntry(mcpStateExecutorResource, input.mcp.mcpForTurn.createStateExecutor()));
+    const interopMcpExecutor = turnMcpResourceImplementationFromInterop((context, call, options) => guardedMcpExecutor.execute(context as Context, call, options as ExecutorOptions));
+    localEntries.push(opaqueResourceEntry(mcpExecutorResource, interopMcpExecutor), opaqueResourceEntry(mcpStateExecutorResource, input.mcp.mcpForTurn.createStateExecutor()));
   }
   localEntries.push(
-    resourceEntry(shellStreamExecutorResource, wrapTurnShellExecutorForAudit(input.shellStreamExecutor, auditDependencies, "foreground")),
-    resourceEntry(backgroundShellExecutorResource, wrapTurnShellExecutorForAudit(input.backgroundShellExecutor, auditDependencies, "background")),
+    opaqueResourceEntry(shellStreamExecutorResource, wrapTurnShellExecutorForAudit(input.shellStreamExecutor, auditDependencies, "foreground")),
+    opaqueResourceEntry(backgroundShellExecutorResource, wrapTurnShellExecutorForAudit(input.backgroundShellExecutor, auditDependencies, "background")),
   );
   const resourceAccessor = new CombinedResourceAccessor(input.baseAccessor, localEntries);
   const launchReviewer = input.subagentReview === undefined ? input.reviewSubagentLaunch : createTurnSubagentLaunchReviewer({ ...input.subagentReview, resourceAccessor });
@@ -1164,22 +1124,8 @@ export function createTurnAgentComposition(host: TurnAgentCompositionHost) {
   let subagentConfigsForRun: readonly unknown[] | undefined;
 
   function buildSubagentConfigsForRun(): readonly unknown[] | undefined {
-    if (host.isSubagentRunner) return undefined;
-    const configs = [...(host.getSubagentConfigs?.() ?? [])];
-    if (host.toolHost.remoteBoxHasDesktop && host.toolHost.getRemoteBoxAvailable()) {
-      const browserUseOffered = host.isBrowserUseSubagentEnabled?.() === true;
-      configs.push(createSlateComputerUseSubagentConfig({ browserUseOffered }));
-      if (browserUseOffered) configs.push(createSlateBrowserUseSubagentConfig());
-    }
-    // The executor subagent replaces the general-purpose one when multitask is on: they are the same slot, and keeping
-    // both would offer the model two ways to plan the same work.
-    if (host.isSystemPromptOverridden !== true && host.isMultitaskEnabled?.() === true) {
-      const executor = createSlateExecutorSubagentConfig();
-      const generalPurposeIndex = configs.findIndex((config) => isGeneralPurposeSubagent(host.getSubagentTypeName?.(config), config));
-      if (generalPurposeIndex >= 0) configs.splice(generalPurposeIndex, 1, executor);
-      else configs.push(executor);
-    }
-    return configs;
+    subagentConfigsForRun = buildSlateSubagentConfigsForRun(host);
+    return subagentConfigsForRun;
   }
 
   return {
@@ -1189,18 +1135,4 @@ export function createTurnAgentComposition(host: TurnAgentCompositionHost) {
     buildSubagentConfigsForRun,
     getSubagentConfigsForRun: (): readonly unknown[] | undefined => subagentConfigsForRun,
   };
-}
-
-/** Whether a config is the general-purpose subagent, by the host's own name for it or by the generated shape. */
-function isGeneralPurposeSubagent(hostName: string | undefined, config: unknown): boolean {
-  if (hostName !== undefined) return hostName === "generalPurpose";
-  if (typeof config !== "object" || config === null || !("subagent_type" in config)) return false;
-  const subagentType = (config as { readonly subagent_type?: unknown }).subagent_type;
-  if (typeof subagentType !== "object" || subagentType === null || !("type" in subagentType)) return false;
-  const type = (subagentType as { readonly type?: unknown }).type;
-  if (typeof type !== "object" || type === null || !("case" in type)) return false;
-  const shaped = type as { readonly case?: unknown; readonly value?: unknown };
-  if (shaped.case === "unspecified") return true;
-  if (shaped.case !== "custom" || typeof shaped.value !== "object" || shaped.value === null) return false;
-  return "name" in shaped.value && (shaped.value as { readonly name?: unknown }).name === "generalPurpose";
 }

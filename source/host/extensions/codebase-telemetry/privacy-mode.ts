@@ -5,19 +5,22 @@
  * codebase may leave the machine.
  */
 
-import type { MethodInfoUnary } from "@bufbuild/protobuf";
-import { DashboardService } from "../../../packages/proto/generated/aiserver/v1/dashboard_connect.ts";
-import { GetUserPrivacyModeRequest, type GetUserPrivacyModeResponse } from "../../../packages/proto/generated/aiserver/v1/dashboard_pb.ts";
-import { PrivacyMode as ProtoPrivacyMode } from "../../../packages/proto/generated/aiserver/v1/privacy_mode_pb.ts";
-import { createSlateCursorBackendClient } from "../../../shared/node/cursor-backend/cursor-inference.ts";
+import { createSlatePrivacyModeDashboardReader } from "../../../adapters/interop/telemetry/privacy-mode-dashboard-adapter.ts";
+import { PrivacyMode as SlatePrivacyMode, type PrivacyMode as SlatePrivacyModeValue } from "../../../packages/redaction/privacy-mode.ts";
 import type { DeadlinePolicy, PollingPolicy, RetryPolicy } from "../scheduling.ts";
 import { createWatchChannel, type WatchReceiver } from "./watch-channel.ts";
 
 export type { WatchReceiver };
 
 /** The modes the platform knows. Anything else it is told is read as unspecified. */
-export const PrivacyModes = { Unspecified: 0, NoStorage: 1, NoTraining: 2, UsageDataTrainingAllowed: 3, UsageCodebaseTrainingAllowed: 4 } as const;
-export type PrivacyMode = number;
+export const PrivacyModes = {
+  Unspecified: SlatePrivacyMode.UNSPECIFIED,
+  NoStorage: SlatePrivacyMode.NO_STORAGE,
+  NoTraining: SlatePrivacyMode.NO_TRAINING,
+  UsageDataTrainingAllowed: SlatePrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
+  UsageCodebaseTrainingAllowed: SlatePrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED,
+} as const;
+export type PrivacyMode = SlatePrivacyModeValue;
 
 /** The account a telemetry lookup is made for. */
 export interface TelemetryAuth {
@@ -27,17 +30,11 @@ export interface TelemetryAuth {
 
 /** Reads the account's privacy mode from the backend. */
 export function createSlatePrivacyModeLoader(authApi: { getMachineId(): Promise<string> }) {
-  return async ({ auth, signal }: { auth: TelemetryAuth; signal: AbortSignal }): Promise<PrivacyMode> => {
-    // The generated service type does not carry this method, though the backend serves it.
-    const service = DashboardService as typeof DashboardService & { readonly methods: typeof DashboardService.methods & { readonly getUserPrivacyMode: MethodInfoUnary<GetUserPrivacyModeRequest, GetUserPrivacyModeResponse> } };
-    const client = createSlateCursorBackendClient(service, { getAccessToken: async () => auth.authToken, getMachineId: () => authApi.getMachineId() });
-    const response = await client.getUserPrivacyMode(new GetUserPrivacyModeRequest({ inferredPrivacyMode: ProtoPrivacyMode.NO_STORAGE }), { signal });
-    return response.privacyMode;
-  };
+  return createSlatePrivacyModeDashboardReader(authApi) as (args: { auth: TelemetryAuth; signal: AbortSignal }) => Promise<PrivacyMode>;
 }
 
 /** The mode the platform understands; everything else is unspecified. */
-export function toPrivacyMode(value: number): PrivacyMode {
+export function toPrivacyMode(value: unknown): PrivacyMode {
   switch (value) {
     case PrivacyModes.NoStorage:
     case PrivacyModes.NoTraining:

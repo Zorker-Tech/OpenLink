@@ -1,28 +1,42 @@
-/**
- * The SendMessage tool.
- *
- * It carries what the agent wants said — text, an attachment, a widget, a reference to another agent, or a request for
- * a secret — and answers with what happened, so the agent can tell a delivery from a refusal.
- */
+/** Compose and deliver the messages that appear in a Slate conversation. */
+
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import {
-  SendMessageError,
-  SendMessageResult,
-  SendMessageSuccess,
-  SendMessageToolCall,
-} from "../../../packages/proto/generated/agent/v1/send_message_tool_pb.ts";
+  createSendMessageProtocolCall,
+  sendMessageErrorResult,
+  sendMessageSuccessResult,
+  type InteropSendMessageResult,
+} from "../../../adapters/interop/agent/send-message-tool-protocol-adapter.ts";
 import type { Context } from "../../../packages/context/context.ts";
 import { createStringResult } from "../../../packages/chat-inference/prompt-executor.ts";
 import { createZodAgentTool, withSafeParsedArgs } from "../../../packages/agent/tools/tool-support.ts";
-import { createSendMessageToolCall, encodeSendMessage } from "./send-message-encoding.ts";
+import { encodeSendMessage } from "./send-message-encoding.ts";
 import { sendMessageParameters, type SendMessageInput } from "./send-message-schema.ts";
 import { clampSecretDescription, clampSecretLabel } from "./slate-secret-request.ts";
 import { SlateToolInputError } from "./tool-input-error.ts";
+
 export const SLATE_SEND_MESSAGE_TOOL_NAME = "SendMessage";
-const SLATE_SEND_MESSAGE_TOOL_DESCRIPTION = `Say something to the user in the Slate chat. This is your only voice. The user only ever sees the content of SendMessage calls; your plain assistant text is invisible to them (it is just your private scratchpad), so a reply counts only once it is inside SendMessage, including short, casual, or social replies like "Hey" or "Doing good, you?". Finish a turn where someone is waiting on you without calling SendMessage and they see total silence and assume you ignored them; the lone exception is a scheduled routine (a [routine] run) whose saved instruction says to stay quiet when there's nothing to report, where ending with no SendMessage is correct rather than filler like "(no change.)". Keep the user posted with meaningful beats, not just at the end: post an update for a real result, decision, blocker, or change of plan, and batch or omit routine mechanics, retries, and minor snags rather than narrating each one; prefer fewer, higher-signal updates over a play-by-play. Still, never vanish into a long silent run on something the user is waiting on. This also covers results: output the user is waiting on counts as delivered only inside a SendMessage, so an opening acknowledgement does not discharge it (ack \u2260 delivery), and if you ran something for them you send the actual result before you yield. Use {"type":"text","content":"..."} for normal messages. In text content you can point back at a specific earlier message with a reference link: [label](slate-msg:<address>), e.g. "Covered in [my earlier breakdown](slate-msg:t2s1)" \u2014 it renders as a small chip that jumps there on click. Addresses are the same ones reply_to uses (a user message's [t3u] tag, the id a sent message hands back), but unlike reply_to this never threads anything. Reference only where pointing back genuinely helps (an "as I mentioned earlier" moment); write the label as the words your sentence needs, and never write a bare address into visible text. Use {"type":"attachment","url":"file:///absolute/path/to/file.png"} for actual files or standalone media; https:// file/media URLs are also accepted. The rule for images: if image(s) belong WITH what you're saying, attach them to the text message itself \u2014 {"type":"text","content":"...","images":[{"url":"file:///absolute/path/to/shot.png","alt":"..."}]} renders them inside the same chat bubble, below your text (one image full width, several as a compact gallery). Use {"type":"attachment"} only when the image IS the whole message, with no accompanying text; videos and non-image files always go as attachments. Never embed images as markdown ![](...) in content. Use {"type":"slate-agent","bcId":"bc-..."} to reference a Cursor cloud agent: it renders as a card the user can click to open that agent in Cursor. Always use this instead of pasting a cloud agent's URL or bcId as text. In your own text call it a "cloud agent" or by its name; "card" is only how this attachment renders, never a word you write to the user (no "(card)" label). Use {"type":"widget","widget":{...}} to ask the user a question with selectable options instead of asking in plain text \u2014 but ask rarely: by default decide and proceed (see Autonomy), reserving a widget for a consequential or destructive go/no-go, true ambiguity you cannot resolve by looking it up, or something only the user knows. Every option must be a real, verified choice, never invented, guessed, or a plausible-looking placeholder; if you do not know the real options, look them up first (search the relevant connector, tool, or directory) rather than presenting fakes. Use {"type":"secret-request","secret":{"label":"...","connector":"...","field":"..."}} to ask for a credential (an API token, key, or secret): the user gets a masked secure input and the value goes straight to the connector's credential file. NEVER ask the user to paste a token, key, or password into the chat; always request it this way so it stays out of the transcript and out of your context. You only learn that they provided it. Sending a secret-request ends your turn; you are resumed once they submit. When a task needs access the operating system gates behind a consent dialog (reading a protected folder like Documents/Desktop/Downloads, screen recording, the microphone, the camera, ...), just attempt the action directly \u2014 the OS surfaces its own permission dialog naturally when it is required, and the user grants there. Do NOT announce it first, invent a permission card or click-path, or promise that "your system will ask" \u2014 attempt the action and let the real dialog appear. (For a manual desktop step only the user can do \u2014 a login, SSO, 2FA, captcha, or payment \u2014 use request_box_help instead.) The widget has a prompt, optional helpText, and 1-6 options; each option has a label, an optional value (the text sent back to you when confirmed; defaults to the label), an optional description, and an optional style ("default"|"primary"|"danger"). Set the optional allowCustom: true to also let the user type their own free-text answer instead of picking an option. Set the optional dismissOnMoveOn: true only for low-stakes questions that become moot if the user moves on; the widget then auto-dismisses once they send a newer message without answering. Leave it off (default) for real decisions you still need answered. The user picks an option and its value comes back to you as their reply. In the chat, the resolved card keeps your question and shows their selection checked under it, so phrase the prompt as a natural conversational question (never a menu instruction like "Pick one of the following") and give every option a value that reads like a reply the user would actually send. The user can also dismiss the question without answering; you'll be told on your next turn \u2014 treat that as a decline and don't re-ask. Example: {"type":"widget","widget":{"prompt":"Deploy to production?","options":[{"label":"Deploy","value":"Yes, deploy now","style":"primary"},{"label":"Cancel","value":"No, hold off","style":"danger"}]}}. When you do genuinely need a decision or confirmation, this widget is how you ask, not plain text. Sending a widget ends your turn; make it your last action and stop, and the user's selection arrives as the next message.`;
-export const SLATE_AWAITING_USER_SEND_MESSAGE_BLOCKED = "This turn is already waiting on the user (you sent a question widget or handed the box back to them), so this message was not delivered. Wait for the user — their response arrives as the next message — then say this on your next turn.";
-export interface SlateOutgoingMessage extends Record<string, unknown> { readonly type: SendMessageInput["type"]; }
+
+const SLATE_SEND_MESSAGE_TOOL_DESCRIPTION = [
+  "Use SendMessage for every reply or result the user should see. Plain assistant text is private and is not delivered.",
+  "Share meaningful progress after a result, decision, blocker, or plan change. Combine routine mechanics and retries, and do not leave the user waiting through a long task.",
+  "Choose text for conversation. Put images that accompany words on the same text message, and do not use Markdown image syntax. Use attachment for a standalone image, video, or other file. File URLs must be absolute; HTTPS links are accepted.",
+  "Use reply_to to thread a reply. A slate-msg reference link jumps to an earlier message without starting a thread; include one only when it helps.",
+  "Use slate-agent with its bcId to refer to a remote Slate agent. In visible text, use its name or say remote agent; never paste an agent URL or identifier.",
+  "Use widget sparingly for a consequential choice or ambiguity only the user can resolve. Ask a natural question and offer one to six verified, real choices. Add help text when it clarifies the choice; each option may have a value, description, and style. Enable allowCustom only when a typed answer is useful. Enable dismissOnMoveOn only for a low-stakes question. After sending a widget, stop. If the user dismisses it, treat that as a decline and do not ask again.",
+  "Use secret-request for credentials. It opens a masked secure input; never ask the user to paste a secret into chat, and do not expect to see its value.",
+  "When an operating-system permission prompt is needed, attempt the action and let the system show it. For a login, SSO, second factor, CAPTCHA, or payment that only the user can complete, use request_box_help.",
+].join(" ");
+
+export const SLATE_AWAITING_USER_SEND_MESSAGE_BLOCKED =
+  "This turn is waiting for the user to answer a question or continue from a handoff. The message was not sent; wait for their reply before continuing.";
+
+export interface SlateOutgoingMessage extends Record<string, unknown> {
+  readonly type: SendMessageInput["type"];
+}
+
 export interface SendMessageDependencies<Context> {
   readonly isAwaitingUserSelection?: () => boolean;
   readonly resolveCloudAgentTitle?: (ctx: Context, bcId: string) => Promise<string | undefined>;
@@ -32,27 +46,181 @@ export interface SendMessageDependencies<Context> {
   readonly classifyAttachment?: (url: string) => "file" | "media";
   readonly onSendMessage: (message: SlateOutgoingMessage, timestampMs: number) => string | undefined;
 }
-function filePathFromFileUrl(url: string): string | null { try { return new URL(url).protocol === "file:" ? fileURLToPath(url) : null; } catch { return null; } }
-export async function resolveAttachmentSource<Context>(ctx: Context, sourceUrl: string, deps: SendMessageDependencies<Context>): Promise<{ url: string; fileName?: string }> {
-  const sourcePath = filePathFromFileUrl(sourceUrl), fileName = sourcePath == null ? undefined : path.basename(sourcePath);
-  const result = (url: string) => ({ url, ...(fileName == null || fileName.length === 0 ? {} : { fileName }) });
-  if (sourcePath == null) return result(sourceUrl);
-  const ingest = deps.getIngestAttachment();
-  if (ingest != null) try { return result(pathToFileURL(await ingest(sourcePath)).href); } catch {}
-  return result(await deps.resolveBoxAttachment?.(ctx, sourcePath) ?? sourceUrl);
+
+function localPathFromUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "file:" ? fileURLToPath(url) : null;
+  } catch {
+    return null;
+  }
 }
-async function dimensions<Context>(url: string, deps: SendMessageDependencies<Context>): Promise<{ width: number; height: number } | undefined> { const file = filePathFromFileUrl(url); return file == null ? undefined : await deps.readMediaDimensions?.(file) ?? undefined; }
-export async function buildSlateSendMessage<Context>(ctx: Context, input: SendMessageInput, deps: SendMessageDependencies<Context>): Promise<SlateOutgoingMessage> {
-  const raw = sendMessageParameters.parse(input); const reply = raw.reply_to || undefined, channel = raw.channel || undefined;
-  if (raw.type === "text") { const images = []; for (const image of raw.images ?? []) { const source = await resolveAttachmentSource(ctx, image.url, deps); images.push({ url: source.url, ...(image.alt ? { alt: image.alt } : {}), ...await dimensions(source.url, deps) }); } return { type: "text", content: raw.content ?? "", ...(images.length ? { images } : {}), ...(reply ? { reply_to: reply } : {}), ...(channel ? { channel } : {}) }; }
-  if (raw.type === "widget") { if (raw.widget == null) throw new SlateToolInputError("widget is required when type is widget"); return { type: "widget", widget: raw.widget, ...(reply ? { reply_to: reply } : {}) }; }
-  if (raw.type === "slate-agent") { if (!raw.bcId) throw new SlateToolInputError("bcId is required when type is cursor-agent"); let title: string | undefined; try { title = (await deps.resolveCloudAgentTitle?.(ctx, raw.bcId))?.trim() || undefined; } catch {} return { type: "slate-agent", bcId: raw.bcId, ...(title ? { title } : {}), ...(reply ? { reply_to: reply } : {}) }; }
-  if (raw.type === "secret-request") { const secret = raw.secret; if (secret == null) throw new SlateToolInputError("secret is required when type is secret-request"); return { type: "secret-request", secretRequest: { label: clampSecretLabel(secret.label), ...(secret.description ? { description: clampSecretDescription(secret.description) } : {}), target: { kind: "channel-credential", platform: secret.connector, field: secret.field } }, ...(reply ? { reply_to: reply } : {}) }; }
-  const url = raw.url ?? "";
-  try { if (new URL(url).protocol === "https:" && deps.classifyAttachment?.(url) === "file") return { type: "text", content: url, ...(reply ? { reply_to: reply } : {}), ...(channel ? { channel } : {}) }; } catch {}
-  const source = await resolveAttachmentSource(ctx, url, deps);
-  return { type: "attachment", url: source.url, ...(reply ? { reply_to: reply } : {}), ...(source.fileName ? { file_name: source.fileName } : {}), ...(raw.alt ? { alt: raw.alt } : {}), ...(channel ? { channel } : {}), ...await dimensions(source.url, deps) };
+
+export async function resolveAttachmentSource<Context>(
+  ctx: Context,
+  sourceUrl: string,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<{ url: string; fileName?: string }> {
+  const sourcePath = localPathFromUrl(sourceUrl);
+  if (sourcePath === null) return { url: sourceUrl };
+
+  const fileName = path.basename(sourcePath);
+  const result = (url: string) => ({ url, ...(fileName.length === 0 ? {} : { fileName }) });
+  const ingest = dependencies.getIngestAttachment();
+  if (ingest !== undefined) {
+    try {
+      const cachedPath = await ingest(sourcePath);
+      return result(pathToFileURL(cachedPath).href);
+    } catch {
+      // The box resolver is the next available route for a local attachment.
+    }
+  }
+
+  const boxUrl = await dependencies.resolveBoxAttachment?.(ctx, sourcePath);
+  return result(boxUrl ?? sourceUrl);
 }
+
+async function mediaDimensions<Context>(
+  url: string,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<{ width: number; height: number } | undefined> {
+  const filePath = localPathFromUrl(url);
+  if (filePath === null || dependencies.readMediaDimensions === undefined) return undefined;
+  return await dependencies.readMediaDimensions(filePath) ?? undefined;
+}
+
+function replyAddress(input: SendMessageInput): string | undefined {
+  return input.reply_to || undefined;
+}
+
+function channelAddress(input: SendMessageInput): string | undefined {
+  return input.channel || undefined;
+}
+
+async function composeTextMessage<Context>(
+  ctx: Context,
+  input: SendMessageInput,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<SlateOutgoingMessage> {
+  const images = [];
+  for (const image of input.images ?? []) {
+    const source = await resolveAttachmentSource(ctx, image.url, dependencies);
+    images.push({
+      url: source.url,
+      ...(image.alt ? { alt: image.alt } : {}),
+      ...await mediaDimensions(source.url, dependencies),
+    });
+  }
+
+  const replyTo = replyAddress(input);
+  const channel = channelAddress(input);
+  return {
+    type: "text",
+    content: input.content ?? "",
+    ...(images.length === 0 ? {} : { images }),
+    ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+    ...(channel === undefined ? {} : { channel }),
+  };
+}
+
+async function composeAttachmentMessage<Context>(
+  ctx: Context,
+  input: SendMessageInput,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<SlateOutgoingMessage> {
+  const url = input.url ?? "";
+  try {
+    if (new URL(url).protocol === "https:" && dependencies.classifyAttachment?.(url) === "file") {
+      const replyTo = replyAddress(input);
+      const channel = channelAddress(input);
+      return {
+        type: "text",
+        content: url,
+        ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+        ...(channel === undefined ? {} : { channel }),
+      };
+    }
+  } catch {
+    // Validation normally rejects malformed URLs; keep shaping safe for direct callers too.
+  }
+
+  const source = await resolveAttachmentSource(ctx, url, dependencies);
+  const replyTo = replyAddress(input);
+  const channel = channelAddress(input);
+  return {
+    type: "attachment",
+    url: source.url,
+    ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+    ...(source.fileName === undefined ? {} : { file_name: source.fileName }),
+    ...(input.alt ? { alt: input.alt } : {}),
+    ...(channel === undefined ? {} : { channel }),
+    ...await mediaDimensions(source.url, dependencies),
+  };
+}
+
+async function composeSlateAgentReference<Context>(
+  ctx: Context,
+  input: SendMessageInput,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<SlateOutgoingMessage> {
+  const bcId = input.bcId ?? "";
+  if (bcId.length === 0) throw new SlateToolInputError("bcId is required for a slate-agent message");
+
+  let title: string | undefined;
+  try {
+    title = (await dependencies.resolveCloudAgentTitle?.(ctx, bcId))?.trim() || undefined;
+  } catch {
+    title = undefined;
+  }
+
+  const replyTo = replyAddress(input);
+  return {
+    type: "slate-agent",
+    bcId,
+    ...(title === undefined ? {} : { title }),
+    ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+  };
+}
+
+function composeSecretRequest(input: SendMessageInput): SlateOutgoingMessage {
+  const secret = input.secret;
+  if (secret == null) throw new SlateToolInputError("secret is required for a secret-request message");
+
+  const replyTo = replyAddress(input);
+  return {
+    type: "secret-request",
+    secretRequest: {
+      label: clampSecretLabel(secret.label),
+      ...(secret.description ? { description: clampSecretDescription(secret.description) } : {}),
+      target: { kind: "channel-credential", platform: secret.connector, field: secret.field },
+    },
+    ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+  };
+}
+
+export async function buildSlateSendMessage<Context>(
+  ctx: Context,
+  input: SendMessageInput,
+  dependencies: SendMessageDependencies<Context>,
+): Promise<SlateOutgoingMessage> {
+  const parsed = sendMessageParameters.parse(input);
+  switch (parsed.type) {
+    case "text":
+      return await composeTextMessage(ctx, parsed, dependencies);
+    case "widget": {
+      if (parsed.widget == null) throw new SlateToolInputError("widget is required for a widget message");
+      const replyTo = replyAddress(parsed);
+      return { type: "widget", widget: parsed.widget, ...(replyTo === undefined ? {} : { reply_to: replyTo }) };
+    }
+    case "slate-agent":
+      return await composeSlateAgentReference(ctx, parsed, dependencies);
+    case "secret-request":
+      return composeSecretRequest(parsed);
+    case "attachment":
+      return await composeAttachmentMessage(ctx, parsed, dependencies);
+  }
+}
+
 export interface SendMessageInteractionHandler<Context> {
   emitPartialToolCall(context: Context, toolCallId: string, toolCall: unknown): void;
   executeToolCall<Result>(
@@ -64,50 +232,35 @@ export interface SendMessageInteractionHandler<Context> {
   ): Promise<Result>;
 }
 
-function errorResult(error: string): SendMessageResult {
-  return new SendMessageResult({
-    result: { case: "error", value: new SendMessageError({ error }) },
-  });
-}
-
-export function createSendMessageTool(deps: SendMessageDependencies<Context>) {
-  // The wrapper hands this function the interaction handler and the parsed input as unknown — a tool does not
-  // hold the orchestrator's types — so both are asserted once here and the body below is the reference's.
+export function createSendMessageTool(dependencies: SendMessageDependencies<Context>) {
   const execute = async (
     ctx: Context,
     rawHandler: unknown,
     rawInput: unknown,
     meta: { readonly toolCallId: string },
-  ): Promise<SendMessageResult> => {
-    const interactionHandler = rawHandler as SendMessageInteractionHandler<Context>;
-    const input = rawInput as SendMessageInput;
-    const message = await buildSlateSendMessage(ctx, input, deps);
-    const encodedArgs = encodeSendMessage(message);
-    const baseToolCall = new SendMessageToolCall({ args: encodedArgs });
-    const run = async (): Promise<SendMessageResult> => {
-      if (deps.isAwaitingUserSelection?.() === true) {
-        return errorResult(SLATE_AWAITING_USER_SEND_MESSAGE_BLOCKED);
+  ): Promise<InteropSendMessageResult> => {
+    const interaction = rawHandler as SendMessageInteractionHandler<Context>;
+    const message = await buildSlateSendMessage(ctx, rawInput as SendMessageInput, dependencies);
+    const args = encodeSendMessage(message);
+
+    const deliver = async (): Promise<InteropSendMessageResult> => {
+      if (dependencies.isAwaitingUserSelection?.() === true) {
+        return sendMessageErrorResult(SLATE_AWAITING_USER_SEND_MESSAGE_BLOCKED);
       }
       const timestampMs = Date.now();
-      const messageId = deps.onSendMessage(message, timestampMs);
-      return new SendMessageResult({
-        result: {
-          case: "success",
-          value: new SendMessageSuccess({
-            timestamp: BigInt(timestampMs),
-            ...(messageId == null || messageId.length === 0 ? {} : { messageId }),
-          }),
-        },
-      });
+      const messageId = dependencies.onSendMessage(message, timestampMs);
+      return sendMessageSuccessResult(timestampMs, messageId);
     };
-    return interactionHandler.executeToolCall(
+
+    return await interaction.executeToolCall(
       ctx,
-      createSendMessageToolCall(baseToolCall),
+      createSendMessageProtocolCall(args),
       meta.toolCallId,
-      run,
-      (result) => createSendMessageToolCall(new SendMessageToolCall({ args: encodedArgs, result })),
+      deliver,
+      (result) => createSendMessageProtocolCall(args, result),
     );
   };
+
   return createZodAgentTool("SEND_MESSAGE", {
     name: SLATE_SEND_MESSAGE_TOOL_NAME,
     descriptionGenerator: () => SLATE_SEND_MESSAGE_TOOL_DESCRIPTION,
@@ -115,30 +268,23 @@ export function createSendMessageTool(deps: SendMessageDependencies<Context>) {
     execute: withSafeParsedArgs(
       sendMessageParameters,
       execute,
-      createSendMessageToolCall(new SendMessageToolCall()),
+      createSendMessageProtocolCall(),
     ),
-    async render(_context: Context, output: SendMessageResult) {
+    async render(_context: Context, output: InteropSendMessageResult) {
       if (output.result.case === "error") {
         const detail = output.result.value.error.trim();
-        return createStringResult(
-          detail.length > 0
-            ? `Failed to send the message to the user: ${detail}`
-            : "Failed to send the message to the user.",
-          true,
-        );
+        const message = detail.length === 0
+          ? "The message could not be sent."
+          : `The message could not be sent: ${detail}`;
+        return createStringResult(message, true);
       }
-      const messageId = output.result.case === "success"
-        ? output.result.value.messageId.trim()
-        : "";
-      return createStringResult(
-        messageId.length > 0
-          ? `Message sent to user. (id: ${messageId})`
-          : "Message sent to user.",
-      );
+
+      const messageId = output.result.case === "success" ? output.result.value.messageId.trim() : "";
+      return createStringResult(messageId.length === 0 ? "Message sent to the user." : `Message sent to the user. (id: ${messageId})`);
     },
     serializeError(error: unknown) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return createSendMessageToolCall(new SendMessageToolCall({ result: errorResult(message) }));
+      const detail = error instanceof Error ? error.message : "Unexpected failure";
+      return createSendMessageProtocolCall(undefined, sendMessageErrorResult(detail));
     },
   });
 }

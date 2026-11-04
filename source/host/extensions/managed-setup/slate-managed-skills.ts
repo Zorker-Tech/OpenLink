@@ -1,19 +1,60 @@
-/**
- * A skill the platform manages, turned into one the agent can read.
- *
- * What is fetched has to be enabled, carry a safe folder id and hold a body once the workflow file's own parts are
- * parsed; the name falls back to the id, and what the agent reads is bounded like any other workflow file.
- */
-import { clampWorkflowBody, clampWorkflowDescription, clampWorkflowName, parseWorkflowFile } from "../../../shared/workflow-model.ts";
+import {
+  clampWorkflowBody,
+  clampWorkflowDescription,
+  clampWorkflowName,
+  parseWorkflowFile,
+} from "../../../shared/workflow-model.ts";
 import { isSafeFolderId } from "../../storage/folder-id.ts";
 import type { ManagedSkill } from "./managed-skills-cache.ts";
 
-export interface FetchedManagedSkill { id: string; description: string; content: string; enabled: boolean }
+export interface FetchedManagedSkill {
+  readonly id: string;
+  readonly description: string;
+  readonly content: string;
+  readonly enabled: boolean;
+}
+
+type ParsedSkillFile = ReturnType<typeof parseWorkflowFile>;
+
+function cacheIdentifier(skill: FetchedManagedSkill): string | null {
+  if (!skill.enabled) return null;
+  const identifier = skill.id.trim();
+  return isSafeFolderId(identifier) ? identifier : null;
+}
+
+function readableInstructions(source: string, document: ParsedSkillFile): string | null {
+  const body = clampWorkflowBody(document?.body ?? source);
+  return body.trim().length > 0 ? body : null;
+}
+
+function cacheName(documentName: string | undefined | null, identifier: string): string | null {
+  const candidate = documentName != null && documentName.length > 0 ? documentName : identifier;
+  const name = clampWorkflowName(candidate);
+  return name.length > 0 ? name : null;
+}
+
+function cacheDescription(documentDescription: string | undefined | null, fetchedDescription: string): string {
+  const candidate = documentDescription != null && documentDescription.length > 0
+    ? documentDescription
+    : fetchedDescription;
+  return clampWorkflowDescription(candidate);
+}
 
 export function fetchedManagedSkillToSlateSkill(skill: FetchedManagedSkill): ManagedSkill | null {
-  if (!skill.enabled) return null;
-  const id = skill.id.trim(); if (!isSafeFolderId(id)) return null;
-  const parsed = parseWorkflowFile(skill.content); const body = clampWorkflowBody(parsed?.body ?? skill.content); if (body.trim().length === 0) return null;
-  const name = clampWorkflowName(parsed?.name != null && parsed.name.length > 0 ? parsed.name : id); if (name.length === 0) return null;
-  return { id, name, description: clampWorkflowDescription(parsed?.description != null && parsed.description.length > 0 ? parsed.description : skill.description), body };
+  const id = cacheIdentifier(skill);
+  if (id === null) return null;
+
+  const document = parseWorkflowFile(skill.content);
+  const body = readableInstructions(skill.content, document);
+  if (body === null) return null;
+
+  const name = cacheName(document?.name, id);
+  if (name === null) return null;
+
+  return {
+    id,
+    name,
+    description: cacheDescription(document?.description, skill.description),
+    body,
+  };
 }

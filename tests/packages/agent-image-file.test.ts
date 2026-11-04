@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import path from "node:path"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { WriteArgs } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import { writeSelectedImageToProjectAssets } from "../../source/packages/agent/context/image-file-spill.ts"
 

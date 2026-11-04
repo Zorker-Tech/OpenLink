@@ -20,40 +20,49 @@ export const SESSION_EVENT_BY_FAMILY = {
   summary_build: "slate.session.summary_build",
 } as const;
 export interface SessionDiagnostic {
-  family: keyof typeof SESSION_EVENT_BY_FAMILY;
-  kind: string;
-  agentId?: string;
-  errorClass?: string;
-  outcome?: string;
-  quarantine?: string;
-  salvagedKv?: number | null;
-  salvagedBlobs?: number | null;
-  salvagedTranscript?: number | null;
+  readonly family: keyof typeof SESSION_EVENT_BY_FAMILY;
+  readonly kind: string;
+  readonly agentId?: string;
+  readonly errorClass?: string;
+  readonly outcome?: string;
+  readonly quarantine?: string;
+  readonly salvagedKv?: number | null;
+  readonly salvagedBlobs?: number | null;
+  readonly salvagedTranscript?: number | null;
 }
-export function sessionDiagnosticTelemetry(r: SessionDiagnostic) {
-  const level = SESSION_WARN_KINDS.has(r.kind) ? "warn" : "error";
-  if (r.family === "store_db")
-    return {
-      level,
-      event: SESSION_EVENT_BY_FAMILY[r.family],
-      metadata: {
-        kind: r.kind,
-        agent_id: r.agentId,
-        error_class: r.errorClass,
-        outcome: r.outcome,
-        quarantine: r.quarantine,
-        salvaged_kv: r.salvagedKv != null ? String(r.salvagedKv) : undefined,
-        salvaged_blobs:
-          r.salvagedBlobs != null ? String(r.salvagedBlobs) : undefined,
-        salvaged_transcript:
-          r.salvagedTranscript != null
-            ? String(r.salvagedTranscript)
-            : undefined,
-      },
-    };
+
+function diagnosticLevel(kind: string): "warn" | "error" {
+  return SESSION_WARN_KINDS.has(kind) ? "warn" : "error";
+}
+
+function commonMetadata(report: SessionDiagnostic) {
   return {
-    level,
-    event: SESSION_EVENT_BY_FAMILY[r.family],
-    metadata: { kind: r.kind, agent_id: r.agentId, error_class: r.errorClass },
+    kind: report.kind,
+    agent_id: report.agentId,
+    error_class: report.errorClass,
+  };
+}
+
+function asCount(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : String(value);
+}
+
+function storeMetadata(report: SessionDiagnostic) {
+  return {
+    ...commonMetadata(report),
+    outcome: report.outcome,
+    quarantine: report.quarantine,
+    salvaged_kv: asCount(report.salvagedKv),
+    salvaged_blobs: asCount(report.salvagedBlobs),
+    salvaged_transcript: asCount(report.salvagedTranscript),
+  };
+}
+
+export function sessionDiagnosticTelemetry(report: SessionDiagnostic) {
+  const metadata = report.family === "store_db" ? storeMetadata(report) : commonMetadata(report);
+  return {
+    level: diagnosticLevel(report.kind),
+    event: SESSION_EVENT_BY_FAMILY[report.family],
+    metadata,
   };
 }

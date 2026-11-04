@@ -1,42 +1,57 @@
-/** What a box's log shipping is doing, in the shape the telemetry backend reports it: how much was written and delivered, and how old the oldest pending window is. */
 export const BOX_LOG_SHIP_EVENT = "slate.box.log_ship";
-export type BoxLogShipReport =
-  | {
-      kind: "progress";
-      bytesWritten: number;
-      bytesDelivered: number;
-      pendingWindowCount: number;
-      oldestPendingWindowAgeMs: number;
-    }
-  | {
-      kind: "save_failed" | "save_recovered";
-      errorClass: string;
-      failureCount: number;
-    };
+
+interface ShippingProgress {
+  readonly kind: "progress";
+  readonly bytesWritten: number;
+  readonly bytesDelivered: number;
+  readonly pendingWindowCount: number;
+  readonly oldestPendingWindowAgeMs: number;
+}
+
+interface OffsetSaveStatus {
+  readonly kind: "save_failed" | "save_recovered";
+  readonly errorClass: string;
+  readonly failureCount: number;
+}
+
+export type BoxLogShipReport = ShippingProgress | OffsetSaveStatus;
+
+function countFields(fields: readonly (readonly [string, number])[]): Record<string, string> {
+  return Object.fromEntries(fields.map(([name, count]) => [name, String(count)]));
+}
+
+function progressMetadata(report: ShippingProgress): Record<string, string> {
+  return {
+    kind: report.kind,
+    ...countFields([
+      ["bytes_written", report.bytesWritten],
+      ["bytes_delivered", report.bytesDelivered],
+      ["pending_window_count", report.pendingWindowCount],
+      ["oldest_pending_window_age_ms", report.oldestPendingWindowAgeMs],
+    ]),
+  };
+}
+
+function saveMetadata(report: OffsetSaveStatus): Record<string, string> {
+  return {
+    kind: report.kind,
+    error_class: report.errorClass,
+    failure_count: String(report.failureCount),
+  };
+}
+
+function metadataFor(report: BoxLogShipReport): Record<string, string> {
+  return report.kind === "progress" ? progressMetadata(report) : saveMetadata(report);
+}
+
+function severityFor(report: BoxLogShipReport): "info" | "warn" {
+  return report.kind === "save_failed" ? "warn" : "info";
+}
+
 export function boxLogShipTelemetry(report: BoxLogShipReport) {
-  switch (report.kind) {
-    case "progress":
-      return {
-        level: "info",
-        message: BOX_LOG_SHIP_EVENT,
-        metadata: {
-          kind: report.kind,
-          bytes_written: String(report.bytesWritten),
-          bytes_delivered: String(report.bytesDelivered),
-          pending_window_count: String(report.pendingWindowCount),
-          oldest_pending_window_age_ms: String(report.oldestPendingWindowAgeMs),
-        },
-      };
-    case "save_failed":
-    case "save_recovered":
-      return {
-        level: report.kind === "save_failed" ? "warn" : "info",
-        message: BOX_LOG_SHIP_EVENT,
-        metadata: {
-          kind: report.kind,
-          error_class: report.errorClass,
-          failure_count: String(report.failureCount),
-        },
-      };
-  }
+  return {
+    level: severityFor(report),
+    message: BOX_LOG_SHIP_EVENT,
+    metadata: metadataFor(report),
+  };
 }

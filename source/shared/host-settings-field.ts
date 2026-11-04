@@ -1,22 +1,80 @@
-/**
- * One field of the host's settings, kept in step between the host and a box.
- *
- * The settings live with the host and a copy lives with the box, and the two drift: a read that raced a write is
- * answered from the copy, a write that could not reach the host is reported as unreachable rather than as saved, and
- * what the box already holds is absorbed back rather than overwriting what the user has since chosen. A field the box
- * never wrote is given the session's answer when it comes back empty, and an in-flight write can be abandoned when the
- * connection it belonged to is gone.
- */
-import { WriteEpoch } from "./write-epoch.ts";
-export interface HostSettingsPort<Settings extends object> { isReadable(): boolean; read(): Promise<Settings>; write(update: Partial<Settings>): Promise<Settings | null> }
-export interface HostSettingsMirror<Value> { read(): Value | undefined; write(value: Value): void; clear?: () => void }
-export class BoxSettingsField<Settings extends object, Field extends keyof Settings, Value = Exclude<Settings[Field], null | undefined>> { readonly #writes = new WriteEpoch(); #answeredThisSession = false; #sentToBox: Value | undefined; constructor(readonly port: HostSettingsPort<Settings>, readonly field: Field, readonly mirror?: HostSettingsMirror<Value>) {}
-  async reconcile(): Promise<Value | null> { if (this.mirror === undefined) return this.#resolve(await this.port.read()); const readAt = this.#writes.snapshot(); const settings = await this.#readOrNull(); if (settings === null || this.#writes.isStale(readAt)) return this.mirror.read() ?? null; return this.#resolve(settings); }
-  async apply(value: Value): Promise<{ status: "unreachable" } | { status: "persisted"; value: Value | null }> { this.mirror?.write(value); this.#answeredThisSession = true; const settle = this.#writes.begin(); try { const echo = await this.port.write({ [this.field]: value } as unknown as Partial<Settings>); if (echo === null) return { status: "unreachable" }; this.#sentToBox = value; return { status: "persisted", value: this.#boxValue(echo) }; } finally { settle(); } }
-  async absorbFromBox(): Promise<"none" | "backfilled" | "repainted" | "cleared"> { if (this.mirror === undefined) return "none"; const readAt = this.#writes.snapshot(); const settings = await this.#readOrNull(); if (settings === null || this.#writes.isStale(readAt)) return "none"; const onBox = this.#boxValue(settings); if (onBox === null) return this.#giveUnwrittenBoxThisSessionsAnswer(); const local = this.mirror.read(); if (onBox === local) return "none"; this.mirror.write(onBox); return local === undefined ? "backfilled" : "repainted"; }
-  abandonInFlight(): void { this.#writes.reset(); this.#answeredThisSession = false; this.#sentToBox = undefined; }
-  async #giveUnwrittenBoxThisSessionsAnswer(): Promise<"none" | "cleared"> { if (!this.#answeredThisSession) { if (this.mirror?.read() === undefined || this.mirror.clear === undefined) return "none"; this.mirror.clear(); return "cleared"; } const local = this.mirror?.read(); if (local !== undefined && local !== this.#sentToBox) await this.apply(local); return "none"; }
-  async #readOrNull(): Promise<Settings | null> { if (!this.port.isReadable()) return null; const [read] = await Promise.allSettled([this.port.read()]); return read?.status === "fulfilled" ? read.value : null; }
-  #resolve(settings: Settings): Value | null { if (!this.#answeredThisSession) return this.#boxValue(settings); return this.#boxValue(settings) ?? this.mirror?.read() ?? null; }
-  #boxValue(settings: Settings): Value | null { const value = settings[this.field]; return value == null ? null : value as unknown as Value; }
+import { readHostSettingsSnapshot } from "./host-settings-field-port.ts"
+import type { HostSettingsFieldUpdate, HostSettingsMirror, HostSettingsPort } from "./host-settings-field-contracts.ts"
+import { HostSettingsFieldSession } from "./host-settings-field-session.ts"
+
+export type { HostSettingsFieldUpdate, HostSettingsMirror, HostSettingsPort } from "./host-settings-field-contracts.ts"
+
+export class BoxSettingsField<
+  Settings extends object,
+  Field extends keyof Settings,
+  Value = Exclude<Settings[Field], null | undefined>,
+> {
+  readonly #session = new HostSettingsFieldSession<Value>()
+
+  constructor(
+    readonly port: HostSettingsPort<Settings>,
+    readonly field: Field,
+    readonly mirror?: HostSettingsMirror<Value>,
+  ) {}
+
+  async reconcile(): Promise<Value | null> {
+    if (this.mirror === undefined) return this.#valueIn(await this.port.read())
+
+    const readEpoch = this.#session.captureReadEpoch()
+    const snapshot = await readHostSettingsSnapshot(this.port)
+    if (snapshot === null || this.#session.readWasInterrupted(readEpoch)) return this.mirror.read() ?? null
+
+    const value = this.#valueIn(snapshot)
+    return this.#session.hasLocalAnswer() ? value ?? this.mirror.read() ?? null : value
+  }
+
+  async apply(value: Value): Promise<HostSettingsFieldUpdate<Value>> {
+    this.mirror?.write(value)
+    this.#session.noteLocalAnswer()
+    const finishWrite = this.#session.beginWrite()
+
+    try {
+      const echoed = await this.port.write({ [this.field]: value } as unknown as Partial<Settings>)
+      if (echoed === null) return { status: "unreachable" }
+      this.#session.noteBoxEcho(value)
+      return { status: "persisted", value: this.#valueIn(echoed) }
+    } finally {
+      finishWrite()
+    }
+  }
+
+  async absorbFromBox(): Promise<"none" | "backfilled" | "repainted" | "cleared"> {
+    if (this.mirror === undefined) return "none"
+
+    const readEpoch = this.#session.captureReadEpoch()
+    const snapshot = await readHostSettingsSnapshot(this.port)
+    if (snapshot === null || this.#session.readWasInterrupted(readEpoch)) return "none"
+
+    const valueOnBox = this.#valueIn(snapshot)
+    if (valueOnBox === null) return await this.#settleMissingBoxValue()
+
+    const valueHere = this.mirror.read()
+    if (valueOnBox === valueHere) return "none"
+    this.mirror.write(valueOnBox)
+    return valueHere === undefined ? "backfilled" : "repainted"
+  }
+
+  abandonInFlight(): void { this.#session.abandon() }
+
+  async #settleMissingBoxValue(): Promise<"none" | "cleared"> {
+    const localValue = this.mirror!.read()
+    if (!this.#session.hasLocalAnswer()) {
+      if (localValue === undefined || this.mirror!.clear === undefined) return "none"
+      this.mirror!.clear()
+      return "cleared"
+    }
+
+    if (localValue !== undefined && localValue !== this.#session.lastValueSent()) await this.apply(localValue)
+    return "none"
+  }
+
+  #valueIn(settings: Settings): Value | null {
+    const value = settings[this.field]
+    return value == null ? null : value as unknown as Value
+  }
 }

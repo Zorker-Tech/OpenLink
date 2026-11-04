@@ -7,11 +7,11 @@ import {
   coreMessageToProto,
   protoStreamErrorToError,
   toolCallArgsFromProto,
-} from "../../source/packages/chat-inference-proto/converters.ts"
+} from "../../source/adapters/interop/chat-inference-proto/converters.ts"
 import {
   InferenceStreamErrorType,
   InferenceToolCall,
-} from "../../source/packages/proto/generated/aiserver/v1/inference_pb.ts"
+} from "../../source/adapters/interop/proto/generated/aiserver/v1/inference_pb.ts"
 import { InputTokenLimitError, OutputTokensLimitExceededError } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------

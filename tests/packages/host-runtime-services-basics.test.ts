@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { REMOTE_MEMBER_TURN_TIMEOUT_MS, REMOTE_TURN_MESSAGE_LIMIT, REMOTE_TURN_TEXT_MAX_LENGTH, resolveSharedRoomBoxToolsEnabled } from "../../source/host/groups/xuser.ts";
+import { SHARED_ROOM_MEMBER_TURN_TIMEOUT_MS, SHARED_ROOM_TURN_MESSAGE_LIMIT, SHARED_ROOM_TEXT_LIMIT, sharedRoomBoxToolsAreEnabled } from "../../source/host/groups/xuser.ts";
 import { removePathWithRetries, removeSqliteSidecars } from "../../source/host/storage/sqlite-recovery.ts";
 import { TranscriptJournalCorruptionError, TranscriptJournalWriteError, TranscriptOccurrenceConflictError } from "../../source/host/transcript/mirror/transcript-journal-codec.ts";
 import { applyWebAuthnProxyMarker, BOX_CHROME_POLICY_COMMAND, SLATE_WEBAUTHN_PROXY_MARKER_PATH } from "../../source/host/extensions/webauthn-proxy/webauthn-proxy-marker.ts";
@@ -21,7 +21,8 @@ import { searchIndexHealthTelemetry, SEARCH_INDEX_HEALTH_EVENT } from "../../sou
 import { NeverRecords, sendTraceSampler, FollowsItsParent, SampleDecision } from "../../source/host/telemetry/send-trace-sampler.ts";
 import { isBackgroundAutomationTrigger, normalizeAutomationErrorKind } from "../../source/host/transcript/slate-automation-failure.ts";
 import { DISK_PRESSURE_HEARTBEAT_MS, DISK_PRESSURE_THRESHOLDS, GIB } from "../../source/host/boxes/forever-box/disk-pressure-guard.ts";
-import { getAgentProjectsPath, MEMBERSHIP_FILENAME, toSafeSlugSet } from "../../source/host/memory/project-membership.ts";
+import { agentProjectMembershipPath, AGENT_PROJECTS_FILE } from "../../source/host/memory/project-membership.ts";
+import { decodeProjectMembership } from "../../source/host/memory/project-membership-policy.ts";
 import { BoxFileTransferError } from "../../source/host/boxes/box-file-transfer.ts";
 import { computerUseSubagentDescription, COMPUTER_USE_SUBAGENT_TYPE, isComputerUseSubagentType } from "../../source/host/runner/tools/slate-computer-use-subagent.ts";
 import { autoReviewApprovalTelemetry } from "../../source/host/telemetry/auto-review-approval-telemetry.ts";
@@ -33,16 +34,16 @@ after(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 describe("a group room that includes someone else's computer", () => {
   it("bounds what a remote member is shown, and keeps the box's tools on unless they were turned off", () => {
-    assert.equal(REMOTE_MEMBER_TURN_TIMEOUT_MS, 600_000);
-    assert.equal(REMOTE_TURN_MESSAGE_LIMIT, 24);
-    assert.equal(REMOTE_TURN_TEXT_MAX_LENGTH, 8_000);
-    assert.equal(resolveSharedRoomBoxToolsEnabled(undefined), true);
-    assert.equal(resolveSharedRoomBoxToolsEnabled(""), true);
-    assert.equal(resolveSharedRoomBoxToolsEnabled("1"), true);
-    assert.equal(resolveSharedRoomBoxToolsEnabled("yes"), true);
-    assert.equal(resolveSharedRoomBoxToolsEnabled("off"), true);
-    assert.equal(resolveSharedRoomBoxToolsEnabled("0"), false);
-    assert.equal(resolveSharedRoomBoxToolsEnabled("FALSE"), false);
+    assert.equal(SHARED_ROOM_MEMBER_TURN_TIMEOUT_MS, 600_000);
+    assert.equal(SHARED_ROOM_TURN_MESSAGE_LIMIT, 24);
+    assert.equal(SHARED_ROOM_TEXT_LIMIT, 8_000);
+    assert.equal(sharedRoomBoxToolsAreEnabled(undefined), true);
+    assert.equal(sharedRoomBoxToolsAreEnabled(""), true);
+    assert.equal(sharedRoomBoxToolsAreEnabled("1"), true);
+    assert.equal(sharedRoomBoxToolsAreEnabled("yes"), true);
+    assert.equal(sharedRoomBoxToolsAreEnabled("off"), true);
+    assert.equal(sharedRoomBoxToolsAreEnabled("0"), false);
+    assert.equal(sharedRoomBoxToolsAreEnabled("FALSE"), false);
   });
 });
 
@@ -253,10 +254,10 @@ describe("noticing that the disk is filling up", () => {
 
 describe("which projects an agent is a member of", () => {
   it("keeps only safe folder slugs, and keeps them beside the agent", () => {
-    assert.equal(MEMBERSHIP_FILENAME, "projects.json");
-    assert.equal(getAgentProjectsPath("/agents/a1"), "/agents/a1/projects.json");
-    assert.deepEqual([...toSafeSlugSet(["safe-slug", "../escape", "", 7, "another_one"])], ["safe-slug", "another_one"]);
-    assert.deepEqual([...toSafeSlugSet("not an array")], []);
+    assert.equal(AGENT_PROJECTS_FILE, "projects.json");
+    assert.equal(agentProjectMembershipPath("/agents/a1"), "/agents/a1/projects.json");
+    assert.deepEqual([...decodeProjectMembership(["safe-slug", "../escape", "", 7, "another_one"])], ["safe-slug", "another_one"]);
+    assert.deepEqual([...decodeProjectMembership("not an array")], []);
   });
 });
 

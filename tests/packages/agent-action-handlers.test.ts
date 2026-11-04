@@ -15,17 +15,21 @@ import {
   BackgroundTaskCompletionReason,
   BackgroundTaskKind,
   BackgroundTaskStatus,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { toRedactedBackgroundTaskCompletionAction } from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { toRedactedBackgroundTaskCompletionAction } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
-import { RequestContext } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts"
+import { RequestContext } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts"
 import { toRedactedCoreMessages } from "../../source/packages/redaction/message-redaction.ts"
 import { ConversationStateHandle } from "../../source/packages/agent/state.ts"
 import {
   toRedactedConversationStateStructure,
   toRedactedShellCommand,
-} from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
-import { ConversationStateStructure, ShellCommand, UserMessage } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+  toRedactedAsyncAskQuestionCompletionAction,
+} from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { AskQuestionArgs, AskQuestionResult, AskQuestionSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
+import { AgentMode, AsyncAskQuestionCompletionAction, ConversationStateStructure, ShellCommand, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The action handlers are the ways a turn can start. Each is handed the action and the things a turn
@@ -86,7 +90,7 @@ function createStateHandler(overrides: Record<string, unknown> = {}) {
     mode: undefined,
     isRootProjectConversation: true,
     getPrivacyMode: () => PrivacyMode.UNSPECIFIED,
-    isDsv3: () => false,
+    usesLargeContextTreatment: () => false,
     computeNewStructure: async () => ({ computed: true }),
     recordSubagentRunCompletion: () => {},
     hasCompletedAskQuestion: () => false,
@@ -200,17 +204,84 @@ test("the metadata of the first user info is read back as it was written", () =>
   assert.equal(handler.getFirstUserInfoRequestContextCompleteness([{ role: "system", content: "x" }]), undefined)
 })
 
+test("plan execution uses Slate chat mode across policy and encodes only the stored message", async () => {
+  const toolModes: unknown[] = []
+  const promptModes: unknown[] = []
+  const storedMessages: UserMessage[] = []
+  let stateMode: unknown
+  const toolSet = {
+    getAllTools: () => [],
+    getStaticTools: () => [],
+    getDescriptionProps: () => ({ allTools: {} }),
+    hasTool: () => false,
+    getTool: () => undefined,
+    getStaticTool: () => undefined,
+    getDynamicToolRegistry: () => undefined,
+  }
+  const { handler } = createHandler<ExecutePlanActionHandler>(ExecutePlanActionHandler, {
+    agentType: AgentType.IDE,
+    agentSessionId: "session-1",
+    nonFileRules: [],
+    featureFlags: {},
+    userInfoDisplayOptions: { disable: true },
+    toolsGenerator: (input: { mode: unknown }) => {
+      toolModes.push(input.mode)
+      return toolSet
+    },
+    systemPromptGenerator: (input: { mode: unknown }) => {
+      promptModes.push(input.mode)
+      return "system prompt"
+    },
+  })
+  const state = createStateHandler({
+    plan: undefined,
+    todos: [],
+    summaryArchives: [],
+    setTodos() {},
+    upsertPlanEntry() {},
+    getBlobStore() { return undefined },
+    usesLargeContextTreatment() { return false },
+    setMode(mode: unknown) { stateMode = mode },
+    async createAgentTurn(_ctx: unknown, message: UserMessage) {
+      storedMessages.push(message)
+      return { created: true }
+    },
+  })
+  const promptMessages: any[] = []
+  const prompt = {
+    getMessages: () => promptMessages,
+    appendMessages(next: readonly unknown[]) { promptMessages.push(...next) },
+    clearMessages() { promptMessages.length = 0 },
+  }
+  const action = {
+    planFileContent: { unwrap: () => "# Plan\nDo the work." },
+    planFilePath: { unwrap: () => "/repo/plan.md" },
+    executionMode: AgentMode.ASK,
+    planId: "plan-1",
+    kickoffMessageId: "message-1",
+    _privacyMode: PrivacyMode.NO_STORAGE,
+  }
+
+  await handler.initializeConversation(createContext(), action, prompt, state, [])
+
+  assert.deepEqual(toolModes, [SlateMode.CHAT])
+  assert.deepEqual(promptModes, [SlateMode.CHAT])
+  assert.equal(stateMode, SlateMode.CHAT)
+  assert.equal(storedMessages[0]?.mode, AgentMode.ASK)
+})
+
 // ---------------------------------------------------------------------------------------------
 // An answer to a question that was asked asynchronously
 // ---------------------------------------------------------------------------------------------
 
 function askQuestionCompletion(overrides: Record<string, unknown> = {}) {
-  return {
+  const action = new AsyncAskQuestionCompletionAction({
     originalToolCallId: "call-1",
-    result: { result: { case: "success" } },
-    originalArgs: { questions: [] },
+    originalArgs: new AskQuestionArgs({ title: "A follow-up" }),
+    result: new AskQuestionResult({ result: { case: "success", value: new AskQuestionSuccess() } }),
     ...overrides,
-  }
+  })
+  return toRedactedAsyncAskQuestionCompletionAction(action, PrivacyMode.UNSPECIFIED)
 }
 
 test("an answer that is not an answer is left alone", async () => {
@@ -238,6 +309,79 @@ test("an answer with no turn to attach to is left alone", async () => {
   await handler.handle(createContext(), askQuestionCompletion(), createPromptExecutor(), state, [], undefined)
 
   assert.equal(updates.length, 0)
+})
+
+test("a completion after a finished turn opens a continuation and runs it", async () => {
+  const { handler, updates } = createHandler<AsyncAskQuestionCompletionActionHandler>(AsyncAskQuestionCompletionActionHandler)
+  const { state } = await stateWithAgentTurn()
+  state.computeNewStructure = async () => ({ computed: true }) as never
+  const appended: unknown[] = []
+  const prompt = createPromptExecutor()
+  const createdUsers: UserMessage[] = []
+  const loopCalls: unknown[][] = []
+  const toolsGenerator = () => ({})
+  const continuationTurn = {
+    async upsertToolCall(_ctx: unknown, toolCall: unknown, toolCallId: string) {
+      appended.push([toolCallId, toolCall])
+    },
+  }
+  state.createAgentTurn = async (_ctx, userMessage) => {
+    createdUsers.push(userMessage as UserMessage)
+    return continuationTurn as never
+  }
+  Object.assign(handler, {
+    mergeRequestContextTools: (_tools: unknown, _requestTools: unknown) => [],
+    runTurnLoop: async (...args: unknown[]) => { loopCalls.push(args) },
+  })
+  ;(handler as unknown as { config: Record<string, unknown> }).config.toolsGenerator = toolsGenerator
+
+  const result = await handler.handle(createContext(), askQuestionCompletion(), prompt, state, [], undefined)
+
+  assert.deepEqual(result, { computed: true })
+  assert.equal(createdUsers.length, 1)
+  assert.equal(createdUsers[0]?.text, "Continue with the questionnaire results.")
+  assert.equal(createdUsers[0]?.isSimulatedMsg, true)
+  assert.equal(updates.length, 1)
+  assert.equal(appended.length, 1)
+  assert.equal(prompt.appended.length, 2)
+  assert.equal(loopCalls.length, 1)
+  assert.equal(loopCalls[0]?.[3], continuationTurn)
+  assert.equal(loopCalls[0]?.[4], toolsGenerator)
+})
+
+test("a completion during an active turn is appended to that turn before its loop runs", async () => {
+  const { handler } = createHandler<AsyncAskQuestionCompletionActionHandler>(AsyncAskQuestionCompletionActionHandler)
+  const { state, turn } = await stateWithAgentTurn()
+  state.computeNewStructure = async () => ({ computed: true }) as never
+  turn.steps.push({ get: async () => ({
+    kind: "tool-call",
+    toolCallId: "call-before-completion",
+    hookContexts: [],
+    tool: { case: undefined },
+  }) } as never)
+  const appended: unknown[] = []
+  const prompt = createPromptExecutor()
+  const loopCalls: unknown[][] = []
+  const toolsGenerator = () => ({})
+  const upsertToolCall = turn.upsertToolCall.bind(turn)
+  turn.upsertToolCall = async (...args) => {
+    appended.push(args[2])
+    return await upsertToolCall(...args)
+  }
+  Object.assign(handler, {
+    mergeRequestContextTools: () => [],
+    runTurnLoop: async (...args: unknown[]) => { loopCalls.push(args) },
+  })
+  ;(handler as unknown as { config: Record<string, unknown> }).config.toolsGenerator = toolsGenerator
+
+  const result = await handler.handle(createContext(), askQuestionCompletion(), prompt, state, [], undefined)
+
+  assert.deepEqual(result, { computed: true })
+  assert.deepEqual(appended, ["call-1"])
+  assert.equal(prompt.appended.length, 2)
+  assert.equal(loopCalls.length, 1)
+  assert.equal(loopCalls[0]?.[3], turn)
+  assert.equal(loopCalls[0]?.[4], toolsGenerator)
 })
 
 // ---------------------------------------------------------------------------------------------

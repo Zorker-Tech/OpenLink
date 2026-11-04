@@ -19,7 +19,6 @@ import * as iconv from "iconv-lite";
 
 import type { Context } from "../context/context.ts";
 import { createLogger } from "../context/logging.ts";
-import { ReadError, ReadFileNotFound, ReadInvalidFile, ReadPermissionDenied, ReadResult, ReadSuccess } from "../proto/generated/agent/v1/read_exec_pb.ts";
 import { isAgentToolOutputFile, isTerminalFilePath } from "../utils/managed-paths.ts";
 import { resizeImageBufferIfNeeded } from "../utils/image-resize.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -60,6 +59,21 @@ export interface LocalReadArgs {
   readonly limit?: number;
   readonly encodingHint?: string;
 }
+
+export type LocalReadOutcome =
+  | {
+      readonly kind: "success";
+      readonly path: string;
+      readonly output: { readonly kind: "text"; readonly text: string } | { readonly kind: "data"; readonly bytes: Uint8Array };
+      readonly totalLines: number;
+      readonly fileSize: number;
+      readonly truncated: boolean;
+      readonly rangeApplied: boolean;
+    }
+  | { readonly kind: "invalid_file"; readonly path: string; readonly reason: string }
+  | { readonly kind: "permission_denied"; readonly path: string }
+  | { readonly kind: "not_found"; readonly path: string }
+  | { readonly kind: "error"; readonly path: string; readonly error: string }
 
 /** What the executor may be built with: the MCP state to refresh and the switch for the streaming reader. */
 export interface LocalReadOptions {
@@ -178,20 +192,28 @@ function looksLikeKnownBinaryFormat(buffer: Buffer): boolean {
 }
 
 /** The answer for a file whose bytes name a format the model cannot read: refused, with the format named. */
-function binaryRejection(path: string): ReadResult {
+function binaryRejection(path: string): LocalReadOutcome {
   const extension = extname(path).toLowerCase();
   const reason = extension === "" ? "Binary files without an extension are not supported by the read executor" : `Binary files of type ${extension} are not supported by the read executor`;
-  return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path, reason }) } });
+  return { kind: "invalid_file", path, reason };
 }
 
 /** The answer for a file that exists but is not a file: a directory, or neither. */
-function notAFile(path: string, reason: string): ReadResult {
-  return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path, reason }) } });
+function notAFile(path: string, reason: string): LocalReadOutcome {
+  return { kind: "invalid_file", path, reason };
 }
 
 /** The answer for a file that was read: content or data, with the file's size and how much of it was kept. */
-function readSuccess(path: string, fileSize: number, output: { case: "content"; value: string } | { case: "data"; value: Uint8Array }, totalLines: number, truncated: boolean, rangeApplied: boolean): ReadResult {
-  return new ReadResult({ result: { case: "success", value: new ReadSuccess({ path, output, totalLines, fileSize: BigInt(fileSize), truncated, rangeApplied }) } });
+function readSuccess(path: string, fileSize: number, output: { case: "content"; value: string } | { case: "data"; value: Uint8Array }, totalLines: number, truncated: boolean, rangeApplied: boolean): LocalReadOutcome {
+  return {
+    kind: "success",
+    path,
+    output: output.case === "content" ? { kind: "text", text: output.value } : { kind: "data", bytes: output.value },
+    totalLines,
+    fileSize,
+    truncated,
+    rangeApplied,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -479,10 +501,10 @@ export class LocalReadExecutor {
   }
 
   /** Read one file, and answer with the content, the data or the reason it cannot be read. */
-  async execute(ctx: Context, args: LocalReadArgs): Promise<ReadResult> {
+  async execute(ctx: Context, args: LocalReadArgs): Promise<LocalReadOutcome> {
     const path = resolvePath(args.path, this.workspacePath);
     const blocked = await bounded(ctx, "permissionsService.shouldBlockRead", 3_000, () => this.permissionsService.shouldBlockRead(path));
-    if (blocked) return new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path }) } });
+    if (blocked) return { kind: "permission_denied", path };
     if (this.mcpStateAccessor !== undefined) scheduleDiskMcpDiscoveryFreshnessOnMcpsPathAccess(ctx, this.mcpStateAccessor, path);
     try {
       const stats = await bounded(ctx, "stat", 3_000, () => stat(path));
@@ -507,19 +529,19 @@ export class LocalReadExecutor {
   }
 
   /** An image is handed back as data, resized when the model cannot take it whole. */
-  private async readImage(ctx: Context, path: string, size: number): Promise<ReadResult> {
+  private async readImage(ctx: Context, path: string, size: number): Promise<LocalReadOutcome> {
     const image = await bounded(ctx, "resizeImageIfNeeded", 3_000, async () => resizeImageBufferIfNeeded(await readFile(path)));
     return readSuccess(path, size, { case: "data", value: image.data }, 0, false, false);
   }
 
   /** A PDF or a video is handed back as its bytes: the model decides what to do with it. */
-  private async readData(ctx: Context, path: string, size: number, step: string): Promise<ReadResult> {
+  private async readData(ctx: Context, path: string, size: number, step: string): Promise<LocalReadOutcome> {
     const data = await bounded(ctx, step, 3_000, () => readFile(path));
     return readSuccess(path, size, { case: "data", value: data }, 0, false, false);
   }
 
   /** A text file read whole, with its range applied and the text budget enforced. */
-  private async readTextFile(ctx: Context, path: string, size: number, args: LocalReadArgs): Promise<ReadResult> {
+  private async readTextFile(ctx: Context, path: string, size: number, args: LocalReadArgs): Promise<LocalReadOutcome> {
     const full = await bounded(ctx, "readText", 3_000, () => readText(path, args.encodingHint));
     const totalLines = await bounded(ctx, "countLines", 3_000, () => countLines(full));
     const ranged = applyRange(full, totalLines, args);
@@ -528,7 +550,7 @@ export class LocalReadExecutor {
   }
 
   /** A terminal or agent-tool record file: decoded as records, with the agent-tool bytes checked for binary formats. */
-  private async readRecordsFile(ctx: Context, path: string, size: number, args: LocalReadArgs, checkBinary: boolean): Promise<ReadResult> {
+  private async readRecordsFile(ctx: Context, path: string, size: number, args: LocalReadArgs, checkBinary: boolean): Promise<LocalReadOutcome> {
     const raw = await bounded(ctx, "readTerminalFile", 3_000, () => readFile(path));
     if (checkBinary && looksLikeKnownBinaryFormat(raw)) return binaryRejection(path);
     const decoded = decodeTerminalFile(raw).replaceAll("\r\n", "\n");
@@ -540,9 +562,9 @@ export class LocalReadExecutor {
 }
 
 /** The answer for a read that failed: the failures a reader can expect, and one honest error for the rest. */
-function readFailure(path: string, error: unknown): ReadResult {
+function readFailure(path: string, error: unknown): LocalReadOutcome {
   const code = (error as NodeJS.ErrnoException).code;
-  if (code === "ENOENT") return new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({ path }) } });
-  if (code === "EACCES" || code === "EPERM") return new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path }) } });
-  return new ReadResult({ result: { case: "error", value: new ReadError({ path, error: error instanceof Error ? error.message : "Unknown error occurred" }) } });
+  if (code === "ENOENT") return { kind: "not_found", path };
+  if (code === "EACCES" || code === "EPERM") return { kind: "permission_denied", path };
+  return { kind: "error", path, error: error instanceof Error ? error.message : "Unknown error occurred" };
 }

@@ -7,12 +7,12 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { lsExecutorResource } from "../../source/packages/agent-exec/ls.ts"
-import { subagentExecutorResource } from "../../source/packages/agent-exec/subagent.ts"
+import { subagentExecutorResource } from "../../source/adapters/interop/agent/subagent-exec-adapter.ts"
 import { subagentAwaitExecutorResource } from "../../source/packages/agent-exec/subagent-await.ts"
-import { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
-import { LsResult, LsSuccess } from "../../source/packages/proto/generated/agent/v1/ls_exec_pb.ts"
-import { SubagentAwaitComplete, SubagentAwaitResult, SubagentAwaitStillRunning } from "../../source/packages/proto/generated/agent/v1/subagent_exec_pb.ts"
-import { AwaitResult } from "../../source/packages/proto/generated/agent/v1/await_tool_pb.ts"
+import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import { LsResult, LsSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
+import { SubagentAwaitComplete, SubagentAwaitResult, SubagentAwaitStillRunning } from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
+import { AwaitResult } from "../../source/adapters/interop/proto/generated/agent/v1/await_tool_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -438,6 +438,27 @@ test("a result is rendered for the model, whatever shape it has", async () => {
   const error = new AwaitResult({ result: { case: "error", value: { error: "the read failed" } } as never })
   assert.equal(await renderOf(tool, error), "Error awaiting task: the read failed")
   assert.equal(await renderOf(tool, new AwaitResult()), "Unknown error")
+})
+
+test("rendering a wire result preserves 64-bit durations and output lengths", async () => {
+  const tool = harness().build()
+  const runtimeMs = 9_007_199_254_740_993_123n
+  const outputLength = 9_007_199_254_740_993_125n
+  const result = new AwaitResult({
+    result: {
+      case: "success",
+      value: {
+        awaitResult: {
+          case: "complete",
+          value: { taskId: "large", runtimeMs, outputFilePath: "/tmp/large.txt", outputLength },
+        },
+      },
+    } as never,
+  })
+  assert.equal(
+    await renderOf(tool, result),
+    `Task completed in ${runtimeMs}ms with exit code: unknown.\noutput_file_path: /tmp/large.txt\noutput_length: ${outputLength}`,
+  )
 })
 
 test("a failure is serialized into the call's own error result", () => {

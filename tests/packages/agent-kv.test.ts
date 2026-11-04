@@ -5,14 +5,16 @@ import { createContext } from "../../source/packages/context/context.ts"
 import type { Context } from "../../source/packages/context/context.ts"
 import { getBlobId, InMemoryBlobStore, isBlobDurable, toUint8Array } from "../../source/packages/agent-kv/blob-store.ts"
 import { BlobNotFoundError, findBlobNotFoundError } from "../../source/packages/agent-kv/blob-not-found-error.ts"
-import { fromHex, ProtoSerde, toHex, utf8Serde } from "../../source/packages/agent-kv/serde.ts"
+import { fromHex, toHex, utf8Serde, type Serde } from "../../source/packages/agent-kv/serde.ts"
+import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
+import { createProtobufAgentConversationCodec } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import {
-  getBlobMetadataCallback,
-  setBlobReadableFromCloudMirror,
-  TypedBlobStore,
-  unwrapBlobStore,
+  metadataObserverForStore,
+  ensureBlobVisibleToCloudMirror,
+  ObservedBlobStore,
+  underlyingBlobStore,
 } from "../../source/packages/agent-kv/typed-blob-store.ts"
-import { EagerReference, LazyReference } from "../../source/packages/agent-kv/references.ts"
+import { EagerReference, LazyReference, Writeable } from "../../source/packages/agent-kv/references.ts"
 import {
   AgentConversationStore,
   AgentMetadataSerde,
@@ -26,14 +28,15 @@ import { resolveSubagentPersistedStates } from "../../source/packages/agent-kv/s
 import {
   AgentConversationTurn,
   AgentConversationTurnStructure,
+  ConversationTokenDetails,
   ConversationStateStructure,
   ConversationStep,
   ConversationSummary,
   ConversationTurnStructure,
   SubagentPersistedState,
   UserMessage,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { TodoItem } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 
 const ctx = createContext()
 
@@ -61,7 +64,7 @@ test("serdes turn values into blobs and back", () => {
   assert.equal(utf8Serde.deserialize(utf8Serde.serialize("hello")), "hello")
   assert.deepEqual(utf8Serde.getBlobType(), { kind: "string" })
 
-  const todoSerde = new ProtoSerde(TodoItem)
+  const todoSerde = new ProtobufBlobSerde(TodoItem)
   const todo = new TodoItem({ id: "1", content: "do it", status: 1 })
   assert.deepEqual(todoSerde.deserialize(todoSerde.serialize(todo)).toJson(), todo.toJson())
   assert.deepEqual(todoSerde.getBlobType(), { kind: "proto", typeName: "agent.v1.TodoItem" })
@@ -86,6 +89,25 @@ test("a blob id is the hash of the bytes", async () => {
   assert.equal(view.buffer, source.buffer, "an ordinary buffer is viewed, not copied")
 })
 
+test("a shared byte view is copied before it leaves the current thread", () => {
+  if (typeof SharedArrayBuffer === "undefined") return
+  const shared = new Uint8Array(new SharedArrayBuffer(3))
+  shared.set([1, 2, 3])
+
+  const local = toUint8Array(shared)
+  assert.notEqual(local.buffer, shared.buffer)
+  shared[0] = 9
+  assert.deepEqual([...local], [1, 2, 3])
+})
+
+test("a blob id is based on a snapshot of the caller's bytes", async () => {
+  const source = new Uint8Array([4, 5, 6])
+  const pendingId = getBlobId(source)
+  source.fill(0)
+
+  assert.deepEqual(await pendingId, await getBlobId(new Uint8Array([4, 5, 6])))
+})
+
 test("the in-memory store keeps blobs and reports durability", async () => {
   const store = new InMemoryBlobStore()
   const id = await getBlobId(new Uint8Array([9]))
@@ -99,29 +121,36 @@ test("the in-memory store keeps blobs and reports durability", async () => {
 })
 
 test("a missing blob produces one error that survives being wrapped", () => {
-  const error = new BlobNotFoundError(["a".repeat(64)])
-  assert.match(error.message, /data is missing and can't be restored/)
+  const missingId = "a".repeat(64)
+  const error = new BlobNotFoundError([missingId])
+  assert.match(error.message, /required data is absent/)
   assert.match(error.message, /missing blob aaaaaaaaaaaa/)
   assert.equal(error.isUsageError, true)
-  assert.deepEqual(error.blobIdHexes, ["a".repeat(64)])
+  assert.deepEqual(error.blobIdHexes, [missingId])
 
   const many = new BlobNotFoundError(["1".repeat(64), "2".repeat(64), "3".repeat(64), "4".repeat(64)])
-  assert.match(many.message, /4 missing blobs: 111111111111, 222222222222, 333333333333, …/)
+  assert.match(many.message, /4 blobs missing: 111111111111, 222222222222, 333333333333, …/)
 
   const wrapped = new Error("outer", { cause: new Error("inner", { cause: error }) })
   assert.equal(findBlobNotFoundError(wrapped), error)
   assert.equal(findBlobNotFoundError(new Error("unrelated")), undefined)
   assert.equal(findBlobNotFoundError(undefined), undefined)
+
+  const marked = Object.assign(new Error("compatibility marker"), { isBlobNotFound: true })
+  assert.equal(findBlobNotFoundError(marked), marked)
+  const named = new Error("legacy name")
+  named.name = "BlobNotFoundError"
+  assert.equal(findBlobNotFoundError(new Error("wrapper", { cause: named })), named)
 })
 
 test("a typed blob store carries its metadata callback and unwraps", async () => {
   const inner = new InMemoryBlobStore()
   const seen: unknown[] = []
-  const typed = new TypedBlobStore(inner, metadata => seen.push(metadata))
-  assert.equal(getBlobMetadataCallback(inner), undefined)
-  assert.equal(typeof getBlobMetadataCallback(typed), "function")
-  assert.equal(unwrapBlobStore(typed), inner)
-  assert.equal(unwrapBlobStore(new TypedBlobStore(typed)), inner, "unwrapping goes all the way down")
+  const typed = new ObservedBlobStore(inner, metadata => seen.push(metadata))
+  assert.equal(metadataObserverForStore(inner), undefined)
+  assert.equal(typeof metadataObserverForStore(typed), "function")
+  assert.equal(underlyingBlobStore(typed), inner)
+  assert.equal(underlyingBlobStore(new ObservedBlobStore(typed)), inner, "unwrapping goes all the way down")
 
   const id = await getBlobId(new Uint8Array([7]))
   await typed.setBlob(ctx, id, new Uint8Array([7]))
@@ -138,11 +167,11 @@ test("writing for the cloud mirror defers replication when the store can", async
     },
   })
   const id = await getBlobId(new Uint8Array([5]))
-  await setBlobReadableFromCloudMirror({ blobStore: new TypedBlobStore(writethrough), ctx, blobId: id, blobData: new Uint8Array([5]) })
+  await ensureBlobVisibleToCloudMirror({ blobStore: new ObservedBlobStore(writethrough), ctx, blobId: id, blobData: new Uint8Array([5]) })
   assert.deepEqual(writes, [`secondary:${toHex(id)}`], "a store that can defer does not write eagerly")
 
   const plain = new InMemoryBlobStore()
-  await setBlobReadableFromCloudMirror({ blobStore: plain, ctx, blobId: id, blobData: new Uint8Array([5]) })
+  await ensureBlobVisibleToCloudMirror({ blobStore: plain, ctx, blobId: id, blobData: new Uint8Array([5]) })
   assert.deepEqual(await plain.getBlob(ctx, id), new Uint8Array([5]))
 })
 
@@ -186,6 +215,71 @@ test("reading a lazy reference whose blob is gone reports the missing data", asy
   await assert.rejects(reference.get(ctx), BlobNotFoundError)
 })
 
+test("eager and lazy references restore cached bytes when storage loses durability", async () => {
+  function durabilityAwareStore() {
+    const inner = new InMemoryBlobStore()
+    const notDurable = new Set<string>()
+    return {
+      getBlob: (context: Context, id: Uint8Array) => inner.getBlob(context, id),
+      setBlob: async (context: Context, id: Uint8Array, bytes: Uint8Array) => {
+        notDurable.delete(toHex(id))
+        await inner.setBlob(context, id, bytes)
+      },
+      setBlobLocallyOnly: async (context: Context, id: Uint8Array, bytes: Uint8Array) => {
+        notDurable.add(toHex(id))
+        await inner.setBlob(context, id, bytes)
+      },
+      flush: (context: Context) => inner.flush(context),
+      isBlobDurable: (id: Uint8Array) => !notDurable.has(toHex(id)),
+    }
+  }
+
+  const eagerStore = durabilityAwareStore()
+  const eager = new EagerReference(utf8Serde, eagerStore, "cached")
+  const eagerId = await eager.writeToBlobStore(ctx)
+  await eagerStore.setBlobLocallyOnly(ctx, eagerId, new Uint8Array([0]))
+  assert.equal(isBlobDurable(eagerStore, eagerId), false)
+  await eager.writeToBlobStore(ctx)
+  assert.deepEqual(await eagerStore.getBlob(ctx, eagerId), utf8Serde.serialize("cached"))
+  assert.equal(isBlobDurable(eagerStore, eagerId), true)
+
+  const lazyStore = durabilityAwareStore()
+  const lazyId = await getBlobId(utf8Serde.serialize("cached"))
+  await lazyStore.setBlob(ctx, lazyId, utf8Serde.serialize("cached"))
+  const lazy = new LazyReference(utf8Serde, lazyStore, lazyId)
+  assert.equal(await lazy.get(ctx), "cached")
+  await lazyStore.setBlobLocallyOnly(ctx, lazyId, new Uint8Array([0]))
+  assert.equal(isBlobDurable(lazyStore, lazyId), false)
+  await lazy.writeToBlobStore(ctx)
+  assert.deepEqual(await lazyStore.getBlob(ctx, lazyId), utf8Serde.serialize("cached"))
+  assert.equal(isBlobDurable(lazyStore, lazyId), true)
+})
+
+test("references delegate serialization to values that own their blob writing", async () => {
+  const calls: Context[] = []
+  const delegatedId = new Uint8Array([9, 8, 7])
+  class DelegatedValue extends Writeable<Context> {
+    async writeToBlobStore(context: Context): Promise<Uint8Array> {
+      calls.push(context)
+      return delegatedId
+    }
+  }
+  const serde: Serde<DelegatedValue> = {
+    serialize: () => { throw new Error("the reference must delegate") },
+    deserialize: () => new DelegatedValue(),
+    getBlobType: () => ({ kind: "string" }),
+  }
+  const store = new InMemoryBlobStore()
+
+  const eager = new EagerReference(serde, store, new DelegatedValue())
+  assert.equal(await eager.writeToBlobStore(ctx), delegatedId)
+  const sourceId = await getBlobId(new Uint8Array([1]))
+  const lazy = new LazyReference(serde, store, sourceId)
+  lazy.set(new DelegatedValue())
+  assert.equal(await lazy.writeToBlobStore(ctx), delegatedId)
+  assert.deepEqual(calls, [ctx, ctx])
+})
+
 test("agent metadata survives a round trip and forgives what it does not recognize", () => {
   const defaults = getDefaultAgentMetadata("agent-1")
   assert.equal(defaults.agentId, "agent-1")
@@ -225,7 +319,7 @@ test("agent metadata survives a round trip and forgives what it does not recogni
 test("checkpointing writes the structure and reloading finds it again", async () => {
   const store = new InMemoryBlobStore()
   const metadata = metadataStore(getDefaultAgentMetadata("agent-1"))
-  const conversation = new AgentConversationStore(store, metadata)
+  const conversation = new AgentConversationStore(store, metadata, { codec: createProtobufAgentConversationCodec<unknown>() })
 
   assert.equal(await conversation.tryResetFromDb(ctx), false, "a fresh agent has nothing to load")
   assert.deepEqual(conversation.getConversationStateStructure().turns, [])
@@ -246,22 +340,189 @@ test("checkpointing writes the structure and reloading finds it again", async ()
 
   const structure = new ConversationStateStructure({ turns: [turnId] })
   await conversation.handleCheckpoint(ctx, structure)
-  assert.equal(toHex(conversation.getMetadata("latestRootBlobId")), toHex(await getBlobId(structure.toBinary())))
+  const persistedRoot = await store.getBlob(ctx, conversation.getMetadata("latestRootBlobId"))
+  assert.ok(persistedRoot)
+  assert.equal(toHex(conversation.getMetadata("latestRootBlobId")), toHex(await getBlobId(persistedRoot)))
   assert.equal(await conversation.getLastRequestIdFromConversation(ctx), "req-1")
 
   const full = await conversation.getFullConversation(ctx)
   assert.equal(full.turns.length, 1)
   assert.equal(full.turns[0]?.turn.case, "agentConversationTurn")
 
-  const reloaded = new AgentConversationStore(store, metadata)
+  const reloaded = new AgentConversationStore(store, metadata, { codec: createProtobufAgentConversationCodec<unknown>() })
   assert.equal(await reloaded.tryResetFromDb(ctx), true)
   assert.equal(reloaded.getConversationStateStructure().turns.length, 1)
   assert.equal(toHex(reloaded.getLatestCheckpoint().turns[0] as Uint8Array), toHex(turnId))
 })
 
+test("checkpoint roots use Slate's versioned envelope and preserve the complete runtime snapshot", async () => {
+  const blobStore = new InMemoryBlobStore()
+  const metadata = metadataStore(getDefaultAgentMetadata("agent-versioned"))
+  const conversation = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  const checkpoint = new ConversationStateStructure({
+    rootPromptMessagesJson: [new Uint8Array([1, 2])],
+    todos: [new Uint8Array([3, 4])],
+    pendingToolCalls: ["call-1"],
+    tokenDetails: { usedTokens: 12, maxTokens: 100 },
+    summary: new Uint8Array([5]),
+    plan: new Uint8Array([6]),
+    turns: [new Uint8Array([7, 8])],
+    previousWorkspaceUris: ["file:///workspace"],
+    summaryArchive: new Uint8Array([9]),
+    fileStates: { "src/main.ts": new Uint8Array([10]) },
+    summaryArchives: [new Uint8Array([11])],
+    selfSummaryCount: 2,
+    readPaths: ["src/main.ts"],
+    activeBranchName: "main",
+    agentType: "assistant",
+    subagentThreads: { "tool-1": "thread-1" },
+    communicateUpdateFinalSummary: "completed",
+    conversationStartedTimestampMs: 123n,
+    conversationStartedTimeZone: "Asia/Shanghai",
+    communicateUpdateCompletedSubtitle: "done",
+    subagentStateRefs: { "child-1": new Uint8Array([12]) },
+    isRootProjectConversation: true,
+    completedAskQuestionToolCallIds: ["question-1"],
+  })
+
+  await conversation.handleCheckpoint(ctx, checkpoint)
+  const rootBlobId = conversation.getMetadata("latestRootBlobId")
+  const rootBytes = await blobStore.getBlob(ctx, rootBlobId)
+  assert.ok(rootBytes)
+  const rootText = new TextDecoder().decode(rootBytes)
+  const header = "SLATE-AGENT-CHECKPOINT\n"
+  assert.ok(rootText.startsWith(header), "new roots use Slate's checkpoint envelope")
+  const envelope = JSON.parse(rootText.slice(header.length)) as {
+    format: string
+    version: number
+    conversation: unknown
+    interopSnapshot: unknown
+  }
+  assert.equal(envelope.format, "slate.agent-conversation-checkpoint")
+  assert.equal(envelope.version, 1)
+  assert.deepEqual(envelope.conversation, {
+    turnBlobIds: ["0708"],
+    todoBlobIds: ["0304"],
+    summaryBlobId: "05",
+    summaryArchiveBlobId: "09",
+    summaryArchiveBlobIds: ["0b"],
+  })
+  const interopSnapshot = { ...(checkpoint.toJson() as Record<string, unknown>) }
+  delete interopSnapshot.turns
+  delete interopSnapshot.todos
+  delete interopSnapshot.summary
+  delete interopSnapshot.summaryArchive
+  delete interopSnapshot.summaryArchives
+  assert.deepEqual(envelope.interopSnapshot, interopSnapshot)
+  assert.deepEqual(await getBlobId(rootBytes), rootBlobId)
+
+  const reloaded = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  assert.equal(await reloaded.tryResetFromDb(ctx), true)
+  assert.deepEqual(reloaded.getConversationStateStructure().toJson(), checkpoint.toJson())
+})
+
+test("legacy protobuf checkpoint roots load and migrate on the next write", async () => {
+  const blobStore = new InMemoryBlobStore()
+  const legacyCheckpoint = new ConversationStateStructure({
+    turns: [new Uint8Array([1, 2, 3])],
+    todos: [new Uint8Array([4, 5])],
+    summaryArchives: [new Uint8Array([6])],
+    activeBranchName: "legacy-branch",
+    conversationStartedTimestampMs: 456n,
+  })
+  const legacyBytes = legacyCheckpoint.toBinary()
+  const legacyBlobId = await getBlobId(legacyBytes)
+  const initialMetadata = getDefaultAgentMetadata("agent-legacy")
+  initialMetadata.latestRootBlobId = legacyBlobId
+  const metadata = metadataStore(initialMetadata)
+  await blobStore.setBlob(ctx, legacyBlobId, legacyBytes)
+
+  const conversation = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  assert.equal(await conversation.tryResetFromDb(ctx), true, "legacy protobuf roots stay readable")
+  assert.deepEqual(conversation.getConversationStateStructure().toJson(), legacyCheckpoint.toJson())
+
+  await conversation.handleCheckpoint(ctx, conversation.getConversationStateStructure())
+  const migratedBytes = await blobStore.getBlob(ctx, conversation.getMetadata("latestRootBlobId"))
+  assert.ok(migratedBytes)
+  assert.ok(new TextDecoder().decode(migratedBytes).startsWith("SLATE-AGENT-CHECKPOINT\n"))
+})
+
+test("unknown root and nested protobuf fields survive a Slate checkpoint write", async () => {
+  function appendUnknownVarint(bytes: Uint8Array): Uint8Array {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+
+  const tokenDetails = ConversationTokenDetails.fromBinary(
+    appendUnknownVarint(new ConversationTokenDetails({ usedTokens: 12, maxTokens: 100 }).toBinary()),
+  )
+  const checkpoint = ConversationStateStructure.fromBinary(
+    appendUnknownVarint(new ConversationStateStructure({
+      turns: [new Uint8Array([1, 2, 3])],
+      tokenDetails,
+    }).toBinary()),
+  )
+  const rootUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(checkpoint)
+  const nestedUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(checkpoint.tokenDetails!)
+  assert.equal(rootUnknownFields.length, 1)
+  assert.equal(nestedUnknownFields.length, 1)
+
+  const blobStore = new InMemoryBlobStore()
+  const metadata = metadataStore(getDefaultAgentMetadata("agent-unknown-fields"))
+  const conversation = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  await conversation.handleCheckpoint(ctx, checkpoint)
+
+  const reloaded = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  assert.equal(await reloaded.tryResetFromDb(ctx), true)
+  const restored = reloaded.getConversationStateStructure()
+  assert.deepEqual(restored.toJson(), checkpoint.toJson())
+  assert.deepEqual(
+    ConversationStateStructure.runtime.bin.listUnknownFields(restored),
+    rootUnknownFields,
+  )
+  assert.deepEqual(
+    ConversationStateStructure.runtime.bin.listUnknownFields(restored.tokenDetails!),
+    nestedUnknownFields,
+  )
+})
+
+test("an unsupported Slate checkpoint version is not decoded as an empty legacy root", async () => {
+  const blobStore = new InMemoryBlobStore()
+  const bytes = new TextEncoder().encode("SLATE-AGENT-CHECKPOINT\n" + JSON.stringify({
+    format: "slate.agent-conversation-checkpoint",
+    version: 2,
+    conversation: {},
+    interopSnapshot: {},
+  }))
+  const rootBlobId = await getBlobId(bytes)
+  const initialMetadata = getDefaultAgentMetadata("agent-future-version")
+  initialMetadata.latestRootBlobId = rootBlobId
+  const metadata = metadataStore(initialMetadata)
+  await blobStore.setBlob(ctx, rootBlobId, bytes)
+
+  const conversation = new AgentConversationStore(blobStore, metadata, {
+    codec: createProtobufAgentConversationCodec<unknown>(),
+  })
+  assert.equal(await conversation.tryResetFromDb(ctx), false)
+  assert.deepEqual(conversation.getConversationStateStructure().turns, [])
+  assert.deepEqual(conversation.getMetadata("latestRootBlobId"), rootBlobId, "failed decoding does not rewrite the stored root")
+})
+
 test("a conversation with no readable turns still returns what it has", async () => {
   const store = new InMemoryBlobStore()
-  const conversation = new AgentConversationStore(store, metadataStore(getDefaultAgentMetadata()))
+  const conversation = new AgentConversationStore(store, metadataStore(getDefaultAgentMetadata()), { codec: createProtobufAgentConversationCodec<unknown>() })
   const missingTurnId = await getBlobId(new Uint8Array([42]))
   const full = await conversation.deserializeConversationStateStructure(
     ctx,
@@ -280,19 +541,19 @@ test("subagent states resolve from inline entries and blobs, and a lost one is f
   const resolved = await resolveSubagentPersistedStates(ctx, new ConversationStateStructure({
     subagentStates: { "sub-inline": inline },
     subagentStateRefs: { "sub-blob": blobId },
-  }), store)
+  }), store, bytes => SubagentPersistedState.fromBinary(bytes))
   assert.equal(Object.keys(resolved).length, 2)
   assert.equal(resolved["sub-blob"]?.createdTimestampMs, 2n)
 
   const lostId = await getBlobId(new Uint8Array([77]))
   await assert.rejects(
-    resolveSubagentPersistedStates(ctx, new ConversationStateStructure({ subagentStateRefs: { "sub-lost": lostId } }), store),
+    resolveSubagentPersistedStates(ctx, new ConversationStateStructure({ subagentStateRefs: { "sub-lost": lostId } }), store, bytes => SubagentPersistedState.fromBinary(bytes)),
     BlobNotFoundError,
   )
 
   const withFallback = await resolveSubagentPersistedStates(ctx, new ConversationStateStructure({
     subagentStates: { "sub-both": inline },
     subagentStateRefs: { "sub-both": lostId },
-  }), store)
+  }), store, bytes => SubagentPersistedState.fromBinary(bytes))
   assert.equal(withFallback["sub-both"]?.createdTimestampMs, 1n, "the inline copy is used when the blob is gone")
 })

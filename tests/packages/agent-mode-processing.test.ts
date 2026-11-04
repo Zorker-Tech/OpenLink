@@ -10,8 +10,9 @@ import {
   resolveCurrentTurnMode,
   type ModeProcessingConfig,
   type ModeProcessingRequestContext,
+  SlateMode,
+  type SlateMode as SlateModeValue,
 } from "../../source/packages/agent/mode-processing.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import { WORKTREE_NOTE } from "../../source/packages/agent/prompts/worktree-note.ts"
 
@@ -20,18 +21,18 @@ import { WORKTREE_NOTE } from "../../source/packages/agent/prompts/worktree-note
 // ---------------------------------------------------------------------------------------------
 
 test("the mode the user asked for this turn wins over the one the conversation is in", () => {
-  assert.equal(resolveCurrentTurnMode(AgentMode.PLAN, AgentMode.AGENT), AgentMode.AGENT)
-  assert.equal(resolveCurrentTurnMode(AgentMode.PLAN, undefined), AgentMode.PLAN)
-  assert.equal(resolveCurrentTurnMode(AgentMode.PLAN, AgentMode.UNSPECIFIED), AgentMode.PLAN)
-  assert.equal(resolveCurrentTurnMode(undefined, undefined), AgentMode.AGENT)
-  assert.equal(resolveCurrentTurnMode(AgentMode.UNSPECIFIED, AgentMode.UNSPECIFIED), AgentMode.AGENT)
+  assert.equal(resolveCurrentTurnMode(SlateMode.PLAN, SlateMode.AGENT), SlateMode.AGENT)
+  assert.equal(resolveCurrentTurnMode(SlateMode.PLAN, undefined), SlateMode.PLAN)
+  assert.equal(resolveCurrentTurnMode(SlateMode.PLAN, SlateMode.UNSPECIFIED), SlateMode.PLAN)
+  assert.equal(resolveCurrentTurnMode(undefined, undefined), SlateMode.AGENT)
+  assert.equal(resolveCurrentTurnMode(SlateMode.UNSPECIFIED, SlateMode.UNSPECIFIED), SlateMode.AGENT)
 })
 
 test("a step keeps the mode it was started in", () => {
-  assert.equal(resolveCurrentStepMode(AgentMode.PLAN, AgentMode.AGENT), AgentMode.PLAN)
-  assert.equal(resolveCurrentStepMode(undefined, AgentMode.ASK), AgentMode.ASK)
-  assert.equal(resolveCurrentStepMode(AgentMode.UNSPECIFIED, AgentMode.ASK), AgentMode.ASK)
-  assert.equal(resolveCurrentStepMode(undefined, undefined), AgentMode.AGENT)
+  assert.equal(resolveCurrentStepMode(SlateMode.PLAN, SlateMode.AGENT), SlateMode.PLAN)
+  assert.equal(resolveCurrentStepMode(undefined, SlateMode.CHAT), SlateMode.CHAT)
+  assert.equal(resolveCurrentStepMode(SlateMode.UNSPECIFIED, SlateMode.CHAT), SlateMode.CHAT)
+  assert.equal(resolveCurrentStepMode(undefined, undefined), SlateMode.AGENT)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -39,11 +40,11 @@ test("a step keeps the mode it was started in", () => {
 // ---------------------------------------------------------------------------------------------
 
 interface Calls {
-  readonly plan: Array<AgentMode | undefined>
-  readonly ask: Array<{ prevTurnMode: AgentMode | undefined; requestContext: ModeProcessingRequestContext }>
+  readonly plan: Array<SlateModeValue | undefined>
+  readonly ask: Array<{ prevTurnMode: SlateModeValue | undefined; requestContext: ModeProcessingRequestContext }>
   readonly debug: Array<{ config: unknown; entering: boolean }>
-  readonly triage: Array<AgentMode | undefined>
-  readonly project: Array<AgentMode | undefined>
+  readonly triage: Array<SlateModeValue | undefined>
+  readonly project: Array<SlateModeValue | undefined>
 }
 
 function configWith(calls: Calls, overrides: Partial<ModeProcessingConfig> = {}): ModeProcessingConfig {
@@ -61,8 +62,8 @@ const emptyCalls = (): Calls => ({ plan: [], ask: [], debug: [], triage: [], pro
 
 test("agent mode needs nothing said about it", () => {
   const calls = emptyCalls()
-  assert.equal(processModeSystemReminder(AgentMode.AGENT, configWith(calls), {}), "")
-  assert.equal(processModeSystemReminder(AgentMode.UNSPECIFIED, configWith(calls), {}), "")
+  assert.equal(processModeSystemReminder(SlateMode.AGENT, configWith(calls), {}), "")
+  assert.equal(processModeSystemReminder(SlateMode.UNSPECIFIED, configWith(calls), {}), "")
   assert.deepEqual(calls, emptyCalls())
 })
 
@@ -70,29 +71,29 @@ test("each mode's reminder comes from its own generator, with what that generato
   const calls = emptyCalls()
   const config = configWith(calls)
   // Each of these is a change of mode, so the mode's own reminder follows the statement of the switch.
-  const plan = processModeSystemReminder(AgentMode.PLAN, config, {}, AgentMode.AGENT)
+  const plan = processModeSystemReminder(SlateMode.PLAN, config, {}, SlateMode.AGENT)
   assert.match(plan, /PLAN REMINDER$/)
   assert.match(plan, /You are now in Plan mode\./)
 
-  const ask = processModeSystemReminder(AgentMode.ASK, config, { debugModeConfig: { level: 2 } }, AgentMode.PLAN)
+  const ask = processModeSystemReminder(SlateMode.CHAT, config, { debugModeConfig: { level: 2 } }, SlateMode.PLAN)
   assert.match(ask, /ASK REMINDER$/)
   assert.match(ask, /You are now in Ask mode\./)
 
-  assert.match(processModeSystemReminder(AgentMode.TRIAGE, config, {}, AgentMode.AGENT), /TRIAGE REMINDER$/)
-  assert.match(processModeSystemReminder(AgentMode.PROJECT, config, {}, AgentMode.AGENT), /PROJECT REMINDER$/)
+  assert.match(processModeSystemReminder(SlateMode.TRIAGE, config, {}, SlateMode.AGENT), /TRIAGE REMINDER$/)
+  assert.match(processModeSystemReminder(SlateMode.PROJECT, config, {}, SlateMode.AGENT), /PROJECT REMINDER$/)
 
-  assert.deepEqual(calls.plan, [AgentMode.AGENT])
-  assert.deepEqual(calls.ask, [{ prevTurnMode: AgentMode.PLAN, requestContext: { debugModeConfig: { level: 2 } } }])
-  assert.deepEqual(calls.triage, [AgentMode.AGENT])
-  assert.deepEqual(calls.project, [AgentMode.AGENT])
+  assert.deepEqual(calls.plan, [SlateMode.AGENT])
+  assert.deepEqual(calls.ask, [{ prevTurnMode: SlateMode.PLAN, requestContext: { debugModeConfig: { level: 2 } } }])
+  assert.deepEqual(calls.triage, [SlateMode.AGENT])
+  assert.deepEqual(calls.project, [SlateMode.AGENT])
 })
 
 test("debug mode says whether it is being entered for the first time", () => {
   const calls = emptyCalls()
   const config = configWith(calls)
-  processModeSystemReminder(AgentMode.DEBUG, config, { debugModeConfig: "the config" }, AgentMode.AGENT)
-  processModeSystemReminder(AgentMode.DEBUG, config, {}, AgentMode.DEBUG)
-  processModeSystemReminder(AgentMode.DEBUG, config, {}, undefined)
+  processModeSystemReminder(SlateMode.DEBUG, config, { debugModeConfig: "the config" }, SlateMode.AGENT)
+  processModeSystemReminder(SlateMode.DEBUG, config, {}, SlateMode.DEBUG)
+  processModeSystemReminder(SlateMode.DEBUG, config, {}, undefined)
   assert.deepEqual(calls.debug, [
     { config: "the config", entering: true },
     { config: undefined, entering: false },
@@ -103,18 +104,18 @@ test("debug mode says whether it is being entered for the first time", () => {
 test("a project mode with no generator of its own says nothing", () => {
   const calls = emptyCalls()
   const config = configWith(calls, { projectSystemReminderGenerator: undefined })
-  assert.equal(processModeSystemReminder(AgentMode.PROJECT, config, {}), "")
+  assert.equal(processModeSystemReminder(SlateMode.PROJECT, config, {}), "")
 })
 
 test("entering multitask mode names the tool that launches subagents", () => {
   const calls = emptyCalls()
-  const withModel = configWith(calls, { modelInfo: { promptVersion: "latest", isComposer1: true } })
-  const reminder = processModeSystemReminder(AgentMode.MULTITASK, withModel, {}, AgentMode.AGENT)
+  const withToolName = configWith(calls, { multitaskReminder: { subagentToolName: "delegate" } })
+  const reminder = processModeSystemReminder(SlateMode.MULTITASK, withToolName, {}, SlateMode.AGENT)
   assert.match(reminder, /^<system_reminder>\n/)
-  assert.match(reminder, /mcp_task/)
+  assert.match(reminder, /delegate tool/)
   assert.match(reminder, /\n<\/system_reminder>$/)
 
-  const withoutModel = processModeSystemReminder(AgentMode.MULTITASK, configWith(emptyCalls()), {}, AgentMode.AGENT)
+  const withoutModel = processModeSystemReminder(SlateMode.MULTITASK, configWith(emptyCalls()), {}, SlateMode.AGENT)
   assert.match(withoutModel, /Task/)
 })
 
@@ -122,45 +123,45 @@ test("a step inside a multitask turn is not told the mode's instructions again",
   const calls = emptyCalls()
   const config = configWith(calls)
   // Already in the mode, so nothing is said at all.
-  assert.equal(processModeSystemReminder(AgentMode.MULTITASK, config, {}, AgentMode.MULTITASK, { isUserTurn: false }), "")
+  assert.equal(processModeSystemReminder(SlateMode.MULTITASK, config, {}, SlateMode.MULTITASK, { isUserTurn: false }), "")
 
   // Entering it, the switch is still worth stating, but the delegation instructions are not repeated.
-  const entering = processModeSystemReminder(AgentMode.MULTITASK, config, {}, AgentMode.AGENT, { isUserTurn: false })
+  const entering = processModeSystemReminder(SlateMode.MULTITASK, config, {}, SlateMode.AGENT, { isUserTurn: false })
   assert.match(entering, /You are now in Multitask mode\./)
   assert.doesNotMatch(entering, /delegation_examples/)
 })
 
 test("staying in multitask mode has its own reminder", () => {
   const calls = emptyCalls()
-  const staying = processModeSystemReminder(AgentMode.MULTITASK, configWith(calls), {}, AgentMode.MULTITASK)
-  const entering = processModeSystemReminder(AgentMode.MULTITASK, configWith(calls), {}, AgentMode.AGENT)
+  const staying = processModeSystemReminder(SlateMode.MULTITASK, configWith(calls), {}, SlateMode.MULTITASK)
+  const entering = processModeSystemReminder(SlateMode.MULTITASK, configWith(calls), {}, SlateMode.AGENT)
   assert.notEqual(staying, entering)
-  assert.match(staying, /You are still in \*\*Multitask Mode\*\*\./)
+  assert.match(staying, /You remain in Slate multitask mode/)
   assert.doesNotMatch(staying, /You are now in Multitask mode\./)
-  assert.match(entering, /delegation_examples/)
+  assert.match(entering, /Choose one coherent worker task/)
 })
 
 test("leaving multitask mode is said before what the new mode requires", () => {
   const calls = emptyCalls()
-  const reminder = processModeSystemReminder(AgentMode.PLAN, configWith(calls), {}, AgentMode.MULTITASK)
-  assert.match(reminder, /do not continue with the aggressive multitasking strategy/)
+  const reminder = processModeSystemReminder(SlateMode.PLAN, configWith(calls), {}, SlateMode.MULTITASK)
+  assert.match(reminder, /The user turned off Slate multitask mode/)
   assert.match(reminder, /PLAN REMINDER/)
-  assert.equal(reminder.indexOf("multitasking strategy") < reminder.indexOf("PLAN REMINDER"), true)
+  assert.equal(reminder.indexOf("turned off Slate multitask mode") < reminder.indexOf("PLAN REMINDER"), true)
 })
 
 test("a mode that did not change is not described as a switch", () => {
   const calls = emptyCalls()
-  const reminder = processModeSystemReminder(AgentMode.PLAN, configWith(calls), {}, AgentMode.PLAN)
+  const reminder = processModeSystemReminder(SlateMode.PLAN, configWith(calls), {}, SlateMode.PLAN)
   assert.equal(reminder, "PLAN REMINDER")
 
   // And a first turn, with no previous mode at all, is not a switch either.
-  assert.equal(processModeSystemReminder(AgentMode.PLAN, configWith(calls), {}, undefined), "PLAN REMINDER")
+  assert.equal(processModeSystemReminder(SlateMode.PLAN, configWith(calls), {}, undefined), "PLAN REMINDER")
 })
 
 test("a mode switch says which mode the turn is now in, before what that mode requires", () => {
   const calls = emptyCalls()
   const config = configWith(calls, { switchModeToolConfig: { targetModes: ["agent", "plan"], fromModes: ["chat"] } })
-  const reminder = processModeSystemReminder(AgentMode.ASK, config, {}, AgentMode.AGENT)
+  const reminder = processModeSystemReminder(SlateMode.CHAT, config, {}, SlateMode.AGENT)
   assert.match(reminder, /You are now in Ask mode\. You have EXITED your previous mode\./)
   assert.match(reminder, /ASK REMINDER/)
   assert.equal(reminder.indexOf("You are now in Ask mode") < reminder.indexOf("ASK REMINDER"), true)
@@ -195,7 +196,7 @@ test("the anti-question reminder is only sent when the session is set up for it"
     "",
   )
   assert.equal(processAntiAskQuestionSystemReminder({ ...enabled, userInfoDisplayOptions: { disable: true } }), "")
-  assert.equal(processAntiAskQuestionSystemReminder({ ...enabled, userInfoDisplayOptions: { displayCursorRules: false } }), "")
+  assert.equal(processAntiAskQuestionSystemReminder({ ...enabled, userInfoDisplayOptions: { displayWorkspaceRules: false } }), "")
 })
 
 test("the reminder names the session's own question tool", () => {

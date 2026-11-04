@@ -8,7 +8,8 @@
  * Run it after a build: `pnpm --filter @slate/work-host build && pnpm --filter @slate/work-host smoke`.
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -52,6 +53,86 @@ async function waitForReady(started, seconds = 15) {
   throw new Error(`the box exec daemon did not report itself ready: ${started.output}${started.errors}`);
 }
 
+async function hostProcess() {
+  const port = await freePort();
+  const dataRoot = mkdtempSync(join(tmpdir(), "slate-smoke-host-process-"));
+  const discoveryPath = join(dataRoot, "gateway.json");
+  const started = startProcess(join(dist, "host", "main.js"), {
+    SLATE_DATA_ROOT: dataRoot,
+    SLATE_HOST_PORT: String(port),
+    SLATE_USE_EXISTING_BOX_EXEC_DAEMON: "1",
+  });
+  try {
+    const deadline = Date.now() + 30_000;
+    let discovery;
+    while (Date.now() < deadline) {
+      if (started.child.exitCode != null || started.child.signalCode != null) {
+        throw new Error(`the Slate host exited before publishing its gateway: ${started.output}${started.errors}`);
+      }
+      try {
+        discovery = JSON.parse(await readFile(discoveryPath, "utf8"));
+        if (Number.isInteger(discovery.port) && discovery.host != null && discovery.scheme != null) break;
+      } catch {
+        // The host publishes discovery atomically once the gateway is listening.
+      }
+      await new Promise((resolve) => { setTimeout(resolve, 100); });
+    }
+    if (discovery == null || !Number.isInteger(discovery.port)) {
+      throw new Error(`the Slate host did not publish gateway discovery: ${started.output}${started.errors}`);
+    }
+
+    const { SLATE_GATEWAY } = await import(join(dist, "shared", "gateway-wire.js"));
+    const gatewayUrl = new URL(SLATE_GATEWAY.paths.health, `${discovery.scheme}://${discovery.host}:${discovery.port}`);
+    const response = await fetch(gatewayUrl, {
+      headers: discovery.token === undefined ? undefined : { authorization: `Bearer ${discovery.token}` },
+    });
+    if (!response.ok) throw new Error(`the Slate host health route returned HTTP ${response.status}`);
+    const health = await response.json();
+    if (health.ok !== true || health.pid !== started.child.pid) {
+      throw new Error(`the Slate host returned an unexpected health response: ${JSON.stringify(health)}`);
+    }
+
+    started.stop();
+    const exited = await Promise.race([started.exited, new Promise((resolve) => { setTimeout(() => resolve("timeout"), 15_000); })]);
+    if (exited === "timeout") throw new Error(`the Slate host did not stop on SIGTERM: ${started.output}${started.errors}`);
+    if (exited.code !== 0) throw new Error(`the Slate host exited with ${exited.code}: ${started.output}${started.errors}`);
+    if (!started.output.includes("received SIGTERM, shutting down")) {
+      throw new Error(`the Slate host did not report its shutdown: ${started.output}${started.errors}`);
+    }
+    if (existsSync(discoveryPath)) throw new Error("the Slate host left gateway discovery behind after shutdown");
+    return `started pid ${started.child.pid}, health answered on ${gatewayUrl.pathname}, stopped cleanly`;
+  } finally {
+    started.stop("SIGKILL");
+    if (started.child.exitCode == null && started.child.signalCode == null) {
+      await Promise.race([started.exited, new Promise((resolve) => { setTimeout(resolve, 5_000); })]);
+    }
+    rmSync(dataRoot, { recursive: true, force: true });
+  }
+}
+
+async function agentStoreWorker() {
+  const dataRoot = mkdtempSync(join(tmpdir(), "slate-smoke-agent-store-"));
+  const { AgentWorkerPool } = await import(join(dist, "host", "agents", "isolation", "agent-worker-pool.js"));
+  const pool = new AgentWorkerPool({ idleTimeoutMs: Number.POSITIVE_INFINITY });
+  const blobDbPath = join(dataRoot, "conversation-blobs.db");
+  const blobId = new Uint8Array([1, 4, 9]);
+  const blobBytes = new Uint8Array([2, 5, 8, 13]);
+  try {
+    await pool.setBlob("smoke-agent", blobDbPath, blobId, blobBytes);
+    const readBack = await pool.getBlob("smoke-agent", blobDbPath, blobId);
+    if (readBack == null || Buffer.compare(Buffer.from(readBack), Buffer.from(blobBytes)) !== 0) {
+      throw new Error("the built agent-store worker returned different blob bytes");
+    }
+    return "built worker opened its store, round-tripped a blob, and shut down";
+  } finally {
+    try {
+      await pool.closeAll();
+    } finally {
+      rmSync(dataRoot, { recursive: true, force: true });
+    }
+  }
+}
+
 async function boxExecDaemon() {
   const port = await freePort();
   const started = startProcess(join(dist, "box-exec", "cli.js"), {
@@ -64,7 +145,7 @@ async function boxExecDaemon() {
     // It answers the box's own control call, with the token it was started with.
     const { createPromiseClient } = await import("@connectrpc/connect");
     const { createConnectTransport } = await import("@connectrpc/connect-node");
-    const { ControlService } = await import(join(dist, "packages/proto/generated/agent/v1/control_service_connect.js"));
+    const { ControlService } = await import(join(dist, "adapters/interop/proto/generated/agent/v1/control_service_connect.js"));
     const transport = createConnectTransport({ httpVersion: "1.1", baseUrl: ready.url, nodeOptions: { headers: { authorization: "Bearer local" } } });
     const client = createPromiseClient(ControlService, transport);
     const capabilities = await client.getCapabilities({});
@@ -111,7 +192,7 @@ async function localExecDaemon() {
   }
 }
 
-const checks = [["box exec daemon", boxExecDaemon], ["local-exec daemon", localExecDaemon]];
+const checks = [["Slate host", hostProcess], ["agent-store worker", agentStoreWorker], ["box exec daemon", boxExecDaemon], ["local-exec daemon", localExecDaemon]];
 let failed = 0;
 for (const [name, check] of checks) {
   try {

@@ -23,32 +23,45 @@ export interface ModelExperimentExposureDeps {
 export function createModelExperimentExposureLatch(
   deps: ModelExperimentExposureDeps,
 ) {
-  let logged = false;
-  async function flush() {
-    if (logged) return;
-    const envOverride = readSlateModelExperimentEnvOverride(
-      deps.env ?? process.env,
-    );
-    if (envOverride == null && !deps.experiments.hasHydratedExperimentUser()) {
-      const ready =
-        await deps.experiments.waitForHydratedExperimentUser(HYDRATION_WAIT_MS);
-      if (logged || !ready) return;
+  let exposureRecorded = false;
+  let pendingHydrationWait: Promise<boolean> | undefined;
+
+  async function waitForAssignment(): Promise<boolean> {
+    const wait = pendingHydrationWait ??= deps.experiments.waitForHydratedExperimentUser(HYDRATION_WAIT_MS);
+    try {
+      return await wait;
+    } finally {
+      if (pendingHydrationWait === wait) pendingHydrationWait = undefined;
     }
-    const state = envOverride ?? deps.experiments.getSlateModelExperimentState();
-    if (state == null || !state.active) return;
-    const sdkExposed = deps.experiments.logSlateModelExperimentExposure();
-    if (!sdkExposed) {
-      if (envOverride == null || !deps.analytics.canRecordEvents()) return;
-    }
-    logged = true;
-    if (deps.analytics.canRecordEvents())
-      deps.analytics.trackEvent("slate.model_experiment.exposure", {
-        arm: state.arm,
-      });
   }
+
+  function trackExposure(arm: string): void {
+    if (!deps.analytics.canRecordEvents()) return;
+    deps.analytics.trackEvent("slate.model_experiment.exposure", { arm });
+  }
+
+  async function attemptExposure(): Promise<void> {
+    if (exposureRecorded) return;
+
+    const override = readSlateModelExperimentEnvOverride(deps.env ?? process.env);
+    if (override === undefined && !deps.experiments.hasHydratedExperimentUser()) {
+      const ready = await waitForAssignment();
+      if (exposureRecorded || !ready) return;
+    }
+
+    const assignment = override ?? deps.experiments.getSlateModelExperimentState();
+    if (assignment == null || !assignment.active) return;
+
+    const acceptedByExperiments = deps.experiments.logSlateModelExperimentExposure();
+    if (!acceptedByExperiments && (override === undefined || !deps.analytics.canRecordEvents())) return;
+
+    exposureRecorded = true;
+    trackExposure(assignment.arm);
+  }
+
   return {
     note: () => {
-      if (!logged) void flush();
+      if (!exposureRecorded) void attemptExposure();
     },
   };
 }

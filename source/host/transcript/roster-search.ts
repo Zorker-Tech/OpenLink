@@ -1,19 +1,10 @@
-/**
- * Searching the transcripts of every agent.
- *
- * Each agent's transcript is searched for what the caller asked for, and what comes back says which agent and which
- * entry matched, with a snippet of the text around it.
- */
-import { getTranscript } from "./transcript-store.ts";
-import type { TranscriptManagerLike } from "./transcript-hub.ts";
+import type { TranscriptManagerLike } from "./transcript-hub.ts"
+import { searchIndexedTranscriptResults } from "./roster-search-indexed.ts"
+import { searchAgentsByTranscriptScan } from "./roster-search-linear.ts"
+import { searchExistingAgentMedia } from "./roster-search-media.ts"
+import type { TranscriptSearchResult } from "./roster-search-contracts.ts"
 
-export interface TranscriptSearchResult {
-  agentId: string;
-  entryId: string;
-  role: string;
-  timestampMs: number;
-  snippet: string;
-}
+export type { TranscriptSearchResult } from "./roster-search-contracts.ts"
 
 export class RosterSearch {
   constructor(readonly tm: TranscriptManagerLike) {}
@@ -22,92 +13,24 @@ export class RosterSearch {
     query: string,
     limit = this.tm.contentSearch.maxResults,
   ): Promise<TranscriptSearchResult[]> {
-    const normalized = query.trim().toLowerCase();
-    if (normalized.length === 0) return [];
+    const normalizedQuery = query.trim().toLowerCase()
+    if (normalizedQuery.length === 0) return []
+
     if (this.tm.contentSearch.isSearchReady) {
-      const indexed = await this.tm.contentSearch.searchMessages({
-        query: normalized,
-        limit: limit + this.tm.contentSearch.maxMatchesPerAgent,
-      });
-      if (indexed != null) {
-        const liveAgentId = this.tm.sessions.inMemoryTranscriptAgentId;
-        const results: TranscriptSearchResult[] = indexed.filter(
-          (match: TranscriptSearchResult) =>
-            match.agentId !== liveAgentId &&
-            this.tm.sessionStore.agentExists(match.agentId),
-        );
-        if (liveAgentId != null) {
-          const entries = getTranscript();
-          const newestLiveMs =
-            entries.reduce(
-              (newest, entry) => Math.max(newest, entry.timestampMs ?? 0),
-              0,
-            ) || Date.now();
-          for (const match of this.tm.contentSearch.findTranscriptMatches(
-            entries,
-            normalized,
-          )) {
-            results.push({
-              agentId: liveAgentId,
-              entryId: match.entryId,
-              role: match.role,
-              timestampMs:
-                match.timestampMs > 0 ? match.timestampMs : newestLiveMs,
-              snippet: match.snippet,
-            });
-          }
-        }
-        return results
-          .sort((left, right) => right.timestampMs - left.timestampMs)
-          .slice(0, limit);
-      }
+      const indexed = await searchIndexedTranscriptResults(this.tm, normalizedQuery, limit)
+      if (indexed !== null) return indexed
     }
-    return this.searchAgentsByLinearScan(normalized, limit);
+    return this.searchAgentsByLinearScan(normalizedQuery, limit)
   }
 
-  async searchAgentsByLinearScan(
-    normalized: string,
-    limit: number,
-  ): Promise<TranscriptSearchResult[]> {
-    const activeId = this.tm.getActiveAgentId();
-    const agents = await this.tm.sessionStore.listAgents(activeId ?? undefined);
-    const results: TranscriptSearchResult[] = [];
-    for (const agent of agents) {
-      const entries =
-        activeId != null && agent.id === activeId
-          ? getTranscript()
-          : this.tm.sessionStore.readAgentTranscriptEntries(agent.id);
-      for (const match of this.tm.contentSearch.findTranscriptMatches(
-        entries,
-        normalized,
-      )) {
-        results.push({
-          agentId: agent.id,
-          entryId: match.entryId,
-          role: match.role,
-          timestampMs:
-            match.timestampMs > 0 ? match.timestampMs : agent.updatedAt,
-          snippet: match.snippet,
-        });
-      }
-    }
-    return results
-      .sort((left, right) => right.timestampMs - left.timestampMs)
-      .slice(0, limit);
+  searchAgentsByLinearScan(normalizedQuery: string, limit: number): Promise<TranscriptSearchResult[]> {
+    return searchAgentsByTranscriptScan(this.tm, normalizedQuery, limit)
   }
 
-  async searchMedia(
+  searchMedia(
     query: string,
     limit = this.tm.contentSearch.maxResults,
   ): Promise<any[]> {
-    if (!this.tm.contentSearch.isSearchReady) return [];
-    const matches = await this.tm.contentSearch.searchMedia({
-      query: query.trim(),
-      limit,
-    });
-    if (matches == null) return [];
-    return matches.filter((match: any) =>
-      this.tm.sessionStore.agentExists(match.agentId),
-    );
+    return searchExistingAgentMedia(this.tm, query.trim(), limit)
   }
 }

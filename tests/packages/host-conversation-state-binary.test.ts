@@ -6,6 +6,8 @@ import {
   decodeSummaryArchiveMessageIds,
   decodeTranscriptMirrorConversationState,
 } from "../../source/host/transcript/mirror/conversation-state-binary.ts";
+import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 
 /** A varint as the record writes it. */
 function varint(value: number): Buffer {
@@ -76,6 +78,18 @@ describe("reading a stored conversation state", () => {
 
   it("reads an empty record as a state with nothing in it", () => {
     assert.deepEqual(decodeTranscriptMirrorConversationState(Buffer.alloc(0)), { rootPromptMessagesJson: [], turns: [], summaryArchives: [] });
+  });
+
+  it("reads transcript references from a Slate checkpoint root", () => {
+    const bytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({
+      rootPromptMessagesJson: [new Uint8Array([1, 2])],
+      turns: [new Uint8Array([3, 4])],
+      summaryArchives: [new Uint8Array([5, 6])],
+    }));
+    const state = decodeTranscriptMirrorConversationState(bytes);
+    assert.deepEqual(state.rootPromptMessagesJson, [new Uint8Array([1, 2])]);
+    assert.deepEqual(state.turns, [new Uint8Array([3, 4])]);
+    assert.deepEqual(state.summaryArchives, [new Uint8Array([5, 6])]);
   });
 
   it("keeps an empty reference as a reference", () => {

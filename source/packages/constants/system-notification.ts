@@ -1,15 +1,9 @@
-/**
- * The tags a system notification is wrapped in.
- *
- * A notification is delivered inside the conversation's text stream, so it needs a delimiter that cannot be confused
- * with the user's or the model's own words — and one the renderer can find without parsing the text around it.
- */
+/** Markers that wrap a system notification in conversation text. */
+const NOTIFICATION_TAG_NAME = "system_notification"
+const OPENING_MARKER = "<"
+const CLOSING_MARKER = "</"
+const MARKER_END = ">"
 
-/** The tag name a notification carries, without its brackets. */
-export const SYSTEM_NOTIFICATION_TAG = "system_notification"
-
-/** The opening tag: the tag name in brackets. */
-export const SYSTEM_NOTIFICATION_OPEN_TAG = `<${SYSTEM_NOTIFICATION_TAG}>`
-
-/** The closing tag: the tag name in brackets, with the closing slash. */
-export const SYSTEM_NOTIFICATION_CLOSE_TAG = `</${SYSTEM_NOTIFICATION_TAG}>`
+export const SYSTEM_NOTIFICATION_TAG = NOTIFICATION_TAG_NAME
+export const SYSTEM_NOTIFICATION_OPEN_TAG = `${OPENING_MARKER}${NOTIFICATION_TAG_NAME}${MARKER_END}`
+export const SYSTEM_NOTIFICATION_CLOSE_TAG = `${CLOSING_MARKER}${NOTIFICATION_TAG_NAME}${MARKER_END}`

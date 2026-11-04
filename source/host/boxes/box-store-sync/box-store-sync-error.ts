@@ -7,8 +7,12 @@
  */
 
 export class BoxStoreSyncError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options)
-    this.name = "BoxStoreSyncError"
+  constructor(detail: string, context?: ErrorOptions) {
+    super(detail, context)
+    this.name = new.target.name
   }
+}
+
+export function isBoxStoreSyncError(value: unknown): value is BoxStoreSyncError {
+  return value instanceof BoxStoreSyncError
 }

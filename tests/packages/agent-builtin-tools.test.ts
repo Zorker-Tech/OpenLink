@@ -1,13 +1,13 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { getToolFamily } from "../../source/packages/agent/tools/tool-families.ts"
+import { getInteropToolFamily as getToolFamily } from "../../source/adapters/interop/agent/tool-family-adapter.ts"
 import {
   DynamicToolRegistry,
-  agentToolResultToMcpToolResult,
   isReservedDynamicToolsNamespace,
   resolveDynamicDispatchToolName,
 } from "../../source/packages/agent/tools/mcp/builtin-tools.ts"
+import { encodeInteropMcpToolResult } from "../../source/adapters/interop/agent/mcp-builtins-adapter.ts"
 import { DYNAMIC_TOOLS_NAMESPACE } from "../../source/packages/agent-exec/mcp-operations.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -59,8 +59,7 @@ test("the registry describes its tools as a server of their own", () => {
   assert.equal(descriptor?.serverIdentifier, DYNAMIC_TOOLS_NAMESPACE)
   assert.deepEqual(descriptor?.tools.map(entry => entry.toolName), ["alpha", "zeta"])
   assert.match(String(descriptor?.serverUseInstructions), /Native Slate tools for this session/)
-  assert.equal(descriptor?.tools[0]?.inputSchema !== undefined, true)
-  assert.deepEqual((descriptor?.tools[0]?.inputSchema as { toJson(): unknown } | undefined)?.toJson(), { type: "object" })
+  assert.deepEqual(descriptor?.tools[0]?.inputSchema, { type: "object" })
 })
 
 test("a tool's concise context is added to the instructions", () => {
@@ -162,7 +161,7 @@ test("a dispatch for another namespace, or an unknown tool, resolves to nothing"
 // ---------------------------------------------------------------------------------------------
 
 test("a rendered tool result becomes an MCP result with its content and its error flag", () => {
-  const result = agentToolResultToMcpToolResult({
+  const result = encodeInteropMcpToolResult({
     content: [
       { type: "text", text: "output" },
       { type: "image", data: Buffer.from("bytes").toString("base64"), mimeType: "image/png" },
@@ -181,7 +180,7 @@ test("a rendered tool result becomes an MCP result with its content and its erro
 })
 
 test("an image without a mime type is sent as a PNG", () => {
-  const result = agentToolResultToMcpToolResult({
+  const result = encodeInteropMcpToolResult({
     content: [{ type: "image", data: Buffer.from("bytes").toString("base64") }],
   })
   const success = result.result.value as { content: Array<{ content: { value: { mimeType: string } } }> }

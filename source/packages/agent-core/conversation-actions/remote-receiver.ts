@@ -7,9 +7,9 @@
  */
 
 import type { Context } from "../../context/context.ts"
-import type { ConversationActionReceiver } from "./receiver-contract.ts"
+import type { AgentActionInbox } from "./action-inbox.ts"
 
-export class NoopConversationActionReceiver implements ConversationActionReceiver {
+export class NoopConversationActionReceiver implements AgentActionInbox {
   async pop(_context: Context): Promise<undefined> {
     return undefined
   }

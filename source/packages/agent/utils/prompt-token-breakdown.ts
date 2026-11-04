@@ -22,8 +22,8 @@
 
 import { createHistogram } from "../../metrics/index.ts"
 import type { Context } from "../../context/context.ts"
-import { PromptTokenBreakdownCategory, PromptTokenBreakdownSnapshot } from "../../proto/generated/agent/v1/agent_pb.ts"
 import { buildDescriptionGeneratorProps, toAgentTools } from "../tools/tool-execution.ts"
+import type { PromptTokenBreakdownSnapshotValue } from "./prompt-usage-contracts.ts"
 import { estimateStringTokenCount } from "./token-estimate.ts"
 import { extractCompleteTagRanges } from "./prompt-tags.ts"
 import type { PromptMessageLike, PromptToolLike } from "./prompt-shapes.ts"
@@ -61,7 +61,7 @@ export interface PromptTokenBreakdownParams {
   descriptionProps?: Record<string, unknown> | undefined
   totalUsedTokens: number
   maxTokens: number
-  previousSnapshot?: PromptTokenBreakdownSnapshot | undefined
+  previousSnapshot?: PromptTokenBreakdownSnapshotValue | undefined
 }
 
 /** A category's resolved numbers, whether they came from the cache or from an estimate. */
@@ -70,7 +70,7 @@ interface ResolvedCategory {
   estimatedTokens: number
 }
 
-export function buildPromptTokenBreakdownSnapshot(ctx: Context, params: PromptTokenBreakdownParams): PromptTokenBreakdownSnapshot {
+export function buildPromptTokenBreakdownSnapshot(ctx: Context, params: PromptTokenBreakdownParams): PromptTokenBreakdownSnapshotValue {
   const sources = collectAllCategorySources(params.messages, params.tools, params.descriptionProps)
   const charCounts = mapCategoryRecord(sources, segments => sumCharacterCount(segments))
   emitCategoryEstimatedTokensMetric(ctx, sources)
@@ -99,11 +99,11 @@ export function buildPromptTokenBreakdownSnapshot(ctx: Context, params: PromptTo
  * category is carried over and the conversation keeps whatever the total leaves.
  */
 export function buildSummarizeRefreshSnapshot(params: {
-  previousSnapshot?: PromptTokenBreakdownSnapshot | undefined
+  previousSnapshot?: PromptTokenBreakdownSnapshotValue | undefined
   newSummarizedConversationCharCount: number
   totalUsedTokens: number
   maxTokens: number
-}): PromptTokenBreakdownSnapshot | undefined {
+}): PromptTokenBreakdownSnapshotValue | undefined {
   if (!snapshotHasCharacterCounts(params.previousSnapshot)) return params.previousSnapshot
   const previousByCategory = indexCategoriesById(params.previousSnapshot)
   const avgRatio = computeAvgRatio(previousByCategory)
@@ -394,7 +394,7 @@ function buildApportionedSnapshot(
   sources: Record<CategoryId, string[]>,
   charCounts: Record<CategoryId, number>,
   params: PromptTokenBreakdownParams,
-): PromptTokenBreakdownSnapshot {
+): PromptTokenBreakdownSnapshotValue {
   const rawTokensByCategory = mapCategoryRecord(sources, segments => sumRawTokens(segments))
   const apportioned = apportionRawWeightsToTotal(rawTokensByCategory, params.totalUsedTokens)
   return assemblePromptTokenBreakdownSnapshot({
@@ -450,7 +450,7 @@ function resolveCacheableCategories(
 }
 
 function indexCategoriesById(
-  snapshot: PromptTokenBreakdownSnapshot | undefined,
+  snapshot: PromptTokenBreakdownSnapshotValue | undefined,
 ): Map<CategoryId, { characterCount?: number; estimatedTokens: number }> {
   const index = new Map<CategoryId, { characterCount?: number; estimatedTokens: number }>()
   if (!snapshot) return index
@@ -462,7 +462,7 @@ function indexCategoriesById(
 }
 
 /** A snapshot from a provider that reports only totals carries no character counts to reuse. */
-function snapshotHasCharacterCounts(snapshot: PromptTokenBreakdownSnapshot | undefined): boolean {
+function snapshotHasCharacterCounts(snapshot: PromptTokenBreakdownSnapshotValue | undefined): boolean {
   if (!snapshot) return false
   return snapshot.categories.some(category => category.characterCount !== undefined)
 }
@@ -479,25 +479,25 @@ function buildSnapshotFromResolvedCategories(args: {
   conversationEstimatedTokens: number
   totalUsedTokens: number
   maxTokens: number
-}): PromptTokenBreakdownSnapshot {
+}): PromptTokenBreakdownSnapshotValue {
   const resolved = new Map(args.resolved)
   resolved.set("conversation", {
     characterCount: args.conversationCharCount,
     estimatedTokens: args.conversationEstimatedTokens,
   })
-  return new PromptTokenBreakdownSnapshot({
+  return {
     totalUsedTokens: roundClampNonNegative(args.totalUsedTokens),
     maxTokens: roundClampNonNegative(args.maxTokens),
     categories: PROMPT_TOKEN_CATEGORIES.map(category => {
       const entry = resolved.get(category.id) ?? { characterCount: 0, estimatedTokens: 0 }
-      return new PromptTokenBreakdownCategory({
+      return {
         id: category.id,
         label: category.label,
         estimatedTokens: entry.estimatedTokens,
         characterCount: entry.characterCount,
-      })
+      }
     }),
-  })
+  }
 }
 
 function assemblePromptTokenBreakdownSnapshot(args: {
@@ -505,17 +505,17 @@ function assemblePromptTokenBreakdownSnapshot(args: {
   characterCountsByCategory: Record<CategoryId, number>
   totalUsedTokens: number
   maxTokens: number
-}): PromptTokenBreakdownSnapshot {
-  return new PromptTokenBreakdownSnapshot({
+}): PromptTokenBreakdownSnapshotValue {
+  return {
     totalUsedTokens: roundClampNonNegative(args.totalUsedTokens),
     maxTokens: roundClampNonNegative(args.maxTokens),
-    categories: PROMPT_TOKEN_CATEGORIES.map(category => new PromptTokenBreakdownCategory({
+    categories: PROMPT_TOKEN_CATEGORIES.map(category => ({
       id: category.id,
       label: category.label,
       estimatedTokens: args.estimatedTokensByCategory[category.id],
       characterCount: args.characterCountsByCategory[category.id],
     })),
-  })
+  }
 }
 
 function sumCharacterCount(segments: string[]): number {

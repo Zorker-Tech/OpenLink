@@ -11,15 +11,16 @@ import {
 } from "../../source/packages/agent/summarization-orchestrator.ts"
 import { BackgroundSummarizationMode } from "../../source/packages/agent-summarization/background-summarization.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { AgentMode, ConversationSummaryArchive } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { hookExecutorResource } from "../../source/packages/agent-exec/hook-executor.ts"
-import { toRedactedTodoItem } from "../../source/packages/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { TodoItem, TodoStatus } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
+import { toRedactedTodoItem } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
+import { TodoItem, TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -67,7 +68,7 @@ function stateHandler(initial: readonly unknown[] = [], options: StateOptions = 
   const blobs = new Map<string, Uint8Array>()
   const archives: unknown[] = []
   const state = {
-    mode: AgentMode.AGENT,
+    mode: SlateMode.AGENT,
     todos: [] as readonly { get(ctx: Context): Promise<never> }[],
     tokenDetails: { usedTokens: 100, maxTokens: 1_000 },
     summaryArchives: archives as readonly unknown[],

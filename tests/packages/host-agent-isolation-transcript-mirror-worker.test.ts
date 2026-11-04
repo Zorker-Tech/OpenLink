@@ -13,7 +13,7 @@ import { describe, it } from "node:test";
 import { Worker } from "node:worker_threads";
 
 import { ReadOnlySqliteBlobStore, runTranscriptMirrorWorker } from "../../source/host/agents/isolation/transcript-mirror-worker.ts";
-import { ConversationStateStructure } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
+import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 
 const WORKER_URL = new URL("../../source/host/agents/isolation/transcript-mirror-worker.ts", import.meta.url);
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");

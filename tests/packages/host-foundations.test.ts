@@ -102,8 +102,8 @@ test("a shared room is read defensively and kept beside the agent", () => {
 test("a box is rebuilt only as far as the box says it was", async () => {
   const calls: Array<Record<string, unknown>> = []
   const service = new BoxLifecycleService({
-    getBoxRunState: async () => ({ imageUpdateAvailable: true }),
-    recreateBox: async input => {
+    imageUpdateAvailable: async () => true,
+    recreate: async input => {
       calls.push(input)
       return { started: true }
     },
@@ -112,8 +112,8 @@ test("a box is rebuilt only as far as the box says it was", async () => {
   assert.deepEqual(await service.recreateInBox({ preserveData: true }), { started: true })
   // A rebuild that did not start is reported with the reason it did not.
   const refused = new BoxLifecycleService({
-    getBoxRunState: async () => ({ imageUpdateAvailable: false }),
-    recreateBox: async () => ({ started: false, reason: "busy" }),
+    imageUpdateAvailable: async () => false,
+    recreate: async () => ({ started: false, reason: "busy" }),
   })
   assert.deepEqual(await refused.recreateInBox({ preserveData: false }), { started: false, reason: "busy" })
   assert.deepEqual(calls, [{ preserveData: true, force: false }])

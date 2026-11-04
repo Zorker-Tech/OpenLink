@@ -12,7 +12,6 @@ export {
   createContinuationInjectorMiddleware,
   needsContinuationMessage,
 } from "./middleware/continuation-injector-middleware.ts";
-import "./middleware/effort-level-middleware.ts";
 export * from "./middleware/image-resizing-middleware.ts";
 export * from "./middleware/noop-middleware.ts";
 export * from "./middleware/tracing-middleware.ts";
@@ -23,4 +22,3 @@ export {
   trailingEmptyAssistantRemovalMiddleware,
 } from "./middleware/trailing-empty-assistant-removal-middleware.ts";
 export * from "./mock-prompt-executor.ts";
-export * from "./token-limit-error-classification.ts";

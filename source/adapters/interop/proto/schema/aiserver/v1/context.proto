@@ -1,0 +1,287 @@
+// aiserver.v1 — aiserver/v1/context messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/cpp.proto";
+import "aiserver/v1/lsp_subgraph.proto";
+import "aiserver/v1/utils.proto";
+
+message ContextItem {
+  optional .aiserver.v1.ContextIntent intent = 1 [json_name = "intent"];
+  oneof item {
+    .aiserver.v1.ContextItem.FileChunk file_chunk = 2 [json_name = "fileChunk"];
+    .aiserver.v1.ContextItem.OutlineChunk outline_chunk = 3 [json_name = "outlineChunk"];
+    .aiserver.v1.ContextItem.CmdKSelection cmd_k_selection = 4 [json_name = "cmdKSelection"];
+    .aiserver.v1.ContextItem.CmdKImmediateContext cmd_k_immediate_context = 5 [json_name = "cmdKImmediateContext"];
+    .aiserver.v1.ContextItem.CmdKQuery cmd_k_query = 6 [json_name = "cmdKQuery"];
+    .aiserver.v1.ContextItem.CmdKQueryHistory cmd_k_query_history = 7 [json_name = "cmdKQueryHistory"];
+    .aiserver.v1.ContextItem.CustomInstructions custom_instructions = 8 [json_name = "customInstructions"];
+    .aiserver.v1.ContextItem.GoToDefinitionResult go_to_definition_result = 9 [json_name = "goToDefinitionResult"];
+    .aiserver.v1.ContextItem.DocumentationChunk documentation_chunk = 10 [json_name = "documentationChunk"];
+    .aiserver.v1.ContextItem.Lints lints = 11 [json_name = "lints"];
+    .aiserver.v1.ContextItem.ChatHistory chat_history = 12 [json_name = "chatHistory"];
+    .aiserver.v1.ContextItem.NotebookCellOutput notebook_cell_output = 13 [json_name = "notebookCellOutput"];
+    .aiserver.v1.ContextItem.TerminalHistory terminal_history = 14 [json_name = "terminalHistory"];
+    .aiserver.v1.ContextItem.TerminalCmdKQuery terminal_cmd_k_query = 15 [json_name = "terminalCmdKQuery"];
+    .aiserver.v1.ContextItem.TerminalCmdKQueryHistory terminal_cmd_k_query_history = 16 [json_name = "terminalCmdKQueryHistory"];
+    .aiserver.v1.ContextItem.SparseFileChunk sparse_file_chunk = 17 [json_name = "sparseFileChunk"];
+    .aiserver.v1.ContextItem.LspSubgraphChunk lsp_subgraph_chunk = 18 [json_name = "lspSubgraphChunk"];
+    .aiserver.v1.ContextItem.CommitNoteChunk commit_note_chunk = 19 [json_name = "commitNoteChunk"];
+    .aiserver.v1.ContextItem.FileDiffHistory file_diff_history = 20 [json_name = "fileDiffHistory"];
+    .aiserver.v1.ContextItem.CmdKQueryHistoryInDiffSession cmd_k_query_history_in_diff_session = 21 [json_name = "cmdKQueryHistoryInDiffSession"];
+    .aiserver.v1.CursorRule project_rule = 22 [json_name = "projectRule"];
+  }
+  message FileChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string chunk_contents = 2 [json_name = "chunkContents"];
+    int32 start_line_number = 3 [json_name = "startLineNumber"];
+  }
+  message OutlineChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string contents = 2 [json_name = "contents"];
+    optional .aiserver.v1.LineRange full_range = 3 [json_name = "fullRange"];
+  }
+  message CmdKSelection {
+    repeated string lines = 1 [json_name = "lines"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+  }
+  message CmdKImmediateContext {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.ContextItem.CmdKImmediateContext.Line lines = 2 [json_name = "lines"];
+    int32 total_number_of_lines_in_file = 3 [json_name = "totalNumberOfLinesInFile"];
+    optional int32 cell_number = 4 [json_name = "cellNumber"];
+    message Line {
+      string line = 1 [json_name = "line"];
+      int32 line_number = 2 [json_name = "lineNumber"];
+    }
+  }
+  message CmdKQuery {
+    string query = 1 [json_name = "query"];
+  }
+  message CmdKQueryHistory {
+    optional .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
+    optional .aiserver.v1.ContextItem.CmdKImmediateContext immediate_context = 2 [json_name = "immediateContext"];
+    optional .aiserver.v1.ContextItem.CmdKSelection selection = 3 [json_name = "selection"];
+    optional .aiserver.v1.ContextItem.CmdKQueryHistory query_history = 4 [json_name = "queryHistory"];
+    repeated string context_item_hashes = 5 [json_name = "contextItemHashes"];
+    optional int64 timestamp = 6 [json_name = "timestamp"];
+    optional double timestamp_double = 7 [json_name = "timestampDouble"];
+  }
+  message CustomInstructions {
+    string instructions = 1 [json_name = "instructions"];
+  }
+  message GoToDefinitionResult {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string line = 2 [json_name = "line"];
+    int32 line_number = 3 [json_name = "lineNumber"];
+    int32 column_number = 4 [json_name = "columnNumber"];
+    optional .aiserver.v1.ContextItem.FileChunk definition_chunk = 5 [json_name = "definitionChunk"];
+  }
+  message DocumentationChunk {
+    string doc_name = 1 [json_name = "docName"];
+    string page_url = 2 [json_name = "pageUrl"];
+    string documentation_chunk = 3 [json_name = "documentationChunk"];
+    float score = 4 [json_name = "score"];
+  }
+  message Lints {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.Lint lints = 2 [json_name = "lints"];
+    repeated .aiserver.v1.ContextItem.Lints.Line context_lines = 3 [json_name = "contextLines"];
+    message Line {
+      string line = 1 [json_name = "line"];
+      int32 line_number = 2 [json_name = "lineNumber"];
+    }
+  }
+  message ChatHistory {
+    string user_message = 1 [json_name = "userMessage"];
+    string assistant_response = 2 [json_name = "assistantResponse"];
+    optional .aiserver.v1.ContextItem.ChatHistory chat_history = 3 [json_name = "chatHistory"];
+    bool active_for_cmd_k = 4 [json_name = "activeForCmdK"];
+    optional int64 timestamp = 5 [json_name = "timestamp"];
+    optional double timestamp_double = 6 [json_name = "timestampDouble"];
+  }
+  message NotebookCellOutput {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string cell_output = 2 [json_name = "cellOutput"];
+    int32 cell_number = 3 [json_name = "cellNumber"];
+  }
+  message TerminalHistory {
+    string history = 1 [json_name = "history"];
+    bool active_for_cmd_k = 4 [json_name = "activeForCmdK"];
+    string cwd_full = 5 [json_name = "cwdFull"];
+    string cwd_relative_workspace_path = 6 [json_name = "cwdRelativeWorkspacePath"];
+    optional int64 timestamp = 7 [json_name = "timestamp"];
+    optional double timestamp_double = 8 [json_name = "timestampDouble"];
+  }
+  message TerminalCmdKQuery {
+    string query = 1 [json_name = "query"];
+  }
+  message TerminalCmdKQueryHistory {
+    optional .aiserver.v1.ContextItem.TerminalCmdKQuery query = 1 [json_name = "query"];
+    optional .aiserver.v1.ContextItem.TerminalCmdKQueryHistory query_history = 2 [json_name = "queryHistory"];
+    repeated string context_item_hashes = 5 [json_name = "contextItemHashes"];
+    string suggested_command = 6 [json_name = "suggestedCommand"];
+  }
+  message SparseFileChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.ContextItem.SparseFileChunk.Line lines = 2 [json_name = "lines"];
+    int32 total_number_of_lines_in_file = 3 [json_name = "totalNumberOfLinesInFile"];
+    optional int32 cell_number = 4 [json_name = "cellNumber"];
+    message Line {
+      string line = 1 [json_name = "line"];
+      int32 line_number = 2 [json_name = "lineNumber"];
+    }
+  }
+  message LspSubgraphChunk {
+    optional .aiserver.v1.LspSubgraphFullContext lsp_subgraph_full_context = 1 [json_name = "lspSubgraphFullContext"];
+  }
+  message CommitNoteChunk {
+    string note = 1 [json_name = "note"];
+  }
+  message FileDiffHistory {
+    optional .aiserver.v1.CppFileDiffHistory cpp_file_diff_history = 1 [json_name = "cppFileDiffHistory"];
+    int32 how_many_diffs_ago = 2 [json_name = "howManyDiffsAgo"];
+    bool is_very_recent = 3 [json_name = "isVeryRecent"];
+  }
+  message CmdKQueryHistoryInDiffSession {
+    repeated .aiserver.v1.ContextItem.CmdKQueryHistoryInDiffSession.PastCmdKQueryInDiffSession past_cmdk_queries = 1 [json_name = "pastCmdkQueries"];
+    double curr_timestamp_double = 3 [json_name = "currTimestampDouble"];
+    message PastCmdKQueryInDiffSession {
+      optional .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
+      string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+      optional bool cmdk_was_accepted = 5 [json_name = "cmdkWasAccepted"];
+      double timestamp_double = 6 [json_name = "timestampDouble"];
+      optional double timestamp_for_diff_interleaving = 7 [json_name = "timestampForDiffInterleaving"];
+      optional string request_id = 8 [json_name = "requestId"];
+    }
+  }
+}
+
+message ContextIntent {
+  .aiserver.v1.ContextIntent.Type type = 1 [json_name = "type"];
+  string uuid = 15 [json_name = "uuid"];
+  oneof intent {
+    .aiserver.v1.ContextIntent.File file = 2 [json_name = "file"];
+    .aiserver.v1.ContextIntent.CodeSelection code_selection = 3 [json_name = "codeSelection"];
+    .aiserver.v1.ContextIntent.Lints lints = 5 [json_name = "lints"];
+    .aiserver.v1.ContextIntent.RecentLocations recent_locations = 6 [json_name = "recentLocations"];
+    .aiserver.v1.ContextIntent.CmdKCurrentFile cmd_k_current_file = 8 [json_name = "cmdKCurrentFile"];
+    .aiserver.v1.ContextIntent.CmdKQueryEtc cmd_k_query_etc = 9 [json_name = "cmdKQueryEtc"];
+    .aiserver.v1.ContextIntent.CmdKDefinitions cmd_k_definitions = 10 [json_name = "cmdKDefinitions"];
+    .aiserver.v1.ContextIntent.Documentation documentation = 11 [json_name = "documentation"];
+    .aiserver.v1.ContextIntent.CustomInstructions custom_instructions = 12 [json_name = "customInstructions"];
+    .aiserver.v1.ContextIntent.ChatHistory chat_history = 13 [json_name = "chatHistory"];
+    .aiserver.v1.ContextIntent.TerminalCmdKDefaults terminal_cmd_k_defaults = 14 [json_name = "terminalCmdKDefaults"];
+    .aiserver.v1.ContextIntent.TerminalHistory terminal_history = 16 [json_name = "terminalHistory"];
+    .aiserver.v1.ContextIntent.VisibleTabs visible_tabs = 17 [json_name = "visibleTabs"];
+    .aiserver.v1.ContextIntent.LspSubgraph lsp_subgraph = 18 [json_name = "lspSubgraph"];
+    .aiserver.v1.ContextIntent.CommitNotes commit_notes = 19 [json_name = "commitNotes"];
+    .aiserver.v1.ContextIntent.DiffHistory diff_history = 20 [json_name = "diffHistory"];
+    .aiserver.v1.ContextIntent.PastCmdkConversationsInDiffSessions past_cmdk_messages_in_diff_sessions = 21 [json_name = "pastCmdkMessagesInDiffSessions"];
+  }
+  message File {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    .aiserver.v1.ContextIntent.File.Mode mode = 2 [json_name = "mode"];
+    enum Mode {
+      MODE_UNSPECIFIED = 0;
+      MODE_FULL = 1;
+      MODE_OUTLINE = 2;
+      MODE_CHUNKS = 3;
+    }
+  }
+  message CodeSelection {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    optional .aiserver.v1.SimpleRange potentially_out_of_date_range = 2 [json_name = "potentiallyOutOfDateRange"];
+    string text = 3 [json_name = "text"];
+  }
+  message Lints {
+    repeated .aiserver.v1.LintSeverity filter_to_severities = 3 [json_name = "filterToSeverities"];
+    oneof scope {
+      .aiserver.v1.ContextIntent.Lints.CmdKScope cmdk_scope = 1 [json_name = "cmdkScope"];
+      .aiserver.v1.ContextIntent.Lints.FileScope file_scope = 2 [json_name = "fileScope"];
+    }
+    message CmdKScope {
+    }
+    message FileScope {
+      string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+      optional .aiserver.v1.LineRange filter_range = 2 [json_name = "filterRange"];
+    }
+  }
+  message RecentLocations {
+    optional double timestamp = 2 [json_name = "timestamp"];
+  }
+  message CmdKCurrentFile {
+  }
+  message CmdKQueryEtc {
+  }
+  message TerminalCmdKDefaults {
+  }
+  message CmdKDefinitions {
+  }
+  message Documentation {
+    string documentation_identifier = 1 [json_name = "documentationIdentifier"];
+  }
+  message CustomInstructions {
+  }
+  message ChatHistory {
+  }
+  message TerminalHistory {
+    int32 instance_id = 1 [json_name = "instanceId"];
+    bool active_for_cmd_k = 2 [json_name = "activeForCmdK"];
+    optional bool use_active_instance_as_fallback = 3 [json_name = "useActiveInstanceAsFallback"];
+  }
+  message VisibleTabs {
+  }
+  message LspSubgraph {
+  }
+  message CommitNotes {
+  }
+  message DiffHistory {
+  }
+  message PastCmdkConversationsInDiffSessions {
+  }
+  message CodebaseChunks {
+  }
+  message Symbol {
+    optional .aiserver.v1.DocumentSymbol symbol = 1 [json_name = "symbol"];
+    string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+  }
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_USER_ADDED = 1;
+    TYPE_AUTOMATIC = 2;
+  }
+}
+
+message ContextStatusUpdate {
+  repeated .aiserver.v1.ContextItemStatus context_item_statuses = 1 [json_name = "contextItemStatuses"];
+}
+
+message MissingContextItems {
+  repeated string missing_context_item_hashes = 2 [json_name = "missingContextItemHashes"];
+}
+
+message ContextItemStatus {
+  string context_item_hash = 1 [json_name = "contextItemHash"];
+  bool shown_to_the_model = 2 [json_name = "shownToTheModel"];
+  float score = 3 [json_name = "score"];
+  float percentage_of_available_space = 4 [json_name = "percentageOfAvailableSpace"];
+  .aiserver.v1.ContextItemStatus.PostGenerationEvaluation post_generation_evaluation = 5 [json_name = "postGenerationEvaluation"];
+  enum PostGenerationEvaluation {
+    POST_GENERATION_EVALUATION_UNSPECIFIED = 0;
+    POST_GENERATION_EVALUATION_USEFUL = 1;
+    POST_GENERATION_EVALUATION_USELESS = 2;
+  }
+}
+
+message PotentiallyCachedContextItem {
+  oneof item {
+    .aiserver.v1.ContextItem context_item = 1 [json_name = "contextItem"];
+    string context_item_hash = 2 [json_name = "contextItemHash"];
+  }
+}

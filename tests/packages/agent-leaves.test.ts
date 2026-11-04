@@ -4,40 +4,38 @@ import assert from "node:assert/strict"
 import { z } from "zod"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
-import { BackgroundComposerSource } from "../../source/packages/proto/generated/aiserver/v1/background_composer_pb.ts"
 import { getSafeErrorType } from "../../source/packages/agent/attachment-error-type.ts"
 import { getSkillIdFromPath } from "../../source/packages/agent/skill-id.ts"
-import { READ_CHAR_HARD_LIMIT, LARGE_TEXT_BLOB_THRESHOLD } from "../../source/packages/agent/tools/read-limits.ts"
-import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/subagent-model-policy.ts"
-import { SubagentModelId } from "../../source/packages/agent/tools/subagent-model-ids.ts"
-import { maybeRedirectWorktriesPath } from "../../source/packages/agent/tools/core/worktree-paths.ts"
+import { READ_OUTPUT_BOUNDS } from "../../source/packages/agent/tools/read-limits.ts"
 import {
-  checkModelFacingShellUiAutomation,
-  isInternalHostScreenshotShellCommand,
-  MODEL_FACING_SHELL_UI_AUTOMATION_BLOCK_REASON,
+  isSubagentModelForcePolicy,
+  SubagentModelForcePolicy,
+} from "../../source/packages/agent/tools/subagent-model-policy.ts"
+import { SubagentModelId } from "../../source/packages/agent/tools/subagent-model-ids.ts"
+import {
+  checkShellDesktopControl,
+  isHostOwnedScreenshotCommand,
+  SHELL_DESKTOP_CONTROL_REFUSAL,
 } from "../../source/packages/agent/tools/core/shell/ui-automation-guard.ts"
 import { lenientBoolean, lenientEnum, lenientNumber } from "../../source/packages/agent/tools/lenient-scalars.ts"
 import { getTaskToolName } from "../../source/packages/agent/tools/task-tool-name.ts"
 import { renderUploadedDocumentsContext } from "../../source/packages/agent/context/uploaded-documents.ts"
 import { appendRandomUploadSuffix } from "../../source/packages/agent/context/attachment-filenames.ts"
-import { renderGithubPrInvocationContext } from "../../source/packages/agent/context/github-pr-context.ts"
 import { canUseWatchVideoSubagent } from "../../source/packages/agent/context/watch-video-eligibility.ts"
 import { renderConsoleLogsContext } from "../../source/packages/agent/context/console-logs-context.ts"
 import { renderSelectedSubagentDelegation } from "../../source/packages/agent/context/selected-subagents-context.ts"
 import { renderSelectedBrowsersContext } from "../../source/packages/agent/context/selected-browsers-context.ts"
 import { renderExternalLinksContext } from "../../source/packages/agent/context/external-links-context.ts"
-import { renderSelectedCursorCommands } from "../../source/packages/agent/context/cursor-commands-context.ts"
+import { renderAttachedCommands } from "../../source/packages/agent/context/attached-commands-context.ts"
 import { renderDocumentationContext } from "../../source/packages/agent/context/documentation-context.ts"
-import { hydrateSelectedInvocationContext } from "../../source/packages/agent/context/invocation-hydration.ts"
-import { hydrateSelectedDocumentation } from "../../source/packages/agent/context/documentation-hydration.ts"
 import { renderPrReviewContext } from "../../source/packages/agent/context/pr-review-context.ts"
 import {
   computeCoreMessageImagePresence,
   coreMessageJsonHasImage,
 } from "../../source/packages/agent/conversation-image-presence.ts"
-import { parseAgentType } from "../../source/packages/agent/state-agent-type.ts"
+import { resolveAgentType } from "../../source/packages/agent/state-agent-type.ts"
 import { recordGoalContinuationStarted, recordGoalTerminalTransition } from "../../source/packages/agent/goal-metrics.ts"
 import { drainPendingWritesOnRunStreamError } from "../../source/packages/agent/abort-drain.ts"
 import { hasPdfMagicBytes, isPdfBinary } from "../../source/packages/agent/tools/core/read/pdf-utils.ts"
@@ -46,7 +44,6 @@ import { CancelActionHandler } from "../../source/packages/agent/actions/cancel-
 import { BackgroundShellActionHandler, NoOpSideChannelActionHandler } from "../../source/packages/agent/actions/background-shell-action-handler.ts"
 import {
   NOTIFICATION_TAG_NAMES,
-  extractCursorProviderOptions,
   getUserMessageTextContent,
   isGoalContinuationNotificationMessage,
   isNotificationOnlyUserMessage,
@@ -62,10 +59,10 @@ import { analyzeFailure, isNetworkCommand } from "../../source/packages/agent/to
 import {
   PLAN_MODE_NON_MARKDOWN_EDIT_ERROR,
   assertPlanModeAllowsFileEdit,
-  isManagedCanvasEditPath,
   isMarkdownEditPath,
   isPlanModeAllowedEditPath,
 } from "../../source/packages/agent/tools/core/edit/plan-mode-file-policy.ts"
+import { isManagedCanvasEditPath, isPlanMode } from "../../source/adapters/interop/agent/plan-edit-policy-adapter.ts"
 import { smartModeMcpApprovalStoreResource } from "../../source/packages/agent/tools/mcp/smart-mode-approval-store.ts"
 
 const ctx = () => createContext()
@@ -104,22 +101,17 @@ test("a skill's id is its directory, whatever shape the path arrived in", () => 
   assert.equal(getSkillIdFromPath("/"), "Skill")
 })
 
-test("the read limits are the platform's cap and a lower blob threshold", () => {
-  assert.equal(READ_CHAR_HARD_LIMIT, 100_000)
-  assert.equal(LARGE_TEXT_BLOB_THRESHOLD, 10_000)
-  assert.ok(LARGE_TEXT_BLOB_THRESHOLD < READ_CHAR_HARD_LIMIT)
+test("the read output bounds separate the response cap from blob spill", () => {
+  assert.deepEqual(READ_OUTPUT_BOUNDS, { maximumCharacters: 100_000, spillToBlobAboveCharacters: 10_000 })
+  assert.ok(READ_OUTPUT_BOUNDS.spillToBlobAboveCharacters < READ_OUTPUT_BOUNDS.maximumCharacters)
 })
 
 test("the subagent model policy and ids are the values the catalogue uses", () => {
   assert.deepEqual(Object.values(SubagentModelForcePolicy), ["none", "parent_pin", "request_based_composer"])
+  assert.equal(isSubagentModelForcePolicy("parent_pin"), true)
+  assert.equal(isSubagentModelForcePolicy("unknown"), false)
+  assert.equal(isSubagentModelForcePolicy(undefined), false)
   assert.deepEqual(SubagentModelId, { standard: "composer-2.5", fast: "composer-2.5-fast" })
-})
-
-test("the misspelled worktree directory is corrected, and only there", () => {
-  assert.equal(maybeRedirectWorktriesPath("/Users/u/.cursor/worktries/repo"), "/Users/u/.cursor/worktrees/repo")
-  assert.equal(maybeRedirectWorktriesPath("/home/u/.cursor/worktries"), "/home/u/.cursor/worktrees")
-  assert.equal(maybeRedirectWorktriesPath("/Users/u/.cursor/worktrees/repo"), "/Users/u/.cursor/worktrees/repo")
-  assert.equal(maybeRedirectWorktriesPath("/srv/worktries/x"), "/srv/worktries/x")
 })
 
 test("driving the desktop by script is refused, with the tool to use instead", () => {
@@ -130,18 +122,41 @@ test("driving the desktop by script is refused, with the tool to use instead", (
     "chrome --remote-debugging-port=9222",
     "npx playwright codegen",
   ]) {
-    const decision = checkModelFacingShellUiAutomation(command)
+    const decision = checkShellDesktopControl(command)
     assert.equal(decision.allow, false, command)
-    assert.equal((decision as { reason: string }).reason, MODEL_FACING_SHELL_UI_AUTOMATION_BLOCK_REASON)
+    assert.equal((decision as { reason: string }).reason, SHELL_DESKTOP_CONTROL_REFUSAL)
   }
-  assert.equal(checkModelFacingShellUiAutomation("ls -la").allow, true)
-  assert.equal(checkModelFacingShellUiAutomation("npm test").allow, true)
+  assert.equal(checkShellDesktopControl("ls -la").allow, true)
+  assert.equal(checkShellDesktopControl("npm test").allow, true)
+})
+
+test("the guard covers desktop controllers and browser debugging entry points", () => {
+  const refused = [
+    "wmctrl -a browser",
+    "xte 'mousemove 10 10'",
+    "ydotool click 1",
+    "cliclick c:10,10",
+    "python -c 'from pynput import mouse'",
+    "node -e 'require(\"robotjs\")'",
+    "sikuli-run script.sikuli",
+    "Quartz.CGEventPost(event)",
+    "ApplicationServices.framework",
+    "chrome --remote-debugging-pipe",
+    "node -e 'require(\"chrome-devtools-protocol\")'",
+    "puppeteer.connect()",
+    "npx playwright open https://example.test",
+    "chromedriver --port=9515",
+    "selenium-server standalone",
+  ]
+  for (const command of refused) assert.equal(checkShellDesktopControl(command).allow, false, command)
+  assert.equal(checkShellDesktopControl("echo xdotoolish").allow, true)
+  assert.match(SHELL_DESKTOP_CONTROL_REFUSAL, /Computer tool/)
 })
 
 test("the platform taking a screenshot through its own host is allowed", () => {
-  assert.equal(isInternalHostScreenshotShellCommand("control-slate screenshot --out /tmp/a.png"), true)
-  assert.equal(checkModelFacingShellUiAutomation("control-slate screenshot --out /tmp/a.png").allow, true)
-  assert.equal(isInternalHostScreenshotShellCommand("ls"), false)
+  assert.equal(isHostOwnedScreenshotCommand("control-slate screenshot --out /tmp/a.png"), true)
+  assert.equal(checkShellDesktopControl("control-slate screenshot --out /tmp/a.png").allow, true)
+  assert.equal(isHostOwnedScreenshotCommand("ls"), false)
 })
 
 test("a boolean, a number and an enum sent as text are read as what they meant", () => {
@@ -163,6 +178,7 @@ test("an ambiguous enum is not guessed at", () => {
 
 test("the subagent tool is named the way the model was trained to call it", () => {
   assert.equal(getTaskToolName({ promptVersion: "gpt-5" }), "Task")
+  assert.equal(getTaskToolName({ promptVersion: "gpt5-codex", isComposer1: true }), "mcp_task")
   assert.equal(getTaskToolName({ promptVersion: "gpt-5", isComposer15: true }), "mcp_task")
   assert.equal(getTaskToolName({ promptVersion: "gpt5-codex" }), "Subagent")
   assert.equal(getTaskToolName({ promptVersion: "codex-cloud" }), "Subagent")
@@ -174,12 +190,11 @@ test("the subagent tool is named the way the model was trained to call it", () =
 
 test("nothing is rendered for an attachment that is not there", () => {
   assert.equal(renderUploadedDocumentsContext([]), undefined)
-  assert.equal(renderGithubPrInvocationContext({ title: "t", description: "", comments: "" }).includes("PR Description"), false)
   assert.equal(renderConsoleLogsContext([]), undefined)
   assert.equal(renderSelectedSubagentDelegation([]), undefined)
   assert.equal(renderSelectedBrowsersContext([]), undefined)
   assert.equal(renderExternalLinksContext([]), undefined)
-  assert.equal(renderSelectedCursorCommands([]), undefined)
+  assert.equal(renderAttachedCommands([]), undefined)
   assert.equal(renderDocumentationContext(undefined), undefined)
   assert.equal(renderDocumentationContext({ chunks: [] }), undefined)
   assert.equal(renderPrReviewContext([]), undefined)
@@ -201,18 +216,6 @@ test("an upload is renamed so two uploads cannot collide", () => {
   assert.match(appendRandomUploadSuffix("a/b:c", "file"), /^a_b_c_[a-z0-9]{4}$/)
 })
 
-test("the pull request context omits the sections there is nothing to put in", () => {
-  const rendered = renderGithubPrInvocationContext({ title: "Fix it", description: "", comments: "", ciFailures: "" })
-  assert.match(rendered, /PR Title: Fix it/)
-  assert.doesNotMatch(rendered, /PR Description/)
-  assert.doesNotMatch(rendered, /CI Failures/)
-
-  const full = renderGithubPrInvocationContext({ title: "t", description: "d", comments: "c", ciFailures: "f" })
-  assert.match(full, /PR Description:\nd/)
-  assert.match(full, /Recent PR Comments\/Reviews:\nc/)
-  assert.match(full, /Possibly Relevant CI Failures:\nf/)
-})
-
 test("video watching is offered only where it was enabled", () => {
   assert.equal(canUseWatchVideoSubagent({ agentType: AgentType.IDE, backgroundAgentSource: undefined, featureFlags: {} }), false)
   assert.equal(canUseWatchVideoSubagent({
@@ -222,38 +225,39 @@ test("video watching is offered only where it was enabled", () => {
   }), true)
   assert.equal(canUseWatchVideoSubagent({
     agentType: AgentType.BACKGROUND,
-    backgroundAgentSource: BackgroundComposerSource.SLACK,
-    featureFlags: { enableSlackVideoAttachments: true },
+    backgroundAgentSource: "chat",
+    featureFlags: { enableBackgroundVideoAttachments: true },
   }), true)
   assert.equal(canUseWatchVideoSubagent({
     agentType: AgentType.BACKGROUND,
-    backgroundAgentSource: BackgroundComposerSource.SLACK,
+    backgroundAgentSource: "chat",
     featureFlags: {},
   }), false)
   assert.equal(canUseWatchVideoSubagent({
     agentType: AgentType.BACKGROUND,
-    backgroundAgentSource: BackgroundComposerSource.EDITOR,
-    featureFlags: { enableSlackVideoAttachments: true },
+    backgroundAgentSource: "other",
+    featureFlags: { enableBackgroundVideoAttachments: true },
   }), false)
 })
 
 test("a console log line keeps its level, its time and its message", () => {
   const rendered = renderConsoleLogsContext([
     { level: "error", timestamp: 1_700_000_000_000, message: "boom" },
-  ] as never)
+  ])
   assert.equal(rendered?.type, "text")
   assert.match(rendered!.text, /^<console_logs_context>/)
   assert.match(rendered!.text, /error \d{1,2}:\d{2}:\d{2}.*: boom/)
 })
 
 test("the subagent delegation names the subagents and shows how to call one", () => {
-  const rendered = renderSelectedSubagentDelegation([{ name: "explore" }, { name: "plan" }] as never)
-  assert.match(rendered!.text, /delegate work to the following subagent\(s\): explore, plan/)
+  const rendered = renderSelectedSubagentDelegation([{ name: "explore" }, { name: "plan" }])
+  assert.match(rendered!.text, /User requested delegation to these agents: explore, plan/)
   assert.match(rendered!.text, /Task\(subagent_type="explore"/)
+  assert.match(rendered!.text, /prompt="Describe the delegated task here"/)
 })
 
 test("a browser tab is named by its title, with the id the tools need", () => {
-  const rendered = renderSelectedBrowsersContext([{ pageTitle: "", url: "https://x.test", browserId: "b-1" }] as never)
+  const rendered = renderSelectedBrowsersContext([{ pageTitle: "", url: "https://x.test", browserId: "b-1" }])
   assert.match(rendered!.text, /- Untitled/)
   assert.match(rendered!.text, /URL: https:\/\/x\.test/)
   assert.match(rendered!.text, /Browser ID: b-1/)
@@ -268,9 +272,21 @@ test("search results are presented as known, and citations are asked for", () =>
 })
 
 test("a saved command is fenced with its own name", () => {
-  const rendered = renderSelectedCursorCommands([{ name: "commit", content: "do it" }])
+  const rendered = renderAttachedCommands([{ name: "commit", content: "do it" }])
   assert.match(rendered!.text, /--- Command: commit ---/)
   assert.match(rendered!.text, /--- End Command ---/)
+})
+
+test("attached commands retain their order and each has its own boundary", () => {
+  const rendered = renderAttachedCommands([
+    { name: "first", content: "one" },
+    { name: "second", content: "two" },
+  ])
+  assert.ok(rendered)
+  assert.ok(rendered.text.indexOf("--- Command: first ---") < rendered.text.indexOf("--- Command: second ---"))
+  assert.equal((rendered.text.match(/--- End Command ---/g) ?? []).length, 2)
+  assert.match(rendered.text, /^<slate_commands>/)
+  assert.match(rendered.text, /<\/slate_commands>$/)
 })
 
 test("documentation chunks carry the page they came from", () => {
@@ -281,62 +297,16 @@ test("documentation chunks carry the page they came from", () => {
   assert.match(rendered!, /Document URL: https:\/\/d\.test\/1/)
 })
 
-test("an invocation reference is fetched, and both failures are thrown", async () => {
-  const withData = { data: { case: "inline", value: "x" } }
-  assert.equal(await hydrateSelectedInvocationContext({ ctx: ctx(), invocationContext: withData as never }), withData)
-  assert.equal(await hydrateSelectedInvocationContext({ ctx: ctx(), invocationContext: undefined }), undefined)
-
-  const blobReference = { data: { case: "blobId", value: new Uint8Array([1]) } }
-  await assert.rejects(
-    hydrateSelectedInvocationContext({ ctx: ctx(), invocationContext: blobReference as never }),
-    /Blob store is required/,
-  )
-  await assert.rejects(
-    hydrateSelectedInvocationContext({
-      ctx: ctx(),
-      invocationContext: blobReference as never,
-      blobStore: { getBlob: async () => undefined },
-    }),
-    /blob not found/,
-  )
-})
-
-test("documentation is only asked for when something was attached", async () => {
-  let called = 0
-  const service = {
-    async hydrateDocumentation() {
-      called += 1
-      return { chunks: [] }
-    },
-  }
-  assert.equal(await hydrateSelectedDocumentation({
-    ctx: ctx(),
-    documentations: [],
-    documentationHydrationService: service,
-    conversationQuery: "q",
-  }), undefined)
-  assert.equal(called, 0)
-
-  const result = await hydrateSelectedDocumentation({
-    ctx: ctx(),
-    documentations: [{ docId: "d1", name: "Guide" }] as never,
-    documentationHydrationService: service,
-    conversationQuery: "q",
-  })
-  assert.deepEqual(result, { chunks: [] })
-  assert.equal(called, 1)
-})
-
 test("a review attachment says where in the file it is", () => {
   const single = renderPrReviewContext([
     { filePath: "a.ts", startLine: 3, endLine: 3, prUrl: "https://pr.test/1", diffContent: "" },
-  ] as never)
+  ])
   assert.match(single!.text, /Location: line 3/)
   assert.doesNotMatch(single!.text, /Diff Content/)
 
   const range = renderPrReviewContext([
     { filePath: "a.ts", startLine: 3, endLine: 9, prUrl: "https://pr.test/1", diffContent: "+x" },
-  ] as never)
+  ])
   assert.match(range!.text, /Location: lines 3-9/)
   assert.match(range!.text, /Diff Content:\n\+x/)
 })
@@ -376,10 +346,12 @@ test("a conversation with no image says so, and counts its turns", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("only the run kinds the platform has are accepted", () => {
-  assert.equal(parseAgentType(AgentType.IDE), AgentType.IDE)
-  assert.equal(parseAgentType("cli"), AgentType.CLI)
-  assert.equal(parseAgentType("something-else"), undefined)
-  assert.equal(parseAgentType(undefined), undefined)
+  assert.equal(resolveAgentType(AgentType.IDE), AgentType.IDE)
+  assert.equal(resolveAgentType("cli"), AgentType.CLI)
+  assert.equal(resolveAgentType("something-else"), undefined)
+  assert.equal(resolveAgentType(undefined), undefined)
+  assert.equal(resolveAgentType(null), undefined)
+  assert.equal(resolveAgentType(12), undefined)
 })
 
 test("a goal's continuation and its ending are both counted", () => {
@@ -476,13 +448,12 @@ test("a side-channel action recomputes the state and runs no tool", async () => 
 })
 
 test("a summary and a notification are not real user messages", () => {
-  assert.equal(isSyntheticUserMessage({ role: "user", providerOptions: { cursor: { isSummary: true } } }), true)
+  assert.equal(isSyntheticUserMessage({ role: "user", providerOptions: { cursor: { isSummary: true } } } as never), true)
   assert.equal(isSyntheticUserMessage({ role: "user", content: "hello" }), false)
   assert.equal(
     isSyntheticUserMessage({ role: "user", content: `<${NOTIFICATION_TAG_NAMES[0]}>wake up</${NOTIFICATION_TAG_NAMES[0]}>` }),
     true,
   )
-  assert.equal(extractCursorProviderOptions({ role: "user", providerOptions: { cursor: { isSummary: true } } })?.isSummary, true)
 })
 
 test("a message that merely mentions a notification is still a real message", () => {
@@ -544,10 +515,14 @@ test("the snapshot keeps the end of the output, not the beginning", () => {
 test("a network failure is named as one, from the command or from the output", () => {
   assert.equal(isNetworkCommand("curl https://x.test"), true)
   assert.equal(isNetworkCommand("  GIT push"), true)
+  assert.equal(isNetworkCommand("npm install package"), true)
   assert.equal(isNetworkCommand("ls -la"), false)
   assert.equal(analyzeFailure(1, "", "curl https://x.test"), "network")
   assert.equal(analyzeFailure(1, "Could not resolve host: x.test"), "network")
+  assert.equal(analyzeFailure(1, "operation not permitted", "curl https://x.test"), "network")
   assert.equal(analyzeFailure(1, "operation not permitted"), "sandbox")
+  assert.equal(analyzeFailure(null, "EACCES"), "sandbox")
+  assert.equal(analyzeFailure(0, "EACCES"), "unknown")
   assert.equal(analyzeFailure(1, "something went wrong"), "unknown")
   assert.equal(analyzeFailure(0, ""), "unknown")
 })
@@ -560,10 +535,10 @@ test("plan mode allows markdown and the platform's own canvases, and refuses the
   assert.equal(isPlanModeAllowedEditPath("/p/plan.md"), true)
   assert.equal(isPlanModeAllowedEditPath("/p/code.ts"), false)
 
-  assertPlanModeAllowsFileEdit("/p/plan.md", { mode: AgentMode.PLAN })
-  assertPlanModeAllowsFileEdit("/p/code.ts", { mode: AgentMode.AGENT })
+  assertPlanModeAllowsFileEdit("/p/plan.md", isPlanMode(AgentMode.PLAN))
+  assertPlanModeAllowsFileEdit("/p/code.ts", isPlanMode(AgentMode.AGENT))
   assert.throws(
-    () => assertPlanModeAllowsFileEdit("/p/code.ts", { mode: AgentMode.PLAN }),
+    () => assertPlanModeAllowsFileEdit("/p/code.ts", isPlanMode(AgentMode.PLAN)),
     (error: unknown) => {
       assert.equal((error as Error).message, PLAN_MODE_NON_MARKDOWN_EDIT_ERROR)
       return true

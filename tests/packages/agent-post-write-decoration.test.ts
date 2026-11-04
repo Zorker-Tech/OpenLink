@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 
 import { decoratePostWriteResultForModel } from "../../source/packages/agent/tools/core/edit/post-write-result-decoration.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { configOverridesKey } from "../../source/packages/agent/utils/config-overrides.ts"
+import { slateConfigOverridesKey } from "../../source/packages/agent/utils/config-override-reader.ts"
 import { loggerKey } from "../../source/packages/context/logging.ts"
 import { metricsKey } from "../../source/packages/metrics/index.ts"
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
@@ -12,8 +12,8 @@ import { agentStoreConflictNoticeExecutorResource } from "../../source/packages/
 import {
   CanvasDiagnosticsResult,
   CanvasDiagnosticsSuccess,
-} from "../../source/packages/proto/generated/agent/v1/canvas_diagnostics_exec_pb.ts"
-import { Diagnostic, DiagnosticSeverity } from "../../source/packages/proto/generated/agent/v1/diagnostics_exec_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/canvas_diagnostics_exec_pb.ts"
+import { Diagnostic, DiagnosticSeverity } from "../../source/adapters/interop/proto/generated/agent/v1/diagnostics_exec_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a write's result, decorated by the two things that happen after a save
@@ -289,7 +289,7 @@ test("a diagnostic without a position or a source reports zeroes and no suffix",
 
 test("a canvas check that hangs is given up on and the write is reported", async () => {
   const harnessed = harness({ diagnosticsHang: 200 })
-  const ctx = createContext().with(conversationIdKey, "conversation-1").with(configOverridesKey, { canvas_post_edit_diagnostics_timeout_ms: 5 })
+  const ctx = createContext().with(conversationIdKey, "conversation-1").with(slateConfigOverridesKey, { canvas_post_edit_diagnostics_timeout_ms: 5 })
   assert.equal(await decorate(harnessed, { path: CANVAS_PATH, ctx }), "the file was written")
 })
 

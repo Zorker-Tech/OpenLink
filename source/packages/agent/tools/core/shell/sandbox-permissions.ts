@@ -1,18 +1,5 @@
-/**
- * The permissions a shell command may ask for.
- *
- * A command that needs the network or the ability to write says so in its arguments, and what it is
- * allowed to ask for depends on the session: a read-only session may ask for the network and nothing
- * else, a strict one may ask for the network or for everything but only one at a time, and an ordinary
- * one may also ask for write access to git. The list is read leniently, because a model that asks for a
- * single permission writes it as a bare word as often as it writes a list.
- *
- * The sandbox's network information is read here too: a session with a network allowlist — its own
- * defaults or an explicit entry — is one where a command may be told it has the network.
- */
-
+/** The permissions a shell command can request under each session policy. */
 import { z } from "zod"
-
 import { lenientArray } from "../../lenient-array.ts"
 
 export interface SandboxNetworkInfo {
@@ -21,26 +8,50 @@ export interface SandboxNetworkInfo {
 }
 
 export function hasNetworkAllowlist(info: SandboxNetworkInfo | undefined): boolean {
-  if (!info) return false
-  return info.hasDefaults || info.explicitEntries.length > 0
+  return info != null && (info.hasDefaults || info.explicitEntries.length > 0)
 }
 
-export function getRequiredPermissionsSchema(options: { readonly isReadonly: boolean; readonly strict?: boolean }): z.ZodTypeAny {
-  if (options.isReadonly) {
-    return lenientArray(z.array(z.enum(["full_network", "network"])), {
-      field: "required_permissions",
-      primitiveItems: true,
-    }).optional().describe("Optional list of permissions to request if the command needs them (full_network).")
-  }
-  if (options.strict === true) {
-    // One permission at a time, and nothing beyond the network or everything.
-    return lenientArray(z.array(z.enum(["full_network", "all"])).max(1), {
-      field: "required_permissions",
-      primitiveItems: true,
-    }).optional().describe("Optional list of permissions to request if the command needs them (full_network, all).")
-  }
-  return lenientArray(z.array(z.enum(["git_write", "full_network", "network", "all"])), {
+type PermissionChoices = readonly [string, ...string[]]
+
+interface PermissionProfile {
+  readonly choices: PermissionChoices
+  readonly maximumCount?: number | undefined
+  readonly description: string
+}
+
+const READ_ONLY_PROFILE: PermissionProfile = {
+  choices: ["full_network", "network"],
+  description: "Optional list of permissions to request if the command needs them (full_network).",
+}
+
+const STRICT_PROFILE: PermissionProfile = {
+  choices: ["full_network", "all"],
+  maximumCount: 1,
+  description: "Optional list of permissions to request if the command needs them (full_network, all).",
+}
+
+const FLEXIBLE_PROFILE: PermissionProfile = {
+  choices: ["git_write", "full_network", "network", "all"],
+  description: "Optional list of permissions to request if the command needs them (full_network, all).",
+}
+
+function permissionListSchema(profile: PermissionProfile): z.ZodTypeAny {
+  const allowed = z.array(z.enum([...profile.choices] as [string, ...string[]]))
+  const bounded = profile.maximumCount === undefined ? allowed : allowed.max(profile.maximumCount)
+  return lenientArray(bounded, {
     field: "required_permissions",
     primitiveItems: true,
-  }).optional().describe("Optional list of permissions to request if the command needs them (full_network, all).")
+  }).optional().describe(profile.description)
+}
+
+export function getRequiredPermissionsSchema(options: {
+  readonly isReadonly: boolean
+  readonly strict?: boolean | undefined
+}): z.ZodTypeAny {
+  const profile = options.isReadonly
+    ? READ_ONLY_PROFILE
+    : options.strict === true
+      ? STRICT_PROFILE
+      : FLEXIBLE_PROFILE
+  return permissionListSchema(profile)
 }

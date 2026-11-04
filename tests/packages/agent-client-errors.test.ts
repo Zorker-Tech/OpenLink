@@ -10,7 +10,7 @@ import {
   RetriableError,
   classifyError,
 } from "../../source/packages/agent-client/errors.ts";
-import { ErrorDetails_Error } from "../../source/packages/proto/generated/aiserver/v1/utils_pb.ts";
+import { ErrorDetails_Error } from "../../source/adapters/interop/proto/generated/aiserver/v1/utils_pb.ts";
 
 function connectError(code: number, details: any[], message = "backend failed", metadata: Record<string, string> = {}) {
   return Object.assign(new Error(message), {
@@ -70,11 +70,13 @@ describe("classifying a backend failure", () => {
     const rejected = classifyError(connectError(Code.Unknown, [detail(ErrorDetails_Error.NOT_LOGGED_IN, { analyticsMetadata: { actionRequired: "reconnect" }, title: "T", detail: "D", isRetryable: true })]));
     assert.equal(rejected instanceof ActionRequiredError, true);
     assert.equal((rejected as ActionRequiredError).action, "reconnect");
-    assert.deepEqual(rejected.displayInfo?.title, "T");
-    assert.deepEqual(rejected.displayInfo?.detail, "D");
+    assert.equal(rejected.displayInfo?.title, "T");
+    assert.equal(rejected.displayInfo?.detail, "D");
     assert.equal(rejected.displayInfo?.isRetryable, true);
     assert.equal(rejected.displayInfo?.connectCode, Code.Unknown);
-    assert.equal(rejected.displayInfo?.errorCode, ErrorDetails_Error.NOT_LOGGED_IN);
+    assert.equal(rejected.displayInfo?.errorCode, "authentication");
+    assert.equal(rejected.displayInfo?.errorDetails?.actionRequired, "reconnect");
+    assert.equal(rejected.displayInfo?.errorDetails?.expected, undefined);
   });
 
   it("keeps a terminal message and a non-retriable detail terminal", () => {

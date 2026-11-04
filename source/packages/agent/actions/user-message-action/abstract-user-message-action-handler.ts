@@ -1,11 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { RE2JS } from "re2js";
-import { InteractionUpdate, AgentMode, ResponseComparisonCompleted, ResponseComparisonDisplayOrder, ResponseComparisonSkipped, ResponseComparisonSkipReason, ResponseComparisonStarted, ResponseComparisonTextDelta, ResponseComparisonUpdate, UserMessage } from "../../../proto/generated/agent/v1/agent_pb.ts";
-import { TodoStatus } from "../../../proto/generated/agent/v1/todo_tool_pb.ts";
-import { RequestContext } from "../../../proto/generated/agent/v1/request_context_exec_pb.ts";
-import { createRedactedConversationTokenDetails, fromRedactedConversationPlan, fromRedactedToolCall, fromRedactedUserMessage, toRedactedConversationPlan, toRedactedInteractionUpdate, toRedactedToolCall } from "../../../redacted-protos/generated/agent/v1/agent_redacted.ts";
+import {
+  AgentModeInterop,
+  createEmptyRequestContextInterop,
+  createRedactedConversationTokenDetailsInterop,
+  createSyntheticUserMessageInterop,
+  fromRedactedConversationPlanInterop,
+  fromRedactedMcpToolDefinitionInterop,
+  fromRedactedRequestContextInterop,
+  fromRedactedTodoItemInterop,
+  fromRedactedToolCallInterop,
+  fromRedactedUserMessageInterop,
+  toRedactedConversationPlanInterop,
+  toRedactedInteractionUpdateInterop,
+  toRedactedTodoItemInterop,
+  toRedactedToolCallInterop,
+  TodoStatusInterop,
+  type RequestContextInterop,
+} from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import type { Context } from "../../../context/context.ts";
+import type { SlateConversationStep } from "../../conversation-step-state.ts";
 import type { RequestContextResources } from "../../utils/request-context.ts";
 import { createSpan } from "../../../context/telemetry.ts";
 import { createLogger } from "../../../context/logging.ts";
@@ -23,41 +38,55 @@ import { InteractionHandler } from "../../interaction-handler.ts";
 import { RedactedUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
 import { Updates } from "../../../agent-core/interaction-updates.ts";
 import { applyAskQuestionCompletion, type AskQuestionCompletionAction } from "../ask-question-completion.ts";
-import { resolveCurrentStepMode, resolveCurrentTurnMode } from "../../mode-processing.ts";
+import { fromInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
+import {
+  createRedactedResponseComparisonUpdateInterop,
+  type ResponseComparisonEventInterop,
+} from "../../../../adapters/interop/agent/response-comparison-interaction-adapter.ts";
 import { getBrowserToolNames } from "../../browser-tools.ts";
 import { AgentConversationTurnHandle } from "../../state.ts";
-import { toUnredactedInteractionListener } from "../../../agent-core/redacted-interaction-listener.ts";
-import { AgentLoopError, createLoopReminderMessage } from "../../loop-detection/agent-loop-detector.ts";
+import { toUnredactedInteractionListener } from "../../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
+import { AgentLoopError, createLoopReminderMessage } from "../../../../adapters/interop/agent/agent-loop-presentation-adapter.ts";
 import { enrichPendingToolCallJson, getAdmittedEffectiveToolName } from "../../pending-tool-call-contract.ts";
 import { getTaskToolName } from "../../tools/task-tool-name.ts";
 import { executeRemoteAfterAgentThoughtHook } from "../../tools/remote-hooks.ts";
 import { FileOperationLockManager } from "../../tools/core/file-operation-locks.ts";
-import { appendToolCallIdTagsToToolResults, shouldTagToolCallIdsForCurrentContext } from "../../tools/tool-call-id-tagging.ts";
+import { attachToolReferenceHints, shouldExposeToolReferencesInCurrentContext } from "../../tools/tool-call-id-tagging.ts";
 import { extractToolMetadataMap, getDirectDynamicToolNames, getExecutableTools, toAgentTools } from "../../tools/tool-execution.ts";
 import { executeDeferredToolCall, getEffectiveToolCallArgs, getEffectiveToolCallName, type NativeToolCallDescriptor } from "../../tool-stream-executor.ts";
 import { ToolCountingStateTracker, createToolCountingMiddleware } from "../../tool-counting-middleware.ts";
 import { applyRemindersToToolResults } from "../../reminders/apply-reminders.ts";
-import { fromRedactedTodoItem, toRedactedTodoItem } from "../../../redacted-protos/generated/agent/v1/todo_tool_redacted.ts";
 import { agentStoreConflictNoticeExecutorResource, conflictNoticeAck, conflictNoticeRelease, conflictNoticeSyncAndPeek } from "../../../agent-exec/agent-store-conflict-notice.ts";
 import { sanitizeSystemReminderContent } from "../../../hooks/system-reminder-sanitizing.ts";
 import { extractAutomationTriggerContext, getAllRules } from "../common.ts";
 import { mcpInputSchemaToJson, type McpInputSchemaLike } from "../../../agent-exec/mcp-operations.ts";
-import { fromRedactedMcpToolDefinition } from "../../../redacted-protos/generated/agent/v1/mcp_redacted.ts";
-import { fromRedactedRequestContext } from "../../../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts";
+import { redactedPromptTokenDetailsCodec } from "../../../../adapters/interop/agent/redacted-prompt-token-details-adapter.ts";
 import { getInvocationId } from "../../utils/invocation-id.ts";
 import { computeNextRedactedPromptContextDetails } from "../../utils/next-redacted-prompt-context-details.ts";
 import type { PromptTokenBreakdownParams } from "../../utils/prompt-token-breakdown.ts";
+import {
+  resolveCurrentStepMode,
+  resolveCurrentTurnMode,
+  SlateMode,
+  type SlateMode as SlateModeValue,
+} from "../../mode-processing.ts";
 import { EVAL_ENFORCED_WAIT_FOR_SUMMARIZATION_COMPLETION } from "../../utils/config-overrides.ts";
 import { trackPromptTokenUsage } from "../../utils/prompt-token-tracking.ts";
 import { getAgentEventTracker } from "../../utils/event-tracking.ts";
 import { requestPromptSuggestion } from "../../prompt-suggestion/prompt-suggestion-handler.ts";
 import { getAutoRoutingReasonFromContext, getClientVersionMetricTagsFromContext, getIsInternalTeamFromContext, getIsAutoFromContext, getIsDevFromContext, getIsPremiumFromContext, getIsSubagentFromContext, getIsUserApiKeyFromContext, getRequestId, getSdkFlavorMetricTagFromContext } from "../../utils/request-scope.ts";
-import { smartModeAutoRunInstructionsFromProtos } from "../../utils/permissions-instructions.ts";
+import { smartModeAutoRunInstructionsFromRequestContext } from "../../../../adapters/interop/agent/smart-mode-permissions-adapter.ts";
 import { isGoalContinuationNotificationMessage, isNotificationOnlyUserMessage } from "./synthetic-user-message.ts";
 import { warnIfLongTrailingUserMessageRun } from "./user-message-run-warning.ts";
 import type { AgentType } from "../../utils/agent-config.ts";
 
 type PromptTokenTrackingParamsLike = Parameters<typeof trackPromptTokenUsage>[0];
+
+export function slateModeFromUserMessage(
+  mode: AgentModeInterop | SlateModeValue | undefined,
+): SlateModeValue | undefined {
+  return typeof mode === "string" ? mode : fromInteropAgentMode(mode);
+}
 import type { AgentConfigTooling } from "../../agent-config-tooling.ts";
 import type { AgentToolsGenerator } from "../../tools/tools-generator.ts";
 import type { ToolSetHandle } from "../../tools/tool-execution.ts";
@@ -444,15 +473,9 @@ function hasReflectGeneralToolCall(
   return false;
 }
 
-function isSuccessfulCreatePlanStep(agentStep: unknown): boolean {
-  if (typeof agentStep !== "object" || agentStep === null || !("message" in agentStep)) return false;
-  const turnMessage = agentStep.message;
-  if (typeof turnMessage !== "object" || turnMessage === null || !("case" in turnMessage) || turnMessage.case !== "toolCall" || !("value" in turnMessage)) return false;
-  const messageValue = turnMessage.value;
-  if (typeof messageValue !== "object" || messageValue === null || !("tool" in messageValue)) return false;
-  const executableTool = messageValue.tool;
-  if (typeof executableTool !== "object" || executableTool === null || !("case" in executableTool) || executableTool.case !== "createPlanToolCall" || !("value" in executableTool)) return false;
-  const toolValue = executableTool.value;
+function isSuccessfulCreatePlanStep(agentStep: SlateConversationStep | undefined): boolean {
+  if (agentStep?.kind !== "tool-call" || agentStep.tool.case !== "createPlanToolCall") return false;
+  const toolValue = agentStep.tool.value;
   if (typeof toolValue !== "object" || toolValue === null || !("result" in toolValue)) return false;
   const stepResult = toolValue.result;
   if (typeof stepResult !== "object" || stepResult === null || !("result" in stepResult)) return false;
@@ -461,19 +484,7 @@ function isSuccessfulCreatePlanStep(agentStep: unknown): boolean {
 
 interface DeliveryTurnLike {
   readonly steps: readonly {
-    get(runContext: Context): Promise<{
-      readonly message: {
-        readonly case?: string;
-        readonly value?: {
-          readonly tool?: {
-            readonly case?: string;
-            readonly value?: {
-              readonly result?: { readonly result?: { readonly case?: string } };
-            };
-          };
-        };
-      };
-    }>;
+    get(runContext: Context): Promise<SlateConversationStep>;
   }[];
   readonly userMessage: {
     get(runContext: Context): Promise<{ readonly isSimulatedMsg?: boolean }>;
@@ -500,9 +511,10 @@ async function isSendMessageDeliveryOwed(
     for (let stepIndex = conversationTurn.steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
       const agentStep = await conversationTurn.steps[stepIndex]!.get(runContext);
       if (
-        agentStep.message.case === "toolCall" &&
-        agentStep.message.value?.tool?.case === "sendMessageToolCall" &&
-        agentStep.message.value.tool.value?.result?.result?.case === "success"
+        agentStep.kind === "tool-call" &&
+        agentStep.tool.case === "sendMessageToolCall" &&
+        (agentStep.tool.value as { readonly result?: { readonly result?: { readonly case?: string } } } | undefined)
+          ?.result?.result?.case === "success"
       ) {
         return false;
       }
@@ -763,7 +775,7 @@ const numberOfParallelToolCallsWithAtLeastOneCall = createHistogram("agent.unifi
   ],
 });
 
-type SmartModeRequestContextLike = Parameters<typeof smartModeAutoRunInstructionsFromProtos>[0];
+type SmartModeRequestContextLike = Parameters<typeof smartModeAutoRunInstructionsFromRequestContext>[0];
 
 interface ResponseComparisonSelectionLike {
   readonly displayOrder: "parent-first" | "alternate-first";
@@ -879,12 +891,12 @@ interface UserMessageActionHandlerConfigLike {
   readonly reminders?: Parameters<typeof applyRemindersToToolResults>[1];
   readonly messageHistoryModifier?: ((turnMessages: CoreMessageLike[]) => CoreMessageLike[] | undefined) | undefined;
   readonly systemPromptGenerator: (toolArgs: {
-    readonly requestContext: RequestContext;
+    readonly requestContext: RequestContextInterop;
     readonly cursorRules: ReturnType<typeof getAllRules>;
     readonly env: unknown;
     readonly browserTools: readonly string[];
     readonly cloudRule: unknown;
-    readonly mode: AgentMode;
+    readonly mode: SlateModeValue;
     readonly grindMode: { readonly phase: "executing" | "planning" };
   }, toolSetLease: ToolSetHandle) => string;
   readonly smartModeClassifierMode?: unknown;
@@ -919,9 +931,9 @@ interface RedactedActionCarrier {
 }
 
 interface RedactedUserMessageActionValue extends RedactedActionCarrier {
-  readonly userMessage?: Parameters<typeof fromRedactedUserMessage>[0];
+  readonly userMessage?: Parameters<typeof fromRedactedUserMessageInterop>[0];
   readonly requestContext?: {
-    readonly tools?: readonly Parameters<typeof fromRedactedMcpToolDefinition>[0][];
+    readonly tools?: readonly Parameters<typeof fromRedactedMcpToolDefinitionInterop>[0][];
   };
 }
 
@@ -1012,21 +1024,11 @@ interface ModelOnlyStepResultLike {
 
 interface RunStepTurnLike extends SetupStepTurnLike {
   readonly steps: readonly {
-    get(runContext: Context): Promise<{
-      readonly message: {
-        readonly case?: string;
-        readonly value?: {
-          readonly tool?: {
-            readonly case?: string;
-            readonly value?: { readonly result?: { readonly result?: { readonly case?: string } } };
-          };
-        };
-      };
-    }>;
+    get(runContext: Context): Promise<SlateConversationStep>;
   }[];
   readonly userMessage: {
     get(runContext: Context): Promise<{
-      readonly mode?: AgentMode | undefined;
+      readonly mode?: AgentModeInterop | SlateModeValue | undefined;
       readonly selectedContext?: PromptTokenTrackingParamsLike["selectedContext"];
       readonly messageId?: string | undefined;
     }>;
@@ -1036,14 +1038,15 @@ interface RunStepTurnLike extends SetupStepTurnLike {
 }
 
 interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationStateHandler {
-  mode?: AgentMode | undefined;
+  mode?: SlateModeValue | undefined;
+  readonly turns: SummarizationStateHandler["turns"];
   lastStepInvocationId?: string | undefined;
   lastSkillCatalogBudgetStrategy?: string | undefined;
   getPrivacyMode(): PrivacyMode;
   assertRootPromptBlobsLoadedForFullPromptRead(): void;
   invalidateRootPromptPrefix(): void;
   computeNewStructure(runContext: Context): Promise<{ pendingToolCalls: unknown[] }>;
-  setTokenDetails(tokenUsageDetails: ReturnType<typeof createRedactedConversationTokenDetails>): void;
+  setTokenDetails(tokenUsageDetails: ReturnType<typeof createRedactedConversationTokenDetailsInterop>): void;
   addTurnUsage(tokenUsage: {
     readonly inputTokens: number;
     readonly outputTokens: number;
@@ -1051,7 +1054,7 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
     readonly cacheWriteTokens: number;
     readonly reasoningTokens: number;
   }): void;
-  setMode(mode: AgentMode): void;
+  setMode(mode: SlateModeValue): void;
   createAgentTurn(
     runContext: Context,
     promptUserMessage: unknown,
@@ -1064,7 +1067,7 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
   readonly readPaths: ReadonlySet<string>;
   readonly backgroundSummarizationCancellationToken: { cancelled: boolean } | undefined;
   readonly selfSummaryInputLimitFailureTokenCount: number | undefined;
-  generateModeChangeContent(config: unknown, requestState: unknown, previousMode?: AgentMode): string;
+  generateModeChangeContent(config: unknown, requestState: unknown, previousMode?: SlateModeValue): string;
 }
 
 interface RetryOrchestratorLike {
@@ -1129,13 +1132,13 @@ interface MergedRequestContextToolLike {
 }
 
 interface SetupStepStateHandlerLike {
-  readonly mode?: AgentMode | undefined;
-  setMode(mode: AgentMode): void;
+  readonly mode?: SlateModeValue | undefined;
+  setMode(mode: SlateModeValue): void;
 }
 
 interface SetupStepTurnLike {
   readonly userMessage: {
-    get(runContext: Context): Promise<{ readonly mode?: AgentMode | undefined }>;
+    get(runContext: Context): Promise<{ readonly mode?: AgentModeInterop | SlateModeValue | undefined }>;
   };
 }
 
@@ -1195,20 +1198,16 @@ interface ResponseComparisonRunArgsLike {
   readonly alternateInvocationId?: string | undefined;
 }
 
-type ResponseComparisonEventLike =
-  | { readonly case: "started"; readonly value: ResponseComparisonStarted }
-  | { readonly case: "textDelta"; readonly value: ResponseComparisonTextDelta }
-  | { readonly case: "completed"; readonly value: ResponseComparisonCompleted }
-  | { readonly case: "skipped"; readonly value: ResponseComparisonSkipped };
+type ResponseComparisonEventLike = ResponseComparisonEventInterop;
 
 interface SplitStepStateMutationTarget {
-  readonly mode?: AgentMode | undefined;
+  readonly mode?: SlateModeValue | undefined;
   readonly turns: readonly { get(runContext: Context): Promise<unknown> }[];
   getBlobStore(): unknown;
   setActiveBranchName(branchName: string | undefined): void;
   persistSubagentState(runContext: Context, subagentId: string, subagentType: unknown, turnStatus: Partial<Record<string, unknown>>): void;
   setPlan(plan: unknown | undefined): void;
-  setMode(mode: AgentMode): void;
+  setMode(mode: SlateModeValue): void;
   setTodos(todos: readonly unknown[]): void;
   upsertPlanEntry(entry: unknown): void;
   setGoalState(goalState: unknown): void;
@@ -1248,7 +1247,7 @@ type SplitStepStateOp =
   | (SplitStepStateOpBase & { readonly type: "setActiveBranchName"; readonly branchName: string | undefined })
   | (SplitStepStateOpBase & { readonly type: "persistSubagentState"; readonly subagentId: string; readonly subagentType: unknown; readonly state: Partial<Record<string, unknown>> })
   | (SplitStepStateOpBase & { readonly type: "setPlan"; readonly plan: unknown | undefined })
-  | (SplitStepStateOpBase & { readonly type: "setMode"; readonly mode: AgentMode })
+  | (SplitStepStateOpBase & { readonly type: "setMode"; readonly mode: SlateModeValue })
   | (SplitStepStateOpBase & { readonly type: "setTodos"; readonly todos: readonly unknown[] })
   | (SplitStepStateOpBase & { readonly type: "upsertPlanEntry"; readonly entry: unknown })
   | (SplitStepStateOpBase & { readonly type: "setGoalState"; readonly goalState: unknown })
@@ -1324,13 +1323,13 @@ function createSplitStepStateHandler(
         return (plan: unknown | undefined) => {
           stateOperations.push({
             type: "setPlan",
-            plan: plan === undefined ? undefined : fromRedactedConversationPlan(plan, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+            plan: plan === undefined ? undefined : fromRedactedConversationPlanInterop(plan, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
           });
           return target.setPlan(plan);
         };
       }
       if (property === "setMode") {
-        return (mode: AgentMode) => {
+        return (mode: SlateModeValue) => {
           stateOperations.push({ type: "setMode", mode });
           return target.setMode(mode);
         };
@@ -1339,7 +1338,7 @@ function createSplitStepStateHandler(
         return (todos: readonly unknown[]) => {
           stateOperations.push({
             type: "setTodos",
-            todos: todos.map(todo => fromRedactedTodoItem(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
+            todos: todos.map(todo => fromRedactedTodoItemInterop(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
           });
           return target.setTodos(todos);
         };
@@ -1382,7 +1381,7 @@ function createSplitStepStateHandler(
     recordToolCall(pendingCall, callIdentifier) {
       stateOperations.push({
         type: "recordToolCall",
-        toolCall: fromRedactedToolCall(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+        toolCall: fromRedactedToolCallInterop(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
         toolCallId: callIdentifier,
       });
     },
@@ -1392,7 +1391,7 @@ function createSplitStepStateHandler(
     async upsertToolCall(_ctx, pendingCall, callIdentifier) {
       stateOperations.push({
         type: "recordToolCall",
-        toolCall: fromRedactedToolCall(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+        toolCall: fromRedactedToolCallInterop(pendingCall, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
         toolCallId: callIdentifier,
       });
     },
@@ -1414,13 +1413,13 @@ async function applyConversationStateOp(
       turnState.persistSubagentState(runContext, stateOperation.subagentId, stateOperation.subagentType, stateOperation.state);
       break;
     case "setPlan":
-      turnState.setPlan(stateOperation.plan === undefined ? undefined : toRedactedConversationPlan(stateOperation.plan, turnState.getPrivacyMode()));
+      turnState.setPlan(stateOperation.plan === undefined ? undefined : toRedactedConversationPlanInterop(stateOperation.plan, turnState.getPrivacyMode()));
       break;
     case "setMode":
       turnState.setMode(stateOperation.mode);
       break;
     case "setTodos":
-      turnState.setTodos(stateOperation.todos.map(todo => toRedactedTodoItem(todo, turnState.getPrivacyMode())));
+      turnState.setTodos(stateOperation.todos.map(todo => toRedactedTodoItemInterop(todo, turnState.getPrivacyMode())));
       break;
     case "upsertPlanEntry":
       turnState.upsertPlanEntry(stateOperation.entry);
@@ -1434,9 +1433,9 @@ async function applyConversationStateOp(
     case "recordToolCall":
       const pendingCall = stateOperation.toolCall as { readonly tool?: { readonly case?: string } };
       if (pendingCall.tool?.case === "askQuestionToolCall" && stateOperation.toolCallId !== undefined) {
-        await toolCallRecorder.upsertToolCall(runContext, toRedactedToolCall(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
+        await toolCallRecorder.upsertToolCall(runContext, toRedactedToolCallInterop(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
       } else {
-        toolCallRecorder.recordToolCall(toRedactedToolCall(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
+        toolCallRecorder.recordToolCall(toRedactedToolCallInterop(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
       }
       break;
     case "recordReadPath":
@@ -1510,7 +1509,7 @@ export class AbstractUserMessageActionHandler {
     if (!this.config.smartModeClassifierMode && !this.config.smartModeClassifierShadowMode) {
       return Promise.resolve(undefined);
     }
-    const { userAutoRunInstructions, hasAdminOverride } = smartModeAutoRunInstructionsFromProtos(requestState);
+    const { userAutoRunInstructions, hasAdminOverride } = smartModeAutoRunInstructionsFromRequestContext(requestState);
     if (hasAdminOverride) return Promise.resolve(undefined);
     if (userAutoRunInstructions !== undefined) return Promise.resolve(userAutoRunInstructions);
     return loadUserPermissionsFileAutoRunInstructions(runContext);
@@ -1519,7 +1518,7 @@ export class AbstractUserMessageActionHandler {
   getProjectPermissionsFileAutoRunInstructions(
     requestState: SmartModeRequestContextLike,
   ) {
-    const { projectAutoRunInstructions } = smartModeAutoRunInstructionsFromProtos(requestState);
+    const { projectAutoRunInstructions } = smartModeAutoRunInstructionsFromRequestContext(requestState);
     return projectAutoRunInstructions;
   }
 
@@ -1595,15 +1594,13 @@ export class AbstractUserMessageActionHandler {
         privacyMode: toolArgs.privacyMode,
         comparisonId: pendingState.comparisonId,
         event: {
-          case: "started",
-          value: new ResponseComparisonStarted({
-            displayOrder: preparedSelection.selection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST,
-            parentInvocationId: toolArgs.parentInvocationId,
-            alternateInvocationId: pendingState.alternateInvocationId,
-            parentResponse: "",
-            comparisonConfigId: preparedSelection.selection.comparisonConfigId,
-            alternateModelId: alternateModelIdForAnalytics(preparedSelection.selection),
-          }),
+          kind: "started",
+          displayOrder: preparedSelection.selection.displayOrder === "parent-first" ? "parent-first" : "alternate-first",
+          parentInvocationId: toolArgs.parentInvocationId,
+          alternateInvocationId: pendingState.alternateInvocationId,
+          parentResponse: "",
+          comparisonConfigId: preparedSelection.selection.comparisonConfigId,
+          alternateModelId: alternateModelIdForAnalytics(preparedSelection.selection),
         },
       });
     } catch (error) {
@@ -1636,7 +1633,7 @@ export class AbstractUserMessageActionHandler {
   }
 
   async cancelPendingAgentResponseComparison(
-    retryReason: ResponseComparisonSkipReason = ResponseComparisonSkipReason.CANCELLED,
+    retryReason: Extract<ResponseComparisonEventLike, { readonly kind: "skipped" }>["reason"] = "cancelled",
   ): Promise<void> {
     const pendingState = this.pendingResponseComparison;
     if (pendingState === undefined) return;
@@ -1646,7 +1643,7 @@ export class AbstractUserMessageActionHandler {
         ctx: pendingState.ctx,
         privacyMode: pendingState.privacyMode,
         comparisonId: pendingState.comparisonId,
-        event: { case: "skipped", value: new ResponseComparisonSkipped({ reason: retryReason }) },
+        event: { kind: "skipped", reason: retryReason },
       });
     } catch (error) {
       agentLogger.warn(pendingState.ctx, "Agent response comparison skip update failed open", { error });
@@ -1750,7 +1747,7 @@ export class AbstractUserMessageActionHandler {
         try {
           const refined = await comparisonCapability.refineSelection({ ctx: comparisonCtx, parentResponse: toolArgs.parentResponse, messages: toolArgs.messages, selection: modelSelection });
           if (refined === undefined) {
-            await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
+            await sendEvent({ kind: "skipped", reason: "cancelled" });
             return;
           }
           modelSelection = refined;
@@ -1759,7 +1756,7 @@ export class AbstractUserMessageActionHandler {
         }
       }
       if (!toolArgs.pendingUi) {
-        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: modelSelection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) }) });
+        await sendEvent({ kind: "started", displayOrder: modelSelection.displayOrder === "parent-first" ? "parent-first" : "alternate-first", parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) });
       }
       stepResult = comparisonCapability.execute({ ctx: comparisonCtx, selection: modelSelection, messages: toolArgs.messages, tools: toolArgs.tools, invocationId: alternateInvocationId });
       let sawToolCall = false;
@@ -1784,37 +1781,37 @@ export class AbstractUserMessageActionHandler {
       }
       const modelResponse = await stepResult.response;
       if (sawToolCall || containsToolCall(modelResponse.messages)) {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.ALTERNATE_TOOL_CALL }) });
+        await sendEvent({ kind: "skipped", reason: "alternate-tool-call" });
         return;
       }
       if (modelResponse.error !== undefined) throw modelResponse.error;
       if (exceededMaxResponseChars) {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
+        await sendEvent({ kind: "skipped", reason: "cancelled" });
         return;
       }
       const alternateResponse = bufferedTextDeltas.join("");
       if (alternateResponse.trim().length === 0) throw new Error("Alternate response completed without text");
       if (!toolArgs.preparedAttempt.hasSufficientCharacterDiff(toolArgs.parentResponse, alternateResponse)) {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
+        await sendEvent({ kind: "skipped", reason: "cancelled" });
         return;
       }
       if (!toolArgs.pendingUi && !await toolArgs.preparedAttempt.commitCooldown()) {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
+        await sendEvent({ kind: "skipped", reason: "cancelled" });
         return;
       }
       if (toolArgs.pendingUi) {
-        await sendEvent({ case: "started", value: new ResponseComparisonStarted({ displayOrder: modelSelection.displayOrder === "parent-first" ? ResponseComparisonDisplayOrder.PARENT_FIRST : ResponseComparisonDisplayOrder.ALTERNATE_FIRST, parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) }) });
+        await sendEvent({ kind: "started", displayOrder: modelSelection.displayOrder === "parent-first" ? "parent-first" : "alternate-first", parentInvocationId: toolArgs.parentInvocationId, alternateInvocationId, parentResponse: toolArgs.parentResponse, comparisonConfigId: modelSelection.comparisonConfigId, alternateModelId: alternateModelIdForAnalytics(modelSelection) });
       }
-      await sendEvent({ case: "textDelta", value: new ResponseComparisonTextDelta({ text: alternateResponse }) });
+      await sendEvent({ kind: "text-delta", text: alternateResponse });
       if (toolArgs.pendingUi && !await toolArgs.preparedAttempt.commitCooldown()) {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: ResponseComparisonSkipReason.CANCELLED }) });
+        await sendEvent({ kind: "skipped", reason: "cancelled" });
         return;
       }
-      await sendEvent({ case: "completed", value: new ResponseComparisonCompleted() });
+      await sendEvent({ kind: "completed" });
     } catch (error) {
-      const retryReason = toolArgs.ctx.signal.aborted ? ResponseComparisonSkipReason.CANCELLED : comparisonCtx.signal.aborted ? ResponseComparisonSkipReason.TIMEOUT : ResponseComparisonSkipReason.INFERENCE_ERROR;
+      const retryReason = toolArgs.ctx.signal.aborted ? "cancelled" : comparisonCtx.signal.aborted ? "timeout" : "inference-error";
       try {
-        await sendEvent({ case: "skipped", value: new ResponseComparisonSkipped({ reason: retryReason }) }, toolArgs.ctx);
+        await sendEvent({ kind: "skipped", reason: retryReason }, toolArgs.ctx);
       } catch (sendError) {
         agentLogger.warn(toolArgs.ctx, "Agent response comparison failed open", { error, sendError });
       }
@@ -1831,12 +1828,11 @@ export class AbstractUserMessageActionHandler {
     readonly comparisonId: string;
     readonly event: ResponseComparisonEventLike;
   }): Promise<void> {
-    await this.interactionListener.sendUpdate(toolArgs.ctx, toRedactedInteractionUpdate(new InteractionUpdate({
-      message: {
-        case: "responseComparison",
-        value: new ResponseComparisonUpdate({ comparisonId: toolArgs.comparisonId, event: toolArgs.event }),
-      },
-    }), toolArgs.privacyMode));
+    await this.interactionListener.sendUpdate(toolArgs.ctx, createRedactedResponseComparisonUpdateInterop({
+      comparisonId: toolArgs.comparisonId,
+      event: toolArgs.event,
+      privacyMode: toolArgs.privacyMode,
+    }));
   }
 
   createAfterAgentThoughtCallback(callInvocationId: string, requestState: {
@@ -1880,7 +1876,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryInfos: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
     previousQueuedMessageSource: unknown,
@@ -1906,7 +1902,7 @@ export class AbstractUserMessageActionHandler {
         this.createAfterAgentThoughtCallback(callInvocationId, requestState),
       );
       const promptUserMessage = await conversationTurn.userMessage.get(runContext);
-      const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+      const mode = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode));
       const toolSetLease = toolSetGenerator({
         resourceAccessor: this.resourceAccessor,
         stateHandler: turnState,
@@ -2119,8 +2115,8 @@ export class AbstractUserMessageActionHandler {
         descriptionProps: toolSetLease.getDescriptionProps(),
         totalUsedTokens: tokenUsage.totalTokens,
         maxTokens: usageDetails.maxTokens,
-      });
-      turnState.setTokenDetails(createRedactedConversationTokenDetails(turnState.getPrivacyMode(), {
+      }, redactedPromptTokenDetailsCodec);
+      turnState.setTokenDetails(createRedactedConversationTokenDetailsInterop(turnState.getPrivacyMode(), {
         usedTokens: tokenUsage.totalTokens,
         maxTokens: usageDetails.maxTokens,
         breakdown: promptContextDetails!.breakdown,
@@ -2178,8 +2174,8 @@ export class AbstractUserMessageActionHandler {
         if (conversationTurn.steps.length > 0) {
           const lastStepRef = conversationTurn.steps[conversationTurn.steps.length - 1]!;
           const lastStep = await lastStepRef.get(runContext);
-          if (lastStep.message.case === "toolCall") {
-            const toolCase = lastStep.message.value?.tool?.case;
+          if (lastStep.kind === "tool-call") {
+            const toolCase = lastStep.tool.case;
             if (toolCase !== undefined) priorToolCallName = toolCase.replace("ToolCall", "").replace(/_/g, "-");
           }
         }
@@ -2249,7 +2245,7 @@ export class AbstractUserMessageActionHandler {
         const deliveryObligationSatisfied = hasSendMessageCapability && !deliveryOwed && !hasTrailingToolFailure;
         const isRetryEnabled = this.config.featureFlags?.enableEmptyResponseRetry === true;
         const isMetaParentAgent = this.config.featureFlags?.glassMetaParentAgent === true;
-        const isMultitaskMode = mode === AgentMode.MULTITASK;
+        const isMultitaskMode = mode === SlateMode.MULTITASK;
         const alreadyRetried = maxOutputTokenRetryDebug?.didRetryAfterEmptyResponse === true;
         const isLastRetryLoopIteration = (maxOutputTokenRetryDebug?.retryLoopIteration ?? 0) >= MAX_RETRY_ITERATIONS - 1;
         const turnBudget = maxOutputTokenRetryDebug?.emptyResponseRetryTurnBudget;
@@ -2560,7 +2556,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly MergedRequestContextToolLike[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<void> {
     using spanContext = createSpan(parentCtx.withName("runTurnLoop"));
@@ -2578,8 +2574,8 @@ export class AbstractUserMessageActionHandler {
     const hadPreviousAssistantMessage = promptExecutor.getMessages().some(turnMessage => turnMessage.role === "assistant");
     const initialTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
     const initialTodoCount = initialTodos.length;
-    const hadUnfinishedTodosAtStart = initialTodos.some(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS);
-    const unfinishedTodosAtStart = initialTodos.filter(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS).length;
+    const hadUnfinishedTodosAtStart = initialTodos.some(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS);
+    const unfinishedTodosAtStart = initialTodos.filter(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS).length;
     let conversationTurn = initialTurn;
     let currentMcpTools = mcpToolSet;
     let assistantMessagesSinceLastReflectGeneral = 0;
@@ -2588,7 +2584,7 @@ export class AbstractUserMessageActionHandler {
     const cliReflectGeneralReminderText = this.config.featureFlags?.cliReflectGeneralConfig?.forcedFollowUpMessage ?? DEFAULT_CLI_REFLECT_GENERAL_REMINDER_TEXT;
     let cliReflectGeneralFollowUpsSentInTurn = 0;
     const promptUserMessage = await initialTurn.userMessage.get(runContext);
-    turnState.setMode(resolveCurrentTurnMode(turnState.mode, promptUserMessage.mode));
+    turnState.setMode(resolveCurrentTurnMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode)));
     const maxSteps = this.config.maxSteps;
     if (typeof maxSteps !== "number" || !Number.isFinite(maxSteps) || maxSteps <= 0) {
       throw new Error("Max steps must be a finite number greater than 0");
@@ -2863,7 +2859,7 @@ export class AbstractUserMessageActionHandler {
       }
       try {
         const finalTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
-        const unfinishedTodoCount = finalTodos.filter(todo => todo.status === TodoStatus.PENDING || todo.status === TodoStatus.IN_PROGRESS).length;
+        const unfinishedTodoCount = finalTodos.filter(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS).length;
         if (unfinishedTodoCount > 0) {
           unfinishedTodosMetric.increment(runContext, unfinishedTodoCount);
           agentLogger.info(runContext, "Turn ended with unfinished todos", { unfinishedTodoCount });
@@ -2900,7 +2896,7 @@ export class AbstractUserMessageActionHandler {
       if (this.config.featureFlags?.enablePromptSuggestion && this.config.modelId !== undefined) {
         try {
           const userMessageForTools = await conversationTurn.userMessage.get(runContext);
-          const modeForTools = resolveCurrentStepMode(turnState.mode, userMessageForTools.mode);
+          const modeForTools = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(userMessageForTools.mode));
           const toolSetHandleForSuggestion = toolSetGenerator({
             resourceAccessor: this.resourceAccessor,
             stateHandler: turnState,
@@ -2968,15 +2964,15 @@ export class AbstractUserMessageActionHandler {
     turnState: RunStepStateHandlerLike,
     _turn: RunStepTurnLike,
     reminderText: string,
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<RunStepTurnLike> {
-    const syntheticUserMessage = new UserMessage({
+    const syntheticUserMessage = createSyntheticUserMessageInterop({
       text: reminderText,
       messageId: randomUUID(),
       isSimulatedMsg: true,
     });
-    await this.interactionListener.sendUpdate(runContext, toRedactedInteractionUpdate(Updates.userMessageAppended(syntheticUserMessage), turnState.getPrivacyMode()));
+    await this.interactionListener.sendUpdate(runContext, toRedactedInteractionUpdateInterop(Updates.userMessageAppended(syntheticUserMessage), turnState.getPrivacyMode()));
     const newTurn = await turnState.createAgentTurn(runContext, syntheticUserMessage, requestState, this.config, this.resourceAccessor);
     if (this.config.immediatelyUpdateStateOnNewTurn) {
       if (this.config.fireAndForgetCheckpoints) {
@@ -3021,7 +3017,7 @@ export class AbstractUserMessageActionHandler {
       if (shouldCreateNewTurn) {
         try {
           await this.interactionListener.sendUpdate(runContext, RedactedUpdates.userMessageAppended(queuedMsg));
-          conversationTurn = await turnState.createAgentTurn(runContext, fromRedactedUserMessage(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), queuedReqContext === undefined ? new RequestContext() : fromRedactedRequestContext(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
+          conversationTurn = await turnState.createAgentTurn(runContext, fromRedactedUserMessageInterop(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), queuedReqContext === undefined ? createEmptyRequestContextInterop() : fromRedactedRequestContextInterop(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
         } catch (error) {
           if (consumedClaimedInjection) this.conversationActionReceiver.failConsumedInjectionDelivery?.();
           throw error;
@@ -3037,7 +3033,7 @@ export class AbstractUserMessageActionHandler {
         }
       }
       if (!consumedClaimedInjection) await this.conversationActionReceiver.pop(runContext);
-      const unredactedTools = queuedReqContext?.tools?.map(executableTool => fromRedactedMcpToolDefinition(executableTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)) ?? [];
+      const unredactedTools = queuedReqContext?.tools?.map(executableTool => fromRedactedMcpToolDefinitionInterop(executableTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)) ?? [];
       mcpToolSet = this.mergeRequestContextTools(currentMcpTools, unredactedTools);
     }
     return { turn: conversationTurn, hasQueuedMessages, mcpTools: mcpToolSet };
@@ -3050,14 +3046,14 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
   ): Promise<boolean> {
     if (this.config.featureFlags?.enableCliReflectGeneralTool !== true) {
       return false;
     }
     const promptUserMessage = await conversationTurn.userMessage.get(runContext);
-    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    const mode = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode));
     return toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
       stateHandler: turnState,
@@ -3162,7 +3158,7 @@ export class AbstractUserMessageActionHandler {
     const mergedTools = [...existingTools];
     for (const maybeRedTool of requestContextTools) {
       const executableTool = "_privacyMode" in maybeRedTool
-        ? fromRedactedMcpToolDefinition(maybeRedTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
+        ? fromRedactedMcpToolDefinitionInterop(maybeRedTool, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
         : maybeRedTool;
       const exists = mergedTools.some((t) => t.name === executableTool.name);
       if (!exists) {
@@ -3187,7 +3183,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
     previousQueuedMessageSource?: unknown,
@@ -3236,7 +3232,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
   ): Promise<{
     readonly tools: ReturnType<ToolSetHandle["getStaticTools"]>;
@@ -3245,7 +3241,7 @@ export class AbstractUserMessageActionHandler {
     readonly toolCallIdentityResolver: ToolSetHandle;
   }> {
     const promptUserMessage = await conversationTurn.userMessage.get(runContext);
-    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    const mode = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode));
     const toolSetLease = toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
       stateHandler: turnState,
@@ -3314,7 +3310,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     runStep: (
       runContext: Context,
@@ -3378,7 +3374,7 @@ export class AbstractUserMessageActionHandler {
     modelMessages: CoreMessageLike[],
     publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
     grindRebuildParams: {
-      readonly requestContext: RequestContext;
+      readonly requestContext: RequestContextInterop;
       readonly toolsGenerator: AgentToolsGenerator;
       readonly repositoryInfo: readonly unknown[];
       readonly mcpTools: readonly unknown[];
@@ -3392,12 +3388,12 @@ export class AbstractUserMessageActionHandler {
       await applyRemindersToToolResults(
         modelMessages,
         this.config.reminders,
-        currentTodos.map((todo) => fromRedactedTodoItem(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
+        currentTodos.map((todo) => fromRedactedTodoItemInterop(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
         conversationMessages,
       );
     }
-    if (shouldTagToolCallIdsForCurrentContext(runContext)) {
-      appendToolCallIdTagsToToolResults(modelMessages);
+    if (shouldExposeToolReferencesInCurrentContext(runContext)) {
+      attachToolReferenceHints(modelMessages);
     }
     conversationTurn.appendPromptMessages(toRedactedCoreMessages(modelMessages, turnState.getPrivacyMode()));
     if (this.config.messageHistoryModifier) {
@@ -3414,7 +3410,7 @@ export class AbstractUserMessageActionHandler {
     if (grindPhaseOverride !== undefined && grindRebuildParams) {
       const { requestContext: requestState, toolsGenerator: toolSetGenerator, repositoryInfo: repositoryDetails, mcpTools: mcpToolSet, fileOperationLockManager: fileLockManager } = grindRebuildParams;
       const promptUserMessage = await conversationTurn.userMessage.get(runContext);
-      const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+      const mode = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode));
       const toolSetLease = toolSetGenerator({
         resourceAccessor: this.resourceAccessor,
         stateHandler: turnState,
@@ -3470,7 +3466,7 @@ export class AbstractUserMessageActionHandler {
   ): Promise<{ readonly fileOperationLockManager: FileOperationLockManager }> {
     const promptUserMessage = await conversationTurn.userMessage.get(runContext);
     if (turnState.mode === void 0) {
-      turnState.setMode(resolveCurrentTurnMode(turnState.mode, promptUserMessage.mode));
+      turnState.setMode(resolveCurrentTurnMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode)));
     }
     const fileLockManager = new FileOperationLockManager();
     return { fileOperationLockManager: fileLockManager };
@@ -3484,7 +3480,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<{ readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("runSingleStep"));
@@ -3525,7 +3521,7 @@ export class AbstractUserMessageActionHandler {
     toolCallRecorder: SplitStepToolCallRecorderLike,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     allowedToolNames: ReadonlySet<string> | undefined,
     admittedEffectiveToolName: string | undefined,
@@ -3612,7 +3608,7 @@ export class AbstractUserMessageActionHandler {
     turnState: SplitStepStateMutationTarget,
     mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     logMessage: string,
   ): Promise<ToolExecutionContextLike & { readonly stateOps: readonly SplitStepStateOp[] }> {
@@ -3668,13 +3664,13 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<{
     readonly toolCallDescriptors: readonly unknown[];
     readonly splitStepData: {
       readonly modelResponseMessages: readonly CoreMessageLike[];
-      readonly requestContext: RequestContext;
+      readonly requestContext: RequestContextInterop;
       readonly allowedToolNames: readonly string[];
     };
   }> {
@@ -3712,7 +3708,7 @@ export class AbstractUserMessageActionHandler {
     turnState: SplitStepStateMutationTarget,
     mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
   ): Promise<{
     readonly toolCallId: string;
@@ -3765,7 +3761,7 @@ export class AbstractUserMessageActionHandler {
     turnState: SplitStepStateMutationTarget,
     mcpToolSet: readonly MergedRequestContextToolLike[],
     splitStepData: DeferredSplitStepDataLike,
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
   ): Promise<unknown> {
     const { toolMap, extraT: extraTools } = await this.buildDeferredToolExecutionContext(
@@ -3799,7 +3795,7 @@ export class AbstractUserMessageActionHandler {
     promptExecutor: RetryRootPromptExecutorLike,
     turnState: RunStepStateHandlerLike & SplitStepStateMutationTarget,
     mcpToolSet: readonly MergedRequestContextToolLike[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
   ): Promise<{ readonly state: { pendingToolCalls: unknown[] }; readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("finalizeStep"));
@@ -3857,7 +3853,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: readonly unknown[],
     repositoryDetails: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<ModelOnlyStepResultLike & { readonly availableToolNames: readonly string[] }> {
@@ -3899,7 +3895,7 @@ export class AbstractUserMessageActionHandler {
     toolSetGenerator: AgentToolsGenerator,
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryInfos: readonly unknown[],
-    requestState: RequestContext,
+    requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
     publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
   ): Promise<ModelOnlyStepResultLike> {
@@ -3923,7 +3919,7 @@ export class AbstractUserMessageActionHandler {
       this.createAfterAgentThoughtCallback(callInvocationId, requestState),
     );
     const promptUserMessage = await conversationTurn.userMessage.get(runContext);
-    const mode = resolveCurrentStepMode(turnState.mode, promptUserMessage.mode);
+    const mode = resolveCurrentStepMode(turnState.mode, slateModeFromUserMessage(promptUserMessage.mode));
     const toolSetLease = toolSetGenerator({
       resourceAccessor: this.resourceAccessor,
       stateHandler: turnState,
@@ -4067,8 +4063,8 @@ export class AbstractUserMessageActionHandler {
       descriptionProps: toolSetLease.getDescriptionProps(),
       totalUsedTokens: tokenUsage.totalTokens,
       maxTokens: usageDetails.maxTokens,
-    });
-    turnState.setTokenDetails(createRedactedConversationTokenDetails(turnState.getPrivacyMode(), {
+    }, redactedPromptTokenDetailsCodec);
+    turnState.setTokenDetails(createRedactedConversationTokenDetailsInterop(turnState.getPrivacyMode(), {
       usedTokens: tokenUsage.totalTokens,
       maxTokens: usageDetails.maxTokens,
       breakdown: promptContextDetails!.breakdown,

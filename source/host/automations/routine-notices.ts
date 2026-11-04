@@ -1,9 +1,9 @@
 /**
  * The notices a routine automation earns.
  *
- * A GitHub listener whose scope was never set is worth telling the user about, and an automation that predates the
- * scope being introduced is not — only the ones created after it are, so a user is not told about something that was
- * always so.
+ * A GitHub listener that predates account scoping can match activity from any contributor. The reminder gives the model
+ * a chance to compare that event with the saved prompt, while keeping changes conservative when the expected scope is
+ * not clear.
  */
 import { triggerListeners } from "../../shared/automations.ts";
 
@@ -11,39 +11,57 @@ export const GITHUB_LISTENER_SCOPE = "github-listener-scope";
 export const GITHUB_LISTENER_SCOPE_CREATED_BEFORE_MS = Date.UTC(2026, 6, 30);
 
 export interface NoticeAutomation {
-  createdAt: number;
-  trigger: Parameters<typeof triggerListeners>[0];
-  raisedNotices?: readonly string[];
+  readonly createdAt: number;
+  readonly trigger: Parameters<typeof triggerListeners>[0];
+  readonly raisedNotices?: readonly string[] | undefined;
 }
 
 export interface RoutineNotice {
-  id: string;
-  applies(automation: NoticeAutomation): boolean;
-  lines: readonly string[];
+  readonly id: string;
+  readonly applies: (automation: NoticeAutomation) => boolean;
+  readonly lines: readonly string[];
+}
+
+function hasUnscopedGithubListener(automation: NoticeAutomation): boolean {
+  return triggerListeners(automation.trigger).some(listener =>
+    listener.type === "github" && (listener.userAllowlist == null || listener.userAllowlist.length === 0)
+  );
+}
+
+function predatesAccountScope(automation: NoticeAutomation): boolean {
+  return automation.createdAt < GITHUB_LISTENER_SCOPE_CREATED_BEFORE_MS
 }
 
 const githubListenerScopeNotice: RoutineNotice = {
   id: GITHUB_LISTENER_SCOPE,
-  applies: (automation) => automation.createdAt < GITHUB_LISTENER_SCOPE_CREATED_BEFORE_MS && triggerListeners(automation.trigger).some(
-    (listener) => listener.type === "github" && (listener.userAllowlist == null || listener.userAllowlist.length === 0)
-  ),
+  applies: automation => predatesAccountScope(automation) && hasUnscopedGithubListener(automation),
   lines: [
-    `NOTICE ${GITHUB_LISTENER_SCOPE} (raised once for this routine, and only here — act on it now or not at all): this routine's github listener filters nobody, so it fires for everyone in the repo, the shape of a listener written before userAllowlist existed. Decide whether this event was genuinely in scope for the saved prompt; silence by design is not a wasted fire.`,
-    "If this fire is clearly wasted, update the listener now: narrow userAllowlist to a confirmed GitHub login or remove event kinds the saved prompt never covered. CI events are never user-gated. Tell the user what changed, and leave it alone when the mismatch or login is uncertain."
-  ]
+    `NOTICE ${GITHUB_LISTENER_SCOPE} (one reminder per automation): this older repository listener has no account filter, so a matching event can come from anyone in the repository. Compare it with the saved prompt; a run that does no work can still be intentional.`,
+    "If the event is clearly out of scope, narrow the listener to a confirmed GitHub account or remove event types the saved prompt does not handle. Keep CI events open to everyone. Tell the user what changed, and make no edit when the expected account or event scope is uncertain.",
+  ],
 };
 
 export const SLATE_ROUTINE_NOTICES: readonly RoutineNotice[] = [githubListenerScopeNotice];
+const KNOWN_NOTICE_IDS = new Set(SLATE_ROUTINE_NOTICES.map(notice => notice.id));
 
 export function isRoutineNoticeId(value: string): boolean {
-  return SLATE_ROUTINE_NOTICES.some((notice) => notice.id === value);
+  return KNOWN_NOTICE_IDS.has(value);
 }
 
 export function routineNoticesToRaise(automation: NoticeAutomation): RoutineNotice[] {
-  const raised = automation.raisedNotices ?? [];
-  return SLATE_ROUTINE_NOTICES.filter((notice) => notice.applies(automation) && !raised.includes(notice.id));
+  const alreadyShown = new Set(automation.raisedNotices ?? []);
+  const pending: RoutineNotice[] = [];
+  for (const notice of SLATE_ROUTINE_NOTICES) {
+    if (alreadyShown.has(notice.id) || !notice.applies(automation)) continue;
+    pending.push(notice);
+  }
+  return pending;
 }
 
 export function routineNoticeWakeLines(automation: NoticeAutomation): string[] {
-  return routineNoticesToRaise(automation).flatMap((notice) => [...notice.lines]);
+  const lines: string[] = [];
+  for (const notice of routineNoticesToRaise(automation)) {
+    for (const line of notice.lines) lines.push(line);
+  }
+  return lines;
 }

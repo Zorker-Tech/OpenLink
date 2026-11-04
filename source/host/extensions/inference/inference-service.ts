@@ -16,12 +16,16 @@ import type { SlateModelExperimentState } from "../../../shared/node/experiments
 import { SlateSettingsStore } from "../../../shared/node/settings/slate-settings-store.ts";
 import type { SlateInferenceProvider } from "../../../shared/inference-router.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
-import { createCursorSlateInference } from "./cursor-session.ts";
+import { createSlateInferenceSessionFactory } from "./slate-inference-session.ts";
 import { createProviderPromptSession } from "./provider-session.ts";
 import type { PromptExecutor } from "./slate-labeling.ts";
+import { wrapExecutorWithUsageRecording } from "./inference-usage-recording.ts";
+import {
+  createSlateInferenceSessionInteropAdapter,
+  videoAttachmentFeatureEnabled,
+} from "../../../adapters/interop/inference/slate-inference-session-adapter.ts";
 
-/** The gate that turns the video API on for a turn. */
-export const GEMINI_VIDEO_DEVELOPER_API_GATE = "gemini_video_developer_api";
+export { usageCountsFrom, wrapExecutorWithUsageRecording } from "./inference-usage-recording.ts";
 
 export interface HostInferenceOptions {
   auth: { getAccessToken(...args: unknown[]): Promise<string>; getMachineId(): string };
@@ -43,52 +47,16 @@ export interface HostInferenceOptions {
   onModelExperimentApplied(): void;
 }
 
-/** The counts a provider reported, with everything it did not report left out. */
-export function usageCountsFrom(usage: Record<string, unknown>): { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number } {
-  return {
-    ...(typeof usage.inputTokens === "number" ? { inputTokens: usage.inputTokens } : {}),
-    ...(typeof usage.outputTokens === "number" ? { outputTokens: usage.outputTokens } : {}),
-    ...(typeof usage.cacheReadTokens === "number" ? { cacheReadTokens: usage.cacheReadTokens } : {}),
-    ...(typeof usage.cacheWriteTokens === "number" ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
-  };
-}
-
-/**
- * An executor that writes down what a routed model spent, once the model says so: the stream's own answer is handed
- * back untouched, and a usage that arrived as a promise is awaited in the background.
- */
-export function wrapExecutorWithUsageRecording(executor: PromptExecutor, provider: SlateInferenceProvider, recordUsage: HostInferenceOptions["settings"]["recordInferenceUsage"]): PromptExecutor {
-  return {
-    appendMessages(messages) {
-      executor.appendMessages(messages);
-      return this;
-    },
-    getState: () => executor.getState(),
-    getMessages: () => executor.getMessages(),
-    clearMessages: () => executor.clearMessages(),
-    stream(...args: readonly unknown[]) {
-      const result = executor.stream(...args) as Record<string, any>;
-      const extendedUsage = result?.extendedUsage as PromiseLike<Record<string, unknown>> | undefined;
-      // A provider that reports nothing leaves nothing to write down.
-      if (extendedUsage != null && typeof extendedUsage.then === "function") {
-        void Promise.resolve(extendedUsage)
-          .then((usage) => recordUsage(provider, usageCountsFrom(usage)))
-          // A usage that could not be written down is not a reason to fail the turn it belonged to.
-          .catch(() => {});
-      }
-      return result;
-    },
-  };
-}
-
 export function createHostInference(options: HostInferenceOptions) {
   const { auth, experiments, settings } = options;
   // The provider a turn runs on is kept where the coordinator keeps it, not in the host's own settings.
   const routerSettings = new SlateSettingsStore(join(getSlateRootDir(), "settings.json"));
-  const cursor = createCursorSlateInference({
-    getAccessToken: auth.getAccessToken,
-    getMachineId: auth.getMachineId,
-    isGeminiVideoDeveloperApiEnabled: () => experiments.checkFeatureGate(GEMINI_VIDEO_DEVELOPER_API_GATE),
+  const slateSessions = createSlateInferenceSessionFactory({
+    interop: createSlateInferenceSessionInteropAdapter({
+      getAccessToken: auth.getAccessToken,
+      getMachineId: auth.getMachineId,
+    }),
+    isVideoAttachmentEnabled: () => videoAttachmentFeatureEnabled(experiments.checkFeatureGate),
     getDefaultModel: () => settings.getAgentDefaultModel(),
     getComputerUseModel: () => {
       const storedModel = settings.getComputerUseModel();
@@ -107,23 +75,23 @@ export function createHostInference(options: HostInferenceOptions) {
   });
 
   /** A session whose answer is measured: what a routed model spent is written against the provider that spent it. */
-  const routedSession = (session: ReturnType<typeof cursor.createSession>, provider: SlateInferenceProvider) => ({
+  const routedSession = (session: ReturnType<typeof slateSessions.createSession>, provider: SlateInferenceProvider) => ({
     getModelId: () => session.getModelId(),
     getExecutor: (state?: unknown) => wrapExecutorWithUsageRecording(session.getExecutor(state) as unknown as PromptExecutor, provider, settings.recordInferenceUsage.bind(settings)),
   });
 
   return {
-    ...cursor,
-    createSession(onRequestId: (requestId: string) => void, sessionOptions?: Parameters<typeof cursor.createSession>[1]) {
+    ...slateSessions,
+    createSession(onRequestId: (requestId: string) => void, sessionOptions?: Parameters<typeof slateSessions.createSession>[1]) {
       const provider = routerSettings.getInferenceProvider();
-      if (provider === "slate") return routedSession(cursor.createSession(onRequestId, sessionOptions), provider);
-      return createProviderPromptSession(provider) as ReturnType<typeof cursor.createSession>;
+      if (provider === "slate") return routedSession(slateSessions.createSession(onRequestId, sessionOptions), provider);
+      return createProviderPromptSession(provider) as ReturnType<typeof slateSessions.createSession>;
     },
-    createSummarizationSession(onRequestId: (requestId: string) => void, sessionOptions?: Parameters<NonNullable<typeof cursor.createSummarizationSession>>[1]) {
+    createSummarizationSession(onRequestId: (requestId: string) => void, sessionOptions?: Parameters<typeof slateSessions.createSummarizationSession>[1]) {
       const provider = routerSettings.getInferenceProvider();
       // A summarization is a session of its own whatever provider runs it.
-      if (provider === "slate") return routedSession(cursor.createSession(onRequestId, { ...(sessionOptions ?? {}), isSummarizationSession: true }), provider) as ReturnType<NonNullable<typeof cursor.createSummarizationSession>>;
-      return createProviderPromptSession(provider) as ReturnType<NonNullable<typeof cursor.createSummarizationSession>>;
+      if (provider === "slate") return routedSession(slateSessions.createSession(onRequestId, { ...(sessionOptions ?? {}), isSummarizationSession: true }), provider) as ReturnType<typeof slateSessions.createSummarizationSession>;
+      return createProviderPromptSession(provider) as ReturnType<typeof slateSessions.createSummarizationSession>;
     },
   };
 }

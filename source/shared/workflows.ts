@@ -1,8 +1,23 @@
-/**
- * The workflow surface a caller can hit.
- *
- * Publishing a skill can be refused, and a refusal travels as its own error so the caller can tell it from a failure
- * of the platform: the reason is what the refusal was, and the prefix is what makes it recognizable in a message. A
- * workflow may also refer to another node rather than embedding it, which is what the reference node type names.
- */
-export const SLATE_SKILL_PUBLISH_REFUSED = "skill-publish/refused"; export const SKILL_PUBLISH_REFUSAL_PREFIX = `${SLATE_SKILL_PUBLISH_REFUSED}: `; export class SlateSkillPublishError extends Error { constructor(reason: string) { super(`${SKILL_PUBLISH_REFUSAL_PREFIX}${reason}`); this.name = "SlateSkillPublishError"; } } export const WORKFLOW_REFERENCE_NODE_TYPE = "workflowReference";
+/** Values shared by the host's workflow records and publish commands. */
+const SKILL_PUBLISH_REFUSAL = {
+  code: "skill-publish/refused",
+  errorName: "SlateSkillPublishError",
+  separator: ": ",
+} as const;
+
+const REFERENCE_NODE_NAME = "workflowReference" as const;
+
+export const SLATE_SKILL_PUBLISH_REFUSED = SKILL_PUBLISH_REFUSAL.code;
+export const SKILL_PUBLISH_REFUSAL_PREFIX = `${SKILL_PUBLISH_REFUSAL.code}${SKILL_PUBLISH_REFUSAL.separator}`;
+export const WORKFLOW_REFERENCE_NODE_TYPE = REFERENCE_NODE_NAME;
+
+function refusalMessage(reason: string): string {
+  return `${SKILL_PUBLISH_REFUSAL_PREFIX}${reason}`;
+}
+
+export class SlateSkillPublishError extends Error {
+  constructor(reason: string) {
+    super(refusalMessage(reason));
+    this.name = SKILL_PUBLISH_REFUSAL.errorName;
+  }
+}

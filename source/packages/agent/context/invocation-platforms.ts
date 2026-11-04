@@ -1,276 +1,280 @@
-/**
- * What a turn is told when it was started from somewhere other than the editor.
- *
- * Three places a request can come from, and each arrives with context the model cannot guess. A message
- * from a chat integration is not from the user, so the channel, the thread and the sender are written out
- * — without them an agent answers as if the user had said it. A request started while the editor was open
- * arrives with what the user was looking at: the files they have open, the ones they looked at recently,
- * and any pull request they were reading, which is often the whole reason the question was asked. A pull
- * request is summarised rather than dumped: its title, its branch, a description capped at a readable
- * length, and — when the platform has written the details to disk — where they are and what is in each
- * file, so the model can read the diff itself instead of being handed all of it.
- *
- * Two of these are shaped by a session flag. A terminal file is a file the platform writes for a shell
- * session rather than one the user opened, so it is left out of both lists unless the session works with
- * them, and an active command is only mentioned in the same case.
- */
-
-import type {
-  InvocationContext,
-  InvocationContext_IdeState_ViewedPullRequest,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
-import { formatSlackSenderLine } from "../utils/slack-sender.ts"
-import { extractTerminalId } from "../../utils/managed-paths.ts"
+import { extractTerminalId } from "../../utils/managed-paths.ts";
+import { renderPullRequestInvocationContext, type PullRequestInvocationContext } from "./pull-request-invocation-context.ts";
 
 export interface InvocationTextContent {
-  readonly type: "text"
-  readonly text: string
+  readonly type: "text";
+  readonly text: string;
 }
 
-interface ViewedPullRequestSummaryFile {
-  readonly path: string
-  readonly diffFileName?: string
-  readonly status?: unknown
-  readonly diffLines?: unknown
-  readonly diffSizeChars?: unknown
-  readonly diffSizeBytes?: unknown
-  readonly originalSizeChars?: unknown
-  readonly originalSizeBytes?: unknown
+export interface InvocationThreadChannel {
+  readonly workspaceName?: string | undefined;
+  readonly workspaceDescription?: string | undefined;
+  readonly channelName?: string | undefined;
+  readonly channelDescription?: string | undefined;
+  readonly purpose?: string | undefined;
+  readonly topic?: string | undefined;
 }
 
-interface ViewedPullRequestSummary {
-  readonly headRef?: string
-  readonly baseRef?: string
-  readonly totalFiles?: unknown
-  readonly totalDiffLines?: unknown
-  readonly totalDiffSizeChars?: unknown
-  readonly totalDiffSizeBytes?: unknown
-  readonly files?: readonly ViewedPullRequestSummaryFile[]
+export interface InvocationThreadSender {
+  readonly name?: string | undefined;
+  readonly id?: string | undefined;
+  readonly kind?: string | undefined;
 }
 
-function renderSlackThread(
-  slackThread: Extract<InvocationContext["data"], { case: "slackThread" }>["value"],
-): string {
-  const hasChannelInfo = slackThread.channelName !== undefined && slackThread.channelName.length > 0 ||
-    slackThread.channelPurpose !== undefined && slackThread.channelPurpose.length > 0 ||
-    slackThread.channelTopic !== undefined && slackThread.channelTopic.length > 0
-  const hasThreadContext = slackThread.thread !== undefined && slackThread.thread.length > 0
-  let slackContextText = "<slack_context>\n"
-  if (hasChannelInfo) {
-    slackContextText += "<slack_channel>\n"
-    if (slackThread.channelName !== undefined && slackThread.channelName.length > 0) {
-      slackContextText += `Channel: #${slackThread.channelName}\n`
-    }
-    if (slackThread.channelPurpose !== undefined && slackThread.channelPurpose.length > 0) {
-      slackContextText += `Channel purpose: ${slackThread.channelPurpose}\n`
-    }
-    if (slackThread.channelTopic !== undefined && slackThread.channelTopic.length > 0) {
-      slackContextText += `Channel topic: ${slackThread.channelTopic}\n`
-    }
-    slackContextText += "</slack_channel>\n"
-  }
-  const senderLine = formatSlackSenderLine(slackThread.senderName, slackThread.senderId, slackThread.senderType)
-  if (hasThreadContext || senderLine !== undefined) {
-    slackContextText += "<slack_thread>\n"
-    if (hasThreadContext) {
-      slackContextText += `The user shared the following Slack thread for additional context
-${slackThread.thread}
-`
-    }
-    if (senderLine !== undefined) {
-      slackContextText += `${senderLine}
-`
-    }
-    slackContextText += "</slack_thread>\n"
-  }
-  slackContextText += "</slack_context>"
-  return slackContextText
+export interface InvocationThread {
+  readonly channel?: InvocationThreadChannel | undefined;
+  readonly body?: string | undefined;
+  readonly sender?: InvocationThreadSender | undefined;
 }
 
-function renderMicrosoftTeamsThread(
-  teamsThread: Extract<InvocationContext["data"], { case: "microsoftTeamsThread" }>["value"],
-): string {
-  const hasChannelMetadata = teamsThread.channelName !== undefined && teamsThread.channelName.length > 0 ||
-    teamsThread.channelDescription !== undefined && teamsThread.channelDescription.length > 0 ||
-    teamsThread.teamName !== undefined && teamsThread.teamName.length > 0 ||
-    teamsThread.teamDescription !== undefined && teamsThread.teamDescription.length > 0
-  const hasTeamsThreadContext = teamsThread.thread !== undefined && teamsThread.thread.length > 0
-  let teamsContextText = "<microsoft_teams_context>\n"
-  if (hasChannelMetadata) {
-    teamsContextText += "<microsoft_teams_channel>\n"
-    if (teamsThread.teamName !== undefined && teamsThread.teamName.length > 0) {
-      teamsContextText += `Team: ${teamsThread.teamName}\n`
-    }
-    if (teamsThread.teamDescription !== undefined && teamsThread.teamDescription.length > 0) {
-      teamsContextText += `Team description: ${teamsThread.teamDescription}\n`
-    }
-    if (teamsThread.channelName !== undefined && teamsThread.channelName.length > 0) {
-      teamsContextText += `Channel: #${teamsThread.channelName}\n`
-    }
-    if (teamsThread.channelDescription !== undefined && teamsThread.channelDescription.length > 0) {
-      teamsContextText += `Channel description: ${teamsThread.channelDescription}\n`
-    }
-    teamsContextText += "</microsoft_teams_channel>\n"
-  }
-  if (hasTeamsThreadContext) {
-    teamsContextText += `<microsoft_teams_thread>
-The user shared the following Microsoft Teams thread for additional context
-${teamsThread.thread}
-</microsoft_teams_thread>
-`
-  }
-  teamsContextText += "</microsoft_teams_context>"
-  return teamsContextText
+export interface InvocationEditorFile {
+  readonly path: string;
+  readonly totalLines?: number | undefined;
+  readonly activeCommand?: string | undefined;
+  readonly cursorLine?: number | undefined;
 }
 
-function renderViewedPullRequest(
-  viewedPr: InvocationContext_IdeState_ViewedPullRequest,
-): string {
-  let currentlyViewedPrSection = `PR #${viewedPr.number}`
-  if (viewedPr.title) {
-    currentlyViewedPrSection += `: ${viewedPr.title}`
+export interface InvocationPullRequestSummaryFile {
+  readonly path: string;
+  readonly diffFileName?: string | undefined;
+  readonly status?: unknown;
+  readonly diffLines?: unknown;
+  readonly diffSizeChars?: unknown;
+  readonly diffSizeBytes?: unknown;
+  readonly originalSizeChars?: unknown;
+  readonly originalSizeBytes?: unknown;
+}
+
+export interface InvocationPullRequestSummary {
+  readonly headRef?: string | undefined;
+  readonly baseRef?: string | undefined;
+  readonly totalFiles?: unknown;
+  readonly totalDiffLines?: unknown;
+  readonly totalDiffSizeChars?: unknown;
+  readonly totalDiffSizeBytes?: unknown;
+  readonly files?: readonly InvocationPullRequestSummaryFile[];
+}
+
+export interface InvocationViewedPullRequest {
+  readonly number: number;
+  readonly title?: string | undefined;
+  readonly url?: string | undefined;
+  readonly description?: string | undefined;
+  readonly folderPath?: string | undefined;
+  readonly summaryJson?: string | undefined;
+}
+
+export interface InvocationEditorState {
+  readonly recentlyViewedFiles: readonly InvocationEditorFile[];
+  readonly visibleFiles: readonly InvocationEditorFile[];
+  readonly currentlyViewedPullRequests?: readonly InvocationViewedPullRequest[] | undefined;
+}
+
+export type SlateInvocationContext =
+  | { readonly kind: "conversation"; readonly conversation: InvocationThread }
+  | { readonly kind: "editor"; readonly editor: InvocationEditorState }
+  | { readonly kind: "pull_request"; readonly pullRequest: PullRequestInvocationContext }
+  | { readonly kind: "unsupported" };
+
+export function formatInvocationSenderLine(
+  senderName?: string,
+  senderId?: string,
+  senderKind?: string,
+): string | undefined {
+  const name = senderName?.trim();
+  const id = senderId?.trim();
+  const hasName = name !== undefined && name.length > 0;
+  const hasId = id !== undefined && id.length > 0;
+  if (!hasName && !hasId) return undefined;
+
+  const kind = senderKind?.trim();
+  const kindSuffix = kind !== undefined && kind.length > 0 ? " (" + kind + ")" : "";
+  const label = hasName && hasId ? name + " (" + id + ")" : hasName ? name : id!;
+  return "The current message is being sent by " + label + kindSuffix;
+}
+
+function channelHasDetails(channel: InvocationThreadChannel): boolean {
+  return [
+    channel.workspaceName,
+    channel.workspaceDescription,
+    channel.channelName,
+    channel.channelDescription,
+    channel.purpose,
+    channel.topic,
+  ].some((value) => value !== undefined && value.length > 0);
+}
+
+function renderThreadChannel(channel: InvocationThreadChannel): string {
+  let section = "<conversation_channel>\n";
+  if (channel.workspaceName) section += "Workspace: " + channel.workspaceName + "\n";
+  if (channel.workspaceDescription) section += "Workspace details: " + channel.workspaceDescription + "\n";
+  if (channel.channelName) section += "Channel: #" + channel.channelName + "\n";
+  if (channel.channelDescription) section += "Channel details: " + channel.channelDescription + "\n";
+  if (channel.purpose) section += "Channel purpose: " + channel.purpose + "\n";
+  if (channel.topic) section += "Channel topic: " + channel.topic + "\n";
+  return section + "</conversation_channel>\n";
+}
+
+function renderConversationThread(conversation: InvocationThread): string {
+  let content = "<conversation_context>\n";
+  const channel = conversation.channel;
+  if (channel !== undefined && channelHasDetails(channel)) {
+    content += renderThreadChannel(channel);
   }
-  currentlyViewedPrSection += "\n"
-  if (viewedPr.url) {
-    currentlyViewedPrSection += `- URL: ${viewedPr.url}\n`
+
+  const senderLine = conversation.sender === undefined
+    ? undefined
+    : formatInvocationSenderLine(
+      conversation.sender.name,
+      conversation.sender.id,
+      conversation.sender.kind,
+    );
+  const hasBody = conversation.body !== undefined && conversation.body.length > 0;
+  if (hasBody || senderLine !== undefined) {
+    content += "<conversation_thread>\n";
+    if (hasBody) {
+      content += "The user shared this conversation for additional context:\n";
+      content += conversation.body + "\n";
+    }
+    if (senderLine !== undefined) content += "Sender: " + senderLine + "\n";
+    content += "</conversation_thread>\n";
   }
-  // The branch pair is inside the summary, so a summary that does not parse simply omits it.
-  if (viewedPr.summaryJson) {
+  return content + "</conversation_context>";
+}
+
+function renderViewedPullRequest(pullRequest: InvocationViewedPullRequest): string {
+  let section = "Pull request #" + pullRequest.number;
+  if (pullRequest.title) section += ": " + pullRequest.title;
+  section += "\n";
+
+  if (pullRequest.url) section += "- Link: " + pullRequest.url + "\n";
+  if (pullRequest.summaryJson) {
     try {
-      const summaryForBranch = JSON.parse(viewedPr.summaryJson) as { headRef?: string; baseRef?: string }
-      const headRef = summaryForBranch.headRef?.trim()
-      const baseRef = summaryForBranch.baseRef?.trim()
-      if (headRef) {
-        currentlyViewedPrSection += `- Branch: ${headRef}${baseRef ? ` → ${baseRef}` : ""}\n`
-      }
+      const summary = JSON.parse(pullRequest.summaryJson) as Pick<InvocationPullRequestSummary, "headRef" | "baseRef">;
+      const head = summary.headRef?.trim();
+      const base = summary.baseRef?.trim();
+      if (head) section += "- Branch: " + head + (base ? " → " + base : "") + "\n";
     } catch {
+      // Invalid optional metadata does not replace the title or link.
     }
   }
-  if (viewedPr.description) {
-    const maxDescriptionLength = 500
-    if (viewedPr.description.length > maxDescriptionLength) {
-      const truncated = viewedPr.description.slice(0, maxDescriptionLength)
-      currentlyViewedPrSection += `- Description: ${truncated}... (truncated, full description in summary.json)\n`
+
+  if (pullRequest.description) {
+    const limit = 500;
+    if (pullRequest.description.length > limit) {
+      section += "- Description: " + pullRequest.description.slice(0, limit) +
+        "... (shortened; the complete text is in summary.json)\n";
     } else {
-      currentlyViewedPrSection += `- Description: ${viewedPr.description}\n`
+      section += "- Description: " + pullRequest.description + "\n";
     }
   }
-  if (viewedPr.folderPath) {
-    currentlyViewedPrSection += `- Some additional details about the PR are available in the folder ${viewedPr.folderPath}\n`
-    currentlyViewedPrSection += "  - Contents:\n"
-    currentlyViewedPrSection += "    - all.diff: Complete diff of all files in one file\n"
-    currentlyViewedPrSection += "    - diffs/: Individual diff files if you need to read specific files\n"
-    currentlyViewedPrSection += "    - summary.json: Metadata about the PR and changed files\n"
-    currentlyViewedPrSection += "    - comments.json: Review comments on the PR\n"
-    if (viewedPr.summaryJson) {
-      try {
-        const summary = JSON.parse(viewedPr.summaryJson) as ViewedPullRequestSummary
-        const totalDiffChars = summary.totalDiffSizeChars ?? summary.totalDiffSizeBytes
-        currentlyViewedPrSection += `- Summary: ${summary.totalFiles} files, ${summary.totalDiffLines} lines, ${totalDiffChars} chars\n`
-        currentlyViewedPrSection += "- Files changed:\n"
-        for (const file of summary.files || []) {
-          // A file's diff is named after its path when the summary does not say otherwise.
-          const diffFileName = file.diffFileName || `${file.path.replace(/\//g, "__")}.diff`
-          const diffChars = file.diffSizeChars ?? file.diffSizeBytes
-          const originalChars = file.originalSizeChars ?? file.originalSizeBytes
-          currentlyViewedPrSection += `  - ${file.path} (diff: diffs/${diffFileName})\n`
-          currentlyViewedPrSection += `    ${file.status}, ${file.diffLines} diff lines, ${diffChars} diff chars`
-          if (originalChars !== undefined) {
-            currentlyViewedPrSection += `, ${originalChars} original chars`
-          }
-          currentlyViewedPrSection += "\n"
-        }
-      } catch {
-        currentlyViewedPrSection += "- Read summary.json for file list and diff sizes.\n"
-      }
+
+  if (!pullRequest.folderPath) return section;
+  section += "- Review files are available in " + pullRequest.folderPath + "\n";
+  section += "  - Contents:\n";
+  section += "    - all.diff: complete change set\n";
+  section += "    - diffs/: per-file change details\n";
+  section += "    - summary.json: request and file metadata\n";
+  section += "    - comments.json: review discussion\n";
+
+  if (!pullRequest.summaryJson) return section;
+  try {
+    const summary = JSON.parse(pullRequest.summaryJson) as InvocationPullRequestSummary;
+    const diffSize = summary.totalDiffSizeChars ?? summary.totalDiffSizeBytes;
+    section += "- Summary: " + summary.totalFiles + " files, " +
+      summary.totalDiffLines + " lines, " + diffSize + " characters\n";
+    section += "- Files changed:\n";
+    for (const file of summary.files ?? []) {
+      const diffFileName = file.diffFileName ?? file.path.replace(/\//g, "__") + ".diff";
+      const diffChars = file.diffSizeChars ?? file.diffSizeBytes;
+      const originalChars = file.originalSizeChars ?? file.originalSizeBytes;
+      section += "  - " + file.path + " (diff: diffs/" + diffFileName + ")\n";
+      section += "    " + file.status + ", " + file.diffLines + " changed lines, " + diffChars + " characters";
+      if (originalChars !== undefined) section += ", " + originalChars + " original characters";
+      section += "\n";
     }
+  } catch {
+    section += "- Read summary.json for the file list and change sizes.\n";
   }
-  return currentlyViewedPrSection
+  return section;
 }
 
-function renderIdeState(
-  ideState: Extract<InvocationContext["data"], { case: "ideState" }>["value"],
-  enableTerminalFiles: boolean,
-): string {
-  let recentlyViewedFiles = ideState.recentlyViewedFiles
-  let visibleFiles = ideState.visibleFiles
-  // A terminal file is written by the platform rather than opened by the user.
-  if (!enableTerminalFiles) {
-    recentlyViewedFiles = recentlyViewedFiles.filter(file => extractTerminalId(file.path) === null)
-    visibleFiles = visibleFiles.filter(file => extractTerminalId(file.path) === null)
-  }
-  let recentlyViewedSection = ""
-  if (recentlyViewedFiles.length > 0) {
-    recentlyViewedSection = "Recently viewed files (recent at the top, oldest at the bottom):\n"
-    // The list is written oldest first, so the reader's most recent file is nearest the end.
-    const reversedFiles = [...recentlyViewedFiles].reverse()
-    for (const file of reversedFiles) {
-      recentlyViewedSection += `- ${file.path}`
-      if (file.totalLines !== -1) {
-        recentlyViewedSection += ` (total lines: ${file.totalLines})`
-      }
-      if (file.activeCommand && enableTerminalFiles) {
-        recentlyViewedSection += ` (active command: ${file.activeCommand})`
-      }
-      recentlyViewedSection += "\n"
+function editorFilePath(file: InvocationEditorFile): string {
+  let result = "- " + file.path;
+  if (file.cursorLine !== undefined) {
+    result += " (focused file, cursor on line " + file.cursorLine;
+    if (file.totalLines !== undefined && file.totalLines !== -1) {
+      result += ", " + file.totalLines + " total lines";
     }
-    recentlyViewedSection += "\n"
+    return result + ")";
   }
-  let visibleFilesSection = ""
-  if (visibleFiles.length === 0) {
-    visibleFilesSection = "User currently doesn't have any open files in their IDE.\n"
+  if (file.totalLines !== undefined && file.totalLines !== -1) {
+    result += " (" + file.totalLines + " total lines)";
+  }
+  return result;
+}
+
+function renderEditorState(state: InvocationEditorState, enableTerminalFiles: boolean): string {
+  const includeFile = (file: InvocationEditorFile) =>
+    enableTerminalFiles || extractTerminalId(file.path) === null;
+  const recent = state.recentlyViewedFiles.filter(includeFile);
+  const visible = state.visibleFiles.filter(includeFile);
+
+  let recentSection = "";
+  if (recent.length > 0) {
+    recentSection = "Recently viewed workspace files (newest last):\n";
+    for (const file of [...recent].reverse()) {
+      let line = "- " + file.path;
+      if (file.totalLines !== undefined && file.totalLines !== -1) {
+        line += " (" + file.totalLines + " total lines)";
+      }
+      if (file.activeCommand && enableTerminalFiles) line += " (active command: " + file.activeCommand + ")";
+      recentSection += line + "\n";
+    }
+    recentSection += "\n";
+  }
+
+  let visibleSection = "";
+  if (visible.length === 0) {
+    visibleSection = "No workspace files are open in the editor.\n";
   } else {
-    visibleFilesSection = "Files that are currently open and visible in the user's IDE:\n"
-    for (const file of visibleFiles) {
-      visibleFilesSection += `- ${file.path}`
-      const hasTotalLines = file.totalLines !== -1
-      if (file.cursorPosition !== undefined) {
-        if (hasTotalLines) {
-          visibleFilesSection += ` (currently focused file, cursor is on line ${file.cursorPosition.line}, total lines: ${file.totalLines})`
-        } else {
-          visibleFilesSection += ` (currently focused file, cursor is on line ${file.cursorPosition.line})`
-        }
-      } else if (hasTotalLines) {
-        visibleFilesSection += ` (total lines: ${file.totalLines})`
-      }
-      if (file.activeCommand && enableTerminalFiles) {
-        visibleFilesSection += ` (active command: ${file.activeCommand})`
-      }
-      visibleFilesSection += "\n"
+    visibleSection = "Workspace files currently open in the editor:\n";
+    for (const file of visible) {
+      let line = editorFilePath(file);
+      if (file.activeCommand && enableTerminalFiles) line += " (active command: " + file.activeCommand + ")";
+      visibleSection += line + "\n";
     }
   }
-  let currentlyViewedPrSection = ""
-  const viewedPrs = ideState.currentlyViewedPrs
-  if (viewedPrs && viewedPrs.length > 0) {
-    currentlyViewedPrSection = viewedPrs.length === 1
-      ? "\nCurrently viewing Pull Request:\n"
-      : "\nCurrently viewing Pull Requests:\n"
-    for (const viewedPr of viewedPrs) {
-      // A pull request with no number is not one the model can be told anything useful about.
-      if (viewedPr.number === undefined) {
-        continue
-      }
-      currentlyViewedPrSection += renderViewedPullRequest(viewedPr)
+
+  let pullRequestSection = "";
+  const pullRequests = state.currentlyViewedPullRequests ?? [];
+  if (pullRequests.length > 0) {
+    pullRequestSection = pullRequests.length === 1
+      ? "\nPull request currently being viewed:\n"
+      : "\nPull requests currently being viewed:\n";
+    for (const pullRequest of pullRequests) {
+      pullRequestSection += renderViewedPullRequest(pullRequest);
     }
   }
-  return `<open_and_recently_viewed_files>
-${recentlyViewedSection}${visibleFilesSection}${currentlyViewedPrSection}
-Note: these files may or may not be relevant to the current conversation. Use the read file tool if you need to get the contents of some of them.
-</open_and_recently_viewed_files>`
+
+  return "<workspace_editor_context>\n" +
+    recentSection + visibleSection + pullRequestSection +
+    "\nThese files may be unrelated to the current conversation. Use the workspace file reader when you need their contents.\n" +
+    "</workspace_editor_context>";
 }
 
 export function renderInvocationPlatformContext(
-  invocationContext: InvocationContext,
+  context: SlateInvocationContext,
   enableTerminalFiles: boolean,
 ): InvocationTextContent | undefined {
-  if (invocationContext.data.case === "slackThread") {
-    return { type: "text", text: renderSlackThread(invocationContext.data.value) }
+  if (context.kind === "conversation") {
+    return { type: "text", text: renderConversationThread(context.conversation) };
   }
-  if (invocationContext.data.case === "microsoftTeamsThread") {
-    return { type: "text", text: renderMicrosoftTeamsThread(invocationContext.data.value) }
+  if (context.kind === "editor") {
+    return { type: "text", text: renderEditorState(context.editor, enableTerminalFiles) };
   }
-  if (invocationContext.data.case === "ideState") {
-    return { type: "text", text: renderIdeState(invocationContext.data.value, enableTerminalFiles) }
+  if (context.kind === "pull_request") {
+    return { type: "text", text: renderPullRequestInvocationContext(context.pullRequest) };
   }
-  return undefined
+  return undefined;
 }

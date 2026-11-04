@@ -4,7 +4,6 @@ import { describe, it } from "node:test";
 import {
   composeLocalExecDaemonOptions,
   holdLocalExecDaemonProcessOpen,
-  loadLocalExecSentryRuntime,
   LOCAL_EXEC_DAEMON_LIFETIME_TICK_MS,
   LOCAL_EXEC_DAEMON_SHUTDOWN_TIMEOUT_MS,
   runLocalExecDaemonEntrypoint,
@@ -14,8 +13,11 @@ import {
 } from "../../source/local-exec/main.ts";
 import type { DeadlinePolicy } from "../../source/host/extensions/scheduling.ts";
 import type { RunLocalExecDaemonOptions } from "../../source/host/local-exec/local-exec-daemon.ts";
-import { LOCAL_EXEC_GENERATION_TOKEN_ARG, LOCAL_EXEC_GENERATION_TOKEN_ENV } from "../../source/shared/local-exec-process-identity.ts";
-import type { SlateSentryDaemonRuntime } from "../../source/host/local-exec/sentry.ts";
+import { LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX, LOCAL_EXEC_IDENTITY_ENV_KEY } from "../../source/shared/local-exec-process-identity.ts";
+import {
+  loadDaemonCrashReporterRuntime,
+  type DaemonCrashReporterRuntime,
+} from "../../source/adapters/interop/telemetry/local-exec-crash-reporter-adapter.ts";
 
 type Signal = "SIGTERM" | "SIGINT";
 
@@ -232,13 +234,13 @@ describe("the local-exec daemon's supporting boundaries", () => {
     };
 
     let requestedModule: string | undefined;
-    assert.equal(loadLocalExecSentryRuntime((name) => {
+    assert.equal(loadDaemonCrashReporterRuntime((name) => {
       requestedModule = name;
       return runtime;
     }), runtime);
     assert.equal(requestedModule, "@sentry/node");
-    assert.equal(loadLocalExecSentryRuntime(() => ({ init() {}, captureException() {}, flush() {} })), undefined);
-    assert.equal(loadLocalExecSentryRuntime(() => { throw new Error("module unavailable"); }), undefined);
+    assert.equal(loadDaemonCrashReporterRuntime(() => ({ init() {}, captureException() {}, flush() {} })), undefined);
+    assert.equal(loadDaemonCrashReporterRuntime(() => { throw new Error("module unavailable"); }), undefined);
   });
 
   it("reports fatal errors, flushes the reporter, then exits with failure", async () => {
@@ -282,12 +284,12 @@ describe("the local-exec daemon's supporting boundaries", () => {
 
   it("refuses to start when the process argument is not bound to its environment token", async () => {
     const savedArgv = process.argv;
-    const savedGeneration = process.env[LOCAL_EXEC_GENERATION_TOKEN_ENV];
+    const savedGeneration = process.env[LOCAL_EXEC_IDENTITY_ENV_KEY];
     const savedSentryEnvironment = process.env.SLATE_SENTRY_ENVIRONMENT;
     const savedSentryRelease = process.env.SLATE_SENTRY_RELEASE;
     const fakeProcess = processStub();
     const captured: string[] = [];
-    const sentryRuntime = {
+    const crashReporterRuntime = {
       init() {},
       eventFiltersIntegration() { return {}; },
       functionToStringIntegration() { return {}; },
@@ -300,23 +302,23 @@ describe("the local-exec daemon's supporting boundaries", () => {
         captured.push(`flush:${timeoutMs}`);
         return true;
       },
-    } as unknown as SlateSentryDaemonRuntime;
+    } as unknown as DaemonCrashReporterRuntime;
 
     try {
-      process.argv = [process.execPath, new URL(import.meta.url).pathname, `${LOCAL_EXEC_GENERATION_TOKEN_ARG}wrong`];
-      process.env[LOCAL_EXEC_GENERATION_TOKEN_ENV] = "expected";
+      process.argv = [process.execPath, new URL(import.meta.url).pathname, `${LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX}wrong`];
+      process.env[LOCAL_EXEC_IDENTITY_ENV_KEY] = "expected";
       process.env.SLATE_SENTRY_ENVIRONMENT = "test";
       process.env.SLATE_SENTRY_RELEASE = "local-exec-main-test";
 
       await assert.rejects(runLocalExecDaemonEntrypoint({
         daemonOptions: { executor: {} as NonNullable<RunLocalExecDaemonOptions["executor"]> },
-        sentryRuntime,
+        crashReporterRuntime,
         process: fakeProcess.process,
       }), /process\.exit returned unexpectedly/);
     } finally {
       process.argv = savedArgv;
-      if (savedGeneration === undefined) delete process.env[LOCAL_EXEC_GENERATION_TOKEN_ENV];
-      else process.env[LOCAL_EXEC_GENERATION_TOKEN_ENV] = savedGeneration;
+      if (savedGeneration === undefined) delete process.env[LOCAL_EXEC_IDENTITY_ENV_KEY];
+      else process.env[LOCAL_EXEC_IDENTITY_ENV_KEY] = savedGeneration;
       if (savedSentryEnvironment === undefined) delete process.env.SLATE_SENTRY_ENVIRONMENT;
       else process.env.SLATE_SENTRY_ENVIRONMENT = savedSentryEnvironment;
       if (savedSentryRelease === undefined) delete process.env.SLATE_SENTRY_RELEASE;

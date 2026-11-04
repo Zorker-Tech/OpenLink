@@ -1,19 +1,76 @@
-/**
- * The zsh script that reports a shell's own state, in the lighter of the two forms.
- *
- * A command runs in a shell that was set up before it — aliases, options, exported variables — and the
- * platform has to be able to put that shell back the way it was found. This is the script that reads the
- * state out: it emits the working directory, the exported variables, the options and the aliases, each
- * encoded so that a value containing newlines or quotes survives being written into a file and sourced
- * again. Functions are deliberately left out, which is what makes this the light form: a shell with a large
- * set of functions costs more to snapshot than the snapshot is worth.
- *
- * The script reports whether it ran to the end with a marker, since a dump that was cut short must not be
- * sourced back as if it were complete.
- */
-
+/** The lightweight state script used when a shell's functions should stay local to each command. */
 export const ZSH_STATE_LIGHT_MARKER = "__SLATE_ZSH_STATE_LIGHT_VALID__";
 
-const zshScript = "#!/usr/bin/env zsh\n\n# Usage:\n#   source dump_zsh_state_light.zsh\n#   dump_zsh_state_light\n# Or execute directly (captures a subshell's state):\n#   ./dump_zsh_state_light.zsh\n\n# Lightweight version that skips function tracking for better performance\n\n# Define a function so sourcing won't alter caller state; emulate locally inside\nfunction dump_zsh_state_light() {\n  emulate -L zsh -o errreturn -o pipefail\n  set -u\n\n\n  # Helper to log timing, only if DUMP_ZSH_STATE_TIMING is set\n  if [[ -n \"${DUMP_ZSH_STATE_TIMING:-}\" ]]; then\n    # Timing setup\n    typeset start_time=${EPOCHREALTIME}\n    typeset step_start=${EPOCHREALTIME}\n    _log_timing() {\n      typeset step_name=\"$1\"\n      typeset now=${EPOCHREALTIME}\n      typeset step_duration=$((now - step_start))\n      typeset total_duration=$((now - start_time))\n      builtin printf \"[TIMING] %-20s: %6.3fs (total: %6.3fs)\n\" \"$step_name\" \"$step_duration\" \"$total_duration\" >&2\n      step_start=$now\n    }\n  else\n    _log_timing() { :; }\n  fi\n\n  # Ensure parameter arrays are available\n  builtin zmodload -F zsh/parameter p:parameters p:options p:aliases p:galiases p:saliases 2>/dev/null || true\n  _log_timing \"zmodload\"\n\n  # Helper to print a line to stdout\n  _emit() {\n    builtin print -r -- \"$1\"\n  }\n\n  # Helper to safely encode and emit unsafe values\n  _emit_encoded() {\n    local content=\"$1\"\n    local var_name=\"$2\"\n    if [[ -n \"$content\" ]]; then\n      # Use here-document to avoid argument list length limits entirely\n      builtin printf 'slate_snap_%s=$(command base64 -d <<'''SLATE_SNAP_EOF_%s'''\n' \"$var_name\" \"$var_name\"\n      command base64 <<<\"$content\" | command tr -d '\n'\n      builtin printf '\nSLATE_SNAP_EOF_%s\n' \"$var_name\"\n      builtin printf ')\n'\n      builtin printf 'eval \"$slate_snap_%s\"\n' \"$var_name\"\n    fi\n  }\n\n  _log_timing \"init\"\n\n  # Emit validity marker so we can detect if dump_zsh_state_light completed\n  _emit \"__SLATE_ZSH_STATE_LIGHT_VALID__\"\n\n  # Header\n  _emit \"$PWD\"\n\n  _emit \"# zsh state dump (light) generated on $(command date +'%Y-%m-%d %H:%M:%S %z')\"\n  _log_timing \"header\"\n\n  # Working directory\n  _log_timing \"working_dir\"\n\n  # Environment variables (exported)\n  # Filter out: proxy settings plus request/session-scoped vars that must not\n  # leak across shell executions.\n  local env_vars\n  env_vars=$(builtin typeset -xp 2>/dev/null | command grep -viE '_proxy=|SLATE_SANDBOX|SUDO_ASKPASS|SLATE_ASKPASS|SLATE_CONVERSATION_ID|SLATE_AGENT_STORE' || true)\n  _emit_encoded \"$env_vars\" \"ENV_VARS_B64\"\n  _log_timing \"env_variables\"\n\n  # Options (replayable as setopt lines). Exclude the errreturn/nounset/pipefail this\n  # function force-enables above, so they are not baked into the restored snapshot and\n  # leaked onto every subsequent command (a stray pipefail makes a successful\n  # 'cmd | head' report exit 141).\n  local zsh_opts\n  zsh_opts=$(setopt 2>/dev/null | command grep -vE '^(errreturn|nounset|pipefail)$' | command awk '{printf \"builtin setopt %s 2>/dev/null || true\\n\", $0}' || true)\n  _emit_encoded \"$zsh_opts\" \"ZSH_OPTS_B64\"\n  _log_timing \"options\"\n\n  # SKIP FUNCTIONS - this is the key difference for performance\n\n  # Aliases (regular, global, and suffix)\n  {\n    builtin alias -L 2>/dev/null || true\n    builtin alias -gL 2>/dev/null || true\n    builtin alias -sL 2>/dev/null || true\n  }\n  _log_timing \"aliases\"\n\n  # Done\n  _emit \"# end of zsh state dump (light)\"\n  _log_timing \"finalize\"\n}\n";
+const lightSnapshotScript = String.raw`#!/usr/bin/env zsh
 
-export default zshScript;
+function dump_zsh_state_light() {
+  emulate -L zsh -o errreturn -o pipefail
+  set -u
+
+  local started_at step_started
+  if [[ -n "\${DUMP_ZSH_STATE_TIMING:-}" ]]; then
+    started_at="\${EPOCHREALTIME}"
+    step_started="\${EPOCHREALTIME}"
+    _slate_log_timing() {
+      local step_name="$1"
+      local now="\${EPOCHREALTIME}"
+      local step_duration=$((now - step_started))
+      local total_duration=$((now - started_at))
+      builtin printf "[TIMING] %-20s: %6.3fs (total: %6.3fs)\n" "$step_name" "$step_duration" "$total_duration" >&2
+      step_started="$now"
+    }
+  else
+    _slate_log_timing() { :; }
+  fi
+
+  builtin zmodload -F zsh/parameter p:parameters p:options p:aliases p:galiases p:saliases 2>/dev/null || true
+  _slate_log_timing "zmodload"
+
+  _slate_emit() {
+    builtin print -r -- "$1"
+  }
+
+  _slate_emit_encoded() {
+    local content="$1"
+    local variable_name="$2"
+    if [[ -n "$content" ]]; then
+      builtin printf "slate_state_%s=\$(command base64 -d <<'SLATE_STATE_EOF_%s'\n" "$variable_name" "$variable_name"
+      command base64 <<<"$content" | command tr -d '\n'
+      builtin printf '\nSLATE_STATE_EOF_%s\n)\n' "$variable_name"
+      builtin printf 'builtin eval "$slate_state_%s"\n' "$variable_name"
+    fi
+  }
+
+  _slate_log_timing "initialization"
+  _slate_emit "__SLATE_ZSH_STATE_LIGHT_VALID__"
+  _slate_emit "$PWD"
+  _slate_emit "# Slate light-shell snapshot created on $(command date +'%Y-%m-%d %H:%M:%S %z')"
+  _slate_log_timing "header"
+
+  _slate_log_timing "working directory"
+  local exported_state
+  exported_state=$(builtin typeset -xp 2>/dev/null | command grep -viE '_proxy=|SLATE_SANDBOX|SUDO_ASKPASS|SLATE_ASKPASS|SLATE_CONVERSATION_ID|SLATE_AGENT_STORE' || true)
+  _slate_emit_encoded "$exported_state" "ENV_VARS_B64"
+  _slate_log_timing "environment"
+
+  local reusable_options
+  reusable_options=$(setopt 2>/dev/null | command grep -vE '^(errreturn|nounset|pipefail)$' | command awk '{printf "builtin setopt %s 2>/dev/null || true\\n", $0}' || true)
+  _slate_emit_encoded "$reusable_options" "ZSH_OPTS_B64"
+  _slate_log_timing "options"
+
+  # Functions stay in the shell that defined them; this variant only carries simple aliases.
+  {
+    builtin alias -L 2>/dev/null || true
+    builtin alias -gL 2>/dev/null || true
+    builtin alias -sL 2>/dev/null || true
+  }
+  _slate_log_timing "aliases"
+
+  _slate_emit "# end of Slate light-shell snapshot"
+  _slate_log_timing "complete"
+}
+`;
+
+const lightSnapshot = lightSnapshotScript.replace(/\\\$\{/g, "${");
+
+export default lightSnapshot;

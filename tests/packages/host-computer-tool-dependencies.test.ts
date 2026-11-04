@@ -5,8 +5,8 @@ import {
   createHostBrowserDriverDependencies,
   createHostComputerToolDependencies,
   createHostShellExecutor,
-  toGeneratedComputerUseArgs,
 } from "../../source/host/runner/host-computer-tool-dependencies.ts";
+import { toGeneratedComputerUseArgs } from "../../source/adapters/interop/agent/computer-use-executor-adapter.ts";
 
 const action = (wireCase: string, value: unknown) => ({ action: { case: wireCase, value } });
 

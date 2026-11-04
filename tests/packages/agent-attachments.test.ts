@@ -5,53 +5,55 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { AskQuestionResult } from "../../source/packages/proto/generated/agent/v1/ask_question_tool_pb.ts"
-import { SelectedVideo } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
+import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { AskQuestionResult } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
+import { SelectedGitPRDiffSelection, SelectedPullRequest, SelectedVideo } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import {
-  appendToolCallIdTagsToToolResults,
-  shouldTagToolCallIdsForCurrentContext,
+  attachToolReferenceHints,
+  shouldExposeToolReferencesInCurrentContext,
 } from "../../source/packages/agent/tools/tool-call-id-tagging.ts"
 import { calculateDiff } from "../../source/packages/agent/tools/core/edit/diff-worker.ts"
 import {
   hydrateGitPrDiffSelections,
   hydrateSelectedPullRequests,
-} from "../../source/packages/agent/context/pr-hydration.ts"
+} from "../../source/adapters/interop/agent/pull-request-hydration-adapter.ts"
 import {
   GENERAL_PURPOSE_SUBAGENT_TYPE,
-  applyConversationStateMapping,
-  getSubagentTypeName,
-  isGeminiVideoSubagentType,
   normalizeSubagentTypeName,
 } from "../../source/packages/agent/tools/core/subagent/subagent-config.ts"
-import { hydrateSelectedExtraContext } from "../../source/packages/agent/context/extra-context-hydration.ts"
-import { hydrateSelectedImageData } from "../../source/packages/agent/context/image-data-hydration.ts"
 import {
-  canonicalSubagentComposerSlug,
-  isBuiltInComposerSubagentSlug,
-  isComposerSubagentDefaultId,
+  isVideoReviewSubagentType,
+  mapSubagentConversationState,
+  subagentTypeNameFromInterop,
+} from "../../source/adapters/interop/agent/subagent-type-adapter.ts"
+import { hydrateSelectedExtraContext } from "../../source/packages/agent/context/extra-context-hydration.ts"
+import { hydrateSelectedImageData } from "../../source/adapters/interop/agent/selected-image-blob-adapter.ts"
+import {
+  canonicalSubagentModelId,
+  isBuiltInSubagentModelId,
+  isSubagentDefaultId,
   normalizeTaskArgModelInput,
-  orderedExploreSubagentComposerIds,
-  resolveTaskArgToSubagentComposerSlug,
+  orderedExploreSubagentModelIds,
+  resolveTaskArgToSubagentModelId,
   shouldNormalizeTaskArgModelInput,
-  taskArgSelectsFastComposerTier,
-} from "../../source/packages/agent/tools/composer-subagent-resolution.ts"
+  taskArgSelectsFastSubagentTier,
+} from "../../source/packages/agent/tools/subagent-model-resolution.ts"
 import { resolveTrustedPathOnlyAttachmentPath } from "../../source/packages/agent/context/path-trust.ts"
-import { processSelectedVideoPathOnly } from "../../source/packages/agent/context/video-path-processing.ts"
+import { processSelectedVideoPathOnly } from "../../source/adapters/interop/agent/selected-video-path-adapter.ts"
 import { extractCellSource, isJupyterNotebook, parseNotebook, tryParseNotebook } from "../../source/packages/agent/tools/core/notebook-utils.ts"
 import { formatNotebookForLLM } from "../../source/packages/agent/tools/core/read/notebook-format.ts"
 import {
   formatAskQuestionResultAsString,
   shouldReceiptAskQuestionResult,
 } from "../../source/packages/agent/tools/core/ask-question/index.ts"
-import { hydrateSelectedAttachmentData } from "../../source/packages/agent/context/attachment-hydration.ts"
+import { hydrateAttachmentContent } from "../../source/packages/agent/context/attachment-hydration.ts"
 import {
   buildRequestContextNotesOptions,
   buildRequestContextOptions,
-  buildUserInfoAgentNotesProps,
   isMetaAgentNotesEnabled,
 } from "../../source/packages/agent/actions/meta-agent-notes.ts"
-import { ConversationStateStructure } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { buildUserInfoAgentNotesProps } from "../../source/adapters/interop/agent/meta-agent-notes-adapter.ts"
+import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 const ctx = () => createContext()
 
@@ -61,17 +63,17 @@ const ctx = () => createContext()
 
 test("a tool result gets its call's reference appended once", () => {
   const messages = [{ role: "tool", content: [{ type: "tool-result", toolCallId: "call_abcdefg", result: "output" }] }]
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   const part = (messages[0]!.content as Array<{ result: string }>)[0]!
   assert.match(part.result, /^output\n<tool_call_id>abcdefg<\/tool_call_id>$/)
 
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   assert.equal(part.result.match(/<tool_call_id>/g)?.length, 1)
 })
 
 test("a result with no text takes the tag as its whole result", () => {
   const messages = [{ role: "tool", content: [{ type: "tool-result", toolCallId: "call_abcdefg" }] }]
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   const part = (messages[0]!.content as unknown as Array<{ result: string }>)[0]!
   assert.equal(part.result, "<tool_call_id>abcdefg</tool_call_id>")
 })
@@ -86,7 +88,7 @@ test("a result with content parts gets the tag on its last text part", () => {
       experimental_content: [{ type: "text", text: "one" }, { type: "image" }],
     }],
   }]
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   const part = (messages[0]!.content as Array<{ experimental_content: Array<{ type?: string; text?: string }> }>)[0]!
   assert.match(String(part.experimental_content[0]!.text), /one\n<tool_call_id>abcdefg/)
   assert.equal(part.experimental_content.length, 2)
@@ -97,7 +99,7 @@ test("a result with no text part at all gets one", () => {
     role: "tool",
     content: [{ type: "tool-result", toolCallId: "call_abcdefg", experimental_content: [{ type: "image" }] }],
   }]
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   const part = (messages[0]!.content as Array<{ experimental_content: Array<{ type?: string; text?: string }> }>)[0]!
   assert.deepEqual(part.experimental_content[1], { type: "text", text: "<tool_call_id>abcdefg</tool_call_id>" })
 })
@@ -108,13 +110,13 @@ test("a call whose id carries no reference is left alone, and non-tool messages 
     { role: "assistant", content: [{ type: "tool-result", toolCallId: "call_abcdefg", result: "x" }] },
     { role: "tool", content: "not an array" },
   ]
-  appendToolCallIdTagsToToolResults(messages as never)
+  attachToolReferenceHints(messages as never)
   assert.equal((messages[0]!.content as Array<{ result: string }>)[0]!.result, "x")
   assert.equal((messages[1]!.content as Array<{ result: string }>)[0]!.result, "x")
 })
 
 test("tagging is asked of the context", () => {
-  assert.equal(typeof shouldTagToolCallIdsForCurrentContext(ctx()), "boolean")
+  assert.equal(typeof shouldExposeToolReferencesInCurrentContext(ctx()), "boolean")
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -190,6 +192,45 @@ test("a pull request blob is fetched, and both failures are thrown", async () =>
   )
 })
 
+test("pull requests and diff selections are decoded from their stored messages", async () => {
+  const pullRequest = new SelectedPullRequest({
+    number: 42,
+    url: "https://code.example/pull/42",
+    folderPath: "workspace/pull-42",
+    description: "Review the implementation",
+  })
+  const diffSelection = new SelectedGitPRDiffSelection({
+    prUrl: "https://code.example/pull/42",
+    filePath: "src/main.ts",
+    startLine: 4,
+    endLine: 8,
+    diffContent: "-old\n+new",
+  })
+  const stored = new Map([
+    ["01", pullRequest.toBinary()],
+    ["02", diffSelection.toBinary()],
+  ])
+  const blobStore = {
+    async getBlob(_ctx: unknown, blobId: Uint8Array) {
+      return stored.get(Buffer.from(blobId).toString("hex"))
+    },
+  }
+
+  const hydratedPullRequests = await hydrateSelectedPullRequests({
+    ctx: ctx(),
+    selectedPullRequests: [new SelectedPullRequest({ blobId: new Uint8Array([1]) })],
+    blobStore,
+  })
+  const hydratedDiffs = await hydrateGitPrDiffSelections({
+    ctx: ctx(),
+    gitPrDiffSelections: [new SelectedGitPRDiffSelection({ blobId: new Uint8Array([2]) })],
+    blobStore,
+  })
+
+  assert.equal(SelectedPullRequest.equals(hydratedPullRequests[0], pullRequest), true)
+  assert.equal(SelectedGitPRDiffSelection.equals(hydratedDiffs[0], diffSelection), true)
+})
+
 // ---------------------------------------------------------------------------------------------
 // subagent types
 // ---------------------------------------------------------------------------------------------
@@ -203,28 +244,28 @@ test("a subagent type name is normalized whatever the caller wrote", () => {
 })
 
 test("a type message becomes the name the platform uses", () => {
-  assert.equal(getSubagentTypeName({ type: { case: "unspecified" } } as never), GENERAL_PURPOSE_SUBAGENT_TYPE)
-  assert.equal(getSubagentTypeName({ type: { case: "custom", value: { name: "mine" } } } as never), "mine")
-  assert.equal(getSubagentTypeName({ type: { case: "bash" } } as never), "shell")
-  assert.equal(getSubagentTypeName({ type: { case: "shell" } } as never), "shell")
-  assert.equal(getSubagentTypeName({ type: { case: "browserUse" } } as never), "browser-use")
-  assert.equal(getSubagentTypeName({ type: { case: "mediaReview" } } as never), "videoReview")
-  assert.equal(getSubagentTypeName({ type: { case: "cursorGuide" } } as never), "cursor-guide")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "unspecified" } } as never), GENERAL_PURPOSE_SUBAGENT_TYPE)
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "custom", value: { name: "mine" } } } as never), "mine")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "bash" } } as never), "shell")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "shell" } } as never), "shell")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "browserUse" } } as never), "browser-use")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "mediaReview" } } as never), "videoReview")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "cursorGuide" } } as never), "cursor-guide")
 })
 
 test("the media-watching types are one family", () => {
-  assert.equal(isGeminiVideoSubagentType({ type: { case: "mediaReview" } } as never), true)
-  assert.equal(isGeminiVideoSubagentType({ type: { case: "watchVideo" } } as never), true)
-  assert.equal(isGeminiVideoSubagentType({ type: { case: "explore" } } as never), false)
-  assert.equal(isGeminiVideoSubagentType(undefined), false)
+  assert.equal(isVideoReviewSubagentType({ type: { case: "mediaReview" } } as never), true)
+  assert.equal(isVideoReviewSubagentType({ type: { case: "watchVideo" } } as never), true)
+  assert.equal(isVideoReviewSubagentType({ type: { case: "explore" } } as never), false)
+  assert.equal(isVideoReviewSubagentType(undefined), false)
 })
 
 test("a subagent with no mapping starts from an empty structure, and one with a mapping is mapped", () => {
   const callerState = new ConversationStateStructure()
-  assert.notEqual(applyConversationStateMapping({}, callerState), callerState)
+  assert.notEqual(mapSubagentConversationState({}, callerState), callerState)
 
   const mapped = new ConversationStateStructure()
-  assert.equal(applyConversationStateMapping({ conversationStateMapper: () => mapped }, callerState), mapped)
+  assert.equal(mapSubagentConversationState({ conversationStateMapper: () => mapped }, callerState), mapped)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -309,6 +350,10 @@ test("image bytes that arrived alone are stored and become a reference", async (
   assert.deepEqual(spy.calls, ["set"])
   assert.equal(result.selectedImage?.dataOrBlobId?.case, "blobId")
   assert.deepEqual(result.imageData, new Uint8Array([1, 2, 3]))
+  const payload = result.selectedImage?.dataOrBlobId
+  const blobId = payload?.case === "blobId" ? payload.value : undefined
+  assert.ok(blobId)
+  assert.deepEqual(spy.blobs.get(String(blobId)), new Uint8Array([1, 2, 3]))
 })
 
 test("image bytes that came with an id are stored locally only", async () => {
@@ -322,6 +367,10 @@ test("image bytes that came with an id are stored locally only", async () => {
   })
   assert.deepEqual(spy.calls, ["setLocal"])
   assert.equal(result.selectedImage?.dataOrBlobId?.case, "blobId")
+  if (result.selectedImage?.dataOrBlobId?.case === "blobId") {
+    assert.deepEqual(result.selectedImage.dataOrBlobId.value, new Uint8Array([9]))
+  }
+  assert.deepEqual(spy.blobs.get(String(new Uint8Array([9]))), new Uint8Array([1]))
 })
 
 test("a reference is fetched, a missing one is an error, and an unresolved upload is an error", async () => {
@@ -333,6 +382,7 @@ test("a reference is fetched, a missing one is an error, and an unresolved uploa
     selectedImage: { dataOrBlobId: { case: "blobId", value: new Uint8Array([7]) } } as never,
   })
   assert.deepEqual(fetched.imageData, new Uint8Array([4, 5]))
+  assert.equal(fetched.selectedImage?.dataOrBlobId?.case, "blobId")
 
   await assert.rejects(
     hydrateSelectedImageData({
@@ -359,27 +409,28 @@ test("an image with nothing in it produces nothing", async () => {
     blobStore: spy.store as never,
     selectedImage: {} as never,
   })
+  assert.deepEqual(spy.calls, [])
   assert.equal(result.imageData, undefined)
   assert.equal(result.selectedImage, undefined)
 })
 
 // ---------------------------------------------------------------------------------------------
-// composer subagent model resolution
+// subagent model resolution
 // ---------------------------------------------------------------------------------------------
 
-test("a legacy slug is mapped to its replacement", () => {
-  assert.equal(canonicalSubagentComposerSlug("composer-1.5"), "composer-2.5")
-  assert.equal(canonicalSubagentComposerSlug("composer-2.5"), "composer-2.5")
-  assert.equal(isBuiltInComposerSubagentSlug("composer-1.5"), true)
-  assert.equal(isBuiltInComposerSubagentSlug("gpt-5"), false)
-  assert.equal(isComposerSubagentDefaultId("composer-2.5-fast"), true)
+test("a retired subagent model id is mapped to its replacement", () => {
+  assert.equal(canonicalSubagentModelId("composer-1.5"), "composer-2.5")
+  assert.equal(canonicalSubagentModelId("composer-2.5"), "composer-2.5")
+  assert.equal(isBuiltInSubagentModelId("composer-1.5"), true)
+  assert.equal(isBuiltInSubagentModelId("gpt-5"), false)
+  assert.equal(isSubagentDefaultId("composer-2.5-fast"), true)
 })
 
-test("the cheaper tier is offered first when it is cheaper than the parent's model", () => {
+test("the cheaper subagent model tier is offered first when it costs less than the parent", () => {
   const ids = ["composer-2.5-fast", "composer-2.5", "extra"]
-  assert.deepEqual(orderedExploreSubagentComposerIds(ids, "parent", () => 1), ["composer-2.5", "composer-2.5-fast", "extra"])
-  assert.deepEqual(orderedExploreSubagentComposerIds(ids, "parent", () => -1), ids)
-  assert.deepEqual(orderedExploreSubagentComposerIds(["one"], "parent", () => 1), ["one"])
+  assert.deepEqual(orderedExploreSubagentModelIds(ids, "parent", () => 1), ["composer-2.5", "composer-2.5-fast", "extra"])
+  assert.deepEqual(orderedExploreSubagentModelIds(ids, "parent", () => -1), ids)
+  assert.deepEqual(orderedExploreSubagentModelIds(["one"], "parent", () => 1), ["one"])
 })
 
 test("a model request is normalized only when the catalogue would survive it", () => {
@@ -391,21 +442,21 @@ test("a model request is normalized only when the catalogue would survive it", (
   assert.equal(normalizeTaskArgModelInput("  Composer_2_5  ", mixed), "Composer_2_5")
 })
 
-test("a request is resolved to a slug, with the two words that have meanings of their own", () => {
+test("a request resolves through the catalog and the two subagent-tier aliases", () => {
   const models = new Map([["composer-2.5", { slug: "composer-2.5" }]])
-  assert.equal(resolveTaskArgToSubagentComposerSlug("composer-2.5", models), "composer-2.5")
+  assert.equal(resolveTaskArgToSubagentModelId("composer-2.5", models), "composer-2.5")
   // The legacy slug is only mapped when the catalogue still carries it under that name.
-  assert.equal(resolveTaskArgToSubagentComposerSlug("composer-1.5", models), undefined)
+  assert.equal(resolveTaskArgToSubagentModelId("composer-1.5", models), undefined)
   assert.equal(
-    resolveTaskArgToSubagentComposerSlug("composer-1.5", new Map([["composer-1.5", { slug: "composer-1.5" }]])),
+    resolveTaskArgToSubagentModelId("composer-1.5", new Map([["composer-1.5", { slug: "composer-1.5" }]])),
     "composer-2.5",
   )
-  assert.equal(resolveTaskArgToSubagentComposerSlug("something-fast", models), "composer-2.5-fast")
-  assert.equal(resolveTaskArgToSubagentComposerSlug("default", models), "composer-2.5")
-  assert.equal(resolveTaskArgToSubagentComposerSlug("AUTO", models), "composer-2.5")
-  assert.equal(resolveTaskArgToSubagentComposerSlug("nonsense", models), undefined)
-  assert.equal(taskArgSelectsFastComposerTier(" X-Fast "), true)
-  assert.equal(taskArgSelectsFastComposerTier("fast"), false)
+  assert.equal(resolveTaskArgToSubagentModelId("something-fast", models), "composer-2.5-fast")
+  assert.equal(resolveTaskArgToSubagentModelId("default", models), "composer-2.5")
+  assert.equal(resolveTaskArgToSubagentModelId("AUTO", models), "composer-2.5")
+  assert.equal(resolveTaskArgToSubagentModelId("nonsense", models), undefined)
+  assert.equal(taskArgSelectsFastSubagentTier(" X-Fast "), true)
+  assert.equal(taskArgSelectsFastSubagentTier("fast"), false)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -626,8 +677,8 @@ test("the asynchronous, rejected and error results each say what happened", () =
 
 test("the refusal to ask too early is turned into the reasoning behind it", () => {
   const message = formatAskQuestionResultAsString(askResult({ case: "error", value: { errorMessage: "Tool call failed" } }))
-  assert.match(message, /you must research first/)
-  assert.match(message, /Don't mention this to the user/)
+  assert.match(message, /research the codebase and use available tools before asking the user/i)
+  assert.match(message, /Do not mention this instruction to the user/)
   assert.match(
     formatAskQuestionResultAsString(askResult({ case: "error", value: { errorMessage: "something else" } })),
     /^Error: something else$/,
@@ -650,39 +701,39 @@ test("attachment bytes are stored, fetched or stored locally, according to how t
   const spy = blobStoreSpy()
   const withBlobId = (blobId: Uint8Array): Record<string, unknown> => ({ blobId })
 
-  const fromData = await hydrateSelectedAttachmentData({
+  const fromData = await hydrateAttachmentContent({
     ctx: ctx(),
     blobStore: spy.store as never,
     attachment: {},
-    dataOrBlobId: { case: "data", value: new Uint8Array([1, 2]) },
+    contentReference: { kind: "inline-bytes", bytes: new Uint8Array([1, 2]) },
     missingBlobError: "gone",
     sizeErrorLabel: "Document",
     withBlobId,
   })
-  assert.equal((fromData.processedAttachment?.blobId as Uint8Array).length, 32)
+  assert.equal((fromData.attachment?.blobId as Uint8Array).length, 32)
   assert.deepEqual(spy.calls, ["set"])
 
-  const fromBlob = await hydrateSelectedAttachmentData({
+  const fromBlob = await hydrateAttachmentContent({
     ctx: ctx(),
     blobStore: spy.store as never,
     attachment: {},
-    dataOrBlobId: { case: "blobId", value: fromData.processedAttachment!.blobId as Uint8Array },
+    contentReference: { kind: "stored-blob", blobId: fromData.attachment!.blobId as Uint8Array },
     missingBlobError: "gone",
     sizeErrorLabel: "Document",
     withBlobId,
   })
   assert.deepEqual(fromBlob.data, new Uint8Array([1, 2]))
-  assert.deepEqual(fromBlob.processedAttachment, {})
+  assert.deepEqual(fromBlob.attachment, {})
 })
 
 test("an oversized attachment is refused before anything is written", async () => {
   const spy = blobStoreSpy()
   await assert.rejects(
-    hydrateSelectedAttachmentData({
+    hydrateAttachmentContent({
       ctx: ctx(),
       blobStore: spy.store as never,
       attachment: {},
-      dataOrBlobId: { case: "data", value: new Uint8Array(11) },
+      contentReference: { kind: "inline-bytes", bytes: new Uint8Array(11) },
       missingBlobError: "gone",
       maxBytes: 10,
       sizeErrorLabel: "Video",
@@ -696,11 +747,11 @@ test("an oversized attachment is refused before anything is written", async () =
 test("a missing blob and an unresolved upload are both errors, and nothing at all is not", async () => {
   const spy = blobStoreSpy()
   await assert.rejects(
-    hydrateSelectedAttachmentData({
+    hydrateAttachmentContent({
       ctx: ctx(),
       blobStore: spy.store as never,
       attachment: {},
-      dataOrBlobId: { case: "blobId", value: new Uint8Array([1]) },
+      contentReference: { kind: "stored-blob", blobId: new Uint8Array([1]) },
       missingBlobError: "gone",
       sizeErrorLabel: "Document",
       withBlobId: (blobId: Uint8Array): Record<string, unknown> => ({ blobId }),
@@ -708,11 +759,11 @@ test("a missing blob and an unresolved upload are both errors, and nothing at al
     /gone/,
   )
   await assert.rejects(
-    hydrateSelectedAttachmentData({
+    hydrateAttachmentContent({
       ctx: ctx(),
       blobStore: spy.store as never,
       attachment: {},
-      dataOrBlobId: { case: "promptUploadRef", value: {} },
+      contentReference: { kind: "unresolved-upload-reference", reference: {} },
       missingBlobError: "gone",
       sizeErrorLabel: "Document",
       withBlobId: (blobId: Uint8Array): Record<string, unknown> => ({ blobId }),
@@ -720,16 +771,16 @@ test("a missing blob and an unresolved upload are both errors, and nothing at al
     /unresolved prompt upload/,
   )
   assert.deepEqual(
-    await hydrateSelectedAttachmentData({
+    await hydrateAttachmentContent({
       ctx: ctx(),
       blobStore: spy.store as never,
       attachment: {},
-      dataOrBlobId: undefined,
+      contentReference: undefined,
       missingBlobError: "gone",
       sizeErrorLabel: "Document",
       withBlobId: (blobId: Uint8Array): Record<string, unknown> => ({ blobId }),
     }),
-    { data: undefined, processedAttachment: undefined },
+    { data: undefined, attachment: undefined },
   )
 })
 

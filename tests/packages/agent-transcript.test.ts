@@ -2,12 +2,12 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { TranscriptStore } from "../../source/host/transcript/agent-transcript/index.ts"
-import { HistoryVisibilityMode, convertConversationMessagesToTrace } from "../../source/host/transcript/agent-transcript/trace-format.ts"
+import { HistoryVisibilityMode, convertConversationMessagesToTrace } from "../../source/adapters/interop/agent/conversation-message-trace-adapter.ts"
 import { stripContextTags, stripTags } from "../../source/host/transcript/agent-transcript/context-stripping.ts"
-import { getTranscriptRelativePath } from "../../source/host/transcript/agent-transcript/paths.ts"
+import { transcriptFilePath } from "../../source/host/transcript/agent-transcript/paths.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { AgentMode, ConversationSummaryArchive } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { ConversationMessage, ConversationMessage_MessageType } from "../../source/packages/proto/generated/aiserver/v1/chat_pb.ts"
+import { ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { ConversationMessage, ConversationMessage_MessageType } from "../../source/adapters/interop/proto/generated/aiserver/v1/chat_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -31,7 +31,7 @@ const message = (role: string, content: unknown, options: { isSummary?: boolean 
 
 function harness(options: {
   blobs?: Map<string, Uint8Array>
-  state?: { mode?: AgentMode; rootPromptMessagesJson?: Uint8Array[]; summaryArchives?: Uint8Array[] }
+  state?: { mode?: string; rootPromptMessagesJson?: Uint8Array[]; summaryArchives?: Uint8Array[] }
   storeOptions?: Record<string, unknown>
 } = {}) {
   const files = new Map<string, string>()
@@ -47,7 +47,7 @@ function harness(options: {
     },
   )
   const state = {
-    mode: options.state?.mode ?? AgentMode.AGENT,
+    mode: options.state?.mode ?? "agent",
     rootPromptMessagesJson: options.state?.rootPromptMessagesJson ?? [],
     summaryArchives: options.state?.summaryArchives ?? [],
   }
@@ -64,23 +64,30 @@ const jsonlFile = (harnessed: ReturnType<typeof harness>, conversationId = "conv
 // where a transcript lives
 // ---------------------------------------------------------------------------------------------
 
-test("a conversation's transcript is named after the conversation", () => {
-  assert.equal(getTranscriptRelativePath({ conversationId: "conversation-1", kind: "primary", ext: "jsonl" }), "agent-transcripts/conversation-1/conversation-1.jsonl")
+test("a conversation's transcript file lives under its encoded id", () => {
+  assert.equal(transcriptFilePath({ conversationId: "conversation-1", kind: "primary", ext: "jsonl" }), "agent-transcripts/conversation-1/conversation-1.jsonl")
 })
 
-test("a subagent's transcript lives under the conversation that started it", () => {
+test("a child transcript lives under its parent's history", () => {
   assert.equal(
-    getTranscriptRelativePath({ conversationId: "agent-1", kind: "subagent", parentConversationId: "conversation-1", ext: "jsonl" }),
+    transcriptFilePath({ conversationId: "agent-1", kind: "subagent", parentConversationId: "conversation-1", ext: "jsonl" }),
     "agent-transcripts/conversation-1/subagents/agent-1.jsonl",
   )
 })
 
 test("an id that could address another directory is encoded", () => {
-  const relative = getTranscriptRelativePath({ conversationId: "../escape", kind: "primary", ext: "jsonl" })
+  const relative = transcriptFilePath({ conversationId: "../escape", kind: "primary", ext: "jsonl" })
   // The separator is gone, so what was a path is now one name — the dots are part of the name, not a step up.
   assert.equal(relative.startsWith("agent-transcripts/"), true)
   assert.deepEqual(relative.split("/").filter(part => part === ".."), [])
   assert.equal(relative.split("/").length, 3)
+})
+
+test("a child without a parent id stays in its own history", () => {
+  assert.equal(
+    transcriptFilePath({ conversationId: "agent-1", kind: "subagent", parentConversationId: "", ext: "jsonl" }),
+    "agent-transcripts/agent-1/agent-1.jsonl",
+  )
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -231,7 +238,7 @@ test("binary data in a message is written as a note rather than as hex", async (
 
 test("the JSON form carries the mode and the messages", async () => {
   const blobs = new Map([["a", message("user", "hello")]])
-  const harnessed = harness({ blobs, state: { mode: AgentMode.PLAN, rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  const harnessed = harness({ blobs, state: { mode: "plan", rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
   await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
   const written = JSON.parse(harnessed.files.get("/repo/.slate/projects/workspace-1/agent-transcripts/conversation-1/conversation-1.json") ?? "{}") as Record<string, unknown>
   assert.equal(written.mode, "plan")
@@ -451,10 +458,10 @@ const jsonlLinesOf = (harnessed: ReturnType<typeof harness>) =>
 
 test("an unspecified mode is written as agent, like an unknown one", async () => {
   const blobs = new Map([["a", message("user", "hello")]])
-  const unspecified = harness({ blobs, state: { mode: AgentMode.UNSPECIFIED, rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  const unspecified = harness({ blobs, state: { mode: "unspecified", rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
   await unspecified.store.writeFromStateFull(ctx, unspecified.state, "conversation-1")
   assert.equal(jsonFileOf(unspecified).mode, "agent")
-  const unknown = harness({ blobs, state: { mode: 99 as AgentMode, rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  const unknown = harness({ blobs, state: { mode: "future-mode", rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
   await unknown.store.writeFromStateFull(ctx, unknown.state, "conversation-1")
   assert.equal(jsonFileOf(unknown).mode, "agent")
 })
@@ -545,7 +552,7 @@ test("a message with no showable part is left out of the JSONL form", async () =
 test("the store names a transcript itself when it is given no resolver", async () => {
   const files = new Map<string, string>()
   const store = new TranscriptStore("/repo", blobStoreOf(new Map([["a", message("user", "hello")]])) as never, async (path, content) => { files.set(path, content) })
-  await store.writeFromStateFull(ctx, { mode: AgentMode.AGENT, rootPromptMessagesJson: [blobId("a")], summaryArchives: [] }, "conversation-1")
+  await store.writeFromStateFull(ctx, { mode: "agent", rootPromptMessagesJson: [blobId("a")], summaryArchives: [] }, "conversation-1")
   assert.equal([...files.keys()][0], "/repo/agent-transcripts/conversation-1/conversation-1.txt")
 })
 

@@ -6,10 +6,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { augmentMcpResultWithSavedImages, describeSavedImage } from "../../source/shared/node/mcp/mcp-image-assets.ts";
-import { generatedMcpResultFactory } from "../../source/shared/node/mcp/mcp-result-factory.ts";
-import { McpResult } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts";
-import type { McpContentItem } from "../../source/shared/node/mcp/mcp-image-assets.ts";
+import { augmentMcpResultWithSavedImages } from "../../source/adapters/interop/mcp/mcp-image-result-adapter.ts";
+import { generatedMcpResultFactory } from "../../source/adapters/interop/mcp/mcp-result-factory.ts";
+import { describeSavedImage } from "../../source/shared/node/mcp/saved-image-notice.ts";
+import { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts";
+import type { McpContentItem } from "../../source/adapters/interop/mcp/mcp-image-result-adapter.ts";
 
 function imageItem(data: Uint8Array, mimeType = "image/png") {
   return { content: { case: "image", value: { data, mimeType } } };

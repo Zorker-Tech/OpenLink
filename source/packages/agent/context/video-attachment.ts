@@ -1,316 +1,268 @@
 /**
- * A video the user attached, made usable by the model that will watch it.
+ * Make an attached video usable by the selected model.
  *
- * A video is far too large to put in a message, so there are only three ways it can reach the model, and
- * which one applies is decided here. A model that watches video itself can be handed the bytes, and the
- * bytes are the whole point — so the size cap is checked, because a video past it is refused rather than
- * truncated into something unwatchable. A session that may store attached media gets a signed URL
- * instead: the bytes are uploaded once and the model is given a link, which is why a video already
- * carrying a signed URL is only re-signed rather than re-uploaded. And a subagent that runs on a machine
- * of its own cannot be handed bytes at all, so the video is materialised into the workspace's uploads
- * folder and referred to by path — the same arrangement as an attached document, including the name that
- * cannot collide with an earlier upload.
- *
- * What is refused is as much a part of this as what is accepted: a video for a model that cannot watch
- * one, a frame rate outside what the platform supports, a mime type that is not a video at all, a signed
- * URL in a session whose privacy mode does not allow storing attached media, and an attachment with no
- * data behind it. Each of those is a caller's mistake rather than a model's, so they are thrown rather
- * than reported as a result.
+ * Slate chooses whether bytes travel inline, through a stored-media link, or through a workspace path.
+ * The input and result here use Slate's video record; a separate adapter handles the persisted video message.
  */
 
-import path from "node:path"
+import path from "node:path";
 
-import type { Context } from "../../context/context.ts"
-import { createLogger } from "../../context/index.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
+import type { Context } from "../../context/context.ts";
+import { createLogger } from "../../context/index.ts";
+import type { PrivacyMode } from "../../redaction/privacy-mode.ts";
 import {
-  SelectedVideo,
-  SelectedVideo_SignedUrl,
-  type SelectedVideo as SelectedVideoValue,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
-import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
+  hydrateAttachmentContent,
+  type AttachmentContentReference,
+  type AttachmentContentStore,
+} from "./attachment-hydration.ts";
+import { getSafeErrorType } from "../attachment-error-type.ts";
+import { appendRandomUploadSuffix } from "./attachment-filenames.ts";
 import {
-  hydrateSelectedAttachmentData,
-  type AttachmentBlobStore,
-} from "./attachment-hydration.ts"
-import { getSafeErrorType } from "../attachment-error-type.ts"
-import { appendRandomUploadSuffix } from "./attachment-filenames.ts"
-import {
-  isGeminiModelId,
   isSignedUrlStorageAllowed,
   uploadAttachedMediaToSignedUrl,
-} from "../attached-media.ts"
-import type { AttachmentPathRequestContext } from "./path-trust.ts"
-
-interface VideoWriteExecutor {
-  execute(ctx: Context, args: WriteArgs): Promise<unknown>
-}
-
-export interface VideoResourceAccessor {
-  get(resource: typeof writeExecutorResource): VideoWriteExecutor
-}
+} from "../attached-media.ts";
+import { isVideoAttachmentModelId } from "../../../adapters/interop/inference/video-model-adapter.ts";
+import type { AttachmentPathRequestContext } from "./path-trust.ts";
+import type { SlateVideoAttachment, SlateVideoContent } from "./video-attachment-contracts.ts";
 
 export interface AttachedMediaUrlProvider {
   getSignedUrlForAttachedMedia(
     ctx: Context,
     request: {
-      readonly conversationId: string
-      readonly key?: string
-      readonly mimeType: string
-      readonly contentLengthBytes?: number
+      readonly conversationId: string;
+      readonly key?: string;
+      readonly mimeType: string;
+      readonly contentLengthBytes?: number;
     },
   ): Promise<{
-    readonly key: string
-    readonly putUrl: string
-    readonly getUrl: string
-    readonly expiresAtUnixMs: bigint
-    readonly refreshAfterUnixMs: bigint
-  }>
+    readonly key: string;
+    readonly putUrl: string;
+    readonly getUrl: string;
+    readonly expiresAtUnixMs: bigint;
+    readonly refreshAfterUnixMs: bigint;
+  }>;
 }
 
 export interface ProcessVideoAttachmentArgs {
-  readonly ctx: Context
-  readonly blobStore: AttachmentBlobStore<Context>
-  readonly selectedVideo: SelectedVideoValue
-  readonly index: number
-  readonly modelId: string | undefined
-  readonly maxVideoBytes: number
-  readonly requestContext: AttachmentPathRequestContext | undefined
-  readonly resourceAccessor: VideoResourceAccessor | undefined
-  readonly privacyMode?: PrivacyMode
-  readonly attachedMediaUrlProvider?: AttachedMediaUrlProvider
-  readonly conversationId?: string
+  readonly ctx: Context;
+  readonly blobStore: AttachmentContentStore<Context>;
+  readonly video: SlateVideoAttachment;
+  readonly index: number;
+  readonly modelId: string | undefined;
+  readonly maxVideoBytes: number;
+  readonly requestContext: AttachmentPathRequestContext | undefined;
+  readonly writeWorkspaceFile?: ((context: Context, path: string, bytes: Uint8Array) => Promise<void>) | undefined;
+  readonly privacyMode?: PrivacyMode | undefined;
+  readonly attachedMediaUrlProvider?: AttachedMediaUrlProvider | undefined;
+  readonly conversationId?: string | undefined;
 }
 
 export interface ProcessedVideoAttachment {
-  readonly processedSelectedVideo: SelectedVideoValue | undefined
-  readonly videoData: Uint8Array | undefined
-  readonly mimeType: string
-  readonly fps: number | undefined
-  readonly filename: string
-  readonly localFilePath?: string
-  readonly videoUrl?: string
+  readonly processedVideo: SlateVideoAttachment | undefined;
+  readonly videoData: Uint8Array | undefined;
+  readonly mimeType: string;
+  readonly fps: number | undefined;
+  readonly filename: string;
+  readonly localFilePath?: string | undefined;
+  readonly videoUrl?: string | undefined;
 }
 
-const logger = createLogger("agent/context-processing")
+const logger = createLogger("agent/context-processing");
+const UPLOADS_DIR = "uploads";
+const MIN_VIDEO_FPS = 0.25;
+const MAX_VIDEO_FPS = 20;
 
-/** Where a video is written for a subagent that cannot be handed its bytes. */
-const UPLOADS_DIR = "uploads"
+function contentReferenceFor(content: SlateVideoContent): AttachmentContentReference | undefined {
+  switch (content.kind) {
+    case "bytes": return { kind: "inline-bytes", bytes: content.bytes };
+    case "blob": return { kind: "stored-blob", blobId: content.blobId };
+    case "blob-with-bytes": return { kind: "blob-with-bytes", blobId: content.blobId, bytes: content.bytes };
+    default: return undefined;
+  }
+}
 
-/** What the platform supports: below this a video has too few frames, above it too many to send. */
-const MIN_VIDEO_FPS = 0.25
-const MAX_VIDEO_FPS = 20
+function contentFromBlobId(video: SlateVideoAttachment, blobId: Uint8Array): SlateVideoAttachment {
+  return { ...video, content: { kind: "blob", blobId } };
+}
 
 export async function processVideoAttachment({
   ctx,
   blobStore,
-  selectedVideo,
+  video,
   index,
   modelId,
   maxVideoBytes,
   requestContext,
-  resourceAccessor,
+  writeWorkspaceFile,
   privacyMode,
   attachedMediaUrlProvider,
   conversationId,
 }: ProcessVideoAttachmentArgs): Promise<ProcessedVideoAttachment> {
-  const materializeToFilesystem = selectedVideo.materializeToFilesystem === true
-  // A video that is not written to disk has to be watched by the model, and not every model can watch.
-  if (!materializeToFilesystem && !isGeminiModelId(modelId)) {
-    throw new Error("Video attachments are only supported for Gemini models")
+  const materializeToFilesystem = video.writeToWorkspace;
+  if (!materializeToFilesystem && !isVideoAttachmentModelId(modelId)) {
+    throw new Error("Video attachments require a video-capable model.");
   }
-  const fps = selectedVideo.fps
+  const fps = video.frameRate;
   if (fps !== undefined && (!Number.isFinite(fps) || fps < MIN_VIDEO_FPS || fps > MAX_VIDEO_FPS)) {
-    throw new Error(`Video fps must be between ${MIN_VIDEO_FPS} and ${MAX_VIDEO_FPS}, got ${fps}`)
+    throw new Error("Video fps must be between " + MIN_VIDEO_FPS + " and " + MAX_VIDEO_FPS + ", got " + fps);
   }
-  const mimeType = selectedVideo.mimeType
+  const mimeType = video.mediaType;
   if (!mimeType || !mimeType.startsWith("video/")) {
-    throw new Error(`Video attachments require a video/* mime type, got ${mimeType}`)
+    throw new Error("Video attachments require a video/* mime type, got " + mimeType);
   }
 
-  // A signed URL is only available where the session may store attached media at all.
-  const useSignedUrl = !materializeToFilesystem &&
+  const mayUseSignedUrl = !materializeToFilesystem &&
     privacyMode !== undefined &&
     isSignedUrlStorageAllowed(privacyMode) &&
-    attachedMediaUrlProvider !== undefined
-  if (useSignedUrl && attachedMediaUrlProvider !== undefined) {
-    return processVideoUsingSignedUrl({
+    attachedMediaUrlProvider !== undefined;
+  if (mayUseSignedUrl && attachedMediaUrlProvider !== undefined) {
+    return await processVideoUsingSignedUrl({
       ctx,
       blobStore,
-      selectedVideo,
+      video,
       maxVideoBytes,
       mimeType,
       fps,
       attachedMediaUrlProvider,
       conversationId,
-    })
+    });
   }
 
-  const dataCase = selectedVideo.dataOrBlobId?.case
-  if (dataCase !== "data" && dataCase !== "blobId" && dataCase !== "blobIdWithData") {
-    if (dataCase === "signedUrl") {
-      throw new Error("Attached media signed URLs are not available in this privacy mode")
-    }
-    throw new Error("Video attachment has no data")
+  if (video.content.kind === "signed-link") {
+    throw new Error("Attached media signed URLs are not available in this privacy mode");
   }
-  const hydratedVideo = await hydrateSelectedAttachmentData({
+  const contentReference = contentReferenceFor(video.content);
+  if (contentReference === undefined) throw new Error("Video attachment has no data");
+
+  const hydrated = await hydrateAttachmentContent({
     ctx,
     blobStore,
-    attachment: selectedVideo,
-    dataOrBlobId: selectedVideo.dataOrBlobId,
+    attachment: video,
+    contentReference,
     maxBytes: maxVideoBytes,
     missingBlobError: "Video not found in blob store",
     sizeErrorLabel: "Video",
-    withBlobId: (blobId: Uint8Array) => new SelectedVideo({
-      ...selectedVideo,
-      dataOrBlobId: {
-        case: "blobId",
-        value: blobId,
-      },
-    }),
-  })
-  const videoData = hydratedVideo.data
-  let processedSelectedVideo = hydratedVideo.processedAttachment
-  let videoFilePath: string | undefined
-  const filename = selectedVideo.filename ||
-    (selectedVideo.path.length > 0 ? path.basename(selectedVideo.path) : `video-${Date.now()}-${index}`)
+    withBlobId: blobId => contentFromBlobId(video, blobId),
+  });
+  const videoData = hydrated.data;
+  let processedVideo = hydrated.attachment;
+  let videoFilePath: string | undefined;
+  const filename = video.displayName ||
+    (video.sourcePath.length > 0 ? path.basename(video.sourcePath) : "video-" + Date.now() + "-" + index);
 
-  if (materializeToFilesystem && videoData) {
-    const videoRootPath = requestContext?.env?.projectFolder ?? requestContext?.env?.workspacePaths?.[0]
-    if (resourceAccessor && videoRootPath !== undefined) {
+  if (materializeToFilesystem && videoData !== undefined) {
+    const videoRootPath = requestContext?.env?.projectFolder ?? requestContext?.env?.workspacePaths?.[0];
+    if (writeWorkspaceFile !== undefined && videoRootPath !== undefined) {
       try {
-        const safeFilename = appendRandomUploadSuffix(filename, `video-${Date.now()}-${index}`)
-        const uploadsDir = path.join(videoRootPath, UPLOADS_DIR)
-        const filePath = path.join(uploadsDir, safeFilename)
-        const writeExecutor = resourceAccessor.get(writeExecutorResource)
-        await writeExecutor.execute(ctx, new WriteArgs({
-          path: filePath,
-          fileBytes: new Uint8Array(videoData),
-          returnFileContentAfterWrite: false,
-        }))
-        videoFilePath = filePath
-        processedSelectedVideo = new SelectedVideo({
-          ...(processedSelectedVideo ?? selectedVideo),
-          path: filePath,
-        })
+        const safeFilename = appendRandomUploadSuffix(filename, "video-" + Date.now() + "-" + index);
+        const filePath = path.join(videoRootPath, UPLOADS_DIR, safeFilename);
+        await writeWorkspaceFile(ctx, filePath, videoData);
+        videoFilePath = filePath;
+        processedVideo = { ...(processedVideo ?? video), sourcePath: filePath };
       } catch (error) {
-        // A video that could not be written is dropped rather than failing the turn that carried it.
-        logger.warn(ctx, "Failed to write video to filesystem", {
-          errorType: getSafeErrorType(error),
-        })
-        processedSelectedVideo = undefined
+        logger.warn(ctx, "Failed to write video to filesystem", { errorType: getSafeErrorType(error) });
+        processedVideo = undefined;
       }
     }
   }
-  // A video asked to be materialised and not written anywhere has nothing to offer the model.
-  if (materializeToFilesystem && videoFilePath === undefined) {
-    processedSelectedVideo = undefined
-  }
+  if (materializeToFilesystem && videoFilePath === undefined) processedVideo = undefined;
+
   return {
-    processedSelectedVideo,
-    // Bytes only travel when they are the way the model will see the video.
+    processedVideo,
     videoData: materializeToFilesystem ? undefined : videoData,
     mimeType,
     fps,
     filename,
     ...(videoFilePath === undefined ? {} : { localFilePath: videoFilePath }),
-  }
+  };
 }
 
 async function processVideoUsingSignedUrl({
   ctx,
   blobStore,
-  selectedVideo,
+  video,
   maxVideoBytes,
   mimeType,
   fps,
   attachedMediaUrlProvider,
   conversationId,
 }: {
-  readonly ctx: Context
-  readonly blobStore: AttachmentBlobStore<Context>
-  readonly selectedVideo: SelectedVideoValue
-  readonly maxVideoBytes: number
-  readonly mimeType: string
-  readonly fps: number | undefined
-  readonly attachedMediaUrlProvider: AttachedMediaUrlProvider
-  readonly conversationId: string | undefined
+  readonly ctx: Context;
+  readonly blobStore: AttachmentContentStore<Context>;
+  readonly video: SlateVideoAttachment;
+  readonly maxVideoBytes: number;
+  readonly mimeType: string;
+  readonly fps: number | undefined;
+  readonly attachedMediaUrlProvider: AttachedMediaUrlProvider;
+  readonly conversationId: string | undefined;
 }): Promise<ProcessedVideoAttachment> {
-  const dataOrBlobId = selectedVideo.dataOrBlobId
-  // A video that already has a signed URL has already been uploaded, so only the URL is renewed.
-  if (dataOrBlobId?.case === "signedUrl") {
-    const incomingSignedUrl = dataOrBlobId.value
+  const content = video.content;
+  if (content.kind === "signed-link") {
     const renewed = await attachedMediaUrlProvider.getSignedUrlForAttachedMedia(ctx, {
-      conversationId: incomingSignedUrl.conversationId,
-      key: incomingSignedUrl.key,
+      conversationId: content.conversationId,
+      ...(content.key === undefined ? {} : { key: content.key }),
       mimeType,
-    })
-    const signedUrl = new SelectedVideo_SignedUrl({
+    });
+    const renewedContent: SlateVideoContent = {
+      kind: "signed-link",
       url: renewed.getUrl,
       key: renewed.key,
       expiresAtUnixMs: renewed.expiresAtUnixMs,
       refreshAfterUnixMs: renewed.refreshAfterUnixMs,
-      conversationId: incomingSignedUrl.conversationId,
-    })
+      conversationId: content.conversationId,
+    };
     return {
-      processedSelectedVideo: new SelectedVideo({
-        ...selectedVideo,
-        dataOrBlobId: { case: "signedUrl", value: signedUrl },
-      }),
+      processedVideo: { ...video, content: renewedContent },
       videoData: undefined,
-      videoUrl: signedUrl.url,
+      videoUrl: renewed.getUrl,
       mimeType,
       fps,
-      filename: selectedVideo.filename,
-    }
+      filename: video.displayName,
+    };
   }
 
-  let videoData: Uint8Array | undefined
-  if (dataOrBlobId?.case === "data") {
-    videoData = dataOrBlobId.value
-  } else if (dataOrBlobId?.case === "blobId") {
-    videoData = await blobStore.getBlob(ctx, dataOrBlobId.value)
-    if (!videoData) {
-      throw new Error("Video not found in blob store")
-    }
-  } else if (dataOrBlobId?.case === "blobIdWithData") {
-    videoData = dataOrBlobId.value.data
+  let videoData: Uint8Array | undefined;
+  if (content.kind === "bytes") {
+    videoData = content.bytes;
+  } else if (content.kind === "blob") {
+    videoData = await blobStore.getBlob(ctx, content.blobId);
+    if (!videoData) throw new Error("Video not found in blob store");
+  } else if (content.kind === "blob-with-bytes") {
+    videoData = content.bytes;
   } else {
-    throw new Error("Video attachment has no data")
+    throw new Error("Video attachment has no data");
   }
 
   if (videoData.length > maxVideoBytes) {
-    throw new Error(`Video exceeds maximum size of ${maxVideoBytes} bytes (${Math.round(maxVideoBytes / 1024 / 1024)}MB)`)
+    throw new Error("Video exceeds maximum size of " + maxVideoBytes + " bytes (" +
+      Math.round(maxVideoBytes / 1024 / 1024) + "MB)");
   }
-  const resolvedConversationId = conversationId ?? ""
+  const uploadConversationId = conversationId ?? "";
   const signedUrls = await attachedMediaUrlProvider.getSignedUrlForAttachedMedia(ctx, {
-    conversationId: resolvedConversationId,
+    conversationId: uploadConversationId,
     mimeType,
     contentLengthBytes: videoData.length,
-  })
+  });
   await uploadAttachedMediaToSignedUrl({
     putUrl: signedUrls.putUrl,
     data: new Uint8Array(videoData),
     mimeType,
     signal: ctx.signal,
-  })
-  const signedUrl = new SelectedVideo_SignedUrl({
+  });
+  const signedContent: SlateVideoContent = {
+    kind: "signed-link",
     url: signedUrls.getUrl,
     key: signedUrls.key,
     expiresAtUnixMs: signedUrls.expiresAtUnixMs,
     refreshAfterUnixMs: signedUrls.refreshAfterUnixMs,
-    conversationId: resolvedConversationId,
-  })
+    conversationId: uploadConversationId,
+  };
   return {
-    processedSelectedVideo: new SelectedVideo({
-      ...selectedVideo,
-      dataOrBlobId: { case: "signedUrl", value: signedUrl },
-    }),
+    processedVideo: { ...video, content: signedContent },
     videoData: undefined,
-    videoUrl: signedUrl.url,
+    videoUrl: signedUrls.getUrl,
     mimeType,
     fps,
-    filename: selectedVideo.filename,
-  }
+    filename: video.displayName,
+  };
 }

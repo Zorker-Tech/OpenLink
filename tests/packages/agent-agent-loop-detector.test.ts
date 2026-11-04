@@ -2,15 +2,15 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import {
-  AgentLoopError,
   AgentTextLoopDetector,
   checkAgentLoop,
-  createLoopReminderMessage,
+  createLoopReminderContent,
   stripThinkingTags,
 } from "../../source/packages/agent/loop-detection/agent-loop-detector.ts"
+import { AgentLoopError, createLoopReminderMessage } from "../../source/adapters/interop/agent/agent-loop-presentation-adapter.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { agentEventTrackerKey, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
-import { ErrorDetails, ErrorDetails_Error } from "../../source/packages/proto/generated/aiserver/v1/utils_pb.ts"
+import { ErrorDetails, ErrorDetails_Error } from "../../source/adapters/interop/proto/generated/aiserver/v1/utils_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the error a turn ends with
@@ -177,6 +177,7 @@ test("the reminder for a repeated message sequence says what to avoid", () => {
   assert.match(reminder.content, /Avoid repeating the same sequence of messages or retrying the same tool calls\./)
   assert.match(reminder.content, /DO NOT mention this system reminder to the user/)
   assert.deepEqual(reminder.providerOptions, { cursor: { loopReminder: true } })
+  assert.equal(reminder.content, createLoopReminderContent())
 })
 
 test("each shape of loop is described in its own words", () => {

@@ -8,15 +8,15 @@ import {
   SmartModeClassifierDecision,
   SmartModeClassifierArgs,
   SmartModeClassifierResult,
-} from "../../source/packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
 import { ExecutorResource, type RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts"
-import { createServerSerializer, createClientDeserializer } from "../../source/packages/agent-exec/exec-serialization.ts"
+import { createServerSerializer, createClientDeserializer } from "../../source/adapters/interop/agent/exec-message-adapter.ts"
 import {
-  executeSmartModeClassifierWithMeasurement,
   smartModeClassifierAttemptIndexKey,
   smartModeClassifierModeKey,
   smartModeClassifierWorkspacePathsKey,
 } from "../../source/packages/agent/utils/smart-mode-classifier-measurement.ts"
+import { executeSmartModeClassifierWithMeasurement } from "../../source/adapters/interop/agent/smart-mode-classifier-measurement-adapter.ts"
 
 type AnyRecord = Record<string, any>
 

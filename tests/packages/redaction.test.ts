@@ -80,15 +80,20 @@ test("what gets redacted follows the classification first and the mode second", 
   assert.ok(SENSITIVE_CLASSIFICATIONS.includes(DataClassification.CODE))
   assert.ok(!SENSITIVE_CLASSIFICATIONS.includes(DataClassification.SAFE))
 
+  const trainingAllowed = new Set<PrivacyMode>([
+    PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
+    PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED,
+  ])
   for (const mode of Object.values(PrivacyMode)) {
-    assert.equal(shouldRedact(mode, DataClassification.CREDENTIALS), true)
-    assert.equal(shouldRedact(mode, DataClassification.UNSPECIFIED), true)
-    assert.equal(shouldRedact(mode, DataClassification.SAFE), false)
+    for (const classification of Object.values(DataClassification)) {
+      const expected = classification === DataClassification.CREDENTIALS ||
+        classification === DataClassification.UNSPECIFIED ||
+        (classification !== DataClassification.SAFE && !trainingAllowed.has(mode))
+      assert.equal(shouldRedact(mode, classification), expected, `${classification} under mode ${mode}`)
+    }
   }
-  assert.equal(shouldRedact(PrivacyMode.NO_STORAGE, DataClassification.CODE), true)
-  assert.equal(shouldRedact(PrivacyMode.NO_TRAINING, DataClassification.PROVIDER_INFO), true)
-  assert.equal(shouldRedact(PrivacyMode.USAGE_DATA_TRAINING_ALLOWED, DataClassification.CODE), false)
-  assert.equal(shouldRedact(PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED, DataClassification.PATH), false)
+  assert.equal(shouldRedact(PrivacyMode.NO_STORAGE, "future" as DataClassification), false)
+  assert.equal(shouldRedact(9 as never, DataClassification.CODE), true)
 })
 
 test("enforcement is explicit when the context says so, otherwise it depends on the process gate", () => {
@@ -153,7 +158,7 @@ test("unwrap refuses what policy forbids, with the placeholder or an error", () 
   })
   assert.throws(
     () => value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING),
-    /Unwrap not allowed for purpose storage_for_training with classification code and privacy mode 1/,
+    /Unwrap not allowed for purpose storage_for_training with classification code and privacy mode no-storage/,
   )
   assert.equal(
     value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, { redactUnallowedFieldsInsteadOfThrowing: true }),

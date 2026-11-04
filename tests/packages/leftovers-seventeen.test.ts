@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { createReactToMessageTool, SLATE_REACT_TO_MESSAGE_TOOL_NAME } from "../../source/host/runner/tools/slate-reaction-tool.ts";
 import { FileTranscriptMirror } from "../../source/host/transcript/mirror/transcript-mirror.ts";
 import { AutoReviewService, parseLocalAutoReviewMode, SETTLED_APPROVAL_MEMORY } from "../../source/host/extensions/auto-review/auto-review-service.ts";
-import { createRequestBoxHelpTool, normalizeBoxHelpDomain } from "../../source/host/runner/tools/box-help-tool.ts";
+import { createManualHandoffTool, normalizeDestinationHost } from "../../source/host/runner/tools/box-help-tool.ts";
 import { createSubagentManagementTools, elapsedLabel } from "../../source/host/runner/tools/slate-subagent-management-tools.ts";
 
 describe("the tool an agent reacts with", () => {
@@ -36,9 +36,9 @@ describe("the service that decides whether a change needs a review", () => {
 
 describe("the tool a box's agent asks its host for help with", () => {
   it("normalizes what it was asked about, taking a host out of a URL", () => {
-    assert.equal(normalizeBoxHelpDomain("  https://example.com/x  "), "example.com");
-    assert.equal(normalizeBoxHelpDomain("example.com"), "example.com");
-    assert.equal(typeof createRequestBoxHelpTool, "function");
+    assert.equal(normalizeDestinationHost("  https://example.com/x  "), "example.com");
+    assert.equal(normalizeDestinationHost("example.com"), "example.com");
+    assert.equal(typeof createManualHandoffTool, "function");
   });
 });
 

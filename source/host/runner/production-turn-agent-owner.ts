@@ -17,7 +17,7 @@
  */
 import type { Context } from "../../packages/context/context.ts";
 import type { BlobStore } from "../../packages/agent-kv/blob-store.ts";
-import { ConversationStateStructure } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
+import { cloneInteropConversationState, type InteropConversationState } from "../../adapters/interop/agent/turn-agent-run-projection-adapter.ts";
 import {
   buildAgentForRun,
   createTurnAgentRunInputProjection,
@@ -33,8 +33,8 @@ import {
 import type { TurnToolsetHost, TurnToolsetTurnInput } from "./tools/turn-toolset.ts";
 import {
   createProductionTurnToolsetHost,
-  type ProductionTurnLazyToolsetHostInput,
-  type ProductionTurnToolsetHostInput,
+  type LazyTurnToolsetHostBinding,
+  type TurnToolsetHostBinding,
 } from "../runner-production-bridge.ts";
 import type { SummarizationPromptSession } from "../../packages/agent-summarization/summarization-handler.ts";
 import type { DiskPressureReminderEpisodes } from "../boxes/forever-box/disk-pressure.ts";
@@ -42,7 +42,7 @@ import type { AgentProfilePromptSnapshot } from "./slate-agent-profile-prompt.ts
 import type { PromptSnapshotStore } from "./system-prompt-assembly.ts";
 import type { ForwardedUpdate } from "./agent-adapters.ts";
 import type { MessageLike } from "./send-message-reminder-middleware.ts";
-import type { GeneratedTurnActionAssembly, GeneratedTurnPromptOptions } from "./prompt-collector-glue.ts";
+import type { InteropTurnActionAssembly as GeneratedTurnActionAssembly, InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import { createTurnAgentRunContext, type TurnAgentInferenceOwner, type TurnAgentRunContext } from "./turn-run-shell.ts";
 import { presentOptions } from "./optional-options.ts";
 
@@ -63,7 +63,7 @@ export interface ProductionTurnAgentOwnerInput {
   /** Optional when the inference owner exposes its own session factory. */
   readonly summarizationSession?: SummarizationPromptSession;
   readonly toolHost?: TurnToolsetHost;
-  readonly toolsetHostInput?: ProductionTurnToolsetHostInput | ProductionTurnLazyToolsetHostInput;
+  readonly toolsetHostInput?: TurnToolsetHostBinding | LazyTurnToolsetHostBinding;
   readonly turn: TurnToolsetTurnInput;
   readonly staticConfig: Omit<TurnAgentStaticConfigInputs, "toolsGenerator">;
   readonly emitUpdate: (update: ForwardedUpdate) => void;
@@ -107,7 +107,7 @@ export interface ProductionTurnAgentRunInput {
   }) => Promise<GeneratedTurnActionAssembly>;
   readonly profileUpdateForTurn?: { readonly text: string };
   readonly compactionEpoch: () => number;
-  readonly getConversationState: () => ConversationStateStructure;
+  readonly getConversationState: () => InteropConversationState;
   readonly mcp?: TurnAgentMcpTurnProvider;
   readonly onMcpDiscoveryFailed?: (error: unknown) => void;
 }
@@ -198,6 +198,6 @@ export async function createProductionTurnAgentOwner(input: ProductionTurnAgentO
 }
 
 /** The generated state handed to a host caller is a copy, so the caller's edits cannot reach the turn's own state. */
-export function cloneTurnState(state: ConversationStateStructure): ConversationStateStructure {
-  return ConversationStateStructure.fromBinary(state.toBinary());
+export function cloneTurnState(state: InteropConversationState): InteropConversationState {
+  return cloneInteropConversationState(state);
 }

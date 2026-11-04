@@ -6,7 +6,7 @@ import {
   FeedbackRequestCategory,
   ThinkingDeltaUpdate,
   UserMessage,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 
 const messageOf = (update: ReturnType<typeof Updates.textDelta>) => update.message!;
 const caseOf = (update: unknown) => (update as { message: { case: string } }).message.case;

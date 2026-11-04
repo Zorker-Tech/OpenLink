@@ -2,29 +2,30 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { PrivacyMode } from "../../source/packages/proto/generated/aiserver/v1/privacy_mode_pb.ts"
-import { BackgroundComposerSource } from "../../source/packages/proto/generated/aiserver/v1/background_composer_pb.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { BackgroundComposerSource } from "../../source/adapters/interop/proto/generated/aiserver/v1/background_composer_pb.ts"
 import { InMemoryBlobStore } from "../../source/packages/agent-kv/blob-store.ts"
 import { toHex } from "../../source/packages/agent-kv/serde.ts"
 import {
   AgentType,
-  classifierResultToProto,
   isCloudAgentComputerUseEligibleEnvironment,
   isComputerUseEligibleModel,
   shouldEnableComputerUse,
   shouldUseExperimentalCloudBehavior,
 } from "../../source/packages/agent/utils/agent-config.ts"
+import { classifierResultToProto } from "../../source/adapters/interop/agent/command-classifier-result-adapter.ts"
+import { projectBackgroundAgentSource } from "../../source/adapters/interop/agent/background-agent-source-adapter.ts"
 import {
   getContextUsageInfo,
   getFilenameWithoutExtension,
   getFirstNonEmptyLine,
-  getSkillSourceFromPath,
   isHookStepConfigured,
 } from "../../source/packages/agent/utils/common-helpers.ts"
 import { agentEventTrackerKey, getAgentEventTracker, recordSkillApplied, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
 import { isLoopbackIpHost, isPrivateIpHost } from "../../source/packages/agent/utils/ip-addresses.ts"
-import { projectPermissionsAutoRunFromProto, smartModeAutoRunInstructionsFromProtos } from "../../source/packages/agent/utils/permissions-instructions.ts"
+import { normalizeAutoRunPolicyInstructions, resolveSmartModeAutoRunInstructions } from "../../source/packages/agent/utils/permissions-instructions.ts"
+import { ProjectConversationBoundary } from "../../source/packages/constants/project-conversation.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { isRootProjectUserMessage, resolveProjectConversationContext, shouldOmitCloudWorkerProcedure } from "../../source/packages/agent/utils/project-conversation.ts"
 import { extractCompleteTagRanges, extractMcpServerTagRanges, extractSelfClosingTagRangesMatching } from "../../source/packages/agent/utils/prompt-tags.ts"
 import {
@@ -33,16 +34,21 @@ import {
   getClientOsMetricTagFromContext,
   getClientVersionMetricTagsFromContext,
   getConversationGroupId,
+  getParentAgentToolCallId,
+  getParentRequestId,
   getIsInternalTeamFromContext,
   getIsSubagentFromContext,
   getRequestId,
   getRootParentRequestId,
   getSdkFlavorMetricTagFromContext,
+  withParentRequestId,
+  withRootParentRequestId,
+  withParentAgentToolCallId,
   clientOsKey,
   clientVersionKey,
   conversationIdKey,
   membershipTypeKey,
-  requestIdKey,
+  withRequestId,
   teamIdKey,
   getMembershipTypeMetricTagsFromContext,
 } from "../../source/packages/agent/utils/request-scope.ts"
@@ -65,18 +71,6 @@ test("file, line and context helpers answer the questions the prompt assembly as
   assert.equal(getContextUsageInfo({ maxTokens: 0, usedTokens: 10 }).contextUsagePercent, 0)
   assert.equal(isHookStepConfigured(["pre"], "pre"), true)
   assert.equal(isHookStepConfigured(undefined, "pre"), false)
-})
-
-test("a skill's source decides whether the user may change it", () => {
-  // The directories are the ones that exist on disk, including another tool's.
-  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills-cursor/x/SKILL.md"), "builtin")
-  assert.equal(getSkillSourceFromPath("/home/u/.cursor/plugins/p/x/SKILL.md"), "plugin")
-  assert.equal(getSkillSourceFromPath("/home/u/.claude/plugins/p/x/SKILL.md"), "plugin")
-  assert.equal(getSkillSourceFromPath("/home/u/.claude/skills/x/SKILL.md"), "other-tool")
-  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills/x/SKILL.md"), "workspace")
-  assert.equal(getSkillSourceFromPath("/home/u/.agents/skills/x/SKILL.md"), "workspace")
-  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills-cursor\\x\\SKILL.md"), "builtin")
-  assert.equal(getSkillSourceFromPath("/home/u/random/SKILL.md"), "unknown")
 })
 
 test("loopback and private hosts are recognized in both address families", () => {
@@ -174,7 +168,7 @@ test("computer use is enabled only where it makes sense", () => {
   assert.equal(isComputerUseEligibleModel("claude-4.5-sonnetx"), false)
   assert.equal(isComputerUseEligibleModel("some-other-model"), false)
 
-  assert.equal(isCloudAgentComputerUseEligibleEnvironment(BackgroundComposerSource.GITHUB_CI_AUTOFIX), false)
+  assert.equal(isCloudAgentComputerUseEligibleEnvironment(projectBackgroundAgentSource(BackgroundComposerSource.GITHUB_CI_AUTOFIX)), false)
   assert.equal(isCloudAgentComputerUseEligibleEnvironment(undefined), true)
   assert.equal(shouldUseExperimentalCloudBehavior({ agentType: AgentType.BACKGROUND, enableCloudTesting: true }), true)
   assert.equal(shouldUseExperimentalCloudBehavior({ agentType: AgentType.IDE, enableCloudTesting: true }), false)
@@ -190,17 +184,19 @@ test("computer use is enabled only where it makes sense", () => {
   assert.equal(shouldEnableComputerUse({ ...eligible, isBackground: false }), false)
   assert.equal(shouldEnableComputerUse({ ...eligible, modelId: "other" }), false)
   assert.equal(
-    shouldEnableComputerUse({ ...eligible, backgroundAgentSource: BackgroundComposerSource.BUGBOT_AUTOFIX }),
+    shouldEnableComputerUse({ ...eligible, backgroundAgentSource: projectBackgroundAgentSource(BackgroundComposerSource.BUGBOT_AUTOFIX) }),
     false,
   )
 })
 
 test("a subagent runs as its own request with its parent recorded", () => {
-  const root = createContext().with(requestIdKey, "root-1").with(conversationIdKey, "conv-1")
+  const root = withRequestId(createContext().with(conversationIdKey, "conv-1"), "root-1")
   const subagent = createSubagentContext(root, "sub-1", "call-9")
 
   assert.equal(getRequestId(subagent), "sub-1")
+  assert.equal(getParentRequestId(subagent), "root-1")
   assert.equal(getRootParentRequestId(subagent), "root-1")
+  assert.equal(getParentAgentToolCallId(subagent), "call-9")
   assert.equal(getIsSubagentFromContext(subagent), true)
   assert.equal(getIsSubagentFromContext(root), false)
   assert.equal(getConversationGroupId(subagent), "conv-1", "a subagent stays in its conversation group")
@@ -210,6 +206,26 @@ test("a subagent runs as its own request with its parent recorded", () => {
 
   const grouped = root.with(conversationIdKey, "conv-1").with({ symbol: Symbol("conversationGroupId"), defaultValue: undefined }, "group-1")
   void grouped
+})
+
+test("request lineage updates patch one isolated context value", () => {
+  const original = withRequestId(createContext(), "request-1")
+  const nested = withParentAgentToolCallId(
+    withRootParentRequestId(
+      withParentRequestId(original, "parent-1"),
+      "root-1",
+    ),
+    "call-1",
+  )
+
+  assert.deepEqual([
+    getRequestId(nested),
+    getParentRequestId(nested),
+    getRootParentRequestId(nested),
+    getParentAgentToolCallId(nested),
+  ], ["request-1", "parent-1", "root-1", "call-1"])
+  assert.equal(getParentRequestId(original), undefined)
+  assert.equal(getRootParentRequestId(original), undefined)
 })
 
 test("client metric tags are normalized and bounded", () => {
@@ -234,25 +250,25 @@ test("client metric tags are normalized and bounded", () => {
 })
 
 test("empty permission entries are dropped, and an administrator's layer wins", () => {
-  assert.equal(projectPermissionsAutoRunFromProto(undefined), undefined)
-  assert.equal(projectPermissionsAutoRunFromProto({ allowInstructions: [], blockInstructions: [] }), undefined)
-  assert.equal(projectPermissionsAutoRunFromProto({ allowInstructions: [""], blockInstructions: [] }), undefined)
+  assert.equal(normalizeAutoRunPolicyInstructions(undefined), undefined)
+  assert.equal(normalizeAutoRunPolicyInstructions({ allowInstructions: [], blockInstructions: [] }), undefined)
+  assert.equal(normalizeAutoRunPolicyInstructions({ allowInstructions: [""], blockInstructions: [] }), undefined)
   assert.deepEqual(
-    projectPermissionsAutoRunFromProto({ allowInstructions: ["a", ""], blockInstructions: ["b"] }),
+    normalizeAutoRunPolicyInstructions({ allowInstructions: ["a", ""], blockInstructions: ["b"] }),
     { allowInstructions: ["a"], blockInstructions: ["b"] },
   )
 
-  const admin = smartModeAutoRunInstructionsFromProtos({
-    userPermissionsAutoRun: { allowInstructions: ["user"], blockInstructions: [] },
-    adminPermissionsAutoRun: { allowInstructions: ["admin"], blockInstructions: [] },
+  const admin = resolveSmartModeAutoRunInstructions({
+    user: { allowInstructions: ["user"], blockInstructions: [] },
+    administrator: { allowInstructions: ["admin"], blockInstructions: [] },
   })
   assert.equal(admin.hasAdminOverride, true)
   assert.deepEqual(admin.projectAutoRunInstructions?.allowInstructions, ["admin"])
   assert.equal(admin.userAutoRunInstructions, undefined, "an administrator's layer replaces the user's")
 
-  const layered = smartModeAutoRunInstructionsFromProtos({
-    userPermissionsAutoRun: { allowInstructions: ["user"], blockInstructions: [] },
-    projectPermissionsAutoRun: { allowInstructions: ["project"], blockInstructions: [] },
+  const layered = resolveSmartModeAutoRunInstructions({
+    user: { allowInstructions: ["user"], blockInstructions: [] },
+    project: { allowInstructions: ["project"], blockInstructions: [] },
   })
   assert.equal(layered.hasAdminOverride, false)
   assert.deepEqual(layered.userAutoRunInstructions?.allowInstructions, ["user"])
@@ -313,20 +329,20 @@ test("a usage snapshot is written once per prompt, and not at all without storag
 })
 
 test("the project conversation is decided by its newest boundary", async () => {
-  assert.equal(isRootProjectUserMessage({ projectDetails: {} }), true)
-  assert.equal(isRootProjectUserMessage({ projectDetails: {}, bestOfNGroupId: "g" }), false)
+  assert.equal(isRootProjectUserMessage({ projectBoundary: ProjectConversationBoundary.ROOT }), true)
+  assert.equal(isRootProjectUserMessage({ projectBoundary: ProjectConversationBoundary.RELATED }), false)
   assert.equal(isRootProjectUserMessage({}), false)
 
   assert.equal(
     shouldOmitCloudWorkerProcedure({
-      gateEnabled: true, agentType: AgentType.BACKGROUND, mode: AgentMode.AGENT,
+      gateEnabled: true, agentType: AgentType.BACKGROUND, mode: SlateMode.AGENT,
       useLocalAgentPrompting: false, isNamedAgentSession: false, isRootProject: true,
     }),
     true,
   )
   assert.equal(
     shouldOmitCloudWorkerProcedure({
-      gateEnabled: true, agentType: AgentType.IDE, mode: AgentMode.AGENT,
+      gateEnabled: true, agentType: AgentType.IDE, mode: SlateMode.AGENT,
       useLocalAgentPrompting: false, isNamedAgentSession: false, isRootProject: true,
     }),
     false,
@@ -336,18 +352,30 @@ test("the project conversation is decided by its newest boundary", async () => {
     ({ get: async () => ({ userMessage: { get: async () => userMessage } }) }) as never
   const resolved = await resolveProjectConversationContext(createContext(), {
     turns: [
-      turnOf({ mode: AgentMode.AGENT, projectDetails: {}, isSimulatedMsg: false }),
-      turnOf({ mode: AgentMode.PLAN, isSimulatedMsg: true }),
+      turnOf({ mode: SlateMode.AGENT, projectBoundary: ProjectConversationBoundary.ROOT, isSimulated: false }),
+      turnOf({ mode: SlateMode.PLAN, isSimulated: true }),
     ],
   })
   assert.equal(resolved.hasProjectBoundary, true)
   assert.equal(resolved.isRootProject, true)
-  assert.equal(resolved.lastMode, AgentMode.PLAN, "the newest mode seen is reported")
+  assert.equal(resolved.lastMode, SlateMode.PLAN, "the newest mode seen is reported")
 
   const none = await resolveProjectConversationContext(createContext(), {
-    turns: [turnOf({ mode: AgentMode.AGENT, isSimulatedMsg: true })],
+    turns: [turnOf({ mode: SlateMode.AGENT, isSimulated: true })],
   })
-  assert.deepEqual(none, { lastMode: AgentMode.AGENT, isRootProject: false, hasProjectBoundary: false })
+  assert.deepEqual(none, { lastMode: SlateMode.AGENT, isRootProject: false, hasProjectBoundary: false })
+
+  const userTurnStopsAtTheNewestNonSimulatedMessage = await resolveProjectConversationContext(createContext(), {
+    turns: [
+      turnOf({ mode: SlateMode.AGENT, projectBoundary: ProjectConversationBoundary.ROOT, isSimulated: false }),
+      turnOf({ mode: SlateMode.CHAT, isSimulated: false }),
+    ],
+  })
+  assert.deepEqual(userTurnStopsAtTheNewestNonSimulatedMessage, {
+    lastMode: SlateMode.CHAT,
+    isRootProject: false,
+    hasProjectBoundary: false,
+  })
 })
 
 test("a rule is file-scoped when it is attached to files or nested below the workspace root", () => {
@@ -360,5 +388,14 @@ test("a rule is file-scoped when it is attached to files or nested below the wor
     "a global rule below the root belongs to its subtree",
   )
   assert.equal(isFileScopedRule({ type: { type: { case: "other" } }, fullPath: "/repo/.cursor/rules/a.mdc" }, [workspace]), false)
+  assert.equal(isFileScopedRule({ type: { type: { case: "global" } } }, [workspace]), false)
+  assert.equal(
+    isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "C:\\repo\\pkg\\.cursor\\rules\\windows.mdc" }, ["C:\\repo"]),
+    true,
+  )
+  assert.equal(
+    isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "/outside/.cursor/rules/a.mdc" }, [workspace]),
+    false,
+  )
   assert.equal(isFileScopedRule({}, [workspace]), false)
 })

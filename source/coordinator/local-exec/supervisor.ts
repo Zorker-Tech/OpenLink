@@ -7,9 +7,9 @@
 import { createRealPollingPolicy, type PollingPolicy } from "../../host/extensions/scheduling.ts";
 import { SLATE_CLIENT_PAUSE_REASON } from "../../shared/gateway-reachability.ts";
 import {
-  commandCarriesLocalExecGeneration,
-  localExecDiscoveryTimeMatchesProcess,
-  sameLocalExecProcessIdentity,
+  processCommandHasExpectedIdentity,
+  discoveryBelongsToProcessWindow,
+  processIdentitiesMatch,
   type ExpectedLocalExecProcessIdentity,
   type LocalExecProcessIdentity,
 } from "../../shared/local-exec-process-identity.ts";
@@ -85,9 +85,9 @@ function isClientPauseRefusal(error: unknown): boolean {
   return error instanceof Error && error.message.includes(SLATE_CLIENT_PAUSE_REASON);
 }
 
-function isProcessIdentity(value: unknown): value is LocalExecProcessIdentity { if (typeof value !== "object" || value == null) return false; const identity = value as Partial<LocalExecProcessIdentity>; return Number.isInteger(identity.pid) && (identity.pid ?? 0) > 0 && typeof identity.startEpochMs === "number" && Number.isFinite(identity.startEpochMs) && typeof identity.command === "string" && identity.command.length > 0 && typeof identity.entryRealpath === "string" && identity.entryRealpath.length > 0 && typeof identity.generationToken === "string" && identity.generationToken.length > 0 && commandCarriesLocalExecGeneration(identity.command, identity.entryRealpath, identity.generationToken); }
+function isProcessIdentity(value: unknown): value is LocalExecProcessIdentity { if (typeof value !== "object" || value == null) return false; const identity = value as Partial<LocalExecProcessIdentity>; return Number.isInteger(identity.pid) && (identity.pid ?? 0) > 0 && typeof identity.startEpochMs === "number" && Number.isFinite(identity.startEpochMs) && typeof identity.command === "string" && identity.command.length > 0 && typeof identity.entryRealpath === "string" && identity.entryRealpath.length > 0 && typeof identity.generationToken === "string" && identity.generationToken.length > 0 && processCommandHasExpectedIdentity(identity.command, identity.entryRealpath, identity.generationToken); }
 function descriptorHasIdentity(discovery: { readonly entryRealpath?: string; readonly generationToken?: string }): discovery is { readonly entryRealpath: string; readonly generationToken: string } { return typeof discovery.entryRealpath === "string" && discovery.entryRealpath.length > 0 && typeof discovery.generationToken === "string" && discovery.generationToken.length > 0; }
-function descriptorMatchesProcess(discovery: { readonly pid: number; readonly startedAt: number; readonly entryRealpath?: string; readonly generationToken?: string }, identity: LocalExecProcessIdentity, observedAtMs: number): boolean { return descriptorHasIdentity(discovery) && discovery.pid === identity.pid && localExecDiscoveryTimeMatchesProcess(discovery.startedAt, identity.startEpochMs, observedAtMs) && discovery.entryRealpath === identity.entryRealpath && discovery.generationToken === identity.generationToken && commandCarriesLocalExecGeneration(identity.command, identity.entryRealpath, identity.generationToken); }
+function descriptorMatchesProcess(discovery: { readonly pid: number; readonly startedAt: number; readonly entryRealpath?: string; readonly generationToken?: string }, identity: LocalExecProcessIdentity, observedAtMs: number): boolean { return descriptorHasIdentity(discovery) && discovery.pid === identity.pid && discoveryBelongsToProcessWindow(discovery.startedAt, identity.startEpochMs, observedAtMs) && discovery.entryRealpath === identity.entryRealpath && discovery.generationToken === identity.generationToken && processCommandHasExpectedIdentity(identity.command, identity.entryRealpath, identity.generationToken); }
 function activeGeneration(origin: "spawned" | "adopted", discovery: { readonly pid: number; readonly startedAt: number }, identity: LocalExecProcessIdentity): Extract<LocalExecDaemonState, { phase: "active" }> { return { phase: "active", daemon: { origin, pid: discovery.pid, startedAt: discovery.startedAt, processStartEpochMs: identity.startEpochMs, command: identity.command, entryRealpath: identity.entryRealpath, generationToken: identity.generationToken } }; }
 function identityFromActive(state: Extract<LocalExecDaemonState, { phase: "active" }>): LocalExecProcessIdentity { return { pid: state.daemon.pid, startEpochMs: state.daemon.processStartEpochMs, command: state.daemon.command, entryRealpath: state.daemon.entryRealpath, generationToken: state.daemon.generationToken }; }
 
@@ -121,12 +121,12 @@ export function createLocalExecDaemonSupervisor(settings: LocalExecDaemonSupervi
     if (quarantinedProcess == null) return false;
     const quarantined = quarantinedProcess;
     const observed = await identityOf(quarantined);
-    if (observed != null && sameLocalExecProcessIdentity(observed, quarantined)) return true;
+    if (observed != null && processIdentitiesMatch(observed, quarantined)) return true;
     if (await settings.control.isProcessAlive({ pid: quarantined.pid })) return true;
     quarantinedProcess = undefined;
     return false;
   };
-  const watchSpawnedExit = (identity: LocalExecProcessIdentity) => { void settings.control.waitLocalExecDaemonExit(identity).then((settlement) => serialized(async () => { if (isDisposed || !sameLocalExecProcessIdentity(settlement.identity, identity) || state.phase !== "active" || !sameLocalExecProcessIdentity(identityFromActive(state), identity)) return; if (respawnCount >= LOCAL_EXEC_DAEMON_RESPAWN_LIMIT) { state = { phase: "failed", reason: "respawn limit reached" }; return; } state = { phase: "absent" }; if (!isPaused && !refusedForPause) { respawnCount += 1; await establishDaemonNow(); } }), () => {}); };
+  const watchSpawnedExit = (identity: LocalExecProcessIdentity) => { void settings.control.waitLocalExecDaemonExit(identity).then((settlement) => serialized(async () => { if (isDisposed || !processIdentitiesMatch(settlement.identity, identity) || state.phase !== "active" || !processIdentitiesMatch(identityFromActive(state), identity)) return; if (respawnCount >= LOCAL_EXEC_DAEMON_RESPAWN_LIMIT) { state = { phase: "failed", reason: "respawn limit reached" }; return; } state = { phase: "absent" }; if (!isPaused && !refusedForPause) { respawnCount += 1; await establishDaemonNow(); } }), () => {}); };
 
   const refreshConnectionNow = async () => {
     if (isDisposed || isPaused) return;
@@ -180,7 +180,7 @@ export function createLocalExecDaemonSupervisor(settings: LocalExecDaemonSupervi
         if (isDisposed || isPaused || refusedForPause) { await cleanupFailedSpawn(); return; }
         const discovery = await readLocalExecDaemonDiscovery(daemonPaths.discoveryPath);
         const observed = await identityOf(spawned);
-        if (observed == null || !sameLocalExecProcessIdentity(observed, spawned)) throw new Error(`local-exec daemon ${spawned.pid} exited or changed identity before readiness`);
+        if (observed == null || !processIdentitiesMatch(observed, spawned)) throw new Error(`local-exec daemon ${spawned.pid} exited or changed identity before readiness`);
         if (discovery != null && descriptorMatchesProcess(discovery, spawned, clock())) {
           quarantinedProcess = undefined;
           state = activeGeneration("spawned", discovery, spawned);
@@ -280,14 +280,14 @@ export function createLocalExecDaemonSupervisor(settings: LocalExecDaemonSupervi
       && discovery.entryRealpath === active.daemon.entryRealpath
       && discovery.generationToken === active.daemon.generationToken) {
       const observed = await identityOf(activeIdentity);
-      if (observed != null && sameLocalExecProcessIdentity(observed, activeIdentity)) { missingDiscoveryCount = 0; respawnCount = 0; return; }
+      if (observed != null && processIdentitiesMatch(observed, activeIdentity)) { missingDiscoveryCount = 0; respawnCount = 0; return; }
       await removeLocalExecDaemonDiscoveryIfMatches(daemonPaths.discoveryPath, discovery);
       state = { phase: "absent" };
     } else {
       if (discovery.pid === active.daemon.pid) {
         await removeLocalExecDaemonDiscoveryIfMatches(daemonPaths.discoveryPath, discovery);
         const observed = await identityOf(activeIdentity);
-        if (observed != null && sameLocalExecProcessIdentity(observed, activeIdentity)) {
+        if (observed != null && processIdentitiesMatch(observed, activeIdentity)) {
           quarantinedProcess = activeIdentity;
           missingDiscoveryCount = 0;
           state = { phase: "failed", reason: "local-exec active discovery generation changed while its verified process remained live" };

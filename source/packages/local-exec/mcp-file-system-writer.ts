@@ -18,11 +18,6 @@ import { createLogger, loggerKey, type ContextLoggerBackend } from "../context/l
 import { createSpan } from "../context/telemetry.ts";
 import { createCounter, createGauge } from "../metrics/index.ts";
 import {
-  McpDescriptor,
-  McpFileSystemOptions,
-  McpToolDescriptor,
-} from "../proto/generated/agent/v1/mcp_pb.ts";
-import {
   buildMcpToolFileContent,
   isFullMcpLeaseInvalidation,
   mergeMcpLeaseEvents,
@@ -31,7 +26,7 @@ import {
   type McpToolFileLike,
 } from "../agent-exec/mcp-operations.ts";
 import { sanitizeServerName as safeServerName } from "./mcp.ts";
-import { toolAnnotationsJsonField, type ToolAnnotations } from "./mcp-tool-annotations.ts";
+import type { ToolAnnotations } from "./mcp-tool-annotations.ts";
 
 const loggerBase = createLogger("McpFileSystemWriter");
 const MCP_FS_STRUCTURED_LOG_OPT_IN_METADATA_KEY = "mcpFsStructuredLogOptIn";
@@ -310,7 +305,32 @@ interface WriterOptions {
   readonly onDidWrite?: (descriptorList: readonly McpFileSystemDescriptor[]) => void;
   readonly loggerBackend?: ContextLoggerBackend;
 }
-export interface McpFileSystemDescriptor { readonly serverIdentifier: string; readonly folderPath: string; readonly tools: readonly { readonly toolName: string; readonly definitionPath: string }[] }
+export interface McpFileSystemToolDescriptor {
+  readonly toolName: string;
+  readonly definitionPath: string;
+  readonly annotations?: ToolAnnotations;
+}
+export interface McpFileSystemDescriptor {
+  readonly serverIdentifier: string;
+  readonly folderPath: string;
+  readonly tools: readonly { readonly toolName: string; readonly definitionPath: string }[];
+}
+export interface McpFileSystemOptionDescriptor {
+  readonly serverIdentifier: string;
+  readonly serverName: string;
+  readonly folderPath: string;
+  readonly plugin?: string;
+  readonly marketplace?: string;
+  readonly pluginId?: string;
+  readonly marketplaceId?: string;
+  readonly instructions?: string;
+  readonly tools: readonly McpFileSystemToolDescriptor[];
+}
+export interface McpFileSystemOptions {
+  readonly enabled: boolean;
+  readonly workspaceProjectDir: string;
+  readonly mcpDescriptors: readonly McpFileSystemOptionDescriptor[];
+}
 
 export class McpFileSystemWriter {
   static readonly DIVERGENCE_CHECK_COOLDOWN_MS = 10_000;
@@ -392,13 +412,75 @@ export class McpFileSystemWriter {
   private async writeServerSwap(context: Context, server: WriterServer, mcpsPath: string): Promise<void> { using span = createSpan(context.withName("McpFileSystemWriter.writeServerSwap")); const stagingNameText = `${server.sanitizedId}${STAGING_SUFFIX}`; const previousNameText = `${server.sanitizedId}${PREV_SUFFIX}`; const stagingFolder = join(mcpsPath, stagingNameText); const previousFolder = join(mcpsPath, previousNameText); const liveFolder = join(mcpsPath, server.sanitizedId); await rm(stagingFolder, { recursive: true, force: true }); try { await rename(previousFolder, liveFolder); } catch { await rm(previousFolder, { recursive: true, force: true }); } await this.writeServerFiles(context, server, { basePath: mcpsPath, dirName: stagingNameText }); try { try { await rename(liveFolder, previousFolder); } catch {} await rename(stagingFolder, liveFolder); } catch (error) { logger.error(context, "Per-server swap failed", error, { serverIdentifier: server.serverIdentifier, sanitizedId: server.sanitizedId }, { includeStructuredLogs: true }); try { await rename(previousFolder, liveFolder); } catch {} await rm(stagingFolder, { recursive: true, force: true }); throw error; } await rm(previousFolder, { recursive: true, force: true }).catch(() => {}); }
   private async writeServerFiles(context: Context, server: WriterServer, options: { basePath: string; dirName?: string }): Promise<void> { using span = createSpan(context.withName("McpFileSystemWriter.writeServerFiles")); const serverFolder = join(options.basePath, options.dirName ?? server.sanitizedId); await mkdir(serverFolder, { recursive: true }); if (server.tools.length > 0) { const toolFolder = join(serverFolder, MCP_TOOLS_SUBDIR); await mkdir(toolFolder, { recursive: true }); for (const tool of server.tools) await writeFile(join(toolFolder, `${safeFileName(tool.toolName)}.json`), JSON.stringify(buildMcpToolFileContent(tool), null, 2)); } if (server.resources.length > 0) { const resourceFolder = join(serverFolder, MCP_RESOURCES_SUBDIR); await mkdir(resourceFolder, { recursive: true }); for (const resource of server.resources) await writeFile(join(resourceFolder, `${safeFileName(resource.name || resource.uri.replace(/[^a-zA-Z0-9_-]/g, "_"))}.json`), JSON.stringify({ uri: resource.uri, name: resource.name, description: resource.description, mimeType: resource.mimeType }, null, 2)); } if (server.prompts.length > 0) { const promptFolder = join(serverFolder, MCP_PROMPTS_SUBDIR); await mkdir(promptFolder, { recursive: true }); for (const prompt of server.prompts) await writeFile(join(promptFolder, `${safeFileName(prompt.name)}.json`), JSON.stringify({ name: prompt.name, description: prompt.description, arguments: prompt.arguments }, null, 2)); } if (server.instructions && server.instructions.trim().length > 0) await writeFile(join(serverFolder, INSTRUCTIONS_FILENAME), server.instructions.trim()); if (server.status === "error" || server.status === "needsAuth") await writeFile(join(serverFolder, STATUS_FILENAME), server.status === "error" ? this.errorStatusText() : this.needsAuthStatusTextForWrite(server.serverIdentifier)); await writeFile(join(serverFolder, SERVER_METADATA_FILENAME), JSON.stringify({ serverIdentifier: server.serverIdentifier, serverName: server.serverName }, null, 2)); }
 
-  async getMcpFileSystemOptions(context: Context, options?: { timeoutMs?: number }): Promise<McpFileSystemOptions | undefined> { if (this.isDisposed) return undefined; using span = createSpan(context.withName("McpFileSystemWriter.getMcpFileSystemOptions")); const writeTimedOut = await this.settleWrites(context, options?.timeoutMs); if (this.snapshotSource && !writeTimedOut) return this.optionsFromSnapshots(context); const servers = this.lastServers ?? []; const descriptorList = servers.map((server) => new McpDescriptor({ serverIdentifier: server.serverIdentifier, serverName: server.serverName, ...(server.plugin === undefined ? {} : { plugin: server.plugin }), ...(server.marketplace === undefined ? {} : { marketplace: server.marketplace }), ...(server.pluginId === undefined ? {} : { pluginDbId: server.pluginId }), ...(server.marketplaceId === undefined ? {} : { marketplaceId: server.marketplaceId }), folderPath: server.folderPath, ...(server.instructions === undefined ? {} : { serverUseInstructions: server.instructions }), tools: server.tools.map((tool) => new McpToolDescriptor({ toolName: tool.toolName, definitionPath: join(server.folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(tool.toolName)}.json`), ...toolAnnotationsJsonField(tool.annotations) })) })); this.checkDescriptorsVsFilesystem(context, descriptorList, "workbench_lease"); return new McpFileSystemOptions({ enabled: true, workspaceProjectDir: this.workspaceDir, mcpDescriptors: descriptorList }); }
+  async getMcpFileSystemOptions(context: Context, options?: { timeoutMs?: number }): Promise<McpFileSystemOptions | undefined> {
+    if (this.isDisposed) return undefined
+    using span = createSpan(context.withName("McpFileSystemWriter.getMcpFileSystemOptions"))
+    const writeTimedOut = await this.settleWrites(context, options?.timeoutMs)
+    if (this.snapshotSource !== undefined && !writeTimedOut) return this.optionsFromSnapshots(context)
+
+    const servers = this.lastServers ?? []
+    const descriptors: McpFileSystemOptionDescriptor[] = servers.map(server => ({
+      serverIdentifier: server.serverIdentifier,
+      serverName: server.serverName,
+      folderPath: server.folderPath,
+      ...(server.plugin === undefined ? {} : { plugin: server.plugin }),
+      ...(server.marketplace === undefined ? {} : { marketplace: server.marketplace }),
+      ...(server.pluginId === undefined ? {} : { pluginId: server.pluginId }),
+      ...(server.marketplaceId === undefined ? {} : { marketplaceId: server.marketplaceId }),
+      ...(server.instructions === undefined ? {} : { instructions: server.instructions }),
+      tools: server.tools.map(tool => ({
+        toolName: tool.toolName,
+        definitionPath: join(server.folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(tool.toolName)}.json`),
+        ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+      })),
+    }))
+    this.checkDescriptorsVsFilesystem(context, descriptors, "workbench_lease")
+    return { enabled: true, workspaceProjectDir: this.workspaceDir, mcpDescriptors: descriptors }
+  }
   private async settleWrites(context: Context, timeoutMs?: number): Promise<boolean> { const logCtx = this.logContextFor(context); const hadPendingDebounce = this.debounceHandle !== undefined; if (this.debounceHandle !== undefined) { clearTimeout(this.debounceHandle); this.debounceHandle = undefined; this.scheduleWritePass(context, this.takeQueuedEvent()); } if (hadPendingDebounce) logger.info(logCtx, "getMcpFileSystemOptions force-fired pending debounce"); if (this.writeChain === undefined) return false; if (timeoutMs !== undefined) { let timedOut = false; let timer: ReturnType<typeof setTimeout> | undefined; try { await Promise.race([this.writeChain, new Promise<void>((resolve) => { timer = setTimeout(() => { timedOut = true; resolve(); }, timeoutMs); })]); } catch (error) { logger.error(logCtx, "Error waiting for pending write to complete", error); } finally { if (timer !== undefined) clearTimeout(timer); } if (timedOut) logger.warn(logCtx, `getMcpFileSystemOptions timed out after ${timeoutMs}ms waiting for write; returning stale cache`); return timedOut; } try { await this.writeChain; } catch (error) { logger.error(logCtx, "Error waiting for pending write to complete", error); } return false; }
-  private async optionsFromSnapshots(context: Context): Promise<McpFileSystemOptions> { using span = createSpan(context.withName("McpFileSystemWriter.optionsFromSnapshots")); if (this.snapshotSource === undefined) throw new Error("snapshot provider unavailable"); const logCtx = this.logContextFor(context); const startMs = Date.now(); const capturedServers = await this.snapshotSource.getAllSnapshots(context); const mcpDir = join(this.workspaceDir, MCPS_SUBDIR); const descriptorList = capturedServers.filter((captured) => captured.tools.length > 0 || captured.resources.length > 0 || captured.prompts.length > 0 || captured.instructions !== undefined || this.authToolWanted(captured.serverIdentifier, captured.status) || captured.status === "needsAuth" || captured.status === "error").map((captured) => { const folderPath = join(mcpDir, safeServerName(captured.serverIdentifier)); const tools = captured.tools.map((tool) => new McpToolDescriptor({ toolName: tool.name, definitionPath: join(folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(tool.name)}.json`), ...toolAnnotationsJsonField(tool.annotations) })); if (this.authToolWanted(captured.serverIdentifier, captured.status) && !captured.tools.some((tool) => tool.name === MCP_AUTH_TOOL_NAME)) tools.push(new McpToolDescriptor({ toolName: MCP_AUTH_TOOL_NAME, definitionPath: join(folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(MCP_AUTH_TOOL_NAME)}.json`) })); return new McpDescriptor({ serverIdentifier: captured.serverIdentifier, serverName: captured.serverName, ...(captured.plugin === undefined ? {} : { plugin: captured.plugin }), ...(captured.marketplace === undefined ? {} : { marketplace: captured.marketplace }), ...(captured.pluginId === undefined ? {} : { pluginDbId: captured.pluginId }), ...(captured.marketplaceId === undefined ? {} : { marketplaceId: captured.marketplaceId }), folderPath, ...(captured.instructions === undefined ? {} : { serverUseInstructions: captured.instructions }), tools }); }); const totalToolCount = descriptorList.reduce((sum, descriptor) => sum + descriptor.tools.length, 0); logger.info(logCtx, `optionsFromSnapshots completed in ${Date.now() - startMs}ms: ${capturedServers.length} snapshots, ${descriptorList.length} descriptors, ${totalToolCount} tools`); this.checkDescriptorsVsFilesystem(context, descriptorList, "captured"); return new McpFileSystemOptions({ enabled: true, workspaceProjectDir: this.workspaceDir, mcpDescriptors: descriptorList }); }
+  private async optionsFromSnapshots(context: Context): Promise<McpFileSystemOptions> {
+    using span = createSpan(context.withName("McpFileSystemWriter.optionsFromSnapshots"))
+    if (this.snapshotSource === undefined) throw new Error("snapshot provider unavailable")
+    const logCtx = this.logContextFor(context)
+    const startMs = Date.now()
+    const capturedServers = await this.snapshotSource.getAllSnapshots(context)
+    const mcpDir = join(this.workspaceDir, MCPS_SUBDIR)
+    const descriptors: McpFileSystemOptionDescriptor[] = capturedServers
+      .filter(captured => captured.tools.length > 0 || captured.resources.length > 0 || captured.prompts.length > 0 || captured.instructions !== undefined || this.authToolWanted(captured.serverIdentifier, captured.status) || captured.status === "needsAuth" || captured.status === "error")
+      .map(captured => {
+        const folderPath = join(mcpDir, safeServerName(captured.serverIdentifier))
+        const tools: McpFileSystemToolDescriptor[] = captured.tools.map(tool => ({
+          toolName: tool.name,
+          definitionPath: join(folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(tool.name)}.json`),
+          ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+        }))
+        if (this.authToolWanted(captured.serverIdentifier, captured.status) && !captured.tools.some(tool => tool.name === MCP_AUTH_TOOL_NAME)) {
+          tools.push({
+            toolName: MCP_AUTH_TOOL_NAME,
+            definitionPath: join(folderPath, MCP_TOOLS_SUBDIR, `${safeFileName(MCP_AUTH_TOOL_NAME)}.json`),
+          })
+        }
+        return {
+          serverIdentifier: captured.serverIdentifier,
+          serverName: captured.serverName,
+          folderPath,
+          ...(captured.plugin === undefined ? {} : { plugin: captured.plugin }),
+          ...(captured.marketplace === undefined ? {} : { marketplace: captured.marketplace }),
+          ...(captured.pluginId === undefined ? {} : { pluginId: captured.pluginId }),
+          ...(captured.marketplaceId === undefined ? {} : { marketplaceId: captured.marketplaceId }),
+          ...(captured.instructions === undefined ? {} : { instructions: captured.instructions }),
+          tools,
+        }
+      })
+    const totalToolCount = descriptors.reduce((sum, descriptor) => sum + descriptor.tools.length, 0)
+    logger.info(logCtx, `optionsFromSnapshots completed in ${Date.now() - startMs}ms: ${capturedServers.length} snapshots, ${descriptors.length} descriptors, ${totalToolCount} tools`)
+    this.checkDescriptorsVsFilesystem(context, descriptors, "captured")
+    return { enabled: true, workspaceProjectDir: this.workspaceDir, mcpDescriptors: descriptors }
+  }
   async waitForPendingWrites(): Promise<void> { if (this.debounceHandle !== undefined) await new Promise<void>((resolve) => { const checkTimer = (): void => { if (this.debounceHandle === undefined) resolve(); else setTimeout(checkTimer, 10); }; checkTimer(); }); if (this.writeChain !== undefined) { try { await this.writeChain; } catch {} } }
   getCachedServerData(): readonly WriterServer[] | undefined { return this.lastServers; }
-  checkDescriptorsVsFilesystem(context: Context, descriptorList: readonly McpDescriptor[], source: string): void { const logCtx = this.logContextFor(context); const now = Date.now(); if (now - this.lastDivergenceAt < McpFileSystemWriter.DIVERGENCE_CHECK_COOLDOWN_MS) return; this.lastDivergenceAt = now; void this.checkFilesystemAsync(context, descriptorList, source).catch((error) => logger.warn(logCtx, "Divergence check failed", error)); }
-  private async checkFilesystemAsync(context: Context, descriptorList: readonly McpDescriptor[], source: string): Promise<void> { const logCtx = this.logContextFor(context); const mcpsPath = join(this.workspaceDir, MCPS_SUBDIR); const expectedServerIds = new Set<string>(); const expectedToolCounts = new Map<string, number>(); for (const descriptor of descriptorList) { const sanitizedId = safeServerName(descriptor.serverIdentifier); expectedServerIds.add(sanitizedId); expectedToolCounts.set(sanitizedId, descriptor.tools.length); } let actualDirs: string[] = []; try { actualDirs = (await readdir(mcpsPath)).filter((entry) => !entry.endsWith(STAGING_SUFFIX) && !entry.endsWith(PREV_SUFFIX)); } catch (error) { if ((error as { code?: unknown } | null)?.code !== "ENOENT") throw error; } const actualServerIds = new Set(actualDirs); let synced = true; let serversMissing = 0; let serversStale = 0; let toolMismatches = 0; const serversBucket = bucketForCount(expectedServerIds.size); for (const expected of expectedServerIds) if (!actualServerIds.has(expected)) { synced = false; serversMissing += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "server_missing", mcp_source: source, configured_servers: serversBucket })); } for (const actual of actualServerIds) if (!expectedServerIds.has(actual)) { synced = false; serversStale += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "server_stale", mcp_source: source, configured_servers: serversBucket })); } for (const serverId of expectedServerIds) { if (!actualServerIds.has(serverId)) continue; let actualCount = 0; try { actualCount = (await readdir(join(mcpsPath, serverId, MCP_TOOLS_SUBDIR)).then((files) => files.filter((file) => file.endsWith(".json")).length)); } catch {} if (actualCount !== (expectedToolCounts.get(serverId) ?? 0)) { synced = false; toolMismatches += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "tool_count_mismatch", mcp_source: source, configured_servers: serversBucket })); } } mcpFilesystemSyncCheck.increment(context, 1, this.metricTagsFor({ synced: String(synced), mcp_source: source, configured_servers: serversBucket })); mcpFilesystemSyncExpectedServers.gauge(context, expectedServerIds.size, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncActualServers.gauge(context, actualServerIds.size, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncServersMissing.gauge(context, serversMissing, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncToolMismatches.gauge(context, toolMismatches, this.metricTagsFor({ mcp_source: source })); logger.info(logCtx, "MCP filesystem sync check", { mcpFileSystemMeta: { synced, expectedServers: expectedServerIds.size, actualServers: actualServerIds.size, serversMissing, serversStale, toolMismatches, source, configuredServers: expectedServerIds.size, bucketForCount: serversBucket } }, { includeStructuredLogs: true }); if (!synced) logger.warn(logCtx, "MCP filesystem divergence summary", { mcpFileSystemMeta: { synced, expectedServers: expectedServerIds.size, actualServers: actualServerIds.size, serversMissing, serversStale, toolMismatches, source, configuredServers: expectedServerIds.size, bucketForCount: serversBucket } }, { includeStructuredLogs: true }); }
+  checkDescriptorsVsFilesystem(context: Context, descriptorList: readonly McpFileSystemOptionDescriptor[], source: string): void { const logCtx = this.logContextFor(context); const now = Date.now(); if (now - this.lastDivergenceAt < McpFileSystemWriter.DIVERGENCE_CHECK_COOLDOWN_MS) return; this.lastDivergenceAt = now; void this.checkFilesystemAsync(context, descriptorList, source).catch((error) => logger.warn(logCtx, "Divergence check failed", error)); }
+  private async checkFilesystemAsync(context: Context, descriptorList: readonly McpFileSystemOptionDescriptor[], source: string): Promise<void> { const logCtx = this.logContextFor(context); const mcpsPath = join(this.workspaceDir, MCPS_SUBDIR); const expectedServerIds = new Set<string>(); const expectedToolCounts = new Map<string, number>(); for (const descriptor of descriptorList) { const sanitizedId = safeServerName(descriptor.serverIdentifier); expectedServerIds.add(sanitizedId); expectedToolCounts.set(sanitizedId, descriptor.tools.length); } let actualDirs: string[] = []; try { actualDirs = (await readdir(mcpsPath)).filter((entry) => !entry.endsWith(STAGING_SUFFIX) && !entry.endsWith(PREV_SUFFIX)); } catch (error) { if ((error as { code?: unknown } | null)?.code !== "ENOENT") throw error; } const actualServerIds = new Set(actualDirs); let synced = true; let serversMissing = 0; let serversStale = 0; let toolMismatches = 0; const serversBucket = bucketForCount(expectedServerIds.size); for (const expected of expectedServerIds) if (!actualServerIds.has(expected)) { synced = false; serversMissing += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "server_missing", mcp_source: source, configured_servers: serversBucket })); } for (const actual of actualServerIds) if (!expectedServerIds.has(actual)) { synced = false; serversStale += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "server_stale", mcp_source: source, configured_servers: serversBucket })); } for (const serverId of expectedServerIds) { if (!actualServerIds.has(serverId)) continue; let actualCount = 0; try { actualCount = (await readdir(join(mcpsPath, serverId, MCP_TOOLS_SUBDIR)).then((files) => files.filter((file) => file.endsWith(".json")).length)); } catch {} if (actualCount !== (expectedToolCounts.get(serverId) ?? 0)) { synced = false; toolMismatches += 1; mcpFilesystemDivergence.increment(context, 1, this.metricTagsFor({ divergence_type: "tool_count_mismatch", mcp_source: source, configured_servers: serversBucket })); } } mcpFilesystemSyncCheck.increment(context, 1, this.metricTagsFor({ synced: String(synced), mcp_source: source, configured_servers: serversBucket })); mcpFilesystemSyncExpectedServers.gauge(context, expectedServerIds.size, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncActualServers.gauge(context, actualServerIds.size, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncServersMissing.gauge(context, serversMissing, this.metricTagsFor({ mcp_source: source })); mcpFilesystemSyncToolMismatches.gauge(context, toolMismatches, this.metricTagsFor({ mcp_source: source })); logger.info(logCtx, "MCP filesystem sync check", { mcpFileSystemMeta: { synced, expectedServers: expectedServerIds.size, actualServers: actualServerIds.size, serversMissing, serversStale, toolMismatches, source, configuredServers: expectedServerIds.size, bucketForCount: serversBucket } }, { includeStructuredLogs: true }); if (!synced) logger.warn(logCtx, "MCP filesystem divergence summary", { mcpFileSystemMeta: { synced, expectedServers: expectedServerIds.size, actualServers: actualServerIds.size, serversMissing, serversStale, toolMismatches, source, configuredServers: expectedServerIds.size, bucketForCount: serversBucket } }, { includeStructuredLogs: true }); }
   dispose(): void { if (this.isDisposed) return; this.isDisposed = true; if (this.debounceHandle !== undefined) { clearTimeout(this.debounceHandle); this.debounceHandle = undefined; } this.changeSubscription?.dispose(); this.changeSubscription = undefined; this.lastServers = undefined; this.fingerprintsByServer.clear(); }
 }
 

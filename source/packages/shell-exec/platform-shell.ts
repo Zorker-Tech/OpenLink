@@ -13,51 +13,38 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 
 import { findActualExecutable } from "../utils/executable-lookup.ts"
+import type { ShellPathResolutionPorts } from "./platform-shell-contracts.ts"
+import {
+  resolveBashExecutable,
+  resolvePowerShellExecutable,
+  resolveZshExecutable,
+  toGitShellPath,
+} from "./platform-shell-policy.ts"
 
-export function getBashPath(userTerminalHint?: string): string | null {
-  if (process.platform === "win32") {
-    const pathMustMatch = /git.*bash/i
-    if (userTerminalHint && pathMustMatch.test(userTerminalHint)) return userTerminalHint
-    const gitBashPath = findActualExecutable("bash", [], pathMustMatch).cmd
-    if (pathMustMatch.test(gitBashPath)) return gitBashPath
-    // A bash that is not Git's is the Windows one, which is not the shell commands are written for.
-    return null
+export function currentShellPathPorts(): ShellPathResolutionPorts {
+  return {
+    platform: process.platform,
+    ...(process.env.SHELL === undefined ? {} : { shell: process.env.SHELL }),
+    ...(process.env.SYSTEMROOT === undefined ? {} : { systemRoot: process.env.SYSTEMROOT }),
+    findExecutable: (name, matcher) => findActualExecutable(name, [], matcher).cmd,
+    exists: existsSync,
+    join: (...parts) => path.join(...parts),
   }
-  const shell = process.env.SHELL
-  if (shell?.includes("bash")) return shell
-  return findActualExecutable("bash", []).cmd
 }
 
-/** A Windows path as the same file seen from inside Git Bash. */
+export function getBashPath(userTerminalHint?: string): string | null {
+  return resolveBashExecutable(currentShellPathPorts(), userTerminalHint)
+}
+
+/** A Windows path expressed in Git Bash's slash-rooted form. */
 export function windowsPathToGitBash(windowsPath: string): string {
-  if (process.platform !== "win32") return windowsPath
-  const normalized = path.normalize(windowsPath)
-  const driveLetter = normalized[0]?.toLowerCase()
-  if (driveLetter && normalized[1] === ":" && normalized[2] === path.sep) {
-    return `/${driveLetter}${normalized.slice(2).replace(/\\/g, "/")}`
-  }
-  return normalized.replace(/\\/g, "/")
+  return toGitShellPath(windowsPath, process.platform)
 }
 
 export function getPowerShellExecutable(): string {
-  if (process.platform !== "win32") {
-    const shell = process.env.SHELL
-    if (shell?.includes("pwsh") || shell?.includes("powershell")) return shell
-  }
-  let executable = findActualExecutable("pwsh", []).cmd
-  if (executable !== "pwsh") return executable
-  executable = findActualExecutable("powershell", []).cmd
-  if (executable !== "powershell") return executable
-  if (process.platform === "win32") {
-    // The built-in one is not on the PATH on every installation, so its usual place is tried as well.
-    executable = path.join(process.env.SYSTEMROOT!, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-    if (existsSync(executable)) return executable
-  }
-  throw new Error("Neither 'pwsh' (PowerShell Core) nor 'powershell' (Windows PowerShell) found in PATH")
+  return resolvePowerShellExecutable(currentShellPathPorts())
 }
 
 export function getZshPath(): string {
-  const shell = process.env.SHELL
-  if (shell?.includes("zsh")) return shell
-  return findActualExecutable("zsh", []).cmd
+  return resolveZshExecutable(currentShellPathPorts())
 }

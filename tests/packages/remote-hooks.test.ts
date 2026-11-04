@@ -3,9 +3,9 @@ import assert from "node:assert/strict"
 
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { agentEventTrackerKey, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
-import { conversationIdKey, requestIdKey } from "../../source/packages/agent/utils/request-scope.ts"
-import { HookAdditionalContext } from "../../source/packages/proto/generated/agent/v1/hook_additional_context_pb.ts"
-import { ExecuteHookArgs, ExecuteHookResult } from "../../source/packages/proto/generated/agent/v1/exec_pb.ts"
+import { conversationIdKey, withRequestId } from "../../source/packages/agent/utils/request-scope.ts"
+import type { HookContextEntry } from "../../source/packages/hooks-carriers/hook-additional-context.ts"
+import { ExecuteHookArgs, ExecuteHookResult } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import {
   RemoteHookBlockedError,
   executeRemoteAfterAgentThoughtHook,
@@ -39,10 +39,12 @@ function testContext(): Context {
       tracked.push(event)
     },
   } as unknown as AgentEventTracker
-  return createContext()
-    .with(agentEventTrackerKey, tracker)
-    .with(conversationIdKey, "conv-1")
-    .with(requestIdKey, "req-1")
+  return withRequestId(
+    createContext()
+      .with(agentEventTrackerKey, tracker)
+      .with(conversationIdKey, "conv-1"),
+    "req-1",
+  )
 }
 
 /** A hook executor that answers with whatever the test wants, and records what it was asked. */
@@ -228,7 +230,7 @@ test("a hook may rewrite the arguments, and its context is collected", async () 
     options,
   })
   assert.deepEqual(result.updatedInput, { command: "ls -la" })
-  assert.deepEqual(options.hookContextCollector.map((carrier: HookAdditionalContext) => carrier.content), ["be careful"])
+  assert.deepEqual(options.hookContextCollector.map((carrier: HookContextEntry) => carrier.text), ["be careful"])
   assert.equal(result.hookAdditionalContexts.length, 1)
 })
 
@@ -340,8 +342,8 @@ test("a post-tool hook contributes its context and nothing else", async () => {
     requestContext,
     options,
   })
-  assert.deepEqual(contexts.map(carrier => carrier.content), ["the output was truncated"])
-  assert.deepEqual(options.hookContextCollector.map((carrier: HookAdditionalContext) => carrier.content), ["the output was truncated"])
+  assert.deepEqual(contexts.map(carrier => carrier.text), ["the output was truncated"])
+  assert.deepEqual(options.hookContextCollector.map((carrier: HookContextEntry) => carrier.text), ["the output was truncated"])
   const sent = executor.calls[0]?.request.request.value
   assert.equal(sent.durationMs, 13n)
   assert.equal(sent.toolOutput, "a b c")
@@ -375,7 +377,7 @@ test("a failure hook is told what failed and how long the call took", async () =
     requestContext,
     options: hookOptions(executor),
   })
-  assert.deepEqual(contexts.map(carrier => carrier.content), ["try a smaller glob"])
+  assert.deepEqual(contexts.map(carrier => carrier.text), ["try a smaller glob"])
   const sent = executor.calls[0]?.request.request.value
   assert.equal(sent.errorMessage, "too many files")
   assert.equal(sent.failureType, "timeout")

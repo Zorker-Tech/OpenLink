@@ -1,29 +1,66 @@
-/**
- * A conversation's state, read out of the store.
- *
- * What the store holds is turned into the state the rest of the host works with, with the blobs it refers to read
- * through the cache the session keeps, and a state that does not fully resolve is reported as such rather than handed
- * on half-resolved.
- */
-import { SlateAgentDb, type TranscriptEntry } from "./agent-db.ts";
-import { cacheBlobReads } from "./session-recovery.ts";
-import { conversationStructureFullyResolves } from "./conversation-recovery.ts";
-import { getAgentDbPath } from "./session-paths.ts";
-interface BlobStore<T=Uint8Array>{getBlob(ctx:unknown,id:Uint8Array):Promise<T|null>;setBlob(ctx:unknown,id:Uint8Array,data:T):Promise<void>;flush(ctx:unknown):Promise<void>}
-interface Structure{turns:readonly Uint8Array[];todos:readonly Uint8Array[];summary?:Uint8Array}
-interface ConversationSession{db:{getTranscriptEntries():TranscriptEntry[];close():void};agentStore:{getFullConversation(ctx:unknown):Promise<unknown>;dispose():Promise<void>}}
-interface ConversationStateHost{rootDir:string;ctx:unknown;openSession(id:string):Promise<ConversationSession>;deriveOutline(state:unknown):unknown;deriveState(structure:Structure,store:BlobStore):Promise<{turns:readonly unknown[]}>}
-export class SlateSessionConversationState{
-  constructor(readonly host:ConversationStateHost){}
-  async resolveConversationState(structure:Structure,blobStore:BlobStore):Promise<{turns:readonly unknown[]}|null>{const cached=cacheBlobReads(blobStore);if(!await conversationStructureFullyResolves(this.host.ctx,structure,cached))return null;const state=await this.host.deriveState(structure,cached);return state.turns.length===0||state.turns.length<structure.turns.length?null:state}
-  async getTranscriptEntries(session:Pick<ConversationSession,"db">):Promise<TranscriptEntry[]>{return session.db.getTranscriptEntries()}
-  async getSessionOutline(session:Pick<ConversationSession,"agentStore">):Promise<unknown>{return this.host.deriveOutline(await session.agentStore.getFullConversation(this.host.ctx))}
-  async getAgentOutline(id:string):Promise<unknown>{const session=await this.host.openSession(id);try{return await this.getSessionOutline(session)}finally{await session.agentStore.dispose();session.db.close()}}
-  private readDb<T>(agentId:string,read:(db:SlateAgentDb)=>T,fallback:T):T{let db:SlateAgentDb|undefined;try{db=new SlateAgentDb(getAgentDbPath(this.host.rootDir,agentId),{recoverOnCorruption:false});return read(db)}catch{return fallback}finally{db?.close()}}
-  readAgentTranscriptEntries(agentId:string){return this.readDb(agentId,(db)=>db.getTranscriptEntries(),[])}
-  readAgentTranscriptPage(agentId:string,query:{beforeSeq?:number;sinceMs?:number;untilMs:number;limit:number}){return this.readDb(agentId,(db)=>db.getTranscriptPage(query),{entries:[]})}
-  readAgentTranscriptWindow(agentId:string,query:{beforeSeq?:number;limit:number}){return this.readDb(agentId,(db)=>db.getTranscriptWindow(query),{entries:[],threadCounts:{}})}
-  readAgentTranscriptTail(agentId:string,query:{beforeSeq?:number;limit:number}){return this.readDb(agentId,(db)=>db.getTranscriptTail(query),{entries:[]})}
-  readAgentThread(agentId:string,rootId:string){return this.readDb(agentId,(db)=>db.getThread(rootId),{entries:[]})}
-  async getAgentTranscriptEntries(id:string):Promise<TranscriptEntry[]>{const session=await this.host.openSession(id);try{return await this.getTranscriptEntries(session)}finally{await session.agentStore.dispose();session.db.close()}}
+import { memoizeConversationBlobs } from "./session-recovery.ts"
+import { conversationStructureFullyResolves } from "./conversation-recovery.ts"
+import { readWithAgentDatabase } from "./session-conversation-database-reads.ts"
+import { withConversationSession } from "./session-conversation-session-reads.ts"
+import type {
+  ConversationBlobStore,
+  ConversationSessionHandles,
+  ConversationStateShape,
+  SessionConversationStateHost,
+} from "./session-conversation-state-contracts.ts"
+import type { TranscriptEntry } from "./agent-db.ts"
+
+export class SlateSessionConversationState {
+  constructor(readonly host: SessionConversationStateHost) {}
+
+  async resolveConversationState(
+    structure: ConversationStateShape,
+    blobStore: ConversationBlobStore,
+  ): Promise<{ readonly turns: readonly unknown[] } | null> {
+    const cachedBlobs = memoizeConversationBlobs(blobStore)
+    if (!await conversationStructureFullyResolves(this.host.ctx, structure, cachedBlobs)) return null
+
+    const state = await this.host.deriveState(structure, cachedBlobs)
+    return state.turns.length === 0 || state.turns.length < structure.turns.length ? null : state
+  }
+
+  async getTranscriptEntries(session: Pick<ConversationSessionHandles, "db">): Promise<TranscriptEntry[]> {
+    return session.db.getTranscriptEntries()
+  }
+
+  async getSessionOutline(session: Pick<ConversationSessionHandles, "agentStore">): Promise<unknown> {
+    const conversation = await session.agentStore.getFullConversation(this.host.ctx)
+    return this.host.deriveOutline(conversation)
+  }
+
+  getAgentOutline(agentId: string): Promise<unknown> {
+    return withConversationSession(this.host, agentId, session => this.getSessionOutline(session))
+  }
+
+  readAgentTranscriptEntries(agentId: string): TranscriptEntry[] {
+    return readWithAgentDatabase(this.host.rootDir, agentId, database => database.getTranscriptEntries(), [])
+  }
+
+  readAgentTranscriptPage(
+    agentId: string,
+    query: { readonly beforeSeq?: number; readonly sinceMs?: number; readonly untilMs: number; readonly limit: number },
+  ) {
+    return readWithAgentDatabase(this.host.rootDir, agentId, database => database.getTranscriptPage(query), { entries: [] })
+  }
+
+  readAgentTranscriptWindow(agentId: string, query: { readonly beforeSeq?: number; readonly limit: number }) {
+    return readWithAgentDatabase(this.host.rootDir, agentId, database => database.getTranscriptWindow(query), { entries: [], threadCounts: {} })
+  }
+
+  readAgentTranscriptTail(agentId: string, query: { readonly beforeSeq?: number; readonly limit: number }) {
+    return readWithAgentDatabase(this.host.rootDir, agentId, database => database.getTranscriptTail(query), { entries: [] })
+  }
+
+  readAgentThread(agentId: string, rootId: string) {
+    return readWithAgentDatabase(this.host.rootDir, agentId, database => database.getThread(rootId), { entries: [] })
+  }
+
+  getAgentTranscriptEntries(agentId: string): Promise<TranscriptEntry[]> {
+    return withConversationSession(this.host, agentId, session => this.getTranscriptEntries(session))
+  }
 }

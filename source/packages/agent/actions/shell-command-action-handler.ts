@@ -21,37 +21,22 @@
  */
 
 import { randomUUID } from "node:crypto"
-import { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts"
 import { createLogger } from "../../context/index.ts"
-import { DataClassification, PrivacyCapability } from "../../redaction/classification.ts"
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts"
-import { createRedactedString } from "../../redaction/create.ts"
-import { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import {
-  createRedactedShellArgs,
-  createRedactedShellCommandParsingResult,
-  createRedactedShellStreamExit,
-  createRedactedShellStreamStderr,
-  createRedactedShellStreamStart,
-  createRedactedShellStreamStdout,
-  fromRedactedShellArgs,
-  toRedactedShellStream,
-} from "../../redacted-protos/generated/agent/v1/shell_exec_redacted.ts"
-import { createRedactedShellOutput } from "../../redacted-protos/generated/agent/v1/agent_redacted.ts"
-import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts"
-import { shellStreamExecutorResource } from "../../agent-exec/shell-stream-operation.ts"
+import { projectBackgroundAgentSource } from "../../../adapters/interop/agent/background-agent-source-adapter.ts"
+import { adaptShellCommandAction, renderShellActionUserInfo, toShellSystemPromptOptions } from "../../../adapters/interop/agent/shell-command-action-adapter.ts"
 import { getBrowserToolNames } from "../browser-tools.ts"
 import { getAllRules } from "./common.ts"
-import { buildRequestContextOptions, buildUserInfoAgentNotesProps } from "./meta-agent-notes.ts"
+import { buildRequestContextOptions } from "./meta-agent-notes.ts"
+import { buildUserInfoAgentNotesProps } from "../../../adapters/interop/agent/meta-agent-notes-adapter.ts"
+import { adaptInteropCloudTestingModelProfile } from "../../../adapters/interop/agent/testing-prompt-profile-adapter.ts"
 import { isProjectWorkspaceConversation } from "../configs/project-workspace-mcp-tools.ts"
 import { getRequestContext } from "../utils/request-context.ts"
 import { getCloudTestingSectionsPlacement } from "../prompts/cloud-testing-sections.ts"
 import { extractToolInfo } from "../prompts/tool-info.ts"
-import { UserInfo } from "../prompts/user-info.ts"
 import { withToolSetMcpSnapshot } from "../utils/mcp-meta-tool-options.ts"
-import { getMcpMetaToolOptionsWithUserDefinedTools } from "../utils/mcp-user-defined-tools.ts"
+import { getMcpMetaToolOptionsWithUserDefinedTools } from "../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts"
 import { FileOperationLockManager } from "../tools/core/file-operation-locks.ts"
-import { formatShellResult, formatShellResultForVersion } from "../tools/core/shell/formatters.ts"
 
 type Any = any
 
@@ -74,67 +59,45 @@ export class ShellCommandActionHandler {
     mcpTools: Any,
     _onStateUpdate: Any,
   ): Promise<Any> {
-    const shellCommand = action.shellCommand
-    if (!shellCommand) throw new Error("Shell command is required")
-    const command = shellCommand.command
-    const turn = await stateHandler.createShellTurn(ctx, shellCommand)
-    let stdout = createRedactedString("", DataClassification.CODE, "stdout", action._privacyMode)
-    let stderr = createRedactedString("", DataClassification.CODE, "stderr", action._privacyMode)
-    let combinedOutput = createRedactedString("", DataClassification.CODE, "combinedOutput", action._privacyMode)
+    const invocation = adaptShellCommandAction(action)
+    if (invocation === undefined) throw new Error("Shell command is required")
+    const turn = await invocation.createTurn(ctx, stateHandler)
+    let stdout = ""
+    let stderr = ""
+    let combinedOutput = ""
     let exitCode = 0
-    const shellExec = this.resourceAccessor.get(shellStreamExecutorResource)
-    const args = createRedactedShellArgs(action._privacyMode, {
-      command,
-      parsingResult: createRedactedShellCommandParsingResult(action._privacyMode, {}),
-      // The user typed this command themselves, so there is nothing to approve and no classifier to ask.
-      skipApproval: true,
-    })
-    const result = shellExec.execute(ctx, fromRedactedShellArgs(args, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), { execId: action.execId })
     // A resumed turn has already shown these updates to the user.
-    const skipInteractionUpdates = !!action.execId
+    const skipInteractionUpdates = !!invocation.execId
     try {
-      for await (const unredStream of result) {
-        const stream: Any = toRedactedShellStream(unredStream, action._privacyMode)
-        switch (stream.event.case) {
-          case "start":
+      for await (const event of invocation.run(ctx, this.resourceAccessor)) {
+        switch (event.kind) {
+          case "started":
             if (!skipInteractionUpdates) {
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-                case: "start",
-                value: createRedactedShellStreamStart(stream._privacyMode, { sandboxPolicy: stream.event.value.sandboxPolicy }),
-              }))
+              await this.interactionListener.sendUpdate(ctx, event.interactionUpdate)
             }
             break
           case "stdout": {
-            const data = stream.event.value.data.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-            stdout = stdout.safeTransform(value => value + data)
-            combinedOutput = combinedOutput.safeTransform(value => value + data)
+            const data = event.text ?? ""
+            stdout += data
+            combinedOutput += data
             if (!skipInteractionUpdates) {
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-                case: "stdout",
-                value: createRedactedShellStreamStdout(stream._privacyMode, { data: stream.event.value.data }),
-              }))
+              await this.interactionListener.sendUpdate(ctx, event.interactionUpdate)
             }
             break
           }
           case "stderr": {
-            const data = stream.event.value.data.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-            stderr = stderr.safeTransform(value => value + data)
-            combinedOutput = combinedOutput.safeTransform(value => value + data)
+            const data = event.text ?? ""
+            stderr += data
+            combinedOutput += data
             if (!skipInteractionUpdates) {
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-                case: "stderr",
-                value: createRedactedShellStreamStderr(stream._privacyMode, { data: stream.event.value.data }),
-              }))
+              await this.interactionListener.sendUpdate(ctx, event.interactionUpdate)
             }
             break
           }
           case "exit":
-            exitCode = stream.event.value.code | 0
+            exitCode = (event.code ?? 0) | 0
             if (!skipInteractionUpdates) {
-              await this.interactionListener.sendUpdate(ctx, RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-                case: "exit",
-                value: createRedactedShellStreamExit(stream._privacyMode, { code: stream.event.value.code, aborted: stream.event.value.aborted }),
-              }))
+              await this.interactionListener.sendUpdate(ctx, event.interactionUpdate)
             }
             break
         }
@@ -143,14 +106,14 @@ export class ShellCommandActionHandler {
       // The output collected so far is still recorded: a command that failed to stream still ran.
       logger.error(ctx, "Shell command action handler error", error)
     }
-    turn.recordShellOutput(createRedactedShellOutput(action._privacyMode, { stdout, stderr, exitCode }))
+    turn.recordShellOutput(invocation.createStoredOutput(stdout, stderr, exitCode))
     const toolCallId = randomUUID()
-    const commandText = command.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    let text = `Run the following command: ${commandText}`
-    if (stateHandler.isDsv3()) text = `<user_query>\n${text}\n</user_query>`
+    const commandText = invocation.commandText
+    const largeContextMode = invocation.isLargeContextMode(stateHandler)
+    const transcriptView = invocation.transcriptView({ command: commandText, output: combinedOutput, exitCode, largeContextMode })
     // The transcript is written as a normal turn: the user asked, the agent called the shell, it answered.
-    const userMessage = { role: "user", content: [{ type: "text", text }] }
-    const toolName = stateHandler.isDsv3() ? "run_terminal_cmd" : "Shell"
+    const userMessage = { role: "user", content: [{ type: "text", text: transcriptView.promptText }] }
+    const toolName = transcriptView.toolName
     const assistantMessage = { role: "assistant", content: [{ type: "tool-call", toolCallId, toolName, args: { command: commandText } }] }
     const toolCallResult = {
       role: "tool",
@@ -159,16 +122,14 @@ export class ShellCommandActionHandler {
         type: "tool-result",
         toolCallId,
         toolName,
-        result: stateHandler.isDsv3()
-          ? formatShellResultForVersion({ combinedOutput: combinedOutput.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), exitCode, command: commandText }, commandText)
-          : formatShellResult({ combinedOutput: combinedOutput.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), exitCode }),
+        result: transcriptView.resultText,
       }],
     }
     // A conversation that begins with a shell command has no turn to have carried its instructions.
     if (rootPromptExecutor.getMessages().length === 0) {
       const requestContext = await getRequestContext(ctx, undefined, this.resourceAccessor, buildRequestContextOptions(this.config))
       const rules = getAllRules(requestContext, this.config.nonFileRules, this.config.featureFlags)
-      const modeForPrompt = stateHandler.mode ?? AgentMode.AGENT
+      const modeForPrompt = invocation.promptMode(stateHandler)
       const toolSetHandle = this.config.toolsGenerator({
         resourceAccessor: this.resourceAccessor,
         stateHandler,
@@ -186,21 +147,21 @@ export class ShellCommandActionHandler {
       })
       rootPromptExecutor.appendMessages(toRedactedCoreMessages([{
         role: "system",
-        content: this.config.systemPromptGenerator({
+        content: this.config.systemPromptGenerator(toShellSystemPromptOptions({
           requestContext,
-          cursorRules: rules,
+          rules,
           env: requestContext.env,
           browserTools: getBrowserToolNames(mcpTools),
           cloudRule: requestContext.cloudRule ?? undefined,
           mode: modeForPrompt,
-        }, toolSetHandle),
+        }), toolSetHandle),
       }], stateHandler.getPrivacyMode()))
       if (!this.config.userInfoDisplayOptions?.disable) {
         const isRootProject = await isProjectWorkspaceConversation(ctx, stateHandler)
         const placement = getCloudTestingSectionsPlacement({
-          modelInfo: this.config.modelInfo,
+          modelInfo: adaptInteropCloudTestingModelProfile(this.config.modelInfo),
           enableComposer2IntelligentTestingPromptSection: this.config.enableComposer2IntelligentTestingPromptSection,
-          backgroundAgentSource: this.config.backgroundAgentSource,
+          backgroundAgentSource: projectBackgroundAgentSource(this.config.backgroundAgentSource),
           agentType: this.config.agentType,
           enableCloudTesting: this.config.enableCloudTesting,
           featureFlags: this.config.featureFlags,
@@ -210,8 +171,8 @@ export class ShellCommandActionHandler {
         const userInfoMcpMetaToolOptions = withToolSetMcpSnapshot(getMcpMetaToolOptionsWithUserDefinedTools(requestContext.mcpMetaToolOptions, mcpTools), toolSetHandle)
         rootPromptExecutor.appendMessages(toRedactedCoreMessages([{
           role: "user",
-          content: UserInfo({
-            cursorRules: rules,
+          content: renderShellActionUserInfo({
+            rules,
             agentSkills: requestContext.agentSkills,
             env: requestContext.env,
             gitRepos: requestContext.gitRepos,
@@ -219,7 +180,7 @@ export class ShellCommandActionHandler {
             cloudRule: requestContext.cloudRule ?? undefined,
             mode: modeForPrompt,
             isRootProject,
-            isLargeContextModel: stateHandler.isDsv3(),
+            isLargeContextModel: largeContextMode,
             displayOptions: this.config.userInfoDisplayOptions,
             mcpInfoComplete: requestContext.mcpInfoComplete,
             mcpInstructions: requestContext.mcpInstructions,
@@ -249,7 +210,7 @@ export class ShellCommandActionHandler {
             agentTokenLimit: this.config.agentTokenLimit,
             enableComposer2IntelligentTestingPromptSection: this.config.enableComposer2IntelligentTestingPromptSection,
           }),
-          ...(placement !== undefined && { providerOptions: { cursor: { composer2CloudTestingSectionsPlacement: placement } } }),
+          ...(invocation.providerOptionsForPromptPlacement(placement) ?? {}),
         }], stateHandler.getPrivacyMode()))
       }
     }

@@ -29,16 +29,13 @@ import {
   type MessageLike,
   type PromptExecutor,
 } from "./send-message-reminder-middleware.ts";
-import { createStartOfTurnAckReminderMiddleware } from "./start-of-turn-ack-reminder-middleware.ts";
+import { createOpeningMessageReminder } from "./start-of-turn-ack-reminder-middleware.ts";
 import { SimplePromptToolExecutor } from "../../packages/agent/tool-stream-executor.ts";
 import {
-  createShellWatchGeneratedStateProjection,
-  createShellWatchReadAccessor,
   type ConfirmedUserTurnWatermark,
   type ShellTerminalWatchHost,
-  type ShellWatchGeneratedStateOwner,
-  type ShellWatchResourceAccessor,
 } from "./shell-terminal-watch.ts";
+import { createShellWatchGeneratedStateProjection, createShellWatchReadAccessor, type ShellWatchGeneratedStateOwner } from "../../adapters/interop/agent/shell-terminal-watch-adapter.ts";
 import type { TurnAgentScope, TurnAgentSessions } from "./turn-agent-composition.ts";
 import type { PromptSnapshotStore } from "./system-prompt-assembly.ts";
 import type { SummarizationPromptSession } from "../../packages/agent-summarization/summarization-handler.ts";
@@ -47,7 +44,6 @@ import { getSlateRootDir } from "../host-paths.ts";
 import { SlateSettingsStore } from "../../shared/node/settings/slate-settings-store.ts";
 import type { SlateInferenceProvider } from "../../shared/inference-router.ts";
 import type { AgentProfilePromptSnapshot } from "./slate-agent-profile-prompt.ts";
-import { ConversationAction, ResumeAction } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
 import { createTurnSettle, type TurnCheckpoint, type TurnSession, type TurnSettleHost, type TurnSettleResult } from "./turn-settle.ts";
 import type { TurnStreamLifecycleInput, TurnStreamPath, TurnStreamStartInput } from "./turn-agent-stream.ts";
 import { presentOptions } from "./optional-options.ts";
@@ -68,7 +64,7 @@ export interface TurnAgentInferenceOwner {
 /** The box the terminal watch reads through, and what the watch remembers between turns. */
 export interface TurnAgentShellWatchInput<ContextValue> {
   readonly box: {
-    ensureReady(context: ContextValue, conversationId: string): Promise<{ readonly terminalsFolder: string; readonly remoteAccessor: ShellWatchResourceAccessor<ContextValue> }>;
+    ensureReady(context: ContextValue, conversationId: string): Promise<{ readonly terminalsFolder: string; readonly remoteAccessor: unknown }>;
   };
   readonly generatedState: ShellWatchGeneratedStateOwner<ContextValue>;
   readonly getConfirmedUserTurnWatermarkCache: () => ConfirmedUserTurnWatermark | undefined;
@@ -168,7 +164,7 @@ function executorWithReminders(input: TurnAgentRunContextInput<unknown>, episode
   const withDiskPressure = episodeId == null ? baseExecutor() : createDiskPressureReminderMiddleware(episodeId)(baseExecutor());
   if (input.isSubagentRunner || input.isSilenceAllowed) return withDiskPressure;
   const withSendMessage = createSendMessageReminderMiddleware()(withDiskPressure);
-  return createStartOfTurnAckReminderMiddleware()(withSendMessage);
+  return createOpeningMessageReminder()(withSendMessage);
 }
 
 /** What a tool may do this turn: which privacy it runs under, how it is cancelled, and what it may append. */
@@ -280,8 +276,6 @@ export class SlateTurnInterruptedBeforeDispatchError extends Error {
     this.name = "SlateTurnInterruptedBeforeDispatchError";
   }
 }
-
-export const RESUME_TURN_ACTION = new ConversationAction({ action: { case: "resumeAction", value: new ResumeAction() } });
 
 export interface TurnRunOptions {
   readonly requestSource?: string;

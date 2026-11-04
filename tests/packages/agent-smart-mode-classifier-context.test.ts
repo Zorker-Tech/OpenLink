@@ -8,7 +8,7 @@ import {
 import { ConversationStateHandle } from "../../source/packages/agent/state.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { toRedactedConversationStateStructure } from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import {
   AgentConversationTurnStructure,
   AssistantMessage,
@@ -16,17 +16,17 @@ import {
   ConversationStep,
   ConversationTurnStructure,
   UserMessage,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { ProtoSerde } from "../../source/packages/agent-kv/serde.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a conversation the classifier can be shown, built out of real blobs
 // ---------------------------------------------------------------------------------------------
 
-const stepSerde = new ProtoSerde(ConversationStep)
-const turnSerde = new ProtoSerde(ConversationTurnStructure)
-const userMessageSerde = new ProtoSerde(UserMessage)
+const stepSerde = new ProtobufBlobSerde(ConversationStep)
+const turnSerde = new ProtobufBlobSerde(ConversationTurnStructure)
+const userMessageSerde = new ProtobufBlobSerde(UserMessage)
 
 interface ConversationHarness {
   readonly ctx: Context

@@ -8,12 +8,9 @@ import { describe, it } from "node:test";
 import {
   describeParamIncompatibilities,
   findCatalogEntry,
-  mapAvailableModels,
-  toSlateModelCatalogEntry,
   validateModelParams,
   validateParamCombination,
   type CatalogModel,
-  type WireModel,
 } from "../../source/shared/agents/model-catalog.ts";
 
 /** A model with a fast tier and a 1M context, offered together only in the plain variant. */
@@ -30,18 +27,6 @@ const fastAndLong: CatalogModel = {
   ],
 };
 
-const wireModel: WireModel = {
-  name: "slate-pro",
-  clientDisplayName: "  Slate Pro  ",
-  idAliases: ["pro"],
-  parameterDefinitions: [
-    { id: "tier", name: " Tier ", parameterType: { enumParameter: { values: [{ value: "fast", displayName: " Fast " }, { value: "deep" }] } } },
-    { id: "thinking", name: "", parameterType: { booleanParameter: { values: [{ value: "on" }] } } },
-    { id: "empty", name: "No values", parameterType: { enumParameter: { values: [] } } },
-  ],
-  variants: [{ parameterValues: [{ id: "tier", value: "fast" }] }],
-};
-
 describe("finding a model", () => {
   it("matches the id or an alias, case-insensitively, and nothing for an empty id", () => {
     const catalog = [fastAndLong];
@@ -50,27 +35,6 @@ describe("finding a model", () => {
     assert.equal(findCatalogEntry(catalog, "slate-pro-latest"), fastAndLong);
     assert.equal(findCatalogEntry(catalog, "other"), undefined);
     assert.equal(findCatalogEntry(catalog, "   "), undefined);
-  });
-});
-
-describe("reading a backend's model", () => {
-  it("keeps the parameters that can be selected, trims what it keeps, and drops what cannot", () => {
-    const model = toSlateModelCatalogEntry(wireModel);
-    assert.deepEqual(model, {
-      id: "slate-pro",
-      displayName: "Slate Pro",
-      aliases: ["pro"],
-      params: [
-        { id: "tier", name: "Tier", type: "enum", values: [{ value: "fast", displayName: "Fast" }, { value: "deep" }] },
-        // A boolean parameter is a parameter like any other; a parameter with no values is not.
-        { id: "thinking", type: "boolean", values: [{ value: "on" }] },
-      ],
-      variants: [[{ id: "tier", value: "fast" }]],
-    });
-    // A model with no name is not a model, and the catalogue does not carry it.
-    assert.deepEqual(mapAvailableModels([wireModel, { ...wireModel, name: "  " }]).map((entry) => entry.id), ["slate-pro"]);
-    // A display name that is only spaces is no display name.
-    assert.equal("displayName" in toSlateModelCatalogEntry({ ...wireModel, clientDisplayName: "  " }), false);
   });
 });
 

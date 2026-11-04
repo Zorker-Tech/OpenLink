@@ -6,8 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { generatedMcpResultFactory } from "../../source/shared/node/mcp/mcp-result-factory.ts";
-import { McpResult, McpSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts";
+import { generatedMcpResultFactory } from "../../source/adapters/interop/mcp/mcp-result-factory.ts";
+import { McpResult, McpSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts";
 
 describe("the MCP result factory", () => {
   it("builds a text item as the platform's own content item", () => {

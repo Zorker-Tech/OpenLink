@@ -1,43 +1,56 @@
-/** An outcome of the transcript journal, in the shape the telemetry backend reports it, with the error tags the platform uses. */
-import {
-  slateErrorTags,
-  type SlateErrorValue,
-} from "../../shared/errors/registry.ts";
+/** Project journal recovery results into the host's structured telemetry event. */
+import { slateErrorTags, type SlateErrorValue } from "../../shared/errors/registry.ts"
 
-export const JOURNAL_OUTCOME_EVENT = "slate.journal.outcome";
+export const JOURNAL_OUTCOME_EVENT = "slate.journal.outcome"
+
 export interface JournalOutcomeReport {
-  outcome: string;
-  op: string;
-  conversationId: string;
-  entryCount?: number;
-  bytes?: number;
-  durationMs: number;
-  cause?: SlateErrorValue;
+  readonly outcome: string
+  readonly op: string
+  readonly conversationId: string
+  readonly entryCount?: number | undefined
+  readonly bytes?: number | undefined
+  readonly durationMs: number
+  readonly cause?: SlateErrorValue | undefined
 }
+
 export function corruptTailKind(cause: SlateErrorValue | undefined): unknown {
-  return cause !== undefined && "tail" in cause ? cause.tail : undefined;
+  if (cause === undefined || !("tail" in cause)) return undefined
+  return cause.tail
 }
-export function journalOutcomeLevel(
-  report: JournalOutcomeReport,
-): "error" | "warn" | "info" {
-  if (report.outcome === "failed") return "error";
-  const tail = corruptTailKind(report.cause);
-  if (tail !== undefined && tail !== "missing") return "warn";
-  return "info";
+
+function needsWarning(tail: unknown): boolean {
+  return tail !== undefined && tail !== "missing"
 }
-export function journalOutcomeTelemetry(r: JournalOutcomeReport) {
+
+export function journalOutcomeLevel(report: JournalOutcomeReport): "error" | "warn" | "info" {
+  if (report.outcome === "failed") return "error"
+  return needsWarning(corruptTailKind(report.cause)) ? "warn" : "info"
+}
+
+function stringifyOptionalCount(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : String(value)
+}
+
+function stringifyDuration(milliseconds: number): string {
+  return String(Math.round(milliseconds))
+}
+
+function journalOutcomeMetadata(report: JournalOutcomeReport): Record<string, string | undefined> {
   return {
-    level: journalOutcomeLevel(r),
+    op: report.op,
+    outcome: report.outcome,
+    conversation_id: report.conversationId,
+    entry_count: stringifyOptionalCount(report.entryCount),
+    bytes: stringifyOptionalCount(report.bytes),
+    duration_ms: stringifyDuration(report.durationMs),
+    ...(report.cause === undefined ? {} : slateErrorTags(report.cause)),
+  }
+}
+
+export function journalOutcomeTelemetry(report: JournalOutcomeReport) {
+  return {
+    level: journalOutcomeLevel(report),
     event: JOURNAL_OUTCOME_EVENT,
-    metadata: {
-      op: r.op,
-      outcome: r.outcome,
-      conversation_id: r.conversationId,
-      entry_count:
-        r.entryCount !== undefined ? String(r.entryCount) : undefined,
-      bytes: r.bytes !== undefined ? String(r.bytes) : undefined,
-      duration_ms: String(Math.round(r.durationMs)),
-      ...(r.cause !== undefined ? slateErrorTags(r.cause) : {}),
-    },
-  };
+    metadata: journalOutcomeMetadata(report),
+  }
 }

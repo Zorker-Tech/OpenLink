@@ -17,7 +17,7 @@ import {
   scrubSocketEnvVars,
 } from "../../source/packages/shell-exec/env-filter.ts"
 import { attachShellOutputStreams } from "../../source/packages/shell-exec/output-limiter.ts"
-import { getSandboxCacheEnv } from "../../source/packages/shell-exec/sandbox/cache-env.ts"
+import { getSandboxCacheEnv } from "../../source/adapters/interop/shell/sandbox-cache-environment-adapter.ts"
 import {
   ensureSandboxPolicyDirectory,
   writeSandboxPolicyFile,
@@ -40,7 +40,15 @@ import { SHELL_ENV_OVERRIDES, KnownShellExecutor } from "../../source/packages/s
 import { SHELL_OUTPUT_SUPPRESSION_DEFAULTS, SHELL_OUTPUT_SUPPRESSED_NOTICE } from "../../source/packages/shell-exec/output-suppression.ts"
 import { EventLoopPressureThresholdDefault, EventLoopPressureTrackerDefault } from "../../source/packages/shell-exec/event-loop-pressure.ts"
 import { getRipgrepBinaryPath, withConfiguredRipgrepEnv } from "../../source/packages/shell-exec/ripgrep.ts"
+import { prependExecutableDirectory } from "../../source/packages/shell-exec/ripgrep-environment-policy.ts"
 import { windowsPathToGitBash, getZshPath } from "../../source/packages/shell-exec/platform-shell.ts"
+import {
+  resolveBashExecutable,
+  resolvePowerShellExecutable,
+  resolveZshExecutable,
+  toGitShellPath,
+} from "../../source/packages/shell-exec/platform-shell-policy.ts"
+import type { ShellPathResolutionPorts } from "../../source/packages/shell-exec/platform-shell-contracts.ts"
 import { spawnUnsafe } from "../../source/packages/shell-exec/sandbox/unsafe-spawn.ts"
 import { analyzeShellCommand } from "../../source/packages/shell-exec/shell-parser.ts"
 import { withPolicyDirectoryReadonly, withSandboxPolicyDirectoryReadonly } from "../../source/packages/shell-exec/sandbox/policy-readonly.ts"
@@ -70,7 +78,7 @@ import { createShellExitEvent, parseShellStateOutput, splitPwdAndState } from ".
 import { BASH_STATE_END_MARKER, BASH_STATE_START_MARKER, default as dumpBashState } from "../../source/packages/shell-exec/dump_bash_state.ts"
 import { ZSH_STATE_END_MARKER, ZSH_STATE_START_MARKER, default as dumpZshState } from "../../source/packages/shell-exec/dump_zsh_state.ts"
 import { ZSH_STATE_LIGHT_MARKER, default as dumpZshLightState } from "../../source/packages/shell-exec/dump_zsh_state_light.ts"
-import { default as powershellWrapperScript } from "../../source/packages/shell-exec/dump_powershell_state.ts"
+import { buildShellCommandStateWrapper } from "../../source/adapters/interop/shell/powershell-state-wrapper-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // rewriting a command so sudo does not stop to ask
@@ -209,7 +217,7 @@ test("a command's output is not streamed faster than it is worth watching", () =
   assert.equal(SHELL_OUTPUT_SUPPRESSION_DEFAULTS.windowMs, 60_000)
   // More is allowed while the loop is under pressure, which is when streaming costs the most.
   assert.equal(SHELL_OUTPUT_SUPPRESSION_DEFAULTS.thresholdCharsPerSecondWithoutPressure > SHELL_OUTPUT_SUPPRESSION_DEFAULTS.minimumThresholdCharsPerSecond, true)
-  assert.match(SHELL_OUTPUT_SUPPRESSED_NOTICE, /still run/)
+  assert.match(SHELL_OUTPUT_SUPPRESSED_NOTICE, /continue running/)
 })
 
 test("the pressure thresholds are the ones the tracker samples at", () => {
@@ -241,10 +249,11 @@ test("an unsupported sandbox says what was unsupported", () => {
 test("the policy directory is private and its files are written private", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-sandbox-policy-"))
   const previous = process.env.SLATE_SANDBOX_POLICY_DIR
-  process.env.SLATE_SANDBOX_POLICY_DIR = dir
+  process.env.SLATE_SANDBOX_POLICY_DIR = `  ${dir}  `
   try {
     const ensured = ensureSandboxPolicyDirectory()
     assert.equal(ensured, path.resolve(dir))
+    assert.equal((fs.statSync(ensured).mode & 0o777), 0o700)
     const file = writeSandboxPolicyFile('{"version":1}')
     assert.equal(path.dirname(file), ensured)
     assert.equal(fs.readFileSync(file, "utf8"), '{"version":1}')
@@ -270,9 +279,17 @@ test("a policy file that is no longer used is swept", () => {
     fs.utimesSync(stale, old, old)
     const kept = path.join(dir, "not-a-policy")
     fs.writeFileSync(kept, "{}")
+    const recent = path.join(dir, "sandbox-policy-recent")
+    fs.writeFileSync(recent, "{}")
+    const withinWindow = new Date(Date.now() - 59 * 60 * 1_000)
+    fs.utimesSync(recent, withinWindow, withinWindow)
+    const folder = path.join(dir, "sandbox-policy-folder")
+    fs.mkdirSync(folder)
     ensureSandboxPolicyDirectory()
     assert.equal(fs.existsSync(stale), false)
     assert.equal(fs.existsSync(kept), true)
+    assert.equal(fs.existsSync(recent), true)
+    assert.equal(fs.existsSync(folder), true)
   } finally {
     if (previous === undefined) delete process.env.SLATE_SANDBOX_POLICY_DIR
     else process.env.SLATE_SANDBOX_POLICY_DIR = previous
@@ -282,8 +299,12 @@ test("a policy file that is no longer used is swept", () => {
 
 test("the caches a command writes are pointed somewhere disposable", () => {
   const env = getSandboxCacheEnv()
-  assert.equal(env.NPM_CONFIG_CACHE.startsWith(os.tmpdir()), true)
-  assert.equal(env.CARGO_TARGET_DIR.startsWith(os.tmpdir()), true)
+  const npmCache = env.NPM_CONFIG_CACHE
+  const cargoTarget = env.CARGO_TARGET_DIR
+  assert.ok(npmCache)
+  assert.ok(cargoTarget)
+  assert.equal(npmCache.startsWith(os.tmpdir()), true)
+  assert.equal(cargoTarget.startsWith(os.tmpdir()), true)
   // The toolchain's own home is not redirected, since it holds executables rather than caches.
   assert.equal("CARGO_HOME" in env, false)
   assert.equal("RUSTUP_HOME" in env, false)
@@ -369,10 +390,70 @@ test("the search binary is only redirected once it is configured", () => {
   assert.throws(() => getRipgrepBinaryPath(), /not configured/)
 })
 
+test("the search executable directory wins without duplicate PATH spellings", () => {
+  const unixPath = prependExecutableDirectory(
+    { PATH: "/usr/bin:/opt/rg:/bin" } as NodeJS.ProcessEnv,
+    "/opt/rg/rg",
+    "linux",
+  )
+  assert.equal(unixPath.PATH, "/opt/rg:/usr/bin:/bin")
+
+  const windowsPath = prependExecutableDirectory(
+    { Path: "C:\\Windows;D:\\Tools", PATH: "shadow" } as NodeJS.ProcessEnv,
+    "C:\\Program Files\\rg.exe",
+    "win32",
+  )
+  assert.equal(windowsPath.Path, "C:\\Program Files;C:\\Windows;D:\\Tools")
+  assert.equal("PATH" in windowsPath, false)
+});
+
 test("a path is only translated for Git Bash on Windows", () => {
   // On every other platform a path is already the path a command uses.
   assert.equal(windowsPathToGitBash("/tmp/a b"), "/tmp/a b")
 })
+
+test("platform shell selection follows the supplied host environment", () => {
+  const commands: string[] = []
+  const windows: ShellPathResolutionPorts = {
+    platform: "win32",
+    findExecutable: (name, matcher) => {
+      commands.push(name)
+      return name === "bash" && matcher?.test("C:\\Git\\bin\\bash.exe") === true
+        ? "C:\\Git\\bin\\bash.exe"
+        : name
+    },
+    exists: (candidate) => candidate === "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    join: (...parts) => parts.join("\\"),
+  }
+  assert.equal(resolveBashExecutable(windows, "C:\\Git\\bin\\bash.exe"), "C:\\Git\\bin\\bash.exe")
+  assert.equal(resolveBashExecutable(windows), "C:\\Git\\bin\\bash.exe")
+  assert.equal(resolvePowerShellExecutable({
+    ...windows,
+    systemRoot: "C:\\Windows",
+    findExecutable: (name) => name,
+  }), "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+  assert.deepEqual(commands, ["bash"])
+
+  assert.equal(resolveBashExecutable({
+    platform: "linux",
+    shell: "/usr/bin/bash",
+    findExecutable: () => "/bin/bash",
+    exists: () => false,
+    join: (...parts) => parts.join("/"),
+  }), "/usr/bin/bash")
+  assert.equal(resolveZshExecutable({
+    platform: "linux",
+    shell: "/usr/bin/zsh",
+    findExecutable: () => "/bin/zsh",
+    exists: () => false,
+    join: (...parts) => parts.join("/"),
+  }), "/usr/bin/zsh")
+});
+
+test("Windows paths become drive-rooted Git Bash paths", () => {
+  assert.equal(toGitShellPath("C:\\Program Files\\Git\\bin\\bash.exe", "win32"), "/c/Program Files/Git/bin/bash.exe")
+  assert.equal(toGitShellPath("\\\\server\\share\\file", "win32"), "//server/share/file")
+});
 
 test("the zsh this machine has is found", () => {
   const zsh = getZshPath()
@@ -477,10 +558,14 @@ test("the policy directory is made read-only in every policy", () => {
     assert.deepEqual(withPolicyDirectoryReadonly(), [policyDirectory])
     assert.deepEqual(withPolicyDirectoryReadonly(["/etc"]), ["/etc", policyDirectory])
     // A list that already names it is not given it twice.
-    assert.deepEqual(withPolicyDirectoryReadonly([policyDirectory]), [policyDirectory])
-    const input = { type: "workspace_readwrite" as const, additionalReadonlyPaths: ["/etc"] }
+    const existingPaths = [policyDirectory]
+    assert.equal(withPolicyDirectoryReadonly(existingPaths), existingPaths)
+    const originalReadonlyPaths = ["/etc"]
+    const input = { type: "workspace_readwrite" as const, additionalReadonlyPaths: originalReadonlyPaths }
     const policy = withSandboxPolicyDirectoryReadonly(input)
     assert.deepEqual(policy.additionalReadonlyPaths, ["/etc", policyDirectory])
+    assert.deepEqual(input.additionalReadonlyPaths, ["/etc"])
+    assert.notEqual(policy.additionalReadonlyPaths, originalReadonlyPaths)
     assert.equal(policy.type, "workspace_readwrite")
   } finally {
     if (previous === undefined) delete process.env.SLATE_SANDBOX_POLICY_DIR
@@ -1181,7 +1266,13 @@ test("the terminal markers of a state dump are the ones its script writes", () =
   assert.match(dumpZshState, new RegExp(ZSH_STATE_END_MARKER))
   assert.match(dumpZshLightState, new RegExp(ZSH_STATE_LIGHT_MARKER))
   assert.match(dumpBashState, new RegExp(BASH_STATE_END_MARKER))
-  assert.match(powershellWrapperScript("state", "/repo", "echo hi", "/tmp/state.txt"), /Dump-PowerShellState/)
+  const wrapper = buildShellCommandStateWrapper("restore state", "/repo", "echo hi", "/tmp/state.txt")
+  assert.match(wrapper, /Dump-PowerShellState -OutputFile "\/tmp\/state\.txt"/)
+  assert.match(wrapper, /restore state/)
+  assert.match(wrapper, /Set-Location '\/repo'/)
+  assert.ok(wrapper.indexOf("echo hi") < wrapper.indexOf("$COMMAND_EXIT_CODE = $LASTEXITCODE"))
+  assert.ok(wrapper.indexOf("$COMMAND_EXIT_CODE = $LASTEXITCODE") < wrapper.indexOf("Dump-PowerShellState"))
+  assert.match(wrapper, /exit \$COMMAND_EXIT_CODE\s*$/)
 })
 
 test("a sandbox that this machine cannot enforce stops the command rather than running it", () => {
@@ -1190,7 +1281,8 @@ test("a sandbox that this machine cannot enforce stops the command rather than r
     (error: unknown) => {
       assert.equal(error instanceof SandboxUnsupportedError, true)
       // The reason the helper is unavailable travels with the error, so the caller can say why.
-      assert.match((error as Error).message, /not supported on this system/)
+      assert.match((error as Error).message, /cannot be enforced here/)
+      assert.match((error as Error).message, /command was not started/)
       assert.notEqual((error as SandboxUnsupportedError).reason, undefined)
       return true
     },

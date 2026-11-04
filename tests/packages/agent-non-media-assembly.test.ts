@@ -2,19 +2,27 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { appendNonMediaSelectedContextContent } from "../../source/packages/agent/context/non-media-assembly.ts"
-import { SimulatedMsgReason } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import type { GitPullRequestPromptInput } from "../../source/packages/agent/git-pr-processing-contracts.ts"
+import { toSelectedUIElementInputs } from "../../source/adapters/interop/agent/selected-ui-elements-adapter.ts"
+import { toRecentAgentPromptInputs } from "../../source/adapters/interop/agent/recent-agents-adapter.ts"
+import { toPrReviewInputs } from "../../source/adapters/interop/agent/selected-pr-review-adapter.ts"
+import { toBrowserTabPromptInputs } from "../../source/adapters/interop/agent/selected-browsers-adapter.ts"
+import { toSubagentNameInputs } from "../../source/adapters/interop/agent/selected-subagents-adapter.ts"
+import { toConsoleLogPromptInputs } from "../../source/adapters/interop/agent/selected-console-logs-adapter.ts"
+import { projectSelectedNonMediaContext } from "../../source/adapters/interop/agent/selected-non-media-context-adapter.ts"
+import { renderInteropSimulatedMessagePrompts } from "../../source/adapters/interop/agent/git-action-prompt-adapter.ts"
+import { SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   SelectedAgenticGitAction,
   SelectedAgenticGitActionPushParams,
   SelectedContext,
   SelectedGitDiff,
   SelectedGitPRDiffSelection,
-  SelectedPullRequest,
   SelectedConsoleLog,
   SelectedBrowser,
   SelectedUIElement,
   SelectedSubagent,
-} from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the order the turn's attachments are written in
@@ -26,7 +34,7 @@ interface TextPart {
 }
 
 function append(selectedContext: SelectedContext, options: {
-  pullRequests?: readonly SelectedPullRequest[]
+  pullRequests?: readonly GitPullRequestPromptInput[]
   prDiffSelections?: readonly SelectedGitPRDiffSelection[]
   extraContexts?: readonly string[]
   simulatedMsgReason?: number
@@ -40,17 +48,25 @@ function append(selectedContext: SelectedContext, options: {
   const userContent: TextPart[] = []
   appendNonMediaSelectedContextContent({
     userContent,
-    selectedContext,
-    hydratedSelectedPullRequests: options.pullRequests ?? [],
-    hydratedGitPrDiffSelections: options.prDiffSelections ?? [],
+    selectedContext: projectSelectedNonMediaContext(selectedContext),
+    simulatedMessagePrompts: renderInteropSimulatedMessagePrompts({
+      selectedContext,
+      simulatedMsgReason: (options.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED) as never,
+      ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo as never }),
+      environmentParamForSubagent: options.environmentParamForSubagent ?? false,
+      babysitV2Prompt: options.babysitV2Prompt ?? false,
+      enablePrCreationForgeGuidance: options.enablePrCreationForgeGuidance ?? false,
+    }),
+    recentAgents: toRecentAgentPromptInputs(selectedContext.recentAgentsContext?.recentAgents ?? []),
+    selectedUIElements: toSelectedUIElementInputs(selectedContext.uiElements),
+    selectedBrowsers: toBrowserTabPromptInputs(selectedContext.selectedBrowsers),
+    selectedSubagents: toSubagentNameInputs(selectedContext.selectedSubagents),
+    consoleLogs: toConsoleLogPromptInputs(selectedContext.consoleLogs),
+    pullRequestPrompts: options.pullRequests ?? [],
+    prReviewSelections: toPrReviewInputs(options.prDiffSelections ?? []),
     extraContextsToInclude: options.extraContexts ?? [],
     isComposerMatterhorn: options.isComposerMatterhorn ?? false,
     isRawTrainingSlug: options.isRawTrainingSlug ?? false,
-    simulatedMsgReason: (options.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED) as never,
-    ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo as never }),
-    environmentParamForSubagent: options.environmentParamForSubagent ?? false,
-    babysitV2Prompt: options.babysitV2Prompt ?? false,
-    enablePrCreationForgeGuidance: options.enablePrCreationForgeGuidance ?? false,
   })
   return userContent
 }
@@ -89,7 +105,7 @@ test("the pieces appear in the order they are read: commands, diffs, commits, pu
     gitCommits: [{ commitHash: "abc", message: "a commit" } as never],
   })
   const parts = append(context, {
-    pullRequests: [new SelectedPullRequest({ number: 7, title: "a pull request" })],
+    pullRequests: [{ number: 7, title: "a pull request", url: "", folderPath: "", summary: { kind: "absent" } }],
   })
   const order = parts.map(part => part.text)
   const indexOf = (needle: string) => order.findIndex(text => text.includes(needle))
@@ -100,7 +116,9 @@ test("the pieces appear in the order they are read: commands, diffs, commits, pu
 test("a pull request is only written when the caller hydrated one", () => {
   const context = new SelectedContext({})
   assert.deepEqual(append(context), [])
-  assert.equal(append(context, { pullRequests: [new SelectedPullRequest({ number: 7 })] }).length, 1)
+  assert.equal(append(context, {
+    pullRequests: [{ number: 7, url: "", folderPath: "", summary: { kind: "absent" } }],
+  }).length, 1)
 })
 
 test("the ambient context is written only for what was attached", () => {

@@ -130,7 +130,7 @@ describe("the two caches", () => {
   it("answers with the catalog it was handed for testing, and holds its own time to the platform's", async () => {
     const now = () => 1_000;
     const catalog = [{ id: "model-one" }];
-    const cache = new CloudAgentModelCatalogCache({ clock: { monotonicNow: now }, getCursorAccessToken: async () => "token", getMachineId: async () => "machine", modelCatalogForTesting: catalog as never });
+    const cache = new CloudAgentModelCatalogCache({ clock: { monotonicNow: now }, getAccessToken: async () => "token", getMachineId: async () => "machine", modelCatalogForTesting: catalog as never });
     // A catalog handed in for testing is the one answered with, and no fetch is attempted for it.
     assert.deepEqual(await cache.listModels(), catalog);
     assert.deepEqual(await cache.listModels(), catalog);

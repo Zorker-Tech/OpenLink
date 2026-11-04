@@ -9,12 +9,10 @@
  * trade because the message is short enough to matter.
  */
 
-import type { SelectedGitCommit } from "../proto/generated/agent/v1/selected_context_pb.ts"
-
-const GIT_COMMIT_APPROXIMATE_MAX_TOKENS_PER_COMMIT = 8_000
-const GIT_COMMIT_CHARS_PER_TOKEN = 4
-const MAX_GIT_COMMIT_CHAR_LENGTH = GIT_COMMIT_APPROXIMATE_MAX_TOKENS_PER_COMMIT * GIT_COMMIT_CHARS_PER_TOKEN
-const GIT_COMMIT_DIFF_TRUNCATION_NOTICE =
+const PROMPT_BUDGET_PER_COMMIT = 8_000
+const CHARS_PER_ESTIMATED_TOKEN = 4
+const MAX_COMMIT_CONTEXT_CHARS = PROMPT_BUDGET_PER_COMMIT * CHARS_PER_ESTIMATED_TOKEN
+const PATCH_CUT_NOTICE =
   "\n\n[commit diff truncated due to size; run `git show <sha>` locally for the full output]"
 
 interface TextContent {
@@ -22,9 +20,17 @@ interface TextContent {
   readonly text: string
 }
 
-export function buildGitCommitsUserContent(gitCommits: readonly SelectedGitCommit[]): TextContent {
+/** Fields Slate needs after the external selected-context message has been decoded. */
+export interface AttachedGitCommit {
+  readonly objectId: string
+  readonly subject: string
+  readonly explanation?: string | undefined
+  readonly patch: string
+}
+
+export function buildGitCommitsUserContent(gitCommits: readonly AttachedGitCommit[]): TextContent {
   if (gitCommits.length === 0) return { type: "text", text: "" }
-  const formattedCommits = gitCommits.map(commit => formatSingleCommit(commit)).join("\n\n")
+  const formattedCommits = gitCommits.map(formatCommitForPrompt).join("\n\n")
   const text = [
     "<git_commits>",
     `The following git commit${gitCommits.length > 1 ? "s have" : " has"} been manually attached:`,
@@ -35,20 +41,19 @@ export function buildGitCommitsUserContent(gitCommits: readonly SelectedGitCommi
   return { type: "text", text }
 }
 
-function formatSingleCommit(commit: SelectedGitCommit): string {
-  const sha = commit.sha ?? "unknown"
-  const message = commit.message ?? ""
-  const description = commit.description
-  const diff = commit.diff ?? ""
-  const headerLength = `Commit: ${sha}\nMessage: ${message}\n`.length +
-    (description ? `Description:\n${description}\n`.length : 0) +
+function formatCommitForPrompt(commit: AttachedGitCommit): string {
+  const headerLength = `Commit: ${commit.objectId}\nMessage: ${commit.subject}\n`.length +
+    (commit.explanation ? `Description:\n${commit.explanation}\n`.length : 0) +
     "\nDiff:\n".length
-  const availableCharsForDiff = Math.max(0, MAX_GIT_COMMIT_CHAR_LENGTH - headerLength)
-  const truncatedDiff = diff.length > availableCharsForDiff
-    ? diff.slice(0, availableCharsForDiff - GIT_COMMIT_DIFF_TRUNCATION_NOTICE.length) + GIT_COMMIT_DIFF_TRUNCATION_NOTICE
-    : diff
-  const parts = [`Commit: ${sha}`, `Message: ${message}`]
-  if (description?.trim()) parts.push(`Description:\n${description}`)
-  if (truncatedDiff) parts.push(`\nDiff:\n${truncatedDiff}`)
+  const patchBudget = Math.max(0, MAX_COMMIT_CONTEXT_CHARS - headerLength)
+  const patchText = limitPatch(commit.patch, patchBudget)
+  const parts = [`Commit: ${commit.objectId}`, `Message: ${commit.subject}`]
+  if (commit.explanation?.trim()) parts.push(`Description:\n${commit.explanation}`)
+  if (patchText) parts.push(`\nDiff:\n${patchText}`)
   return parts.join("\n")
+}
+
+function limitPatch(patch: string, availableChars: number): string {
+  if (patch.length <= availableChars) return patch
+  return patch.slice(0, availableChars - PATCH_CUT_NOTICE.length) + PATCH_CUT_NOTICE
 }
