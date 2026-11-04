@@ -1,10 +1,11 @@
-/** Decodes persisted transcript bytes through the generated agent message constructors. */
+/** Decodes Slate turn envelopes and the remaining interop message payloads for transcript projection. */
 
 import type {
   DecodedTranscriptStep,
   DecodedTranscriptTurn,
   TranscriptOccurrenceCodec,
 } from "../../../host/transcript/mirror/transcript-occurrence-deriver.ts"
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 
 interface BinaryMessageType<Message> {
   fromBinary(wireBytes: Uint8Array): Message
@@ -63,6 +64,11 @@ export interface GeneratedTranscriptOccurrenceBindings {
   readonly ConversationStep: BinaryMessageType<StepShape>
 }
 
+export interface SlateTranscriptOccurrenceBindings {
+  readonly UserMessage: BinaryMessageType<UserMessageShape>
+  readonly ConversationStep: BinaryMessageType<StepShape>
+}
+
 function requireGeneratedType<Message>(
   value: BinaryMessageType<Message> | undefined,
   typeName: string,
@@ -81,28 +87,13 @@ function slateToolName(caseName: string, value: ToolReplyShape): string {
     .toLowerCase()
 }
 
-export function createGeneratedTranscriptOccurrenceCodec(
-  generatedBindings: GeneratedTranscriptOccurrenceBindings,
+function createTranscriptOccurrenceCodec(
+  userType: BinaryMessageType<UserMessageShape>,
+  stepType: BinaryMessageType<StepShape>,
+  decodeTurn: (wireBytes: Uint8Array) => DecodedTranscriptTurn,
 ): TranscriptOccurrenceCodec {
-  const turnType = requireGeneratedType(generatedBindings?.ConversationTurnStructure, "ConversationTurnStructure")
-  const userType = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage")
-  const stepType = requireGeneratedType(generatedBindings?.ConversationStep, "ConversationStep")
-
   return {
-    decodeTurn(wireBytes): DecodedTranscriptTurn {
-      const decoded = turnType.fromBinary(wireBytes)
-      if (decoded.turn.case === "agentConversationTurn") {
-        return {
-          case: "agent",
-          userMessage: decoded.turn.value.userMessage,
-          steps: decoded.turn.value.steps,
-        }
-      }
-      return decoded.turn.case === "shellConversationTurn"
-        ? { case: "shell" }
-        : { case: undefined }
-    },
-
+    decodeTurn,
     decodeUserMessage(wireBytes) {
       const decoded = userType.fromBinary(wireBytes)
       return {
@@ -110,7 +101,6 @@ export function createGeneratedTranscriptOccurrenceCodec(
         ...(decoded.textBlobId === undefined ? {} : { textBlobId: decoded.textBlobId }),
       }
     },
-
     decodeStep(wireBytes): DecodedTranscriptStep {
       const decoded = stepType.fromBinary(wireBytes)
       const message = decoded.message
@@ -132,4 +122,46 @@ export function createGeneratedTranscriptOccurrenceCodec(
       }
     },
   }
+}
+
+export function createSlateTranscriptOccurrenceCodec(
+  bindings: SlateTranscriptOccurrenceBindings,
+): TranscriptOccurrenceCodec {
+  const userType = requireGeneratedType(bindings?.UserMessage, "UserMessage")
+  const stepType = requireGeneratedType(bindings?.ConversationStep, "ConversationStep")
+  return createTranscriptOccurrenceCodec(userType, stepType, wireBytes => {
+    try {
+      const decoded = slateConversationTurnSerde.deserialize(wireBytes)
+      return decoded.kind === "agent"
+        ? { case: "agent", userMessage: decoded.userMessageBlobId, steps: decoded.stepBlobIds }
+        : { case: "shell" }
+    } catch (error) {
+      if (error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case") {
+        return { case: undefined }
+      }
+      throw error
+    }
+  })
+}
+
+/** Legacy protocol-view constructor kept for isolated interop callers and contract tests. */
+export function createGeneratedTranscriptOccurrenceCodec(
+  generatedBindings: GeneratedTranscriptOccurrenceBindings,
+): TranscriptOccurrenceCodec {
+  const turnType = requireGeneratedType(generatedBindings?.ConversationTurnStructure, "ConversationTurnStructure")
+  const userType = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage")
+  const stepType = requireGeneratedType(generatedBindings?.ConversationStep, "ConversationStep")
+  return createTranscriptOccurrenceCodec(userType, stepType, wireBytes => {
+    const decoded = turnType.fromBinary(wireBytes)
+    if (decoded.turn.case === "agentConversationTurn") {
+      return {
+        case: "agent",
+        userMessage: decoded.turn.value.userMessage,
+        steps: decoded.turn.value.steps,
+      }
+    }
+    return decoded.turn.case === "shellConversationTurn"
+      ? { case: "shell" }
+      : { case: undefined }
+  })
 }

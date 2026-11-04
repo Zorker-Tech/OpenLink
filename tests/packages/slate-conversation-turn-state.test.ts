@@ -69,11 +69,12 @@ test("the persistence adapter preserves every agent turn field", () => {
   const bytes = slateConversationTurnSerde.serialize(turn)
   const decoded = slateConversationTurnSerde.deserialize(bytes)
 
+  assert.ok(new TextDecoder().decode(bytes).startsWith("SLATE-AGENT-TURN\n"))
   assert.deepEqual(decoded, turn)
   assert.notEqual(decoded.stepBlobIds[0], turn.stepBlobIds[0])
   assert.deepEqual(slateConversationTurnSerde.getBlobType?.(), {
-    kind: "proto",
-    typeName: "agent.v1.ConversationTurnStructure",
+    kind: "json",
+    typeName: "slate.agent-conversation-turn",
   })
 })
 
@@ -115,6 +116,53 @@ test("the adapter reconstructs the historical envelope without changing either c
 
   assert.equal(toInteropConversationTurn(agent).turn.case, "agentConversationTurn")
   assert.equal(toInteropConversationTurn(shell).turn.case, "shellConversationTurn")
+})
+
+test("legacy Proto turns import into Slate and new writes use the Slate envelope", () => {
+  const legacy = new ConversationTurnStructure({
+    turn: {
+      case: "agentConversationTurn",
+      value: new AgentConversationTurnStructure({
+        userMessage: new Uint8Array([7]),
+        steps: [new Uint8Array([8])],
+        sendMessageStepIndices: [0],
+      }),
+    },
+  })
+  const slate = slateConversationTurnSerde.deserialize(legacy.toBinary())
+  assert.deepEqual(slate, createSlateAgentConversationTurn({
+    userMessageBlobId: new Uint8Array([7]),
+    stepBlobIds: [new Uint8Array([8])],
+    sendMessageStepIndices: [0],
+  }))
+  assert.ok(new TextDecoder().decode(slateConversationTurnSerde.serialize(slate)).startsWith("SLATE-AGENT-TURN\n"))
+})
+
+test("unknown fields in legacy turn envelope and payload survive the Slate rewrite", () => {
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const payload = AgentConversationTurnStructure.fromBinary(appendUnknownVarint(
+    new AgentConversationTurnStructure({ userMessage: new Uint8Array([1]), steps: [new Uint8Array([2])] }).toBinary(),
+  ))
+  const legacy = ConversationTurnStructure.fromBinary(appendUnknownVarint(
+    new ConversationTurnStructure({ turn: { case: "agentConversationTurn", value: payload } }).toBinary(),
+  ))
+  const slate = slateConversationTurnSerde.deserialize(legacy.toBinary())
+  const rewritten = slateConversationTurnSerde.deserialize(slateConversationTurnSerde.serialize(slate))
+  const restored = toInteropConversationTurn(rewritten)
+
+  if (legacy.turn.case !== "agentConversationTurn") throw new Error("legacy turn lost its agent case")
+  if (restored.turn.case !== "agentConversationTurn") throw new Error("restored turn lost its agent case")
+  assert.deepEqual(ConversationTurnStructure.runtime.bin.listUnknownFields(restored),
+    ConversationTurnStructure.runtime.bin.listUnknownFields(legacy))
+  assert.deepEqual(
+    AgentConversationTurnStructure.runtime.bin.listUnknownFields(restored.turn.value),
+    AgentConversationTurnStructure.runtime.bin.listUnknownFields(legacy.turn.value),
+  )
 })
 
 test("a persisted envelope without a known turn case is rejected", () => {

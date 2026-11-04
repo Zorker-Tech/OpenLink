@@ -35,7 +35,7 @@ test("the production mirror adapter shares its journal and seeds each runner's p
   const second = createMirror(options(5, "/data/agents/two/session.db") as never) as RoutedMirrorView
 
   assert.equal(first.journal instanceof FileTranscriptMirror, true)
-  assert.ok(first.journal.deriver, "the production adapter supplies generated-message decoding")
+  assert.ok(first.journal.deriver, "the production adapter supplies Slate turn and interop payload decoding")
   assert.equal(second.journal, first.journal, "all runners from one provider write the same journal")
   assert.deepEqual(first.legacy.options, {
     transcriptsDir: "/data/transcripts",

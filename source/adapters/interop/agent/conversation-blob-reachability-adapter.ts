@@ -1,9 +1,8 @@
 /**
  * Collecting the blobs a conversation no longer refers to.
  *
- * What a conversation still points at is walked from its state — every field of every message that can carry a blob
- * reference — and everything else the store holds for it is collected, so a conversation that was rewritten does not
- * keep its old payloads alive.
+ * What a conversation still points at is walked from its state. Slate turn envelopes and the still-interop
+ * payload messages are decoded at their respective boundaries; everything else the store holds is collected.
  */
 import { isMessage, type FieldInfo, type Message } from "@bufbuild/protobuf";
 
@@ -13,6 +12,7 @@ import {
   getBlobReferenceMessageMetadata,
   isProtoBlobReferenceTypeName
 } from "./blob-reference-metadata.ts";
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts";
 
 export const EDGES_NOT_WALKED_SO_REFERENTS_COLLECT = new Set([
   "agent.v1.UserMessage.conversation_state_blob_id",
@@ -59,10 +59,30 @@ export function collectReachableBlobHexIds(options: {
     const hexId = toHexId(blobId);
     if (reachableHexIds.has(hexId)) return;
     reachableHexIds.add(hexId);
-    if (!isProtoBlobReferenceTypeName(blobReferenceType)) return;
+    if (!isProtoBlobReferenceTypeName(blobReferenceType) &&
+        blobReferenceType !== "agent.v1.ConversationTurnStructure") return;
     const childBytes = options.getBlobByHexId(hexId);
     if (childBytes == null) {
       unresolvedProtoRefs += 1;
+      return;
+    }
+    if (blobReferenceType === "agent.v1.ConversationTurnStructure") {
+      try {
+        const turn = slateConversationTurnSerde.deserialize(childBytes);
+        if (turn.kind === "agent") {
+          visitBlobReference(turn.userMessageBlobId, "agent.v1.UserMessage");
+          for (const stepBlobId of turn.stepBlobIds) {
+            visitBlobReference(stepBlobId, "agent.v1.ConversationStep");
+          }
+        } else {
+          visitBlobReference(turn.shellCommandBlobId, "agent.v1.ShellCommand");
+          visitBlobReference(turn.shellOutputBlobId, "agent.v1.ShellOutput");
+        }
+      } catch (error) {
+        if (!(error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case")) {
+          unresolvedProtoRefs += 1
+        }
+      }
       return;
     }
     let child: Message;

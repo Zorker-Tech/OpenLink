@@ -1,12 +1,11 @@
-/** Binds the production transcript provider to the generated message identities persisted by the service. */
+/** Binds production transcript derivation to Slate turn envelopes and remaining interop payload codecs. */
 
 import {
   ConversationStep,
-  ConversationTurnStructure,
   UserMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import {
-  createGeneratedTranscriptOccurrenceCodec,
+  createSlateTranscriptOccurrenceCodec,
 } from "./transcript-occurrence-codec-adapter.ts"
 import {
   createProductionTranscriptMirrorProvider,
@@ -15,8 +14,7 @@ import {
 
 export function createDefaultProductionTranscriptMirrorProvider(): CreateTranscriptMirror {
   return createProductionTranscriptMirrorProvider({
-    codec: createGeneratedTranscriptOccurrenceCodec({
-      ConversationTurnStructure,
+    codec: createSlateTranscriptOccurrenceCodec({
       UserMessage,
       ConversationStep,
     }),

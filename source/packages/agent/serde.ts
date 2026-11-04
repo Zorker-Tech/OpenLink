@@ -1,10 +1,11 @@
 /**
  * How conversation data is written to storage, and read back.
  *
- * Everything the platform keeps about a conversation — turns, steps, summaries, plans, shell commands, file
- * state, the model messages themselves — is stored as bytes, and each kind is stored in the form that fits
- * it: the protocol's own messages go in as their binary encoding, and a model message goes in as JSON,
- * because it is a shape the provider libraries define rather than one the protocol does. Reading has to
+ * Everything the platform keeps about a conversation — turn envelopes, steps, summaries, plans, shell
+ * commands, file state and model messages — is stored as bytes. Slate-owned conversation roots and turn
+ * envelopes use versioned Slate records. Payload families that still have an interop schema use their
+ * dedicated codecs, and a model message goes in as JSON because its shape comes from the inference
+ * library. Reading has to
  * give back exactly what was written, and two values do not survive JSON on their own: byte arrays become
  * `{__type:"Uint8Array",hex}` and 64-bit integers become strings, both of which are turned back on the way
  * in. Hex decoding has a fast path for the common case and falls back to the shared decoder for anything
