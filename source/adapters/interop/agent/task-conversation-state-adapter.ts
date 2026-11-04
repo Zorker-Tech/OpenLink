@@ -1,38 +1,62 @@
 import { ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
-import { fromRedactedConversationStateStructure } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../../../packages/redaction/privacy-mode.ts"
 import type { SlateTaskConversationState } from "../../../packages/agent/subagent-persisted-state.ts"
+import {
+  fromRedactedConversationStateStructureInterop,
+  fromInteropConversationState,
+  toInteropConversationState,
+  toRedactedConversationStateStructureInterop,
+} from "./agent-state-message-serdes-adapter.ts"
 
-/** Projects the external top-level snapshot into Slate's own launch/resume value. */
-export function fromInteropTaskConversationState(
-  value: ConversationStateStructure,
+function ownTaskSnapshot(
+  value: SlateTaskConversationState,
+  modeWasPersisted: boolean,
 ): SlateTaskConversationState {
-  return {
-    ...(value as unknown as Record<string, unknown>),
-    turns: [...value.turns],
-  } as SlateTaskConversationState
+  const snapshot: SlateTaskConversationState = {
+    ...value,
+    turns: value.turns.map(turn => new Uint8Array(turn)),
+  }
+  if (modeWasPersisted) return snapshot
+  const { mode: _mode, unknownModeCode: _unknownModeCode, ...withoutMode } = snapshot
+  return withoutMode
 }
 
-/**
- * Reconstructs the generated message only where the subagent protocol requires it.
- *
- * Nested values remain the external message objects the owning conversation codec produced; rebuilding the
- * outer message validates the top-level shape without changing any persisted field.
- */
+/** Projects every conversation snapshot field into the Slate conversation model. */
+export function fromInteropTaskConversationState(
+  value: ConversationStateStructure,
+  privacyMode: PrivacyModeValue = PrivacyMode.UNSPECIFIED,
+): SlateTaskConversationState {
+  return ownTaskSnapshot(
+    fromInteropConversationState(toRedactedConversationStateStructureInterop(value, privacyMode)),
+    value.mode !== undefined,
+  )
+}
+
+/** Reconstructs the historical message at the launch and persistence interop boundary. */
 export function toInteropTaskConversationState(
   value: SlateTaskConversationState,
 ): ConversationStateStructure {
-  return new ConversationStateStructure(value as never)
+  return fromRedactedConversationStateStructureInterop(
+    toInteropConversationState(value),
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
 }
 
 export function fromRedactedTaskConversationState(
-  value: Parameters<typeof fromRedactedConversationStateStructure>[0],
+  value: Parameters<typeof fromRedactedConversationStateStructureInterop>[0],
 ): SlateTaskConversationState {
-  return fromInteropTaskConversationState(
-    fromRedactedConversationStateStructure(
-      value,
-      PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-      undefined,
-    ),
+  return ownTaskSnapshot(
+    fromInteropConversationState(value as never),
+    value.mode !== undefined,
   )
+}
+
+/** Builds the launch checkpoint from Slate state using the inherited conversation privacy mode. */
+export function toRedactedTaskConversationState(
+  value: SlateTaskConversationState,
+  privacyMode: PrivacyModeValue,
+) {
+  return toInteropConversationState({ ...value, privacyMode })
 }

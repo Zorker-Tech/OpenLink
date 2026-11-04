@@ -130,7 +130,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(configAny),
     });
-    const unredResolvedPlanContent = planAction.planText ?? (stateHandler.plan ? (await stateHandler.plan.get(ctx)).plan.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined);
+    const unredResolvedPlanContent = planAction.planText ?? (stateHandler.plan ? (await stateHandler.plan.get(ctx)).content : undefined);
     let planMarksProject = false;
     try {
       planMarksProject = unredResolvedPlanContent !== undefined && grayMatter(unredResolvedPlanContent).data.isProject === true;

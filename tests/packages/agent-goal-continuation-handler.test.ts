@@ -4,16 +4,17 @@ import { describe, it } from "node:test";
 import { createContext, type Context } from "../../source/packages/context/context.ts";
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts";
 import { GoalContinuationActionHandler } from "../../source/packages/agent/actions/goal-continuation-action-handler.ts";
-import { AgentMode, GoalState, SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
-import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts";
+import { AgentMode, SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts";
+import { SlateGoalState } from "../../source/packages/agent/goal-state.ts";
+import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts";
 
 const GOAL_ID = "123e4567-e89b-42d3-a456-426614174000";
 const baseCtx = () => createContext().with(conversationIdKey, "conv-1");
-const activeGoal = (overrides: Record<string, unknown> = {}) => new GoalState({
+const activeGoal = (overrides: Record<string, unknown> = {}) => new SlateGoalState({
   goalId: GOAL_ID,
-  status: GoalStatus.ACTIVE,
+  status: SlateGoalStatus.ACTIVE,
   objective: "ship the thing",
   conversationId: "conv-1",
   continuationCount: 0,
@@ -57,7 +58,7 @@ describe("the goal continuation handler", () => {
     const ctx = baseCtx();
     assert.equal(await instance.adaptAction(ctx, stateHandler(undefined).state, undefined, publish), undefined);
     assert.equal(await instance.adaptAction(ctx, stateHandler(activeGoal({ conversationId: "other" })).state, undefined, publish), undefined);
-    assert.equal(await instance.adaptAction(ctx, stateHandler(activeGoal({ status: GoalStatus.PAUSED })).state, undefined, publish), undefined);
+    assert.equal(await instance.adaptAction(ctx, stateHandler(activeGoal({ status: SlateGoalStatus.PAUSED })).state, undefined, publish), undefined);
     const withoutConversation = instance;
     assert.equal(await withoutConversation.adaptAction(createContext(), stateHandler(activeGoal()).state, undefined, publish), undefined);
   });
@@ -68,8 +69,8 @@ describe("the goal continuation handler", () => {
     const harness = stateHandler(activeGoal({ idleContinuationsWithoutToolCalls: 3 }));
     const result = await instance.adaptAction(ctx, harness.state, undefined, publish);
     assert.equal(result, undefined);
-    const written = harness.written[0] as GoalState;
-    assert.equal(written.status, GoalStatus.PAUSED);
+    const written = harness.written[0] as SlateGoalState;
+    assert.equal(written.status, SlateGoalStatus.PAUSED);
     assert.equal(written.lastAccruedAtMs, undefined);
   });
 
@@ -78,7 +79,7 @@ describe("the goal continuation handler", () => {
     const ctx = baseCtx();
     const harness = stateHandler(activeGoal({ activeDurationMs: BigInt(0), lastAccruedAtMs: BigInt(Date.now() - 1_000) }));
     const action = await instance.adaptAction(ctx, harness.state, undefined, publish);
-    const written = harness.written[0] as GoalState;
+    const written = harness.written[0] as SlateGoalState;
     assert.equal(written.continuationCount, 1);
     assert.equal(written.idleContinuationsWithoutToolCalls, 1);
     assert.equal(written.activeDurationMs! > BigInt(0), true);
@@ -98,7 +99,7 @@ describe("the goal continuation handler", () => {
     const present = stateHandler(activeGoal({ idleContinuationsWithoutToolCalls: 2 }));
     const published: unknown[] = [];
     const structure = await instance.clearIdleContinuationStreak(ctx, present.state, async (_ctx: unknown, value: unknown) => { published.push(value); });
-    assert.equal((present.written[0] as GoalState).idleContinuationsWithoutToolCalls, 0);
+    assert.equal((present.written[0] as SlateGoalState).idleContinuationsWithoutToolCalls, 0);
     assert.notEqual(structure, undefined);
     assert.equal(published.length, 1);
   });

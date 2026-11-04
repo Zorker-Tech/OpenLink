@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { GoalState } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
-import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts";
+import { SlateGoalState } from "../../source/packages/agent/goal-state.ts";
+import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { reactivatePausedGoalOnUserMessage } from "../../source/packages/agent/actions/user-message-action/reactivate-paused-goal.ts";
 
-function buildStateHandler(goalState: GoalState | undefined) {
+function buildStateHandler(goalState: SlateGoalState | undefined) {
   const events: unknown[] = [];
   let current = goalState;
   const structure = { revision: 7 };
@@ -14,7 +14,7 @@ function buildStateHandler(goalState: GoalState | undefined) {
     events,
     structure,
     get goalState() { return current; },
-    setGoalState(next: GoalState) {
+    setGoalState(next: SlateGoalState) {
       events.push(["set", next]);
       current = next;
     },
@@ -30,10 +30,13 @@ describe("paused goal reactivation contract", () => {
     const previousNow = Date.now;
     Date.now = () => 9_000;
     try {
-      const original = new GoalState({
+      const original = new SlateGoalState({
+        conversationId: "",
         goalId: "goal-1",
-        status: GoalStatus.PAUSED,
+        objective: "",
+        status: SlateGoalStatus.PAUSED,
         idleContinuationsWithoutToolCalls: 5,
+        continuationCount: 0,
         activeDurationMs: 1_250n,
         lastAccruedAtMs: 4_000n,
       });
@@ -52,9 +55,9 @@ describe("paused goal reactivation contract", () => {
       const resumed = state.goalState;
       assert.ok(resumed);
       assert.notEqual(resumed, original);
-      assert.equal(original.status, GoalStatus.PAUSED);
+      assert.equal(original.status, SlateGoalStatus.PAUSED);
       assert.equal(original.idleContinuationsWithoutToolCalls, 5);
-      assert.equal(resumed.status, GoalStatus.ACTIVE);
+      assert.equal(resumed.status, SlateGoalStatus.ACTIVE);
       assert.equal(resumed.idleContinuationsWithoutToolCalls, 0);
       assert.equal(resumed.activeDurationMs, 1_250n);
       assert.equal(resumed.lastAccruedAtMs, 9_000n);
@@ -66,7 +69,14 @@ describe("paused goal reactivation contract", () => {
   });
 
   it("leaves an active goal alone", async () => {
-    const current = new GoalState({ goalId: "goal-2", status: GoalStatus.ACTIVE, idleContinuationsWithoutToolCalls: 2 });
+    const current = new SlateGoalState({
+      conversationId: "",
+      goalId: "goal-2",
+      objective: "",
+      status: SlateGoalStatus.ACTIVE,
+      idleContinuationsWithoutToolCalls: 2,
+      continuationCount: 0,
+    });
     const state = buildStateHandler(current);
     const updates: unknown[] = [];
 

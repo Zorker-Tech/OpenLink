@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6917520215633424,
-      "refreshReason": "Conversation state uses Slate-facing values and Slate-owned conversation-state, turn, step and user-message records with dedicated interop serializers; privacy and mode compatibility stay at the checkpoint boundary.",
-      "evidence": "Conversation-state, turn-step, user-message-state and smart-classifier suites pass under Node 24. Agent-turn creation round-trips text, message id and mode through historical UserMessage bytes, real steps expose Slate assistant/thinking kinds, and unknown conversation modes retain their source code unless Slate explicitly replaces them. Mutations across turn, user-message, step and conversation-state boundaries were caught. The measured rewrite overlap is 0.6917520215633424."
+      "overlap": 0.6892722371967654,
+      "refreshReason": "Conversation state now uses Slate-owned conversation-state, turn, step, user-message, goal, active-plan and read-path records; persisted privacy wrappers are reconstructed only at the checkpoint boundary.",
+      "evidence": "Conversation-state, turn-step, user-message-state, plan, read-path and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9872/9872. Active plans are restored from historical blobs and written back in their legacy encoding; read paths are strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode through historical UserMessage bytes, real steps expose Slate assistant/thinking kinds, and unknown conversation modes retain their source code unless Slate explicitly replaces them. The read-path set still deduplicates exact paths and the checkpoint round-trip preserves the original path. Four path-boundary mutations were caught. Work-host build and process smoke pass. Measured overlap is 0.6892722371967654."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
@@ -540,8 +540,8 @@
     "packages/agent/actions/user-message-action/reactivate-paused-goal.ts": {
       "claim": "rewritten",
       "overlap": 0.5280898876404494,
-      "refreshReason": "Goal status and generated clock projection moved behind the interop adapter while the resume decision remained in Slate code.",
-      "evidence": "tests/packages/agent-reactivate-paused-goal-contract.test.ts pins paused-only activation, original-state preservation, idle-counter reset, accrued-time retention, clock anchoring, and set/compute/publish order. User-message and goal-action suites pass; interop:check drops one direct schema consumer."
+      "refreshReason": "Paused-goal reactivation now operates directly on Slate goal state; the former interop path is only a compatibility re-export.",
+      "evidence": "tests/packages/agent-reactivate-paused-goal-contract.test.ts pins paused-only activation, original-state preservation, idle-counter reset, accrued-time retention, clock anchoring, and set/compute/publish order. The complete Work-host suite passes 9872/9872 and interop:check drops two core schema consumers."
     },
     "packages/agent/tools/mcp/smart-mode-approval-store.ts": {
       "claim": "rewritten",
@@ -2599,7 +2599,7 @@
       "claim": "rewritten",
       "overlap": 0.6176911544227887,
       "refreshReason": "Moved generated follow-up, persistence, and success-result construction to the interop adapter while keeping completion policy on Slate-owned state and outcomes.",
-      "evidence": "The completion behavior and interop adapter contract suites pass 22/22; the full Work-host suite passes 9759/9759. Work-host typecheck, rewrite:check, and interop:check pass with 17 direct consumers. The Slate completion module no longer imports generated wire types. Measured overlap is 0.6176911544227887 against 667 baseline pairs."
+      "evidence": "The completion behavior and interop adapter contract suites pass 22/22; the full Work-host suite passes 9872/9872. Work-host typecheck, rewrite:check, and interop:check pass with 17 direct consumers. The Slate completion module no longer imports generated wire types. Measured overlap is 0.6176911544227887 against 667 baseline pairs."
     },
     "packages/constants/auto-spillover-ui.ts": {
       "claim": "rewritten",
@@ -2701,8 +2701,9 @@
     },
     "packages/agent/tools/core/read/read.ts": {
       "claim": "rewritten",
-      "overlap": 0.7546749777382012,
-      "evidence": "Read tool, prompt-profile and protocol-adapter suites pass 46/46. Existing behavior contracts pin model argument shapes, negative offsets, range handling, empty and oversized files, errors, redacted executor selection, path accounting, rules and skills, blobs, image/PDF/Notebook rendering and line formatting. Adapter contracts pin Slate-owned executor request/result mapping and transcript call conversion. Work-host typecheck and interop boundary check pass."
+      "overlap": 0.7435440783615316,
+      "refreshReason": "Successful reads now record their resolved path through Slate's string contract; checkpoint privacy classification remains at the persistence boundary.",
+      "evidence": "Read tool, prompt-profile, protocol-adapter, conversation-state and MCP guard suites pass 148/148; the complete Work-host suite passes 9872/9872. Existing behavior contracts pin model argument shapes, negative offsets, range handling, empty and oversized files, errors, redacted executor selection, exact path accounting, rules and skills, blobs, image/PDF/Notebook rendering and line formatting. Adapter contracts pin Slate-owned executor request/result mapping and transcript call conversion. Work-host typecheck passes. Measured overlap is 0.7435440783615316 against 2246 baseline pairs."
     },
     "packages/agent/tools/core/todo/todo.ts": {
       "claim": "rewritten",
@@ -2835,9 +2836,9 @@
     },
     "packages/agent/actions/execute-plan-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.7842105263157895,
-      "refreshReason": "Renamed the state capability query from a model-family name to Slate's large-context treatment contract and remeasured the split-source group.",
-      "evidence": "Work-host typecheck/build pass; the agent-state and action-handler suites pass in the focused 163/163 bundle. The source edit updates only the Slate-owned capability method and its consumer. Generated plan actions and the virtual plan URI remain in interop adapters. Measured overlap is 0.7842105263157895 against 1520 baseline pairs."
+      "overlap": 0.7828947368421053,
+      "refreshReason": "The execution path now reads Slate's active plan record directly; generated plan actions and the virtual plan URI remain at the interop boundary.",
+      "evidence": "Agent-action-handler and plan adapter suites pass; the complete Work-host suite passes 9872/9872. Persisted plan text is exercised without planFileContent, and Slate chat mode, prompt generation, stored message projection and plan clearing remain unchanged. Generated plan actions and the virtual plan URI remain in interop adapters. Measured overlap is 0.7828947368421053 against 1520 baseline pairs."
     },
     "packages/agent-summarization/durable-blocks.ts": {
       "claim": "rewritten",
@@ -3296,7 +3297,7 @@
       "claim": "rewritten",
       "overlap": 0.5824742268041238,
       "refreshReason": "Moved redacted user, ask-question, computer-use, and classifier message schema handling into interop while returning Slate-owned role/content records; conversation steps now use Slate's own kind discriminator.",
-      "evidence": "The classifier context and rewrite-boundary suites pass; the complete Work-host suite passes under Node 24. Typecheck, rewrite:check and interop:check pass. Generated decoding and message construction live in the interop adapter, while conversation steps expose Slate's own kind discriminator. Measured overlap is 0.5824742268041238 against 1940 baseline pairs."
+      "evidence": "The classifier context and rewrite-boundary suites pass; the complete Work-host suite passes 9872/9872. Typecheck, rewrite:check and interop:check pass. Generated decoding and message construction live in the interop adapter, while conversation steps expose Slate's own kind discriminator. Measured overlap is 0.5824742268041238 against 1940 baseline pairs."
     },
     "host/local-exec/extension.ts": {
       "claim": "rewritten",
@@ -3385,8 +3386,9 @@
     },
     "packages/agent/tools/mcp/mcp-execution-guards.ts": {
       "claim": "rewritten",
-      "overlap": 0.6941176470588235,
-      "evidence": "MCP execution-guard contract tests pass 10/10; Work-host typecheck passes and the full Node 24 suite passes 10564/10564. Tool availability and definition-read outcomes remain explicit, with meta-tool deferrals preserved."
+      "overlap": 0.6411764705882353,
+      "refreshReason": "MCP definition-read checks consume Slate path strings rather than redaction wrapper objects.",
+      "evidence": "MCP execution-guard, MCP tool and read-path contract suites pass 148/148; the complete Work-host suite passes 9872/9872. Tool availability and definition-read outcomes remain explicit, with meta-tool deferrals preserved; the check compares the same exact definition path recorded by the read tool. Work-host typecheck passes. Measured overlap is 0.6411764705882353 against 170 baseline pairs."
     },
     "host/extensions/inference/extension.ts": {
       "claim": "rewritten",
@@ -4382,9 +4384,9 @@
     },
     "packages/agent/actions/goal-continuation-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.6341059602649006,
-      "refreshReason": "Moved generated paused-goal status and wakeup-message envelopes into interop while the core handler retains continuation, anti-spin and active-time policy.",
-      "evidence": "agent-goal-continuation-handler.test.ts and agent-plan-and-goal-actions.test.ts pass 32/32 as an esbuild bundle. Work-host typecheck/build pass. The tests cover ownership checks, pauses, synthetic wakeups, streak clearing and all turn entry points. Interop boundary count is 48. Measured overlap is 0.6341059602649006 against 604 baseline pairs."
+      "overlap": 0.6357615894039735,
+      "refreshReason": "Goal lifecycle status and active-time state now use Slate records; only wakeup-message envelope construction remains in interop.",
+      "evidence": "agent-goal-continuation-handler.test.ts and agent-plan-and-goal-actions.test.ts pass 32/32; the complete Work-host suite passes 9872/9872. Tests cover ownership, pauses, synthetic wakeups, active-time accrual, streak clearing and all turn entry points. Interop debt is 347 imports across 227 files. Measured overlap is 0.6357615894039735 against 604 baseline pairs."
     },
     "packages/agent/tools/mcp/builtin-tools.ts": {
       "claim": "rewritten",
@@ -4402,7 +4404,7 @@
       "claim": "rewritten",
       "overlap": 0.6895306859205776,
       "refreshReason": "Delegated redacted resume-context decoding to the request-context interop adapter while keeping pending-tool and Slate-mode resume policy in the core.",
-      "evidence": "agent-resume-action-handler.test.ts passes 10/10 and the complete Work-host suite passes under Node 24. The suite verifies that a persisted plan-mode user message gives the resumed tools SlateMode.PLAN, and mutating the read back to the former non-existent userMode field is caught. interop-user-message-action-input-adapter.test.ts passes 3/3. Work-host typecheck passes and the interop boundary reports no new direct imports. Measured overlap is 0.6895306859205776 against 831 baseline pairs."
+      "evidence": "agent-resume-action-handler.test.ts passes 10/10 and the complete Work-host suite passes 9872/9872. The suite verifies that a persisted plan-mode user message gives the resumed tools SlateMode.PLAN, and mutating the read back to the former non-existent userMode field is caught. interop-user-message-action-input-adapter.test.ts passes 3/3. Work-host typecheck passes and the interop boundary reports no new direct imports. Measured overlap is 0.6895306859205776 against 831 baseline pairs."
     },
     "host/runner/computer-use.ts": {
       "claim": "rewritten",

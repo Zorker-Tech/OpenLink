@@ -186,7 +186,6 @@ source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/i
 source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/interop/agent/testing-prompt-profile-adapter.ts
 source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/interop/agent/user-info-input-adapter.ts
 source/packages/agent/actions/goal-continuation-action-handler.ts	../../../adapters/interop/agent/goal-continuation-message-adapter.ts
-source/packages/agent/actions/goal-continuation-action-handler.ts	../../../adapters/interop/agent/paused-goal-state-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/background-agent-source-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/meta-agent-notes-adapter.ts
@@ -203,7 +202,6 @@ source/packages/agent/actions/user-message-action/abstract-user-message-action-h
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts
 source/packages/agent/actions/user-message-action/conversation-history.ts	../../../../adapters/interop/agent/conversation-history-adapter.ts
 source/packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts	../../../../adapters/interop/agent/interrupted-tool-resolution-adapter.ts
-source/packages/agent/actions/user-message-action/reactivate-paused-goal.ts	../../../../adapters/interop/agent/paused-goal-state-adapter.ts
 source/packages/agent/actions/user-message-action/resume-action-handler.ts	../../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
 source/packages/agent/actions/user-message-action/resume-action-handler.ts	../../../../adapters/interop/agent/user-message-action-input-adapter.ts
 source/packages/agent/actions/user-message-action/synthetic-user-message.ts	../../../../adapters/interop/cursor-backend/summary-origin-marker-adapter.ts
@@ -312,7 +310,6 @@ source/packages/agent/tools/task-subagent-preparation.ts	../../../adapters/inter
 source/packages/agent/tools/task-subagent-preparation.ts	../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts
 source/packages/agent/tools/task-subagent-preparation.ts	../../../adapters/interop/inference/video-model-adapter.ts
 source/packages/agent/tools/task.ts	../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
-source/packages/agent/tools/task.ts	../../../adapters/interop/agent/task-conversation-state-adapter.ts
 source/packages/agent/tools/task.ts	../../../adapters/interop/agent/task-tool-protocol-adapter.ts
 source/packages/agent/tools/tool-support.ts	../../../adapters/interop/inference/tool-marker-adapter.ts
 source/packages/agent/utils/mcp-meta-tool-options.ts	../../../adapters/interop/agent/mcp-meta-tool-options-adapter.ts

@@ -1472,27 +1472,22 @@ describe("rewrite overlap gate inputs", () => {
     );
   });
 
-  it("keeps generated goal status and clock updates in the interop adapter", () => {
+  it("scores paused goal lifecycle policy as Slate code", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/actions/user-message-action/reactivate-paused-goal.ts",
       rewritten: "source/packages/agent/actions/user-message-action/reactivate-paused-goal.ts",
     }), [
       "packages/agent/actions/user-message-action/reactivate-paused-goal.ts",
-      "adapters/interop/agent/paused-goal-state-adapter.ts",
     ]);
-    assert.equal(
-      exemptSourceReason("adapters/interop/agent/paused-goal-state-adapter.ts"),
-      "interop adapter: translates the generated goal status and clock fields when a paused goal resumes",
-    );
+    assert.equal(exemptSourceReason("adapters/interop/agent/paused-goal-state-adapter.ts"), undefined);
   });
 
-  it("keeps goal continuation message envelopes and status enums in interop", () => {
+  it("keeps goal continuation message envelopes in interop", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/actions/goal-continuation-action-handler.ts",
       rewritten: "source/packages/agent/actions/goal-continuation-action-handler.ts",
     }), [
       "packages/agent/actions/goal-continuation-action-handler.ts",
-      "adapters/interop/agent/paused-goal-state-adapter.ts",
       "adapters/interop/agent/goal-continuation-message-adapter.ts",
     ]);
     assert.match(exemptSourceReason("adapters/interop/agent/goal-continuation-message-adapter.ts") ?? "", /interop adapter/);

@@ -28,6 +28,7 @@ import {
   type ConversationBlobStore,
 } from "./task-runtime.ts"
 import { createSlateSubagentConversationState } from "../subagent-persisted-state.ts"
+import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
 
@@ -84,10 +85,8 @@ export interface TaskSubagentIterationResult {
   readonly finalResult?: unknown
 }
 
-/** The completion policy only needs the turn identifiers; the runner's full state stays opaque here. */
-export interface TaskSubagentConversationState {
-  readonly turns: readonly Uint8Array[]
-}
+/** The completion policy reads turn references and persists the complete Slate conversation snapshot. */
+export type TaskSubagentConversationState = SlateTaskConversationState
 
 /** How long the subagent has been running, measured from the moment it was started. */
 function elapsedMs(completion: TaskSubagentCompletionContext): number {

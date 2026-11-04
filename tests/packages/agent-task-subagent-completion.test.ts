@@ -17,9 +17,12 @@ import type { ConversationBlobStore } from "../../source/packages/agent/tools/ta
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
 import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
+import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
+import type { SlateTaskConversationState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import {
   AgentMode,
   ConversationStateStructure,
+  FileStateStructure,
   ConversationStep,
   ConversationTurnStructure,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
@@ -28,6 +31,8 @@ import {
   SubagentTypeUnspecified,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import type { ExecuteHookArgs } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a hook executor that answers the way a workspace would
@@ -173,7 +178,7 @@ function blobStoreOf(entries: Array<{ id: Uint8Array; bytes: Uint8Array }>): Con
 }
 
 function conversationWith(text: string, toolCalls: number): {
-  readonly state: ConversationStateStructure
+  readonly state: SlateTaskConversationState
   readonly blobStore: ConversationBlobStore
 } {
   const stepIds = [10, 11, 12]
@@ -185,7 +190,18 @@ function conversationWith(text: string, toolCalls: number): {
       bytes: new ConversationStep({ message: { case: "toolCall", value: {} } as never }).toBinary(),
     })),
   ]
-  return { state: new ConversationStateStructure({ turns: [idOf(1)] }), blobStore: blobStoreOf(entries) }
+  return {
+    state: fromInteropTaskConversationState(new ConversationStateStructure({
+      turns: [idOf(1)],
+      mode: AgentMode.PLAN,
+      activeBranchName: "feature/subagent",
+      readPaths: ["/repo/read.ts"],
+      fileStatesV2: {
+        "/repo/file.ts": new FileStateStructure({ content: new Uint8Array([7]) }),
+      },
+    })),
+    blobStore: blobStoreOf(entries),
+  }
 }
 
 const completionCtx: TaskSubagentCompletionContext = {
@@ -232,7 +248,7 @@ test("a subagent that finishes without a follow-up produces its result and is dr
   const harness = hookHarness(call => call.step === "subagentStop" ? stopHookAnswer() : { response: { response: { case: "postToolUse", value: {} } } })
   const { state, blobStore } = conversationWith("the answer", 2)
   const { deps, cleaned } = dependencies(harness, blobStore)
-  const persisted: Array<{ subagentId: string; state: { readonly modelId: string } }> = []
+  const persisted: Array<{ subagentId: string; state: SlateSubagentPersistedState }> = []
   const iterState = iterationState()
 
   const result = await processSubagentIterationSuccess(
@@ -242,7 +258,7 @@ test("a subagent that finishes without a follow-up produces its result and is dr
     completionCtx,
     deps,
     (_ctx, subagentId, _type, persistedState) => {
-      persisted.push({ subagentId, state: persistedState as { readonly modelId: string } })
+      persisted.push({ subagentId, state: persistedState as SlateSubagentPersistedState })
     },
     new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
   )
@@ -250,6 +266,12 @@ test("a subagent that finishes without a follow-up produces its result and is dr
   assert.equal(iterState.subagentStopCalled, true)
   assert.deepEqual(persisted.map(entry => entry.subagentId), ["subagent-1"])
   assert.equal(persisted[0]?.state.modelId, "composer-2")
+  assert.equal(persisted[0]?.state.conversationState?.mode, SlateMode.PLAN)
+  assert.equal(persisted[0]?.state.conversationState?.activeBranchName, "feature/subagent")
+  assert.deepEqual(persisted[0]?.state.conversationState?.readPaths, ["/repo/read.ts"])
+  assert.deepEqual(persisted[0]?.state.conversationState?.fileStatesV2.get("/repo/file.ts"), {
+    contentBlobId: new Uint8Array([7]),
+  })
   assert.equal(result.shouldContinue, false)
   const finalResult = taskResultOf(result.finalResult)
   assert.equal(finalResult?.result.case, "success")
@@ -300,7 +322,7 @@ test("only the turns since the last iteration are counted", async () => {
   const harness = hookHarness(call => call.step === "subagentStop" ? stopHookAnswer() : { response: { response: { case: "postToolUse", value: {} } } })
   const { state, blobStore } = conversationWith("the answer", 1)
   // Two turns already existed before this iteration, so only this one's blobs are read.
-  const stateWithHistory = new ConversationStateStructure({ turns: [idOf(7), idOf(8), ...state.turns] })
+  const stateWithHistory: SlateTaskConversationState = { ...state, turns: [idOf(7), idOf(8), ...state.turns] }
   const { deps } = dependencies(harness, blobStore)
   const result = await processSubagentIterationSuccess(
     stateWithHistory,
@@ -508,7 +530,7 @@ test("only the turns of this iteration are collected into the result", async () 
     { id: idOf(21), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "old two" } } as never }).toBinary() },
   ]
   const { deps } = dependencies(harness, blobStoreOf(entries), { enableTaskToolHooksExec: false })
-  const state = new ConversationStateStructure({ turns: [idOf(7), idOf(8), idOf(1)] })
+  const state = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [idOf(7), idOf(8), idOf(1)] }))
   const result = await processSubagentIterationSuccess(state, 2, iterationState(), { ...completionCtx, initialTurnsCount: 2 }, deps, () => {}, new SubagentType({}))
   const finalResult = taskResultOf(result.finalResult)
   if (finalResult?.result.case !== "success") throw new Error("expected a success")

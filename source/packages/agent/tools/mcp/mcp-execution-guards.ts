@@ -1,7 +1,5 @@
 /** Validates MCP calls against the descriptors and read-path history held by a session. */
 
-import type { RedactedString } from "../../../redaction/redacted-values.ts"
-import { safeString } from "../../../redaction/create.ts"
 import {
   McpExecToolNotFoundError,
   McpServerDoesNotExistError,
@@ -15,7 +13,7 @@ export type McpToolDefinitionReadCheck =
   | { readonly kind: "unread"; readonly unreadPath: string }
 
 export interface McpReadPathStateHandler {
-  hasReadPath(path: RedactedString): boolean
+  hasReadPath(path: string): boolean
 }
 
 function readOkay(): McpToolDefinitionReadCheck {
@@ -85,7 +83,7 @@ export function checkToolDefinitionRead(
     }
   }
 
-  return stateHandler.hasReadPath(safeString(definitionPath))
+  return stateHandler.hasReadPath(definitionPath)
     ? readOkay()
     : { kind: "unread", unreadPath: definitionPath }
 }

@@ -19,7 +19,11 @@ import { conversationIdKey } from "../../source/packages/agent/utils/request-sco
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../source/packages/constants/system-notification.ts"
-import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
+import {
+  SlateGoalState,
+  type SlateGoalState as SlateGoalStateType,
+} from "../../source/packages/agent/goal-state.ts"
+import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts"
 import { AgentMode, SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 
@@ -267,35 +271,20 @@ test("plan todo conversion keeps known statuses and defaults unknown statuses", 
 
 
 
-interface GoalShape {
-  goalId: string
-  objective: string
-  status: number
-  continuationCount: number
-  idleContinuationsWithoutToolCalls: number
-  lastAccruedAtMs?: bigint
-  activeDurationMs?: bigint
-  clone(): GoalShape
-  conversationId: string
-  agentSessionId: string
-}
+type GoalShape = SlateGoalStateType
 
 function goalState(overrides: Partial<GoalShape> = {}): GoalShape {
-  const state: GoalShape = {
+  return new SlateGoalState({
     // A goal is only this conversation's to continue when its id and owner are both well-formed.
     goalId: "0123abcd-4567-89ef-0123-456789abcdef",
     objective: "make the tests pass",
-    status: GoalStatus.ACTIVE,
+    status: SlateGoalStatus.ACTIVE,
     continuationCount: 0,
     idleContinuationsWithoutToolCalls: 0,
     conversationId: "conversation-1",
     agentSessionId: "session-1",
-    clone() {
-      return { ...state, clone: state.clone }
-    },
     ...overrides,
-  }
-  return state
+  })
 }
 
 interface StateHarness {
@@ -394,7 +383,7 @@ test("a goal that keeps being woken without doing anything is paused instead", a
 
   assert.equal(action, undefined)
   const written = state.setGoalStateCalls.at(-1)
-  assert.equal(written?.status, GoalStatus.PAUSED)
+  assert.equal(written?.status, SlateGoalStatus.PAUSED)
   // Pausing stops the clock: the accrued time is written and the marker cleared.
   assert.equal(typeof written?.activeDurationMs, "bigint")
   assert.equal(written?.lastAccruedAtMs, undefined)

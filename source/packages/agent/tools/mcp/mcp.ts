@@ -24,7 +24,6 @@
 import { jsonSchema } from "ai"
 
 import type { Context } from "../../../context/context.ts"
-import type { RedactedString } from "../../../redaction/redacted-values.ts"
 import { createLogger } from "../../../context/logging.ts"
 import { createSpan } from "../../../context/telemetry.ts"
 import type { ResourceAccessor } from "../../../agent-exec/resource-provider.ts"
@@ -158,7 +157,7 @@ interface ToolCallBridge {
 }
 
 interface ConversationStateWithReads extends ConversationStateHandle {
-  hasReadPath(path: RedactedString): boolean
+  hasReadPath(path: string): boolean
 }
 
 interface McpCallMeta {
