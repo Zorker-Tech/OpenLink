@@ -1,8 +1,15 @@
 /** Slate's active plan, before the historical blob representation. */
 import { PrivacyCapability } from "../redaction/classification.ts"
+import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
+
+export interface SlateConversationPlanCompatibility {
+  /** Unknown fields from a historical plan blob, retained only for lossless migration write-back. */
+  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
+}
 
 export interface SlateConversationPlanState {
   readonly content: string
+  readonly compatibility?: SlateConversationPlanCompatibility
 }
 
 interface RedactedTextValue {
@@ -31,11 +38,25 @@ export function slateConversationPlanFromValue(value: unknown): SlateConversatio
   const record = value as {
     readonly content?: unknown
     readonly plan?: unknown
+    readonly compatibility?: SlateConversationPlanCompatibility
   }
-  if (typeof record.content === "string") return { content: record.content }
-  if (typeof record.plan === "string") return { content: record.plan }
+  if (typeof record.content === "string") {
+    return {
+      content: record.content,
+      ...(record.compatibility === undefined ? {} : { compatibility: record.compatibility }),
+    }
+  }
+  if (typeof record.plan === "string") {
+    return {
+      content: record.plan,
+      ...(record.compatibility === undefined ? {} : { compatibility: record.compatibility }),
+    }
+  }
   if (isRedactedTextValue(record.plan)) {
-    return { content: record.plan.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }
+    return {
+      content: record.plan.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+      ...(record.compatibility === undefined ? {} : { compatibility: record.compatibility }),
+    }
   }
   throw new TypeError("conversation plan must contain text")
 }

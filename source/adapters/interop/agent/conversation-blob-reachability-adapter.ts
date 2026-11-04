@@ -15,6 +15,7 @@ import {
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts";
 import {
   deserializeSlateConversationStepInterop,
+  deserializeSlateConversationPlan,
   deserializeSlateUserMessageInterop,
 } from "./agent-state-message-serdes-adapter.ts";
 
@@ -100,6 +101,14 @@ export function collectReachableBlobHexIds(options: {
     if (blobReferenceType === "agent.v1.UserMessage") {
       try {
         visitMessage(deserializeSlateUserMessageInterop(childBytes));
+      } catch {
+        unresolvedProtoRefs += 1;
+      }
+      return;
+    }
+    if (blobReferenceType === "agent.v1.ConversationPlan") {
+      try {
+        deserializeSlateConversationPlan(childBytes);
       } catch {
         unresolvedProtoRefs += 1;
       }

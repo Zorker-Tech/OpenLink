@@ -22,7 +22,6 @@ import {
   CloudSubagentReference,
   CommunicateUpdateHistoryEntry,
   CommunicateUpdateTurnState,
-  ConversationPlan,
   ConversationStateStructure,
   FileStateStructure,
   ShellCommand,
@@ -43,6 +42,7 @@ import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
+import { deserializeSlateConversationPlan } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 
@@ -237,7 +237,7 @@ test("a plan is stored, replaced and cleared", async () => {
   const persisted = await harnessed.handle.computeNewStructure(createContext())
   assert.ok(persisted.plan)
   const bytes = harnessed.blobs.get(Buffer.from(persisted.plan).toString("hex"))
-  assert.equal(ConversationPlan.fromBinary(bytes!).plan, "# First plan\n\nDo the work.")
+  assert.deepEqual(deserializeSlateConversationPlan(bytes!), { content: "# First plan\n\nDo the work." })
   harnessed.handle.setPlan(undefined)
   assert.equal(await harnessed.handle.getPlan(createContext()), undefined)
 })
