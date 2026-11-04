@@ -3,7 +3,6 @@ import {
   CloudSubagentReference,
   ConversationAction,
   ConversationStep,
-  ConversationTurnStructure,
   NewCloudVmTarget,
   SameMachineTarget,
   SelfHostedPoolTarget,
@@ -22,6 +21,7 @@ import type {
   TaskEnvironment,
   TaskTargetMachine,
 } from "../../../packages/agent/tools/task-runtime-types.ts"
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 
 export type ConversationTurnView =
   | { readonly kind: "agent"; readonly stepBlobIds: readonly Uint8Array[] }
@@ -60,10 +60,17 @@ export function createTaskInitialUserActionInterop(input: {
 }
 
 export function conversationTurnFromBinaryInterop(bytes: Uint8Array): ConversationTurnView {
-  const turn = ConversationTurnStructure.fromBinary(bytes)
-  return turn.turn.case === "agentConversationTurn"
-    ? { kind: "agent", stepBlobIds: turn.turn.value.steps }
-    : { kind: "other" }
+  try {
+    const turn = slateConversationTurnSerde.deserialize(bytes)
+    return turn.kind === "agent"
+      ? { kind: "agent", stepBlobIds: turn.stepBlobIds }
+      : { kind: "other" }
+  } catch (error) {
+    if (error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case") {
+      return { kind: "other" }
+    }
+    throw error
+  }
 }
 
 export function conversationStepFromBinaryInterop(bytes: Uint8Array): ConversationStepView {

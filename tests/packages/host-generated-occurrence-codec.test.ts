@@ -2,9 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createSlateTranscriptOccurrenceCodec,
   createGeneratedTranscriptOccurrenceCodec,
   type GeneratedTranscriptOccurrenceBindings,
 } from "../../source/adapters/interop/agent/transcript-occurrence-codec-adapter.ts";
+import {
+  AgentConversationTurnStructure,
+  ConversationStep,
+  ConversationTurnStructure,
+  UserMessage,
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 import type { DecodedTranscriptStep, DecodedTranscriptTurn, TranscriptOccurrenceCodec } from "../../source/host/transcript/mirror/transcript-occurrence-deriver.ts";
 
 const bytes = (...values: number[]) => new Uint8Array(values);
@@ -124,5 +133,30 @@ test("the codec keeps the generated collaborators in its closure", () => {
   const step: DecodedTranscriptStep = codec.decodeStep(bytes(0));
   assert.equal(turn.case, undefined);
   assert.equal(step.case, undefined);
+});
+
+test("the Slate production codec reads both new and legacy turn envelopes", () => {
+  const codec = createSlateTranscriptOccurrenceCodec({ UserMessage, ConversationStep });
+  const userMessageId = bytes(7);
+  const stepId = bytes(8);
+  const turn = createSlateAgentConversationTurn({
+    userMessageBlobId: userMessageId,
+    stepBlobIds: [stepId],
+    sendMessageStepIndices: [],
+  });
+  const slateBytes = slateConversationTurnSerde.serialize(turn);
+  assert.deepEqual(codec.decodeTurn(slateBytes), { case: "agent", userMessage: userMessageId, steps: [stepId] });
+
+  const legacyTurn = new ConversationTurnStructure({
+    turn: { case: "agentConversationTurn", value: new AgentConversationTurnStructure({
+      userMessage: bytes(9),
+      steps: [bytes(10)],
+    }) },
+  });
+  assert.deepEqual(codec.decodeTurn(legacyTurn.toBinary()), {
+    case: "agent",
+    userMessage: bytes(9),
+    steps: [bytes(10)],
+  });
 });
 

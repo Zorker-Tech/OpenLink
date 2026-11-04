@@ -3,11 +3,16 @@ import { createHash } from "node:crypto"
 import { test } from "node:test"
 
 import {
+  AssistantMessage,
   AgentConversationTurnStructure,
+  ConversationStep,
   ConversationStateStructure,
   ConversationTurnStructure,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
+import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import {
   collectReachableBlobHexIds,
   EDGES_NOT_WALKED_SO_REFERENTS_COLLECT,
@@ -63,6 +68,32 @@ test("reachability follows nested turn and user records but skips back-links and
   assert.equal(result.unresolvedProtoRefs, 0)
   assert.equal(result.reachableHexIds.has(hex(omittedBackLink)), false)
   assert.equal(result.reachableHexIds.has(hex(omittedArchive)), false)
+})
+
+test("reachability follows turn and step refs from Slate-encoded turn blobs", () => {
+  const userBytes = new UserMessage({ text: "question" }).toBinary()
+  const stepBytes = new ConversationStep({
+    message: { case: "assistantMessage", value: new AssistantMessage({ text: "answer" }) },
+  }).toBinary()
+  const userId = digest(userBytes)
+  const stepId = digest(stepBytes)
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId: userId,
+    stepBlobIds: [stepId],
+    sendMessageStepIndices: [],
+  }))
+  const turnId = digest(turnBytes)
+  const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [turnId] }))
+  const blobs = new Map([
+    [hex(turnId), turnBytes],
+    [hex(userId), userBytes],
+    [hex(stepId), stepBytes],
+  ])
+
+  const result = collectReachableBlobHexIds({ rootBytes, getBlobByHexId: id => blobs.get(id) })
+
+  assert.deepEqual([...result.reachableHexIds].sort(), [hex(turnId), hex(userId), hex(stepId)].sort())
+  assert.equal(result.unresolvedProtoRefs, 0)
 })
 
 test("missing typed child blobs are retained as unresolved references", () => {

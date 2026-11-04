@@ -40,8 +40,8 @@ export type DecodedTranscriptStep =
   | { readonly case: undefined };
 
 /**
- * Generated protobuf decoding remains a mandatory production input. The emitted deriver consumes
- * ConversationTurnStructure, UserMessage and ConversationStep and relies on generated `toJson()` for tool payloads.
+ * Turn envelopes are decoded by Slate's storage codec. UserMessage and ConversationStep remain
+ * interop payloads at this boundary, including generated `toJson()` for tool payloads.
  */
 export interface TranscriptOccurrenceCodec {
   decodeTurn(bytes: Uint8Array): DecodedTranscriptTurn;

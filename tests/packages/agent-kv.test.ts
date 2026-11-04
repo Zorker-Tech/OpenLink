@@ -338,8 +338,11 @@ test("checkpointing writes the structure and reloading finds it again", async ()
       value: new AgentConversationTurnStructure({ userMessage: userMessageId, steps: [stepId], requestId: "req-1" }),
     },
   }).toBinary())
+  const emptyTurnBytes = new ConversationTurnStructure().toBinary()
+  const emptyTurnId = await getBlobId(emptyTurnBytes)
+  await store.setBlob(ctx, emptyTurnId, emptyTurnBytes)
 
-  const structure = new ConversationStateStructure({ turns: [turnId] })
+  const structure = new ConversationStateStructure({ turns: [turnId, emptyTurnId] })
   await conversation.handleCheckpoint(ctx, structure)
   const persistedRoot = await store.getBlob(ctx, conversation.getMetadata("latestRootBlobId"))
   assert.ok(persistedRoot)
@@ -352,7 +355,7 @@ test("checkpointing writes the structure and reloading finds it again", async ()
 
   const reloaded = new AgentConversationStore(store, metadata, { codec: createSlateAgentConversationCodec<unknown>() })
   assert.equal(await reloaded.tryResetFromDb(ctx), true)
-  assert.equal(reloaded.getConversationStateStructure().turns.length, 1)
+  assert.equal(reloaded.getConversationStateStructure().turns.length, 2)
   assert.equal(toHex(reloaded.getLatestCheckpoint().turns[0] as Uint8Array), toHex(turnId))
 })
 

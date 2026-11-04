@@ -6,7 +6,6 @@ import {
   ConversationStep,
   ConversationSummary,
   ConversationTurn,
-  ConversationTurnStructure,
   ShellCommand,
   ShellConversationTurn,
   ShellOutput,
@@ -16,6 +15,7 @@ import {
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { ProtobufBlobSerde } from "./protobuf-blob-serde-adapter.ts"
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
@@ -40,12 +40,22 @@ import {
 const todoItemSerde = new ProtobufBlobSerde(TodoItem)
 const userMessageSerde = new ProtobufBlobSerde(UserMessage)
 const conversationStepSerde = new ProtobufBlobSerde(ConversationStep)
-const conversationTurnStructureSerde = new ProtobufBlobSerde(ConversationTurnStructure)
 const conversationSummarySerde = new ProtobufBlobSerde(ConversationSummary)
 const shellCommandSerde = new ProtobufBlobSerde(ShellCommand)
 const shellOutputSerde = new ProtobufBlobSerde(ShellOutput)
 const checkpointSerde = new ProtobufBlobSerde(ConversationStateStructure)
 const PRESERVED_UNKNOWN_FIELDS_KEY = "$slateInteropUnknownFields"
+
+function turnValueOrUndefined(bytes: Uint8Array) {
+  try {
+    return slateConversationTurnSerde.deserialize(bytes)
+  } catch (error) {
+    if (error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case") {
+      return undefined
+    }
+    throw error
+  }
+}
 
 type UnknownFieldPathStep = { readonly field: string } | { readonly index: number } | { readonly key: string }
 
@@ -159,14 +169,14 @@ export async function deriveInteropConversationStateFromStructure<Context>(
   for (const turnBlobId of structure.turns) {
     const turnBlob = await blobStore.getBlob(ctx, turnBlobId)
     if (!turnBlob) continue
-    const turnStructure = conversationTurnStructureSerde.deserialize(turnBlob)
+    const turnStructure = turnValueOrUndefined(turnBlob)
+    if (turnStructure === undefined) continue
     let turn: InstanceType<typeof ConversationTurn> | undefined
-    if (turnStructure.turn.case === "agentConversationTurn") {
-      const agentTurn = turnStructure.turn.value
-      const userMessageBlob = await blobStore.getBlob(ctx, agentTurn.userMessage)
+    if (turnStructure.kind === "agent") {
+      const userMessageBlob = await blobStore.getBlob(ctx, turnStructure.userMessageBlobId)
       if (!userMessageBlob) continue
       const steps: InstanceType<typeof ConversationStep>[] = []
-      for (const stepBlobId of agentTurn.steps) {
+      for (const stepBlobId of turnStructure.stepBlobIds) {
         const stepBlob = await blobStore.getBlob(ctx, stepBlobId)
         if (stepBlob) steps.push(conversationStepSerde.deserialize(stepBlob))
       }
@@ -176,11 +186,10 @@ export async function deriveInteropConversationStateFromStructure<Context>(
           value: new AgentConversationTurn({ userMessage: userMessageSerde.deserialize(userMessageBlob), steps }),
         },
       })
-    } else if (turnStructure.turn.case === "shellConversationTurn") {
-      const shellTurn = turnStructure.turn.value
-      const shellCommandBlob = await blobStore.getBlob(ctx, shellTurn.shellCommand)
+    } else {
+      const shellCommandBlob = await blobStore.getBlob(ctx, turnStructure.shellCommandBlobId)
       if (!shellCommandBlob) continue
-      const shellOutputBlob = await blobStore.getBlob(ctx, shellTurn.shellOutput)
+      const shellOutputBlob = await blobStore.getBlob(ctx, turnStructure.shellOutputBlobId)
       if (!shellOutputBlob) continue
       turn = new ConversationTurn({
         turn: {
@@ -283,9 +292,10 @@ export function createSlateAgentConversationCodec<Context>(): AgentConversationC
       for (let index = checkpoint.turns.length - 1; index >= 0; index -= 1) {
         const turnBlob = await blobStore.getBlob(ctx, checkpoint.turns[index]!)
         if (!turnBlob) continue
-        const turnStructure = conversationTurnStructureSerde.deserialize(turnBlob)
-        if (turnStructure.turn.case === "agentConversationTurn") {
-          return turnStructure.turn.value.requestId ?? null
+        const turnStructure = turnValueOrUndefined(turnBlob)
+        if (turnStructure === undefined) continue
+        if (turnStructure.kind === "agent") {
+          return turnStructure.requestId ?? null
         }
       }
       return null

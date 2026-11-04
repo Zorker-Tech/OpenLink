@@ -1,10 +1,11 @@
 /** Adapts generated conversation, user-message and read-executor records to the Slate shell-watch contract. */
 
-import { ConversationStateStructure, ConversationTurnStructure, UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
+import { ConversationStateStructure, UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
 import { ReadArgs, type ReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
 import type { BlobStore } from "../../../packages/agent-kv/blob-store.ts"
 import { collectPrependUserMessageRecords } from "../../../host/runner/shell-terminal-watch.ts"
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import type {
   MaterializedUserMessage,
   RecentTerminalUserMessage,
@@ -59,10 +60,17 @@ export function createShellWatchGeneratedStateProjection<Context>(
     getConversationState: () => stateOwner.getConversationState(),
     getBlob: async (turnContext, blobRef) => (await stateOwner.getBlobStore().getBlob(turnContext, blobRef)) ?? null,
     decodeConversationTurn(rawBytes) {
-      const turn = ConversationTurnStructure.fromBinary(rawBytes)
-      if (turn.turn.case !== "agentConversationTurn") return { kind: "other" }
-      const agentTurn = turn.turn.value as { readonly userMessage?: Uint8Array }
-      return { kind: "agent", ...(agentTurn.userMessage === undefined ? {} : { userMessageBlobId: agentTurn.userMessage }) }
+      try {
+        const turn = slateConversationTurnSerde.deserialize(rawBytes)
+        return turn.kind === "agent"
+          ? { kind: "agent", userMessageBlobId: turn.userMessageBlobId }
+          : { kind: "other" }
+      } catch (error) {
+        if (error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case") {
+          return { kind: "other" }
+        }
+        throw error
+      }
     },
     decodeUserMessage(rawBytes) {
       const userMessage = UserMessage.fromBinary(rawBytes)

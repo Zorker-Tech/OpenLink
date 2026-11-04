@@ -2,8 +2,8 @@
  * Slate's in-memory shape for one persisted conversation turn.
  *
  * The shape is intentionally small: turn messages refer to immutable blobs, while the envelope carries
- * only the metadata needed to resume and reconstruct a turn. Protocol packages at the persistence edge
- * translate this value to and from the historical storage encoding.
+ * only the metadata needed to resume and reconstruct a turn. The storage adapter writes Slate's own
+ * versioned envelope and imports the historical encoding only when reading older blobs.
  */
 export interface SlateAgentConversationTurn {
   readonly kind: "agent"
@@ -13,12 +13,25 @@ export interface SlateAgentConversationTurn {
   readonly encryptedModel?: string
   readonly dynamicToolCount?: number
   readonly sendMessageStepIndices: readonly number[]
+  readonly compatibility?: SlateConversationTurnCompatibility
 }
 
 export interface SlateShellConversationTurn {
   readonly kind: "shell"
   readonly shellCommandBlobId: Uint8Array
   readonly shellOutputBlobId: Uint8Array
+  readonly compatibility?: SlateConversationTurnCompatibility
+}
+
+export interface SlateConversationTurnCompatibility {
+  readonly envelopeUnknownFields?: readonly SlateConversationTurnUnknownField[]
+  readonly payloadUnknownFields?: readonly SlateConversationTurnUnknownField[]
+}
+
+export interface SlateConversationTurnUnknownField {
+  readonly number: number
+  readonly wireType: number
+  readonly dataHex: string
 }
 
 export type SlateConversationTurn =
@@ -32,11 +45,13 @@ export interface SlateAgentConversationTurnInput {
   readonly encryptedModel?: string
   readonly dynamicToolCount?: number
   readonly sendMessageStepIndices: readonly number[]
+  readonly compatibility?: SlateConversationTurnCompatibility
 }
 
 export interface SlateShellConversationTurnInput {
   readonly shellCommandBlobId: Uint8Array
   readonly shellOutputBlobId: Uint8Array
+  readonly compatibility?: SlateConversationTurnCompatibility
 }
 
 function cloneBytes(bytes: Uint8Array): Uint8Array {
@@ -60,6 +75,7 @@ export function createSlateAgentConversationTurn(
     ...(input.encryptedModel === undefined ? {} : { encryptedModel: input.encryptedModel }),
     ...(input.dynamicToolCount === undefined ? {} : { dynamicToolCount: input.dynamicToolCount }),
     sendMessageStepIndices: [...input.sendMessageStepIndices],
+    ...(input.compatibility === undefined ? {} : { compatibility: cloneCompatibility(input.compatibility) }),
   }
 }
 
@@ -70,5 +86,19 @@ export function createSlateShellConversationTurn(
     kind: "shell",
     shellCommandBlobId: cloneBytes(input.shellCommandBlobId),
     shellOutputBlobId: cloneBytes(input.shellOutputBlobId),
+    ...(input.compatibility === undefined ? {} : { compatibility: cloneCompatibility(input.compatibility) }),
+  }
+}
+
+function cloneCompatibility(
+  value: SlateConversationTurnCompatibility,
+): SlateConversationTurnCompatibility {
+  return {
+    ...(value.envelopeUnknownFields === undefined
+      ? {}
+      : { envelopeUnknownFields: value.envelopeUnknownFields.map(field => ({ ...field })) }),
+    ...(value.payloadUnknownFields === undefined
+      ? {}
+      : { payloadUnknownFields: value.payloadUnknownFields.map(field => ({ ...field })) }),
   }
 }
