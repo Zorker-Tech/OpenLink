@@ -32,6 +32,7 @@ import {
   createAgentStateCommunicateTurnStateInterop,
   createEmptyRedactedShellOutputInterop,
   createSlateConversationStepSerde,
+  redactSlateTodoItem,
   fromInteropToolCallStep,
   fromInteropConversationState,
   fromInteropGoalState,
@@ -54,7 +55,6 @@ import {
   fromRedactedPlanRegistryEntryInterop,
   fromRedactedSubagentPersistedStateInterop,
   fromRedactedSubagentRunStateInterop,
-  fromRedactedTodoItemInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
   toInteropGoalState,
@@ -62,7 +62,6 @@ import {
   toRedactedConversationSummaryArchiveInterop,
   toRedactedConversationSummaryInterop,
   toRedactedSubagentPersistedStateInterop,
-  toRedactedTodoItemInterop,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import {
   fromInteropSubagentPersistedState,
@@ -104,6 +103,7 @@ import {
   type SlateUserMessage,
   type SlateUserMessageText,
 } from "./user-message-state.ts"
+import type { SlateStoredTodoItem, SlateTodoItem } from "./tools/core/todo/contracts.ts"
 import {
   fromInteropSubagentRunState,
   toInteropSubagentRunState,
@@ -1242,6 +1242,9 @@ type TurnRequest = AgentStateRequestContextInterop & ModeProcessingRequestContex
 type CodecSet = ReturnType<typeof createSerdes>;
 type TurnUnion = AgentConversationTurnHandle | ShellConversationTurnHandle;
 type ValueRef<Context extends OperationContext> = EagerReference<any, Context> | LazyReference<any, Context>;
+type TodoRef<Context extends OperationContext> =
+  | EagerReference<SlateStoredTodoItem, Context>
+  | LazyReference<SlateStoredTodoItem, Context>;
 type UsageDelta = {
   readonly inputTokens: number;
   readonly outputTokens: number;
@@ -1308,7 +1311,7 @@ export class ConversationStateHandle {
   conversationStartedTimestampMs: bigint | undefined;
   conversationStartedTimeZone: string | undefined;
   turns: ValueRef<OperationContext>[];
-  todos: ValueRef<OperationContext>[];
+  todos: TodoRef<OperationContext>[];
   tokenDetails: TokenDetails;
   summary: ValueRef<OperationContext> | undefined;
   plan: ValueRef<OperationContext> | undefined;
@@ -2082,9 +2085,13 @@ These images can be copied for use in other locations.
     return conversationStartedDate;
   }
 
-  setTodos(todos: readonly unknown[]): void {
+  setTodos(todos: readonly SlateTodoItem[]): void {
     this.todos.length = 0;
-    this.todos.push(...todos.map((todo) => new EagerReference(this.serdes.todoItem, this.blobStore, todo)));
+    this.todos.push(...todos.map(todo => new EagerReference(
+      this.serdes.todoItem,
+      this.blobStore,
+      redactSlateTodoItem(todo, this.privacyMode),
+    )));
   }
 
   setSummary(summary: unknown): void {

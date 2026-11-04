@@ -43,6 +43,7 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { deserializeSlateConversationPlan } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 
@@ -496,7 +497,9 @@ test("clearing the turns empties the conversation", async () => {
 
 test("the todos a conversation holds are written into its structure", async () => {
   const harnessed = harness()
-  harnessed.handle.setTodos([toRedactedTodoItem(new TodoItem({ id: "1", content: "do the thing", status: 1 }), PrivacyMode.NO_STORAGE)])
+  harnessed.handle.setTodos([fromRedactedInteropTodoItem(
+    toRedactedTodoItem(new TodoItem({ id: "1", content: "do the thing", status: 1 }), PrivacyMode.NO_STORAGE),
+  )])
   const structure = await harnessed.handle.computeNewStructure(createContext())
   // The list is carried as its own blob reference, not as a turn.
   assert.equal(structure.todos.length, 1)

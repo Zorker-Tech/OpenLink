@@ -20,7 +20,11 @@ import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.t
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { todoStatusFromString } from "../../../packages/agent/tools/core/todo/common.ts"
-import { toInteropTodoStatus } from "./todo-schema-adapter.ts"
+import {
+  fromRedactedInteropTodoItem,
+  toInteropTodoStatus,
+} from "./todo-schema-adapter.ts"
+import type { SlateTodoItem } from "../../../packages/agent/tools/core/todo/contracts.ts"
 import type {
   ExecutePlanPlanFileIO,
   PlanExecutionMessageInput,
@@ -121,6 +125,13 @@ export function toRedactedPlanTodos(todos: readonly PlanTodo[], privacyMode: Pri
     })
     return toRedactedTodoItem(item, privacyMode)
   })
+}
+
+/** Creates Slate-owned persisted todo records from the plan's domain items. */
+export function toSlatePlanTodos(todos: readonly PlanTodo[], privacyMode: PrivacyMode): SlateTodoItem[] {
+  return toRedactedPlanTodos(todos, privacyMode).map(todo =>
+    fromRedactedInteropTodoItem(todo as Parameters<typeof fromRedactedInteropTodoItem>[0]),
+  )
 }
 
 export function isInteropPlanTodoComplete(status: unknown): boolean {

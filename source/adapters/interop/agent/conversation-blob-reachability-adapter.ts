@@ -17,6 +17,7 @@ import {
   deserializeSlateConversationStepInterop,
   deserializeSlateConversationPlan,
   deserializeSlateUserMessageInterop,
+  deserializeSlateTodoItemInterop,
 } from "./agent-state-message-serdes-adapter.ts";
 
 export const EDGES_NOT_WALKED_SO_REFERENTS_COLLECT = new Set([
@@ -109,6 +110,14 @@ export function collectReachableBlobHexIds(options: {
     if (blobReferenceType === "agent.v1.ConversationPlan") {
       try {
         deserializeSlateConversationPlan(childBytes);
+      } catch {
+        unresolvedProtoRefs += 1;
+      }
+      return;
+    }
+    if (blobReferenceType === "agent.v1.TodoItem") {
+      try {
+        deserializeSlateTodoItemInterop(childBytes);
       } catch {
         unresolvedProtoRefs += 1;
       }

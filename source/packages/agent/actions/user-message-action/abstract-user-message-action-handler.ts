@@ -9,17 +9,19 @@ import {
   fromInteropUserMessage,
   fromRedactedMcpToolDefinitionInterop,
   fromRedactedRequestContextInterop,
-  fromRedactedTodoItemInterop,
   fromRedactedToolCallInterop,
   fromRedactedUserMessageInterop,
   toRedactedInteractionUpdateInterop,
-  toRedactedTodoItemInterop,
   toRedactedToolCallInterop,
-  TodoStatusInterop,
   type RequestContextInterop,
 } from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import type { Context } from "../../../context/context.ts";
 import type { SlateConversationStep } from "../../conversation-step-state.ts";
+import {
+  cloneSlateTodoItem,
+  slateTodoItemWithReadableContent,
+  type SlateTodoItem,
+} from "../../tools/core/todo/contracts.ts";
 import {
   slateConversationPlanFromValue,
   type SlateConversationPlanState,
@@ -1211,7 +1213,7 @@ interface SplitStepStateMutationTarget {
   persistSubagentState(runContext: Context, subagentId: string, subagentType: unknown, turnStatus: Partial<Record<string, unknown>>): void;
   setPlan(plan: SlateConversationPlanState | undefined): void;
   setMode(mode: SlateModeValue): void;
-  setTodos(todos: readonly unknown[]): void;
+  setTodos(todos: readonly SlateTodoItem[]): void;
   upsertPlanEntry(entry: unknown): void;
   setGoalState(goalState: unknown): void;
   appendCommunicateUpdateHistoryEntry(entry: unknown): void;
@@ -1251,7 +1253,7 @@ type SplitStepStateOp =
   | (SplitStepStateOpBase & { readonly type: "persistSubagentState"; readonly subagentId: string; readonly subagentType: unknown; readonly state: Partial<Record<string, unknown>> })
   | (SplitStepStateOpBase & { readonly type: "setPlan"; readonly plan: SlateConversationPlanState | undefined })
   | (SplitStepStateOpBase & { readonly type: "setMode"; readonly mode: SlateModeValue })
-  | (SplitStepStateOpBase & { readonly type: "setTodos"; readonly todos: readonly unknown[] })
+  | (SplitStepStateOpBase & { readonly type: "setTodos"; readonly todos: readonly SlateTodoItem[] })
   | (SplitStepStateOpBase & { readonly type: "upsertPlanEntry"; readonly entry: unknown })
   | (SplitStepStateOpBase & { readonly type: "setGoalState"; readonly goalState: unknown })
   | (SplitStepStateOpBase & { readonly type: "appendCommunicateUpdateHistoryEntry"; readonly entry: unknown })
@@ -1339,10 +1341,10 @@ function createSplitStepStateHandler(
         };
       }
       if (property === "setTodos") {
-        return (todos: readonly unknown[]) => {
+        return (todos: readonly SlateTodoItem[]) => {
           stateOperations.push({
             type: "setTodos",
-            todos: todos.map(todo => fromRedactedTodoItemInterop(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
+            todos: todos.map(cloneSlateTodoItem),
           });
           return target.setTodos(todos);
         };
@@ -1423,7 +1425,7 @@ async function applyConversationStateOp(
       turnState.setMode(stateOperation.mode);
       break;
     case "setTodos":
-      turnState.setTodos(stateOperation.todos.map(todo => toRedactedTodoItemInterop(todo, turnState.getPrivacyMode())));
+      turnState.setTodos(stateOperation.todos);
       break;
     case "upsertPlanEntry":
       turnState.upsertPlanEntry(stateOperation.entry);
@@ -2578,8 +2580,8 @@ export class AbstractUserMessageActionHandler {
     const hadPreviousAssistantMessage = promptExecutor.getMessages().some(turnMessage => turnMessage.role === "assistant");
     const initialTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
     const initialTodoCount = initialTodos.length;
-    const hadUnfinishedTodosAtStart = initialTodos.some(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS);
-    const unfinishedTodosAtStart = initialTodos.filter(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS).length;
+    const hadUnfinishedTodosAtStart = initialTodos.some(todo => todo.status === "pending" || todo.status === "in_progress");
+    const unfinishedTodosAtStart = initialTodos.filter(todo => todo.status === "pending" || todo.status === "in_progress").length;
     let conversationTurn = initialTurn;
     let currentMcpTools = mcpToolSet;
     let assistantMessagesSinceLastReflectGeneral = 0;
@@ -2863,7 +2865,7 @@ export class AbstractUserMessageActionHandler {
       }
       try {
         const finalTodos = await Promise.all(turnState.todos.map(todoRef => todoRef.get(runContext)));
-        const unfinishedTodoCount = finalTodos.filter(todo => todo.status === TodoStatusInterop.PENDING || todo.status === TodoStatusInterop.IN_PROGRESS).length;
+        const unfinishedTodoCount = finalTodos.filter(todo => todo.status === "pending" || todo.status === "in_progress").length;
         if (unfinishedTodoCount > 0) {
           unfinishedTodosMetric.increment(runContext, unfinishedTodoCount);
           agentLogger.info(runContext, "Turn ended with unfinished todos", { unfinishedTodoCount });
@@ -3392,7 +3394,7 @@ export class AbstractUserMessageActionHandler {
       await applyRemindersToToolResults(
         modelMessages,
         this.config.reminders,
-        currentTodos.map((todo) => fromRedactedTodoItemInterop(todo, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)),
+        currentTodos.map(slateTodoItemWithReadableContent),
         conversationMessages,
       );
     }

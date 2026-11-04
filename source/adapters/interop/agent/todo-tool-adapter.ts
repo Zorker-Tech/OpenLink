@@ -29,7 +29,6 @@ import {
   fromInteropTodoItem,
   readStoredTodos,
   toInteropTodoItem,
-  toRedactedInteropTodoItem,
 } from "./todo-schema-adapter.ts";
 import type { StoredTodoReference } from "./todo-schema-adapter.ts";
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
@@ -39,7 +38,7 @@ export interface UpdateTodosResourceAccessor extends ResourceAccessor<RemoteExec
 export interface UpdateTodosStateHandler extends PlanSyncStateHandler {
   readonly todos: readonly StoredTodoReference[];
   getPrivacyMode(): PrivacyMode;
-  setTodos(todos: readonly unknown[]): void;
+  setTodos(todos: readonly SlateTodoItem[]): void;
 }
 
 interface InteropTodoInteractionHandler {
@@ -140,7 +139,7 @@ function fromInteropTodoResult(result: UpdateTodosResult | undefined): SlateTodo
       const success = result.result.value;
       return {
         kind: "success",
-        todos: success.todos.map(fromInteropTodoItem),
+        todos: success.todos.map(todo => fromInteropTodoItem(todo)),
         totalCount: success.totalCount,
         wasMerge: success.wasMerge,
       };
@@ -196,7 +195,7 @@ export function createUpdateTodosTool(
       return await readStoredTodos(ctx, stateHandler.todos);
     },
     writeTodos(todos: readonly SlateTodoItem[]) {
-      stateHandler.setTodos(todos.map(todo => toRedactedInteropTodoItem(todo, stateHandler.getPrivacyMode())));
+      stateHandler.setTodos(todos);
     },
     async syncPlanTodos(ctx: Context, toolCallId: string) {
       const todos = await readStoredTodos(ctx, stateHandler.todos);
