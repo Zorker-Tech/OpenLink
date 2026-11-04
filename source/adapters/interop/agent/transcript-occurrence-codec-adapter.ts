@@ -6,6 +6,7 @@ import type {
   TranscriptOccurrenceCodec,
 } from "../../../host/transcript/mirror/transcript-occurrence-deriver.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
+import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
 
 interface BinaryMessageType<Message> {
   fromBinary(wireBytes: Uint8Array): Message
@@ -66,7 +67,6 @@ export interface GeneratedTranscriptOccurrenceBindings {
 
 export interface SlateTranscriptOccurrenceBindings {
   readonly UserMessage: BinaryMessageType<UserMessageShape>
-  readonly ConversationStep: BinaryMessageType<StepShape>
 }
 
 function requireGeneratedType<Message>(
@@ -87,10 +87,30 @@ function slateToolName(caseName: string, value: ToolReplyShape): string {
     .toLowerCase()
 }
 
+function decodeStepShape(decoded: StepShape): DecodedTranscriptStep {
+  const message = decoded.message
+  if (message.case === "assistantMessage" || message.case === "thinkingMessage") {
+    return {
+      case: message.case === "assistantMessage" ? "assistant" : "thinking",
+      text: message.value.text,
+    }
+  }
+  if (message.case !== "toolCall") return { case: undefined }
+
+  const call = message.value.tool
+  if (call.case == null) return { case: undefined }
+  return {
+    case: "tool",
+    name: slateToolName(call.case, call.value),
+    input: call.value.args?.toJson() ?? {},
+    ...(call.value.result == null ? {} : { result: call.value.result.toJson() }),
+  }
+}
+
 function createTranscriptOccurrenceCodec(
   userType: BinaryMessageType<UserMessageShape>,
-  stepType: BinaryMessageType<StepShape>,
   decodeTurn: (wireBytes: Uint8Array) => DecodedTranscriptTurn,
+  decodeStep: (wireBytes: Uint8Array) => DecodedTranscriptStep,
 ): TranscriptOccurrenceCodec {
   return {
     decodeTurn,
@@ -101,26 +121,7 @@ function createTranscriptOccurrenceCodec(
         ...(decoded.textBlobId === undefined ? {} : { textBlobId: decoded.textBlobId }),
       }
     },
-    decodeStep(wireBytes): DecodedTranscriptStep {
-      const decoded = stepType.fromBinary(wireBytes)
-      const message = decoded.message
-      if (message.case === "assistantMessage" || message.case === "thinkingMessage") {
-        return {
-          case: message.case === "assistantMessage" ? "assistant" : "thinking",
-          text: message.value.text,
-        }
-      }
-      if (message.case !== "toolCall") return { case: undefined }
-
-      const call = message.value.tool
-      if (call.case == null) return { case: undefined }
-      return {
-        case: "tool",
-        name: slateToolName(call.case, call.value),
-        input: call.value.args?.toJson() ?? {},
-        ...(call.value.result == null ? {} : { result: call.value.result.toJson() }),
-      }
-    },
+    decodeStep,
   }
 }
 
@@ -128,8 +129,7 @@ export function createSlateTranscriptOccurrenceCodec(
   bindings: SlateTranscriptOccurrenceBindings,
 ): TranscriptOccurrenceCodec {
   const userType = requireGeneratedType(bindings?.UserMessage, "UserMessage")
-  const stepType = requireGeneratedType(bindings?.ConversationStep, "ConversationStep")
-  return createTranscriptOccurrenceCodec(userType, stepType, wireBytes => {
+  return createTranscriptOccurrenceCodec(userType, wireBytes => {
     try {
       const decoded = slateConversationTurnSerde.deserialize(wireBytes)
       return decoded.kind === "agent"
@@ -141,7 +141,7 @@ export function createSlateTranscriptOccurrenceCodec(
       }
       throw error
     }
-  })
+  }, wireBytes => decodeStepShape(deserializeSlateConversationStepInterop(wireBytes) as unknown as StepShape))
 }
 
 /** Legacy protocol-view constructor kept for isolated interop callers and contract tests. */
@@ -151,7 +151,7 @@ export function createGeneratedTranscriptOccurrenceCodec(
   const turnType = requireGeneratedType(generatedBindings?.ConversationTurnStructure, "ConversationTurnStructure")
   const userType = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage")
   const stepType = requireGeneratedType(generatedBindings?.ConversationStep, "ConversationStep")
-  return createTranscriptOccurrenceCodec(userType, stepType, wireBytes => {
+  return createTranscriptOccurrenceCodec(userType, wireBytes => {
     const decoded = turnType.fromBinary(wireBytes)
     if (decoded.turn.case === "agentConversationTurn") {
       return {
@@ -163,5 +163,5 @@ export function createGeneratedTranscriptOccurrenceCodec(
     return decoded.turn.case === "shellConversationTurn"
       ? { case: "shell" }
       : { case: undefined }
-  })
+  }, wireBytes => decodeStepShape(stepType.fromBinary(wireBytes)))
 }

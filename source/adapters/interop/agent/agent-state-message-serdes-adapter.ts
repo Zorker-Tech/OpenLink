@@ -1,3 +1,4 @@
+import { isMessage, type FieldInfo, type Message } from "@bufbuild/protobuf"
 import {
   ConversationPlan,
   ConversationStateStructure,
@@ -52,9 +53,11 @@ import {
   toRedactedUserMessage,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { fromRedactedTodoItem, toRedactedTodoItem } from "../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts"
-import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
-import { createRedactedString } from "../../../packages/redaction/create.ts"
+import { DataClassification, PrivacyCapability, type DataClassification as DataClassificationValue } from "../../../packages/redaction/classification.ts"
+import { PrivacyMode as PrivacyModes, type PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
+import { createRedactedBytes, createRedactedString } from "../../../packages/redaction/create.ts"
+import { RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import { conversationStateStructureSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
@@ -62,6 +65,8 @@ import {
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
+  createSlateUnsupportedConversationStep,
+  type SlateConversationStepCompatibility,
   type SlateConversationStep,
 } from "../../../packages/agent/conversation-step-state.ts"
 import type {
@@ -76,6 +81,7 @@ import {
   type SlatePlanRegistryEntry,
 } from "../../../packages/agent/goal-state.ts"
 import { SlateGoalStatus } from "../../../packages/agent-core/goal-continuation.ts"
+import type { SlateCheckpointUnknownField, SlateCheckpointUnknownFieldPathStep } from "../../../packages/agent/conversation-checkpoint-state.ts"
 
 export type RedactedAgentConversationStateInterop = ReturnType<typeof toRedactedConversationStateStructure>
 export type AgentStateSelectedContextInterop = SelectedContext
@@ -572,15 +578,100 @@ export function createRedactedAssistantTextStepInterop(input: {
   )
 }
 
+function protoFieldValue(message: Message, field: FieldInfo): unknown {
+  const record = message as unknown as Record<string, unknown>
+  if (field.oneof == null) return record[field.localName]
+  const selection = record[field.oneof.localName]
+  if (selection == null || typeof selection !== "object") return undefined
+  const selected = selection as { readonly case?: unknown; readonly value?: unknown }
+  return selected.case === field.localName ? selected.value : undefined
+}
+
+function collectStepUnknownFields(root: ConversationStep): SlateCheckpointUnknownField[] {
+  const fields: SlateCheckpointUnknownField[] = []
+  function visit(message: Message, path: readonly SlateCheckpointUnknownFieldPathStep[]): void {
+    for (const field of message.getType().runtime.bin.listUnknownFields(message)) {
+      fields.push({ path, number: field.no, wireType: field.wireType, dataHex: toHex(field.data) })
+    }
+    for (const field of message.getType().fields.list()) {
+      const value = protoFieldValue(message, field)
+      if (value == null) continue
+      if (field.kind === "message") {
+        if (field.repeated && Array.isArray(value)) {
+          value.forEach((child, index) => {
+            if (isMessage(child)) visit(child, [...path, { field: field.localName }, { index }])
+          })
+        } else if (!field.repeated && isMessage(value)) {
+          visit(value, [...path, { field: field.localName }])
+        }
+      } else if (field.kind === "map" && field.V.kind === "message" && typeof value === "object") {
+        const entries = value instanceof Map ? [...value.entries()] : Object.entries(value)
+        for (const [key, child] of entries) {
+          if (typeof key === "string" && isMessage(child)) {
+            visit(child, [...path, { field: field.localName }, { key }])
+          }
+        }
+      }
+    }
+  }
+  visit(root, [])
+  return fields
+}
+
+function messageAtStepUnknownFieldPath(
+  root: Message,
+  path: readonly SlateCheckpointUnknownFieldPathStep[],
+): Message {
+  let current: unknown = root
+  for (const step of path) {
+    if ("field" in step) {
+      if (!isMessage(current)) throw new TypeError("stored step unknown-field parent is invalid")
+      const field = current.getType().fields.list().find(candidate => candidate.localName === step.field)
+      if (field === undefined) throw new TypeError("stored step unknown-field field is not in this runtime")
+      current = protoFieldValue(current, field)
+    } else if ("index" in step) {
+      current = Array.isArray(current) ? current[step.index] : undefined
+    } else {
+      current = current !== null && typeof current === "object"
+        ? (current as Record<string, unknown>)[step.key]
+        : undefined
+    }
+  }
+  if (!isMessage(current)) throw new TypeError("stored step unknown-field target is missing")
+  return current
+}
+
+function restoreStepUnknownFields(
+  step: ConversationStep,
+  fields: readonly SlateCheckpointUnknownField[] | undefined,
+): void {
+  for (const field of fields ?? []) {
+    ConversationStep.runtime.bin.onUnknownField(
+      messageAtStepUnknownFieldPath(step, field.path),
+      field.number,
+      field.wireType as Parameters<typeof ConversationStep.runtime.bin.onUnknownField>[2],
+      fromHex(field.dataHex),
+    )
+  }
+}
+
 /** Projects the generated step oneof into Slate's discriminated step vocabulary. */
-export function fromInteropConversationStep(step: ConversationStep): SlateConversationStep {
+export function fromInteropConversationStep(
+  step: ConversationStep,
+  preservedUnknownFields?: readonly SlateCheckpointUnknownField[],
+): SlateConversationStep {
+  const unknownFields = preservedUnknownFields ?? (isMessage(step) ? collectStepUnknownFields(step) : [])
+  const compatibility: SlateConversationStepCompatibility | undefined = unknownFields.length === 0
+    ? undefined
+    : { legacyUnknownFields: unknownFields }
   switch (step.message.case) {
     case "assistantMessage":
-      return createSlateAssistantMessageStep(step.message.value.text as never)
+      return createSlateAssistantMessageStep(step.message.value.text as never, compatibility)
     case "thinkingMessage":
       return createSlateThinkingMessageStep({
         text: step.message.value.text as never,
         durationMs: step.message.value.durationMs,
+        ...(compatibility === undefined ? {} : { compatibility }),
       })
     case "toolCall":
       return createSlateToolCallStep({
@@ -601,9 +692,16 @@ export function fromInteropConversationStep(step: ConversationStep): SlateConver
           ...(step.message.value.tool.case === undefined ? {} : { case: step.message.value.tool.case }),
           ...(step.message.value.tool.value === undefined ? {} : { value: step.message.value.tool.value }),
         },
+        ...(compatibility === undefined ? {} : { compatibility }),
       })
-    default:
-      return { kind: "unsupported" }
+    default: {
+      const unsupported = step.message as unknown as { readonly case?: string; readonly value?: unknown }
+      return createSlateUnsupportedConversationStep({
+        ...(unsupported.case === undefined ? {} : { sourceCase: unsupported.case }),
+        ...(unsupported.value === undefined ? {} : { value: unsupported.value }),
+        ...(compatibility === undefined ? {} : { compatibility }),
+      })
+    }
   }
 }
 
@@ -628,28 +726,25 @@ export function fromInteropToolCallStep(
   })
 }
 
-/** Reconstructs the generated step only while entering or leaving historical storage. */
+/** Reconstructs the generated step only for an interop caller. */
 export function toInteropConversationStep(step: SlateConversationStep): ConversationStep {
+  let interop: ConversationStep
   switch (step.kind) {
     case "assistant-message":
-      return new ConversationStep({
-        message: {
-          case: "assistantMessage",
-          value: new AssistantMessage({ text: step.text as never }),
-        },
+      interop = new ConversationStep({
+        message: { case: "assistantMessage", value: new AssistantMessage({ text: step.text as never }) },
       })
+      break
     case "thinking-message":
-      return new ConversationStep({
+      interop = new ConversationStep({
         message: {
           case: "thinkingMessage",
-          value: new ThinkingMessage({
-            text: step.text as never,
-            durationMs: step.durationMs,
-          }),
+          value: new ThinkingMessage({ text: step.text as never, durationMs: step.durationMs }),
         },
       })
+      break
     case "tool-call":
-      return new ConversationStep({
+      interop = new ConversationStep({
         message: {
           case: "toolCall",
           value: new ToolCall({
@@ -666,80 +761,544 @@ export function toInteropConversationStep(step: SlateConversationStep): Conversa
           }),
         },
       })
+      break
     case "unsupported":
-      return new ConversationStep()
+      interop = new ConversationStep()
+      break
+  }
+  restoreStepUnknownFields(interop, step.compatibility?.legacyUnknownFields)
+  return interop
+}
+
+function unredactStepValue(value: unknown, ancestors = new Set<object>()): unknown {
+  if (value instanceof RedactedString) return value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  if (value instanceof RedactedBytes) return new Uint8Array(value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED))
+  if (value instanceof Uint8Array) return new Uint8Array(value)
+  if (typeof value === "bigint" || value === null || typeof value !== "object") return value
+  if (value instanceof Date) return new Date(value.getTime())
+  if (ancestors.has(value)) throw new TypeError("Step payload contains a cycle")
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) return value.map(entry => unredactStepValue(entry, ancestors))
+    if (value instanceof Map) {
+      return new Map([...value.entries()].map(([key, entry]) => [
+        unredactStepValue(key, ancestors),
+        unredactStepValue(entry, ancestors),
+      ]))
+    }
+    if (value instanceof Set) return new Set([...value].map(entry => unredactStepValue(entry, ancestors)))
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null && !isMessage(value)) {
+      throw new TypeError(`Step payload contains an unsupported object: ${prototype?.constructor?.name ?? "unknown"}`)
+    }
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      unredactStepValue(entry, ancestors),
+    ]))
+  } finally {
+    ancestors.delete(value)
   }
 }
 
-/** Keeps generated step bytes and redaction at the adapter while state handles Slate steps. */
-type RedactedConversationStepInterop = ReturnType<typeof toRedactedConversationStep>
-
-function toRedactedSlateConversationStep(
-  step: SlateConversationStep,
-  privacyMode: PrivacyMode,
-): RedactedConversationStepInterop {
+/** Reconstructs an unredacted runner message for hydration and blob reachability. */
+export function toPlainInteropConversationStep(step: SlateConversationStep): ConversationStep {
+  let interop: ConversationStep
+  const plainText = (value: RedactedString): string => value instanceof RedactedString
+    ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : typeof value === "string"
+      ? value
+      : (() => { throw new TypeError("Conversation step text is not a string") })()
   switch (step.kind) {
     case "assistant-message":
-      return {
-        _privacyMode: privacyMode,
+      interop = new ConversationStep({
         message: {
           case: "assistantMessage",
-          value: { _privacyMode: privacyMode, text: step.text },
+          value: new AssistantMessage({ text: plainText(step.text) }),
         },
-      } as RedactedConversationStepInterop
+      })
+      break
     case "thinking-message":
-      return {
-        _privacyMode: privacyMode,
+      interop = new ConversationStep({
         message: {
           case: "thinkingMessage",
-          value: { _privacyMode: privacyMode, text: step.text, durationMs: step.durationMs },
+          value: new ThinkingMessage({
+            text: plainText(step.text),
+            durationMs: step.durationMs,
+          }),
         },
-      } as RedactedConversationStepInterop
+      })
+      break
     case "tool-call":
-      return {
-        _privacyMode: privacyMode,
+      interop = new ConversationStep({
         message: {
           case: "toolCall",
-          value: {
-            _privacyMode: privacyMode,
-            hookAdditionalContexts: step.hookContexts.map(context => ({
-              _privacyMode: privacyMode,
-              hookEventName: context.event,
-              content: context.text,
-            })) as never,
+          value: new ToolCall({
             ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId }),
             ...(step.startedAtMs === undefined ? {} : { startedAtMs: step.startedAtMs }),
             ...(step.completedAtMs === undefined ? {} : { completedAtMs: step.completedAtMs }),
+            hookAdditionalContexts: step.hookContexts.map(context => ({
+              hookEventName: context.event,
+              content: plainText(context.text),
+            })) as never,
             tool: step.tool.case === undefined
               ? { case: undefined }
-              : { case: step.tool.case, value: step.tool.value },
-          },
+              : { case: step.tool.case as never, value: unredactStepValue(step.tool.value) as never },
+          }),
         },
-      } as RedactedConversationStepInterop
+      })
+      break
     case "unsupported":
+      interop = new ConversationStep()
+      break
+  }
+  restoreStepUnknownFields(interop, step.compatibility?.legacyUnknownFields)
+  return interop
+}
+
+type StoredStepValue =
+  | { readonly kind: "undefined" }
+  | { readonly kind: "null" }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "number"; readonly value: number }
+  | { readonly kind: "special-number"; readonly value: "negative-zero" | "nan" | "positive-infinity" | "negative-infinity" }
+  | { readonly kind: "string"; readonly value: string }
+  | { readonly kind: "bigint"; readonly decimal: string }
+  | { readonly kind: "bytes"; readonly hex: string }
+  | { readonly kind: "redacted-string"; readonly rawText: string; readonly classification: DataClassificationValue; readonly fieldName: string }
+  | { readonly kind: "redacted-bytes"; readonly hex: string; readonly classification: DataClassificationValue; readonly fieldName: string }
+  | { readonly kind: "date"; readonly iso: string }
+  | { readonly kind: "array"; readonly entries: readonly StoredStepValue[] }
+  | { readonly kind: "set"; readonly entries: readonly StoredStepValue[] }
+  | { readonly kind: "map"; readonly entries: readonly (readonly [StoredStepValue, StoredStepValue])[] }
+  | { readonly kind: "object"; readonly entries: readonly (readonly [string, StoredStepValue])[] }
+
+interface StoredRedactedStepText {
+  readonly text: string
+  readonly classification: DataClassificationValue
+  readonly fieldName: string
+}
+
+const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
+const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
+const CLASSIFICATION_VALUES = new Set<string>(Object.values(DataClassification))
+
+function encodeStepValue(value: unknown, path = new Set<object>()): StoredStepValue {
+  if (value === undefined) return { kind: "undefined" }
+  if (value === null) return { kind: "null" }
+  if (typeof value === "string") return { kind: "string", value }
+  if (typeof value === "boolean") return { kind: "boolean", value }
+  if (typeof value === "number") {
+    if (Object.is(value, -0)) return { kind: "special-number", value: "negative-zero" }
+    if (Number.isNaN(value)) return { kind: "special-number", value: "nan" }
+    if (value === Number.POSITIVE_INFINITY) return { kind: "special-number", value: "positive-infinity" }
+    if (value === Number.NEGATIVE_INFINITY) return { kind: "special-number", value: "negative-infinity" }
+    return { kind: "number", value }
+  }
+  if (typeof value === "bigint") return { kind: "bigint", decimal: value.toString() }
+  if (value instanceof RedactedString) {
+    return {
+      kind: "redacted-string",
+      rawText: value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+      classification: value.__classification,
+      fieldName: value.__fieldName,
+    }
+  }
+  if (value instanceof RedactedBytes) {
+    return {
+      kind: "redacted-bytes",
+      hex: toHex(value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+      classification: value.__classification,
+      fieldName: value.__fieldName,
+    }
+  }
+  if (value instanceof Uint8Array) return { kind: "bytes", hex: toHex(value) }
+  if (value instanceof ArrayBuffer) return { kind: "bytes", hex: toHex(new Uint8Array(value)) }
+  if (value instanceof Date) return { kind: "date", iso: value.toISOString() }
+  if (typeof value !== "object") {
+    throw new TypeError(`Step payload contains an unsupported ${typeof value} value`)
+  }
+  if (path.has(value)) throw new TypeError("Step payload contains a cycle")
+  path.add(value)
+  try {
+    if (Array.isArray(value)) return { kind: "array", entries: value.map(entry => encodeStepValue(entry, path)) }
+    if (value instanceof Map) {
       return {
-        _privacyMode: privacyMode,
-        message: { case: undefined, value: undefined },
-      } as RedactedConversationStepInterop
+        kind: "map",
+        entries: [...value.entries()].map(([key, entry]) => [encodeStepValue(key, path), encodeStepValue(entry, path)] as const),
+      }
+    }
+    if (value instanceof Set) return { kind: "set", entries: [...value].map(entry => encodeStepValue(entry, path)) }
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null && !isMessage(value)) {
+      throw new TypeError(`Step payload contains an unsupported object: ${prototype?.constructor?.name ?? "unknown"}`)
+    }
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      .map(([key, entry]) => [key, encodeStepValue(entry, path)] as const)
+    return { kind: "object", entries }
+  } finally {
+    path.delete(value)
   }
 }
 
+function isStoredStepValue(value: unknown, pending: unknown[] = [value]): value is StoredStepValue {
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (current === null || typeof current !== "object" || Array.isArray(current)) return false
+    const entry = current as Record<string, unknown>
+    if (typeof entry.kind !== "string") return false
+    switch (entry.kind) {
+      case "undefined":
+      case "null":
+        if (!hasOnlyKeys(entry, ["kind"])) return false
+        break
+      case "boolean":
+        if (!hasOnlyKeys(entry, ["kind", "value"]) || typeof entry.value !== "boolean") return false
+        break
+      case "number":
+        if (!hasOnlyKeys(entry, ["kind", "value"]) || typeof entry.value !== "number" || !Number.isFinite(entry.value)) return false
+        break
+      case "special-number":
+        if (!hasOnlyKeys(entry, ["kind", "value"]) || ![
+          "negative-zero", "nan", "positive-infinity", "negative-infinity",
+        ].includes(String(entry.value))) return false
+        break
+      case "string":
+        if (!hasOnlyKeys(entry, ["kind", "value"]) || typeof entry.value !== "string") return false
+        break
+      case "bigint":
+        if (!hasOnlyKeys(entry, ["kind", "decimal"]) || typeof entry.decimal !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(entry.decimal)) return false
+        break
+      case "bytes":
+        if (!hasOnlyKeys(entry, ["kind", "hex"]) || typeof entry.hex !== "string" || !/^(?:[0-9a-f]{2})*$/.test(entry.hex)) return false
+        break
+      case "redacted-string":
+        if (!hasOnlyKeys(entry, ["kind", "rawText", "classification", "fieldName"]) ||
+            typeof entry.rawText !== "string" || typeof entry.fieldName !== "string" ||
+            typeof entry.classification !== "string" || !CLASSIFICATION_VALUES.has(entry.classification)) return false
+        break
+      case "redacted-bytes":
+        if (!hasOnlyKeys(entry, ["kind", "hex", "classification", "fieldName"]) ||
+            typeof entry.hex !== "string" || !/^(?:[0-9a-f]{2})*$/.test(entry.hex) ||
+            typeof entry.fieldName !== "string" || typeof entry.classification !== "string" ||
+            !CLASSIFICATION_VALUES.has(entry.classification)) return false
+        break
+      case "date":
+        if (!hasOnlyKeys(entry, ["kind", "iso"]) || typeof entry.iso !== "string" || !Number.isFinite(Date.parse(entry.iso))) return false
+        break
+      case "array":
+      case "set":
+        if (!hasOnlyKeys(entry, ["kind", "entries"]) || !Array.isArray(entry.entries)) return false
+        for (const child of entry.entries) pending.push(child)
+        break
+      case "map":
+        if (!hasOnlyKeys(entry, ["kind", "entries"]) || !Array.isArray(entry.entries) ||
+            !entry.entries.every(pair => Array.isArray(pair) && pair.length === 2)) return false
+        for (const pair of entry.entries as unknown[][]) pending.push(pair[0], pair[1])
+        break
+      case "object":
+        if (!hasOnlyKeys(entry, ["kind", "entries"]) || !Array.isArray(entry.entries) ||
+            !entry.entries.every(pair => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === "string")) return false
+        for (const pair of entry.entries as unknown[][]) pending.push(pair[1])
+        break
+      default:
+        return false
+    }
+  }
+  return true
+}
+
+function decodeStepValue(value: StoredStepValue, privacyMode: PrivacyMode): unknown {
+  switch (value.kind) {
+    case "undefined": return undefined
+    case "null": return null
+    case "boolean":
+    case "number":
+    case "string": return value.value
+    case "special-number":
+      switch (value.value) {
+        case "negative-zero": return -0
+        case "nan": return Number.NaN
+        case "positive-infinity": return Number.POSITIVE_INFINITY
+        case "negative-infinity": return Number.NEGATIVE_INFINITY
+      }
+      break
+    case "bigint": return BigInt(value.decimal)
+    case "bytes": return fromHex(value.hex)
+    case "redacted-string":
+      return createRedactedString(value.rawText, value.classification, value.fieldName, privacyMode)
+    case "redacted-bytes":
+      return createRedactedBytes(fromHex(value.hex), value.classification, value.fieldName, privacyMode)
+    case "date": return new Date(value.iso)
+    case "array": return value.entries.map(entry => decodeStepValue(entry, privacyMode))
+    case "set": return new Set(value.entries.map(entry => decodeStepValue(entry, privacyMode)))
+    case "map": return new Map(value.entries.map(([key, entry]) => [
+      decodeStepValue(key, privacyMode),
+      decodeStepValue(entry, privacyMode),
+    ]))
+    case "object":
+      return Object.fromEntries(value.entries.map(([key, entry]) => [
+        key,
+        key === "_privacyMode" ? privacyMode : decodeStepValue(entry, privacyMode),
+      ]))
+  }
+  throw new TypeError("Stored Slate step value is invalid")
+}
+
+function isStepUnknownField(value: unknown): value is SlateCheckpointUnknownField {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const field = value as Record<string, unknown>
+  if (!hasOnlyKeys(field, ["path", "number", "wireType", "dataHex"]) ||
+      !Array.isArray(field.path) || !Number.isInteger(field.number) || (field.number as number) < 1 ||
+      (field.number as number) > 536_870_911 || !Number.isInteger(field.wireType) ||
+      (field.wireType as number) < 0 || (field.wireType as number) > 5 ||
+      typeof field.dataHex !== "string" || !/^(?:[0-9a-f]{2})*$/.test(field.dataHex)) return false
+  return field.path.every(step => {
+    if (step === null || typeof step !== "object" || Array.isArray(step)) return false
+    const pathStep = step as Record<string, unknown>
+    if (hasOnlyKeys(pathStep, ["field"]) && Object.keys(pathStep).length === 1) return typeof pathStep.field === "string"
+    if (hasOnlyKeys(pathStep, ["index"]) && Object.keys(pathStep).length === 1) return Number.isSafeInteger(pathStep.index) && (pathStep.index as number) >= 0
+    if (hasOnlyKeys(pathStep, ["key"]) && Object.keys(pathStep).length === 1) return typeof pathStep.key === "string"
+    return false
+  })
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every(key => keys.includes(key))
+}
+
+function isStoredRedactedStepText(value: unknown): value is StoredRedactedStepText {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const text = value as Record<string, unknown>
+  return hasOnlyKeys(text, ["text", "classification", "fieldName"]) &&
+    typeof text.text === "string" && typeof text.classification === "string" &&
+    CLASSIFICATION_VALUES.has(text.classification) && typeof text.fieldName === "string"
+}
+
+function encodeRedactedStepText(value: RedactedString, fallbackFieldName: string): StoredRedactedStepText {
+  if (value instanceof RedactedString) {
+    return {
+      text: value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+      classification: value.__classification,
+      fieldName: value.__fieldName,
+    }
+  }
+  if (typeof value === "string") {
+    return { text: value, classification: DataClassification.CODE, fieldName: fallbackFieldName }
+  }
+  throw new TypeError("Conversation step text must be a Slate redacted string")
+}
+
+function decodeRedactedStepText(value: StoredRedactedStepText, privacyMode: PrivacyMode): RedactedString {
+  return createRedactedString(value.text, value.classification, value.fieldName, privacyMode)
+}
+
+function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const envelope = value as Record<string, unknown>
+  if (!hasOnlyKeys(envelope, ["format", "version", "step", "compatibility"]) ||
+      envelope.format !== STEP_STORAGE_FORMAT || envelope.version !== 1 ||
+      envelope.step === null || typeof envelope.step !== "object" || Array.isArray(envelope.step)) return false
+  if (envelope.compatibility !== undefined) {
+    if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
+    const compatibility = envelope.compatibility as Record<string, unknown>
+    if (!hasOnlyKeys(compatibility, ["legacyUnknownFields"]) ||
+        (compatibility.legacyUnknownFields !== undefined &&
+          (!Array.isArray(compatibility.legacyUnknownFields) || !compatibility.legacyUnknownFields.every(isStepUnknownField)))) return false
+  }
+  const step = envelope.step as Record<string, unknown>
+  if (typeof step.kind !== "string") return false
+  switch (step.kind) {
+    case "assistant-message":
+      return hasOnlyKeys(step, ["kind", "text"]) && isStoredRedactedStepText(step.text)
+    case "thinking-message":
+      return hasOnlyKeys(step, ["kind", "text", "durationMs"]) && isStoredRedactedStepText(step.text) &&
+        typeof step.durationMs === "number" && Number.isFinite(step.durationMs)
+    case "tool-call": {
+      if (!hasOnlyKeys(step, ["kind", "toolCallId", "startedAtMs", "completedAtMs", "hookContexts", "tool"]) ||
+          (step.toolCallId !== undefined && typeof step.toolCallId !== "string") ||
+          (step.startedAtMs !== undefined && (typeof step.startedAtMs !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(step.startedAtMs))) ||
+          (step.completedAtMs !== undefined && (typeof step.completedAtMs !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(step.completedAtMs))) ||
+          !Array.isArray(step.hookContexts) || step.tool === null || typeof step.tool !== "object" || Array.isArray(step.tool)) return false
+      const tool = step.tool as Record<string, unknown>
+      if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
+          (tool.operation !== undefined && typeof tool.operation !== "string") ||
+          (tool.payload !== undefined && !isStoredStepValue(tool.payload))) return false
+      return step.hookContexts.every(context => {
+        if (context === null || typeof context !== "object" || Array.isArray(context)) return false
+        const hook = context as Record<string, unknown>
+        return hasOnlyKeys(hook, ["event", "text"]) && typeof hook.event === "string" &&
+          isStoredRedactedStepText(hook.text)
+      })
+    }
+    case "unsupported":
+      return hasOnlyKeys(step, ["kind", "sourceCase", "value"]) &&
+        (step.sourceCase === undefined || typeof step.sourceCase === "string") &&
+        (step.value === undefined || isStoredStepValue(step.value))
+    default:
+      return false
+  }
+}
+
+function beginsWith(bytes: Uint8Array, prefix: Uint8Array): boolean {
+  if (bytes.length < prefix.length) return false
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (bytes[index] !== prefix[index]) return false
+  }
+  return true
+}
+
+function stepCompatibility(value: unknown): SlateConversationStepCompatibility | undefined {
+  if (value === undefined) return undefined
+  const compatibility = value as { readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[] }
+  return compatibility.legacyUnknownFields === undefined
+    ? {}
+    : { legacyUnknownFields: compatibility.legacyUnknownFields.map(field => ({ ...field, path: field.path.map(pathStep => ({ ...pathStep })) })) }
+}
+
+function serializeStoredStepEnvelope(
+  storedStep: Record<string, unknown>,
+  legacyUnknownFields: readonly SlateCheckpointUnknownField[] | undefined,
+): Uint8Array {
+  const envelope = {
+    format: STEP_STORAGE_FORMAT,
+    version: 1,
+    step: storedStep,
+    ...(legacyUnknownFields === undefined || legacyUnknownFields.length === 0
+      ? {}
+      : { compatibility: { legacyUnknownFields: stepCompatibility({ legacyUnknownFields })?.legacyUnknownFields } }),
+  }
+  return utf8Serde.serialize(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`)
+}
+
+function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
+  let storedStep: Record<string, unknown>
+  switch (step.kind) {
+    case "assistant-message":
+      storedStep = { kind: step.kind, text: encodeRedactedStepText(step.text, "text") }
+      break
+    case "thinking-message":
+      storedStep = {
+        kind: step.kind,
+        text: encodeRedactedStepText(step.text, "text"),
+        durationMs: step.durationMs,
+      }
+      break
+    case "tool-call":
+      storedStep = {
+        kind: step.kind,
+        ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId }),
+        ...(step.startedAtMs === undefined
+          ? {}
+          : { startedAtMs: step.startedAtMs.toString() }),
+        ...(step.completedAtMs === undefined
+          ? {}
+          : { completedAtMs: step.completedAtMs.toString() }),
+        hookContexts: step.hookContexts.map(context => ({
+          event: context.event,
+          text: encodeRedactedStepText(context.text, "hook_additional_context"),
+        })),
+        tool: {
+          ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
+          ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
+            ? { payload: encodeStepValue(step.tool.value) }
+            : {}),
+        },
+      }
+      break
+    case "unsupported":
+      storedStep = {
+        kind: step.kind,
+        ...(step.sourceCase === undefined ? {} : { sourceCase: step.sourceCase }),
+        ...(Object.prototype.hasOwnProperty.call(step, "value") ? { value: encodeStepValue(step.value) } : {}),
+      }
+      break
+  }
+  return serializeStoredStepEnvelope(storedStep, step.compatibility?.legacyUnknownFields)
+}
+
+function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMode): SlateConversationStep | undefined {
+  if (!beginsWith(bytes, STEP_STORAGE_HEADER)) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(STEP_STORAGE_HEADER.length)))
+  } catch (error) {
+    throw new TypeError("Slate conversation step JSON is invalid", { cause: error })
+  }
+  if (!isStoredStepEnvelope(parsed)) throw new TypeError("Slate conversation step record is unsupported or invalid")
+  const envelope = parsed as {
+    readonly step: Record<string, unknown>
+    readonly compatibility?: { readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[] }
+  }
+  const step = envelope.step
+  const compatibility = stepCompatibility(envelope.compatibility)
+  switch (step.kind) {
+    case "assistant-message":
+      return createSlateAssistantMessageStep(
+        decodeRedactedStepText(step.text as StoredRedactedStepText, privacyMode),
+        compatibility,
+      )
+    case "thinking-message":
+      return createSlateThinkingMessageStep({
+        text: decodeRedactedStepText(step.text as StoredRedactedStepText, privacyMode),
+        durationMs: step.durationMs as number,
+        ...(compatibility === undefined ? {} : { compatibility }),
+      })
+    case "tool-call": {
+      const tool = step.tool as Record<string, unknown>
+      return createSlateToolCallStep({
+        ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
+        ...(step.startedAtMs === undefined ? {} : { startedAtMs: BigInt(step.startedAtMs as string) }),
+        ...(step.completedAtMs === undefined ? {} : { completedAtMs: BigInt(step.completedAtMs as string) }),
+        hookContexts: (step.hookContexts as readonly Record<string, unknown>[]).map(context => ({
+          event: context.event as string,
+          text: decodeRedactedStepText(context.text as StoredRedactedStepText, privacyMode),
+        })),
+        tool: {
+          ...(tool.operation === undefined ? {} : { case: tool.operation as string }),
+          ...(Object.prototype.hasOwnProperty.call(tool, "payload")
+            ? { value: decodeStepValue(tool.payload as StoredStepValue, privacyMode) }
+            : {}),
+        },
+        ...(compatibility === undefined ? {} : { compatibility }),
+      })
+    }
+    case "unsupported":
+      return createSlateUnsupportedConversationStep({
+        ...(step.sourceCase === undefined ? {} : { sourceCase: step.sourceCase as string }),
+        ...(Object.prototype.hasOwnProperty.call(step, "value")
+          ? { value: decodeStepValue(step.value as StoredStepValue, privacyMode) }
+          : {}),
+        ...(compatibility === undefined ? {} : { compatibility }),
+      })
+    default:
+      return undefined
+  }
+}
+
+export function deserializeSlateConversationStepInterop(bytes: Uint8Array): ConversationStep {
+  const slate = decodeStoredConversationStep(bytes, PrivacyModes.UNSPECIFIED)
+  return slate === undefined ? ConversationStep.fromBinary(bytes) : toPlainInteropConversationStep(slate)
+}
+
 export function createSlateConversationStepSerde(privacyMode: PrivacyMode): Serde<SlateConversationStep> {
-  const interopSerde = createRedactedProtoSerde<ConversationStep, RedactedConversationStepInterop>(
-    ConversationStep,
-    toRedactedConversationStep,
-    serdeDecoder(fromRedactedConversationStep),
-    privacyMode,
-  )
   return {
     serialize(step) {
-      return interopSerde.serialize(toRedactedSlateConversationStep(step, privacyMode))
+      return encodeStoredConversationStep(step)
     },
     deserialize(bytes) {
-      return fromInteropConversationStep(interopSerde.deserialize(bytes) as unknown as ConversationStep)
+      const slate = decodeStoredConversationStep(bytes, privacyMode)
+      if (slate !== undefined) return slate
+      const plain = ConversationStep.fromBinary(bytes)
+      const unknownFields = collectStepUnknownFields(plain)
+      const redacted = toRedactedConversationStep(plain, privacyMode)
+      return fromInteropConversationStep(
+        redacted as unknown as ConversationStep,
+        unknownFields,
+      )
     },
     getBlobType() {
-      return interopSerde.getBlobType?.() ?? { kind: "proto", typeName: "agent.v1.ConversationStep" }
+      return { kind: "json", typeName: "slate.agent-conversation-step" }
     },
   }
 }

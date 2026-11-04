@@ -10,6 +10,9 @@ import { serializeSlateAgentCheckpoint } from "../../source/packages/agent-kv/ag
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
 import { createSlateAgentConversationCodec } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import {
+  createSlateConversationStepSerde,
+} from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import {
   metadataObserverForStore,
   ensureBlobVisibleToCloudMirror,
   ObservedBlobStore,
@@ -38,6 +41,10 @@ import {
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { TodoItem } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
+import { createRedactedString } from "../../source/packages/redaction/create.ts"
+import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
 
 const ctx = createContext()
 
@@ -357,6 +364,50 @@ test("checkpointing writes the structure and reloading finds it again", async ()
   assert.equal(await reloaded.tryResetFromDb(ctx), true)
   assert.equal(reloaded.getConversationStateStructure().turns.length, 2)
   assert.equal(toHex(reloaded.getLatestCheckpoint().turns[0] as Uint8Array), toHex(turnId))
+})
+
+test("full conversation hydration reads Slate step blobs through the compatibility boundary", async () => {
+  const store = new InMemoryBlobStore()
+  const metadata = metadataStore(getDefaultAgentMetadata("agent-slate-step"))
+  const conversation = new AgentConversationStore(store, metadata, {
+    codec: createSlateAgentConversationCodec<unknown>(),
+  })
+
+  const userMessage = new UserMessage({ text: "hello" })
+  const userMessageBytes = userMessage.toBinary()
+  const userMessageId = await getBlobId(userMessageBytes)
+  await store.setBlob(ctx, userMessageId, userMessageBytes)
+
+  const slateStep = createSlateAssistantMessageStep(createRedactedString(
+    "Slate step restored",
+    DataClassification.CODE,
+    "text",
+    PrivacyMode.NO_STORAGE,
+  ))
+  const stepBytes = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(slateStep)
+  assert.ok(new TextDecoder().decode(stepBytes).startsWith("SLATE-AGENT-STEP\n"))
+  const stepId = await getBlobId(stepBytes)
+  await store.setBlob(ctx, stepId, stepBytes)
+
+  const turn = new ConversationTurnStructure({
+    turn: {
+      case: "agentConversationTurn",
+      value: new AgentConversationTurnStructure({ userMessage: userMessageId, steps: [stepId] }),
+    },
+  })
+  const turnBytes = turn.toBinary()
+  const turnId = await getBlobId(turnBytes)
+  await store.setBlob(ctx, turnId, turnBytes)
+  await conversation.handleCheckpoint(ctx, new ConversationStateStructure({ turns: [turnId] }))
+
+  const full = await conversation.getFullConversation(ctx)
+  const loadedTurn = full.turns[0]?.turn
+  assert.equal(loadedTurn?.case, "agentConversationTurn")
+  if (loadedTurn?.case !== "agentConversationTurn") assert.fail("expected the stored agent turn")
+  const loadedStep = loadedTurn.value.steps[0]
+  assert.equal(loadedStep?.message.case, "assistantMessage")
+  if (loadedStep?.message.case !== "assistantMessage") assert.fail("expected the stored assistant step")
+  assert.equal(loadedStep.message.value.text, "Slate step restored")
 })
 
 test("checkpoint roots use Slate's versioned envelope and preserve the complete runtime snapshot", async () => {

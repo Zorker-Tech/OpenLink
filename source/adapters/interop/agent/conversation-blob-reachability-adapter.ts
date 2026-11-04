@@ -13,6 +13,7 @@ import {
   isProtoBlobReferenceTypeName
 } from "./blob-reference-metadata.ts";
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts";
+import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts";
 
 export const EDGES_NOT_WALKED_SO_REFERENTS_COLLECT = new Set([
   "agent.v1.UserMessage.conversation_state_blob_id",
@@ -82,6 +83,14 @@ export function collectReachableBlobHexIds(options: {
         if (!(error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case")) {
           unresolvedProtoRefs += 1
         }
+      }
+      return;
+    }
+    if (blobReferenceType === "agent.v1.ConversationStep") {
+      try {
+        visitMessage(deserializeSlateConversationStepInterop(childBytes));
+      } catch {
+        unresolvedProtoRefs += 1;
       }
       return;
     }
