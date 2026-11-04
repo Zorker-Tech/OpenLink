@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { AgentMode } from "../proto/generated/agent/v1/agent_pb.ts"
 import { RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
 import { toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
@@ -10,12 +11,16 @@ import { PrivacyCapability } from "../../../packages/redaction/classification.ts
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { SlateConversationStep } from "../../../packages/agent/conversation-step-state.ts"
+import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
+import { toInteropAgentMode } from "./mode-processing-adapter.ts"
+import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 
 const FULL_ACCESS = PrivacyCapability.UNSAFE_ALWAYS_ALLOWED
 
 export interface ContinuationMessageSource {
   readonly selectedContext?: unknown
-  readonly mode?: unknown
+  readonly mode?: SlateUserMessage["mode"] | undefined
+  readonly compatibility?: SlateUserMessage["compatibility"]
   readonly bestOfNGroupId?: unknown
   readonly tryUseBestOfNPromotion?: unknown
 }
@@ -50,20 +55,25 @@ export function projectTurnRequestContext(requestContext: RedactedTurnRequestCon
 export function createQuestionnaireContinuation(
   source: ContinuationMessageSource,
   privacyMode: PrivacyMode,
-): { readonly message: UserMessage; readonly appendedUpdate: unknown } {
+): { readonly message: UserMessage; readonly slateMessage: SlateUserMessage; readonly appendedUpdate: unknown } {
   const message = new UserMessage({
     text: "Continue with the questionnaire results.",
     messageId: randomUUID(),
     ...(source.selectedContext == null
       ? {}
       : { selectedContext: fromRedactedSelectedContext(source.selectedContext as never, FULL_ACCESS, undefined) }),
-    mode: source.mode as UserMessage["mode"],
+    mode: source.mode === undefined
+      ? AgentMode.UNSPECIFIED
+      : source.compatibility?.legacyModeCode === undefined
+        ? toInteropAgentMode(source.mode)
+        : source.compatibility.legacyModeCode as UserMessage["mode"],
     isSimulatedMsg: true,
     ...(source.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: source.bestOfNGroupId as string }),
     ...(source.tryUseBestOfNPromotion === undefined ? {} : { tryUseBestOfNPromotion: source.tryUseBestOfNPromotion as boolean }),
   })
   return {
     message,
+    slateMessage: fromInteropUserMessage(message),
     appendedUpdate: toRedactedInteractionUpdate(Updates.userMessageAppended(message), privacyMode),
   }
 }

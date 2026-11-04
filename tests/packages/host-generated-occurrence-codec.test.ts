@@ -14,7 +14,11 @@ import {
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts";
-import { createSlateConversationStepSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts";
+import {
+  createSlateConversationStepSerde,
+  createSlateUserMessageSerde,
+} from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts";
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import { createRedactedString } from "../../source/packages/redaction/create.ts";
 import { DataClassification } from "../../source/packages/redaction/classification.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
@@ -140,7 +144,17 @@ test("the codec keeps the generated collaborators in its closure", () => {
 });
 
 test("the Slate production codec reads both new and legacy turn envelopes", () => {
-  const codec = createSlateTranscriptOccurrenceCodec({ UserMessage });
+  const codec = createSlateTranscriptOccurrenceCodec();
+  const slateUserBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(
+    fromInteropUserMessage(new UserMessage({ text: "Slate transcript prompt", messageId: "prompt-1", textBlobId: bytes(6) })),
+  );
+  assert.deepEqual(codec.decodeUserMessage(slateUserBytes), {
+    text: "Slate transcript prompt",
+    textBlobId: bytes(6),
+  });
+  assert.deepEqual(codec.decodeUserMessage(new UserMessage({ text: "legacy transcript prompt" }).toBinary()), {
+    text: "legacy transcript prompt",
+  });
   const userMessageId = bytes(7);
   const stepId = bytes(8);
   const turn = createSlateAgentConversationTurn({

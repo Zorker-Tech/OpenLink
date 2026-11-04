@@ -275,7 +275,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     const planFileContent = resolvedPlanContent.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
     const selectedPlanPath = (planFileAvailability === "unavailable" ? undefined : planFilePath) ?? planAction.sourceUri ?? unavailablePlanDocumentUri();
     const messageId = planAction.messageId ?? randomUUID();
-    const { userMessage, listenerUpdate } = createPlanExecutionMessage({
+    const { slateUserMessage, listenerUpdate } = createPlanExecutionMessage({
       text: planInstruction.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
       messageId,
       planContent: planFileContent,
@@ -287,7 +287,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
       listenerPrivacyMode: stateHandler.getPrivacyMode(),
     });
     await this.interactionListener.sendUpdate(ctx, listenerUpdate);
-    const turn = await stateHandler.createAgentTurn(ctx, userMessage, requestContext, configAny, this.resourceAccessor);
+    const turn = await stateHandler.createAgentTurn(ctx, slateUserMessage, requestContext, configAny, this.resourceAccessor);
     stateHandler.setMode(slateMode);
     return { turn, mergedMcpTools, requestContext, requestContextProvenance, planId: planAction.id };
   }

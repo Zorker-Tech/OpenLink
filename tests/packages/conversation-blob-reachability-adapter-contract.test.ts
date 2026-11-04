@@ -11,7 +11,11 @@ import {
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
-import { createSlateConversationStepSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import {
+  createSlateConversationStepSerde,
+  createSlateUserMessageSerde,
+} from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
@@ -74,7 +78,10 @@ test("reachability follows nested turn and user records but skips back-links and
 })
 
 test("reachability follows turn and step refs from Slate-encoded blobs", () => {
-  const userBytes = new UserMessage({ text: "question" }).toBinary()
+  const textId = id(12)
+  const userBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(
+    fromInteropUserMessage(new UserMessage({ text: "question", textBlobId: textId })),
+  )
   const stepBytes = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(
     createSlateAssistantMessageStep(
       createRedactedString("answer", DataClassification.CODE, "text", PrivacyMode.NO_STORAGE),
@@ -97,7 +104,7 @@ test("reachability follows turn and step refs from Slate-encoded blobs", () => {
 
   const result = collectReachableBlobHexIds({ rootBytes, getBlobByHexId: id => blobs.get(id) })
 
-  assert.deepEqual([...result.reachableHexIds].sort(), [hex(turnId), hex(userId), hex(stepId)].sort())
+  assert.deepEqual([...result.reachableHexIds].sort(), [hex(turnId), hex(userId), hex(stepId), hex(textId)].sort())
   assert.equal(result.unresolvedProtoRefs, 0)
 })
 

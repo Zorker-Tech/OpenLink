@@ -30,6 +30,8 @@ import { AskQuestionArgs, AskQuestionResult, AskQuestionSuccess } from "../../so
 import { AgentMode, AsyncAskQuestionCompletionAction, ConversationStateStructure, ShellCommand, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
+import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The action handlers are the ways a turn can start. Each is handed the action and the things a turn
@@ -136,7 +138,7 @@ async function stateWithAgentTurn() {
   const state = createConversationState()
   const turn = await state.createAgentTurn(
     createContext(),
-    new UserMessage({ text: "what is the answer", messageId: "m1", isSimulatedMsg: true }),
+    fromInteropUserMessage(new UserMessage({ text: "what is the answer", messageId: "m1", isSimulatedMsg: true })),
     new RequestContext({}) as never,
     {} as never,
     undefined,
@@ -207,7 +209,7 @@ test("the metadata of the first user info is read back as it was written", () =>
 test("plan execution uses Slate chat mode across policy and encodes only the stored message", async () => {
   const toolModes: unknown[] = []
   const promptModes: unknown[] = []
-  const storedMessages: UserMessage[] = []
+  const storedMessages: SlateUserMessage[] = []
   let stateMode: unknown
   const toolSet = {
     getAllTools: () => [],
@@ -247,7 +249,7 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
     getBlobStore() { return undefined },
     usesLargeContextTreatment() { return false },
     setMode(mode: unknown) { stateMode = mode },
-    async createAgentTurn(_ctx: unknown, message: UserMessage) {
+    async createAgentTurn(_ctx: unknown, message: SlateUserMessage) {
       storedMessages.push(message)
       return { created: true }
     },
@@ -271,7 +273,7 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
   assert.deepEqual(toolModes, [SlateMode.CHAT])
   assert.deepEqual(promptModes, [SlateMode.CHAT])
   assert.equal(stateMode, SlateMode.CHAT)
-  assert.equal(storedMessages[0]?.mode, AgentMode.ASK)
+  assert.equal(storedMessages[0]?.mode, SlateMode.CHAT)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -321,7 +323,7 @@ test("a completion after a finished turn opens a continuation and runs it", asyn
   state.computeNewStructure = async () => ({ computed: true }) as never
   const appended: unknown[] = []
   const prompt = createPromptExecutor()
-  const createdUsers: UserMessage[] = []
+  const createdUsers: SlateUserMessage[] = []
   const loopCalls: unknown[][] = []
   const toolsGenerator = () => ({})
   const continuationTurn = {
@@ -330,7 +332,7 @@ test("a completion after a finished turn opens a continuation and runs it", asyn
     },
   }
   state.createAgentTurn = async (_ctx, userMessage) => {
-    createdUsers.push(userMessage as UserMessage)
+    createdUsers.push(userMessage as SlateUserMessage)
     return continuationTurn as never
   }
   Object.assign(handler, {

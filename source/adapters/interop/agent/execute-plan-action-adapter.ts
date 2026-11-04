@@ -16,6 +16,7 @@ import { writeExecutorResource } from "../../../packages/agent-exec/write-operat
 import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteArgs } from "../proto/generated/agent/v1/write_exec_pb.ts"
 import { Updates } from "../../../packages/agent-core/interaction-updates.ts"
+import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { todoStatusFromString } from "../../../packages/agent/tools/core/todo/common.ts"
@@ -95,6 +96,7 @@ export function createPlanExecutionMessage(input: PlanExecutionMessageInput) {
   })
   return {
     userMessage,
+    slateUserMessage: fromInteropUserMessage(userMessage),
     listenerUpdate: toRedactedInteractionUpdate(
       Updates.userMessageAppended(userMessage),
       input.listenerPrivacyMode,

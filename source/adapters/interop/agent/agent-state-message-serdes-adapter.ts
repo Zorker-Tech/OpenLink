@@ -77,6 +77,16 @@ import type { SlateConversationPlanState } from "../../../packages/agent/convers
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
 import { fromInteropAgentMode, toInteropAgentMode } from "./mode-processing-adapter.ts"
 import {
+  fromInteropUserMessage,
+  toPlainInteropUserMessage,
+} from "./user-message-action-protocol-adapter.ts"
+import {
+  SlateSimulatedMessageReason,
+  type SlateUserMessage,
+  type SlateUserMessageText,
+  type SlateUserMessageCompatibility,
+} from "../../../packages/agent/user-message-state.ts"
+import {
   SlateGoalState,
   type SlatePlanRegistryEntry,
 } from "../../../packages/agent/goal-state.ts"
@@ -587,7 +597,7 @@ function protoFieldValue(message: Message, field: FieldInfo): unknown {
   return selected.case === field.localName ? selected.value : undefined
 }
 
-function collectStepUnknownFields(root: ConversationStep): SlateCheckpointUnknownField[] {
+function collectStepUnknownFields(root: Message): SlateCheckpointUnknownField[] {
   const fields: SlateCheckpointUnknownField[] = []
   function visit(message: Message, path: readonly SlateCheckpointUnknownFieldPathStep[]): void {
     for (const field of message.getType().runtime.bin.listUnknownFields(message)) {
@@ -642,7 +652,7 @@ function messageAtStepUnknownFieldPath(
 }
 
 function restoreStepUnknownFields(
-  step: ConversationStep,
+  step: Message,
   fields: readonly SlateCheckpointUnknownField[] | undefined,
 ): void {
   for (const field of fields ?? []) {
@@ -855,7 +865,7 @@ export function toPlainInteropConversationStep(step: SlateConversationStep): Con
   return interop
 }
 
-type StoredStepValue =
+type StoredSlateValue =
   | { readonly kind: "undefined" }
   | { readonly kind: "null" }
   | { readonly kind: "boolean"; readonly value: boolean }
@@ -867,10 +877,10 @@ type StoredStepValue =
   | { readonly kind: "redacted-string"; readonly rawText: string; readonly classification: DataClassificationValue; readonly fieldName: string }
   | { readonly kind: "redacted-bytes"; readonly hex: string; readonly classification: DataClassificationValue; readonly fieldName: string }
   | { readonly kind: "date"; readonly iso: string }
-  | { readonly kind: "array"; readonly entries: readonly StoredStepValue[] }
-  | { readonly kind: "set"; readonly entries: readonly StoredStepValue[] }
-  | { readonly kind: "map"; readonly entries: readonly (readonly [StoredStepValue, StoredStepValue])[] }
-  | { readonly kind: "object"; readonly entries: readonly (readonly [string, StoredStepValue])[] }
+  | { readonly kind: "array"; readonly entries: readonly StoredSlateValue[] }
+  | { readonly kind: "set"; readonly entries: readonly StoredSlateValue[] }
+  | { readonly kind: "map"; readonly entries: readonly (readonly [StoredSlateValue, StoredSlateValue])[] }
+  | { readonly kind: "object"; readonly entries: readonly (readonly [string, StoredSlateValue])[] }
 
 interface StoredRedactedStepText {
   readonly text: string
@@ -878,11 +888,47 @@ interface StoredRedactedStepText {
   readonly fieldName: string
 }
 
+interface StoredSlateUserMessageV1 {
+  readonly id: string
+  readonly content: StoredSlateValue
+  readonly context?: StoredSlateValue
+  readonly mode: string
+  readonly simulated?: boolean
+  readonly promotionGroupId?: string
+  readonly promotionEligible?: boolean
+  readonly richContent?: StoredSlateValue
+  readonly origin?: string
+  readonly conversationSnapshotId: string
+  readonly workerReminder?: StoredSlateValue
+  readonly actor?: StoredSlateValue
+  readonly planExecution?: StoredSlateValue
+  readonly simulation?: StoredSlateValue
+  readonly promptReference?: string
+  readonly thread?: string
+  readonly contentBlobId?: string
+  readonly richContentBlobId?: string
+  readonly hooks: readonly { readonly event: string; readonly text: StoredSlateValue }[]
+  readonly modeIntent?: StoredSlateValue
+  readonly project?: {
+    readonly name?: StoredSlateValue
+    readonly subagent?: { readonly storeDir?: StoredSlateValue }
+    readonly sideChat?: { readonly storeDir?: StoredSlateValue }
+  }
+}
+
 const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
 const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
+const USER_MESSAGE_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-USER\n")
+const USER_MESSAGE_STORAGE_FORMAT = "slate.agent-user-message"
 const CLASSIFICATION_VALUES = new Set<string>(Object.values(DataClassification))
+const SLATE_MODE_VALUES = new Set<string>(Object.values(SlateMode))
+const SLATE_SIMULATED_REASON_VALUES = new Set<string>(Object.values(SlateSimulatedMessageReason))
 
-function encodeStepValue(value: unknown, path = new Set<object>()): StoredStepValue {
+function encodeSlateValue(
+  value: unknown,
+  path = new Set<object>(),
+  valueLabel = "Step payload",
+): StoredSlateValue {
   if (value === undefined) return { kind: "undefined" }
   if (value === null) return { kind: "null" }
   if (typeof value === "string") return { kind: "string", value }
@@ -915,33 +961,42 @@ function encodeStepValue(value: unknown, path = new Set<object>()): StoredStepVa
   if (value instanceof ArrayBuffer) return { kind: "bytes", hex: toHex(new Uint8Array(value)) }
   if (value instanceof Date) return { kind: "date", iso: value.toISOString() }
   if (typeof value !== "object") {
-    throw new TypeError(`Step payload contains an unsupported ${typeof value} value`)
+    throw new TypeError(`${valueLabel} contains an unsupported ${typeof value} value`)
   }
-  if (path.has(value)) throw new TypeError("Step payload contains a cycle")
+  if (path.has(value)) throw new TypeError(`${valueLabel} contains a cycle`)
   path.add(value)
   try {
-    if (Array.isArray(value)) return { kind: "array", entries: value.map(entry => encodeStepValue(entry, path)) }
+    if (Array.isArray(value)) return { kind: "array", entries: value.map(entry => encodeSlateValue(entry, path, valueLabel)) }
     if (value instanceof Map) {
       return {
         kind: "map",
-        entries: [...value.entries()].map(([key, entry]) => [encodeStepValue(key, path), encodeStepValue(entry, path)] as const),
+        entries: [...value.entries()].map(([key, entry]) => [
+          encodeSlateValue(key, path, valueLabel),
+          encodeSlateValue(entry, path, valueLabel),
+        ] as const),
       }
     }
-    if (value instanceof Set) return { kind: "set", entries: [...value].map(entry => encodeStepValue(entry, path)) }
+    if (value instanceof Set) {
+      return { kind: "set", entries: [...value].map(entry => encodeSlateValue(entry, path, valueLabel)) }
+    }
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null && !isMessage(value)) {
-      throw new TypeError(`Step payload contains an unsupported object: ${prototype?.constructor?.name ?? "unknown"}`)
+      throw new TypeError(`${valueLabel} contains an unsupported object: ${prototype?.constructor?.name ?? "unknown"}`)
     }
     const entries = Object.entries(value as Record<string, unknown>)
       .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-      .map(([key, entry]) => [key, encodeStepValue(entry, path)] as const)
+      .map(([key, entry]) => [key, encodeSlateValue(entry, path, valueLabel)] as const)
     return { kind: "object", entries }
   } finally {
     path.delete(value)
   }
 }
 
-function isStoredStepValue(value: unknown, pending: unknown[] = [value]): value is StoredStepValue {
+function encodeSlateUserMessageValue(value: unknown): StoredSlateValue {
+  return encodeSlateValue(value, new Set(), "User-message value")
+}
+
+function isStoredSlateValue(value: unknown, pending: unknown[] = [value]): value is StoredSlateValue {
   while (pending.length > 0) {
     const current = pending.pop()
     if (current === null || typeof current !== "object" || Array.isArray(current)) return false
@@ -1008,7 +1063,7 @@ function isStoredStepValue(value: unknown, pending: unknown[] = [value]): value 
   return true
 }
 
-function decodeStepValue(value: StoredStepValue, privacyMode: PrivacyMode): unknown {
+function decodeSlateValue(value: StoredSlateValue, privacyMode: PrivacyMode): unknown {
   switch (value.kind) {
     case "undefined": return undefined
     case "null": return null
@@ -1030,19 +1085,19 @@ function decodeStepValue(value: StoredStepValue, privacyMode: PrivacyMode): unkn
     case "redacted-bytes":
       return createRedactedBytes(fromHex(value.hex), value.classification, value.fieldName, privacyMode)
     case "date": return new Date(value.iso)
-    case "array": return value.entries.map(entry => decodeStepValue(entry, privacyMode))
-    case "set": return new Set(value.entries.map(entry => decodeStepValue(entry, privacyMode)))
+    case "array": return value.entries.map(entry => decodeSlateValue(entry, privacyMode))
+    case "set": return new Set(value.entries.map(entry => decodeSlateValue(entry, privacyMode)))
     case "map": return new Map(value.entries.map(([key, entry]) => [
-      decodeStepValue(key, privacyMode),
-      decodeStepValue(entry, privacyMode),
+      decodeSlateValue(key, privacyMode),
+      decodeSlateValue(entry, privacyMode),
     ]))
     case "object":
       return Object.fromEntries(value.entries.map(([key, entry]) => [
         key,
-        key === "_privacyMode" ? privacyMode : decodeStepValue(entry, privacyMode),
+        key === "_privacyMode" ? privacyMode : decodeSlateValue(entry, privacyMode),
       ]))
   }
-  throw new TypeError("Stored Slate step value is invalid")
+  throw new TypeError("Stored Slate value is invalid")
 }
 
 function isStepUnknownField(value: unknown): value is SlateCheckpointUnknownField {
@@ -1123,7 +1178,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       const tool = step.tool as Record<string, unknown>
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
-          (tool.payload !== undefined && !isStoredStepValue(tool.payload))) return false
+          (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
         const hook = context as Record<string, unknown>
@@ -1134,7 +1189,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
     case "unsupported":
       return hasOnlyKeys(step, ["kind", "sourceCase", "value"]) &&
         (step.sourceCase === undefined || typeof step.sourceCase === "string") &&
-        (step.value === undefined || isStoredStepValue(step.value))
+        (step.value === undefined || isStoredSlateValue(step.value))
     default:
       return false
   }
@@ -1201,7 +1256,7 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
         tool: {
           ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
           ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
-            ? { payload: encodeStepValue(step.tool.value) }
+            ? { payload: encodeSlateValue(step.tool.value) }
             : {}),
         },
       }
@@ -1210,7 +1265,7 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       storedStep = {
         kind: step.kind,
         ...(step.sourceCase === undefined ? {} : { sourceCase: step.sourceCase }),
-        ...(Object.prototype.hasOwnProperty.call(step, "value") ? { value: encodeStepValue(step.value) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(step, "value") ? { value: encodeSlateValue(step.value) } : {}),
       }
       break
   }
@@ -1257,7 +1312,7 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
         tool: {
           ...(tool.operation === undefined ? {} : { case: tool.operation as string }),
           ...(Object.prototype.hasOwnProperty.call(tool, "payload")
-            ? { value: decodeStepValue(tool.payload as StoredStepValue, privacyMode) }
+            ? { value: decodeSlateValue(tool.payload as StoredSlateValue, privacyMode) }
             : {}),
         },
         ...(compatibility === undefined ? {} : { compatibility }),
@@ -1267,7 +1322,7 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
       return createSlateUnsupportedConversationStep({
         ...(step.sourceCase === undefined ? {} : { sourceCase: step.sourceCase as string }),
         ...(Object.prototype.hasOwnProperty.call(step, "value")
-          ? { value: decodeStepValue(step.value as StoredStepValue, privacyMode) }
+          ? { value: decodeSlateValue(step.value as StoredSlateValue, privacyMode) }
           : {}),
         ...(compatibility === undefined ? {} : { compatibility }),
       })
@@ -1303,6 +1358,239 @@ export function createSlateConversationStepSerde(privacyMode: PrivacyMode): Serd
   }
 }
 
+function isStoredTextValue(value: unknown): value is StoredSlateValue {
+  return isStoredSlateValue(value) && (value.kind === "string" || value.kind === "redacted-string")
+}
+
+function isStoredProjectDetails(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const project = value as Record<string, unknown>
+  if (!hasOnlyKeys(project, ["name", "subagent", "sideChat"]) ||
+      (project.name !== undefined && !isStoredTextValue(project.name))) return false
+  for (const key of ["subagent", "sideChat"] as const) {
+    const child = project[key]
+    if (child === undefined) continue
+    if (child === null || typeof child !== "object" || Array.isArray(child)) return false
+    const record = child as Record<string, unknown>
+    if (!hasOnlyKeys(record, ["storeDir"]) ||
+        (record.storeDir !== undefined && !isStoredTextValue(record.storeDir))) return false
+  }
+  return true
+}
+
+function isStoredSlateUserMessageEnvelope(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const envelope = value as Record<string, unknown>
+  if (!hasOnlyKeys(envelope, ["format", "version", "message", "compatibility"]) ||
+      envelope.format !== USER_MESSAGE_STORAGE_FORMAT || envelope.version !== 1 ||
+      envelope.message === null || typeof envelope.message !== "object" || Array.isArray(envelope.message)) return false
+  if (envelope.compatibility !== undefined) {
+    if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
+    const compatibility = envelope.compatibility as Record<string, unknown>
+    if (!hasOnlyKeys(compatibility, ["legacyModeCode", "legacyUnknownFields"]) ||
+        (compatibility.legacyModeCode !== undefined &&
+          (!Number.isSafeInteger(compatibility.legacyModeCode) ||
+            (compatibility.legacyModeCode as number) < -2_147_483_648 ||
+            (compatibility.legacyModeCode as number) > 2_147_483_647)) ||
+        (compatibility.legacyUnknownFields !== undefined &&
+          (!Array.isArray(compatibility.legacyUnknownFields) ||
+            !compatibility.legacyUnknownFields.every(isStepUnknownField)))) return false
+  }
+  const message = envelope.message as Record<string, unknown>
+  if (!hasOnlyKeys(message, [
+    "id", "content", "context", "mode", "simulated", "promotionGroupId", "promotionEligible",
+    "richContent", "origin", "conversationSnapshotId", "workerReminder", "actor", "planExecution",
+    "simulation", "promptReference", "thread", "contentBlobId", "richContentBlobId", "hooks",
+    "modeIntent", "project",
+  ]) ||
+      typeof message.id !== "string" || !isStoredTextValue(message.content) ||
+      (message.context !== undefined && !isStoredSlateValue(message.context)) ||
+      typeof message.mode !== "string" || !SLATE_MODE_VALUES.has(message.mode) ||
+      (message.simulated !== undefined && typeof message.simulated !== "boolean") ||
+      (message.promotionGroupId !== undefined && typeof message.promotionGroupId !== "string") ||
+      (message.promotionEligible !== undefined && typeof message.promotionEligible !== "boolean") ||
+      (message.richContent !== undefined && !isStoredTextValue(message.richContent)) ||
+      (message.origin !== undefined && typeof message.origin !== "string") ||
+      typeof message.conversationSnapshotId !== "string" || !/^(?:[0-9a-f]{2})*$/.test(message.conversationSnapshotId) ||
+      (message.workerReminder !== undefined && !isStoredTextValue(message.workerReminder)) ||
+      (message.actor !== undefined && !isStoredSlateValue(message.actor)) ||
+      (message.planExecution !== undefined && !isStoredSlateValue(message.planExecution)) ||
+      (message.simulation !== undefined && !isStoredSlateValue(message.simulation)) ||
+      (message.promptReference !== undefined && typeof message.promptReference !== "string") ||
+      (message.thread !== undefined && typeof message.thread !== "string") ||
+      (message.contentBlobId !== undefined &&
+        (typeof message.contentBlobId !== "string" || !/^(?:[0-9a-f]{2})*$/.test(message.contentBlobId))) ||
+      (message.richContentBlobId !== undefined &&
+        (typeof message.richContentBlobId !== "string" || !/^(?:[0-9a-f]{2})*$/.test(message.richContentBlobId))) ||
+      !Array.isArray(message.hooks) ||
+      !message.hooks.every(hook => hook !== null && typeof hook === "object" && !Array.isArray(hook) &&
+        hasOnlyKeys(hook as Record<string, unknown>, ["event", "text"]) &&
+        typeof (hook as Record<string, unknown>).event === "string" &&
+        isStoredTextValue((hook as Record<string, unknown>).text)) ||
+      (message.modeIntent !== undefined && !isStoredSlateValue(message.modeIntent)) ||
+      (message.project !== undefined && !isStoredProjectDetails(message.project))) return false
+  if (message.origin !== undefined && !SLATE_SIMULATED_REASON_VALUES.has(message.origin) &&
+      !/^unknown-(-?\d+)$/.test(message.origin)) return false
+  return true
+}
+
+function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
+  const stored: StoredSlateUserMessageV1 = {
+    id: message.messageId,
+    content: encodeSlateUserMessageValue(message.text),
+    ...(message.selectedContext === undefined ? {} : { context: encodeSlateUserMessageValue(message.selectedContext) }),
+    mode: message.mode,
+    ...(message.isSimulatedMsg === undefined ? {} : { simulated: message.isSimulatedMsg }),
+    ...(message.bestOfNGroupId === undefined ? {} : { promotionGroupId: message.bestOfNGroupId }),
+    ...(message.tryUseBestOfNPromotion === undefined ? {} : { promotionEligible: message.tryUseBestOfNPromotion }),
+    ...(message.richText === undefined ? {} : { richContent: encodeSlateUserMessageValue(message.richText) }),
+    ...(message.simulatedMsgReason === undefined ? {} : { origin: message.simulatedMsgReason }),
+    conversationSnapshotId: toHex(message.conversationStateBlobId),
+    ...(message.subagentSystemReminder === undefined ? {} : { workerReminder: encodeSlateUserMessageValue(message.subagentSystemReminder) }),
+    ...(message.triggeringUserInfo === undefined ? {} : { actor: encodeSlateUserMessageValue(message.triggeringUserInfo) }),
+    ...(message.executePlanInfo === undefined ? {} : { planExecution: encodeSlateUserMessageValue(message.executePlanInfo) }),
+    ...(message.simulatedMessageMetadata === undefined ? {} : { simulation: encodeSlateUserMessageValue(message.simulatedMessageMetadata) }),
+    ...(message.promptReferenceId === undefined ? {} : { promptReference: message.promptReferenceId }),
+    ...(message.threadId === undefined ? {} : { thread: message.threadId }),
+    ...(message.textBlobId === undefined ? {} : { contentBlobId: toHex(message.textBlobId) }),
+    ...(message.richTextBlobId === undefined ? {} : { richContentBlobId: toHex(message.richTextBlobId) }),
+    hooks: message.hookContexts.map(context => ({ event: context.event, text: encodeSlateUserMessageValue(context.text) })),
+    ...(message.customModeIntent === undefined ? {} : { modeIntent: encodeSlateUserMessageValue(message.customModeIntent) }),
+    ...(message.projectDetails === undefined
+      ? {}
+      : {
+          project: {
+            ...(message.projectDetails.name === undefined ? {} : { name: encodeSlateUserMessageValue(message.projectDetails.name) }),
+            ...(message.projectDetails.subagent === undefined
+              ? {}
+              : {
+                  subagent: message.projectDetails.subagent.storeDir === undefined
+                    ? {}
+                    : { storeDir: encodeSlateUserMessageValue(message.projectDetails.subagent.storeDir) },
+                }),
+            ...(message.projectDetails.sideChat === undefined
+              ? {}
+              : {
+                  sideChat: message.projectDetails.sideChat.storeDir === undefined
+                    ? {}
+                    : { storeDir: encodeSlateUserMessageValue(message.projectDetails.sideChat.storeDir) },
+                }),
+          },
+        }),
+  }
+  const compatibility = message.compatibility
+  const envelope = {
+    format: USER_MESSAGE_STORAGE_FORMAT,
+    version: 1,
+    message: stored,
+    ...(compatibility === undefined ||
+      (compatibility.legacyModeCode === undefined &&
+        (compatibility.legacyUnknownFields === undefined || compatibility.legacyUnknownFields.length === 0))
+      ? {}
+      : { compatibility }),
+  }
+  return utf8Serde.serialize(`SLATE-AGENT-USER\n${JSON.stringify(envelope)}`)
+}
+
+function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMode): SlateUserMessage | undefined {
+  if (!beginsWith(bytes, USER_MESSAGE_STORAGE_HEADER)) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(USER_MESSAGE_STORAGE_HEADER.length)))
+  } catch (error) {
+    throw new TypeError("Stored Slate user message is not valid JSON", { cause: error })
+  }
+  if (!isStoredSlateUserMessageEnvelope(parsed)) throw new TypeError("Stored Slate user message envelope is invalid")
+  const envelope = parsed as {
+    readonly message: StoredSlateUserMessageV1
+    readonly compatibility?: SlateUserMessageCompatibility
+  }
+  const message = envelope.message
+  const project = message.project
+  const decodeOptionalText = (value: StoredSlateValue | undefined) =>
+    value === undefined ? undefined : decodeSlateValue(value, privacyMode) as SlateUserMessage["text"]
+  const decoded: SlateUserMessage = {
+    messageId: message.id,
+    text: decodeSlateValue(message.content, privacyMode) as SlateUserMessage["text"],
+    ...(message.context === undefined ? {} : { selectedContext: decodeSlateValue(message.context, privacyMode) }),
+    mode: message.mode as SlateMode,
+    ...(message.simulated === undefined ? {} : { isSimulatedMsg: message.simulated }),
+    ...(message.promotionGroupId === undefined ? {} : { bestOfNGroupId: message.promotionGroupId }),
+    ...(message.promotionEligible === undefined ? {} : { tryUseBestOfNPromotion: message.promotionEligible }),
+    ...(message.richContent === undefined ? {} : { richText: decodeOptionalText(message.richContent) as SlateUserMessageText }),
+    ...(message.origin === undefined
+      ? {}
+      : { simulatedMsgReason: message.origin as Exclude<SlateUserMessage["simulatedMsgReason"], undefined> }),
+    conversationStateBlobId: fromHex(message.conversationSnapshotId),
+    ...(message.workerReminder === undefined ? {} : { subagentSystemReminder: decodeOptionalText(message.workerReminder) as SlateUserMessageText }),
+    ...(message.actor === undefined ? {} : { triggeringUserInfo: decodeSlateValue(message.actor, privacyMode) }),
+    ...(message.planExecution === undefined ? {} : { executePlanInfo: decodeSlateValue(message.planExecution, privacyMode) }),
+    ...(message.simulation === undefined ? {} : { simulatedMessageMetadata: decodeSlateValue(message.simulation, privacyMode) }),
+    ...(message.promptReference === undefined ? {} : { promptReferenceId: message.promptReference }),
+    ...(message.thread === undefined ? {} : { threadId: message.thread }),
+    ...(message.contentBlobId === undefined ? {} : { textBlobId: fromHex(message.contentBlobId) }),
+    ...(message.richContentBlobId === undefined ? {} : { richTextBlobId: fromHex(message.richContentBlobId) }),
+    hookContexts: message.hooks.map(context => ({
+      event: context.event,
+      text: decodeSlateValue(context.text, privacyMode) as SlateUserMessageText,
+    })),
+    ...(message.modeIntent === undefined ? {} : { customModeIntent: decodeSlateValue(message.modeIntent, privacyMode) }),
+    ...(project === undefined
+      ? {}
+      : {
+          projectDetails: {
+            ...(project.name === undefined ? {} : { name: decodeOptionalText(project.name) as SlateUserMessageText }),
+            ...(project.subagent === undefined
+              ? {}
+              : {
+                  subagent: project.subagent.storeDir === undefined
+                    ? {}
+                    : { storeDir: decodeOptionalText(project.subagent.storeDir) as SlateUserMessageText },
+                }),
+            ...(project.sideChat === undefined
+              ? {}
+              : {
+                  sideChat: project.sideChat.storeDir === undefined
+                    ? {}
+                    : { storeDir: decodeOptionalText(project.sideChat.storeDir) as SlateUserMessageText },
+                }),
+          },
+        }),
+    ...(envelope.compatibility === undefined ? {} : { compatibility: envelope.compatibility }),
+  }
+  return decoded
+}
+
+export function createSlateUserMessageSerde(privacyMode: PrivacyMode): Serde<SlateUserMessage> {
+  return {
+    serialize: encodeStoredSlateUserMessage,
+    deserialize(bytes) {
+      const stored = decodeStoredSlateUserMessage(bytes, privacyMode)
+      if (stored !== undefined) return stored
+      const legacy = UserMessage.fromBinary(bytes)
+      const legacyUnknownFields = collectStepUnknownFields(legacy)
+      const redacted = toRedactedUserMessage(legacy, privacyMode)
+      const slate = fromInteropUserMessage(redacted as unknown as UserMessage)
+      if (legacyUnknownFields.length === 0) return slate
+      return {
+        ...slate,
+        compatibility: {
+          ...(slate.compatibility ?? {}),
+          legacyUnknownFields,
+        },
+      }
+    },
+    getBlobType() {
+      return { kind: "json", typeName: USER_MESSAGE_STORAGE_FORMAT }
+    },
+  }
+}
+
+export function deserializeSlateUserMessageInterop(bytes: Uint8Array): UserMessage {
+  const slate = createSlateUserMessageSerde(PrivacyModes.UNSPECIFIED).deserialize(bytes)
+  return toPlainInteropUserMessage(slate)
+}
+
 export function createEmptyRedactedShellOutputInterop(privacyMode: PrivacyMode) {
   return toRedactedShellOutput(new ShellOutput({
     stdout: "",
@@ -1327,12 +1615,12 @@ function serdeDecoder<Redacted, Plain>(
   return (value, purpose) => fromRedacted(value, purpose, undefined)
 }
 
-/** Protobuf-backed agent records are persisted in their redacted form at the interop storage boundary. */
+/** Agent records use Slate-owned serdes where migrated; remaining legacy codecs stay at this adapter boundary. */
 export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
   return {
     shellCommand: createRedactedProtoSerde(ShellCommand, toRedactedShellCommand, serdeDecoder(fromRedactedShellCommand), privacyMode),
     shellOutput: createRedactedProtoSerde(ShellOutput, toRedactedShellOutput, serdeDecoder(fromRedactedShellOutput), privacyMode),
-    userMessage: createRedactedProtoSerde(UserMessage, toRedactedUserMessage, serdeDecoder(fromRedactedUserMessage), privacyMode),
+    userMessage: createSlateUserMessageSerde(privacyMode),
     conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, serdeDecoder(fromRedactedConversationStep), privacyMode),
     conversationSummary: createRedactedProtoSerde(ConversationSummary, toRedactedConversationSummary, serdeDecoder(fromRedactedConversationSummary), privacyMode),
     conversationSummaryArchive: createRedactedProtoSerde(ConversationSummaryArchive, toRedactedConversationSummaryArchive, serdeDecoder(fromRedactedConversationSummaryArchive), privacyMode),

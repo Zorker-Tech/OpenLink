@@ -11,7 +11,9 @@ import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-
 import { createSlateAgentConversationCodec } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import {
   createSlateConversationStepSerde,
+  createSlateUserMessageSerde,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import {
   metadataObserverForStore,
   ensureBlobVisibleToCloudMirror,
@@ -366,7 +368,7 @@ test("checkpointing writes the structure and reloading finds it again", async ()
   assert.equal(toHex(reloaded.getLatestCheckpoint().turns[0] as Uint8Array), toHex(turnId))
 })
 
-test("full conversation hydration reads Slate step blobs through the compatibility boundary", async () => {
+test("full conversation hydration reads Slate user-message and step blobs through their adapters", async () => {
   const store = new InMemoryBlobStore()
   const metadata = metadataStore(getDefaultAgentMetadata("agent-slate-step"))
   const conversation = new AgentConversationStore(store, metadata, {
@@ -374,7 +376,7 @@ test("full conversation hydration reads Slate step blobs through the compatibili
   })
 
   const userMessage = new UserMessage({ text: "hello" })
-  const userMessageBytes = userMessage.toBinary()
+  const userMessageBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(fromInteropUserMessage(userMessage))
   const userMessageId = await getBlobId(userMessageBytes)
   await store.setBlob(ctx, userMessageId, userMessageBytes)
 
@@ -404,6 +406,7 @@ test("full conversation hydration reads Slate step blobs through the compatibili
   const loadedTurn = full.turns[0]?.turn
   assert.equal(loadedTurn?.case, "agentConversationTurn")
   if (loadedTurn?.case !== "agentConversationTurn") assert.fail("expected the stored agent turn")
+  assert.equal(loadedTurn.value.userMessage?.text, "hello")
   const loadedStep = loadedTurn.value.steps[0]
   assert.equal(loadedStep?.message.case, "assistantMessage")
   if (loadedStep?.message.case !== "assistantMessage") assert.fail("expected the stored assistant step")
