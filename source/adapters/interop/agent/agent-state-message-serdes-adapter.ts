@@ -356,32 +356,80 @@ export function toInteropPlanRegistryEntry(entry: SlatePlanRegistryEntry): PlanR
   return new PlanRegistryEntry({ id: entry.id, path: entry.path })
 }
 
+const CONVERSATION_PLAN_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-PLAN\n")
+const CONVERSATION_PLAN_STORAGE_FORMAT = "slate.agent-conversation-plan"
+
+function isStoredSlateConversationPlan(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const envelope = value as Record<string, unknown>
+  if (!hasOnlyKeys(envelope, ["format", "version", "plan", "compatibility"]) ||
+      envelope.format !== CONVERSATION_PLAN_STORAGE_FORMAT || envelope.version !== 1 ||
+      envelope.plan === null || typeof envelope.plan !== "object" || Array.isArray(envelope.plan)) return false
+  const plan = envelope.plan as Record<string, unknown>
+  if (!hasOnlyKeys(plan, ["content"]) || typeof plan.content !== "string") return false
+  if (envelope.compatibility !== undefined) {
+    if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
+    const compatibility = envelope.compatibility as Record<string, unknown>
+    if (!hasOnlyKeys(compatibility, ["legacyUnknownFields"]) ||
+        (compatibility.legacyUnknownFields !== undefined &&
+          (!Array.isArray(compatibility.legacyUnknownFields) ||
+            !compatibility.legacyUnknownFields.every(isStepUnknownField)))) return false
+  }
+  return true
+}
+
 export function createSlateConversationPlanSerde(privacyMode: PrivacyMode): Serde<SlateConversationPlanState> {
-  const interopSerde = createRedactedProtoSerde(
-    ConversationPlan,
-    toRedactedConversationPlan,
-    serdeDecoder(fromRedactedConversationPlan),
-    privacyMode,
-  )
+  void privacyMode
   return {
     serialize(plan) {
-      return interopSerde.serialize(
-        toRedactedConversationPlan(new ConversationPlan({ plan: plan.content }), privacyMode),
-      )
+      if (typeof plan.content !== "string") throw new TypeError("Slate conversation plan content must be text")
+      const compatibility = plan.compatibility
+      if (compatibility?.legacyUnknownFields?.some(field => !isStepUnknownField(field))) {
+        throw new TypeError("Slate conversation plan compatibility data is invalid")
+      }
+      const envelope = {
+        format: CONVERSATION_PLAN_STORAGE_FORMAT,
+        version: 1,
+        plan: { content: plan.content },
+        ...(compatibility?.legacyUnknownFields === undefined || compatibility.legacyUnknownFields.length === 0
+          ? {}
+          : { compatibility: { legacyUnknownFields: compatibility.legacyUnknownFields } }),
+      }
+      return utf8Serde.serialize(`SLATE-AGENT-PLAN\n${JSON.stringify(envelope)}`)
     },
     deserialize(bytes) {
-      const redacted = interopSerde.deserialize(bytes)
-      const plain = fromRedactedConversationPlan(
-        redacted,
-        PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-        undefined,
-      )
-      return { content: plain.plan }
+      if (beginsWith(bytes, CONVERSATION_PLAN_STORAGE_HEADER)) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(CONVERSATION_PLAN_STORAGE_HEADER.length)))
+        } catch (error) {
+          throw new TypeError("Stored Slate conversation plan is not valid JSON", { cause: error })
+        }
+        if (!isStoredSlateConversationPlan(parsed)) throw new TypeError("Stored Slate conversation plan envelope is invalid")
+        const envelope = parsed as {
+          readonly plan: { readonly content: string }
+          readonly compatibility?: { readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[] }
+        }
+        return {
+          content: envelope.plan.content,
+          ...(envelope.compatibility === undefined ? {} : { compatibility: envelope.compatibility }),
+        }
+      }
+      const legacy = ConversationPlan.fromBinary(bytes)
+      const legacyUnknownFields = collectStepUnknownFields(legacy)
+      return {
+        content: legacy.plan,
+        ...(legacyUnknownFields.length === 0 ? {} : { compatibility: { legacyUnknownFields } }),
+      }
     },
     getBlobType() {
-      return interopSerde.getBlobType?.() ?? { kind: "proto", typeName: "agent.v1.ConversationPlan" }
+      return { kind: "json", typeName: CONVERSATION_PLAN_STORAGE_FORMAT }
     },
   }
+}
+
+export function deserializeSlateConversationPlan(bytes: Uint8Array): SlateConversationPlanState {
+  return createSlateConversationPlanSerde(PrivacyModes.UNSPECIFIED).deserialize(bytes)
 }
 
 const INTEROP_TO_SLATE_GOAL_STATUS = new Map<number, import("../../../packages/agent-core/goal-continuation.ts").SlateGoalStatus>([

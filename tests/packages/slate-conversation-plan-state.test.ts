@@ -31,19 +31,29 @@ test("a plan without text is refused instead of being stored as an empty plan", 
   assert.throws(() => slateConversationPlanFromValue({ plan: 42 }), TypeError)
 })
 
-test("Slate plan state reads and writes the historical ConversationPlan blob", () => {
+test("Slate plan state writes an owned envelope and imports legacy ConversationPlan blobs", () => {
   const serde = createSlateConversationPlanSerde(PrivacyMode.NO_STORAGE)
   const content = "# Plan\n\n1. Preserve every observable behavior."
   const bytes = serde.serialize({ content })
 
-  assert.equal(ConversationPlan.fromBinary(bytes).plan, content)
+  assert.ok(new TextDecoder().decode(bytes).startsWith("SLATE-AGENT-PLAN\n"))
+  assert.equal(JSON.parse(new TextDecoder().decode(bytes).slice("SLATE-AGENT-PLAN\n".length)).plan.content, content)
   assert.deepEqual(serde.deserialize(bytes), { content })
   assert.deepEqual(
     serde.deserialize(new ConversationPlan({ plan: "previous checkpoint" }).toBinary()),
     { content: "previous checkpoint" },
   )
-  assert.deepEqual(serde.getBlobType?.(), {
-    kind: "proto",
-    typeName: "agent.v1.ConversationPlan",
-  })
+  assert.deepEqual(serde.getBlobType?.(), { kind: "json", typeName: "slate.agent-conversation-plan" })
+})
+
+test("unknown legacy plan fields survive the Slate format migration", () => {
+  const serde = createSlateConversationPlanSerde(PrivacyMode.NO_STORAGE)
+  const legacy = new ConversationPlan({ plan: "previous checkpoint" })
+  ConversationPlan.runtime.bin.onUnknownField(legacy, 100, 0, new Uint8Array([9]))
+
+  const imported = serde.deserialize(legacy.toBinary())
+  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 1)
+  const rewritten = serde.serialize(imported)
+  assert.ok(new TextDecoder().decode(rewritten).startsWith("SLATE-AGENT-PLAN\n"))
+  assert.equal(serde.deserialize(rewritten).compatibility?.legacyUnknownFields?.length, 1)
 })
