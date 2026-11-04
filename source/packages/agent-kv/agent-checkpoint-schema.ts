@@ -30,6 +30,15 @@ export interface SlateAgentCheckpointV1 {
   readonly interopSnapshot: AgentCheckpointJsonObject
 }
 
+/** A complete first-party conversation snapshot in the version 2 storage format. */
+export interface SlateAgentCheckpointV2 {
+  readonly format: "slate.agent-conversation-checkpoint"
+  readonly version: 2
+  readonly conversation: AgentCheckpointJsonObject
+}
+
+export type SlateAgentCheckpoint = SlateAgentCheckpointV1 | SlateAgentCheckpointV2
+
 const FORMAT = "slate.agent-conversation-checkpoint"
 const VERSION = 1
 const HEADER = utf8Serde.serialize("SLATE-AGENT-CHECKPOINT\n")
@@ -79,8 +88,26 @@ export function serializeSlateAgentCheckpoint(
   return blob
 }
 
+/** Serializes a Slate-owned conversation snapshot without a generated-message JSON payload. */
+export function serializeSlateAgentCheckpointV2(
+  conversation: AgentCheckpointJsonObject,
+): Uint8Array {
+  if (!Object.values(conversation).every(isJsonValue)) {
+    throw new TypeError("Slate conversation checkpoint contains non-JSON data")
+  }
+  const body = utf8Serde.serialize(JSON.stringify({
+    format: FORMAT,
+    version: 2,
+    conversation,
+  }))
+  const blob = new Uint8Array(HEADER.length + body.length)
+  blob.set(HEADER)
+  blob.set(body, HEADER.length)
+  return blob
+}
+
 /** Returns `undefined` for a legacy root so the interop adapter can decode its former protobuf format. */
-export function deserializeSlateAgentCheckpoint(blob: Uint8Array): SlateAgentCheckpointV1 | undefined {
+export function deserializeSlateAgentCheckpoint(blob: Uint8Array): SlateAgentCheckpoint | undefined {
   if (!hasHeader(blob)) return undefined
 
   let parsed: unknown
@@ -89,8 +116,15 @@ export function deserializeSlateAgentCheckpoint(blob: Uint8Array): SlateAgentChe
   } catch (error) {
     throw new TypeError("Slate agent checkpoint JSON is invalid", { cause: error })
   }
-  if (!isRecord(parsed) || parsed.format !== FORMAT || parsed.version !== VERSION) {
+  if (!isRecord(parsed) || parsed.format !== FORMAT || (parsed.version !== 1 && parsed.version !== 2)) {
     throw new TypeError("Slate agent checkpoint envelope is unsupported")
+  }
+  if (parsed.version === 2) {
+    if (!Object.keys(parsed).every(key => key === "format" || key === "version" || key === "conversation") ||
+        !isRecord(parsed.conversation) || !Object.values(parsed.conversation).every(isJsonValue)) {
+      throw new TypeError("Slate agent checkpoint conversation is invalid")
+    }
+    return parsed as unknown as SlateAgentCheckpointV2
   }
   if (!isRecord(parsed.conversation) || !isRecord(parsed.interopSnapshot)) {
     throw new TypeError("Slate agent checkpoint data is incomplete")
