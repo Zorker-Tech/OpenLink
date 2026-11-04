@@ -23,11 +23,19 @@ import type {
 } from "../../../packages/agent-kv/agent-conversation-store-contracts.ts"
 import {
   deserializeSlateAgentCheckpoint,
-  serializeSlateAgentCheckpoint,
+  serializeSlateAgentCheckpointV2,
   type AgentCheckpointJsonObject,
 } from "../../../packages/agent-kv/agent-checkpoint-schema.ts"
 import { fromHex, toHex } from "../../../packages/agent-kv/serde.ts"
 import { resolveSubagentPersistedStates } from "../../../packages/agent-kv/subagent-states.ts"
+import {
+  isSlateConversationCheckpointV2,
+  type SlateCheckpointUnknownField,
+} from "../../../packages/agent/conversation-checkpoint-state.ts"
+import {
+  interopConversationCheckpointFromSlate,
+  slateConversationCheckpointFromInterop,
+} from "./slate-agent-checkpoint-interop-adapter.ts"
 
 const todoItemSerde = new ProtobufBlobSerde(TodoItem)
 const userMessageSerde = new ProtobufBlobSerde(UserMessage)
@@ -201,31 +209,32 @@ export async function deriveInteropConversationStateFromStructure<Context>(
   return state
 }
 
-/** Writes a Slate root envelope while keeping runtime snapshot interpretation at this interop boundary. */
+/** Projects the runner snapshot into the complete Slate v2 durable conversation schema. */
 export function encodeInteropAgentConversationCheckpoint(checkpoint: ConversationStateStructure): Uint8Array {
-  const interopSnapshot = {
-    ...(checkpoint.toJson() as unknown as Record<string, unknown>),
-  }
-  delete interopSnapshot.turns
-  delete interopSnapshot.todos
-  delete interopSnapshot.summary
-  delete interopSnapshot.summaryArchive
-  delete interopSnapshot.summaryArchives
   const unknownFields = collectUnknownFields(checkpoint)
-  if (unknownFields.length > 0) interopSnapshot[PRESERVED_UNKNOWN_FIELDS_KEY] = unknownFields
-  return serializeSlateAgentCheckpoint({
-    turnBlobIds: checkpoint.turns.map(toHex),
-    todoBlobIds: checkpoint.todos.map(toHex),
-    ...(checkpoint.summary === undefined ? {} : { summaryBlobId: toHex(checkpoint.summary) }),
-    ...(checkpoint.summaryArchive === undefined ? {} : { summaryArchiveBlobId: toHex(checkpoint.summaryArchive) }),
-    summaryArchiveBlobIds: checkpoint.summaryArchives.map(toHex),
-  }, interopSnapshot as AgentCheckpointJsonObject)
+  const conversation = slateConversationCheckpointFromInterop(checkpoint, unknownFields)
+  if (!isSlateConversationCheckpointV2(conversation)) {
+    throw new TypeError("Conversation checkpoint cannot be represented by Slate's version 2 schema")
+  }
+  return serializeSlateAgentCheckpointV2(conversation as unknown as AgentCheckpointJsonObject)
 }
 
 /** Reads Slate roots and the legacy root encoding into the runner's current interop view. */
 export function decodeInteropAgentConversationCheckpoint(bytes: Uint8Array): ConversationStateStructure {
   const slateCheckpoint = deserializeSlateAgentCheckpoint(bytes)
   if (slateCheckpoint === undefined) return checkpointSerde.deserialize(bytes)
+
+  if (slateCheckpoint.version === 2) {
+    if (!isSlateConversationCheckpointV2(slateCheckpoint.conversation)) {
+      throw new TypeError("Slate conversation checkpoint state is invalid")
+    }
+    const checkpoint = interopConversationCheckpointFromSlate(slateCheckpoint.conversation)
+    restoreUnknownFields(
+      checkpoint,
+      slateCheckpoint.conversation.compatibility?.legacyUnknownFields,
+    )
+    return checkpoint
+  }
 
   const interopSnapshot = { ...slateCheckpoint.interopSnapshot } as Record<string, unknown>
   const rawUnknownFields = interopSnapshot[PRESERVED_UNKNOWN_FIELDS_KEY]
@@ -242,22 +251,26 @@ export function decodeInteropAgentConversationCheckpoint(bytes: Uint8Array): Con
   if (slateCheckpoint.conversation.summaryArchiveBlobId !== undefined) {
     checkpoint.summaryArchive = fromHex(slateCheckpoint.conversation.summaryArchiveBlobId)
   }
-  if (rawUnknownFields !== undefined) {
-    if (!Array.isArray(rawUnknownFields)) throw new TypeError("Slate checkpoint unknown fields are invalid")
-    for (const value of rawUnknownFields) {
-      const unknownField = parsePreservedUnknownField(value)
-      ConversationStateStructure.runtime.bin.onUnknownField(
-        messageAtUnknownFieldPath(checkpoint, unknownField.path),
-        unknownField.number,
-        unknownField.wireType as Parameters<typeof ConversationStateStructure.runtime.bin.onUnknownField>[2],
-        fromHex(unknownField.dataHex),
-      )
-    }
-  }
+  restoreUnknownFields(checkpoint, rawUnknownFields)
   return checkpoint
 }
 
-export function createProtobufAgentConversationCodec<Context>(): AgentConversationCodec<
+function restoreUnknownFields(checkpoint: ConversationStateStructure, raw: unknown): void {
+  if (raw === undefined) return
+  if (!Array.isArray(raw)) throw new TypeError("Slate checkpoint unknown fields are invalid")
+  for (const value of raw) {
+    const unknownField = parsePreservedUnknownField(value as SlateCheckpointUnknownField)
+    ConversationStateStructure.runtime.bin.onUnknownField(
+      messageAtUnknownFieldPath(checkpoint, unknownField.path),
+      unknownField.number,
+      unknownField.wireType as Parameters<typeof ConversationStateStructure.runtime.bin.onUnknownField>[2],
+      fromHex(unknownField.dataHex),
+    )
+  }
+}
+
+/** Owns Slate checkpoint persistence and adapts restored roots to the current runner view. */
+export function createSlateAgentConversationCodec<Context>(): AgentConversationCodec<
   Context,
   ConversationStateStructure,
   ConversationStateMessage
@@ -289,3 +302,6 @@ export function createProtobufAgentConversationCodec<Context>(): AgentConversati
     },
   }
 }
+
+/** Compatibility export for callers that have not yet renamed their codec wiring. */
+export const createProtobufAgentConversationCodec = createSlateAgentConversationCodec

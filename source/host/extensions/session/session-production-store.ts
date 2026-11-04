@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { AgentConversationStore } from "../../../packages/agent-kv/agent-conversation-store.ts";
 import {
-  createProtobufAgentConversationCodec,
+  createSlateAgentConversationCodec,
   deriveInteropConversationStateFromStructure,
 } from "../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 import type { Context } from "../../../packages/context/context.ts";
@@ -55,7 +55,7 @@ export function createSessionMaterialization(
       db,
       {
         fixedRootBlobId: SLATE_CONVERSATION_ROOT_SLOT_ID,
-        codec: createProtobufAgentConversationCodec<Context>(),
+        codec: createSlateAgentConversationCodec<Context>(),
       },
     ),
     createMemoryStore: agentDir => store.createMemoryStore(agentDir),

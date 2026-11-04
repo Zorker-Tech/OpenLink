@@ -1,5 +1,6 @@
 import { deserializeSlateAgentCheckpoint } from "../../../packages/agent-kv/agent-checkpoint-schema.ts";
 import { fromHex } from "../../../packages/agent-kv/serde.ts";
+import { isSlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts";
 
 /**
  * A conversation's state, as it is stored.
@@ -159,6 +160,16 @@ export function decodeTranscriptMirrorConversationState(bytes: Uint8Array): Tran
     throw new TranscriptMirrorProtobufDecodeError("Slate conversation checkpoint is invalid");
   }
   if (slateCheckpoint !== undefined) {
+    if (slateCheckpoint.version === 2) {
+      if (!isSlateConversationCheckpointV2(slateCheckpoint.conversation)) {
+        throw new TranscriptMirrorProtobufDecodeError("Slate checkpoint prompt references are invalid");
+      }
+      return {
+        rootPromptMessagesJson: slateCheckpoint.conversation.promptMessageBlobIds.map(fromHex),
+        turns: slateCheckpoint.conversation.turnBlobIds.map(fromHex),
+        summaryArchives: slateCheckpoint.conversation.summaryArchiveBlobIds.map(fromHex),
+      };
+    }
     const prompts = slateCheckpoint.interopSnapshot.rootPromptMessagesJson;
     if (prompts !== undefined && (!Array.isArray(prompts) || prompts.some(value => typeof value !== "string"))) {
       throw new TranscriptMirrorProtobufDecodeError("Slate checkpoint prompt references are invalid");
