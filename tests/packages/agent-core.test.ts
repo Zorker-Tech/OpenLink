@@ -128,7 +128,7 @@ test("a goal belongs to its conversation and, when it names one, to its agent se
   )
 
   assert.equal(isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-1", status: GOAL_STATUS_ACTIVE }, identity), true)
-  assert.equal(isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-1", status: 2 }, identity), false)
+  assert.equal(isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-1", status: "paused" }, identity), false)
   assert.equal(
     isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-9", status: GOAL_STATUS_ACTIVE }, identity),
     false,
@@ -140,7 +140,7 @@ test("a goal belongs to its conversation and, when it names one, to its agent se
 })
 
 test("a goal's clock reads a stored total, and an unanchored clock does not accrue", () => {
-  assert.equal(GOAL_STATUS_ACTIVE, 1)
+  assert.equal(GOAL_STATUS_ACTIVE, "active")
   assert.equal(goalWorkedMs(null), 0)
   assert.equal(goalWorkedMs({ goalId: GOAL_ID }), 0)
   assert.equal(goalWorkedMs({ goalId: GOAL_ID, activeDurationMs: BigInt(-5) }), -5)

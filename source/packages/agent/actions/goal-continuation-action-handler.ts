@@ -21,7 +21,7 @@
 import * as crypto from "node:crypto"
 
 import { createGoalContinuationWakeAction } from "../../../adapters/interop/agent/goal-continuation-message-adapter.ts"
-import { pauseGoalState } from "../../../adapters/interop/agent/paused-goal-state-adapter.ts"
+import { pauseGoalState } from "../goal-state.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../constants/system-notification.ts"
 import { goalClockOnDeactivation, isGoalStateShapeValid } from "../../agent-core/goal-continuation.ts"
 import { buildGoalPursuitGuidelines } from "../../agent-core/goal-guidelines.ts"

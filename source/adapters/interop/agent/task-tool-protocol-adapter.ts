@@ -8,16 +8,20 @@ import {
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { SubagentArgs } from "../proto/generated/agent/v1/subagent_exec_pb.ts"
 import {
-  fromRedactedConversationStateStructure,
   toRedactedConversationAction,
-  toRedactedConversationStateStructure,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { toRedactedTaskConversationState } from "./task-conversation-state-adapter.ts"
+import { fromRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
+export {
+  fromInteropTaskConversationState,
+  fromRedactedTaskConversationState,
+} from "./task-conversation-state-adapter.ts"
 
 export type TaskResultInterop = TaskResult
 export type TaskSubagentCredentialsInterop = SubagentArgs["credentials"]
-export const fromRedactedConversationStateStructureInterop = fromRedactedConversationStateStructure
+export { fromRedactedConversationStateStructureInterop }
 export const toRedactedConversationActionInterop = toRedactedConversationAction
-export const toRedactedConversationStateStructureInterop = toRedactedConversationStateStructure
+export const toRedactedConversationStateStructureInterop = toRedactedTaskConversationState
 
 export function createTaskErrorResultInterop(error: unknown): TaskResultInterop {
   const message = error instanceof Error ? error.message : String(error)

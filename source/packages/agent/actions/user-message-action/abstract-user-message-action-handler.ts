@@ -6,13 +6,11 @@ import {
   createEmptyRequestContextInterop,
   createRedactedConversationTokenDetailsInterop,
   createSyntheticUserMessageInterop,
-  fromRedactedConversationPlanInterop,
   fromRedactedMcpToolDefinitionInterop,
   fromRedactedRequestContextInterop,
   fromRedactedTodoItemInterop,
   fromRedactedToolCallInterop,
   fromRedactedUserMessageInterop,
-  toRedactedConversationPlanInterop,
   toRedactedInteractionUpdateInterop,
   toRedactedTodoItemInterop,
   toRedactedToolCallInterop,
@@ -21,6 +19,10 @@ import {
 } from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import type { Context } from "../../../context/context.ts";
 import type { SlateConversationStep } from "../../conversation-step-state.ts";
+import {
+  slateConversationPlanFromValue,
+  type SlateConversationPlanState,
+} from "../../conversation-plan-state.ts";
 import type { RequestContextResources } from "../../utils/request-context.ts";
 import { createSpan } from "../../../context/telemetry.ts";
 import { createLogger } from "../../../context/logging.ts";
@@ -1206,13 +1208,13 @@ interface SplitStepStateMutationTarget {
   getBlobStore(): unknown;
   setActiveBranchName(branchName: string | undefined): void;
   persistSubagentState(runContext: Context, subagentId: string, subagentType: unknown, turnStatus: Partial<Record<string, unknown>>): void;
-  setPlan(plan: unknown | undefined): void;
+  setPlan(plan: SlateConversationPlanState | undefined): void;
   setMode(mode: SlateModeValue): void;
   setTodos(todos: readonly unknown[]): void;
   upsertPlanEntry(entry: unknown): void;
   setGoalState(goalState: unknown): void;
   appendCommunicateUpdateHistoryEntry(entry: unknown): void;
-  recordReadPath(path: { unwrap(purpose: PrivacyCapability): string }): void;
+  recordReadPath(path: string): void;
   markAskQuestionCompleted?: (originalToolCallId: string) => void;
   getPrivacyMode(): PrivacyMode;
 }
@@ -1246,7 +1248,7 @@ interface SplitStepStateOpBase {
 type SplitStepStateOp =
   | (SplitStepStateOpBase & { readonly type: "setActiveBranchName"; readonly branchName: string | undefined })
   | (SplitStepStateOpBase & { readonly type: "persistSubagentState"; readonly subagentId: string; readonly subagentType: unknown; readonly state: Partial<Record<string, unknown>> })
-  | (SplitStepStateOpBase & { readonly type: "setPlan"; readonly plan: unknown | undefined })
+  | (SplitStepStateOpBase & { readonly type: "setPlan"; readonly plan: SlateConversationPlanState | undefined })
   | (SplitStepStateOpBase & { readonly type: "setMode"; readonly mode: SlateModeValue })
   | (SplitStepStateOpBase & { readonly type: "setTodos"; readonly todos: readonly unknown[] })
   | (SplitStepStateOpBase & { readonly type: "upsertPlanEntry"; readonly entry: unknown })
@@ -1321,11 +1323,12 @@ function createSplitStepStateHandler(
       }
       if (property === "setPlan") {
         return (plan: unknown | undefined) => {
+          const slatePlan = plan === undefined ? undefined : slateConversationPlanFromValue(plan);
           stateOperations.push({
             type: "setPlan",
-            plan: plan === undefined ? undefined : fromRedactedConversationPlanInterop(plan, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+            plan: slatePlan,
           });
-          return target.setPlan(plan);
+          return target.setPlan(slatePlan);
         };
       }
       if (property === "setMode") {
@@ -1362,8 +1365,8 @@ function createSplitStepStateHandler(
         };
       }
       if (property === "recordReadPath") {
-        return (path: { unwrap(purpose: PrivacyCapability): string }) => {
-          stateOperations.push({ type: "recordReadPath", path: path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) });
+        return (path: string) => {
+          stateOperations.push({ type: "recordReadPath", path });
           return target.recordReadPath(path);
         };
       }
@@ -1413,7 +1416,7 @@ async function applyConversationStateOp(
       turnState.persistSubagentState(runContext, stateOperation.subagentId, stateOperation.subagentType, stateOperation.state);
       break;
     case "setPlan":
-      turnState.setPlan(stateOperation.plan === undefined ? undefined : toRedactedConversationPlanInterop(stateOperation.plan, turnState.getPrivacyMode()));
+      turnState.setPlan(stateOperation.plan);
       break;
     case "setMode":
       turnState.setMode(stateOperation.mode);
@@ -1439,7 +1442,7 @@ async function applyConversationStateOp(
       }
       break;
     case "recordReadPath":
-      turnState.recordReadPath(safeString(stateOperation.path));
+      turnState.recordReadPath(stateOperation.path);
       break;
     case "markAskQuestionCompleted":
       if (typeof turnState.markAskQuestionCompleted === "function") {

@@ -1,9 +1,10 @@
 /** Convert the host's turn selection into the redacted Agent input required by the interop boundary. */
 
-import { toRedactedConversationAction, toRedactedConversationStateStructure } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { toRedactedConversationAction } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { ConversationAction, ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { toRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
 
 export type InteropConversationAction = ConversationAction
 export type InteropConversationState = ConversationStateStructure
@@ -48,7 +49,7 @@ export function projectInteropTurnRun(input: {
 }): InteropTurnRunProjection {
   const isResume = input.resumeFrom !== undefined
   return {
-    state: toRedactedConversationStateStructure(input.resumeFrom ?? input.baseState, input.privacyMode),
+    state: toRedactedConversationStateStructureInterop(input.resumeFrom ?? input.baseState, input.privacyMode),
     action: toRedactedConversationAction(isResume ? input.resumeAction : input.action, input.privacyMode),
     isResume,
   }

@@ -6,18 +6,11 @@ import type {
   CloudSubagentPersistedStateArgs,
   TaskTargetMachine,
 } from "./tools/task-runtime-types.ts"
+import { PrivacyMode } from "../redaction/privacy-mode.ts"
+import type { SlateConversationState } from "./conversation-state.ts"
 
-/**
- * The product-owned top-level shape of a subagent conversation snapshot.
- *
- * Turn blobs are the durable conversation references. Other fields remain opaque here until the shared
- * conversation snapshot itself is migrated; the interop adapter preserves them when crossing the legacy
- * storage and launch boundaries.
- */
-export interface SlateTaskConversationState {
-  readonly turns: readonly Uint8Array[]
-  readonly [key: string]: unknown
-}
+/** Subagent snapshots use the same first-party conversation schema as their owning conversation. */
+export type SlateTaskConversationState = SlateConversationState
 
 export interface SlateSubagentCloudReference {
   readonly bcId: string
@@ -39,7 +32,16 @@ export interface SlateSubagentPersistedState {
 }
 
 export function createEmptySlateTaskConversationState(): SlateTaskConversationState {
-  return { turns: [] }
+  return {
+    privacyMode: PrivacyMode.UNSPECIFIED,
+    rootPromptMessagesJson: [],
+    turns: [],
+    todos: [],
+    previousWorkspaceUris: [],
+    summaryArchives: [],
+    fileStatesV2: new Map(),
+    readPaths: [],
+  }
 }
 
 /** Creates a persisted subagent record with stable empty defaults and only the supplied optional fields. */
@@ -86,11 +88,11 @@ export function createSlateCloudSubagentPersistedState(
 }
 
 export function createSlateSubagentConversationState(input: {
-  readonly conversationState: Pick<SlateTaskConversationState, "turns">
+  readonly conversationState: SlateTaskConversationState
   readonly modelId: string | undefined
 }): SlateSubagentPersistedState {
   return createSlateSubagentPersistedState({
-    conversationState: input.conversationState as SlateTaskConversationState,
+    conversationState: input.conversationState,
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
   })
 }

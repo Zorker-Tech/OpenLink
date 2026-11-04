@@ -85,7 +85,7 @@ export interface ReadToolOptions {
 interface ReadStateHandler {
   readonly getBlobStore?: () => BlobStore<Context> | undefined
   readonly readPaths?: ReadonlySet<string>
-  readonly recordReadPath?: (path: RedactedString) => void
+  readonly recordReadPath?: (path: string) => void
   readonly agentType?: AgentType
   readonly lastSkillCatalogBudgetStrategy?: string
   readonly isLargeContextModel?: () => boolean
@@ -482,7 +482,7 @@ export function createReadTool(
 
     if (result.result?.case === "success") {
       const resolvedPath = result.result.value.path
-      meta.stateHandler?.recordReadPath?.(safeString(resolvedPath))
+      meta.stateHandler?.recordReadPath?.(resolvedPath)
       meta.stepReadPathDedup?.add(resolvedPath)
       // The rules and skills that belong to this file are attached to the result, not looked up again later.
       const cursorRules = fromInteropReadRules(meta.cursorRules ?? [])

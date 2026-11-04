@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import {
   AgentMode,
   CloudSubagentReference,
+  FileStateStructure,
   NewCloudVmTarget,
   SubagentExecutionEnvironment,
   SubagentPersistedState,
@@ -18,13 +19,24 @@ import {
   toInteropSubagentPersistedState,
 } from "../../source/adapters/interop/agent/subagent-persisted-state-adapter.ts"
 import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 
-test("a persisted subagent round-trips through Slate metadata and its opaque conversation snapshot", () => {
+test("a persisted subagent round-trips through Slate metadata and its conversation snapshot", () => {
   const type = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
   const wire = new SubagentPersistedState({
     conversationState: new ConversationStateStructure({
       turns: [new Uint8Array([1, 2])],
       mode: AgentMode.PLAN,
+      activeBranchName: "feature/slate",
+      readPaths: ["/repo/read.ts", "/repo/ spaced.ts "],
+      fileStatesV2: {
+        "/repo/file.ts": new FileStateStructure({
+          content: new Uint8Array([3, 4]),
+          initialContent: new Uint8Array([5, 6]),
+        }),
+      },
+      selfSummaryCount: 2,
     }),
     createdTimestampMs: BigInt(10),
     lastUsedTimestampMs: BigInt(20),
@@ -45,9 +57,17 @@ test("a persisted subagent round-trips through Slate metadata and its opaque con
     }),
   })
 
-  const slate = fromInteropSubagentPersistedState(wire)
+  const slate = fromInteropSubagentPersistedState(wire, PrivacyMode.NO_STORAGE)
   assert.deepEqual(slate.conversationState?.turns, [new Uint8Array([1, 2])])
-  assert.equal((slate.conversationState as { mode?: unknown }).mode, AgentMode.PLAN)
+  assert.equal(slate.conversationState?.mode, SlateMode.PLAN)
+  assert.equal(slate.conversationState?.privacyMode, PrivacyMode.NO_STORAGE)
+  assert.equal(slate.conversationState?.activeBranchName, "feature/slate")
+  assert.deepEqual(slate.conversationState?.readPaths, ["/repo/read.ts", "/repo/ spaced.ts "])
+  assert.deepEqual(slate.conversationState?.fileStatesV2.get("/repo/file.ts"), {
+    contentBlobId: new Uint8Array([3, 4]),
+    initialContentBlobId: new Uint8Array([5, 6]),
+  })
+  assert.equal(slate.conversationState?.selfSummaryCount, 2)
   assert.equal(slate.createdTimestampMs, BigInt(10))
   assert.equal(slate.lastUsedTimestampMs, BigInt(20))
   assert.equal(slate.subagentType?.type.case, "unspecified")
@@ -64,5 +84,19 @@ test("a persisted subagent round-trips through Slate metadata and its opaque con
     base_branch: "main",
   })
 
-  assert.equal(SubagentPersistedState.equals(toInteropSubagentPersistedState(slate), wire), true)
+  const interop = toInteropSubagentPersistedState(slate)
+  assert.ok(interop.conversationState)
+  assert.equal(ConversationStateStructure.equals(interop.conversationState, wire.conversationState), true)
+  assert.equal(SubagentPersistedState.equals(interop, wire), true)
+})
+
+test("an unknown mode nested in a subagent snapshot keeps its source enum value", () => {
+  const unknownMode = 987654 as AgentMode
+  const slate = fromInteropSubagentPersistedState(new SubagentPersistedState({
+    conversationState: new ConversationStateStructure({ mode: unknownMode }),
+  }))
+
+  assert.equal(slate.conversationState?.mode, SlateMode.UNSPECIFIED)
+  assert.equal(slate.conversationState?.unknownModeCode, unknownMode)
+  assert.equal(toInteropSubagentPersistedState(slate).conversationState?.mode, unknownMode)
 })

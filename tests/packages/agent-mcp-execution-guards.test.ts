@@ -12,9 +12,6 @@ import {
   McpServerDoesNotExistError,
 } from "../../source/packages/agent/tools/mcp/mcp-result-boundary.ts"
 import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
-import { safeString } from "../../source/packages/redaction/create.ts"
-import type { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
-import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 
 // ---------------------------------------------------------------------------------------------
 // is the tool there at all
@@ -72,11 +69,11 @@ test("a tool the server does not have is refused with where to look", () => {
 // ---------------------------------------------------------------------------------------------
 
 interface ReadPathState {
-  hasReadPath(path: RedactedString): boolean
+  hasReadPath(path: string): boolean
 }
 
 const readPaths = (paths: string[]): ReadPathState => ({
-  hasReadPath: path => paths.includes(path.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING)),
+  hasReadPath: path => paths.includes(path),
 })
 
 test("a session that does not track what was read is not held to having read anything", () => {
@@ -130,7 +127,7 @@ test("the path that counts as read is the one the session recorded", () => {
       true,
       "server-a",
       "search",
-      readPaths([safeString("/repo/mcps/server-a/search.md").unwrap(PrivacyCapability.STORAGE_FOR_TRAINING)]),
+      readPaths(["/repo/mcps/server-a/search.md"]),
     ),
     { kind: "read" },
   )

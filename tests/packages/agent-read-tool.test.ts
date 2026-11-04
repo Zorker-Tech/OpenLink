@@ -413,13 +413,13 @@ test("a redacted read is asked for under its own operation", () => {
 
 test("a successful read is recorded on the conversation and deduplicated within the step", async () => {
   const { tool } = buildTool(() => contentResult("x", { path: "/repo/src/app.ts" }))
-  const recorded: Array<{ value: string }> = []
+  const recorded: string[] = []
   const dedup = new Set<string>()
   await runRead(tool, { path: "/repo/src/app.ts" }, {
-    stateHandler: { recordReadPath: (path: { value: string }) => recorded.push(path) },
+    stateHandler: { recordReadPath: (path: string) => recorded.push(path) },
     stepReadPathDedup: dedup,
   })
-  assert.deepEqual(recorded.map(path => path.value), ["/repo/src/app.ts"])
+  assert.deepEqual(recorded, ["/repo/src/app.ts"])
   assert.deepEqual(Array.from(dedup), ["/repo/src/app.ts"])
 })
 

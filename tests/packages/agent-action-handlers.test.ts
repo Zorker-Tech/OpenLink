@@ -234,10 +234,15 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
     },
   })
   const state = createStateHandler({
-    plan: undefined,
+    plan: {
+      async get() {
+        return { content: "# Plan\nDo the work." }
+      },
+    },
     todos: [],
     summaryArchives: [],
     setTodos() {},
+    setPlan() {},
     upsertPlanEntry() {},
     getBlobStore() { return undefined },
     usesLargeContextTreatment() { return false },
@@ -254,7 +259,6 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
     clearMessages() { promptMessages.length = 0 },
   }
   const action = {
-    planFileContent: { unwrap: () => "# Plan\nDo the work." },
     planFilePath: { unwrap: () => "/repo/plan.md" },
     executionMode: AgentMode.ASK,
     planId: "plan-1",

@@ -21,9 +21,11 @@ import {
 import {
   AgentMode,
   CloudSubagentReference,
+  CommunicateUpdateHistoryEntry,
+  CommunicateUpdateTurnState,
+  ConversationPlan,
   ConversationStateStructure,
-  GoalState,
-  PlanRegistryEntry,
+  FileStateStructure,
   ShellCommand,
   ShellOutput,
   SubagentRunState,
@@ -33,12 +35,15 @@ import {
   NewCloudVmTarget,
   TargetMachine,
   UserMessage,
+  PlanRegistryEntry as PlanRegistryEntryInterop,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { TodoItem } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 import { toRedactedTodoItem } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
 import { SubagentType, SubagentTypeUnspecified } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
+import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the state handle over a blob store
@@ -140,12 +145,27 @@ test("a handle reports the session it was built for", () => {
   assert.equal(harnessed.handle.usesLargeContextTreatment(), false)
 })
 
-test("the paths read in a turn are remembered and deduplicated", () => {
+test("the paths read in a turn are remembered, deduplicated and checkpointed", async () => {
   const harnessed = harness()
-  assert.equal(harnessed.handle.hasReadPath(redactedPath("/repo/a.ts")), false)
-  harnessed.handle.recordReadPath(redactedPath("/repo/a.ts"))
-  assert.equal(harnessed.handle.hasReadPath(redactedPath("/repo/a.ts")), true)
-  assert.equal(harnessed.handle.hasReadPath(redactedPath("/repo/b.ts")), false)
+  assert.equal(harnessed.handle.hasReadPath("/repo/a.ts"), false)
+  harnessed.handle.recordReadPath("/repo/a.ts")
+  assert.equal(harnessed.handle.hasReadPath("/repo/a.ts"), true)
+  assert.equal(harnessed.handle.hasReadPath("/repo/a.ts"), true)
+  harnessed.handle.recordReadPath("/repo/a.ts")
+  const exactPath = "/repo/ spaced.ts "
+  harnessed.handle.recordReadPath(exactPath)
+  assert.equal(harnessed.handle.hasReadPath(exactPath), true)
+  assert.equal(harnessed.handle.hasReadPath(exactPath.trim()), false)
+  assert.deepEqual([...harnessed.handle.readPaths], ["/repo/a.ts", exactPath])
+  assert.equal(harnessed.handle.hasReadPath("/repo/b.ts"), false)
+  const checkpoint = await harnessed.handle.computeNewStructure(createContext())
+  const redactedCheckpoint = checkpoint as unknown as {
+    readonly readPaths: readonly { unwrap(purpose: PrivacyCapability): string }[]
+  }
+  assert.deepEqual(
+    redactedCheckpoint.readPaths.map(path => path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+    ["/repo/a.ts", exactPath],
+  )
 })
 
 test("a question that was answered is remembered as answered", () => {
@@ -209,25 +229,37 @@ test("a new persisted snapshot encodes the Slate mode instead of dropping it", a
 test("a plan is stored, replaced and cleared", async () => {
   const harnessed = harness()
   assert.equal(await harnessed.handle.getPlan(createContext()), undefined)
-  harnessed.handle.setPlan({ steps: [{ description: "first" }] } as never)
-  const plan = await harnessed.handle.getPlan(createContext()) as { steps: unknown[] }
-  assert.equal(plan.steps.length, 1)
+  harnessed.handle.setPlan({ content: "# First plan\n\nDo the work." })
+  assert.deepEqual(await harnessed.handle.getPlan(createContext()), {
+    content: "# First plan\n\nDo the work.",
+  })
+  const persisted = await harnessed.handle.computeNewStructure(createContext())
+  assert.ok(persisted.plan)
+  const bytes = harnessed.blobs.get(Buffer.from(persisted.plan).toString("hex"))
+  assert.equal(ConversationPlan.fromBinary(bytes!).plan, "# First plan\n\nDo the work.")
   harnessed.handle.setPlan(undefined)
   assert.equal(await harnessed.handle.getPlan(createContext()), undefined)
 })
 
 test("a plan registry entry is added once and updated in place", () => {
   const harnessed = harness()
-  harnessed.handle.upsertPlanEntry(new PlanRegistryEntry({ id: "plan-1", path: "/repo/plan.md" } as never))
+  harnessed.handle.upsertPlanEntry({ id: "plan-1", path: "/repo/plan.md" })
   assert.equal(harnessed.handle.plans.size, 1)
-  harnessed.handle.upsertPlanEntry(new PlanRegistryEntry({ id: "plan-1", path: "/repo/plan-2.md" } as never))
+  harnessed.handle.upsertPlanEntry({ id: "plan-1", path: "/repo/plan-2.md" })
   assert.equal(harnessed.handle.plans.size, 1)
   assert.equal(harnessed.handle.plans.get("plan-1")?.path, "/repo/plan-2.md")
 })
 
 test("the goal state is kept and cleared", () => {
   const harnessed = harness()
-  harnessed.handle.setGoalState(new GoalState({ goalId: "0123abcd-4567-89ef-0123-456789abcdef", objective: "ship it" } as never))
+  harnessed.handle.setGoalState(new SlateGoalState({
+    conversationId: "conversation-1",
+    goalId: "0123abcd-4567-89ef-0123-456789abcdef",
+    objective: "ship it",
+    status: "active",
+    idleContinuationsWithoutToolCalls: 0,
+    continuationCount: 0,
+  }))
   assert.equal(harnessed.handle.goalState?.objective, "ship it")
   harnessed.handle.setGoalState(undefined as never)
   assert.equal(harnessed.handle.goalState, undefined)
@@ -258,7 +290,21 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   const harnessed = harness(new ConversationStateStructure({
     subagentStates: {
       "subagent-1": new SubagentPersistedState({
-        conversationState: new ConversationStateStructure({ turns: [new Uint8Array([1])] }),
+        conversationState: new ConversationStateStructure({
+          turns: [new Uint8Array([1])],
+          mode: AgentMode.PLAN,
+          activeBranchName: "feature/subagent",
+          readPaths: ["/repo/subagent-read.ts"],
+          fileStatesV2: {
+            "/repo/subagent-file.ts": new FileStateStructure({ content: new Uint8Array([8]) }),
+          },
+          communicateUpdateStatesByParentToolCallId: {
+            "nested-call": new CommunicateUpdateTurnState({
+              history: [new CommunicateUpdateHistoryEntry({ step: "nested", messageIndex: 4 })],
+            }),
+          },
+          selfSummaryCount: 2,
+        }),
         createdTimestampMs: BigInt(10),
         lastUsedTimestampMs: BigInt(20),
         subagentType,
@@ -274,6 +320,13 @@ test("a legacy persisted subagent is restored into Slate state and written back 
 
   const restored = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
   assert.equal(restored?.conversationState?.turns.length, 1)
+  assert.equal(restored?.conversationState?.mode, SlateMode.PLAN)
+  assert.equal(restored?.conversationState?.activeBranchName, "feature/subagent")
+  assert.deepEqual(restored?.conversationState?.readPaths, ["/repo/subagent-read.ts"])
+  assert.deepEqual(restored?.conversationState?.fileStatesV2.get("/repo/subagent-file.ts"), {
+    contentBlobId: new Uint8Array([8]),
+  })
+  assert.equal(restored?.conversationState?.selfSummaryCount, 2)
   assert.equal(restored?.createdTimestampMs, BigInt(10))
   assert.equal(restored?.lastUsedTimestampMs, BigInt(20))
   assert.equal(restored?.modelId, "model-1")
@@ -282,8 +335,24 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   assert.deepEqual(restored?.machine, { type: "new_cloud_vm", base_branch: "main" })
 
   const snapshot = await harnessed.handle.computeNewStructure(createContext())
-  const persisted = snapshot.subagentStates?.get("subagent-1") as SubagentPersistedState | undefined
+  const persistedRedacted = snapshot.subagentStates?.get("subagent-1")
+  const persisted = persistedRedacted === undefined
+    ? undefined
+    : fromRedactedSubagentPersistedStateInterop(
+        persistedRedacted,
+        PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+        undefined,
+      )
   assert.equal(persisted?.conversationState?.turns.length, 1)
+  assert.equal(persisted?.conversationState?.mode, AgentMode.PLAN)
+  assert.equal(persisted?.conversationState?.activeBranchName, "feature/subagent")
+  assert.deepEqual(persisted?.conversationState?.readPaths, ["/repo/subagent-read.ts"])
+  assert.deepEqual(persisted?.conversationState?.fileStatesV2["/repo/subagent-file.ts"]?.content, new Uint8Array([8]))
+  assert.equal(persisted?.conversationState?.selfSummaryCount, 2)
+  assert.equal(
+    persisted?.conversationState?.communicateUpdateStatesByParentToolCallId["nested-call"]?.history[0]?.step,
+    "nested",
+  )
   assert.equal(persisted?.createdTimestampMs, BigInt(10))
   assert.equal(persisted?.modelId, "model-1")
   assert.equal(persisted?.environment, SubagentExecutionEnvironment.CLOUD)
@@ -549,7 +618,7 @@ test("token details are stored as they were given", () => {
 test("a restore keeps its read paths, plans, skipped-prompt flag and agent-type change", async () => {
   const state = new ConversationStateStructure({
     readPaths: ["/repo/read.ts"],
-    plans: { "plan-1": new PlanRegistryEntry({ id: "plan-1" }) },
+    plans: { "plan-1": new PlanRegistryEntryInterop({ id: "plan-1" }) },
   })
   const restoreWithChange = await restored(state, "cli" as never, { shouldTrackAgentTypeChange: true });
   assert.deepEqual([...restoreWithChange.handle.readPaths], ["/repo/read.ts"])

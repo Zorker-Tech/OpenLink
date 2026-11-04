@@ -8,20 +8,30 @@
  * what stops a resumed conversation from adopting someone else's goal.
  */
 
+export const SlateGoalStatus = {
+  UNSPECIFIED: "unspecified",
+  ACTIVE: "active",
+  PAUSED: "paused",
+  COMPLETE: "complete",
+  CLEARED: "cleared",
+} as const;
+
+export type SlateGoalStatus = (typeof SlateGoalStatus)[keyof typeof SlateGoalStatus];
+
 /** The status a goal has while it is being worked on. */
-export const GOAL_STATUS_ACTIVE = 1;
+export const GOAL_STATUS_ACTIVE = SlateGoalStatus.ACTIVE;
 
 /** The id a goal is stored under: a uuid-shaped id, in either case. */
 export const GOAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** What a stored goal carries: its identity, the status it was last left in, and its clock. */
 export interface GoalState {
-  activeDurationMs?: bigint;
-  lastAccruedAtMs?: bigint;
-  status?: number;
+  activeDurationMs?: bigint | undefined;
+  lastAccruedAtMs?: bigint | undefined;
+  status?: SlateGoalStatus;
   goalId: string;
   conversationId?: string;
-  agentSessionId?: string;
+  agentSessionId?: string | undefined;
 }
 
 /** A goal that has never accrued anything. */

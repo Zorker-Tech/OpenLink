@@ -12,8 +12,8 @@ export interface SlateConversationTokenDetails {
 }
 
 export interface SlateFileStateBlobs {
-  readonly content?: SlateRedactedValue<Uint8Array>
-  readonly initialContent?: SlateRedactedValue<Uint8Array>
+  readonly contentBlobId?: Uint8Array
+  readonly initialContentBlobId?: Uint8Array
 }
 
 export interface SlateTrackedGitRepository {
@@ -35,9 +35,9 @@ export interface SlateConversationState {
   /** Unknown persisted mode retained for lossless checkpoint write-back. */
   unknownModeCode?: number
   readonly summaryArchives: readonly Uint8Array[]
-  readonly fileStatesV2: ReadonlyMap<SlateRedactedValue<string>, SlateFileStateBlobs>
+  readonly fileStatesV2: ReadonlyMap<string, SlateFileStateBlobs>
   readonly selfSummaryCount?: number
-  readonly readPaths: readonly SlateRedactedValue<string>[]
+  readonly readPaths: readonly string[]
   readonly activeBranchName?: string
   readonly plans?: ReadonlyMap<string, unknown>
   readonly trackedGitRepoBranches?: readonly SlateTrackedGitRepository[]

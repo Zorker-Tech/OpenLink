@@ -26,12 +26,14 @@ import {
   createTaskToolCallInterop,
   serializeTaskErrorInterop,
   taskResultIsErrorInterop,
+  fromInteropTaskConversationState,
+  fromRedactedTaskConversationState,
   toRedactedConversationActionInterop,
   toRedactedConversationStateStructureInterop,
   type TaskResultInterop,
   type TaskSubagentCredentialsInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
-import { fromRedactedTaskConversationState } from "../../../adapters/interop/agent/task-conversation-state-adapter.ts";
+import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
 import { requestModelNameKey, withParentRequestId } from "../utils/request-scope.ts";
 import { NoopConversationActionReceiver } from "../../agent-core/conversation-actions/remote-receiver.ts";
 import { Responses } from "../../agent-core/interaction-queries.ts";
@@ -387,9 +389,13 @@ async function runServerTaskSubagent(args: {
     configuredSteps: options.configuredSteps ?? [],
     enableTaskToolHooksExec: options.enableExecuteHookExec === true,
   };
-  let state = prepared.conversationState;
+  const preparedConversationState = prepared.conversationState;
   let action = prepared.initialAction;
-  if (state === undefined || action === undefined) throw new Error("Prepared subagent launch is missing state or action");
+  if (preparedConversationState === undefined || action === undefined) throw new Error("Prepared subagent launch is missing state or action");
+  let state: SlateTaskConversationState = fromInteropTaskConversationState(
+    preparedConversationState,
+    stateHandler.getPrivacyMode(),
+  );
   const persist = (persistCtx: Context, persistId: string, _type: Any, persistedState: Any) =>
     stateHandler.persistSubagentState(persistCtx, persistId, resolved.subagentConfig.subagent_type, persistedState);
   try {
@@ -397,7 +403,7 @@ async function runServerTaskSubagent(args: {
       iterState.runStreamCompleted = false;
       const turnsAtStart = iterState.loopCount === 0 ? prepared.initialTurnsCount : state!.turns.length;
       try {
-        state = await agent.runStream(
+        const updatedState = await agent.runStream(
           withParentRequestId(
             subagentCtx.with(requestModelNameKey, resolved.resolvedModelId),
             resolved.parentRequestId,
@@ -407,6 +413,7 @@ async function runServerTaskSubagent(args: {
           [],
           async () => {},
         );
+        state = fromInteropTaskConversationState(updatedState, stateHandler.getPrivacyMode());
         iterState.runStreamCompleted = true;
       } catch (error) {
         await handleSubagentRunStreamError(error, state!, iterState, completionCtx, completionDeps, subagentCtx.canceled, registry.lastAbortOptions);

@@ -3,7 +3,7 @@
 import {
   activatePausedGoalState,
   isPausedGoalState,
-} from "../../../../adapters/interop/agent/paused-goal-state-adapter.ts";
+} from "../../goal-state.ts";
 import type { Context } from "../../../context/context.ts"
 
 type StateHandlerLike = {

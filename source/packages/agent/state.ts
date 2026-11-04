@@ -31,10 +31,11 @@ import {
   createAgentStateCommunicateHistoryEntryInterop,
   createAgentStateCommunicateTurnStateInterop,
   createEmptyRedactedShellOutputInterop,
-  createFileStateStructureInterop,
   createSlateConversationStepSerde,
   fromInteropToolCallStep,
   fromInteropConversationState,
+  fromInteropGoalState,
+  fromInteropPlanRegistryEntry,
   attachAgentSelectedContextMediaInterop,
   createRedactedConversationTokenDetailsInterop,
   emptyAgentSelectedContextInterop,
@@ -42,13 +43,10 @@ import {
   type AgentStateCommunicateHistoryEntryInterop,
   type AgentStateCommunicateTurnStateInterop,
   type AgentStateRequestContextInterop,
-  type AgentGoalStateInterop,
-  type AgentPlanRegistryEntryInterop,
   type RedactedAgentConversationStateInterop,
   encodeSlateConversationStateSnapshotInterop,
   fromRedactedCommunicateUpdateHistoryEntryInterop,
   fromRedactedCommunicateUpdateTurnStateInterop,
-  fromRedactedConversationPlanInterop,
   fromRedactedConversationSummaryArchiveInterop,
   fromRedactedConversationSummaryInterop,
   fromRedactedConversationTokenDetailsInterop,
@@ -58,9 +56,10 @@ import {
   fromRedactedSubagentRunStateInterop,
   fromRedactedTodoItemInterop,
   fromRedactedUserMessageInterop,
-  toRedactedConversationPlanInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
+  toInteropGoalState,
+  toInteropPlanRegistryEntry,
   toRedactedConversationSummaryArchiveInterop,
   toRedactedConversationSummaryInterop,
   toRedactedSubagentPersistedStateInterop,
@@ -88,6 +87,14 @@ import {
   type SlateToolCallStep,
 } from "./conversation-step-state.ts"
 import type { SlateConversationState } from "./conversation-state.ts"
+import {
+  slateConversationPlanFromValue,
+  type SlateConversationPlanState,
+} from "./conversation-plan-state.ts"
+import {
+  type SlateGoalState,
+  type SlatePlanRegistryEntry,
+} from "./goal-state.ts"
 import {
   fromInteropUserMessage,
   toInteropSimulatedMessageReason,
@@ -1249,7 +1256,7 @@ export class ConversationStateHandle {
   modelId: string | undefined;
   agentTypeChangedFromPersistedState: boolean;
   isRootProjectConversation: boolean;
-  plans: Map<string, AgentPlanRegistryEntryInterop>;
+  plans: Map<string, SlatePlanRegistryEntry>;
   fileStates: Map<string, FileStateReferencesByPath<OperationContext>>;
   readPaths: Set<string>;
   completedAskQuestionToolCallIds: Set<string>;
@@ -1301,7 +1308,7 @@ export class ConversationStateHandle {
   plan: ValueRef<OperationContext> | undefined;
   communicateUpdateFinalSummary: string | undefined;
   communicateUpdateCompletedSubtitle: string | undefined;
-  goalState: AgentGoalStateInterop | undefined;
+  goalState: SlateGoalState | undefined;
 
   createConversationTurnHandleSerde(): Serde<TurnUnion> {
     return {
@@ -1442,12 +1449,13 @@ export class ConversationStateHandle {
       const fileEntries = Array.from(conversationStateStructure.fileStatesV2.entries());
       const fileLoadStart = performance.now();
       for (const [pathValue, fileState] of fileEntries) {
-        const path29 = pathValue.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        const contentBlob = fileState.content?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        const initialBlob = fileState.initialContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-        state.fileStates.set(path29, {
-          content: contentBlob !== undefined ? new LazyReference(utf8Serde, blobStore, contentBlob) : undefined,
-          initialContent: initialBlob !== undefined ? new LazyReference(utf8Serde, blobStore, initialBlob) : undefined,
+        state.fileStates.set(pathValue, {
+          content: fileState.contentBlobId !== undefined
+            ? new LazyReference(utf8Serde, blobStore, fileState.contentBlobId)
+            : undefined,
+          initialContent: fileState.initialContentBlobId !== undefined
+            ? new LazyReference(utf8Serde, blobStore, fileState.initialContentBlobId)
+            : undefined,
         });
       }
       fileSpan.span.setAttribute("fileStatePathCount", fileEntries.length);
@@ -1461,11 +1469,26 @@ export class ConversationStateHandle {
       }
       if (conversationStateStructure.plans !== undefined) {
         for (const [planId, redactedEntry] of conversationStateStructure.plans) {
-          state.plans.set(planId, fromRedactedPlanRegistryEntryInterop(redactedEntry, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined));
+          state.plans.set(
+            planId,
+            fromInteropPlanRegistryEntry(
+              fromRedactedPlanRegistryEntryInterop(
+                redactedEntry,
+                PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+                undefined,
+              ),
+            ),
+          );
         }
       }
       if (conversationStateStructure.goalState !== undefined) {
-        state.goalState = fromRedactedGoalStateInterop(conversationStateStructure.goalState, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
+        state.goalState = fromInteropGoalState(
+          fromRedactedGoalStateInterop(
+            conversationStateStructure.goalState,
+            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+            undefined,
+          ),
+        );
       }
       const restoreMs = performance.now() - restoreStartedAt;
       const crossedLarge = promptBytes >= LARGE_RESTORE_BYTES || promptImageBytes >= LARGE_RESTORE_IMAGE || restoreMs >= SLOW_RESTORE_MS;
@@ -1594,6 +1617,7 @@ export class ConversationStateHandle {
               PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
               undefined,
             ),
+            this.privacyMode,
           ),
         );
       }
@@ -2009,6 +2033,7 @@ These images can be copied for use in other locations.
             PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
             undefined,
           ),
+          this.privacyMode,
         );
         return { kind: "loaded" as const, subagentId, state, blobId, blobData: blob };
       } catch (error4) {
@@ -2084,20 +2109,26 @@ These images can be copied for use in other locations.
     return this.selfSummaryInputLimitFailureTokenCount !== 0 && usedTokens >= this.selfSummaryInputLimitFailureTokenCount;
   }
 
-  setPlan(plan: unknown | undefined): void {
-    this.plan = plan !== undefined ? new EagerReference(this.serdes.conversationPlan, this.blobStore, plan) : undefined;
+  setPlan(plan: SlateConversationPlanState | undefined): void {
+    this.plan = plan !== undefined
+      ? new EagerReference(this.serdes.conversationPlan, this.blobStore, plan)
+      : undefined;
   }
 
-  async getPlan(ctx: OperationContext): Promise<unknown | undefined> {
+  async getPlan(ctx: OperationContext): Promise<SlateConversationPlanState | undefined> {
     if (this.plan === undefined) return undefined;
     return await this.plan.get(ctx);
   }
 
-  upsertPlanEntry(entry: AgentPlanRegistryEntryInterop): void {
+  setPlanFromPersistedValue(value: unknown | undefined): void {
+    this.setPlan(value === undefined ? undefined : slateConversationPlanFromValue(value));
+  }
+
+  upsertPlanEntry(entry: SlatePlanRegistryEntry): void {
     this.plans.set(entry.id, entry);
   }
 
-  setGoalState(goalState: AgentGoalStateInterop): void {
+  setGoalState(goalState: SlateGoalState): void {
     this.goalState = goalState;
   }
 
@@ -2508,10 +2539,10 @@ These images can be copied for use in other locations.
           initialContentBlobIdPromise = knownState.initialContent.writeToBlobStore(quietContext);
         }
         const [contentBlob, initialBlob] = await Promise.all([contentBlobIdPromise, initialContentBlobIdPromise]);
-        const stateEntry = createFileStateStructureInterop({
-          contentBlobId: contentBlob!,
-          initialContentBlobId: initialBlob!,
-        });
+        const stateEntry = {
+          ...(contentBlob === undefined ? {} : { contentBlobId: contentBlob }),
+          ...(initialBlob === undefined ? {} : { initialContentBlobId: initialBlob }),
+        };
         return [path29, stateEntry] as const;
       }));
       const subagentStatesRecord: Record<string, ReturnType<typeof toInteropSubagentPersistedState>> = {};
@@ -2604,7 +2635,7 @@ These images can be copied for use in other locations.
         readPaths: Array.from(this.readPaths),
         completedAskQuestionToolCallIds: Array.from(this.completedAskQuestionToolCallIds),
         plans: plansRecord,
-        goalState: this.goalState!,
+        goalState: this.goalState === undefined ? undefined : toInteropGoalState(this.goalState),
         communicateUpdateHistory: this.communicateUpdateHistory.map((entry) => createAgentStateCommunicateHistoryEntryInterop({
           step: entry.step,
           messageIndex: entry.messageIndex,
@@ -2825,12 +2856,12 @@ These images can be copied for use in other locations.
     }
   }
 
-  recordReadPath(path29: RedactedField<string>): void {
-    this.readPaths.add(path29.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
+  recordReadPath(path29: string): void {
+    this.readPaths.add(path29);
   }
 
-  hasReadPath(path29: RedactedField<string>): boolean {
-    return this.readPaths.has(path29.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
+  hasReadPath(path29: string): boolean {
+    return this.readPaths.has(path29);
   }
 
   hasCompletedAskQuestion(originalToolCallId: string): boolean {

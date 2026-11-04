@@ -19,6 +19,7 @@ import {
   targetMachineToProtoInterop,
 } from "./task-runtime-protocol-adapter.ts"
 import type { SlateSubagentTypeLike } from "../../../packages/agent/subagent-type.ts"
+import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../../../packages/redaction/privacy-mode.ts"
 
 function cloudReferenceFromInterop(
   value: SubagentPersistedState["cloudSubagent"],
@@ -43,6 +44,7 @@ function cloudReferenceToInterop(
 /** Projects the legacy persisted subagent record into Slate's own metadata and snapshot model. */
 export function fromInteropSubagentPersistedState(
   value: SubagentPersistedState,
+  privacyMode: PrivacyModeValue = PrivacyMode.UNSPECIFIED,
 ): SlateSubagentPersistedState {
   const cloudSubagent = cloudReferenceFromInterop(value.cloudSubagent)
   const machine = targetMachineFromProtoInterop(value.machine)
@@ -52,7 +54,7 @@ export function fromInteropSubagentPersistedState(
     environment: slateSubagentEnvironmentFromInterop(value.environment) ?? "unspecified",
     ...(value.conversationState === undefined
       ? {}
-      : { conversationState: fromInteropTaskConversationState(value.conversationState) }),
+      : { conversationState: fromInteropTaskConversationState(value.conversationState, privacyMode) }),
     ...(value.subagentType === undefined
       ? {}
       : { subagentType: value.subagentType as SlateSubagentTypeLike }),

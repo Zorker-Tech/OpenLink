@@ -1,7 +1,6 @@
 import {
   AgentMode,
   ExecutePlanInfo,
-  PlanRegistryEntry,
   ProjectDetails,
   SimulatedMsgReason,
   UserMessage,
@@ -28,6 +27,10 @@ import type {
   PlanExecutionRequest,
   PlanTodo,
 } from "../../../packages/agent/actions/execute-plan-contracts.ts"
+import {
+  createSlatePlanRegistryEntry,
+  type SlatePlanRegistryEntry,
+} from "../../../packages/agent/goal-state.ts"
 
 type Any = any
 
@@ -122,8 +125,8 @@ export function isInteropPlanTodoComplete(status: unknown): boolean {
   return status === TodoStatus.COMPLETED
 }
 
-export function createPlanRegistryEntry(id: string, path: string): PlanRegistryEntry {
-  return new PlanRegistryEntry({ id, path })
+export function createPlanRegistryEntry(id: string, path: string): SlatePlanRegistryEntry {
+  return createSlatePlanRegistryEntry(id, path)
 }
 
 /** Adapts the host's file executor messages to the plan policy's read/restore port. */
