@@ -1,6 +1,21 @@
 /** Slate's product record for a user message while it is becoming a conversation turn. */
 import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
+import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import type { SlateMode } from "./mode-processing.ts"
+import type { RedactedString } from "../redaction/redacted-values.ts"
+
+export type SlateUserMessageText = string | RedactedString
+
+export interface SlateUserMessageHookContext extends Omit<HookContextEntry, "text"> {
+  text: SlateUserMessageText
+}
+
+export interface SlateUserMessageCompatibility {
+  /** Numeric mode values read from old persisted messages until a Slate transition replaces them. */
+  readonly legacyModeCode?: number
+  /** Unknown legacy fields kept only so old persisted messages can be rewritten without data loss. */
+  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
+}
 
 export const SlateSimulatedMessageReason = {
   UNSPECIFIED: "unspecified",
@@ -42,17 +57,17 @@ export type SlateSimulatedMessageReason =
   | `unknown-${number}`
 
 export interface SlateProjectConversationDetails {
-  name?: string
+  name?: SlateUserMessageText
   subagent?: SlateProjectSubagentDetails
   sideChat?: SlateProjectSideChatDetails
 }
 
 export interface SlateProjectSubagentDetails {
-  storeDir?: string
+  storeDir?: SlateUserMessageText
 }
 
 export interface SlateProjectSideChatDetails {
-  storeDir?: string
+  storeDir?: SlateUserMessageText
 }
 
 /**
@@ -62,19 +77,17 @@ export interface SlateProjectSideChatDetails {
  * product models are introduced. They are carried unchanged through the compatibility adapter.
  */
 export interface SlateUserMessage {
-  text: string
+  text: SlateUserMessageText
   messageId: string
   selectedContext?: unknown
   mode: SlateMode
-  /** Unknown persisted mode retained for lossless write-back while policy uses Slate's fallback. */
-  unknownModeCode?: number
   isSimulatedMsg?: boolean
   bestOfNGroupId?: string
   tryUseBestOfNPromotion?: boolean
-  richText?: string
+  richText?: SlateUserMessageText
   simulatedMsgReason?: SlateSimulatedMessageReason
   conversationStateBlobId: Uint8Array
-  subagentSystemReminder?: string
+  subagentSystemReminder?: SlateUserMessageText
   triggeringUserInfo?: unknown
   executePlanInfo?: unknown
   simulatedMessageMetadata?: unknown
@@ -82,9 +95,10 @@ export interface SlateUserMessage {
   threadId?: string
   textBlobId?: Uint8Array
   richTextBlobId?: Uint8Array
-  hookContexts: readonly HookContextEntry[]
+  hookContexts: readonly SlateUserMessageHookContext[]
   customModeIntent?: unknown
   projectDetails?: SlateProjectConversationDetails
+  compatibility?: SlateUserMessageCompatibility
 }
 
 function cloneBytes(bytes: Uint8Array): Uint8Array {
@@ -115,17 +129,34 @@ function copyProjectDetails(
       }
 }
 
+function copyCompatibility(
+  compatibility: SlateUserMessageCompatibility | undefined,
+): SlateUserMessageCompatibility | undefined {
+  if (compatibility === undefined) return undefined
+  return {
+    ...(compatibility.legacyModeCode === undefined ? {} : { legacyModeCode: compatibility.legacyModeCode }),
+    ...(compatibility.legacyUnknownFields === undefined
+      ? {}
+      : {
+          legacyUnknownFields: compatibility.legacyUnknownFields.map(field => ({
+            ...field,
+            path: field.path.map(step => ({ ...step })),
+          })),
+        }),
+  }
+}
+
 /** Copies mutable inputs while sharing only opaque nested wire values that have no Slate projector yet. */
 export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
   const projectDetails = message.projectDetails === undefined
     ? undefined
     : copyProjectDetails(message.projectDetails)
+  const compatibility = copyCompatibility(message.compatibility)
   return {
     text: message.text,
     messageId: message.messageId,
     ...(message.selectedContext === undefined ? {} : { selectedContext: message.selectedContext }),
     mode: message.mode,
-    ...(message.unknownModeCode === undefined ? {} : { unknownModeCode: message.unknownModeCode }),
     ...(message.isSimulatedMsg === undefined ? {} : { isSimulatedMsg: message.isSimulatedMsg }),
     ...(message.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: message.bestOfNGroupId }),
     ...(message.tryUseBestOfNPromotion === undefined
@@ -149,5 +180,6 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
     hookContexts: message.hookContexts.map(context => ({ ...context })),
     ...(message.customModeIntent === undefined ? {} : { customModeIntent: message.customModeIntent }),
     ...(projectDetails === undefined ? {} : { projectDetails }),
+    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }

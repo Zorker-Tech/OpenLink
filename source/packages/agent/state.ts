@@ -55,7 +55,6 @@ import {
   fromRedactedSubagentPersistedStateInterop,
   fromRedactedSubagentRunStateInterop,
   fromRedactedTodoItemInterop,
-  fromRedactedUserMessageInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
   toInteropGoalState,
@@ -64,7 +63,6 @@ import {
   toRedactedConversationSummaryInterop,
   toRedactedSubagentPersistedStateInterop,
   toRedactedTodoItemInterop,
-  toRedactedUserMessageInterop,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import {
   fromInteropSubagentPersistedState,
@@ -96,15 +94,15 @@ import {
   type SlatePlanRegistryEntry,
 } from "./goal-state.ts"
 import {
-  fromInteropUserMessage,
   toInteropSimulatedMessageReason,
-  toInteropUserMessage,
-  type UserMessageInterop,
+  redactSlateUserMessage,
 } from "../../adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import {
   cloneSlateUserMessage,
   SlateSimulatedMessageReason,
   type SlateSimulatedMessageReason as SlateSimulatedMessageReasonValue,
+  type SlateUserMessage,
+  type SlateUserMessageText,
 } from "./user-message-state.ts"
 import {
   fromInteropSubagentRunState,
@@ -814,6 +812,12 @@ function attachThreadId<T extends object>(userMessage: T, threadId: string): T &
 type RedactedCodeString = { unwrap: (purpose: PrivacyCapability) => string };
 type MaybeRedactedCodeString = string | RedactedCodeString | null | undefined;
 
+function unwrapSlateUserMessageText(value: SlateUserMessageText): string {
+  return typeof value === "string"
+    ? value
+    : value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+}
+
 function unwrapCodeString(value: MaybeRedactedCodeString): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -897,7 +901,7 @@ type PromptBuilder = {
 };
 type RestorePromptBuilder = PromptBuilder & { clearMessages(): void };
 type AgentTurnSerdes = {
-  userMessage: Serde<any>;
+  userMessage: Serde<SlateUserMessage>;
   conversationStep: Serde<SlateConversationStep>;
 };
 type RedactedToolCallInput = Parameters<typeof fromInteropToolCallStep>[0];
@@ -983,7 +987,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
   private readonly rootPromptBuilder: PromptBuilder;
   private blobId: Uint8Array | undefined;
   private dirty: boolean;
-  readonly userMessage: LazyReference<any, Context>;
+  readonly userMessage: LazyReference<SlateUserMessage, Context>;
   readonly steps: StepRef[];
   private readonly sendMessageStepIndices: number[];
 
@@ -1024,7 +1028,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
     return this.steps.length;
   }
 
-  setUserMessage(userMessage: unknown): void {
+  setUserMessage(userMessage: SlateUserMessage): void {
     this.userMessage.set(userMessage);
     this.dirty = true;
   }
@@ -1180,9 +1184,9 @@ type RedactedField<T> = {
 };
 
 type MessageBlobTarget = {
-  text: string;
+  text: SlateUserMessageText;
   textBlobId?: Uint8Array;
-  richText?: string;
+  richText?: SlateUserMessageText;
   richTextBlobId?: Uint8Array;
 };
 
@@ -1668,7 +1672,7 @@ export class ConversationStateHandle {
 
   async createAgentTurn(
     parentContext: OperationContext,
-    incomingRecord: UserMessageInterop,
+    incomingRecord: SlateUserMessage,
     hostContext: TurnRequest,
     turnSettings: TurnConfig,
     resourceAccessor: TurnAccessor | undefined,
@@ -1679,7 +1683,7 @@ export class ConversationStateHandle {
       const span = createSpan(parentContext.withName("createAgentTurn"));
       addDisposableResource(turnEnv, span, false);
       const ctx = span.ctx;
-      let userMessage = fromInteropUserMessage(incomingRecord);
+      let userMessage = cloneSlateUserMessage(incomingRecord);
       if (userMessage.isSimulatedMsg !== true) {
         this.resetSelfSummaryCount();
       }
@@ -1749,7 +1753,7 @@ export class ConversationStateHandle {
         resourceAccessor,
         toInteropAgentMode(turnMode),
         this.modelId,
-        userMessage.text,
+        unwrapSlateUserMessageText(userMessage.text),
         toInteropSimulatedMessageReason(userMessage.simulatedMsgReason),
         this.privacyMode,
       );
@@ -1904,7 +1908,7 @@ These images can be copied for use in other locations.
           ? receivedHookContexts
           : receivedHookContexts.filter((context) => context.event === "agentStoreConflict");
         for (const hookContext of hookContexts) {
-          const hookNotice = renderHookContextReminder(hookContext.text);
+          const hookNotice = renderHookContextReminder(unwrapSlateUserMessageText(hookContext.text));
           if (hookNotice) {
             const needsNewline = contentParts.length > 0;
             contentParts.push({ type: "text", text: needsNewline ? `\n\n${hookNotice}` : hookNotice });
@@ -1922,15 +1926,16 @@ These images can be copied for use in other locations.
       const messageIdTag = sendMessageEnabled && exposeIncomingMessageId({
         isSimulatedMsg: userMessage.isSimulatedMsg === true,
         simulatedMsgReason: userMessage.simulatedMsgReason ?? SlateSimulatedMessageReason.UNSPECIFIED,
-        text: userMessage.text,
+        text: unwrapSlateUserMessageText(userMessage.text),
       }) ? renderIncomingMessageIdTag(userMessage.messageId) : undefined;
       if (messageIdTag !== undefined) {
         contentParts.unshift({ type: "text", text: messageIdTag });
       }
-      const notificationOnly = isNotificationOnlyUserMessage({ role: "user", content: userMessage.text });
+      const incomingText = unwrapSlateUserMessageText(userMessage.text);
+      const notificationOnly = isNotificationOnlyUserMessage({ role: "user", content: incomingText });
       contentParts.push({
         type: "text",
-        text: notificationOnly ? `${timePrefix}${userMessage.text}` : `${timePrefix}<user_query>\n${eagerNote}${userMessage.text}\n</user_query>`,
+        text: notificationOnly ? `${timePrefix}${incomingText}` : `${timePrefix}<user_query>\n${eagerNote}${incomingText}\n</user_query>`,
       });
       const referenceTag = !referenceResolution.hasStructuredPromptReferenceId && referenceResolution.promptReferenceId !== undefined
         ? referenceResolution.promptReferenceId
@@ -1966,13 +1971,13 @@ These images can be copied for use in other locations.
       if (userMessage.simulatedMsgReason !== SlateSimulatedMessageReason.BACKGROUND_TASK_COMPLETION) {
         this.rootPromptBuilder.appendMessages(redactedPrompt);
       }
-      const redactedUser = toRedactedUserMessageInterop(toInteropUserMessage(userMessage), this.privacyMode);
+      const redactedUser = redactSlateUserMessage(userMessage, this.privacyMode);
       const userBlobStartedAt = performance.now();
       const userBytes = this.serdes.userMessage.serialize(redactedUser);
       const userBlobId = await getBlobId(userBytes);
       metadataObserverForStore(this.blobStore)?.({
         blobId: userBlobId,
-        blobType: { kind: "proto", typeName: "agent.v1.UserMessage" },
+        blobType: this.serdes.userMessage.getBlobType?.() ?? { kind: "json", typeName: "slate.agent-user-message" },
       });
       await this.blobStore.setBlob(ctx, userBlobId, userBytes);
       userMessageBlobHistogram.histogram(ctx, performance.now() - userBlobStartedAt);
@@ -2175,7 +2180,7 @@ These images can be copied for use in other locations.
       if (turn instanceof AgentConversationTurnHandle) {
         const incomingRecord = await turn.userMessage.get(ctx);
         if (incomingRecord.isSimulatedMsg !== true) {
-          return incomingRecord.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+          return unwrapSlateUserMessageText(incomingRecord.text);
         }
       }
     }
@@ -2217,7 +2222,7 @@ These images can be copied for use in other locations.
       if (incomingRecord.isSimulatedMsg === true) continue;
       const promptReferenceId = incomingRecord.promptReferenceId;
       if (promptReferenceId === undefined || promptReferenceId.length === 0 || promptsByReference.has(promptReferenceId)) continue;
-      promptsByReference.set(promptReferenceId, incomingRecord.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED));
+      promptsByReference.set(promptReferenceId, unwrapSlateUserMessageText(incomingRecord.text));
     }
     return promptsByReference;
   }

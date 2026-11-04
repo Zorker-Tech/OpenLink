@@ -8,7 +8,13 @@ import {
 } from "../redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
 import { fromRedactedComputerUseToolCall } from "../redacted-protos/generated/agent/v1/computer_use_tool_redacted.ts"
 import { renderInteropSimulatedMessagePrompts } from "./git-action-prompt-adapter.ts"
-import type { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import {
+  SlateSimulatedMessageReason,
+  type SlateSimulatedMessageReason as SlateSimulatedMessageReasonValue,
+} from "../../../packages/agent/user-message-state.ts"
+import { toInteropSimulatedMessageReason } from "./user-message-action-protocol-adapter.ts"
+import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 
 /** Decodes a redacted user message into fields consumed by Slate's classifier policy. */
 export function readClassifierUserMessageInterop(
@@ -20,6 +26,20 @@ export function readClassifierUserMessageInterop(
   readonly simulatedMsgReason: unknown
   readonly selectedContext?: unknown
 } {
+  if (value !== null && typeof value === "object" && typeof (value as { mode?: unknown }).mode === "string") {
+    const slate = value as {
+      readonly text: string | RedactedString
+      readonly isSimulatedMsg?: boolean | undefined
+      readonly simulatedMsgReason?: SlateSimulatedMessageReasonValue | undefined
+      readonly selectedContext?: unknown
+    }
+    return {
+      text: typeof slate.text === "string" ? slate.text : slate.text.unwrap(capability),
+      isSimulatedMsg: slate.isSimulatedMsg === true,
+      simulatedMsgReason: slate.simulatedMsgReason,
+      ...(slate.selectedContext === undefined ? {} : { selectedContext: slate.selectedContext }),
+    }
+  }
   const message = fromRedactedUserMessage(value as never, capability, {})
   return {
     text: message.text,
@@ -30,7 +50,9 @@ export function readClassifierUserMessageInterop(
 }
 
 export function isAutomaticClassifierContextMessageInterop(reason: unknown): boolean {
-  return reason === SimulatedMsgReason.BACKGROUND_TASK_COMPLETION
+  return reason === SlateSimulatedMessageReason.BACKGROUND_TASK_COMPLETION
+    || reason === SlateSimulatedMessageReason.GOAL_CONTINUATION
+    || reason === SimulatedMsgReason.BACKGROUND_TASK_COMPLETION
     || reason === SimulatedMsgReason.GOAL_CONTINUATION
 }
 
@@ -40,10 +62,19 @@ export function selectedWorkflowPathsForClassifierInterop(value: unknown): {
   readonly commandPaths: readonly unknown[]
 } {
   if (value === undefined || value === null) return { skillPaths: [], commandPaths: [] }
-  const selectedContext = value as SelectedContextMessage
+  const selectedContext = value as Partial<SelectedContextMessage>
+  const paths = (items: unknown): unknown[] => Array.isArray(items)
+    ? items.map(item => {
+        if (item === null || typeof item !== "object") return undefined
+        const fullPath = (item as { readonly fullPath?: unknown }).fullPath
+        return fullPath instanceof RedactedString
+          ? fullPath.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+          : fullPath
+      })
+    : []
   return {
-    skillPaths: selectedContext.selectedSkills.map(({ fullPath }) => fullPath),
-    commandPaths: selectedContext.cursorCommands.map(({ fullPath }) => fullPath),
+    skillPaths: paths(selectedContext.selectedSkills),
+    commandPaths: paths(selectedContext.cursorCommands),
   }
 }
 
@@ -52,11 +83,17 @@ export function renderSimulatedClassifierPromptsInterop(input: {
   readonly selectedContext?: unknown
   readonly simulatedMsgReason: unknown
 }): string[] {
+  const selectedContext = input.selectedContext === undefined
+    ? new SelectedContext()
+    : input.selectedContext instanceof SelectedContext
+      ? input.selectedContext
+      : new SelectedContext(input.selectedContext as never)
+  const simulatedMsgReason = typeof input.simulatedMsgReason === "string"
+    ? toInteropSimulatedMessageReason(input.simulatedMsgReason as SlateSimulatedMessageReasonValue)
+    : input.simulatedMsgReason as SimulatedMsgReason
   return renderInteropSimulatedMessagePrompts({
-    selectedContext: input.selectedContext === undefined
-      ? new SelectedContext()
-      : input.selectedContext as SelectedContextMessage,
-    simulatedMsgReason: input.simulatedMsgReason as SimulatedMsgReason,
+    selectedContext: selectedContext as SelectedContextMessage,
+    simulatedMsgReason,
   }).map((part) => part.text)
 }
 

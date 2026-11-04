@@ -5,9 +5,14 @@ import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v
 import { fromRedactedUserMessage } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import { SlateMode, type SlateMode as SlateModeValue } from "../../../packages/agent/mode-processing.ts"
+import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 
 export function decodeIncomingUserMessage(value: unknown) {
   return fromRedactedUserMessage(value as never, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
+}
+
+export function decodeIncomingSlateUserMessage(value: unknown) {
+  return fromInteropUserMessage(decodeIncomingUserMessage(value))
 }
 
 export function decodeIncomingRequestContext(value: unknown) {

@@ -27,7 +27,9 @@ import type {
   SlateBackgroundTaskStatus,
 } from "../../../packages/agent/actions/background-task-completion-contracts.ts";
 import type { SlateMode } from "../../../packages/agent/mode-processing.ts";
+import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts";
 import { toInteropAgentMode } from "./mode-processing-adapter.ts";
+import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts";
 
 export type StoredBackgroundCompletionAction = Parameters<typeof fromRedactedBackgroundTaskCompletionAction>[0];
 
@@ -123,16 +125,13 @@ export function projectBackgroundCompletionRequestContext(
 export function createBackgroundCompletionUserMessage(input: {
   readonly text: string;
   readonly messageId: string;
-  readonly sourceMessage?: unknown;
+  readonly sourceMessage?: SlateUserMessage;
   readonly mode?: SlateMode | undefined;
   readonly metadata?: unknown;
   readonly threadId?: string | undefined;
   readonly privacyMode: PrivacyMode;
-}): { readonly userMessage: UserMessage; readonly listenerUpdate: unknown } {
-  const sourceMessage = input.sourceMessage as {
-    readonly selectedContext?: Parameters<typeof fromRedactedSelectedContext>[0] | undefined;
-    readonly mode?: AgentMode | undefined;
-  } | undefined;
+}): { readonly userMessage: UserMessage; readonly slateUserMessage: SlateUserMessage; readonly listenerUpdate: unknown } {
+  const sourceMessage = input.sourceMessage;
   const selectedContext = sourceMessage?.selectedContext === undefined
     ? new SelectedContext()
     : fromRedactedSelectedContext(
@@ -144,9 +143,13 @@ export function createBackgroundCompletionUserMessage(input: {
     text: input.text,
     messageId: input.messageId,
     selectedContext,
-    mode: input.mode === undefined
-      ? sourceMessage?.mode ?? AgentMode.AGENT
-      : toInteropAgentMode(input.mode),
+    mode: input.mode !== undefined
+      ? toInteropAgentMode(input.mode)
+      : sourceMessage?.compatibility?.legacyModeCode !== undefined
+        ? sourceMessage.compatibility.legacyModeCode as AgentMode
+        : sourceMessage === undefined
+          ? AgentMode.AGENT
+          : toInteropAgentMode(sourceMessage.mode),
     isSimulatedMsg: true,
     simulatedMsgReason: SimulatedMsgReason.BACKGROUND_TASK_COMPLETION,
     ...(input.metadata === undefined ? {} : { simulatedMessageMetadata: input.metadata as never }),
@@ -154,6 +157,7 @@ export function createBackgroundCompletionUserMessage(input: {
   if (input.threadId !== undefined && input.threadId.length > 0) userMessage.threadId = input.threadId;
   return {
     userMessage,
+    slateUserMessage: fromInteropUserMessage(userMessage),
     listenerUpdate: toRedactedInteractionUpdate(
       Updates.userMessageAppended(userMessage),
       input.privacyMode,

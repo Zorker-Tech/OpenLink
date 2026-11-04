@@ -10,13 +10,15 @@ import {
   ShellConversationTurn,
   ShellOutput,
   SubagentPersistedState,
-  UserMessage,
   type ConversationState as ConversationStateMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { ProtobufBlobSerde } from "./protobuf-blob-serde-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
-import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
+import {
+  deserializeSlateConversationStepInterop,
+  deserializeSlateUserMessageInterop,
+} from "./agent-state-message-serdes-adapter.ts"
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
@@ -39,7 +41,6 @@ import {
 } from "./slate-agent-checkpoint-interop-adapter.ts"
 
 const todoItemSerde = new ProtobufBlobSerde(TodoItem)
-const userMessageSerde = new ProtobufBlobSerde(UserMessage)
 const conversationSummarySerde = new ProtobufBlobSerde(ConversationSummary)
 const shellCommandSerde = new ProtobufBlobSerde(ShellCommand)
 const shellOutputSerde = new ProtobufBlobSerde(ShellOutput)
@@ -183,7 +184,7 @@ export async function deriveInteropConversationStateFromStructure<Context>(
       turn = new ConversationTurn({
         turn: {
           case: "agentConversationTurn",
-          value: new AgentConversationTurn({ userMessage: userMessageSerde.deserialize(userMessageBlob), steps }),
+          value: new AgentConversationTurn({ userMessage: deserializeSlateUserMessageInterop(userMessageBlob), steps }),
         },
       })
     } else {

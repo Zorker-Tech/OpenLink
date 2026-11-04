@@ -10,6 +10,7 @@
  */
 import {
   decodeIncomingRequestContext,
+  decodeIncomingSlateUserMessage,
   decodeIncomingUserMessage,
   shouldHideMcpMetaToolSnapshot,
 } from "../../../../adapters/interop/agent/user-message-action-input-adapter.ts";
@@ -186,7 +187,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         : {}),
       createTurn: (context, message, turnOptions) => stateHandler.createAgentTurn(
         context,
-        message,
+        decodeIncomingSlateUserMessage(message),
         requestContext,
         configAny,
         this.resourceAccessor,
@@ -351,7 +352,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     systemPromptGenerationDuration.histogram(ctx, performance.now() - systemPromptStart);
     if (sendToInteractionListener) await this.interactionListener.sendUpdate(ctx, RedactedUpdates.userMessageAppended(userMessage));
     const createMainTurnStart = performance.now();
-    const turn = await stateHandler.createAgentTurn(ctx, decodeIncomingUserMessage(userMessage), requestContext, configAny, this.resourceAccessor, {
+    const turn = await stateHandler.createAgentTurn(ctx, decodeIncomingSlateUserMessage(userMessage), requestContext, configAny, this.resourceAccessor, {
       additionalUserTurnSystemReminder: namedAgentUserTurnReminder,
       ...(isProjectKickoffBeforePrepends ? { isProjectKickoff: true } : {}),
       ...dynamicToolTurnOptions,

@@ -105,7 +105,7 @@ export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageAc
         privacyMode: stateHandler.getPrivacyMode(),
       });
       await this.interactionListener.sendUpdate(ctx, syntheticMessage.listenerUpdate);
-      latestTurn = await stateHandler.createAgentTurn(ctx, syntheticMessage.userMessage, contextProjection.promptContext, this.config, this.resourceAccessor);
+      latestTurn = await stateHandler.createAgentTurn(ctx, syntheticMessage.slateUserMessage, contextProjection.promptContext, this.config, this.resourceAccessor);
       rootPromptExecutor.appendMessages(toRedactedCoreMessages([{ role: "user", content: completionPromptMessage }], stateHandler.getPrivacyMode()));
     }
     if (latestTurn === undefined) return { kind: "skip", ctx, state: await stateHandler.computeNewStructure(ctx) };

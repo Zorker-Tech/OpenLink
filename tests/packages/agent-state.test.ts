@@ -13,7 +13,6 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import {
-  fromRedactedUserMessage,
   toRedactedConversationStateStructure,
   toRedactedShellCommand,
   toRedactedShellOutput,
@@ -43,6 +42,8 @@ import { SubagentType, SubagentTypeUnspecified } from "../../source/adapters/int
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
+import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -398,11 +399,11 @@ test("an agent turn persists a user message through the Slate compatibility boun
   const ctx = createContext()
   const turn = await harnessed.handle.createAgentTurn(
     ctx,
-    new UserMessage({
+    fromInteropUserMessage(new UserMessage({
       text: "hello",
       messageId: "message-1",
       mode: AgentMode.PLAN,
-    }),
+    })),
     { env: {}, gitRepos: [] } as never,
     {
       enableTerminalFiles: false,
@@ -421,11 +422,7 @@ test("an agent turn persists a user message through the Slate compatibility boun
   )
 
   const stored = await turn.userMessage.get(ctx)
-  const plain = fromRedactedUserMessage(
-    stored as Parameters<typeof fromRedactedUserMessage>[0],
-    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-    undefined,
-  )
+  const plain = toPlainInteropUserMessage(stored)
   assert.equal(plain.text, "hello")
   assert.equal(plain.messageId, "message-1")
   assert.equal(plain.mode, AgentMode.PLAN)
@@ -437,7 +434,7 @@ test("an agent turn records assistant and thinking steps in Slate's step vocabul
   const ctx = createContext()
   const turn = await harnessed.handle.createAgentTurn(
     ctx,
-    new UserMessage({ text: "hello", messageId: "message-1" }),
+    fromInteropUserMessage(new UserMessage({ text: "hello", messageId: "message-1" })),
     { env: {}, gitRepos: [] } as never,
     {
       enableTerminalFiles: false,

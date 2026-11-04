@@ -82,7 +82,7 @@ export class AsyncAskQuestionCompletionActionHandler extends AbstractUserMessage
         await interactionListener.sendUpdate(ctx, continuation.appendedUpdate)
         targetTurn = await stateHandler.createAgentTurn(
           ctx,
-          continuation.message,
+          continuation.slateMessage,
           turnContext.requestContext,
           config,
           resourceAccessor,

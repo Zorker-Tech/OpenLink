@@ -6,6 +6,7 @@ import {
   createEmptyRequestContextInterop,
   createRedactedConversationTokenDetailsInterop,
   createSyntheticUserMessageInterop,
+  fromInteropUserMessage,
   fromRedactedMcpToolDefinitionInterop,
   fromRedactedRequestContextInterop,
   fromRedactedTodoItemInterop,
@@ -2976,7 +2977,7 @@ export class AbstractUserMessageActionHandler {
       isSimulatedMsg: true,
     });
     await this.interactionListener.sendUpdate(runContext, toRedactedInteractionUpdateInterop(Updates.userMessageAppended(syntheticUserMessage), turnState.getPrivacyMode()));
-    const newTurn = await turnState.createAgentTurn(runContext, syntheticUserMessage, requestState, this.config, this.resourceAccessor);
+    const newTurn = await turnState.createAgentTurn(runContext, fromInteropUserMessage(syntheticUserMessage), requestState, this.config, this.resourceAccessor);
     if (this.config.immediatelyUpdateStateOnNewTurn) {
       if (this.config.fireAndForgetCheckpoints) {
         void turnState.computeNewStructure(runContext).then(async newState => { await publishStateUpdate(runContext, newState); }).catch(error => { agentLogger.error(runContext, "Failed to persist checkpoint after creating CLI reflect-general follow-up turn", { error }); });
@@ -3020,7 +3021,7 @@ export class AbstractUserMessageActionHandler {
       if (shouldCreateNewTurn) {
         try {
           await this.interactionListener.sendUpdate(runContext, RedactedUpdates.userMessageAppended(queuedMsg));
-          conversationTurn = await turnState.createAgentTurn(runContext, fromRedactedUserMessageInterop(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), queuedReqContext === undefined ? createEmptyRequestContextInterop() : fromRedactedRequestContextInterop(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
+          conversationTurn = await turnState.createAgentTurn(runContext, fromInteropUserMessage(fromRedactedUserMessageInterop(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)), queuedReqContext === undefined ? createEmptyRequestContextInterop() : fromRedactedRequestContextInterop(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
         } catch (error) {
           if (consumedClaimedInjection) this.conversationActionReceiver.failConsumedInjectionDelivery?.();
           throw error;

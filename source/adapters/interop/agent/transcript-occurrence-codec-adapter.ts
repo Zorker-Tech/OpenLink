@@ -6,7 +6,10 @@ import type {
   TranscriptOccurrenceCodec,
 } from "../../../host/transcript/mirror/transcript-occurrence-deriver.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
-import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
+import {
+  deserializeSlateConversationStepInterop,
+  deserializeSlateUserMessageInterop,
+} from "./agent-state-message-serdes-adapter.ts"
 
 interface BinaryMessageType<Message> {
   fromBinary(wireBytes: Uint8Array): Message
@@ -65,10 +68,6 @@ export interface GeneratedTranscriptOccurrenceBindings {
   readonly ConversationStep: BinaryMessageType<StepShape>
 }
 
-export interface SlateTranscriptOccurrenceBindings {
-  readonly UserMessage: BinaryMessageType<UserMessageShape>
-}
-
 function requireGeneratedType<Message>(
   value: BinaryMessageType<Message> | undefined,
   typeName: string,
@@ -108,14 +107,14 @@ function decodeStepShape(decoded: StepShape): DecodedTranscriptStep {
 }
 
 function createTranscriptOccurrenceCodec(
-  userType: BinaryMessageType<UserMessageShape>,
+  decodeUserMessage: (wireBytes: Uint8Array) => UserMessageShape,
   decodeTurn: (wireBytes: Uint8Array) => DecodedTranscriptTurn,
   decodeStep: (wireBytes: Uint8Array) => DecodedTranscriptStep,
 ): TranscriptOccurrenceCodec {
   return {
     decodeTurn,
     decodeUserMessage(wireBytes) {
-      const decoded = userType.fromBinary(wireBytes)
+      const decoded = decodeUserMessage(wireBytes)
       return {
         text: decoded.text,
         ...(decoded.textBlobId === undefined ? {} : { textBlobId: decoded.textBlobId }),
@@ -125,11 +124,8 @@ function createTranscriptOccurrenceCodec(
   }
 }
 
-export function createSlateTranscriptOccurrenceCodec(
-  bindings: SlateTranscriptOccurrenceBindings,
-): TranscriptOccurrenceCodec {
-  const userType = requireGeneratedType(bindings?.UserMessage, "UserMessage")
-  return createTranscriptOccurrenceCodec(userType, wireBytes => {
+export function createSlateTranscriptOccurrenceCodec(): TranscriptOccurrenceCodec {
+  return createTranscriptOccurrenceCodec(wireBytes => deserializeSlateUserMessageInterop(wireBytes), wireBytes => {
     try {
       const decoded = slateConversationTurnSerde.deserialize(wireBytes)
       return decoded.kind === "agent"
@@ -151,7 +147,7 @@ export function createGeneratedTranscriptOccurrenceCodec(
   const turnType = requireGeneratedType(generatedBindings?.ConversationTurnStructure, "ConversationTurnStructure")
   const userType = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage")
   const stepType = requireGeneratedType(generatedBindings?.ConversationStep, "ConversationStep")
-  return createTranscriptOccurrenceCodec(userType, wireBytes => {
+  return createTranscriptOccurrenceCodec(wireBytes => userType.fromBinary(wireBytes), wireBytes => {
     const decoded = turnType.fromBinary(wireBytes)
     if (decoded.turn.case === "agentConversationTurn") {
       return {
