@@ -19,22 +19,32 @@
  */
 
 import { createLogger } from "../context/index.ts"
-import { AgentMode } from "../proto/generated/agent/v1/agent_pb.ts"
 import { isWorktreesPath } from "../utils/paths.ts"
 import { buildAntiAskQuestionSystemReminder } from "./prompts/ask-question-guidance.ts"
 import { SwitchModeReminderSnippet } from "./prompts/legacy-snippets.ts"
-import { usesPersistenceInstructions, type PersistenceModelInfo } from "./prompts/persistence-instructions.ts"
 import {
   renderMultitaskModeEnterUserReminderInner,
   renderMultitaskModeExitUserReminder,
   renderStillInMultitaskModeReminder,
-  type MultitaskModelInfo,
+  type MultitaskReminderPolicy,
 } from "./prompts/multitask-mode-reminders.ts"
 import { WORKTREE_NOTE } from "./prompts/worktree-note.ts"
-import { getTaskToolName, type TaskToolModelInfo } from "./tools/task-tool-name.ts"
 import { AgentType } from "./utils/agent-config.ts"
 
-type ModeModelInfo = TaskToolModelInfo & PersistenceModelInfo & MultitaskModelInfo
+/** Slate's internal mode vocabulary. Wire enum values are translated at the interop boundary. */
+export const SlateMode = {
+  AGENT: "agent",
+  CHAT: "chat",
+  PLAN: "plan",
+  DEBUG: "debug",
+  TRIAGE: "triage",
+  PROJECT: "project",
+  MULTITASK: "multitask",
+  CUSTOM: "custom",
+  UNSPECIFIED: "unspecified",
+} as const
+
+export type SlateMode = typeof SlateMode[keyof typeof SlateMode]
 
 export interface ModeProcessingRequestContext {
   readonly debugModeConfig?: unknown
@@ -42,18 +52,21 @@ export interface ModeProcessingRequestContext {
 }
 
 export interface ModeProcessingConfig {
-  readonly planSystemReminderGenerator: (previousMode: AgentMode | undefined) => string
+  readonly planSystemReminderGenerator: (previousMode: SlateMode | undefined) => string
   readonly askSystemReminderGenerator: (options: {
-    readonly prevTurnMode: AgentMode | undefined
+    readonly prevTurnMode: SlateMode | undefined
     readonly requestContext: ModeProcessingRequestContext
   }) => string
   readonly debugSystemReminderGenerator: (
     debugModeConfig: unknown,
     enteringDebugMode: boolean,
   ) => string
-  readonly triageSystemReminderGenerator: (previousMode: AgentMode | undefined) => string
-  readonly projectSystemReminderGenerator?: ((previousMode: AgentMode | undefined) => string) | undefined
-  readonly modelInfo?: ModeModelInfo | undefined
+  readonly triageSystemReminderGenerator: (previousMode: SlateMode | undefined) => string
+  readonly projectSystemReminderGenerator?: ((previousMode: SlateMode | undefined) => string) | undefined
+  readonly multitaskReminder?: {
+    readonly subagentToolName?: string | undefined
+    readonly policy?: MultitaskReminderPolicy | undefined
+  } | undefined
   readonly featureFlags?: {
     readonly hideAsyncSubagentTaskNotifications?: boolean | undefined
     readonly enableAntiAskQuestionSysReminder?: boolean | undefined
@@ -65,124 +78,108 @@ export interface ModeProcessingConfig {
   } | undefined
   readonly userInfoDisplayOptions?: {
     readonly disable?: boolean | undefined
-    readonly displayCursorRules?: boolean | undefined
+    readonly displayWorkspaceRules?: boolean | undefined
   } | undefined
   readonly askQuestionToolName?: string | undefined
 }
 
 createLogger("@slate/agent:mode-processing")
 
-/** The mode as the product names it, which is what a reminder about switching modes says. */
-function agentModeToModeId(mode: AgentMode): string {
-  switch (mode) {
-    case AgentMode.AGENT: return "agent"
-    case AgentMode.ASK: return "chat"
-    case AgentMode.PLAN: return "plan"
-    case AgentMode.DEBUG: return "debug"
-    case AgentMode.TRIAGE: return "triage"
-    case AgentMode.PROJECT: return "project"
-    case AgentMode.MULTITASK: return "multitask"
-    default: return "agent"
-  }
+/** The names Slate presents in its mode-switch reminder. */
+const SWITCH_MODE_IDS: Partial<Record<SlateMode, string>> = {
+  [SlateMode.AGENT]: "agent",
+  [SlateMode.CHAT]: "chat",
+  [SlateMode.PLAN]: "plan",
+  [SlateMode.DEBUG]: "debug",
+  [SlateMode.TRIAGE]: "triage",
+  [SlateMode.PROJECT]: "project",
+  [SlateMode.MULTITASK]: "multitask",
+}
+
+function agentModeToModeId(mode: SlateMode): string {
+  return SWITCH_MODE_IDS[mode] ?? "agent"
 }
 
 /** What the user asked for this turn wins; otherwise the mode the conversation is in. */
 export function resolveCurrentTurnMode(
-  persistedMode: AgentMode | undefined,
-  userMessageMode: AgentMode | undefined,
-): AgentMode {
-  if (userMessageMode !== undefined && userMessageMode !== AgentMode.UNSPECIFIED) {
+  persistedMode: SlateMode | undefined,
+  userMessageMode: SlateMode | undefined,
+): SlateMode {
+  if (userMessageMode !== undefined && userMessageMode !== SlateMode.UNSPECIFIED) {
     return userMessageMode
   }
-  if (persistedMode !== undefined && persistedMode !== AgentMode.UNSPECIFIED) {
+  if (persistedMode !== undefined && persistedMode !== SlateMode.UNSPECIFIED) {
     return persistedMode
   }
-  return AgentMode.AGENT
+  return SlateMode.AGENT
 }
 
 /** A step keeps the mode it was started in, whatever the turn has moved on to. */
 export function resolveCurrentStepMode(
-  persistedMode: AgentMode | undefined,
-  userMessageMode: AgentMode | undefined,
-): AgentMode {
-  if (persistedMode !== undefined && persistedMode !== AgentMode.UNSPECIFIED) {
+  persistedMode: SlateMode | undefined,
+  userMessageMode: SlateMode | undefined,
+): SlateMode {
+  if (persistedMode !== undefined && persistedMode !== SlateMode.UNSPECIFIED) {
     return persistedMode
   }
   return resolveCurrentTurnMode(persistedMode, userMessageMode)
 }
 
+interface ModeReminderInput {
+  readonly config: ModeProcessingConfig
+  readonly requestContext: ModeProcessingRequestContext
+  readonly previousMode: SlateMode | undefined
+  readonly isUserTurn: boolean
+}
+
+type ModeReminderPolicy = (input: ModeReminderInput) => string
+
+function multitaskReminder({ config, previousMode, isUserTurn }: ModeReminderInput): string {
+  if (!isUserTurn) return ""
+  const reminderOptions = {
+    policy: config.multitaskReminder?.policy,
+    hideAsyncSubagentTaskNotifications: config.featureFlags?.hideAsyncSubagentTaskNotifications,
+  }
+  if (previousMode === SlateMode.MULTITASK) {
+    return renderStillInMultitaskModeReminder(reminderOptions)
+  }
+  const subagentToolName = config.multitaskReminder?.subagentToolName ?? "Task"
+  const reminder = renderMultitaskModeEnterUserReminderInner(subagentToolName, reminderOptions)
+  return `<system_reminder>\n${reminder}\n</system_reminder>`
+}
+
+const MODE_REMINDER_POLICIES: Partial<Record<SlateMode, ModeReminderPolicy>> = {
+  [SlateMode.PLAN]: ({ config, previousMode }) => config.planSystemReminderGenerator(previousMode),
+  [SlateMode.CHAT]: ({ config, previousMode, requestContext }) => config.askSystemReminderGenerator({
+    prevTurnMode: previousMode,
+    requestContext,
+  }),
+  [SlateMode.DEBUG]: ({ config, previousMode, requestContext }) => config.debugSystemReminderGenerator(
+    requestContext.debugModeConfig,
+    previousMode !== SlateMode.DEBUG,
+  ),
+  [SlateMode.TRIAGE]: ({ config, previousMode }) => config.triageSystemReminderGenerator(previousMode),
+  [SlateMode.PROJECT]: ({ config, previousMode }) => config.projectSystemReminderGenerator?.(previousMode) ?? "",
+  [SlateMode.MULTITASK]: multitaskReminder,
+}
+
 export function processModeSystemReminder(
-  mode: AgentMode,
+  mode: SlateMode,
   config: ModeProcessingConfig,
   requestContext: ModeProcessingRequestContext,
-  previousMode?: AgentMode,
+  previousMode?: SlateMode,
   options?: { readonly isUserTurn?: boolean | undefined },
 ): string {
   const isUserTurn = options?.isUserTurn ?? true
   const hasModeSwitch = previousMode !== undefined && previousMode !== mode
   // Leaving multitask mode is worth saying on its own, because the mode's instructions were the loudest.
   const leftMultitask = previousMode !== undefined &&
-    previousMode !== AgentMode.UNSPECIFIED &&
-    previousMode === AgentMode.MULTITASK &&
-    mode !== AgentMode.MULTITASK
+    previousMode !== SlateMode.UNSPECIFIED &&
+    previousMode === SlateMode.MULTITASK &&
+    mode !== SlateMode.MULTITASK
   const exitMultitaskReminder = leftMultitask ? renderMultitaskModeExitUserReminder() : ""
-  let modeReminder = ""
-  switch (mode) {
-    case AgentMode.AGENT:
-    case AgentMode.UNSPECIFIED:
-      break
-    case AgentMode.PLAN:
-      modeReminder = config.planSystemReminderGenerator(previousMode)
-      break
-    case AgentMode.ASK:
-      modeReminder = config.askSystemReminderGenerator({
-        prevTurnMode: previousMode,
-        requestContext,
-      })
-      break
-    case AgentMode.DEBUG:
-      modeReminder = config.debugSystemReminderGenerator(
-        requestContext.debugModeConfig,
-        previousMode !== AgentMode.DEBUG,
-      )
-      break
-    case AgentMode.TRIAGE:
-      modeReminder = config.triageSystemReminderGenerator(previousMode)
-      break
-    case AgentMode.PROJECT:
-      modeReminder = config.projectSystemReminderGenerator
-        ? config.projectSystemReminderGenerator(previousMode)
-        : ""
-      break
-    case AgentMode.MULTITASK: {
-      // The mode's own instructions are for the user's turn; a step inside the turn is not re-told them.
-      if (!isUserTurn) break
-      if (previousMode === AgentMode.MULTITASK) {
-        modeReminder = renderStillInMultitaskModeReminder({
-          modelInfo: config.modelInfo,
-          hideAsyncSubagentTaskNotifications:
-            config.featureFlags?.hideAsyncSubagentTaskNotifications,
-        })
-        break
-      }
-      const subagentToolName = config.modelInfo !== undefined
-        ? getTaskToolName(config.modelInfo)
-        : "Task"
-      const multitaskReminderInner = renderMultitaskModeEnterUserReminderInner(
-        subagentToolName,
-        {
-          ignoreGptPersistenceInstructions: usesPersistenceInstructions(config.modelInfo),
-          modelInfo: config.modelInfo,
-          hideAsyncSubagentTaskNotifications:
-            config.featureFlags?.hideAsyncSubagentTaskNotifications,
-        },
-      )
-      modeReminder = `<system_reminder>\n${multitaskReminderInner}\n</system_reminder>`
-      break
-    }
-    default:
-      break
-  }
+  // Each mode owns its reminder policy; absent policies intentionally mean there is nothing to add.
+  const modeReminder = MODE_REMINDER_POLICIES[mode]?.({ config, requestContext, previousMode, isUserTurn }) ?? ""
   const trailingModeReminders = [exitMultitaskReminder, modeReminder]
     .filter(Boolean)
     .join("\n\n")
@@ -209,7 +206,7 @@ export function processAntiAskQuestionSystemReminder(config: ModeProcessingConfi
     config.featureFlags?.enableAntiAskQuestionSysReminder !== true ||
     config.featureFlags?.dropCustomPromptContext === true ||
     config.userInfoDisplayOptions?.disable === true ||
-    config.userInfoDisplayOptions?.displayCursorRules === false
+    config.userInfoDisplayOptions?.displayWorkspaceRules === false
   ) {
     return ""
   }

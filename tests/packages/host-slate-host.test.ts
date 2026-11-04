@@ -6,15 +6,32 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { BOX_READY_REPORT_ATTEMPTS, BOX_READY_STAGE_MARKER_PATH, SlateHost, createProductionSlateHost, type HostExtensionRegistry, type SlateHostRuntime } from "../../source/host/slate-host.ts";
+import { SlateHost, type HostExtensionRegistry, type SlateHostRuntime } from "../../source/host/slate-host.ts";
+import { BOX_READY_REPORT_ATTEMPTS, BOX_READY_STAGE_MARKER_PATH } from "../../source/host/box-ready-reporter.ts";
+import { createProductionSlateHost } from "../../source/host/slate-host-production.ts";
 import { installShutdownHandlers, main, reportLockOutcome } from "../../source/host/main.ts";
 
 /** A registry of extension APIs: every method a startup or a health check calls, recording what it was asked to do. */
-function registry(overrides: { isBusy?: boolean; backgroundShell?: boolean; diskPressureLevel?: string | null } = {}) {
+type RegistryOverrides = {
+  backgroundShell?: () => boolean;
+  carryablePendingWake?: () => boolean;
+  midDrainRevival?: () => boolean;
+  runningSubagents?: () => boolean;
+  liveRunningAgentIds?: () => Iterable<string>;
+  agentsWithPendingApprovals?: () => Iterable<string>;
+  reportBoxBootStageConfirmed?: () => Promise<boolean>;
+  diskPressureLevel?: string | null;
+  feedSinks?: Map<string, (payload: unknown) => void>;
+};
+
+function registry(overrides: RegistryOverrides = {}) {
   const calls: string[] = [];
   const awaiters: Array<() => void> = [];
   const record = (name: string) => (...args: unknown[]) => {
     calls.push(args.length === 0 ? name : `${name}:${JSON.stringify(args)}`);
+  };
+  const captureFeed = (name: string) => (listener: (payload: unknown) => void) => {
+    overrides.feedSinks?.set(name, listener);
   };
   const apis: Record<string, Record<string, unknown>> = {
     telemetry: {
@@ -28,21 +45,27 @@ function registry(overrides: { isBusy?: boolean; backgroundShell?: boolean; disk
         },
       }),
       setHostBundleIdentity: record("setHostBundleIdentity"),
-      logs: { reportHostStartup: record("reportHostStartup") },
+      logs: {
+        reportHostStartup: record("reportHostStartup"),
+        reportBoxBootStageConfirmed: overrides.reportBoxBootStageConfirmed ?? (async () => false),
+      },
     },
     transcript: {
-      hasRunningBackgroundShellWork: () => overrides.backgroundShell === true,
+      hasRunningBackgroundShellWork: () => overrides.backgroundShell?.() ?? false,
+      hasCarryablePendingWake: () => overrides.carryablePendingWake?.() ?? false,
+      hasMidDrainRevival: () => overrides.midDrainRevival?.() ?? false,
+      hasAgentsWithRunningSubagents: () => overrides.runningSubagents?.() ?? false,
       getActiveAgentId: () => "agent-1",
       kickstartAgent: async () => true,
       listAgentsSync: () => [],
-      subscribe: record("subscribeTranscript"),
+      subscribe: captureFeed("transcript"),
       subscribeAgents: record("subscribeAgents"),
       createAwaitingStateSink: () => undefined,
       setAgentForgottenObserver: record("setAgentForgottenObserver"),
       setShouldEmitAutomations: record("setShouldEmitAutomations"),
       setConnectorConnectCardObserver: record("setConnectorConnectCardObserver"),
       ensureLoaded: async () => [],
-      liveRunningAgentIds: () => [],
+      liveRunningAgentIds: () => overrides.liveRunningAgentIds?.() ?? [],
       dispose: async () => calls.push("disposeTranscript"),
     },
     // The roster's own bookkeeping asks for these on every apply, so the stub exposes them as the real extension does.
@@ -58,16 +81,16 @@ function registry(overrides: { isBusy?: boolean; backgroundShell?: boolean; disk
     },
     "host-upgrade": { resolveHostBundleIdentityVersion: async () => "1.2.3", startSharedUpdateWatch: record("startSharedUpdateWatch") },
     "box-store-sync": { getStoreId: async () => "store-1", isEnabled: false, scheduleStoreDbSnapshot: record("scheduleStoreDbSnapshot") },
-    mcp: { subscribeToAuthCompletion: record("subscribeAuthCompletion") },
-    "cross-user-sharing": { subscribe: record("subscribeSharing"), prepareForUpgrade: record("prepareSharing") },
-    settings: { subscribeToChanges: record("subscribeSettings") },
+    mcp: { subscribeToAuthCompletion: record("subscribeAuthCompletion"), subscribeToServersUpdated: captureFeed("mcp-servers") },
+    "cross-user-sharing": { subscribe: captureFeed("sharing"), prepareForUpgrade: record("prepareSharing") },
+    settings: { subscribeToChanges: captureFeed("host-settings") },
     "local-tool-permission": { bindAskSurfaces: record("bindAskSurfaces") },
     "local-exec": { checkLiveComputerForAsk: () => true },
     "turn-execution": { bindExecutor: record("bindExecutor") },
     inference: { isReady: async () => true },
     "managed-setup": { dispose: record("disposeManagedSetup") },
     automations: { suspendWakes: async () => calls.push("suspendWakes"), reconcileNow: record("reconcileNow") },
-    "auto-review": { agentIdsWithPendingApprovals: () => [], expirePendingApprovals: record("expireApprovals") },
+    "auto-review": { agentIdsWithPendingApprovals: () => overrides.agentsWithPendingApprovals?.() ?? [], expirePendingApprovals: record("expireApprovals") },
     trays: {},
     memory: {},
     "teach-recording": {},
@@ -92,8 +115,8 @@ async function until(predicate: () => boolean): Promise<void> {
   throw new Error("the expected state never arrived");
 }
 
-function runtime(overrides: Record<string, unknown> = {}) {
-  const state = registry();
+function runtime(overrides: Record<string, unknown> = {}, registryOverrides: RegistryOverrides = {}) {
+  const state = registry(registryOverrides);
   const runnerCalls: string[] = [];
   return {
     calls: state.calls,
@@ -154,6 +177,93 @@ describe("the host lifecycle", () => {
     assert.equal(seen.length, 1);
   });
 
+  it("projects optional extension feeds into their gateway channels", async () => {
+    const feedSinks = new Map<string, (payload: unknown) => void>();
+    const { runtime: hostRuntime } = runtime({}, { feedSinks });
+    const host = new SlateHost(hostRuntime);
+    await host.start();
+    const seen: unknown[] = [];
+    host.subscribe((event) => seen.push(event));
+
+    feedSinks.get("mcp-servers")!({ server: "one" });
+    feedSinks.get("sharing")!({ room: "room-1" });
+    feedSinks.get("host-settings")!({ key: "theme" });
+    feedSinks.get("transcript")!({ message: "hello" });
+
+    assert.deepEqual(seen.slice(1), [
+      { channel: "mcp-servers", payload: { server: "one" } },
+      { channel: "sharing", payload: { room: "room-1" } },
+      { channel: "host-settings", payload: { key: "theme" } },
+      { channel: "transcript", payload: { message: "hello" } },
+    ]);
+  });
+
+  it("keeps approval-only work busy without moving the last-work timestamp", async () => {
+    const clock = { value: 1_000 };
+    const running = new Set(["agent-1", "agent-2"]);
+    const approvals = new Set(["agent-1", "agent-2"]);
+    const { runtime: hostRuntime } = runtime({ now: () => clock.value }, {
+      liveRunningAgentIds: () => running,
+      agentsWithPendingApprovals: () => approvals,
+    });
+    const host = new SlateHost(hostRuntime);
+    await host.start();
+
+    clock.value = 1_500;
+    assert.deepEqual(host.getHealth(), {
+      isBusy: true,
+      busyOnlyAwaitingApproval: true,
+      activeAgentId: "agent-1",
+      lastBusyAtMs: 1_000,
+    });
+
+    approvals.delete("agent-2");
+    clock.value = 2_000;
+    assert.deepEqual(host.getHealth(), {
+      isBusy: true,
+      busyOnlyAwaitingApproval: false,
+      activeAgentId: "agent-1",
+      lastBusyAtMs: 2_000,
+    });
+
+    approvals.add("agent-2");
+    const hasSubagents = { value: true };
+    const withSubagents = runtime({ now: () => clock.value }, {
+      liveRunningAgentIds: () => running,
+      agentsWithPendingApprovals: () => approvals,
+      runningSubagents: () => hasSubagents.value,
+    });
+    const subagentHost = new SlateHost(withSubagents.runtime);
+    await subagentHost.start();
+    clock.value = 2_500;
+    assert.equal(subagentHost.getHealth().busyOnlyAwaitingApproval, false);
+    assert.equal(subagentHost.getHealth().lastBusyAtMs, 2_500);
+  });
+
+  it("counts background shells, pending wakes and mid-drain revivals as busy work", async () => {
+    const clock = { value: 1_000 };
+    const activity = { shell: false, wake: false, revival: false };
+    const { runtime: hostRuntime } = runtime({ now: () => clock.value }, {
+      backgroundShell: () => activity.shell,
+      carryablePendingWake: () => activity.wake,
+      midDrainRevival: () => activity.revival,
+    });
+    const host = new SlateHost(hostRuntime);
+    await host.start();
+    assert.equal(host.getHealth().isBusy, false);
+
+    for (const [kind, advance] of [["shell", 100], ["wake", 200], ["revival", 300]] as const) {
+      activity[kind] = true;
+      clock.value += advance;
+      const health = host.getHealth();
+      assert.equal(health.isBusy, true, `${kind} contributes to busy state`);
+      assert.equal(health.busyOnlyAwaitingApproval, false, `${kind} cannot be classified as approval-only work`);
+      assert.equal(health.lastBusyAtMs, clock.value, `${kind} advances the last-work timestamp`);
+      activity[kind] = false;
+    }
+    assert.equal(host.getHealth().isBusy, false);
+  });
+
   it("disposes its parts in the order the platform depends on", async () => {
     const { runtime: hostRuntime, calls } = runtime();
     const host = new SlateHost(hostRuntime);
@@ -183,16 +293,14 @@ describe("a box reporting itself ready", () => {
     withBoxEnv();
     const markers: string[] = [];
     let delivered = true;
-    const { runtime: hostRuntime, calls } = runtime({
+    const { runtime: hostRuntime } = runtime({
       readReadyMarker: async () => null,
       writeReadyMarker: async (bootId: string) => {
         markers.push(bootId);
       },
-    });
+    }, { reportBoxBootStageConfirmed: async () => delivered });
     const host = new SlateHost({ ...hostRuntime, log: { log: () => {}, error: () => {} } } as never);
     await host.start();
-    const logs = (host as unknown as { hostExtensions: { api(id: string): Record<string, unknown> } }).hostExtensions.api("telemetry").logs as Record<string, unknown>;
-    logs.reportBoxBootStageConfirmed = async () => delivered;
     await host.reportBoxReady();
     assert.deepEqual(markers, ["boot-1"]);
     // A boot whose marker is already there reports nothing.
@@ -208,14 +316,14 @@ describe("a box reporting itself ready", () => {
   it("retries a report it could not deliver, a bounded number of times", async () => {
     withBoxEnv();
     const attempts: number[] = [];
-    const { runtime: hostRuntime } = runtime({ readReadyMarker: async () => null, writeReadyMarker: async () => {}, readyRetryDelay: async () => {} });
+    const { runtime: hostRuntime } = runtime({ readReadyMarker: async () => null, writeReadyMarker: async () => {}, readyRetryDelay: async () => {} }, {
+      reportBoxBootStageConfirmed: async () => {
+        attempts.push(attempts.length + 1);
+        return false;
+      },
+    });
     const host = new SlateHost({ ...hostRuntime, log: { log: () => {}, error: () => {} } } as never);
     await host.start();
-    const logs = (host as unknown as { hostExtensions: { api(id: string): Record<string, unknown> } }).hostExtensions.api("telemetry").logs as Record<string, unknown>;
-    logs.reportBoxBootStageConfirmed = async () => {
-      attempts.push(attempts.length + 1);
-      return false;
-    };
     await host.reportBoxReady();
     assert.equal(attempts.length, BOX_READY_REPORT_ATTEMPTS);
     assert.equal(BOX_READY_STAGE_MARKER_PATH.endsWith("slate-box-ready-stage"), true);

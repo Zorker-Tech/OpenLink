@@ -1,0 +1,38 @@
+// agent.v1 — agent/v1/pi_grep_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/pi_common.proto";
+
+message PiGrepExecArgs {
+  string pattern = 1 [json_name = "pattern"];
+  optional string path = 2 [json_name = "path"];
+  optional string glob = 3 [json_name = "glob"];
+  optional bool ignore_case = 4 [json_name = "ignoreCase"];
+  optional bool literal = 5 [json_name = "literal"];
+  optional int32 context = 6 [json_name = "context"];
+  optional int32 limit = 7 [json_name = "limit"];
+}
+
+message PiGrepExecResult {
+  oneof result {
+    .agent.v1.PiGrepExecSuccess success = 1 [json_name = "success"];
+    .agent.v1.PiGrepExecError error = 2 [json_name = "error"];
+  }
+}
+
+message PiGrepExecSuccess {
+  string output = 1 [json_name = "output"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional uint32 match_limit_reached = 3 [json_name = "matchLimitReached"];
+  bool lines_truncated = 4 [json_name = "linesTruncated"];
+}
+
+message PiGrepExecError {
+  string error = 1 [json_name = "error"];
+}

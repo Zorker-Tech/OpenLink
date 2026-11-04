@@ -8,11 +8,19 @@
 
 import { getSafeConversationId, TRANSCRIPTS_SUBDIR } from "../../../packages/utils/conversation-paths.ts"
 
-export function getTranscriptRelativePath(args: { conversationId: string; kind: string; parentConversationId?: string; ext: string }): string {
-  const safeId = getSafeConversationId(args.conversationId)
-  if (args.kind === "subagent" && args.parentConversationId) {
-    const safeParentId = getSafeConversationId(args.parentConversationId)
-    return `${TRANSCRIPTS_SUBDIR}/${safeParentId}/subagents/${safeId}.${args.ext}`
-  }
-  return `${TRANSCRIPTS_SUBDIR}/${safeId}/${safeId}.${args.ext}`
+export interface TranscriptFileAddress {
+  readonly conversationId: string;
+  readonly kind: string;
+  readonly parentConversationId?: string | undefined;
+  readonly ext: string;
+}
+
+export function transcriptFilePath(address: TranscriptFileAddress): string {
+  const conversationFolder = getSafeConversationId(address.conversationId);
+  const fileName = `${conversationFolder}.${address.ext}`;
+  const parentId = address.kind === "subagent" ? address.parentConversationId : undefined;
+
+  return parentId
+    ? [TRANSCRIPTS_SUBDIR, getSafeConversationId(parentId), "subagents", fileName].join("/")
+    : [TRANSCRIPTS_SUBDIR, conversationFolder, fileName].join("/");
 }

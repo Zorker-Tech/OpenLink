@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { InteractionHandler } from "../../source/packages/agent/interaction-handler.ts";
 import { createContext } from "../../source/packages/context/context.ts";
-import { ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { EditArgs } from "../../source/packages/proto/generated/agent/v1/edit_tool_pb.ts";
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { EditArgs } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts";
 
 function harness() {
   const sent: Array<{ kind: string; payload: any }> = [];

@@ -10,16 +10,26 @@ import { MirrorRouter, type JournalPort, type LegacyMirrorPort } from "../../sou
 type Checkpoint = { readonly id: string };
 
 /** The journal and the older writer, recording what they were asked to do. */
-function world(options: { owned?: readonly string[]; enabled?: boolean; legacyFails?: boolean } = {}) {
+function world(options: { owned?: readonly string[]; enabled?: boolean; legacyFails?: boolean; failOwnsOnce?: boolean; failClaimOnce?: boolean } = {}) {
   const calls: string[] = [];
   const owned = new Set(options.owned ?? []);
+  let failOwnsOnce = options.failOwnsOnce === true;
+  let failClaimOnce = options.failClaimOnce === true;
   const journal: JournalPort<Checkpoint, string> = {
     async ownsConversation(conversationId) {
       calls.push(`owns:${conversationId}`);
+      if (failOwnsOnce) {
+        failOwnsOnce = false;
+        throw new Error("temporary ownership read failure");
+      }
       return owned.has(conversationId);
     },
     async claimConversation(conversationId) {
       calls.push(`claim:${conversationId}`);
+      if (failClaimOnce) {
+        failClaimOnce = false;
+        throw new Error("temporary claim failure");
+      }
       owned.add(conversationId);
     },
     async recover(_ctx, conversationId) {
@@ -71,6 +81,23 @@ describe("which writer a conversation gets", () => {
     const fresh = world({ enabled: false });
     assert.equal(await fresh.router.route("conv-new"), "legacy");
     assert.deepEqual(fresh.calls, ["owns:conv-new"]);
+  });
+
+  it("retries a route decision after ownership lookup or claim fails", async () => {
+    const ownership = world({ failOwnsOnce: true });
+    await assert.rejects(() => ownership.router.route("conv-read-retry"), /temporary ownership read failure/);
+    assert.equal(await ownership.router.route("conv-read-retry"), "journal");
+    assert.deepEqual(ownership.calls, ["owns:conv-read-retry", "owns:conv-read-retry", "claim:conv-read-retry"]);
+
+    const claim = world({ failClaimOnce: true });
+    await assert.rejects(() => claim.router.route("conv-claim-retry"), /temporary claim failure/);
+    assert.equal(await claim.router.route("conv-claim-retry"), "journal");
+    assert.deepEqual(claim.calls, [
+      "owns:conv-claim-retry",
+      "claim:conv-claim-retry",
+      "owns:conv-claim-retry",
+      "claim:conv-claim-retry",
+    ]);
   });
 });
 

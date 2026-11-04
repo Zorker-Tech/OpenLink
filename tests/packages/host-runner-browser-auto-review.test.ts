@@ -25,7 +25,7 @@ import {
   SmartModeClassifierDecision,
   SmartModeClassifierResult,
   type SmartModeClassifierConversationMessage,
-} from "../../source/packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+} from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
 
 type BrowserActionInput = { readonly op: string; readonly [key: string]: unknown };
 const boxIdentity: BoxIdentity = { boxId: "box-1", windowGeneration: "gen-1" };
@@ -187,10 +187,10 @@ test("the classifier target names the browser action and carries box and permiss
     canonicalTarget,
     personalInstructions: { allowInstructions: ["trusted site"] },
     projectAutoRunInstructions: { blockInstructions: ["do not submit"] },
-  }) as { action: string; arguments?: { toJson(): Record<string, unknown> } };
+  });
 
   assert.equal(target.action, SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION);
-  const args = target.arguments?.toJson() as Record<string, any>;
+  const args = target.arguments as Record<string, any>;
   assert.equal(args.surface, "browser");
   assert.equal(args.action_kind, "browser_click");
   assert.equal(args.cdp_method, "Page.navigate");

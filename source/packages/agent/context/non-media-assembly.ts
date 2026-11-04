@@ -13,24 +13,24 @@
  * gathered for this turn rather than attached to it.
  */
 
-import type { SimulatedMsgReason as SimulatedMsgReasonValue } from "../../proto/generated/agent/v1/agent_pb.ts"
-import type {
-  SelectedContext,
-  SelectedGitPRDiffSelection,
-  SelectedPullRequest,
-} from "../../proto/generated/agent/v1/selected_context_pb.ts"
+import type { GitPullRequestPromptInput } from "../git-pr-processing-contracts.ts"
 import { buildGitCommitsUserContent } from "../git-commit-processing.ts"
-import { buildGitDiffUncommittedUserContent, buildGitDiffUserContent } from "../git-diff-processing.ts"
+import { buildBranchChangeAttachment, buildWorktreeChangeAttachment } from "../git-diff-processing.ts"
 import { buildGitPullRequestsUserContent } from "../git-pr-processing.ts"
 import { renderConsoleLogsContext } from "./console-logs-context.ts"
-import { renderSelectedCursorCommands } from "./cursor-commands-context.ts"
+import type { ConsoleLogPromptInput } from "./console-logs-context.ts"
+import { renderAttachedCommands } from "./attached-commands-context.ts"
 import { renderPrReviewContext } from "./pr-review-context.ts"
+import type { PrReviewInput } from "./pr-review-context.ts"
 import { renderRecentAgentsContext } from "./recent-agents-context.ts"
+import type { RecentAgentPromptInput } from "./recent-agents-context.ts"
 import { renderSelectedBrowsersContext } from "./selected-browsers-context.ts"
+import type { BrowserTabPromptInput } from "./selected-browsers-context.ts"
 import { renderSelectedSubagentDelegation } from "./selected-subagents-context.ts"
-import { renderSimulatedMessagePrompts } from "../simulated-message-prompts.ts"
+import type { SubagentNamePromptInput } from "./selected-subagents-context.ts"
 import { renderSelectedUIElementsContext } from "./ui-elements-context.ts"
-import type { TaskToolModelInfo } from "../tools/task-tool-name.ts"
+import type { SelectedUIElementInput } from "./ui-elements-context.ts"
+import type { NonMediaSelectedContext } from "./non-media-context-contracts.ts"
 
 interface TextContent {
   readonly type: "text";
@@ -39,17 +39,18 @@ interface TextContent {
 
 export interface AppendNonMediaSelectedContextContentArgs {
   readonly userContent: TextContent[];
-  readonly selectedContext: SelectedContext;
-  readonly hydratedSelectedPullRequests: readonly SelectedPullRequest[];
-  readonly hydratedGitPrDiffSelections: readonly SelectedGitPRDiffSelection[];
+  readonly selectedContext: NonMediaSelectedContext;
+  readonly simulatedMessagePrompts: readonly TextContent[];
+  readonly recentAgents: readonly RecentAgentPromptInput[];
+  readonly selectedUIElements: readonly SelectedUIElementInput[];
+  readonly selectedBrowsers: readonly BrowserTabPromptInput[];
+  readonly selectedSubagents: readonly SubagentNamePromptInput[];
+  readonly consoleLogs: readonly ConsoleLogPromptInput[];
+  readonly pullRequestPrompts: readonly GitPullRequestPromptInput[];
+  readonly prReviewSelections: readonly PrReviewInput[];
   readonly extraContextsToInclude: readonly string[];
   readonly isComposerMatterhorn: boolean;
   readonly isRawTrainingSlug: boolean;
-  readonly simulatedMsgReason: SimulatedMsgReasonValue;
-  readonly modelInfo?: TaskToolModelInfo | undefined;
-  readonly environmentParamForSubagent: boolean;
-  readonly babysitV2Prompt: boolean;
-  readonly enablePrCreationForgeGuidance: boolean;
 }
 
 // Extracted from ../packages/agent/dist/context-processing.js as the exact
@@ -59,71 +60,65 @@ export interface AppendNonMediaSelectedContextContentArgs {
 export function appendNonMediaSelectedContextContent({
   userContent,
   selectedContext,
-  hydratedSelectedPullRequests,
-  hydratedGitPrDiffSelections,
+  recentAgents,
+  selectedUIElements,
+  selectedBrowsers,
+  selectedSubagents,
+  consoleLogs,
+  pullRequestPrompts,
+  prReviewSelections,
   extraContextsToInclude,
+  simulatedMessagePrompts,
   isComposerMatterhorn,
   isRawTrainingSlug,
-  simulatedMsgReason,
-  modelInfo,
-  environmentParamForSubagent,
-  babysitV2Prompt,
-  enablePrCreationForgeGuidance,
 }: AppendNonMediaSelectedContextContentArgs): void {
   if (selectedContext.cursorCommands.length > 0) {
-    const commandsText = renderSelectedCursorCommands(selectedContext.cursorCommands);
+    const commandsText = renderAttachedCommands(selectedContext.cursorCommands);
     if (commandsText !== undefined) {
       userContent.push(commandsText);
     }
   }
   if (selectedContext.gitDiff) {
-    userContent.push(buildGitDiffUncommittedUserContent(selectedContext.gitDiff));
+    userContent.push(buildWorktreeChangeAttachment(selectedContext.gitDiff));
   }
   if (selectedContext.gitDiffFromBranchToMain) {
-    userContent.push(buildGitDiffUserContent(selectedContext.gitDiffFromBranchToMain));
+    userContent.push(buildBranchChangeAttachment(selectedContext.gitDiffFromBranchToMain));
   }
   if (selectedContext.gitCommits.length > 0) {
     userContent.push(buildGitCommitsUserContent(selectedContext.gitCommits));
   }
-  if (hydratedSelectedPullRequests.length > 0) {
-    userContent.push(buildGitPullRequestsUserContent(hydratedSelectedPullRequests));
+  if (pullRequestPrompts.length > 0) {
+    userContent.push(buildGitPullRequestsUserContent(pullRequestPrompts));
   }
   const recentAgentsText = renderRecentAgentsContext({
-    recentAgents: selectedContext.recentAgentsContext?.recentAgents ?? [],
+    recentAgents,
     isComposerMatterhorn,
     isRawTrainingSlug,
   });
   if (recentAgentsText !== undefined) {
     userContent.push(recentAgentsText);
   }
-  const selectedSubagentsText = renderSelectedSubagentDelegation(selectedContext.selectedSubagents);
+  const selectedSubagentsText = renderSelectedSubagentDelegation(selectedSubagents);
   if (selectedSubagentsText !== undefined) {
     userContent.push(selectedSubagentsText);
   }
-  const prReviewText = renderPrReviewContext(hydratedGitPrDiffSelections);
+  const prReviewText = renderPrReviewContext(prReviewSelections);
   if (prReviewText !== undefined) {
     userContent.push(prReviewText);
   }
-  const consoleLogsText = renderConsoleLogsContext(selectedContext.consoleLogs);
+  const consoleLogsText = renderConsoleLogsContext(consoleLogs);
   if (consoleLogsText !== undefined) {
     userContent.push(consoleLogsText);
   }
-  const uiElementsText = renderSelectedUIElementsContext(selectedContext.uiElements);
+  const uiElementsText = renderSelectedUIElementsContext(selectedUIElements);
   if (uiElementsText !== undefined) {
     userContent.push(uiElementsText);
   }
-  const browsersText = renderSelectedBrowsersContext(selectedContext.selectedBrowsers);
+  const browsersText = renderSelectedBrowsersContext(selectedBrowsers);
   if (browsersText !== undefined) {
     userContent.push(browsersText);
   }
-  userContent.push(...renderSimulatedMessagePrompts({
-    selectedContext,
-    simulatedMsgReason,
-    modelInfo,
-    environmentParamForSubagent,
-    babysitV2Prompt,
-    enablePrCreationForgeGuidance,
-  }));
+  userContent.push(...simulatedMessagePrompts);
   for (const extraContext of extraContextsToInclude) {
     userContent.push({
       type: "text",

@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import type { Clock, RetryPolicy } from "../extensions/scheduling.ts";
 import { errorLogTag } from "../../shared/errors/summary.ts";
 import { getAccessTokenExpiryMs, getConfiguredBackendUrl } from "../../shared/node/slate-token.ts";
-import { getSlateBackendClientHeaders } from "../../shared/node/slate-client-metadata.ts";
+import { getSlateBackendClientHeaders } from "../../adapters/interop/backend/slate-client-metadata-adapter.ts";
 
 export class SlateCredentialRenewalError extends Error {
   constructor(message: string) { super(message); this.name = "SlateCredentialRenewalError"; }

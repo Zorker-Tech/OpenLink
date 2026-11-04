@@ -5,7 +5,7 @@
  * around that review. */
 import { randomUUID } from "node:crypto";
 import type { PromptExecutor } from "../../packages/chat-inference/base.ts";
-import { conversationIdKey, requestIdKey } from "../../packages/chat-inference-proto/client.ts";
+import { conversationIdKey, requestIdKey } from "../../adapters/interop/chat-inference-proto/client.ts";
 import { createContext } from "../../packages/context/context.ts";
 import { normalizeMemoryContent } from "../runner/slate-memory.ts";
 import { SlateError } from "../../shared/errors/registry.ts";

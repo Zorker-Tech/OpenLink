@@ -36,7 +36,7 @@ import {
   type GroupMessage,
 } from "../groups/group-chat.ts";
 import { isSlateRemoteRoomDir } from "../groups/remote-room-store.ts";
-import { buildSharedRoomGuardrailPrompt } from "../groups/xuser.ts";
+import { buildSharedRoomGuardrails } from "../groups/xuser.ts";
 import { createGroupMemberActivityTracker } from "../slate-activity.ts";
 import {
   beginTurnTrace,
@@ -51,7 +51,7 @@ import {
 } from "./group-chat-orchestrator.ts";
 import { describeAgentRunError } from "./agent-run-error.ts";
 import { AgentGoneError } from "./session-runtime.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import {
   appendEntry,
   getTranscript,
@@ -360,7 +360,7 @@ export class GroupChatGlue {
         ...turnRequest,
         systemPrompt:
           turnRequest.systemPrompt +
-          buildSharedRoomGuardrailPrompt({
+          buildSharedRoomGuardrails({
             hostName: "",
             isForeignHost: false,
           }),
@@ -616,7 +616,7 @@ export class GroupChatGlue {
     const transcriptEntries = this.entriesFor(session, isActive);
     const transcriptEntry: TranscriptEntry = {
       kind: "send-message",
-      id: nextEntryId(transcriptEntries, "send-message"),
+      id: allocateTranscriptEntryId(transcriptEntries, "send-message"),
       message: { type: "text", content },
       timestampMs: Date.now(),
       author,
@@ -651,7 +651,7 @@ export class GroupChatGlue {
   }
 
   openGroupStreamEntry(groupMember: GroupMember, stream: GroupMemberStream): void {
-    const id = nextEntryId(getTranscript(), "send-message");
+    const id = allocateTranscriptEntryId(getTranscript(), "send-message");
     const transcriptEntry: TranscriptEntry = {
       kind: "send-message",
       id,

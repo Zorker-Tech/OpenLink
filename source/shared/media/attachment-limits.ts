@@ -1,14 +1,54 @@
-/**
- * How large an attachment may be.
- *
- * A video is given more room than anything else, and the two limits are told apart by the name of the file rather than
- * by what it turns out to contain, since the check happens before anything is read. What is too large is reported in
- * megabytes, and the notice says which limit it broke.
- */
 import { VIDEO_MIME_FROM_EXTENSION, extensionOf } from "./media-extensions.ts";
-export const ATTACHMENT_BYTE_LIMIT = 25 * 1024 * 1024; export const VIDEO_BYTE_LIMIT = 200 * 1024 * 1024; export const BYTES_PER_MB = 1024 * 1024;
-export function nameLooksLikeVideo(name: string): boolean { return VIDEO_MIME_FROM_EXTENSION[extensionOf(name)] !== undefined; }
-export function attachmentByteLimitForName(name: string): number { return nameLooksLikeVideo(name) ? VIDEO_BYTE_LIMIT : ATTACHMENT_BYTE_LIMIT; }
-export function formatMegabytes(bytes: number): string { return `${Math.round(bytes / BYTES_PER_MB)} MB`; }
-export function formatAttachmentTooLargeNotice(filename: string): string { const video = nameLooksLikeVideo(filename); const limit = video ? VIDEO_BYTE_LIMIT : ATTACHMENT_BYTE_LIMIT; return `"${filename}" is too large to attach (max ${formatMegabytes(limit)}${video ? " for video" : ""}).`; }
-export class AttachmentTooLargeError extends Error { constructor(readonly limitBytes: number) { super(`Attachment exceeds ${limitBytes} bytes.`); this.name = "AttachmentTooLargeError"; } }
+
+export const ATTACHMENT_BYTE_LIMIT = 25 * 1024 * 1024;
+export const VIDEO_BYTE_LIMIT = 200 * 1024 * 1024;
+export const BYTES_PER_MB = 1024 * 1024;
+
+interface AttachmentPolicy {
+  readonly byteLimit: number;
+  readonly description: "" | " for video";
+}
+
+const STANDARD_POLICY: AttachmentPolicy = {
+  byteLimit: ATTACHMENT_BYTE_LIMIT,
+  description: "",
+};
+
+const VIDEO_POLICY: AttachmentPolicy = {
+  byteLimit: VIDEO_BYTE_LIMIT,
+  description: " for video",
+};
+
+function policyForName(name: string): AttachmentPolicy {
+  return nameLooksLikeVideo(name) ? VIDEO_POLICY : STANDARD_POLICY;
+}
+
+export function nameLooksLikeVideo(name: string): boolean {
+  const extension = extensionOf(name);
+  return VIDEO_MIME_FROM_EXTENSION[extension] !== undefined;
+}
+
+export function attachmentByteLimitForName(name: string): number {
+  return policyForName(name).byteLimit;
+}
+
+export function formatMegabytes(bytes: number): string {
+  const wholeMegabytes = Math.round(bytes / BYTES_PER_MB);
+  return `${wholeMegabytes} MB`;
+}
+
+export function formatAttachmentTooLargeNotice(filename: string): string {
+  const policy = policyForName(filename);
+  const sizeLimit = formatMegabytes(policy.byteLimit);
+  return `"${filename}" is too large to attach (max ${sizeLimit}${policy.description}).`;
+}
+
+export class AttachmentTooLargeError extends Error {
+  readonly limitBytes: number;
+
+  constructor(limitBytes: number) {
+    super(`Attachment exceeds ${limitBytes} bytes.`);
+    this.name = "AttachmentTooLargeError";
+    this.limitBytes = limitBytes;
+  }
+}

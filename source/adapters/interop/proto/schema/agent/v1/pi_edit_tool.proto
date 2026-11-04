@@ -1,0 +1,46 @@
+// agent.v1 — agent/v1/pi_edit_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message PiEditReplacement {
+  string old_text = 1 [json_name = "oldText"];
+  string new_text = 2 [json_name = "newText"];
+}
+
+message PiEditToolCall {
+  optional .agent.v1.PiEditToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiEditToolResult result = 2 [json_name = "result"];
+}
+
+message PiEditToolArgs {
+  string path = 1 [json_name = "path"];
+  repeated .agent.v1.PiEditReplacement edits = 2 [json_name = "edits"];
+}
+
+message PiEditToolResult {
+  oneof result {
+    .agent.v1.PiEditToolSuccess success = 1 [json_name = "success"];
+    .agent.v1.PiEditToolError error = 2 [json_name = "error"];
+    .agent.v1.PiEditToolRejected rejected = 3 [json_name = "rejected"];
+  }
+}
+
+message PiEditToolSuccess {
+  string output = 1 [json_name = "output"];
+  string diff = 2 [json_name = "diff"];
+  string patch = 3 [json_name = "patch"];
+  optional uint32 first_changed_line = 4 [json_name = "firstChangedLine"];
+}
+
+message PiEditToolError {
+  string error = 1 [json_name = "error"];
+}
+
+message PiEditToolRejected {
+  string reason = 1 [json_name = "reason"];
+}

@@ -7,11 +7,13 @@
  * left as gaps in the middle of a message.
  */
 
-/** The tags the platform surrounds its own context with; their content is not part of the conversation. */
+import { LEGACY_INTEROP_CONTEXT_TAG_ALIASES } from "../../../adapters/interop/agent/legacy-context-tag-adapter.ts";
+
+/** Current Slate context tags plus historical interop aliases; their content is not part of the conversation. */
 export const CONTEXT_TAGS_TO_STRIP = [
   "user_info", "project_layout", "rules", "always_applied_workspace_rules", "agent_requestable_workspace_rules", "user_rules", "agent_skills", "available_skills",
-  "cloud_instructions", "cloud_task_instructions", "open_and_recently_viewed_files", "system_reminder", "system-reminder", "mcp_instructions", "mcp_file_system",
-  "mcp_file_system_servers", "git_status", "agent_transcripts", "cursor_rules_context", "attached_files", "system_notification", "task_notification", "agent_notification",
+  "cloud_instructions", "cloud_task_instructions", "open_and_recently_viewed_files", "workspace_editor_context", "system_reminder", "system-reminder", "mcp_instructions", "mcp_file_system",
+  "mcp_file_system_servers", "git_status", "agent_transcripts", "workspace_rules_context", ...LEGACY_INTEROP_CONTEXT_TAG_ALIASES, "attached_files", "system_notification", "task_notification", "agent_notification",
 ] as const;
 
 /** The whole element of one tagged block: the opening tag with any attributes, its content across lines, its closing tag. */

@@ -6,7 +6,7 @@
  */
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { buildHostShellArgs } from "../../boxes/box-shell-command.ts";
+import { buildHostShellArgs } from "../../../adapters/interop/agent/box-shell-command-adapter.ts";
 import { navigationProbeCommand, normalizeNavigationUrl, parseNavigationProbeOutput } from "../slate-action-audit.ts";
 import { SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE } from "../../ports/box.ts";
 import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts";
@@ -23,7 +23,7 @@ import {
   SLATE_BROWSER_DRIVER_BOX_PATH,
   SLATE_BROWSER_DRIVER_SOURCE,
   SLATE_BROWSER_RESULT_MARKER,
-} from "./slate-browser-driver-source.ts";
+} from "../../../adapters/interop/browser/browser-driver-source-adapter.ts";
 
 export const BOX_CDP_PORT_BASE = 9_222;
 export const PENDING_SCREENSHOT_CAP = 32;

@@ -1,0 +1,195 @@
+// aiserver.v1 — aiserver/v1/usage messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/empty.proto";
+
+message UsageEventDetails {
+  optional int32 override_num_requests_counted = 13 [json_name = "overrideNumRequestsCounted"];
+  optional int32 override_num_requests_counted_millis = 16 [json_name = "overrideNumRequestsCountedMillis"];
+  optional string routed_model = 17 [json_name = "routedModel"];
+  optional .aiserver.v1.ModelSelectionSnapshot requested_model_selection = 18 [json_name = "requestedModelSelection"];
+  optional .aiserver.v1.ModelSelectionSnapshot effective_model_selection = 19 [json_name = "effectiveModelSelection"];
+  oneof feature {
+    .aiserver.v1.UsageEventDetails.Chat chat = 1 [json_name = "chat"];
+    .aiserver.v1.UsageEventDetails.ContextChat context_chat = 2 [json_name = "contextChat"];
+    .aiserver.v1.UsageEventDetails.CmdK cmd_k = 3 [json_name = "cmdK"];
+    .aiserver.v1.UsageEventDetails.TerminalCmdK terminal_cmd_k = 4 [json_name = "terminalCmdK"];
+    .aiserver.v1.UsageEventDetails.AiReviewAcceptedComment ai_review_accepted_comment = 5 [json_name = "aiReviewAcceptedComment"];
+    .aiserver.v1.UsageEventDetails.InterpreterChat interpreter_chat = 6 [json_name = "interpreterChat"];
+    .aiserver.v1.UsageEventDetails.SlashEdit slash_edit = 7 [json_name = "slashEdit"];
+    .aiserver.v1.UsageEventDetails.Composer composer = 8 [json_name = "composer"];
+    .aiserver.v1.UsageEventDetails.FastApply fast_apply = 9 [json_name = "fastApply"];
+    .aiserver.v1.UsageEventDetails.WarmComposer warm_composer = 10 [json_name = "warmComposer"];
+    .aiserver.v1.UsageEventDetails.BugFinderTriggerV1 bug_finder_trigger_v1 = 11 [json_name = "bugFinderTriggerV1"];
+    .aiserver.v1.UsageEventDetails.ToolCallComposer tool_call_composer = 12 [json_name = "toolCallComposer"];
+    .aiserver.v1.UsageEventDetails.BugReport bug_bot = 14 [json_name = "bugBot"];
+    .aiserver.v1.UsageEventDetails.PromptHook prompt_hook = 15 [json_name = "promptHook"];
+  }
+  message Chat {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
+  }
+  message ContextChat {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
+  }
+  message CmdK {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
+  }
+  message TerminalCmdK {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
+  }
+  message AiReviewAcceptedComment {
+  }
+  message InterpreterChat {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
+  }
+  message SlashEdit {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional bool max_mode = 2 [json_name = "maxMode"];
+  }
+  message Composer {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_headless = 3 [json_name = "isHeadless"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
+    optional bool max_mode = 6 [json_name = "maxMode"];
+  }
+  message FastApply {
+    bool is_optimistic = 1 [json_name = "isOptimistic"];
+    bool willing_to_pay_extra_for_speed = 2 [json_name = "willingToPayExtraForSpeed"];
+  }
+  message WarmComposer {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional bool max_mode = 2 [json_name = "maxMode"];
+  }
+  message BugFinderTriggerV1 {
+    bool in_background_subsidized = 1 [json_name = "inBackgroundSubsidized"];
+    int32 cost_cents = 2 [json_name = "costCents"];
+    bool is_fast = 3 [json_name = "isFast"];
+  }
+  message ToolCallComposer {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_headless = 3 [json_name = "isHeadless"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
+    optional bool max_mode = 6 [json_name = "maxMode"];
+  }
+  message BugReport {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
+    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    bool max_mode = 4 [json_name = "maxMode"];
+    string billing_mode = 7 [json_name = "billingMode"];
+    oneof discount {
+      .google.protobuf.Empty no_discount = 5 [json_name = "noDiscount"];
+      .google.protobuf.Empty free = 6 [json_name = "free"];
+    }
+  }
+  message PromptHook {
+    string model_intent = 1 [json_name = "modelIntent"];
+    optional .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
+    optional bool max_mode = 3 [json_name = "maxMode"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+  }
+}
+
+message ModelSelectionSnapshot {
+  string model_id = 1 [json_name = "modelId"];
+  bool max_mode = 2 [json_name = "maxMode"];
+  repeated .aiserver.v1.ModelSelectionSnapshot.ModelParameterValue parameters = 3 [json_name = "parameters"];
+  message ModelParameterValue {
+    string id = 1 [json_name = "id"];
+    string value = 2 [json_name = "value"];
+  }
+}
+
+message TokenUsage {
+  int32 input_tokens = 1 [json_name = "inputTokens"];
+  int32 output_tokens = 2 [json_name = "outputTokens"];
+  int32 cache_write_tokens = 3 [json_name = "cacheWriteTokens"];
+  int32 cache_read_tokens = 4 [json_name = "cacheReadTokens"];
+  float total_cents = 5 [json_name = "totalCents"];
+  optional int32 discount_percent_off = 6 [json_name = "discountPercentOff"];
+  optional float enterprise_usage_discount_percent = 7 [json_name = "enterpriseUsageDiscountPercent"];
+}
+
+message UsageEvent {
+  int64 timestamp = 1 [json_name = "timestamp"];
+  optional .aiserver.v1.UsageEventDetails details = 2 [json_name = "details"];
+  optional string subscription_product_id = 3 [json_name = "subscriptionProductId"];
+  optional string usage_price_id = 4 [json_name = "usagePriceId"];
+  bool is_slow = 5 [json_name = "isSlow"];
+  string status = 6 [json_name = "status"];
+  optional string owning_user = 7 [json_name = "owningUser"];
+  optional string owning_team = 8 [json_name = "owningTeam"];
+  optional float price_cents = 9 [json_name = "priceCents"];
+  optional string team_membership_type = 10 [json_name = "teamMembershipType"];
+}
+
+message UsageEventDisplay {
+  int64 timestamp = 1 [json_name = "timestamp"];
+  string model = 2 [json_name = "model"];
+  .aiserver.v1.UsageEventKind kind = 3 [json_name = "kind"];
+  optional string custom_subscription_name = 4 [json_name = "customSubscriptionName"];
+  bool max_mode = 5 [json_name = "maxMode"];
+  float requests_costs = 6 [json_name = "requestsCosts"];
+  optional string usage_based_costs = 7 [json_name = "usageBasedCosts"];
+  optional bool is_token_based_call = 8 [json_name = "isTokenBasedCall"];
+  optional .aiserver.v1.TokenUsage token_usage = 9 [json_name = "tokenUsage"];
+  optional string owning_user = 10 [json_name = "owningUser"];
+  optional string owning_team = 11 [json_name = "owningTeam"];
+  optional string user_email = 12 [json_name = "userEmail"];
+  optional float cursor_token_fee = 13 [json_name = "cursorTokenFee"];
+  optional bool is_chargeable = 14 [json_name = "isChargeable"];
+  optional string service_account_name = 15 [json_name = "serviceAccountName"];
+  optional string service_account_id = 16 [json_name = "serviceAccountId"];
+  optional bool is_headless = 17 [json_name = "isHeadless"];
+  optional float charged_cents = 18 [json_name = "chargedCents"];
+  optional string cloud_agent_id = 19 [json_name = "cloudAgentId"];
+  optional string automation_id = 20 [json_name = "automationId"];
+  optional string automation_managed_type = 21 [json_name = "automationManagedType"];
+  optional string client_type = 22 [json_name = "clientType"];
+  optional string conversation_id = 23 [json_name = "conversationId"];
+  optional string subscription_product_id = 24 [json_name = "subscriptionProductId"];
+}
+
+enum UsageEventKind {
+  USAGE_EVENT_KIND_UNSPECIFIED = 0;
+  USAGE_EVENT_KIND_USAGE_BASED = 1;
+  USAGE_EVENT_KIND_USER_API_KEY = 2;
+  USAGE_EVENT_KIND_INCLUDED_IN_PRO = 3;
+  USAGE_EVENT_KIND_INCLUDED_IN_BUSINESS = 4;
+  USAGE_EVENT_KIND_ERRORED_NOT_CHARGED = 5;
+  USAGE_EVENT_KIND_ABORTED_NOT_CHARGED = 6;
+  USAGE_EVENT_KIND_CUSTOM_SUBSCRIPTION = 7;
+  USAGE_EVENT_KIND_INCLUDED_IN_PRO_PLUS = 8;
+  USAGE_EVENT_KIND_INCLUDED_IN_ULTRA = 9;
+  USAGE_EVENT_KIND_FREE_CREDIT = 10;
+}

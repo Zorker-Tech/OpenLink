@@ -6,70 +6,39 @@
  * command is not allowed. A command blocked by the permissions configuration of a read-only session is reported as a
  * permission denial rather than as a rejection, because it is not something the user could approve.
  */
-import {
-  ShellPermissionDenied,
-  ShellRejected,
-  type ShellResult,
-} from "../../proto/generated/agent/v1/shell_exec_pb.ts";
 import { formatAdminCommandDenylistBlockReason } from "../services/admin-command-denylist.ts";
 
 export type ShellBlockReason =
-  | { readonly type: "userRejected"; readonly reason: string }
-  | { readonly type: "unsafeResolution"; readonly message: string }
-  | { readonly type: "adminCommandDenylist"; readonly pattern: string }
+  | { readonly type: "userDeclined"; readonly detail: string }
+  | { readonly type: "unsafeWorkingDirectory"; readonly message: string }
+  | { readonly type: "administratorCommandRule"; readonly pattern: string }
   | {
       readonly type:
-        | "needsApproval"
-        | "cursorIgnore"
-        | "adminBlock"
-        | "permissionsConfig"
-        | "cursorFiles";
-      readonly isReadonly?: boolean;
+        | "approvalRequired"
+        | "ignorePolicy"
+        | "administratorPolicy"
+        | "permissionConfiguration"
+        | "managedInstructionFiles";
+      readonly isReadOnly?: boolean;
     };
 
 export function shellBlockReasonMessage(reason: ShellBlockReason): string {
   switch (reason.type) {
-    case "userRejected":
-      return reason.reason;
-    case "unsafeResolution":
+    case "userDeclined":
+      return reason.detail;
+    case "unsafeWorkingDirectory":
       return reason.message;
-    case "adminCommandDenylist":
+    case "administratorCommandRule":
       return formatAdminCommandDenylistBlockReason(reason.pattern);
-    case "needsApproval":
-    case "cursorIgnore":
-    case "adminBlock":
-    case "permissionsConfig":
-    case "cursorFiles":
+    case "approvalRequired":
+    case "ignorePolicy":
+    case "administratorPolicy":
+    case "permissionConfiguration":
+    case "managedInstructionFiles":
       return "Command is not allowed";
     default: {
       const _exhaustive: never = reason;
       return `Command is not allowed (${JSON.stringify(_exhaustive)})`;
     }
   }
-}
-
-export function shellCommandBlockResult(
-  command: string,
-  workingDirectory: string,
-  reason: ShellBlockReason,
-): ShellResult["result"] {
-  if (reason.type === "permissionsConfig" && (reason.isReadonly ?? false)) {
-    return {
-      case: "permissionDenied",
-      value: new ShellPermissionDenied({
-        command,
-        workingDirectory,
-        error: "Command blocked by permissions configuration",
-        isReadonly: true,
-      }),
-    };
-  }
-  return {
-    case: "rejected",
-    value: new ShellRejected({
-      command,
-      workingDirectory,
-      reason: shellBlockReasonMessage(reason),
-    }),
-  };
 }

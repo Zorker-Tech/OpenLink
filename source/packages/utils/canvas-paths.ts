@@ -1,22 +1,24 @@
-/**
- * Canvas paths.
- *
- * A canvas is a platform-managed file (a `.canvas.tsx` under the workspace's canvas directory) and
- * the agent is allowed to treat it as editable, unlike the rest of the managed directory. Because a
- * path can arrive with `..` or backslashes, it is normalized before it is judged.
- */
+/** Canvas documents are the one workspace-managed file shape the editor may change directly. */
 
-const MANAGED_CANVAS_PATTERN = /(?:^|\/)\.slate\/projects\/[^/]+\/canvases\/[^/]+\.canvas\.tsx$/i
+const WORKSPACE_CANVAS_DOCUMENT_PATTERN = /(?:^|\/)\.slate\/projects\/[^/]+\/canvases\/[^/]+\.canvas\.tsx$/i
 
-/** Collapses `.`/`..` and backslashes without touching the filesystem. */
-export function normalizeCanvasPath(value: string): string {
-  const segments: string[] = []
-  for (const segment of value.replace(/\\/g, "/").split("/")) {
+/** Convert path syntax to a stable workspace-relative form without consulting the filesystem. */
+export function canonicalizeWorkspacePath(value: string): string {
+  const components: string[] = []
+  const segments = value.replace(/\\/g, "/").split("/")
+
+  for (const segment of segments) {
     if (segment === "" || segment === ".") continue
-    if (segment === "..") segments.pop()
-    else segments.push(segment)
+    if (segment === "..") {
+      components.pop()
+      continue
+    }
+    components.push(segment)
   }
-  return segments.join("/")
+
+  return components.join("/")
 }
 
-export const isManagedCanvasPath = (value: string): boolean => MANAGED_CANVAS_PATTERN.test(normalizeCanvasPath(value))
+export function isWorkspaceCanvasDocument(value: string): boolean {
+  return WORKSPACE_CANVAS_DOCUMENT_PATTERN.test(canonicalizeWorkspacePath(value))
+}

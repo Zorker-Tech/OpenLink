@@ -1,79 +1,79 @@
-/**
- * The name the account goes by.
- *
- * The backend is asked for the account's full name once and the answer is kept, so every surface that shows a name
- * shows the same one — and a name that could not be read is left as what was known rather than blanked.
- */
-import { parseJwtPayload } from "../../shared/node/slate-token.ts";
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl } from "../../shared/node/cursor-backend/cursor-inference.ts";
-import { DashboardService } from "../../packages/proto/generated/aiserver/v1/dashboard_connect.ts";
-import { GetMeRequest, type GetMeResponse } from "../../packages/proto/generated/aiserver/v1/dashboard_pb.ts";
-import type { MethodInfoUnary } from "@bufbuild/protobuf";
+import { parseJwtPayload } from "../../shared/node/slate-token.ts"
+import {
+  getAccountIdentityBackendUrl,
+  readAccountName,
+} from "../../adapters/interop/cursor-backend/account-name-adapter.ts"
+import { displayNameFrom, nonEmpty } from "./user-full-name-policy.ts"
 
-export const GET_ME_TIMEOUT_MS = 10_000;
+export { displayNameFrom, nonEmpty } from "./user-full-name-policy.ts"
 
-export function nonEmpty(value: string | null | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed != null && trimmed.length > 0 ? trimmed : undefined;
-}
+export const GET_ME_TIMEOUT_MS = 10_000
 
-export function displayNameFrom(name: { readonly firstName?: string | undefined; readonly lastName?: string | undefined }): string | undefined {
-  const parts = [name.firstName?.trim(), name.lastName?.trim()].filter((part): part is string => part != null && part.length > 0);
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-async function fetchFullNameOverBackend(accessToken: string, getMachineId: () => Promise<string>): Promise<string | undefined> {
-  const service = DashboardService as typeof DashboardService & {
-    readonly methods: typeof DashboardService.methods & {
-      readonly getMe: MethodInfoUnary<GetMeRequest, GetMeResponse>;
-    };
-  };
-  const client = createSlateCursorBackendClient(service, {
-    getAccessToken: async () => accessToken,
-    getMachineId
-  });
-  const me = await client.getMe(new GetMeRequest({}), { timeoutMs: GET_ME_TIMEOUT_MS });
-  return nonEmpty(displayNameFrom({ firstName: me.firstName, lastName: me.lastName }));
+async function loadAccountDisplayName(
+  accessToken: string,
+  getMachineId: () => Promise<string>,
+): Promise<string | undefined> {
+  const accountName = await readAccountName({
+    accessToken,
+    getMachineId,
+    timeoutMs: GET_ME_TIMEOUT_MS,
+  })
+  return nonEmpty(displayNameFrom({
+    firstName: accountName.givenName,
+    lastName: accountName.familyName,
+  }))
 }
 
 export function createSlateUserFullNameResolver(options: {
-  readonly getAccessToken: (options: { readonly backendUrl: string }) => Promise<string>;
-  readonly peekAccessToken: () => string | null;
-  readonly getMachineId: () => Promise<string>;
-  readonly fetchFullName?: (accessToken: string) => Promise<string | undefined>;
-  readonly log: (message: string) => void;
+  readonly getAccessToken: (options: { readonly backendUrl: string }) => Promise<string>
+  readonly peekAccessToken: () => string | null
+  readonly getMachineId: () => Promise<string>
+  readonly fetchFullName?: (accessToken: string) => Promise<string | undefined>
+  readonly log: (message: string) => void
 }) {
-  const fetchFullName = options.fetchFullName ?? ((accessToken: string) => fetchFullNameOverBackend(accessToken, options.getMachineId));
-  let resolvedPrincipal: string | undefined;
-  let resolvedFullName: string | undefined;
-  let inFlight: { principal: string; done: Promise<void> } | undefined;
-  let inFlightGeneration = 0;
-  const currentPrincipal = () => {
-    const token = options.peekAccessToken();
-    return token == null ? undefined : parseJwtPayload(token)?.sub;
-  };
-  const resolve = async (principal: string) => {
+  const fetchFullName = options.fetchFullName ?? ((token: string) => loadAccountDisplayName(token, options.getMachineId))
+  let cachedAccount: string | undefined
+  let cachedName: string | undefined
+  let pendingRead: { readonly account: string; readonly completion: Promise<void> } | undefined
+  let readGeneration = 0
+
+  const signedInAccount = (): string | undefined => {
+    const token = options.peekAccessToken()
+    return token == null ? undefined : parseJwtPayload(token)?.sub
+  }
+
+  const loadForAccount = async (account: string): Promise<void> => {
     try {
-      const accessToken = await options.getAccessToken({ backendUrl: getSlateInferenceBackendUrl() });
-      if (parseJwtPayload(accessToken)?.sub !== principal) return;
-      const fullName = await fetchFullName(accessToken);
-      if (currentPrincipal() !== principal) return;
-      resolvedPrincipal = principal;
-      resolvedFullName = fullName;
-    } catch (error) { options.log(`user full-name resolve failed: ${String(error)}`); }
-  };
-  return {
-    getUserFullName: (): string | undefined => resolvedPrincipal !== undefined && resolvedPrincipal === currentPrincipal() ? resolvedFullName : undefined,
-    async refresh(): Promise<void> {
-      const principal = currentPrincipal();
-      if (principal === undefined || resolvedPrincipal === principal) return;
-      let pending = inFlight;
-      if (pending === undefined || pending.principal !== principal) {
-        const generation = ++inFlightGeneration;
-        pending = { principal, done: resolve(principal).finally(() => { if (inFlightGeneration === generation) inFlight = undefined; }) };
-        inFlight = pending;
-      }
-      await pending.done;
+      const token = await options.getAccessToken({ backendUrl: getAccountIdentityBackendUrl() })
+      if (parseJwtPayload(token)?.sub !== account) return
+
+      const name = await fetchFullName(token)
+      if (signedInAccount() !== account) return
+      cachedAccount = account
+      cachedName = name
+    } catch (error) {
+      options.log(`user full-name resolve failed: ${String(error)}`)
     }
-  };
+  }
+
+  return {
+    getUserFullName: (): string | undefined =>
+      cachedAccount !== undefined && cachedAccount === signedInAccount() ? cachedName : undefined,
+
+    async refresh(): Promise<void> {
+      const account = signedInAccount()
+      if (account === undefined || cachedAccount === account) return
+
+      let pending = pendingRead
+      if (pending === undefined || pending.account !== account) {
+        const generation = ++readGeneration
+        const completion = loadForAccount(account).finally(() => {
+          if (readGeneration === generation) pendingRead = undefined
+        })
+        pending = { account, completion }
+        pendingRead = pending
+      }
+      await pending.completion
+    },
+  }
 }

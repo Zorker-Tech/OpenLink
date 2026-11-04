@@ -4,7 +4,7 @@ import { z } from "zod"
 
 import { createContext } from "../../source/packages/context/context.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
-import { WriteArgs } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { FileOperationLockManager } from "../../source/packages/agent/tools/core/file-operation-locks.ts"
 import { ToolCallAbortedError } from "../../source/packages/agent/tools/tool-errors.ts"
 import { renderSelectedTerminalContext } from "../../source/packages/agent/context/terminal-context.ts"

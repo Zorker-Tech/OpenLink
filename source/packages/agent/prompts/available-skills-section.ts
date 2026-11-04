@@ -13,34 +13,33 @@
 
 import path from "node:path"
 
-import type { AgentSkill } from "../../proto/generated/agent/v1/agent_skills_pb.ts"
-import type { CursorRule } from "../../proto/generated/agent/v1/rules_pb.ts"
 import type { PromptNode } from "../../prompt-jsx/index.ts"
 import { getFirstNonEmptyLine } from "../utils/common-helpers.ts"
 import { AgentType } from "../utils/agent-config.ts"
-import { filterByAgentEnvironment } from "../utils/environment-filtering.ts"
+import { filterItemsForRunEnvironment } from "../utils/environment-filtering.ts"
 import { normalizeToUnixPath } from "../../utils/paths.ts"
 import { BudgetedAgentSkillsSection } from "./agent-skills-section.ts"
-import { categorizeCursorRules } from "./rule-categorization.ts"
+import { categorizePromptRules } from "./rule-categorization.ts"
 import { getAgentRequestableRuleDescription, getRuleDir } from "./rule-sections.ts"
+import type { UserInfoRule, UserInfoSkill } from "./user-info-data-contracts.ts"
 
 interface AvailableSkillsPromptProps {
   readonly env?: { readonly workspacePaths?: readonly string[] | undefined } | undefined
-  readonly cursorRules: CursorRule[]
+  readonly workspaceRules: readonly UserInfoRule[]
   readonly displayOptions?: {
     readonly agentType?: AgentType | undefined
     readonly computerUseSubagentSurface?: boolean | undefined
     readonly displaySkills?: boolean | undefined
-    readonly displayCursorRules?: boolean | undefined
+    readonly displayWorkspaceRules?: boolean | undefined
   } | undefined
-  readonly agentSkills?: AgentSkill[] | undefined
+  readonly agentSkills?: readonly UserInfoSkill[] | undefined
   readonly featureFlags?: { readonly protectLoopSkillDescription?: boolean | undefined } | undefined
   readonly agentTokenLimit?: number | undefined
   readonly modelInfo?: { readonly isGpt56?: boolean | undefined } | undefined
 }
 
 interface AvailableSkillsPromptOverrides {
-  readonly skills?: CursorRule[] | undefined
+  readonly skills?: readonly UserInfoRule[] | undefined
   readonly readToolName?: string | undefined
 }
 
@@ -83,7 +82,7 @@ function getSkillScopeRoot(skillPath: string): string {
 }
 
 /** A skill with globs is scoped to files; one whose directory is above the workspace root is not. */
-function isFileScopedSkill(skill: AgentSkill, workspacePaths: readonly string[]): boolean {
+function isFileScopedSkill(skill: UserInfoSkill, workspacePaths: readonly string[]): boolean {
   const globs = skill.globs ?? []
   if (globs.length > 0) return true
   if (!skill.fullPath) return false
@@ -98,7 +97,7 @@ function isComputerUseGuidedSkill(skill: { readonly fullPath?: string | undefine
   return COMPUTER_USE_SKILL_PATTERN.test(`${skill.fullPath ?? ""}\n${skill.description ?? ""}`)
 }
 
-function toLegacySkillCatalogItems(skills: readonly CursorRule[]) {
+function toLegacySkillCatalogItems(skills: readonly UserInfoRule[]) {
   return skills.map(rule => {
     const ruleDir = getRuleDir(rule.fullPath)
     return { fullPath: rule.fullPath, description: getAgentRequestableRuleDescription(rule, ruleDir) }
@@ -118,31 +117,31 @@ export function buildAvailableSkillsPromptSection(
 } {
   const workspacePaths = props.env?.workspacePaths ?? []
   const skills = overrides?.skills ??
-    categorizeCursorRules(props.cursorRules, workspacePaths, props.displayOptions?.agentType).skills
+    categorizePromptRules(props.workspaceRules, workspacePaths, props.displayOptions?.agentType).skills
   const computerUseSubagentSurface = props.displayOptions?.computerUseSubagentSurface === true
-  const agentSkillsFromProto = filterByAgentEnvironment(props.agentSkills ?? [], props.displayOptions?.agentType)
+  const availableSkills = filterItemsForRunEnvironment([...(props.agentSkills ?? [])], props.displayOptions?.agentType)
     .filter(skill => !skill.disableModelInvocation && !isFileScopedSkill(skill, workspacePaths))
-  const useAgentSkillsProto = (props.agentSkills?.length ?? 0) > 0
-  const filteredAgentSkillsFromProto = computerUseSubagentSurface
-    ? agentSkillsFromProto.filter(skill => isComputerUseGuidedSkill(skill))
-    : agentSkillsFromProto
+  const useStructuredSkills = (props.agentSkills?.length ?? 0) > 0
+  const filteredStructuredSkills = computerUseSubagentSurface
+    ? availableSkills.filter(skill => isComputerUseGuidedSkill(skill))
+    : availableSkills
   const filteredLegacySkills = computerUseSubagentSurface
     ? skills.filter(skill => isComputerUseGuidedSkill({
       fullPath: skill.fullPath,
       description: getAgentRequestableRuleDescription(skill, getRuleDir(skill.fullPath)),
     }))
     : skills
-  const availableSkillCount = useAgentSkillsProto ? filteredAgentSkillsFromProto.length : filteredLegacySkills.length
+  const availableSkillCount = useStructuredSkills ? filteredStructuredSkills.length : filteredLegacySkills.length
   // A desktop subagent is shown its skills regardless; anywhere else the session has to have asked for them.
   const shouldRenderSection = availableSkillCount > 0 && (
     computerUseSubagentSurface ||
-    (props.displayOptions?.displaySkills === true && props.displayOptions?.displayCursorRules !== false)
+    (props.displayOptions?.displaySkills === true && props.displayOptions?.displayWorkspaceRules !== false)
   )
   if (!shouldRenderSection) return { skillCount: 0 }
   const protectLoopSkill = props.featureFlags?.protectLoopSkillDescription === true
-  const budgetedSection = useAgentSkillsProto
+  const budgetedSection = useStructuredSkills
     ? BudgetedAgentSkillsSection({
-      skillItems: filteredAgentSkillsFromProto.map(skill => ({
+      skillItems: filteredStructuredSkills.map(skill => ({
         fullPath: skill.fullPath,
         description: skill.description || undefined,
       })),

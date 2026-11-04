@@ -8,92 +8,45 @@
  * every decision is logged with its reason so a surprising model can be explained rather than guessed at.
  */
 
-import { isBuiltInComposerSubagentSlug } from "./composer-subagent-resolution.ts"
+import { isBuiltInSubagentModelId } from "./subagent-model-resolution.ts"
 import { SubagentModelForcePolicy } from "./subagent-model-policy.ts"
+import type { ForcedSubagentModelInput, PinnedSubagentModelPorts } from "./subagent-forced-model-contracts.ts"
+import { resolveUsablePinnedModel } from "./subagent-forced-model-policy.ts"
 
-type ForcePolicy = (typeof SubagentModelForcePolicy)[keyof typeof SubagentModelForcePolicy]
+export type { ForcedModelAudit, ForcedSubagentModelInput, PinnedSubagentModelPorts } from "./subagent-forced-model-contracts.ts"
 
-type ForcedModelLog = (args: {
-  candidateModelId: string
-  modelResolutionReason: string
-  reasonDetails: Record<string, unknown>
-}) => string
-
-interface ResolvePinnedForceModelArgs {
-  forceModelId?: string | undefined
-  subagentModelForcePolicy: ForcePolicy
-  isModelBlocked: (modelId: string) => boolean
-  isMaxModeCompatible: (modelId: string) => Promise<boolean>
-  logForcedModel: ForcedModelLog
-}
-
-export async function resolvePinnedForceModelId(args: ResolvePinnedForceModelArgs): Promise<string | undefined> {
-  const { forceModelId, subagentModelForcePolicy, isModelBlocked, isMaxModeCompatible, logForcedModel } = args
-  if (forceModelId !== undefined && !isModelBlocked(forceModelId) && await isMaxModeCompatible(forceModelId)) {
-    return logForcedModel({
-      candidateModelId: forceModelId,
-      modelResolutionReason: "force_model",
-      reasonDetails: { forceModelId, subagentModelForcePolicy },
-    })
-  }
-  return undefined
-}
-
-interface TryResolveForcedSubagentModelArgs extends ResolvePinnedForceModelArgs {
-  userRequestedModelId?: string | undefined
-  isModelValid: (modelId: string) => boolean
-}
-
-export async function tryResolveForcedSubagentModel(args: TryResolveForcedSubagentModelArgs): Promise<string | undefined> {
-  const {
-    subagentModelForcePolicy,
-    forceModelId,
-    userRequestedModelId,
-    isModelBlocked,
-    isModelValid,
-    isMaxModeCompatible,
-    logForcedModel,
-  } = args
-  switch (subagentModelForcePolicy) {
+export async function resolveForcedSubagentModel(input: ForcedSubagentModelInput): Promise<string | undefined> {
+  switch (input.subagentModelForcePolicy) {
     case SubagentModelForcePolicy.RequestBasedComposer: {
-      if (forceModelId === undefined) return undefined
-      // The user's pick only counts when it is one of the family's own models and is usable.
-      const userSelectedForcedComposerModelId = userRequestedModelId !== undefined &&
-          isBuiltInComposerSubagentSlug(userRequestedModelId) &&
-          !isModelBlocked(userRequestedModelId) &&
-          isModelValid(userRequestedModelId) &&
-          await isMaxModeCompatible(userRequestedModelId)
-        ? userRequestedModelId
+      if (input.forceModelId === undefined) return undefined
+      const requestedModel = input.userRequestedModelId
+      const selectedComposerModel = requestedModel !== undefined
+        && isBuiltInSubagentModelId(requestedModel)
+        && !input.isModelBlocked(requestedModel)
+        && input.isModelValid(requestedModel)
+        && await input.isMaxModeCompatible(requestedModel)
+        ? requestedModel
         : undefined
-      if (userSelectedForcedComposerModelId !== undefined) {
-        return logForcedModel({
-          candidateModelId: userSelectedForcedComposerModelId,
+      if (selectedComposerModel !== undefined) {
+        return input.logForcedModel({
+          candidateModelId: selectedComposerModel,
           modelResolutionReason: "force_model_user_composer_selection",
-          reasonDetails: { forceModelId, userSelectedForcedComposerModelId, subagentModelForcePolicy },
+          reasonDetails: {
+            forceModelId: input.forceModelId,
+            userSelectedForcedComposerModelId: selectedComposerModel,
+            subagentModelForcePolicy: input.subagentModelForcePolicy,
+          },
         })
       }
-      return resolvePinnedForceModelId({
-        forceModelId,
-        subagentModelForcePolicy,
-        isModelBlocked,
-        isMaxModeCompatible,
-        logForcedModel,
-      })
+      return resolveUsablePinnedModel(input)
     }
     case SubagentModelForcePolicy.ParentPin:
-      return resolvePinnedForceModelId({
-        forceModelId,
-        subagentModelForcePolicy,
-        isModelBlocked,
-        isMaxModeCompatible,
-        logForcedModel,
-      })
+      return resolveUsablePinnedModel(input)
     case SubagentModelForcePolicy.None:
       return undefined
     default: {
-      // A new policy has to be decided about rather than silently treated as no policy.
-      const exhaustive = subagentModelForcePolicy
-      throw new Error(`Unhandled subagent model force policy: ${String(exhaustive)}`)
+      const unrecognizedPolicy = input.subagentModelForcePolicy
+      throw new Error(`Unhandled subagent model force policy: ${String(unrecognizedPolicy)}`)
     }
   }
 }

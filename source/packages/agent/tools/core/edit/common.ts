@@ -19,14 +19,15 @@ import type { Context } from "../../../../context/context.ts"
 import { createCounter } from "../../../../metrics/index.ts"
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
-import { writeExecutorResource, type WriteExecutor } from "../../../../agent-exec/write-operation.ts"
-import { WriteArgs, type WriteResult } from "../../../../proto/generated/agent/v1/write_exec_pb.ts"
 import { WORKTREE_GUARD_ERROR } from "../../../../utils/paths.ts"
 import { CustomToolCallError, ToolCallError, ToolCallUnexpectedEnvironmentError, ToolErrorClassification } from "../../tool-errors.ts"
 import { generateSeededUuid } from "../../tool-support.ts"
 import { decoratePostWriteResultForModel, type PostWriteDecorationOptions } from "./post-write-result-decoration.ts"
 import { assertPlanModeAllowsFileEdit } from "./plan-mode-file-policy.ts"
-import type { HookAdditionalContext } from "../../../../proto/generated/agent/v1/hook_additional_context_pb.ts"
+import { isManagedCanvasEditPath } from "../../../../../adapters/interop/agent/plan-edit-policy-adapter.ts"
+import { SlateMode, type SlateMode as SlateModeValue } from "../../../mode-processing.ts"
+import { writeFileThroughInterop } from "../../../../../adapters/interop/agent/write-operation-adapter.ts"
+import type { HookContextEntry } from "../../../../hooks-carriers/hook-additional-context.ts"
 
 const editCommonPerformWriteCounter = createCounter("agent.tools.edit_common.perform_write.total", {
   description: "Total performWrite operations",
@@ -37,11 +38,7 @@ const editCommonPerformWriteErrorCounter = createCounter("agent.tools.edit_commo
   labelNames: ["error_type"],
 });
 
-const NOTEBOOK_VIEW_TYPE_MODEL_ERROR = "This notebook could not be opened for editing because the editor environment has no notebook provider for it (for example, Jupyter/notebook support is unavailable). This is an environment limitation, not a problem with the edit itself — retrying will not help.";
-
-function isNotebookViewTypeResolutionError(errorMessage: string): boolean {
-  return errorMessage.includes("Missing viewType for");
-}
+const NOTEBOOK_EDITOR_UNAVAILABLE_MESSAGE = "This notebook cannot be edited in the current workspace because notebook editing support is unavailable. This is a workspace capability gap, not an edit failure; retrying will not help.";
 
 export class WritePermissionDeniedError extends CustomToolCallError {
   readonly isReadonly: boolean;
@@ -81,8 +78,17 @@ export interface PerformWriteEditInfo {
 
 export interface PerformWriteMeta extends PostWriteDecorationOptions {
   readonly toolCallId: string;
-  readonly hookContextCollector?: HookAdditionalContext[];
+  readonly hookContextCollector?: HookContextEntry[];
 }
+
+export type SlateWriteOutcome =
+  | { readonly kind: "written"; readonly path: string }
+  | { readonly kind: "permission-denied"; readonly message: string; readonly isReadonly: boolean }
+  | { readonly kind: "device-full" }
+  | { readonly kind: "user-rejected"; readonly reason: string }
+  | { readonly kind: "editor-unavailable"; readonly message: string }
+  | { readonly kind: "write-failed"; readonly message: string }
+  | { readonly kind: "unknown" }
 
 export interface FileStateWriter {
   recordFileState(path: string, content: string | undefined, previousContent: string | undefined): void;
@@ -107,26 +113,29 @@ export async function performWrite(
   content: string,
   editInfo: PerformWriteEditInfo,
   meta: PerformWriteMeta,
-  stateHandler: FileStateWriter & { readonly mode: Parameters<typeof assertPlanModeAllowsFileEdit>[1]["mode"] },
+  stateHandler: FileStateWriter & { readonly mode: SlateModeValue },
 ): Promise<PerformWriteResult> {
   editCommonPerformWriteCounter.increment(ctx, 1);
-  assertPlanModeAllowsFileEdit(path, stateHandler);
-  const writeExecutor: WriteExecutor = resourceAccessor.get(writeExecutorResource);
-  const writeArgs = new WriteArgs({ path, fileText: content, toolCallId: meta.toolCallId });
+  assertPlanModeAllowsFileEdit(path, stateHandler.mode === SlateMode.PLAN, isManagedCanvasEditPath(path));
   const writeExecId = generateSeededUuid(`${meta.toolCallId}-write`);
-  const writeResult: WriteResult = await writeExecutor.execute(ctx, writeArgs, {
+  const writeResult = await writeFileThroughInterop({
+    context: ctx,
+    resources: resourceAccessor,
+    path,
+    content,
+    toolCallId: meta.toolCallId,
     execId: writeExecId,
-    ...(meta.hookContextCollector !== undefined ? { hookContextCollector: meta.hookContextCollector } : {}),
-    enableAgentStoreConflictNotices: meta.enableAgentStoreConflictNotices === true,
+    ...(meta.hookContextCollector === undefined ? {} : { hookContextCollector: meta.hookContextCollector }),
+    enableConflictNotices: meta.enableAgentStoreConflictNotices === true,
   });
-  if (writeResult.result.case === undefined) {
+  if (writeResult.kind === "unknown") {
     editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "unknown" });
     throw new ToolCallError({ clientVisibleErrorMessage: "Unknown error", modelVisibleErrorMessage: "Unknown error", error: "Unknown error" });
   }
-  switch (writeResult.result.case) {
-    case "success": {
-      void stateHandler.recordFileState(writeResult.result.value.path, content, editInfo.originalContent);
-      const resultForModel = await decoratePostWriteResultForModel(ctx, resourceAccessor, writeResult.result.value.path, editInfo.resultForModel, meta.toolCallId, meta);
+  switch (writeResult.kind) {
+    case "written": {
+      void stateHandler.recordFileState(writeResult.path, content, editInfo.originalContent);
+      const resultForModel = await decoratePostWriteResultForModel(ctx, resourceAccessor, writeResult.path, editInfo.resultForModel, meta.toolCallId, meta);
       return {
         modified: content,
         edit: {
@@ -139,18 +148,17 @@ export async function performWrite(
         },
       };
     }
-    case "permissionDenied": {
+    case "permission-denied": {
       editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "permission_denied" });
-      const permissionDenied = writeResult.result.value;
-      const detail = permissionDenied.error ? `: ${permissionDenied.error}` : "";
-      throw new WritePermissionDeniedError(permissionDenied.isReadonly ?? false, `Write permission denied: ${path}${detail}`, `Write permission denied: ${path}${detail}`);
+      const detail = writeResult.message ? `: ${writeResult.message}` : "";
+      throw new WritePermissionDeniedError(writeResult.isReadonly, `Write permission denied: ${path}${detail}`, `Write permission denied: ${path}${detail}`);
     }
-    case "noSpace": {
+    case "device-full": {
       editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "no_space" });
       throw new CustomToolCallError(ToolErrorClassification.BAD_USER_DEVICE_STATE, { clientVisibleErrorMessage: "No space left on device", modelVisibleErrorMessage: "No space left on device", error: "No space left on device" });
     }
-    case "rejected": {
-      const reason = writeResult.result.value.reason;
+    case "user-rejected": {
+      const reason = writeResult.reason;
       if (reason.includes("Failed to find tool call context")) {
         editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "write_error" });
         throw new ToolCallError({ clientVisibleErrorMessage: `Edit rejected: ${reason}`, modelVisibleErrorMessage: reason, error: `Edit rejected: ${reason}` });
@@ -158,19 +166,23 @@ export async function performWrite(
       editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "rejected" });
       throw new WriteRejectedError(reason, `Edit rejected: ${reason}`);
     }
-    case "error": {
-      const writeError = writeResult.result.value.error;
+    case "editor-unavailable": {
+      editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "notebook_view_type_unresolved" });
+      throw new CustomToolCallError(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, {
+        error: writeResult.message,
+        clientVisibleErrorMessage: writeResult.message,
+        modelVisibleErrorMessage: NOTEBOOK_EDITOR_UNAVAILABLE_MESSAGE,
+      });
+    }
+    case "write-failed": {
+      const writeError = writeResult.message;
       if (writeError === WORKTREE_GUARD_ERROR) throw new ToolCallUnexpectedEnvironmentError(writeError);
-      if (isNotebookViewTypeResolutionError(writeError)) {
-        editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "notebook_view_type_unresolved" });
-        throw new CustomToolCallError(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, { error: writeError, clientVisibleErrorMessage: writeError, modelVisibleErrorMessage: NOTEBOOK_VIEW_TYPE_MODEL_ERROR });
-      }
       editCommonPerformWriteErrorCounter.increment(ctx, 1, { error_type: "write_error" });
       throw new ToolCallError({ clientVisibleErrorMessage: writeError, modelVisibleErrorMessage: writeError, error: writeError });
     }
     default: {
-      const exhaustiveCheck: never = writeResult.result;
-      throw new Error(`Unhandled writeResult.result: ${String(exhaustiveCheck)}`);
+      const exhaustiveCheck: never = writeResult;
+      throw new Error(`Unhandled Slate write outcome: ${String(exhaustiveCheck)}`);
     }
   }
 }

@@ -1,3 +1,5 @@
-/** The error a failure of the local executor is reported as. */
-export class SlateLocalExecError extends Error {}
+const LocalExecErrorType = class SlateLocalExecError extends Error {};
+
+export const SlateLocalExecError = LocalExecErrorType;
+export type SlateLocalExecError = InstanceType<typeof LocalExecErrorType>;
 

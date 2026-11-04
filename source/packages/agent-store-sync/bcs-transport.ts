@@ -15,33 +15,51 @@
  * What the store answers with is read defensively throughout (the wire's own numbers become numbers, tags are
  * normalized, paths are normalized), so a shape this file does not expect fails loudly here rather than later.
  */
-import { Code, ConnectError, createClient, type CallOptions, type Client, type Transport } from "@connectrpc/connect";
-import {
-  AbortAgentStoreMultipartWritesRequest,
-  AgentStoreDeleteFileStatus,
-  AgentStoreDirectoryListingMode,
-  AgentStoreMultipartOperationFailureCode,
-  AgentStoreSourceKind as AgentStoreSourceKindProto,
-  AgentStoreSourceRef,
-  AgentStoreWriteFileEntry,
-  CompleteAgentStoreMultipartWritesRequest,
-  AgentStoreDeleteFileEntry,
-  DeleteAgentStoreFilesRequest,
-  ListAgentStoreDirectoryRequest,
-  MintAgentStoreTokenRequest,
-  PresignAgentStoreReadsRequest,
-  PresignAgentStoreWritesRequest,
-  AgentStoreMultipartUploadPartDescriptor,
-  AgentStoreMultipartUploadContext,
-  AgentStoreMultipartWriteCompletion as AgentStoreMultipartWriteCompletionProto,
-  AgentStoreMultipartUploadedPart,
-  AgentStoreMultipartWriteAbort as AgentStoreMultipartWriteAbortProto,
-} from "../proto/generated/aiserver/v1/background_composer_pb.ts";
-import { BackgroundComposerService } from "../proto/generated/aiserver/v1/background_composer_connect.ts";
+import { Code, ConnectError, type Transport } from "@connectrpc/connect";
+import { adaptBcsAgentStoreRpcClient, createBcsAgentStoreClient, type BcsAgentStoreRpcClient } from "../../adapters/interop/agent-store/bcs-agent-store-client-adapter.ts";
+import type {
+  AgentStoreCloudClient,
+  AgentStoreDeleteOutcome,
+  AgentStoreDirectoryPage,
+  AgentStoreDirectoryQuery,
+  AgentStoreListFile,
+  AgentStoreListing,
+  AgentStoreMintTarget,
+  AgentStoreMultipartRpcResult,
+  AgentStoreMultipartContext,
+  AgentStoreMultipartWriteAbort,
+  AgentStoreMultipartWriteCompletion,
+  AgentStoreMultipartWriteInstruction,
+  AgentStoreRemoteMultipartWriteInstruction,
+  AgentStoreRemoteWriteInstruction,
+  AgentStoreRpcCallOptions,
+  AgentStoreReadInstruction,
+  AgentStoreSourceKind,
+  AgentStoreTombstone,
+  AgentStoreToken,
+  AgentStoreWriteFile,
+  AgentStoreWriteInstruction,
+} from "./agent-store-sync-contracts.ts";
 import { normalizeS3Etag } from "./etag.ts";
 import { AgentStoreDirectoryListingError, AgentStoreProtocolError, AgentStoreUnauthorizedError } from "./bcs-client.ts";
 import { adaptFlatAgentStoreList } from "./bcs-list-adapter.ts";
 import { normalizeRelPath } from "./safe-paths.ts";
+
+export type {
+  AgentStoreListFile,
+  AgentStoreListing,
+  AgentStoreMintTarget,
+  AgentStoreMultipartContext,
+  AgentStoreMultipartWriteAbort,
+  AgentStoreMultipartWriteCompletion,
+  AgentStoreMultipartWriteInstruction,
+  AgentStoreReadInstruction,
+  AgentStoreSourceKind,
+  AgentStoreTombstone,
+  AgentStoreToken,
+  AgentStoreWriteFile,
+  AgentStoreWriteInstruction,
+} from "./agent-store-sync-contracts.ts";
 
 const AGENT_STORE_TOKEN_HEADER = "x-agent-store-token";
 
@@ -51,115 +69,20 @@ const DIRECTORY_LIST_MAX_PAGES = 10;
 const DIRECTORY_LIST_MAX_ENTRIES = DIRECTORY_LIST_PAGE_SIZE * DIRECTORY_LIST_MAX_PAGES;
 const DEFAULT_RPC_TIMEOUT_MS = 60_000;
 
-export type AgentStoreSourceKind = "cloud" | "local" | "user" | "team" | "automation";
-export type AgentStoreMintTarget =
-  | { readonly kind: "share"; readonly shareId: string }
-  | { readonly kind: "store"; readonly storeId: string }
-  | { readonly kind: "source"; readonly sourceKind: AgentStoreSourceKind; readonly sourceId: string };
-
-export interface AgentStoreToken {
-  readonly token: string;
-  readonly expiresAtMs: number;
-  readonly storeIds: readonly string[];
-}
-
-export interface AgentStoreReadInstruction {
-  readonly relPath: string;
-  readonly url: string;
-  readonly expiresAtMs: number;
-}
-
-export interface AgentStoreWriteFile {
-  readonly relPath: string;
-  readonly sha: string;
-  readonly size: number;
-  readonly baseEtag?: string;
-  readonly expectAbsent?: boolean;
-  readonly multipartParts?: readonly {
-    readonly partNumber: number;
-    readonly offsetBytes: number;
-    readonly sizeBytes: number;
-    readonly checksumSha256: Uint8Array;
-  }[];
-}
-
-export interface AgentStoreMultipartContext {
-  readonly uploadId: string;
-  readonly storeId: string;
-  readonly relPath: string;
-  readonly sizeBytes: number;
-  readonly sha: string;
-  readonly expectedPartCount: number;
-  readonly precondition: { readonly case: "baseEtag"; readonly value: string } | { readonly case: "expectAbsent"; readonly value: boolean } | { readonly case: undefined };
-  readonly sessionId: string;
-}
-
-export interface AgentStoreMultipartWriteInstruction {
-  readonly context: AgentStoreMultipartContext;
-  readonly parts: readonly { readonly partNumber: number; readonly url: string; readonly headers: Record<string, string>; readonly offsetBytes: number; readonly sizeBytes: number }[];
-  readonly partUrlsExpiresAtMs: number;
-}
-
-export interface AgentStoreWriteInstruction {
-  readonly relPath: string;
-  readonly sha: string;
-  readonly url: string;
-  readonly headers: Record<string, string>;
-  readonly expiresAtMs: number;
-  readonly multipart?: AgentStoreMultipartWriteInstruction;
-  readonly primaryPreconditionFailed?: boolean;
-  readonly lockRedirect?: { readonly conflictRelPath: string; readonly lockExpiresAtMs: number };
-  readonly conflict?: { readonly relPath: string; readonly url: string; readonly headers: Record<string, string>; readonly expiresAtMs: number; readonly multipart?: AgentStoreMultipartWriteInstruction };
-}
-
-export interface AgentStoreMultipartWriteCompletion {
-  readonly context: AgentStoreMultipartContext;
-  readonly parts: readonly { readonly partNumber: number; readonly etag: string; readonly checksumSha256: Uint8Array }[];
-}
-
-export interface AgentStoreMultipartWriteAbort {
-  readonly context: AgentStoreMultipartContext;
-}
-
-export interface AgentStoreListFile {
-  readonly relPath: string;
-  readonly etag: string;
-  readonly size: number;
-  readonly serverMtimeMs: number;
-}
-
-export interface AgentStoreTombstone {
-  readonly relPath: string;
-  readonly tombstoneEtag: string;
-  readonly deletedAtMs: number;
-}
-
-export interface AgentStoreListing {
-  readonly files: readonly AgentStoreListFile[];
-  readonly subdirs: readonly string[];
-  readonly tombstones: readonly AgentStoreTombstone[];
-  readonly listingComplete: boolean;
-  readonly skippedUnsafeEntries?: number;
-}
-
 /** The store's service as this transport reads it; what it answers with is read defensively, so it is typed loosely. */
-export interface BcsAgentStoreClient {
-  mintAgentStoreToken(request: unknown, options?: CallOptions): Promise<any>;
-  listAgentStoreDirectory(request: unknown, options?: CallOptions): Promise<any>;
-  presignAgentStoreReads(request: unknown, options?: CallOptions): Promise<any>;
-  presignAgentStoreWrites(request: unknown, options?: CallOptions): Promise<any>;
-  completeAgentStoreMultipartWrites(request: unknown, options?: CallOptions): Promise<any>;
-  abortAgentStoreMultipartWrites(request: unknown, options?: CallOptions): Promise<any>;
-  deleteAgentStoreFiles(request: unknown, options?: CallOptions): Promise<any>;
-}
+export type BcsAgentStoreClient = AgentStoreCloudClient;
 
 export interface BcsAgentStoreTransportInput {
-  readonly client?: BcsAgentStoreClient | Client<typeof BackgroundComposerService>;
+  readonly client?: BcsAgentStoreClient | BcsAgentStoreRpcClient;
   readonly transport?: Transport;
   readonly now?: () => number;
   readonly flatFileListCacheTtlMs?: number;
   readonly mintTokenHeaders?: Record<string, string>;
   readonly rpcTimeoutMs?: number;
+}
+
+function isAgentStoreCloudClient(client: AgentStoreCloudClient | BcsAgentStoreRpcClient): client is AgentStoreCloudClient {
+  return typeof (client as AgentStoreCloudClient).mintToken === "function";
 }
 
 interface CachedDirectoryListing {
@@ -191,9 +114,9 @@ export class BcsAgentStoreTransport {
     this.mintTokenHeaders = input.mintTokenHeaders;
     this.rpcTimeoutMs = normalizeRpcTimeoutMs(input.rpcTimeoutMs);
     if (input.client !== undefined) {
-      this.client = input.client as BcsAgentStoreClient;
+      this.client = isAgentStoreCloudClient(input.client) ? input.client : adaptBcsAgentStoreRpcClient(input.client);
     } else if (input.transport !== undefined) {
-      this.client = createClient(BackgroundComposerService, input.transport) as unknown as BcsAgentStoreClient;
+      this.client = createBcsAgentStoreClient(input.transport);
     } else {
       throw new Error("BcsAgentStoreTransport requires either `client` or `transport`.");
     }
@@ -201,16 +124,10 @@ export class BcsAgentStoreTransport {
 
   async mintToken(target: AgentStoreMintTarget, options?: { readonly signal?: AbortSignal }): Promise<AgentStoreToken> {
     try {
-      const response = await this.invokeRpc(
-        (callOptions) => this.client.mintAgentStoreToken(mintAgentStoreTokenRequestForTarget(target), callOptions),
+      return await this.invokeRpc(
+        (callOptions) => this.client.mintToken(target, callOptions),
         { ...(this.mintTokenHeaders === undefined ? {} : { headers: { ...this.mintTokenHeaders } }), ...(options?.signal === undefined ? {} : { signal: options.signal }) },
       );
-      return {
-        token: response.token,
-        expiresAtMs: Number(response.expiresAtMs),
-        // A store that names its stores as agents means the same thing by them.
-        storeIds: [...(response.storeIds.length > 0 ? response.storeIds : response.agentIds)],
-      };
     } catch (error) {
       throw mapConnectError(error);
     }
@@ -222,11 +139,10 @@ export class BcsAgentStoreTransport {
 
   async presignReads(args: { readonly token: AgentStoreToken; readonly storeId: string; readonly relPaths: readonly string[]; readonly shareId?: string; readonly signal?: AbortSignal }): Promise<readonly AgentStoreReadInstruction[]> {
     try {
-      const response = await this.invokeRpc(
-        (options) => this.client.presignAgentStoreReads(new PresignAgentStoreReadsRequest(args.shareId !== undefined ? { shareId: args.shareId, relPaths: [...args.relPaths] } : { storeId: args.storeId, relPaths: [...args.relPaths] }), options),
+      return await this.invokeRpc(
+        (options) => this.client.presignReads({ storeId: args.storeId, ...(args.shareId === undefined ? {} : { shareId: args.shareId }), relPaths: [...args.relPaths] }, options),
         agentStoreCallOptions(args.token.token, args.signal),
       );
-      return response.instructions.map((instruction: any) => ({ relPath: instruction.relPath, url: instruction.url, expiresAtMs: Number(instruction.expiresAtMs) }));
     } catch (error) {
       throw mapConnectError(error);
     }
@@ -241,15 +157,11 @@ export class BcsAgentStoreTransport {
       if (file.baseEtag !== undefined && normalizeS3Etag(file.baseEtag).length === 0) throw new Error(`Agent store write for ${file.relPath} carries an empty baseEtag`);
     }
     try {
-      const response = await this.invokeRpc(
-        (options) =>
-          this.client.presignAgentStoreWrites(
-            new PresignAgentStoreWritesRequest({ storeId: args.storeId, files: args.files.map(writeFileEntry) }),
-            options,
-          ),
+      const instructions = await this.invokeRpc(
+        (options) => this.client.presignWrites({ storeId: args.storeId, files: args.files }, options),
         agentStoreCallOptions(args.token.token, args.signal),
       );
-      return response.instructions.map((instruction: any, index: number) => this.readWriteInstruction({ instruction, requested: args.files[index], shaByRelPath }));
+      return instructions.map((instruction, index) => this.readWriteInstruction({ instruction, requested: args.files[index], shaByRelPath }));
     } catch (error) {
       throw mapConnectError(error);
     }
@@ -258,11 +170,11 @@ export class BcsAgentStoreTransport {
   async completeMultipartWrites(args: { readonly token: AgentStoreToken; readonly storeId: string; readonly completions: readonly AgentStoreMultipartWriteCompletion[]; readonly signal?: AbortSignal }): Promise<readonly { readonly kind: "success" | "failure"; readonly relPath: string; readonly etag?: string; readonly code?: string }[]> {
     this.invalidateListCache({ storeId: args.storeId });
     try {
-      const response = await this.invokeRpc(
-        (options) => this.client.completeAgentStoreMultipartWrites(new CompleteAgentStoreMultipartWritesRequest({ storeId: args.storeId, completions: args.completions.map(multipartWriteCompletionToProto) }), options),
+      const results = await this.invokeRpc(
+        (options) => this.client.completeWrites({ storeId: args.storeId, completions: args.completions }, options),
         agentStoreCallOptions(args.token.token, args.signal),
       );
-      return correlateMultipartResults({ kind: "complete", inputs: args.completions, results: response.results, map: mapMultipartCompletionResult });
+      return correlateMultipartResults({ kind: "complete", inputs: args.completions, results, map: mapMultipartCompletionResult });
     } catch (error) {
       throw mapConnectError(error);
     } finally {
@@ -272,11 +184,11 @@ export class BcsAgentStoreTransport {
 
   async abortMultipartWrites(args: { readonly token: AgentStoreToken; readonly storeId: string; readonly uploads: readonly AgentStoreMultipartWriteAbort[]; readonly signal?: AbortSignal }): Promise<readonly { readonly kind: "success" | "failure"; readonly relPath: string; readonly alreadyFinished?: boolean; readonly code?: string }[]> {
     try {
-      const response = await this.invokeRpc(
-        (options) => this.client.abortAgentStoreMultipartWrites(new AbortAgentStoreMultipartWritesRequest({ storeId: args.storeId, uploads: args.uploads.map(multipartWriteAbortToProto) }), options),
+      const results = await this.invokeRpc(
+        (options) => this.client.abortWrites({ storeId: args.storeId, uploads: args.uploads }, options),
         agentStoreCallOptions(args.token.token, args.signal),
       );
-      return correlateMultipartResults({ kind: "abort", inputs: args.uploads, results: response.results, map: mapMultipartAbortResult });
+      return correlateMultipartResults({ kind: "abort", inputs: args.uploads, results, map: mapMultipartAbortResult });
     } catch (error) {
       throw mapConnectError(error);
     }
@@ -287,10 +199,10 @@ export class BcsAgentStoreTransport {
     this.invalidateListCache({ storeId: args.storeId });
     try {
       const response = await this.invokeRpc(
-        (options) => this.client.deleteAgentStoreFiles(new DeleteAgentStoreFilesRequest({ storeId: args.storeId, files: args.files.map((file) => new AgentStoreDeleteFileEntry({ relPath: file.relPath, baseEtag: normalizeS3Etag(file.baseEtag), ...(file.mutationId === undefined ? {} : { mutationId: file.mutationId }) })) }), options),
+        (options) => this.client.deleteFiles({ storeId: args.storeId, files: args.files.map((file) => ({ ...file, baseEtag: normalizeS3Etag(file.baseEtag) })) }, options),
         agentStoreCallOptions(args.token.token, args.signal),
       );
-      const outcomes = response.results.map(deleteOutcomeOf);
+      const outcomes = response.map(deleteOutcomeOf);
       this.invalidateListCache({ storeId: args.storeId });
       return outcomes;
     } catch (error) {
@@ -358,12 +270,19 @@ export class BcsAgentStoreTransport {
         pageCount += 1;
         if (pageCount > DIRECTORY_LIST_MAX_PAGES) throw new AgentStoreDirectoryListingError(`Agent store directory listing exceeded ${DIRECTORY_LIST_MAX_PAGES} pages`);
         const response = await this.invokeRpc(
-          (options) => this.client.listAgentStoreDirectory(new ListAgentStoreDirectoryRequest({ ...(args.shareId === undefined ? { storeId: args.storeId } : { shareId: args.shareId }), relativePath: args.relPath, pageSize: DIRECTORY_LIST_PAGE_SIZE, pageToken, preferCompleteFlatStore: preferCompleteFlatStore && pageToken === "" }), options),
+          (options) => this.client.listDirectory({
+            storeId: args.storeId,
+            ...(args.shareId === undefined ? {} : { shareId: args.shareId }),
+            relativePath: args.relPath,
+            pageSize: DIRECTORY_LIST_PAGE_SIZE,
+            pageToken,
+            preferCompleteFlatStore: preferCompleteFlatStore && pageToken === "",
+          }, options),
           agentStoreCallOptions(args.token.token, args.signal),
         );
-        if (response.mode === AgentStoreDirectoryListingMode.COMPLETE_FLAT_STORE) {
-          const flatFiles = response.files.map((file: any) => ({ relPath: file.relPath, etag: normalizeS3Etag(file.etag), size: Number(file.sizeBytes), serverMtimeMs: Number(file.lastModifiedMs) }));
-          const flatTombstones = adaptTombstoneEntries(response.tombstones);
+        if (response.kind === "complete") {
+          const flatFiles = response.files.map((file) => ({ ...file, etag: normalizeS3Etag(file.etag) }));
+          const flatTombstones = normalizeTombstones(response.tombstones);
           if (flatFiles.length + flatTombstones.length > DIRECTORY_LIST_MAX_ENTRIES) throw new AgentStoreDirectoryListingError(`Agent store directory listing exceeded ${DIRECTORY_LIST_MAX_ENTRIES} entries`);
           const completeListing = adaptFlatAgentStoreList({ files: flatFiles, relPath: "", tombstones: flatTombstones, listingComplete: true });
           // What the whole store held is kept for every directory inside it, unless it was dropped meanwhile.
@@ -372,9 +291,9 @@ export class BcsAgentStoreTransport {
         }
         // A store that answered page by page where a whole-store listing was asked for is a large one.
         if (preferCompleteFlatStore && pageToken === "") this.knownLargeTargets.add(targetKey);
-        for (const file of response.files) files.set(file.relPath, { relPath: file.relPath, etag: normalizeS3Etag(file.etag), size: Number(file.sizeBytes), serverMtimeMs: Number(file.lastModifiedMs) });
+        for (const file of response.files) files.set(file.relPath, { ...file, etag: normalizeS3Etag(file.etag) });
         for (const subdir of response.subdirs) subdirs.add(subdir);
-        for (const tombstone of adaptTombstoneEntries(response.tombstones)) tombstones.set(tombstone.relPath, tombstone);
+        for (const tombstone of normalizeTombstones(response.tombstones)) tombstones.set(tombstone.relPath, tombstone);
         if (files.size + subdirs.size + tombstones.size > DIRECTORY_LIST_MAX_ENTRIES) throw new AgentStoreDirectoryListingError(`Agent store directory listing exceeded ${DIRECTORY_LIST_MAX_ENTRIES} entries`);
         pageToken = response.nextPageToken;
         // A store that hands back a page it already handed back would be walked forever.
@@ -393,7 +312,7 @@ export class BcsAgentStoreTransport {
   }
 
   /** One write instruction, matched to the file that asked for it. */
-  private readWriteInstruction(args: { readonly instruction: any; readonly requested: AgentStoreWriteFile | undefined; readonly shaByRelPath: Map<string, string> }): AgentStoreWriteInstruction {
+  private readWriteInstruction(args: { readonly instruction: AgentStoreRemoteWriteInstruction; readonly requested: AgentStoreWriteFile | undefined; readonly shaByRelPath: Map<string, string> }): AgentStoreWriteInstruction {
     const relPath = args.instruction.relPath;
     let sha = args.requested?.sha;
     try {
@@ -407,23 +326,23 @@ export class BcsAgentStoreTransport {
       sha,
       url: args.instruction.url,
       headers: { ...args.instruction.headers },
-      expiresAtMs: Number(args.instruction.expiresAtMs),
+      expiresAtMs: args.instruction.expiresAtMs,
       ...(args.instruction.multipart === undefined ? {} : { multipart: mapMultipartWriteInstruction(args.instruction.multipart) }),
       ...(args.instruction.primaryPreconditionFailed ? { primaryPreconditionFailed: true } : {}),
-      ...(args.instruction.lockRedirect === undefined ? {} : { lockRedirect: { conflictRelPath: args.instruction.lockRedirect.conflictRelPath, lockExpiresAtMs: Number(args.instruction.lockRedirect.lockExpiresAtMs) } }),
+      ...(args.instruction.lockRedirect === undefined ? {} : { lockRedirect: { conflictRelPath: args.instruction.lockRedirect.conflictRelPath, lockExpiresAtMs: args.instruction.lockRedirect.lockExpiresAtMs } }),
       ...(args.instruction.conflict === undefined ? {} : { conflict: mapConflictWriteInstruction(args.instruction.conflict) }),
     };
   }
 
   /** A call carries the store's token, the caller's signal, and this transport's own deadline. */
-  private buildCallOptions(base: CallOptions | undefined): { readonly options: CallOptions | undefined; readonly timeoutSignal: AbortSignal | undefined } {
+  private buildCallOptions(base: AgentStoreRpcCallOptions | undefined): { readonly options: AgentStoreRpcCallOptions | undefined; readonly timeoutSignal: AbortSignal | undefined } {
     if (this.rpcTimeoutMs <= 0) return { options: base, timeoutSignal: undefined };
     const timeoutSignal = AbortSignal.timeout(this.rpcTimeoutMs);
     const signal = base?.signal === undefined ? timeoutSignal : AbortSignal.any([base.signal, timeoutSignal]);
     return { options: { ...base, timeoutMs: this.rpcTimeoutMs, signal }, timeoutSignal };
   }
 
-  private async invokeRpc(invoke: (options: CallOptions | undefined) => Promise<any>, base?: CallOptions): Promise<any> {
+  private async invokeRpc<T>(invoke: (options: AgentStoreRpcCallOptions | undefined) => Promise<T>, base?: AgentStoreRpcCallOptions): Promise<T> {
     const { options, timeoutSignal } = this.buildCallOptions(base);
     return rejectWhenAborted(invoke(options), { signal: options?.signal, timeoutSignal });
   }
@@ -479,109 +398,67 @@ function isAbortShapedRpcError(error: unknown): boolean {
   return (error instanceof Error && error.name === "AbortError") || (error instanceof ConnectError && (error.code === Code.Canceled || error.code === Code.DeadlineExceeded));
 }
 
-function adaptTombstoneEntries(tombstones: readonly any[] | undefined): AgentStoreTombstone[] {
-  return (tombstones ?? []).map((tombstone) => ({ relPath: normalizeHarnessRelPath(tombstone.relPath), tombstoneEtag: normalizeS3Etag(tombstone.tombstoneEtag), deletedAtMs: Number(tombstone.deletedAtMs) }));
+function normalizeTombstones(tombstones: readonly AgentStoreTombstone[]): AgentStoreTombstone[] {
+  return tombstones.map((tombstone) => ({
+    relPath: normalizeHarnessRelPath(tombstone.relPath),
+    tombstoneEtag: normalizeS3Etag(tombstone.tombstoneEtag),
+    deletedAtMs: tombstone.deletedAtMs,
+  }));
 }
 
-function mintAgentStoreTokenRequestForTarget(target: AgentStoreMintTarget): MintAgentStoreTokenRequest {
-  switch (target.kind) {
-    case "share":
-      return new MintAgentStoreTokenRequest({ shareId: target.shareId });
-    case "store":
-      return new MintAgentStoreTokenRequest({ storeId: target.storeId });
-    case "source":
-      return new MintAgentStoreTokenRequest({ source: new AgentStoreSourceRef({ kind: agentStoreSourceKindToProto(target.sourceKind), sourceId: target.sourceId }) });
-  }
-}
-
-function agentStoreSourceKindToProto(kind: AgentStoreSourceKind): AgentStoreSourceKindProto {
-  switch (kind) {
-    case "cloud":
-      return AgentStoreSourceKindProto.CLOUD;
-    case "local":
-      return AgentStoreSourceKindProto.LOCAL;
-    case "user":
-      return AgentStoreSourceKindProto.USER;
-    case "team":
-      return AgentStoreSourceKindProto.TEAM;
-    case "automation":
-      return AgentStoreSourceKindProto.AUTOMATION;
-  }
-}
-
-function agentStoreCallOptions(token: string, signal: AbortSignal | undefined): CallOptions {
+function agentStoreCallOptions(token: string, signal: AbortSignal | undefined): AgentStoreRpcCallOptions {
   return { headers: { [AGENT_STORE_TOKEN_HEADER]: token }, ...(signal === undefined ? {} : { signal }) };
 }
 
-/** One file of a write, with whichever precondition it carries and the parts it is made of. */
-function writeFileEntry(file: AgentStoreWriteFile): AgentStoreWriteFileEntry {
-  return new AgentStoreWriteFileEntry({
-    relPath: file.relPath,
-    sizeBytes: BigInt(file.size),
-    sha: file.sha,
-    ...(file.multipartParts === undefined ? {} : { multipartParts: file.multipartParts.map((part) => new AgentStoreMultipartUploadPartDescriptor({ partNumber: part.partNumber, offsetBytes: BigInt(part.offsetBytes), sizeBytes: BigInt(part.sizeBytes), checksumSha256: new Uint8Array(part.checksumSha256) })) }),
-    ...(file.baseEtag !== undefined ? { precondition: { case: "baseEtag" as const, value: normalizeS3Etag(file.baseEtag) } } : file.expectAbsent === true ? { precondition: { case: "expectAbsent" as const, value: true } } : {}),
-  });
-}
-
-/** What a delete answered for one file, read as what became of it. */
-function deleteOutcomeOf(result: any): { readonly relPath: string; readonly status: string; readonly tombstoneEtag?: string; readonly currentEtag?: string } {
+/** A delete outcome in Slate's status vocabulary, with paths and tags normalized for callers. */
+function deleteOutcomeOf(result: AgentStoreDeleteOutcome): AgentStoreDeleteOutcome {
   const relPath = normalizeHarnessRelPath(result.relPath);
-  const tombstoneEtag = normalizeS3Etag(result.tombstoneEtag);
+  const tombstoneEtag = normalizeS3Etag(result.tombstoneEtag ?? "");
   switch (result.status) {
-    case AgentStoreDeleteFileStatus.DELETED:
+    case "deleted":
       return { relPath, status: "deleted", tombstoneEtag };
-    case AgentStoreDeleteFileStatus.ALREADY_DELETED:
+    case "already_deleted":
       return { relPath, status: "already_deleted", ...(tombstoneEtag.length === 0 ? {} : { tombstoneEtag }) };
-    case AgentStoreDeleteFileStatus.CONFLICT: {
-      const currentEtag = normalizeS3Etag(result.currentEtag);
+    case "conflict": {
+      const currentEtag = normalizeS3Etag(result.currentEtag ?? "");
       return { relPath, status: "conflict", ...(currentEtag.length === 0 ? {} : { currentEtag }) };
     }
-    case AgentStoreDeleteFileStatus.UNSPECIFIED:
+    case "unspecified":
       throw new Error(`BCS delete returned UNSPECIFIED status for ${relPath}`);
     default:
       throw new Error(`BCS delete returned an unknown status for ${relPath}: ${result.status}`);
   }
 }
 
-function mapConflictWriteInstruction(instruction: any): NonNullable<AgentStoreWriteInstruction["conflict"]> {
-  return { relPath: instruction.relPath, url: instruction.url, headers: { ...instruction.headers }, expiresAtMs: Number(instruction.expiresAtMs), ...(instruction.multipart === undefined ? {} : { multipart: mapMultipartWriteInstruction(instruction.multipart) }) };
-}
-
-function mapMultipartWriteInstruction(instruction: any): AgentStoreMultipartWriteInstruction {
-  if (instruction.context === undefined) throw new AgentStoreProtocolError("BCS multipart write instruction is missing context");
+function mapConflictWriteInstruction(instruction: AgentStoreRemoteWriteInstruction): NonNullable<AgentStoreWriteInstruction["conflict"]> {
   return {
-    context: multipartContextFromProto(instruction.context),
-    parts: instruction.parts.map((part: any) => ({ partNumber: part.partNumber, url: part.url, headers: { ...part.headers }, offsetBytes: Number(part.offsetBytes), sizeBytes: Number(part.sizeBytes) })),
-    partUrlsExpiresAtMs: Number(instruction.partUrlsExpiresAtMs),
+    relPath: instruction.relPath,
+    url: instruction.url,
+    headers: { ...instruction.headers },
+    expiresAtMs: instruction.expiresAtMs,
+    ...(instruction.multipart === undefined ? {} : { multipart: mapMultipartWriteInstruction(instruction.multipart) }),
   };
 }
 
-function multipartContextFromProto(context: any): AgentStoreMultipartContext {
-  return { uploadId: context.uploadId, storeId: context.storeId, relPath: context.relPath, sizeBytes: Number(context.sizeBytes), sha: context.sha, expectedPartCount: context.expectedPartCount, precondition: cloneMultipartPrecondition(context.precondition), sessionId: context.sessionId };
+function mapMultipartWriteInstruction(instruction: AgentStoreRemoteMultipartWriteInstruction): AgentStoreMultipartWriteInstruction {
+  if (instruction.context === undefined) throw new AgentStoreProtocolError("BCS multipart write instruction is missing context");
+  return {
+    context: copyMultipartContext(instruction.context),
+    parts: instruction.parts.map((part) => ({ ...part, headers: { ...part.headers } })),
+    partUrlsExpiresAtMs: instruction.partUrlsExpiresAtMs,
+  };
 }
 
-function cloneMultipartPrecondition(precondition: any): AgentStoreMultipartContext["precondition"] {
-  switch (precondition.case) {
-    case "baseEtag":
-      return { case: "baseEtag", value: precondition.value };
-    case "expectAbsent":
-      return { case: "expectAbsent", value: precondition.value };
-    default:
-      return { case: undefined };
-  }
-}
-
-function multipartContextToProto(context: AgentStoreMultipartContext): AgentStoreMultipartUploadContext {
-  return new AgentStoreMultipartUploadContext({ uploadId: context.uploadId, storeId: context.storeId, relPath: context.relPath, sizeBytes: BigInt(context.sizeBytes), sha: context.sha, expectedPartCount: context.expectedPartCount, precondition: cloneMultipartPrecondition(context.precondition), sessionId: context.sessionId });
-}
-
-function multipartWriteCompletionToProto(completion: AgentStoreMultipartWriteCompletion): AgentStoreMultipartWriteCompletionProto {
-  return new AgentStoreMultipartWriteCompletionProto({ context: multipartContextToProto(completion.context), parts: completion.parts.map((part) => new AgentStoreMultipartUploadedPart({ partNumber: part.partNumber, etag: part.etag, checksumSha256: new Uint8Array(part.checksumSha256) })) });
-}
-
-function multipartWriteAbortToProto(upload: AgentStoreMultipartWriteAbort): AgentStoreMultipartWriteAbortProto {
-  return new AgentStoreMultipartWriteAbortProto({ context: multipartContextToProto(upload.context) });
+function copyMultipartContext(context: AgentStoreMultipartContext): AgentStoreMultipartContext {
+  const precondition = context.precondition;
+  return {
+    ...context,
+    precondition: precondition.case === "baseEtag"
+      ? { case: "baseEtag", value: precondition.value }
+      : precondition.case === "expectAbsent"
+        ? { case: "expectAbsent", value: precondition.value }
+        : { case: undefined },
+  };
 }
 
 /**
@@ -591,8 +468,8 @@ function multipartWriteAbortToProto(upload: AgentStoreMultipartWriteAbort): Agen
 function correlateMultipartResults<TResult, TInput extends { readonly context: AgentStoreMultipartContext }>(args: {
   readonly kind: "complete" | "abort";
   readonly inputs: readonly TInput[];
-  readonly results: readonly any[];
-  readonly map: (args: { readonly result: any; readonly relPath: string }) => TResult | undefined;
+  readonly results: readonly AgentStoreMultipartRpcResult[];
+  readonly map: (args: { readonly result: AgentStoreMultipartRpcResult; readonly relPath: string }) => TResult | undefined;
 }): readonly TResult[] {
   const ordered: (TResult | undefined)[] = Array.from({ length: args.inputs.length });
   for (const result of args.results) {
@@ -627,54 +504,27 @@ function requireCompleteMultipartResultSet<T>(args: { readonly ordered: readonly
   return output;
 }
 
-function mapMultipartCompletionResult(args: { readonly result: any; readonly relPath: string }): { readonly kind: "success" | "failure"; readonly relPath: string; readonly etag?: string; readonly code?: string } | undefined {
-  switch (args.result.outcome.case) {
+function mapMultipartCompletionResult(args: { readonly result: AgentStoreMultipartRpcResult; readonly relPath: string }): { readonly kind: "success" | "failure"; readonly relPath: string; readonly etag?: string; readonly code?: string } | undefined {
+  switch (args.result.outcome.kind) {
     case "success":
-      return { kind: "success", relPath: args.relPath, etag: normalizeS3Etag(args.result.outcome.value.etag) };
+      return { kind: "success", relPath: args.relPath, etag: normalizeS3Etag(args.result.outcome.etag ?? "") };
     case "failure":
-      return { kind: "failure", relPath: args.relPath, code: mapMultipartFailureCode(args.result.outcome.value.code) };
-    case undefined:
-      return { kind: "failure", relPath: args.relPath, code: "internal" };
-    default:
+      return { kind: "failure", relPath: args.relPath, code: args.result.outcome.code };
+    case "unknown":
       // An outcome this transport does not know is no result, which the caller is told about as a missing one.
       return undefined;
   }
 }
 
-function mapMultipartAbortResult(args: { readonly result: any; readonly relPath: string }): { readonly kind: "success" | "failure"; readonly relPath: string; readonly alreadyFinished?: boolean; readonly code?: string } | undefined {
-  switch (args.result.outcome.case) {
+function mapMultipartAbortResult(args: { readonly result: AgentStoreMultipartRpcResult; readonly relPath: string }): { readonly kind: "success" | "failure"; readonly relPath: string; readonly alreadyFinished?: boolean; readonly code?: string } | undefined {
+  switch (args.result.outcome.kind) {
     case "success":
-      return { kind: "success", relPath: args.relPath, alreadyFinished: args.result.outcome.value.alreadyFinished };
+      return { kind: "success", relPath: args.relPath, ...(args.result.outcome.alreadyFinished === undefined ? {} : { alreadyFinished: args.result.outcome.alreadyFinished }) };
     case "failure":
-      return { kind: "failure", relPath: args.relPath, code: mapMultipartFailureCode(args.result.outcome.value.code) };
-    case undefined:
-      return { kind: "failure", relPath: args.relPath, code: "internal" };
-    default:
+      return { kind: "failure", relPath: args.relPath, code: args.result.outcome.code };
+    case "unknown":
       // An outcome this transport does not know is no result, which the caller is told about as a missing one.
       return undefined;
-  }
-}
-
-function mapMultipartFailureCode(code: number): string {
-  switch (code) {
-    case AgentStoreMultipartOperationFailureCode.UNSPECIFIED:
-      return "internal";
-    case AgentStoreMultipartOperationFailureCode.PRECONDITION_FAILED:
-      return "precondition_failed";
-    case AgentStoreMultipartOperationFailureCode.UPLOAD_NOT_FOUND:
-      return "upload_not_found";
-    case AgentStoreMultipartOperationFailureCode.INVALID_PARTS:
-      return "invalid_parts";
-    case AgentStoreMultipartOperationFailureCode.CHECKSUM_MISMATCH:
-      return "checksum_mismatch";
-    case AgentStoreMultipartOperationFailureCode.TRANSIENT:
-      return "transient";
-    case AgentStoreMultipartOperationFailureCode.INTERNAL:
-      return "internal";
-    case AgentStoreMultipartOperationFailureCode.RESTART_REQUIRED:
-      return "restart_required";
-    default:
-      return "unknown";
   }
 }
 

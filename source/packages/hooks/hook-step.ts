@@ -1,36 +1,36 @@
-/**
- * The points in a turn where a hook may run.
- *
- * The names are the wire names: a hook configuration file on disk spells its events exactly like
- * this, so the strings are a contract and not a label. The set is closed — a step that is not here
- * cannot be configured — which is what makes the validator's "unknown hook type" check possible.
- */
+const STEP_NAMES = [
+  "beforeShellExecution",
+  "beforeMCPExecution",
+  "afterShellExecution",
+  "afterMCPExecution",
+  "beforeReadFile",
+  "afterFileEdit",
+  "beforeTabFileRead",
+  "afterTabFileEdit",
+  "stop",
+  "beforeSubmitPrompt",
+  "afterAgentResponse",
+  "afterAgentThought",
+  "sessionStart",
+  "sessionEnd",
+  "preCompact",
+  "subagentStart",
+  "subagentStop",
+  "preToolUse",
+  "postToolUse",
+  "postToolUseFailure",
+  "workspaceOpen",
+] as const;
 
-export const HookStep = {
-  beforeShellExecution: "beforeShellExecution",
-  beforeMCPExecution: "beforeMCPExecution",
-  afterShellExecution: "afterShellExecution",
-  afterMCPExecution: "afterMCPExecution",
-  beforeReadFile: "beforeReadFile",
-  afterFileEdit: "afterFileEdit",
-  beforeTabFileRead: "beforeTabFileRead",
-  afterTabFileEdit: "afterTabFileEdit",
-  stop: "stop",
-  beforeSubmitPrompt: "beforeSubmitPrompt",
-  afterAgentResponse: "afterAgentResponse",
-  afterAgentThought: "afterAgentThought",
-  sessionStart: "sessionStart",
-  sessionEnd: "sessionEnd",
-  preCompact: "preCompact",
-  subagentStart: "subagentStart",
-  subagentStop: "subagentStop",
-  preToolUse: "preToolUse",
-  postToolUse: "postToolUse",
-  postToolUseFailure: "postToolUseFailure",
-  workspaceOpen: "workspaceOpen",
-} as const
+export type HookStep = (typeof STEP_NAMES)[number];
 
-export type HookStep = (typeof HookStep)[keyof typeof HookStep]
+type HookStepCatalog = { readonly [Step in HookStep]: Step };
 
-/** Every configured step, in declaration order: what the config validator reports as valid. */
-export const HOOK_STEPS: readonly HookStep[] = Object.values(HookStep)
+function makeHookStepCatalog(names: readonly HookStep[]): HookStepCatalog {
+  return Object.fromEntries(names.map(name => [name, name])) as HookStepCatalog;
+}
+
+export const HookStep = makeHookStepCatalog(STEP_NAMES);
+
+/** All valid configured step names in their catalog order. */
+export const HOOK_STEPS: readonly HookStep[] = Object.values(HookStep) as HookStep[];

@@ -10,10 +10,9 @@
  * emits once it knows its model, the retries it counts, and the outcome it reports exactly once.
  */
 
-import { AnalyticsService } from "../../packages/proto/generated/aiserver/v1/analytics_connect.ts";
 import { slateErrorTags, slateErrorWireCode, type SlateErrorValue } from "../../shared/errors/registry.ts";
 import { getSlateClientVersion, SLATE_CLIENT_TYPE } from "../../shared/node/slate-client-metadata.ts";
-import { createSlateCursorBackendClient } from "../../shared/node/cursor-backend/cursor-inference.ts";
+import { createAnalyticsTelemetryClient } from "../../adapters/interop/telemetry/analytics-client-adapter.ts";
 import { connectorAuthTelemetry, type ConnectorAuthReport } from "../../shared/observability/connector-auth-telemetry.ts";
 import { StructuredLogTransport, type StructuredLogClient } from "../../shared/observability/structured-log-transport.ts";
 import {
@@ -53,26 +52,23 @@ import {
   TOOL_CALL_ERROR_EVENT,
   TOOL_CALL_STALLED_EVENT,
   TOOL_CALL_STARTED_EVENT,
-  TURN_OUTCOME_DETAIL_EVENT,
-  TURN_OUTCOME_EVENT,
-  TURN_START_EVENT,
 } from "../../shared/observability/telemetry-events.ts";
 import type { DeadlinePolicy, ExpiryPolicy, PollingPolicy } from "../extensions/scheduling.ts";
 import { resolveBoxIdentityTags } from "../ports/telemetry.ts";
 import { hostCrashMarkerMetadata, type HostCrashMarker } from "./host-crash-marker.ts";
 import { autoReviewApprovalTelemetry } from "./auto-review-approval-telemetry.ts";
-import { automationFireDroppedTelemetry, automationRunTelemetry } from "./automation-fire-telemetry.ts";
+import { projectDroppedAutomationFire, projectAutomationRunTelemetry } from "./automation-fire-telemetry.ts";
 import { automationShadowPruneTelemetry } from "./automation-shadow-prune-telemetry.ts";
 import { boxLogShipTelemetry } from "./box-log-ship-telemetry.ts";
 import { conversationGcTelemetry } from "./conversation-gc-telemetry.ts";
 import { diskPressureReport } from "./disk-pressure-telemetry.ts";
-import { eventLoopWindowTelemetry } from "./event-loop-telemetry.ts";
+import { toEventLoopLogRecord } from "./event-loop-telemetry-policy.ts";
 import { experimentsDiagnosticTelemetry } from "./experiments-diagnostic-telemetry.ts";
 import { hostDiagnosticTelemetry } from "./host-diagnostic-telemetry.ts";
-import { hostEventBusTelemetry } from "./host-event-bus-telemetry.ts";
+import { mapHostEventBusFailure } from "./host-event-bus-telemetry.ts";
 import { hostExtensionDiagnosticTelemetry } from "./host-extension-diagnostic-telemetry.ts";
 import { boxImageCheckTelemetry, boxInfrastructureTelemetry, daemonPingTelemetry, hostLifecycleTelemetry, hostStartupTelemetry } from "./lifecycle-telemetry.ts";
-import { localExecFailedTelemetry, localExecProviderTelemetry, localExecRefusedTelemetry } from "./local-exec-telemetry.ts";
+import { projectLocalExecFailure, projectLocalExecProvider, projectLocalExecRefusal } from "./local-exec-telemetry.ts";
 import { memorySynthesisTelemetry } from "./memory-synthesis-telemetry.ts";
 import { ackObligationTelemetry, pendingWakeTelemetry, queueAcceptedTelemetry, queueDequeuedTelemetry, queueWatchdogTelemetry, sendDispatchTelemetry } from "./queue-telemetry-mappers.ts";
 import { shellRevivalTelemetry, subagentRevivalTelemetry } from "./revival-telemetry-mappers.ts";
@@ -82,6 +78,8 @@ import { turnEmptyDeliveryTelemetry } from "./turn-empty-delivery-telemetry.ts";
 import { closingSendNudgeTelemetry, computerUseUsageTelemetry, ttftTelemetry, turnAwaitTelemetry, turnInterruptTelemetry, turnRetryTelemetry, turnUsageTelemetry, userMessageReceivedTelemetry } from "./turn-telemetry-mappers.ts";
 import { webauthnProxyTelemetry } from "./webauthn-proxy-telemetry.ts";
 import { journalOutcomeTelemetry } from "./journal-outcome-telemetry.ts";
+import { SlateTurnTelemetryImpl } from "./turn-telemetry-session.ts";
+export { SlateTurnTelemetryImpl } from "./turn-telemetry-session.ts";
 
 export type LogLevel = "info" | "warn" | "error";
 export type Metadata = Record<string, string | undefined>;
@@ -227,18 +225,10 @@ export class SlateStructuredLogTelemetry {
       platform: process.platform,
       ...(options.identityTags ?? resolveBoxIdentityTags()),
     };
-    const createClient = options.createClient ?? (() =>
-      createSlateCursorBackendClient(AnalyticsService, {
-        // A credential that cannot be had is not a reason to drop a log line: the request goes out unauthenticated.
-        getAccessToken: async (request) => {
-          try {
-            return await options.getAccessToken!(request);
-          } catch {
-            return "";
-          }
-        },
-        getMachineId: options.getMachineId!,
-      }) as unknown as StructuredLogClient);
+    const createClient = options.createClient ?? (() => createAnalyticsTelemetryClient({
+      getAccessToken: options.getAccessToken!,
+      getMachineId: options.getMachineId!,
+    }));
     return new StructuredLogTransport({
       key: SLATE_LOG_KEY,
       platformTags,
@@ -264,7 +254,7 @@ export class SlateStructuredLogTelemetry {
     const turn = new SlateTurnTelemetryImpl(this, start, () => {
       // Only the turn that is still the current one takes itself out of the map.
       if (this.activeTurnsByConversation.get(start.conversationId) === turn) this.activeTurnsByConversation.delete(start.conversationId);
-    });
+    }, errorDetailTags);
     this.activeTurnsByConversation.set(start.conversationId, turn);
     return turn;
   }
@@ -283,12 +273,12 @@ export class SlateStructuredLogTelemetry {
     this.enqueue("info", mapped.event, mapped.metadata);
   }
 
-  reportAutomationRun(r: Parameters<typeof automationRunTelemetry>[0]): void {
-    this.reportMapped(automationRunTelemetry, r as never);
+  reportAutomationRun(r: Parameters<typeof projectAutomationRunTelemetry>[0]): void {
+    this.reportMapped(projectAutomationRunTelemetry, r as never);
   }
 
-  reportAutomationFireDropped(r: Parameters<typeof automationFireDroppedTelemetry>[0]): void {
-    this.reportMapped(automationFireDroppedTelemetry, r as never);
+  reportAutomationFireDropped(r: Parameters<typeof projectDroppedAutomationFire>[0]): void {
+    this.reportMapped(projectDroppedAutomationFire, r as never);
   }
 
   reportAutomationShadowPrune(r: Parameters<typeof automationShadowPruneTelemetry>[0]): void {
@@ -304,8 +294,8 @@ export class SlateStructuredLogTelemetry {
     this.enqueue(mapped.level as LogLevel, "slate.box.disk_pressure", mapped.metadata);
   }
 
-  reportHostEventLoop(r: Parameters<typeof eventLoopWindowTelemetry>[0]): void {
-    this.reportMapped(eventLoopWindowTelemetry, r as never);
+  reportHostEventLoop(r: Parameters<typeof toEventLoopLogRecord>[0]): void {
+    this.reportMapped(toEventLoopLogRecord, r as never);
   }
 
   reportExperimentsDiagnostic(r: Parameters<typeof experimentsDiagnosticTelemetry>[0]): void {
@@ -316,8 +306,8 @@ export class SlateStructuredLogTelemetry {
     this.reportMapped(hostDiagnosticTelemetry, r as never);
   }
 
-  reportHostEventBusFailure(r: Parameters<typeof hostEventBusTelemetry>[0]): void {
-    this.reportMapped(hostEventBusTelemetry, r as never);
+  reportHostEventBusFailure(r: Parameters<typeof mapHostEventBusFailure>[0]): void {
+    this.reportMapped(mapHostEventBusFailure, r as never);
   }
 
   reportHostExtensionDiagnostic(r: Parameters<typeof hostExtensionDiagnosticTelemetry>[0]): void {
@@ -334,16 +324,16 @@ export class SlateStructuredLogTelemetry {
     this.reportMapped(searchIndexHealthTelemetry, r as never);
   }
 
-  reportLocalExecRefused(r: Parameters<typeof localExecRefusedTelemetry>[0]): void {
-    this.reportMapped(localExecRefusedTelemetry, r as never);
+  reportLocalExecRefused(r: Parameters<typeof projectLocalExecRefusal>[0]): void {
+    this.reportMapped(projectLocalExecRefusal, r as never);
   }
 
-  reportLocalExecProvider(r: Parameters<typeof localExecProviderTelemetry>[0]): void {
-    this.reportMapped(localExecProviderTelemetry, r as never);
+  reportLocalExecProvider(r: Parameters<typeof projectLocalExecProvider>[0]): void {
+    this.reportMapped(projectLocalExecProvider, r as never);
   }
 
-  reportLocalExecFailed(r: Parameters<typeof localExecFailedTelemetry>[0]): void {
-    this.reportMapped(localExecFailedTelemetry, r as never);
+  reportLocalExecFailed(r: Parameters<typeof projectLocalExecFailure>[0]): void {
+    this.reportMapped(projectLocalExecFailure, r as never);
   }
 
   reportWebAuthnProxy(r: Parameters<typeof webauthnProxyTelemetry>[0]): void {
@@ -751,77 +741,5 @@ export class SlateStructuredLogTelemetry {
       if (value !== undefined) cleaned[key] = String(value);
     }
     this.transport.enqueue(level, message, cleaned, onSettled);
-  }
-}
-
-/** One turn: it starts once its model is known, counts its retries, and ends exactly once. */
-export class SlateTurnTelemetryImpl {
-  private readonly startedAt = Date.now();
-  private model: string | undefined;
-  private requestId: string | undefined;
-  private startEmitted = false;
-  private finalized = false;
-  private retryCount = 0;
-  private backoffTotalMs = 0;
-  private retryCause: string | undefined;
-
-  constructor(
-    private readonly telemetry: SlateStructuredLogTelemetry,
-    private readonly start: { conversationId: string; turnType: string; model?: string },
-    private readonly onFinalized: () => void,
-  ) {
-    this.model = start.model;
-    if (this.model !== undefined) this.emitStart();
-  }
-
-  noteRetry(report: Record<string, unknown>): void {
-    if (this.finalized) return;
-    this.retryCount += 1;
-    this.backoffTotalMs += typeof report.delayMs === "number" ? report.delayMs : 0;
-    if (typeof report.cause === "string") this.retryCause = report.cause;
-  }
-
-  setModel(modelId: string): void {
-    if (modelId.length === 0) return;
-    this.model = modelId;
-    this.emitStart();
-  }
-
-  setRequestId(requestId: string): void {
-    // The first request that asked is the one a turn is known by.
-    if (this.requestId === undefined && requestId.length > 0) this.requestId = requestId;
-  }
-
-  finalize(outcome: string, error?: SlateErrorValue, detail?: { message: string; stack?: string }): void {
-    if (this.finalized) return;
-    this.finalized = true;
-    this.onFinalized();
-    this.emitStart();
-    const metadata: Metadata = {
-      ...this.baseTags(),
-      // A turn that carried an error ended in one, whatever the caller called the outcome.
-      outcome: error !== undefined ? "error" : outcome,
-      duration_ms: String(Date.now() - this.startedAt),
-    };
-    if (this.retryCount > 0) {
-      metadata.retry_count = String(this.retryCount);
-      metadata.backoff_total_ms = String(Math.round(this.backoffTotalMs));
-      metadata.retry_cause = this.retryCause;
-    }
-    if (error !== undefined) Object.assign(metadata, slateErrorTags(error));
-    this.telemetry.emitTurnEvent(TURN_OUTCOME_EVENT, metadata);
-    if (error !== undefined && detail !== undefined) {
-      this.telemetry.emitTurnEvent(TURN_OUTCOME_DETAIL_EVENT, { ...this.baseTags(), ...errorDetailTags(error, detail) });
-    }
-  }
-
-  baseTags(): Metadata {
-    return { turn_type: this.start.turnType, conversation_id: this.start.conversationId, request_id: this.requestId, model_intent: this.model };
-  }
-
-  private emitStart(): void {
-    if (this.startEmitted) return;
-    this.startEmitted = true;
-    this.telemetry.emitTurnEvent(TURN_START_EVENT, this.baseTags());
   }
 }

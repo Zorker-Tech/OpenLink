@@ -1,39 +1,38 @@
-/**
- * Where the agent is told its past conversations live.
- *
- * Transcripts are files in the workspace, so the agent can read what it or another agent did before —
- * which is often the only record of a decision. Whether it may point the user at one depends on where
- * the user is: in an editor the transcript is a chat the user can open, and elsewhere naming the file
- * would be naming something they cannot.
- */
+/** Describe where prior agent conversations are stored and when they may be linked. */
 
-import { jsx, jsxs } from "../../prompt-jsx/index.ts"
-import type { PromptNode } from "../../prompt-jsx/index.ts"
-import { AgentType } from "../utils/agent-config.ts"
+import { jsx, jsxs } from "../../prompt-jsx/index.ts";
+import type { PromptNode } from "../../prompt-jsx/index.ts";
+import { AgentType } from "../utils/agent-config.ts";
 
-export function AgentTranscriptsSection({ agentTranscriptsFolder, agentType, enableAgentChatLinks }: {
-  readonly agentTranscriptsFolder: string
-  readonly agentType?: AgentType | undefined
-  readonly enableAgentChatLinks?: boolean | undefined
+function citationGuidance(agentType: AgentType | undefined, enableAgentChatLinks: boolean): string[] {
+  if (agentType !== AgentType.IDE) return ["Outside the editor, do not cite the path directly to the user."];
+
+  return [
+    "In the editor, link a parent conversation with a title of at most six words and its UUID without the .jsonl suffix.",
+    ...(enableAgentChatLinks ? [] : ["Do not point the user to subagent transcript files in this folder."]),
+    "Do not explain the directory layout.",
+  ];
+}
+
+export function AgentTranscriptsSection({
+  agentTranscriptsFolder,
+  agentType,
+  enableAgentChatLinks,
+}: {
+  readonly agentTranscriptsFolder: string;
+  readonly agentType?: AgentType | undefined;
+  readonly enableAgentChatLinks?: boolean | undefined;
 }): PromptNode {
-  const isIDE = agentType === AgentType.IDE
-  const citationInstruction = isIDE
-    ? [
-      `cite parent chat transcripts to the user as [<title for chat <=6 words>](<uuid excluding .jsonl>).${enableAgentChatLinks ? "" : " Do not cite subagent transcript files from this folder."}`,
-      "Don't discuss the folder structure.",
-    ].join(" ")
-    : "Don't cite the file directly to the user."
+  const guidance = citationGuidance(agentType, enableAgentChatLinks === true);
   return jsx("section", {
     title: "agent_transcripts",
     children: jsxs("p", {
       children: [
-        "Agent transcripts (past chats) live in ",
+        "Earlier agent conversations are kept under ",
         agentTranscriptsFolder,
-        ". They have names like ",
-        "<uuid>",
-        ".jsonl, ",
-        citationInstruction,
+        " in .jsonl files. ",
+        guidance.join(" "),
       ],
     }),
-  })
+  });
 }

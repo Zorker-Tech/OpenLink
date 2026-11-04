@@ -5,16 +5,20 @@
  * it is asked to stop — writing down what it was doing if it finds one of its own invariants broken.
  */
 import { realpathSync } from "node:fs";
-import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 import { createDeadlinePolicy, realClock, type DeadlinePolicy } from "../host/extensions/scheduling.ts";
-import { LOCAL_EXEC_GENERATION_TOKEN_ARG, LOCAL_EXEC_GENERATION_TOKEN_ENV } from "../shared/local-exec-process-identity.ts";
+import { LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX, LOCAL_EXEC_IDENTITY_ENV_KEY } from "../shared/local-exec-process-identity.ts";
 import { runLocalExecDaemon, type RunLocalExecDaemonOptions } from "../host/local-exec/local-exec-daemon.ts";
 import { installProcessCrashGuards, type ProcessCrashKind } from "../host/process-crash-guard.ts";
-import { flushSlateSentry, initSlateSentryDaemon, type SlateSentryDaemonRuntime } from "../host/local-exec/sentry.ts";
+import {
+  flushDaemonCrashReporter,
+  initializeDaemonCrashReporter,
+  loadDaemonCrashReporterRuntime,
+  type DaemonCrashReporterRuntime,
+} from "../adapters/interop/telemetry/local-exec-crash-reporter-adapter.ts";
 import { installInvariantReporter } from "../shared/invariant.ts";
-import { writeInvariantViolationLog } from "./invariant-violation-log.ts";
+import { writeLocalExecInvariantRecord } from "./invariant-violation-log.ts";
 import {
   createDefaultProductionLocalExecExecutor,
   type ProductionLocalExecExecutorFactory,
@@ -126,7 +130,7 @@ function installDaemonSignalHandlers(
 function installDaemonCrashReporting(deps: LocalExecDaemonMainDeps): void {
   const installInvariant = deps.installInvariantReporter ?? installInvariantReporter;
   const installGuards = deps.installCrashGuards ?? installProcessCrashGuards;
-  installInvariant((report) => writeInvariantViolationLog(report));
+  installInvariant((report) => writeLocalExecInvariantRecord(report));
 
   const guards = installGuards({ scope: "slate-local-exec-daemon" });
   const reporter = deps.initCrashReporter?.();
@@ -194,24 +198,6 @@ export async function reportLocalExecDaemonFatal(
   throw new Error("process.exit returned unexpectedly");
 }
 
-function isUsableSentryRuntime(runtime: Partial<SlateSentryDaemonRuntime>): boolean {
-  return runtime.init != null
-    && runtime.captureException != null
-    && runtime.flush != null
-    && runtime.makeNodeTransport != null;
-}
-
-export function loadLocalExecSentryRuntime(
-  requireModule: (id: string) => unknown = createRequire(import.meta.url),
-): SlateSentryDaemonRuntime | undefined {
-  try {
-    const runtime = requireModule("@sentry/node") as Partial<SlateSentryDaemonRuntime>;
-    return isUsableSentryRuntime(runtime) ? runtime as SlateSentryDaemonRuntime : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function alreadyHasExecutor(options: RunLocalExecDaemonOptions | undefined): boolean {
   return options?.executor !== undefined;
 }
@@ -224,21 +210,21 @@ export function composeLocalExecDaemonOptions(
   return { ...daemonOptions, executor: productionExecutorFactory() };
 }
 
-function reporterInitializer(sentryRuntime: SlateSentryDaemonRuntime | undefined): () => DaemonCrashReporter | undefined {
+function reporterInitializer(externalRuntime: DaemonCrashReporterRuntime | undefined): () => DaemonCrashReporter | undefined {
   let initialized = false;
   let reporter: DaemonCrashReporter | undefined;
 
   return () => {
     if (initialized) return reporter;
     initialized = true;
-    reporter = sentryRuntime === undefined ? undefined : initSlateSentryDaemon(sentryRuntime);
+    reporter = externalRuntime === undefined ? undefined : initializeDaemonCrashReporter(externalRuntime);
     return reporter;
   };
 }
 
 function generationFromArguments(arguments_: readonly string[]): string | undefined {
-  const tokenArgument = arguments_.find((argument) => argument.startsWith(LOCAL_EXEC_GENERATION_TOKEN_ARG));
-  return tokenArgument?.slice(LOCAL_EXEC_GENERATION_TOKEN_ARG.length);
+  const tokenArgument = arguments_.find((argument) => argument.startsWith(LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX));
+  return tokenArgument?.slice(LOCAL_EXEC_IDENTITY_ARGUMENT_PREFIX.length);
 }
 
 function bindGenerationToDaemonEntry(
@@ -263,7 +249,7 @@ function fatalDependencies(
 ): Pick<LocalExecDaemonMainDeps, "initCrashReporter" | "flushCrashReporter" | "process"> {
   return {
     initCrashReporter,
-    flushCrashReporter: flushSlateSentry,
+    flushCrashReporter: flushDaemonCrashReporter,
     ...(processLike === undefined ? {} : { process: processLike }),
   };
 }
@@ -271,11 +257,11 @@ function fatalDependencies(
 export async function runLocalExecDaemonEntrypoint(options: {
   readonly daemonOptions?: RunLocalExecDaemonOptions;
   readonly productionExecutorFactory?: ProductionLocalExecExecutorFactory;
-  readonly sentryRuntime?: SlateSentryDaemonRuntime;
+  readonly crashReporterRuntime?: DaemonCrashReporterRuntime;
   readonly process?: Pick<NodeJS.Process, "pid" | "on" | "exit">;
 } = {}): Promise<void> {
-  const sentryRuntime = options.sentryRuntime ?? loadLocalExecSentryRuntime();
-  const initCrashReporter = reporterInitializer(sentryRuntime);
+  const crashReporterRuntime = options.crashReporterRuntime ?? loadDaemonCrashReporterRuntime();
+  const initCrashReporter = reporterInitializer(crashReporterRuntime);
 
   try {
     const daemonOptions = composeLocalExecDaemonOptions(
@@ -285,7 +271,7 @@ export async function runLocalExecDaemonEntrypoint(options: {
     const boundOptions = bindGenerationToDaemonEntry(
       daemonOptions,
       process.argv[1],
-      process.env[LOCAL_EXEC_GENERATION_TOKEN_ENV],
+      process.env[LOCAL_EXEC_IDENTITY_ENV_KEY],
       generationFromArguments(process.argv),
     );
 
@@ -293,7 +279,7 @@ export async function runLocalExecDaemonEntrypoint(options: {
       runDaemon: runLocalExecDaemon,
       daemonOptions: boundOptions,
       initCrashReporter,
-      flushCrashReporter: flushSlateSentry,
+      flushCrashReporter: flushDaemonCrashReporter,
       ...(options.process === undefined ? {} : { process: options.process }),
     });
   } catch (error) {

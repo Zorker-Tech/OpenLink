@@ -10,7 +10,7 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { parentPort } from "node:worker_threads";
 
 import { createContext } from "../../../packages/context/context.ts";
-import { ConversationStateStructure } from "../../../packages/proto/generated/agent/v1/agent_pb.ts";
+import { decodeInteropAgentConversationCheckpoint } from "../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 import { invariant } from "../../../shared/invariant.ts";
 import { LegacyFileTranscriptMirror } from "../../transcript/mirror/legacy-transcript-mirror.ts";
 
@@ -131,7 +131,7 @@ export function runTranscriptMirrorWorker(): void {
             "transcript mirror checkpoint blob is unavailable"
           );
         }
-        const state = ConversationStateStructure.fromBinary(stateBytes);
+        const state = decodeInteropAgentConversationCheckpoint(stateBytes);
         const written = await new LegacyFileTranscriptMirror(
           workerRequest.transcriptsDir
         ).writeFull(

@@ -22,7 +22,7 @@ import { describeAgentRunError } from "./agent-run-error.ts";
 import { CompletionRevivals } from "./completion-revivals.ts";
 import { AgentGoneError } from "./session-runtime.ts";
 import { collectInboundImages } from "./send-message-shaping.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript } from "./transcript-store.ts";
 import { classifyAgentError } from "./turn-runtime.ts";
 import type { TranscriptManagerLike } from "./transcript-hub.ts";
@@ -291,7 +291,7 @@ export class BackgroundWakes {
     for (const envelope of inboundBatch) {
       const transcriptEntry = {
         kind: "message",
-        id: nextEntryId(
+        id: allocateTranscriptEntryId(
           isActive ? getTranscript() : targetSession.db.getTranscriptEntries(),
           "user-message",
         ),

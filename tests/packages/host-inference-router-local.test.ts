@@ -112,7 +112,11 @@ describe("whether a local inference client can be used", () => {
     writeFileSync(binary, "#!/bin/sh\n");
     chmodSync(binary, 0o755);
     assert.equal(withEnv({ CODEX_PATH: binary }, () => resolveCodexCliPath()), binary);
-    assert.equal(withEnv({ CODEX_PATH: join(root, "missing") }, () => resolveCodexCliPath()), null);
+    const isolatedHome = scratch();
+    assert.equal(
+      withEnv({ CODEX_PATH: join(root, "missing"), HOME: isolatedHome, PATH: isolatedHome }, () => resolveCodexCliPath()),
+      null,
+    );
   });
 
   it("takes a claude-code as signed in by its credentials file or by a key in the environment, and not otherwise", () => {

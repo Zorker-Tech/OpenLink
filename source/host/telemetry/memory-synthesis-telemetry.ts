@@ -1,54 +1,62 @@
-/** What the memory synthesis did, in the shape the telemetry backend reports it: the outcome, the tagged cause and what it held. */
-import {
-  slateErrorTags,
-  type SlateErrorValue,
-} from "../../shared/errors/registry.ts";
+/** Map memory-synthesis outcomes onto the host's structured telemetry contract. */
+import { slateErrorTags, type SlateErrorValue } from "../../shared/errors/registry.ts"
 
-export const MEMORY_SYNTHESIS_EVENT = "slate.memory.synthesis";
+export const MEMORY_SYNTHESIS_EVENT = "slate.memory.synthesis"
+
 export type MemorySynthesisReport =
-  | { outcome: "skipped_gate" }
+  | { readonly outcome: "skipped_gate" }
   | {
-      outcome: "shed";
-      cause: SlateErrorValue;
-      itemCount: number;
+      readonly outcome: "shed"
+      readonly cause: SlateErrorValue
+      readonly itemCount: number
     }
   | {
-      outcome: "failed";
-      cause: SlateErrorValue;
-      durationMs: number;
-      itemCount: number;
+      readonly outcome: "failed"
+      readonly cause: SlateErrorValue
+      readonly durationMs: number
+      readonly itemCount: number
     }
   | {
-      outcome: "ok";
-      durationMs: number;
-      itemCount: number;
-    };
+      readonly outcome: "ok"
+      readonly durationMs: number
+      readonly itemCount: number
+    }
 
-export function memorySynthesisTelemetry(r: MemorySynthesisReport) {
-  if (r.outcome === "skipped_gate")
-    return {
-      level: "info",
-      event: MEMORY_SYNTHESIS_EVENT,
-      metadata: { outcome: r.outcome },
-    };
-  if (r.outcome === "shed")
-    return {
-      level: "warn",
-      event: MEMORY_SYNTHESIS_EVENT,
-      metadata: {
-        outcome: r.outcome,
-        ...slateErrorTags(r.cause),
-        item_count: String(r.itemCount),
-      },
-    };
+function telemetryEvent(level: "info" | "warn", metadata: Record<string, string>): {
+  readonly level: "info" | "warn"
+  readonly event: string
+  readonly metadata: Record<string, string>
+} {
+  return { level, event: MEMORY_SYNTHESIS_EVENT, metadata }
+}
+
+function runMetrics(durationMs: number, itemCount: number): Record<string, string> {
   return {
-    level: r.outcome === "failed" ? "warn" : "info",
-    event: MEMORY_SYNTHESIS_EVENT,
-    metadata: {
-      outcome: r.outcome,
-      ...(r.outcome === "failed" ? slateErrorTags(r.cause) : {}),
-      duration_ms: String(Math.round(r.durationMs)),
-      item_count: String(r.itemCount),
-    },
-  };
+    duration_ms: String(Math.round(durationMs)),
+    item_count: String(itemCount),
+  }
+}
+
+export function memorySynthesisTelemetry(report: MemorySynthesisReport) {
+  switch (report.outcome) {
+    case "skipped_gate":
+      return telemetryEvent("info", { outcome: report.outcome })
+    case "shed":
+      return telemetryEvent("warn", {
+        outcome: report.outcome,
+        ...slateErrorTags(report.cause),
+        item_count: String(report.itemCount),
+      })
+    case "failed":
+      return telemetryEvent("warn", {
+        outcome: report.outcome,
+        ...slateErrorTags(report.cause),
+        ...runMetrics(report.durationMs, report.itemCount),
+      })
+    case "ok":
+      return telemetryEvent("info", {
+        outcome: report.outcome,
+        ...runMetrics(report.durationMs, report.itemCount),
+      })
+  }
 }

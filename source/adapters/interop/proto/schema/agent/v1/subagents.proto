@@ -1,0 +1,92 @@
+// agent.v1 — agent/v1/subagents messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message CustomSubagent {
+  string full_path = 1 [json_name = "fullPath"];
+  string name = 2 [json_name = "name"];
+  string description = 3 [json_name = "description"];
+  repeated string tools = 4 [json_name = "tools"];
+  string model = 5 [json_name = "model"];
+  string prompt = 6 [json_name = "prompt"];
+  .agent.v1.CustomSubagentPermissionMode permission_mode = 7 [json_name = "permissionMode"];
+  bool is_background = 8 [json_name = "isBackground"];
+  optional string plugin = 9 [json_name = "plugin"];
+  optional string marketplace = 10 [json_name = "marketplace"];
+  optional string plugin_id = 11 [json_name = "pluginId"];
+  optional string marketplace_id = 12 [json_name = "marketplaceId"];
+  bool force_default_model = 13 [json_name = "forceDefaultModel"];
+  optional string source = 14 [json_name = "source"];
+}
+
+message SubagentType {
+  oneof type {
+    .agent.v1.SubagentTypeUnspecified unspecified = 1 [json_name = "unspecified"];
+    .agent.v1.SubagentTypeComputerUse computer_use = 2 [json_name = "computerUse"];
+    .agent.v1.SubagentTypeCustom custom = 3 [json_name = "custom"];
+    .agent.v1.SubagentTypeExplore explore = 4 [json_name = "explore"];
+    .agent.v1.SubagentTypeMediaReview media_review = 5 [json_name = "mediaReview"];
+    .agent.v1.SubagentTypeBash bash = 6 [json_name = "bash"];
+    .agent.v1.SubagentTypeBrowserUse browser_use = 7 [json_name = "browserUse"];
+    .agent.v1.SubagentTypeShell shell = 8 [json_name = "shell"];
+    .agent.v1.SubagentTypeVmSetupHelper vm_setup_helper = 9 [json_name = "vmSetupHelper"];
+    .agent.v1.SubagentTypeDebug debug = 10 [json_name = "debug"];
+    .agent.v1.SubagentTypeCursorGuide cursor_guide = 11 [json_name = "cursorGuide"];
+    .agent.v1.SubagentTypeWatchVideo watch_video = 12 [json_name = "watchVideo"];
+  }
+}
+
+message SubagentTypeUnspecified {
+}
+
+message SubagentTypeComputerUse {
+}
+
+message SubagentTypeCustom {
+  string name = 1 [json_name = "name"];
+}
+
+message SubagentTypeExplore {
+}
+
+message SubagentTypeMediaReview {
+}
+
+message SubagentTypeBash {
+}
+
+message SubagentTypeBrowserUse {
+}
+
+message SubagentTypeShell {
+}
+
+message SubagentTypeVmSetupHelper {
+}
+
+message SubagentTypeDebug {
+}
+
+message SubagentTypeCursorGuide {
+}
+
+message SubagentTypeWatchVideo {
+}
+
+enum CustomSubagentPermissionMode {
+  CUSTOM_SUBAGENT_PERMISSION_MODE_UNSPECIFIED = 0;
+  CUSTOM_SUBAGENT_PERMISSION_MODE_DEFAULT = 1;
+  CUSTOM_SUBAGENT_PERMISSION_MODE_READONLY = 2;
+  CUSTOM_SUBAGENT_PERMISSION_MODE_AGENT_ONLY = 3;
+}
+
+enum TaskMode {
+  TASK_MODE_UNSPECIFIED = 0;
+  TASK_MODE_AGENT = 1;
+  TASK_MODE_PLAN = 2;
+}

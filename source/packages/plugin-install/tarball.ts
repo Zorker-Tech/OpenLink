@@ -1,35 +1,44 @@
-/**
- * A plugin directory as one artifact.
- *
- * The plugin is packed from its own directory, gzipped and made portable so the same artifact can be unpacked
- * anywhere, and a symlink is left out rather than followed — a link points at something that is not part of this
- * plugin. The archive is built in a temporary file that is removed afterwards, so nothing of the packing outlives it.
- */
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { create } from "tar";
 
-export async function packPluginArtifact(dirPath: string): Promise<Buffer> {
-  const archivePath = join(
-    await mkdtemp(join(tmpdir(), "slate-plugin-artifact-")),
-    "plugin.tgz",
-  );
+interface TemporaryArchive {
+  readonly directory: string;
+  readonly file: string;
+}
+
+async function allocateArchiveWorkspace(): Promise<TemporaryArchive> {
+  const directory = await mkdtemp(join(tmpdir(), "slate-plugin-artifact-"));
+  return { directory, file: join(directory, "plugin.tgz") };
+}
+
+function includesArchiveEntry(_entryPath: string, entryStats: unknown): boolean {
+  const stats = entryStats as { isSymbolicLink?: () => boolean };
+  return !stats.isSymbolicLink?.();
+}
+
+async function writePluginArchive(sourceDirectory: string, destination: string): Promise<void> {
+  const rootEntries = await readdir(sourceDirectory);
+  await create({
+    cwd: sourceDirectory,
+    file: destination,
+    gzip: true,
+    portable: true,
+    filter: includesArchiveEntry,
+  }, rootEntries);
+}
+
+async function removeArchiveWorkspace(directory: string): Promise<void> {
+  await rm(directory, { recursive: true, force: true }).catch(() => {});
+}
+
+export async function packPluginArtifact(sourceDirectory: string): Promise<Buffer> {
+  const temporary = await allocateArchiveWorkspace();
   try {
-    const entries = await readdir(dirPath);
-    await create({
-      cwd: dirPath,
-      file: archivePath,
-      gzip: true,
-      portable: true,
-      filter: (_path, stat) => !(
-        stat as { isSymbolicLink?: () => boolean }
-      ).isSymbolicLink?.(),
-    }, entries);
-    return await readFile(archivePath);
+    await writePluginArchive(sourceDirectory, temporary.file);
+    return await readFile(temporary.file);
   } finally {
-    await rm(dirname(archivePath), { recursive: true, force: true }).catch(
-      () => {},
-    );
+    await removeArchiveWorkspace(temporary.directory);
   }
 }

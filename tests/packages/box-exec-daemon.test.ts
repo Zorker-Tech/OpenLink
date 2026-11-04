@@ -16,9 +16,20 @@ import { createPromiseClient, type PromiseClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 
 import { BOX_EXEC_DAEMON_AUTH_TOKEN, BOX_EXEC_DAEMON_HOST, BOX_EXEC_DAEMON_PORT, BOX_TERMINAL_VIRTUAL_PREFIX, startBoxExecDaemon, type BoxExecDaemonHandle } from "../../source/box-exec/server.ts";
-import { ControlService } from "../../source/packages/proto/generated/agent/v1/control_service_connect.ts";
-import { ExecService } from "../../source/packages/proto/generated/agent/v1/exec_service_connect.ts";
-import { ExecServerMessage } from "../../source/packages/proto/generated/agent/v1/exec_pb.ts";
+import { createSlateBoxControlClient } from "../../source/adapters/interop/box/slate-box-control-client.ts";
+import { createSlateBoxExecClient } from "../../source/adapters/interop/box/slate-box-exec-client.ts";
+import { productionSlateBoxPorts } from "../../source/adapters/interop/agent/production-box-slate-adapter.ts";
+import { createBoxTransport } from "../../source/host/boxes/box-remote-accessor.ts";
+import {
+  SLATE_BOX_CONTROL_PATHS,
+  SLATE_BOX_CONTROL_PROTOCOL_HEADER,
+  SLATE_BOX_CONTROL_PROTOCOL_VERSION,
+} from "../../source/shared/box-control-protocol.ts";
+import { createContext } from "../../source/packages/context/context.ts";
+import { SLATE_BOX_EXEC_SCHEMA } from "../../source/shared/box-exec-protocol.ts";
+import { ControlService } from "../../source/adapters/interop/proto/generated/agent/v1/control_service_connect.ts";
+import { ExecService } from "../../source/adapters/interop/proto/generated/agent/v1/exec_service_connect.ts";
+import { ExecServerMessage } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts";
 
 const WORKSPACE_NOTE = "line one\nline two\nline three\n";
 
@@ -117,6 +128,160 @@ describe("the box's exec daemon", () => {
       assert.equal(throughLinkResult.value.reason?.includes("Symlink") === true || throughLinkResult.value.reason?.includes("Symbolic-link") === true, true);
       const throughDirectory = await collectExec(exec, new ExecServerMessage({ id: 7, execId: "exec-7", message: { case: "readArgs", value: { path: "/workspace/outside-directory/hosts" } } }));
       assert.equal((clientMessage(throughDirectory[0] as { element: { case?: string; value?: unknown } })?.value?.result as { case: string }).case, "rejected");
+    } finally {
+      await handle.stop();
+    }
+  });
+
+  it("serves the Slate-native control protocol while retaining legacy Connect", async () => {
+    const { workspaceRoot, terminalsDirectory } = boxWorkspace();
+    const handle = await startBoxExecDaemon({
+      host: "127.0.0.1",
+      port: 0,
+      workspaceRoot,
+      terminalsDirectory,
+      authToken: "test-token",
+    });
+    try {
+      const target = {
+        baseUrl: handle.url,
+        interceptors: [
+          <Reply>(step: (request: { header: { set(name: string, value: string): void } }) => Promise<Reply>) =>
+            async (request: { header: { set(name: string, value: string): void } }): Promise<Reply> => {
+              request.header.set("authorization", "Bearer test-token");
+              return await step(request);
+            },
+        ],
+      };
+      const client = createSlateBoxControlClient(target);
+      const context = createContext();
+      assert.deepEqual(await client.ping(context, {}, { timeoutMs: 1_000 }), { ok: true });
+      const environment = await client.updateEnvironmentVariables(context, {
+        env: { SLATE_NATIVE_MARKER: "yes" },
+        replace: true,
+      });
+      assert.equal((environment as { applied: number }).applied, 1);
+      assert.equal((environment as { removed: number }).removed >= 0, true);
+      assert.deepEqual(await client.loadMcpServers(context, { mcpConfigJson: "{}" }), { loadedServerNames: [] });
+
+      const productionTransport = createBoxTransport({
+        host: handle.host,
+        port: handle.port,
+        authToken: "test-token",
+      }, productionSlateBoxPorts.createTransport);
+      const productionControl = productionSlateBoxPorts.createControlClient(productionTransport);
+      assert.deepEqual(await productionControl.ping(context, {}, { timeoutMs: 1_000 }), { ok: true });
+      assert.deepEqual(await productionControl.loadServers(context, "{}"), []);
+
+      const execClient = createSlateBoxExecClient(target);
+      const responses = [];
+      for await (const response of execClient.exec(context, {
+        schema: SLATE_BOX_EXEC_SCHEMA,
+        id: 70,
+        op: "workspace.read",
+        redacted: false,
+        path: "/workspace/note.txt",
+        limit: 2,
+      })) responses.push(response);
+      assert.equal(responses[0]?.kind, "workspace.read");
+      assert.equal(responses[0]?.kind === "workspace.read" ? responses[0].result.kind : "", "success");
+      assert.equal(responses.at(-1)?.kind, "control");
+
+      const shellResponses = [];
+      for await (const response of execClient.exec(context, {
+        schema: SLATE_BOX_EXEC_SCHEMA,
+        id: 72,
+        op: "shell.run",
+        variant: "default",
+        command: "printf native",
+        workingDirectory: "/workspace",
+        timeout: 0,
+      })) shellResponses.push(response);
+      assert.equal(
+        shellResponses[0]?.kind === "shell.run" ? shellResponses[0].result.kind : "",
+        "success",
+      );
+
+      const productionExec = productionSlateBoxPorts.createExecClient(productionTransport);
+      const generated = [];
+      for await (const envelope of productionExec.exec(context, new ExecServerMessage({
+        id: 71,
+        message: { case: "readArgs", value: { path: "/workspace/note.txt" } },
+      }))) generated.push(envelope);
+      assert.equal(generated[0]?.element.case, "execClientMessage");
+      assert.equal(
+        generated[0]?.element.case === "execClientMessage"
+          ? generated[0].element.value.message.case
+          : undefined,
+        "readResult",
+      );
+      assert.equal(generated.at(-1)?.element.case, "execClientControlMessage");
+
+      const streamed = [];
+      for await (const envelope of productionExec.exec(context, new ExecServerMessage({
+        id: 73,
+        message: {
+          case: "shellStreamArgs",
+          value: { command: "printf stream", workingDirectory: "/workspace" },
+        },
+      }))) streamed.push(envelope);
+      const stdout = streamed.flatMap((envelope) => {
+        if (envelope.element.case !== "execClientMessage") return [];
+        const message = envelope.element.value.message;
+        return message.case === "shellStream" && message.value.event.case === "stdout"
+          ? [message.value.event.value.data]
+          : [];
+      }).join("");
+      assert.equal(stdout, "stream");
+
+      const background = [];
+      for await (const response of execClient.exec(context, {
+        schema: SLATE_BOX_EXEC_SCHEMA,
+        id: 74,
+        op: "shell.background.spawn",
+        command: "printf native-background",
+        workingDirectory: "/workspace",
+      })) background.push(response);
+      assert.equal(
+        background[0]?.kind === "shell.background.spawn" ? background[0].result.kind : "",
+        "success",
+      );
+
+      const stdin = [];
+      for await (const response of execClient.exec(context, {
+        schema: SLATE_BOX_EXEC_SCHEMA,
+        id: 75,
+        op: "shell.stdin.write",
+        shellId: 999,
+        chars: "x",
+      })) stdin.push(response);
+      assert.equal(stdin[0]?.kind === "shell.stdin.write" ? stdin[0].result.kind : "", "error");
+
+      const unsupported = [];
+      for await (const response of execClient.exec(context, {
+        schema: SLATE_BOX_EXEC_SCHEMA,
+        id: 76,
+        op: "unsupported",
+        sourceOperation: "notImplemented",
+      })) unsupported.push(response);
+      assert.deepEqual(unsupported.map((response) =>
+        response.kind === "control" ? response.control.kind : response.kind
+      ), ["throw", "stream.close"]);
+
+      const response = await fetch(handle.url + SLATE_BOX_CONTROL_PATHS.ping, {
+        method: "POST",
+        headers: { authorization: "Bearer test-token", "content-type": "application/json" },
+        body: "{}",
+      });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get(SLATE_BOX_CONTROL_PROTOCOL_HEADER), String(SLATE_BOX_CONTROL_PROTOCOL_VERSION));
+
+      const invalid = await fetch(handle.url + SLATE_BOX_CONTROL_PATHS.environment, {
+        method: "POST",
+        headers: { authorization: "Bearer test-token", "content-type": "application/json" },
+        body: JSON.stringify({ env: { "INVALID=NAME": "x" }, replace: true }),
+      });
+      assert.equal(invalid.status, 400);
     } finally {
       await handle.stop();
     }
@@ -255,6 +420,6 @@ describe("the box exec daemon's own defaults", () => {
     assert.equal(BOX_EXEC_DAEMON_HOST, "127.0.0.1");
     assert.equal(BOX_EXEC_DAEMON_PORT, 1337);
     assert.equal(BOX_EXEC_DAEMON_AUTH_TOKEN, "local");
-    assert.equal(BOX_TERMINAL_VIRTUAL_PREFIX, "/root/.cursor/projects/workspace/terminals/");
+    assert.equal(BOX_TERMINAL_VIRTUAL_PREFIX, "/root/.slate/projects/workspace/terminals/");
   });
 });

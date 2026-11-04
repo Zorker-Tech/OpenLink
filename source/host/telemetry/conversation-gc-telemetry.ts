@@ -21,49 +21,53 @@ export type ConversationGcReport =
       vacuumed: boolean;
     };
 export function cappedCount(value: number): string {
-  return String(
-    Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(value))),
-  );
+  let rounded = Math.round(value)
+  if (rounded < 0) rounded = 0
+  if (rounded > Number.MAX_SAFE_INTEGER) rounded = Number.MAX_SAFE_INTEGER
+  return String(rounded)
 }
 export function conversationGcLevel(
   report: ConversationGcReport,
 ): "info" | "warn" {
-  if (report.outcome === "failed") return "warn";
-  if (report.outcome === "skipped")
-    return report.skipReason === "unresolved-refs" ? "warn" : "info";
-  return report.stillOverCap ? "warn" : "info";
+  switch (report.outcome) {
+    case "failed":
+      return "warn"
+    case "skipped":
+      return report.skipReason === "unresolved-refs" ? "warn" : "info"
+    case "collected":
+      return report.stillOverCap ? "warn" : "info"
+  }
 }
 export function conversationGcTelemetry(report: ConversationGcReport) {
+  const metadata = {
+    trigger: report.trigger,
+    outcome: report.outcome,
+    agent_id: report.agentId,
+    skip_reason: undefined as string | undefined,
+    unresolved_proto_refs: undefined as string | undefined,
+    deleted_rows: undefined as string | undefined,
+    deleted_bytes: undefined as string | undefined,
+    live_rows: undefined as string | undefined,
+    live_bytes: undefined as string | undefined,
+    vacuumed: undefined as string | undefined,
+  }
+
+  if (report.outcome === "skipped") {
+    metadata.skip_reason = report.skipReason
+    if (report.unresolvedProtoRefs !== undefined) {
+      metadata.unresolved_proto_refs = cappedCount(report.unresolvedProtoRefs)
+    }
+  } else if (report.outcome === "collected") {
+    metadata.deleted_rows = cappedCount(report.deletedRows)
+    metadata.deleted_bytes = cappedCount(report.deletedBytes)
+    metadata.live_rows = cappedCount(report.liveRows)
+    metadata.live_bytes = cappedCount(report.liveBytes)
+    metadata.vacuumed = String(report.vacuumed)
+  }
+
   return {
     level: conversationGcLevel(report),
     event: CONVERSATION_GC_EVENT,
-    metadata: {
-      trigger: report.trigger,
-      outcome: report.outcome,
-      agent_id: report.agentId,
-      skip_reason: report.outcome === "skipped" ? report.skipReason : undefined,
-      unresolved_proto_refs:
-        report.outcome === "skipped" && report.unresolvedProtoRefs !== undefined
-          ? cappedCount(report.unresolvedProtoRefs)
-          : undefined,
-      deleted_rows:
-        report.outcome === "collected"
-          ? cappedCount(report.deletedRows)
-          : undefined,
-      deleted_bytes:
-        report.outcome === "collected"
-          ? cappedCount(report.deletedBytes)
-          : undefined,
-      live_rows:
-        report.outcome === "collected"
-          ? cappedCount(report.liveRows)
-          : undefined,
-      live_bytes:
-        report.outcome === "collected"
-          ? cappedCount(report.liveBytes)
-          : undefined,
-      vacuumed:
-        report.outcome === "collected" ? String(report.vacuumed) : undefined,
-    },
+    metadata,
   };
 }

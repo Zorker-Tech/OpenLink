@@ -2,10 +2,10 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createCallMcpTool, createMcpTool } from "../../source/packages/agent/tools/mcp/mcp.ts"
-import { indexMcpDescriptors } from "../../source/packages/agent/tools/mcp/mcp-call-options.ts"
-import { McpToolResult } from "../../source/packages/proto/generated/agent/v1/mcp_tool_pb.ts"
-import { McpResult, McpSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
-import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
+import { indexInteropMcpDescriptors } from "../../source/adapters/interop/agent/mcp-descriptor-index-adapter.ts"
+import { McpToolResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_tool_pb.ts"
+import { McpResult, McpSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
 import { Value } from "@bufbuild/protobuf"
 import { CustomToolCallError, ToolCallRejectedError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { McpPermissionDeniedError } from "../../source/packages/agent/tools/mcp/mcp-result-boundary.ts"
@@ -14,7 +14,7 @@ import { createContext } from "../../source/packages/context/context.ts"
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { smartModeClassifierExecutorResource } from "../../source/packages/agent-exec/smart-mode-classifier-operation.ts"
 import { smartModeMcpApprovalStoreResource } from "../../source/packages/agent/tools/mcp/smart-mode-approval-store.ts"
-import { SmartModeClassifierDecision, SmartModeClassifierResult } from "../../source/packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
+import { SmartModeClassifierDecision, SmartModeClassifierResult } from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -324,7 +324,7 @@ test("a call that fails is recorded and raised", async () => {
 // ---------------------------------------------------------------------------------------------
 
 test("the descriptors are indexed by the server's own identifier", () => {
-  const index = indexMcpDescriptors({
+  const index = indexInteropMcpDescriptors({
     mcpMetaToolEnabled: false,
     mcpFileSystemOptions: { mcpDescriptors: [descriptor("github", [toolDescriptor("create_issue", "/defs/github.json")])] } as never,
   })
@@ -334,14 +334,14 @@ test("the descriptors are indexed by the server's own identifier", () => {
 
 test("the auth tool is only offered where authentication can happen", () => {
   const descriptors = [descriptor("github", [toolDescriptor("mcp_auth"), toolDescriptor("create_issue")])]
-  const without = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: descriptors } as never })
+  const without = indexInteropMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: descriptors } as never })
   assert.deepEqual(without.serverDescriptors.get("github")?.tools.map(tool => tool.toolName), ["create_issue"])
-  const withAuth = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: descriptors } as never, allowInteractiveMcpAuth: true })
+  const withAuth = indexInteropMcpDescriptors({ mcpMetaToolEnabled: false, mcpFileSystemOptions: { mcpDescriptors: descriptors } as never, allowInteractiveMcpAuth: true })
   assert.deepEqual(withAuth.serverDescriptors.get("github")?.tools.map(tool => tool.toolName), ["mcp_auth", "create_issue"])
 })
 
 test("the meta tool's own descriptor list is used when it is enabled", () => {
-  const index = indexMcpDescriptors({
+  const index = indexInteropMcpDescriptors({
     mcpMetaToolEnabled: true,
     mcpMetaToolOptions: { mcpDescriptors: [descriptor("from-meta", [toolDescriptor("a")])] } as never,
     mcpFileSystemOptions: { mcpDescriptors: [descriptor("from-files", [toolDescriptor("b")])] } as never,

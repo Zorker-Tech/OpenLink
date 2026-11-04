@@ -1,6 +1,6 @@
 /** Watches one cloud run at a time; account catalogs and launch policy live in cloud-agent-watch-policy.ts. */
 
-import type { DeadlinePolicy } from "../scheduling.ts"
+import type { DeadlinePolicy } from "../extensions/scheduling.ts"
 import { buildWatchResult, cloudAgentRateLimitPauseMs, normalizeCloudAgentRunStatus } from "./cloud-agent-watch-policy.ts"
 import type { Clock, DetailedComposer } from "./cloud-agent-watch-policy.ts"
 

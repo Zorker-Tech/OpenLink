@@ -3,8 +3,8 @@ import assert from "node:assert/strict"
 
 import { createMcpToolRegistry } from "../../source/packages/agent/tools/mcp/mcp-tool-registry.ts"
 import { ToolSetHandle } from "../../source/packages/agent/tools/tool-execution.ts"
-import { McpDescriptor, McpToolDescriptor, type McpMetaToolOptions } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
-import { McpResult, McpSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { McpDescriptor, McpToolDescriptor, type McpMetaToolOptions } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
+import { McpResult, McpSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 import { Value } from "@bufbuild/protobuf"
 
 // ---------------------------------------------------------------------------------------------
@@ -61,6 +61,23 @@ test("the tools the caller already had are kept", () => {
   const existing = [{ toolIdentifier: "OTHER", name: "SomethingElse", dynamicToolMetaRole: "invocation" }]
   const handle = createMcpToolRegistry(registryOptions({ existingTools: existing }))
   assert.equal(handle.getStaticTools().some(tool => tool.name === "SomethingElse"), true)
+})
+
+test("keeps caller tools first, then discovery, and invocation last without changing the input list", () => {
+  const existing = [
+    { toolIdentifier: "FIRST", name: "FirstTool", dynamicToolMetaRole: "invocation" },
+    { toolIdentifier: "SECOND", name: "SecondTool", dynamicToolMetaRole: "invocation" },
+  ]
+  const expectedExistingNames = existing.map(tool => tool.name)
+  const handle = createMcpToolRegistry(registryOptions({ existingTools: existing }))
+
+  assert.deepEqual(handle.getStaticTools().map(tool => tool.name), [
+    "FirstTool",
+    "SecondTool",
+    "GetMcpTools",
+    "CallMcpTool",
+  ])
+  assert.deepEqual(existing.map(tool => tool.name), expectedExistingNames)
 })
 
 test("the invocation tool is named what the caller asked for", () => {

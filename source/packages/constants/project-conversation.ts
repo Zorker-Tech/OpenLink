@@ -1,16 +1,7 @@
-/**
- * What kind of project conversation this is.
- *
- * A conversation can be a project's root conversation, a subagent's, or a side chat's. Only the root
- * one is the project itself — the others are work done on its behalf — so the check for "is this the
- * root" has to look at both markers rather than at one of them.
- */
+/** Slate-owned boundary labels shared by conversation policy and interop adapters. */
+export const ProjectConversationBoundary = {
+  ROOT: "project-root",
+  RELATED: "related-work",
+} as const
 
-export interface ProjectDetails {
-  readonly subagent?: unknown
-  readonly sideChat?: unknown
-}
-
-export function isRootProjectDetails(projectDetails: ProjectDetails | null | undefined): boolean {
-  return projectDetails != null && projectDetails.subagent === undefined && projectDetails.sideChat === undefined
-}
+export type ProjectConversationBoundary = typeof ProjectConversationBoundary[keyof typeof ProjectConversationBoundary]

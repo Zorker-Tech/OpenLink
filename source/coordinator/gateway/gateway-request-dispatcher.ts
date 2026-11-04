@@ -13,24 +13,49 @@ export const GATEWAY_COMMAND_FAILED = "gateway-command-failed";
 export const GATEWAY_UNREACHABLE = "gateway-unreachable";
 export const GATEWAY_TRANSPORT_FAILED = "gateway-transport-failed";
 
-export function failureFor(error: unknown): { code: string; message: string; transportKind?: string } {
-  if (error instanceof SlateGatewayCommandError) return { code: GATEWAY_COMMAND_FAILED, message: error.message };
-  if (error instanceof SlateGatewayUnreachableError) return { code: GATEWAY_UNREACHABLE, message: error.message, transportKind: error.kind };
-  return { code: GATEWAY_TRANSPORT_FAILED, message: error instanceof Error ? error.message : String(error) };
+export function failureFor(reason: unknown): { code: string; message: string; transportKind?: string } {
+  const message = reason instanceof Error ? reason.message : String(reason);
+
+  if (reason instanceof SlateGatewayCommandError) {
+    return { code: GATEWAY_COMMAND_FAILED, message };
+  }
+  if (reason instanceof SlateGatewayUnreachableError) {
+    return { code: GATEWAY_UNREACHABLE, message, transportKind: reason.kind };
+  }
+  return { code: GATEWAY_TRANSPORT_FAILED, message };
 }
 
-export interface GatewayCommandClient {
+export interface GatewayRequestPort {
   dispatchCommand(method: string, args: unknown, options: { signal?: AbortSignal }): Promise<unknown>;
 }
 
-export function createGatewayRequestDispatch(client: GatewayCommandClient, serves: (method: string) => boolean = isCoordinatorMethod) {
-  return async (method: string, args: unknown, signal?: AbortSignal): Promise<CoordinatorReplyOutcome> => {
-    if (!serves(method)) return { status: "failed", failure: { code: COORDINATOR_UNKNOWN_METHOD, message: `no coordinator method named ${method}` } };
+function unknownMethodReply(method: string): CoordinatorReplyOutcome {
+  return {
+    status: "failed",
+    failure: { code: COORDINATOR_UNKNOWN_METHOD, message: `no coordinator method named ${method}` },
+  };
+}
+
+function failedReply(reason: unknown): CoordinatorReplyOutcome {
+  return { status: "failed", failure: failureFor(reason) };
+}
+
+function signalOptions(signal: AbortSignal | undefined): { signal?: AbortSignal } {
+  return signal === undefined ? {} : { signal };
+}
+
+export function createGatewayRequestDispatch(
+  gateway: GatewayRequestPort,
+  isSupported: (method: string) => boolean = isCoordinatorMethod,
+) {
+  return async function dispatch(method: string, input: unknown, signal?: AbortSignal): Promise<CoordinatorReplyOutcome> {
+    if (!isSupported(method)) return unknownMethodReply(method);
+
     try {
-      const value = validateCoordinatorReply(method, await client.dispatchCommand(method, args, { ...(signal === undefined ? {} : { signal }) }));
-      return { status: "ok", value };
-    } catch (error) {
-      return { status: "failed", failure: failureFor(error) };
+      const rawReply = await gateway.dispatchCommand(method, input, signalOptions(signal));
+      return { status: "ok", value: validateCoordinatorReply(method, rawReply) };
+    } catch (reason) {
+      return failedReply(reason);
     }
   };
 }

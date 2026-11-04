@@ -16,7 +16,7 @@
  * - **unwinding** disposes the owner and the linked context, and drops the relay's callbacks, in that order.
  */
 import type { Context } from "../../packages/context/context.ts";
-import type { ConversationStateStructure as ConversationStateStructureMessage } from "../../packages/proto/generated/agent/v1/agent_pb.ts";
+import { cloneInteropRunnerConversationState, type InteropRunnerConversationState } from "../../adapters/interop/agent/runner-conversation-state-adapter.ts";
 import {
   createProductionTurnAgentOwner,
   createProductionTurnAgentRunInput,
@@ -27,20 +27,15 @@ import {
 import { createTurnAgentStreamStart, type TurnAgentMcpTurnProvider } from "./turn-agent-composition.ts";
 import { createTurnRunShell, type PreparedTurn, type TurnRunContext, type TurnRunOptions, type TurnRunShellHost, type TurnStreamCallbacks } from "./turn-run-shell.ts";
 import type { TurnCheckpoint, TurnSession, TurnSettleHost } from "./turn-settle.ts";
-import type { GeneratedTurnPromptOptions } from "./prompt-collector-glue.ts";
+import type { InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import type { ForwardedUpdate } from "./agent-adapters.ts";
 import { presentOptions } from "./optional-options.ts";
+import { ProductionTurnRunLease } from "./production-turn-run-lease.ts";
 
 export interface ProductionTurnRunShellPreparedTurn extends PreparedTurn {
-  readonly baseState: ConversationStateStructureMessage;
-  readonly productionOwner: ProductionTurnAgentOwner;
+  readonly baseState: InteropRunnerConversationState;
   readonly productionInput: Awaited<ReturnType<typeof createProductionTurnAgentRunInput>>;
   readonly runContext: Context;
-  readonly disposeRunContext: () => void;
-  readonly updateRelay: {
-    callbacks?: TurnStreamCallbacks;
-    prepared?: ProductionTurnRunShellPreparedTurn;
-  };
 }
 
 /** A context that is cancelled with the run: the run's signal decides, and disposing stops listening to it. */
@@ -163,9 +158,7 @@ function collectInto(callbacks: TurnStreamCallbacks, update: ForwardedUpdate, la
 
 /** The Agent owner bound to the turn shell: preparation, the stream, and the unwind that releases both. */
 export function createProductionTurnRunShellAdapter(input: ProductionTurnRunShellAdapterInput) {
-  const ownedTurns = new WeakMap<object, ProductionTurnRunShellPreparedTurn>();
-  let activeOwner: ProductionTurnAgentOwner | undefined;
-  let activePrepared: ProductionTurnRunShellPreparedTurn | undefined;
+  const leases = new ProductionTurnRunLease<ProductionTurnRunShellPreparedTurn, ProductionTurnAgentOwner>();
   const host: TurnRunShellHost = {
     isSubagentRunner: input.isSubagentRunner,
     subagents: input.subagents,
@@ -188,62 +181,64 @@ export function createProductionTurnRunShellAdapter(input: ProductionTurnRunShel
     }),
     async prepareTurn(prompt: string, options: TurnRunOptions, context: TurnRunContext): Promise<PreparedTurn> {
       const linked = linkTurnRunContext(input.context(), context.signal);
-      const updateRelay: ProductionTurnRunShellPreparedTurn["updateRelay"] = {};
+      let ownerForCleanup: ProductionTurnAgentOwner | undefined;
+      let preparedForUpdates: ProductionTurnRunShellPreparedTurn | undefined;
       const emitUpdate = (update: ForwardedUpdate): void => {
-        const callbacks = activePrepared === updateRelay.prepared ? updateRelay.callbacks : undefined;
+        const callbacks = leases.activeCallbacksFor(preparedForUpdates);
         if (callbacks !== undefined) collectInto(callbacks, update, input.lastReactionApplied);
         input.emitUpdate(update);
       };
       try {
         const owner = await input.createOwner({ requestId: context.requestId, runOptions: options, context: linked.context, cancelThisRun: input.cancelThisRun, emitUpdate });
+        ownerForCleanup = owner;
         const productionInput = await input.createRunInput({ owner, runContext: linked.context, prompt, options: input.promptOptions(prompt, options) });
+        const baseState = cloneInteropRunnerConversationState(productionInput.baseState);
+        if (baseState === undefined) throw new TypeError("the production Agent did not provide a cloneable base state");
         const result: ProductionTurnRunShellPreparedTurn = {
           action: productionInput.action,
           // The turn's base state is handed out as a copy: the stream mutates the one it runs on.
-          baseState: productionInput.baseState.clone(),
+          baseState,
           transcriptPersistenceEnabled: true,
           session: input.createSession(owner),
-          productionOwner: owner,
           productionInput,
           runContext: linked.context,
-          disposeRunContext: linked.dispose,
-          updateRelay,
         };
-        updateRelay.prepared = result;
-        activeOwner = owner;
-        activePrepared = result;
-        ownedTurns.set(result, result);
+        leases.attach(result, owner, linked.dispose);
+        preparedForUpdates = result;
         return result;
       } catch (error) {
         linked.dispose();
+        try {
+          ownerForCleanup?.dispose();
+        } catch {
+          // Cleanup cannot replace the preparation error the caller needs to diagnose.
+        }
         throw error;
       }
     },
     async runPreparedTurn(preparedTurn: PreparedTurn, _context: TurnRunContext, callbacks: TurnStreamCallbacks): Promise<TurnCheckpoint> {
-      const owned = ownedTurns.get(preparedTurn);
-      if (owned === undefined) throw new TypeError("this prepared turn is not bound to a production owner");
-      owned.updateRelay.callbacks = callbacks;
+      const lease = leases.forPrepared(preparedTurn);
+      if (lease === undefined) throw new TypeError("this prepared turn is not bound to a production owner");
+      if (!leases.acceptCallbacks(preparedTurn, callbacks)) throw new TypeError("this prepared turn is no longer active");
+      const owned = lease.prepared;
       const finalState = await createTurnAgentStreamStart({
-        agent: owned.productionOwner.built,
+        agent: lease.owner.built,
         baseState: owned.baseState,
         action: owned.productionInput.action,
-        privacyMode: owned.productionOwner.runContext.privacyMode,
+        privacyMode: lease.owner.runContext.privacyMode,
         mcpTools: owned.productionInput.mcpTools,
       }).startStream(owned.runContext, undefined, async (_checkpointContext, checkpoint) => {
         await callbacks.persistCheckpoint(checkpoint);
       });
       // The turn ran, so the claim it made on the box's cleanup is committed here rather than before the stream.
-      owned.productionOwner.runContext.commitDiskPressureReminder();
+      lease.owner.runContext.commitDiskPressureReminder();
       return finalState;
     },
     onRunUnwind: () => {
-      const owner = activeOwner;
-      activeOwner = undefined;
-      if (activePrepared !== undefined) delete activePrepared.updateRelay.callbacks;
       // The stream context follows the shell's controller, so the outer run must stop listening to it before disposal.
-      activePrepared?.disposeRunContext();
-      activePrepared = undefined;
-      owner?.dispose();
+      const lease = leases.releaseActive();
+      lease?.disposeRunContext();
+      lease?.owner.dispose();
       input.onRunUnwind?.();
     },
   };

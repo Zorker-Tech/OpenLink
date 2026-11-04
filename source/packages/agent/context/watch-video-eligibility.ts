@@ -7,27 +7,25 @@
  * attachment is left to the ordinary file tools.
  */
 
-import { BackgroundComposerSource } from "../../proto/generated/aiserver/v1/background_composer_pb.ts"
 import { AgentType } from "../utils/agent-config.ts"
+
+export type SlateBackgroundAgentSource = "chat" | "automation" | "other"
 
 export interface WatchVideoEligibilityInput {
   readonly agentType: AgentType | undefined
-  readonly backgroundAgentSource: BackgroundComposerSource | undefined
+  readonly backgroundAgentSource: SlateBackgroundAgentSource | undefined
   readonly featureFlags?: {
-    readonly enableSlackVideoAttachments?: boolean | undefined
+    readonly enableBackgroundVideoAttachments?: boolean | undefined
     readonly enableWatchVideoInIdeSubagent?: boolean | undefined
   } | undefined
 }
 
-export function canUseWatchVideoSubagent({
-  agentType,
-  backgroundAgentSource,
-  featureFlags,
-}: WatchVideoEligibilityInput): boolean {
-  const backgroundAgentSupportsWatchVideo = agentType === AgentType.BACKGROUND &&
-    (backgroundAgentSource === BackgroundComposerSource.SLACK ||
-      backgroundAgentSource === BackgroundComposerSource.AUTOMATIONS) &&
-    (featureFlags?.enableSlackVideoAttachments ?? false)
-  return (agentType === AgentType.IDE && (featureFlags?.enableWatchVideoInIdeSubagent ?? false)) ||
-    backgroundAgentSupportsWatchVideo
+export function canUseWatchVideoSubagent(input: WatchVideoEligibilityInput): boolean {
+  if (input.agentType === AgentType.IDE) {
+    return input.featureFlags?.enableWatchVideoInIdeSubagent === true
+  }
+  if (input.agentType !== AgentType.BACKGROUND) return false
+
+  const supportedSource = input.backgroundAgentSource === "chat" || input.backgroundAgentSource === "automation"
+  return supportedSource && input.featureFlags?.enableBackgroundVideoAttachments === true
 }

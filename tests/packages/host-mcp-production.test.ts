@@ -11,7 +11,7 @@ import { describe, it } from "node:test";
 import { createMcpProductionExtras } from "../../source/host/mcp/production.ts";
 import { McpHostService } from "../../source/host/mcp/mcp-service.ts";
 import { PLUGIN_SKILLS_REFRESH_INTERVAL_MS, SlatePluginSkillsService } from "../../source/host/skills/plugin-skills.ts";
-import { SlateSkillPublishService } from "../../source/host/skills/skill-publish.ts";
+import { SkillMarketplacePublisher } from "../../source/host/skills/skill-publish.ts";
 import type { McpPluginSkillsService } from "../../source/host/mcp/extension.ts";
 
 /** A root of its own, so the cleanup and the sweep see only what the test put there. */
@@ -84,7 +84,7 @@ describe("what the extension's factories are made of", () => {
       assert.equal(skills instanceof SlatePluginSkillsService, true);
       const service = world.extras.createService(skills);
       assert.equal(service instanceof McpHostService, true);
-      assert.equal(world.extras.createSkillPublish(skills) instanceof SlateSkillPublishService, true);
+      assert.equal(world.extras.createSkillPublish(skills) instanceof SkillMarketplacePublisher, true);
       // The skills are refreshed on the platform's own schedule.
       const polling = world.extras.createPolling() as unknown as { name: string };
       assert.deepEqual([polling.name, PLUGIN_SKILLS_REFRESH_INTERVAL_MS > 0], ["slate-plugin-skills-refresh", true]);

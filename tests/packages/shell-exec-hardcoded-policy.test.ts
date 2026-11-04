@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -31,6 +31,18 @@ test("the read allowlist is the platform's own, and only what the installation h
   assert.equal(darwin.includes("/System/Library"), true, "the darwin policy has its own system library")
   assert.equal(darwin.includes("/etc/pki/ca-trust/extracted"), false, "the linux-only entries do not leak into the other platform's policy")
   assert.deepEqual(getHardcodedAllowedReadPaths("win32", "/home/someone", {}), [])
+
+  withTempDir((dir) => {
+    const homeDir = join(dir, "home")
+    mkdirSync(homeDir)
+    const startupFile = join(homeDir, ".bashrc")
+    const startupLink = join(homeDir, ".zshrc")
+    writeFileSync(startupFile, "x")
+    symlinkSync(startupFile, startupLink)
+    const homePaths = getHardcodedAllowedReadPaths("linux", homeDir, {})
+    assert.equal(homePaths.includes(startupFile), true)
+    assert.equal(homePaths.includes(startupLink), false, "home startup symlinks are not followed")
+  })
 
   withTempDir((dir) => {
     const bundled = join(dir, "bin")
@@ -67,8 +79,16 @@ test("the write protections are grouped by what they protect, and the policy ass
   const workspace = "/work/space"
   const workspaceMapping = getWorkspaceMapping(workspace)
   assert.deepEqual(Object.keys(workspaceMapping), [workspace])
-  assert.equal(workspaceMapping[workspace]!.includes("**/.cursor/*.json"), true)
-  assert.equal(workspaceMapping[workspace]!.includes("**/.vscode/**"), true)
+  const workspaceRules = workspaceMapping[workspace]!;
+  for (const rule of [
+    "**/.cursor/*.json",
+    "!**/.cursor/rules",
+    "**/.claude/*.json",
+    "**/.vscode/**",
+    "**/.idea/**",
+    "**/.venv/",
+  ]) assert.equal(workspaceRules.includes(rule), true, rule)
+  assert.ok(workspaceRules.indexOf("**/.cursor/*.json") < workspaceRules.indexOf("!**/.cursor/rules"));
   const gitMapping = getGitWriteProtectionMapping("/repo/.git/..")
   assert.deepEqual(Object.keys(gitMapping), ["/repo/.git/.."])
   assert.equal(gitMapping["/repo/.git/.."]!.includes("**/.git/hooks/**"), true)

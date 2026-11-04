@@ -6,7 +6,7 @@
 import { isMessageAddress } from "../../shared/message-reference.ts";
 import { slateDualSurfaceToolTelemetry } from "../../shared/agents/agent-tool-names.ts";
 import { SLATE_REACTION_AGENT } from "../../shared/transcript.ts";
-import { UNKNOWN_CONNECTOR_TAG } from "../../shared/observability/connector-auth-telemetry.ts";
+import { UNKNOWN_CONNECTOR_TAG } from "../../adapters/interop/mcp/connector-auth-tag-adapter.ts";
 import { slateErrorDetail } from "../ports/telemetry.ts";
 import {
   isContextOverflowDeadEnd,
@@ -39,7 +39,7 @@ import {
   stampBoxRequestEntry,
   type SendMessage,
 } from "./send-message-shaping.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import type {
   TranscriptEntry,
   TranscriptManagerLike,
@@ -739,7 +739,7 @@ export class TurnRuntime {
           isForActiveAgent || runSession == null
             ? getTranscript()
             : (runSession.db.getTranscriptEntries() as TranscriptEntry[]);
-        const sendEntryId = nextEntryId(entryList, "send-message");
+        const sendEntryId = allocateTranscriptEntryId(entryList, "send-message");
         const validatedMessage = this.tm.sendPipeline.validateAiReplyTarget(
           incomingMessage,
           sendEntryId,

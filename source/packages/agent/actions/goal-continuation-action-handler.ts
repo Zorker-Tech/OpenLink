@@ -20,9 +20,8 @@
 
 import * as crypto from "node:crypto"
 
-import { AgentMode, SimulatedMsgReason, UserMessage } from "../../proto/generated/agent/v1/agent_pb.ts"
-import { GoalStatus } from "../../proto/generated/agent/v1/goal_tool_pb.ts"
-import { createRedactedUserMessageAction, toRedactedUserMessage } from "../../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { createGoalContinuationWakeAction } from "../../../adapters/interop/agent/goal-continuation-message-adapter.ts"
+import { pauseGoalState } from "../../../adapters/interop/agent/paused-goal-state-adapter.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../constants/system-notification.ts"
 import { goalClockOnDeactivation, isGoalStateShapeValid } from "../../agent-core/goal-continuation.ts"
 import { buildGoalPursuitGuidelines } from "../../agent-core/goal-guidelines.ts"
@@ -93,7 +92,7 @@ export class GoalContinuationActionHandler {
       mcpTools,
       repositoryInfos: [],
       blobStore: stateHandler.getBlobStore(),
-      mode: stateHandler.mode ?? AgentMode.AGENT,
+      mode: stateHandler.mode,
       loggingContext: callContext,
       fileOperationLockManager: new FileOperationLockManager(),
     })
@@ -115,7 +114,7 @@ export class GoalContinuationActionHandler {
     }
     if (goalState.idleContinuationsWithoutToolCalls >= MAX_IDLE_CONTINUATIONS_WITHOUT_TOOL_CALLS) {
       const pausedGoal = goalState.clone()
-      pausedGoal.status = GoalStatus.PAUSED
+      pauseGoalState(pausedGoal)
       Object.assign(pausedGoal, goalClockOnDeactivation(pausedGoal, Date.now()))
       stateHandler.setGoalState(pausedGoal)
       recordGoalTerminalTransition(callContext, {
@@ -140,7 +139,7 @@ export class GoalContinuationActionHandler {
     stateHandler.setGoalState(continuedGoal)
     recordGoalContinuationStarted(callContext)
     await onStateUpdate(callContext, await stateHandler.computeNewStructure(callContext))
-    const wakeupMessage = new UserMessage({
+    return createGoalContinuationWakeAction({
       text: buildGoalContinuationPrompt({
         goalState,
         ...currentToolNames,
@@ -148,12 +147,8 @@ export class GoalContinuationActionHandler {
       messageId: (0, crypto.randomUUID)(),
       // Continue in whatever mode the conversation is in; goals are not agent-mode-only.
       mode: stateHandler.mode,
-      isSimulatedMsg: true,
-      simulatedMsgReason: SimulatedMsgReason.GOAL_CONTINUATION,
-    })
-    return createRedactedUserMessageAction(stateHandler.getPrivacyMode(), {
-      userMessage: toRedactedUserMessage(wakeupMessage, stateHandler.getPrivacyMode()),
-      sendToInteractionListener: true,
+      getActionPrivacyMode: () => stateHandler.getPrivacyMode(),
+      getMessagePrivacyMode: () => stateHandler.getPrivacyMode(),
     })
   }
 

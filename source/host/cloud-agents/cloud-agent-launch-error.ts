@@ -5,4 +5,7 @@
  * the box that was meant to be created. The message is what the caller shows and what it retries on.
  */
 
-export class SlateCloudAgentLaunchError extends Error {}
+const CloudAgentLaunchErrorType = class SlateCloudAgentLaunchError extends Error {};
+
+export const SlateCloudAgentLaunchError = CloudAgentLaunchErrorType;
+export type SlateCloudAgentLaunchError = InstanceType<typeof CloudAgentLaunchErrorType>;

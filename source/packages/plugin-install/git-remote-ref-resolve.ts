@@ -1,76 +1,59 @@
-/**
- * Turning a ref a plugin named into the commit it points at.
- *
- * A manifest may name a branch, a tag, a short commit or a full one, and what is fetched has to be a commit: the ref is
- * resolved against the remote, a tag that points at another object is followed to the commit underneath it, and a short
- * hash that names a ref on the remote is preferred over the literal hash so the fetch gets what the author meant. A ref
- * that cannot be resolved is reported as a failure with what was being resolved, rather than fetched as something else.
- */
-import { execGitNonInteractive, type ExtraGitConfig } from "./git-subprocess-env.ts";
+import { execGitNonInteractive } from "./git-command.ts"
+import type { PluginSourceRevision, PluginSourceRevisionOptions } from "./git-ref-resolution-contracts.ts"
+import { isCommitPrefix, isFullCommitId, selectResolvedCommit } from "./git-ref-resolution-policy.ts"
 
-const SHA_REF_REGEX = /^[0-9a-f]{7,40}$/i;
-const FULL_SHA_REGEX = /^[0-9a-f]{40}$/i;
+export { isCommitPrefix, isFullCommitId, parseRemoteCommitRecords, selectResolvedCommit } from "./git-ref-resolution-policy.ts"
+export type { PluginSourceRevision, PluginSourceRevisionOptions } from "./git-ref-resolution-contracts.ts"
 
-function parseResolvedCommitSha(stdout: string | undefined): string | undefined {
-  if (stdout === undefined || stdout === "") return undefined;
-  const shaLines = stdout.split(/\r?\n/).map(line => {
-    const [sha, refName] = line.split("\t");
-    return !sha || !refName || !/^[0-9a-f]{40}$/i.test(sha) ? undefined : { sha, refName };
-  }).filter((line): line is { sha: string; refName: string } => line !== undefined);
-  if (shaLines.length === 0) return undefined;
-  return shaLines.find(line => line.refName.endsWith("^{}"))?.sha ?? shaLines[0]!.sha;
-}
-
-export interface ResolveGitRemoteRefOptions {
-  readonly sshBatchMode?: boolean | undefined;
-  readonly extraGitConfig?: ExtraGitConfig | undefined;
-  readonly timeoutMs?: number | undefined;
-}
-
-async function resolveExactRemoteNamedHexRef(
+async function resolveNamedHexRef(
   gitUrl: string,
   ref: string,
-  options?: ResolveGitRemoteRefOptions,
+  options?: PluginSourceRevisionOptions,
 ): Promise<string | undefined> {
-  const { stdout } = await execGitNonInteractive(
+  const response = await execGitNonInteractive(
     ["ls-remote", gitUrl, `refs/heads/${ref}`, `refs/tags/${ref}`, `refs/tags/${ref}^{}`],
     options,
-  );
-  return parseResolvedCommitSha(stdout)?.toLowerCase();
+  )
+  return selectResolvedCommit(response.stdout)
 }
 
-export async function resolveGitRemoteRef(
+/** Resolves a plugin manifest revision to the immutable commit that fetches should use. */
+export async function resolvePluginSourceRevision(
   gitUrl: string,
-  ref: string,
-  options?: ResolveGitRemoteRefOptions,
-): Promise<{ fullSha: string; headSymrefStdout?: string }> {
-  const normalizedRef = ref.trim();
-  if (FULL_SHA_REGEX.test(normalizedRef)) return { fullSha: normalizedRef.toLowerCase() };
-  if (SHA_REF_REGEX.test(normalizedRef)) {
+  requestedRef: string,
+  options?: PluginSourceRevisionOptions,
+): Promise<PluginSourceRevision> {
+  const ref = requestedRef.trim()
+  if (isFullCommitId(ref)) return { fullSha: ref.toLowerCase() }
+
+  if (isCommitPrefix(ref)) {
     try {
-      const namedRefSha = await resolveExactRemoteNamedHexRef(gitUrl, normalizedRef, options);
-      if (namedRefSha) return { fullSha: namedRefSha };
-    } catch {}
-    return { fullSha: normalizedRef.toLowerCase() };
+      const namedCommit = await resolveNamedHexRef(gitUrl, ref, options)
+      if (namedCommit !== undefined) return { fullSha: namedCommit }
+    } catch {
+      // A short object id remains useful when the remote cannot be queried for same-named refs.
+    }
+    return { fullSha: ref.toLowerCase() }
   }
 
-  let stdout: string;
+  let stdout: string
   try {
-    if (normalizedRef.toUpperCase() === "HEAD") {
-      const result = await execGitNonInteractive(["ls-remote", "--symref", gitUrl, "HEAD"], options);
-      const commitSha = parseResolvedCommitSha(result.stdout);
-      if (!commitSha) throw new Error(`git ls-remote did not return a resolvable commit for HEAD (${gitUrl})`);
-      return { fullSha: commitSha.toLowerCase(), headSymrefStdout: result.stdout };
+    if (ref.toUpperCase() === "HEAD") {
+      const response = await execGitNonInteractive(["ls-remote", "--symref", gitUrl, "HEAD"], options)
+      const commit = selectResolvedCommit(response.stdout)
+      if (commit === undefined) throw new Error(`The remote did not provide a commit for its default branch (${gitUrl}).`)
+      return { fullSha: commit, headSymrefStdout: response.stdout }
     }
-    ({ stdout } = await execGitNonInteractive(["ls-remote", gitUrl, normalizedRef], options));
+    ({ stdout } = await execGitNonInteractive(["ls-remote", gitUrl, ref], options))
   } catch (error) {
-    const wrappedError = new Error(
-      `Failed to resolve git ref "${normalizedRef}" for ${gitUrl}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    wrappedError.cause = error;
-    throw wrappedError;
+    const wrapped = new Error(
+      `Could not resolve plugin revision "${ref}" from ${gitUrl}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    wrapped.cause = error
+    throw wrapped
   }
-  const commitSha = parseResolvedCommitSha(stdout);
-  if (!commitSha) throw new Error(`git ls-remote did not return a resolvable commit for ref "${normalizedRef}" (${gitUrl})`);
-  return { fullSha: commitSha.toLowerCase() };
+
+  const commit = selectResolvedCommit(stdout)
+  if (commit === undefined) throw new Error(`The remote did not resolve plugin revision "${ref}" to a commit (${gitUrl}).`)
+  return { fullSha: commit }
 }

@@ -1,27 +1,52 @@
-/**
- * The context-to-span bridge.
- *
- * Work does not start spans at module scope: a span is attached to the context an operation
- * carries, so nesting follows the call graph, attributes travel down the chain, and a whole
- * subtree can be flattened into one span when the fan-out would be noise (Box polling, tight
- * loops) instead of drowning the trace.
- */
-
 import {
-  SpanKind,
-  context as otelContext,
-  trace,
-  type AttributeValue,
-  type Span,
-  type SpanContext,
-  type SpanOptions,
-  type TimeInput,
-  type Tracer,
-} from "@opentelemetry/api"
-
+  createRuntimeSpan,
+  createRuntimeSpanFromRemoteContext,
+  getRuntimeSpanContext,
+  wrapRuntimeRemoteSpanContext,
+} from "../../adapters/interop/telemetry/trace-runtime-adapter.ts"
 import { createContext, createKey, type Context } from "./context.ts"
 
-/** Span identity in a form that can cross a process boundary and be restored later. */
+export type TelemetryAttributeValue =
+  | string
+  | number
+  | boolean
+  | readonly (string | number | boolean)[]
+
+export const TelemetrySpanKind = {
+  INTERNAL: "internal",
+  SERVER: "server",
+  CLIENT: "client",
+  PRODUCER: "producer",
+  CONSUMER: "consumer",
+} as const
+
+export type TelemetrySpanKind = typeof TelemetrySpanKind[keyof typeof TelemetrySpanKind]
+
+export const TelemetrySpanStatusCode = {
+  UNSET: 0,
+  OK: 1,
+  ERROR: 2,
+} as const
+
+export interface TelemetrySpanStatus {
+  readonly code: number
+  readonly message?: string | undefined
+}
+
+export interface TelemetrySpanOptions {
+  readonly kind?: TelemetrySpanKind | undefined
+  readonly attributes?: Readonly<Record<string, TelemetryAttributeValue>> | undefined
+  readonly startTime?: number | Date | undefined
+}
+
+export interface TelemetrySpanContext {
+  readonly traceId: string
+  readonly spanId: string
+  readonly traceFlags: number
+  readonly traceState?: string | undefined
+  readonly isRemote?: boolean | undefined
+}
+
 export interface SerializableSpanContext {
   traceId: string
   spanId: string
@@ -29,121 +54,117 @@ export interface SerializableSpanContext {
   traceState?: string | undefined
 }
 
-const SPAN_KEY = createKey<Span | undefined>(Symbol("otel.span"), undefined)
-const ROOT_SPAN_KEY = createKey<Span | undefined>(Symbol("otel.root_span"), undefined)
-const ROOT_SPAN_START_MS_KEY = createKey<number | undefined>(Symbol("otel.root_start_ms"), undefined)
-const SUPPRESS_CHILD_SPANS_KEY = createKey(Symbol("otel.suppress_child_spans"), false)
+export interface TelemetrySpan {
+  setAttribute(key: string, value: TelemetryAttributeValue): void
+  recordException(error: unknown): void
+  setStatus(status: TelemetrySpanStatus): void
+  spanContext(): TelemetrySpanContext
+  end(endTime?: number | Date): void
+}
 
-/** Attributes applied to every span started below the context holding them. */
-export const INHERITABLE_SPAN_ATTRIBUTES_KEY = createKey<Record<string, AttributeValue>>(
-  Symbol("otel.inheritable_span_attributes"),
+export interface TelemetryTracer {
+  startSpan(name: string, options?: TelemetrySpanOptions, parent?: TelemetrySpan): TelemetrySpan
+}
+
+export const DEFAULT_TRACER_NAME = "work-context"
+
+const SPAN_KEY = createKey<TelemetrySpan | undefined>(Symbol("slate.telemetry.span"), undefined)
+const ROOT_SPAN_KEY = createKey<TelemetrySpan | undefined>(Symbol("slate.telemetry.root_span"), undefined)
+const ROOT_SPAN_START_MS_KEY = createKey<number | undefined>(Symbol("slate.telemetry.root_start_ms"), undefined)
+const SUPPRESS_CHILD_SPANS_KEY = createKey(Symbol("slate.telemetry.suppress_child_spans"), false)
+
+export const INHERITABLE_SPAN_ATTRIBUTES_KEY = createKey<Record<string, TelemetryAttributeValue>>(
+  Symbol("slate.telemetry.inheritable_attributes"),
   {},
 )
 
-/** Every span this package starts comes from here, so exporters can recognize the platform's own. */
-export const DEFAULT_TRACER_NAME = "work-context"
-
-export function getTracer(name: string = DEFAULT_TRACER_NAME): Tracer {
-  return trace.getTracer(name)
+export function getTracer(name: string = DEFAULT_TRACER_NAME): TelemetryTracer {
+  return {
+    startSpan: (spanName, options, parent) => createRuntimeSpan(spanName, options, parent, name),
+  }
 }
 
-/** A child context carrying a span — a child of the current span, or a root one if there is none. */
-export function withSpan(ctx: Context, options?: SpanOptions): Context {
-  const tracer = getTracer()
+export function withSpan(ctx: Context, options?: TelemetrySpanOptions): Context {
   const parentSpan = ctx.get(SPAN_KEY)
   if (ctx.get(SUPPRESS_CHILD_SPANS_KEY) && parentSpan) return ctx
 
-  const spanName = ctx.name || "anonymous-context"
-  const span = parentSpan
-    ? tracer.startSpan(spanName, options, trace.setSpan(otelContext.active(), parentSpan))
-    : tracer.startSpan(spanName, options)
-
+  const span = getTracer().startSpan(ctx.name || "anonymous-context", options, parentSpan)
   const inherited = ctx.get(INHERITABLE_SPAN_ATTRIBUTES_KEY)
-  for (const key in inherited) {
-    const value = inherited[key]
-    if (value !== undefined) span.setAttribute(key, value)
+  for (const [key, value] of Object.entries(inherited)) {
+    span.setAttribute(key, value)
   }
 
-  let ctxWith = ctx.with(SPAN_KEY, span)
-  if (!parentSpan) {
-    ctxWith = ctxWith.with(ROOT_SPAN_KEY, span).with(ROOT_SPAN_START_MS_KEY, Date.now())
+  let child = ctx.with(SPAN_KEY, span)
+  if (parentSpan === undefined) {
+    child = child.with(ROOT_SPAN_KEY, span).with(ROOT_SPAN_START_MS_KEY, Date.now())
   }
-  return ctxWith
+  return child
 }
 
-export function getSpan(ctx: Context): Span | undefined {
+export function getSpan(ctx: Context): TelemetrySpan | undefined {
   return ctx.get(SPAN_KEY)
 }
 
-/** Flattens this subtree: contexts derived from the result start no spans of their own. */
 export function withSuppressedChildSpans(ctx: Context): Context {
   return ctx.with(SUPPRESS_CHILD_SPANS_KEY, true)
 }
 
-/** Adds an attribute to the current span and to every span started below this context. */
-export function withInheritableAttribute(ctx: Context, key: string, value: AttributeValue): Context {
-  const existing = ctx.get(INHERITABLE_SPAN_ATTRIBUTES_KEY)
-  const span = getSpan(ctx)
-  if (span) span.setAttribute(key, value)
-  return ctx.with(INHERITABLE_SPAN_ATTRIBUTES_KEY, { ...existing, [key]: value })
+export function withInheritableAttribute(
+  ctx: Context,
+  key: string,
+  value: TelemetryAttributeValue,
+): Context {
+  const inherited = ctx.get(INHERITABLE_SPAN_ATTRIBUTES_KEY)
+  getSpan(ctx)?.setAttribute(key, value)
+  return ctx.with(INHERITABLE_SPAN_ATTRIBUTES_KEY, { ...inherited, [key]: value })
 }
 
-/**
- * The current span's identity for a remote peer. A suppressed context reports trace flags 0, so
- * the peer starts an unlinked span instead of joining a trace that decided not to record.
- */
 export function getSpanContextData(ctx: Context): SerializableSpanContext | undefined {
   try {
     const span = getSpan(ctx)
-    if (!span) return undefined
-    const spanContext = span.spanContext()
+    if (span === undefined) return undefined
+    const context = getRuntimeSpanContext(span)
     return {
-      traceId: spanContext.traceId,
-      spanId: spanContext.spanId,
-      traceFlags: ctx.get(SUPPRESS_CHILD_SPANS_KEY) ? 0 : spanContext.traceFlags,
-      traceState: spanContext.traceState?.toString(),
+      traceId: context.traceId,
+      spanId: context.spanId,
+      traceFlags: ctx.get(SUPPRESS_CHILD_SPANS_KEY) ? 0 : context.traceFlags,
+      traceState: context.traceState,
     }
   } catch {
     return undefined
   }
 }
 
-type RemoteSpanContext = Pick<SpanContext, "traceId" | "spanId" | "traceFlags">
+type RemoteSpanContext = Pick<SerializableSpanContext, "traceId" | "spanId" | "traceFlags">
 
-/** Continues a remote trace: the new span is a child of the peer's span. */
 export function createContextFromSpanContext(
   spanContext: RemoteSpanContext,
   name?: string,
   existingContext?: Context,
 ): Context {
-  const tracer = getTracer()
-  const remoteSpanContext: SpanContext = { ...spanContext, isRemote: true }
-  const parentOtelContext = trace.setSpanContext(otelContext.active(), remoteSpanContext)
-  const span = tracer.startSpan(name || "child.span", { kind: SpanKind.INTERNAL }, parentOtelContext)
-  const parentContext = existingContext ?? createContext()
-  const ctx = name ? parentContext.withName(name) : parentContext
-  return ctx.with(SPAN_KEY, span)
+  const span = createRuntimeSpanFromRemoteContext(spanContext, name || "child.span", DEFAULT_TRACER_NAME)
+  const parent = existingContext ?? createContext()
+  const named = name ? parent.withName(name) : parent
+  return named.with(SPAN_KEY, span)
 }
 
-/** Adopts a remote span as this context's span without starting a new one. */
 export function createContextFromRemoteSpanContext(
   spanContext: RemoteSpanContext,
   name?: string,
   existingContext?: Context,
 ): Context {
-  const span = trace.wrapSpanContext({ ...spanContext, isRemote: true })
-  const parentContext = existingContext ?? createContext()
-  const ctx = name ? parentContext.withName(name) : parentContext
-  return ctx.with(SPAN_KEY, span)
+  const span = wrapRuntimeRemoteSpanContext(spanContext)
+  const parent = existingContext ?? createContext()
+  const named = name ? parent.withName(name) : parent
+  return named.with(SPAN_KEY, span)
 }
 
-/** Ends its span on dispose — `using span = createSpan(...)` covers the error path too. */
 export class DisposableSpan implements Disposable {
   readonly ctx: Context
-  readonly span: Span
+  readonly span: TelemetrySpan
   private readonly shouldEnd: boolean
 
-  constructor(ctx: Context, span: Span, shouldEnd = true) {
+  constructor(ctx: Context, span: TelemetrySpan, shouldEnd = true) {
     this.ctx = ctx
     this.span = span
     this.shouldEnd = shouldEnd
@@ -154,53 +175,43 @@ export class DisposableSpan implements Disposable {
   }
 }
 
-export function createSpan(ctx: Context, options?: SpanOptions): DisposableSpan {
+export function createSpan(ctx: Context, options?: TelemetrySpanOptions): DisposableSpan {
   const parentSpan = getSpan(ctx)
-  const isSuppressed = parentSpan !== undefined && ctx.get(SUPPRESS_CHILD_SPANS_KEY)
-  const ctxWithSpan = withSpan(ctx, options)
-  const span = getSpan(ctxWithSpan)
+  const suppressEnd = parentSpan !== undefined && ctx.get(SUPPRESS_CHILD_SPANS_KEY)
+  const spanContext = withSpan(ctx, options)
+  const span = getSpan(spanContext)
   if (span === undefined) throw new Error("createSpan produced a context without a span")
-  return new DisposableSpan(ctxWithSpan, span, !isSuppressed)
+  return new DisposableSpan(spanContext, span, !suppressEnd)
 }
 
-/** A span that is started and ended in one call: for work that is worth recording, not observing. */
 export function recordCompletedSpanIfParented(
   ctx: Context,
-  options?: SpanOptions,
-  endTime?: TimeInput,
-): Span | undefined {
-  if (!getSpan(ctx) || ctx.get(SUPPRESS_CHILD_SPANS_KEY)) return undefined
-  const ctxWithSpan = withSpan(ctx, options)
-  const span = getSpan(ctxWithSpan)
+  options?: TelemetrySpanOptions,
+  endTime?: number | Date,
+): TelemetrySpan | undefined {
+  if (getSpan(ctx) === undefined || ctx.get(SUPPRESS_CHILD_SPANS_KEY)) return undefined
+  const child = withSpan(ctx, options)
+  const span = getSpan(child)
   if (span === undefined) return undefined
   span.end(endTime)
   return span
 }
 
-/**
- * Records that `name` happened, as an attribute on the trace's root span plus a point-in-time
- * span, so a long run's internal milestones can be read off a single timeline. Telemetry must
- * never fail a caller's operation, so every error here is swallowed.
- */
 export function reportEvent(ctx: Context, name: string): void {
   try {
-    const tracer = getTracer()
-    const parentSpan = getSpan(ctx)
-    if (!parentSpan) return
-    const parentOtelContext = trace.setSpan(otelContext.active(), parentSpan)
-    const eventSpan = tracer.startSpan(name, undefined, parentOtelContext)
-    const inherited = ctx.get(INHERITABLE_SPAN_ATTRIBUTES_KEY)
-    for (const key in inherited) {
-      const value = inherited[key]
-      if (value !== undefined) eventSpan.setAttribute(key, value)
+    const parent = getSpan(ctx)
+    if (parent === undefined) return
+    const event = getTracer().startSpan(name, undefined, parent)
+    for (const [key, value] of Object.entries(ctx.get(INHERITABLE_SPAN_ATTRIBUTES_KEY))) {
+      event.setAttribute(key, value)
     }
     const rootStart = ctx.get(ROOT_SPAN_START_MS_KEY)
     const elapsedMs = typeof rootStart === "number" ? Date.now() - rootStart : 0
-    const attributeKey = `event.${name}`
-    const rootSpan = ctx.get(ROOT_SPAN_KEY) ?? parentSpan
-    rootSpan.setAttribute(attributeKey, elapsedMs)
-    eventSpan.setAttribute(attributeKey, elapsedMs)
-    eventSpan.end()
+    const key = "event." + name
+    const root = ctx.get(ROOT_SPAN_KEY) ?? parent
+    root.setAttribute(key, elapsedMs)
+    event.setAttribute(key, elapsedMs)
+    event.end()
   } catch {
     // Diagnostics are best-effort by design.
   }

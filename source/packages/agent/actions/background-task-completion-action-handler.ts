@@ -11,27 +11,20 @@
  */
 import { randomUUID } from "node:crypto";
 import {
-  AgentMode,
-  SimulatedMsgReason,
-  UserMessage,
-} from "../../proto/generated/agent/v1/agent_pb.ts";
-import { SelectedContext } from "../../proto/generated/agent/v1/selected_context_pb.ts";
-import { Updates } from "../../agent-core/interaction-updates.ts";
+  createBackgroundCompletionUserMessage,
+  decodeStoredBackgroundTaskCompletionAction,
+  projectBackgroundCompletionRequestContext,
+} from "../../../adapters/interop/agent/background-task-completion-adapter.ts";
 import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts";
 import { createSpan } from "../../context/telemetry.ts";
 import { createLogger } from "../../context/logging.ts";
-import { PrivacyCapability } from "../../redaction/classification.ts";
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts";
-import { fromRedactedBackgroundTaskCompletionAction, toRedactedInteractionUpdate } from "../../redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { fromRedactedRepositoryIndexingInfo } from "../../redacted-protos/generated/agent/v1/repo_redacted.ts";
-import { fromRedactedRequestContext } from "../../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts";
-import { fromRedactedSelectedContext } from "../../redacted-protos/generated/agent/v1/selected_context_redacted.ts";
 import { AgentType } from "../utils/agent-config.ts";
 import { AgentConversationTurnHandle } from "../state.ts";
 import { buildRequestContextOptions } from "./meta-agent-notes.ts";
 import { getRedactedRequestContext } from "../utils/request-context.ts";
-import { isProjectSendMessageEnabled } from "../../constants/project-send-message.ts";
-import { resolveProjectConversationContext } from "../utils/project-conversation.ts";
+import { canRootConversationSendToProject } from "../../constants/project-send-message.ts";
+import { resolveProjectConversationContextFromInterop } from "../../../adapters/interop/agent/project-conversation-adapter.ts";
 import { renderIncomingMessageIdTag } from "../state.ts";
 import {
   formatBackgroundCompletions,
@@ -52,14 +45,16 @@ function logBackgroundTaskCompletionOutcome(ctx: Any, outcome: string, summary: 
 
 export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageActionHandler {
   async prepareFollowupTurn(ctx: Any, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any): Promise<Any> {
-    const completionAction = fromRedactedBackgroundTaskCompletionAction(action, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
-    for (const completion of completionAction.completions) stateHandler.recordSubagentRunCompletion(completion);
+    const decodedCompletion = decodeStoredBackgroundTaskCompletionAction(action);
+    for (const completion of decodedCompletion.completions) stateHandler.recordSubagentRunCompletion(completion);
     const isMetaParentAgent = this.config.featureFlags?.glassMetaParentAgent === true;
     if (this.config.featureFlags?.disableBackgroundTaskFollowUp && !isMetaParentAgent) {
-      logBackgroundTaskCompletionOutcome(ctx, "skipped_disabled", summarizeBackgroundTaskCompletions(completionAction.completions), { is_meta_parent: isMetaParentAgent });
+      logBackgroundTaskCompletionOutcome(ctx, "skipped_disabled", summarizeBackgroundTaskCompletions(decodedCompletion.completions), { is_meta_parent: isMetaParentAgent });
       return { kind: "skip", ctx, state: await stateHandler.computeNewStructure(ctx) };
     }
-    const completions = this.config.featureFlags?.enableBackgroundTaskProgress ? completionAction.completions : completionAction.completions.filter((completion: Any) => !isShellOutputCompletion(completion));
+    const completions = this.config.featureFlags?.enableBackgroundTaskProgress
+      ? decodedCompletion.completions
+      : decodedCompletion.completions.filter(completion => !isShellOutputCompletion(completion));
     const summary = summarizeBackgroundTaskCompletions(completions);
     if (completions.length === 0) {
       logBackgroundTaskCompletionOutcome(ctx, "skipped_empty", summary, { is_meta_parent: isMetaParentAgent });
@@ -72,20 +67,19 @@ export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageAc
       if (lastTurn instanceof AgentConversationTurnHandle) sourceUserMessage = await lastTurn.userMessage.get(ctx);
     }
     const requestContext = await getRedactedRequestContext(ctx, undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
-    const unredactedRequestContext = fromRedactedRequestContext(requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
-    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
-    const repositoryInfos = requestContext.repositoryInfo.map((info: Any) => fromRedactedRepositoryIndexingInfo(info, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined));
-    const followUpMode = stateHandler.mode ?? sourceUserMessage?.mode ?? AgentMode.AGENT;
+    const contextProjection = projectBackgroundCompletionRequestContext(requestContext);
+    const mergedMcpTools = this.mergeRequestContextTools(mcpTools, contextProjection.tools as Any);
+    const repositoryInfos = contextProjection.repositoryInfos;
     const formatOpts: Any = {
-      timeZone: unredactedRequestContext.env?.timeZone,
-      includeTimestamp: this.config.featureFlags?.userMessageTimestamps === true && !stateHandler.isDsv3(),
+      timeZone: contextProjection.timeZone,
+      includeTimestamp: this.config.featureFlags?.userMessageTimestamps === true && !stateHandler.usesLargeContextTreatment(),
       parentModelInfo: this.config.modelInfo,
       enableAgentChatLinks: this.config.featureFlags?.enableAgentChatLinks !== false,
       hideAsyncSubagentTaskNotifications: this.config.featureFlags?.hideAsyncSubagentTaskNotifications === true,
       includeCloudSubagentViewLinks: this.config.agentType === AgentType.IDE || this.config.useLocalAgentPrompting === true,
     };
-    if (!stateHandler.isRootProjectConversation) stateHandler.isRootProjectConversation = (await resolveProjectConversationContext(ctx, stateHandler)).isRootProject;
-    const sendMessageEnabled = isProjectSendMessageEnabled(stateHandler);
+    if (!stateHandler.isRootProjectConversation) stateHandler.isRootProjectConversation = (await resolveProjectConversationContextFromInterop(ctx, stateHandler)).isRootProject;
+    const sendMessageEnabled = canRootConversationSendToProject(stateHandler);
     const perCompletionMessages = completions.map((completion: Any) => {
       const completionMessage = isMetaParentAgent ? formatMetaParentBackgroundCompletions([completion], formatOpts) : formatBackgroundCompletions([completion], formatOpts);
       const messageId = randomUUID();
@@ -101,22 +95,21 @@ export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageAc
     logBackgroundTaskCompletionOutcome(ctx, "ran_followup", summary, { is_meta_parent: isMetaParentAgent, has_source_user_message: sourceUserMessage !== undefined });
     let latestTurn: Any;
     for (const { completionMessage, completionPromptMessage, completionMetadata, completionThreadId, messageId } of perCompletionMessages) {
-      const syntheticUserMessage = new UserMessage({
+      const syntheticMessage = createBackgroundCompletionUserMessage({
         text: completionMessage,
         messageId,
-        selectedContext: sourceUserMessage?.selectedContext ? fromRedactedSelectedContext(sourceUserMessage.selectedContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) : new SelectedContext(),
-        mode: followUpMode,
-        isSimulatedMsg: true,
-        simulatedMsgReason: SimulatedMsgReason.BACKGROUND_TASK_COMPLETION,
-        ...(completionMetadata !== undefined ? { simulatedMessageMetadata: completionMetadata } : {}),
+        sourceMessage: sourceUserMessage,
+        mode: stateHandler.mode,
+        metadata: completionMetadata,
+        threadId: completionThreadId,
+        privacyMode: stateHandler.getPrivacyMode(),
       });
-      if (completionThreadId !== undefined && completionThreadId.length > 0) syntheticUserMessage.threadId = completionThreadId;
-      await this.interactionListener.sendUpdate(ctx, toRedactedInteractionUpdate(Updates.userMessageAppended(syntheticUserMessage), stateHandler.getPrivacyMode()));
-      latestTurn = await stateHandler.createAgentTurn(ctx, syntheticUserMessage, unredactedRequestContext, this.config, this.resourceAccessor);
+      await this.interactionListener.sendUpdate(ctx, syntheticMessage.listenerUpdate);
+      latestTurn = await stateHandler.createAgentTurn(ctx, syntheticMessage.userMessage, contextProjection.promptContext, this.config, this.resourceAccessor);
       rootPromptExecutor.appendMessages(toRedactedCoreMessages([{ role: "user", content: completionPromptMessage }], stateHandler.getPrivacyMode()));
     }
     if (latestTurn === undefined) return { kind: "skip", ctx, state: await stateHandler.computeNewStructure(ctx) };
-    return { kind: "ready", ctx, latestTurn, mergedMcpTools, repositoryInfos, requestContext: unredactedRequestContext };
+    return { kind: "ready", ctx, latestTurn, mergedMcpTools, repositoryInfos, requestContext: contextProjection.promptContext };
   }
 
   async handle(parentCtx: Any, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {

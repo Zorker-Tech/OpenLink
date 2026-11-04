@@ -1,17 +1,35 @@
 /**
  * What the prompt needs to know about the tool set, gathered in one pass.
  *
- * The prompt is assembled from the tools themselves rather than from a hand-written list, so the four
- * things it asks about are read off the assembled set: whether the agent can edit anything at all
- * (which changes how the work is described), which tools speak to people outside the conversation,
- * what the subagent descriptions say, and what every tool is called for a description that refers to
- * another tool by name.
- *
- * A subagent description is generated per call rather than stored, and it is told whether the tool is
- * visible to the model — the same generator words the two cases differently.
+ * The prompt uses the inventory to describe editing, outside communication, and the agents available to delegate to.
+ * A delegated-agent description depends on whether that tool is among the ones shown to the model.
  */
 
-import { isAutomationsPlatformCommunicationToolName } from "../automations/platform-communication-tools.ts"
+import { isAutomationsPlatformCommunicationToolName } from "../../../adapters/interop/automation/platform-communication-tool-policy-adapter.ts"
+
+interface SubagentDescriptionParts {
+  readonly availableSubagentModelsDescriptionText?: unknown
+  readonly availableSubagentTypesDescriptionText?: unknown
+}
+
+interface PromptTool extends Record<string, unknown> {
+  readonly toolIdentifier?: unknown
+  readonly name?: unknown
+  readonly descriptionTokenPartsGenerator?: unknown
+}
+
+type ToolDescriptionProps = Record<string, unknown>
+type SubagentDescriptionGenerator = (
+  props: ToolDescriptionProps,
+  options: { readonly promptVisible: boolean },
+) => SubagentDescriptionParts | undefined
+
+interface ToolSetPromptSource {
+  getAllTools(): readonly PromptTool[]
+  getStaticTools(): readonly PromptTool[]
+  getDescriptionProps(): ToolDescriptionProps
+  hasTool(identifier: string): boolean
+}
 
 interface ExtractedToolInfo {
   readonly hasAnyEditTools: boolean
@@ -21,31 +39,49 @@ interface ExtractedToolInfo {
   readonly availableSubagentTypesDescription: unknown
 }
 
-export function extractToolInfo(toolSetHandle: {
-  getAllTools(): readonly Record<string, any>[]
-  getStaticTools(): readonly Record<string, any>[]
-  getDescriptionProps(): { allTools: Record<string, unknown> }
-  hasTool(identifier: string): boolean
-}): ExtractedToolInfo {
-  const availableTools = toolSetHandle.getAllTools()
-  const promptVisibleTools = toolSetHandle.getStaticTools()
-  const descriptionProps = toolSetHandle.getDescriptionProps()
+const EDIT_TOOL_IDENTIFIERS = ["WRITE", "STR_REPLACE", "APPLY_PATCH"] as const
+
+export function extractToolInfo(toolSet: ToolSetPromptSource): ExtractedToolInfo {
+  const availableTools = toolSet.getAllTools()
+  const promptVisibleTools = new Set(toolSet.getStaticTools())
+  const descriptionProps = toolSet.getDescriptionProps()
+  const toolMetadata = describeToolsForPrompt(availableTools, promptVisibleTools, descriptionProps)
+
+  return {
+    hasAnyEditTools: EDIT_TOOL_IDENTIFIERS.some(identifier => toolSet.hasTool(identifier)),
+    allTools: descriptionProps.allTools as Record<string, unknown>,
+    ...toolMetadata,
+  }
+}
+
+function describeToolsForPrompt(
+  availableTools: readonly PromptTool[],
+  promptVisibleTools: ReadonlySet<PromptTool>,
+  descriptionProps: ToolDescriptionProps,
+): Pick<ExtractedToolInfo, "automationsCommunicationToolNames" | "availableSubagentModelsDescription" | "availableSubagentTypesDescription"> {
   const automationsCommunicationToolNames: string[] = []
   let availableSubagentModelsDescription: unknown
   let availableSubagentTypesDescription: unknown
+
   for (const tool of availableTools) {
-    if (tool.toolIdentifier === "PLATFORM_ACTION" && isAutomationsPlatformCommunicationToolName(tool.name)) {
+    if (
+      tool.toolIdentifier === "PLATFORM_ACTION" &&
+      typeof tool.name === "string" &&
+      isAutomationsPlatformCommunicationToolName(tool.name)
+    ) {
       automationsCommunicationToolNames.push(tool.name)
     }
-    if (tool.toolIdentifier === "TASK" && "descriptionTokenPartsGenerator" in tool) {
-      const tokenParts = tool.descriptionTokenPartsGenerator?.(descriptionProps, { promptVisible: promptVisibleTools.includes(tool) })
-      availableSubagentModelsDescription = tokenParts?.availableSubagentModelsDescriptionText
-      availableSubagentTypesDescription = tokenParts?.availableSubagentTypesDescriptionText
-    }
+    if (tool.toolIdentifier !== "TASK" || typeof tool.descriptionTokenPartsGenerator !== "function") continue
+
+    const generateParts = tool.descriptionTokenPartsGenerator as SubagentDescriptionGenerator
+    const parts = generateParts(descriptionProps, {
+      promptVisible: promptVisibleTools.has(tool),
+    })
+    availableSubagentModelsDescription = parts?.availableSubagentModelsDescriptionText
+    availableSubagentTypesDescription = parts?.availableSubagentTypesDescriptionText
   }
+
   return {
-    hasAnyEditTools: toolSetHandle.hasTool("WRITE") || toolSetHandle.hasTool("STR_REPLACE") || toolSetHandle.hasTool("APPLY_PATCH"),
-    allTools: descriptionProps.allTools,
     automationsCommunicationToolNames,
     availableSubagentModelsDescription,
     availableSubagentTypesDescription,

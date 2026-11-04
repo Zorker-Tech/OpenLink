@@ -17,42 +17,32 @@ import { dirname, join } from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
+import { parseAgentStoreWorkerReply } from "./agent-worker-protocol.ts";
+import type {
+  AgentStoreWorkerBoot,
+  AgentStoreWorkerCommand,
+  AgentStoreWorkerCommandFor,
+  AgentStoreWorkerOperation,
+  AgentStoreWorkerSuccess,
+  AgentStoreWorkerSuccessFor,
+} from "./agent-worker-protocol.ts";
 
 export function defaultWorkerEntryPath(): string {
-  const here = typeof __dirname === "string" ? __dirname : dirname(fileURLToPath(import.meta.url));
-  return join(here, "agent-isolation", "agent-store-worker.cjs");
+  if (typeof __dirname === "string") return join(__dirname, "agent-store-worker.cjs");
+  const moduleUrl = import.meta.url;
+  const here = dirname(fileURLToPath(moduleUrl));
+  const extension = moduleUrl.endsWith(".ts") ? ".ts" : ".js";
+  return join(here, `agent-store-worker${extension}`);
 }
 
-/** What a worker answers: one response per request id, or an error with the worker's own name and code. */
-interface WorkerResponse {
-  readonly kind: string;
-  readonly requestId: number;
-  readonly threadId?: number;
-  readonly pid?: number;
-  readonly blobData?: Uint8Array;
-  readonly rootId?: Uint8Array;
-  readonly deleted?: number;
-  readonly result?: unknown;
-  readonly verdict?: unknown;
-  readonly message?: string;
-  readonly name?: string;
-  readonly code?: string;
-}
-
-interface WorkerBoot {
-  readonly agentId: string;
-  readonly blobDbPath: string;
-  readonly busyTimeoutMs: number;
-  readonly legacyBlobDbPath?: string;
-}
-
+/** A call waiting for its worker reply. */
 interface PendingWorkerRequest {
-  resolve(response: WorkerResponse): void;
+  resolve(response: AgentStoreWorkerSuccess): void;
   reject(error: Error): void;
 }
 
 /** A worker's error, as close to the one it threw as a message can carry: its name and code survive the trip. */
-export function rebuildWorkerError(response: Pick<WorkerResponse, "message" | "name" | "code">): Error {
+export function rebuildWorkerError(response: { readonly message: string; readonly name?: string; readonly code?: string }): Error {
   const error = new Error(response.message);
   if (response.name != null) error.name = response.name;
   if (response.code != null) Object.assign(error, { code: response.code });
@@ -97,7 +87,7 @@ export function forwardStream(stream: Readable | null, emit: (line: string) => v
 }
 
 /** How a connection gets its worker: the real thread by default, and something else in a test. */
-type CreateWorker = (entryPath: string, boot: WorkerBoot) => Worker;
+type CreateWorker = (entryPath: string, boot: AgentStoreWorkerBoot) => Worker;
 
 const spawnWorker: CreateWorker = (entryPath, boot) => new Worker(entryPath, { workerData: boot, stdout: true, stderr: true });
 
@@ -105,28 +95,33 @@ const spawnWorker: CreateWorker = (entryPath, boot) => new Worker(entryPath, { w
 export class AgentWorkerConnection {
   readonly worker: Worker;
   readonly pending = new Map<number, PendingWorkerRequest>();
-  nextRequestId = 1;
+  nextCallId = 1;
   isDead = false;
   lastActivityAt = Date.now();
   workerThreadId: number | null = null;
   workerPid: number | null = null;
 
-  constructor(workerEntryPath: string, boot: WorkerBoot, readonly onExit: (self: AgentWorkerConnection) => void, createWorker: CreateWorker = spawnWorker) {
+  constructor(workerEntryPath: string, boot: AgentStoreWorkerBoot, readonly onExit: (self: AgentWorkerConnection) => void, createWorker: CreateWorker = spawnWorker) {
     this.worker = createWorker(workerEntryPath, boot);
     forwardStream(this.worker.stdout, (message) => console.log(message));
     forwardStream(this.worker.stderr, (message) => console.error(message));
-    this.worker.on("message", (response) => this.settle(response as WorkerResponse));
+    this.worker.on("message", (response) => this.settle(response));
     this.worker.on("error", (error) => this.die(error));
     this.worker.on("exit", (code) => this.die(code !== 0 ? new Error(`worker exited with code ${code}`) : new Error("worker exited")));
   }
 
-  /** One answer settles one request; an answer nobody is waiting for is ignored (a late response to a dead caller). */
-  private settle(response: WorkerResponse): void {
-    const entry = this.pending.get(response.requestId);
+  /** One reply settles one call; an answer nobody is waiting for is ignored. */
+  private settle(message: unknown): void {
+    const response = parseAgentStoreWorkerReply(message);
+    if (response == null) {
+      this.die(new TypeError("worker returned an invalid reply"));
+      return;
+    }
+    const entry = this.pending.get(response.callId);
     if (entry == null) return;
-    this.pending.delete(response.requestId);
+    this.pending.delete(response.callId);
     this.lastActivityAt = Date.now();
-    if (response.kind === "error") entry.reject(rebuildWorkerError(response));
+    if (response.outcome === "failure") entry.reject(rebuildWorkerError(response));
     else entry.resolve(response);
   }
 
@@ -140,13 +135,13 @@ export class AgentWorkerConnection {
     this.onExit(this);
   }
 
-  send(build: (requestId: number) => object, transfer: readonly ArrayBuffer[] = []): Promise<WorkerResponse> {
+  send(build: (callId: number) => AgentStoreWorkerCommand, transfer: readonly ArrayBuffer[] = []): Promise<AgentStoreWorkerSuccess> {
     if (this.isDead) return Promise.reject(new Error("worker is no longer running"));
     this.lastActivityAt = Date.now();
-    const requestId = this.nextRequestId++;
-    const request = build(requestId);
+    const callId = this.nextCallId++;
+    const request = build(callId);
     return new Promise((resolve, reject) => {
-      this.pending.set(requestId, {
+      this.pending.set(callId, {
         resolve: (response) => {
           this.lastActivityAt = Date.now();
           resolve(response);
@@ -156,7 +151,12 @@ export class AgentWorkerConnection {
           reject(error);
         },
       });
-      this.worker.postMessage(request, [...transfer]);
+      try {
+        this.worker.postMessage(request, [...transfer]);
+      } catch (error) {
+        this.pending.delete(callId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
@@ -173,56 +173,60 @@ export class AgentWorkerConnection {
   }
 
   /**
-   * One request: the worker's request id, the body built for it, and — when the caller wants a field — the answer picked
-   * apart with `pick`. Answer shapes are the worker's protocol, so each public method below names the field it reads.
+   * Send one typed operation and read its operation-specific reply when the caller needs a value.
    */
-  private async ask<T>(kind: string, body: () => Record<string, unknown> = () => ({}), pick?: (response: WorkerResponse) => T): Promise<T | undefined> {
-    const response = await this.send((requestId) => ({ kind, requestId, ...body() }));
-    return pick?.(response);
+  private async ask<Operation extends AgentStoreWorkerOperation, Value = void>(
+    operation: Operation,
+    build: (callId: number) => AgentStoreWorkerCommandFor<Operation>,
+    pick?: (response: AgentStoreWorkerSuccessFor<Operation>) => Value,
+  ): Promise<Value | undefined> {
+    const response = await this.send(build);
+    if (response.operation !== operation) throw new TypeError(`worker answered ${response.operation} for ${operation}`);
+    return pick?.(response as AgentStoreWorkerSuccessFor<Operation>);
   }
 
-  async init(boot: WorkerBoot): Promise<void> {
-    const identity = await this.ask("init", () => ({ agentId: boot.agentId, blobDbPath: boot.blobDbPath, busyTimeoutMs: boot.busyTimeoutMs }), (response) => ({
-      threadId: response.threadId as number,
-      pid: response.pid as number,
+  async init(): Promise<void> {
+    const identity = await this.ask("worker.identify", (callId) => ({ operation: "worker.identify", callId }), (response) => ({
+      threadId: response.workerThreadId,
+      pid: response.processId,
     }));
     this.workerThreadId = identity!.threadId;
     this.workerPid = identity!.pid;
   }
 
   async setBlob(blobId: Uint8Array, blobData: Uint8Array): Promise<void> {
-    await this.ask("set-blob", () => ({ blobId, blobData }));
+    await this.ask("blob.write", (callId) => ({ operation: "blob.write", callId, blobId, blobBytes: blobData }));
   }
 
   async getBlob(blobId: Uint8Array): Promise<Uint8Array | undefined> {
-    return await this.ask("get-blob", () => ({ blobId }), (response) => response.blobData);
+    return await this.ask("blob.read", (callId) => ({ operation: "blob.read", callId, blobId }), (response) => response.blobBytes);
   }
 
   async findLatestRootBlobId(): Promise<Uint8Array | undefined> {
-    return await this.ask("find-latest-root", undefined, (response) => response.rootId);
+    return await this.ask("root.find-latest", (callId) => ({ operation: "root.find-latest", callId }), (response) => response.latestRootId);
   }
 
   async clearBlobs(): Promise<void> {
-    await this.ask("clear-blobs");
+    await this.ask("blob.clear", (callId) => ({ operation: "blob.clear", callId }));
   }
 
   async clearStaleCheckpointRoots(retainedRootIdHex: string): Promise<number> {
-    return (await this.ask("clear-stale-roots", () => ({ retainedRootIdHex }), (response) => response.deleted)) as number;
+    return (await this.ask("checkpoint.prune", (callId) => ({ operation: "checkpoint.prune", callId, retainedRootIdHex }), (response) => response.deletedCount)) as number;
   }
 
   async collectGarbage(retainedRootIdHex: string, pendingWriteRetentionMs: number): Promise<unknown> {
-    return await this.ask("collect-garbage", () => ({ retainedRootIdHex, pendingWriteRetentionMs }), (response) => response.result);
+    return await this.ask("conversation.collect-garbage", (callId) => ({ operation: "conversation.collect-garbage", callId, retainedRootIdHex, pendingWriteRetentionMs }), (response) => response.garbageReport);
   }
 
   async verifyLegacyBlobRetirement(retainedRootIdHex: string, legacyBlobDbPath: string): Promise<unknown> {
-    return await this.ask("verify-legacy-blob-retirement", () => ({ retainedRootIdHex, legacyBlobDbPath }), (response) => response.verdict);
+    return await this.ask("legacy.verify-retirement", (callId) => ({ operation: "legacy.verify-retirement", callId, retainedRootIdHex, legacyBlobDbPath }), (response) => response.retirementVerdict);
   }
 
   /** Closing is best effort: a worker that cannot be asked to close is still terminated. */
   async close(): Promise<void> {
     if (this.isDead) return;
     try {
-      await this.ask("close");
+      await this.ask("worker.close", (callId) => ({ operation: "worker.close", callId }));
     } catch {
       // A worker that will not answer "close" is terminated below either way.
     }
@@ -270,7 +274,7 @@ export class AgentWorkerPool {
     const existing = this.connections.get(blobDbPath);
     if (existing != null) return existing;
     this.evictForCapacity();
-    const boot: WorkerBoot = { agentId, blobDbPath, busyTimeoutMs: this.busyTimeoutMs, ...(legacyBlobDbPath == null ? {} : { legacyBlobDbPath }) };
+    const boot: AgentStoreWorkerBoot = { agentId, blobDbPath, busyTimeoutMs: this.busyTimeoutMs, ...(legacyBlobDbPath == null ? {} : { legacyBlobDbPath }) };
     const connection = new AgentWorkerConnection(
       this.workerEntryPath,
       boot,
@@ -285,7 +289,7 @@ export class AgentWorkerPool {
     );
     this.connections.set(blobDbPath, connection);
     this.startSweep();
-    await connection.init(boot);
+    await connection.init();
     console.log(`[agent-isolation] spawned worker for agent ${agentId} on thread ${connection.threadId()} (pid ${connection.pid()}, active workers: ${this.connections.size})`);
     return connection;
   }

@@ -1,0 +1,2156 @@
+// aiserver.v1 — aiserver/v1/tools messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "agent/v1/ai_attribution_tool.proto";
+import "agent/v1/apply_agent_diff_tool.proto";
+import "agent/v1/background_shell_exec.proto";
+import "agent/v1/computer_use_tool.proto";
+import "agent/v1/generate_image_tool.proto";
+import "agent/v1/ls_exec.proto";
+import "agent/v1/record_screen_exec.proto";
+import "agent/v1/report_bugfix_results_tool.proto";
+import "agent/v1/sandbox.proto";
+import "agent/v1/shell_exec.proto";
+import "agent/v1/subagents.proto";
+import "aiserver/v1/repository.proto";
+import "aiserver/v1/utils.proto";
+
+message ListDirResult {
+  repeated .aiserver.v1.ListDirResult.File files = 1 [json_name = "files"];
+  string directory_relative_workspace_path = 2 [json_name = "directoryRelativeWorkspacePath"];
+  message File {
+    string name = 1 [json_name = "name"];
+    bool is_directory = 2 [json_name = "isDirectory"];
+    optional int64 size = 3 [json_name = "size"];
+    optional .google.protobuf.Timestamp last_modified = 4 [json_name = "lastModified"];
+    optional int32 num_children = 5 [json_name = "numChildren"];
+    optional int32 num_lines = 6 [json_name = "numLines"];
+  }
+}
+
+message TodoItem {
+  string content = 1 [json_name = "content"];
+  string status = 2 [json_name = "status"];
+  string id = 3 [json_name = "id"];
+  repeated string dependencies = 4 [json_name = "dependencies"];
+}
+
+message ListDirV2Result {
+  optional .aiserver.v1.ListDirV2Result.DirectoryTreeNode directory_tree_root = 1 [json_name = "directoryTreeRoot"];
+  message DirectoryTreeNode {
+    string abs_path = 1 [json_name = "absPath"];
+    repeated .aiserver.v1.ListDirV2Result.DirectoryTreeNode children_dirs = 2 [json_name = "childrenDirs"];
+    repeated .aiserver.v1.ListDirV2Result.DirectoryTreeNode.File children_files = 3 [json_name = "childrenFiles"];
+    bool children_were_processed = 4 [json_name = "childrenWereProcessed"];
+    map<string, int32> full_subtree_extension_counts = 5 [json_name = "fullSubtreeExtensionCounts"];
+    int32 num_files = 6 [json_name = "numFiles"];
+    message File {
+      string name = 1 [json_name = "name"];
+      optional .agent.v1.TerminalMetadata terminal_metadata = 2 [json_name = "terminalMetadata"];
+    }
+  }
+}
+
+message ClientSideToolV2Result {
+  .aiserver.v1.ClientSideToolV2 tool = 1 [json_name = "tool"];
+  optional .aiserver.v1.ToolResultError error = 8 [json_name = "error"];
+  string tool_call_id = 35 [json_name = "toolCallId"];
+  optional string model_call_id = 48 [json_name = "modelCallId"];
+  optional uint32 tool_index = 49 [json_name = "toolIndex"];
+  optional .aiserver.v1.ToolResultAttachments attachments = 50 [json_name = "attachments"];
+  oneof result {
+    .aiserver.v1.ReadSemsearchFilesResult read_semsearch_files_result = 2 [json_name = "readSemsearchFilesResult"];
+    .aiserver.v1.RipgrepSearchResult ripgrep_search_result = 4 [json_name = "ripgrepSearchResult"];
+    .aiserver.v1.ReadFileResult read_file_result = 6 [json_name = "readFileResult"];
+    .aiserver.v1.ListDirResult list_dir_result = 9 [json_name = "listDirResult"];
+    .aiserver.v1.EditFileResult edit_file_result = 10 [json_name = "editFileResult"];
+    .aiserver.v1.ToolCallFileSearchResult file_search_result = 11 [json_name = "fileSearchResult"];
+    .aiserver.v1.SemanticSearchFullResult semantic_search_full_result = 18 [json_name = "semanticSearchFullResult"];
+    .aiserver.v1.DeleteFileResult delete_file_result = 20 [json_name = "deleteFileResult"];
+    .aiserver.v1.ReapplyResult reapply_result = 21 [json_name = "reapplyResult"];
+    .aiserver.v1.RunTerminalCommandV2Result run_terminal_command_v2_result = 24 [json_name = "runTerminalCommandV2Result"];
+    .aiserver.v1.FetchRulesResult fetch_rules_result = 25 [json_name = "fetchRulesResult"];
+    .aiserver.v1.WebSearchResult web_search_result = 27 [json_name = "webSearchResult"];
+    .aiserver.v1.MCPResult mcp_result = 28 [json_name = "mcpResult"];
+    .aiserver.v1.SearchSymbolsResult search_symbols_result = 32 [json_name = "searchSymbolsResult"];
+    .aiserver.v1.BackgroundComposerFollowupResult background_composer_followup_result = 33 [json_name = "backgroundComposerFollowupResult"];
+    .aiserver.v1.KnowledgeBaseResult knowledge_base_result = 34 [json_name = "knowledgeBaseResult"];
+    .aiserver.v1.FetchPullRequestResult fetch_pull_request_result = 36 [json_name = "fetchPullRequestResult"];
+    .aiserver.v1.DeepSearchResult deep_search_result = 37 [json_name = "deepSearchResult"];
+    .aiserver.v1.CreateDiagramResult create_diagram_result = 38 [json_name = "createDiagramResult"];
+    .aiserver.v1.FixLintsResult fix_lints_result = 39 [json_name = "fixLintsResult"];
+    .aiserver.v1.ReadLintsResult read_lints_result = 40 [json_name = "readLintsResult"];
+    .aiserver.v1.GotodefResult gotodef_result = 41 [json_name = "gotodefResult"];
+    .aiserver.v1.TaskResult task_result = 42 [json_name = "taskResult"];
+    .aiserver.v1.AwaitTaskResult await_task_result = 43 [json_name = "awaitTaskResult"];
+    .aiserver.v1.TodoReadResult todo_read_result = 44 [json_name = "todoReadResult"];
+    .aiserver.v1.TodoWriteResult todo_write_result = 45 [json_name = "todoWriteResult"];
+    .aiserver.v1.EditFileV2Result edit_file_v2_result = 51 [json_name = "editFileV2Result"];
+    .aiserver.v1.ListDirV2Result list_dir_v2_result = 52 [json_name = "listDirV2Result"];
+    .aiserver.v1.ReadFileV2Result read_file_v2_result = 53 [json_name = "readFileV2Result"];
+    .aiserver.v1.RipgrepRawSearchResult ripgrep_raw_search_result = 54 [json_name = "ripgrepRawSearchResult"];
+    .aiserver.v1.GlobFileSearchResult glob_file_search_result = 55 [json_name = "globFileSearchResult"];
+    .aiserver.v1.CreatePlanResult create_plan_result = 56 [json_name = "createPlanResult"];
+    .aiserver.v1.ListMcpResourcesResult list_mcp_resources_result = 57 [json_name = "listMcpResourcesResult"];
+    .aiserver.v1.ReadMcpResourceResult read_mcp_resource_result = 58 [json_name = "readMcpResourceResult"];
+    .aiserver.v1.ReadProjectResult read_project_result = 59 [json_name = "readProjectResult"];
+    .aiserver.v1.UpdateProjectResult update_project_result = 60 [json_name = "updateProjectResult"];
+    .aiserver.v1.TaskV2Result task_v2_result = 61 [json_name = "taskV2Result"];
+    .aiserver.v1.CallMcpToolResult call_mcp_tool_result = 62 [json_name = "callMcpToolResult"];
+    .agent.v1.ApplyAgentDiffResult apply_agent_diff_result = 63 [json_name = "applyAgentDiffResult"];
+    .aiserver.v1.AskQuestionResult ask_question_result = 64 [json_name = "askQuestionResult"];
+    .aiserver.v1.SwitchModeResult switch_mode_result = 65 [json_name = "switchModeResult"];
+    .aiserver.v1.ComputerUseResult computer_use_result = 66 [json_name = "computerUseResult"];
+    .agent.v1.GenerateImageResult generate_image_result = 67 [json_name = "generateImageResult"];
+    .agent.v1.WriteShellStdinResult write_shell_stdin_result = 68 [json_name = "writeShellStdinResult"];
+    .agent.v1.RecordScreenResult record_screen_result = 69 [json_name = "recordScreenResult"];
+    .aiserver.v1.WebFetchResult web_fetch_result = 70 [json_name = "webFetchResult"];
+    .aiserver.v1.ReportBugfixResultsResult report_bugfix_results_result = 71 [json_name = "reportBugfixResultsResult"];
+    .agent.v1.AiAttributionResult ai_attribution_result = 72 [json_name = "aiAttributionResult"];
+    .aiserver.v1.McpAuthResult mcp_auth_result = 73 [json_name = "mcpAuthResult"];
+    .aiserver.v1.GetMcpToolsResult get_mcp_tools_result = 74 [json_name = "getMcpToolsResult"];
+    .aiserver.v1.ConnectScmResult connect_scm_result = 75 [json_name = "connectScmResult"];
+  }
+}
+
+message ToolResultError {
+  string client_visible_error_message = 1 [json_name = "clientVisibleErrorMessage"];
+  string model_visible_error_message = 2 [json_name = "modelVisibleErrorMessage"];
+  optional string actual_error_message_only_send_from_client_to_server_never_the_other_way_around_because_that_may_be_a_security_risk = 3 [json_name = "actualErrorMessageOnlySendFromClientToServerNeverTheOtherWayAroundBecauseThatMayBeASecurityRisk"];
+  oneof error_details {
+    .aiserver.v1.ToolResultError.EditFileError edit_file_error_details = 5 [json_name = "editFileErrorDetails"];
+    .aiserver.v1.ToolResultError.SearchReplaceError search_replace_error_details = 6 [json_name = "searchReplaceErrorDetails"];
+  }
+  message EditFileError {
+    int32 num_lines_in_file_before_edit = 1 [json_name = "numLinesInFileBeforeEdit"];
+  }
+  message SearchReplaceError {
+    int32 num_lines_in_file_before_edit = 1 [json_name = "numLinesInFileBeforeEdit"];
+  }
+}
+
+message ClientSideToolV2Call {
+  .aiserver.v1.ClientSideToolV2 tool = 1 [json_name = "tool"];
+  string tool_call_id = 3 [json_name = "toolCallId"];
+  optional double timeout_ms = 6 [json_name = "timeoutMs"];
+  string name = 9 [json_name = "name"];
+  string raw_args = 10 [json_name = "rawArgs"];
+  bool is_streaming = 14 [json_name = "isStreaming"];
+  bool is_last_message = 15 [json_name = "isLastMessage"];
+  optional uint32 tool_index = 48 [json_name = "toolIndex"];
+  optional string model_call_id = 49 [json_name = "modelCallId"];
+  bool internal = 51 [json_name = "internal"];
+  oneof params {
+    .aiserver.v1.ReadSemsearchFilesParams read_semsearch_files_params = 2 [json_name = "readSemsearchFilesParams"];
+    .aiserver.v1.RipgrepSearchParams ripgrep_search_params = 5 [json_name = "ripgrepSearchParams"];
+    .aiserver.v1.ReadFileParams read_file_params = 8 [json_name = "readFileParams"];
+    .aiserver.v1.ListDirParams list_dir_params = 12 [json_name = "listDirParams"];
+    .aiserver.v1.EditFileParams edit_file_params = 13 [json_name = "editFileParams"];
+    .aiserver.v1.ToolCallFileSearchParams file_search_params = 16 [json_name = "fileSearchParams"];
+    .aiserver.v1.SemanticSearchFullParams semantic_search_full_params = 17 [json_name = "semanticSearchFullParams"];
+    .aiserver.v1.DeleteFileParams delete_file_params = 19 [json_name = "deleteFileParams"];
+    .aiserver.v1.ReapplyParams reapply_params = 20 [json_name = "reapplyParams"];
+    .aiserver.v1.RunTerminalCommandV2Params run_terminal_command_v2_params = 23 [json_name = "runTerminalCommandV2Params"];
+    .aiserver.v1.FetchRulesParams fetch_rules_params = 24 [json_name = "fetchRulesParams"];
+    .aiserver.v1.WebSearchParams web_search_params = 26 [json_name = "webSearchParams"];
+    .aiserver.v1.MCPParams mcp_params = 27 [json_name = "mcpParams"];
+    .aiserver.v1.SearchSymbolsParams search_symbols_params = 31 [json_name = "searchSymbolsParams"];
+    .aiserver.v1.BackgroundComposerFollowupParams background_composer_followup_params = 32 [json_name = "backgroundComposerFollowupParams"];
+    .aiserver.v1.KnowledgeBaseParams knowledge_base_params = 33 [json_name = "knowledgeBaseParams"];
+    .aiserver.v1.FetchPullRequestParams fetch_pull_request_params = 34 [json_name = "fetchPullRequestParams"];
+    .aiserver.v1.DeepSearchParams deep_search_params = 35 [json_name = "deepSearchParams"];
+    .aiserver.v1.CreateDiagramParams create_diagram_params = 36 [json_name = "createDiagramParams"];
+    .aiserver.v1.FixLintsParams fix_lints_params = 37 [json_name = "fixLintsParams"];
+    .aiserver.v1.ReadLintsParams read_lints_params = 38 [json_name = "readLintsParams"];
+    .aiserver.v1.GotodefParams gotodef_params = 41 [json_name = "gotodefParams"];
+    .aiserver.v1.TaskParams task_params = 42 [json_name = "taskParams"];
+    .aiserver.v1.AwaitTaskParams await_task_params = 43 [json_name = "awaitTaskParams"];
+    .aiserver.v1.TodoReadParams todo_read_params = 44 [json_name = "todoReadParams"];
+    .aiserver.v1.TodoWriteParams todo_write_params = 45 [json_name = "todoWriteParams"];
+    .aiserver.v1.EditFileV2Params edit_file_v2_params = 50 [json_name = "editFileV2Params"];
+    .aiserver.v1.ListDirV2Params list_dir_v2_params = 52 [json_name = "listDirV2Params"];
+    .aiserver.v1.ReadFileV2Params read_file_v2_params = 53 [json_name = "readFileV2Params"];
+    .aiserver.v1.RipgrepRawSearchParams ripgrep_raw_search_params = 54 [json_name = "ripgrepRawSearchParams"];
+    .aiserver.v1.GlobFileSearchParams glob_file_search_params = 55 [json_name = "globFileSearchParams"];
+    .aiserver.v1.CreatePlanParams create_plan_params = 56 [json_name = "createPlanParams"];
+    .aiserver.v1.ListMcpResourcesParams list_mcp_resources_params = 57 [json_name = "listMcpResourcesParams"];
+    .aiserver.v1.ReadMcpResourceParams read_mcp_resource_params = 58 [json_name = "readMcpResourceParams"];
+    .aiserver.v1.ReadProjectParams read_project_params = 59 [json_name = "readProjectParams"];
+    .aiserver.v1.UpdateProjectParams update_project_params = 60 [json_name = "updateProjectParams"];
+    .aiserver.v1.TaskV2Params task_v2_params = 61 [json_name = "taskV2Params"];
+    .aiserver.v1.CallMcpToolParams call_mcp_tool_params = 62 [json_name = "callMcpToolParams"];
+    .aiserver.v1.ApplyAgentDiffParams apply_agent_diff_params = 63 [json_name = "applyAgentDiffParams"];
+    .aiserver.v1.AskQuestionParams ask_question_params = 64 [json_name = "askQuestionParams"];
+    .aiserver.v1.SwitchModeParams switch_mode_params = 65 [json_name = "switchModeParams"];
+    .aiserver.v1.ComputerUseParams computer_use_params = 66 [json_name = "computerUseParams"];
+    .agent.v1.WriteShellStdinArgs write_shell_stdin_params = 67 [json_name = "writeShellStdinParams"];
+    .agent.v1.RecordScreenArgs record_screen_params = 68 [json_name = "recordScreenParams"];
+    .aiserver.v1.WebFetchParams web_fetch_params = 69 [json_name = "webFetchParams"];
+    .aiserver.v1.ReportBugfixResultsParams report_bugfix_results_params = 70 [json_name = "reportBugfixResultsParams"];
+    .aiserver.v1.McpAuthParams mcp_auth_params = 71 [json_name = "mcpAuthParams"];
+    .aiserver.v1.GetMcpToolsParams get_mcp_tools_params = 72 [json_name = "getMcpToolsParams"];
+    .aiserver.v1.ConnectScmParams connect_scm_params = 73 [json_name = "connectScmParams"];
+  }
+}
+
+message ReadSemsearchFilesParams {
+  optional .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  repeated .aiserver.v1.CodeResult code_results = 2 [json_name = "codeResults"];
+  string query = 3 [json_name = "query"];
+  repeated .aiserver.v1.PullRequestReference pr_references = 4 [json_name = "prReferences"];
+  optional bool pr_search_on = 5 [json_name = "prSearchOn"];
+}
+
+message RipgrepSearchParams {
+  optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto options = 1 [json_name = "options"];
+  optional .aiserver.v1.RipgrepSearchParams.IPatternInfoProto pattern_info = 2 [json_name = "patternInfo"];
+  message ITextQueryBuilderOptionsProto {
+    optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ITextSearchPreviewOptionsProto preview_options = 1 [json_name = "previewOptions"];
+    optional string file_encoding = 2 [json_name = "fileEncoding"];
+    optional int32 surrounding_context = 3 [json_name = "surroundingContext"];
+    optional bool is_smart_case = 4 [json_name = "isSmartCase"];
+    optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.INotebookSearchConfigProto notebook_search_config = 5 [json_name = "notebookSearchConfig"];
+    optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExcludePatternProto exclude_pattern = 6 [json_name = "excludePattern"];
+    optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto include_pattern = 7 [json_name = "includePattern"];
+    optional bool expand_patterns = 8 [json_name = "expandPatterns"];
+    optional int32 max_results = 9 [json_name = "maxResults"];
+    optional int32 max_file_size = 10 [json_name = "maxFileSize"];
+    optional bool disregard_ignore_files = 11 [json_name = "disregardIgnoreFiles"];
+    optional bool disregard_global_ignore_files = 12 [json_name = "disregardGlobalIgnoreFiles"];
+    optional bool disregard_parent_ignore_files = 13 [json_name = "disregardParentIgnoreFiles"];
+    optional bool disregard_exclude_settings = 14 [json_name = "disregardExcludeSettings"];
+    optional bool disregard_search_exclude_settings = 15 [json_name = "disregardSearchExcludeSettings"];
+    optional bool ignore_symlinks = 16 [json_name = "ignoreSymlinks"];
+    optional bool only_open_editors = 17 [json_name = "onlyOpenEditors"];
+    optional bool only_file_scheme = 18 [json_name = "onlyFileScheme"];
+    optional string reason = 19 [json_name = "reason"];
+    optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExtraFileResourcesProto extra_file_resources = 20 [json_name = "extraFileResources"];
+    message ITextSearchPreviewOptionsProto {
+      int32 match_lines = 1 [json_name = "matchLines"];
+      int32 chars_per_line = 2 [json_name = "charsPerLine"];
+    }
+    message INotebookSearchConfigProto {
+      bool include_markup_input = 1 [json_name = "includeMarkupInput"];
+      bool include_markup_preview = 2 [json_name = "includeMarkupPreview"];
+      bool include_code_input = 3 [json_name = "includeCodeInput"];
+      bool include_output = 4 [json_name = "includeOutput"];
+    }
+    message ExcludePatternProto {
+      repeated .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPatternBuilderProto exclude_pattern = 1 [json_name = "excludePattern"];
+    }
+    message ISearchPathPatternBuilderProto {
+      optional string pattern = 1 [json_name = "pattern"];
+      repeated string patterns = 2 [json_name = "patterns"];
+    }
+    message ExtraFileResourcesProto {
+      repeated string extra_file_resources = 1 [json_name = "extraFileResources"];
+    }
+    message ISearchPatternBuilderProto {
+      optional string uri = 1 [json_name = "uri"];
+      optional .aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto pattern = 2 [json_name = "pattern"];
+    }
+  }
+  message IPatternInfoProto {
+    string pattern = 1 [json_name = "pattern"];
+    optional bool is_reg_exp = 2 [json_name = "isRegExp"];
+    optional bool is_word_match = 3 [json_name = "isWordMatch"];
+    optional string word_separators = 4 [json_name = "wordSeparators"];
+    optional bool is_multiline = 5 [json_name = "isMultiline"];
+    optional bool is_unicode = 6 [json_name = "isUnicode"];
+    optional bool is_case_sensitive = 7 [json_name = "isCaseSensitive"];
+    optional .aiserver.v1.RipgrepSearchParams.IPatternInfoProto.INotebookPatternInfoProto notebook_info = 8 [json_name = "notebookInfo"];
+    optional bool pattern_was_escaped = 9 [json_name = "patternWasEscaped"];
+    message INotebookPatternInfoProto {
+      optional bool is_in_notebook_markdown_input = 1 [json_name = "isInNotebookMarkdownInput"];
+      optional bool is_in_notebook_markdown_preview = 2 [json_name = "isInNotebookMarkdownPreview"];
+      optional bool is_in_notebook_cell_input = 3 [json_name = "isInNotebookCellInput"];
+      optional bool is_in_notebook_cell_output = 4 [json_name = "isInNotebookCellOutput"];
+    }
+  }
+}
+
+message ReadFileParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  bool read_entire_file = 2 [json_name = "readEntireFile"];
+  optional int32 start_line_one_indexed = 3 [json_name = "startLineOneIndexed"];
+  optional int32 end_line_one_indexed_inclusive = 4 [json_name = "endLineOneIndexedInclusive"];
+  bool file_is_allowed_to_be_read_entirely = 5 [json_name = "fileIsAllowedToBeReadEntirely"];
+  optional int32 max_lines = 6 [json_name = "maxLines"];
+  optional int32 max_chars = 7 [json_name = "maxChars"];
+  optional int32 min_lines = 8 [json_name = "minLines"];
+}
+
+message ListDirParams {
+  string directory_path = 1 [json_name = "directoryPath"];
+}
+
+message EditFileParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string language = 2 [json_name = "language"];
+  string contents = 3 [json_name = "contents"];
+  bool blocking = 4 [json_name = "blocking"];
+  optional string instructions = 5 [json_name = "instructions"];
+  optional string old_string = 6 [json_name = "oldString"];
+  optional string new_string = 7 [json_name = "newString"];
+  optional bool allow_multiple_matches = 8 [json_name = "allowMultipleMatches"];
+  repeated .aiserver.v1.LineRange line_ranges = 9 [json_name = "lineRanges"];
+  optional bool use_whitespace_insensitive_fallback = 10 [json_name = "useWhitespaceInsensitiveFallback"];
+  optional bool use_did_you_mean_fuzzy_match = 11 [json_name = "useDidYouMeanFuzzyMatch"];
+  optional bool should_edit_file_fail_for_large_files = 12 [json_name = "shouldEditFileFailForLargeFiles"];
+  optional int32 notebook_cell_idx = 13 [json_name = "notebookCellIdx"];
+  optional bool is_new_cell = 14 [json_name = "isNewCell"];
+  optional string cell_language = 15 [json_name = "cellLanguage"];
+  optional bool gracefully_handle_recoverable_errors = 16 [json_name = "gracefullyHandleRecoverableErrors"];
+  optional string edit_category = 17 [json_name = "editCategory"];
+  optional bool should_eagerly_process_lints = 18 [json_name = "shouldEagerlyProcessLints"];
+}
+
+message ToolCallFileSearchParams {
+  string query = 1 [json_name = "query"];
+}
+
+message SemanticSearchFullParams {
+  optional .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  string query = 2 [json_name = "query"];
+  optional string include_pattern = 3 [json_name = "includePattern"];
+  optional string exclude_pattern = 4 [json_name = "excludePattern"];
+  int32 top_k = 5 [json_name = "topK"];
+  repeated .aiserver.v1.PullRequestReference pr_references = 6 [json_name = "prReferences"];
+  optional bool pr_search_on = 7 [json_name = "prSearchOn"];
+  optional string explanation = 8 [json_name = "explanation"];
+  repeated .aiserver.v1.CodeResult code_results = 9 [json_name = "codeResults"];
+}
+
+message DeleteFileParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message ReapplyParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message RunTerminalCommandV2Params {
+  string command = 1 [json_name = "command"];
+  optional string cwd = 2 [json_name = "cwd"];
+  optional bool new_session = 3 [json_name = "newSession"];
+  optional .aiserver.v1.RunTerminalCommandV2Params.ExecutionOptions options = 4 [json_name = "options"];
+  bool is_background = 5 [json_name = "isBackground"];
+  bool require_user_approval = 6 [json_name = "requireUserApproval"];
+  optional .aiserver.v1.ShellCommandParsingResult parsing_result = 7 [json_name = "parsingResult"];
+  optional int32 idle_timeout_seconds = 8 [json_name = "idleTimeoutSeconds"];
+  optional .agent.v1.SandboxPolicy requested_sandbox_policy = 9 [json_name = "requestedSandboxPolicy"];
+  optional int64 file_output_threshold_bytes = 10 [json_name = "fileOutputThresholdBytes"];
+  optional string command_description = 11 [json_name = "commandDescription"];
+  optional .agent.v1.CommandClassifierResult classifier_result = 12 [json_name = "classifierResult"];
+  message ExecutionOptions {
+    optional int32 timeout = 1 [json_name = "timeout"];
+    optional bool skip_ai_check = 2 [json_name = "skipAiCheck"];
+    optional int32 command_run_timeout_ms = 3 [json_name = "commandRunTimeoutMs"];
+    optional int32 command_change_check_interval_ms = 4 [json_name = "commandChangeCheckIntervalMs"];
+    optional int32 ai_finish_check_max_attempts = 5 [json_name = "aiFinishCheckMaxAttempts"];
+    optional int32 ai_finish_check_interval_ms = 6 [json_name = "aiFinishCheckIntervalMs"];
+    optional int32 delayer_interval_ms = 7 [json_name = "delayerIntervalMs"];
+    optional bool ai_check_for_hangs = 8 [json_name = "aiCheckForHangs"];
+  }
+}
+
+message FetchRulesParams {
+  repeated string rule_names = 1 [json_name = "ruleNames"];
+}
+
+message WebSearchParams {
+  string search_term = 1 [json_name = "searchTerm"];
+}
+
+message MCPParams {
+  repeated .aiserver.v1.MCPParams.Tool tools = 1 [json_name = "tools"];
+  optional int64 file_output_threshold_bytes = 2 [json_name = "fileOutputThresholdBytes"];
+  message Tool {
+    string name = 1 [json_name = "name"];
+    string description = 2 [json_name = "description"];
+    string parameters = 3 [json_name = "parameters"];
+    string server_name = 4 [json_name = "serverName"];
+    optional .aiserver.v1.MCPParams.TranscriptDisplay transcript_display = 5 [json_name = "transcriptDisplay"];
+  }
+  message TranscriptDisplay {
+    string loading = 1 [json_name = "loading"];
+    string success = 2 [json_name = "success"];
+    string error = 3 [json_name = "error"];
+  }
+}
+
+message SearchSymbolsParams {
+  string query = 1 [json_name = "query"];
+}
+
+message GotodefParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string symbol = 2 [json_name = "symbol"];
+  int32 start_line = 3 [json_name = "startLine"];
+  int32 end_line = 4 [json_name = "endLine"];
+}
+
+message BackgroundComposerFollowupParams {
+  string proposed_followup = 1 [json_name = "proposedFollowup"];
+  string bc_id = 2 [json_name = "bcId"];
+}
+
+message KnowledgeBaseParams {
+  string knowledge_to_store = 1 [json_name = "knowledgeToStore"];
+  string title = 2 [json_name = "title"];
+  optional string existing_knowledge_id = 3 [json_name = "existingKnowledgeId"];
+  optional string action = 4 [json_name = "action"];
+}
+
+message FetchPullRequestParams {
+  string pull_number_or_commit_hash = 1 [json_name = "pullNumberOrCommitHash"];
+  optional string repo = 2 [json_name = "repo"];
+  optional bool is_github = 3 [json_name = "isGithub"];
+}
+
+message DeepSearchParams {
+  string query = 1 [json_name = "query"];
+}
+
+message CreateDiagramParams {
+  string content = 1 [json_name = "content"];
+}
+
+message FixLintsParams {
+}
+
+message ReadLintsParams {
+  string path = 1 [json_name = "path"];
+  repeated string paths = 2 [json_name = "paths"];
+}
+
+message TaskParams {
+  string task_description = 1 [json_name = "taskDescription"];
+  optional bool async = 2 [json_name = "async"];
+  repeated string allowed_write_directories = 3 [json_name = "allowedWriteDirectories"];
+  string task_title = 4 [json_name = "taskTitle"];
+  optional string model_override = 5 [json_name = "modelOverride"];
+  optional bool max_mode_override = 6 [json_name = "maxModeOverride"];
+  optional bool default_expanded_while_running = 7 [json_name = "defaultExpandedWhileRunning"];
+}
+
+message AwaitTaskParams {
+  repeated string ids = 1 [json_name = "ids"];
+}
+
+message TodoReadParams {
+  bool read = 1 [json_name = "read"];
+}
+
+message TodoWriteParams {
+  repeated .aiserver.v1.TodoItem todos = 1 [json_name = "todos"];
+  bool merge = 2 [json_name = "merge"];
+}
+
+message EditFileV2Params {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional string contents_after_edit = 2 [json_name = "contentsAfterEdit"];
+  optional bool waiting_for_file_contents = 3 [json_name = "waitingForFileContents"];
+  bool should_send_back_linter_errors = 6 [json_name = "shouldSendBackLinterErrors"];
+  optional .aiserver.v1.EditFileResult.FileDiff diff = 7 [json_name = "diff"];
+  string result_for_model = 8 [json_name = "resultForModel"];
+  optional string streaming_content = 9 [json_name = "streamingContent"];
+  optional bool no_codeblock = 10 [json_name = "noCodeblock"];
+  optional bool cloud_agent_edit = 11 [json_name = "cloudAgentEdit"];
+  oneof streaming_edit {
+    .aiserver.v1.EditFileV2Params.StreamingEditText text = 4 [json_name = "text"];
+    .aiserver.v1.EditFileV2Params.StreamingEditCode code = 5 [json_name = "code"];
+  }
+  message StreamingEditText {
+    string text = 1 [json_name = "text"];
+  }
+  message StreamingEditCode {
+    string code = 1 [json_name = "code"];
+  }
+}
+
+message ListDirV2Params {
+  string target_directory = 1 [json_name = "targetDirectory"];
+  repeated string ignore_globs = 2 [json_name = "ignoreGlobs"];
+  optional bool should_enrich_terminal_metadata = 3 [json_name = "shouldEnrichTerminalMetadata"];
+}
+
+message ReadFileV2Params {
+  string target_file = 1 [json_name = "targetFile"];
+  optional int32 offset = 2 [json_name = "offset"];
+  optional int32 limit = 3 [json_name = "limit"];
+  int32 chars_limit = 4 [json_name = "charsLimit"];
+  string effective_uri = 5 [json_name = "effectiveUri"];
+  optional bool enable_line_numbers = 6 [json_name = "enableLineNumbers"];
+}
+
+message RipgrepRawSearchParams {
+  string pattern = 1 [json_name = "pattern"];
+  optional string path = 2 [json_name = "path"];
+  optional string glob = 3 [json_name = "glob"];
+  optional string output_mode = 4 [json_name = "outputMode"];
+  optional int32 context_before = 5 [json_name = "contextBefore"];
+  optional int32 context_after = 6 [json_name = "contextAfter"];
+  optional int32 context = 7 [json_name = "context"];
+  optional bool case_insensitive = 8 [json_name = "caseInsensitive"];
+  optional string type = 9 [json_name = "type"];
+  optional int32 head_limit = 10 [json_name = "headLimit"];
+  optional bool multiline = 11 [json_name = "multiline"];
+  optional string sort = 12 [json_name = "sort"];
+  optional bool sort_ascending = 13 [json_name = "sortAscending"];
+  repeated string ignore_globs = 14 [json_name = "ignoreGlobs"];
+  optional int32 offset = 15 [json_name = "offset"];
+}
+
+message GlobFileSearchParams {
+  string target_directory = 1 [json_name = "targetDirectory"];
+  string glob_pattern = 2 [json_name = "globPattern"];
+}
+
+message CreatePlanParams {
+  string plan = 1 [json_name = "plan"];
+  string title = 2 [json_name = "title"];
+  string summary = 3 [json_name = "summary"];
+  repeated .aiserver.v1.Step steps = 4 [json_name = "steps"];
+  string old_str = 5 [json_name = "oldStr"];
+  string new_str = 6 [json_name = "newStr"];
+  string name = 7 [json_name = "name"];
+  repeated .aiserver.v1.TodoItem todos = 8 [json_name = "todos"];
+  string overview = 9 [json_name = "overview"];
+  bool is_spec = 10 [json_name = "isSpec"];
+  bool is_project = 11 [json_name = "isProject"];
+  repeated .aiserver.v1.PlanPhase phases = 12 [json_name = "phases"];
+}
+
+message ListMcpResourcesParams {
+  optional string server = 1 [json_name = "server"];
+}
+
+message ReadMcpResourceParams {
+  string server = 1 [json_name = "server"];
+  string uri = 2 [json_name = "uri"];
+  optional string download_path = 3 [json_name = "downloadPath"];
+}
+
+message ReadProjectParams {
+}
+
+message UpdateProjectParams {
+  repeated .aiserver.v1.UpdateProjectStringReplacement string_replacements = 1 [json_name = "stringReplacements"];
+  string summary = 2 [json_name = "summary"];
+}
+
+message TaskV2Params {
+  string description = 1 [json_name = "description"];
+  string prompt = 2 [json_name = "prompt"];
+  string subagent_type = 3 [json_name = "subagentType"];
+  optional string model = 4 [json_name = "model"];
+  string name = 5 [json_name = "name"];
+  .agent.v1.TaskMode mode = 6 [json_name = "mode"];
+}
+
+message CallMcpToolParams {
+  string server = 1 [json_name = "server"];
+  string tool_name = 2 [json_name = "toolName"];
+  optional .google.protobuf.Struct tool_args = 3 [json_name = "toolArgs"];
+}
+
+message ApplyAgentDiffParams {
+  string agent_id = 1 [json_name = "agentId"];
+}
+
+message AskQuestionParams {
+  string title = 1 [json_name = "title"];
+  repeated .aiserver.v1.AskQuestionParams.Question questions = 2 [json_name = "questions"];
+  bool run_async = 3 [json_name = "runAsync"];
+  message Question {
+    string id = 1 [json_name = "id"];
+    string prompt = 2 [json_name = "prompt"];
+    repeated .aiserver.v1.AskQuestionParams.Option options = 3 [json_name = "options"];
+    bool allow_multiple = 4 [json_name = "allowMultiple"];
+  }
+  message Option {
+    string id = 1 [json_name = "id"];
+    string label = 2 [json_name = "label"];
+  }
+}
+
+message SwitchModeParams {
+  string from_mode_id = 1 [json_name = "fromModeId"];
+  string to_mode_id = 2 [json_name = "toModeId"];
+  optional string explanation = 3 [json_name = "explanation"];
+}
+
+message ComputerUseParams {
+  repeated .agent.v1.ComputerUseAction actions = 1 [json_name = "actions"];
+}
+
+message WebFetchParams {
+  string url = 1 [json_name = "url"];
+}
+
+message ReportBugfixResultsParams {
+  string summary = 1 [json_name = "summary"];
+  repeated .agent.v1.BugfixResultItem results = 2 [json_name = "results"];
+}
+
+message McpAuthParams {
+  string server_identifier = 1 [json_name = "serverIdentifier"];
+}
+
+message GetMcpToolsParams {
+  optional string server = 1 [json_name = "server"];
+  optional string tool_name = 2 [json_name = "toolName"];
+  optional string pattern = 3 [json_name = "pattern"];
+}
+
+message ConnectScmParams {
+  optional .aiserver.v1.ConnectScmGithub github = 1 [json_name = "github"];
+}
+
+message ConnectScmGithub {
+  optional .aiserver.v1.ConnectScmGithubRepository repository = 1 [json_name = "repository"];
+  optional string ghe_application = 2 [json_name = "gheApplication"];
+}
+
+message ConnectScmGithubRepository {
+  string owner = 1 [json_name = "owner"];
+  string repo = 2 [json_name = "repo"];
+}
+
+message UpdateProjectStringReplacement {
+  string old_string = 1 [json_name = "oldString"];
+  string new_string = 2 [json_name = "newString"];
+}
+
+message Step {
+  string id = 1 [json_name = "id"];
+  string title = 2 [json_name = "title"];
+  string description = 3 [json_name = "description"];
+  string instructions = 4 [json_name = "instructions"];
+  repeated string prerequisites = 5 [json_name = "prerequisites"];
+  string sub_composer_id = 6 [json_name = "subComposerId"];
+}
+
+message PlanPhase {
+  string name = 1 [json_name = "name"];
+  repeated .aiserver.v1.TodoItem todos = 2 [json_name = "todos"];
+}
+
+message ShellCommandParsingResult {
+  bool parsing_failed = 1 [json_name = "parsingFailed"];
+  repeated .aiserver.v1.ShellCommandParsingResult.ExecutableCommand executable_commands = 2 [json_name = "executableCommands"];
+  bool has_redirects = 3 [json_name = "hasRedirects"];
+  bool has_command_substitution = 4 [json_name = "hasCommandSubstitution"];
+  optional bool all_redirects_are_dev_null = 5 [json_name = "allRedirectsAreDevNull"];
+  repeated .aiserver.v1.ShellCommandParsingResult.Redirect redirects = 6 [json_name = "redirects"];
+  message ExecutableCommand {
+    string name = 1 [json_name = "name"];
+    repeated .aiserver.v1.ShellCommandParsingResult.ExecutableCommandArg args = 2 [json_name = "args"];
+    string full_text = 3 [json_name = "fullText"];
+  }
+  message Redirect {
+    string operator = 1 [json_name = "operator"];
+    repeated uint32 destination_fds = 2 [json_name = "destinationFds"];
+    string target_node_type = 3 [json_name = "targetNodeType"];
+    optional string target_text = 4 [json_name = "targetText"];
+  }
+  message ExecutableCommandArg {
+    string type = 1 [json_name = "type"];
+    string value = 2 [json_name = "value"];
+  }
+}
+
+message PullRequestReference {
+  string sha = 1 [json_name = "sha"];
+  float score = 2 [json_name = "score"];
+  optional string title = 3 [json_name = "title"];
+  optional string summary = 4 [json_name = "summary"];
+  optional uint32 pr_number = 5 [json_name = "prNumber"];
+  optional string author = 6 [json_name = "author"];
+  optional string date = 7 [json_name = "date"];
+  repeated string changed_files = 8 [json_name = "changedFiles"];
+}
+
+message ReadSemsearchFilesResult {
+  repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+  repeated .aiserver.v1.File all_files = 2 [json_name = "allFiles"];
+  repeated .aiserver.v1.MissingFile missing_files = 3 [json_name = "missingFiles"];
+  repeated .aiserver.v1.Knowledge knowledge_results = 4 [json_name = "knowledgeResults"];
+  repeated .aiserver.v1.ToolPullRequestResult pr_results = 5 [json_name = "prResults"];
+  optional string git_remote_url = 6 [json_name = "gitRemoteUrl"];
+  optional bool pr_hydration_timed_out = 7 [json_name = "prHydrationTimedOut"];
+}
+
+message RipgrepSearchResult {
+  optional .aiserver.v1.RipgrepSearchResultInternal internal = 1 [json_name = "internal"];
+}
+
+message ReadFileResult {
+  string contents = 1 [json_name = "contents"];
+  bool did_downgrade_to_line_range = 2 [json_name = "didDowngradeToLineRange"];
+  bool did_shorten_line_range = 3 [json_name = "didShortenLineRange"];
+  bool did_set_default_line_range = 4 [json_name = "didSetDefaultLineRange"];
+  optional string full_file_contents = 5 [json_name = "fullFileContents"];
+  optional string outline = 6 [json_name = "outline"];
+  optional int32 start_line_one_indexed = 7 [json_name = "startLineOneIndexed"];
+  optional int32 end_line_one_indexed_inclusive = 8 [json_name = "endLineOneIndexedInclusive"];
+  string relative_workspace_path = 9 [json_name = "relativeWorkspacePath"];
+  bool did_shorten_char_range = 10 [json_name = "didShortenCharRange"];
+  optional bool read_full_file = 11 [json_name = "readFullFile"];
+  optional int32 total_lines = 12 [json_name = "totalLines"];
+  repeated .aiserver.v1.CursorRule matching_cursor_rules = 13 [json_name = "matchingCursorRules"];
+  optional .aiserver.v1.FileGit file_git_context = 14 [json_name = "fileGitContext"];
+}
+
+message EditFileResult {
+  optional .aiserver.v1.EditFileResult.FileDiff diff = 1 [json_name = "diff"];
+  bool is_applied = 2 [json_name = "isApplied"];
+  bool apply_failed = 3 [json_name = "applyFailed"];
+  repeated .aiserver.v1.LinterError linter_errors = 4 [json_name = "linterErrors"];
+  optional bool rejected = 5 [json_name = "rejected"];
+  optional int32 num_matches = 6 [json_name = "numMatches"];
+  optional bool whitespace_insensitive_fallback_found_match = 7 [json_name = "whitespaceInsensitiveFallbackFoundMatch"];
+  optional bool no_match_found_in_line_ranges = 8 [json_name = "noMatchFoundInLineRanges"];
+  optional int32 num_lines_in_file = 9 [json_name = "numLinesInFile"];
+  optional bool is_subagent_edit = 10 [json_name = "isSubagentEdit"];
+  optional .aiserver.v1.EditFileResult.RecoverableError recoverable_error = 11 [json_name = "recoverableError"];
+  optional bool diff_became_no_op_due_to_on_save_fixes = 12 [json_name = "diffBecameNoOpDueToOnSaveFixes"];
+  optional .aiserver.v1.EditFileResult.EditFileHumanReview human_review = 13 [json_name = "humanReview"];
+  optional .aiserver.v1.EditFileResult.HumanFeedback human_feedback = 14 [json_name = "humanFeedback"];
+  optional bool should_eagerly_process_lints = 15 [json_name = "shouldEagerlyProcessLints"];
+  optional .aiserver.v1.HumanReview human_review_v2 = 16 [json_name = "humanReviewV2"];
+  optional bool were_all_new_linter_errors_resolved_by_this_edit = 17 [json_name = "wereAllNewLinterErrorsResolvedByThisEdit"];
+  message FileDiff {
+    repeated .aiserver.v1.EditFileResult.FileDiff.ChunkDiff chunks = 1 [json_name = "chunks"];
+    .aiserver.v1.EditFileResult.FileDiff.Editor editor = 2 [json_name = "editor"];
+    bool hit_timeout = 3 [json_name = "hitTimeout"];
+    message ChunkDiff {
+      string diff_string = 1 [json_name = "diffString"];
+      int32 old_start = 2 [json_name = "oldStart"];
+      int32 new_start = 3 [json_name = "newStart"];
+      int32 old_lines = 4 [json_name = "oldLines"];
+      int32 new_lines = 5 [json_name = "newLines"];
+      int32 lines_removed = 6 [json_name = "linesRemoved"];
+      int32 lines_added = 7 [json_name = "linesAdded"];
+    }
+    enum Editor {
+      EDITOR_UNSPECIFIED = 0;
+      EDITOR_AI = 1;
+      EDITOR_HUMAN = 2;
+    }
+  }
+  message RecoverableError {
+    .aiserver.v1.EditFileResult.RecoverableError.RecoverableErrorType error_type = 1 [json_name = "errorType"];
+    string model_message = 2 [json_name = "modelMessage"];
+    enum RecoverableErrorType {
+      RECOVERABLE_ERROR_TYPE_UNSPECIFIED = 0;
+      RECOVERABLE_ERROR_TYPE_SEARCH_STRING_NOT_FOUND = 1;
+      RECOVERABLE_ERROR_TYPE_AMBIGUOUS_SEARCH_STRING = 2;
+    }
+  }
+  message EditFileHumanReview {
+    bool is_edit_accepted = 1 [json_name = "isEditAccepted"];
+    string text_result = 2 [json_name = "textResult"];
+    bool stop_and_get_new_user_input = 3 [json_name = "stopAndGetNewUserInput"];
+  }
+  message HumanFeedback {
+    string selected_option = 1 [json_name = "selectedOption"];
+    string feedback_text = 2 [json_name = "feedbackText"];
+    bool submit_feedback_as_new_message = 3 [json_name = "submitFeedbackAsNewMessage"];
+    string bubble_id = 4 [json_name = "bubbleId"];
+  }
+}
+
+message ToolCallFileSearchResult {
+  repeated .aiserver.v1.ToolCallFileSearchResult.File files = 1 [json_name = "files"];
+  optional bool limit_hit = 2 [json_name = "limitHit"];
+  int32 num_results = 3 [json_name = "numResults"];
+  message File {
+    string uri = 1 [json_name = "uri"];
+  }
+}
+
+message SemanticSearchFullResult {
+  repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+  repeated .aiserver.v1.File all_files = 2 [json_name = "allFiles"];
+  repeated .aiserver.v1.MissingFile missing_files = 3 [json_name = "missingFiles"];
+  repeated .aiserver.v1.Knowledge knowledge_results = 4 [json_name = "knowledgeResults"];
+  repeated .aiserver.v1.ToolPullRequestResult pr_results = 5 [json_name = "prResults"];
+  optional string git_remote_url = 6 [json_name = "gitRemoteUrl"];
+  optional bool pr_hydration_timed_out = 7 [json_name = "prHydrationTimedOut"];
+}
+
+message DeleteFileResult {
+  bool rejected = 1 [json_name = "rejected"];
+  bool file_non_existent = 2 [json_name = "fileNonExistent"];
+  bool file_deleted_successfully = 3 [json_name = "fileDeletedSuccessfully"];
+}
+
+message ReapplyResult {
+  optional .aiserver.v1.EditFileResult.FileDiff diff = 1 [json_name = "diff"];
+  bool is_applied = 2 [json_name = "isApplied"];
+  bool apply_failed = 3 [json_name = "applyFailed"];
+  repeated .aiserver.v1.LinterError linter_errors = 4 [json_name = "linterErrors"];
+  optional bool rejected = 5 [json_name = "rejected"];
+}
+
+message RunTerminalCommandV2Result {
+  string output = 1 [json_name = "output"];
+  int32 exit_code = 2 [json_name = "exitCode"];
+  optional bool rejected = 3 [json_name = "rejected"];
+  bool popped_out_into_background = 4 [json_name = "poppedOutIntoBackground"];
+  bool is_running_in_background = 5 [json_name = "isRunningInBackground"];
+  bool not_interrupted = 6 [json_name = "notInterrupted"];
+  string resulting_working_directory = 7 [json_name = "resultingWorkingDirectory"];
+  bool did_user_change = 8 [json_name = "didUserChange"];
+  .aiserver.v1.RunTerminalCommandEndedReason ended_reason = 9 [json_name = "endedReason"];
+  optional int32 exit_code_v2 = 10 [json_name = "exitCodeV2"];
+  optional string updated_command = 11 [json_name = "updatedCommand"];
+  string output_raw = 12 [json_name = "outputRaw"];
+  optional .aiserver.v1.HumanReview human_review_v2 = 13 [json_name = "humanReviewV2"];
+  optional .agent.v1.SandboxPolicy effective_sandbox_policy = 14 [json_name = "effectiveSandboxPolicy"];
+  optional int32 terminal_instance_id = 15 [json_name = "terminalInstanceId"];
+  optional .aiserver.v1.OutputLocation output_location = 16 [json_name = "outputLocation"];
+  optional string terminal_instance_path = 17 [json_name = "terminalInstancePath"];
+  optional uint32 background_shell_id = 18 [json_name = "backgroundShellId"];
+}
+
+message FetchRulesResult {
+  repeated .aiserver.v1.CursorRule rules = 1 [json_name = "rules"];
+}
+
+message WebSearchResult {
+  repeated .aiserver.v1.WebSearchResult.WebReference references = 1 [json_name = "references"];
+  optional bool is_final = 2 [json_name = "isFinal"];
+  optional bool rejected = 3 [json_name = "rejected"];
+  message WebReference {
+    string title = 1 [json_name = "title"];
+    string url = 2 [json_name = "url"];
+    string chunk = 3 [json_name = "chunk"];
+  }
+}
+
+message MCPResult {
+  string selected_tool = 1 [json_name = "selectedTool"];
+  string result = 2 [json_name = "result"];
+}
+
+message SearchSymbolsResult {
+  repeated .aiserver.v1.SearchSymbolsResult.SymbolMatch matches = 1 [json_name = "matches"];
+  optional bool rejected = 2 [json_name = "rejected"];
+  message SymbolMatch {
+    string name = 1 [json_name = "name"];
+    string uri = 2 [json_name = "uri"];
+    optional .aiserver.v1.Range range = 3 [json_name = "range"];
+    string secondary_text = 4 [json_name = "secondaryText"];
+    repeated .aiserver.v1.MatchRange label_matches = 5 [json_name = "labelMatches"];
+    repeated .aiserver.v1.MatchRange description_matches = 6 [json_name = "descriptionMatches"];
+    double score = 7 [json_name = "score"];
+  }
+}
+
+message BackgroundComposerFollowupResult {
+  string proposed_followup = 1 [json_name = "proposedFollowup"];
+  bool is_sent = 2 [json_name = "isSent"];
+}
+
+message KnowledgeBaseResult {
+  bool success = 1 [json_name = "success"];
+  string confirmation_message = 2 [json_name = "confirmationMessage"];
+  string id = 3 [json_name = "id"];
+}
+
+message FetchPullRequestResult {
+  string content = 1 [json_name = "content"];
+  uint32 pr_number = 2 [json_name = "prNumber"];
+  string title = 3 [json_name = "title"];
+  string body = 4 [json_name = "body"];
+  string author = 5 [json_name = "author"];
+  string date = 6 [json_name = "date"];
+  string diff = 7 [json_name = "diff"];
+  optional string sha = 8 [json_name = "sha"];
+  optional string external_link = 9 [json_name = "externalLink"];
+  optional string url = 10 [json_name = "url"];
+  repeated .aiserver.v1.IssueComment comments = 11 [json_name = "comments"];
+  repeated string labels = 12 [json_name = "labels"];
+  repeated string assignees = 13 [json_name = "assignees"];
+  optional bool is_issue = 14 [json_name = "isIssue"];
+  optional string state = 15 [json_name = "state"];
+  optional bool prompt_connect_github = 16 [json_name = "promptConnectGithub"];
+}
+
+message DeepSearchResult {
+  bool success = 1 [json_name = "success"];
+  string result = 2 [json_name = "result"];
+}
+
+message CreateDiagramResult {
+  optional string error = 1 [json_name = "error"];
+}
+
+message FixLintsResult {
+  repeated .aiserver.v1.FixLintsResult.FileResult file_results = 1 [json_name = "fileResults"];
+  message FileResult {
+    string file_path = 1 [json_name = "filePath"];
+    optional .aiserver.v1.EditFileResult.FileDiff diff = 2 [json_name = "diff"];
+    bool is_applied = 3 [json_name = "isApplied"];
+    bool apply_failed = 4 [json_name = "applyFailed"];
+    optional string error = 5 [json_name = "error"];
+    repeated .aiserver.v1.LinterError linter_errors = 6 [json_name = "linterErrors"];
+  }
+}
+
+message ReadLintsResult {
+  string path = 1 [json_name = "path"];
+  repeated .aiserver.v1.LinterError linter_errors = 2 [json_name = "linterErrors"];
+  repeated .aiserver.v1.LinterErrors linter_errors_by_file = 3 [json_name = "linterErrorsByFile"];
+}
+
+message GotodefResult {
+  repeated .aiserver.v1.GotodefDefinition definitions = 1 [json_name = "definitions"];
+}
+
+message TaskResult {
+  oneof result {
+    .aiserver.v1.TaskResult.CompletedTaskResult completed_task_result = 1 [json_name = "completedTaskResult"];
+    .aiserver.v1.TaskResult.AsyncTaskResult async_task_result = 2 [json_name = "asyncTaskResult"];
+  }
+  message CompletedTaskResult {
+    string summary = 1 [json_name = "summary"];
+    repeated .aiserver.v1.FixLintsResult.FileResult file_results = 2 [json_name = "fileResults"];
+    bool user_aborted = 3 [json_name = "userAborted"];
+    bool subagent_errored = 4 [json_name = "subagentErrored"];
+  }
+  message AsyncTaskResult {
+    string task_id = 1 [json_name = "taskId"];
+    bool user_aborted = 2 [json_name = "userAborted"];
+    bool subagent_errored = 3 [json_name = "subagentErrored"];
+  }
+}
+
+message AwaitTaskResult {
+  repeated .aiserver.v1.AwaitTaskResult.TaskResultItem task_results = 1 [json_name = "taskResults"];
+  repeated string missing_task_ids = 2 [json_name = "missingTaskIds"];
+  message TaskResultItem {
+    string task_id = 1 [json_name = "taskId"];
+    optional .aiserver.v1.TaskResult.CompletedTaskResult result = 2 [json_name = "result"];
+  }
+}
+
+message TodoReadResult {
+  repeated .aiserver.v1.TodoItem todos = 1 [json_name = "todos"];
+}
+
+message TodoWriteResult {
+  bool success = 1 [json_name = "success"];
+  repeated string ready_task_ids = 2 [json_name = "readyTaskIds"];
+  bool needs_in_progress_todos = 3 [json_name = "needsInProgressTodos"];
+  repeated .aiserver.v1.TodoItem final_todos = 4 [json_name = "finalTodos"];
+  repeated .aiserver.v1.TodoItem initial_todos = 5 [json_name = "initialTodos"];
+  bool was_merge = 6 [json_name = "wasMerge"];
+}
+
+message EditFileV2Result {
+  optional string contents_before_edit = 1 [json_name = "contentsBeforeEdit"];
+  bool file_was_created = 2 [json_name = "fileWasCreated"];
+  optional .aiserver.v1.EditFileResult.FileDiff diff = 3 [json_name = "diff"];
+  optional bool rejected = 4 [json_name = "rejected"];
+  repeated .aiserver.v1.LinterError linter_errors = 5 [json_name = "linterErrors"];
+  bool sent_back_linter_errors = 6 [json_name = "sentBackLinterErrors"];
+  optional .aiserver.v1.HumanReview human_review_v2 = 7 [json_name = "humanReviewV2"];
+  bool should_auto_fix_lints = 8 [json_name = "shouldAutoFixLints"];
+  optional string eol_sequence = 9 [json_name = "eolSequence"];
+  string result_for_model = 10 [json_name = "resultForModel"];
+  optional string detected_language = 11 [json_name = "detectedLanguage"];
+  optional string contents_after_edit = 12 [json_name = "contentsAfterEdit"];
+  optional string before_content_id = 13 [json_name = "beforeContentId"];
+  string after_content_id = 14 [json_name = "afterContentId"];
+}
+
+message ReadFileV2Result {
+  optional string contents = 1 [json_name = "contents"];
+  int32 num_characters_in_requested_range = 2 [json_name = "numCharactersInRequestedRange"];
+  optional bool offset_is_bigger_than_number_of_lines_in_file = 3 [json_name = "offsetIsBiggerThanNumberOfLinesInFile"];
+  optional int32 total_lines_in_file = 4 [json_name = "totalLinesInFile"];
+  repeated .aiserver.v1.CursorRule matching_cursor_rules = 5 [json_name = "matchingCursorRules"];
+  repeated .aiserver.v1.ImageProto images = 6 [json_name = "images"];
+}
+
+message RipgrepRawSearchResult {
+  oneof result {
+    .aiserver.v1.RipgrepRawSearchSuccess success = 1 [json_name = "success"];
+    .aiserver.v1.RipgrepRawSearchError error = 2 [json_name = "error"];
+  }
+}
+
+message GlobFileSearchResult {
+  repeated .aiserver.v1.GlobFileSearchResult.Directory directories = 1 [json_name = "directories"];
+  message Directory {
+    string abs_path = 1 [json_name = "absPath"];
+    repeated .aiserver.v1.GlobFileSearchResult.File files = 2 [json_name = "files"];
+    int32 total_files = 3 [json_name = "totalFiles"];
+    bool ripgrep_truncated = 4 [json_name = "ripgrepTruncated"];
+  }
+  message File {
+    string rel_path = 1 [json_name = "relPath"];
+  }
+}
+
+message CreatePlanResult {
+  string plan_uri = 4 [json_name = "planUri"];
+  oneof result {
+    .aiserver.v1.CreatePlanResult.Accepted accepted = 1 [json_name = "accepted"];
+    .aiserver.v1.CreatePlanResult.Rejected rejected = 2 [json_name = "rejected"];
+    .aiserver.v1.CreatePlanResult.Modified modified = 3 [json_name = "modified"];
+  }
+  message Accepted {
+    repeated .aiserver.v1.TodoItem final_todos = 1 [json_name = "finalTodos"];
+  }
+  message Rejected {
+  }
+  message Modified {
+    string new_plan = 1 [json_name = "newPlan"];
+    repeated .aiserver.v1.TodoItem final_todos = 2 [json_name = "finalTodos"];
+  }
+}
+
+message ListMcpResourcesResult {
+  repeated .aiserver.v1.ListMcpResourcesResult.MCPResource resources = 1 [json_name = "resources"];
+  message MCPResource {
+    string uri = 1 [json_name = "uri"];
+    optional string name = 2 [json_name = "name"];
+    optional string description = 3 [json_name = "description"];
+    optional string mime_type = 4 [json_name = "mimeType"];
+    string server = 5 [json_name = "server"];
+    map<string, string> annotations = 6 [json_name = "annotations"];
+  }
+}
+
+message ReadMcpResourceResult {
+  string uri = 1 [json_name = "uri"];
+  optional string name = 2 [json_name = "name"];
+  optional string description = 3 [json_name = "description"];
+  optional string mime_type = 4 [json_name = "mimeType"];
+  map<string, string> annotations = 7 [json_name = "annotations"];
+  oneof content {
+    string text = 5 [json_name = "text"];
+    bytes blob = 6 [json_name = "blob"];
+  }
+}
+
+message ReadProjectResult {
+  string plan = 1 [json_name = "plan"];
+}
+
+message UpdateProjectResult {
+  bool success = 1 [json_name = "success"];
+  string updated_plan = 2 [json_name = "updatedPlan"];
+}
+
+message TaskV2Result {
+  optional string agent_id = 1 [json_name = "agentId"];
+  bool is_background = 2 [json_name = "isBackground"];
+  optional string cloud_agent_bc_id = 3 [json_name = "cloudAgentBcId"];
+}
+
+message CallMcpToolResult {
+  string server = 1 [json_name = "server"];
+  string tool_name = 2 [json_name = "toolName"];
+  optional .google.protobuf.Struct result = 3 [json_name = "result"];
+}
+
+message AskQuestionResult {
+  repeated .aiserver.v1.AskQuestionResult.Answer answers = 1 [json_name = "answers"];
+  bool is_async = 2 [json_name = "isAsync"];
+  message Answer {
+    string question_id = 1 [json_name = "questionId"];
+    repeated string selected_option_ids = 2 [json_name = "selectedOptionIds"];
+    optional string freeform_text = 3 [json_name = "freeformText"];
+  }
+}
+
+message SwitchModeResult {
+  string from_mode_id = 1 [json_name = "fromModeId"];
+  string to_mode_id = 2 [json_name = "toModeId"];
+  bool auto_approved = 3 [json_name = "autoApproved"];
+  bool user_approved = 4 [json_name = "userApproved"];
+}
+
+message ComputerUseResult {
+  oneof result {
+    .agent.v1.ComputerUseSuccess success = 1 [json_name = "success"];
+    .agent.v1.ComputerUseError error = 2 [json_name = "error"];
+  }
+}
+
+message WebFetchResult {
+  string url = 1 [json_name = "url"];
+  optional string markdown = 2 [json_name = "markdown"];
+  optional string error = 3 [json_name = "error"];
+}
+
+message ReportBugfixResultsResult {
+  oneof result {
+    .agent.v1.ReportBugfixResultsSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReportBugfixResultsError error = 2 [json_name = "error"];
+  }
+}
+
+message McpAuthResult {
+  bool success = 1 [json_name = "success"];
+  string message = 2 [json_name = "message"];
+}
+
+message GetMcpToolsResult {
+  string content = 1 [json_name = "content"];
+  optional string output_file_path = 2 [json_name = "outputFilePath"];
+}
+
+message ConnectScmResult {
+  bool success = 1 [json_name = "success"];
+  string message = 2 [json_name = "message"];
+}
+
+message ToolResultAttachments {
+  repeated .aiserver.v1.TodoItem original_todos = 1 [json_name = "originalTodos"];
+  repeated .aiserver.v1.TodoItem updated_todos = 2 [json_name = "updatedTodos"];
+  repeated .aiserver.v1.NudgeMessage nudge_messages = 3 [json_name = "nudgeMessages"];
+  bool should_show_todo_write_reminder = 4 [json_name = "shouldShowTodoWriteReminder"];
+  .aiserver.v1.ToolResultAttachments.TodoReminderType todo_reminder_type = 5 [json_name = "todoReminderType"];
+  optional .aiserver.v1.ToolResultAttachments.DiscoveryBudgetReminder discovery_budget_reminder = 6 [json_name = "discoveryBudgetReminder"];
+  message DiscoveryBudgetReminder {
+    int32 discovery_rounds_remaining = 1 [json_name = "discoveryRoundsRemaining"];
+    optional string discovery_effort = 2 [json_name = "discoveryEffort"];
+  }
+  enum TodoReminderType {
+    TODO_REMINDER_TYPE_UNSPECIFIED = 0;
+    TODO_REMINDER_TYPE_EVERY_10_TURNS = 1;
+    TODO_REMINDER_TYPE_AFTER_EDIT = 2;
+  }
+}
+
+message NudgeMessage {
+  string raw_message = 1 [json_name = "rawMessage"];
+}
+
+message RipgrepRawSearchSuccess {
+  string pattern = 1 [json_name = "pattern"];
+  string path = 2 [json_name = "path"];
+  string output_mode = 3 [json_name = "outputMode"];
+  map<string, .aiserver.v1.RipgrepRawSearchUnionResult> workspace_results = 4 [json_name = "workspaceResults"];
+  optional .aiserver.v1.RipgrepRawSearchUnionResult active_editor_result = 5 [json_name = "activeEditorResult"];
+}
+
+message RipgrepRawSearchError {
+  string error = 1 [json_name = "error"];
+}
+
+message RipgrepRawSearchUnionResult {
+  oneof result {
+    .aiserver.v1.RipgrepRawSearchCountResult count = 1 [json_name = "count"];
+    .aiserver.v1.RipgrepRawSearchFilesResult files = 2 [json_name = "files"];
+    .aiserver.v1.RipgrepRawSearchContentResult content = 3 [json_name = "content"];
+  }
+}
+
+message RipgrepRawSearchCountResult {
+  repeated .aiserver.v1.RipgrepRawSearchFileCount counts = 1 [json_name = "counts"];
+  int32 total_files = 2 [json_name = "totalFiles"];
+  int32 total_matches = 3 [json_name = "totalMatches"];
+  bool client_truncated = 4 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 5 [json_name = "ripgrepTruncated"];
+  optional int32 head_limit_applied = 6 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 7 [json_name = "offsetApplied"];
+}
+
+message RipgrepRawSearchFilesResult {
+  repeated string files = 1 [json_name = "files"];
+  int32 total_files = 2 [json_name = "totalFiles"];
+  bool client_truncated = 3 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 4 [json_name = "ripgrepTruncated"];
+  repeated .aiserver.v1.RipgrepRawSearchFilesResult.FileEntry files_with_meta = 5 [json_name = "filesWithMeta"];
+  optional int32 head_limit_applied = 6 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 7 [json_name = "offsetApplied"];
+  message FileEntry {
+    string file = 1 [json_name = "file"];
+    bool is_dirty = 2 [json_name = "isDirty"];
+    bool is_out_of_workspace = 3 [json_name = "isOutOfWorkspace"];
+    optional string absolute_path = 4 [json_name = "absolutePath"];
+  }
+}
+
+message RipgrepRawSearchContentResult {
+  repeated .aiserver.v1.RipgrepRawSearchFileMatch matches = 1 [json_name = "matches"];
+  int32 total_lines = 2 [json_name = "totalLines"];
+  int32 total_matched_lines = 3 [json_name = "totalMatchedLines"];
+  bool client_truncated = 4 [json_name = "clientTruncated"];
+  bool ripgrep_truncated = 5 [json_name = "ripgrepTruncated"];
+  optional int32 head_limit_applied = 6 [json_name = "headLimitApplied"];
+  optional int32 offset_applied = 7 [json_name = "offsetApplied"];
+}
+
+message RipgrepRawSearchFileMatch {
+  string file = 1 [json_name = "file"];
+  repeated .aiserver.v1.RipgrepRawSearchContentMatch matches = 2 [json_name = "matches"];
+  optional bool is_dirty = 3 [json_name = "isDirty"];
+  optional bool is_out_of_workspace = 4 [json_name = "isOutOfWorkspace"];
+  optional string absolute_path = 5 [json_name = "absolutePath"];
+}
+
+message RipgrepRawSearchContentMatch {
+  int32 line_number = 1 [json_name = "lineNumber"];
+  string content = 2 [json_name = "content"];
+  bool content_truncated = 3 [json_name = "contentTruncated"];
+  bool is_context_line = 4 [json_name = "isContextLine"];
+}
+
+message RipgrepRawSearchFileCount {
+  string file = 1 [json_name = "file"];
+  int32 count = 2 [json_name = "count"];
+  optional bool is_dirty = 3 [json_name = "isDirty"];
+  optional bool is_out_of_workspace = 4 [json_name = "isOutOfWorkspace"];
+  optional string absolute_path = 5 [json_name = "absolutePath"];
+}
+
+message HumanReview {
+  string selected_option = 1 [json_name = "selectedOption"];
+  string feedback_text = 2 [json_name = "feedbackText"];
+  bool submit_feedback_as_new_message = 3 [json_name = "submitFeedbackAsNewMessage"];
+  string bubble_id = 4 [json_name = "bubbleId"];
+}
+
+message GotodefDefinition {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional string fully_qualified_name = 2 [json_name = "fullyQualifiedName"];
+  optional string symbol_kind = 3 [json_name = "symbolKind"];
+  int32 start_line = 4 [json_name = "startLine"];
+  int32 end_line = 5 [json_name = "endLine"];
+  repeated string code_context_lines = 6 [json_name = "codeContextLines"];
+}
+
+message IssueComment {
+  uint32 id = 1 [json_name = "id"];
+  string body = 2 [json_name = "body"];
+  optional string author = 3 [json_name = "author"];
+  string created_at = 4 [json_name = "createdAt"];
+  string updated_at = 5 [json_name = "updatedAt"];
+  optional string author_association = 6 [json_name = "authorAssociation"];
+}
+
+message Range {
+  int32 start_line = 1 [json_name = "startLine"];
+  int32 start_character = 2 [json_name = "startCharacter"];
+  int32 end_line = 3 [json_name = "endLine"];
+  int32 end_character = 4 [json_name = "endCharacter"];
+}
+
+message MatchRange {
+  int32 start = 1 [json_name = "start"];
+  int32 end = 2 [json_name = "end"];
+}
+
+message OutputLocation {
+  string file_path = 1 [json_name = "filePath"];
+  int64 size_bytes = 2 [json_name = "sizeBytes"];
+  int64 line_count = 3 [json_name = "lineCount"];
+}
+
+message MissingFile {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  .aiserver.v1.MissingFile.MissingReason missing_reason = 2 [json_name = "missingReason"];
+  optional int32 num_lines = 3 [json_name = "numLines"];
+  enum MissingReason {
+    MISSING_REASON_UNSPECIFIED = 0;
+    MISSING_REASON_TOO_LARGE = 1;
+    MISSING_REASON_NOT_FOUND = 2;
+  }
+}
+
+message Knowledge {
+  string knowledge = 1 [json_name = "knowledge"];
+  string title = 2 [json_name = "title"];
+}
+
+message ToolPullRequestResult {
+  string sha = 1 [json_name = "sha"];
+  string full_pr_contents = 2 [json_name = "fullPrContents"];
+  float score = 3 [json_name = "score"];
+  optional string title = 4 [json_name = "title"];
+  optional string summary = 5 [json_name = "summary"];
+  optional uint32 pr_number = 6 [json_name = "prNumber"];
+  repeated string changed_files = 7 [json_name = "changedFiles"];
+  optional string author = 8 [json_name = "author"];
+  optional string date = 9 [json_name = "date"];
+}
+
+message RipgrepSearchResultInternal {
+  repeated .aiserver.v1.RipgrepSearchResultInternal.IFileMatch results = 1 [json_name = "results"];
+  optional .aiserver.v1.RipgrepSearchResultInternal.SearchCompletionExitCode exit = 2 [json_name = "exit"];
+  optional bool limit_hit = 3 [json_name = "limitHit"];
+  repeated .aiserver.v1.RipgrepSearchResultInternal.ITextSearchCompleteMessage messages = 4 [json_name = "messages"];
+  oneof stats {
+    .aiserver.v1.RipgrepSearchResultInternal.IFileSearchStats file_search_stats = 5 [json_name = "fileSearchStats"];
+    .aiserver.v1.RipgrepSearchResultInternal.ITextSearchStats text_search_stats = 6 [json_name = "textSearchStats"];
+  }
+  message IFileMatch {
+    string resource = 1 [json_name = "resource"];
+    repeated .aiserver.v1.RipgrepSearchResultInternal.ITextSearchResult results = 2 [json_name = "results"];
+  }
+  message ITextSearchCompleteMessage {
+    string text = 1 [json_name = "text"];
+    .aiserver.v1.RipgrepSearchResultInternal.TextSearchCompleteMessageType type = 2 [json_name = "type"];
+    optional bool trusted = 3 [json_name = "trusted"];
+  }
+  message IFileSearchStats {
+    bool from_cache = 1 [json_name = "fromCache"];
+    int32 result_count = 5 [json_name = "resultCount"];
+    .aiserver.v1.RipgrepSearchResultInternal.IFileSearchStats.FileSearchProviderType type = 6 [json_name = "type"];
+    optional int32 sorting_time = 7 [json_name = "sortingTime"];
+    oneof detail_stats {
+      .aiserver.v1.RipgrepSearchResultInternal.ISearchEngineStats search_engine_stats = 2 [json_name = "searchEngineStats"];
+      .aiserver.v1.RipgrepSearchResultInternal.ICachedSearchStats cached_search_stats = 3 [json_name = "cachedSearchStats"];
+      .aiserver.v1.RipgrepSearchResultInternal.IFileSearchProviderStats file_search_provider_stats = 4 [json_name = "fileSearchProviderStats"];
+    }
+    enum FileSearchProviderType {
+      FILE_SEARCH_PROVIDER_TYPE_UNSPECIFIED = 0;
+      FILE_SEARCH_PROVIDER_TYPE_FILE_SEARCH_PROVIDER = 1;
+      FILE_SEARCH_PROVIDER_TYPE_SEARCH_PROCESS = 2;
+    }
+  }
+  message ITextSearchStats {
+    .aiserver.v1.RipgrepSearchResultInternal.ITextSearchStats.TextSearchProviderType type = 1 [json_name = "type"];
+    enum TextSearchProviderType {
+      TEXT_SEARCH_PROVIDER_TYPE_UNSPECIFIED = 0;
+      TEXT_SEARCH_PROVIDER_TYPE_TEXT_SEARCH_PROVIDER = 1;
+      TEXT_SEARCH_PROVIDER_TYPE_SEARCH_PROCESS = 2;
+      TEXT_SEARCH_PROVIDER_TYPE_AI_TEXT_SEARCH_PROVIDER = 3;
+    }
+  }
+  message ISearchEngineStats {
+    int32 file_walk_time = 1 [json_name = "fileWalkTime"];
+    int32 directories_walked = 2 [json_name = "directoriesWalked"];
+    int32 files_walked = 3 [json_name = "filesWalked"];
+    int32 cmd_time = 4 [json_name = "cmdTime"];
+    optional int32 cmd_result_count = 5 [json_name = "cmdResultCount"];
+  }
+  message ICachedSearchStats {
+    bool cache_was_resolved = 1 [json_name = "cacheWasResolved"];
+    int32 cache_lookup_time = 2 [json_name = "cacheLookupTime"];
+    int32 cache_filter_time = 3 [json_name = "cacheFilterTime"];
+    int32 cache_entry_count = 4 [json_name = "cacheEntryCount"];
+  }
+  message IFileSearchProviderStats {
+    int32 provider_time = 1 [json_name = "providerTime"];
+    int32 post_process_time = 2 [json_name = "postProcessTime"];
+  }
+  message ITextSearchResult {
+    oneof result {
+      .aiserver.v1.RipgrepSearchResultInternal.ITextSearchMatch match = 1 [json_name = "match"];
+      .aiserver.v1.RipgrepSearchResultInternal.ITextSearchContext context = 2 [json_name = "context"];
+    }
+  }
+  message ITextSearchMatch {
+    optional string uri = 1 [json_name = "uri"];
+    repeated .aiserver.v1.RipgrepSearchResultInternal.ISearchRangeSetPairing range_locations = 2 [json_name = "rangeLocations"];
+    string preview_text = 3 [json_name = "previewText"];
+    optional int32 webview_index = 4 [json_name = "webviewIndex"];
+    optional string cell_fragment = 5 [json_name = "cellFragment"];
+  }
+  message ITextSearchContext {
+    optional string uri = 1 [json_name = "uri"];
+    string text = 2 [json_name = "text"];
+    int32 line_number = 3 [json_name = "lineNumber"];
+  }
+  message ISearchRangeSetPairing {
+    optional .aiserver.v1.RipgrepSearchResultInternal.ISearchRange source = 1 [json_name = "source"];
+    optional .aiserver.v1.RipgrepSearchResultInternal.ISearchRange preview = 2 [json_name = "preview"];
+  }
+  message ISearchRange {
+    int32 start_line_number = 1 [json_name = "startLineNumber"];
+    int32 start_column = 2 [json_name = "startColumn"];
+    int32 end_line_number = 3 [json_name = "endLineNumber"];
+    int32 end_column = 4 [json_name = "endColumn"];
+  }
+  enum SearchCompletionExitCode {
+    SEARCH_COMPLETION_EXIT_CODE_UNSPECIFIED = 0;
+    SEARCH_COMPLETION_EXIT_CODE_NORMAL = 1;
+    SEARCH_COMPLETION_EXIT_CODE_NEW_SEARCH_STARTED = 2;
+  }
+  enum TextSearchCompleteMessageType {
+    TEXT_SEARCH_COMPLETE_MESSAGE_TYPE_UNSPECIFIED = 0;
+    TEXT_SEARCH_COMPLETE_MESSAGE_TYPE_INFORMATION = 1;
+    TEXT_SEARCH_COMPLETE_MESSAGE_TYPE_WARNING = 2;
+  }
+}
+
+message ToolResult {
+  oneof tool_result {
+    .aiserver.v1.BuiltinToolResult builtin_tool_result = 1 [json_name = "builtinToolResult"];
+    .aiserver.v1.CustomToolResult custom_tool_result = 2 [json_name = "customToolResult"];
+    .aiserver.v1.ErrorToolResult error_tool_result = 3 [json_name = "errorToolResult"];
+  }
+}
+
+message BuiltinToolResult {
+  .aiserver.v1.BuiltinTool tool = 1 [json_name = "tool"];
+  oneof result {
+    .aiserver.v1.SearchResult search_result = 2 [json_name = "searchResult"];
+    .aiserver.v1.ReadChunkResult read_chunk_result = 3 [json_name = "readChunkResult"];
+    .aiserver.v1.GotodefResult gotodef_result = 4 [json_name = "gotodefResult"];
+    .aiserver.v1.EditResult edit_result = 5 [json_name = "editResult"];
+    .aiserver.v1.UndoEditResult undo_edit_result = 6 [json_name = "undoEditResult"];
+    .aiserver.v1.EndResult end_result = 7 [json_name = "endResult"];
+    .aiserver.v1.NewFileResult new_file_result = 8 [json_name = "newFileResult"];
+    .aiserver.v1.AddTestResult add_test_result = 9 [json_name = "addTestResult"];
+    .aiserver.v1.RunTestResult run_test_result = 10 [json_name = "runTestResult"];
+    .aiserver.v1.DeleteTestResult delete_test_result = 11 [json_name = "deleteTestResult"];
+    .aiserver.v1.SaveFileResult save_file_result = 12 [json_name = "saveFileResult"];
+    .aiserver.v1.GetTestsResult get_tests_result = 13 [json_name = "getTestsResult"];
+    .aiserver.v1.GetSymbolsResult get_symbols_result = 14 [json_name = "getSymbolsResult"];
+    .aiserver.v1.SemanticSearchResult semantic_search_result = 15 [json_name = "semanticSearchResult"];
+    .aiserver.v1.GetProjectStructureResult get_project_structure_result = 16 [json_name = "getProjectStructureResult"];
+    .aiserver.v1.CreateRmFilesResult create_rm_files_result = 17 [json_name = "createRmFilesResult"];
+    .aiserver.v1.RunTerminalCommandsResult run_terminal_commands_result = 18 [json_name = "runTerminalCommandsResult"];
+    .aiserver.v1.NewEditResult new_edit_result = 19 [json_name = "newEditResult"];
+    .aiserver.v1.ReadWithLinterResult read_with_linter_result = 20 [json_name = "readWithLinterResult"];
+    .aiserver.v1.AddUiStepResult add_ui_step_result = 21 [json_name = "addUiStepResult"];
+    .aiserver.v1.ReadSemsearchFilesResult read_semsearch_files_result = 22 [json_name = "readSemsearchFilesResult"];
+    .aiserver.v1.DeleteFileResult delete_file_result = 24 [json_name = "deleteFileResult"];
+  }
+}
+
+message CustomToolResult {
+  string tool_id = 1 [json_name = "toolId"];
+  string result = 2 [json_name = "result"];
+}
+
+message ErrorToolResult {
+  string error_message = 1 [json_name = "errorMessage"];
+}
+
+message SearchResult {
+  repeated .aiserver.v1.SearchToolFileSearchResult file_results = 1 [json_name = "fileResults"];
+  int32 num_total_matches = 2 [json_name = "numTotalMatches"];
+  int32 num_total_matched_files = 3 [json_name = "numTotalMatchedFiles"];
+  bool num_total_may_be_incomplete = 4 [json_name = "numTotalMayBeIncomplete"];
+  bool files_only = 5 [json_name = "filesOnly"];
+}
+
+message ReadChunkResult {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 start_line_number = 2 [json_name = "startLineNumber"];
+  repeated string lines = 3 [json_name = "lines"];
+  int32 total_num_lines = 4 [json_name = "totalNumLines"];
+  bool cropped = 5 [json_name = "cropped"];
+}
+
+message EditResult {
+  repeated string feedback = 1 [json_name = "feedback"];
+  int32 context_start_line_number = 2 [json_name = "contextStartLineNumber"];
+  repeated string context_lines = 3 [json_name = "contextLines"];
+  string file = 4 [json_name = "file"];
+  int32 file_total_lines = 5 [json_name = "fileTotalLines"];
+  repeated .aiserver.v1.EditResult.Feedback structured_feedback = 6 [json_name = "structuredFeedback"];
+  message Feedback {
+    string message = 1 [json_name = "message"];
+    string severity = 2 [json_name = "severity"];
+    int32 start_line_number = 3 [json_name = "startLineNumber"];
+    int32 end_line_number = 4 [json_name = "endLineNumber"];
+    repeated .aiserver.v1.EditResult.RelatedInformation related_information = 5 [json_name = "relatedInformation"];
+  }
+  message RelatedInformation {
+    string message = 1 [json_name = "message"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    int32 end_line_number = 3 [json_name = "endLineNumber"];
+    string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
+  }
+}
+
+message UndoEditResult {
+  repeated string feedback = 1 [json_name = "feedback"];
+  int32 context_start_line_number = 2 [json_name = "contextStartLineNumber"];
+  repeated string context_lines = 3 [json_name = "contextLines"];
+  string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
+  int32 context_total_num_lines = 5 [json_name = "contextTotalNumLines"];
+  int32 file_total_lines = 6 [json_name = "fileTotalLines"];
+}
+
+message EndResult {
+}
+
+message NewFileResult {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 file_total_lines = 2 [json_name = "fileTotalLines"];
+}
+
+message AddTestResult {
+  repeated .aiserver.v1.AddTestResult.Feedback feedback = 1 [json_name = "feedback"];
+  message Feedback {
+    string message = 1 [json_name = "message"];
+    string severity = 2 [json_name = "severity"];
+    int32 start_line_number = 3 [json_name = "startLineNumber"];
+    int32 end_line_number = 4 [json_name = "endLineNumber"];
+    repeated .aiserver.v1.AddTestResult.RelatedInformation related_information = 5 [json_name = "relatedInformation"];
+  }
+  message RelatedInformation {
+    string message = 1 [json_name = "message"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    int32 end_line_number = 3 [json_name = "endLineNumber"];
+    string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
+  }
+}
+
+message RunTestResult {
+  string result = 1 [json_name = "result"];
+}
+
+message DeleteTestResult {
+}
+
+message SaveFileResult {
+}
+
+message GetTestsResult {
+  repeated .aiserver.v1.GetTestsResult.Test tests = 1 [json_name = "tests"];
+  message Test {
+    string name = 1 [json_name = "name"];
+    repeated string lines = 2 [json_name = "lines"];
+  }
+}
+
+message GetSymbolsResult {
+  repeated .aiserver.v1.DocumentSymbol symbols = 1 [json_name = "symbols"];
+}
+
+message SemanticSearchResult {
+  repeated .aiserver.v1.SemanticSearchResult.Item results = 1 [json_name = "results"];
+  map<string, string> files = 2 [json_name = "files"];
+  message Item {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    float score = 2 [json_name = "score"];
+    string content = 3 [json_name = "content"];
+    optional .aiserver.v1.SimpleRange range = 4 [json_name = "range"];
+    optional string original_content = 5 [json_name = "originalContent"];
+    repeated .aiserver.v1.DetailedLine detailed_lines = 6 [json_name = "detailedLines"];
+  }
+}
+
+message GetProjectStructureResult {
+  repeated .aiserver.v1.GetProjectStructureResult.File files = 1 [json_name = "files"];
+  string root_workspace_path = 2 [json_name = "rootWorkspacePath"];
+  message File {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string outline = 2 [json_name = "outline"];
+  }
+}
+
+message CreateRmFilesResult {
+  repeated string created_file_paths = 1 [json_name = "createdFilePaths"];
+  repeated string removed_file_paths = 2 [json_name = "removedFilePaths"];
+}
+
+message RunTerminalCommandsResult {
+  repeated string outputs = 1 [json_name = "outputs"];
+}
+
+message NewEditResult {
+}
+
+message ReadWithLinterResult {
+  string contents = 1 [json_name = "contents"];
+  repeated .aiserver.v1.Diagnostic diagnostics = 2 [json_name = "diagnostics"];
+}
+
+message AddUiStepResult {
+}
+
+message SearchToolFileSearchResult {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 num_matches = 2 [json_name = "numMatches"];
+  repeated .aiserver.v1.SearchToolFileSearchResult.Line potentially_relevant_lines = 3 [json_name = "potentiallyRelevantLines"];
+  bool cropped = 4 [json_name = "cropped"];
+  message Line {
+    int32 line_number = 1 [json_name = "lineNumber"];
+    string text = 2 [json_name = "text"];
+  }
+}
+
+message ToolCall {
+  oneof tool_call {
+    .aiserver.v1.BuiltinToolCall builtin_tool_call = 1 [json_name = "builtinToolCall"];
+    .aiserver.v1.CustomToolCall custom_tool_call = 2 [json_name = "customToolCall"];
+  }
+}
+
+message BuiltinToolCall {
+  .aiserver.v1.BuiltinTool tool = 1 [json_name = "tool"];
+  optional string tool_call_id = 22 [json_name = "toolCallId"];
+  oneof params {
+    .aiserver.v1.SearchParams search_params = 2 [json_name = "searchParams"];
+    .aiserver.v1.ReadChunkParams read_chunk_params = 3 [json_name = "readChunkParams"];
+    .aiserver.v1.GotodefParams gotodef_params = 4 [json_name = "gotodefParams"];
+    .aiserver.v1.EditParams edit_params = 5 [json_name = "editParams"];
+    .aiserver.v1.UndoEditParams undo_edit_params = 6 [json_name = "undoEditParams"];
+    .aiserver.v1.EndParams end_params = 7 [json_name = "endParams"];
+    .aiserver.v1.NewFileParams new_file_params = 8 [json_name = "newFileParams"];
+    .aiserver.v1.AddTestParams add_test_params = 9 [json_name = "addTestParams"];
+    .aiserver.v1.RunTestParams run_test_params = 10 [json_name = "runTestParams"];
+    .aiserver.v1.DeleteTestParams delete_test_params = 11 [json_name = "deleteTestParams"];
+    .aiserver.v1.SaveFileParams save_file_params = 12 [json_name = "saveFileParams"];
+    .aiserver.v1.GetTestsParams get_tests_params = 13 [json_name = "getTestsParams"];
+    .aiserver.v1.GetSymbolsParams get_symbols_params = 14 [json_name = "getSymbolsParams"];
+    .aiserver.v1.SemanticSearchParams semantic_search_params = 15 [json_name = "semanticSearchParams"];
+    .aiserver.v1.GetProjectStructureParams get_project_structure_params = 16 [json_name = "getProjectStructureParams"];
+    .aiserver.v1.CreateRmFilesParams create_rm_files_params = 17 [json_name = "createRmFilesParams"];
+    .aiserver.v1.RunTerminalCommandsParams run_terminal_commands_params = 18 [json_name = "runTerminalCommandsParams"];
+    .aiserver.v1.NewEditParams new_edit_params = 19 [json_name = "newEditParams"];
+    .aiserver.v1.ReadWithLinterParams read_with_linter_params = 20 [json_name = "readWithLinterParams"];
+    .aiserver.v1.AddUiStepParams add_ui_step_params = 21 [json_name = "addUiStepParams"];
+    .aiserver.v1.ReadSemsearchFilesParams read_semsearch_files_params = 23 [json_name = "readSemsearchFilesParams"];
+    .aiserver.v1.DeleteFileParams delete_file_params = 26 [json_name = "deleteFileParams"];
+  }
+}
+
+message CustomToolCall {
+  string tool_id = 1 [json_name = "toolId"];
+  string params = 2 [json_name = "params"];
+}
+
+message SearchParams {
+  string query = 1 [json_name = "query"];
+  bool regex = 2 [json_name = "regex"];
+  string include_pattern = 3 [json_name = "includePattern"];
+  string exclude_pattern = 4 [json_name = "excludePattern"];
+  bool filename_search = 5 [json_name = "filenameSearch"];
+}
+
+message ReadChunkParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 start_line_number = 2 [json_name = "startLineNumber"];
+  optional int32 num_lines = 3 [json_name = "numLines"];
+}
+
+message EditParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional int32 line_number = 2 [json_name = "lineNumber"];
+  int32 replace_num_lines = 3 [json_name = "replaceNumLines"];
+  repeated string new_lines = 4 [json_name = "newLines"];
+  string edit_id = 5 [json_name = "editId"];
+  .aiserver.v1.EditParams.FrontendEditType frontend_edit_type = 6 [json_name = "frontendEditType"];
+  optional bool replace_whole_file = 7 [json_name = "replaceWholeFile"];
+  optional bool auto_fix_all_linter_errors_in_file = 8 [json_name = "autoFixAllLinterErrorsInFile"];
+  enum FrontendEditType {
+    FRONTEND_EDIT_TYPE_UNSPECIFIED = 0;
+    FRONTEND_EDIT_TYPE_INLINE_DIFFS = 1;
+    FRONTEND_EDIT_TYPE_SIMPLE = 2;
+  }
+}
+
+message UndoEditParams {
+}
+
+message EndParams {
+}
+
+message NewFileParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message AddTestParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string test_name = 2 [json_name = "testName"];
+  string test_code = 3 [json_name = "testCode"];
+}
+
+message RunTestParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional string test_name = 2 [json_name = "testName"];
+}
+
+message DeleteTestParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional string test_name = 2 [json_name = "testName"];
+}
+
+message SaveFileParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message GetTestsParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message GetSymbolsParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional .aiserver.v1.GetSymbolsParams.LineRange line_range = 2 [json_name = "lineRange"];
+  bool include_children = 3 [json_name = "includeChildren"];
+  message LineRange {
+    int32 start_line_number = 1 [json_name = "startLineNumber"];
+    int32 end_line_number_inclusive = 2 [json_name = "endLineNumberInclusive"];
+  }
+}
+
+message SemanticSearchParams {
+  string query = 1 [json_name = "query"];
+  optional string include_pattern = 2 [json_name = "includePattern"];
+  optional string exclude_pattern = 3 [json_name = "excludePattern"];
+  int32 top_k = 4 [json_name = "topK"];
+  optional string index_id = 5 [json_name = "indexId"];
+  bool grab_whole_file = 6 [json_name = "grabWholeFile"];
+}
+
+message GetProjectStructureParams {
+}
+
+message CreateRmFilesParams {
+  repeated string removed_file_paths = 1 [json_name = "removedFilePaths"];
+  repeated string created_file_paths = 2 [json_name = "createdFilePaths"];
+  repeated string created_directory_paths = 3 [json_name = "createdDirectoryPaths"];
+}
+
+message RunTerminalCommandsParams {
+  repeated string commands = 1 [json_name = "commands"];
+  string commands_uuid = 2 [json_name = "commandsUuid"];
+}
+
+message NewEditParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  optional int32 start_line_number = 2 [json_name = "startLineNumber"];
+  optional int32 end_line_number = 3 [json_name = "endLineNumber"];
+  string text = 4 [json_name = "text"];
+  string edit_id = 5 [json_name = "editId"];
+  bool first_edit = 6 [json_name = "firstEdit"];
+}
+
+message ReadWithLinterParams {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message AddUiStepParams {
+  string conversation_id = 1 [json_name = "conversationId"];
+  oneof step {
+    .aiserver.v1.AddUiStepParams.SearchResults search_results = 2 [json_name = "searchResults"];
+  }
+  message SearchResults {
+    repeated .aiserver.v1.AddUiStepParams.SearchResult search_results = 1 [json_name = "searchResults"];
+  }
+  message SearchResult {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  }
+}
+
+message StreamedBackToolCall {
+  .aiserver.v1.ClientSideToolV2 tool = 1 [json_name = "tool"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  string name = 8 [json_name = "name"];
+  string raw_args = 9 [json_name = "rawArgs"];
+  optional .aiserver.v1.ToolResultError error = 10 [json_name = "error"];
+  optional uint32 tool_index = 50 [json_name = "toolIndex"];
+  optional string model_call_id = 51 [json_name = "modelCallId"];
+  oneof params {
+    .aiserver.v1.ReadSemsearchFilesStream read_semsearch_files_stream = 3 [json_name = "readSemsearchFilesStream"];
+    .aiserver.v1.RipgrepSearchStream ripgrep_search_stream = 5 [json_name = "ripgrepSearchStream"];
+    .aiserver.v1.ReadFileStream read_file_stream = 7 [json_name = "readFileStream"];
+    .aiserver.v1.ListDirStream list_dir_stream = 12 [json_name = "listDirStream"];
+    .aiserver.v1.EditFileStream edit_file_stream = 13 [json_name = "editFileStream"];
+    .aiserver.v1.ToolCallFileSearchStream file_search_stream = 14 [json_name = "fileSearchStream"];
+    .aiserver.v1.SemanticSearchFullStream semantic_search_full_stream = 19 [json_name = "semanticSearchFullStream"];
+    .aiserver.v1.DeleteFileStream delete_file_stream = 21 [json_name = "deleteFileStream"];
+    .aiserver.v1.ReapplyStream reapply_stream = 22 [json_name = "reapplyStream"];
+    .aiserver.v1.RunTerminalCommandV2Stream run_terminal_command_v2_stream = 25 [json_name = "runTerminalCommandV2Stream"];
+    .aiserver.v1.FetchRulesStream fetch_rules_stream = 26 [json_name = "fetchRulesStream"];
+    .aiserver.v1.WebSearchStream web_search_stream = 28 [json_name = "webSearchStream"];
+    .aiserver.v1.MCPStream mcp_stream = 29 [json_name = "mcpStream"];
+    .aiserver.v1.SearchSymbolsStream search_symbols_stream = 33 [json_name = "searchSymbolsStream"];
+    .aiserver.v1.BackgroundComposerFollowupStream background_composer_followup_stream = 34 [json_name = "backgroundComposerFollowupStream"];
+    .aiserver.v1.KnowledgeBaseStream knowledge_base_stream = 35 [json_name = "knowledgeBaseStream"];
+    .aiserver.v1.FetchPullRequestStream fetch_pull_request_stream = 36 [json_name = "fetchPullRequestStream"];
+    .aiserver.v1.DeepSearchStream deep_search_stream = 37 [json_name = "deepSearchStream"];
+    .aiserver.v1.CreateDiagramStream create_diagram_stream = 38 [json_name = "createDiagramStream"];
+    .aiserver.v1.FixLintsStream fix_lints_stream = 39 [json_name = "fixLintsStream"];
+    .aiserver.v1.ReadLintsStream read_lints_stream = 40 [json_name = "readLintsStream"];
+    .aiserver.v1.GotodefStream gotodef_stream = 41 [json_name = "gotodefStream"];
+    .aiserver.v1.TaskStream task_stream = 42 [json_name = "taskStream"];
+    .aiserver.v1.AwaitTaskStream await_task_stream = 43 [json_name = "awaitTaskStream"];
+    .aiserver.v1.TodoReadStream todo_read_stream = 44 [json_name = "todoReadStream"];
+    .aiserver.v1.TodoWriteStream todo_write_stream = 45 [json_name = "todoWriteStream"];
+    .aiserver.v1.EditFileV2Stream edit_file_v2_stream = 52 [json_name = "editFileV2Stream"];
+    .aiserver.v1.ListDirV2Stream list_dir_v2_stream = 53 [json_name = "listDirV2Stream"];
+    .aiserver.v1.ReadFileV2Stream read_file_v2_stream = 54 [json_name = "readFileV2Stream"];
+    .aiserver.v1.RipgrepRawSearchStream ripgrep_raw_search_stream = 55 [json_name = "ripgrepRawSearchStream"];
+    .aiserver.v1.GlobFileSearchStream glob_file_search_stream = 56 [json_name = "globFileSearchStream"];
+    .aiserver.v1.CreatePlanStream create_plan_stream = 57 [json_name = "createPlanStream"];
+    .aiserver.v1.ListMcpResourcesStream list_mcp_resources_stream = 58 [json_name = "listMcpResourcesStream"];
+    .aiserver.v1.ReadMcpResourceStream read_mcp_resource_stream = 59 [json_name = "readMcpResourceStream"];
+    .aiserver.v1.ReadProjectStream read_project_stream = 60 [json_name = "readProjectStream"];
+    .aiserver.v1.UpdateProjectStream update_project_stream = 61 [json_name = "updateProjectStream"];
+    .aiserver.v1.TaskV2Stream task_v2_stream = 62 [json_name = "taskV2Stream"];
+    .aiserver.v1.CallMcpToolStream call_mcp_tool_stream = 63 [json_name = "callMcpToolStream"];
+    .aiserver.v1.AskQuestionStream ask_question_stream = 64 [json_name = "askQuestionStream"];
+    .aiserver.v1.SwitchModeStream switch_mode_stream = 65 [json_name = "switchModeStream"];
+    .aiserver.v1.ComputerUseStream computer_use_stream = 66 [json_name = "computerUseStream"];
+    .aiserver.v1.WriteShellStdinStream write_shell_stdin_stream = 67 [json_name = "writeShellStdinStream"];
+    .aiserver.v1.WebFetchStream web_fetch_stream = 68 [json_name = "webFetchStream"];
+    .aiserver.v1.ReportBugfixResultsStream report_bugfix_results_stream = 69 [json_name = "reportBugfixResultsStream"];
+    .aiserver.v1.McpAuthStream mcp_auth_stream = 70 [json_name = "mcpAuthStream"];
+    .aiserver.v1.ConnectScmStream connect_scm_stream = 71 [json_name = "connectScmStream"];
+  }
+}
+
+message ReadSemsearchFilesStream {
+  int32 num_files = 1 [json_name = "numFiles"];
+}
+
+message RipgrepSearchStream {
+  string query = 1 [json_name = "query"];
+}
+
+message ReadFileStream {
+}
+
+message ListDirStream {
+}
+
+message EditFileStream {
+}
+
+message ToolCallFileSearchStream {
+  string query = 1 [json_name = "query"];
+}
+
+message SemanticSearchFullStream {
+  int32 num_files = 1 [json_name = "numFiles"];
+}
+
+message DeleteFileStream {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+}
+
+message ReapplyStream {
+}
+
+message RunTerminalCommandV2Stream {
+  string command = 1 [json_name = "command"];
+  bool is_background = 2 [json_name = "isBackground"];
+  optional .aiserver.v1.ShellCommandParsingResult parsing_result = 7 [json_name = "parsingResult"];
+  optional int32 idle_timeout_seconds = 8 [json_name = "idleTimeoutSeconds"];
+  optional .agent.v1.SandboxPolicy requested_sandbox_policy = 9 [json_name = "requestedSandboxPolicy"];
+}
+
+message FetchRulesStream {
+  repeated string rule_names = 1 [json_name = "ruleNames"];
+}
+
+message WebSearchStream {
+  string search_term = 1 [json_name = "searchTerm"];
+}
+
+message MCPStream {
+  repeated .aiserver.v1.MCPParams.Tool tools = 1 [json_name = "tools"];
+}
+
+message SearchSymbolsStream {
+  string query = 1 [json_name = "query"];
+}
+
+message GotodefStream {
+}
+
+message BackgroundComposerFollowupStream {
+}
+
+message KnowledgeBaseStream {
+}
+
+message FetchPullRequestStream {
+}
+
+message DeepSearchStream {
+}
+
+message CreateDiagramStream {
+}
+
+message FixLintsStream {
+}
+
+message ReadLintsStream {
+}
+
+message TaskStream {
+}
+
+message AwaitTaskStream {
+}
+
+message TodoReadStream {
+}
+
+message TodoWriteStream {
+}
+
+message EditFileV2Stream {
+}
+
+message ListDirV2Stream {
+}
+
+message ReadFileV2Stream {
+  optional .aiserver.v1.ReadFileV2Params params = 1 [json_name = "params"];
+}
+
+message RipgrepRawSearchStream {
+  string pattern = 1 [json_name = "pattern"];
+}
+
+message GlobFileSearchStream {
+}
+
+message CreatePlanStream {
+}
+
+message ListMcpResourcesStream {
+}
+
+message ReadMcpResourceStream {
+}
+
+message ReadProjectStream {
+}
+
+message UpdateProjectStream {
+}
+
+message TaskV2Stream {
+}
+
+message CallMcpToolStream {
+}
+
+message AskQuestionStream {
+  optional .aiserver.v1.AskQuestionParams params = 1 [json_name = "params"];
+}
+
+message SwitchModeStream {
+  optional .aiserver.v1.SwitchModeParams params = 1 [json_name = "params"];
+}
+
+message ComputerUseStream {
+  optional .aiserver.v1.ComputerUseParams params = 1 [json_name = "params"];
+}
+
+message WriteShellStdinStream {
+  optional .agent.v1.WriteShellStdinArgs params = 1 [json_name = "params"];
+}
+
+message WebFetchStream {
+  optional .aiserver.v1.WebFetchParams params = 1 [json_name = "params"];
+}
+
+message ReportBugfixResultsStream {
+  optional .aiserver.v1.ReportBugfixResultsParams params = 1 [json_name = "params"];
+}
+
+message McpAuthStream {
+}
+
+message ConnectScmStream {
+}
+
+message StreamedBackToolCallV2 {
+  .aiserver.v1.ClientSideToolV2 tool = 1 [json_name = "tool"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  string name = 8 [json_name = "name"];
+  string raw_args = 10 [json_name = "rawArgs"];
+  optional .aiserver.v1.ToolResultError error = 11 [json_name = "error"];
+  optional uint32 tool_index = 50 [json_name = "toolIndex"];
+  optional string model_call_id = 51 [json_name = "modelCallId"];
+  oneof params {
+    .aiserver.v1.ReadSemsearchFilesParams read_semsearch_files_params = 3 [json_name = "readSemsearchFilesParams"];
+    .aiserver.v1.RipgrepSearchParams ripgrep_search_params = 5 [json_name = "ripgrepSearchParams"];
+    .aiserver.v1.ReadFileParams read_file_params = 9 [json_name = "readFileParams"];
+    .aiserver.v1.ListDirParams list_dir_params = 12 [json_name = "listDirParams"];
+    .aiserver.v1.EditFileParams edit_file_params = 13 [json_name = "editFileParams"];
+    .aiserver.v1.ToolCallFileSearchParams file_search_params = 16 [json_name = "fileSearchParams"];
+    .aiserver.v1.SemanticSearchFullParams semantic_search_full_params = 17 [json_name = "semanticSearchFullParams"];
+    .aiserver.v1.DeleteFileParams delete_file_params = 19 [json_name = "deleteFileParams"];
+    .aiserver.v1.ReapplyParams reapply_params = 20 [json_name = "reapplyParams"];
+    .aiserver.v1.RunTerminalCommandV2Params run_terminal_command_v2_params = 23 [json_name = "runTerminalCommandV2Params"];
+    .aiserver.v1.FetchRulesParams fetch_rules_params = 24 [json_name = "fetchRulesParams"];
+    .aiserver.v1.WebSearchParams web_search_params = 26 [json_name = "webSearchParams"];
+    .aiserver.v1.MCPParams mcp_params = 27 [json_name = "mcpParams"];
+    .aiserver.v1.SearchSymbolsParams search_symbols_params = 31 [json_name = "searchSymbolsParams"];
+    .aiserver.v1.BackgroundComposerFollowupParams background_composer_followup_params = 32 [json_name = "backgroundComposerFollowupParams"];
+    .aiserver.v1.KnowledgeBaseParams knowledge_base_params = 33 [json_name = "knowledgeBaseParams"];
+    .aiserver.v1.FetchPullRequestParams fetch_pull_request_params = 34 [json_name = "fetchPullRequestParams"];
+    .aiserver.v1.DeepSearchParams deep_search_params = 35 [json_name = "deepSearchParams"];
+    .aiserver.v1.CreateDiagramParams create_diagram_params = 36 [json_name = "createDiagramParams"];
+    .aiserver.v1.FixLintsParams fix_lints_params = 37 [json_name = "fixLintsParams"];
+    .aiserver.v1.ReadLintsParams read_lints_params = 38 [json_name = "readLintsParams"];
+    .aiserver.v1.GotodefParams gotodef_params = 41 [json_name = "gotodefParams"];
+    .aiserver.v1.TaskParams task_params = 42 [json_name = "taskParams"];
+    .aiserver.v1.AwaitTaskParams await_task_params = 43 [json_name = "awaitTaskParams"];
+    .aiserver.v1.TodoReadParams todo_read_params = 44 [json_name = "todoReadParams"];
+    .aiserver.v1.TodoWriteParams todo_write_params = 45 [json_name = "todoWriteParams"];
+    .aiserver.v1.EditFileV2Params edit_file_v2_params = 48 [json_name = "editFileV2Params"];
+    .aiserver.v1.ListDirV2Params list_dir_v2_params = 49 [json_name = "listDirV2Params"];
+    .aiserver.v1.ReadFileV2Params read_file_v2_params = 61 [json_name = "readFileV2Params"];
+    .aiserver.v1.RipgrepRawSearchParams ripgrep_raw_search_params = 62 [json_name = "ripgrepRawSearchParams"];
+    .aiserver.v1.GlobFileSearchParams glob_file_search_params = 63 [json_name = "globFileSearchParams"];
+    .aiserver.v1.CreatePlanParams create_plan_params = 64 [json_name = "createPlanParams"];
+    .aiserver.v1.ListMcpResourcesParams list_mcp_resources_params = 65 [json_name = "listMcpResourcesParams"];
+    .aiserver.v1.ReadMcpResourceParams read_mcp_resource_params = 66 [json_name = "readMcpResourceParams"];
+    .aiserver.v1.ReadProjectParams read_project_params = 67 [json_name = "readProjectParams"];
+    .aiserver.v1.UpdateProjectParams update_project_params = 68 [json_name = "updateProjectParams"];
+    .aiserver.v1.TaskV2Params task_v2_params = 69 [json_name = "taskV2Params"];
+    .aiserver.v1.CallMcpToolParams call_mcp_tool_params = 70 [json_name = "callMcpToolParams"];
+    .aiserver.v1.ApplyAgentDiffParams apply_agent_diff_params = 71 [json_name = "applyAgentDiffParams"];
+    .aiserver.v1.AskQuestionParams ask_question_params = 72 [json_name = "askQuestionParams"];
+    .aiserver.v1.SwitchModeParams switch_mode_params = 73 [json_name = "switchModeParams"];
+    .aiserver.v1.ComputerUseParams computer_use_params = 74 [json_name = "computerUseParams"];
+    .agent.v1.WriteShellStdinArgs write_shell_stdin_params = 75 [json_name = "writeShellStdinParams"];
+    .agent.v1.RecordScreenArgs record_screen_params = 76 [json_name = "recordScreenParams"];
+    .aiserver.v1.WebFetchParams web_fetch_params = 77 [json_name = "webFetchParams"];
+    .aiserver.v1.ReportBugfixResultsParams report_bugfix_results_params = 78 [json_name = "reportBugfixResultsParams"];
+    .aiserver.v1.McpAuthParams mcp_auth_params = 79 [json_name = "mcpAuthParams"];
+    .aiserver.v1.GetMcpToolsParams get_mcp_tools_params = 80 [json_name = "getMcpToolsParams"];
+    .aiserver.v1.ConnectScmParams connect_scm_params = 81 [json_name = "connectScmParams"];
+  }
+}
+
+message StreamedBackPartialToolCall {
+  .aiserver.v1.ClientSideToolV2 tool = 1 [json_name = "tool"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  string name = 3 [json_name = "name"];
+  optional uint32 tool_index = 4 [json_name = "toolIndex"];
+  optional string model_call_id = 5 [json_name = "modelCallId"];
+}
+
+enum BuiltinTool {
+  BUILTIN_TOOL_UNSPECIFIED = 0;
+  BUILTIN_TOOL_SEARCH = 1;
+  BUILTIN_TOOL_READ_CHUNK = 2;
+  BUILTIN_TOOL_GOTODEF = 3;
+  BUILTIN_TOOL_EDIT = 4;
+  BUILTIN_TOOL_UNDO_EDIT = 5;
+  BUILTIN_TOOL_END = 6;
+  BUILTIN_TOOL_NEW_FILE = 7;
+  BUILTIN_TOOL_ADD_TEST = 8;
+  BUILTIN_TOOL_RUN_TEST = 9;
+  BUILTIN_TOOL_DELETE_TEST = 10;
+  BUILTIN_TOOL_SAVE_FILE = 11;
+  BUILTIN_TOOL_GET_TESTS = 12;
+  BUILTIN_TOOL_GET_SYMBOLS = 13;
+  BUILTIN_TOOL_SEMANTIC_SEARCH = 14;
+  BUILTIN_TOOL_GET_PROJECT_STRUCTURE = 15;
+  BUILTIN_TOOL_CREATE_RM_FILES = 16;
+  BUILTIN_TOOL_RUN_TERMINAL_COMMANDS = 17;
+  BUILTIN_TOOL_NEW_EDIT = 18;
+  BUILTIN_TOOL_READ_WITH_LINTER = 19;
+}
+
+enum ClientSideToolV2 {
+  CLIENT_SIDE_TOOL_V2_UNSPECIFIED = 0;
+  CLIENT_SIDE_TOOL_V2_READ_SEMSEARCH_FILES = 1;
+  CLIENT_SIDE_TOOL_V2_RIPGREP_SEARCH = 3;
+  CLIENT_SIDE_TOOL_V2_READ_FILE = 5;
+  CLIENT_SIDE_TOOL_V2_LIST_DIR = 6;
+  CLIENT_SIDE_TOOL_V2_EDIT_FILE = 7;
+  CLIENT_SIDE_TOOL_V2_FILE_SEARCH = 8;
+  CLIENT_SIDE_TOOL_V2_SEMANTIC_SEARCH_FULL = 9;
+  CLIENT_SIDE_TOOL_V2_DELETE_FILE = 11;
+  CLIENT_SIDE_TOOL_V2_REAPPLY = 12;
+  CLIENT_SIDE_TOOL_V2_RUN_TERMINAL_COMMAND_V2 = 15;
+  CLIENT_SIDE_TOOL_V2_FETCH_RULES = 16;
+  CLIENT_SIDE_TOOL_V2_WEB_SEARCH = 18;
+  CLIENT_SIDE_TOOL_V2_MCP = 19;
+  CLIENT_SIDE_TOOL_V2_SEARCH_SYMBOLS = 23;
+  CLIENT_SIDE_TOOL_V2_BACKGROUND_COMPOSER_FOLLOWUP = 24;
+  CLIENT_SIDE_TOOL_V2_KNOWLEDGE_BASE = 25;
+  CLIENT_SIDE_TOOL_V2_FETCH_PULL_REQUEST = 26;
+  CLIENT_SIDE_TOOL_V2_DEEP_SEARCH = 27;
+  CLIENT_SIDE_TOOL_V2_CREATE_DIAGRAM = 28;
+  CLIENT_SIDE_TOOL_V2_FIX_LINTS = 29;
+  CLIENT_SIDE_TOOL_V2_READ_LINTS = 30;
+  CLIENT_SIDE_TOOL_V2_GO_TO_DEFINITION = 31;
+  CLIENT_SIDE_TOOL_V2_TASK = 32;
+  CLIENT_SIDE_TOOL_V2_AWAIT_TASK = 33;
+  CLIENT_SIDE_TOOL_V2_TODO_READ = 34;
+  CLIENT_SIDE_TOOL_V2_TODO_WRITE = 35;
+  CLIENT_SIDE_TOOL_V2_EDIT_FILE_V2 = 38;
+  CLIENT_SIDE_TOOL_V2_LIST_DIR_V2 = 39;
+  CLIENT_SIDE_TOOL_V2_READ_FILE_V2 = 40;
+  CLIENT_SIDE_TOOL_V2_RIPGREP_RAW_SEARCH = 41;
+  CLIENT_SIDE_TOOL_V2_GLOB_FILE_SEARCH = 42;
+  CLIENT_SIDE_TOOL_V2_CREATE_PLAN = 43;
+  CLIENT_SIDE_TOOL_V2_LIST_MCP_RESOURCES = 44;
+  CLIENT_SIDE_TOOL_V2_READ_MCP_RESOURCE = 45;
+  CLIENT_SIDE_TOOL_V2_READ_PROJECT = 46;
+  CLIENT_SIDE_TOOL_V2_UPDATE_PROJECT = 47;
+  CLIENT_SIDE_TOOL_V2_TASK_V2 = 48;
+  CLIENT_SIDE_TOOL_V2_CALL_MCP_TOOL = 49;
+  CLIENT_SIDE_TOOL_V2_APPLY_AGENT_DIFF = 50;
+  CLIENT_SIDE_TOOL_V2_ASK_QUESTION = 51;
+  CLIENT_SIDE_TOOL_V2_SWITCH_MODE = 52;
+  CLIENT_SIDE_TOOL_V2_GENERATE_IMAGE = 53;
+  CLIENT_SIDE_TOOL_V2_COMPUTER_USE = 54;
+  CLIENT_SIDE_TOOL_V2_WRITE_SHELL_STDIN = 55;
+  CLIENT_SIDE_TOOL_V2_RECORD_SCREEN = 56;
+  CLIENT_SIDE_TOOL_V2_WEB_FETCH = 57;
+  CLIENT_SIDE_TOOL_V2_REPORT_BUGFIX_RESULTS = 58;
+  CLIENT_SIDE_TOOL_V2_AI_ATTRIBUTION = 59;
+  CLIENT_SIDE_TOOL_V2_MCP_AUTH = 60;
+  CLIENT_SIDE_TOOL_V2_REFLECT = 61;
+  CLIENT_SIDE_TOOL_V2_AWAIT = 62;
+  CLIENT_SIDE_TOOL_V2_GET_MCP_TOOLS = 63;
+  CLIENT_SIDE_TOOL_V2_SEND_TO_USER = 65;
+  CLIENT_SIDE_TOOL_V2_CONNECT_SCM = 66;
+}
+
+enum RunTerminalCommandEndedReason {
+  RUN_TERMINAL_COMMAND_ENDED_REASON_UNSPECIFIED = 0;
+  RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_COMPLETED = 1;
+  RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_ABORTED = 2;
+  RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_FAILED = 3;
+  RUN_TERMINAL_COMMAND_ENDED_REASON_ERROR_OCCURRED_CHECKING_REASON = 4;
+  RUN_TERMINAL_COMMAND_ENDED_REASON_IDLE_TIMEOUT = 5;
+}
+
+message ScratchpadResult {
+}
+
+message SemanticSearchArguments {
+  string query = 1 [json_name = "query"];
+  repeated string target_directories = 2 [json_name = "targetDirectories"];
+  string explanation = 3 [json_name = "explanation"];
+}
+
+message ServerSideToolResult {
+}
+
+enum ShellType {
+  SHELL_TYPE_UNSPECIFIED = 0;
+  SHELL_TYPE_BASH = 1;
+  SHELL_TYPE_POWERSHELL = 2;
+}
+
+message SummarizeCodeParams {
+  repeated string target_files = 1 [json_name = "targetFiles"];
+  string focus_query = 2 [json_name = "focusQuery"];
+}
+
+message SummarizeCodeResult {
+  string summary = 1 [json_name = "summary"];
+}
+
+message SummarizeCodeStream {
+}

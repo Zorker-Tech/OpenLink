@@ -1,17 +1,18 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { createUpdateTodosTool, type UpdateTodosStateHandler } from "../../source/packages/agent/tools/core/todo/todo.ts"
+import { createUpdateTodosTool, type UpdateTodosStateHandler } from "../../source/adapters/interop/agent/todo-tool-adapter.ts"
 import { ToolCallArgParseError } from "../../source/packages/agent/tools/tool-support.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
-import { fromRedactedTodoItem, toRedactedTodoItem } from "../../source/packages/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { AgentMode, PlanRegistryEntry, ToolCall } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem, TodoStatus, UpdateTodosResult, UpdateTodosToolCall } from "../../source/packages/proto/generated/agent/v1/todo_tool_pb.ts"
+import { fromRedactedTodoItem, toRedactedTodoItem } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
+import { PlanRegistryEntry, ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { TodoItem, TodoStatus, UpdateTodosResult, UpdateTodosToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
-import { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -58,7 +59,7 @@ function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?:
     get todos() { return stored.map(item => ({ get: async () => item })) },
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
     setTodos(next: readonly unknown[]) { stored = next as RedactedTodo[] },
-    mode: AgentMode.AGENT,
+    mode: SlateMode.AGENT,
     plans: options.planPath === undefined
       ? new Map()
       : new Map([["plan-1", new PlanRegistryEntry({ id: "plan-1", path: options.planPath })]]),
@@ -130,14 +131,12 @@ test("the tool is named what the prompt version was trained on", () => {
   assert.throws(() => harnessed.build("a-version-nobody-trained"), /Unhandled version/)
 })
 
-test("the description is the one that version was trained on", () => {
+test("the inference profile selects Slate-authored task guidance", () => {
   const descriptionOf = (version: string) => (harness().build(version).descriptionGenerator as () => string)()
-  assert.equal(descriptionOf("cursor-0226"), "Use this tool to create and manage a structured task list for your current coding session.")
-  assert.match(descriptionOf("latest"), /### When to Use This Tool/)
-  assert.match(descriptionOf("latest"), /don't tell the user you're updating todos/)
-  assert.match(descriptionOf("gpt5-codex"), /### Guidelines/)
-  // The codex wording is a different prompt, not a variant of the same one.
-  assert.equal(/### Guidelines/.test(descriptionOf("latest")), false)
+  assert.match(descriptionOf("cursor-0226"), /session's task list/)
+  assert.match(descriptionOf("latest"), /stable id/)
+  assert.match(descriptionOf("gpt5-codex"), /independent work/)
+  assert.notEqual(descriptionOf("gpt5-codex"), descriptionOf("latest"))
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -209,8 +208,8 @@ test("the model is told when a list has nothing in progress", async () => {
     todos: [{ id: "1", content: "waiting", status: "pending" }],
   }))
   const rendered = await (harnessed.build().render as (ctx: unknown, value: UpdateTodosResult) => Promise<TextResult>)(createContext(), result)
-  assert.match(rendered.content[0]?.text ?? "", /Successfully updated TODOs/)
-  assert.match(rendered.content[0]?.text ?? "", /No TODOs are marked in-progress/)
+  assert.match(rendered.content[0]?.text ?? "", /Task list updated/)
+  assert.match(rendered.content[0]?.text ?? "", /No task is marked in progress/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -321,7 +320,7 @@ test("an error is rendered as the text the model reads", async () => {
   const render = tool.render as (ctx: unknown, value: UpdateTodosResult) => Promise<TextResult>
   const failure = new UpdateTodosResult({ result: { case: "error", value: { error: "the list was refused" } } as never })
   assert.equal((await render(createContext(), failure)).content[0]?.text, "the list was refused")
-  assert.equal((await render(createContext(), new UpdateTodosResult())).content[0]?.text, "Unknown error")
+  assert.equal((await render(createContext(), new UpdateTodosResult())).content[0]?.text, "No task update result was returned.")
 })
 
 test("a thrown failure is serialized into the call's own error result", () => {

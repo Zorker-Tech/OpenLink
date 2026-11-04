@@ -5,7 +5,7 @@
  * is what the desktop answered, with the monitor the agent was given so it does not drive another's.
  */
 import { Buffer } from "node:buffer";
-import { buildHostShellArgs } from "../../boxes/box-shell-command.ts";
+import { buildHostShellArgs } from "../../../adapters/interop/agent/box-shell-command-adapter.ts";
 import { navigationProbeCommand } from "../slate-action-audit.ts";
 import { SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE } from "../../ports/box.ts";
 import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts";

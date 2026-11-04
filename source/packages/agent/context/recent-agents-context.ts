@@ -1,16 +1,8 @@
-/**
- * The user's other recent agent conversations, offered as places to look.
- *
- * A question often follows from work in another conversation, and those transcripts are files the agent
- * can read. So they are listed by name and path, with a line of overview when the platform has one — and
- * with an instruction to read them in chunks rather than whole, because a transcript is the one file
- * guaranteed to be too large to read at once.
- *
- * One model family is given none of this: its training never included transcript paths, so the paths
- * would be noise it cannot act on.
- */
-
-import type { RecentAgent } from "../../proto/generated/agent/v1/selected_context_pb.ts"
+export interface RecentAgentPromptInput {
+  readonly name: string
+  readonly path: string
+  readonly overview?: string | undefined
+}
 
 export interface RecentAgentsTextContent {
   readonly type: "text"
@@ -18,9 +10,19 @@ export interface RecentAgentsTextContent {
 }
 
 export interface RenderRecentAgentsContextArgs {
-  readonly recentAgents: readonly RecentAgent[]
+  readonly recentAgents: readonly RecentAgentPromptInput[]
   readonly isComposerMatterhorn: boolean
   readonly isRawTrainingSlug: boolean
+}
+
+function entryText(agent: RecentAgentPromptInput): string {
+  const summary = agent.overview?.trim()
+  const summaryLine = summary ? `\n  overview: ${summary}` : ""
+  return `- ${agent.name}${summaryLine}\n  transcript_path: ${agent.path}`
+}
+
+function shouldHideTranscriptLinks(args: RenderRecentAgentsContextArgs): boolean {
+  return args.isComposerMatterhorn && args.isRawTrainingSlug
 }
 
 export function renderRecentAgentsContext({
@@ -28,22 +30,12 @@ export function renderRecentAgentsContext({
   isComposerMatterhorn,
   isRawTrainingSlug,
 }: RenderRecentAgentsContextArgs): RecentAgentsTextContent | undefined {
-  const agents = isComposerMatterhorn && isRawTrainingSlug ? [] : recentAgents
-  if (agents.length === 0) return undefined
-  const recentAgentsText = agents.map(recentAgent => {
-    const trimmedOverview = recentAgent.overview?.trim()
-    const overviewLine = trimmedOverview ? `
-  overview: ${trimmedOverview}` : ""
-    return `- ${recentAgent.name}${overviewLine}
-  transcript_path: ${recentAgent.path}`
-  }).join("\n")
+  if (shouldHideTranscriptLinks({ recentAgents, isComposerMatterhorn, isRawTrainingSlug })) return undefined
+  if (recentAgents.length === 0) return undefined
+
+  const entries = recentAgents.map(entryText).join("\n")
   return {
     type: "text",
-    text: `<recent_agents_context>
-The user has other recent agent conversations available as transcript files.
-If they seem relevant to the user's current query, you may read them for additional context.
-Do not read full transcript files in one go; search and read in targeted chunks.
-${recentAgentsText}
-</recent_agents_context>`,
+    text: `<recent_agents_context>\nOther recent work is available in transcript files. Read a transcript only when it can inform the current question.\nSearch first, then read a few relevant sections instead of loading a whole transcript.\n${entries}\n</recent_agents_context>`,
   }
 }

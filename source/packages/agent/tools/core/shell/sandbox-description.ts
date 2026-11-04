@@ -22,9 +22,9 @@ export function NetworkAllowlistDescription(props: PromptProps): PromptNode {
   const sandboxNetworkInfo = props.sandboxNetworkInfo as SandboxNetworkInfo
   return jsxs(Fragment, {
     children: [
-      sandboxNetworkInfo.hasDefaults && jsx("p", { children: "The sandbox includes network access for common package managers and version control providers (e.g. npm, pypi, crates.io, Maven Central, GitHub, etc.). Standard operations like package installs and fetching dependencies will work without requesting additional permissions." }),
-      sandboxNetworkInfo.explicitEntries.length > 0 && jsxs("p", { children: [sandboxNetworkInfo.hasDefaults ? "Additionally, the" : "The", " sandbox includes network access for the following domains:", " ", sandboxNetworkInfo.explicitEntries.join(", "), ". You do not need to request 'full_network' permissions for these domains."] }),
-      jsx("p", { children: "For broader network access beyond the allowed domains, you may still need to request 'full_network' permissions." }),
+      sandboxNetworkInfo.hasDefaults && jsx("p", { children: "The sandbox already allows connections to common package managers and version control providers. Package installs and dependency fetches should work without another permission request." }),
+      sandboxNetworkInfo.explicitEntries.length > 0 && jsxs("p", { children: [sandboxNetworkInfo.hasDefaults ? "It also" : "The sandbox", " allows network access for the following domains:", " ", sandboxNetworkInfo.explicitEntries.join(", "), ". These destinations do not require 'full_network'."] }),
+      jsx("p", { children: "For destinations outside the allowed domains, request 'full_network' when the task needs wider access." }),
     ],
   })
 }
@@ -36,28 +36,28 @@ export function SandboxingDescriptionBody(props: PromptProps): PromptNode {
   if (isReadonly) {
     return jsxs(Fragment, {
       children: [
-        jsxs("p", { children: ["Your commands will run in a readonly sandbox. The sandbox allows reads to the filesystem but does not allow any writes.", hasNetworkInsideSandbox ? "" : " Network access is disallowed by default but can be requested with the full_network permission."] }),
+        jsxs("p", { children: ["Commands run in a readonly sandbox: they can read the filesystem but cannot write to it.", hasNetworkInsideSandbox ? "" : " Network access is disallowed by default and can be requested with full_network."] }),
         hasNetworkInsideSandbox && jsx(NetworkAllowlistDescription, { sandboxNetworkInfo }),
-        jsx("p", { children: "The required_permissions argument is used to request additional permissions:" }),
+        jsx("p", { children: "Use required_permissions to ask for an additional capability:" }),
         jsx("ul", { children: jsx("li", { children: hasNetworkInsideSandbox ? "full_network: Grants unrestricted network access beyond the allowed domains." : "full_network: Grants unrestricted network access." }) }),
       ],
     })
   }
   return jsxs(Fragment, {
     children: [
-      jsx("p", { children: "By default, your commands will run in a sandbox. The sandbox allows most writes to the workspace and reads to the rest of the filesystem. Some other syscalls are also disallowed like access to USB devices. Syscalls that attempt forbidden operations will fail and not all programs will surface these errors in a useful way." }),
+      jsx("p", { children: "Commands run in a sandbox by default. The sandbox allows most writes to the workspace and reads elsewhere on the filesystem. It blocks some system calls, including access to USB devices; a blocked operation may appear as an ordinary command error." }),
       hasNetworkInsideSandbox && jsx(NetworkAllowlistDescription, { sandboxNetworkInfo }),
-      jsx("p", { children: `Files that are ignored by ${WORKSPACE_IGNORE_FILE_NAME} are not accessible to the command. If you need to access a file that is ignored, you will need to request "all" permissions to disable sandboxing.` }),
-      jsx("p", { children: "The required_permissions argument is used to request additional permissions. If you know you will need a permission, request it. Requesting permissions will slow down the command execution as it will ask the user for approval. Do not hesitate to request permissions if you are certain you need them. For commands you know will need unrestricted network access, request the full_network permission rather than waiting for the command to fail and asking for it later." }),
-      jsx("p", { children: "The following permissions are supported:" }),
+      jsx("p", { children: `Files excluded by ${WORKSPACE_IGNORE_FILE_NAME} cannot be read or written by this command. Request "all" if the task requires those files; that runs the command without sandboxing.` }),
+      jsx("p", { children: "Request additional permissions through required_permissions. Ask when the need is clear, since each request waits for user approval. If unrestricted network access is needed, request full_network before running the command." }),
+      jsx("p", { children: "Available permissions:" }),
       jsxs("ul", {
         children: [
-          !hasNetworkInsideSandbox && jsx("li", { children: "full_network: Grants unrestricted network access to run a server or contact the internet. Needed for package installs, API calls, hosting servers and fetching dependencies." }),
-          hasNetworkInsideSandbox && jsx("li", { children: "full_network: Grants unrestricted network access. This is useful for any commands that need to contact the outside internet, outside of the allowed domains." }),
-          jsx("li", { children: "all: Disables the sandbox entirely. If all is requested the command will run outside of the sandbox." }),
+          !hasNetworkInsideSandbox && jsx("li", { children: "full_network: Grants unrestricted network access for package installs, API calls, servers and dependency fetches. Needed for package installs and internet requests." }),
+          hasNetworkInsideSandbox && jsx("li", { children: "full_network: Grants unrestricted network access beyond the destinations already allowed." }),
+          jsx("li", { children: "all: Disables the sandbox entirely and runs the command without its restrictions." }),
         ],
       }),
-      jsx("p", { children: "If you think a command failed due to sandbox restrictions, run the command again with the required_permissions argument to request what you need." }),
+      jsx("p", { children: "If a failure appears to come from a sandbox restriction, rerun the command with the needed value in required_permissions." }),
     ],
   })
 }

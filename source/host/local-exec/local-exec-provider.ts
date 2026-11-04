@@ -8,8 +8,6 @@ import { readFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
-import type { JsonValue } from "@bufbuild/protobuf";
-
 import {
   createDeadlinePolicy,
   createIdleWatchdogPolicy,
@@ -18,7 +16,7 @@ import {
   realClock,
 } from "../extensions/scheduling.ts";
 import { errorLogTag, errorMessage } from "../../shared/errors/summary.ts";
-import { GATEWAY_AUTH_SCHEME } from "../../shared/gateway-wire.ts";
+import { SLATE_GATEWAY } from "../../shared/gateway-wire.ts";
 import {
   DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES,
   GATEWAY_LOCAL_EXEC_REQUESTS_PATH,
@@ -30,6 +28,19 @@ import {
   localExecUploadFrameTooLargeMessage,
   maxLocalExecUploadFrameBytes,
 } from "../../shared/local-exec-gateway.ts";
+import {
+  SLATE_LOCAL_EXEC_PROTOCOL_VERSION,
+  SLATE_LOCAL_EXEC_LEGACY_SCHEMA,
+  SLATE_LOCAL_EXEC_OPERATION_SCHEMA,
+  parseLocalExecRequestFrame,
+  parseLegacyLocalExecRequestFrame,
+  parseLocalExecResponseBatch,
+  wrapLegacyLocalExecMessage,
+  type LocalExecRequestFrame,
+  type LegacyLocalExecRequestFrame,
+  type LocalExecResponseFrame,
+  type LocalExecWireJsonValue,
+} from "../../shared/local-exec-protocol.ts";
 import { describeLocalExec, type LocalExecMessage, type SlateLocalToolRequest } from "../../shared/local-tool-permission-machinery.ts";
 import { writeFileAtomic } from "../../shared/node/atomic-write.ts";
 import { containPath, regularFileSizeBytes, resolveLocalExecRoot } from "./local-exec-machine.ts";
@@ -52,14 +63,14 @@ export interface LocalExecDecodedMessage {
 
 export interface LocalExecExecutorOutput {
   readonly kind: "client" | "control";
-  readonly message: JsonValue;
+  readonly message: LocalExecWireJsonValue;
 }
 
 export interface LocalExecExecutor {
-  decodeServerMessage(json: JsonValue): LocalExecDecodedMessage;
+  decodeServerMessage(json: LocalExecWireJsonValue): LocalExecDecodedMessage;
   execute(message: LocalExecDecodedMessage, signal: AbortSignal): AsyncIterable<LocalExecExecutorOutput>;
   cancel(execId: number): void;
-  throwControl(error: string): JsonValue;
+  throwControl(error: string): LocalExecWireJsonValue;
 }
 
 function isPlainMessage(value: unknown): value is Record<string, unknown> {
@@ -72,20 +83,22 @@ function descriptionMessage(decoded: LocalExecDecodedMessage): { readonly messag
   return { message: { case: message.case, value: message.value } };
 }
 
-export type LocalExecRequestFrame =
-  | { readonly kind: "welcome"; readonly providerId: string }
-  | { readonly kind: "retire-approval"; readonly approvalId: string }
-  | { readonly kind: "exec"; readonly requestId: string; readonly approvalId?: string; readonly serverMessage: JsonValue }
-  | { readonly kind: "upload"; readonly requestId: string; readonly approvalId?: string; readonly path: string; readonly bytesBase64: string }
-  | { readonly kind: "download"; readonly requestId: string; readonly approvalId?: string; readonly path: string }
-  | { readonly kind: "cancel"; readonly requestId: string };
+export type { LocalExecRequestFrame, LocalExecResponseFrame } from "../../shared/local-exec-protocol.ts";
 
-export type LocalExecResponseFrame =
-  | { readonly kind: "hello"; readonly localRoot: string; readonly terminalsFolder: string; readonly computerId: string; readonly label: string; readonly supervised?: boolean; readonly variant?: string }
-  | { readonly kind: "ping"; readonly supervised?: boolean }
-  | { readonly kind: "client" | "control"; readonly requestId: string; readonly message: JsonValue }
-  | { readonly kind: "file"; readonly requestId: string; readonly bytesBase64?: string }
-  | { readonly kind: "file-error"; readonly requestId: string; readonly error: string };
+type LocalExecResponseFrameInput =
+  | Exclude<LocalExecResponseFrame, { readonly kind: "client" | "control" }>
+  | {
+      readonly kind: "client";
+      readonly requestId: string;
+      readonly message: LocalExecWireJsonValue;
+      readonly protocolVersion?: typeof SLATE_LOCAL_EXEC_PROTOCOL_VERSION | undefined;
+    }
+  | {
+      readonly kind: "control";
+      readonly requestId: string;
+      readonly message: LocalExecWireJsonValue;
+      readonly protocolVersion?: typeof SLATE_LOCAL_EXEC_PROTOCOL_VERSION | undefined;
+    };
 
 export interface SlateLocalExecProviderOptions {
   readonly resolveConnection: () => Promise<LocalExecConnection>;
@@ -110,7 +123,7 @@ export interface SlateLocalExecProviderOptions {
 function connectionHeaders(headers: Record<string, string>, connection: LocalExecConnection): Record<string, string> {
   const merged = { ...headers, ...connection.headers };
   if (connection.token != null && connection.token.length > 0) {
-    merged.authorization = `${GATEWAY_AUTH_SCHEME} ${connection.token}`;
+    merged.authorization = `${SLATE_GATEWAY.authentication.scheme} ${connection.token}`;
   }
   return merged;
 }
@@ -129,7 +142,8 @@ export function isSameLocalExecConnection(a: LocalExecConnection, b: LocalExecCo
     && serializedHeaders(a.headers) === serializedHeaders(b.headers);
 }
 
-type DescribedRequest = Extract<LocalExecRequestFrame, { kind: "exec" | "upload" | "download" }>;
+type AnyLocalExecRequestFrame = LocalExecRequestFrame | LegacyLocalExecRequestFrame;
+type DescribedRequest = Extract<AnyLocalExecRequestFrame, { kind: "exec" | "upload" | "download" }>;
 type ActiveExecution = { readonly execId: number; readonly controller: AbortController };
 
 export class SlateLocalExecProvider {
@@ -177,6 +191,7 @@ export class SlateLocalExecProvider {
   private nextExecutionId = 1;
   private sendingResponses = false;
   private activeProviderId: string | undefined;
+  private activeProtocolVersion: typeof SLATE_LOCAL_EXEC_PROTOCOL_VERSION | undefined;
 
   constructor(private readonly options: SlateLocalExecProviderOptions) {
     this.root = options.root ?? resolveLocalExecRoot();
@@ -201,8 +216,8 @@ export class SlateLocalExecProvider {
     for (const active of this.executions.values()) active.controller.abort();
   }
 
-  private queueResponse(frame: LocalExecResponseFrame): void {
-    this.pendingResponses.push(frame);
+  private queueResponse(frame: LocalExecResponseFrameInput): void {
+    this.pendingResponses.push(normalizeResponseFrame(frame));
     void this.flushResponses();
   }
 
@@ -213,12 +228,16 @@ export class SlateLocalExecProvider {
     try {
       return await this.responseRetry.runWithRetry(async () => {
         const connection = await this.options.resolveConnection();
+        const responseBatch = parseLocalExecResponseBatch({
+          ...(this.activeProviderId === undefined ? {} : { providerId: this.activeProviderId }),
+          frames: frames.map(normalizeResponseFrame),
+        });
         const response = await deadline.run((signal) => this.fetcher(
           `${connection.baseUrl}${GATEWAY_LOCAL_EXEC_RESPONSES_PATH}`,
           {
             method: "POST",
             headers: connectionHeaders({ "content-type": "application/json" }, connection),
-            body: JSON.stringify({ providerId: this.activeProviderId, frames }),
+            body: JSON.stringify(responseBatch),
             signal,
           },
         ));
@@ -308,6 +327,7 @@ export class SlateLocalExecProvider {
       terminalsFolder: this.terminalsFolder,
       computerId: this.computerId,
       label: this.computerLabel,
+      protocolVersion: SLATE_LOCAL_EXEC_PROTOCOL_VERSION,
       ...(supervised === undefined ? {} : { supervised }),
       ...(this.options.variant === undefined ? {} : { variant: this.options.variant }),
     }], this.controlPostDeadline));
@@ -351,6 +371,7 @@ export class SlateLocalExecProvider {
       stall.dispose();
       heartbeat.dispose();
       this.activeProviderId = undefined;
+      this.activeProtocolVersion = undefined;
     }
   }
 
@@ -412,13 +433,16 @@ export class SlateLocalExecProvider {
     if (payload.length === 0) return;
 
     try {
-      void this.handleRequest(JSON.parse(payload.join("\n")) as LocalExecRequestFrame);
+      void this.handleRequest(parseLocalExecRequestFrame(JSON.parse(payload.join("\n"))));
     } catch (error) {
       console.error(`[local-exec-provider] dropping unparseable request frame: ${errorLogTag(error)}`);
     }
   }
 
-  async handleRequest(frame: LocalExecRequestFrame): Promise<void> {
+  async handleRequest(value: unknown): Promise<void> {
+    const frame = this.activeProtocolVersion === SLATE_LOCAL_EXEC_PROTOCOL_VERSION
+      ? parseLocalExecRequestFrame(value)
+      : parseLegacyLocalExecRequestFrame(value);
     if (frame.kind === "retire-approval") {
       await this.options.onApprovalRetired?.(frame.approvalId);
       return;
@@ -440,6 +464,7 @@ export class SlateLocalExecProvider {
     switch (frame.kind) {
       case "welcome":
         this.activeProviderId = frame.providerId;
+        this.activeProtocolVersion = frame.protocolVersion;
         return;
       case "exec":
         return this.executeRequest(frame.requestId, frame.serverMessage);
@@ -473,7 +498,7 @@ export class SlateLocalExecProvider {
     this.queueResponse({ kind: "file-error", requestId: frame.requestId, error: reason });
   }
 
-  private async executeRequest(requestId: string, wireMessage: JsonValue): Promise<void> {
+  private async executeRequest(requestId: string, wireMessage: LocalExecWireJsonValue): Promise<void> {
     let message: LocalExecDecodedMessage;
     try {
       message = this.options.executor.decodeServerMessage(wireMessage);
@@ -545,6 +570,22 @@ export class SlateLocalExecProvider {
   }
 }
 
-function isDescribedRequest(frame: LocalExecRequestFrame): frame is DescribedRequest {
+function normalizeResponseFrame(frame: LocalExecResponseFrameInput): LocalExecResponseFrame {
+  if (frame.kind !== "client" && frame.kind !== "control") return frame as LocalExecResponseFrame;
+  const message = frame.message;
+  if (
+    typeof message === "object"
+    && message !== null
+    && "schema" in message
+    && (message.schema === SLATE_LOCAL_EXEC_OPERATION_SCHEMA || message.schema === SLATE_LOCAL_EXEC_LEGACY_SCHEMA)
+  ) {
+    return frame as LocalExecResponseFrame;
+  }
+  return frame.kind === "client"
+    ? { ...frame, message: wrapLegacyLocalExecMessage(message) }
+    : { ...frame, message: wrapLegacyLocalExecMessage(message) };
+}
+
+function isDescribedRequest(frame: AnyLocalExecRequestFrame): frame is DescribedRequest {
   return frame.kind === "exec" || frame.kind === "upload" || frame.kind === "download";
 }

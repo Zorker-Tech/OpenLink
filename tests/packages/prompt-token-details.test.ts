@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { PromptTokenBreakdownSnapshot } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import type { PromptTokenBreakdownSnapshotValue } from "../../source/packages/agent/utils/prompt-usage-contracts.ts"
 import {
   PROMPT_TOKEN_CATEGORIES,
   buildPromptTokenBreakdownSnapshot,
@@ -11,17 +11,18 @@ import {
 } from "../../source/packages/agent/utils/prompt-token-breakdown.ts"
 import { buildPromptContextUsageTree } from "../../source/packages/agent/utils/prompt-context-usage-tree.ts"
 import { computeNextRedactedPromptContextDetails } from "../../source/packages/agent/utils/next-redacted-prompt-context-details.ts"
+import { redactedPromptTokenDetailsCodec } from "../../source/adapters/interop/agent/redacted-prompt-token-details-adapter.ts"
 import type { PromptMessageLike, PromptToolLike } from "../../source/packages/agent/utils/prompt-shapes.ts"
 
 const ctx = () => createContext()
 
-const categoriesOf = (snapshot: PromptTokenBreakdownSnapshot): Record<string, { tokens: number; chars: number | undefined }> =>
+const categoriesOf = (snapshot: PromptTokenBreakdownSnapshotValue): Record<string, { tokens: number; chars: number | undefined }> =>
   Object.fromEntries(snapshot.categories.map(category => [
     category.id,
     { tokens: category.estimatedTokens, chars: category.characterCount },
   ]))
 
-const tokensOf = (snapshot: PromptTokenBreakdownSnapshot): number =>
+const tokensOf = (snapshot: PromptTokenBreakdownSnapshotValue): number =>
   snapshot.categories.reduce((sum, category) => sum + category.estimatedTokens, 0)
 
 function message(role: string, content: unknown, extra: Record<string, unknown> = {}): PromptMessageLike {
@@ -58,6 +59,16 @@ const simpleTools: PromptToolLike[] = [{
 // ---------------------------------------------------------------------------------------------
 
 test("the breakdown reports every category, in the order the platform declares them", () => {
+  assert.deepEqual(PROMPT_TOKEN_CATEGORIES, [
+    { id: "system_prompt", label: "System prompt" },
+    { id: "tools", label: "Tool definitions" },
+    { id: "rules", label: "Rules" },
+    { id: "skills", label: "Skills" },
+    { id: "mcp", label: "MCP & dynamic tools" },
+    { id: "subagents", label: "Subagent definitions" },
+    { id: "summarized_conversation", label: "Summarized conversation" },
+    { id: "conversation", label: "Conversation" },
+  ])
   const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
     messages: samplePrompt(),
     tools: simpleTools,
@@ -66,6 +77,29 @@ test("the breakdown reports every category, in the order the platform declares t
   })
   assert.deepEqual(snapshot.categories.map(category => category.id), PROMPT_TOKEN_CATEGORIES.map(category => category.id))
   assert.deepEqual(snapshot.categories.map(category => category.label), PROMPT_TOKEN_CATEGORIES.map(category => category.label))
+})
+
+test("when every category has zero raw weight, the total belongs to the conversation", () => {
+  const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
+    messages: [],
+    tools: [],
+    totalUsedTokens: 42,
+    maxTokens: 100,
+  })
+  assert.equal(categoriesOf(snapshot).conversation?.tokens, 42)
+  assert.equal(tokensOf(snapshot), 42)
+})
+
+test("equal fractional remainders award the extra token in category order", () => {
+  const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
+    messages: [message("system", "aaaa"), message("user", "bbbb")],
+    tools: [],
+    totalUsedTokens: 1,
+    maxTokens: 100,
+  })
+  assert.equal(categoriesOf(snapshot).system_prompt?.tokens, 1)
+  assert.equal(categoriesOf(snapshot).conversation?.tokens, 0)
+  assert.equal(tokensOf(snapshot), 1)
 })
 
 test("the parts add up to the total the provider reported", () => {
@@ -187,7 +221,7 @@ test("a previous breakdown with character counts is reused for the categories it
 })
 
 test("a category that grew keeps its own ratio rather than the average", () => {
-  const previous = new PromptTokenBreakdownSnapshot({
+  const previous: PromptTokenBreakdownSnapshotValue = {
     totalUsedTokens: 100,
     maxTokens: 1_000,
     categories: PROMPT_TOKEN_CATEGORIES.map(category => ({
@@ -196,7 +230,7 @@ test("a category that grew keeps its own ratio rather than the average", () => {
       estimatedTokens: category.id === "tools" ? 20 : category.id === "conversation" ? 80 : 0,
       characterCount: category.id === "tools" ? 100 : category.id === "conversation" ? 400 : 0,
     })),
-  })
+  }
   const tools = [{ name: "shell", toolIdentifier: "SHELL", description: "x".repeat(200), parameters: {} }]
   const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
     messages: [message("user", "hello")],
@@ -213,7 +247,7 @@ test("a category that grew keeps its own ratio rather than the average", () => {
 })
 
 test("a previous breakdown without character counts is not reused", () => {
-  const previous = new PromptTokenBreakdownSnapshot({
+  const previous: PromptTokenBreakdownSnapshotValue = {
     totalUsedTokens: 100,
     maxTokens: 1_000,
     categories: PROMPT_TOKEN_CATEGORIES.map(category => ({
@@ -222,7 +256,7 @@ test("a previous breakdown without character counts is not reused", () => {
       estimatedTokens: 0,
       characterCount: undefined as unknown as number,
     })),
-  })
+  }
   const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
     messages: [message("user", "hello")],
     tools: [],
@@ -236,7 +270,7 @@ test("a previous breakdown without character counts is not reused", () => {
 })
 
 test("a cache that would exceed the total keeps the previous breakdown instead of going negative", () => {
-  const previous = new PromptTokenBreakdownSnapshot({
+  const previous: PromptTokenBreakdownSnapshotValue = {
     totalUsedTokens: 1_000,
     maxTokens: 8_000,
     categories: PROMPT_TOKEN_CATEGORIES.map(category => ({
@@ -245,7 +279,7 @@ test("a cache that would exceed the total keeps the previous breakdown instead o
       estimatedTokens: category.id === "tools" ? 900 : 0,
       characterCount: category.id === "tools" ? 100 : 0,
     })),
-  })
+  }
   const tools = [{ name: "shell", toolIdentifier: "SHELL", description: "x".repeat(400), parameters: {} }]
   const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
     messages: [message("user", "hello")],
@@ -515,7 +549,7 @@ test("inline content is capped, and the node still reports its full size", () =>
 test("the tree stops growing at its node limit", () => {
   const messages = Array.from({ length: 5_000 }, (_, index) => message("user", `message ${index}`))
   const tree = treeOf({ messages, tools: [] })
-  assert.equal(tree.nodes.length <= 4_000, true)
+  assert.equal(tree.nodes.length, 4_000)
   assert.equal(tree.nodes.length > 3_900, true)
 })
 
@@ -549,6 +583,7 @@ test("the details are computed and converted, and the raw prompt does not travel
     {},
     detailsState(),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
+    redactedPromptTokenDetailsCodec,
   )
   assert.ok(details.breakdown)
   assert.equal((details.breakdown as { totalUsedTokens?: number }).totalUsedTokens, 500)
@@ -562,6 +597,7 @@ test("the tree is carried over untouched when the feature is off", () => {
     { featureFlags: { promptContextUsageTree: false } },
     detailsState({ tokenDetails: { promptContextUsageTree: previousTree } }),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
+    redactedPromptTokenDetailsCodec,
   )
   assert.equal(details.promptContextUsageTree, previousTree)
 })
@@ -573,6 +609,7 @@ test("the tree is rebuilt when the feature is on, replacing the previous one", (
     { featureFlags: { promptContextUsageTree: true } },
     detailsState({ tokenDetails: { promptContextUsageTree: previousTree } }),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
+    redactedPromptTokenDetailsCodec,
   )
   assert.notEqual(details.promptContextUsageTree, previousTree)
   const tree = details.promptContextUsageTree as { schemaVersion?: number; nodes?: unknown[] }
@@ -582,12 +619,13 @@ test("the tree is rebuilt when the feature is on, replacing the previous one", (
 
 test("the previous breakdown is fed back in, so the categories stay stable across turns", () => {
   const params = { messages: samplePrompt() as never, tools: simpleTools as never, maxTokens: 8_000 }
-  const first = computeNextRedactedPromptContextDetails(ctx(), {}, detailsState(), { ...params, totalUsedTokens: 1_000 })
+  const first = computeNextRedactedPromptContextDetails(ctx(), {}, detailsState(), { ...params, totalUsedTokens: 1_000 }, redactedPromptTokenDetailsCodec)
   const second = computeNextRedactedPromptContextDetails(
     ctx(),
     {},
     detailsState({ tokenDetails: { breakdown: first.breakdown } }),
     { ...params, totalUsedTokens: 1_000 },
+    redactedPromptTokenDetailsCodec,
   )
   const categoriesOfDetails = (details: { breakdown?: unknown }) =>
     (details.breakdown as { categories: Array<{ id: string; estimatedTokens: number }> }).categories

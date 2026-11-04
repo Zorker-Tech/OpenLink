@@ -14,17 +14,17 @@ import {
   AGENT_STORE_USER_MOUNT_NAME,
   NAMED_AGENT_HOME_STORE_MOUNT_NAME,
 } from "../../constants/agent-store-ids.ts"
-import { MountedAgentStoreKind, type MountedAgentStore } from "../../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { jsx, jsxs } from "../../prompt-jsx/index.ts"
 import type { PromptNode } from "../../prompt-jsx/index.ts"
+import type { UserInfoMountedStore } from "./user-info-data-contracts.ts"
 
-function describeStore(store: MountedAgentStore): string {
+function describeStore(store: UserInfoMountedStore): string {
   const readOnlySuffix = store.readOnly ? " (read-only)" : ""
   const quotedAlias = store.alias !== undefined && store.alias.length > 0 ? ` "${store.alias}"` : ""
   switch (store.kind) {
-    case MountedAgentStoreKind.SELF:
+    case "self":
       return `Current agent's store: ${store.path}${readOnlySuffix}`
-    case MountedAgentStoreKind.PRINCIPAL:
+    case "principal":
       switch (store.alias) {
         case AGENT_STORE_USER_MOUNT_NAME:
           return `User's personal store: ${store.path}${readOnlySuffix}`
@@ -37,18 +37,18 @@ function describeStore(store: MountedAgentStore): string {
         default:
           return `${store.path}${readOnlySuffix}`
       }
-    case MountedAgentStoreKind.PEER:
+    case "peer":
       return `Peer agent store${quotedAlias}: ${store.path}${readOnlySuffix}`
-    case MountedAgentStoreKind.SHARE:
+    case "share":
       return `Shared store${quotedAlias}: ${store.path}${readOnlySuffix}`
     default:
       return `${store.path}${readOnlySuffix}`
   }
 }
 
-export function MountedAgentStoresSection({ stores }: { readonly stores: readonly MountedAgentStore[] }): PromptNode {
+export function MountedAgentStoresSection({ stores }: { readonly stores: readonly UserInfoMountedStore[] }): PromptNode {
   const userStore = stores.find(store =>
-    store.kind === MountedAgentStoreKind.PRINCIPAL && store.alias === AGENT_STORE_USER_MOUNT_NAME)
+    store.kind === "principal" && store.alias === AGENT_STORE_USER_MOUNT_NAME)
   const hasReadOnlyStores = stores.some(store => store.readOnly)
   return jsxs("p", {
     children: [

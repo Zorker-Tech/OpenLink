@@ -14,7 +14,7 @@ import { SLATE_BOX_BOOT_ID_ENV, SLATE_BOX_BOOT_STAGES, slateErrorDetail } from "
 import { HostReplicaWriter } from "../../source/host/transcript/replica-writer.ts";
 import { SEND_MESSAGE_TYPES, SEND_MESSAGE_TYPE_DESCRIPTION } from "../../source/host/runner/tools/send-message-schema.ts";
 import { SHELL_REWATCH_MAX_WAIT_MS, SHELL_REWATCH_POLL_DEFAULT_MS } from "../../source/host/runner/background-work.ts";
-import { ensureProfileFile } from "../../source/host/extensions/session/session-recovery.ts";
+import { ensureAgentProfileDocument } from "../../source/host/extensions/session/session-recovery.ts";
 
 describe("the transcript a host keeps", () => {
   it("appends, updates and replaces, and keeps its own copy of what it was given", () => {
@@ -35,8 +35,8 @@ describe("recovering a conversation", () => {
   it("says what a scan could not do", () => {
     const error = new ConversationRecoveryScanError("no records");
     assert.equal(error.name, "ConversationRecoveryScanError");
-    assert.equal(error.message, "conversation recovery scan failed: no records");
-    assert.equal(typeof ensureProfileFile, "function");
+    assert.equal(error.message, "Slate could not read conversation recovery records: no records");
+    assert.equal(typeof ensureAgentProfileDocument, "function");
   });
 });
 

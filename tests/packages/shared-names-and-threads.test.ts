@@ -44,14 +44,30 @@ test("a shared agent's id carries its owner as well as itself", () => {
   assert.deepEqual(parseRemoteAgentId(id), reference)
   assert.equal(isRemoteAgentId(id), true)
   assert.equal(isRemoteAgentId("agent-1"), false)
+  assert.equal(isRemoteAgentId(`${REMOTE_AGENT_ID_PREFIX}malformed`), true)
   assert.equal(parseRemoteAgentId("agent-1"), null)
   assert.equal(parseRemoteAgentId(`${REMOTE_AGENT_ID_PREFIX}only-one-part`), null)
+  assert.deepEqual(parseRemoteAgentId(`${REMOTE_AGENT_ID_PREFIX}owner/agent/with/slashes`), {
+    ownerAuthId: "owner",
+    agentId: "agent/with/slashes",
+  })
+  assert.equal(parseRemoteAgentId(`${REMOTE_AGENT_ID_PREFIX}owner%ZZ/agent`), null)
 })
 
 test("an avatar is published only when it is a data url the platform will accept", () => {
   const image = `data:image/png;base64,${"a".repeat(100)}`
   assert.equal(isPublishableShareAvatarDataUrl(image), true)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/jpeg;base64,AA=="), true)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/webp;base64,AA=="), true)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/gif;base64,AA=="), true)
   assert.equal(isPublishableShareAvatarDataUrl("https://example.com/a.png"), false)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/bmp;base64,AA=="), false)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/png;base64,"), false)
+  assert.equal(isPublishableShareAvatarDataUrl("data:image/png;base64,A_=="), false)
+  const prefix = "data:image/png;base64,"
+  const atLimit = `${prefix}${"a".repeat(SLATE_SHARE_AVATAR_DATA_URL_MAX_LENGTH - prefix.length)}`
+  assert.equal(isPublishableShareAvatarDataUrl(atLimit), true)
+  assert.equal(isPublishableShareAvatarDataUrl(`${atLimit}a`), false)
   assert.equal(isPublishableShareAvatarDataUrl(`data:image/png;base64,${"a".repeat(SLATE_SHARE_AVATAR_DATA_URL_MAX_LENGTH)}`), false)
   // Sharing starts off, with nothing pending and nobody in a room.
   assert.equal(EMPTY_SLATE_SHARING_STATE.isEnabled, false)

@@ -1,0 +1,53 @@
+// agent.v1 — agent/v1/record_screen_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message RecordScreenArgs {
+  .agent.v1.RecordingMode mode = 1 [json_name = "mode"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  optional string save_as_filename = 3 [json_name = "saveAsFilename"];
+}
+
+message RecordScreenResult {
+  oneof result {
+    .agent.v1.RecordScreenStartSuccess start_success = 1 [json_name = "startSuccess"];
+    .agent.v1.RecordScreenSaveSuccess save_success = 2 [json_name = "saveSuccess"];
+    .agent.v1.RecordScreenDiscardSuccess discard_success = 3 [json_name = "discardSuccess"];
+    .agent.v1.RecordScreenFailure failure = 4 [json_name = "failure"];
+  }
+}
+
+message RecordScreenStartSuccess {
+  bool was_prior_recording_cancelled = 1 [json_name = "wasPriorRecordingCancelled"];
+  bool was_save_as_filename_ignored = 2 [json_name = "wasSaveAsFilenameIgnored"];
+}
+
+message RecordScreenSaveSuccess {
+  string path = 1 [json_name = "path"];
+  int64 recording_duration_ms = 2 [json_name = "recordingDurationMs"];
+  optional .agent.v1.RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3 [json_name = "requestedFilePathRejectedReason"];
+}
+
+message RecordScreenDiscardSuccess {
+}
+
+message RecordScreenFailure {
+  string error = 1 [json_name = "error"];
+}
+
+enum RecordingMode {
+  RECORDING_MODE_UNSPECIFIED = 0;
+  RECORDING_MODE_START_RECORDING = 1;
+  RECORDING_MODE_SAVE_RECORDING = 2;
+  RECORDING_MODE_DISCARD_RECORDING = 3;
+}
+
+enum RequestedFilePathRejectedReason {
+  REQUESTED_FILE_PATH_REJECTED_REASON_UNSPECIFIED = 0;
+  REQUESTED_FILE_PATH_REJECTED_REASON_SLASHES_NOT_ALLOWED = 1;
+}

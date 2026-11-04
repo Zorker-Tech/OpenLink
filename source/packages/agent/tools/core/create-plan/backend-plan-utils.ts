@@ -28,20 +28,18 @@ import { Piscina } from "piscina"
 import yaml from "js-yaml"
 import { z } from "zod"
 
-import { readExecutorResource } from "../../../../agent-exec/read-operation.ts"
+import type { SlateMode as SlateModeValue } from "../../../mode-processing.ts"
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
 import type { Context } from "../../../../context/context.ts"
 import { createLogger } from "../../../../context/index.ts"
-import { PrivacyCapability } from "../../../../redaction/classification.ts"
-import { fromRedactedTodoItem } from "../../../../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
-import { PlanRegistryEntry } from "../../../../proto/generated/agent/v1/agent_pb.ts"
-import { ReadArgs } from "../../../../proto/generated/agent/v1/read_exec_pb.ts"
+import { readPlanFileForTodoSync } from "../../../../../adapters/interop/agent/plan-file-read-adapter.ts"
 import { performWrite } from "../edit/common.ts"
 import { calculateDiff, type DiffWorkerInput, type DiffWorkerResult } from "../edit/diff-worker.ts"
 import { resolveWorkerLocation } from "../worker-script-location.ts"
 import { generateSeededUuid } from "../../tool-support.ts"
 import { todoStatusToString } from "../todo/common.ts"
+import type { SlateTodoItem } from "../todo/contracts.ts"
 
 const planLog = createLogger("@slate/agent:backend-plan-utils");
 
@@ -75,38 +73,28 @@ export function stringifyPlanFrontmatter(
 }
 
 export interface PlanRegistryState {
-  readonly plans: ReadonlyMap<string, PlanRegistryEntry>;
+  readonly plans: ReadonlyMap<string, PlanRegistryEntryView>;
+}
+
+export interface PlanRegistryEntryView {
+  readonly path?: string | undefined;
 }
 
 export function getLatestPlanRegistryEntry(
   stateHandler: PlanRegistryState,
-): PlanRegistryEntry | undefined {
-  let latestEntry: PlanRegistryEntry | undefined;
+): PlanRegistryEntryView | undefined {
+  let latestEntry: PlanRegistryEntryView | undefined;
   for (const entry of stateHandler.plans.values()) {
     latestEntry = entry;
   }
   return latestEntry;
 }
 
-export interface TodoStateReference {
-  get(ctx: Context): Promise<Parameters<typeof fromRedactedTodoItem>[0]>;
-}
-
-export interface TodoStateForPlanSync {
-  readonly todos: readonly TodoStateReference[];
-}
-
 export async function buildTodoStatusMap(
-  ctx: Context,
-  stateHandler: TodoStateForPlanSync,
+  todos: readonly Pick<SlateTodoItem, "id" | "status">[],
 ): Promise<ReadonlyMap<string, string>> {
   const statusMap = new Map<string, string>();
-  for (const todoReference of stateHandler.todos) {
-    const todo = fromRedactedTodoItem(
-      await todoReference.get(ctx),
-      PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-      undefined,
-    );
+  for (const todo of todos) {
     statusMap.set(todo.id, todoStatusToString(todo.status));
   }
   return statusMap;
@@ -128,9 +116,8 @@ export function updateTodoStatusArray(
   return { didUpdate: changed, updatedTodos: nextTodos };
 }
 
-export interface PlanSyncStateHandler extends TodoStateForPlanSync, PlanRegistryState {
-  readonly mode: Parameters<typeof import("../edit/plan-mode-file-policy.ts").assertPlanModeAllowsFileEdit>[1]["mode"];
-  setTodos(todos: readonly unknown[]): void;
+export interface PlanSyncStateHandler extends PlanRegistryState {
+  readonly mode: SlateModeValue;
   recordFileState(path: string, content: string | undefined, previousContent: string | undefined): void;
 }
 
@@ -173,27 +160,31 @@ export async function syncLatestPlanTodosToFile(request: {
   readonly ctx: Context;
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>;
   readonly stateHandler: PlanSyncStateHandler;
+  readonly todos: readonly SlateTodoItem[];
   readonly toolCallId: string;
 }): Promise<void> {
-  const { ctx, resourceAccessor, stateHandler, toolCallId } = request;
+  const { ctx, resourceAccessor, stateHandler, todos, toolCallId } = request;
   const latestEntry = getLatestPlanRegistryEntry(stateHandler);
   if (latestEntry?.path === undefined || latestEntry.path.length === 0) return;
-  const statusMap = await buildTodoStatusMap(ctx, stateHandler);
+  const statusMap = await buildTodoStatusMap(todos);
   if (statusMap.size === 0) return;
   try {
-    const readExecutor = resourceAccessor.get(readExecutorResource);
-    const readResult = await readExecutor.execute(ctx, new ReadArgs({ path: latestEntry.path, toolCallId }), {
+    const readOutcome = await readPlanFileForTodoSync({
+      context: ctx,
+      resourceAccessor,
+      path: latestEntry.path,
+      toolCallId,
       execId: generateSeededUuid(`${toolCallId}-sync-plan-read`),
     });
-    if (readResult.result.case !== "success") {
-      planLog.warn(ctx, "Failed to read latest plan file while syncing todos", { planPath: latestEntry.path, resultCase: readResult.result.case });
+    if (readOutcome.kind === "read_failed") {
+      planLog.warn(ctx, "Failed to read latest plan file while syncing todos", { planPath: latestEntry.path, resultCase: readOutcome.resultCase });
       return;
     }
-    if (readResult.result.value.output.case !== "content") {
-      planLog.warn(ctx, "Latest plan file is not readable as text", { planPath: latestEntry.path, outputCase: readResult.result.value.output.case });
+    if (readOutcome.kind === "not_text") {
+      planLog.warn(ctx, "Latest plan file is not readable as text", { planPath: latestEntry.path, outputCase: readOutcome.outputCase });
       return;
     }
-    const sourceText = readResult.result.value.output.value;
+    const sourceText = readOutcome.content;
     const document = grayMatter(sourceText);
     const frontmatter = planFrontmatterSchema.safeParse(document.data);
     if (!frontmatter.success) return;

@@ -5,15 +5,13 @@ import {
   assertMcpToolIsCallable,
   checkToolDefinitionRead,
 } from "../../source/packages/agent/tools/mcp/mcp-execution-guards.ts"
-import {
-  indexMcpDescriptors,
-  type McpDescriptorIndex,
-} from "../../source/packages/agent/tools/mcp/mcp-call-options.ts"
+import type { McpDescriptorIndex } from "../../source/packages/agent/tools/mcp/mcp-call-options.ts"
+import { indexInteropMcpDescriptors } from "../../source/adapters/interop/agent/mcp-descriptor-index-adapter.ts"
 import {
   McpExecToolNotFoundError,
   McpServerDoesNotExistError,
 } from "../../source/packages/agent/tools/mcp/mcp-result-boundary.ts"
-import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
+import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
 import { safeString } from "../../source/packages/redaction/create.ts"
 import type { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
@@ -23,7 +21,7 @@ import { PrivacyCapability } from "../../source/packages/redaction/classificatio
 // ---------------------------------------------------------------------------------------------
 
 function sessionWith(descriptors: McpDescriptor[]): McpDescriptorIndex {
-  return indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: new McpMetaToolOptions({ enabled: true, mcpDescriptors: descriptors }) })
+  return indexInteropMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: new McpMetaToolOptions({ enabled: true, mcpDescriptors: descriptors }) })
 }
 
 const serverWithSearch = sessionWith([

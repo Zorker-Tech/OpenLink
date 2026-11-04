@@ -1,54 +1,56 @@
-/**
- * What the experiments client did, in the shape the telemetry backend reports it: the kinds that are informational and
- * the ones that are worth a warning are named here.
- */
-export const EXPERIMENTS_DIAGNOSTIC_EVENT = "slate.experiments.diagnostic";
-export const INFO_KINDS = new Set([
+/** Classify experiments-client diagnostics and project their bounded event metadata. */
+export const EXPERIMENTS_DIAGNOSTIC_EVENT = "slate.experiments.diagnostic"
+
+export const INFO_KINDS = new Set<string>([
   "bootstrap_resolved",
   "bootstrap_anonymous",
   "bootstrap_discarded_auth_changed",
   "exposure_flush_failed",
   "shutdown_failed",
-]);
-export const WARN_KINDS = new Set([
+])
+
+export const WARN_KINDS = new Set<string>([
   "bootstrap_config_unparseable",
   "bootstrap_cache_read_failed",
-]);
+])
+
 export interface ExperimentsDiagnostic {
-  kind: string;
-  stage?: string;
-  reason?: string;
-  errorClass?: string;
-  gatesOnCount?: number | null;
-  authenticated?: boolean | null;
+  readonly kind: string
+  readonly stage?: string | undefined
+  readonly reason?: string | undefined
+  readonly errorClass?: string | undefined
+  readonly gatesOnCount?: number | null | undefined
+  readonly authenticated?: boolean | null | undefined
 }
-export function levelFor(
-  diagnostic: ExperimentsDiagnostic,
-): "info" | "warn" | "error" {
-  if (diagnostic.kind === "config_not_applied")
-    return diagnostic.reason === "identity_unhydrated" ? "info" : "warn";
-  if (INFO_KINDS.has(diagnostic.kind)) return "info";
-  return WARN_KINDS.has(diagnostic.kind) ? "warn" : "error";
+
+export function levelFor(diagnostic: ExperimentsDiagnostic): "info" | "warn" | "error" {
+  if (diagnostic.kind === "config_not_applied") {
+    return diagnostic.reason === "identity_unhydrated" ? "info" : "warn"
+  }
+  if (INFO_KINDS.has(diagnostic.kind)) return "info"
+  if (WARN_KINDS.has(diagnostic.kind)) return "warn"
+  return "error"
 }
-export function experimentsDiagnosticTelemetry(
-  diagnostic: ExperimentsDiagnostic,
-) {
+
+function optionalMetadataTag(value: number | boolean | null | undefined): string | undefined {
+  return value == null ? undefined : String(value)
+}
+
+function metadataFor(diagnostic: ExperimentsDiagnostic): Record<string, string | undefined> {
+  return {
+    kind: diagnostic.kind,
+    stage: diagnostic.stage,
+    reason: diagnostic.reason,
+    error_class: diagnostic.errorClass,
+    gates_on_count: optionalMetadataTag(diagnostic.gatesOnCount),
+    authenticated: optionalMetadataTag(diagnostic.authenticated),
+  }
+}
+
+export function experimentsDiagnosticTelemetry(diagnostic: ExperimentsDiagnostic) {
   return {
     level: levelFor(diagnostic),
     event: EXPERIMENTS_DIAGNOSTIC_EVENT,
-    metadata: {
-      kind: diagnostic.kind,
-      stage: diagnostic.stage,
-      reason: diagnostic.reason,
-      error_class: diagnostic.errorClass,
-      gates_on_count:
-        diagnostic.gatesOnCount != null
-          ? String(diagnostic.gatesOnCount)
-          : undefined,
-      authenticated:
-        diagnostic.authenticated != null
-          ? String(diagnostic.authenticated)
-          : undefined,
-    },
-  };
+    metadata: metadataFor(diagnostic),
+  }
 }

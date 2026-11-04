@@ -9,5 +9,7 @@
 
 import { CHAR_HARD_LIMIT } from "./tool-support.ts"
 
-export const READ_CHAR_HARD_LIMIT = CHAR_HARD_LIMIT
-export const LARGE_TEXT_BLOB_THRESHOLD = 10_000
+export const READ_OUTPUT_BOUNDS = Object.freeze({
+  maximumCharacters: CHAR_HARD_LIMIT,
+  spillToBlobAboveCharacters: 10_000,
+})

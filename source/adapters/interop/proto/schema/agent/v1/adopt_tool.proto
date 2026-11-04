@@ -1,0 +1,34 @@
+// agent.v1 — agent/v1/adopt_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message AdoptArgs {
+  string source_agent_id = 1 [json_name = "sourceAgentId"];
+}
+
+message AdoptResult {
+  string source_agent_id = 1 [json_name = "sourceAgentId"];
+  string target_agent_id = 2 [json_name = "targetAgentId"];
+  string project_root_id = 3 [json_name = "projectRootId"];
+  oneof result {
+    .agent.v1.AdoptOutcome success = 4 [json_name = "success"];
+    string error = 5 [json_name = "error"];
+  }
+}
+
+message AdoptToolCall {
+  optional .agent.v1.AdoptArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AdoptResult result = 2 [json_name = "result"];
+}
+
+enum AdoptOutcome {
+  ADOPT_OUTCOME_UNSPECIFIED = 0;
+  ADOPT_OUTCOME_ALREADY_PARENTED = 1;
+  ADOPT_OUTCOME_EDGE_ONLY = 2;
+  ADOPT_OUTCOME_STORE_IMPORT_COMPLETED = 3;
+}

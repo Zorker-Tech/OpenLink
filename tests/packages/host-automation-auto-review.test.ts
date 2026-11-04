@@ -32,7 +32,7 @@ test("the exported constants name the reviewed surface and its failure text", ()
 test("the risk target describes the routine and its references", () => {
   const risk = buildSlateAutomationWriteRiskTarget({ target });
   assert.equal(risk.action, SLATE_AUTOMATION_WRITE_CLASSIFIER_TARGET_ACTION);
-  const fields = risk.arguments!.toJson() as unknown as Record<string, unknown>;
+  const fields = risk.arguments as Record<string, unknown>;
   assert.equal(fields.surface, "automation_write");
   assert.equal(fields.operation, "update");
   assert.equal(fields.automation_id, "auto-1");
@@ -46,11 +46,11 @@ test("the risk target describes the routine and its references", () => {
 
 test("the risk target defaults missing references to empty lists and merges permissions", () => {
   const bare = buildSlateAutomationWriteRiskTarget({ target: { ...(target as Record<string, unknown>), referencedWorkflows: undefined, referencingRoutines: undefined } as never });
-  const bareFields = bare.arguments!.toJson() as unknown as Record<string, unknown>;
+  const bareFields = bare.arguments as Record<string, unknown>;
   assert.deepEqual(bareFields.referenced_workflows, []);
   assert.deepEqual(bareFields.referencing_routines, []);
   const permitted = buildSlateAutomationWriteRiskTarget({ target, personalInstructions: { allowInstructions: [" a ", "a"], blockInstructions: ["b"] }, projectAutoRunInstructions: { blockInstructions: ["c"] } });
-  const autoRun = (permitted.arguments!.toJson() as unknown as { project_permissions?: { auto_run?: { allow_instructions?: string[]; block_instructions?: string[] } } }).project_permissions?.auto_run;
+  const autoRun = (permitted.arguments as { project_permissions?: { auto_run?: { allow_instructions?: string[]; block_instructions?: string[] } } }).project_permissions?.auto_run;
   assert.deepEqual(autoRun?.allow_instructions, ["a"]);
   assert.deepEqual(autoRun?.block_instructions, ["b", "c"]);
 });

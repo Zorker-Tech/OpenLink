@@ -1,6 +1,5 @@
 /**
- * Generates the redacted message surface from the platform's own schema plus the redaction
- * annotations.
+ * Generates redacted interop message views from the external wire schema and Slate's redaction annotations.
  *
  * For every message reachable from an annotated one, this emits a pair of functions: `toRedactedX`
  * turns a plain proto message into one whose sensitive fields are `RedactedString`s (or bytes), and
@@ -10,7 +9,7 @@
  *
  *   pnpm --filter @slate/work-host redaction:generate
  *
- * Inputs: `source/packages/proto/generated/**` (the schema's descriptors, at runtime) and
+ * Inputs: `source/adapters/interop/proto/generated/**` (the schema's descriptors, at runtime) and
  * `redaction.json` (which field of which message is redacted, under which classification).
  */
 
@@ -19,10 +18,10 @@ import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const protoRoot = path.join(packageRoot, "source", "packages", "proto", "generated")
-const outputRoot = path.join(packageRoot, "source", "packages", "redacted-protos", "generated")
-const annotationsPath = path.join(packageRoot, "source", "packages", "redacted-protos", "redaction.json")
-const surfacePath = path.join(packageRoot, "source", "packages", "redacted-protos", "surface.json")
+const protoRoot = path.join(packageRoot, "source", "adapters", "interop", "proto", "generated")
+const outputRoot = path.join(packageRoot, "source", "adapters", "interop", "redacted-protos", "generated")
+const annotationsPath = path.join(packageRoot, "source", "adapters", "interop", "redacted-protos", "redaction.json")
+const surfacePath = path.join(packageRoot, "source", "adapters", "interop", "redacted-protos", "surface.json")
 
 const CLASSIFICATION = { code: "CODE", path: "PATH", credentials: "CREDENTIALS", provider_info: "PROVIDER_INFO" }
 
@@ -331,7 +330,7 @@ function renderModule(module, messages, annotations, needed) {
   lines.push("// @ts-nocheck -- generated runtime: redaction changes a field's type structurally, so the")
   lines.push("// declaration pass for these modules is a separate mechanical step.")
   lines.push("//")
-  lines.push("// @generated from this repository's schema and redaction annotations. Do not edit.")
+  lines.push("// @generated from external wire schemas and Slate redaction annotations. Do not edit.")
   lines.push("//")
   lines.push("// Regenerate with `pnpm --filter @slate/work-host redaction:generate`.")
   lines.push("// Sensitive fields arrive as RedactedString/RedactedBytes; `fromRedacted*` asks for a purpose.")
@@ -368,7 +367,7 @@ function renderModule(module, messages, annotations, needed) {
       const annotation = annotations[typeName]?.[field.name]
       return annotation !== undefined && annotation.bytes !== true
     }))
-  const redactionRoot = "../../../../redaction"
+  const redactionRoot = "../../../../../../packages/redaction"
   if (usesBytes || usesStrings) {
     lines.push(`import { DataClassification } from ${JSON.stringify(`${redactionRoot}/classification.ts`)};`)
     if (usesStrings) lines.push(`import { createRedactedString } from ${JSON.stringify(`${redactionRoot}/create.ts`)};`)

@@ -14,7 +14,7 @@ import { AgentGoneError } from "../../source/host/transcript/session-runtime.ts"
 import { getTranscript, setTranscript } from "../../source/host/transcript/transcript-store.ts";
 import { GROUP_CONFIG_VERSION, SHARED_ROOM_HISTORY_LIMIT, SlateGroupNestingError, buildGroupRedriveNote } from "../../source/host/groups/group-chat.ts";
 import { GROUP_MAX_MEMBERS, getSlateGroupPath, readSlateGroupConfig, writeSlateGroupConfig } from "../../source/host/groups/group-store.ts";
-import { buildSharedRoomGuardrailPrompt } from "../../source/host/groups/xuser.ts";
+import { buildSharedRoomGuardrails } from "../../source/host/groups/xuser.ts";
 import { getSlateProfilePath, writeSlateProfileFile } from "../../source/host/agents/agent-profile.ts";
 import { writeSlateRemoteRoomConfig } from "../../source/host/groups/remote-room-store.ts";
 import { formatRemoteAgentId } from "../../source/shared/agents/sharing.ts";
@@ -400,7 +400,7 @@ describe("running a room's turn", () => {
     (world1.tm.sharedRooms as { sharedRoomConfigOf: unknown }).sharedRoomConfigOf = () => ({ sharedRoomId: "shared-1", memberIds: [], remoteMembers: [] });
     await world1.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "you are Ada", prompt: "p" }, createGroupMemberStream(), () => true);
     assert.deepEqual(seenOverrides, {
-      systemPrompt: "you are Ada" + buildSharedRoomGuardrailPrompt({ hostName: "", isForeignHost: false }),
+      systemPrompt: "you are Ada" + buildSharedRoomGuardrails({ hostName: "", isForeignHost: false }),
       isSharedRoomTurn: true,
     });
   });

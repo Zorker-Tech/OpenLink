@@ -16,6 +16,7 @@
  */
 
 import { PrivacyCapability } from "../redaction/classification.ts"
+import { planDocumentUri } from "../../adapters/interop/agent/plan-file-uri-adapter.ts"
 import { formatTranscriptLocation } from "./transcript-location.ts"
 
 export type DurableBlockSummarizer =
@@ -94,9 +95,7 @@ function planContentText(plan: DurablePlan): string | undefined {
 function planFilePath(plan: DurablePlan): string {
   const planName = plan.name || "plan"
   const planFilename = planName.endsWith(".plan.md") ? planName : `${planName}.plan.md`
-  return plan.composerId
-    ? `cursor-plan://${plan.composerId}/${planFilename}`
-    : `cursor-plan:///${planFilename}`
+  return planDocumentUri(plan.composerId, planFilename)
 }
 
 function transcriptSection(agentTranscriptsFolder: string, conversationId: string | undefined, useXml: boolean): string {

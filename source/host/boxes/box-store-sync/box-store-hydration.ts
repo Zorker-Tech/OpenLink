@@ -1,20 +1,9 @@
-/**
- * Knowing whether a box's store has been hydrated, and saying so when it has.
- *
- * A hand-off marker is written into the box's data directory once the store is known to be complete, so a later boot
- * can tell that the legacy data was carried over; evidence is accepted when it says the store is complete or when it
- * names the reason it could not be. Removing the marker is idempotent.
- */
-import { mkdir, open, rename, rm } from "node:fs/promises";
-import { dirname } from "node:path";
-import { errorLogTag } from "../../../shared/errors/summary.ts";
-import { reportBoxStoreDiagnostic } from "./box-store-diagnostics.ts";
-export const INCOMPLETE_LEGACY_HYDRATE_REASON = "incomplete_legacy_hydrate";
-export const BOX_STORE_HYDRATION_HANDOFF_FILE_NAME = ".box-store-legacy-hydration-complete";
-export const BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH = `home/box/slate-data/${BOX_STORE_HYDRATION_HANDOFF_FILE_NAME}`;
-export function isHydrationHandoffManifestPath(relPath: string): boolean { return relPath === BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH || relPath.startsWith(`${BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH}.`) && relPath.endsWith(".tmp"); }
-function isCount(value: unknown): value is number { return value != null && Number.isInteger(value) && (value as number) >= 0; }
-export interface HydrationEvidence { failures?: readonly unknown[]; manifestEntries?: number; files?: number; verified?: number; hydrateSource?: string; authoritativeStoreDbEntries?: number; restoredStoreDbEntries?: number }
-export function isBoxStoreFullyHydrated(evidence?: HydrationEvidence | null): boolean { if (evidence?.failures == null || evidence.failures.length !== 0 || !isCount(evidence.manifestEntries) || !isCount(evidence.files) || !isCount(evidence.verified)) return false; if (evidence.hydrateSource === "legacy") return isCount(evidence.authoritativeStoreDbEntries) && isCount(evidence.restoredStoreDbEntries) && evidence.restoredStoreDbEntries >= evidence.authoritativeStoreDbEntries; return evidence.files === evidence.manifestEntries && evidence.verified === evidence.manifestEntries; }
-export async function writeHydrationHandoffMarker(markerPath: string): Promise<void> { await mkdir(dirname(markerPath), { recursive: true }); const temp = `${markerPath}.${process.pid}.tmp`; try { const handle = await open(temp, "w", 0o600); try { await handle.writeFile("complete\n"); await handle.sync(); } finally { await handle.close(); } await rename(temp, markerPath); const directory = await open(dirname(markerPath), "r"); try { await directory.sync(); } finally { await directory.close(); } } finally { await rm(temp, { force: true }).catch((error) => reportBoxStoreDiagnostic({ extension: "box_store", kind: "hydration_temp_cleanup_failed", errorClass: errorLogTag(error) })); } }
-export async function removeHydrationHandoffMarker(markerPath: string): Promise<void> { await rm(markerPath, { force: true }); await mkdir(dirname(markerPath), { recursive: true }); const directory = await open(dirname(markerPath), "r"); try { await directory.sync(); } finally { await directory.close(); } }
+export {
+  BOX_STORE_HYDRATION_HANDOFF_FILE_NAME,
+  BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH,
+  INCOMPLETE_LEGACY_HYDRATE_REASON,
+  isBoxStoreFullyHydrated,
+  isHydrationHandoffManifestPath,
+} from "./box-store-hydration-policy.ts"
+export { removeHydrationHandoffMarker, writeHydrationHandoffMarker } from "./box-store-hydration-marker.ts"
+export type { HydrationEvidence } from "./box-store-hydration-contracts.ts"

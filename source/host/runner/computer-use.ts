@@ -8,11 +8,9 @@ import {
   computerUseAuditKind,
   createSlateNavigationProbe,
 } from "./slate-action-audit.ts";
-import { computerUseExecutorResource } from "../../packages/agent-exec/computer-use.ts";
+import { computerUseExecutorResource } from "../../adapters/interop/agent/computer-use-executor-adapter.ts";
 import { shellExecutorResource } from "../../packages/agent-exec/shell.ts";
-import { buildHostShellArgs } from "../boxes/box-shell-command.ts";
-import type { ComputerUseArgs } from "../../packages/proto/generated/agent/v1/computer_use_tool_pb.ts";
-import type { ShellArgs } from "../../packages/proto/generated/agent/v1/shell_exec_pb.ts";
+import { buildHostShellArgs } from "../../adapters/interop/agent/box-shell-command-adapter.ts";
 import { isNoMonitorComputerUseExecutor } from "../ports/box.ts";
 import { mergeTurnUsage, type TurnUsage } from "./turn-usage.ts";
 
@@ -41,16 +39,16 @@ export interface ComputerUseCoordinationDependencies<Context> {
   classifyError?(error: unknown): string;
 }
 
-interface GeneratedResourceAccessor<Context> {
+interface ComputerUseResourceAccessor<Context> {
   get(resource: typeof computerUseExecutorResource): {
-    execute(context: Context, args: ComputerUseArgs): Promise<unknown>;
+    execute(context: Context, args: unknown): Promise<unknown>;
   };
   get(resource: typeof shellExecutorResource): {
-    execute(context: Context, args: ShellArgs): Promise<unknown>;
+    execute(context: Context, args: unknown): Promise<unknown>;
   };
 }
 
-function looksLikeGeneratedAccessor<Context>(value: unknown): value is GeneratedResourceAccessor<Context> {
+function looksLikeComputerUseAccessor<Context>(value: unknown): value is ComputerUseResourceAccessor<Context> {
   return typeof value === "object" && value !== null && typeof Reflect.get(value, "get") === "function";
 }
 
@@ -118,8 +116,8 @@ export function createComputerUseCoordination<Context>(
         });
       const browserPreparation = readyConnection.then(async (preparedConnection) => {
         if (preparedConnection == null) return undefined;
-        if (!looksLikeGeneratedAccessor<Context>(preparedConnection.remoteAccessor)) {
-          throw new TypeError("computer-use remote accessor does not expose generated resources");
+        if (!looksLikeComputerUseAccessor<Context>(preparedConnection.remoteAccessor)) {
+          throw new TypeError("computer-use remote accessor does not expose the required resources");
         }
         const computerExecutor = preparedConnection.remoteAccessor.get(computerUseExecutorResource);
         if (isNoMonitorComputerUseExecutor(computerExecutor)) return preparedConnection;
@@ -181,7 +179,6 @@ export function createComputerUseCoordination<Context>(
         auditor: auditorSink,
         agentId: dependencies.getConversationId(),
         getBoxId: () => dependencies.resolveBoxId(),
-        buildShellArgs: buildHostShellArgs,
       });
       return navigationProbeState;
     },

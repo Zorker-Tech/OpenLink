@@ -8,14 +8,16 @@ import {
   McpServerDoesNotExistError,
   McpToolDoesNotExistError,
   McpWithoutReadToolDefinitionError,
-  convertExecSuccessToToolSuccess,
-  createMcpToolCall,
   createMcpTransportError,
-  createVirtualMcpAuthSuccessResult,
   getWrappedMcpErrorClassification,
   isInvalidMcpArgumentsError,
-  renderMcpToolResult,
 } from "../../source/packages/agent/tools/mcp/mcp-result-boundary.ts";
+import {
+  convertExecSuccessToToolSuccess,
+  createMcpToolCall,
+  createVirtualMcpAuthSuccessResult,
+  renderMcpToolResult,
+} from "../../source/adapters/interop/agent/mcp-result-adapter.ts";
 import { ASK_MODE_MODEL_ERROR } from "../../source/packages/agent/tools/tool-support.ts";
 import { CustomToolCallError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts";
 import {
@@ -28,8 +30,8 @@ import {
   McpTextContent,
   McpToolNotFound,
   McpToolResultContentItem,
-} from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts";
-import { McpToolCall, McpToolResult } from "../../source/packages/proto/generated/agent/v1/mcp_tool_pb.ts";
+} from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts";
+import { McpToolCall, McpToolResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_tool_pb.ts";
 
 const textItem = (text: string, location?: { filePath: string; sizeBytes: number; lineCount: number }) => new McpToolResultContentItem({
   content: { case: "text", value: new McpTextContent({ text, ...(location === undefined ? {} : { outputLocation: location as never }) }) },

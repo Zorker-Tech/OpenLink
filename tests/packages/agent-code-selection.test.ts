@@ -5,8 +5,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { WriteArgs } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { SlateMode, type SlateMode as SlateModeValue } from "../../source/packages/agent/mode-processing.ts"
+import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import { writeCodeSelectionToFile } from "../../source/packages/agent/context/code-selection-spill.ts"
 import { renderSelectedCodeSelections } from "../../source/packages/agent/context/code-selection-context.ts"
@@ -49,7 +49,7 @@ test("a selection is written into the project's uploads folder with its line ran
     startLine: 10,
     endLine: 20,
     index: 2,
-    requestContext: { env: { projectFolder: "/p", workspacePaths: ["/p"] } },
+    requestContext: { env: { projectFolder: "/p", workspacePaths: ["/workspace-fallback"] } },
     resourceAccessor: accessor,
   })
   assert.equal(written?.path, path.join("/p", "uploads", "thing-L10-L20-2.ts"))
@@ -66,7 +66,7 @@ test("the workspace's folder is used when there is no project folder", async () 
     startLine: 1,
     endLine: 1,
     index: 0,
-    requestContext: { env: { workspacePaths: ["/w"] } },
+    requestContext: { env: { workspacePaths: ["/w", "/not-selected"] } },
     resourceAccessor: accessor,
   })
   assert.equal(written?.path, path.join("/w", "uploads", "a-L1-L1-0.py"))
@@ -226,6 +226,22 @@ test("a selection over the inline limit is spilled and the block says where it w
   assert.doesNotMatch(text, /x{100}/)
 })
 
+test("a selection at the inline limit stays in the prompt", async () => {
+  const { accessor, writes } = recordingWriteExecutor()
+  const rendered = await renderSelectedCodeSelections({
+    ctx: ctx(),
+    codeSelections: [{ path: "/p/edge.ts", content: "x".repeat(20_000) }],
+    formattingOptions: {},
+    enableLongCodeSelectionSpillToFile: true,
+    requestContext: { env: { projectFolder: "/p", workspacePaths: ["/p"] } },
+    resourceAccessor: accessor,
+  })
+
+  assert.equal(writes.length, 0)
+  assert.equal(rendered.documentInfos.length, 0)
+  assert.match(rendered.attachedFilesContent[0]!.text, /<code_selection path="\/p\/edge\.ts" lines="1-1">/)
+})
+
 test("a spill that is not enabled, or that fails, leaves the selection inlined", async () => {
   const long = "x".repeat(25_000)
   const notEnabled = await renderSelectedCodeSelections({
@@ -291,7 +307,7 @@ test("an ordinary session is told what it can do and how to ask for more", () =>
   assert.match(rendered, /allows most writes to the workspace/)
   assert.match(rendered, new RegExp(WORKSPACE_IGNORE_FILE_NAME))
   assert.match(rendered, /all: Disables the sandbox entirely/)
-  assert.match(rendered, /Needed for package installs/)
+  assert.match(rendered, /Needed for package installs and internet requests/)
 })
 
 test("a sandbox with a network allowlist is described as already having the network", () => {
@@ -300,7 +316,7 @@ test("a sandbox with a network allowlist is described as already having the netw
     sandboxNetworkInfo: { hasDefaults: true, explicitEntries: [] },
   }))
   assert.match(withDefaults, /common package managers and version control providers/)
-  assert.match(withDefaults, /outside of the allowed domains/)
+  assert.match(withDefaults, /outside the allowed domains/)
 
   const explicit = renderContent(SandboxingDescription({
     isReadonly: false,
@@ -320,11 +336,11 @@ test("the sandbox description's own predicate agrees with the permission helper"
 // ---------------------------------------------------------------------------------------------
 
 test("the tool set builder's contract is a type, and a builder satisfies it", async () => {
-  const generator = (input: { mode: AgentMode; loggingContext: unknown }) => ({
+  const generator = (input: { mode: SlateModeValue; loggingContext: unknown }) => ({
     getAllTools: () => [],
     mode: input.mode,
   })
-  assert.equal(generator({ mode: AgentMode.AGENT, loggingContext: ctx() }).mode, AgentMode.AGENT)
+  assert.equal(generator({ mode: SlateMode.AGENT, loggingContext: ctx() }).mode, SlateMode.AGENT)
 })
 
 test("the write operation is the resource the spill goes through", () => {

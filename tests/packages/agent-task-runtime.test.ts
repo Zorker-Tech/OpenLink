@@ -4,10 +4,9 @@ import assert from "node:assert/strict"
 import {
   assertCloudOnlyTaskArgsAllowed,
   assertMachineAndLegacyArgsNotBothSet,
-  buildCloudSubagentPersistedState,
   collectConversationStepsFromStepBlobIds,
   collectConversationStepsWithToolCallCount,
-  collectConversationTurnStructures,
+  collectConversationTurns,
   countToolCallsFromTurns,
   createUserMessageAction,
   extractLastAssistantMessage,
@@ -15,15 +14,19 @@ import {
   resolveSubagentModel,
   shouldUseAskModeForSubagent,
   targetMachineFromLegacyArgs,
-  targetMachineFromProto,
-  targetMachineToEnvironment,
-  targetMachineToProto,
-  taskEnvironmentToProto,
   toClientSubagentPlacement,
   type ConversationBlobStore,
   type TaskSubagentModelConfig,
   type TaskTargetMachine,
 } from "../../source/packages/agent/tools/task-runtime.ts"
+import {
+  buildCloudSubagentPersistedStateInterop,
+  conversationStepViewInterop,
+  taskEnvironmentForTargetMachineInterop,
+  taskEnvironmentToProtoInterop,
+  targetMachineFromProtoInterop,
+  targetMachineToProtoInterop,
+} from "../../source/adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/subagent-model-policy.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
@@ -33,13 +36,13 @@ import {
   ConversationTurnStructure,
   SubagentExecutionEnvironment,
   TargetMachine,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   CustomSubagentPermissionMode,
   SubagentType,
   SubagentTypeExplore,
   SubagentTypeUnspecified,
-} from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // which model a subagent runs on
@@ -359,15 +362,15 @@ test("the steps of a turn are collected and the ones that are gone are left out"
   ])
   const steps = await collectConversationStepsFromStepBlobIds({ ctx, stepBlobIds: [idOf(9), idOf(10)], blobStore: store })
   assert.equal(steps.length, 1)
-  assert.equal(steps[0]?.message.case, "assistantMessage")
+  assert.equal(conversationStepViewInterop(steps[0]).kind, "assistant")
 })
 
 test("turns are read into structures, with the missing ones kept as gaps", async () => {
   const ctx = createContext()
   const store = blobStoreOf([turnBlob(1, [])])
-  const turns = await collectConversationTurnStructures({ ctx, turns: [idOf(1), idOf(2)], blobStore: store })
+  const turns = await collectConversationTurns({ ctx, turns: [idOf(1), idOf(2)], blobStore: store })
   assert.equal(turns.length, 2)
-  assert.equal(turns[0]?.turn.case, "agentConversationTurn")
+  assert.equal(turns[0]?.kind, "agent")
   assert.equal(turns[1], undefined)
 })
 
@@ -391,14 +394,14 @@ test("the tool calls in a conversation are counted across all of its turns", asy
 // ---------------------------------------------------------------------------------------------
 
 test("a placement is read into the environment the protocol spells", () => {
-  assert.equal(taskEnvironmentToProto("cloud"), SubagentExecutionEnvironment.CLOUD)
-  assert.equal(taskEnvironmentToProto("local"), SubagentExecutionEnvironment.LOCAL)
-  assert.equal(taskEnvironmentToProto(undefined), SubagentExecutionEnvironment.UNSPECIFIED)
+  assert.equal(taskEnvironmentToProtoInterop("cloud"), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentToProtoInterop("local"), SubagentExecutionEnvironment.LOCAL)
+  assert.equal(taskEnvironmentToProtoInterop(undefined), SubagentExecutionEnvironment.UNSPECIFIED)
 
-  assert.equal(targetMachineToEnvironment({ type: "same_machine" }), SubagentExecutionEnvironment.LOCAL)
-  assert.equal(targetMachineToEnvironment({ type: "new_cloud_vm" }), SubagentExecutionEnvironment.CLOUD)
-  assert.equal(targetMachineToEnvironment({ type: "self_hosted_worker", worker_id: "w" }), SubagentExecutionEnvironment.CLOUD)
-  assert.equal(targetMachineToEnvironment({ type: "self_hosted_pool" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "same_machine" }), SubagentExecutionEnvironment.LOCAL)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "new_cloud_vm" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "self_hosted_worker", worker_id: "w" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "self_hosted_pool" }), SubagentExecutionEnvironment.CLOUD)
 })
 
 test("a client-executed subagent can run here or on a cloud VM, and nowhere else", () => {
@@ -441,30 +444,30 @@ test("a placement survives the trip through the protocol in both directions", ()
     { type: "self_hosted_pool", pool: "team-pool", labels: { region: "eu", tier: "gpu" } },
   ]
   for (const target of targets) {
-    assert.deepEqual(targetMachineFromProto(targetMachineToProto(target)), target)
+    assert.deepEqual(targetMachineFromProtoInterop(targetMachineToProtoInterop(target)), target)
   }
 })
 
 test("a placement that says nothing, or something unknown, reads as no placement", () => {
-  assert.equal(targetMachineFromProto(undefined), undefined)
-  assert.equal(targetMachineFromProto(new TargetMachine({})), undefined)
+  assert.equal(targetMachineFromProtoInterop(undefined), undefined)
+  assert.equal(targetMachineFromProtoInterop(new TargetMachine({})), undefined)
 })
 
 test("a pool with no labels carries no labels on the wire", () => {
-  const machine = targetMachineToProto({ type: "self_hosted_pool" })
+  const machine = targetMachineToProtoInterop({ type: "self_hosted_pool" })
   assert.equal(machine.machine.case === "selfHostedPool" ? machine.machine.value.labels.length : -1, 0)
-  assert.equal(targetMachineFromProto(machine)?.type, "self_hosted_pool")
+  assert.equal(targetMachineFromProtoInterop(machine)?.type, "self_hosted_pool")
 })
 
 test("a cloud subagent's saved state carries how to find it again", () => {
-  const state = buildCloudSubagentPersistedState({ bcId: "bc-1", machine: { type: "new_cloud_vm", base_branch: "main" } })
+  const state = buildCloudSubagentPersistedStateInterop({ bcId: "bc-1", machine: { type: "new_cloud_vm", base_branch: "main" } })
   assert.equal(state.environment, SubagentExecutionEnvironment.CLOUD)
   assert.equal(state.cloudSubagent?.bcId, "bc-1")
   assert.equal(state.cloudSubagent?.transcriptPath, undefined)
   assert.equal(state.modelId, undefined)
   assert.equal(state.machine?.machine.case, "newCloudVm")
 
-  const withExtras = buildCloudSubagentPersistedState({
+  const withExtras = buildCloudSubagentPersistedStateInterop({
     bcId: "bc-2",
     transcriptPath: "/repo/.slate/transcripts/bc-2.txt",
     modelId: "composer-2",

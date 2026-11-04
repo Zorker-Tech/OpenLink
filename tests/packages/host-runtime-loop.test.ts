@@ -6,16 +6,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { EVENT_LOOP_RESOLUTION_MS, HEARTBEAT_EVERY_N_WINDOWS, PRESSURE_P95_MS, WINDOW_MS } from "../../source/host/telemetry/event-loop-telemetry.ts";
+import { LOOP_DELAY_RESOLUTION_MS, LOOP_HEARTBEAT_PERIOD, LOOP_PRESSURE_LIMIT_MS, LOOP_REPORT_WINDOW_MS } from "../../source/host/telemetry/event-loop-telemetry-policy.ts";
 import { TRANSIENT_ERRNO_CODES, TRANSIENT_MESSAGE_TOKENS, isTransientStreamError } from "../../source/host/runner/transient-stream-error.ts";
 import { SLATE_AUTO_REVIEW_BLOCK_REASON, SLATE_AUTO_REVIEW_CLASSIFIER_MAX_ATTEMPTS } from "../../source/host/runner/slate-auto-review-classifier-run.ts";
 
 describe("how busy the host's event loop is", () => {
   it("samples over a window, reports pressure, and otherwise just says so now and then", () => {
-    assert.equal(EVENT_LOOP_RESOLUTION_MS, 20);
-    assert.equal(WINDOW_MS, 60_000);
-    assert.equal(PRESSURE_P95_MS, 50);
-    assert.equal(HEARTBEAT_EVERY_N_WINDOWS, 5);
+    assert.equal(LOOP_DELAY_RESOLUTION_MS, 20);
+    assert.equal(LOOP_REPORT_WINDOW_MS, 60_000);
+    assert.equal(LOOP_PRESSURE_LIMIT_MS, 50);
+    assert.equal(LOOP_HEARTBEAT_PERIOD, 5);
   });
 });
 

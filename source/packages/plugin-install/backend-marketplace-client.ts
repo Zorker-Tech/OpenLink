@@ -17,8 +17,8 @@ import { join } from "node:path";
 import { debuglog } from "node:util";
 import { extract } from "tar";
 import { toScmSshUrl } from "./git-url-parsing.ts";
-import { resolveGitRemoteRef } from "./git-remote-ref-resolve.ts";
-import { execGitNonInteractive, resolveExtraGitConfig, type ExtraGitConfig, type ExtraGitConfigProvider } from "./git-subprocess-env.ts";
+import { resolvePluginSourceRevision } from "./git-remote-ref-resolve.ts";
+import { execGitNonInteractive, resolveExtraGitConfig, type ExtraGitConfig, type ExtraGitConfigProvider } from "./git-command.ts";
 import { materializeSparseDirs, materializeSpecForGitPaths, resolveSparseClonePlan, serverIgnoredFilter, setSparseCheckoutDirs, type MaterializeSpec } from "./git-sparse-clone.ts";
 import { getCanonicalMarketplacePathSegments, isKilledSubprocessError, LOCAL_GIT_TIMEOUT_MS, LS_REMOTE_TIMEOUT_MS, MarketplaceCacheManager, REMOTE_GIT_TIMEOUT_MS, type MarketplaceCacheOptions } from "./marketplace-cache.ts";
 import { releaseSourceFromManifest } from "./cloud-manifest.ts";
@@ -51,6 +51,7 @@ const ARCHIVE_RATIO_LIMIT = 100;
 export interface EffectiveMarketplace {
   name?: string;
   id?: string | number | bigint;
+  teamId?: number | null;
   gitRef?: string;
   gitUrl?: string;
   distributionGitUrl?: string;
@@ -69,6 +70,7 @@ export interface EffectivePluginDefinition {
   releaseAsset?: string;
   releaseTag?: string;
   marketplaceId?: string | number | bigint;
+  publisher?: { ownerUserId?: number | null } | null;
   marketplace?: EffectiveMarketplace | null;
 }
 
@@ -87,6 +89,12 @@ export interface EffectivePluginsResponse {
   plugins?: readonly EffectivePlugin[];
   marketplaces?: readonly EffectiveMarketplace[];
   [key: string]: unknown;
+}
+
+/** Slate's host-facing view of the account data needed by installed-plugin discovery. */
+export interface SlatePluginDashboardPort {
+  listEffectivePlugins(options: { readonly timeoutMs: number }): Promise<EffectivePluginsResponse>;
+  readCurrentUser(options: { readonly timeoutMs: number }): Promise<{ readonly userId: number }>;
 }
 
 /** Whether a value would survive a JSON round trip as an object: non-null, not an array. */
@@ -729,7 +737,7 @@ function createVersionResolution(context: VersionResolutionContext): {
         if (batchMode) request.sshBatchMode = true;
         if (extraGitConfig !== undefined) request.extraGitConfig = extraGitConfig;
         if (timeoutMs !== undefined) request.timeoutMs = timeoutMs;
-        const answer = Object.keys(request).length > 0 ? await resolveGitRemoteRef(url, ref, request) : await resolveGitRemoteRef(url, ref);
+        const answer = Object.keys(request).length > 0 ? await resolvePluginSourceRevision(url, ref, request) : await resolvePluginSourceRevision(url, ref);
         return answer.fullSha;
       };
       if (sshUrl === null) {

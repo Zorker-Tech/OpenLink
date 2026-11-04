@@ -15,18 +15,11 @@ import path from "node:path"
 
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/logging.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
+import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
 import type { AttachmentPathRequestContext } from "./path-trust.ts"
 import { sanitizeFilename } from "../../utils/managed-paths.ts"
 
-interface CodeSelectionWriteExecutor {
-  execute(ctx: Context, args: WriteArgs): Promise<unknown>
-}
-
-export interface CodeSelectionResourceAccessor {
-  get(resource: typeof writeExecutorResource): CodeSelectionWriteExecutor
-}
+export type CodeSelectionResourceAccessor = InteropWorkspaceFileWriteAccessor
 
 export interface WriteCodeSelectionToFileArgs {
   readonly ctx: Context
@@ -58,12 +51,7 @@ export async function writeCodeSelectionToFile({
     const documentRootPath = projectFolder ?? workspaceRootPath
     if (!resourceAccessor || documentRootPath === undefined) return undefined
     const filePath = path.join(documentRootPath, "uploads", safeFilename)
-    const writeExecutor = resourceAccessor.get(writeExecutorResource)
-    await writeExecutor.execute(ctx, new WriteArgs({
-      path: filePath,
-      fileBytes: new Uint8Array(fileBytes),
-      returnFileContentAfterWrite: false,
-    }))
+    await writeWorkspaceBytesThroughInterop(resourceAccessor, ctx, filePath, fileBytes)
     return { path: filePath }
   }
 

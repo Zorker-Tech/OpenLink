@@ -13,28 +13,11 @@
 
 import { z } from "zod"
 
-import {
-  AgentConversationTurn,
-  ConversationState,
-  ConversationStateStructure,
-  ConversationStep,
-  ConversationSummary,
-  ConversationTurn,
-  ConversationTurnStructure,
-  ShellCommand,
-  ShellConversationTurn,
-  ShellOutput,
-  UserMessage,
-  type ConversationState as ConversationStateMessage,
-  type ConversationStateStructure as ConversationStateStructureMessage,
-  type SubagentPersistedState as SubagentPersistedStateMessage,
-} from "../proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { Disposable } from "../utils/disposable.ts"
 import type { BlobStore } from "./blob-store.ts"
 import { getBlobId } from "./blob-store.ts"
-import { ProtoSerde, fromHex, toHex, utf8Serde } from "./serde.ts"
-import { resolveSubagentPersistedStates } from "./subagent-states.ts"
+import { fromHex, toHex, utf8Serde } from "./serde.ts"
+import type { AgentConversationBundle, AgentConversationCodec } from "./agent-conversation-store-contracts.ts"
 
 export const AgentModes = ["default", "plan", "debug", "search"] as const
 export const ApprovalModeSettings = ["allowlist", "unrestricted", "auto-review"] as const
@@ -202,90 +185,23 @@ export class AgentMetadataSerde {
   }
 }
 
-const todoItemSerde = new ProtoSerde(TodoItem)
-const userMessageSerde = new ProtoSerde(UserMessage)
-const conversationStepSerde = new ProtoSerde(ConversationStep)
-const conversationTurnStructureSerde = new ProtoSerde(ConversationTurnStructure)
-const conversationSummarySerde = new ProtoSerde(ConversationSummary)
-const shellCommandSerde = new ProtoSerde(ShellCommand)
-const shellOutputSerde = new ProtoSerde(ShellOutput)
-
-/** Walks a structure and reads the blobs it points at, skipping references that are already gone. */
-export async function deriveConversationStateFromStructure<Context>(
-  ctx: Context,
-  structure: ConversationStateStructureMessage,
-  blobStore: Pick<BlobStore<Context>, "getBlob">,
-): Promise<ConversationStateMessage> {
-  const state = new ConversationState()
-  const turns: InstanceType<typeof ConversationTurn>[] = []
-  for (const turnBlobId of structure.turns) {
-    const turnBlob = await blobStore.getBlob(ctx, turnBlobId)
-    if (!turnBlob) continue
-    const turnStructure = conversationTurnStructureSerde.deserialize(turnBlob)
-    let turn: InstanceType<typeof ConversationTurn> | undefined
-    if (turnStructure.turn.case === "agentConversationTurn") {
-      const agentTurn = turnStructure.turn.value
-      const userMessageBlob = await blobStore.getBlob(ctx, agentTurn.userMessage)
-      if (!userMessageBlob) continue
-      const steps: InstanceType<typeof ConversationStep>[] = []
-      for (const stepBlobId of agentTurn.steps) {
-        const stepBlob = await blobStore.getBlob(ctx, stepBlobId)
-        if (stepBlob) steps.push(conversationStepSerde.deserialize(stepBlob))
-      }
-      turn = new ConversationTurn({
-        turn: {
-          case: "agentConversationTurn",
-          value: new AgentConversationTurn({ userMessage: userMessageSerde.deserialize(userMessageBlob), steps }),
-        },
-      })
-    } else if (turnStructure.turn.case === "shellConversationTurn") {
-      const shellTurn = turnStructure.turn.value
-      const shellCommandBlob = await blobStore.getBlob(ctx, shellTurn.shellCommand)
-      if (!shellCommandBlob) continue
-      const shellOutputBlob = await blobStore.getBlob(ctx, shellTurn.shellOutput)
-      if (!shellOutputBlob) continue
-      turn = new ConversationTurn({
-        turn: {
-          case: "shellConversationTurn",
-          value: new ShellConversationTurn({
-            shellCommand: shellCommandSerde.deserialize(shellCommandBlob),
-            shellOutput: shellOutputSerde.deserialize(shellOutputBlob),
-          }),
-        },
-      })
-    }
-    if (turn) turns.push(turn)
-  }
-  state.turns = turns
-
-  const todos: InstanceType<typeof TodoItem>[] = []
-  for (const todoBlobId of structure.todos) {
-    const todoBlob = await blobStore.getBlob(ctx, todoBlobId)
-    if (todoBlob) todos.push(todoItemSerde.deserialize(todoBlob))
-  }
-  state.todos = todos
-  if (structure.summary) {
-    const summaryBlob = await blobStore.getBlob(ctx, structure.summary)
-    if (summaryBlob) state.summary = conversationSummarySerde.deserialize(summaryBlob)
-  }
-  return state
-}
-
-export class AgentConversationStore<Context = unknown> {
-  private readonly serde = new ProtoSerde(ConversationStateStructure)
+export class AgentConversationStore<Context = unknown, Checkpoint = unknown, Conversation = unknown> {
   private readonly blobStore: BlobStore<Context>
   private readonly metadataStore: AgentMetadataStore
+  private readonly codec: AgentConversationCodec<Context, Checkpoint, Conversation>
   private readonly fixedRootBlobId: Uint8Array | undefined
-  private conversationStateStructure = new ConversationStateStructure()
+  private conversationStateStructure: Checkpoint
 
   constructor(
     blobStore: BlobStore<Context>,
     metadataStore: AgentMetadataStore,
-    options: { fixedRootBlobId?: Uint8Array } = {},
+    options: { codec: AgentConversationCodec<Context, Checkpoint, Conversation>; fixedRootBlobId?: Uint8Array },
   ) {
     this.blobStore = blobStore
     this.metadataStore = metadataStore
+    this.codec = options.codec
     this.fixedRootBlobId = options.fixedRootBlobId
+    this.conversationStateStructure = this.codec.createEmptyCheckpoint()
   }
 
   subscribeToMetadata<Key extends AgentMetadataKey>(
@@ -311,75 +227,52 @@ export class AgentConversationStore<Context = unknown> {
     return this.blobStore
   }
 
-  getConversationStateStructure(): ConversationStateStructureMessage {
+  getConversationStateStructure(): Checkpoint {
     return this.conversationStateStructure
   }
 
   /** The request id of the newest agent turn, which is how a caller resumes a stream. */
   async getLastRequestIdFromConversation(ctx: Context): Promise<string | null> {
-    const turns = this.conversationStateStructure.turns
-    if (turns.length === 0) return null
-    for (let index = turns.length - 1; index >= 0; index--) {
-      const turnBlob = await this.blobStore.getBlob(ctx, turns[index] as Uint8Array)
-      if (!turnBlob) continue
-      const turnStructure = conversationTurnStructureSerde.deserialize(turnBlob)
-      if (turnStructure.turn.case === "agentConversationTurn") {
-        return turnStructure.turn.value.requestId ?? null
-      }
-    }
-    return null
+    return this.codec.getLastRequestId(ctx, this.conversationStateStructure, this.blobStore)
   }
 
-  async getFullConversation(ctx: Context): Promise<ConversationStateMessage> {
+  async getFullConversation(ctx: Context): Promise<Conversation> {
     return this.deserializeConversationStateStructure(ctx, this.conversationStateStructure)
   }
 
   async deserializeConversationStateStructure(
     ctx: Context,
-    structure: ConversationStateStructureMessage,
-  ): Promise<ConversationStateMessage> {
-    return deriveConversationStateFromStructure(ctx, structure, this.blobStore)
+    structure: Checkpoint,
+  ): Promise<Conversation> {
+    return this.codec.hydrateConversation(ctx, structure, this.blobStore)
   }
 
   /** The conversation plus every subagent's own conversation, keyed by subagent id. */
-  async getFullConversationWithSubagents(ctx: Context): Promise<{
-    conversationState: ConversationStateMessage
-    subagentStates: Record<string, {
-      conversationState: ConversationStateMessage
-      createdTimestampMs: SubagentPersistedStateMessage["createdTimestampMs"]
-      lastUsedTimestampMs: SubagentPersistedStateMessage["lastUsedTimestampMs"]
-      subagentType: SubagentPersistedStateMessage["subagentType"]
-    }>
-  }> {
+  async getFullConversationWithSubagents(ctx: Context): Promise<AgentConversationBundle<Conversation>> {
     const structure = this.conversationStateStructure
-    const conversationState = await this.deserializeConversationStateStructure(ctx, structure)
-    const subagentStates: Record<string, {
-      conversationState: ConversationStateMessage
-      createdTimestampMs: SubagentPersistedStateMessage["createdTimestampMs"]
-      lastUsedTimestampMs: SubagentPersistedStateMessage["lastUsedTimestampMs"]
-      subagentType: SubagentPersistedStateMessage["subagentType"]
-    }> = {}
-    const persisted = await resolveSubagentPersistedStates(ctx, structure, this.blobStore)
+    const conversationState = await this.codec.hydrateConversation(ctx, structure, this.blobStore)
+    const subagentStates: AgentConversationBundle<Conversation>["subagentStates"] = {}
+    const persisted = await this.codec.resolveSubconversations(ctx, structure, this.blobStore)
     for (const [agentId, state] of Object.entries(persisted)) {
-      if (!state.conversationState) continue
+      if (state.conversationState === undefined) continue
       subagentStates[agentId] = {
-        conversationState: await this.deserializeConversationStateStructure(ctx, state.conversationState),
+        conversationState: await this.codec.hydrateConversation(ctx, state.conversationState, this.blobStore),
         createdTimestampMs: state.createdTimestampMs,
         lastUsedTimestampMs: state.lastUsedTimestampMs,
-        subagentType: state.subagentType,
+        ...(state.subagentType === undefined ? {} : { subagentType: state.subagentType }),
       }
     }
     return { conversationState, subagentStates }
   }
 
-  getLatestCheckpoint(): ConversationStateStructureMessage {
+  getLatestCheckpoint(): Checkpoint {
     return this.getConversationStateStructure()
   }
 
   /** Writes the structure as the new root blob and remembers its id as the agent's latest. */
-  async handleCheckpoint(ctx: Context, checkpoint: ConversationStateStructureMessage): Promise<void> {
+  async handleCheckpoint(ctx: Context, checkpoint: Checkpoint): Promise<void> {
     this.conversationStateStructure = checkpoint
-    const bytes = this.serde.serialize(checkpoint)
+    const bytes = this.codec.encodeCheckpoint(checkpoint)
     const blobId = this.fixedRootBlobId ?? await getBlobId(bytes)
     await this.blobStore.setBlob(ctx, blobId, bytes)
     this.setMetadata("latestRootBlobId", blobId)
@@ -394,18 +287,18 @@ export class AgentConversationStore<Context = unknown> {
     try {
       const rootBlobId = this.getMetadata("latestRootBlobId")
       if (!rootBlobId || rootBlobId.length === 0) {
-        this.conversationStateStructure = new ConversationStateStructure()
+        this.conversationStateStructure = this.codec.createEmptyCheckpoint()
         return false
       }
       const bytes = await this.blobStore.getBlob(ctx, rootBlobId)
       if (!bytes) {
-        this.conversationStateStructure = new ConversationStateStructure()
+        this.conversationStateStructure = this.codec.createEmptyCheckpoint()
         return false
       }
-      this.conversationStateStructure = this.serde.deserialize(bytes)
+      this.conversationStateStructure = this.codec.decodeCheckpoint(bytes)
       return true
     } catch {
-      this.conversationStateStructure = new ConversationStateStructure()
+      this.conversationStateStructure = this.codec.createEmptyCheckpoint()
       return false
     }
   }

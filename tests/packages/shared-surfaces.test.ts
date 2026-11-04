@@ -1,8 +1,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { isSlateSubagentId, SLATE_SUBAGENT_ID_PREFIX } from "../../source/shared/agents/subagents.ts"
-import { CONNECT_CODE_RESOURCE_EXHAUSTED, getConnectRetryAfterMs, isDeadlineExceededConnectError, isInvalidArgumentConnectError, isRateLimitConnectError, isTransientConnectError } from "../../source/shared/connect-errors.ts"
+import { isManagedSubagentConversationId } from "../../source/shared/agents/subagents.ts"
+import { CONNECT_CODE_RESOURCE_EXHAUSTED, getConnectRetryAfterMs, isDeadlineExceededConnectError, isInvalidArgumentConnectError, isRateLimitConnectError, isTransientConnectError } from "../../source/adapters/interop/connect/connect-error-adapter.ts"
 import { isMessageAddress } from "../../source/shared/message-reference.ts"
 import { isMcpServerId, parseInt32McpServerId, validateMcpServerId } from "../../source/shared/node/mcp/mcp-server-id.ts"
 import { EXTENSION_FROM_IMAGE_MIME, IMAGE_MIME_FROM_EXTENSION, extensionOf } from "../../source/shared/media/media-extensions.ts"
@@ -18,7 +18,7 @@ import { CLIENT_PERSISTENCE_CHANNELS } from "../../source/shared/persistence.ts"
 import { IDLE_TEACH_RECORDING_STATUS, SLATE_TEACH_MAX_DURATION_MS } from "../../source/shared/agents/teach-recording.ts"
 import { getSlateVariant, isSlatePackaged } from "../../source/shared/node/slate-variant.ts"
 import { isValidAttachmentUrl } from "../../source/shared/transport-types.ts"
-import { GATEWAY_API_PREFIX, GATEWAY_AUTH_SCHEME, GATEWAY_SLIM_AVATARS_HEADER } from "../../source/shared/gateway-wire.ts"
+import { SLATE_GATEWAY } from "../../source/shared/gateway-wire.ts"
 import { installInvariantReporter, invariantMessagesStripped, SlateInvariantViolation } from "../../source/shared/invariant.ts"
 import { buildSlateRequestLineageHeaders, sanitizeHeaderValue } from "../../source/shared/observability/request-lineage.ts"
 import { slateWebauthnProxyMirroredEnablement, slateWebauthnSignerShips } from "../../source/shared/webauthn-proxy-availability.ts"
@@ -230,19 +230,25 @@ test("which build this is follows the environment it was started in", () => {
 })
 
 test("the constants the client and the host agree on are the ones they promise", () => {
-  assert.equal(SLATE_SUBAGENT_ID_PREFIX, "slate-subagent-")
-  assert.equal(isSlateSubagentId("slate-subagent-1"), true)
-  assert.equal(isSlateSubagentId("agent-1"), false)
+  assert.equal(isManagedSubagentConversationId("slate-subagent-1"), true)
+  assert.equal(isManagedSubagentConversationId("agent-1"), false)
+  assert.equal(isManagedSubagentConversationId("prefix-slate-subagent-1"), false)
   assert.equal(ROSTER_REPLICA_KEY, "roster")
   assert.equal(transcriptReplicaKey("agent-1"), "transcript:agent-1")
   assert.equal(ORDERED_REPLICAS_V1, "orderedReplicasV1")
-  assert.equal(CLIENT_PERSISTENCE_CHANNELS.read.startsWith("slate:"), true)
+  assert.deepEqual(CLIENT_PERSISTENCE_CHANNELS, {
+    read: "slate:client-persistence-read",
+    write: "slate:client-persistence-write",
+    remove: "slate:client-persistence-remove",
+    listKeys: "slate:client-persistence-list-keys",
+    migrate: "slate:client-persistence-migrate",
+  })
   assert.equal(SLATE_TEACH_MAX_DURATION_MS, 10 * 60 * 1_000)
   assert.equal(IDLE_TEACH_RECORDING_STATUS.state, "idle")
   assert.equal(IDLE_TEACH_RECORDING_STATUS.maxDurationMs, SLATE_TEACH_MAX_DURATION_MS)
-  assert.equal(GATEWAY_API_PREFIX, "/api")
-  assert.equal(GATEWAY_AUTH_SCHEME, "Bearer")
-  assert.equal(GATEWAY_SLIM_AVATARS_HEADER.startsWith("x-slate-"), true)
+  assert.equal(SLATE_GATEWAY.paths.api, "/api")
+  assert.equal(SLATE_GATEWAY.authentication.scheme, "Bearer")
+  assert.equal(SLATE_GATEWAY.headers.slimAvatars.startsWith("x-slate-"), true)
   assert.equal(LOCAL_EXEC_DAEMON_CONNECTION_FILENAME.endsWith(".json"), true)
   assert.equal(SLATE_LOCAL_EXEC_SUPERVISED_WINDOW_MS, 90_000)
 })

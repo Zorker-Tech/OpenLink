@@ -1,304 +1,203 @@
 /**
- * The questions an agent asks the client, and the answers it can expect.
+ * Slate's question-and-answer port for actions that need a user or host decision.
  *
- * An agent cannot decide some things on its own — whether a web search is allowed, whether the user
- * wants a plan, whether a mode switch was accepted, whether an MCP server may be authenticated — so it
- * asks, and the client answers. Every question and answer is a proto message, which is what lets the
- * same code run against the desktop app, a CLI, or a test double. The builders here are the only place
- * those messages are constructed, so an answer's shape is decided once.
+ * The core names each request and carries its small input record. The transport adapter maps these
+ * values to whichever messages the running host speaks.
  */
 
-import type { PartialMessage } from "@bufbuild/protobuf"
+export interface SlateInteractionQuery {
+  readonly id: number;
+  readonly kind: string;
+  readonly payload?: unknown;
+}
 
-import { InteractionQuery, InteractionResponse } from "../proto/generated/agent/v1/agent_pb.ts"
-import type { AskQuestionResult } from "../proto/generated/agent/v1/ask_question_tool_pb.ts"
-import {
-  ConnectScmRequestResponse,
-  ConnectScmRequestResponse_Approved,
-  ConnectScmRequestResponse_Failed,
-  ConnectScmRequestResponse_Rejected,
-} from "../proto/generated/agent/v1/connect_scm_tool_pb.ts"
-import { CreatePlanRequestResponse, type CreatePlanResult } from "../proto/generated/agent/v1/create_plan_tool_pb.ts"
-import {
-  GenerateImageRequestResponse,
-  GenerateImageRequestResponse_Approved,
-  GenerateImageRequestResponse_Rejected,
-} from "../proto/generated/agent/v1/generate_image_tool_pb.ts"
-import {
-  McpAuthRequestQuery,
-  McpAuthRequestResponse,
-  McpAuthRequestResponse_Approved,
-  McpAuthRequestResponse_Rejected,
-  type McpAuthArgs,
-} from "../proto/generated/agent/v1/mcp_auth_tool_pb.ts"
-import type { PrManagementResult } from "../proto/generated/agent/v1/pr_management_tool_pb.ts"
-import type { ReplaceEnvResult } from "../proto/generated/agent/v1/replace_env_tool_pb.ts"
-import type { SetupVmEnvironmentResult } from "../proto/generated/agent/v1/setup_vm_environment_tool_pb.ts"
-import {
-  SwitchModeRequestResponse,
-  SwitchModeRequestResponse_Approved,
-  SwitchModeRequestResponse_Rejected,
-} from "../proto/generated/agent/v1/switch_mode_tool_pb.ts"
-import {
-  WebFetchRequestQuery,
-  WebFetchRequestResponse,
-  WebFetchRequestResponse_Approved,
-  WebFetchRequestResponse_Rejected,
-  type WebFetchArgs,
-} from "../proto/generated/agent/v1/web_fetch_tool_pb.ts"
-import {
-  WebSearchRequestQuery,
-  WebSearchRequestResponse,
-  WebSearchRequestResponse_Approved,
-  WebSearchRequestResponse_Rejected,
-  type WebSearchArgs,
-} from "../proto/generated/agent/v1/web_search_tool_pb.ts"
+export interface SlateInteractionResponse {
+  readonly id: number;
+  readonly kind: string;
+  readonly payload: unknown;
+}
 
 export interface InteractionQueryListener<Context = unknown> {
-  query(context: Context, query: InteractionQuery): Promise<InteractionResponse>
+  query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse>;
 }
 
-/** Thrown when the answer will arrive later than the call: the query is carried so it can be resumed. */
+export type SlateApprovalResponse = {
+  readonly result:
+    | { readonly case: "approved" }
+    | { readonly case: "rejected"; readonly value: { readonly reason: string } };
+};
+
+/** An answer arrives after this call returns, so the request is kept for the host to resume. */
 export class DeferredInteractionResponseError extends Error {
-  constructor(readonly query: InteractionQuery) {
-    super(`Deferred interaction response requested for query ${query.id} (${query.query.case ?? "unknown"})`)
-    this.name = "DeferredInteractionResponseError"
-    Object.setPrototypeOf(this, new.target.prototype)
+  constructor(readonly query: SlateInteractionQuery) {
+    super("Deferred interaction response requested for query " + query.id + " (" + query.kind + ")");
+    this.name = "DeferredInteractionResponseError";
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
+function approvalReply(decision: "approved" | "rejected" | "failed", detail?: string | null) {
+  return {
+    decision,
+    ...(detail === undefined || detail === null ? {} : { detail }),
+  };
+}
+
+/** Standard answers the headless listener and host adapters can build without wire message classes. */
 export const Responses = {
-  webSearchApproved(queryId: number): InteractionResponse {
-    return new InteractionResponse({
+  webSearchApproved(queryId: number): SlateInteractionResponse {
+    return { id: queryId, kind: "web-search", payload: approvalReply("approved") };
+  },
+  webSearchRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return { id: queryId, kind: "web-search", payload: approvalReply("rejected", reason ?? "") };
+  },
+  webFetchApproved(queryId: number): SlateInteractionResponse {
+    return { id: queryId, kind: "web-fetch", payload: approvalReply("approved") };
+  },
+  webFetchRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return { id: queryId, kind: "web-fetch", payload: approvalReply("rejected", reason ?? "") };
+  },
+  askQuestion(queryId: number, payload: unknown): SlateInteractionResponse {
+    return { id: queryId, kind: "ask-question", payload };
+  },
+  switchModeApproved(queryId: number): SlateInteractionResponse {
+    return { id: queryId, kind: "switch-mode", payload: approvalReply("approved") };
+  },
+  switchModeRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return { id: queryId, kind: "switch-mode", payload: approvalReply("rejected", reason ?? "") };
+  },
+  createPlan(queryId: number, payload: unknown): SlateInteractionResponse {
+    return { id: queryId, kind: "create-plan", payload };
+  },
+  setupVmEnvironment(queryId: number, payload: unknown): SlateInteractionResponse {
+    return { id: queryId, kind: "setup-vm-environment", payload };
+  },
+  replaceEnv(queryId: number, payload: unknown): SlateInteractionResponse {
+    return { id: queryId, kind: "replace-environment", payload };
+  },
+  prManagement(queryId: number, payload: unknown): SlateInteractionResponse {
+    return { id: queryId, kind: "pr-management", payload };
+  },
+  mcpAuthApproved(queryId: number): SlateInteractionResponse {
+    return { id: queryId, kind: "mcp-auth", payload: approvalReply("approved") };
+  },
+  mcpAuthRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return {
       id: queryId,
-      result: {
-        case: "webSearchRequestResponse",
-        value: new WebSearchRequestResponse({
-          result: { case: "approved", value: new WebSearchRequestResponse_Approved() },
-        }),
-      },
-    })
+      kind: "mcp-auth",
+      payload: approvalReply("rejected", reason ?? "Authentication was rejected"),
+    };
   },
-  webSearchRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
+  connectScmApproved(queryId: number): SlateInteractionResponse {
+    return { id: queryId, kind: "connect-scm", payload: approvalReply("approved") };
+  },
+  connectScmRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return {
       id: queryId,
-      result: {
-        case: "webSearchRequestResponse",
-        value: new WebSearchRequestResponse({
-          result: { case: "rejected", value: new WebSearchRequestResponse_Rejected({ reason: reason ?? "" }) },
-        }),
-      },
-    })
+      kind: "connect-scm",
+      payload: approvalReply("rejected", reason ?? "Connecting the source-control account was skipped"),
+    };
   },
-  webFetchApproved(queryId: number): InteractionResponse {
-    return new InteractionResponse({
+  connectScmFailed(queryId: number, error?: string | null): SlateInteractionResponse {
+    return {
       id: queryId,
-      result: {
-        case: "webFetchRequestResponse",
-        value: new WebFetchRequestResponse({
-          result: { case: "approved", value: new WebFetchRequestResponse_Approved() },
-        }),
-      },
-    })
+      kind: "connect-scm",
+      payload: approvalReply("failed", error ?? "The source-control connection failed"),
+    };
   },
-  webFetchRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
+  generateImageApproved(queryId: number, description?: string | null): SlateInteractionResponse {
+    return {
       id: queryId,
-      result: {
-        case: "webFetchRequestResponse",
-        value: new WebFetchRequestResponse({
-          result: { case: "rejected", value: new WebFetchRequestResponse_Rejected({ reason: reason ?? "" }) },
-        }),
-      },
-    })
+      kind: "generate-image",
+      payload: { decision: "approved", description: description ?? "" },
+    };
   },
-  askQuestion(queryId: number, result: AskQuestionResult): InteractionResponse {
-    return new InteractionResponse({
+  generateImageRejected(queryId: number, reason?: string | null): SlateInteractionResponse {
+    return {
       id: queryId,
-      result: { case: "askQuestionInteractionResponse", value: { result } },
-    })
+      kind: "generate-image",
+      payload: { decision: "rejected", reason: reason ?? "" },
+    };
   },
-  switchModeApproved(queryId: number): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "switchModeRequestResponse",
-        value: new SwitchModeRequestResponse({
-          result: { case: "approved", value: new SwitchModeRequestResponse_Approved() },
-        }),
-      },
-    })
-  },
-  switchModeRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "switchModeRequestResponse",
-        value: new SwitchModeRequestResponse({
-          result: { case: "rejected", value: new SwitchModeRequestResponse_Rejected({ reason: reason ?? "" }) },
-        }),
-      },
-    })
-  },
-  createPlan(queryId: number, result: CreatePlanResult): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: { case: "createPlanRequestResponse", value: new CreatePlanRequestResponse({ result }) },
-    })
-  },
-  setupVmEnvironment(queryId: number, result: SetupVmEnvironmentResult): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: { case: "setupVmEnvironmentResult", value: result },
-    })
-  },
-  replaceEnv(queryId: number, result: ReplaceEnvResult): InteractionResponse {
-    return new InteractionResponse({ id: queryId, result: { case: "replaceEnvResult", value: result } })
-  },
-  prManagement(queryId: number, result: PrManagementResult): InteractionResponse {
-    return new InteractionResponse({ id: queryId, result: { case: "prManagementResult", value: result } })
-  },
-  mcpAuthApproved(queryId: number): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "mcpAuthRequestResponse",
-        value: new McpAuthRequestResponse({
-          result: { case: "approved", value: new McpAuthRequestResponse_Approved() },
-        }),
-      },
-    })
-  },
-  mcpAuthRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "mcpAuthRequestResponse",
-        value: new McpAuthRequestResponse({
-          result: {
-            case: "rejected",
-            value: new McpAuthRequestResponse_Rejected({ reason: reason ?? "Authentication was rejected" }),
-          },
-        }),
-      },
-    })
-  },
-  connectScmApproved(queryId: number): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "connectScmRequestResponse",
-        value: new ConnectScmRequestResponse({
-          result: { case: "approved", value: new ConnectScmRequestResponse_Approved() },
-        }),
-      },
-    })
-  },
-  connectScmRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "connectScmRequestResponse",
-        value: new ConnectScmRequestResponse({
-          result: {
-            case: "rejected",
-            value: new ConnectScmRequestResponse_Rejected({ reason: reason ?? "Connecting GitHub was skipped" }),
-          },
-        }),
-      },
-    })
-  },
-  connectScmFailed(queryId: number, error?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "connectScmRequestResponse",
-        value: new ConnectScmRequestResponse({
-          result: {
-            case: "failed",
-            value: new ConnectScmRequestResponse_Failed({ error: error ?? "Failed to connect GitHub" }),
-          },
-        }),
-      },
-    })
-  },
-  generateImageApproved(queryId: number, description?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "generateImageRequestResponse",
-        value: new GenerateImageRequestResponse({
-          result: {
-            case: "approved",
-            value: new GenerateImageRequestResponse_Approved({ description: description ?? "" }),
-          },
-        }),
-      },
-    })
-  },
-  generateImageRejected(queryId: number, reason?: string | null): InteractionResponse {
-    return new InteractionResponse({
-      id: queryId,
-      result: {
-        case: "generateImageRequestResponse",
-        value: new GenerateImageRequestResponse({
-          result: { case: "rejected", value: new GenerateImageRequestResponse_Rejected({ reason: reason ?? "" }) },
-        }),
-      },
-    })
-  },
-}
+};
 
-/** An answer of the wrong kind is a bug in the listener, and is reported as one. */
-function expectResponse<T>(response: InteractionResponse, caseName: string, kind: string): T {
-  if (response.result.case !== caseName || !response.result.value) {
-    throw new Error(`Unexpected response for ${kind} query: ${response.result.case}`)
+function expectResponse<T>(response: SlateInteractionResponse, expectedKind: string, label: string): T {
+  if (response.kind !== expectedKind) {
+    throw new Error("Unexpected response for " + label + " query: " + response.kind);
   }
-  return response.result.value as T
+  return response.payload as T;
 }
 
+function approvalView(payload: unknown, label: string): SlateApprovalResponse {
+  if (typeof payload !== "object" || payload === null || !("decision" in payload)) {
+    throw new Error("Invalid " + label + " decision");
+  }
+  const decision = (payload as { decision: unknown }).decision;
+  if (decision === "approved") return { result: { case: "approved" } };
+  if (decision === "rejected") {
+    const detail = (payload as { detail?: unknown }).detail;
+    return {
+      result: {
+        case: "rejected",
+        value: { reason: typeof detail === "string" ? detail : "" },
+      },
+    };
+  }
+  throw new Error("Unexpected " + label + " decision: " + String(decision));
+}
+
+export interface WebSearchInteractionInput {
+  readonly searchTerm: string;
+  readonly explanation?: string | undefined;
+  readonly toolCallId?: string | undefined;
+}
+
+export interface WebFetchInteractionInput {
+  readonly url: string;
+  readonly toolCallId?: string | undefined;
+}
+
+/** Ask whether the current web search may run. */
 export async function queryWebSearch<Context>(
   listener: InteractionQueryListener<Context>,
   context: Context,
-  args: WebSearchArgs | PartialMessage<WebSearchArgs>,
-): Promise<WebSearchRequestResponse> {
-  const response = await listener.query(context, new InteractionQuery({
-    query: { case: "webSearchRequestQuery", value: new WebSearchRequestQuery({ args }) },
-  }))
-  return expectResponse<WebSearchRequestResponse>(response, "webSearchRequestResponse", "web search")
+  args: WebSearchInteractionInput,
+): Promise<SlateApprovalResponse> {
+  const response = await listener.query(context, { id: 0, kind: "web-search", payload: args });
+  return approvalView(expectResponse(response, "web-search", "web search"), "web search");
 }
 
+/** Ask whether a URL may be fetched, carrying the optional approval context only when present. */
 export async function queryWebFetch<Context>(
   listener: InteractionQueryListener<Context>,
   context: Context,
-  args: WebFetchArgs | PartialMessage<WebFetchArgs>,
+  args: WebFetchInteractionInput,
   options?: boolean | {
-    readonly skipApproval?: boolean
-    readonly smartModeApproval?: WebFetchRequestQuery["smartModeApproval"]
+    readonly skipApproval?: boolean;
+    readonly smartModeApproval?: unknown;
   } | null,
-): Promise<WebFetchRequestResponse> {
-  const queryOptions = typeof options === "boolean" ? { skipApproval: options } : options ?? {}
-  const response = await listener.query(context, new InteractionQuery({
-    query: {
-      case: "webFetchRequestQuery",
-      value: new WebFetchRequestQuery({
-        args,
-        skipApproval: queryOptions.skipApproval ?? false,
-        // An absent approval is absent, not undefined: the field is optional on the wire.
-        ...(queryOptions.smartModeApproval === undefined ? {} : { smartModeApproval: queryOptions.smartModeApproval }),
-      }),
+): Promise<SlateApprovalResponse> {
+  const queryOptions = typeof options === "boolean" ? { skipApproval: options } : options ?? {};
+  const response = await listener.query(context, {
+    id: 0,
+    kind: "web-fetch",
+    payload: {
+      args,
+      skipApproval: queryOptions.skipApproval ?? false,
+      ...(queryOptions.smartModeApproval === undefined
+        ? {}
+        : { smartModeApproval: queryOptions.smartModeApproval }),
     },
-  }))
-  return expectResponse<WebFetchRequestResponse>(response, "webFetchRequestResponse", "web fetch")
+  });
+  return approvalView(expectResponse(response, "web-fetch", "web fetch"), "web fetch");
 }
 
+/** Ask a host to authorize access to an external MCP server. */
 export async function queryMcpAuth<Context>(
   listener: InteractionQueryListener<Context>,
   context: Context,
-  args: McpAuthArgs | PartialMessage<McpAuthArgs>,
-): Promise<McpAuthRequestResponse> {
-  const response = await listener.query(context, new InteractionQuery({
-    query: { case: "mcpAuthRequestQuery", value: new McpAuthRequestQuery({ args }) },
-  }))
-  return expectResponse<McpAuthRequestResponse>(response, "mcpAuthRequestResponse", "MCP auth")
+  args: Readonly<Record<string, unknown>>,
+): Promise<SlateApprovalResponse> {
+  const response = await listener.query(context, { id: 0, kind: "mcp-auth", payload: args });
+  return approvalView(expectResponse(response, "mcp-auth", "MCP auth"), "MCP auth");
 }

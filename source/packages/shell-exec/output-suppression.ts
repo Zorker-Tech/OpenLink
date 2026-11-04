@@ -1,12 +1,22 @@
-/**
- * When a shell is producing more output than is worth streaming, and what the user is told instead.
- *
- * A command that prints faster than a person can read — a build log, a spinning progress bar — costs the
- * platform more to stream than the user gets from watching it. So output is suppressed once it exceeds a
- * rate and a total, with a higher rate allowed while the event loop is under pressure, since a busy loop is
- * exactly when streaming hurts most. The command keeps running; the user is told that its output is not
- * being shown.
- */
+/** Stream limits and the user-facing notice for a command whose output is being held back. */
+const OBSERVATION_WINDOW_MS = 60_000;
+const MINIMUM_STREAM_RATE = 64 * 1024;
+const UNPRESSURED_STREAM_RATE = 2 * 1024 * 1024;
+const MINIMUM_SUPPRESSED_OUTPUT = 256 * 1024;
 
-export const SHELL_OUTPUT_SUPPRESSION_DEFAULTS = { windowMs: 60_000, minimumThresholdCharsPerSecond: 64 * 1024, thresholdCharsPerSecondWithoutPressure: 2 * 1024 * 1024, minChars: 256 * 1024 } as const
-export const SHELL_OUTPUT_SUPPRESSED_NOTICE = "\n[This shell is producing too much output to stream. The command will still run.]\n"
+const SUPPRESSION_LIMIT_ENTRIES = [
+  ["windowMs", OBSERVATION_WINDOW_MS],
+  ["minimumThresholdCharsPerSecond", MINIMUM_STREAM_RATE],
+  ["thresholdCharsPerSecondWithoutPressure", UNPRESSURED_STREAM_RATE],
+  ["minChars", MINIMUM_SUPPRESSED_OUTPUT],
+] as const;
+
+export const SHELL_OUTPUT_SUPPRESSION_DEFAULTS = Object.fromEntries(SUPPRESSION_LIMIT_ENTRIES) as {
+  readonly windowMs: typeof OBSERVATION_WINDOW_MS;
+  readonly minimumThresholdCharsPerSecond: typeof MINIMUM_STREAM_RATE;
+  readonly thresholdCharsPerSecondWithoutPressure: typeof UNPRESSURED_STREAM_RATE;
+  readonly minChars: typeof MINIMUM_SUPPRESSED_OUTPUT;
+};
+
+const SUPPRESSED_OUTPUT_NOTICE_LINE = "[Output is being limited to keep the stream readable. The command will continue running.]";
+export const SHELL_OUTPUT_SUPPRESSED_NOTICE = `\n${SUPPRESSED_OUTPUT_NOTICE_LINE}\n`;

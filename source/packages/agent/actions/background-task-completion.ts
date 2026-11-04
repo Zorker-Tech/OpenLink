@@ -20,13 +20,11 @@
  * the message it arrives in.
  */
 
-import {
-  BackgroundTaskCompletion,
-  BackgroundTaskCompletionReason,
-  BackgroundTaskKind,
-  BackgroundTaskNotificationContext,
-  BackgroundTaskStatus,
-} from "../../proto/generated/agent/v1/agent_pb.ts"
+import type {
+  SlateBackgroundTaskCompletion,
+  SlateBackgroundTaskKind,
+  SlateBackgroundTaskStatus,
+} from "./background-task-completion-contracts.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../constants/system-notification.ts"
 import { META_PARENT_COMPLETION_CLOSE_TAG, META_PARENT_COMPLETION_OPEN_TAG, META_PARENT_COMPLETION_SYSTEM_REMINDER } from "../utils/notification-protocol.ts"
 import { escapePromptXmlText } from "../utils/prompt-xml-escape.ts"
@@ -69,12 +67,12 @@ export function getShellNotificationAcknowledgementUserQuery(modelInfo: Backgrou
 }
 
 export function getNotificationAcknowledgementUserQuery(
-  taskResults: readonly BackgroundTaskCompletion[],
+  taskResults: readonly SlateBackgroundTaskCompletion[],
   formatOptions: BackgroundCompletionFormatOptions,
 ): string {
-  if (taskResults.length > 0 && taskResults.every(taskResult => taskResult.notificationContext === BackgroundTaskNotificationContext.USER_DRIVEN_INTERACTIVE_CHILD)) return wrapUserQuery(`${USER_DRIVEN_INTERACTIVE_CHILD_ACKNOWLEDGEMENT_USER_QUERY_BASE}${SUBAGENT_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_SUFFIX}`);
+  if (taskResults.length > 0 && taskResults.every(taskResult => taskResult.notificationContext === "user-driven-interactive-child")) return wrapUserQuery(USER_DRIVEN_INTERACTIVE_CHILD_ACKNOWLEDGEMENT_USER_QUERY_BASE + SUBAGENT_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_SUFFIX);
   for (const taskResult of taskResults) {
-    if (taskResult.kind === BackgroundTaskKind.SUBAGENT) {
+    if (taskResult.kind === "subagent") {
       const basePrompt = formatOptions.hideAsyncSubagentTaskNotifications ? SUBAGENT_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_HIDDEN_SUMMARY_BASE : SUBAGENT_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_WITH_VISIBLE_SUMMARY_BASE;
       let chatLinkInstruction = "";
       if (formatOptions.enableAgentChatLinks) {
@@ -89,28 +87,26 @@ export function getNotificationAcknowledgementUserQuery(
   return getShellNotificationAcknowledgementUserQuery(formatOptions.modelInfo);
 }
 
-export function backgroundTaskKindLabel(kind: BackgroundTaskKind): string {
+export function backgroundTaskKindLabel(kind: SlateBackgroundTaskKind): string {
   switch (kind) {
-    case BackgroundTaskKind.SHELL: return "shell";
-    case BackgroundTaskKind.SUBAGENT: return "subagent";
-    case BackgroundTaskKind.UNSPECIFIED: return "unknown";
-    default: return "unknown";
+    case "shell": return "shell"
+    case "subagent": return "subagent"
+    default: return "unknown"
   }
 }
 
-export function backgroundTaskStatusLabel(status: BackgroundTaskStatus): string {
+export function backgroundTaskStatusLabel(status: SlateBackgroundTaskStatus): string {
   switch (status) {
-    case BackgroundTaskStatus.SUCCESS: return "success";
-    case BackgroundTaskStatus.ERROR: return "error";
-    case BackgroundTaskStatus.ABORTED: return "aborted";
-    case BackgroundTaskStatus.UNSPECIFIED: return "unknown";
-    default: return "unknown";
+    case "success": return "success"
+    case "error": return "error"
+    case "aborted": return "aborted"
+    default: return "unknown"
   }
 }
 
 function CompletedTasksSection(sectionProps: PromptProps): PromptNode {
   const taskResults = Array.isArray(sectionProps.taskResults)
-    ? sectionProps.taskResults.filter((candidate): candidate is BackgroundTaskCompletion => candidate instanceof BackgroundTaskCompletion)
+    ? sectionProps.taskResults as readonly SlateBackgroundTaskCompletion[]
     : [];
   const allAreProgress = taskResults.length > 0 && taskResults.every(isShellOutputCompletion);
   const introText = allAreProgress
@@ -120,7 +116,7 @@ function CompletedTasksSection(sectionProps: PromptProps): PromptNode {
     const detailLines = [
       `kind: ${backgroundTaskKindLabel(taskResult.kind)}`,
       `status: ${backgroundTaskStatusLabel(taskResult.status)}`,
-      ...(taskResult.reason === BackgroundTaskCompletionReason.WORKER_REPARENTED ? ["reason: worker_reparented"] : []),
+      ...(taskResult.reason === "worker-reparented" ? ["reason: worker_reparented"] : []),
       `task_id: ${escapePromptXmlText(taskResult.taskId)}`,
       `title: ${escapePromptXmlText(taskResult.title)}`,
       ...(taskResult.toolCallId ? [`tool_call_id: ${escapePromptXmlText(taskResult.toolCallId)}`] : []),
@@ -132,20 +128,20 @@ function CompletedTasksSection(sectionProps: PromptProps): PromptNode {
   })] });
 }
 
-export function formatBackgroundCompletions(taskResults: readonly BackgroundTaskCompletion[], formatOptions: BackgroundCompletionFormatOptions): string {
+export function formatBackgroundCompletions(taskResults: readonly SlateBackgroundTaskCompletion[], formatOptions: BackgroundCompletionFormatOptions): string {
   const timestampPrefix = formatOptions.includeTimestamp ? buildTimestampPrefix(formatOptions.timeZone) : "";
   const renderedBody = renderContent(jsx(CompletedTasksSection, { taskResults }));
   return `${timestampPrefix}${renderedBody}\n${getNotificationAcknowledgementUserQuery(taskResults, formatOptions)}`;
 }
 
-export function formatMetaParentBackgroundCompletions(taskResults: readonly BackgroundTaskCompletion[], formatOptions: BackgroundCompletionFormatOptions): string {
+export function formatMetaParentBackgroundCompletions(taskResults: readonly SlateBackgroundTaskCompletion[], formatOptions: BackgroundCompletionFormatOptions): string {
   const responseBlock = (rawOutput: string): string => {
     const escapedText = escapePromptXmlText(rawOutput.trim());
     return ["<response>", escapedText.length > 0 ? escapedText : "No output", "</response>"].join("\n");
   };
   const timestampPrefix = formatOptions.includeTimestamp ? buildTimestampPrefix(formatOptions.timeZone) : "";
   const renderedBody = taskResults.map(taskResult => {
-    const includeResult = taskResult.kind !== BackgroundTaskKind.SUBAGENT || formatOptions.hideAsyncSubagentTaskNotifications;
+    const includeResult = taskResult.kind !== "subagent" || formatOptions.hideAsyncSubagentTaskNotifications;
     const resultText = includeResult ? taskResult.detail ?? taskResult.outputPath ?? taskResult.title ?? "No result was provided." : "Subagent completed; result is already visible to the user.";
     const titlePrefix = taskResult.title && includeResult ? `title: ${escapePromptXmlText(taskResult.title)}\n` : "";
     return `${META_PARENT_COMPLETION_OPEN_TAG}\nagent_id: ${escapePromptXmlText(taskResult.taskId)}\nstatus: ${backgroundTaskStatusLabel(taskResult.status)}\n${titlePrefix}response:\n${responseBlock(resultText)}\n${META_PARENT_COMPLETION_CLOSE_TAG}`;
@@ -153,7 +149,7 @@ export function formatMetaParentBackgroundCompletions(taskResults: readonly Back
   return `${timestampPrefix}${META_PARENT_COMPLETION_SYSTEM_REMINDER}\n\n${renderedBody}\n${getNotificationAcknowledgementUserQuery(taskResults, formatOptions)}`;
 }
 
-export function summarizeBackgroundTaskCompletions(taskResults: readonly BackgroundTaskCompletion[]): {
+export function summarizeBackgroundTaskCompletions(taskResults: readonly SlateBackgroundTaskCompletion[]): {
   readonly num_completions: number;
   readonly kind_counts: { readonly shell: number; readonly subagent: number; readonly unknown: number };
   readonly status_counts: { readonly success: number; readonly error: number; readonly aborted: number; readonly unknown: number };
@@ -161,22 +157,22 @@ export function summarizeBackgroundTaskCompletions(taskResults: readonly Backgro
   const kindCounts = { shell: 0, subagent: 0, unknown: 0 };
   const statusCounts = { success: 0, error: 0, aborted: 0, unknown: 0 };
   for (const taskResult of taskResults) {
-    if (taskResult.kind === BackgroundTaskKind.SHELL) kindCounts.shell += 1;
-    else if (taskResult.kind === BackgroundTaskKind.SUBAGENT) kindCounts.subagent += 1;
+    if (taskResult.kind === "shell") kindCounts.shell += 1;
+    else if (taskResult.kind === "subagent") kindCounts.subagent += 1;
     else kindCounts.unknown += 1;
-    if (taskResult.status === BackgroundTaskStatus.SUCCESS) statusCounts.success += 1;
-    else if (taskResult.status === BackgroundTaskStatus.ERROR) statusCounts.error += 1;
-    else if (taskResult.status === BackgroundTaskStatus.ABORTED) statusCounts.aborted += 1;
+    if (taskResult.status === "success") statusCounts.success += 1;
+    else if (taskResult.status === "error") statusCounts.error += 1;
+    else if (taskResult.status === "aborted") statusCounts.aborted += 1;
     else statusCounts.unknown += 1;
   }
   return { num_completions: taskResults.length, kind_counts: kindCounts, status_counts: statusCounts };
 }
 
-export function isShellOutputCompletion(taskResult: BackgroundTaskCompletion): boolean {
-  return taskResult.reason === BackgroundTaskCompletionReason.TASK_PROGRESS;
+export function isShellOutputCompletion(taskResult: SlateBackgroundTaskCompletion): boolean {
+  return taskResult.reason === "task-progress";
 }
 
-export function getBackgroundTaskCompletionMetadata(taskResults: readonly BackgroundTaskCompletion[]): { readonly title?: string; readonly taskId?: string } | undefined {
+export function getBackgroundTaskCompletionMetadata(taskResults: readonly SlateBackgroundTaskCompletion[]): { readonly title?: string; readonly taskId?: string } | undefined {
   const firstMetadata = taskResults.map(taskResult => {
     const title = taskResult.title.trim();
     const taskId = taskResult.taskId.trim();
@@ -186,7 +182,7 @@ export function getBackgroundTaskCompletionMetadata(taskResults: readonly Backgr
   return firstMetadata;
 }
 
-export function getBackgroundTaskCompletionThreadId(taskResults: readonly BackgroundTaskCompletion[], stateHandler: { getSubagentThreadId(taskId: string): string | undefined }): string | undefined {
+export function getBackgroundTaskCompletionThreadId(taskResults: readonly SlateBackgroundTaskCompletion[], stateHandler: { getSubagentThreadId(taskId: string): string | undefined }): string | undefined {
   let resolvedThread: string | undefined;
   for (const taskResult of taskResults) {
     const threadId = taskResult.threadId?.trim() || stateHandler.getSubagentThreadId(taskResult.taskId);

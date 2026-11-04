@@ -1,95 +1,97 @@
-/**
- * The MCP tools a session can call.
- *
- * A routed MCP server is one the host runs on the user's behalf, and its tools are offered to a model the same way any
- * other tool is: the bridge lists what a session may call, and runs a call by routing it to the host — reporting an
- * unknown tool as an error the model can read rather than as a failure of the session.
- */
+/** A loopback JSON-RPC adapter for the routed tools a session may call. */
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
+import { projectRoutedMcpResult } from "./routed-mcp-result-projection.ts";
+import { isRoutedMcpPost, parseRoutedMcpMessage, readRoutedMcpRequestBody, replyWithStatus, writeRoutedMcpResult } from "./routed-mcp-http.ts";
+import { describeRoutedMcpTools, routedMcpTools } from "./routed-mcp-tool-policy.ts";
+import { routedMcpRecord } from "./routed-mcp-shapes.ts";
+import type { RoutedMcpBridge, RoutedMcpBridgeDependencies, RoutedMcpTool } from "./routed-mcp-bridge-contracts.ts";
 
-type Tool = {
-  readonly name: string;
-  readonly providerIdentifier: string;
-  readonly toolName: string;
-  readonly description?: string;
-  readonly inputSchema?: unknown;
-};
+export async function createRoutedMcpBridge(deps: RoutedMcpBridgeDependencies): Promise<RoutedMcpBridge> {
+  const secretPath = `/mcp/${randomUUID()}`;
+  let availableTools = new Map<string, RoutedMcpTool>();
 
-function record(value: unknown): Record<string, any> | null {
-  return typeof value === "object" && value != null && !Array.isArray(value) ? value as Record<string, any> : null;
-}
-
-function isReadOnly(tool: Tool): boolean {
-  const label = `${tool.name} ${tool.toolName} ${tool.description ?? ""}`.toLowerCase();
-  return /(^|[^a-z])(read|search|find|list|get|fetch|query|lookup|inspect|view|download|retrieve)([^a-z]|$)/.test(label)
-    && !/(send|create|update|delete|remove|write|upload|post|reply|archive|move|rename|modify|cancel|purchase|buy)/.test(label);
-}
-
-function mcpResult(value: unknown): Record<string, unknown> {
-  const root = record(value);
-  const result = record(root?.result);
-  if (result?.case !== "success") {
-    const detail = record(result?.value);
-    return { isError: true, content: [{ type: "text", text: typeof detail?.error === "string" ? detail.error : JSON.stringify(value) }] };
-  }
-  const success = record(result.value);
-  const content: Record<string, unknown>[] = Array.isArray(success?.content) ? success.content.flatMap((raw: unknown): Record<string, unknown>[] => {
-    const item = record(raw), carrier = record(item?.content), payload = record(carrier?.value);
-    if (carrier?.case === "text" && typeof payload?.text === "string") return [{ type: "text", text: payload.text }];
-    if (carrier?.case === "image" && payload?.data != null && typeof payload?.mimeType === "string") return [{ type: "image", data: payload.data, mimeType: payload.mimeType }];
-    return [];
-  }) : [];
-  return { isError: success?.isError === true, content: content.length === 0 ? [{ type: "text", text: JSON.stringify(success ?? value) }] : content, ...(success?.structuredContent == null ? {} : { structuredContent: success.structuredContent }) };
-}
-
-export async function createRoutedMcpBridge(deps: {
-  readonly listTools: () => Promise<unknown>;
-  readonly callTool: (args: Tool & { readonly args: unknown; readonly toolCallId: string }) => Promise<unknown>;
-}): Promise<{ readonly url: string; close(): Promise<void> }> {
-  const secret = randomUUID();
-  let tools = new Map<string, Tool>();
   const server = createServer(async (request, response) => {
-    if (request.method !== "POST" || request.url !== `/mcp/${secret}`) { response.writeHead(404).end(); return; }
-    let body = "";
-    for await (const chunk of request) {
-      body += String(chunk);
-      if (body.length > 1_048_576) { response.writeHead(413).end(); return; }
+    if (!isRoutedMcpPost(request.method, request.url, secretPath)) {
+      replyWithStatus(response, 404);
+      return;
     }
-    let message: Record<string, any>;
-    try { message = JSON.parse(body) as Record<string, any>; }
-    catch { response.writeHead(400).end(); return; }
-    if (message.method === "notifications/initialized") { response.writeHead(202).end(); return; }
-    const reply = (result: unknown) => { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result })); };
+
+    const body = await readRoutedMcpRequestBody(request, response);
+    if (body === null) return;
+
+    let message: Record<string, unknown>;
     try {
-      if (message.method === "initialize") { reply({ protocolVersion: "2025-03-26", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slate-plugins", version: "1" } }); return; }
+      message = parseRoutedMcpMessage(body);
+    } catch {
+      replyWithStatus(response, 400);
+      return;
+    }
+
+    if (message.method === "notifications/initialized") {
+      replyWithStatus(response, 202);
+      return;
+    }
+
+    const reply = (result: unknown): void => writeRoutedMcpResult(response, message.id, result);
+    try {
+      if (message.method === "initialize") {
+        reply({
+          protocolVersion: "2025-03-26",
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: "slate-plugins", version: "1" },
+        });
+        return;
+      }
+
       if (message.method === "tools/list") {
-        const discovered = await deps.listTools();
-        const rows = Array.isArray(discovered) ? discovered : [];
-        tools = new Map(rows.flatMap(raw => {
-          const row = record(raw);
-          if (typeof row?.name !== "string" || typeof row.providerIdentifier !== "string" || typeof row.toolName !== "string") return [];
-          return [[row.name, row as Tool]];
-        }));
-        reply({ tools: [...tools.values()].map(tool => {
-          const readOnly = isReadOnly(tool);
-          return { name: tool.name, description: tool.description ?? `${tool.toolName} via ${tool.providerIdentifier}`, inputSchema: record(tool.inputSchema) ?? { type: "object", additionalProperties: true }, annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, idempotentHint: readOnly, openWorldHint: !readOnly } };
-        }) });
+        availableTools = routedMcpTools(await deps.listTools());
+        reply({ tools: describeRoutedMcpTools(availableTools.values()) });
         return;
       }
+
       if (message.method === "tools/call") {
-        const name = record(message.params)?.name, selected = typeof name === "string" ? tools.get(name) : undefined;
-        if (selected == null) { reply({ isError: true, content: [{ type: "text", text: `Unknown Slate plugin tool: ${String(name)}` }] }); return; }
-        reply(mcpResult(await deps.callTool({ ...selected, args: record(message.params)?.arguments ?? {}, toolCallId: randomUUID() })));
+        const parameters = routedMcpRecord(message.params);
+        const requestedName = parameters?.name;
+        const selectedTool = typeof requestedName === "string" ? availableTools.get(requestedName) : undefined;
+        if (selectedTool == null) {
+          reply({
+            isError: true,
+            content: [{ type: "text", text: `Unknown Slate plugin tool: ${String(requestedName)}` }],
+          });
+          return;
+        }
+
+        const result = await deps.callTool({
+          ...selectedTool,
+          args: parameters?.arguments ?? {},
+          toolCallId: randomUUID(),
+        });
+        reply(projectRoutedMcpResult(result));
         return;
       }
+
       reply({});
     } catch (error) {
-      reply({ isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] });
+      reply({
+        isError: true,
+        content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+      });
     }
   });
-  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
   const address = server.address();
   if (address == null || typeof address === "string") throw new Error("Could not bind the routed MCP bridge");
-  return { url: `http://127.0.0.1:${address.port}/mcp/${secret}`, close: () => new Promise<void>((resolve, reject) => { server.closeAllConnections(); server.close(error => error == null ? resolve() : reject(error)); }) };
+  return {
+    url: `http://127.0.0.1:${address.port}${secretPath}`,
+    close: () => new Promise<void>((resolve, reject) => {
+      server.closeAllConnections();
+      server.close((error) => error == null ? resolve() : reject(error));
+    }),
+  };
 }

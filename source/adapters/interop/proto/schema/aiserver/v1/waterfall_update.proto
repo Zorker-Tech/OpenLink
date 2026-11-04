@@ -1,0 +1,126 @@
+// aiserver.v1 — aiserver/v1/waterfall_update messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message WaterfallUpdate {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  oneof update {
+    .aiserver.v1.SpanStart span_start = 2 [json_name = "spanStart"];
+    .aiserver.v1.SpanEnd span_end = 3 [json_name = "spanEnd"];
+    .aiserver.v1.SpanLog span_log = 4 [json_name = "spanLog"];
+    .aiserver.v1.SpanStatusUpdate span_status_update = 5 [json_name = "spanStatusUpdate"];
+    .aiserver.v1.SpanUpdate span_update = 6 [json_name = "spanUpdate"];
+    .aiserver.v1.SetupWaterfallSentinel sentinel = 8 [json_name = "sentinel"];
+  }
+}
+
+message SpanStart {
+  string span_id = 1 [json_name = "spanId"];
+  optional string parent_span_id = 2 [json_name = "parentSpanId"];
+  .aiserver.v1.WaterfallPhaseType phase_type = 5 [json_name = "phaseType"];
+  optional string fallback_phase_label = 6 [json_name = "fallbackPhaseLabel"];
+  oneof span_details {
+    .aiserver.v1.GitReposSetupSpanDetails git_repos_setup = 3 [json_name = "gitReposSetup"];
+    .aiserver.v1.GitRepoSetupSpanDetails git_repo_setup = 4 [json_name = "gitRepoSetup"];
+  }
+}
+
+message SpanEnd {
+  string span_id = 1 [json_name = "spanId"];
+  .aiserver.v1.WaterfallSpanEndStatus end_status = 2 [json_name = "endStatus"];
+}
+
+message SpanLog {
+  string span_id = 1 [json_name = "spanId"];
+  optional .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
+  string message = 3 [json_name = "message"];
+  .aiserver.v1.WaterfallLogLevel level = 4 [json_name = "level"];
+}
+
+message SpanStatusUpdate {
+  string span_id = 1 [json_name = "spanId"];
+  optional .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
+  .aiserver.v1.WaterfallSpanStatusType status_type = 3 [json_name = "statusType"];
+  string message = 4 [json_name = "message"];
+  optional .aiserver.v1.CallToAction call_to_action = 5 [json_name = "callToAction"];
+}
+
+message SpanUpdate {
+  string span_id = 1 [json_name = "spanId"];
+  oneof span_update {
+    .aiserver.v1.GenericLogSpanUpdate generic_log = 2 [json_name = "genericLog"];
+  }
+}
+
+message SetupWaterfallSentinel {
+}
+
+message GenericLogSpanUpdate {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  string message = 2 [json_name = "message"];
+  .aiserver.v1.WaterfallLogLevel level = 3 [json_name = "level"];
+}
+
+message CallToAction {
+  oneof call_to_action {
+    .aiserver.v1.OpenUrlCallToAction open_url = 1 [json_name = "openUrl"];
+  }
+}
+
+message OpenUrlCallToAction {
+  string url = 1 [json_name = "url"];
+  string button_text = 2 [json_name = "buttonText"];
+}
+
+message GitReposSetupSpanDetails {
+}
+
+message GitRepoSetupSpanDetails {
+  string repo_display_name = 1 [json_name = "repoDisplayName"];
+}
+
+enum WaterfallLogLevel {
+  WATERFALL_LOG_LEVEL_UNSPECIFIED = 0;
+  WATERFALL_LOG_LEVEL_DEBUG = 1;
+  WATERFALL_LOG_LEVEL_INFO = 2;
+  WATERFALL_LOG_LEVEL_WARN = 3;
+  WATERFALL_LOG_LEVEL_ERROR = 4;
+}
+
+enum WaterfallPhaseType {
+  WATERFALL_PHASE_TYPE_UNSPECIFIED = 0;
+  WATERFALL_PHASE_TYPE_ENVIRONMENT = 1;
+  WATERFALL_PHASE_TYPE_CREATE_CLOUD_WORKSPACE = 2;
+  WATERFALL_PHASE_TYPE_PROVISION_SANDBOX = 3;
+  WATERFALL_PHASE_TYPE_RESTORE_WORKSPACE_FILES = 4;
+  WATERFALL_PHASE_TYPE_DOCKER_BUILD = 5;
+  WATERFALL_PHASE_TYPE_SETUP_REPOSITORY = 6;
+  WATERFALL_PHASE_TYPE_INSTALL_DEPENDENCIES = 7;
+  WATERFALL_PHASE_TYPE_RUN_WORKSPACE_SETUP = 8;
+  WATERFALL_PHASE_TYPE_START_AGENT_SERVICES = 9;
+  WATERFALL_PHASE_TYPE_INSTALL_EXTENSIONS = 10;
+  WATERFALL_PHASE_TYPE_COMPLETE = 11;
+  WATERFALL_PHASE_TYPE_ACQUIRE_POD = 12;
+  WATERFALL_PHASE_TYPE_HYDRATE = 13;
+}
+
+enum WaterfallSpanEndStatus {
+  WATERFALL_SPAN_END_STATUS_UNSPECIFIED = 0;
+  WATERFALL_SPAN_END_STATUS_SUCCESS = 1;
+  WATERFALL_SPAN_END_STATUS_FAILURE = 2;
+  WATERFALL_SPAN_END_STATUS_SKIPPED = 3;
+}
+
+enum WaterfallSpanStatusType {
+  WATERFALL_SPAN_STATUS_TYPE_UNSPECIFIED = 0;
+  WATERFALL_SPAN_STATUS_TYPE_MESSAGE = 1;
+  WATERFALL_SPAN_STATUS_TYPE_WARN = 2;
+  WATERFALL_SPAN_STATUS_TYPE_ERROR = 3;
+}

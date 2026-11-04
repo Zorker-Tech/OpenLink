@@ -1,7 +1,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { MockIgnoreService, MockPermissionsService } from "../../source/packages/local-exec/tests/common.ts"
+import { EmptyWorkspaceIgnorePolicy } from "../../source/packages/local-exec/runtime-ignore-policy.ts"
+import { PermissiveLocalExecAuthorization } from "../../source/packages/local-exec/runtime-permission-policy.ts"
 import { isMcpDirectoryPath, parseMcpsPath, scheduleDiskMcpDiscoveryFreshnessOnMcpsPathAccess } from "../../source/packages/local-exec/mcp-disk-freshness-on-access.ts"
 import {
   BackgroundShellManager,
@@ -12,23 +13,23 @@ import {
 import { createContext } from "../../source/packages/context/context.ts"
 
 // ---------------------------------------------------------------------------------------------
-// The doubles the executor's tests are written against
+// The fallback runtime policies the executor's tests are written against
 // ---------------------------------------------------------------------------------------------
 
-test("the doubles allow everything until a test says otherwise", async () => {
-  const ignore = new MockIgnoreService()
+test("the fallback runtime policies allow everything until a test supplies a decision", async () => {
+  const ignore = new EmptyWorkspaceIgnorePolicy()
   assert.equal(await ignore.isIgnoredByAny("/repo/a.ts"), false)
   assert.deepEqual(await ignore.listCursorIgnoreFilesByRoot("/repo"), [])
   assert.deepEqual(await ignore.getRepoBlockExcludeGlobs("/repo"), [])
 
-  const permissions = new MockPermissionsService()
+  const permissions = new PermissiveLocalExecAuthorization()
   assert.equal((await permissions.shouldBlockShellCommand({}, "ls", {}, { type: "workspace_readonly" })).kind, "allow")
   // A requested policy is handed back rather than replaced, and one that was not asked for is not invented.
   assert.deepEqual((await permissions.shouldBlockShellCommand({}, "ls", {}, { type: "workspace_readonly" })).policy, { type: "workspace_readonly" })
   assert.deepEqual((await permissions.shouldBlockShellCommand({}, "ls", {})).policy, { type: "insecure_none" })
 
   // The decision a test is about is the one it replaces.
-  permissions.setShouldBlockShellCommand(async () => ({ kind: "blocked" } as never))
+  permissions.setShellDecision(async () => ({ kind: "blocked" } as never))
   assert.equal((await permissions.shouldBlockShellCommand({}, "rm -rf /", {})).kind, "blocked")
 })
 

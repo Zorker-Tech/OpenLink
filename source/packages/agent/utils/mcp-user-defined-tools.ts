@@ -12,9 +12,6 @@
  * names it actually has, and this writes the sentence that matches them.
  */
 
-import { Value } from "@bufbuild/protobuf"
-
-import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor, type McpDescriptor as McpDescriptorValue } from "../../proto/generated/agent/v1/mcp_pb.ts"
 import { CUSTOM_USER_TOOLS_PROVIDER_ID } from "../../agent-exec/mcp-operations.ts"
 
 export interface DescribedTool {
@@ -32,10 +29,6 @@ export interface MetaToolInstructionNames {
   readonly discoveryToolName: string
   readonly invocationToolName: string
   readonly useDynamicToolNamespaces: boolean
-}
-
-function isUserDefinedMcpTool(tool: UserDefinedMcpTool): boolean {
-  return tool.providerIdentifier === CUSTOM_USER_TOOLS_PROVIDER_ID
 }
 
 /** How the model is told to reach a user-defined tool, and what is available. */
@@ -56,62 +49,4 @@ export function buildUserDefinedToolsInstructions(
 
 Available tools:
 ${toolLines}`
-}
-
-function buildUserDefinedToolsDescriptor(
-  userTools: readonly UserDefinedMcpTool[],
-  toolNames?: MetaToolInstructionNames,
-): McpDescriptorValue {
-  const toolDescriptors = userTools.map(tool => new McpToolDescriptor({
-    toolName: tool.toolName,
-    ...(tool.description !== undefined ? { description: tool.description } : {}),
-    ...(tool.inputSchema !== undefined ? { inputSchema: Value.fromJson(tool.inputSchema as never) } : {}),
-  }))
-  return new McpDescriptor({
-    serverIdentifier: CUSTOM_USER_TOOLS_PROVIDER_ID,
-    serverName: CUSTOM_USER_TOOLS_PROVIDER_ID,
-    serverUseInstructions: buildUserDefinedToolsInstructions(userTools, toolNames),
-    tools: toolDescriptors,
-  })
-}
-
-/**
- * Adding the user-defined tools to the meta tool's options, replacing whatever descriptor was there
- * for them: the session's definitions are the current ones, and a stale descriptor would describe
- * tools that no longer exist.
- */
-export function mergeUserDefinedToolsIntoMetaToolOptions(
-  metaToolOptions: McpMetaToolOptions | undefined,
-  mcpTools: readonly UserDefinedMcpTool[],
-  instructionToolNames?: MetaToolInstructionNames,
-): McpMetaToolOptions | undefined {
-  const userTools = mcpTools.filter(isUserDefinedMcpTool)
-  if (userTools.length === 0 || metaToolOptions?.enabled !== true) return metaToolOptions
-  const existingDescriptors = metaToolOptions.mcpDescriptors ?? []
-  const descriptor = buildUserDefinedToolsDescriptor(userTools, instructionToolNames)
-  const otherDescriptors = existingDescriptors.filter(candidate => candidate.serverIdentifier !== CUSTOM_USER_TOOLS_PROVIDER_ID)
-  return new McpMetaToolOptions({
-    enabled: true,
-    mcpDescriptors: [...otherDescriptors, descriptor],
-  })
-}
-
-/**
- * The meta tool's options with the user-defined tools merged in, turning the meta tool on when a
- * session has them: a tool the model is not told about is a tool the model cannot call.
- */
-export function getMcpMetaToolOptionsWithUserDefinedTools(
-  metaToolOptions: McpMetaToolOptions | undefined,
-  mcpTools: readonly UserDefinedMcpTool[],
-  instructionToolNames?: MetaToolInstructionNames,
-): McpMetaToolOptions | undefined {
-  const hasUserTools = mcpTools.some(isUserDefinedMcpTool)
-  if (!hasUserTools) return metaToolOptions
-  const baseOptions = metaToolOptions?.enabled === true
-    ? metaToolOptions
-    : new McpMetaToolOptions({
-      enabled: true,
-      mcpDescriptors: metaToolOptions?.mcpDescriptors ?? [],
-    })
-  return mergeUserDefinedToolsIntoMetaToolOptions(baseOptions, mcpTools, instructionToolNames)
 }

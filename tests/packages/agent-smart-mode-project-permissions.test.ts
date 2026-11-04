@@ -136,6 +136,22 @@ test("the user's own instructions follow the project's", async () => {
   }
 })
 
+test("allow and block lists deduplicate independently in project-first order", async () => {
+  const dir = workspaceWith(JSON.stringify({ autoRun: {
+    allow_instructions: ["run", "shared"],
+    block_instructions: ["shared", "no network"],
+  } }))
+  try {
+    const context = await load([dir], instructions(["shared", "deploy"], ["shared", "no secrets"]))
+    assert.deepEqual(context?.auto_run, {
+      allow_instructions: ["run", "shared", "deploy"],
+      block_instructions: ["shared", "no network", "no secrets"],
+    })
+  } finally {
+    cleanup([dir])
+  }
+})
+
 test("the user's instruction is not repeated when the project already says it", async () => {
   const dir = workspaceWith('{"autoRun":{"allow_instructions":["run the tests"]}}')
   try {

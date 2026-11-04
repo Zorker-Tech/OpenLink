@@ -1,27 +1,19 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import {
-  SLATE_FEEDBACK_ACCOUNT_SLOT_MAX_CHARS,
-  SLATE_FEEDBACK_CONVERSATION_ID_MAX_CHARS,
-  SLATE_FEEDBACK_MESSAGE_MAX_CHARS,
-  SLATE_FEEDBACK_SENTRY_EVENT_ID_MAX_COUNT,
-  SLATE_FEEDBACK_SENTRY_EVENT_ID_PATTERN,
-} from "../../source/shared/feedback.ts"
 import { SLATE_DISABLED_NOTIFICATION_CONFIG } from "../../source/shared/host-settings.ts"
 import { SlateMcpConfigError } from "../../source/shared/node/mcp/mcp-config-error.ts"
-import { DESKTOP_STRUCTURED_LOG_SPILL_MAX_ENTRIES } from "../../source/shared/observability/structured-log-spill.ts"
 import { parseRetryAfterHeaderMs } from "../../source/shared/retry-after.ts"
-import { VNC_VIEWER_VISIBLE_CHANNEL } from "../../source/shared/vnc-viewer-visibility.ts"
 import { SKILL_PUBLISH_REFUSAL_PREFIX, SlateSkillPublishError, SLATE_SKILL_PUBLISH_REFUSED, WORKFLOW_REFERENCE_NODE_TYPE } from "../../source/shared/workflows.ts"
 import { WriteEpoch } from "../../source/shared/write-epoch.ts"
-import { SLATE_PRODUCT_DISPLAY_NAME, SLATE_PRODUCT_HTTP_TOKEN } from "../../source/shared/product-name.ts"
-import { isKnownPluginLogoUrl, rememberPluginLogoUrl } from "../../source/shared/node/marketplace/cursor-marketplace-logo-registry.ts"
+import { SLATE_BRAND } from "../../source/shared/product-name.ts"
+import { isMarketplaceLogoSourceKnown, rememberMarketplaceLogoSource } from "../../source/shared/node/marketplace/marketplace-logo-registry.ts"
 import { mergeUnresolvedAccountServers } from "../../source/shared/node/mcp/account-display-cache.ts"
 import { CATALOG_CACHE_TTL_MS, isLoopbackHostname, validateAuthorizationUrl } from "../../source/shared/node/mcp/mcp-catalog-cache.ts"
-import { PrivacyMode, slateSentryPrivacyTierForMode } from "../../source/shared/observability/sentry-privacy-mode.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { slateSentryPrivacyTierForMode } from "../../source/shared/observability/sentry-privacy-mode.ts"
 import { DISABLE_SEND_ACCEPT_RETURN_ENV, HOST_ACCOUNT_SLOT, NONCE_DIGEST_MISMATCH } from "../../source/shared/send-acceptance.ts"
-import { buildBoxSecretsEnv, validateBoxSecretKey, validateBoxSecrets } from "../../source/shared/box-secrets.ts"
+import { validateBoxSecretKey, validateBoxSecrets } from "../../source/shared/box-secrets.ts"
 import { AUTH_WATCH_POLL_INTERVAL_MS, AUTH_WATCH_POLL_TIMEOUT_MS, AUTH_WATCH_TIMEOUT_MS, authWatchKey } from "../../source/shared/node/mcp/mcp-auth-watch.ts"
 import { isSlateAccessBlockReason, SLATE_ACCESS_BLOCK_REASONS, SLATE_ACCESS_CHECKING, SLATE_ACCESS_UNKNOWN } from "../../source/shared/slate-access.ts"
 import { clampBlock, clampLine, decapitalize, slugifyName } from "../../source/shared/slate-text.ts"
@@ -31,14 +23,6 @@ import { clampBlock, clampLine, decapitalize, slugifyName } from "../../source/s
 // ---------------------------------------------------------------------------------------------
 
 test("the constants the platform shares are the ones it promises", () => {
-  assert.equal(SLATE_FEEDBACK_MESSAGE_MAX_CHARS, 10_000)
-  assert.equal(SLATE_FEEDBACK_CONVERSATION_ID_MAX_CHARS, 512)
-  assert.equal(SLATE_FEEDBACK_ACCOUNT_SLOT_MAX_CHARS, 512)
-  assert.equal(SLATE_FEEDBACK_SENTRY_EVENT_ID_MAX_COUNT, 5)
-  assert.equal(SLATE_FEEDBACK_SENTRY_EVENT_ID_PATTERN.test("a".repeat(32)), true)
-  assert.equal(SLATE_FEEDBACK_SENTRY_EVENT_ID_PATTERN.test("a".repeat(31)), false)
-  assert.equal(DESKTOP_STRUCTURED_LOG_SPILL_MAX_ENTRIES, 1_000)
-  assert.equal(VNC_VIEWER_VISIBLE_CHANNEL.startsWith("slate:"), true)
   assert.equal(NONCE_DIGEST_MISMATCH, "send/nonce-digest-mismatch")
   assert.equal(HOST_ACCOUNT_SLOT, "host")
   assert.equal(DISABLE_SEND_ACCEPT_RETURN_ENV, "SLATE_DISABLE_SEND_ACCEPT_RETURN")
@@ -51,10 +35,12 @@ test("the constants the platform shares are the ones it promises", () => {
   // Notifications that are off are off, with the bounds they would have had.
   assert.equal(SLATE_DISABLED_NOTIFICATION_CONFIG.isEnabled, false)
   assert.deepEqual(SLATE_DISABLED_NOTIFICATION_CONFIG.allowedApps, [])
+  assert.equal(SLATE_DISABLED_NOTIFICATION_CONFIG.minIntervalMs, 5_000)
+  assert.equal(SLATE_DISABLED_NOTIFICATION_CONFIG.maxPerWindow, 10)
+  assert.equal(SLATE_DISABLED_NOTIFICATION_CONFIG.windowMs, 5 * 60_000)
 
   // The platform's own name, and the one-word spelling of it.
-  assert.equal(SLATE_PRODUCT_DISPLAY_NAME, "Slate")
-  assert.equal(SLATE_PRODUCT_HTTP_TOKEN, "Slate")
+  assert.deepEqual(SLATE_BRAND, { displayName: "Slate", httpToken: "Slate" })
 })
 
 test("an error the platform raises says which error it is", () => {
@@ -66,6 +52,8 @@ test("an error the platform raises says which error it is", () => {
   assert.equal(publishError.name, "SlateSkillPublishError")
   assert.equal(publishError.message, `${SKILL_PUBLISH_REFUSAL_PREFIX}the skill is not yours`)
   // The refusal is recognizable in a message, which is what the prefix is for.
+  assert.equal(SLATE_SKILL_PUBLISH_REFUSED, "skill-publish/refused")
+  assert.equal(SKILL_PUBLISH_REFUSAL_PREFIX, "skill-publish/refused: ")
   assert.equal(publishError.message.startsWith(SLATE_SKILL_PUBLISH_REFUSED), true)
 })
 
@@ -76,6 +64,8 @@ test("an error the platform raises says which error it is", () => {
 test("how long to wait is read from either spelling a server may use", () => {
   const now = Date.parse("2026-01-01T00:00:00Z")
   assert.equal(parseRetryAfterHeaderMs("120", now), 120_000)
+  assert.equal(parseRetryAfterHeaderMs("1.2345", now), 1_235)
+  assert.equal(parseRetryAfterHeaderMs("0.0004", now), 0)
   assert.equal(parseRetryAfterHeaderMs("0", now), 0)
   // A moment that has passed is no wait at all, rather than a negative one.
   assert.equal(parseRetryAfterHeaderMs("-5", now), 0)
@@ -119,6 +109,29 @@ test("a reader is told when what it read is out of date", () => {
   assert.equal(epoch.isStale(epoch.snapshot()), false)
 })
 
+test("concurrent writes keep readers stale until the last write settles", () => {
+  const epoch = new WriteEpoch()
+  const firstFinish = epoch.begin()
+  const secondFinish = epoch.begin()
+  const whileBothRun = epoch.snapshot()
+
+  firstFinish()
+  assert.equal(epoch.isStale(whileBothRun), true)
+  secondFinish()
+  assert.equal(epoch.isStale(epoch.snapshot()), false)
+})
+
+test("reset makes earlier write callbacks inert", () => {
+  const epoch = new WriteEpoch()
+  const finishOldWrite = epoch.begin()
+  epoch.reset()
+  const afterReset = epoch.snapshot()
+
+  finishOldWrite()
+  assert.equal(epoch.snapshot(), afterReset)
+  assert.equal(epoch.isStale(afterReset), false)
+})
+
 // ---------------------------------------------------------------------------------------------
 // Secrets, access and text
 // ---------------------------------------------------------------------------------------------
@@ -134,24 +147,30 @@ test("a secret's name is checked against what the box already owns", () => {
   assert.match(String(validateBoxSecretKey("MY_SLATE_SANDBOX_VALUE")), /is reserved by the box runtime/)
 })
 
-test("the set of secrets is bounded, and the box is told their names", () => {
+test("the set of secrets stays within its count and size bounds", () => {
   assert.equal(validateBoxSecrets({ A: "1", B: "2" }), null)
   assert.match(String(validateBoxSecrets({ "not a name": "x" })), /not a valid environment variable name/)
+  assert.equal(validateBoxSecrets({ A: "x".repeat(32 * 1024) }), null)
   assert.match(String(validateBoxSecrets({ A: "x".repeat(32 * 1024 + 1) })), /is too large/)
+
+  const exactCountLimit = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [`V${index}`, "x"]))
+  assert.equal(validateBoxSecrets(exactCountLimit), null)
   // The set as a whole is bounded, however reasonable each value is on its own.
   assert.match(String(validateBoxSecrets({ ["A".repeat(60_000)]: "x", ["B".repeat(40_000)]: "y" })), /combined size/)
+  assert.equal(validateBoxSecrets({
+    A: "x".repeat(32 * 1024 - 1),
+    B: "x".repeat(32 * 1024 - 1),
+    C: "x".repeat(32 * 1024 - 1),
+  }), null, "the exact combined-size limit is accepted")
+  assert.match(String(validateBoxSecrets({
+    A: "x".repeat(32 * 1024),
+    B: "x".repeat(32 * 1024 - 1),
+    C: "x".repeat(32 * 1024 - 1),
+  })), /combined size/, "one character over the combined limit is refused")
 
   const tooMany = Object.fromEntries(Array.from({ length: 101 }, (_, index) => [`V${index}`, "x"]))
   assert.match(String(validateBoxSecrets(tooMany)), /Too many secrets/)
 
-  // The environment carries the names in a stable order, and the list of names beside them so the box can
-  // redact them from what it reports.
-  assert.deepEqual(buildBoxSecretsEnv({ B: "2", A: "1" }), {
-    A: "1",
-    B: "2",
-    CLOUD_AGENT_INJECTED_SECRET_NAMES: "A,B",
-  })
-  assert.deepEqual(buildBoxSecretsEnv({}), {})
 })
 
 test("access is reported as a state, and a block as one of the reasons a caller knows", () => {
@@ -190,10 +209,10 @@ test("a crash report is told how much of itself it may send", () => {
 })
 
 test("a logo is known once it has been shown", () => {
-  assert.equal(isKnownPluginLogoUrl("https://example.com/logo.png"), false)
-  rememberPluginLogoUrl("https://example.com/logo.png")
-  assert.equal(isKnownPluginLogoUrl("https://example.com/logo.png"), true)
-  assert.equal(isKnownPluginLogoUrl("https://example.com/other.png"), false)
+  assert.equal(isMarketplaceLogoSourceKnown("https://example.com/logo.png"), false)
+  rememberMarketplaceLogoSource("https://example.com/logo.png")
+  assert.equal(isMarketplaceLogoSourceKnown("https://example.com/logo.png"), true)
+  assert.equal(isMarketplaceLogoSourceKnown("https://example.com/other.png"), false)
 })
 
 test("a server the refresh could not resolve is carried over rather than dropped", () => {

@@ -7,16 +7,42 @@
 import type { SlateAgentModelSelection } from "../../../shared/agents/slate-agent-model.ts";
 import { SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION, type SlateModelExperimentState } from "../../../shared/node/experiments/slate-model-experiment.ts";
 
-export function selectSlateModelExperimentModel(state: SlateModelExperimentState | undefined | null, _requestSource: string | undefined, configuredModel: SlateAgentModelSelection | undefined): SlateAgentModelSelection | undefined {
-  if (state == null || !state.active) return undefined;
-  if (state.arm === "control") return SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION;
-  return configuredModel ?? SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION;
+function isActiveExperiment(state: SlateModelExperimentState | undefined | null): state is SlateModelExperimentState {
+  return state != null && state.active === true;
 }
 
 export const SLATE_AUTOMATION_REQUEST_SOURCE = "automation";
-export function selectSlateExperimentTurnModel(inputs: { state?: SlateModelExperimentState | null; requestSource?: string; readConfiguredDefaultModel(): SlateAgentModelSelection | undefined; readConfiguredAutomationsModel(): SlateAgentModelSelection | undefined }): SlateAgentModelSelection | undefined {
-  const { state, requestSource } = inputs;
-  if (state == null || !state.active || state.arm === "control") return selectSlateModelExperimentModel(state, requestSource, undefined);
-  const configured = requestSource === SLATE_AUTOMATION_REQUEST_SOURCE ? inputs.readConfiguredAutomationsModel() ?? inputs.readConfiguredDefaultModel() : inputs.readConfiguredDefaultModel();
-  return selectSlateModelExperimentModel(state, requestSource, configured);
+
+function modelForTreatmentTurn(inputs: {
+  readonly requestSource?: string | undefined
+  readonly readConfiguredDefaultModel: () => SlateAgentModelSelection | undefined
+  readonly readConfiguredAutomationsModel: () => SlateAgentModelSelection | undefined
+}): SlateAgentModelSelection | undefined {
+  if (inputs.requestSource === SLATE_AUTOMATION_REQUEST_SOURCE) {
+    const automationModel = inputs.readConfiguredAutomationsModel()
+    if (automationModel != null) return automationModel
+  }
+  return inputs.readConfiguredDefaultModel()
+}
+
+export function selectSlateModelExperimentModel(
+  state: SlateModelExperimentState | undefined | null,
+  configuredModel: SlateAgentModelSelection | undefined,
+): SlateAgentModelSelection | undefined {
+  if (!isActiveExperiment(state)) return undefined
+  return state.arm === "control"
+    ? SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION
+    : configuredModel ?? SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION
+}
+
+export function selectSlateExperimentTurnModel(inputs: {
+  readonly state?: SlateModelExperimentState | null | undefined
+  readonly requestSource?: string | undefined
+  readonly readConfiguredDefaultModel: () => SlateAgentModelSelection | undefined
+  readonly readConfiguredAutomationsModel: () => SlateAgentModelSelection | undefined
+}): SlateAgentModelSelection | undefined {
+  const { state } = inputs
+  if (!isActiveExperiment(state)) return undefined
+  if (state.arm === "control") return SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION
+  return selectSlateModelExperimentModel(state, modelForTreatmentTurn(inputs))
 }

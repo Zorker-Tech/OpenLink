@@ -1,16 +1,18 @@
-/**
- * Privacy modes, as reported by the account.
- *
- * The numeric values are the wire values: they are stored in redacted messages and sent with them,
- * so they are part of the contract and not just an internal ordering.
- */
+/** Slate-owned policy categories used by redaction and persistence decisions. */
+const PRIVACY_MODE_ENTRIES = [
+  ["UNSPECIFIED", "unspecified"],
+  ["NO_STORAGE", "no-storage"],
+  ["NO_TRAINING", "no-training"],
+  ["USAGE_DATA_TRAINING_ALLOWED", "usage-data-training-allowed"],
+  ["USAGE_CODEBASE_TRAINING_ALLOWED", "usage-codebase-training-allowed"],
+] as const
 
-export const PrivacyMode = {
-  UNSPECIFIED: 0,
-  NO_STORAGE: 1,
-  NO_TRAINING: 2,
-  USAGE_DATA_TRAINING_ALLOWED: 3,
-  USAGE_CODEBASE_TRAINING_ALLOWED: 4,
-} as const
+export const PrivacyMode = Object.fromEntries(PRIVACY_MODE_ENTRIES) as {
+  readonly UNSPECIFIED: "unspecified"
+  readonly NO_STORAGE: "no-storage"
+  readonly NO_TRAINING: "no-training"
+  readonly USAGE_DATA_TRAINING_ALLOWED: "usage-data-training-allowed"
+  readonly USAGE_CODEBASE_TRAINING_ALLOWED: "usage-codebase-training-allowed"
+}
 
 export type PrivacyMode = (typeof PrivacyMode)[keyof typeof PrivacyMode]

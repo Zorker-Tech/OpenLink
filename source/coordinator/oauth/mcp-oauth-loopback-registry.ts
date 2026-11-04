@@ -1,126 +1,72 @@
-/**
- * The loopback addresses an OAuth flow waits on.
- *
- * A server's authorization flow needs an address to come back to, and the platform opens one on this machine and keeps
- * it until the flow finishes: the registry hands out a port per pending flow, remembers which flow owns it, and frees
- * it when the flow is over or the request that started it goes away.
- */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { errorMessage } from "../../shared/errors/summary.ts";
+import { dispatchLoopbackCallback } from "./mcp-oauth-loopback-dispatch.ts";
+import {
+  type CoordinatorLogger,
+  type OriginCallbacks,
+  type McpOAuthLoopbackHandler,
+} from "./mcp-oauth-loopback-contracts.ts";
+import { parseLoopbackRedirect } from "./mcp-oauth-loopback-address.ts";
+import { bindLoopbackServers, closeLoopbackServers } from "./mcp-oauth-loopback-server.ts";
 
-export interface CoordinatorLogger {
-  warn(event: Record<string, unknown>): void;
-}
-
-export type McpOAuthLoopbackHandler = (requestUrl: URL, request: IncomingMessage, response: ServerResponse) => boolean | Promise<boolean>;
-
-function closeHttpServer(server: Server): Promise<void> {
-  return new Promise((resolve) => {
-    server.close(() => resolve());
-    server.closeIdleConnections?.();
-  });
-}
-
-export function parseLoopbackRedirect(redirectUrl: URL): { port: number } {
-  if (redirectUrl.protocol !== "http:" || (redirectUrl.hostname !== "127.0.0.1" && redirectUrl.hostname !== "localhost")) {
-    throw new Error("MCP OAuth redirect_uri must be a localhost HTTP URL.");
-  }
-  const port = Number.parseInt(redirectUrl.port, 10);
-  if (!Number.isInteger(port) || port <= 0) throw new Error("MCP OAuth redirect_uri must include a port.");
-  return { port };
-}
-
-export function loopbackBindHosts(redirectHost: string): string[] {
-  return redirectHost === "localhost" ? ["127.0.0.1", "::1"] : [redirectHost];
-}
-
-interface LoopbackEntry {
-  servers: Server[];
-  handlers: Set<McpOAuthLoopbackHandler>;
-}
+export { loopbackBindHosts, parseLoopbackRedirect } from "./mcp-oauth-loopback-address.ts";
+export type { CoordinatorLogger, McpOAuthLoopbackHandler } from "./mcp-oauth-loopback-contracts.ts";
 
 export class McpOAuthLoopbackRegistry {
-  private readonly origins = new Map<string, Promise<LoopbackEntry>>();
+  private readonly openOrigins = new Map<string, Promise<OriginCallbacks>>();
 
   constructor(private readonly log: CoordinatorLogger) {}
 
-  async acquire(redirectUrl: URL, handler: McpOAuthLoopbackHandler): Promise<() => Promise<void>> {
-    const { port } = parseLoopbackRedirect(redirectUrl);
-    const origin = redirectUrl.origin;
-    let entryPromise = this.origins.get(origin);
-    if (entryPromise == null) {
-      entryPromise = this.bindOrigin(origin, port, redirectUrl.hostname);
-      this.origins.set(origin, entryPromise);
-      const pending = entryPromise;
-      void pending.catch(() => { if (this.origins.get(origin) === pending) this.origins.delete(origin); });
+  async acquire(redirectUri: URL, callback: McpOAuthLoopbackHandler): Promise<() => Promise<void>> {
+    const { port } = parseLoopbackRedirect(redirectUri);
+    const originKey = redirectUri.origin;
+    let opening = this.openOrigins.get(originKey);
+    if (opening === undefined) {
+      opening = this.createOriginEntry(originKey, port, redirectUri.hostname);
+      this.openOrigins.set(originKey, opening);
+      const pendingBind = opening;
+      void pendingBind.catch(() => {
+        if (this.openOrigins.get(originKey) === pendingBind) this.openOrigins.delete(originKey);
+      });
     }
-    const entry = await entryPromise;
-    entry.handlers.add(handler);
-    let released = false;
+
+    const record = await opening;
+    record.handlers.add(callback);
+    let leaseEnded = false;
     return async () => {
-      if (released) return;
-      released = true;
-      entry.handlers.delete(handler);
-      if (entry.handlers.size === 0) {
-        if (this.origins.get(origin) === entryPromise) this.origins.delete(origin);
-        await this.closeServers(entry.servers);
-      }
+      if (leaseEnded) return;
+      leaseEnded = true;
+      record.handlers.delete(callback);
+      if (record.handlers.size !== 0) return;
+      if (this.openOrigins.get(originKey) === opening) this.openOrigins.delete(originKey);
+      await closeLoopbackServers(record.listeners);
     };
   }
 
-  private async bindOrigin(origin: string, port: number, redirectHost: string): Promise<LoopbackEntry> {
-    const servers: Server[] = [];
-    const errors: Error[] = [];
-    for (const host of loopbackBindHosts(redirectHost)) {
-      const server = createServer((request, response) => { void this.dispatch(origin, request, response); });
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const onError = (error: Error) => reject(error);
-          server.once("error", onError);
-          server.listen(port, host, () => { server.off("error", onError); resolve(); });
-        });
-        servers.push(server);
-      } catch (error) {
-        errors.push(error instanceof Error ? error : new Error(String(error)));
-        server.close();
-      }
-    }
-    if (servers.length === 0) throw errors[0] ?? new Error(`MCP OAuth loopback callback could not bind port ${port}.`);
-    return { servers, handlers: new Set() };
-  }
-
-  private async closeServers(servers: Server[]): Promise<void> {
-    await Promise.all(servers.filter((server) => server.listening).map(closeHttpServer));
-  }
-
   async dispose(): Promise<void> {
-    const entryPromises = [...this.origins.values()];
-    this.origins.clear();
-    for (const entryPromise of entryPromises) {
+    const openingOrigins = [...this.openOrigins.values()];
+    this.openOrigins.clear();
+    for (const opening of openingOrigins) {
       try {
-        const entry = await entryPromise;
-        entry.handlers.clear();
-        await this.closeServers(entry.servers);
-      } catch { /* failed binds are already closed */ }
+        const record = await opening;
+        record.handlers.clear();
+        await closeLoopbackServers(record.listeners);
+      } catch {
+        // A failed bind has already closed each attempted server.
+      }
     }
   }
 
-  private async dispatch(origin: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const entryPromise = this.origins.get(origin);
-    if (entryPromise == null) { response.writeHead(404); response.end("Not found"); return; }
-    let entry: LoopbackEntry;
-    try { entry = await entryPromise; }
-    catch { response.writeHead(404); response.end("Not found"); return; }
-    let requestUrl: URL;
-    try { requestUrl = new URL(request.url ?? "/", origin); }
-    catch { response.writeHead(400); response.end("Bad request"); return; }
-    for (const handler of [...entry.handlers]) {
-      try { if (await handler(requestUrl, request, response)) return; }
-      catch (error) {
-        this.log.warn({ kind: "callback-handler-failed", detail: errorMessage(error) });
-        if (response.headersSent) return;
-      }
-    }
-    if (!response.headersSent) { response.writeHead(404); response.end("Not found"); }
+  private async createOriginEntry(origin: string, port: number, redirectHost: string): Promise<OriginCallbacks> {
+    const listeners = await bindLoopbackServers(port, redirectHost, (incoming, outgoing) => {
+      void this.serveCallback(origin, incoming, outgoing);
+    });
+    return { listeners, handlers: new Set() };
+  }
+
+  private serveCallback(
+    origin: string,
+    request: import("node:http").IncomingMessage,
+    response: import("node:http").ServerResponse,
+  ): Promise<void> {
+    return dispatchLoopbackCallback(origin, request, response, () => this.openOrigins.get(origin), this.log);
   }
 }

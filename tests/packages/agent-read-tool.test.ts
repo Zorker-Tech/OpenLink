@@ -14,12 +14,12 @@ import {
   ReadRejected,
   ReadResult,
   ReadSuccess,
-} from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
-import { ReadToolError, ReadToolResult, ReadToolSuccess } from "../../source/packages/proto/generated/agent/v1/read_tool_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import { ReadToolError, ReadToolResult, ReadToolSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_tool_pb.ts"
 import type { BlobStore } from "../../source/packages/agent-kv/blob-store.ts"
 import { agentEventTrackerKey, type AgentEventTracker, type SkillAppliedEvent } from "../../source/packages/agent/utils/event-tracking.ts"
-import { READ_CHAR_HARD_LIMIT } from "../../source/packages/agent/tools/read-limits.ts"
-import type { CursorRule } from "../../source/packages/proto/generated/agent/v1/rules_pb.ts"
+import { READ_OUTPUT_BOUNDS } from "../../source/packages/agent/tools/read-limits.ts"
+import type { CursorRule } from "../../source/adapters/interop/proto/generated/agent/v1/rules_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // driving the tool the way the turn does: a fake executor, a fake interaction handler, real JSON
@@ -252,7 +252,7 @@ test("the minimal harness reads images only, and accepts any version", () => {
   const { tool } = buildTool(() => contentResult("x"), { version: "future-model", tool: { useMinimalHarness: true } })
   assert.equal(tool.name, "ViewImage")
   assert.deepEqual(Object.keys(schemaOf(tool).properties ?? {}), ["path"])
-  assert.match(tool.descriptionGenerator(), /^View an image on the local filesystem\./)
+  assert.match(tool.descriptionGenerator(), /^Preview an image from a local path\./)
 })
 
 test("the line-number argument appears only when the version is told to offer it", () => {
@@ -366,7 +366,7 @@ test("formats that are not text are refused before the workspace is asked", asyn
 })
 
 test("content past the hard limit is withheld with the range it should be read in", async () => {
-  const huge = "x".repeat(READ_CHAR_HARD_LIMIT + 1)
+  const huge = "x".repeat(READ_OUTPUT_BOUNDS.maximumCharacters + 1)
   const { tool } = buildTool(() => contentResult(huge))
   const result = await runRead(tool, { path: "/repo/huge.txt" })
   if (result.result.case !== "success") throw new Error("expected a success")

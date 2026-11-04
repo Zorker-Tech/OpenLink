@@ -5,14 +5,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { flushSlateSentry, initSlateSentryDaemon } from "../../source/host/local-exec/sentry.ts";
+import { flushDaemonCrashReporter, initializeDaemonCrashReporter } from "../../source/adapters/interop/telemetry/local-exec-crash-reporter-adapter.ts";
 import { FEATURE_FLAG_OVERRIDES_FILENAME, FEATURE_FLAG_OVERRIDE_TTL_MS, isFlagName, SlateFeatureFlagOverrideStore } from "../../source/shared/node/experiments/feature-flag-overrides.ts";
 import { BOX_CDP_PORT_BASE, createSlateBrowserTools, PENDING_SCREENSHOT_CAP, SlateBrowserDriver } from "../../source/host/runner/tools/slate-browser-tools.ts";
 
 describe("the daemon's own crash reporting", () => {
   it("is initialized and flushed by the daemon", () => {
-    assert.equal(typeof initSlateSentryDaemon, "function");
-    assert.equal(typeof flushSlateSentry, "function");
+    assert.equal(typeof initializeDaemonCrashReporter, "function");
+    assert.equal(typeof flushDaemonCrashReporter, "function");
   });
 });
 

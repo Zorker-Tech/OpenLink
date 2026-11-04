@@ -56,17 +56,21 @@ export class RunnerRegistry {
 
   attachRunner(activeRunner: any): void {
     this.tm.attachRunnerFactory((sessionState: any, hookState: any) => {
-      activeRunner.setAgentStore(sessionState.agentStore, hookState.agentProfileProvider);
-      activeRunner.setMemoryStore(sessionState.memory);
-      activeRunner.setMemorySnapshotStore(sessionState.db);
-      activeRunner.setProfilePromptSnapshotStore(sessionState.db);
-      activeRunner.setEpisodeProgress(sessionState.db);
-      activeRunner.setAutomationStore(sessionState.automations);
-      activeRunner.setWorkflowStore(sessionState.workflows);
-      activeRunner.setChannelStore(sessionState.channels);
-      activeRunner.setAttachmentIngestor(hookState.ingestAttachment);
-      activeRunner.setImagePersister(hookState.persistImage);
-      activeRunner.setMediaBytesPersister(hookState.persistMediaBytes);
+      activeRunner.bindSessionServices({
+        agentState: { store: sessionState.agentStore, profileProvider: hookState.agentProfileProvider },
+        memory: {
+          primary: sessionState.memory,
+          snapshots: sessionState.db,
+          profileSnapshots: sessionState.db,
+          episodeProgress: sessionState.db,
+        },
+        automation: { automations: sessionState.automations, workflows: sessionState.workflows, channels: sessionState.channels },
+        attachments: {
+          ingestor: hookState.ingestAttachment,
+          imagePersister: hookState.persistImage,
+          mediaPersister: hookState.persistMediaBytes,
+        },
+      });
       activeRunner.setAgentIdProvider(() => sessionState.id);
       return activeRunner;
     });

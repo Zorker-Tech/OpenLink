@@ -26,6 +26,50 @@ describe("what a session's store reported", () => {
     assert.equal(sessionDiagnosticTelemetry({ family: "not_a_family" as never, kind: "x" }).event, undefined);
   });
 
+  it("projects store recovery details and converts present counters to strings", () => {
+    assert.deepEqual(sessionDiagnosticTelemetry({
+      family: "store_db",
+      kind: "quarantine_copied",
+      agentId: "agent-1",
+      errorClass: "CorruptionError",
+      outcome: "recovered",
+      quarantine: "copied",
+      salvagedKv: 0,
+      salvagedBlobs: 4,
+      salvagedTranscript: null,
+    }), {
+      level: "warn",
+      event: "slate.session.store_db",
+      metadata: {
+        kind: "quarantine_copied",
+        agent_id: "agent-1",
+        error_class: "CorruptionError",
+        outcome: "recovered",
+        quarantine: "copied",
+        salvaged_kv: "0",
+        salvaged_blobs: "4",
+        salvaged_transcript: undefined,
+      },
+    });
+  });
+
+  it("keeps other event families on their event with only common metadata", () => {
+    for (const family of ["maintenance", "materialize", "summary_build"] as const) {
+      const report = sessionDiagnosticTelemetry({
+        family,
+        kind: "operation_failed",
+        agentId: "agent-2",
+        errorClass: "IOError",
+        outcome: "ignored",
+      });
+      assert.deepEqual(report, {
+        level: "error",
+        event: SESSION_EVENT_BY_FAMILY[family],
+        metadata: { kind: "operation_failed", agent_id: "agent-2", error_class: "IOError" },
+      });
+    }
+  });
+
   it("names the extension that reported a diagnostic", () => {
     const report = hostExtensionDiagnosticTelemetry({ extension: "box_store", kind: "hydration_temp_cleanup_failed" });
     assert.notEqual(report, undefined);

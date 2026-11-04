@@ -11,21 +11,18 @@
  * to write would only invite an attempt that must fail.
  */
 
-import { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts"
-import type { McpFileSystemOptions, McpMetaToolOptions } from "../../proto/generated/agent/v1/mcp_pb.ts"
-import { McpFileSystemInstructions } from "../prompts/legacy-snippets.ts"
+import { renderMcpFileSystemInstructions } from "../prompts/mcp-file-system-instructions.ts"
 import { MCP_AUTH_INSTRUCTION } from "./mcp-auth-instruction.ts"
+import type { UserInfoMode, UserInfoModelProfile } from "../prompts/user-info-profile-contract.ts"
+import type { UserInfoMcpFileSystemOptions, UserInfoMcpMetaToolOptions } from "../prompts/user-info-data-contracts.ts"
 
-export interface McpFileSystemModelInfo {
-  readonly isComposerMatterhorn?: boolean | undefined
-  readonly isRawTrainingSlug?: boolean | undefined
-}
+export type McpFileSystemModelInfo = Pick<UserInfoModelProfile, "mcpToolNameStyle">
 
 export interface McpFileSystemParams {
-  readonly mode?: AgentMode | undefined
+  readonly mode?: UserInfoMode | undefined
   readonly enableFilterEditToolsInAskMode?: boolean | undefined
-  readonly mcpFileSystemOptions?: McpFileSystemOptions | undefined
-  readonly mcpMetaToolOptions?: McpMetaToolOptions | undefined
+  readonly mcpFileSystemOptions?: UserInfoMcpFileSystemOptions | undefined
+  readonly mcpMetaToolOptions?: Pick<UserInfoMcpMetaToolOptions, "enabled"> | undefined
   readonly featureFlags?: { readonly enableMCPFileSystem?: boolean | undefined } | undefined
   readonly modelInfo?: McpFileSystemModelInfo | undefined
 }
@@ -40,7 +37,7 @@ export function getMcpFileSystemToolNames(modelInfo: McpFileSystemModelInfo | un
   readonly listMcpResources: string
   readonly fetchMcpResource: string
 } {
-  if (modelInfo?.isComposerMatterhorn === true && modelInfo.isRawTrainingSlug !== true) {
+  if (modelInfo?.mcpToolNameStyle === "pascal") {
     return {
       callMcpTool: "CallMcpTool",
       listMcpResources: "ListMcpResources",
@@ -55,7 +52,7 @@ export function getMcpFileSystemToolNames(modelInfo: McpFileSystemModelInfo | un
 }
 
 export function getMcpFileSystemInstructions(params: McpFileSystemParams): string {
-  const isAskMode = params.mode === AgentMode.ASK
+  const isAskMode = params.mode === "ask"
   const shouldFilterEditToolsInAskMode = isAskMode && (params.enableFilterEditToolsInAskMode ?? true)
   if (shouldFilterEditToolsInAskMode) return ""
   // A meta tool takes over discovery and invocation; describing both routes would confuse the model.
@@ -65,16 +62,20 @@ export function getMcpFileSystemInstructions(params: McpFileSystemParams): strin
   const isMcpFileSystemEnabled = mcpFileSystemOptions?.enabled ?? false
   const isMcpFileSystemCompatible = params.featureFlags?.enableMCPFileSystem === true
   if (!isMcpFileSystemEnabled || !isMcpFileSystemCompatible || !hasMcpDescriptors || !mcpFileSystemOptions) return ""
-  const instructions = McpFileSystemInstructions({
+  const toolNames = getMcpFileSystemToolNames(params.modelInfo)
+  const instructions = renderMcpFileSystemInstructions({
     workspaceProjectDir: mcpFileSystemOptions.workspaceProjectDir,
-    mcpDescriptors: mcpFileSystemOptions.mcpDescriptors as unknown as readonly {
-      readonly serverIdentifier: string
-      readonly folderPath: string
-      readonly serverUseInstructions?: string | undefined
-    }[],
-  }, {
-    ...getMcpFileSystemToolNames(params.modelInfo),
-    mcpAuthInstruction: MCP_AUTH_INSTRUCTION,
+    servers: mcpFileSystemOptions.mcpDescriptors.map(descriptor => ({
+      serverIdentifier: descriptor.serverIdentifier,
+      ...(descriptor.folderPath === undefined ? {} : { folderPath: descriptor.folderPath }),
+      ...(descriptor.serverUseInstructions === undefined ? {} : { serverUseInstructions: descriptor.serverUseInstructions }),
+    })),
+    toolNames: {
+      callTool: toolNames.callMcpTool,
+      listResources: toolNames.listMcpResources,
+      readResource: toolNames.fetchMcpResource,
+    },
+    authenticationRule: MCP_AUTH_INSTRUCTION,
   })
   // An incomplete MCP tool set is a reason to do the rest of the work, not to reach for a browser.
   return `${instructions}

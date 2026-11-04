@@ -30,21 +30,21 @@ class FakeWorker extends EventEmitter {
   postMessage(request: Record<string, unknown>): void {
     this.posted.push(request);
     // `ensure` waits for `init` and `close` waits for `close`: a worker that never answered them would hang every test.
-    if (request.kind === "init") this.answer(request.requestId as number, { threadId: 7, pid: 4242 });
-    if (request.kind === "close") this.answer(request.requestId as number, {});
+    if (request.operation === "worker.identify") this.answer(request.callId as number, { operation: request.operation, workerThreadId: 7, processId: 4242 });
+    if (request.operation === "worker.close") this.answer(request.callId as number, { operation: request.operation });
   }
 
-  /** The id of the request that was posted last: tests ask for it rather than guessing. */
-  lastRequestId(): number {
-    return this.posted.at(-1)!.requestId as number;
+  /** The id of the call that was posted last: tests ask for it rather than guessing. */
+  lastCallId(): number {
+    return this.posted.at(-1)!.callId as number;
   }
 
-  answer(requestId: number, body: Record<string, unknown> = {}): void {
-    this.emit("message", { kind: "ok", requestId, ...body });
+  answer(callId: number, body: Record<string, unknown> = {}): void {
+    this.emit("message", { outcome: "success", callId, ...body });
   }
 
-  fail(requestId: number, message: string, name?: string, code?: string): void {
-    this.emit("message", { kind: "error", requestId, message, ...(name === undefined ? {} : { name }), ...(code === undefined ? {} : { code }) });
+  fail(callId: number, message: string, name?: string, code?: string): void {
+    this.emit("message", { outcome: "failure", callId, message, ...(name === undefined ? {} : { name }), ...(code === undefined ? {} : { code }) });
   }
 
   async terminate(): Promise<number> {
@@ -139,15 +139,18 @@ describe("a worker's errors and output", () => {
 describe("one worker connection", () => {
   it("settles each request with its own answer, and ignores an answer nobody is waiting for", async () => {
     const { connection, worker } = connectionWith();
-    const first = connection.send((requestId) => ({ kind: "get-blob", requestId }));
-    const firstId = worker.lastRequestId();
-    const second = connection.send((requestId) => ({ kind: "get-blob", requestId }));
-    const secondId = worker.lastRequestId();
-    assert.deepEqual(worker.posted.map((request) => request.kind), ["get-blob", "get-blob"]);
-    worker.answer(secondId, { blobData: new Uint8Array([2]) });
-    worker.answer(firstId, { blobData: new Uint8Array([1]) });
-    assert.deepEqual([...(await first).blobData!], [1]);
-    assert.deepEqual([...(await second).blobData!], [2]);
+    const first = connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([1]) }));
+    const firstId = worker.lastCallId();
+    const second = connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([2]) }));
+    const secondId = worker.lastCallId();
+    assert.deepEqual(worker.posted.map((request) => request.operation), ["blob.read", "blob.read"]);
+    worker.answer(secondId, { operation: "blob.read", blobBytes: new Uint8Array([2]) });
+    worker.answer(firstId, { operation: "blob.read", blobBytes: new Uint8Array([1]) });
+    const firstReply = await first;
+    const secondReply = await second;
+    if (firstReply.operation !== "blob.read" || secondReply.operation !== "blob.read") assert.fail("read call received a different reply");
+    assert.deepEqual([...firstReply.blobBytes!], [1]);
+    assert.deepEqual([...secondReply.blobBytes!], [2]);
     // A response for a request that is over is ignored, not thrown.
     worker.answer(999, {});
     assert.equal(connection.pending.size, 0);
@@ -156,37 +159,46 @@ describe("one worker connection", () => {
   it("rejects a failed request with the worker's error, and remembers the activity while doing it", async () => {
     const { connection, worker } = connectionWith();
     connection.lastActivityAt = 0;
-    const request = connection.send((requestId) => ({ kind: "set-blob", requestId }));
-    worker.fail(worker.lastRequestId(), "disk full", "SQLITE_FULL", "ENOSPC");
+    const request = connection.send((callId) => ({ operation: "blob.write", callId, blobId: new Uint8Array([1]), blobBytes: new Uint8Array([2]) }));
+    worker.fail(worker.lastCallId(), "disk full", "SQLITE_FULL", "ENOSPC");
     await assert.rejects(() => request, (error: unknown) => error instanceof Error && error.name === "SQLITE_FULL" && (error as Error & { code?: string }).code === "ENOSPC");
     assert.notEqual(connection.activityAt(), 0);
   });
 
   it("takes its thread and process identity from the init answer", async () => {
     const { connection, worker } = connectionWith();
-    await connection.init({ agentId: "agent-1", blobDbPath: "/store.db", busyTimeoutMs: 10 });
-    assert.deepEqual([connection.threadId(), connection.pid(), worker.posted.at(-1)?.kind], [7, 4242, "init"]);
+    await connection.init();
+    assert.deepEqual([connection.threadId(), connection.pid(), worker.posted.at(-1)?.operation], [7, 4242, "worker.identify"]);
   });
 
   it("retires itself once when the worker exits, and rejects everything it owed", async () => {
     const { connection, worker, exits } = connectionWith();
-    const first = connection.send((requestId) => ({ kind: "get-blob", requestId }));
-    const second = connection.send((requestId) => ({ kind: "get-blob", requestId }));
+    const first = connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([1]) }));
+    const second = connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([2]) }));
     worker.emit("exit", 3);
     await assert.rejects(() => first, /worker exited with code 3/);
     await assert.rejects(() => second, /worker exited with code 3/);
     assert.equal(exits.length, 1);
     // A clean exit is still an exit, and a dead worker refuses new work.
     assert.equal(connection.isDead, true);
-    await assert.rejects(() => connection.send((requestId) => ({ kind: "get-blob", requestId })), /no longer running/);
+    await assert.rejects(() => connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([3]) })), /no longer running/);
     worker.emit("error", new Error("late"));
+    assert.equal(exits.length, 1);
+  });
+
+  it("retires a worker that returns a malformed reply instead of leaving a call pending", async () => {
+    const { connection, worker, exits } = connectionWith();
+    const pending = connection.send((callId) => ({ operation: "blob.read", callId, blobId: new Uint8Array([1]) }));
+    worker.emit("message", { outcome: "success", operation: "blob.read", callId: worker.lastCallId(), blobBytes: "not-bytes" });
+    await assert.rejects(() => pending, /invalid reply/);
+    assert.equal(connection.isDead, true);
     assert.equal(exits.length, 1);
   });
 
   it("closes by asking and then terminating, even when the worker will not answer", async () => {
     const { connection, worker } = connectionWith();
     const closing = connection.close();
-    worker.answer(connection.pending.keys().next().value as number, {});
+    worker.answer(connection.pending.keys().next().value as number, { operation: "worker.close" });
     await closing;
     assert.equal(worker.terminated, true);
     // A worker that is already dead is not asked anything.
@@ -221,7 +233,7 @@ describe("the pool", () => {
     await pool.ensure("agent-2", "/b.db");
     assert.deepEqual([pool.activeWorkerCount(), pool.connections.has("/b.db")], [2, true]);
     // The call finishes, so the store is no longer retained; a third store then makes the least recently used one way.
-    workers[0]!.answer(workers[0]!.lastRequestId(), { blobData: new Uint8Array([1]) });
+    workers[0]!.answer(workers[0]!.lastCallId(), { operation: "blob.read", blobBytes: new Uint8Array([1]) });
     await retained;
     pool.connections.get("/a.db")!.lastActivityAt = 1;
     pool.connections.get("/b.db")!.lastActivityAt = 2;
@@ -275,7 +287,7 @@ describe("the pool", () => {
     const call = pool.getBlob("agent-1", "/a.db", new Uint8Array([1]));
     // The worker is started and the read is posted on the next turn, so the failure is aimed at the read itself.
     await settleStream();
-    workers[0]!.fail(workers[0]!.lastRequestId(), "cannot read");
+    workers[0]!.fail(workers[0]!.lastCallId(), "cannot read");
     await assert.rejects(() => call, /cannot read/);
     // Nothing is retained once the call is over, so the sweep can close it.
     assert.equal(pool.activeOps.size, 0);

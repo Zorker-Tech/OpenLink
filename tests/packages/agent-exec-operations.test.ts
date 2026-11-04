@@ -28,7 +28,7 @@ import {
 } from "../../source/packages/agent-exec/index.ts"
 import { ExecutorResource, type RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts"
 import { RemoteResourceAccessor, RegistryResourceAccessor } from "../../source/packages/agent-exec/resource-provider.ts"
-import { SimpleControlledExecManager } from "../../source/packages/agent-exec/controlled-exec.ts"
+import { SimpleControlledExecManager } from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts"
 import {
   decodeBackgroundWorkMetadata,
   encodeBackgroundWorkMetadata,
@@ -44,14 +44,14 @@ import {
 } from "../../source/packages/agent-exec/computer-use.ts"
 import {
   AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES,
-  MCP_TEXT_FILE_THRESHOLD_BYTES,
   describeOutputLocation,
-} from "../../source/packages/agent-exec/agent-tools-file.ts"
+} from "../../source/adapters/interop/agent/agent-tools-file-adapter.ts"
+import { MCP_TEXT_FILE_THRESHOLD_BYTES } from "../../source/packages/agent/tools/mcp/mcp-output-spill-policy.ts"
 import {
   createForcePromptHookApprovalRequirement,
   getShellHookApprovalRequirement,
   setShellHookApprovalRequirement,
-} from "../../source/packages/agent-exec/shell-hook-approval.ts"
+} from "../../source/adapters/interop/agent/shell-hook-approval-adapter.ts"
 import {
   execHookConversationIdKey,
   execHookGenerationIdKey,
@@ -67,13 +67,13 @@ import {
   conflictNoticeSyncAndPeek,
 } from "../../source/packages/agent-exec/agent-store-conflict-notice.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { LsArgs, LsResult } from "../../source/packages/proto/generated/agent/v1/ls_exec_pb.ts"
-import { ExecClientMessage } from "../../source/packages/proto/generated/agent/v1/exec_pb.ts"
+import { LsArgs, LsResult } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
+import { ExecClientMessage } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import {
   ShellHookApprovalRequirement,
   ShellHookApprovalRequirement_Kind,
-} from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts"
-import type { OutputLocation } from "../../source/packages/proto/generated/agent/v1/utils_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import type { OutputLocation } from "../../source/adapters/interop/proto/generated/agent/v1/utils_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the operations this daemon can serve
@@ -195,15 +195,15 @@ test("a definition that does not parse yields no name rather than an error", () 
 
 test("a computer-use call is summarized by what it did, not by how long it ran", () => {
   const summary = summarizeComputerUseActions([
-    { action: { case: "click" } },
-    { action: { case: "click" } },
-    { action: { case: "type" } },
-    { action: { case: "key" } },
-    { action: { case: "wait" } },
-    { action: { case: "screenshot" } },
-    { action: { case: "cursorPosition" } },
-    { action: { case: undefined } },
-  ] as never)
+    { kind: "click" },
+    { kind: "click" },
+    { kind: "type-text" },
+    { kind: "key-press" },
+    { kind: "pause" },
+    { kind: "screenshot" },
+    { kind: "pointer-position" },
+    { kind: undefined },
+  ])
   assert.equal(summary.actionCount, 8)
   assert.deepEqual(summary.actionCounts, {
     mouse_move: 0,

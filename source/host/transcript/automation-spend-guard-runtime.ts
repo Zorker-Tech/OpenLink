@@ -16,7 +16,7 @@ import {
   type SpendGuardAnswer,
   type SpendGuardWidget,
 } from "./slate-automation-spend-guard.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript } from "./transcript-store.ts";
 import type {
   TranscriptEntry,
@@ -294,7 +294,7 @@ export class AutomationSpendGuardRuntime {
     const onScreen = isOnScreenSession(guardSession, this.tm);
     const entry: TranscriptEntry = {
       kind: "send-message",
-      id: nextEntryId(this.readEntries(guardSession), "send-message"),
+      id: allocateTranscriptEntryId(this.readEntries(guardSession), "send-message"),
       message: { type: "widget", widget },
       timestampMs: Date.now(),
     };

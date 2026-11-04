@@ -17,57 +17,47 @@
  * instead of here, and a model that never saw MCP at all is given none.
  */
 
-import { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts"
-import type { BackgroundComposerSource } from "../../proto/generated/aiserver/v1/background_composer_pb.ts"
-import type { AgentSkill } from "../../proto/generated/agent/v1/agent_skills_pb.ts"
-import type { CursorRule } from "../../proto/generated/agent/v1/rules_pb.ts"
-import type { GitRepoInfo, RequestContextEnv } from "../../proto/generated/agent/v1/request_context_exec_pb.ts"
-import type { McpDescriptor, McpFileSystemOptions, McpInstructions } from "../../proto/generated/agent/v1/mcp_pb.ts"
 import { jsx, jsxs, Fragment, type PromptNode, type PromptProps } from "../../prompt-jsx/index.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import { materializeAutomationMemoryInstruction } from "./bug_report/automations.ts"
 import { isNamedAgentHomePromptSession } from "./cloud-meta-agent/named-agent-sessions.ts"
-import { getCloudTestingSectionElements, getCloudTestingSectionsPlacement } from "./cloud-testing-sections.ts"
 import { CloudInstructionsSection, CloudTaskInstructions } from "./cloud-task-instructions.ts"
 import {
   AutomationInstructionsSection,
   AvailableSubagentModelsSection,
   AvailableSubagentTypesSection,
   HooksAdditionalContextSection,
-  MetaAgentProjectNotesDirectorySection,
   UserIntentSection,
 } from "./user-info-sections.ts"
+import { MetaAgentProjectNotesDirectorySection } from "./user-info-notes-section.ts"
 import { AgentTranscriptsSection } from "./agent-transcripts-section.ts"
 import { GitStatusSection } from "./git-status-section.ts"
 import { buildAvailableSkillsPromptSection } from "./available-skills-section.ts"
 import { McpInstructionsSection } from "./mcp-instructions-section.ts"
 import { McpMetaToolInstructions } from "./mcp-meta-tool-instructions.ts"
-import { McpMetaToolServersSection, filterProjectWorkspaceMutationMcpDescriptors } from "./mcp-catalog.ts"
+import { McpMetaToolServersSection } from "./mcp-catalog.ts"
 import { resolveAgentNotesDirectory } from "./agent-notes-directory.ts"
 import { UserInfoSection } from "./user-info-section.ts"
 import { getFriendlyDateForTimeZone } from "./friendly-date.ts"
 import { buildRulesSection } from "./custom-user-rules.ts"
-import { categorizeCursorRules } from "./rule-categorization.ts"
+import { categorizePromptRules } from "./rule-categorization.ts"
 import { getMcpFileSystemInstructions } from "../utils/mcp-file-system.ts"
+import type { UserInfoCloudTestingSections, UserInfoMode, UserInfoModelProfile } from "./user-info-profile-contract.ts"
+import type {
+  UserInfoEnvironment,
+  UserInfoGitRepository,
+  UserInfoMcpFileSystemOptions,
+  UserInfoMcpInstructions,
+  UserInfoMcpMetaToolOptions,
+  UserInfoRule,
+  UserInfoSkill,
+} from "./user-info-data-contracts.ts"
 
 interface UserInfoToolInfo {
   readonly allTools?: Record<string, { readonly name?: string | undefined } | undefined>
   readonly availableSubagentTypesDescription?: string | undefined
   readonly availableSubagentModelsDescription?: string | undefined
-  readonly [key: string]: unknown
-}
-
-interface UserInfoModelInfo {
-  readonly modelName?: string | undefined
-  /** A catalogue value: the prompt version a model was trained against. */
-  readonly promptVersion?: string | undefined
-  readonly isComposerMatterhorn?: boolean | undefined
-  readonly isRawTrainingSlug?: boolean | undefined
-  readonly isSlateProductPrompt?: boolean | undefined
-  readonly isComposer2?: boolean | undefined
-  readonly isComposer15?: boolean | undefined
-  readonly isGpt56?: boolean | undefined
   readonly [key: string]: unknown
 }
 
@@ -77,7 +67,7 @@ interface UserInfoDisplayOptions {
   readonly displayGitRepoStatusLine?: boolean | undefined
   readonly displayGitStatus?: boolean | undefined
   readonly excludeAgentTranscripts?: boolean | undefined
-  readonly displayCursorRules?: boolean | undefined
+  readonly displayWorkspaceRules?: boolean | undefined
   readonly displaySkills?: boolean | undefined
   readonly computerUseSubagentSurface?: boolean | undefined
   readonly agentType?: AgentType | undefined
@@ -102,25 +92,13 @@ interface UserInfoFeatureFlags {
   readonly [key: string]: unknown
 }
 
-interface UserInfoMcpMetaToolOptions {
-  readonly enabled: boolean
-  readonly mcpDescriptors: readonly McpDescriptor[]
-  readonly snapshotToolNames?: {
-    readonly discoveryToolName?: string | undefined
-    readonly invocationToolName?: string | undefined
-    readonly useDynamicToolNamespaces?: boolean | undefined
-    readonly fetchMcpResourceToolName?: string | undefined
-    readonly listMcpResourcesToolName?: string | undefined
-  } | undefined
-}
-
 export interface UserInfoProps {
-  readonly cursorRules: CursorRule[]
-  readonly agentSkills?: AgentSkill[] | undefined
-  readonly env?: RequestContextEnv | undefined
+  readonly workspaceRules: readonly UserInfoRule[]
+  readonly agentSkills?: readonly UserInfoSkill[] | undefined
+  readonly env?: UserInfoEnvironment | undefined
   readonly isLargeContextModel?: boolean | undefined
-  readonly mode?: AgentMode | undefined
-  readonly gitRepos?: GitRepoInfo[] | undefined
+  readonly mode?: UserInfoMode | undefined
+  readonly gitRepos?: readonly UserInfoGitRepository[] | undefined
   readonly gitRepoInfoComplete?: boolean | undefined
   readonly terminalsFolder?: string | undefined
   readonly agentSharedNotesFolder?: string | undefined
@@ -128,15 +106,16 @@ export interface UserInfoProps {
   readonly metaAgentNotesEnabled?: boolean | undefined
   readonly notesSessionId?: string | undefined
   readonly featureFlags?: UserInfoFeatureFlags | undefined
-  readonly modelInfo?: UserInfoModelInfo | undefined
+  readonly modelProfile?: UserInfoModelProfile | undefined
+  readonly additionalUserRules?: readonly string[] | undefined
+  readonly cloudTestingSections?: UserInfoCloudTestingSections | undefined
   readonly displayOptions?: UserInfoDisplayOptions | undefined
   readonly toolInfo?: UserInfoToolInfo | undefined
-  readonly backgroundAgentSource?: BackgroundComposerSource | undefined
   readonly agentType?: AgentType | undefined
   readonly cloudRule?: string | undefined
-  readonly mcpInstructions?: readonly McpInstructions[] | undefined
+  readonly mcpInstructions?: readonly UserInfoMcpInstructions[] | undefined
   readonly mcpMetaToolOptions?: UserInfoMcpMetaToolOptions | undefined
-  readonly mcpFileSystemOptions?: McpFileSystemOptions | undefined
+  readonly mcpFileSystemOptions?: UserInfoMcpFileSystemOptions | undefined
   readonly mcpInfoComplete?: boolean | undefined
   readonly enableFilterEditToolsInAskMode?: boolean | undefined
   readonly isRootProject?: boolean | undefined
@@ -145,14 +124,10 @@ export interface UserInfoProps {
   readonly automationInstructions?: string | undefined
   readonly namedAgentSelfDocumentBlock?: string | undefined
   readonly agentTranscriptsFolder?: string | undefined
-  readonly enableComposer2IntelligentTestingPromptSection?: boolean | undefined
   readonly agentTokenLimit?: number | undefined
   readonly isThreadSurface?: boolean | undefined
-  readonly enableCloudTesting?: boolean | undefined
-  readonly priorUserInfoCloudTestingSectionsPlacement?: string | undefined
   readonly namedAgentSessionKind?: string | undefined
   readonly isCloudMetaAgentParent?: boolean | undefined
-  readonly subagentType?: { readonly type?: { readonly case?: string | undefined } | undefined } | undefined
   readonly useLocalAgentPrompting?: boolean | undefined
   readonly omitCloudWorkerProcedure?: boolean | undefined
   readonly designatedBranches?: readonly {
@@ -165,7 +140,6 @@ export interface UserInfoProps {
   readonly branchPrefix?: string | undefined
   readonly branchSuffix?: string | undefined
   readonly preferCurrentBranchInMultiPrMode?: boolean | undefined
-  readonly browserTools?: readonly string[] | undefined
   readonly isRepoless?: boolean | undefined
   readonly skipMcpInstructions?: boolean | undefined
 }
@@ -183,39 +157,33 @@ function UserInfoComponent({ props }: { readonly props: UserInfoProps }): Prompt
   const hasGitRepos = gitRepos.length > 0
   const gitRepoInfoComplete = props.gitRepoInfoComplete
   const workspacePaths = props.env?.workspacePaths ?? []
-  const { globalRules, agentRequestableRules, userRules, skills } = categorizeCursorRules(
-    props.cursorRules,
+  const { globalRules, agentRequestableRules, userRules, skills } = categorizePromptRules(
+    props.workspaceRules,
     workspacePaths,
     props.displayOptions?.agentType,
   )
   const readToolName = props.toolInfo?.allTools?.READ?.name
-  const awaitToolName = props.toolInfo?.allTools?.AWAIT?.name
-  const shellToolName = props.toolInfo?.allTools?.SHELL?.name
-  const grepToolName = props.toolInfo?.allTools?.GREP?.name
-  const { section: rulesSection } = buildRulesSection(props as Parameters<typeof buildRulesSection>[0], {
+  const { section: rulesSection } = buildRulesSection({
+    displayRules: props.displayOptions?.displayWorkspaceRules !== false,
     categorizedRules: { globalRules, agentRequestableRules, userRules },
-    readToolName,
-    awaitToolName,
-    shellToolName,
-    grepToolName,
-  })
-  const { section: availableSkillsSection } = buildAvailableSkillsPromptSection(props, { skills, readToolName })
+    additionalUserRules: props.additionalUserRules ?? [],
+  }, { readToolName })
+  const { section: availableSkillsSection } = buildAvailableSkillsPromptSection({
+    ...props,
+    modelInfo: { isGpt56: props.modelProfile?.gpt56SkillBudget === true },
+  }, { skills, readToolName })
   const todaysDate = getFriendlyDateForTimeZone(props.env?.timeZone)
   const cloudRuleContent = props.cloudRule?.trim() ?? ""
   // A model trained without MCP is given none of it, however the session is configured.
-  const disableMcpForRawMatterhorn = props.modelInfo?.isComposerMatterhorn === true && props.modelInfo.isRawTrainingSlug === true
-  const mcpEntries = disableMcpForRawMatterhorn
+  const disableMcpForRawTraining = props.modelProfile?.suppressMcpContext === true
+  const mcpEntries = disableMcpForRawTraining
     ? []
     : (props.mcpInstructions ?? []).filter(entry => typeof entry?.instructions === "string" && entry.instructions.trim().length > 0)
-  const shouldFilterEditToolsInAskMode = props.mode === AgentMode.ASK && (props.enableFilterEditToolsInAskMode ?? true)
-  const shouldRestrictProjectWorkspace = props.mode === AgentMode.PROJECT || props.isRootProject === true
-  // A project conversation may not move the agent out of its own root.
-  const mcpMetaToolOptions = shouldRestrictProjectWorkspace && props.mcpMetaToolOptions !== undefined
-    ? { ...props.mcpMetaToolOptions, mcpDescriptors: filterProjectWorkspaceMutationMcpDescriptors(props.mcpMetaToolOptions.mcpDescriptors) }
-    : props.mcpMetaToolOptions
+  const shouldFilterEditToolsInAskMode = props.mode === "ask" && (props.enableFilterEditToolsInAskMode ?? true)
+  const mcpMetaToolOptions = props.mcpMetaToolOptions
   const shouldShowMcpMetaToolSnapshot = mcpMetaToolOptions?.enabled === true &&
     mcpMetaToolOptions.mcpDescriptors.length > 0 &&
-    !disableMcpForRawMatterhorn &&
+    !disableMcpForRawTraining &&
     !shouldFilterEditToolsInAskMode
   const largeContextMcpMetaInstructions = props.isLargeContextModel === true &&
       shouldShowMcpMetaToolSnapshot &&
@@ -237,16 +205,14 @@ function UserInfoComponent({ props }: { readonly props: UserInfoProps }): Prompt
   const shouldShiftMcpFilesInstructionsToUserMsg = props.featureFlags?.shiftDsv3McpFilesInstructionsToUserMsg === true
   const mcpInstructionsForUserMsg = props.isLargeContextModel === true &&
       shouldShiftMcpFilesInstructionsToUserMsg &&
-      !disableMcpForRawMatterhorn
+      !disableMcpForRawTraining
     ? getMcpFileSystemInstructions({
       mode: props.mode,
       enableFilterEditToolsInAskMode: props.enableFilterEditToolsInAskMode,
       mcpFileSystemOptions: props.mcpFileSystemOptions,
-      mcpMetaToolOptions: mcpMetaToolOptions
-        ? { enabled: mcpMetaToolOptions.enabled, mcpDescriptors: mcpMetaToolOptions.mcpDescriptors } as never
-        : undefined,
+      mcpMetaToolOptions: mcpMetaToolOptions ? { enabled: mcpMetaToolOptions.enabled } : undefined,
       featureFlags: props.featureFlags,
-      modelInfo: props.modelInfo,
+      modelInfo: props.modelProfile,
     })
     : ""
   const mcpInstructionsBlock = mcpInstructionsForUserMsg.length > 0 ? `\n\n${mcpInstructionsForUserMsg}` : ""
@@ -296,14 +262,12 @@ function UserInfoComponent({ props }: { readonly props: UserInfoProps }): Prompt
     })
   }
   const computerUseSubagentSurface = props.displayOptions?.computerUseSubagentSurface === true
-  const cloudTestingSections = !computerUseSubagentSurface &&
-      props.omitCloudWorkerProcedure !== true &&
-      getCloudTestingSectionsPlacement(props as never) === "user_info"
-    ? getCloudTestingSectionElements(props as never)
-    : undefined
+  const cloudTestingSections = props.cloudTestingSections
   const automationInstructions = props.automationInstructions === undefined
     ? undefined
-    : materializeAutomationMemoryInstruction(props.automationInstructions, props.env?.mountedAgentStores ?? [])
+    : materializeAutomationMemoryInstruction(props.automationInstructions, (props.env?.mountedAgentStores ?? [])
+        .filter(store => store.kind === "principal")
+        .map(store => ({ ...(store.alias === undefined ? {} : { alias: store.alias }), path: store.path })))
   return jsxs(Fragment, {
     children: [
       props.env !== undefined && jsx(UserInfoSectionPrompt, {

@@ -1,43 +1,72 @@
-/**
- * The transcript a host keeps in memory.
- *
- * Entries are read, appended, updated and replaced. Setting or appending keeps its own copy of what it was given, so
- * a caller's later edits to that array are not seen here; reading hands back what the store holds.
- */
-import type { TranscriptEntry } from "./transcript-hub.ts";
+/** The host's in-memory list of transcript entries. */
+import type { TranscriptEntry } from "./transcript-hub.ts"
 
-let cache: TranscriptEntry[] | undefined;
+class TranscriptBuffer {
+  private entries: TranscriptEntry[] | undefined
+
+  read(): TranscriptEntry[] {
+    return this.entries ?? []
+  }
+
+  replace(entries: readonly TranscriptEntry[]): void {
+    this.entries = [...entries]
+  }
+
+  append(entry: TranscriptEntry): void {
+    this.entries = [...this.read(), entry]
+  }
+
+  update(id: string, transform: (entry: TranscriptEntry) => TranscriptEntry): TranscriptEntry | null {
+    let replacement: TranscriptEntry | null = null
+    const next = this.read().map(entry => {
+      if (entry.id !== id) return entry
+      const changed = transform(entry)
+      replacement = changed
+      return changed
+    })
+    if (replacement == null) return null
+    this.entries = next
+    return replacement
+  }
+
+  remove(id: string): boolean {
+    const current = this.read()
+    const remaining = current.filter(entry => entry.id !== id)
+    if (remaining.length === current.length) return false
+    this.entries = remaining
+    return true
+  }
+
+  clear(): void {
+    this.entries = []
+  }
+}
+
+const transcript = new TranscriptBuffer()
+
 export function getTranscript(): TranscriptEntry[] {
-  return cache ?? [];
+  return transcript.read()
 }
+
 export function setTranscript(entries: readonly TranscriptEntry[]): void {
-  cache = [...entries];
+  transcript.replace(entries)
 }
+
 export function appendEntry(entry: TranscriptEntry): void {
-  cache = [...(cache ?? []), entry];
+  transcript.append(entry)
 }
+
 export function updateEntry(
   id: string,
   update: (entry: TranscriptEntry) => TranscriptEntry,
 ): TranscriptEntry | null {
-  const current = cache ?? [];
-  let updated: TranscriptEntry | null = null;
-  const next = current.map((entry) => {
-    if (entry.id !== id) return entry;
-    updated = update(entry);
-    return updated;
-  });
-  if (updated == null) return null;
-  cache = next;
-  return updated;
+  return transcript.update(id, update)
 }
+
 export function removeEntry(id: string): boolean {
-  const current = cache ?? [];
-  const next = current.filter((entry) => entry.id !== id);
-  if (next.length === current.length) return false;
-  cache = next;
-  return true;
+  return transcript.remove(id)
 }
+
 export function clearTranscript(): void {
-  cache = [];
+  transcript.clear()
 }

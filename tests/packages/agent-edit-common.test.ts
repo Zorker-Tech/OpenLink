@@ -16,12 +16,12 @@ import {
   ToolCallUnexpectedEnvironmentError,
 } from "../../source/packages/agent/tools/tool-errors.ts"
 import { WORKTREE_GUARD_ERROR } from "../../source/packages/utils/paths.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { SlateMode, type SlateMode as SlateModeValue } from "../../source/packages/agent/mode-processing.ts"
+import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import { agentStoreConflictNoticeExecutorResource } from "../../source/packages/agent-exec/agent-store-conflict-notice.ts"
 import { canvasDiagnosticsExecutorResource } from "../../source/packages/agent-exec/canvas-diagnostics.ts"
-import { HookAdditionalContext } from "../../source/packages/proto/generated/agent/v1/hook_additional_context_pb.ts"
+import type { HookContextEntry } from "../../source/packages/hooks-carriers/hook-additional-context.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the one place a file is written
@@ -75,7 +75,7 @@ const editInfo = (overrides: Partial<PerformWriteEditInfo> = {}): PerformWriteEd
   ...overrides,
 })
 
-function stateHandler(mode: number = AgentMode.AGENT): { readonly mode: number; recordFileState(path: string, content: string | undefined, previousContent: string | undefined): void; readonly states: Array<{ path: string; content?: string; previous?: string }> } {
+function stateHandler(mode: SlateModeValue = SlateMode.AGENT): { readonly mode: SlateModeValue; recordFileState(path: string, content: string | undefined, previousContent: string | undefined): void; readonly states: Array<{ path: string; content?: string; previous?: string }> } {
   const states: Array<{ path: string; content?: string; previous?: string }> = []
   return {
     mode,
@@ -94,7 +94,7 @@ const write = (
     edit?: PerformWriteEditInfo
     meta?: Partial<PerformWriteMeta>
     state?: ReturnType<typeof stateHandler>
-    mode?: number
+    mode?: SlateModeValue
   } = {},
 ) => performWrite(
   createContext(),
@@ -130,7 +130,7 @@ test("the write's id is derived from the call, so a retry is the same write", as
 
 test("the hook collector and the conflict switch are passed to the workspace", async () => {
   const harnessed = harness()
-  const hookContextCollector = [new HookAdditionalContext({ hookEventName: "preToolUse", content: "a hook said something" })]
+  const hookContextCollector: HookContextEntry[] = [{ event: "preToolUse", text: "a hook said something" }]
   await write(harnessed, { meta: { hookContextCollector, enableAgentStoreConflictNotices: true } })
   assert.deepEqual(harnessed.writes[0]?.options?.hookContextCollector, hookContextCollector)
   assert.equal(harnessed.writes[0]?.options?.enableAgentStoreConflictNotices, true)
@@ -144,7 +144,7 @@ test("a write that is not asked for conflict notices does not ask for them", asy
 
 test("a write in plan mode to a file the plan does not cover is refused before anything is sent", async () => {
   const harnessed = harness()
-  await assert.rejects(() => write(harnessed, { mode: AgentMode.PLAN }), ToolCallRejectedError)
+  await assert.rejects(() => write(harnessed, { mode: SlateMode.PLAN }), ToolCallRejectedError)
   assert.deepEqual(harnessed.writes, [])
 })
 

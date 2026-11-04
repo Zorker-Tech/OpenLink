@@ -25,7 +25,7 @@ import {
   writeSlateRemoteRoomConfig,
 } from "../groups/remote-room-store.ts";
 import { isPassContent } from "../groups/group-chat.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript, updateEntry } from "./transcript-store.ts";
 import type {
   TranscriptEntry,
@@ -637,7 +637,7 @@ export class SharedRooms {
     );
     const transcriptEntry: TranscriptEntry = {
       kind: "message",
-      id: nextEntryId(entries, "user-message"),
+      id: allocateTranscriptEntryId(entries, "user-message"),
       role: "user",
       content: text,
       isStreaming: false,

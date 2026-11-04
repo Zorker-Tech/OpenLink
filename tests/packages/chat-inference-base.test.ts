@@ -8,6 +8,11 @@ import {
   type PromptExecutor,
   type PromptMessage,
 } from "../../source/packages/chat-inference/base.ts";
+import {
+  createPassThroughMiddleware,
+  PassThroughMiddleware,
+  passThroughMiddleware,
+} from "../../source/packages/chat-inference/middleware/noop-middleware.ts";
 
 interface TextMessage { text: string }
 
@@ -124,6 +129,20 @@ describe("a prompt middleware", () => {
     const outer = new BaseMiddleware<TextMessage>(new BaseMiddleware<TextMessage>(executor));
     assert.deepEqual(outer.getMessages(), [{ text: "inner" }]);
     assert.deepEqual((outer as { stream(...args: unknown[]): unknown }).stream("x"), { streamed: ["x"] });
+  });
+});
+
+describe("a pass-through middleware", () => {
+  it("uses the provided executor without changing its behavior", () => {
+    const { calls, executor } = recordedExecutor();
+    const middleware = passThroughMiddleware(executor);
+    assert.equal(middleware instanceof PassThroughMiddleware, true);
+    assert.equal(middleware.getState(), "the state");
+    assert.deepEqual(middleware.stream("request"), { streamed: ["request"] });
+
+    const makeMiddleware = createPassThroughMiddleware<TextMessage>();
+    assert.equal(makeMiddleware(executor) instanceof PassThroughMiddleware, true);
+    assert.deepEqual(calls, [["getState"], ["stream", ["request"]]]);
   });
 });
 

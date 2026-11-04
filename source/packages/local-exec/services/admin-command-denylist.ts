@@ -12,7 +12,7 @@ import {
   normalizeAdminCommandDenylistText,
   parseAdminCommandDenylistColonRule,
 } from "../../utils/command-denylist.ts";
-import { matchesCommandGlob } from "../../utils/command-glob.ts";
+import { commandMatchesPattern } from "../../utils/command-glob.ts";
 
 interface CommandLine {
   readonly fullText: string;
@@ -171,9 +171,9 @@ function singleRuleMatches(ruleText: string, commandText: string): boolean {
     const firstSpace = commandText.indexOf(" ");
     const program = firstSpace === -1 ? commandText : commandText.slice(0, firstSpace);
     const argumentsText = firstSpace === -1 ? "" : commandText.slice(firstSpace + 1).trim();
-    if (matchesCommandGlob(colonSpec.executablePattern, program) && matchesCommandGlob(colonSpec.argsPattern, argumentsText)) return true;
+    if (commandMatchesPattern(colonSpec.executablePattern, program) && commandMatchesPattern(colonSpec.argsPattern, argumentsText)) return true;
   }
-  if (ruleText.includes("*")) return matchesCommandGlob(ruleText, commandText);
+  if (ruleText.includes("*")) return commandMatchesPattern(ruleText, commandText);
   return commandText === ruleText || commandText.startsWith(`${ruleText} `);
 }
 

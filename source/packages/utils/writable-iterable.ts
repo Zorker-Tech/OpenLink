@@ -29,7 +29,7 @@ export function createWritableIterable<T>(): WritableIterable<T> {
   const pendingReaders: PendingReader<T>[] = []
   const written = new Array<T>()
   let closed = false
-  let failure: unknown
+  let failure: { readonly reason: unknown } | undefined
   let resolveBackpressure: () => void = () => {}
   let rejectBackpressure: (error: unknown) => void = () => {}
 
@@ -43,11 +43,11 @@ export function createWritableIterable<T>(): WritableIterable<T> {
   }
   let backpressure = newBackpressure()
 
-  const releaseReaders = (result: IteratorResult<T>, error?: unknown): void => {
+  const releaseReaders = (result: IteratorResult<T>, error?: { readonly reason: unknown }): void => {
     while (pendingReaders.length > 0) {
       const reader = pendingReaders.shift()
       if (reader === undefined) continue
-      if (error) reader.reject(error)
+      if (error !== undefined) reader.reject(error.reason)
       else reader.resolve(result)
     }
   }
@@ -61,7 +61,10 @@ export function createWritableIterable<T>(): WritableIterable<T> {
 
   return {
     async write(value: T): Promise<void> {
-      if (closed) throw failure ?? new WriteIterableClosedError("WritableIterable is closed")
+      if (closed) {
+        if (failure !== undefined) throw failure.reason
+        throw new WriteIterableClosedError("WritableIterable is closed")
+      }
       const reader = pendingReaders.shift()
       if (reader !== undefined) {
         reader.resolve({ done: false, value })
@@ -76,9 +79,9 @@ export function createWritableIterable<T>(): WritableIterable<T> {
     throw(error: unknown): void {
       if (closed) return
       closed = true
-      failure = error
+      failure = { reason: error }
       failBackpressure(error)
-      releaseReaders({ done: true, value: undefined }, error)
+      releaseReaders({ done: true, value: undefined }, failure)
     },
     close(): void {
       if (closed) return
@@ -96,15 +99,19 @@ export function createWritableIterable<T>(): WritableIterable<T> {
           backpressure = newBackpressure()
           const buffered = written.shift()
           if (buffered !== undefined) return Promise.resolve({ done: false, value: buffered })
-          if (closed) return failure ? Promise.reject(failure) : Promise.resolve({ done: true, value: undefined })
+          if (closed) {
+            return failure === undefined
+              ? Promise.resolve({ done: true, value: undefined })
+              : Promise.reject(failure.reason)
+          }
           return new Promise((resolve, reject) => pendingReaders.push({ resolve, reject }))
         },
         throw(error: unknown): Promise<IteratorResult<T>> {
           closed = true
-          failure = error
+          failure = { reason: error }
           written.length = 0
           failBackpressure(error)
-          releaseReaders({ done: true, value: undefined }, error)
+          releaseReaders({ done: true, value: undefined }, failure)
           return Promise.resolve({ done: true, value: undefined })
         },
         return(): Promise<IteratorResult<T>> {

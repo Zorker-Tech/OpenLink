@@ -1,104 +1,91 @@
-/**
- * Recording what each stage of a transport did.
- *
- * Each stage is recorded with how long it took and whether it failed, and what is kept is bounded, so a slow or broken
- * connection can be read back without the record growing without limit.
- */
-import type { Clock } from "../../host/extensions/scheduling.ts";
+import { createSendEchoLedger } from "./transport-stage-echo-ledger.ts"
+import { createBoundedReportForwarder } from "./transport-stage-egress.ts"
+import type { StageTrace, TransportIdentity, TransportStageRecorderOptions, TransportStageReport } from "./transport-stage-recorder-contracts.ts"
 
-export const SSE_ECHO_STAGE = "echo-coordinator-sse";
-export const MAX_IN_FLIGHT_TRANSPORT_REPORTS = 64;
-export const PENDING_SEND_ECHO_MAX = 64;
-export const PENDING_SEND_ECHO_TTL_MS = 120_000;
+export type { TransportIdentity, TransportStageEgress, TransportStageReport } from "./transport-stage-recorder-contracts.ts"
 
-export interface TransportIdentity {
-  readonly accountSlot: string;
-  readonly clientNonce?: string | null;
-  readonly traceparent?: string | null;
+export const SSE_ECHO_STAGE = "echo-coordinator-sse"
+export const MAX_IN_FLIGHT_TRANSPORT_REPORTS = 64
+export const PENDING_SEND_ECHO_MAX = 64
+export const PENDING_SEND_ECHO_TTL_MS = 120_000
+
+const INERT_STAGE = { complete() {}, fail() {} }
+const INERT_TRACE: StageTrace = { beginStage: () => INERT_STAGE, markStage() {} }
+
+function reportOf(
+  identity: { readonly accountSlot: string; readonly clientNonce: string },
+  stage: string,
+  attempt: number,
+  traceparent: string | null,
+  startEpochMs: number,
+  durationMs: number,
+  isError: boolean,
+): TransportStageReport {
+  return { ...identity, stage, attempt, traceparent, startEpochMs, durationMs, isError }
 }
 
-export interface TransportStageReport {
-  readonly accountSlot: string;
-  readonly clientNonce: string;
-  readonly stage: string;
-  readonly attempt: number;
-  readonly traceparent: string | null;
-  readonly startEpochMs: number;
-  readonly durationMs: number;
-  readonly isError: boolean;
-}
+export function createTransportStageRecorder(options: TransportStageRecorderOptions) {
+  const { clock, egress } = options
+  const forward = createBoundedReportForwarder(MAX_IN_FLIGHT_TRANSPORT_REPORTS)
+  const reportStage = (report: TransportStageReport) => forward(() => egress.reportTransportStage(report))
+  const echoes = createSendEchoLedger({
+    clock,
+    maximumEntries: PENDING_SEND_ECHO_MAX,
+    lifetimeMs: PENDING_SEND_ECHO_TTL_MS,
+    onEcho: (identity, traceparent) => reportStage(reportOf(
+      identity,
+      SSE_ECHO_STAGE,
+      0,
+      traceparent,
+      clock.now(),
+      0,
+      false,
+    )),
+  })
 
-export interface TransportStageEgress {
-  reportTransportStage(report: TransportStageReport): Promise<unknown>;
-  reportGatewayCommandSpan(report: unknown): Promise<unknown>;
-  reportGatewayReachability(report: unknown): Promise<unknown>;
-  reportGatewayDnsDiagnostic(report: unknown): Promise<unknown>;
-}
+  function beginSend(identity: TransportIdentity): StageTrace {
+    const { accountSlot, clientNonce, traceparent } = identity
+    if (clientNonce == null || clientNonce === "") return INERT_TRACE
 
-const INERT_STAGE = { complete() {}, fail() {} };
-const INERT_TRACE = { beginStage: () => INERT_STAGE, markStage() {} };
+    const requestIdentity = { accountSlot, clientNonce }
+    const sampledTraceparent = traceparent == null || traceparent === "" ? null : traceparent
+    if (sampledTraceparent !== null) echoes.arm(requestIdentity, sampledTraceparent)
 
-function sendKeyOf(key: { readonly accountSlot: string; readonly clientNonce: string }): string {
-  return `${key.accountSlot}\0${key.clientNonce}`;
-}
+    return {
+      beginStage(stage: string, attempt: number) {
+        const startEpochMs = clock.now()
+        const startedAt = clock.monotonicNow()
+        let finished = false
 
-export function createTransportStageRecorder(options: { readonly clock: Clock; readonly egress: TransportStageEgress }) {
-  const { clock, egress } = options;
-  let inFlightReports = 0;
-  const forward = (dispatch: () => Promise<unknown>) => {
-    if (inFlightReports >= MAX_IN_FLIGHT_TRANSPORT_REPORTS) return;
-    inFlightReports += 1;
-    const settle = () => { inFlightReports -= 1; };
-    try { void dispatch().then(settle, settle); }
-    catch { settle(); }
-  };
-  const forwardStage = (report: TransportStageReport) => forward(() => egress.reportTransportStage(report));
-  const pendingEchoes = new Map<string, { traceparent: string; armedAtMonotonicMs: number }>();
-  const armEcho = (key: { accountSlot: string; clientNonce: string }, traceparent: string) => {
-    const nowMonotonicMs = clock.monotonicNow();
-    for (const [armedKey, pending] of pendingEchoes) {
-      if (nowMonotonicMs - pending.armedAtMonotonicMs > PENDING_SEND_ECHO_TTL_MS) pendingEchoes.delete(armedKey);
-    }
-    if (pendingEchoes.size >= PENDING_SEND_ECHO_MAX) {
-      const oldest = pendingEchoes.keys().next().value;
-      if (oldest !== undefined) pendingEchoes.delete(oldest);
-    }
-    pendingEchoes.set(sendKeyOf(key), { traceparent, armedAtMonotonicMs: nowMonotonicMs });
-  };
-  return {
-    beginSend(identity: TransportIdentity) {
-      const { accountSlot, clientNonce, traceparent } = identity;
-      if (clientNonce == null || clientNonce === "") return INERT_TRACE;
-      const sampledTraceparent = traceparent == null || traceparent === "" ? null : traceparent;
-      if (sampledTraceparent != null) armEcho({ accountSlot, clientNonce }, sampledTraceparent);
-      return {
-        beginStage(stage: string, attempt: number) {
-          const startEpochMs = clock.now();
-          const startMonotonicMs = clock.monotonicNow();
-          let settled = false;
-          const settle = (isError: boolean) => {
-            if (settled) return;
-            settled = true;
-            forwardStage({ accountSlot, clientNonce, stage, attempt, traceparent: sampledTraceparent, startEpochMs, durationMs: clock.monotonicNow() - startMonotonicMs, isError });
-          };
-          return { complete: () => settle(false), fail: () => settle(true) };
-        },
-        markStage(stage: string, attempt: number) {
-          forwardStage({ accountSlot, clientNonce, stage, attempt, traceparent: sampledTraceparent, startEpochMs: clock.now(), durationMs: 0, isError: false });
+        const settle = (isError: boolean) => {
+          if (finished) return
+          finished = true
+          reportStage(reportOf(
+            requestIdentity,
+            stage,
+            attempt,
+            sampledTraceparent,
+            startEpochMs,
+            clock.monotonicNow() - startedAt,
+            isError,
+          ))
         }
-      };
-    },
-    recordSendEcho(key: { readonly accountSlot: string; readonly clientNonce: string }) {
-      const armedKey = sendKeyOf(key);
-      const pending = pendingEchoes.get(armedKey);
-      if (pending == null) return;
-      pendingEchoes.delete(armedKey);
-      forwardStage({ accountSlot: key.accountSlot, clientNonce: key.clientNonce, stage: SSE_ECHO_STAGE, attempt: 0, traceparent: pending.traceparent, startEpochMs: clock.now(), durationMs: 0, isError: false });
-    },
-    recordTransportStage: forwardStage,
-    recordGatewayCommandSpan(report: unknown) { forward(() => egress.reportGatewayCommandSpan(report)); },
-    recordGatewayReachability(report: unknown) { forward(() => egress.reportGatewayReachability(report)); },
-    recordGatewayDnsDiagnostic(report: unknown) { forward(() => egress.reportGatewayDnsDiagnostic(report)); }
-  };
-}
+        return { complete: () => settle(false), fail: () => settle(true) }
+      },
+      markStage(stage: string, attempt: number) {
+        reportStage(reportOf(requestIdentity, stage, attempt, sampledTraceparent, clock.now(), 0, false))
+      },
+    }
+  }
 
+  return {
+    beginSend,
+    recordSendEcho(identity: { readonly accountSlot: string; readonly clientNonce: string }) {
+      echoes.consume(identity)
+    },
+    recordTransportStage: reportStage,
+    recordGatewayCommandSpan(report: unknown) { forward(() => egress.reportGatewayCommandSpan(report)) },
+    recordGatewayReachability(report: unknown) { forward(() => egress.reportGatewayReachability(report)) },
+    recordGatewayDnsDiagnostic(report: unknown) { forward(() => egress.reportGatewayDnsDiagnostic(report)) },
+  }
+}

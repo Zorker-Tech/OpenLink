@@ -4,9 +4,7 @@
  * What the agent was asked for, what it changed and what it reported are gathered into the review's turnContext, bounded in
  * how much travels, so a review can judge work that happened on another machine.
  */
-import { Struct } from "@bufbuild/protobuf";
 import { createHash } from "node:crypto";
-import { SmartModeRiskTarget } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
 import {
   fingerprintSlateAutoReviewTarget,
   type SlateAutoReviewController,
@@ -21,6 +19,7 @@ import {
 } from "./slate-auto-review-summaries.ts";
 import { buildProjectPermissionsContext } from "./slate-computer-auto-review.ts";
 import type { InstructionPermissions } from "./slate-subagent-auto-review.ts";
+import { createSlateAutoReviewRiskTarget, type SlateAutoReviewRiskTarget } from "./auto-review-classifier-contracts.ts";
 
 export const SLATE_CLOUD_AGENT_CLASSIFIER_TARGET_ACTION = "slate_cloud_agent";
 export const SLATE_CLOUD_AGENT_CLASSIFIER_ERROR_REASON =
@@ -129,7 +128,7 @@ export function buildSlateCloudAgentReviewTarget(
 }
 
 /** The arguments a cloud-agent review is classified on, as the classifier reads them. */
-function cloudAgentArguments(target: CloudAgentReviewTarget, reviewOptions: { readonly personalInstructions?: InstructionPermissions; readonly userAutoRunInstructions?: InstructionPermissions; readonly projectAutoRunInstructions?: InstructionPermissions }) {
+function cloudAgentArguments(target: CloudAgentReviewTarget, reviewOptions: { readonly personalInstructions?: InstructionPermissions; readonly userAutoRunInstructions?: InstructionPermissions; readonly projectAutoRunInstructions?: InstructionPermissions }): Record<string, unknown> {
   return JSON.parse(JSON.stringify({
     surface: "cloud_agent",
     action: target.action,
@@ -150,7 +149,7 @@ function cloudAgentArguments(target: CloudAgentReviewTarget, reviewOptions: { re
       sha256: picture.sha256,
     })),
     project_permissions: buildProjectPermissionsContext(reviewOptions),
-  }));
+  })) as Record<string, unknown>;
 }
 
 export function buildSlateCloudAgentRiskTarget(input: {
@@ -158,11 +157,11 @@ export function buildSlateCloudAgentRiskTarget(input: {
   readonly personalInstructions?: InstructionPermissions;
   readonly userAutoRunInstructions?: InstructionPermissions;
   readonly projectAutoRunInstructions?: InstructionPermissions;
-}) {
-  return new SmartModeRiskTarget({
-    action: SLATE_CLOUD_AGENT_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(cloudAgentArguments(input.target, input)),
-  });
+}): SlateAutoReviewRiskTarget {
+  return createSlateAutoReviewRiskTarget(
+    SLATE_CLOUD_AGENT_CLASSIFIER_TARGET_ACTION,
+    cloudAgentArguments(input.target, input),
+  );
 }
 
 export interface CloudAgentReviewOptions<Context> {

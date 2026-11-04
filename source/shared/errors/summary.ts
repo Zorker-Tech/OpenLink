@@ -7,8 +7,10 @@
  */
 
 /** The message of whatever was thrown, or its string form when it is not an Error. */
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+export function errorMessage(failure: unknown): string {
+  if (typeof failure === "string") return failure
+  if (failure instanceof Error) return failure.message
+  return String(failure)
 }
 
 function errorCodeOf(error: Error): string | undefined {

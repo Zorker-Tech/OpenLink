@@ -6,20 +6,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { TrackEventsRequest } from "../../source/packages/proto/generated/aiserver/v1/analytics_pb.ts";
+import type { AnalyticsBatchRequest } from "../../source/packages/analytics-client/events.ts";
 import { SLATE_PRODUCT_ANALYTICS_GATE, SlateProductAnalytics, type ProductAnalyticsClient, type ProductAnalyticsGate } from "../../source/shared/node/analytics/product-analytics.ts";
 
 const account = { getAccessToken: async () => "token", getMachineId: async () => "machine" };
 
-/** The events a flush actually sent, as the client saw them, with each value as the wire carries it. */
+/** The Slate event records a flush handed to its client. */
 function eventWorld(options: { hostInBox?: boolean } = {}) {
   const sent: { name: string; props: Record<string, unknown>; timestamp: string }[] = [];
   const client: ProductAnalyticsClient = {
-    trackEvents: async (request: TrackEventsRequest) => {
+    trackEvents: async (request: AnalyticsBatchRequest) => {
       for (const event of request.events) {
-        const props: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(event.eventData)) props[key] = carriedValue(value);
-        sent.push({ name: event.eventName, props, timestamp: String(event.timestamp) });
+        sent.push({ name: event.eventName, props: { ...event.eventData }, timestamp: String(event.timestamp) });
       }
       return {};
     },
@@ -42,15 +40,6 @@ function eventWorld(options: { hostInBox?: boolean } = {}) {
     },
   });
   return { analytics, sent, named, gate };
-}
-
-/** What a property on the wire carries: the oneof as written, however deep it is nested. */
-function carriedValue(value: unknown): unknown {
-  const record = value as Record<string, unknown> | null;
-  if (record == null) return undefined;
-  if ("case" in record) return record["value"];
-  const only = Object.keys(record)[0];
-  return only == null ? undefined : carriedValue(record[only]);
 }
 
 /** A flush has to happen for anything to be sent. */

@@ -9,7 +9,6 @@
 import { createCounter, createHistogram } from "../metrics/index.ts";
 import type { Context } from "../context/context.ts";
 import { createLogger } from "../context/logging.ts";
-import type { McpStateServer } from "../proto/generated/agent/v1/mcp_exec_pb.ts";
 import { readMcpDiskCatalogToolNamesForProjectDir } from "./mcp-disk-catalog-read.ts";
 import { sanitizeServerName } from "./mcp.ts";
 
@@ -34,8 +33,10 @@ const mcpDiscoveryFreshnessSymmetricDifference = createHistogram("mcp.discovery_
   labelNames: ["surface"],
 });
 
-type McpState = { readonly servers: readonly McpStateServer[] };
-export interface McpStateAccessor { getState(ctx: Context): Promise<McpState> }
+export interface DiskMcpTool { readonly toolName: string }
+export interface DiskMcpServer { readonly serverIdentifier: string; readonly tools: readonly DiskMcpTool[] }
+export interface DiskMcpState { readonly servers: readonly DiskMcpServer[] }
+export interface McpStateAccessor { getState(ctx: Context): Promise<DiskMcpState> }
 type DiskCatalogReader = typeof readMcpDiskCatalogToolNamesForProjectDir;
 
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -96,9 +97,9 @@ async function checkDiskFreshness(input: {
   readonly projectDir: string;
   readonly sanitizedServerFolder: string;
   readonly readDiskCatalog: DiskCatalogReader;
-  readonly mcpState?: McpState;
+  readonly mcpState?: DiskMcpState;
 }): Promise<void> {
-  let mcpState = input.mcpState;
+    let mcpState = input.mcpState;
   if (mcpState === undefined) {
     try { mcpState = await input.mcpStateAccessor.getState(input.ctx); }
     catch (failure) {

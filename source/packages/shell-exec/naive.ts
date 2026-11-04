@@ -67,7 +67,7 @@ export interface DefaultTerminalExecutorOptions {
   readonly shell?: string;
   readonly shellArgs?: readonly string[];
   readonly userTerminalHint?: string;
-  readonly statefulFactories?: Partial<Record<KnownShellExecutor.Zsh | KnownShellExecutor.ZshLight | KnownShellExecutor.Bash | KnownShellExecutor.PowerShell, (executionOptions?: DefaultTerminalExecutorOptions) => Promise<TerminalExecutor>>>;
+  readonly statefulFactories?: Partial<Record<Exclude<KnownShellExecutor, typeof KnownShellExecutor.Naive>, (executionOptions?: DefaultTerminalExecutorOptions) => Promise<TerminalExecutor>>>;
 }
 
 export class NaiveTerminalExecutor implements TerminalExecutor {

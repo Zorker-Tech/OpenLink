@@ -1,114 +1,62 @@
-/**
- * What the platform reports to its analytics service.
- *
- * Each report is described as the event and the properties the service takes, so a caller does not have to know the
- * shape the service wants — only what happened.
- */
-export interface AnalyticsClient {
-  trackEvent(
-    name: string,
-    properties: Record<string, string | number | boolean>,
-  ): void;
-}
+import type {
+  AnalyticsClient,
+  AutomationRunAnalyticsReport,
+  TelemetryService,
+} from "./analytics-service-contracts.ts"
 
-export interface AutomationRunAnalyticsReport {
-  conversationId: string;
-  automationId: string;
-  trigger: string;
-  outcome: string;
-  isGroup: boolean;
-  sentMessageCount?: number | null;
-}
+export type { AnalyticsClient, AutomationRunAnalyticsReport, TelemetryService } from "./analytics-service-contracts.ts"
 
-type ReportMethod = (...args: never[]) => unknown;
+const FORWARDED_METHODS = [
+  "startTurn",
+  "reportToolCallError",
+  "reportToolCallStalled",
+  "reportToolCallStarted",
+  "reportAgentError",
+  "reportBotBlock",
+  "reportDaemonPing",
+  "reportBoxBootStage",
+  "reportExecDaemonRestart",
+  "reportSupervisorRestart",
+  "reportTurnInterrupt",
+  "reportTurnAwait",
+  "reportTurnRetry",
+  "reportUserMessageReceived",
+  "reportClosingSendNudge",
+  "reportSubagentRevival",
+  "reportShellRevival",
+  "reportComputerUseUsage",
+  "reportTtft",
+  "reportSendDispatch",
+  "reportQueueAccepted",
+  "reportQueueDequeued",
+  "reportQueueWatchdog",
+  "reportAckObligation",
+  "reportPendingWake",
+  "reportTurnUsage",
+  "reportTurnEmptyDelivery",
+  "reportJournalOutcome",
+  "reportAutoReviewExpireSweepFailed",
+  "reportAutomationLifecycle",
+  "reportAutomationFireDropped",
+] as const satisfies readonly Exclude<keyof TelemetryService, "reportAutomationRun">[]
 
-/** The exact telemetry surface consumed by the host agent runtime. */
-export interface TelemetryService {
-  startTurn: ReportMethod;
-  reportToolCallError: ReportMethod;
-  reportToolCallStalled: ReportMethod;
-  reportToolCallStarted: ReportMethod;
-  reportAgentError: ReportMethod;
-  reportBotBlock: ReportMethod;
-  reportDaemonPing: ReportMethod;
-  reportBoxBootStage: ReportMethod;
-  reportExecDaemonRestart: ReportMethod;
-  reportSupervisorRestart: ReportMethod;
-  reportTurnInterrupt: ReportMethod;
-  reportTurnAwait: ReportMethod;
-  reportTurnRetry: ReportMethod;
-  reportUserMessageReceived: ReportMethod;
-  reportClosingSendNudge: ReportMethod;
-  reportSubagentRevival: ReportMethod;
-  reportShellRevival: ReportMethod;
-  reportComputerUseUsage: ReportMethod;
-  reportTtft: ReportMethod;
-  reportSendDispatch: ReportMethod;
-  reportQueueAccepted: ReportMethod;
-  reportQueueDequeued: ReportMethod;
-  reportQueueWatchdog: ReportMethod;
-  reportAckObligation: ReportMethod;
-  reportPendingWake: ReportMethod;
-  reportTurnUsage: ReportMethod;
-  reportTurnEmptyDelivery: ReportMethod;
-  reportJournalOutcome: ReportMethod;
-  reportAutoReviewExpireSweepFailed: ReportMethod;
-  reportAutomationLifecycle: ReportMethod;
-  reportAutomationFireDropped: ReportMethod;
-  reportAutomationRun: ReportMethod;
-}
-
-/**
- * Preserve every method explicitly. Class prototype methods are not enumerable,
- * so object spread would silently erase this facade at runtime.
- */
+/** Forward methods explicitly because class prototype members do not appear in object enumeration. */
 export function withAutomationRunAnalytics<T extends TelemetryService>(
   telemetry: T,
   analytics: AnalyticsClient,
-) {
-  const forward = <K extends keyof TelemetryService>(name: K) => {
-    type Method = T[K];
-    return (...args: Parameters<Method>): ReturnType<Method> =>
-      telemetry[name](...args) as ReturnType<Method>;
-  };
+): T {
+  const forward = <Method extends Exclude<keyof TelemetryService, "reportAutomationRun">>(name: Method) => {
+    type OriginalMethod = T[Method]
+    return (...args: Parameters<OriginalMethod>): ReturnType<OriginalMethod> =>
+      telemetry[name](...args) as ReturnType<OriginalMethod>
+  }
+  const forwarded = Object.fromEntries(FORWARDED_METHODS.map((name) => [name, forward(name)]))
   const reportAutomationRun = telemetry.reportAutomationRun as unknown as (
     report: AutomationRunAnalyticsReport,
-  ) => unknown;
+  ) => unknown
 
   return {
-    startTurn: forward("startTurn"),
-    reportToolCallError: forward("reportToolCallError"),
-    reportToolCallStalled: forward("reportToolCallStalled"),
-    reportToolCallStarted: forward("reportToolCallStarted"),
-    reportAgentError: forward("reportAgentError"),
-    reportBotBlock: forward("reportBotBlock"),
-    reportDaemonPing: forward("reportDaemonPing"),
-    reportBoxBootStage: forward("reportBoxBootStage"),
-    reportExecDaemonRestart: forward("reportExecDaemonRestart"),
-    reportSupervisorRestart: forward("reportSupervisorRestart"),
-    reportTurnInterrupt: forward("reportTurnInterrupt"),
-    reportTurnAwait: forward("reportTurnAwait"),
-    reportTurnRetry: forward("reportTurnRetry"),
-    reportUserMessageReceived: forward("reportUserMessageReceived"),
-    reportClosingSendNudge: forward("reportClosingSendNudge"),
-    reportSubagentRevival: forward("reportSubagentRevival"),
-    reportShellRevival: forward("reportShellRevival"),
-    reportComputerUseUsage: forward("reportComputerUseUsage"),
-    reportTtft: forward("reportTtft"),
-    reportSendDispatch: forward("reportSendDispatch"),
-    reportQueueAccepted: forward("reportQueueAccepted"),
-    reportQueueDequeued: forward("reportQueueDequeued"),
-    reportQueueWatchdog: forward("reportQueueWatchdog"),
-    reportAckObligation: forward("reportAckObligation"),
-    reportPendingWake: forward("reportPendingWake"),
-    reportTurnUsage: forward("reportTurnUsage"),
-    reportTurnEmptyDelivery: forward("reportTurnEmptyDelivery"),
-    reportJournalOutcome: forward("reportJournalOutcome"),
-    reportAutoReviewExpireSweepFailed: forward(
-      "reportAutoReviewExpireSweepFailed",
-    ),
-    reportAutomationLifecycle: forward("reportAutomationLifecycle"),
-    reportAutomationFireDropped: forward("reportAutomationFireDropped"),
+    ...forwarded,
     reportAutomationRun: (report: AutomationRunAnalyticsReport) => {
       analytics.trackEvent("slate.automation.run", {
         agent_id: report.conversationId,
@@ -116,11 +64,9 @@ export function withAutomationRunAnalytics<T extends TelemetryService>(
         trigger: report.trigger,
         outcome: report.outcome,
         is_group: report.isGroup,
-        ...(report.sentMessageCount != null
-          ? { sent_message_count: report.sentMessageCount }
-          : {}),
-      });
-      return reportAutomationRun(report);
+        ...(report.sentMessageCount == null ? {} : { sent_message_count: report.sentMessageCount }),
+      })
+      return reportAutomationRun(report)
     },
-  };
+  } as unknown as T
 }

@@ -50,10 +50,10 @@ function flowWorld(options: { plugins?: SlateMarketplacePlugin[]; includesPrivat
       if (options.fetchFails === true) throw new Error("the marketplace is down");
       return { plugins: answered, includesPrivateMarketplaces: options.includesPrivate ?? true };
     },
-    requireAccountWriter: () => ({
+    catalogInstallPort: {
       installPlugin: async (request: unknown) => void installs.push(request),
       updatePluginInstall: async (request: unknown) => void updates.push(request),
-    }),
+    },
     reloadServers: async () => void reloads.push("reloaded"),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
@@ -92,7 +92,7 @@ describe("the catalog the flow keeps", () => {
         asked.push(credential ?? "signed out");
         return { plugins: [plugin("1")], includesPrivateMarketplaces: credential != null };
       },
-      requireAccountWriter: () => ({ installPlugin: async () => {}, updatePluginInstall: async () => {} }),
+      catalogInstallPort: { installPlugin: async () => {}, updatePluginInstall: async () => {} },
       reloadServers: async () => {},
     });
     // Signed out: the private marketplaces are not part of the answer, and the listing is kept.
@@ -122,7 +122,7 @@ describe("the catalog the flow keeps", () => {
       fetchMarketplace: async () => {
         throw new Error("the marketplace went away");
       },
-      requireAccountWriter: () => ({ installPlugin: async () => {}, updatePluginInstall: async () => {} }),
+      catalogInstallPort: { installPlugin: async () => {}, updatePluginInstall: async () => {} },
       reloadServers: async () => {},
     });
     assert.equal(await flaky.getCatalog(token).then(() => "answered", () => "refused"), "refused");
@@ -131,7 +131,7 @@ describe("the catalog the flow keeps", () => {
       getMachineId: async () => "machine-1",
       bestEffortToken: async () => "token",
       fetchMarketplace: async () => ({ plugins: [plugin("1")], includesPrivateMarketplaces: true }),
-      requireAccountWriter: () => ({ installPlugin: async () => {}, updatePluginInstall: async () => {} }),
+      catalogInstallPort: { installPlugin: async () => {}, updatePluginInstall: async () => {} },
       reloadServers: async () => {},
     });
     const first = await held.getCatalog(token);
@@ -155,12 +155,12 @@ describe("installing from the catalog", () => {
     assert.deepEqual([world.installs, world.reloads], [[], []]);
     // A value for each is an install: the plugin id as the backend takes it, the values as they were given.
     assert.equal(await world.flow.installEntry({ entryId: "7", values: { token: "t", team: "T" } }, token), undefined);
-    assert.deepEqual(world.installs, [{ pluginId: 7n, variables: { token: "t", team: "T" } }]);
+    assert.deepEqual(world.installs, [{ pluginId: "7", values: { token: "t", team: "T" } }]);
     assert.deepEqual(world.reloads, ["reloaded"]);
     // An install with no values at all asks for none.
     const plain = flowWorld({ plugins: [plugin("3")] });
     await plain.flow.installEntry({ entryId: "3" }, token);
-    assert.deepEqual(plain.installs, [{ pluginId: 3n }]);
+    assert.deepEqual(plain.installs, [{ pluginId: "3" }]);
   });
 
   it("installs without the values when the plugin's team already carries them", async () => {
@@ -168,11 +168,11 @@ describe("installing from the catalog", () => {
     // The caller says the team has them.
     const told = flowWorld({ plugins: needsValues });
     await told.flow.installEntry({ entryId: "7", hasTeamConfiguredVariables: true }, token);
-    assert.deepEqual(told.installs, [{ pluginId: 7n }]);
+    assert.deepEqual(told.installs, [{ pluginId: "7" }]);
     // Or the account's own listing says so, which is the same answer from further away.
     const listed = flowWorld({ plugins: needsValues, effectivePlugins: [{ pluginId: "7", hasTeamConfiguredVariables: true }] });
     await listed.flow.installEntry({ entryId: "7" }, token);
-    assert.deepEqual(listed.installs, [{ pluginId: 7n }]);
+    assert.deepEqual(listed.installs, [{ pluginId: "7" }]);
     // A plugin the listing does not cover, and a listing that could not be read, both ask for the values.
     const other = flowWorld({ plugins: needsValues, effectivePlugins: [{ pluginId: "99", hasTeamConfiguredVariables: true }] });
     await assert.rejects(other.flow.installEntry({ entryId: "7" }, token), /needs a value for Access token/);
@@ -187,7 +187,7 @@ describe("installing from the catalog", () => {
     await assert.rejects(world.flow.updatePluginInstall({ pluginId: "99", values: {} }, token), /Unknown marketplace plugin "99"/);
     await assert.rejects(world.flow.updatePluginInstall({ pluginId: "7", values: {} }, token), /needs a value for Access token/);
     await assert.doesNotReject(world.flow.updatePluginInstall({ pluginId: "7", values: { token: "t" } }, token));
-    assert.deepEqual(world.updates, [{ pluginId: 7n, variables: { token: "t" } }]);
+    assert.deepEqual(world.updates, [{ pluginId: "7", values: { token: "t" } }]);
     assert.deepEqual(world.reloads, ["reloaded"]);
   });
 
@@ -197,7 +197,7 @@ describe("installing from the catalog", () => {
       getMachineId: async () => "machine-1",
       bestEffortToken: async () => "token",
       fetchMarketplace: async () => ({ plugins, includesPrivateMarketplaces: true }),
-      requireAccountWriter: () => ({ installPlugin: async () => {}, updatePluginInstall: async () => {} }),
+      catalogInstallPort: { installPlugin: async () => {}, updatePluginInstall: async () => {} },
       reloadServers: async () => {},
     });
     await world.getCatalog(token);
@@ -210,7 +210,7 @@ describe("installing from the catalog", () => {
     const handed = flowWorld();
     const withResolver = new SlateMcpCatalogFlow({
       getMachineId: async () => "machine-1",
-      requireAccountWriter: () => ({ installPlugin: async () => {}, updatePluginInstall: async () => {} }),
+      catalogInstallPort: { installPlugin: async () => {}, updatePluginInstall: async () => {} },
       reloadServers: async () => {},
       resolveLogo: async (url: string) => `resolved:${url}`,
     });

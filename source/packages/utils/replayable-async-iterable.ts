@@ -8,44 +8,50 @@
  */
 
 export class ReplayableAsyncIterable<T> implements AsyncIterable<T> {
-  private readonly buffer: T[] = []
-  private closed = false
-  private failure: Error | undefined
-  private waiters: Array<() => void> = []
+  private readonly values: T[] = []
+  private ended = false
+  private sourceError: Error | undefined
+  private readonly readers = new Set<() => void>()
 
-  constructor(source: AsyncIterable<T> | Iterable<T>) {
-    void this.consume(source)
+  constructor(input: AsyncIterable<T> | Iterable<T>) {
+    void this.readSource(input)
   }
 
-  private async consume(source: AsyncIterable<T> | Iterable<T>): Promise<void> {
+  private async readSource(input: AsyncIterable<T> | Iterable<T>): Promise<void> {
     try {
-      for await (const value of source) {
-        this.buffer.push(value)
-        this.wakeWaiters()
+      for await (const item of input) {
+        this.values.push(item)
+        this.notifyReaders()
       }
-    } catch (error) {
-      this.failure = error instanceof Error ? error : new Error(String(error))
+    } catch (cause) {
+      this.sourceError = cause instanceof Error ? cause : new Error(String(cause))
     } finally {
-      this.closed = true
-      this.wakeWaiters()
+      this.ended = true
+      this.notifyReaders()
     }
   }
 
-  private wakeWaiters(): void {
-    const waiters = this.waiters
-    this.waiters = []
-    for (const waiter of waiters) waiter()
+  private notifyReaders(): void {
+    const pending = [...this.readers]
+    this.readers.clear()
+    for (const wake of pending) wake()
+  }
+
+  private waitForValue(): Promise<void> {
+    return new Promise((resolve) => this.readers.add(resolve))
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<T> {
-    let index = 0
+    let cursor = 0
     while (true) {
-      while (index < this.buffer.length) yield this.buffer[index++] as T
-      if (this.closed) {
-        if (this.failure !== undefined) throw this.failure
+      while (cursor < this.values.length) {
+        yield this.values[cursor++] as T
+      }
+      if (this.ended) {
+        if (this.sourceError !== undefined) throw this.sourceError
         return
       }
-      await new Promise<void>(resolve => this.waiters.push(resolve))
+      await this.waitForValue()
     }
   }
 }

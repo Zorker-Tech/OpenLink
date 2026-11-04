@@ -8,16 +8,8 @@
  * that believes a search was approved when it was not is worse than one that is told no.
  */
 
-import { AskQuestionRejected, AskQuestionResult } from "../proto/generated/agent/v1/ask_question_tool_pb.ts"
-import type { InteractionQuery, InteractionResponse } from "../proto/generated/agent/v1/agent_pb.ts"
-import { CreatePlanResult, CreatePlanSuccess } from "../proto/generated/agent/v1/create_plan_tool_pb.ts"
-import { PrManagementError, PrManagementResult } from "../proto/generated/agent/v1/pr_management_tool_pb.ts"
-import { ReplaceEnvFailure, ReplaceEnvResult } from "../proto/generated/agent/v1/replace_env_tool_pb.ts"
-import {
-  SetupVmEnvironmentResult,
-  SetupVmEnvironmentSuccess,
-} from "../proto/generated/agent/v1/setup_vm_environment_tool_pb.ts"
 import { Responses } from "./interaction-queries.ts"
+import type { SlateInteractionQuery, SlateInteractionResponse } from "./interaction-queries.ts"
 
 export interface InteractionListenerContext {
   readonly canceled?: boolean
@@ -25,7 +17,7 @@ export interface InteractionListenerContext {
 
 export interface InteractionListener<Context = InteractionListenerContext> {
   sendUpdate(context: Context, update: unknown): Promise<void>
-  query(context: Context, query: InteractionQuery): Promise<InteractionResponse | undefined>
+  query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse | undefined>
   enqueuePostTurnEndedWork?(work: () => Promise<unknown>): void
   flushPostTurnEndedWork?(context: Context): Promise<void>
 }
@@ -39,12 +31,6 @@ export class InteractionListenerStreamClosedError extends Error {
     this.cause = options.cause
     Object.setPrototypeOf(this, new.target.prototype)
   }
-}
-
-function prManagementUnavailable(): PrManagementResult {
-  return new PrManagementResult({
-    result: { case: "error", value: new PrManagementError({ error: "PR management is only available in cloud agents" }) },
-  })
 }
 
 export async function flushPostTurnEndedWork<Context>(
@@ -77,49 +63,44 @@ export class NoopInteractionListener<Context = InteractionListenerContext>
     }))
   }
 
-  async query(_context: Context, query: InteractionQuery): Promise<InteractionResponse> {
-    switch (query.query.case) {
-      case "webSearchRequestQuery":
+  async query(_context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse> {
+    switch (query.kind) {
+      case "web-search":
         return Responses.webSearchApproved(query.id)
-      case "webFetchRequestQuery":
+      case "web-fetch":
         return Responses.webFetchApproved(query.id)
-      case "askQuestionInteractionQuery":
-        return Responses.askQuestion(query.id, new AskQuestionResult({
-          result: {
-            case: "rejected",
-            value: new AskQuestionRejected({ reason: "Questions skipped by user (CLI fallback)" }),
-          },
-        }))
-      case "switchModeRequestQuery":
+      case "ask-question":
+        return Responses.askQuestion(query.id, {
+          decision: "rejected",
+          reason: "Questions skipped by user (CLI fallback)",
+        })
+      case "switch-mode":
         return Responses.switchModeRejected(query.id, "Mode switching not supported in CLI")
-      case "createPlanRequestQuery":
-        return Responses.createPlan(query.id, new CreatePlanResult({
-          result: { case: "success", value: new CreatePlanSuccess() },
-        }))
-      case "setupVmEnvironmentArgs":
-        return Responses.setupVmEnvironment(query.id, new SetupVmEnvironmentResult({
-          result: { case: "success", value: new SetupVmEnvironmentSuccess({}) },
-        }))
-      case "replaceEnvArgs":
-        return Responses.replaceEnv(query.id, new ReplaceEnvResult({
-          result: {
-            case: "failure",
-            value: new ReplaceEnvFailure({
-              errorMessage: "Environment replacement is not supported in this environment",
-              setupLogs: "",
-            }),
-          },
-        }))
-      case "prManagementRequestQuery":
-        return Responses.prManagement(query.id, prManagementUnavailable())
-      case "mcpAuthRequestQuery":
+      case "create-plan":
+        return Responses.createPlan(query.id, { decision: "success" })
+      case "setup-vm-environment":
+        return Responses.setupVmEnvironment(query.id, { decision: "success" })
+      case "replace-environment":
+        return Responses.replaceEnv(query.id, {
+          decision: "failure",
+          errorMessage: "Environment replacement is not supported in this environment",
+          setupLogs: "",
+        })
+      case "pr-management":
+        return Responses.prManagement(query.id, {
+          decision: "error",
+          error: "PR management is only available in cloud agents",
+        })
+      case "mcp-auth":
         return Responses.mcpAuthRejected(query.id, "MCP authentication is not supported in this environment")
-      case "connectScmRequestQuery":
-        return Responses.connectScmRejected(query.id, "Connecting GitHub is not supported in this environment")
-      case "generateImageRequestQuery":
-        return Responses.generateImageApproved(query.id, query.query.value.args?.description)
+      case "connect-scm":
+        return Responses.connectScmRejected(query.id, "Connecting a source-control account is not supported here")
+      case "generate-image": {
+        const payload = query.payload as { readonly description?: string } | undefined
+        return Responses.generateImageApproved(query.id, payload?.description)
+      }
       default:
-        throw new Error("Unhandled interaction query type")
+        throw new Error("Unhandled interaction query type: " + query.kind)
     }
   }
 }

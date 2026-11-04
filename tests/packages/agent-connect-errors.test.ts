@@ -16,7 +16,7 @@ import {
   ToolCallAbortedError,
   ToolErrorClassification,
 } from "../../source/packages/agent/tools/tool-errors.ts";
-import { ErrorDetails, ErrorDetails_Error } from "../../source/packages/proto/generated/aiserver/v1/utils_pb.ts";
+import { ErrorDetails, ErrorDetails_Error } from "../../source/adapters/interop/proto/generated/aiserver/v1/utils_pb.ts";
 
 const named = (name: string, message = "boom") => Object.assign(new Error(message), { name });
 const wrapped = (message: string, cause: unknown) => Object.assign(new Error(message), { cause });

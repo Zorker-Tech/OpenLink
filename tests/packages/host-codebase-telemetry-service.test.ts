@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import { createCodebaseTelemetryService, createSlateCodebaseTelemetryLogger, type CodebaseTelemetryServiceOptions } from "../../source/host/extensions/codebase-telemetry/codebase-telemetry-service.ts";
 import type { CsnapsCodebaseTelemetryAdapter, Logger } from "../../source/host/extensions/codebase-telemetry/codebase-telemetry-adapter.ts";
 import type { TelemetryAuth } from "../../source/host/extensions/codebase-telemetry/privacy-mode.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { DeadlineExceededError, type DeadlinePolicy, type PollingPolicy, type RetryPolicy } from "../../source/host/extensions/scheduling.ts";
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -91,7 +92,7 @@ function serviceWorld(options: { createFails?: boolean; holdCreates?: boolean; h
       created.push(adapter as never);
       return adapter as unknown as CsnapsCodebaseTelemetryAdapter;
     },
-    loadPrivacyMode: async () => 2,
+    loadPrivacyMode: async () => PrivacyMode.NO_TRAINING,
     policies: policies(uses, options.holdRestartDelay === true ? { holdRestartDelay: true } : {}),
     logger: { error: (message: string) => void logs.push(`error:${message}`), warn: (message: string) => void logs.push(`warn:${message}`), info: () => {}, debug: () => {} },
   } as unknown as CodebaseTelemetryServiceOptions);
@@ -266,7 +267,7 @@ describe("the one adapter the service keeps", () => {
       createAdapter: async () => {
         throw new Error("no adapter is started for an account with no credential");
       },
-      loadPrivacyMode: async () => 2,
+      loadPrivacyMode: async () => PrivacyMode.NO_TRAINING,
       policies: slowPolicies,
       logger: { error: () => {}, warn: (message: string) => void logs.push(`warn:${message}`), info: () => {}, debug: () => {} },
     });

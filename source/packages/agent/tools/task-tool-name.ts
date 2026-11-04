@@ -14,9 +14,14 @@ export interface TaskToolModelInfo {
   readonly promptVersion: string
 }
 
+function composerTaskTool(model: TaskToolModelInfo): string | undefined {
+  return model.isComposer1 || model.isComposer15 ? "mcp_task" : undefined
+}
+
+function codexTaskTool(model: TaskToolModelInfo): string | undefined {
+  return isCodexPromptVersion(model.promptVersion) ? "Subagent" : undefined
+}
+
 export function getTaskToolName(parentModelInfo: TaskToolModelInfo): string {
-  const isComposer = parentModelInfo.isComposer1 || parentModelInfo.isComposer15
-  if (isComposer) return "mcp_task"
-  if (isCodexPromptVersion(parentModelInfo.promptVersion)) return "Subagent"
-  return "Task"
+  return composerTaskTool(parentModelInfo) ?? codexTaskTool(parentModelInfo) ?? "Task"
 }

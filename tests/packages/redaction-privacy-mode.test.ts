@@ -3,29 +3,27 @@ import { describe, it } from "node:test";
 
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 
-describe("the privacy modes an account reports", () => {
-  it("are the wire numbers stored in redacted messages", () => {
+describe("Slate privacy modes", () => {
+  it("are semantic string categories", () => {
     assert.deepEqual(PrivacyMode, {
-      UNSPECIFIED: 0,
-      NO_STORAGE: 1,
-      NO_TRAINING: 2,
-      USAGE_DATA_TRAINING_ALLOWED: 3,
-      USAGE_CODEBASE_TRAINING_ALLOWED: 4,
+      UNSPECIFIED: "unspecified",
+      NO_STORAGE: "no-storage",
+      NO_TRAINING: "no-training",
+      USAGE_DATA_TRAINING_ALLOWED: "usage-data-training-allowed",
+      USAGE_CODEBASE_TRAINING_ALLOWED: "usage-codebase-training-allowed",
     });
     assert.deepEqual(Object.entries(PrivacyMode), [
-      ["UNSPECIFIED", 0],
-      ["NO_STORAGE", 1],
-      ["NO_TRAINING", 2],
-      ["USAGE_DATA_TRAINING_ALLOWED", 3],
-      ["USAGE_CODEBASE_TRAINING_ALLOWED", 4],
+      ["UNSPECIFIED", "unspecified"],
+      ["NO_STORAGE", "no-storage"],
+      ["NO_TRAINING", "no-training"],
+      ["USAGE_DATA_TRAINING_ALLOWED", "usage-data-training-allowed"],
+      ["USAGE_CODEBASE_TRAINING_ALLOWED", "usage-codebase-training-allowed"],
     ]);
   });
 
-  it("numbers every mode once, in the order they arrived in", () => {
-    const numbers = Object.values(PrivacyMode);
-    assert.deepEqual(numbers, [0, 1, 2, 3, 4]);
-    assert.equal(new Set(numbers).size, numbers.length);
-    for (const number of numbers) assert.equal(Number.isInteger(number), true);
+  it("gives every policy a unique value", () => {
+    const values = Object.values(PrivacyMode);
+    assert.equal(new Set(values).size, values.length);
   });
 
   it("is a plain table, not a frozen one", () => {

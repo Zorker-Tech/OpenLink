@@ -4,40 +4,44 @@
  * The helper lives beside the host bundle unless an override names it, and the capability it reports says where it is
  * and whether it can be executed at all.
  */
-import { accessSync, constants, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { accessSync, constants, statSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
-/** Where a helper with this name lives, when a build lays it out beside the host bundle. */
-const HELPER_SEGMENTS: readonly string[] = ["extensions", "codebase-telemetry", "csnaps"];
+const bundledHelperPath = ["extensions", "codebase-telemetry", "csnaps"] as const
 
-/** The directory the host bundle was loaded from, in a build that has a `__dirname` to name. */
 function hostBundleDirectory(): string {
-  return typeof __dirname === "string" ? __dirname : dirname(fileURLToPath(import.meta.url));
+  if (typeof __dirname === "string") return __dirname
+  return dirname(fileURLToPath(import.meta.url))
 }
 
 export function csnapsPath(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.SLATE_CSNAPS_BIN?.trim();
-  if (override) return override;
-  return join(hostBundleDirectory(), ...HELPER_SEGMENTS);
+  const configuredPath = env.SLATE_CSNAPS_BIN?.trim()
+  return configuredPath || join(hostBundleDirectory(), ...bundledHelperPath)
 }
 
-export function csnapsAvailability(env: NodeJS.ProcessEnv = process.env):
+type UnavailableReason = "missing" | "not-file" | "not-executable"
+type Capability =
   | { readonly available: true; readonly executablePath: string }
-  | { readonly available: false; readonly executablePath: string; readonly reason: "missing" | "not-file" | "not-executable" } {
-  const executablePath = csnapsPath(env);
-  // Three questions in the order they can be answered: is it there, is it a file, may it be run.
-  let isFile: boolean;
+  | { readonly available: false; readonly executablePath: string; readonly reason: UnavailableReason }
+
+function unavailable(executablePath: string, reason: UnavailableReason): Capability {
+  return { available: false, executablePath, reason }
+}
+
+export function csnapsAvailability(env: NodeJS.ProcessEnv = process.env): Capability {
+  const executablePath = csnapsPath(env)
+  let targetIsFile: boolean
   try {
-    isFile = statSync(executablePath).isFile();
+    targetIsFile = statSync(executablePath).isFile()
   } catch {
-    return { available: false, executablePath, reason: "missing" };
+    return unavailable(executablePath, "missing")
   }
-  if (!isFile) return { available: false, executablePath, reason: "not-file" };
+  if (!targetIsFile) return unavailable(executablePath, "not-file")
   try {
-    accessSync(executablePath, constants.X_OK);
+    accessSync(executablePath, constants.X_OK)
   } catch {
-    return { available: false, executablePath, reason: "not-executable" };
+    return unavailable(executablePath, "not-executable")
   }
-  return { available: true, executablePath };
+  return { available: true, executablePath }
 }

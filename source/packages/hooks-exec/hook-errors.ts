@@ -1,12 +1,4 @@
-/**
- * What an agent is told when a hook blocks it, or when hooks cannot be evaluated at all.
- *
- * Hooks are user- or team-configured commands that decide whether an action may run, so a block is
- * deliberate policy rather than a failure — and the agent has to be told that plainly, or it will
- * spend the turn looking for a way around it. The opposite case is a hook that cannot run: there the
- * action is blocked too, but because nothing could decide, which is why the message says so and points
- * at where hooks are configured.
- */
+/** Error identities and user-facing explanations for hooks that deny or fail to decide. */
 
 export class HookDeniedError extends Error {
   readonly failureType = "permission_denied"
@@ -32,43 +24,44 @@ export class FailClosedError extends Error {
   }
 }
 
-/** Runs an action whose failure to evaluate must block it: hooks decide, so silence is a refusal. */
-export async function withFailClosed<T>(
-  fn: () => T | Promise<T>,
-  actionDescription: string | null | undefined,
-): Promise<T> {
-  try {
-    return await fn()
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    throw new FailClosedError(createHookFailClosedMessage(actionDescription, errorMessage), error)
-  }
-}
-
 export const HOOK_SETTINGS_HINT = "To view or modify configured hooks, go to Slate Settings > Hooks."
 export const HOOK_DENIAL_AGENT_NOTE = "Agent note: Do not suggest workarounds to the blocked tool."
 
+export async function withFailClosed<T>(
+  evaluate: () => T | Promise<T>,
+  actionDescription: string | null | undefined,
+): Promise<T> {
+  try {
+    const decision = await evaluate()
+    return decision
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    throw new FailClosedError(createHookFailClosedMessage(actionDescription, detail), cause)
+  }
+}
+
 export function appendAgentDenialNote(message: string): string {
-  if (message.includes(HOOK_DENIAL_AGENT_NOTE)) return message
-  return `${message}\n\n${HOOK_DENIAL_AGENT_NOTE}`
+  return message.includes(HOOK_DENIAL_AGENT_NOTE)
+    ? message
+    : `${message}\n\n${HOOK_DENIAL_AGENT_NOTE}`
 }
 
 export function createHookDenialMessage(
   actionDescription: string,
   userMessage: string | null | undefined,
 ): string {
-  const base = userMessage
+  const decision = userMessage
     ? `${actionDescription} was blocked by a hook: ${userMessage}`
     : `${actionDescription} was blocked by a hook.`
-  return appendAgentDenialNote(`${base}\n\n${HOOK_SETTINGS_HINT}`)
+  return appendAgentDenialNote(`${decision}\n\n${HOOK_SETTINGS_HINT}`)
 }
 
 export function createHookFailClosedMessage(
   actionDescription: string | null | undefined,
   errorMessage: string | null | undefined,
 ): string {
-  const action = actionDescription ?? "Action"
-  const errorDetail = errorMessage ? `: ${errorMessage}` : "."
-  const base = `${action} was blocked because a configured hook failed to execute${errorDetail}\n\nThis is a safety measure (fail-closed) - when hooks cannot be evaluated, the action is blocked to prevent potentially unsafe operations.`
-  return `${base}\n\n${HOOK_SETTINGS_HINT}`
+  const subject = actionDescription ?? "Action"
+  const cause = errorMessage ? `: ${errorMessage}` : "."
+  const explanation = `${subject} was blocked because a configured hook failed to execute${cause}\n\nThis is a safety measure (fail-closed) - when hooks cannot be evaluated, the action is blocked to prevent potentially unsafe operations.`
+  return `${explanation}\n\n${HOOK_SETTINGS_HINT}`
 }

@@ -18,30 +18,17 @@
  */
 
 import {
-  AgentConversationTurnStructure,
-  ConversationPlan,
-  ConversationStateStructure,
-  ConversationStep,
-  ConversationSummary,
-  ConversationSummaryArchive,
-  ConversationTurn,
-  ConversationTurnStructure,
-  FileState,
-  ShellCommand,
-  ShellOutput,
-  UserMessage,
-} from "../proto/generated/agent/v1/agent_pb.ts"
-import { TodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
-import {
-  ProtoSerde,
   fromHex,
   toHex,
   utf8Serde,
-  type BinaryMessage,
-  type BinaryMessageType,
   type BlobType,
   type Serde,
 } from "../agent-kv/serde.ts"
+export {
+  conversationStateStructureSerde,
+  conversationTurnStructureSerde,
+} from "../../adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
+export { createRedactedProtoSerde } from "../../adapters/interop/agent/redacted-protobuf-serde-adapter.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
 import {
   fromRedactedCoreMessage,
@@ -64,7 +51,6 @@ function encodeJsonValue(_key: string, entryValue: unknown): unknown {
   }
   return entryValue
 }
-
 function decodeJsonValue(_key: string, entryValue: unknown): unknown {
   if (
     entryValue && typeof entryValue === "object" &&
@@ -183,52 +169,3 @@ class RedactedCoreMessageSerde implements Serde<RedactedCoreMessage> {
 export function createRedactedCoreMessageSerde(privacySetting: PrivacyMode): Serde<RedactedCoreMessage> {
   return new RedactedCoreMessageSerde(privacySetting)
 }
-
-/** The same arrangement for protocol messages: plain on disk, redacted in memory. */
-class RedactedProtoSerde<Plain extends BinaryMessage, Redacted> implements Serde<Redacted> {
-  constructor(
-    private readonly messageType: BinaryMessageType<Plain>,
-    private readonly toRedacted: (entryValue: Plain, privacySetting: PrivacyMode) => Redacted,
-    private readonly fromRedacted: (entryValue: Redacted, purpose: PrivacyCapability) => Plain,
-    private readonly privacySetting: PrivacyMode,
-  ) {}
-
-  serialize(entryValue: Redacted): Uint8Array {
-    const wireMessage = this.fromRedacted(entryValue, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    return wireMessage.toBinary()
-  }
-
-  deserialize(storedBytes: Uint8Array): Redacted {
-    const wireMessage = this.messageType.fromBinary(storedBytes)
-    return this.toRedacted(wireMessage, this.privacySetting)
-  }
-
-  getBlobType(): BlobType {
-    return { kind: "proto", typeName: this.messageType.typeName }
-  }
-}
-
-export function createRedactedProtoSerde<Plain extends BinaryMessage, Redacted>(
-  messageType: BinaryMessageType<Plain>,
-  toRedacted: (entryValue: Plain, privacySetting: PrivacyMode) => Redacted,
-  fromRedacted: (entryValue: Redacted, purpose: PrivacyCapability) => Plain,
-  privacySetting: PrivacyMode,
-): Serde<Redacted> {
-  return new RedactedProtoSerde(messageType, toRedacted, fromRedacted, privacySetting)
-}
-
-// The conversation types this module knows how to store, each as its own protocol serializer. The two a
-// caller reads a whole conversation through are exported; the rest are here so the set is in one place.
-const conversationTurnSerde = new ProtoSerde(ConversationTurn)
-const todoItemSerde = new ProtoSerde(TodoItem)
-const agentConversationTurnStructureSerde = new ProtoSerde(AgentConversationTurnStructure)
-const userMessageSerde = new ProtoSerde(UserMessage)
-const conversationStepSerde = new ProtoSerde(ConversationStep)
-export const conversationStateStructureSerde = new ProtoSerde(ConversationStateStructure)
-export const conversationTurnStructureSerde = new ProtoSerde(ConversationTurnStructure)
-const conversationSummarySerde = new ProtoSerde(ConversationSummary)
-const conversationSummaryArchiveSerde = new ProtoSerde(ConversationSummaryArchive)
-const conversationPlanSerde = new ProtoSerde(ConversationPlan)
-const shellCommandSerde = new ProtoSerde(ShellCommand)
-const shellOutputSerde = new ProtoSerde(ShellOutput)
-const fileStateSerde = new ProtoSerde(FileState)

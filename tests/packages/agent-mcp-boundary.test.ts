@@ -4,22 +4,24 @@ import assert from "node:assert/strict"
 import {
   MCP_AUTH_VIRTUAL_TOOL_NAME,
   buildMcpCallSchemas,
-  indexMcpDescriptors,
 } from "../../source/packages/agent/tools/mcp/mcp-call-options.ts"
+import { indexInteropMcpDescriptors } from "../../source/adapters/interop/agent/mcp-descriptor-index-adapter.ts"
 import {
   McpExecToolNotFoundError,
   McpInvalidArgsToolDefinitionReminderError,
   McpPermissionDeniedError,
   McpServerDoesNotExistError,
   McpWithoutReadToolDefinitionError,
-  convertExecSuccessToToolSuccess,
   createMcpTransportError,
-  createMcpToolCall,
-  createVirtualMcpAuthSuccessResult,
   getWrappedMcpErrorClassification,
   isInvalidMcpArgumentsError,
-  renderMcpToolResult,
 } from "../../source/packages/agent/tools/mcp/mcp-result-boundary.ts"
+import {
+  convertExecSuccessToToolSuccess,
+  createMcpToolCall,
+  createVirtualMcpAuthSuccessResult,
+  renderMcpToolResult,
+} from "../../source/adapters/interop/agent/mcp-result-adapter.ts"
 import {
   McpApproved,
   McpError,
@@ -32,12 +34,12 @@ import {
   McpTextContent,
   McpToolNotFound,
   McpToolResultContentItem,
-} from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
-import { McpToolError, McpToolResult } from "../../source/packages/proto/generated/agent/v1/mcp_tool_pb.ts"
-import { McpDescriptor, McpFileSystemOptions, McpMetaToolOptions, McpToolDescriptor } from "../../source/packages/proto/generated/agent/v1/mcp_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { McpToolError, McpToolResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_tool_pb.ts"
+import { McpDescriptor, McpFileSystemOptions, McpMetaToolOptions, McpToolDescriptor } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
 import { CustomToolCallError, ToolCallRejectedError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { ASK_MODE_MODEL_ERROR } from "../../source/packages/agent/tools/tool-support.ts"
-import type { OutputLocation } from "../../source/packages/proto/generated/agent/v1/utils_pb.ts"
+import type { OutputLocation } from "../../source/adapters/interop/proto/generated/agent/v1/utils_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // which servers and tools a session can call
@@ -58,10 +60,10 @@ test("the descriptors the session can call come from the meta tool or from the f
   const fromMeta = new McpMetaToolOptions({ enabled: true, mcpDescriptors: [descriptor("meta-server", [{ toolName: "search" }])] })
   const fromFiles = new McpFileSystemOptions({ enabled: true, workspaceProjectDir: "/repo", mcpDescriptors: [descriptor("file-server", [{ toolName: "search" }])] })
 
-  const viaMeta = indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: fromMeta, mcpFileSystemOptions: fromFiles })
+  const viaMeta = indexInteropMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: fromMeta, mcpFileSystemOptions: fromFiles })
   assert.deepEqual(Array.from(viaMeta.serverDescriptors.keys()), ["meta-server"])
 
-  const viaFiles = indexMcpDescriptors({ mcpMetaToolEnabled: false, mcpMetaToolOptions: fromMeta, mcpFileSystemOptions: fromFiles })
+  const viaFiles = indexInteropMcpDescriptors({ mcpMetaToolEnabled: false, mcpMetaToolOptions: fromMeta, mcpFileSystemOptions: fromFiles })
   assert.deepEqual(Array.from(viaFiles.serverDescriptors.keys()), ["file-server"])
 })
 
@@ -70,10 +72,10 @@ test("a session that cannot sign in does not offer the sign-in tool", () => {
     enabled: true,
     mcpDescriptors: [descriptor("server-a", [{ toolName: MCP_AUTH_VIRTUAL_TOOL_NAME }, { toolName: "search" }])],
   })
-  const withoutAuth = indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options })
+  const withoutAuth = indexInteropMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options })
   assert.deepEqual(withoutAuth.serverDescriptors.get("server-a")?.tools.map(tool => tool.toolName), ["search"])
 
-  const withAuth = indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options, allowInteractiveMcpAuth: true })
+  const withAuth = indexInteropMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options, allowInteractiveMcpAuth: true })
   assert.deepEqual(withAuth.serverDescriptors.get("server-a")?.tools.map(tool => tool.toolName), [MCP_AUTH_VIRTUAL_TOOL_NAME, "search"])
 })
 
@@ -85,7 +87,7 @@ test("a tool's definition file is remembered under its server and name", () => {
       { toolName: "fetch" },
     ])],
   })
-  const index = indexMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options })
+  const index = indexInteropMcpDescriptors({ mcpMetaToolEnabled: true, mcpMetaToolOptions: options })
   assert.deepEqual(Array.from(index.toolDefinitionPaths.entries()), [["server-a:search", "/repo/mcps/server-a/search.md"]])
 })
 

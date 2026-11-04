@@ -1,0 +1,115 @@
+// anyrun.v1 — anyrun/v1/snapshot messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package anyrun.v1;
+
+import "anyrun/v1/common.proto";
+import "anyrun/v1/persisted_dev_container.proto";
+
+message Snapshot {
+  string snapshot_id = 1 [json_name = "snapshotId"];
+  uint32 resource_version = 2 [json_name = "resourceVersion"];
+  string name = 3 [json_name = "name"];
+  map<string, string> labels = 4 [json_name = "labels"];
+  uint64 creation_timestamp = 5 [json_name = "creationTimestamp"];
+  optional uint64 deletion_timestamp = 6 [json_name = "deletionTimestamp"];
+  string tenant_id = 7 [json_name = "tenantId"];
+  string pod_id = 8 [json_name = "podId"];
+  .anyrun.v1.SnapshotState state = 9 [json_name = "state"];
+  optional .anyrun.v1.ImageMetadata image_metadata = 10 [json_name = "imageMetadata"];
+  .anyrun.v1.BlobStorageFormat blob_storage_format = 11 [json_name = "blobStorageFormat"];
+  optional uint64 deletion_duration_ms = 12 [json_name = "deletionDurationMs"];
+  optional .anyrun.v1.PersistedDevContainerConfig pod_config = 13 [json_name = "podConfig"];
+  optional uint64 archive_timestamp = 14 [json_name = "archiveTimestamp"];
+  optional uint64 archive_duration_ms = 15 [json_name = "archiveDurationMs"];
+  optional string node_machine_type = 16 [json_name = "nodeMachineType"];
+  optional .anyrun.v1.ResourceRequests resource_requests = 17 [json_name = "resourceRequests"];
+  optional .anyrun.v1.ResourceLimits resource_limits = 18 [json_name = "resourceLimits"];
+  optional string cpu_baseline_id = 19 [json_name = "cpuBaselineId"];
+  optional .anyrun.v1.SnapshotUsageStats usage_stats = 20 [json_name = "usageStats"];
+  optional uint64 object_size_bytes = 21 [json_name = "objectSizeBytes"];
+  optional .anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 22 [json_name = "v4RootArchiveOptions"];
+  optional string failure_reason = 23 [json_name = "failureReason"];
+}
+
+enum SnapshotCategory {
+  SNAPSHOT_CATEGORY_EXPLICIT_FORMAT = 0;
+  SNAPSHOT_CATEGORY_FULL_VM = 1;
+}
+
+message SnapshotCollection {
+  repeated .anyrun.v1.Snapshot items = 1 [json_name = "items"];
+  optional string next_cursor = 2 [json_name = "nextCursor"];
+}
+
+message SnapshotExtraDriveFile {
+  string drive_id = 1 [json_name = "driveId"];
+  repeated .anyrun.v1.SnapshotFileChunk file_chunks = 2 [json_name = "fileChunks"];
+  uint64 file_size = 3 [json_name = "fileSize"];
+}
+
+message SnapshotFileChunk {
+  uint64 blob_begin = 1 [json_name = "blobBegin"];
+  uint64 blob_end = 2 [json_name = "blobEnd"];
+  uint64 file_begin = 3 [json_name = "fileBegin"];
+  uint64 file_end = 4 [json_name = "fileEnd"];
+  string hash = 5 [json_name = "hash"];
+}
+
+message SnapshotMemoryCell {
+  uint64 blob_begin = 1 [json_name = "blobBegin"];
+  uint64 blob_end = 2 [json_name = "blobEnd"];
+}
+
+message SnapshotMemoryCellAttributes {
+  uint64 chunk_index = 1 [json_name = "chunkIndex"];
+  optional bytes hash = 2 [json_name = "hash"];
+}
+
+enum SnapshotMemoryHashAlgorithm {
+  SNAPSHOT_MEMORY_HASH_ALGORITHM_UNSPECIFIED = 0;
+  SNAPSHOT_MEMORY_HASH_ALGORITHM_SHA256 = 1;
+  SNAPSHOT_MEMORY_HASH_ALGORITHM_BLAKE3 = 2;
+}
+
+message SnapshotMemoryPrefetchHint {
+  uint32 version = 1 [json_name = "version"];
+  bytes payload = 2 [json_name = "payload"];
+}
+
+enum SnapshotState {
+  SNAPSHOT_STATE_UNSPECIFIED = 0;
+  SNAPSHOT_STATE_CREATING = 1;
+  SNAPSHOT_STATE_READY = 2;
+  SNAPSHOT_STATE_FAILED = 3;
+  SNAPSHOT_STATE_FINALIZING = 4;
+}
+
+message SnapshotVmSnapshotV1Metadata {
+  repeated .anyrun.v1.SnapshotFileChunk rootfs_file_chunks = 1 [json_name = "rootfsFileChunks"];
+  uint64 rootfs_file_size = 2 [json_name = "rootfsFileSize"];
+  optional .anyrun.v1.SnapshotFileChunk memory_file_chunk = 3 [json_name = "memoryFileChunk"];
+  optional .anyrun.v1.SnapshotFileChunk state_file_chunk = 4 [json_name = "stateFileChunk"];
+  optional .anyrun.v1.SnapshotFileChunk kernel_file_chunk = 5 [json_name = "kernelFileChunk"];
+  optional .anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 6 [json_name = "devContainerMetadata"];
+  repeated .anyrun.v1.SnapshotExtraDriveFile extra_drive_files = 7 [json_name = "extraDriveFiles"];
+}
+
+message SnapshotVmSnapshotV2Metadata {
+  repeated .anyrun.v1.SnapshotFileChunk rootfs_file_chunks = 1 [json_name = "rootfsFileChunks"];
+  uint64 rootfs_file_size = 2 [json_name = "rootfsFileSize"];
+  repeated .anyrun.v1.SnapshotMemoryCell memory_cells = 3 [json_name = "memoryCells"];
+  uint64 memory_file_size = 4 [json_name = "memoryFileSize"];
+  uint64 memory_cell_size = 5 [json_name = "memoryCellSize"];
+  optional .anyrun.v1.SnapshotFileChunk state_file_chunk = 6 [json_name = "stateFileChunk"];
+  optional .anyrun.v1.SnapshotFileChunk kernel_file_chunk = 7 [json_name = "kernelFileChunk"];
+  optional .anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 8 [json_name = "devContainerMetadata"];
+  repeated .anyrun.v1.SnapshotExtraDriveFile extra_drive_files = 9 [json_name = "extraDriveFiles"];
+  optional .anyrun.v1.SnapshotMemoryPrefetchHint memory_prefetch_hint = 10 [json_name = "memoryPrefetchHint"];
+  .anyrun.v1.SnapshotMemoryHashAlgorithm memory_hash_algorithm = 11 [json_name = "memoryHashAlgorithm"];
+  repeated .anyrun.v1.SnapshotMemoryCellAttributes memory_cell_attrs = 12 [json_name = "memoryCellAttrs"];
+}

@@ -13,10 +13,9 @@
  * session actually has instead of a name the model would have to guess at.
  */
 
-import type { SimulatedMsgReason } from "../proto/generated/agent/v1/agent_pb.ts"
-import type { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
+import type { GitActionPromptInput } from "./git-action-prompt-contracts.ts"
 import { synthesizeGitActionPrompt } from "./git-action-prompt.ts"
-import { synthesizeMultitaskActionPrompt } from "./multitask-action-prompt.ts"
+import { synthesizeMultitaskActionPrompt, type MultitaskActionKind } from "./multitask-action-prompt.ts"
 import { getTaskToolName, type TaskToolModelInfo } from "./tools/task-tool-name.ts"
 
 export interface SimulatedMessagePromptText {
@@ -25,32 +24,20 @@ export interface SimulatedMessagePromptText {
 }
 
 export interface RenderSimulatedMessagePromptsArgs {
-  readonly selectedContext: SelectedContext
-  readonly simulatedMsgReason: SimulatedMsgReason
+  readonly gitAction?: GitActionPromptInput | undefined
+  readonly multitaskAction?: MultitaskActionKind | undefined
   readonly modelInfo?: TaskToolModelInfo | undefined
-  readonly environmentParamForSubagent?: boolean | undefined
-  readonly babysitV2Prompt?: boolean | undefined
-  readonly enablePrCreationForgeGuidance?: boolean | undefined
 }
 
 export function renderSimulatedMessagePrompts({
-  selectedContext,
-  simulatedMsgReason,
+  gitAction,
+  multitaskAction,
   modelInfo,
-  environmentParamForSubagent,
-  babysitV2Prompt,
-  enablePrCreationForgeGuidance,
 }: RenderSimulatedMessagePromptsArgs): SimulatedMessagePromptText[] {
   const prompts = [
-    synthesizeGitActionPrompt({
-      selectedContext,
-      simulatedMsgReason,
-      environmentParamForSubagent: environmentParamForSubagent === true,
-      babysitV2Prompt: babysitV2Prompt === true,
-      enablePrCreationForgeGuidance: enablePrCreationForgeGuidance === true,
-    }),
+    gitAction === undefined ? undefined : synthesizeGitActionPrompt(gitAction),
     synthesizeMultitaskActionPrompt(
-      simulatedMsgReason,
+      multitaskAction,
       modelInfo !== undefined ? { taskToolName: getTaskToolName(modelInfo) } : {},
     ),
   ].filter(prompt => prompt !== undefined)

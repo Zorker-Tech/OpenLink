@@ -17,10 +17,13 @@
 
 import type { Context } from "../context/context.ts"
 import { createLogger } from "../context/logging.ts"
-import { createSpan, getSpanContextData, type SerializableSpanContext } from "../context/telemetry.ts"
+import {
+  createSpan,
+  getSpanContextData,
+  type SerializableSpanContext,
+} from "../context/telemetry.ts"
 import { createCounter } from "../metrics/index.ts"
-import { ExecClientMessage, ExecServerMessage, SpanContext } from "../proto/generated/agent/v1/exec_pb.ts"
-import type { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
+import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
 import { getFirstItem } from "../utils/async-iterator.ts"
 
 const logger = createLogger("agent-exec/executor")
@@ -30,20 +33,9 @@ const hookAdditionalContextDelivered = createCounter("agent_exec.hook_additional
   labelNames: ["hook_event_name"],
 })
 
-/** The trace context travels as a message; a state that is absent is left absent, not sent as undefined. */
-function toSpanContextMessage(spanContextData: SerializableSpanContext | undefined): SpanContext | undefined {
-  if (spanContextData === undefined) return undefined
-  return new SpanContext({
-    traceId: spanContextData.traceId,
-    spanId: spanContextData.spanId,
-    traceFlags: spanContextData.traceFlags,
-    ...(spanContextData.traceState !== undefined ? { traceState: spanContextData.traceState } : {}),
-  })
-}
-
 export interface ExecutorOptions {
   execId?: string | undefined
-  hookContextCollector?: HookAdditionalContext[]
+  hookContextCollector?: HookContextEntry[]
   deliverAgentStoreConflictNotices?: boolean
   enableAgentStoreConflictNotices?: boolean
 }
@@ -56,94 +48,127 @@ export interface StreamExecutor<Args, Event> {
   execute(ctx: Context, args: Args, options?: ExecutorOptions): AsyncIterable<Event>
 }
 
-export interface RemoteExecManager {
-  createExecInstance(ctx: Context, createMessage: (id: number) => ExecServerMessage): AsyncIterable<ExecClientMessage>
+export interface ExecutorWireRequestOptions {
+  readonly execId?: string | undefined
+  readonly spanContext?: SerializableSpanContext | undefined
+  readonly collectHookContext: boolean
 }
 
-export class ExecutorResource<Args, Result> implements Executor<Args, Result> {
+export interface ExecutorDecodedValue<Value> {
+  readonly value: Value | undefined
+  readonly hookContexts?: readonly HookContextEntry[] | undefined
+}
+
+type ExecRequestEncoder<Request> = {
+  bivarianceHack(id: number): Request
+}["bivarianceHack"]
+
+export interface RemoteExecManager<Request = any, Response = any> {
+  createExecInstance(
+    ctx: Context,
+    createMessage: ExecRequestEncoder<Request>,
+  ): AsyncIterable<Response>
+}
+
+export class ExecutorResource<
+  Args,
+  Result,
+  Request = any,
+  Response = any,
+> implements Executor<Args, Result> {
   constructor(
     private readonly execManager: RemoteExecManager,
-    private readonly serializeArgs: (id: number, args: Args) => Pick<ExecServerMessage, "id" | "message">,
-    private readonly deserializeResult: (message: ExecClientMessage) => Result | undefined,
+    private readonly serializeArgs: (
+      id: number,
+      args: Args,
+      options: ExecutorWireRequestOptions,
+    ) => Request,
+    private readonly deserializeResult: (message: Response) => ExecutorDecodedValue<Result>,
   ) {}
 
   async execute(parentCtx: Context, args: Args, options?: ExecutorOptions): Promise<Result> {
     using span = createSpan(parentCtx.withName("ExecutorResource.execute"))
     const ctx = span.ctx
     if (options?.execId !== undefined) span.span.setAttribute("exec.id", options.execId)
-    const spanContext = toSpanContextMessage(getSpanContextData(ctx))
-    const messageStream = this.execManager.createExecInstance(ctx, (id) => {
-      const serialized = this.serializeArgs(id, args)
-      return new ExecServerMessage({
-        id: serialized.id,
-        message: serialized.message,
-        ...(options?.execId !== undefined ? { execId: options.execId } : {}),
-        ...(spanContext !== undefined ? { spanContext } : {}),
-        acceptHookAdditionalContexts: options?.hookContextCollector !== undefined,
-      })
-    })
+    const wireOptions: ExecutorWireRequestOptions = {
+        ...(options?.execId === undefined ? {} : { execId: options.execId }),
+        spanContext: getSpanContextData(ctx),
+        collectHookContext: options?.hookContextCollector !== undefined,
+    }
+    const messageStream = this.execManager.createExecInstance(
+      ctx,
+      id => this.serializeArgs(id, args, wireOptions),
+    ) as AsyncIterable<Response>
     const initial = await getFirstItem(messageStream)
     if (initial === undefined) throw new Error("No exec result")
     let result = initial.firstItem
     let rest = initial.rest
-    const collect = (message: ExecClientMessage): void => {
-      const carriers = message.hookAdditionalContexts
-      if (options?.hookContextCollector !== undefined && carriers.length > 0) {
-        options.hookContextCollector.push(...carriers)
-        for (const carrier of carriers) {
-          hookAdditionalContextDelivered.increment(ctx, 1, { hook_event_name: carrier.hookEventName })
+    const collect = (decoded: ExecutorDecodedValue<Result>): void => {
+      const entries = decoded.hookContexts
+      if (options?.hookContextCollector !== undefined && entries !== undefined && entries.length > 0) {
+        options.hookContextCollector.push(...entries)
+        for (const entry of entries) {
+          hookAdditionalContextDelivered.increment(ctx, 1, { hook_event_name: entry.event })
         }
       }
     }
-    collect(result)
-    let value = this.deserializeResult(result)
-    while (value === undefined) {
+    let decoded = this.deserializeResult(result)
+    collect(decoded)
+    while (decoded.value === undefined) {
       const next = await getFirstItem(rest)
       if (next === undefined) throw new Error("No result value")
       result = next.firstItem
       rest = next.rest
-      collect(result)
-      value = this.deserializeResult(result)
+      decoded = this.deserializeResult(result)
+      collect(decoded)
     }
     // The answer is in hand; whatever the host still sends is context, so keep reading without holding
     // the caller up, and let the stream ending mid-drain stay a non-event.
     void (async () => {
       try {
-        for await (const message of rest) collect(message)
+        for await (const message of rest) collect(this.deserializeResult(message))
       } catch (error) {
         logger.info(ctx, "Ignoring exec stream shutdown during detached drain", { error })
       }
     })().catch(() => {})
-    return value
+    return decoded.value
   }
 }
 
-export class StreamExecutorResource<Args, Event> implements StreamExecutor<Args, Event> {
+export class StreamExecutorResource<
+  Args,
+  Event,
+  Request = any,
+  Response = any,
+> implements StreamExecutor<Args, Event> {
   constructor(
     private readonly execManager: RemoteExecManager,
-    private readonly serializeArgs: (id: number, args: Args) => Pick<ExecServerMessage, "id" | "message">,
-    private readonly deserializeStream: (message: ExecClientMessage) => Event | undefined,
+    private readonly serializeArgs: (
+      id: number,
+      args: Args,
+      options: ExecutorWireRequestOptions,
+    ) => Request,
+    private readonly deserializeStream: (message: Response) => ExecutorDecodedValue<Event>,
   ) {}
 
   async *execute(parentCtx: Context, args: Args, options?: ExecutorOptions): AsyncIterable<Event> {
     using span = createSpan(parentCtx.withName("StreamExecutorResource.execute"))
     const ctx = span.ctx
-    const spanContext = toSpanContextMessage(getSpanContextData(ctx))
-    const messageStream = this.execManager.createExecInstance(ctx, (id) => {
-      const serialized = this.serializeArgs(id, args)
-      return new ExecServerMessage({
-        id: serialized.id,
-        message: serialized.message,
-        ...(options?.execId !== undefined ? { execId: options.execId } : {}),
-        ...(spanContext !== undefined ? { spanContext } : {}),
-        acceptHookAdditionalContexts: options?.hookContextCollector !== undefined || options?.deliverAgentStoreConflictNotices === true,
-      })
-    })
+    const wireOptions: ExecutorWireRequestOptions = {
+        ...(options?.execId === undefined ? {} : { execId: options.execId }),
+        spanContext: getSpanContextData(ctx),
+        collectHookContext: options?.hookContextCollector !== undefined || options?.deliverAgentStoreConflictNotices === true,
+    }
+    const messageStream = this.execManager.createExecInstance(
+      ctx,
+      id => this.serializeArgs(id, args, wireOptions),
+    ) as AsyncIterable<Response>
     for await (const message of messageStream) {
-      const carriers = message.hookAdditionalContexts
-      if (options?.hookContextCollector !== undefined && carriers.length > 0) options.hookContextCollector.push(...carriers)
-      const value = this.deserializeStream(message)
-      if (value !== undefined) yield value
+      const decoded = this.deserializeStream(message)
+      if (options?.hookContextCollector !== undefined && decoded.hookContexts !== undefined && decoded.hookContexts.length > 0) {
+        options.hookContextCollector.push(...decoded.hookContexts)
+      }
+      if (decoded.value !== undefined) yield decoded.value
     }
   }
 }

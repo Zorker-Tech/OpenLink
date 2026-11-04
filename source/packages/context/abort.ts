@@ -5,21 +5,21 @@
  * all — so every consumer that reports them needs the same small normalization.
  */
 
-export type AbortReasonDescription =
+export type AbortReasonSummary =
   | { readonly abortReasonType: "error"; readonly abortReasonName: string; readonly abortReasonMessage: string }
   | { readonly abortReasonType: "string"; readonly abortReasonMessage: string }
   | { readonly abortReasonType: "undefined" }
   | { readonly abortReasonType: string }
 
-export function getAbortReasonInfo(reason: unknown): AbortReasonDescription {
-  if (reason instanceof Error) {
-    return { abortReasonType: "error", abortReasonName: reason.name, abortReasonMessage: reason.message }
+export function summarizeAbortReason(value: unknown): AbortReasonSummary {
+  if (value instanceof Error) {
+    return { abortReasonType: "error", abortReasonName: value.name, abortReasonMessage: value.message }
   }
-  if (typeof reason === "string") {
-    return { abortReasonType: "string", abortReasonMessage: reason }
+  if (typeof value === "string") {
+    return { abortReasonType: "string", abortReasonMessage: value }
   }
-  if (reason === undefined) {
+  if (value === undefined) {
     return { abortReasonType: "undefined" }
   }
-  return { abortReasonType: typeof reason }
+  return { abortReasonType: typeof value }
 }

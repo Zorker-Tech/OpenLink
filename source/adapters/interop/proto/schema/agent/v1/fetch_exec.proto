@@ -1,0 +1,32 @@
+// agent.v1 — agent/v1/fetch_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message FetchArgs {
+  string url = 1 [json_name = "url"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message FetchResult {
+  oneof result {
+    .agent.v1.FetchSuccess success = 1 [json_name = "success"];
+    .agent.v1.FetchError error = 2 [json_name = "error"];
+  }
+}
+
+message FetchSuccess {
+  string url = 1 [json_name = "url"];
+  string content = 2 [json_name = "content"];
+  int32 status_code = 3 [json_name = "statusCode"];
+  string content_type = 4 [json_name = "contentType"];
+}
+
+message FetchError {
+  string url = 1 [json_name = "url"];
+  string error = 2 [json_name = "error"];
+}

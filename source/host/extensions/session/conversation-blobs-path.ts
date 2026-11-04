@@ -1,15 +1,8 @@
-/**
- * Where a conversation's blobs live.
- *
- * One file beside the session's store holds them, and the path is built here so that every reader and writer agrees on
- * where it is.
- */
+/** Resolve the companion blob database next to a conversation's primary store. */
 import { dirname, join } from "node:path";
-
 import { CONVERSATION_BLOBS_FILENAME } from "./session-paths.ts";
 
-/**
- */
-export function conversationBlobsPath(dbPath: string): string {
-  return join(dirname(dbPath), CONVERSATION_BLOBS_FILENAME);
+export function resolveConversationBlobStorePath(primaryStorePath: string): string {
+  const containingDirectory = dirname(primaryStorePath);
+  return join(containingDirectory, CONVERSATION_BLOBS_FILENAME);
 }

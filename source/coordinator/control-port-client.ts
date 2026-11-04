@@ -1,118 +1,68 @@
-/**
- * The client the coordinator uses to reach the host's control port.
- *
- * A call carries the session it belongs to, is bounded by its own timeout, and a connection that was refused or reset
- * is retried rather than reported as the host being gone.
- */
 import {
   COORDINATOR_PROTOCOL_VERSION,
   parseCoordinatorFrame,
   type CoordinatorFrame,
-  type CoordinatorReplyOutcome
-} from "../shared/rpc/coordinator-port.ts";
+} from "../shared/rpc/coordinator-port.ts"
+import { createControlPortCallLedger } from "./control-port-call-ledger.ts"
+import { createControlPortLifecycle } from "./control-port-client-lifecycle.ts"
+import type { CoordinatorEndpoint } from "./control-port-client-contracts.ts"
 
-export class ControlPortCallError extends Error {
-  constructor(readonly code: string, message: string) {
-    super(`${code}: ${message}`);
-    this.name = "ControlPortCallError";
-  }
-}
-
-export interface CoordinatorEndpoint {
-  post(frame: CoordinatorFrame): void;
-  close(): void;
-}
-
-export type ControlPortSettlement =
-  | { readonly outcome: "shutdown-requested" | "port-closed" }
-  | { readonly outcome: "protocol-breach"; readonly detail: string };
+export { ControlPortCallError } from "./control-port-client-contracts.ts"
+export type { CoordinatorEndpoint, ControlPortSettlement } from "./control-port-client-contracts.ts"
 
 export function createControlPortClient(endpoint: CoordinatorEndpoint) {
-  let phase: "serving" | "settled" = "serving";
-  let readyObserved = false;
-  let nextRequestId = 0;
-  const pending = new Map<string, { resolve(value: unknown): void; reject(error: unknown): void }>();
-  const { promise: settled, resolve: resolveSettled } = Promise.withResolvers<ControlPortSettlement>();
+  const send = (frame: CoordinatorFrame) => endpoint.post(frame)
+  const calls = createControlPortCallLedger(send)
+  const lifecycle = createControlPortLifecycle({
+    expectedVersion: COORDINATOR_PROTOCOL_VERSION,
+    post: send,
+    close: () => endpoint.close(),
+    rejectPending: calls.rejectAll,
+  })
 
-  const settle = (settlement: ControlPortSettlement) => {
-    if (phase === "settled") return;
-    phase = "settled";
-    for (const call of pending.values()) call.reject(new Error(`control port settled (${settlement.outcome}) before the reply`));
-    pending.clear();
-    endpoint.close();
-    resolveSettled(settlement);
-  };
-
-  const breach = (detail: string) => {
-    if (phase === "settled") return;
-    endpoint.post({ kind: "lifecycle", phase: "shutdown", reason: "protocol-error", detail });
-    settle({ outcome: "protocol-breach", detail });
-  };
-
-  endpoint.post({ kind: "lifecycle", phase: "hello", protocolVersion: COORDINATOR_PROTOCOL_VERSION });
-
-  const call = (method: string, args: unknown): Promise<unknown> => {
-    if (phase === "settled") return Promise.reject(new Error(`control port settled before ${method} was posted`));
-    nextRequestId += 1;
-    const requestId = `c-${nextRequestId}`;
-    const outcome = new Promise<unknown>((resolve, reject) => pending.set(requestId, { resolve, reject }));
-    endpoint.post({ kind: "request", requestId, method, args });
-    return outcome;
-  };
+  send({ kind: "lifecycle", phase: "hello", protocolVersion: COORDINATOR_PROTOCOL_VERSION })
 
   const commands = new Proxy({} as Record<string, (args: unknown) => Promise<unknown>>, {
     get(_target, property) {
-      if (typeof property !== "string") return undefined;
-      return (args: unknown) => call(property, args);
-    }
-  });
+      if (typeof property !== "string") return undefined
+      return (args: unknown) => lifecycle.isServing
+        ? calls.invoke(property, args)
+        : Promise.reject(new Error(`control port settled before ${property} was posted`))
+    },
+  })
 
-  const settleReply = (requestId: string, outcome: CoordinatorReplyOutcome) => {
-    const waiting = pending.get(requestId);
-    if (waiting == null) return;
-    pending.delete(requestId);
-    if (outcome.status === "ok") waiting.resolve(outcome.value);
-    else waiting.reject(new ControlPortCallError(outcome.failure.code, outcome.failure.message));
-  };
-
-  const handleFrame = (frame: CoordinatorFrame) => {
+  function acceptFrame(frame: CoordinatorFrame): void {
     if (frame.kind === "lifecycle" && frame.phase === "shutdown") {
-      settle(frame.reason === "requested"
-        ? { outcome: "shutdown-requested" }
-        : { outcome: "protocol-breach", detail: frame.detail ?? "peer reported a breach" });
-      return;
+      lifecycle.peerShutdown(frame)
+      return
     }
     if (frame.kind === "lifecycle" && frame.phase === "ready") {
-      if (readyObserved) { breach("ready repeated on a live control session"); return; }
-      if (frame.protocolVersion !== COORDINATOR_PROTOCOL_VERSION) {
-        breach(`ready.protocolVersion ${frame.protocolVersion} is not the supported ${COORDINATOR_PROTOCOL_VERSION}`);
-        return;
-      }
-      readyObserved = true;
-      return;
+      lifecycle.ready(frame.protocolVersion)
+      return
     }
-    if (frame.kind === "reply") { settleReply(frame.requestId, frame.outcome); return; }
-    breach(`main posted a client-direction ${frame.kind} frame`);
-  };
+    if (frame.kind === "reply") {
+      calls.receive(frame.requestId, frame.outcome)
+      return
+    }
+    lifecycle.breach(`main posted a client-direction ${frame.kind} frame`)
+  }
 
   return {
     commands,
     postEvent(family: string, payload: unknown): void {
-      if (phase !== "settled") endpoint.post({ kind: "event", family, payload });
+      if (lifecycle.isServing) send({ kind: "event", family, payload })
     },
     handleMessage(value: unknown): void {
-      if (phase === "settled") return;
-      const intake = parseCoordinatorFrame(value);
-      if (!intake.accepted) { breach(intake.rejection.detail); return; }
-      handleFrame(intake.frame);
+      if (!lifecycle.isServing) return
+      const parsed = parseCoordinatorFrame(value)
+      if (!parsed.accepted) {
+        lifecycle.breach(parsed.rejection.detail)
+        return
+      }
+      acceptFrame(parsed.frame)
     },
-    handlePortClosed(): void { settle({ outcome: "port-closed" }); },
-    shutdown(): void {
-      if (phase === "settled") return;
-      endpoint.post({ kind: "lifecycle", phase: "shutdown", reason: "requested", detail: null });
-      settle({ outcome: "shutdown-requested" });
-    },
-    settled
-  };
+    handlePortClosed: lifecycle.peerClosed,
+    shutdown: lifecycle.shutdown,
+    settled: lifecycle.settled,
+  }
 }
-

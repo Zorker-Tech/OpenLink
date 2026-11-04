@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { AUTOMATION_FIRE_DROPPED_EVENT, AUTOMATION_LATE_FIRE_THRESHOLD_MS, AUTOMATION_RUN_EVENT, automationFireDroppedTelemetry, automationRunTelemetry } from "../../source/host/telemetry/automation-fire-telemetry.ts";
+import { SLATE_AUTOMATION_FIRE_DROPPED_EVENT, SLATE_AUTOMATION_LATE_FIRE_THRESHOLD_MS, SLATE_AUTOMATION_RUN_EVENT, projectDroppedAutomationFire, projectAutomationRunTelemetry } from "../../source/host/telemetry/automation-fire-telemetry.ts";
 import { createRequestCoalescer } from "../../source/host/boxes/box-store-sync/request-coalescer.ts";
 import { getLocalExecDaemonConnectionPath, getLocalExecDaemonCredentialPath, NO_SUPERVISOR_HEARTBEAT, parseLocalExecConnection } from "../../source/host/local-exec/local-exec-daemon-protocol.ts";
 import { LEGACY_SLATE_BOX_REFERENCE_DIR, SLATE_BOX_REFERENCE_DIR } from "../../source/host/runner/box-reference-docs.ts";
@@ -19,12 +19,12 @@ after(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 describe("an automation firing", () => {
   it("reports a run and a dropped fire under our own event names", () => {
-    assert.equal(AUTOMATION_RUN_EVENT, "slate.automation.run");
-    assert.equal(AUTOMATION_FIRE_DROPPED_EVENT, "slate.automation.fire_dropped");
-    assert.equal(AUTOMATION_LATE_FIRE_THRESHOLD_MS, 300_000);
-    const run = automationRunTelemetry({ conversationId: "c1", automationId: "a1", trigger: "schedule", outcome: "fired", lateByMs: 10 } as never);
+    assert.equal(SLATE_AUTOMATION_RUN_EVENT, "slate.automation.run");
+    assert.equal(SLATE_AUTOMATION_FIRE_DROPPED_EVENT, "slate.automation.fire_dropped");
+    assert.equal(SLATE_AUTOMATION_LATE_FIRE_THRESHOLD_MS, 300_000);
+    const run = projectAutomationRunTelemetry({ conversationId: "c1", automationId: "a1", trigger: "schedule", outcome: "fired", isGroup: false, durationMs: 0, latenessMs: 10 });
     assert.equal(run.event, "slate.automation.run");
-    const dropped = automationFireDroppedTelemetry({ conversationId: "c1", automationId: "a1", trigger: "event", reason: "disabled" } as never);
+    const dropped = projectDroppedAutomationFire({ conversationId: "c1", trigger: "event", reason: "disabled" });
     assert.equal(dropped.event, "slate.automation.fire_dropped");
     assert.equal(typeof dropped.level, "string");
   });

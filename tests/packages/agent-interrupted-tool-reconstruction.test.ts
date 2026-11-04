@@ -12,9 +12,9 @@ import {
   InterruptedPendingToolCallResolutions,
   TaskError,
   TaskResult,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { ShellResult, ShellSuccess } from "../../source/packages/proto/generated/agent/v1/shell_exec_pb.ts"
-import { toRedactedInterruptedPendingToolCallResolution } from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { ShellResult, ShellSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { toRedactedInterruptedPendingToolCallResolution } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -170,7 +170,7 @@ test("a recorded shell result is rendered as the result the model reads", () => 
   })
   const tool = toolMessageOf(harness([assistantMessage([toolCall("call-1", "Shell")])], { resolutions }))
   const entry = tool.content[0] as Record<string, unknown>
-  assert.match(String(entry.result), /Background command started successfully/)
+  assert.match(String(entry.result), /A background command has started/)
   // The folder the session uses fills in the one the recorded result did not carry.
   assert.match(String(entry.result), /\/repo\/\.slate\/projects\/workspace-1\/terminals\/3\.txt/)
   // A recorded success is not an error, so it is not repeated among the raw error messages.
@@ -184,7 +184,7 @@ test("a recorded shell failure is reported as an error", () => {
     value: new ShellResult({ result: { case: "rejected", value: {} } as never }),
   })
   const tool = toolMessageOf(harness([assistantMessage([toolCall("call-1", "Shell")])], { resolutions }))
-  assert.match(String((tool.content[0] as Record<string, unknown>).result), /^Rejected: /)
+  assert.match(String((tool.content[0] as Record<string, unknown>).result), /^Declined: /)
   assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, true)
 })
 
@@ -239,7 +239,7 @@ test("every appended message is redacted for storage", () => {
   const messages = harness([assistantMessage([toolCall("call-1", "Read")])])
   assert.equal(messages.length, 2)
   for (const message of messages) {
-    assert.equal(typeof (message as { _privacyMode?: unknown })._privacyMode, "number")
+    assert.equal(typeof (message as { _privacyMode?: unknown })._privacyMode, "string")
   }
 })
 

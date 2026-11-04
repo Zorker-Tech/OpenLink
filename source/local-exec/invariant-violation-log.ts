@@ -1,15 +1,14 @@
-/**
- * A line written when the local-exec daemon finds its own invariant broken.
- *
- * The line is one JSON object with the time, the name that was violated and where it happened, so a violation that
- * only ever happens in the field can be reconstructed from the log.
- */
-export const DAEMON_INVARIANT_VIOLATION_EVENT = "slate.local_exec_daemon.invariant_violation";
+/** Record the local executor's invariant failures in the host log format. */
+export const LOCAL_EXEC_DAEMON_INVARIANT_EVENT_NAME = "slate.local_exec_daemon.invariant_violation";
 
-export function writeInvariantViolationLog(
-  report: { readonly name: string },
-  write: (line: string) => void = (line) => { void process.stdout.write(line); }
-): void {
-  write(`${JSON.stringify({ event: DAEMON_INVARIANT_VIOLATION_EVENT, name: report.name })}\n`);
+export interface LocalExecInvariantReport {
+  readonly name: string;
 }
 
+export function writeLocalExecInvariantRecord(
+  report: LocalExecInvariantReport,
+  emitLine: (line: string) => void = (line) => { void process.stdout.write(line); },
+): void {
+  const record = { event: LOCAL_EXEC_DAEMON_INVARIANT_EVENT_NAME, name: report.name };
+  emitLine(JSON.stringify(record) + "\n");
+}

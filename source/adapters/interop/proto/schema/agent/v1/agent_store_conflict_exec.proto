@@ -1,0 +1,51 @@
+// agent.v1 — agent/v1/agent_store_conflict_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message AgentStoreConflictArgs {
+  optional .agent.v1.AgentStoreConflictCursor cursor = 1 [json_name = "cursor"];
+  optional bool advance = 2 [json_name = "advance"];
+}
+
+message AgentStoreConflictCursor {
+  string journal_epoch = 1 [json_name = "journalEpoch"];
+  uint64 seq = 2 [json_name = "seq"];
+  string last_event_id = 3 [json_name = "lastEventId"];
+}
+
+message AgentStoreConflictResult {
+  oneof result {
+    .agent.v1.AgentStoreConflictSuccess success = 1 [json_name = "success"];
+    .agent.v1.AgentStoreConflictError error = 2 [json_name = "error"];
+  }
+}
+
+message AgentStoreConflictSuccess {
+  repeated .agent.v1.AgentStoreConflictEvent events = 1 [json_name = "events"];
+  optional .agent.v1.AgentStoreConflictCursor next_cursor = 2 [json_name = "nextCursor"];
+  bool gap = 3 [json_name = "gap"];
+}
+
+message AgentStoreConflictError {
+  string error = 1 [json_name = "error"];
+}
+
+message AgentStoreConflictEvent {
+  uint32 v = 1 [json_name = "v"];
+  string event_id = 2 [json_name = "eventId"];
+  string journal_epoch = 3 [json_name = "journalEpoch"];
+  uint64 seq = 4 [json_name = "seq"];
+  uint64 ts_ms = 5 [json_name = "tsMs"];
+  string kind = 6 [json_name = "kind"];
+  optional string store_id = 7 [json_name = "storeId"];
+  optional string original_rel_path = 8 [json_name = "originalRelPath"];
+  optional string conflict_rel_path = 9 [json_name = "conflictRelPath"];
+  optional string original_abs_path = 10 [json_name = "originalAbsPath"];
+  optional string conflict_abs_path = 11 [json_name = "conflictAbsPath"];
+  optional uint64 preserved_bytes = 12 [json_name = "preservedBytes"];
+}

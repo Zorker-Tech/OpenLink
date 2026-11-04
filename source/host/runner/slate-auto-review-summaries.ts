@@ -1,48 +1,50 @@
-/**
- * The summaries an auto-review leaves in a transcript.
- *
- * What a review found is written as an entry a reader can read — the verdict, what it looked at and what it wants — and
- * a summary that was already written is not written twice.
- *
- * The sentences are the product's wording and are kept as they are written; the code in this file is what decides which
- * words to use (compaction, redaction, the order of an action's sentence) rather than what the words are.
- */
-const SLATE_AUTO_REVIEW_SECRET_KEY_PATTERN = /(?:authorization|api.?key|credential|password|secret|token)/i;
-const SLATE_AUTO_REVIEW_SECRET_VALUE_PATTERN = /^(?:bearer\s+)?[A-Za-z0-9_+\/-]{24,}={0,2}$/i;
+/** Build bounded, privacy-aware text for Slate review cards. */
+import { redactSlateAutoReviewInlineSecrets as redactReviewText } from "../../shared/slate-auto-review-redact.ts";
 
-function redactSlateAutoReviewInlineSecrets(value: string): string {
-  return value.replace(/(authorization|api.?key|password|secret|token)(\s*[:=]\s*)\S+/gi, "$1$2…");
+const SECRET_FIELD = /(?:authorization|api.?key|credential|password|secret|token)/i;
+const SECRET_LITERAL = /^(?:bearer\s+)?[A-Za-z0-9_+\/-]{24,}={0,2}$/i;
+const SAFE_DESTINATION_FIELDS = new Set([
+  "channel", "channel_id", "channelid", "path", "page", "page_id", "pageid",
+  "repo", "repository", "title", "name", "url",
+]);
+
+function redactInlineSecret(value: string): string {
+  return redactReviewText(value);
 }
 
 export function compact(value: string, maxChars: number): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1)}…`;
+  const line = value.replace(/\s+/g, " ").trim();
+  if (line.length <= maxChars) return line;
+  return `${line.slice(0, maxChars - 1)}…`;
 }
 
 export function compactHeadAndTail(value: string, maxChars: number): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxChars) return normalized;
-  let omittedChars = normalized.length - maxChars;
-  let omittedLabel = "";
-  let available = 2;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    omittedLabel = `…[${omittedChars} chars omitted]…`;
-    available = Math.max(2, maxChars - omittedLabel.length);
-    const actualOmittedChars = normalized.length - available;
-    if (actualOmittedChars === omittedChars) break;
-    omittedChars = actualOmittedChars;
+  const line = value.replace(/\s+/g, " ").trim();
+  if (line.length <= maxChars) return line;
+
+  let hiddenCount = line.length - maxChars;
+  let visibleCount = 2;
+  let marker = "";
+  for (let pass = 0; pass < 4; pass += 1) {
+    marker = `…[${hiddenCount} chars skipped]…`;
+    visibleCount = Math.max(2, maxChars - marker.length);
+    const measuredHidden = line.length - visibleCount;
+    if (measuredHidden === hiddenCount) break;
+    hiddenCount = measuredHidden;
   }
-  const headChars = Math.ceil(available / 2);
-  const tailChars = Math.floor(available / 2);
-  return `${normalized.slice(0, headChars)}${omittedLabel}${normalized.slice(-tailChars)}`;
+  const prefixCount = Math.ceil(visibleCount / 2);
+  const suffixCount = Math.floor(visibleCount / 2);
+  return `${line.slice(0, prefixCount)}${marker}${line.slice(-suffixCount)}`;
 }
 
 export function shellLocationPhrase(surface: string): string {
-  return surface === "host_shell" ? "on your local computer" : "on Slate's computer";
+  return surface === "host_shell" ? "on this computer" : "in Slate's hosted workspace";
 }
 
 export function genericSlateShellAutoReviewSummary(surface: string): string {
-  return surface === "host_shell" ? "Run a command on your local computer" : "Run a command on Slate's computer";
+  return surface === "host_shell"
+    ? "Start a shell command on this computer"
+    : "Start a shell command in Slate's hosted workspace";
 }
 
 export function describeSlateShellAutoReviewAction(args: {
@@ -50,37 +52,49 @@ export function describeSlateShellAutoReviewAction(args: {
   readonly description?: string;
   readonly workingDirectory?: string;
 }): string {
-  const location = shellLocationPhrase(args.surface);
-  const description = args.description?.replace(/\s+/g, " ").trim();
-  const cwd = args.workingDirectory === undefined ? "" : ` from ${compact(args.workingDirectory, 100)}`;
-  if (description !== undefined && description.length > 0) {
-    const head = description.replace(/[.!?]+$/u, "");
-    return compact(`${head} ${location}${cwd}`, 340);
+  const place = shellLocationPhrase(args.surface);
+  const intent = args.description?.replace(/\s+/g, " ").trim();
+  const folder = args.workingDirectory === undefined ? "" : ` from ${compact(args.workingDirectory, 100)}`;
+  if (intent !== undefined && intent.length > 0) {
+    return compact(`${intent.replace(/[.!?]+$/u, "")} ${place}${folder}`, 340);
   }
-  return compact(`${genericSlateShellAutoReviewSummary(args.surface)}${cwd}`, 340);
+  return compact(`${genericSlateShellAutoReviewSummary(args.surface)}${folder}`, 340);
 }
 
 export function redactMcpValue(value: unknown, key?: string, depth = 0): unknown {
-  if (key !== undefined && SLATE_AUTO_REVIEW_SECRET_KEY_PATTERN.test(key)) return "…";
-  if (typeof value === "string") {
-    const redacted = redactSlateAutoReviewInlineSecrets(value);
-    return SLATE_AUTO_REVIEW_SECRET_VALUE_PATTERN.test(redacted) ? "…" : compactHeadAndTail(redacted, 160);
-  }
+  return projectSafeValue(value, key, depth);
+}
+
+function projectSafeValue(value: unknown, key: string | undefined, depth: number): unknown {
+  if (key !== undefined && SECRET_FIELD.test(key)) return "…";
+  if (typeof value === "string") return projectSafeText(value);
   if (value === null || typeof value !== "object") return value;
   if (depth >= 3) return Array.isArray(value) ? `[${value.length} items]` : "{…}";
-  if (Array.isArray(value)) {
-    const selected = value.length <= 6
-      ? value
-      : [...value.slice(0, 3), `${value.length - 6} items omitted`, ...value.slice(-3)];
-    return selected.map((entry) => redactMcpValue(entry, undefined, depth + 1));
-  }
-  const allEntries = Object.entries(value);
-  const entries: [string, unknown][] = allEntries.length <= 12
-    ? allEntries
-    : [...allEntries.slice(0, 6), ["…", `${allEntries.length - 12} fields omitted`], ...allEntries.slice(-6)];
-  return Object.fromEntries(entries.map(([entryKey, entry]) => [
-    compact(entryKey, 60),
-    redactMcpValue(entry, entryKey, depth + 1),
+  return Array.isArray(value)
+    ? projectSafeList(value, depth + 1)
+    : projectSafeRecord(value, depth + 1);
+}
+
+function projectSafeText(value: string): string {
+  const cleaned = redactInlineSecret(value);
+  return SECRET_LITERAL.test(cleaned) ? "…" : compactHeadAndTail(cleaned, 160);
+}
+
+function projectSafeList(value: readonly unknown[], depth: number): unknown[] {
+  const sample = value.length <= 6
+    ? value
+    : [...value.slice(0, 3), `${value.length - 6} items omitted`, ...value.slice(-3)];
+  return sample.map((entry) => projectSafeValue(entry, undefined, depth));
+}
+
+function projectSafeRecord(value: object, depth: number): Record<string, unknown> {
+  const fields = Object.entries(value);
+  const sample: [string, unknown][] = fields.length <= 12
+    ? fields
+    : [...fields.slice(0, 6), ["…", `${fields.length - 12} fields omitted`], ...fields.slice(-6)];
+  return Object.fromEntries(sample.map(([key, entry]) => [
+    compact(key, 60),
+    projectSafeValue(entry, key, depth),
   ]));
 }
 
@@ -93,18 +107,25 @@ export function summarizeSlateMcpAutoReviewAction(args: {
   const safeTool = compact(args.toolName, 80);
   const payload = redactMcpValue(args.mcpArguments ?? {}, undefined);
   const details = compactHeadAndTail(JSON.stringify(payload), 300);
-  return `Use ${safeServer || "a connected service"} tool ${safeTool || "action"} with ${details}`;
+  return `Run ${safeTool || "an action"} via ${safeServer || "a connected service"} with ${details}`;
 }
 
 export function genericSlateMcpAutoReviewSummary(serverDisplayName: string): string {
   const safeServer = compact(serverDisplayName, 80);
-  return safeServer.length > 0 ? `Use ${safeServer}` : "Use a connected service";
+  return safeServer.length > 0 ? `Connect to ${safeServer}` : "Use a connected service";
 }
 
-export const MCP_DESTINATION_KEYS = new Set([
-  "channel", "channel_id", "channelid", "path", "page", "page_id", "pageid",
-  "repo", "repository", "title", "name", "url",
+export { SAFE_DESTINATION_FIELDS as MCP_DESTINATION_KEYS };
+
+const ACTION_VERBS = new Set([
+  "send", "create", "update", "delete", "post", "write", "read", "add", "remove", "open", "close",
+  "list", "search", "fetch", "get", "set", "upload", "download", "invite", "share",
 ]);
+
+function articleFor(noun: string): "a" | "an" {
+  const word = noun.toLowerCase();
+  return /^[aeiou]/.test(word) && !/^(user|uni|use)/.test(word) ? "an" : "a";
+}
 
 export function humanizeMcpToolAction(toolName: string): string | undefined {
   const words = compact(toolName, 80)
@@ -115,11 +136,9 @@ export function humanizeMcpToolAction(toolName: string): string | undefined {
     .split(/\s+/)
     .filter((word) => word.length > 0);
   if (words.length === 0) return undefined;
-  if (words.length === 2
-    && /^(send|create|update|delete|post|write|read|add|remove|open|close|list|search|fetch|get|set|upload|download|invite|share)$/.test(words[0] ?? "")
-    && !/s$/i.test(words[1] ?? "")) {
-    const article = /^[aeiou]/i.test(words[1] ?? "") ? "an" : "a";
-    return `${words[0]} ${article} ${words[1]}`;
+  const [verb, noun] = words;
+  if (words.length === 2 && verb !== undefined && noun !== undefined && ACTION_VERBS.has(verb) && !/s$/i.test(noun)) {
+    return `${verb} ${articleFor(noun)} ${noun}`;
   }
   return words.join(" ");
 }
@@ -134,9 +153,9 @@ export function safeMcpDestinationHint(mcpArguments: unknown): string | undefine
   for (const [rawKey, value] of Object.entries(mcpArguments)) {
     if (typeof value !== "string") continue;
     const key = rawKey.replace(/[^a-z0-9]/gi, "").toLowerCase();
-    if (!MCP_DESTINATION_KEYS.has(key) || SLATE_AUTO_REVIEW_SECRET_KEY_PATTERN.test(rawKey)) continue;
-    const redacted = redactSlateAutoReviewInlineSecrets(value).replace(/\s+/g, " ").trim();
-    if (redacted.length === 0 || redacted.length > 80 || SLATE_AUTO_REVIEW_SECRET_VALUE_PATTERN.test(redacted)) continue;
+    if (!SAFE_DESTINATION_FIELDS.has(key) || SECRET_FIELD.test(rawKey)) continue;
+    const redacted = redactInlineSecret(value).replace(/\s+/g, " ").trim();
+    if (redacted.length === 0 || redacted.length > 80 || SECRET_LITERAL.test(redacted)) continue;
     return compact(redacted, 60);
   }
   return undefined;
@@ -152,9 +171,9 @@ export function fallbackSlateMcpAutoReviewSummary(args: {
   const hint = safeMcpDestinationHint(args.mcpArguments);
   if (server.length === 0 && action === undefined) return "Use a connected service";
   if (action === undefined) return genericSlateMcpAutoReviewSummary(server);
-  const base = server.length > 0 ? `Use ${server} to ${action}` : `Use a connected service to ${action}`;
+  const base = server.length > 0 ? `Ask ${server} to ${action}` : `Ask a connected service to ${action}`;
   if (hint === undefined || base.toLowerCase().includes(hint.toLowerCase())) return base;
-  return `${base} to ${hint}`;
+  return `${base} in ${hint}`;
 }
 
 export function describeSlateMcpAutoReviewAction(args: {
@@ -185,20 +204,20 @@ export function summarizeSlateAutomationWriteAction(args: {
   readonly isEnabled?: boolean;
   readonly referencingRoutineNames?: readonly string[];
 }): string {
-  const name = compact(args.name, 80) || "a routine";
-  const instruction = compactHeadAndTail(redactSlateAutoReviewInlineSecrets(args.prompt), 240);
+  const routineName = compact(args.name, 80) || "a routine";
+  const instruction = compactHeadAndTail(redactInlineSecret(args.prompt), 240);
   if (args.operation === "workflow_body") {
-    const routines = args.referencingRoutineNames
+    const relatedRoutines = args.referencingRoutineNames
       ?.map((routine) => compact(routine, 40))
       .filter((routine) => routine.length > 0)
       .slice(0, 3)
       .join(", ") || "standing orders";
-    return `Change workflow \u201C${name}\u201D used by ${routines}: \u201C${instruction}\u201D`;
+    return `Update workflow “${routineName}” used by ${relatedRoutines}: “${instruction}”`;
   }
-  const when = compact(args.triggerDescription, 120) || "on a trigger";
-  const verb = args.operation === "create" ? "Save" : "Change";
+  const timing = (compact(args.triggerDescription, 120) || "when triggered").toLowerCase();
+  const verb = args.operation === "create" ? "Create routine" : "Update routine";
   const paused = args.isEnabled === false ? " (paused)" : "";
-  return `${verb} the routine \u201C${name}\u201D${paused} to run ${when.toLowerCase()}: \u201C${instruction}\u201D`;
+  return `${verb} “${routineName}”${paused} to run ${timing}: “${instruction}”`;
 }
 
 export function summarizeSlateCloudAgentAction(args: {
@@ -210,18 +229,18 @@ export function summarizeSlateCloudAgentAction(args: {
   readonly repoUrl?: string;
   readonly title?: string;
 }): string {
-  const instruction = compactHeadAndTail(redactSlateAutoReviewInlineSecrets(args.prompt), 240);
+  const instruction = compactHeadAndTail(redactInlineSecret(args.prompt), 240);
   const imageCount = args.imageCount ?? 0;
-  const images = imageCount > 0 ? ` with ${imageCount} attached image${imageCount === 1 ? "" : "s"} it can see` : "";
+  const images = imageCount > 0 ? ` with ${imageCount} image${imageCount === 1 ? "" : "s"}` : "";
   if (args.action === "reply") {
     const target = compact(args.agentId ?? "", 40) || "a cloud agent";
     const interrupt = args.interrupt === true ? " (interrupt)" : "";
-    return `Send a follow-up to cloud agent ${target}${interrupt}${images}: \u201C${instruction}\u201D`;
+    return `Send more instructions to cloud agent ${target}${interrupt}${images}: “${instruction}”`;
   }
   const repo = compact(args.repoUrl ?? "", 120);
-  const titled = args.title !== undefined && args.title.trim().length > 0 ? ` \u201C${compact(args.title, 80)}\u201D` : "";
+  const titled = args.title !== undefined && args.title.trim().length > 0 ? ` “${compact(args.title, 80)}”` : "";
   const where = repo.length > 0 ? ` on ${repo}` : "";
-  return `Launch a cloud agent${titled}${where}${images}: \u201C${instruction}\u201D`;
+  return `Start a cloud agent${titled}${where}${images}: “${instruction}”`;
 }
 
 export type CloudLifecycleAction = "rename" | "cancel" | "archive" | "unarchive" | "delete";
@@ -234,21 +253,21 @@ export function summarizeSlateCloudAgentLifecycleAction(args: {
   const target = compact(args.agentId, 40) || "a cloud agent";
   switch (args.action) {
     case "rename": {
-      const title = args.title !== undefined && args.title.trim().length > 0 ? ` to \u201C${compact(args.title, 80)}\u201D` : "";
+      const title = args.title !== undefined && args.title.trim().length > 0 ? ` as “${compact(args.title, 80)}”` : "";
       return `Rename cloud agent ${target}${title}`;
     }
-    case "cancel": return `Cancel the active run of cloud agent ${target}`;
+    case "cancel": return `Stop the active run for cloud agent ${target}`;
     case "archive": return `Archive cloud agent ${target}`;
-    case "unarchive": return `Unarchive cloud agent ${target}`;
-    case "delete": return `Permanently delete cloud agent ${target}`;
+    case "unarchive": return `Restore cloud agent ${target} to the active list`;
+    case "delete": return `Delete cloud agent ${target} permanently`;
   }
 }
 
 export function summarizeSlateSubagentAction(args: { readonly action: string; readonly prompt: string }): string {
-  const instruction = compactHeadAndTail(redactSlateAutoReviewInlineSecrets(args.prompt), 240);
+  const instruction = compactHeadAndTail(redactInlineSecret(args.prompt), 240);
   return args.action === "steer"
-    ? `Send a follow-up to a running task: \u201C${instruction}\u201D`
-    : `Run a task on Slate's computer: \u201C${instruction}\u201D`;
+    ? `Send a follow-up to the running task: “${instruction}”`
+    : `Start a task in Slate's hosted workspace: “${instruction}”`;
 }
 
 export interface SlateBrowserSummaryArgs {
@@ -267,39 +286,40 @@ export interface SlateBrowserSummaryArgs {
 }
 
 export function summarizeSlateBrowserAutoReviewAction(args: SlateBrowserSummaryArgs): string {
-  const element = args.element?.replace(/\s+/g, " ").trim();
-  const target = element !== undefined && element.length > 0 ? `\u201C${compact(element, 160)}\u201D` : "an element";
+  const elementName = args.element?.replace(/\s+/g, " ").trim();
+  const element = elementName !== undefined && elementName.length > 0 ? `“${compact(elementName, 160)}”` : "an element";
   const page = args.targetPageUrl !== undefined && args.targetPageUrl.length > 0
-    ? ` on ${compactHeadAndTail(redactSlateAutoReviewInlineSecrets(args.targetPageUrl), 120)}`
+    ? ` on ${compactHeadAndTail(redactInlineSecret(args.targetPageUrl), 120)}`
     : "";
-  const summarize = (action: string): string => compact(`${action}${page} in the box browser`, 340);
+  const describe = (action: string) => compact(`${action}${page} in Slate's hosted browser`, 340);
   switch (args.op) {
-    case "navigate": return compact(`Open \u201C${redactSlateAutoReviewInlineSecrets(args.url ?? "")}\u201D in the box browser`, 340);
+    case "navigate": return compact(`Navigate to “${redactInlineSecret(args.url ?? "")}” in Slate's hosted browser`, 340);
     case "click":
-    case "mouse_click_xy": return summarize(`Click ${target}`);
-    case "type": return summarize(summarizeTypedText(args.text ?? ""));
-    case "fill": return summarize(summarizeTypedText(args.value ?? ""));
-    case "select_option": return summarize(`Select \u201C${redactSlateAutoReviewInlineSecrets((args.values ?? []).join(", "))}\u201D in ${target}`);
-    case "press_key": return summarize(`Press ${args.key?.slice(0, 80) ?? "a key"}`);
-    case "drag": return summarize(`Drag ${target}`);
-    case "cdp": return summarize(`Run CDP command ${args.cdpMethod?.slice(0, 120) ?? ""} with ${compactHeadAndTail(redactSlateAutoReviewInlineSecrets(args.cdpParams ?? "{}"), 160)}`);
-    case "tabs": return summarize(args.tabsAction === "close" ? `Close browser tab${args.tabIndex !== undefined ? ` ${args.tabIndex}` : ""}` : "Open a new browser tab");
-    default: return compact(`Browser ${args.op} on Slate's computer`, 340);
+    case "mouse_click_xy": return describe(`Click ${element}`);
+    case "type": return describe(summarizeTypedText(args.text ?? ""));
+    case "fill": return describe(summarizeTypedText(args.value ?? ""));
+    case "select_option": return describe(`Select “${redactInlineSecret((args.values ?? []).join(", "))}” in ${element}`);
+    case "press_key": return describe(`Press ${args.key?.slice(0, 80) ?? "a key"}`);
+    case "drag": return describe(`Drag ${element}`);
+    case "cdp": return describe(`Call ${args.cdpMethod?.slice(0, 120) ?? "browser protocol"} with ${compactHeadAndTail(redactInlineSecret(args.cdpParams ?? "{}"), 160)}`);
+    case "tabs": return describe(args.tabsAction === "close"
+      ? `Close browser tab${args.tabIndex !== undefined ? ` ${args.tabIndex}` : ""}`
+      : "Open a browser tab");
+    default: return compact(`Browser action ${args.op} in Slate's hosted browser`, 340);
   }
 }
 
 export function summarizeTypedText(text: string): string {
-  const redacted = redactSlateAutoReviewInlineSecrets(text);
-  const normalized = compactHeadAndTail(redacted, 80);
-  const looksSensitive = redacted !== text
-    || SLATE_AUTO_REVIEW_SECRET_VALUE_PATTERN.test(text.trim())
-    || /(?:api[_ -]?key|authorization|credential|password|secret|token)\s*[:=]/i.test(text)
+  const scrubbed = redactInlineSecret(text);
+  const preview = compactHeadAndTail(scrubbed, 80);
+  const looksSensitive = scrubbed !== text
+    || SECRET_LITERAL.test(text.trim())
+    || (SECRET_FIELD.test(text) && /[:=]/.test(text))
     || (/^[A-Za-z0-9+/_=-]{24,}$/.test(text.trim()) && !text.trim().includes(" "));
-  return looksSensitive || normalized.length === 0
-    ? `Type ${text.length} characters`
-    : `Type ${text.length} characters (\u201C${normalized}\u201D)`;
+  if (looksSensitive || preview.length === 0) return `Enter ${text.length} characters`;
+  return `Enter ${text.length} characters (“${preview}”)`;
 }
 
 export function summarizeSlateComputerTypedText(text: string): string {
-  return `${summarizeTypedText(text)} on Slate's computer`;
+  return `${summarizeTypedText(text)} in Slate's hosted workspace`;
 }

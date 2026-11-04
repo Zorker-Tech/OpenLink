@@ -7,6 +7,51 @@
  */
 import { isAbsolute, resolve } from "node:path";
 import { isPathWithin, realpathNearestExisting } from "../../shared/node/paths.ts";
-export class SlateProtectedPathError extends Error { constructor(message: string, options?: ErrorOptions) { super(message, options); this.name = "SlateProtectedPathError"; } }
-export function refusalMessage(path: string): string { return `Path is inside a protected host-only store and was refused: ${path}`; }
-export async function assertPathOutsideProtectedRoots(protectedRoots: readonly string[], candidatePath: string, baseDir: string): Promise<void> { if (protectedRoots.length === 0) return; const resolved = isAbsolute(candidatePath) ? resolve(candidatePath) : resolve(baseDir, candidatePath); for (const root of protectedRoots) if (isPathWithin(root, resolved, { isInclusive: true })) throw new SlateProtectedPathError(refusalMessage(candidatePath)); const realResolved = await realpathNearestExisting(resolved); for (const root of protectedRoots) { const realRoot = await realpathNearestExisting(root); if (isPathWithin(realRoot, realResolved, { isInclusive: true })) throw new SlateProtectedPathError(refusalMessage(candidatePath)); } }
+
+export class SlateProtectedPathError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "SlateProtectedPathError";
+  }
+}
+
+export function refusalMessage(path: string): string {
+  return `Path is inside a protected host-only store and was refused: ${path}`;
+}
+
+function resolveCandidate(candidatePath: string, baseDir: string): string {
+  return isAbsolute(candidatePath) ? resolve(candidatePath) : resolve(baseDir, candidatePath);
+}
+
+function rejectIfLexicallyProtected(roots: readonly string[], candidate: string, originalPath: string): void {
+  for (const root of roots) {
+    if (isPathWithin(root, candidate, { isInclusive: true })) {
+      throw new SlateProtectedPathError(refusalMessage(originalPath));
+    }
+  }
+}
+
+async function rejectIfRealPathIsProtected(
+  roots: readonly string[],
+  candidate: string,
+  originalPath: string,
+): Promise<void> {
+  const resolvedCandidate = await realpathNearestExisting(candidate);
+  for (const root of roots) {
+    const resolvedRoot = await realpathNearestExisting(root);
+    if (isPathWithin(resolvedRoot, resolvedCandidate, { isInclusive: true })) {
+      throw new SlateProtectedPathError(refusalMessage(originalPath));
+    }
+  }
+}
+
+export async function assertPathOutsideProtectedRoots(
+  protectedRoots: readonly string[],
+  candidatePath: string,
+  baseDir: string,
+): Promise<void> {
+  if (protectedRoots.length === 0) return;
+  const candidate = resolveCandidate(candidatePath, baseDir);
+  rejectIfLexicallyProtected(protectedRoots, candidate, candidatePath);
+  await rejectIfRealPathIsProtected(protectedRoots, candidate, candidatePath);
+}

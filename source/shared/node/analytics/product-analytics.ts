@@ -8,11 +8,9 @@
  * stops being "waiting for the gate".
  */
 
-import { AnalyticsService } from "../../../packages/proto/generated/aiserver/v1/analytics_connect.ts";
-import type { TrackEventsRequest } from "../../../packages/proto/generated/aiserver/v1/analytics_pb.ts";
 import { AnalyticsBuffer, type AnalyticsBufferClient } from "../../../packages/analytics-client/buffer.ts";
-import { DeferredAnalyticsBuffer, type DeferredAnalyticsEvent } from "../../../packages/analytics-client/deferred-buffer.ts";
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl } from "../cursor-backend/cursor-inference.ts";
+import { DeferredAnalyticsBuffer } from "../../../packages/analytics-client/deferred-buffer.ts";
+import { createSlateAnalyticsClient, createSlateAnalyticsTokenProvider } from "../../../adapters/interop/analytics/analytics-client.ts";
 import { getSlateClientVersion } from "../slate-client-metadata.ts";
 import { getSlateVariant } from "../slate-variant.ts";
 
@@ -21,18 +19,29 @@ const MAX_DEFERRED_EVENTS = 256;
 const DEFAULT_FLUSH_TIMEOUT_MS = 2_500;
 const ACTIVE_EVENT = "slate.app.active";
 
-/** Analytics is off when the account asked for no telemetry, or for no analytics. */
+/** One of the host-wide switches is enough to prevent analytics collection. */
 function isAnalyticsOptedOut(): boolean {
-  return process.env.SLATE_DISABLE_TELEMETRY === "1" || process.env.SLATE_DISABLE_ANALYTICS === "1";
+  const telemetryDisabled = process.env.SLATE_DISABLE_TELEMETRY === "1";
+  const analyticsDisabled = process.env.SLATE_DISABLE_ANALYTICS === "1";
+  return telemetryDisabled || analyticsDisabled;
 }
 
 function isAnalyticsDebug(): boolean {
   return process.env.SLATE_ANALYTICS_DEBUG === "1";
 }
 
-export interface ProductAnalyticsClient extends AnalyticsBufferClient {
-  trackEvents(request: TrackEventsRequest, options: { readonly signal: AbortSignal }): Promise<unknown>;
+function baseProperties(hostInBox: boolean): Readonly<Record<string, string | boolean>> {
+  return {
+    client: "slate",
+    slate_version: getSlateClientVersion(),
+    flavor: getSlateVariant(),
+    os: process.platform,
+    arch: process.arch,
+    host_in_box: hostInBox,
+  };
 }
+
+export type ProductAnalyticsClient = AnalyticsBufferClient
 
 export interface ProductAnalyticsGate {
   checkGate(name: string): Promise<boolean>;
@@ -54,29 +63,21 @@ type AnalyticsState =
 export class SlateProductAnalytics {
   state: AnalyticsState;
   activated = false;
-  isEvaluating = false;
   gate: ProductAnalyticsGate | undefined;
   unsubscribeGate: (() => void) | undefined;
   baseProps: Readonly<Record<string, string | boolean>>;
   options: ProductAnalyticsOptions;
   debug = isAnalyticsDebug();
   lastActiveDayKeys = new Map<string, string>();
+  private gateEvaluation: Promise<void> | undefined;
 
   constructor(options: ProductAnalyticsOptions) {
     this.options = options;
-    // Every event carries what this host is, before what the caller had to say.
-    this.baseProps = {
-      client: "slate",
-      slate_version: getSlateClientVersion(),
-      flavor: getSlateVariant(),
-      os: process.platform,
-      arch: process.arch,
-      host_in_box: options.hostInBox,
-    };
+    this.baseProps = baseProperties(options.hostInBox);
     this.state = isAnalyticsOptedOut() ? { kind: "disabled" } : { kind: "deferred", buffer: new DeferredAnalyticsBuffer() };
   }
 
-  /** Starts watching the gate, once: a second call is not a second subscription. */
+  /** A host has one gate subscription for the lifetime of this collector. */
   async activate(gate: ProductAnalyticsGate): Promise<void> {
     if (this.activated) return;
     this.activated = true;
@@ -90,70 +91,53 @@ export class SlateProductAnalytics {
     await this.evaluateGate();
   }
 
-  private async evaluateGate(): Promise<void> {
+  private evaluateGate(): Promise<void> {
     const gate = this.gate;
-    if (gate == null) return;
-    // Once the state has settled, the gate has nothing left to say.
-    if (this.state.kind === "active" || this.state.kind === "disabled") {
-      this.teardownGateSubscription();
-      return;
+    if (gate == null) return Promise.resolve();
+    if (this.state.kind !== "deferred") {
+      this.releaseGateSubscription();
+      return Promise.resolve();
     }
-    if (this.isEvaluating) return;
-    this.isEvaluating = true;
-    try {
-      if (isAnalyticsOptedOut()) {
-        this.disable("opted_out");
-        return;
-      }
-      let enabled = false;
-      try {
-        enabled = await gate.checkGate(SLATE_PRODUCT_ANALYTICS_GATE);
-      } catch {
-        enabled = false;
-      }
-      // A gate that is off (or could not be asked) leaves the events deferred for a later refresh.
-      if (!enabled) {
-        if (this.debug) console.info(`[slate-analytics] gate ${SLATE_PRODUCT_ANALYTICS_GATE} off; buffering until a later refresh`);
-        return;
-      }
-      this.goLive();
-    } finally {
-      this.isEvaluating = false;
-    }
+    if (this.gateEvaluation !== undefined) return this.gateEvaluation;
+
+    const evaluation = Promise.resolve().then(() => this.evaluateCurrentGate(gate));
+    this.gateEvaluation = evaluation;
+    void evaluation.finally(() => {
+      if (this.gateEvaluation === evaluation) this.gateEvaluation = undefined;
+    }).catch(() => {});
+    return evaluation;
   }
 
-  private goLive(): void {
+  private async evaluateCurrentGate(gate: ProductAnalyticsGate): Promise<void> {
+    if (isAnalyticsOptedOut()) {
+      this.disable("opted_out");
+      return;
+    }
+    let enabled = false;
+    try {
+      enabled = await gate.checkGate(SLATE_PRODUCT_ANALYTICS_GATE);
+    } catch {
+      enabled = false;
+    }
+    if (!enabled) {
+      if (this.debug) console.info(`[slate-analytics] gate ${SLATE_PRODUCT_ANALYTICS_GATE} off; buffering until a later refresh`);
+      return;
+    }
+    this.startReporting();
+  }
+
+  private startReporting(): void {
     const deferredBuffer = this.state.kind === "deferred" ? this.state.buffer : undefined;
     try {
       const createClient = this.options.createClient ?? (() =>
-        createSlateCursorBackendClient(AnalyticsService, {
+        createSlateAnalyticsClient({
           getAccessToken: this.options.getAccessToken,
           getMachineId: this.options.getMachineId,
         }));
-      const buffer = new AnalyticsBuffer({
-        client: createClient(),
-        tokenProvider: {
-          // A token that cannot be had is not one this buffer may insist on; an empty one is as good as none.
-          getAccessToken: async () => {
-            try {
-              const token = await this.options.getAccessToken({ backendUrl: getSlateInferenceBackendUrl() });
-              return token.length > 0 ? token : null;
-            } catch {
-              return null;
-            }
-          },
-        },
-        ...(this.debug ? { onDebug: (tag: string, payload: unknown) => console.info(`[slate-analytics] ${tag}`, payload) } : {}),
-      });
-      // What happened while the gate was off is handed over as it happened.
-      if (deferredBuffer != null) {
-        for (const event of deferredBuffer.getEvents() as readonly DeferredAnalyticsEvent[]) {
-          buffer.track(event.eventName, event.props, event.timestamp);
-        }
-        deferredBuffer.clear();
-      }
+      const buffer = this.createActiveBuffer(createClient);
+      if (deferredBuffer !== undefined) this.transferDeferredEvents(deferredBuffer, buffer);
       this.state = { kind: "active", buffer };
-      this.teardownGateSubscription();
+      this.releaseGateSubscription();
       if (this.debug) console.info("[slate-analytics] enabled");
     } catch (error) {
       if (this.debug) console.info("[slate-analytics] failed to enable; disabling", error);
@@ -161,15 +145,30 @@ export class SlateProductAnalytics {
     }
   }
 
+  private createActiveBuffer(createClient: () => ProductAnalyticsClient): AnalyticsBuffer {
+    return new AnalyticsBuffer({
+      client: createClient(),
+      tokenProvider: createSlateAnalyticsTokenProvider(this.options.getAccessToken),
+      ...(this.debug ? { onDebug: (tag: string, payload: unknown) => console.info(`[slate-analytics] ${tag}`, payload) } : {}),
+    });
+  }
+
+  private transferDeferredEvents(source: DeferredAnalyticsBuffer, destination: AnalyticsBuffer): void {
+    for (const event of source.getEvents()) {
+      destination.track(event.eventName, event.props, event.timestamp);
+    }
+    source.clear();
+  }
+
   private disable(reason: string): void {
     // Events that were never sent are not kept for a state that will not send them.
     if (this.state.kind === "deferred") this.state.buffer.clear();
     this.state = { kind: "disabled" };
-    this.teardownGateSubscription();
+    this.releaseGateSubscription();
     if (this.debug) console.info(`[slate-analytics] disabled (${reason})`);
   }
 
-  private teardownGateSubscription(): void {
+  private releaseGateSubscription(): void {
     if (this.unsubscribeGate == null) return;
     try {
       this.unsubscribeGate();
@@ -211,7 +210,7 @@ export class SlateProductAnalytics {
   }
 
   async dispose(): Promise<void> {
-    this.teardownGateSubscription();
+    this.releaseGateSubscription();
     await this.flush();
   }
 

@@ -31,9 +31,12 @@ import {
   SlateBoxStoreServiceProvider,
   READ_PRESIGN_BATCH_MAX,
   SLATE_BOX_STORE_MULTIPART_PART_SIZE_BYTES,
-  type SlateBoxStoreServiceClient,
-  type SlateBoxStoreWriteInstruction,
 } from "../../source/host/boxes/box-store-sync/slate-box-store-files.ts";
+import {
+  adaptInteropBoxStoreService,
+  type InteropBoxStoreServiceClient,
+  type InteropBoxStoreWriteInstruction,
+} from "../../source/adapters/interop/agent/box-store-service-adapter.ts";
 
 const sha = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 
@@ -66,7 +69,7 @@ function objectServer(answers: Array<number | { status: number; etag?: string }>
 }
 
 /** The platform's service, as this box reads it. */
-function serviceWorld(options: { reads?: Array<{ relPath: string; url: string; expiresAtMs: number }>; stat?: { exists: boolean; etag: string }; writes?: SlateBoxStoreWriteInstruction[]; complete?: Array<unknown | Error>; list?: Array<{ entries: Array<{ relPath: string }>; truncated: boolean; nextCursor: string }> } = {}) {
+function serviceWorld(options: { reads?: Array<{ relPath: string; url: string; expiresAtMs: number }>; stat?: { exists: boolean; etag: string }; writes?: InteropBoxStoreWriteInstruction[]; complete?: Array<unknown | Error>; list?: Array<{ entries: Array<{ relPath: string }>; truncated: boolean; nextCursor: string }> } = {}) {
   const calls: string[] = [];
   const presignedFiles: unknown[] = [];
   const aborts: unknown[] = [];
@@ -74,7 +77,7 @@ function serviceWorld(options: { reads?: Array<{ relPath: string; url: string; e
   const writeQueue = [...(options.writes ?? [])];
   const completeQueue = [...(options.complete ?? [])];
   const listQueue = [...(options.list ?? [])];
-  const client: SlateBoxStoreServiceClient = {
+  const wireClient: InteropBoxStoreServiceClient = {
     presignSandBoxStoreReads: async (args) => {
       calls.push(`reads:${args.relPaths.join(",")}`);
       return { instructions: options.reads ?? args.relPaths.map((relPath) => ({ relPath, url: `https://object.invalid/${relPath}`, expiresAtMs: Date.now() + 600_000 })) };
@@ -106,6 +109,7 @@ function serviceWorld(options: { reads?: Array<{ relPath: string; url: string; e
       return listQueue.length === 0 ? { entries: [], truncated: false, nextCursor: "" } : listQueue.length === 1 ? listQueue[0]! : listQueue.shift()!;
     },
   };
+  const client = adaptInteropBoxStoreService(wireClient);
   return { client, calls, presignedFiles, aborts, completions };
 }
 
@@ -116,12 +120,12 @@ describe("planning a file into parts", () => {
       const srcPath = join(directory, "a.bin");
       writeFileSync(srcPath, "0123456789", "utf8");
       const plan = await planSlateBoxStoreMultipartParts(srcPath, 10, 4);
-      assert.deepEqual(plan.parts.map((part) => [part.partNumber, part.offsetBytes, part.sizeBytes, part.sha256]), [
+      assert.deepEqual(plan.parts.map((part) => [part.partNumber, part.offset, part.length, part.digest]), [
         [1, 0, 4, sha("0123")],
         [2, 4, 4, sha("4567")],
         [3, 8, 2, sha("89")],
       ]);
-      assert.equal(plan.wholeSha256, sha("0123456789"));
+      assert.equal(plan.contentDigest, sha("0123456789"));
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -336,7 +340,7 @@ describe("writing a file through the service", () => {
       // planned, has nowhere to go.
       const huge = serviceWorld();
       const noMultipart = new SlateBoxStoreServiceObjectStore(huge.client, 6 * 1024 * 1024 * 1024, 4);
-      await assert.rejects(() => noMultipart.putFromFile("a.txt", srcPath, sha("hello"), 5 * 1024 * 1024 * 1024 + 1), /over the S3 single-PUT maximum/);
+      await assert.rejects(() => noMultipart.putFromFile("a.txt", srcPath, sha("hello"), 5 * 1024 * 1024 * 1024 + 1), /over the single-request limit/);
     } finally {
       await server.stop();
       rmSync(directory, { recursive: true, force: true });

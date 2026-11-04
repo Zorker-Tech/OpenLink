@@ -4,8 +4,9 @@ import assert from "node:assert/strict"
 import { processSelectedContext } from "../../source/packages/agent/context/process-selected-context.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { AgentMode } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { SimulatedMsgReason } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { BackgroundComposerSource } from "../../source/adapters/interop/proto/generated/aiserver/v1/background_composer_pb.ts"
 import {
   InvocationContext,
   InvocationContext_IdeState,
@@ -17,8 +18,9 @@ import {
   SelectedDocument,
   SelectedImage,
   SelectedVideo,
-} from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import { agentEventTrackerKey, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
+import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the services and stores a turn's attachments are moved through
@@ -149,7 +151,7 @@ test("the invocation a turn came from is written out first", async () => {
     }),
   }))
   assert.equal(result.userContent.length, 1)
-  assert.match(textOf(result), /<open_and_recently_viewed_files>/)
+  assert.match(textOf(result), /<workspace_editor_context>/)
   assert.match(textOf(result), /- \/repo\/a\.ts/)
 })
 
@@ -194,6 +196,24 @@ test("an attached video written to disk is referred to by path, and the model is
   assert.match(textOf(result), /- \/repo\/uploads\/clip_\w+\.mp4/)
   // No subagent is offered for this session, so the sentence about watching them is not added.
   assert.doesNotMatch(textOf(result), /WatchVideo subagent/)
+})
+
+test("background chat and automation video sources reach the Slate eligibility policy through interop", async () => {
+  for (const backgroundAgentSource of [BackgroundComposerSource.SLACK, BackgroundComposerSource.AUTOMATIONS]) {
+    const harnessed = harness({ featureFlags: { enableBackgroundVideoAttachments: true } })
+    harnessed.config.agentType = AgentType.BACKGROUND
+    harnessed.config.backgroundAgentSource = backgroundAgentSource
+    const result = await process(harnessed, new SelectedContext({
+      selectedVideos: [new SelectedVideo({
+        path: "/repo/clip.mp4",
+        mimeType: "video/mp4",
+        materializeToFilesystem: true,
+        dataOrBlobId: { case: "data", value: new Uint8Array([1, 2, 3]) },
+      })],
+    }), { projectFolder: "/repo" })
+
+    assert.match(textOf(result), /You can watch them using your WatchVideo subagent/)
+  }
 })
 
 test("an attached document is written out and listed", async () => {
@@ -327,7 +347,7 @@ test("attached rules are written as context the model may use", async () => {
   const result = await process(harness(), new SelectedContext({
     cursorRules: [{ rule: { fullPath: "/repo/.cursor/rules/style.md", content: "Always use semicolons." } } as never],
   }))
-  assert.match(textOf(result), /<cursor_rules_context>/)
+  assert.match(textOf(result), /<workspace_rules_context>/)
   assert.match(textOf(result), /Rule Name: style/)
   assert.match(textOf(result), /Always use semicolons\./)
 })
@@ -338,7 +358,7 @@ test("a session that drops custom prompt context writes neither rules nor skills
     cursorRules: [{ rule: { fullPath: "/repo/.cursor/rules/style.md", content: "Always use semicolons." } } as never],
     selectedSkills: [{ fullPath: "/repo/.cursor/skills/release/SKILL.md", content: "the skill body" } as never],
   }))
-  assert.doesNotMatch(textOf(result), /cursor_rules_context/)
+  assert.doesNotMatch(textOf(result), /workspace_rules_context/)
   assert.doesNotMatch(textOf(result), /manually_attached_skills/)
   assert.deepEqual(harnessed.appliedSkills, [])
 })
@@ -376,7 +396,7 @@ test("the instruction for a wake-up is written after everything attached", async
 })
 
 test("the video size a session allows comes from its flags", async () => {
-  const harnessed = harness({ featureFlags: { geminiVideoAttachmentInlineMaxBytes: 2 } })
+  const harnessed = harness({ featureFlags: { videoAttachmentInlineMaxBytes: 2 } })
   await assert.rejects(
     () => process(harnessed, new SelectedContext({
       selectedVideos: [new SelectedVideo({

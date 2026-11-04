@@ -8,7 +8,14 @@
  * than none.
  */
 
-function buildFriendlyDate(date: Date, timeZone?: string): string | undefined {
+interface FriendlyDateParts {
+  readonly weekday?: string | undefined
+  readonly month?: string | undefined
+  readonly day?: string | undefined
+  readonly year?: string | undefined
+}
+
+function datePartsInZone(date: Date, timeZone?: string): FriendlyDateParts | undefined {
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone,
@@ -17,30 +24,36 @@ function buildFriendlyDate(date: Date, timeZone?: string): string | undefined {
       day: "2-digit",
       year: "numeric",
     })
-    const partLookup: Record<string, string> = {}
+    const values: Record<string, string> = {}
     for (const part of formatter.formatToParts(date)) {
       if (part.type === "literal") continue
-      partLookup[part.type] = part.value
+      values[part.type] = part.value
     }
-    const weekday = partLookup.weekday
-    const month = partLookup.month
-    const day = partLookup.day
-    const year = partLookup.year
-    if (weekday && month && day && year) {
-      const normalizedDay = Number.parseInt(day, 10).toString()
-      return `${weekday} ${month} ${normalizedDay}, ${year}`
+    return {
+      weekday: values.weekday,
+      month: values.month,
+      day: values.day,
+      year: values.year,
     }
   } catch {
-    // Fall through to the local time zone, then to the ISO date.
+    return undefined
   }
-  return undefined
+}
+
+function renderFriendlyDate(parts: FriendlyDateParts | undefined): string | undefined {
+  if (parts?.weekday === undefined || parts.month === undefined || parts.day === undefined || parts.year === undefined) {
+    return undefined
+  }
+  const dayNumber = Number.parseInt(parts.day, 10)
+  if (!Number.isFinite(dayNumber)) return undefined
+  return `${parts.weekday} ${parts.month} ${dayNumber}, ${parts.year}`
 }
 
 export function getFriendlyDateForTimeZone(timeZone?: string): string {
   const now = new Date()
-  const formatted = buildFriendlyDate(now, timeZone)
+  const formatted = renderFriendlyDate(datePartsInZone(now, timeZone))
   if (formatted) return formatted
-  const fallbackFormatted = buildFriendlyDate(now, undefined)
+  const fallbackFormatted = renderFriendlyDate(datePartsInZone(now, undefined))
   if (fallbackFormatted) return fallbackFormatted
-  return now.toISOString().split("T")[0]!
+  return now.toISOString().slice(0, 10)
 }

@@ -19,7 +19,7 @@ import { createKey, type Context } from "../../context/context.ts"
 import { createLogger } from "../../context/logging.ts"
 import { createSpan } from "../../context/telemetry.ts"
 import { createHistogram } from "../../metrics/index.ts"
-import { TOOL_MARKER_TOKENS } from "../../utils/model-markers.ts"
+import { stripInteropToolMarkerTokens } from "../../../adapters/interop/inference/tool-marker-adapter.ts"
 import { buildToolCallExecutionTimedOutMessage } from "./tool-execution-timeout.ts"
 import {
   CustomToolCallError,
@@ -78,13 +78,11 @@ function needsMarkerTokenStripping(meta: ToolExecutionMetaLike | undefined): boo
 /** Some models leak their tool-call markers into the arguments; they are noise, not content. */
 function stripMarkerTokensFromArgs(options: { ctx: Context; args: string; toolName: string; strip: boolean }): string {
   if (!options.strip) return options.args
-  let result = options.args
-  for (const token of TOOL_MARKER_TOKENS) {
-    if (!result.includes(token)) continue
-    logger.warn(options.ctx, "nal.tool_args.dsv3_token_leaked", { tool_name: options.toolName, token })
-    result = result.replaceAll(token, "")
+  const result = stripInteropToolMarkerTokens(options.args)
+  for (const token of result.removedMarkers) {
+    logger.warn(options.ctx, "agent.tools.marker_token_leaked", { tool_name: options.toolName, token })
   }
-  return result
+  return result.text
 }
 
 export const agentToolExecutionMetaKey = createKey<unknown>(Symbol("agentToolExecutionMeta"), undefined)

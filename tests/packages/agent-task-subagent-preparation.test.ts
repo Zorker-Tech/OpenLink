@@ -26,23 +26,26 @@ import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/suba
 import {
   SubagentCredentials,
   SubagentExecutionEnvironment,
-  SubagentPersistedState,
   ConversationStateStructure,
   PreparedTaskSubagent,
   TaskToolCallArgsProto,
   ApiKeyCredentials,
-  NewCloudVmTarget,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
+import type {
+  SlateSubagentPersistedState,
+  SlateTaskConversationState,
+} from "../../source/packages/agent/subagent-persisted-state.ts"
 import {
   SubagentType,
   SubagentTypeCustom,
   SubagentTypeUnspecified,
   CustomSubagentPermissionMode,
-} from "../../source/packages/proto/generated/agent/v1/subagents_pb.ts"
-import { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
+import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
-import { RequestContext } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts"
+import { RequestContext } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -54,8 +57,8 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 const credentials: SubagentCredentials["credentials"] = { case: "apiKeyCredentials", value: new ApiKeyCredentials({ apiKey: "secret" }) }
 
 const restoredState = (
-  overrides: Partial<Pick<SubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId">> = {},
-): Pick<SubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> => ({
+  overrides: Partial<Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId">> = {},
+): Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> => ({
   // Every field is optional on the proto, so a fake can leave the ones a test does not care about out.
   conversationState: undefined,
   cloudSubagent: undefined,
@@ -77,29 +80,29 @@ test("a stored environment is read back as the request spells it", () => {
 test("what the request asked for wins, and the saved state is the fallback", () => {
   // A machine in the request decides it, whatever else says.
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "new_cloud_vm" } }, { environment: SubagentExecutionEnvironment.LOCAL }),
+    getEffectiveSubagentEnvironment({ machine: { type: "new_cloud_vm" } }, { environment: "local" }),
     SubagentExecutionEnvironment.CLOUD,
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "same_machine" } }, { environment: SubagentExecutionEnvironment.CLOUD }),
+    getEffectiveSubagentEnvironment({ machine: { type: "same_machine" } }, { environment: "cloud" }),
     SubagentExecutionEnvironment.LOCAL,
   )
   // Then the older environment field.
   assert.equal(
-    getEffectiveSubagentEnvironment({ environment: "cloud" }, { environment: SubagentExecutionEnvironment.LOCAL }),
+    getEffectiveSubagentEnvironment({ environment: "cloud" }, { environment: "local" }),
     SubagentExecutionEnvironment.CLOUD,
   )
   // Then the saved state's machine, then its environment, then a cloud reference.
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ machine: { machine: { case: "newCloudVm", value: new NewCloudVmTarget({}) } } as never })),
+    getEffectiveSubagentEnvironment({}, restoredState({ machine: { type: "new_cloud_vm" } })),
     SubagentExecutionEnvironment.CLOUD,
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ environment: SubagentExecutionEnvironment.CLOUD })),
+    getEffectiveSubagentEnvironment({}, restoredState({ environment: "cloud" })),
     SubagentExecutionEnvironment.CLOUD,
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ cloudSubagent: { bcId: "bc-1" } as never })),
+    getEffectiveSubagentEnvironment({}, restoredState({ cloudSubagent: { bcId: "bc-1" } })),
     SubagentExecutionEnvironment.CLOUD,
   )
   assert.equal(getEffectiveSubagentEnvironment({}, undefined), SubagentExecutionEnvironment.UNSPECIFIED)
@@ -179,11 +182,11 @@ test("a session with no environment has no folders, which means none are allowed
 // what a subagent starts from
 // ---------------------------------------------------------------------------------------------
 
-const parentStateWith = (state: ConversationStateStructure): {
+const parentStateWith = (state: SlateTaskConversationState): {
   readonly asked: string[]
   readonly parentState: {
-    getConversationState(ctx: Context): Promise<ConversationStateStructure>
-    restoreSubagentState(ctx: Context, subagentId: string): Pick<SubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> | undefined
+    getConversationState(ctx: Context): Promise<SlateTaskConversationState>
+    restoreSubagentState(ctx: Context, subagentId: string): Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> | undefined
   }
 } => {
   const asked: string[] = []
@@ -200,16 +203,16 @@ const parentStateWith = (state: ConversationStateStructure): {
 }
 
 test("a self-fork starts from the parent's own conversation", async () => {
-  const state = new ConversationStateStructure({ turns: [new Uint8Array([1])] })
+  const state = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([1])] }))
   const { parentState } = parentStateWith(state)
   const resolved = await resolveSubagentConversationState(createContext(), {}, parentState, undefined, true, "call-1", "generalPurpose")
   assert.equal(resolved, state)
 })
 
 test("a resumed subagent starts from the conversation it was saved with", async () => {
-  const saved = new ConversationStateStructure({ turns: [new Uint8Array([2])] })
+  const saved = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([2])] }))
   const parentState = {
-    async getConversationState() { return new ConversationStateStructure() },
+    async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure()) },
     restoreSubagentState() { return restoredState({ conversationState: saved }) },
   }
   const resolved = await resolveSubagentConversationState(createContext(), {}, parentState, "subagent-1", false, "call-1", "generalPurpose")
@@ -218,16 +221,16 @@ test("a resumed subagent starts from the conversation it was saved with", async 
 
 test("a resumed cloud subagent with no saved conversation starts from nothing", async () => {
   const parentState = {
-    async getConversationState() { return new ConversationStateStructure({ turns: [new Uint8Array([3])] }) },
-    restoreSubagentState() { return restoredState({ cloudSubagent: { bcId: "bc-1" } as never }) },
+    async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([3])] })) },
+    restoreSubagentState() { return restoredState({ cloudSubagent: { bcId: "bc-1" } }) },
   }
   const resolved = await resolveSubagentConversationState(createContext(), {}, parentState, "subagent-1", false, "call-1", "generalPurpose")
   assert.deepEqual(resolved.turns, [])
 })
 
 test("a fresh subagent starts from the parent's conversation as its type maps it", async () => {
-  const parent = new ConversationStateStructure({ turns: [new Uint8Array([4])] })
-  const mapped = new ConversationStateStructure({ turns: [new Uint8Array([5])] })
+  const parent = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([4])] }))
+  const mapped = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([5])] }))
   const parentState = {
     async getConversationState() { return parent },
     restoreSubagentState() { return restoredState() },
@@ -292,7 +295,7 @@ function resolutionArgs(options: {
     meta: { toolCallId: "call-1" },
     subagentConfigs: (options.configs ?? [generalConfig, customConfig]) as never,
     parentState: {
-      async getConversationState() { return new ConversationStateStructure() },
+      async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure()) },
       restoreSubagentState(_ctx: Context, subagentId: string) {
         restoreCalls.push(subagentId)
         return restoredState((options.restore?.(subagentId) ?? {}) as never)
@@ -564,7 +567,7 @@ test("a video is refused for a model that cannot watch one", async () => {
     () => buildClientSubagentAttachmentsContext(createContext(), ["/repo/uploads/clip.mp4"], attachments.resourceAccessor as never, "call-1", {
       resolvedModelId: "composer-2",
     }),
-    /Video attachments are only supported for Gemini models/,
+    /Video attachments require a video-capable model/,
   )
 })
 
@@ -618,7 +621,7 @@ async function prepared(options: {
     rawArgs,
     meta: { toolCallId: "call-1" },
     parentState: {
-      async getConversationState() { return new ConversationStateStructure({ turns: [new Uint8Array([1])] }) },
+      async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([1])] })) },
       restoreSubagentState() { return restoredState() },
     },
     resourceAccessor: attachments.resourceAccessor as never,
@@ -643,6 +646,7 @@ test("a prepared subagent carries what the turn needs to start it", async () => 
   assert.equal(message.parentModelName, "composer-2")
   // A type that maps nothing out of the parent's conversation starts from an empty structure, and the count
   // says where its own turns begin.
+  assert.equal(message.conversationState instanceof ConversationStateStructure, true)
   assert.equal(message.conversationState?.turns.length, 0)
   assert.equal(message.initialTurnsCount, 0)
   assert.equal(message.initialAction?.action.case, "userMessageAction")

@@ -2,13 +2,13 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { MethodKind } from "@bufbuild/protobuf"
 
-import { BlobData, BlobType, ImageBlobData } from "../../source/packages/proto/generated/internapi/v1/blob_pb.ts"
-import { InferenceService } from "../../source/packages/proto/generated/aiserver/v1/inference_connect.ts"
-import { AgentService } from "../../source/packages/proto/generated/agent/v1/agent_service_connect.ts"
-import { AllowedDomain } from "../../source/packages/proto/generated/anyrun/v1/common_pb.ts"
-import { PodErrorEvent } from "../../source/packages/proto/generated/anyrun/v1/pod_event_pb.ts"
-import { ClientSideToolV2Call } from "../../source/packages/proto/generated/aiserver/v1/tools_pb.ts"
-import { WriteShellStdinArgs } from "../../source/packages/proto/generated/agent/v1/background_shell_exec_pb.ts"
+import { BlobData, BlobType, ImageBlobData } from "../../source/adapters/interop/proto/generated/internapi/v1/blob_pb.ts"
+import { InferenceService } from "../../source/adapters/interop/proto/generated/aiserver/v1/inference_connect.ts"
+import { AgentService } from "../../source/adapters/interop/proto/generated/agent/v1/agent_service_connect.ts"
+import { AllowedDomain } from "../../source/adapters/interop/proto/generated/anyrun/v1/common_pb.ts"
+import { PodErrorEvent } from "../../source/adapters/interop/proto/generated/anyrun/v1/pod_event_pb.ts"
+import { ClientSideToolV2Call } from "../../source/adapters/interop/proto/generated/aiserver/v1/tools_pb.ts"
+import { WriteShellStdinArgs } from "../../source/adapters/interop/proto/generated/agent/v1/background_shell_exec_pb.ts"
 
 test("generated messages carry the wire name the peer service knows them by", () => {
   assert.equal(BlobData.typeName, "internapi.v1.BlobData")

@@ -9,9 +9,10 @@
 
 import type { Context } from "../../context/context.ts"
 import { createCounter, createHistogram } from "../../metrics/index.ts"
+import type { SkillCatalogBudgetStrategy } from "../prompts/skill-catalog-budget.ts"
 
 export interface SkillCatalogBudgetMetricsInput {
-  readonly strategy: string
+  readonly strategy: SkillCatalogBudgetStrategy
   readonly renderedTokens: number
   readonly uncappedTokens: number
   readonly omittedCount: number

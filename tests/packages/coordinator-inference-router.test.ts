@@ -155,7 +155,13 @@ describe("a turn run by another provider", () => {
     });
     world.seed({ "agent-1": [entry({ id: "t2u" })] });
     assert.deepEqual(await world.router.dispatch("sendPrompt", { agentId: "agent-1", prompt: "do it", richText: "**do it**", clientNonce: "n-1" }), { handled: true, value: { accepted: true, clientNonce: "n-1", provider: "codex" } });
-    await waitFor(() => world.store().agents["agent-1"]!.length >= 3);
+    await waitFor(() => {
+      const savedAnswer = (world.store().agents["agent-1"]?.length ?? 0) >= 3;
+      const finalTranscriptUpdate = world.transcripts().some(
+        (event) => event.entry["id"] === "t5s0" && event.entry["streaming"] === false,
+      );
+      return savedAnswer && finalTranscriptUpdate;
+    });
     const stored = world.store().agents["agent-1"]!;
     // The turn after the highest either side knows: the backend had t4, so this one is t5.
     assert.deepEqual(stored.map((entry) => [entry.id, entry.role, entry.content]), [["t2u", "user", "hi"], ["t5u", "user", "do it"], ["t5s0", "assistant", "the answer"]]);

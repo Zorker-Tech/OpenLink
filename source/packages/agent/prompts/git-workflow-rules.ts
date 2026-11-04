@@ -1,201 +1,24 @@
-/**
- * The git workflow, spelled out for models that do not have it as a tool.
- *
- * Most models are given a pull-request tool and told about git in one sentence; these sections exist
- * for the ones that only have a shell, so the workflow has to be written as steps: what to check before
- * committing, how to word a commit message, what must never be done (rewriting history, skipping hooks,
- * force pushing to the default branch, committing secrets), and how a pull request is opened.
- *
- * The safety rules are the reason this is worth having in full rather than in summary: a model that
- * knows `git commit --amend` exists will use it, and the conditions under which that is acceptable are
- * narrow. The same goes for pushing and for touching the git config — the rules say when, and the
- * answer is usually "only when the user asked".
- */
+import { jsx, renderContent, type PromptNode } from "../../prompt-jsx/index.ts"
+import { CommittingChangesSection } from "./git-commit-safety-section.ts"
+import { CreatingPullRequestsSection } from "./git-pull-request-section.ts"
 
-import { jsx, jsxs } from "../../prompt-jsx/index.ts"
-import type { PromptNode } from "../../prompt-jsx/index.ts"
-import { renderContent } from "../../prompt-jsx/index.ts"
-
-const USER_REQUEST_SCOPE = " in the user query or in a different user rule"
-
-export function CommittingChangesSection({ shellToolName, forComposerUserRules = false }: {
-  readonly shellToolName: string
-  readonly forComposerUserRules?: boolean | undefined
-}): PromptNode {
-  return jsxs("section", {
-    title: "Committing changes with git",
-    children: [
-      jsx("p", { children: "Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:" }),
-      jsx("p", { children: "Git Safety Protocol:" }),
-      jsxs("ul", {
-        children: [
-          jsx("li", { children: "NEVER update the git config" }),
-          jsxs("li", { children: ["NEVER run destructive/irreversible git commands (like push --force, hard reset, etc) unless the user explicitly requests them", forComposerUserRules ? USER_REQUEST_SCOPE : ""] }),
-          jsxs("li", { children: ["NEVER skip hooks (--no-verify, --no-gpg-sign, etc) unless the user explicitly requests it", forComposerUserRules ? USER_REQUEST_SCOPE : ""] }),
-          jsx("li", { children: "NEVER run force push to main/master, warn the user if they request it" }),
-          jsxs("li", {
-            children: [
-              "Avoid git commit --amend. ONLY use --amend when ALL conditions are met:",
-              jsxs("ol", {
-                children: [
-                  jsx("li", { children: "User explicitly requested amend, OR commit SUCCEEDED but pre-commit hook auto-modified files that need including" }),
-                  jsx("li", { children: "HEAD commit was created by you in this conversation (verify: git log -1 --format='%an %ae')" }),
-                  jsx("li", { children: 'Commit has NOT been pushed to remote (verify: git status shows "Your branch is ahead")' }),
-                ],
-              }),
-            ],
-          }),
-          jsx("li", { children: "CRITICAL: If commit FAILED or was REJECTED by hook, NEVER amend - fix the issue and create a NEW commit" }),
-          jsxs("li", { children: ["CRITICAL: If you already pushed to remote, NEVER amend unless the user explicitly requests it", forComposerUserRules ? USER_REQUEST_SCOPE : "", " (requires force push)"] }),
-          jsxs("li", { children: ["NEVER commit changes unless the user explicitly asks you to", forComposerUserRules ? USER_REQUEST_SCOPE : "", ". It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive."] }),
-        ],
-      }),
-      jsxs("ol", {
-        children: [
-          jsxs("li", {
-            children: [
-              "You can call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. ALWAYS run the following shell commands in parallel, each using the ",
-              shellToolName,
-              " tool:",
-              jsxs("ul", {
-                children: [
-                  jsx("li", { children: "Run a git status command to see all untracked files." }),
-                  jsx("li", { children: "Run a git diff command to see both staged and unstaged changes that will be committed." }),
-                  jsx("li", { children: "Run a git log command to see recent commit messages, so you can follow the user's commit message style." }),
-                ],
-              }),
-            ],
-          }),
-          jsxs("li", {
-            children: [
-              "Analyze all staged changes (both previously staged and newly added) and draft a commit message:",
-              jsxs("ul", {
-                children: [
-                  jsx("li", { children: 'Summarize the nature of the changes (eg. new feature, enhancement to an existing feature, bug fix, refactoring, test, docs, etc.). Ensure the message accurately reflects the changes and their purpose (i.e. "add" means a wholly new feature, "update" means an enhancement to an existing feature, "fix" means a bug fix, etc.).' }),
-                  jsx("li", { children: "Do not commit files that likely contain secrets (.env, credentials.json, etc). Warn the user if they specifically request to commit those files" }),
-                  jsx("li", { children: 'Draft a concise (1-2 sentences) commit message that focuses on the "why" rather than the "what"' }),
-                  jsx("li", { children: "Ensure it accurately reflects the changes and their purpose" }),
-                ],
-              }),
-            ],
-          }),
-          jsxs("li", {
-            children: [
-              "Run the following commands sequentially:",
-              jsxs("ul", {
-                children: [
-                  jsx("li", { children: "Add relevant untracked files to the staging area." }),
-                  jsx("li", { children: "Commit the changes with the message." }),
-                  jsx("li", { children: "Run git status after the commit completes to verify success." }),
-                ],
-              }),
-            ],
-          }),
-          jsx("li", { children: "If the commit fails due to pre-commit hook, fix the issue and create a NEW commit (see amend rules above)" }),
-        ],
-      }),
-      jsx("p", { children: "Important notes:" }),
-      jsxs("ul", {
-        children: [
-          jsx("li", { children: "NEVER update the git config" }),
-          jsx("li", { children: "NEVER run additional commands to read or explore code, besides git shell commands" }),
-          jsxs("li", { children: ["DO NOT push to the remote repository unless the user explicitly asks you to do so", forComposerUserRules ? USER_REQUEST_SCOPE : ""] }),
-          jsx("li", { children: "IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported." }),
-          jsx("li", { children: "If there are no changes to commit (i.e. no untracked files and no modifications), do not create an empty commit" }),
-          jsx("li", { children: "In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:" }),
-        ],
-      }),
-      jsx("x", {
-        tag: "example",
-        children: `git commit -m "$(cat <<'EOF'
-Commit message here.
-
-EOF
-)"`,
-      }),
-    ],
-  })
-}
-
-export function CreatingPullRequestsSection({ shellToolName, enablePrCreationForgeGuidance = false }: {
-  readonly shellToolName: string
-  readonly enablePrCreationForgeGuidance?: boolean | undefined
-}): PromptNode {
-  return jsxs("section", {
-    title: "Creating pull requests",
-    children: [
-      jsxs("p", { children: ["Use the gh command via the ", shellToolName, " tool for ALL GitHub-related tasks including working with issues, pull requests, checks, and releases. If given a Github URL use the gh command to get the information needed."] }),
-      // A host the conversation already chose overrides the steps below; the tool name differs per host.
-      enablePrCreationForgeGuidance && jsx("p", { children: "If this conversation already includes preferred pull-request host guidance that names a create command (`gh pr create`, or the platform's own `origin pr create` for its PR host rather than the git remote named `origin`), that guidance OVERRIDES the `gh pr create` steps and example below. If using `gt`, pass `--github` or `--origin`. Keep using `gh` for other GitHub tasks (issues, checks, releases) unless that guidance says otherwise." }),
-      jsx("p", { children: "IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:" }),
-      jsxs("ol", {
-        children: [
-          jsxs("li", {
-            children: [
-              "You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. ALWAYS run the following shell commands in parallel using the ",
-              shellToolName,
-              " tool, in order to understand the current state of the branch since it diverged from the main branch:",
-              jsxs("ul", {
-                children: [
-                  jsx("li", { children: "Run a git status command to see all untracked files" }),
-                  jsx("li", { children: "Run a git diff command to see both staged and unstaged changes that will be committed" }),
-                  jsx("li", { children: "Check if the current branch tracks a remote branch and is up to date with the remote, so you know if you need to push to the remote" }),
-                  jsx("li", { children: "Run a git log command and `git diff [base-branch]...HEAD` to understand the full commit history on the current branch (from the time it diverged from the base branch)" }),
-                ],
-              }),
-            ],
-          }),
-          jsx("li", { children: "Analyze all changes that will be included in the pull request, making sure to look at all relevant commits (NOT just the latest commit, but ALL commits that will be included in the pull request!!!), and draft a pull request summary" }),
-          jsxs("li", {
-            children: [
-              "Run the following commands sequentially:",
-              jsxs("ul", {
-                children: [
-                  jsx("li", { children: "Create new branch if needed" }),
-                  jsx("li", { children: "Push to remote with -u flag if needed" }),
-                  jsx("li", { children: "Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting." }),
-                ],
-              }),
-            ],
-          }),
-        ],
-      }),
-      jsx("x", {
-        tag: "example",
-        children: `# First, push the branch (with required_permissions: ["all"])
-git push -u origin HEAD
-
-# Then create the PR (with required_permissions: ["all"])
-gh pr create --title "the pr title" --body "$(cat <<'EOF'
-## Summary
-<1-3 bullet points>
-
-## Test plan
-[Checklist of TODOs for testing the pull request...]
-
-EOF
-)"`,
-      }),
-      jsx("p", { children: "Important:" }),
-      jsxs("ul", {
-        children: [
-          jsx("li", { children: "NEVER update the git config" }),
-          jsx("li", { children: "DO NOT use the TodoWrite or Task tools" }),
-          jsx("li", { children: "Return the PR URL when you're done, so the user can see it" }),
-        ],
-      }),
-    ],
-  })
-}
+export { CommittingChangesSection } from "./git-commit-safety-section.ts"
+export { CreatingPullRequestsSection } from "./git-pull-request-section.ts"
 
 interface GitToolInfo {
   readonly allTools?: { readonly SHELL?: { readonly name?: string | undefined } | undefined } | undefined
 }
 
-export function getComposerGitUserRules(toolInfo: GitToolInfo, enablePrCreationForgeGuidance = false): string[] {
+export function getGitWorkflowUserRules(toolInfo: GitToolInfo, enablePrCreationForgeGuidance = false): string[] {
   const shellToolName = toolInfo.allTools?.SHELL?.name ?? "Shell"
   return [
-    renderContent(jsx(CommittingChangesSection as unknown as (props: Record<string, unknown>) => PromptNode, { shellToolName, forComposerUserRules: true })),
-    renderContent(jsx(CreatingPullRequestsSection as unknown as (props: Record<string, unknown>) => PromptNode, { shellToolName, enablePrCreationForgeGuidance })),
+    renderContent(jsx(CommittingChangesSection as unknown as (props: Record<string, unknown>) => PromptNode, {
+      shellToolName,
+      requireExplicitUserRequestProof: true,
+    })),
+    renderContent(jsx(CreatingPullRequestsSection as unknown as (props: Record<string, unknown>) => PromptNode, {
+      shellToolName,
+      enablePrCreationForgeGuidance,
+    })),
   ]
 }

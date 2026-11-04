@@ -4,8 +4,8 @@
  * agent was paused for, so it is resumed with the hiddenPrompt its situation calls for, and the badge that said the user was
  * being waited on is cleared or set to say something else. */
 import {
-  decideBoxHandBack,
-  type BoxHandoff,
+  planBoxReturn,
+  type BoxReturnTicket,
 } from "../../shared/forever-box.ts";
 import { formatMcpAccountDisplayName } from "../../shared/mcp.ts";
 import { slateErrorDetail } from "../ports/telemetry.ts";
@@ -28,7 +28,7 @@ export interface AwaitingStateSink {
 }
 
 export class BoxHandoffResume {
-  readonly boxHandoffs = new Map<string, BoxHandoff>();
+  readonly boxHandoffs = new Map<string, BoxReturnTicket>();
   readonly foreverBoxListeners = new Set<(value: unknown) => void>();
   readonly awaitingSink = this.createAwaitingStateSink();
 
@@ -41,7 +41,7 @@ export class BoxHandoffResume {
 
   withBoxHandoff<T extends { agentId: string }>(
     boxStatus: T,
-  ): T & { handoff: BoxHandoff | null } {
+  ): T & { handoff: BoxReturnTicket | null } {
     return { ...boxStatus, handoff: this.boxHandoffs.get(boxStatus.agentId) ?? null };
   }
 
@@ -93,17 +93,17 @@ export class BoxHandoffResume {
   }
 
   async handBackForeverBox(agentId: string, trigger: string): Promise<void> {
-    const handoffDecision = decideBoxHandBack(this.boxHandoffs.get(agentId), trigger);
-    if (handoffDecision.kind === "none") return;
+    const returnPlan = planBoxReturn(this.boxHandoffs.get(agentId), trigger);
+    if (returnPlan.type === "untracked") return;
     this.boxHandoffs.delete(agentId);
     this.awaitingSink.clear(agentId);
     await this.tm.resolveBoxRequestEntry(
       agentId,
-      handoffDecision.requestId,
-      handoffDecision.resolution,
+      returnPlan.requestId,
+      returnPlan.outcome,
     );
     await this.tm.emitForeverBoxStatus(agentId);
-    await this.tm.resumeAfterBoxHandoff(agentId, handoffDecision.trigger);
+    await this.tm.resumeAfterBoxHandoff(agentId, returnPlan.cause);
   }
 
   async emitForeverBoxStatus(agentId: string): Promise<void> {

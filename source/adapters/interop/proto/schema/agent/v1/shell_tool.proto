@@ -1,0 +1,31 @@
+// agent.v1 — agent/v1/shell_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/shell_exec.proto";
+
+message ShellToolCall {
+  optional .agent.v1.ShellArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ShellResult result = 2 [json_name = "result"];
+  optional string description = 3 [json_name = "description"];
+}
+
+message ShellToolCallDelta {
+  oneof delta {
+    .agent.v1.ShellToolCallStdoutDelta stdout = 1 [json_name = "stdout"];
+    .agent.v1.ShellToolCallStderrDelta stderr = 2 [json_name = "stderr"];
+  }
+}
+
+message ShellToolCallStdoutDelta {
+  string content = 1 [json_name = "content"];
+}
+
+message ShellToolCallStderrDelta {
+  string content = 1 [json_name = "content"];
+}

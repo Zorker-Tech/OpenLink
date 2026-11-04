@@ -3,10 +3,9 @@ import assert from "node:assert/strict"
 import path from "node:path"
 
 import { processVideoAttachment } from "../../source/packages/agent/context/video-attachment.ts"
-import type { AttachmentBlobStore } from "../../source/packages/agent/context/attachment-hydration.ts"
+import type { SlateVideoAttachment, SlateVideoContent } from "../../source/packages/agent/context/video-attachment-contracts.ts"
+import type { AttachmentContentStore } from "../../source/packages/agent/context/attachment-hydration.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { SelectedVideo } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
-import type { WriteArgs } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 
@@ -14,7 +13,7 @@ import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 // the three things a video is moved through: a blob store, a write executor, and an upload URL
 // ---------------------------------------------------------------------------------------------
 
-function blobHarness(): { store: AttachmentBlobStore<Context>; blobs: Map<string, Uint8Array> } {
+function blobHarness(): { store: AttachmentContentStore<Context>; blobs: Map<string, Uint8Array> } {
   const blobs = new Map<string, Uint8Array>()
   const keyOf = (blobId: Uint8Array): string => Buffer.from(blobId).toString("hex")
   return {
@@ -27,18 +26,16 @@ function blobHarness(): { store: AttachmentBlobStore<Context>; blobs: Map<string
   }
 }
 
-function writeHarness(failWith?: Error): { writes: WriteArgs[]; accessor: { get(): { execute(ctx: Context, args: WriteArgs): Promise<unknown> } } } {
-  const writes: WriteArgs[] = []
+function writeHarness(failWith?: Error): {
+  writes: Array<{ path: string; fileBytes: Uint8Array }>
+  writeWorkspaceFile(ctx: Context, path: string, bytes: Uint8Array): Promise<void>
+} {
+  const writes: Array<{ path: string; fileBytes: Uint8Array }> = []
   return {
     writes,
-    accessor: {
-      get: () => ({
-        async execute(_ctx, args) {
-          if (failWith !== undefined) throw failWith
-          writes.push(args)
-          return {}
-        },
-      }),
+    async writeWorkspaceFile(_ctx, path, bytes) {
+      if (failWith !== undefined) throw failWith
+      writes.push({ path, fileBytes: bytes })
     },
   }
 }
@@ -87,25 +84,22 @@ type VideoOverrides = Partial<{
   fps: number
   materializeToFilesystem: boolean
   data: Uint8Array
-  dataOrBlobId: SelectedVideo["dataOrBlobId"]
+  content: SlateVideoContent
 }>
 
-const video = (overrides: VideoOverrides = {}): SelectedVideo =>
-  new SelectedVideo({
-    path: overrides.path ?? "",
-    filename: overrides.filename ?? "clip.mp4",
-    mimeType: overrides.mimeType ?? "video/mp4",
-    materializeToFilesystem: overrides.materializeToFilesystem ?? false,
-    ...(overrides.fps === undefined ? {} : { fps: overrides.fps }),
-    ...(overrides.dataOrBlobId !== undefined
-      ? { dataOrBlobId: overrides.dataOrBlobId }
-      : overrides.data === undefined
-        ? {}
-        : { dataOrBlobId: { case: "data" as const, value: overrides.data } }),
-  })
+const video = (overrides: VideoOverrides = {}): SlateVideoAttachment => ({
+  sourcePath: overrides.path ?? "",
+  displayName: overrides.filename ?? "clip.mp4",
+  mediaType: overrides.mimeType ?? "video/mp4",
+  ...(overrides.fps === undefined ? {} : { frameRate: overrides.fps }),
+  writeToWorkspace: overrides.materializeToFilesystem ?? false,
+  content: overrides.content ?? (overrides.data === undefined
+    ? { kind: "empty" }
+    : { kind: "bytes", bytes: overrides.data }),
+})
 
 async function process(
-  selectedVideo: SelectedVideo,
+  selectedVideo: SlateVideoAttachment,
   options: {
     modelId?: string
     maxVideoBytes?: number
@@ -129,12 +123,12 @@ async function process(
   return await processVideoAttachment({
     ctx: createContext(),
     blobStore: blobHarness().store,
-    selectedVideo,
+    video: selectedVideo,
     index: options.index ?? 0,
     modelId: options.modelId ?? "gemini-2.5-pro",
     maxVideoBytes: options.maxVideoBytes ?? 10 * 1024 * 1024,
     requestContext: env === undefined ? undefined : { env },
-    resourceAccessor: options.withResourceAccessor === false ? undefined : writes.accessor,
+    writeWorkspaceFile: options.withResourceAccessor === false ? undefined : writes.writeWorkspaceFile,
     ...(options.privacyMode === undefined ? {} : { privacyMode: options.privacyMode }),
     ...(options.uploads === undefined ? {} : { attachedMediaUrlProvider: options.uploads.provider }),
     ...(options.conversationId === undefined ? {} : { conversationId: options.conversationId }),
@@ -148,12 +142,12 @@ async function process(
 test("a video is only sent to a model that can watch one", async () => {
   await assert.rejects(
     () => process(video({ data: bytesOf("frames") }), { modelId: "composer-2" }),
-    /Video attachments are only supported for Gemini models/,
+    /Video attachments require a video-capable model/,
   )
   // A model with no name at all is not one that can watch a video either.
   await assert.rejects(
     () => process(video({ data: bytesOf("frames") }), { modelId: "" }),
-    /Video attachments are only supported for Gemini models/,
+    /Video attachments require a video-capable model/,
   )
 })
 
@@ -196,7 +190,7 @@ test("an attachment with no data behind it is refused", async () => {
 
 test("a signed URL in a session that may not store media is refused rather than fetched", async () => {
   await assert.rejects(
-    () => process(video({ dataOrBlobId: { case: "signedUrl", value: { url: "https://x", key: "k", conversationId: "c" } as never } }), {
+    () => process(video({ content: { kind: "signed-link", url: "https://x", key: "k", conversationId: "c" } }), {
       privacyMode: PrivacyMode.NO_STORAGE,
       uploads: uploadHarness(),
     }),
@@ -215,7 +209,7 @@ test("a video's bytes are handed to the model and stored on the way", async () =
   assert.equal(result.localFilePath, undefined)
   assert.equal(result.mimeType, "video/mp4")
   assert.equal(result.filename, "clip.mp4")
-  assert.equal(result.processedSelectedVideo?.dataOrBlobId?.case, "blobId")
+  assert.equal(result.processedVideo?.content.kind, "blob")
 })
 
 test("a video past the size cap is refused rather than truncated", async () => {
@@ -227,14 +221,14 @@ test("a video past the size cap is refused rather than truncated", async () => {
 
 test("a video whose stored bytes are gone is an error rather than an empty video", async () => {
   await assert.rejects(
-    () => process(video({ dataOrBlobId: { case: "blobId", value: new Uint8Array([7, 7]) } })),
+    () => process(video({ content: { kind: "blob", blobId: new Uint8Array([7, 7]) } })),
     /Video not found in blob store/,
   )
 })
 
 test("a video that carries both a reference and its bytes uses the bytes", async () => {
   const data = bytesOf("inline frames")
-  const result = await process(video({ dataOrBlobId: { case: "blobIdWithData", value: { data, blobId: new Uint8Array([1]) } as never } }))
+  const result = await process(video({ content: { kind: "blob-with-bytes", bytes: data, blobId: new Uint8Array([1]) } }))
   assert.deepEqual(result.videoData, data)
 })
 
@@ -261,7 +255,7 @@ test("a materialised video is written into the workspace and referred to by path
   assert.match(path.basename(written?.path ?? ""), /^clip_[a-z0-9]{4}\.mp4$/)
   assert.deepEqual(written?.fileBytes, data)
   assert.equal(result.localFilePath, written?.path)
-  assert.equal(result.processedSelectedVideo?.path, written?.path)
+  assert.equal(result.processedVideo?.sourcePath, written?.path)
   // The bytes are not also sent: the model reads the video from the path it was given.
   assert.equal(result.videoData, undefined)
 })
@@ -280,7 +274,7 @@ test("a video that cannot be written is dropped, and the turn goes on", async ()
   const writes = writeHarness(new Error("the workspace is read-only"))
   const result = await process(video({ data: bytesOf("x"), materializeToFilesystem: true }), { writes, workspaceRoot: "/repo" })
   assert.equal(result.localFilePath, undefined)
-  assert.equal(result.processedSelectedVideo, undefined)
+  assert.equal(result.processedVideo, undefined)
   assert.equal(result.videoData, undefined)
 })
 
@@ -289,11 +283,11 @@ test("a materialised video is not written when the session has nowhere to write 
     workspaceRoot: "/repo",
     withResourceAccessor: false,
   })
-  assert.equal(withNoAccessor.processedSelectedVideo, undefined)
+  assert.equal(withNoAccessor.processedVideo, undefined)
   assert.equal(withNoAccessor.localFilePath, undefined)
 
   const withNoRoot = await process(video({ data: bytesOf("x"), materializeToFilesystem: true }))
-  assert.equal(withNoRoot.processedSelectedVideo, undefined)
+  assert.equal(withNoRoot.processedVideo, undefined)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -333,10 +327,10 @@ test("a video is uploaded once and the model is given a link to it", async () =>
     })
     assert.equal(result.videoUrl, "https://storage.test/get/generated-key")
     assert.equal(result.videoData, undefined)
-    const signedUrl = result.processedSelectedVideo?.dataOrBlobId
-    assert.equal(signedUrl?.case, "signedUrl")
-    assert.equal(signedUrl?.case === "signedUrl" ? signedUrl.value.conversationId : "", "conversation-1")
-    assert.equal(signedUrl?.case === "signedUrl" ? signedUrl.value.expiresAtUnixMs : 0n, 1_000n)
+    const signedUrl = result.processedVideo?.content
+    assert.equal(signedUrl?.kind, "signed-link")
+    assert.equal(signedUrl?.kind === "signed-link" ? signedUrl.conversationId : "", "conversation-1")
+    assert.equal(signedUrl?.kind === "signed-link" ? signedUrl.expiresAtUnixMs : 0n, 1_000n)
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -353,7 +347,7 @@ test("a video that already has a link has only that link renewed", async () => {
 
   try {
     const result = await process(
-      video({ dataOrBlobId: { case: "signedUrl", value: { url: "https://old", key: "existing-key", conversationId: "conversation-2" } as never } }),
+      video({ content: { kind: "signed-link", url: "https://old", key: "existing-key", conversationId: "conversation-2" } }),
       { privacyMode: PrivacyMode.NO_TRAINING, uploads },
     )
     // The bytes are already stored, so nothing is uploaded again.
@@ -405,12 +399,11 @@ test("a stored video is uploaded from its stored bytes", async () => {
     const result = await processVideoAttachment({
       ctx: createContext(),
       blobStore: blobs.store,
-      selectedVideo: video({ dataOrBlobId: { case: "blobId", value: blobId } }),
+      video: video({ content: { kind: "blob", blobId } }),
       index: 0,
       modelId: "gemini-2.5-pro",
       maxVideoBytes: 1024,
       requestContext: undefined,
-      resourceAccessor: undefined,
       privacyMode: PrivacyMode.NO_TRAINING,
       attachedMediaUrlProvider: uploads.provider,
       conversationId: "conversation-3",
@@ -425,7 +418,7 @@ test("a stored video is uploaded from its stored bytes", async () => {
 test("a stored video whose bytes are gone is an error even when it would have been uploaded", async () => {
   const uploads = uploadHarness()
   await assert.rejects(
-    () => process(video({ dataOrBlobId: { case: "blobId", value: new Uint8Array([3, 3]) } }), {
+    () => process(video({ content: { kind: "blob", blobId: new Uint8Array([3, 3]) } }), {
       privacyMode: PrivacyMode.NO_TRAINING,
       uploads,
     }),

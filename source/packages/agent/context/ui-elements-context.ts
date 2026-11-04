@@ -1,53 +1,47 @@
-/**
- * The UI elements the user picked out of a running app.
- *
- * A picked element is described two ways depending on what it is: a React component is named with its
- * props, and anything else with its markup and its text. Props are parsed rather than passed through as
- * text, because the model reads them as data — and a payload that does not parse is reported as invalid
- * rather than dropped, since an element whose props are missing looks like an element that has none.
- *
- * The xpath travels with each element because it is what makes the selection actionable: the agent can
- * point at the same element again.
- */
-
-import type { SelectedUIElement } from "../../proto/generated/agent/v1/selected_context_pb.ts"
+export interface SelectedUIElementInput {
+  readonly element: string
+  readonly xpath: string
+  readonly textContent: string
+  readonly component?: string | undefined
+  readonly componentPropsJson?: string | undefined
+}
 
 export interface SelectedUIElementsTextContent {
   readonly type: "text"
   readonly text: string
 }
 
+function componentDescription(input: SelectedUIElementInput): string {
+  let props: unknown
+  if (input.componentPropsJson !== undefined && input.componentPropsJson !== "") {
+    try {
+      props = JSON.parse(input.componentPropsJson)
+    } catch {
+      props = { error: "Invalid JSON" }
+    }
+  }
+
+  return `<ui_element>\nReact Component: ${input.component}\nProps: ${props ? JSON.stringify(props, null, 2) : "None"}\nxpath: ${input.xpath}\n</ui_element>`
+}
+
+function markupDescription(input: SelectedUIElementInput): string {
+  return `<ui_element>\n${input.element}\nxpath: ${input.xpath}\ntextContent: ${input.textContent}\n</ui_element>`
+}
+
+function describeElement(input: SelectedUIElementInput): string {
+  return input.component !== undefined && input.component !== ""
+    ? componentDescription(input)
+    : markupDescription(input)
+}
+
 export function renderSelectedUIElementsContext(
-  uiElements: readonly SelectedUIElement[],
+  uiElements: readonly SelectedUIElementInput[],
 ): SelectedUIElementsTextContent | undefined {
   if (uiElements.length === 0) return undefined
-  const uiElementsText = uiElements.map(uiElement => {
-    if (uiElement.component !== undefined && uiElement.component !== "") {
-      let parsedProps: unknown
-      if (uiElement.componentPropsJson !== undefined && uiElement.componentPropsJson !== "") {
-        try {
-          parsedProps = JSON.parse(uiElement.componentPropsJson)
-        } catch (_error) {
-          parsedProps = { error: "Invalid JSON" }
-        }
-      }
-      return `<ui_element>
-React Component: ${uiElement.component}
-Props: ${parsedProps ? JSON.stringify(parsedProps, null, 2) : "None"}
-xpath: ${uiElement.xpath}
-</ui_element>`
-    }
-    return `<ui_element>
-${uiElement.element}
-xpath: ${uiElement.xpath}
-textContent: ${uiElement.textContent}
-</ui_element>`
-  }).join("\n\n")
+
+  const descriptions = uiElements.map(describeElement).join("\n\n")
   return {
     type: "text",
-    text: `<selected_ui_elements>
-The following UI elements have been selected by the user from the runtime.
-${uiElementsText}
-</selected_ui_elements>`,
+    text: `<selected_ui_elements>\nThe following UI elements have been selected by the user from the runtime.\n${descriptions}\n</selected_ui_elements>`,
   }
 }

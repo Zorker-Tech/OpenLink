@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { convertInternalToProtoPolicy, convertProtoToInternalPolicy } from "../../source/packages/local-exec/sandbox-conversion.ts";
+import {
+  adaptSandboxPolicyFromInterop as convertProtoToInternalPolicy,
+  adaptSandboxPolicyToInterop as convertInternalToProtoPolicy,
+} from "../../source/adapters/interop/agent/sandbox-policy-adapter.ts";
 import {
   NetworkPolicy,
   NetworkPolicy_DefaultAction,
@@ -9,7 +12,7 @@ import {
   SandboxPolicy,
   SandboxPolicy_ReadBoundaryMode,
   SandboxPolicy_Type,
-} from "../../source/packages/proto/generated/agent/v1/sandbox_pb.ts";
+} from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts";
 
 const protoPolicy = (fields: Record<string, unknown>) => new SandboxPolicy(fields as never);
 const network = (fields: Record<string, unknown>) => new NetworkPolicy(fields as never);

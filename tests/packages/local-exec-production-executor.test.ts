@@ -186,9 +186,20 @@ function recordingRuntime(): {
 
 /** A throw control names the exec id and the error; the manager also stamps a stack, which belongs to the caller's file. */
 function throwControlOf(message: unknown): { id: number; error: string } {
-  const control = message as { throw: { id: number; error: string } };
+  const control = unwrapLegacyControl(message) as { throw: { id: number; error: string } };
   assert.deepEqual(Object.keys(control), ["throw"]);
   return { id: control.throw.id, error: control.throw.error };
+}
+
+function unwrapLegacyControl(message: unknown): unknown {
+  if (
+    typeof message === "object"
+    && message !== null
+    && "schema" in message
+    && message.schema === "slate.local-exec.legacy.v1"
+    && "data" in message
+  ) return message.data;
+  return message;
 }
 
 async function collectOutputs(executor: LocalExecExecutor, decoded: unknown, signal: AbortSignal): Promise<LocalExecExecutorOutput[]> {
@@ -372,12 +383,63 @@ test("reads a file through the machine it was built for", async () => {
 
     assert.equal(outputs[0]?.kind, "client");
     assert.equal(outputs[1]?.kind, "control");
-    const result = outputs[0]?.message as { id: number; readResult: { success: { path: string; content: string; fileSize: string } } };
+    const result = outputs[0]?.message as {
+      id: number;
+      op: string;
+      result: { kind: string; path: string; body: { kind: string; text: string }; fileSize: string };
+    };
     assert.equal(result.id, 5);
-    assert.equal(result.readResult.success.path, resolve(machine, "notes.txt"));
-    assert.equal(result.readResult.success.content, "one\n");
-    assert.equal(result.readResult.success.fileSize, "4");
-    assert.deepEqual(outputs[1]?.message, { streamClose: { id: 5 } });
+    assert.equal(result.op, "workspace.read.result");
+    assert.equal(result.result.kind, "success");
+    assert.equal(result.result.path, resolve(machine, "notes.txt"));
+    assert.equal(result.result.body.kind, "text");
+    assert.equal(result.result.body.text, "one\n");
+    assert.equal(result.result.fileSize, "4");
+    assert.deepEqual(unwrapLegacyControl(outputs[1]?.message), { streamClose: { id: 5 } });
+  });
+});
+
+test("reads through the Slate-owned wire operation without generated message JSON", async () => {
+  await withMachine(async (machine) => {
+    writeFileSync(join(machine, "notes.txt"), "slate\n");
+    const executor = createDefaultProductionLocalExecExecutor({ root: machine });
+    const decoded = executor.decodeServerMessage({
+      schema: "slate.local-exec.operation.v1",
+      id: 31,
+      op: "workspace.read",
+      redacted: false,
+      args: { path: "notes.txt" },
+    });
+    const outputs = await collectOutputs(executor, decoded, new AbortController().signal);
+
+    const response = outputs[0]?.message as {
+      schema: string;
+      id: number;
+      op: string;
+      redacted: boolean;
+      result: {
+        kind: string;
+        path: string;
+        body: { kind: string; text: string };
+        totalLines: number;
+        fileSize: string;
+        truncated: boolean;
+        rangeApplied: boolean;
+      };
+    };
+    assert.equal(response.schema, "slate.local-exec.operation.v1");
+    assert.equal(response.id, 31);
+    assert.equal(response.op, "workspace.read.result");
+    assert.equal(response.redacted, false);
+    assert.deepEqual(response.result, {
+      kind: "success",
+      path: resolve(machine, "notes.txt"),
+      body: { kind: "text", text: "slate\n" },
+      totalLines: 2,
+      fileSize: "6",
+      truncated: false,
+      rangeApplied: false,
+    });
   });
 });
 
@@ -392,18 +454,25 @@ test("a file over the daemon's limit is refused before it is read, and one at th
       executor.decodeServerMessage({ id: 1, readArgs: { path: "over.txt" } }),
       new AbortController().signal,
     );
-    const refusal = over[0]?.message as { id: number; readResult: unknown };
+    const refusal = over[0]?.message as {
+      id: number;
+      op: string;
+      result: { kind: string; path: string; error: string };
+    };
     assert.equal(refusal.id, 1);
-    assert.deepEqual(refusal.readResult, {
-      error: { path: resolve(machine, "over.txt"), error: localExecFileTooLargeMessage(5, 4) },
-    });
+    assert.equal(refusal.op, "workspace.read.result");
+    assert.equal(refusal.result.kind, "error");
+    assert.equal(refusal.result.path, resolve(machine, "over.txt"));
+    assert.equal(refusal.result.error, localExecFileTooLargeMessage(5, 4));
 
     const atLimit = await collectOutputs(
       executor,
       executor.decodeServerMessage({ id: 2, readArgs: { path: "at-limit.txt" } }),
       new AbortController().signal,
     );
-    assert.equal((atLimit[0]?.message as { readResult: { success?: { content: string } } }).readResult.success?.content, "1234");
+    assert.equal((atLimit[0]?.message as {
+      result: { kind: string; body?: { kind: string; text: string } };
+    }).result.body?.text, "1234");
 
     // The answer says which number is the file and which is the limit, so a larger pair whose sizes read differently
     // proves the two are not swapped.
@@ -415,9 +484,11 @@ test("a file over the daemon's limit is refused before it is read, and one at th
       big.decodeServerMessage({ id: 3, readArgs: { path: "two-mib.txt" } }),
       new AbortController().signal,
     );
-    const bigError = (bigRefusal[0]?.message as { readResult: { error: { error: string } } }).readResult.error.error;
+    const bigError = (bigRefusal[0]?.message as {
+      result: { kind: string; error: string };
+    }).result.error;
     assert.equal(bigError, localExecFileTooLargeMessage(twoMiB, 1024 * 1024));
-    assert.match(bigError, /File is 2\.0 MiB, which exceeds Slate's 1\.0 MiB limit/);
+    assert.match(bigError, /This file is 2\.0 MiB and exceeds the 1\.0 MiB per-file limit/);
   });
 });
 
@@ -431,8 +502,70 @@ test("a directory is handed to the reader rather than sized as a file", async ()
       new AbortController().signal,
     );
 
-    const result = outputs[0]?.message as { readResult: { invalidFile?: { reason: string } } };
-    assert.match(result.readResult.invalidFile?.reason ?? "", /is a directory/);
+    const result = outputs[0]?.message as { result: { kind: string; reason: string } };
+    assert.equal(result.result.kind, "invalid-file");
+    assert.match(result.result.reason, /is a directory/);
+  });
+});
+
+test("lists a workspace through the Slate-owned operation schema", async () => {
+  await withMachine(async (machine) => {
+    mkdirSync(join(machine, "src"));
+    writeFileSync(join(machine, "src", "index.ts"), "export const value = 1\n");
+    const executor = createDefaultProductionLocalExecExecutor({ root: machine });
+    const outputs = await collectOutputs(
+      executor,
+      executor.decodeServerMessage({
+        schema: "slate.local-exec.operation.v1",
+        id: 41,
+        op: "workspace.list",
+        args: { path: "src" },
+      }),
+      new AbortController().signal,
+    );
+
+    const response = outputs[0]?.message as {
+      op: string;
+      result: { kind: string; root?: { path: string; files: Array<{ name: string }> } };
+    };
+    assert.equal(response.op, "workspace.list.result");
+    assert.equal(response.result.kind, "success");
+    assert.equal(response.result.root?.path, resolve(machine, "src"));
+    assert.deepEqual(response.result.root?.files.map((file) => file.name), ["index.ts"]);
+  });
+});
+
+test("refuses a denied background shell through the Slate-owned operation schema", async () => {
+  await withMachine(async (machine) => {
+    mkdirSync(join(machine, "work"));
+    const executor = createDefaultProductionLocalExecExecutor({ root: machine });
+    const outputs = await collectOutputs(
+      executor,
+      executor.decodeServerMessage({
+        schema: "slate.local-exec.operation.v1",
+        id: 42,
+        op: "shell.background.spawn",
+        args: {
+          command: "echo blocked",
+          workingDirectory: "work",
+          adminCommandDenylist: ["echo blocked"],
+          skipApproval: true,
+        },
+      }),
+      new AbortController().signal,
+    );
+
+    const response = outputs[0]?.message as {
+      op: string;
+      result: { kind: string; command: string; workingDirectory: string; reason: string };
+    };
+    assert.equal(response.op, "shell.background.spawn.result");
+    assert.equal(response.result.kind, "rejected");
+    assert.equal(response.result.command, "echo blocked");
+    assert.equal(response.result.workingDirectory, resolve(machine, "work"));
+    assert.match(response.result.reason, /blocked/i);
+    const close = unwrapLegacyControl(outputs[1]?.message);
+    assert.equal(typeof close === "object" && close !== null && "streamClose" in close, true);
   });
 });
 
@@ -461,14 +594,16 @@ test("a missing working directory is reported before the command runs in the mac
     const outputs = await collectOutputs(
       executor,
       executor.decodeServerMessage({
+        schema: "slate.local-exec.operation.v1",
         id: 9,
-        shellStreamArgs: { command: "true", workingDirectory: "/definitely/not/here" },
+        op: "shell.stream",
+        args: { command: "true", workingDirectory: "/definitely/not/here" },
       }),
       controller.signal,
     );
 
     // The note about the fall back arrives as a stream event, then the aborted run ends as a throw control.
-    assert.equal((outputs[0]?.message as { shellStream: { stderr: { data: string } } }).shellStream.stderr.data,
+    assert.equal((outputs[0]?.message as { event: { kind: string; data: string } }).event.data,
       "working directory /definitely/not/here does not exist on this machine; running in " + machine + " instead\n");
     assert.deepEqual(throwControlOf(outputs[1]?.message), { id: 9, error: "stop-marker" });
   });
@@ -480,12 +615,20 @@ test("a shell command runs in the working directory that was settled for it", as
     const executor = createDefaultProductionLocalExecExecutor({ root: machine });
     const outputs = await collectOutputs(
       executor,
-      executor.decodeServerMessage({ id: 6, shellStreamArgs: { command: "pwd", workingDirectory: "work" } }),
+      executor.decodeServerMessage({
+        schema: "slate.local-exec.operation.v1",
+        id: 6,
+        op: "shell.stream",
+        args: { command: "pwd", workingDirectory: "work" },
+      }),
       new AbortController().signal,
     );
 
     const printed = outputs
-      .map((output) => (output.message as { shellStream?: { stdout?: { data: string } } }).shellStream?.stdout?.data)
+      .map((output) => {
+        const event = (output.message as { event?: { kind?: string; data?: string } }).event;
+        return event?.kind === "stdout" ? event.data : undefined;
+      })
       .filter((data): data is string => data !== undefined)
       .join("");
     assert.equal(realpathSync(printed.trim()), realpathSync(join(machine, "work")));
@@ -498,16 +641,21 @@ test("a command whose working directory is missing runs in the machine's root", 
     const outputs = await collectOutputs(
       executor,
       executor.decodeServerMessage({
+        schema: "slate.local-exec.operation.v1",
         id: 12,
-        shellStreamArgs: { command: "pwd", workingDirectory: "/definitely/not/here" },
+        op: "shell.stream",
+        args: { command: "pwd", workingDirectory: "/definitely/not/here" },
       }),
       new AbortController().signal,
     );
 
-    const notice = (outputs[0]?.message as { shellStream?: { stderr?: { data: string } } }).shellStream?.stderr?.data;
+    const notice = (outputs[0]?.message as { event?: { kind?: string; data?: string } }).event?.data;
     assert.equal(notice, "working directory /definitely/not/here does not exist on this machine; running in " + machine + " instead\n");
     const printed = outputs
-      .map((output) => (output.message as { shellStream?: { stdout?: { data: string } } }).shellStream?.stdout?.data)
+      .map((output) => {
+        const event = (output.message as { event?: { kind?: string; data?: string } }).event;
+        return event?.kind === "stdout" ? event.data : undefined;
+      })
       .filter((data): data is string => data !== undefined)
       .join("");
     assert.equal(realpathSync(printed.trim()), realpathSync(machine));
@@ -525,8 +673,14 @@ test("a running command ends when the executor cancels it", async () => {
       if (outputs.length === 1) executor.cancel(decoded.id);
     }
 
-    const last = outputs.at(-1)?.message as { throw?: { id: number }; shellStream?: { exit?: { aborted?: boolean } } };
-    const endedByAbort = last.throw?.id === 21 || last.shellStream?.exit?.aborted === true;
+    const last = unwrapLegacyControl(outputs.at(-1)?.message) as {
+      throw?: { id: number };
+      shellStream?: { exit?: { aborted?: boolean } };
+      event?: { kind?: string; aborted?: boolean };
+    };
+    const endedByAbort = last.throw?.id === 21
+      || last.shellStream?.exit?.aborted === true
+      || (last.event?.kind === "exit" && last.event.aborted === true);
     assert.equal(endedByAbort, true, "a cancelled command ends as an abort rather than running to completion");
   });
 });
@@ -538,7 +692,7 @@ test("an unsupported server message is answered with a throw and a stream close"
 
     assert.deepEqual(outputs.map((output) => output.kind), ["control", "control"]);
     assert.deepEqual(throwControlOf(outputs[0]?.message), { id: 13, error: "No handler found for server message of type undefined" });
-    assert.deepEqual(outputs[1]?.message, { streamClose: { id: 13 } });
+    assert.deepEqual(unwrapLegacyControl(outputs[1]?.message), { streamClose: { id: 13 } });
   });
 });
 
@@ -550,6 +704,6 @@ test("the default executor is the four-method provider surface", async () => {
     assert.equal(executor.execute.length, 2);
     assert.equal(executor.cancel.length, 1);
     assert.equal(executor.throwControl.length, 1);
-    assert.deepEqual(executor.throwControl("refused"), { throw: { error: "refused" } });
+    assert.deepEqual(unwrapLegacyControl(executor.throwControl("refused")), { throw: { error: "refused" } });
   });
 });

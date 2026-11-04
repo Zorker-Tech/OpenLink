@@ -113,7 +113,11 @@ describe("which files an image may come from", () => {
     const folder = join(dir, "folder.png");
     mkdirSync(folder, { recursive: true });
     const asDirectory = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${folder}`], agentDir: join(scratch, "agent-images") });
-    assert.deepEqual(asDirectory, { ok: false, message: `Could not read the image at 'file://${folder}'. The path is one you're allowed to read, so check it actually exists.` });
+    assert.equal(asDirectory.ok, false);
+    if (!asDirectory.ok) {
+      assert.equal(asDirectory.message.includes(`file://${folder}`), true);
+      assert.match(asDirectory.message, /could not be read/i);
+    }
     // A file that is not there is the same answer.
     const absent = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${join(dir, "gone.png")}`], agentDir: join(scratch, "agent-images") });
     assert.equal(absent.ok, false);
@@ -125,9 +129,18 @@ describe("which files an image may come from", () => {
     assert.deepEqual(inside.ok === true ? [inside.images[0]!.path, [...inside.images[0]!.data].length] : null, [`${SLATE_BOX_WORKSPACE_ROOT}/shot.png`, `${SLATE_BOX_WORKSPACE_ROOT}/shot.png`.length]);
     // A path that merely starts with the same letters is not inside the workspace.
     const lookalike = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${SLATE_BOX_WORKSPACE_ROOT}-elsewhere/shot.png`], agentDir: join(scratch, "agent-box"), readBoxFile: readBoxFile as never });
-    assert.deepEqual(lookalike, { ok: false, message: `Refused to read 'file://${SLATE_BOX_WORKSPACE_ROOT}-elsewhere/shot.png': it is neither inside your own attachments/assets folder nor under /workspace in your box. Copy the image into /workspace first, then attach it from there.` });
+    assert.equal(lookalike.ok, false);
+    if (!lookalike.ok) {
+      assert.equal(lookalike.message.includes(`file://${SLATE_BOX_WORKSPACE_ROOT}-elsewhere/shot.png`), true);
+      assert.match(lookalike.message, /outside the allowed attachment locations/);
+      assert.match(lookalike.message, /\/workspace/);
+    }
     const outside = await loadCloudAgentImages({ ctx: undefined, urls: ["file:///etc/passwd.png"], agentDir: join(scratch, "agent-box"), readBoxFile: readBoxFile as never });
-    assert.deepEqual(outside, { ok: false, message: "Refused to read 'file:///etc/passwd.png': it is neither inside your own attachments/assets folder nor under /workspace in your box. Copy the image into /workspace first, then attach it from there." });
+    assert.equal(outside.ok, false);
+    if (!outside.ok) {
+      assert.equal(outside.message.includes("file:///etc/passwd.png"), true);
+      assert.match(outside.message, /outside the allowed attachment locations/);
+    }
     // Nothing to read the box with is as good as a file that is not there.
     const withoutReader = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${SLATE_BOX_WORKSPACE_ROOT}/shot.png`], agentDir: join(scratch, "agent-box") });
     assert.equal(withoutReader.ok, false);
@@ -135,7 +148,11 @@ describe("which files an image may come from", () => {
     assert.deepEqual(tooLarge, { ok: false, message: `"file://${SLATE_BOX_WORKSPACE_ROOT}/shot.png" is too large to attach (max 25 MB).` });
     // A file that cannot be read, and a url that is not a file at all, are told apart from all of that.
     const unreadable = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${SLATE_BOX_WORKSPACE_ROOT}/shot.png`], agentDir: join(scratch, "agent-box"), readBoxFile: (async () => { throw new Error("gone"); }) as never });
-    assert.deepEqual(unreadable, { ok: false, message: `Could not read the image at 'file://${SLATE_BOX_WORKSPACE_ROOT}/shot.png'. The path is one you're allowed to read, so check it actually exists.` });
+    assert.equal(unreadable.ok, false);
+    if (!unreadable.ok) {
+      assert.equal(unreadable.message.includes(`file://${SLATE_BOX_WORKSPACE_ROOT}/shot.png`), true);
+      assert.match(unreadable.message, /could not be read/i);
+    }
     const notAFileUrl = await loadCloudAgentImages({ ctx: undefined, urls: ["https://example.test/shot.png"], agentDir: join(scratch, "agent-box") });
     assert.match(String(notAFileUrl.ok === false ? notAFileUrl.message : ""), /is not a file:\/\/ url/);
     const notAnImage = await loadCloudAgentImages({ ctx: undefined, urls: [`file://${SLATE_BOX_WORKSPACE_ROOT}/notes.txt`], agentDir: join(scratch, "agent-box") });

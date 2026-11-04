@@ -33,33 +33,20 @@ import { createSpan } from "../../../context/telemetry.ts"
 import { createStringResult } from "../../../chat-inference/prompt-executor.ts"
 import type { ResourceAccessor } from "../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../agent-exec/executor-resources.ts"
-import { lsExecutorResource } from "../../../agent-exec/ls.ts"
-import { readExecutorResource } from "../../../agent-exec/read-operation.ts"
-import { subagentExecutorResource } from "../../../agent-exec/subagent.ts"
-import { subagentAwaitExecutorResource } from "../../../agent-exec/subagent-await.ts"
 import { getConversationId } from "../../utils/request-scope.ts"
 import { extractTerminalId } from "../../../utils/managed-paths.ts"
 import {
-  AwaitArgs,
-  AwaitError,
-  AwaitResult,
-  AwaitSuccess,
-  AwaitTaskComplete,
-  AwaitTaskStillRunning,
-  AwaitToolCall,
-} from "../../../proto/generated/agent/v1/await_tool_pb.ts"
-import { ReadArgs } from "../../../proto/generated/agent/v1/read_exec_pb.ts"
-import { LsArgs } from "../../../proto/generated/agent/v1/ls_exec_pb.ts"
-import {
-  SubagentArgs,
-  SubagentAwaitArgs,
-  SubagentAwaitComplete,
-  SubagentAwaitError,
-  SubagentAwaitNotFound,
-  SubagentAwaitResult,
-  SubagentAwaitStillRunning,
-} from "../../../proto/generated/agent/v1/subagent_exec_pb.ts"
-import { ToolCall } from "../../../proto/generated/agent/v1/agent_pb.ts"
+  createAwaitErrorToolCallInterop,
+  createAwaitResultInterop,
+  createAwaitToolCallInterop,
+  listAwaitDirectoryTreeInterop,
+  projectAwaitResultInterop,
+  readAwaitJobFileInterop,
+  runAwaitSubagentInterop,
+  type AwaitDirectoryNode,
+  type AwaitJobFileSnapshot,
+  type AwaitResultView,
+} from "../../../../adapters/interop/agent/await-tool-protocol-adapter.ts"
 import { ToolCallAbortedError, ToolCallArgParseError, createZodAgentTool, withSafeParsedArgs } from "../tool-support.ts"
 import { lenientNumber } from "../lenient-scalars.ts"
 
@@ -103,15 +90,15 @@ interface ExecutionMeta {
 interface InteractionHandlerBridge {
   executeToolCall(
     ctx: Context,
-    toolCall: ToolCall,
+    toolCall: unknown,
     callId: string,
-    execute: (ctx: Context) => Promise<AwaitResult>,
-    merge: (result: AwaitResult) => ToolCall,
-  ): Promise<AwaitResult>
+    execute: (ctx: Context) => Promise<unknown>,
+    merge: (result: unknown) => unknown,
+  ): Promise<unknown>
 }
 
-function awaitCallOf(value: AwaitToolCall): ToolCall {
-  return new ToolCall({ tool: { case: "awaitToolCall", value } })
+function awaitCallOf(request: AwaitRequest, result?: AwaitResultView): unknown {
+  return createAwaitToolCallInterop(request, result)
 }
 
 function wholeNonNegative(value: unknown, fallback: number): number {
@@ -217,36 +204,20 @@ function compileOutputMatcher(pattern: string | undefined): { matched(content: s
   }
 }
 
-interface JobFileSnapshot { readonly exists: boolean; readonly content: string; readonly outputLength: number }
-
 /** The file as it stands right now, which is what every wait slice is decided from. */
-async function readJobFile(ctx: Context, resourceAccessor: AwaitAccessor, path: string, toolCallId: string): Promise<JobFileSnapshot> {
-  const result = await resourceAccessor.get(readExecutorResource).execute(ctx, new ReadArgs({ path, toolCallId }))
-  switch (result.result.case) {
-    case "success": {
-      const output = result.result.value.output
-      const content = output.case === "content" ? output.value : output.case === "data" ? Buffer.from(output.value).toString("utf8") : ""
-      const outputLength = Number(result.result.value.fileSize)
-      return { exists: true, content, outputLength: Number.isFinite(outputLength) && outputLength > 0 ? outputLength : content.length }
-    }
-    case "fileNotFound": return { exists: false, content: "", outputLength: 0 }
-    case "permissionDenied": throw new Error(`Permission denied reading ${path}`)
-    case "rejected": throw new Error(result.result.value.reason || `Read rejected for ${path}`)
-    case "invalidFile": throw new Error(result.result.value.reason || `Invalid file: ${path}`)
-    case "error": throw new Error(result.result.value.error || `Read failed for ${path}`)
-    case undefined: throw new Error(`Unknown read result for ${path}`)
-  }
+async function readJobFile(ctx: Context, resourceAccessor: AwaitAccessor, path: string, toolCallId: string): Promise<AwaitJobFileSnapshot> {
+  return readAwaitJobFileInterop(ctx, resourceAccessor, path, toolCallId)
 }
 
 /** A transcript is found by walking the listing, since the folder it lands in depends on the run. */
-function findInTree(root: { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly unknown[] }[] } | undefined, name: string): string | undefined {
+function findInTree(root: AwaitDirectoryNode | undefined, name: string): string | undefined {
   if (root === undefined) return undefined
   const stack: Array<typeof root> = [root]
   while (stack.length > 0) {
     const node = stack.pop()!
     const file = node.childrenFiles.find(candidate => candidate.name === name)
     if (file !== undefined) return underFolder(node.absPath, file.name)
-    for (const child of node.childrenDirs) stack.push(child as typeof root)
+    for (const child of node.childrenDirs) stack.push(child)
   }
   return undefined
 }
@@ -261,16 +232,8 @@ async function findSubagentTranscript(ctx: Context, resourceAccessor: AwaitAcces
   for (const candidate of candidates) {
     if ((await readJobFile(ctx, resourceAccessor, candidate, toolCallId).catch(() => undefined))?.exists === true) return candidate
   }
-  const listed = await resourceAccessor.get(lsExecutorResource).execute(ctx, new LsArgs({ path: folder, toolCallId, timeoutMs: 2_000 })).catch(() => undefined)
-  const tree = listed?.result.case === "success" || listed?.result.case === "timeout" ? listed.result.value.directoryTreeRoot : undefined
+  const tree = await listAwaitDirectoryTreeInterop(ctx, resourceAccessor, folder, toolCallId)
   return findInTree(tree, `${taskId}.jsonl`)
-}
-
-/** A success that carries no await result at all is reported as an unknown result, not as a success. */
-function awaitResultShape(result: AwaitResult["result"]): AwaitResult["result"] {
-  if (result.case === "success") return result.value.awaitResult?.case === undefined ? { case: undefined } : result.value.awaitResult
-  if (result.case === "error") return result
-  return { case: undefined }
 }
 
 function awaitParameters(options: { enableSubagentAwaiting: boolean; defaultBlockUntilMs: number; requireBlockUntilMs: boolean; training: boolean; includeWaitingSignal: boolean }) {
@@ -400,18 +363,44 @@ function awaitRequestOf(raw: unknown, fallbackBlockUntilMs: number): { request: 
 }
 
 /** The result of a wait with nothing to watch: the duration slept, or a sleep the user's message cut short. */
-function sleptAwaitResult(startMs: number, outcome: "timeout" | "steer_release"): AwaitResult {
-  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: "", runtimeMs: BigInt(Date.now() - startMs), outputFilePath: "", outputLength: 0n, regexRequested: false, ...(outcome === "steer_release" ? { wakeReason: STEER_WAKE_REASON } : {}) }) } }) } })
+function sleptAwaitResult(startMs: number, outcome: "timeout" | "steer_release"): AwaitResultView {
+  return {
+    kind: "complete",
+    taskId: "",
+    runtimeMs: Date.now() - startMs,
+    outputFilePath: "",
+    outputLength: 0,
+    regexRequested: false,
+    ...(outcome === "steer_release" ? { wakeReason: STEER_WAKE_REASON } : {}),
+  }
 }
 
 /** The result a finished shell job reports, with its exit code when the footer carried one. */
-function completedShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, exitCode: number | undefined): AwaitResult {
-  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: request.taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: jobFile, outputLength: BigInt(outputLength), regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0, ...(matchedText === undefined ? {} : { regexMatch: matchedText }), ...(exitCode === undefined ? {} : { exitCode }) }) } }) } })
+function completedShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, exitCode: number | undefined): AwaitResultView {
+  return {
+    kind: "complete",
+    taskId: request.taskId,
+    runtimeMs,
+    outputFilePath: jobFile,
+    outputLength,
+    regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0,
+    ...(matchedText === undefined ? {} : { regexMatch: matchedText }),
+    ...(exitCode === undefined ? {} : { exitCode }),
+  }
 }
 
 /** The result a shell job that is still running reports, whether the wait ran out, was a status check, or was steered. */
-function runningShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, steered: boolean): AwaitResult {
-  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "stillRunning", value: new AwaitTaskStillRunning({ taskId: request.taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: jobFile, outputLength: BigInt(outputLength), regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0, ...(matchedText === undefined ? {} : { regexMatch: matchedText }), ...(steered ? { wakeReason: STEER_WAKE_REASON } : {}) }) } }) } })
+function runningShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, steered: boolean): AwaitResultView {
+  return {
+    kind: "still-running",
+    taskId: request.taskId,
+    runtimeMs,
+    outputFilePath: jobFile,
+    outputLength,
+    regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0,
+    ...(matchedText === undefined ? {} : { regexMatch: matchedText }),
+    ...(steered ? { wakeReason: STEER_WAKE_REASON } : {}),
+  }
 }
 
 /**
@@ -426,19 +415,31 @@ async function subagentAwaitResult(
   toolCallId: string,
   request: AwaitRequest,
   startMs: number,
-): Promise<AwaitResult> {
+): Promise<AwaitResultView> {
   const parentConversationId = getConversationId(toolCtx)
   if (!parentConversationId) throw new Error("Awaiting subagent tasks requires a non-empty conversationId in the agent context")
   // A bounded wait is one call that returns when the subagent finishes; otherwise the wait is a
   // read-only resume of the subagent, which is what reports its transcript.
-  const result = options.enableBoundedSubagentAwait === true
-    ? await resourceAccessor.get(subagentAwaitExecutorResource).execute(toolCtx, new SubagentAwaitArgs({ agentId: request.taskId, timeoutMs: request.blockUntilMs }))
-    : await resourceAccessor.get(subagentExecutorResource).execute(toolCtx, new SubagentArgs({ toolCallId, resumeAgentId: request.taskId, parentConversationId, prompt: "", readonly: true, runInBackground: false, subagentType: options.defaultSubagentType ?? "generalPurpose", modelId: options.defaultModelId ?? "default-model" }))
-  if (!("result" in result) || result.result.case !== "complete") throw new Error("Failed to await subagent task")
-  const complete = result.result.value
-  const transcriptPath = "transcriptPath" in complete ? complete.transcriptPath : await findSubagentTranscript(toolCtx, resourceAccessor, request.taskId, options.agentTranscriptsFolder, toolCallId, parentConversationId)
+  const outcome = await runAwaitSubagentInterop(toolCtx, resourceAccessor, {
+    bounded: options.enableBoundedSubagentAwait === true,
+    toolCallId,
+    taskId: request.taskId,
+    timeoutMs: request.blockUntilMs,
+    parentConversationId,
+    subagentType: options.defaultSubagentType ?? "generalPurpose",
+    modelId: options.defaultModelId ?? "default-model",
+  })
+  const transcriptPath = outcome.hasTranscriptPathField
+    ? outcome.transcriptPath
+    : await findSubagentTranscript(toolCtx, resourceAccessor, request.taskId, options.agentTranscriptsFolder, toolCallId, parentConversationId)
   const jobFileSnapshot = transcriptPath === undefined ? undefined : await readJobFile(toolCtx, resourceAccessor, transcriptPath, toolCallId).catch(() => undefined)
-  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: request.taskId, runtimeMs: BigInt(Date.now() - startMs), outputFilePath: transcriptPath ?? "", outputLength: BigInt(jobFileSnapshot?.outputLength ?? 0) }) } }) } })
+  return {
+    kind: "complete",
+    taskId: request.taskId,
+    runtimeMs: Date.now() - startMs,
+    outputFilePath: transcriptPath ?? "",
+    outputLength: jobFileSnapshot?.outputLength ?? 0,
+  }
 }
 
 /**
@@ -454,7 +455,7 @@ async function shellAwaitResult(
   request: AwaitRequest,
   startMs: number,
   injectionSignal: ExecutionMeta["contextInjectionSignal"],
-): Promise<AwaitResult> {
+): Promise<AwaitResultView> {
   const regexRequested = typeof request.pattern === "string" && request.pattern.trim().length > 0
   const outputMatcher = compileOutputMatcher(request.pattern)
   const terminalsRoot = resolveTerminalsFolder(options.terminalsFolder)
@@ -483,15 +484,13 @@ async function shellAwaitResult(
 }
 
 /** What the model is told a wait returned: a sleep, a finished job, a still-running one, or a failure. */
-function renderAwaitResult(output: AwaitResult): string {
-  const normalized = awaitResultShape(output.result)
-  if (normalized.case === "complete") {
-    const value = normalized.value
-    if (!value.taskId) return value.wakeReason === STEER_WAKE_REASON ? "Slept briefly. Sleep released early: a new user message is arriving." : "Slept briefly."
-    return `Task completed in ${value.runtimeMs.toString()}ms with exit code: ${value.exitCode ?? "unknown"}.\noutput_file_path: ${value.outputFilePath}\noutput_length: ${value.outputLength.toString()}`
+function renderAwaitResult(output: AwaitResultView): string {
+  if (output.kind === "complete") {
+    if (!output.taskId) return output.wakeReason === STEER_WAKE_REASON ? "Slept briefly. Sleep released early: a new user message is arriving." : "Slept briefly."
+    return `Task completed in ${output.runtimeMs}ms with exit code: ${output.exitCode ?? "unknown"}.\noutput_file_path: ${output.outputFilePath}\noutput_length: ${output.outputLength}`
   }
-  if (normalized.case === "stillRunning") return `Task still running after ${normalized.value.runtimeMs.toString()}ms...\noutput_file_path: ${normalized.value.outputFilePath}\noutput_length: ${normalized.value.outputLength.toString()}`
-  if (normalized.case === "error") return `Error awaiting task: ${normalized.value.error}`
+  if (output.kind === "still-running") return `Task still running after ${output.runtimeMs}ms...\noutput_file_path: ${output.outputFilePath}\noutput_length: ${output.outputLength}`
+  if (output.kind === "error") return `Error awaiting task: ${output.error}`
   return "Unknown error"
 }
 
@@ -529,27 +528,26 @@ export function createAwaitTool(resourceAccessor: AwaitAccessor, options: AwaitT
   // The wrapper hands the handler and the parsed arguments over as unknowns, since it does not know this
   // tool's own types; the arguments have just been parsed against this tool's schema, so they are asserted
   // here rather than re-checked.
-  const execute = async (parent: Context, bridge: unknown, raw: unknown, meta: ExecutionMeta): Promise<AwaitResult> => {
+  const execute = async (parent: Context, bridge: unknown, raw: unknown, meta: ExecutionMeta): Promise<unknown> => {
     const callBridge = bridge as InteractionHandlerBridge
     const { request, waitingRequested } = awaitRequestOf(raw, defaultBlockUntilMs)
     using executionSpan = createSpan(parent.withName("awaitExecute"))
     const ctx = executionSpan.ctx
-    const baseAwaitCall = new AwaitToolCall({ args: new AwaitArgs({ taskId: request.taskId, blockUntilMs: request.blockUntilMs, ...(request.pattern === undefined ? {} : { regex: request.pattern }) }) })
-    return callBridge.executeToolCall(ctx, awaitCallOf(baseAwaitCall), meta.toolCallId, async toolCtx => {
+    return callBridge.executeToolCall(ctx, awaitCallOf(request), meta.toolCallId, async toolCtx => {
       // Waiting for a subagent is the one thing this tool must not be used for, so asking for it is refused.
       if (includeWaitingSignal && waitingRequested) throw new ToolCallArgParseError(SUBAGENT_WAIT_REFUSAL)
       const startMs = Date.now()
       if (request.taskId.length === 0) {
         if (request.blockUntilMs === 0) throw new Error("Must pass a task id or wait for a nonzero duration.")
-        return sleptAwaitResult(startMs, await sleepUnlessSteered(toolCtx, request.blockUntilMs, meta.contextInjectionSignal))
+        return createAwaitResultInterop(sleptAwaitResult(startMs, await sleepUnlessSteered(toolCtx, request.blockUntilMs, meta.contextInjectionSignal)))
       }
       if (!looksLikeShellId(request.taskId)) {
         if (!enableSubagentAwaiting) throw new ToolCallArgParseError(SUBAGENT_WAIT_REFUSAL)
         if (typeof request.pattern === "string" && request.pattern.trim().length > 0) throw new ToolCallArgParseError("Regex awaiting is not available for subagents. Run Await without regex, or await a shell task id instead.")
-        return subagentAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs)
+        return createAwaitResultInterop(await subagentAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs))
       }
-      return shellAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs, meta.contextInjectionSignal)
-    }, result => awaitCallOf(new AwaitToolCall({ ...baseAwaitCall, result })))
+      return createAwaitResultInterop(await shellAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs, meta.contextInjectionSignal))
+    }, result => awaitCallOf(request, projectAwaitResultInterop(result)))
   }
 
   return createZodAgentTool(options.toolIdentifier ?? "AWAIT", {
@@ -562,8 +560,8 @@ export function createAwaitTool(resourceAccessor: AwaitAccessor, options: AwaitT
       return awaitDescriptionFor(promptVersion, name, training, enableSubagentAwaiting, mentionSubagents, shellToolName, taskToolName, options)
     },
     parameters,
-    execute: withSafeParsedArgs(parsing, execute, awaitCallOf(new AwaitToolCall())),
-    render: async (_ctx: Context, output: AwaitResult) => createStringResult(renderAwaitResult(output)),
-    serializeError: error => awaitCallOf(new AwaitToolCall({ result: new AwaitResult({ result: { case: "error", value: new AwaitError({ error: error instanceof Error ? error.message : String(error) }) } }) })),
+    execute: withSafeParsedArgs(parsing, execute, awaitCallOf({ taskId: "", blockUntilMs: 0 })),
+    render: async (_ctx: Context, output: unknown) => createStringResult(renderAwaitResult(projectAwaitResultInterop(output))),
+    serializeError: error => createAwaitErrorToolCallInterop(error instanceof Error ? error.message : String(error)),
   })
 }

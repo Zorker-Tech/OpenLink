@@ -1,13 +1,82 @@
-/**
- * Telling a phone that an agent needs its user.
- *
- * A push is worth sending on the same terms as an operating-system notification, and the decision is made by the same
- * decider; a window that was focused recently counts as focused, since a phone's idea of presence arrives late. What
- * arrives before the baseline is seeded is held and replayed once it is, so a push is not sent for something that
- * happened before the notifier knew what the user had already seen.
- */
-import { SlateOsNotificationDecider, toNotificationSnapshot, type NotificationAgent } from "../../shared/os-notification.ts";
-export const SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS = 5 * 60_000;
-export interface MobilePushInput { readonly agentId: string; readonly agentName: string; readonly messagePreview?: string; readonly lastMessageId?: string; readonly awaitingUserResponse: boolean; }
-export function createSlateMobilePushSender(client: { notifySlateAgentTurnFinished(input: { agentId: string; agentName: string; messagePreview: string; lastMessageId: string; awaitingUserResponse: boolean }): Promise<unknown> }): (input: MobilePushInput) => Promise<void> { return async (input) => { await client.notifySlateAgentTurnFinished({ agentId: input.agentId, agentName: input.agentName, messagePreview: input.messagePreview ?? "", lastMessageId: input.lastMessageId ?? "", awaitingUserResponse: input.awaitingUserResponse }); }; }
-export class SlateMobilePushNotifier { private readonly decider = new SlateOsNotificationDecider(); private readonly now: () => number; private hasSeededBaseline = false; private preSeedDeltas: Array<{ event: { agent: NotificationAgent }; presence: { windowFocusedAtMs?: number | null } }> = []; constructor(private readonly deps: { readonly notify: (input: MobilePushInput) => Promise<void>; readonly now?: () => number }) { this.now = deps.now ?? Date.now; } seedBaseline(agents: readonly NotificationAgent[]): void { this.decider.seedBaseline(agents.map(toNotificationSnapshot)); this.flushPreSeedDeltas(); } handleAgentsEvent(event: { readonly agents: readonly NotificationAgent[] }, presence: { readonly windowFocusedAtMs?: number | null }): void { const resolved = this.resolvePresence(presence); const transitions = this.decider.decide({ agents: event.agents.map(toNotificationSnapshot), ...resolved }); this.flushPreSeedDeltas(); for (const transition of transitions) this.fire(transition); } handleAgentUpsertedEvent(event: { readonly agent: NotificationAgent }, presence: { readonly windowFocusedAtMs?: number | null }): void { if (!this.hasSeededBaseline) { this.preSeedDeltas.push({ event, presence }); return; } for (const transition of this.decider.decideAgent(toNotificationSnapshot(event.agent), this.resolvePresence(presence))) this.fire(transition); } private resolvePresence(presence: { readonly windowFocusedAtMs?: number | null }): { nowMs: number; isWindowFocused: boolean } { const nowMs = this.now(); const focusedAt = presence.windowFocusedAtMs; return { nowMs, isWindowFocused: focusedAt != null && nowMs - focusedAt <= SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS }; } forget(agentId: string): void { this.decider.forget(agentId); } private flushPreSeedDeltas(): void { if (this.hasSeededBaseline) return; this.hasSeededBaseline = true; const buffered = this.preSeedDeltas; this.preSeedDeltas = []; for (const item of buffered) this.handleAgentUpsertedEvent(item.event, item.presence); } private fire(transition: ReturnType<SlateOsNotificationDecider["decide"]>[number]): void { void this.deps.notify({ agentId: transition.agentId, agentName: transition.agentName, ...(transition.lastMessagePreview == null ? {} : { messagePreview: transition.lastMessagePreview }), ...(transition.lastMessageId == null ? {} : { lastMessageId: transition.lastMessageId }), awaitingUserResponse: transition.kind === "agent-needs-input" }).catch(() => {}); } }
+import {
+  SlateOsNotificationDecider,
+  toNotificationSnapshot,
+  type NotificationAgent,
+  type NotificationTransition,
+} from "../../shared/os-notification.ts"
+import type { MobilePushInput } from "../../shared/mobile-push-contracts.ts"
+import {
+  pushPresenceAt,
+  type MobileWindowPresence,
+} from "./mobile-push-policy.ts"
+import { mobilePushInputForTransition } from "./mobile-push-projection.ts"
+
+export type { MobilePushInput } from "../../shared/mobile-push-contracts.ts"
+export { SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS } from "./mobile-push-policy.ts"
+
+interface PendingAgentUpdate {
+  readonly event: { readonly agent: NotificationAgent }
+  readonly presence: MobileWindowPresence
+}
+
+export class SlateMobilePushNotifier {
+  private readonly decider = new SlateOsNotificationDecider()
+  private readonly currentTime: () => number
+  private baselineReady = false
+  private queuedUpdates: PendingAgentUpdate[] = []
+
+  constructor(private readonly deps: {
+    readonly notify: (input: MobilePushInput) => Promise<void>
+    readonly now?: () => number
+  }) {
+    this.currentTime = deps.now ?? Date.now
+  }
+
+  seedBaseline(agents: readonly NotificationAgent[]): void {
+    this.decider.seedBaseline(agents.map(toNotificationSnapshot))
+    this.replayQueuedUpdates()
+  }
+
+  handleAgentsEvent(
+    event: { readonly agents: readonly NotificationAgent[] },
+    presence: MobileWindowPresence,
+  ): void {
+    const context = pushPresenceAt(this.currentTime(), presence)
+    const transitions = this.decider.decide({
+      agents: event.agents.map(toNotificationSnapshot),
+      ...context,
+    })
+    this.replayQueuedUpdates()
+    for (const transition of transitions) this.send(transition)
+  }
+
+  handleAgentUpsertedEvent(
+    event: { readonly agent: NotificationAgent },
+    presence: MobileWindowPresence,
+  ): void {
+    if (!this.baselineReady) {
+      this.queuedUpdates.push({ event, presence })
+      return
+    }
+    const context = pushPresenceAt(this.currentTime(), presence)
+    for (const transition of this.decider.decideAgent(toNotificationSnapshot(event.agent), context)) {
+      this.send(transition)
+    }
+  }
+
+  forget(agentId: string): void {
+    this.decider.forget(agentId)
+  }
+
+  private replayQueuedUpdates(): void {
+    if (this.baselineReady) return
+    this.baselineReady = true
+    const queued = this.queuedUpdates
+    this.queuedUpdates = []
+    for (const update of queued) this.handleAgentUpsertedEvent(update.event, update.presence)
+  }
+
+  private send(transition: NotificationTransition): void {
+    void this.deps.notify(mobilePushInputForTransition(transition)).catch(() => {})
+  }
+}

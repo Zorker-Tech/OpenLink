@@ -225,9 +225,9 @@ describe("what an agent may be told to change about itself", () => {
     assert.equal((await state.deleteAutomation({ id: "missing" })).message, 'no routine with folder "missing" exists.');
     assert.equal((await state.writeWorkflow({ name: "Release notes", body: "1. Do it" })).message, 'Saved workflow "Release notes" (id workflow-1).');
     assert.equal((await state.writeWorkflow({ id: "workflow-1", name: "Release notes", body: "2. Done" })).message, 'Updated workflow "Release notes" (id workflow-1).');
-    assert.equal((await state.writeWorkflow({ id: "missing", name: "x", body: "y" })).message, 'no workflow with id "missing" exists, or the new fields were invalid. Cursor-managed skills cannot be edited.');
+    assert.equal((await state.writeWorkflow({ id: "missing", name: "x", body: "y" })).message, 'no workflow with id "missing" exists, or the new fields were invalid. Platform-managed skills cannot be edited.');
     assert.equal((await state.deleteWorkflow({ id: "workflow-1" })).message, "Deleted workflow workflow-1.");
-    assert.equal((await state.deleteWorkflow({ id: "missing" })).message, 'no workflow with id "missing" exists, or it is a Cursor-managed skill, which cannot be deleted.');
+    assert.equal((await state.deleteWorkflow({ id: "missing" })).message, 'no workflow with id "missing" exists, or it is a platform-managed skill, which cannot be deleted.');
     // A change that names nothing to change is refused rather than written.
     assert.equal((await state.updateProfile({})).message, "nothing to change — pass at least one of name or description.");
     assert.equal((await state.updateProfile({ name: "   " })).message, "a blank name is not allowed.");

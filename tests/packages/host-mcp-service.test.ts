@@ -6,16 +6,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createHostMcp, McpHostService, toAuthResult, toCatalogFields, toInstalledServer, toInstalledServers, toPluginSummary, type CatalogPlugin, type EffectivePlugin, type McpServerSummary } from "../../source/host/mcp/mcp-service.ts";
-import type { BoxMcpExecPort } from "../../source/host/mcp/box-mcp-exec.ts";
-import type { AccountDisplayConfig, DisplayServer } from "../../source/shared/node/mcp/mcp-display-runtime.ts";
+import { createHostMcp, McpHostService, toPluginSummary } from "../../source/host/mcp/mcp-service.ts";
+import { toAuthResult, toCatalogFields, toInstalledServer, toInstalledServers } from "../../source/adapters/interop/mcp/host-service-adapter.ts";
+import type { CatalogPlugin, EffectivePlugin, McpServerSummary } from "../../source/host/mcp/mcp-service-contracts.ts";
+import type { BoxMcpExecPort } from "../../source/adapters/interop/agent/box-mcp-exec-adapter.ts";
+import type { SlateMcpAccountDisplay, SlateMcpDisplayRow } from "../../source/shared/node/mcp/mcp-display-runtime.ts";
 import type { McpManagerSettingsPort } from "../../source/shared/node/mcp/mcp-manager.ts";
 import { SlateMcpExecutor } from "../../source/shared/node/mcp/tools-discovery.ts";
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const url = (name: string) => `https://${name}.invalid/mcp`;
-const httpRow = (id: string, name: string, extra: Partial<DisplayServer> = {}): DisplayServer => ({ id, name, serverIdentifier: name, config: { url: url(name) }, isTeamServer: false, ...extra });
-const stdioRow = (id: string, name: string, extra: Partial<DisplayServer> = {}): DisplayServer => ({ id, name, serverIdentifier: name, config: { command: `run-${name}` }, isTeamServer: false, ...extra });
+const httpRow = (id: string, name: string, extra: Partial<SlateMcpDisplayRow> = {}): SlateMcpDisplayRow => ({ id, name, serverIdentifier: name, config: { url: url(name) }, isTeamServer: false, ...extra });
+const stdioRow = (id: string, name: string, extra: Partial<SlateMcpDisplayRow> = {}): SlateMcpDisplayRow => ({ id, name, serverIdentifier: name, config: { command: `run-${name}` }, isTeamServer: false, ...extra });
 const summary = (extra: Partial<McpServerSummary> = {}): McpServerSummary => ({ id: "11", name: "remote", serverIdentifier: "remote", accountKey: "default", isTeamServer: false, status: "connected", transport: "http", toolCount: 2, customInstructions: "", ...extra });
 
 /** A settings store that answers what it was given, and nothing else. */
@@ -35,14 +37,14 @@ function settingsSpy(seed: { disabled?: Record<string, string[]> } = {}): McpMan
   };
 }
 
-function hostWorld(options: { rows?: DisplayServer[]; effectivePlugins?: EffectivePlugin[] | Error; writerConfig?: Record<string, unknown>; boxRows?: Array<{ serverIdentifier: string; status: string; statusDetail?: string; toolCount: number; tools: Array<{ name: string; providerIdentifier: string; toolName: string; clientKey: string }> }>; settings?: McpManagerSettingsPort } = {}) {
+function hostWorld(options: { rows?: SlateMcpDisplayRow[]; effectivePlugins?: EffectivePlugin[] | Error; writerConfig?: Record<string, unknown>; boxRows?: Array<{ serverIdentifier: string; status: string; statusDetail?: string; toolCount: number; tools: Array<{ name: string; providerIdentifier: string; toolName: string; clientKey: string }> }>; settings?: McpManagerSettingsPort } = {}) {
   const calls: string[] = [];
   const logs: string[] = [];
   let mutated = 0;
   // The account's own state: what it shows is what its configuration still holds.
   let rows = [...(options.rows ?? [httpRow("11", "remote")])];
   let configReads = 0;
-  const display: AccountDisplayConfig = { get servers() { return rows; } };
+  const display: SlateMcpAccountDisplay = { get servers() { return rows; } };
   const backendTools: Array<Array<{ accountLabel: string; serverIdentifier: string; rowServerIdentifier: string; status?: string; tools: Array<{ name: string; providerIdentifier: string; toolName: string; description?: string }> }>> = [];
   const exec = {
     listTools: async (identifiers: readonly string[]) => {
@@ -69,7 +71,7 @@ function hostWorld(options: { rows?: DisplayServer[]; effectivePlugins?: Effecti
     },
     installPlugin: async (args: { pluginId: bigint }) => void calls.push(`installPlugin:${args.pluginId}`),
     updatePluginInstall: async (args: { pluginId: bigint }) => void calls.push(`updatePluginInstall:${args.pluginId}`),
-    uninstallPlugin: async (args: { pluginId: bigint }) => void calls.push(`uninstallPlugin:${args.pluginId}`),
+    uninstallPlugin: async (args: { pluginId: string }) => void calls.push(`uninstallPlugin:${args.pluginId}`),
   };
   const boxRows = [...(options.boxRows ?? [])];
   const pushedConfigs: string[] = [];

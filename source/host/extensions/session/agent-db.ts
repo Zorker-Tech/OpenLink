@@ -35,10 +35,10 @@ import {
   type DbRecoveryOptions
 } from "./agent-db-recovery.ts";
 import {
-  readTranscriptPage,
-  readTranscriptTail,
-  readTranscriptWindow,
-  type TranscriptPageStatements
+  loadAgentTranscriptPage,
+  loadAgentTranscriptTail,
+  loadAgentTranscriptWindow,
+  type AgentTranscriptSqlStatements
 } from "./agent-db-transcript-pages.ts";
 import {
   bumpDbWriteGeneration,
@@ -238,16 +238,16 @@ export class SlateAgentDb {
   hasLegacyConversationBlobs(): boolean { if (this.isClosed) return false; return this.db.prepare("SELECT 1 present FROM blobs LIMIT 1").get() != null; }
   getTranscriptEntries(): TranscriptEntry[] { if (this.isClosed) return []; return (this.preparedStatements.listTranscriptEntries!.all() as Array<{ entry?: unknown }>).flatMap((storedRow) => typeof storedRow.entry === "string" ? (parseTranscriptEntry(storedRow.entry) as TranscriptEntry | null) ?? [] : []); }
   getNewestDividerAnchorTimestampMs(): number { if (this.isClosed) return 0; const storedValue = (this.preparedStatements.newestDividerAnchorTimestamp!.get() as { timestampMs?: unknown } | undefined)?.timestampMs; return typeof storedValue === "number" && Number.isFinite(storedValue) && storedValue > 0 ? storedValue : 0; }
-  private transcriptPageStatements(): TranscriptPageStatements {
+  private transcriptPageStatements(): AgentTranscriptSqlStatements {
     return {
-      listTranscriptPage: this.preparedStatements.listTranscriptPage as TranscriptPageStatements["listTranscriptPage"],
-      listTranscriptWindow: this.preparedStatements.listTranscriptWindow as TranscriptPageStatements["listTranscriptWindow"],
-      listTranscriptTail: this.preparedStatements.listTranscriptTail as TranscriptPageStatements["listTranscriptTail"]
+      listTranscriptPage: this.preparedStatements.listTranscriptPage as AgentTranscriptSqlStatements["listTranscriptPage"],
+      listTranscriptWindow: this.preparedStatements.listTranscriptWindow as AgentTranscriptSqlStatements["listTranscriptWindow"],
+      listTranscriptTail: this.preparedStatements.listTranscriptTail as AgentTranscriptSqlStatements["listTranscriptTail"]
     };
   }
-  getTranscriptPage(pageQuery: { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }) { return this.isClosed ? { entries: [] } : readTranscriptPage(this.transcriptPageStatements(), pageQuery); }
-  getTranscriptWindow(pageQuery: { beforeSeq?: number; limit: number }) { return this.isClosed ? { entries: [] } : readTranscriptWindow(this.transcriptPageStatements(), pageQuery, entryList => this.threadCountsFor(entryList as TranscriptEntry[])); }
-  getTranscriptTail(pageQuery: { beforeSeq?: number; limit: number }) { return this.isClosed ? { entries: [] } : readTranscriptTail(this.transcriptPageStatements(), pageQuery); }
+  getTranscriptPage(pageQuery: { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }) { return this.isClosed ? { entries: [] } : loadAgentTranscriptPage(this.transcriptPageStatements(), pageQuery); }
+  getTranscriptWindow(pageQuery: { beforeSeq?: number; limit: number }) { return this.isClosed ? { entries: [] } : loadAgentTranscriptWindow(this.transcriptPageStatements(), pageQuery, entryList => this.threadCountsFor(entryList as TranscriptEntry[])); }
+  getTranscriptTail(pageQuery: { beforeSeq?: number; limit: number }) { return this.isClosed ? { entries: [] } : loadAgentTranscriptTail(this.transcriptPageStatements(), pageQuery); }
   getThread(rootId: string) { if (this.isClosed) return { entries: [] }; const root = this.getEntryById(rootId); const descendants = branchEntries(rootId, this.getBranchedEntries()); return { entries: root == null ? descendants : [root, ...descendants] }; }
   getBranchedEntries(): TranscriptEntry[] { if (this.isClosed) return []; return (this.preparedStatements.listBranchedEntries!.all() as Array<{ entry?: unknown }>).flatMap((storedRow) => typeof storedRow.entry === "string" ? (parseTranscriptEntry(storedRow.entry) as TranscriptEntry | null) ?? [] : []); }
   threadCountsFor(entryList: readonly TranscriptEntry[]): Record<string, number> { const counts = replyCountByBranch(this.getBranchedEntries()); const updateResult: Record<string, number> = {}; for (const entry of entryList) { const count = counts.get(entry.id); if (count !== undefined) updateResult[entry.id] = count; } return updateResult; }

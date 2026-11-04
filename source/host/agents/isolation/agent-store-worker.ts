@@ -6,25 +6,14 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 
 import { ConversationBlobRecoveryError } from "./conversation-blob-db.ts";
 import { ConversationBlobStoreDb } from "./conversation-blob-store.ts";
+import {
+  isAgentStoreWorkerOperation,
+  parseAgentStoreWorkerBoot,
+  parseAgentStoreWorkerCommand,
+} from "./agent-worker-protocol.ts";
+import type { AgentStoreWorkerReply } from "./agent-worker-protocol.ts";
 
-interface AgentStoreWorkerBoot {
-  readonly agentId: string;
-  readonly blobDbPath: string;
-  readonly busyTimeoutMs?: number;
-  readonly legacyBlobDbPath?: string;
-}
-
-interface AgentStoreWorkerRequest {
-  readonly kind: string;
-  readonly requestId: number;
-  readonly blobId?: Uint8Array;
-  readonly blobData?: Uint8Array;
-  readonly retainedRootIdHex?: string;
-  readonly pendingWriteRetentionMs?: number;
-  readonly legacyBlobDbPath?: string;
-}
-
-function emit(payload: object, transfers: ArrayBuffer[] = []): void {
+function emit(payload: AgentStoreWorkerReply, transfers: ArrayBuffer[] = []): void {
   parentPort?.postMessage(payload, transfers);
 }
 
@@ -34,7 +23,12 @@ export function runAgentStoreWorker(): void {
     throw new Error("agent-store-worker must run as a worker_thread");
   }
 
-  const workerConfig = workerData as AgentStoreWorkerBoot;
+  const workerConfig = parseAgentStoreWorkerBoot(workerData);
+  if (workerConfig == null) {
+    console.error("[agent-isolation-worker] invalid worker bootstrap");
+    process.exit(1);
+    return;
+  }
   let blobStore: ConversationBlobStoreDb;
   try {
     blobStore = new ConversationBlobStoreDb({
@@ -64,30 +58,60 @@ export function runAgentStoreWorker(): void {
     return;
   }
 
-  workerPort.on("message", (incomingRequest: AgentStoreWorkerRequest) => {
+  workerPort.on("message", (message: unknown) => {
+    const request = parseAgentStoreWorkerCommand(message);
+    if (request == null) {
+      const operation = typeof message === "object" && message !== null && "operation" in message
+        ? (message as { readonly operation?: unknown }).operation
+        : undefined;
+      // The private protocol has historically ignored unknown operations while keeping this worker available.
+      if (!isAgentStoreWorkerOperation(operation)) return;
+      const callId = typeof message === "object" && message !== null && "callId" in message
+        ? (message as { readonly callId?: unknown }).callId
+        : undefined;
+      if (Number.isSafeInteger(callId) && (callId as number) > 0) {
+        const invalidBlobId = operation === "blob.write" && typeof message === "object" && message !== null &&
+          "blobId" in message && !((message as { readonly blobId?: unknown }).blobId instanceof Uint8Array);
+        const invalidBlobBytes = operation === "blob.write" && typeof message === "object" && message !== null &&
+          "blobBytes" in message && !((message as { readonly blobBytes?: unknown }).blobBytes instanceof Uint8Array);
+        emit({
+          outcome: "failure",
+          callId: callId as number,
+          message: invalidBlobBytes ? "Invalid blob payload for BLOB column" : "Invalid agent-store worker command",
+          name: invalidBlobBytes && !invalidBlobId ? "Error" : "TypeError",
+          ...(invalidBlobId || invalidBlobBytes ? { code: "ERR_INVALID_ARG_TYPE" } : {}),
+        });
+      } else {
+        workerPort.close();
+      }
+      return;
+    }
     try {
-      switch (incomingRequest.kind) {
-        case "init": {
+      switch (request.operation) {
+        case "worker.identify": {
           emit({
-            kind: "init-ok",
-            requestId: incomingRequest.requestId,
-            threadId,
-            pid: process.pid
+            outcome: "success",
+            operation: request.operation,
+            callId: request.callId,
+            workerThreadId: threadId,
+            processId: process.pid,
           });
           return;
         }
-        case "set-blob": {
-          blobStore.setBlob(incomingRequest.blobId as Uint8Array, incomingRequest.blobData as Uint8Array);
-          emit({ kind: "set-blob-ok", requestId: incomingRequest.requestId });
+        case "blob.write": {
+          if (request.blobBytes.byteLength === 0) throw new TypeError("Conversation blob data must not be empty");
+          blobStore.setBlob(request.blobId, request.blobBytes);
+          emit({ outcome: "success", operation: request.operation, callId: request.callId });
           return;
         }
-        case "get-blob": {
-          const blobData = blobStore.getBlob(incomingRequest.blobId as Uint8Array);
+        case "blob.read": {
+          const blobData = blobStore.getBlob(request.blobId);
           if (blobData == null) {
             emit({
-              kind: "get-blob-ok",
-              requestId: incomingRequest.requestId,
-              blobData: undefined
+              outcome: "success",
+              operation: request.operation,
+              callId: request.callId,
+              blobBytes: undefined,
             });
             return;
           }
@@ -95,66 +119,69 @@ export function runAgentStoreWorker(): void {
           snapshot.set(blobData);
           emit(
             {
-              kind: "get-blob-ok",
-              requestId: incomingRequest.requestId,
-              blobData: snapshot
+              outcome: "success",
+              operation: request.operation,
+              callId: request.callId,
+              blobBytes: snapshot,
             },
             [snapshot.buffer]
           );
           return;
         }
-        case "find-latest-root": {
+        case "root.find-latest": {
           emit({
-            kind: "find-latest-root-ok",
-            requestId: incomingRequest.requestId,
-            rootId: blobStore.findLatestRootBlobId()
+            outcome: "success",
+            operation: request.operation,
+            callId: request.callId,
+            latestRootId: blobStore.findLatestRootBlobId(),
           });
           return;
         }
-        case "clear-blobs": {
+        case "blob.clear": {
           blobStore.clearBlobs();
-          emit({ kind: "clear-blobs-ok", requestId: incomingRequest.requestId });
+          emit({ outcome: "success", operation: request.operation, callId: request.callId });
           return;
         }
-        case "clear-stale-roots": {
+        case "checkpoint.prune": {
           emit({
-            kind: "clear-stale-roots-ok",
-            requestId: incomingRequest.requestId,
-            deleted: blobStore.clearStaleCheckpointRoots(
-              incomingRequest.retainedRootIdHex as string
-            )
+            outcome: "success",
+            operation: request.operation,
+            callId: request.callId,
+            deletedCount: blobStore.clearStaleCheckpointRoots(request.retainedRootIdHex),
           });
           return;
         }
-        case "collect-garbage": {
+        case "conversation.collect-garbage": {
           emit({
-            kind: "collect-garbage-ok",
-            requestId: incomingRequest.requestId,
-            result: blobStore.collectGarbage({
-              retainedRootIdHex: incomingRequest.retainedRootIdHex as string,
-              pendingWriteRetentionMs: incomingRequest.pendingWriteRetentionMs as number
-            })
+            outcome: "success",
+            operation: request.operation,
+            callId: request.callId,
+            garbageReport: blobStore.collectGarbage({
+              retainedRootIdHex: request.retainedRootIdHex,
+              pendingWriteRetentionMs: request.pendingWriteRetentionMs,
+            }),
           });
           return;
         }
-        case "verify-legacy-blob-retirement": {
+        case "legacy.verify-retirement": {
           emit({
-            kind: "verify-legacy-blob-retirement-ok",
-            requestId: incomingRequest.requestId,
-            verdict: blobStore.verifyLegacyBlobRetirement(
-              incomingRequest.retainedRootIdHex as string,
-              incomingRequest.legacyBlobDbPath as string
-            )
+            outcome: "success",
+            operation: request.operation,
+            callId: request.callId,
+            retirementVerdict: blobStore.verifyLegacyBlobRetirement(
+              request.retainedRootIdHex,
+              request.legacyBlobDbPath,
+            ),
           });
           return;
         }
-        case "flush": {
-          emit({ kind: "flush-ok", requestId: incomingRequest.requestId });
+        case "store.flush": {
+          emit({ outcome: "success", operation: request.operation, callId: request.callId });
           return;
         }
-        case "close": {
+        case "worker.close": {
           blobStore.close();
-          emit({ kind: "close-ok", requestId: incomingRequest.requestId });
+          emit({ outcome: "success", operation: request.operation, callId: request.callId });
           workerPort.close();
           return;
         }
@@ -167,8 +194,8 @@ export function runAgentStoreWorker(): void {
         ? cause.code
         : undefined;
       emit({
-        kind: "error",
-        requestId: incomingRequest.requestId,
+        outcome: "failure",
+        callId: request.callId,
         message: cause instanceof Error ? cause.message : String(cause),
         ...(cause instanceof Error ? { name: cause.name } : {}),
         ...(failureCode == null ? {} : { code: failureCode })

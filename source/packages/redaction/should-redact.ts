@@ -11,27 +11,30 @@ import { DataClassification, SENSITIVE_CLASSIFICATIONS } from "./classification.
 import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "./privacy-mode.ts"
 import { resolveEnforceRedaction } from "./privacy-context.ts"
 
+type ClassificationRule = "always-mask" | "always-show" | "follow-mode"
+
+const CLASSIFICATION_RULES: Readonly<Record<DataClassification, ClassificationRule>> = Object.freeze({
+  [DataClassification.SAFE]: "always-show",
+  [DataClassification.CODE]: "follow-mode",
+  [DataClassification.CREDENTIALS]: "always-mask",
+  [DataClassification.PATH]: "follow-mode",
+  [DataClassification.PROVIDER_INFO]: "follow-mode",
+  [DataClassification.UNSPECIFIED]: "always-mask",
+})
+
+const MODES_THAT_ALLOW_TRAINING = new Set<PrivacyModeValue>([
+  PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
+  PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED,
+])
+
 export function shouldRedact(
   privacyMode: PrivacyModeValue,
   classification: DataClassification,
 ): boolean {
-  if (
-    classification === DataClassification.CREDENTIALS ||
-    classification === DataClassification.UNSPECIFIED
-  ) return true
-  if (classification === DataClassification.SAFE) return false
-  if (!SENSITIVE_CLASSIFICATIONS.includes(classification)) return false
-  switch (privacyMode) {
-    case PrivacyMode.USAGE_DATA_TRAINING_ALLOWED:
-    case PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED:
-      return false
-    case PrivacyMode.NO_STORAGE:
-    case PrivacyMode.NO_TRAINING:
-    case PrivacyMode.UNSPECIFIED:
-      return true
-    default:
-      return true
-  }
+  const rule = CLASSIFICATION_RULES[classification]
+  if (rule === undefined || rule === "always-show") return false
+  if (rule === "always-mask") return true
+  return !MODES_THAT_ALLOW_TRAINING.has(privacyMode)
 }
 
 /** The placeholder that stands in for a redacted value, named so a log points at the field. */

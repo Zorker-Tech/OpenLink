@@ -19,22 +19,22 @@
 import { dirname } from "node:path";
 import { TranscriptMirrorOffloadPool } from "./agents/isolation/transcript-mirror-offload.ts";
 import {
-  createProductionTurnToolInputs,
+  createRunnerToolInputs,
   createProductionTurnToolsetHost,
-  type CreateProductionRunnerRunStep,
-  type ProductionTurnAutoReviewHostProjection,
-  type ProductionTurnCancelThisRun,
-  type ProductionTurnEmitUpdate,
-  type ProductionTurnExternalAwaitInputs,
-  type ProductionTurnHostDependencies,
-  type ProductionTurnHostToolProjections,
-  type ProductionTurnToolInputs,
-  type ProductionTurnToolsetHostInput,
+  type CreateRunnerStep,
+  type TurnAutoReviewBinding,
+  type CancelTurnExecution,
+  type EmitTurnUpdate,
+  type TurnAwaitPort,
+  type TurnHostServices,
+  type TurnHostOverrides,
+  type RunnerToolInputs,
+  type TurnToolsetHostBinding,
 } from "./runner-production-bridge.ts";
 import { NoopConversationActionReceiver } from "../packages/agent-core/conversation-actions/remote-receiver.ts";
-import { RequestContext, RequestContextEnv } from "../packages/proto/generated/agent/v1/request_context_exec_pb.ts";
 import { SummarizationHandler, type SummarizationPromptSession } from "../packages/agent-summarization/summarization-handler.ts";
 import { getAgentBlobStore, type AgentProfileForRunner } from "./runner/slate-agent-runner.ts";
+import type { RunnerServiceBindings } from "./runner/runner-service-bindings.ts";
 import type { AutomationRecord, AutomationReview, WorkflowRecord } from "./runner/tools/slate-state-tool.ts";
 import type { CloudAgentApi, CloudAgentToolContext, CloudAgentToolDeps } from "./cloud-agents/cloud-agent-tool.ts";
 import {
@@ -53,7 +53,7 @@ import {
   type TurnWebSearchToolFactoryInput,
 } from "./runner/tools/turn-toolset.ts";
 import type { RemoteResource, ResourceAccessor } from "../packages/agent-exec/resource-provider.ts";
-import { subagentExecutorResource } from "../packages/agent-exec/subagent.ts";
+import { subagentExecutorResource } from "../adapters/interop/agent/subagent-exec-adapter.ts";
 import { requestContextExecutorResource } from "../packages/agent-exec/request-context-operation.ts";
 import { subagentRegistryResource } from "../packages/agent/tools/subagent-registry.ts";
 import { smartModeClassifierExecutorResource } from "../packages/agent-exec/smart-mode-classifier-operation.ts";
@@ -62,24 +62,27 @@ import { shellStreamExecutorResource } from "../packages/agent-exec/shell-stream
 import { backgroundShellExecutorResource } from "../packages/agent-exec/background-shell.ts";
 import type { RemoteExecManager } from "../packages/agent-exec/executor-resources.ts";
 import { SLATE_BOX_AWAIT_SHELL_TOOL_NAME, SLATE_BOX_READ_TOOL_NAME, SLATE_EXTERNAL_AWAIT_SHELL_TOOL_NAME, SLATE_EXTERNAL_READ_TOOL_NAME } from "./slate-activity.ts";
-import { connectorCardEmissionToMessage } from "./runner/tools/box-help-tool.ts";
+import { connectorMessageFromEmission } from "./runner/tools/box-help-tool.ts";
 import { createAgentPromptSession } from "./extensions/inference/extension.ts";
 import { CONNECTOR_MANIFESTS } from "./channels/channels.ts";
 import { parseStoredTrigger } from "./automations/automation-trigger.ts";
-import { listenerPlatformsInTrigger } from "./automations/listener-integrations.ts";
-import { resolveSharedRoomBoxToolsEnabled } from "./groups/xuser.ts";
+import { listenerPlatformsInTrigger } from "./automations/listener-platforms.ts";
+import { sharedRoomBoxToolsAreEnabled } from "./groups/xuser.ts";
 import { boxAgentWindowIndex, boxSupportsMultiWindow } from "./boxes/box-capabilities.ts";
 import { createAutoReviewGate } from "./runner/auto-review-gate.ts";
 import { slateAutoReviewApprovalExpiryPolicy, SlateAutoReviewController } from "./runner/slate-auto-review.ts";
 import { createHostBrowserDriverDependencies, createHostComputerToolDependencies, createHostShellExecutor, type HostBrowserBoxOwner } from "./runner/host-computer-tool-dependencies.ts";
 import { createRemoteBoxResourceAccessor, type RemoteBoxResourceHost } from "./runner/remote-box-resources.ts";
+import { executeBoxWindowShellCommand } from "../adapters/interop/agent/box-window-shell-result-adapter.ts";
 import { createStreamAttempt } from "./runner/stream-attempt.ts";
 import { createTurnAgentRunStreamInput, createTurnAgentStreamStart, type TurnLocalResourceProjectionInput } from "./runner/turn-agent-composition.ts";
 import { createProductionTurnAgentOwner, createProductionTurnAgentRunInput, type ProductionTurnAgentOwnerInput } from "./runner/production-turn-agent-owner.ts";
 import { createProductionTurnRunShellHostInput } from "./runner/production-turn-run-shell-adapter.ts";
-import { createPromptCollectorGlue, type GeneratedTurnPromptOptions, type PromptCollectorHost } from "./runner/prompt-collector-glue.ts";
-import { createRunnerPromptGlue } from "./runner/runner-prompt-glue.ts";
-import { createShellWatchGeneratedStateProjection, createShellWatchReadAccessor, type ShellTerminalWatchHost } from "./runner/shell-terminal-watch.ts";
+import { createPromptCollectorGlue, type PromptCollectorHost } from "./runner/prompt-collector-glue.ts";
+import { interopTurnPromptOptionsFromRunner } from "../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../adapters/interop/agent/prompt-action-adapter.ts";
+import type { ShellTerminalWatchHost } from "./runner/shell-terminal-watch.ts";
+import { createShellWatchGeneratedStateProjection, createShellWatchReadAccessor } from "../adapters/interop/agent/shell-terminal-watch-adapter.ts";
 import { DEFAULT_SLATE_SYSTEM_PROMPT } from "./runner/system-prompt.ts";
 import { createSystemPromptAssembly, type PromptSnapshotStore } from "./runner/system-prompt-assembly.ts";
 import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../packages/redaction/privacy-mode.ts";
@@ -97,18 +100,26 @@ import {
   SLATE_CLOUD_AGENT_CLASSIFIER_ERROR_REASON,
 } from "./runner/slate-cloud-agent-auto-review.ts";
 import type { Context } from "../packages/context/context.ts";
-import type { TurnCheckpoint, TurnSettleHost } from "./runner/turn-settle.ts";
+import type { TurnSettleHost } from "./runner/turn-settle.ts";
 import type { TextExecutor } from "./runner/slate-memory.ts";
-import type { RunnerPromptGlueOwner } from "./runner/runner-prompt-glue.ts";
-import type { TransferBox } from "./boxes/box-transfer.ts";
-import type { CapableBox } from "./boxes/box-capabilities.ts";
-import type { UserComputerHandle } from "./runner/tools/slate-file-transfer-tools.ts";
 import type { AgentProfilePromptSnapshot } from "./runner/slate-agent-profile-prompt.ts";
 import type { RunningSubagentInfo, SubagentManagementController } from "./runner/tools/slate-subagent-management-tools.ts";
 import type { SubagentSession, SubagentRunOptions } from "./runner/subagent-runtime.ts";
 import type { SubagentAdapterArgs } from "./runner/agent-adapters.ts";
-import type { CursorRule } from "../packages/proto/generated/agent/v1/rules_pb.ts";
 import { presentOptions } from "./runner/optional-options.ts";
+import { HostRunnerPermissionSurfaces } from "./runner/host-runner-permission-surfaces.ts";
+import { deriveHostRunnerScope } from "./runner/host-runner-turn-scope.ts";
+import {
+  createProductionTurnSettleHost as createProductionTurnSettleHostAdapter,
+  type ProductionTurnSettleRunner,
+} from "./runner/production-turn-settle-host.ts";
+import {
+  asCapableTransferBox,
+  asPromptUserComputers,
+  asRemoteBoxResourceOwner,
+  asTransferBox,
+  isAgentContext,
+} from "./runner/host-runner-capabilities.ts";
 
 export const DEFAULT_SLATE_MODEL = "gpt-5.5-high-fast";
 export const SLATE_SUMMARIZATION_MAX_PROMPT_CHARS = 2_800_000;
@@ -128,12 +139,12 @@ export interface HostRunnerSession {
 
 export interface HostRunnerHooks {
   readonly transport: {
-    onUpdate(update: unknown, cancelThisRun?: ProductionTurnCancelThisRun): void;
+    onUpdate(update: unknown, cancelThisRun?: CancelTurnExecution): void;
     lastSentMessageId?(): string | undefined;
     lastReactionApplied?(): boolean;
   };
   /** The turn-scoped card emitter; a caller that has none keeps that branch closed. */
-  readonly emitUpdate?: ProductionTurnEmitUpdate;
+  readonly emitUpdate?: EmitTurnUpdate;
   readonly onRunLifecycle?: (event: unknown) => void;
   readonly agentProfileProvider?: () => AgentProfileForRunner | null;
   readonly ingestAttachment?: (sourcePath: string) => Promise<string>;
@@ -190,21 +201,7 @@ export interface ProductionSessionBoundRunner {
   getObservedToolCallCount(): number;
   getActivitySnapshot(): readonly string[];
   getTranscriptPath(): string | null;
-  setAgentStore(agentStore: unknown, agentProfileProvider?: unknown): void;
-  setMemoryStore(memoryStore: unknown): void;
-  setUserMemory(userMemory: unknown): void;
-  setProjectMemory(projectMemory: unknown): void;
-  setMemorySnapshotStore(memorySnapshots: unknown): void;
-  setProfilePromptSnapshotStore(profilePromptSnapshots: unknown): void;
-  setEpisodeProgress(episodeProgress: unknown): void;
-  setAutomationStore(automationStore: unknown): void;
-  setWorkflowStore(workflowStore: unknown): void;
-  setChannelStore(channelStore: unknown): void;
-  setMcp(mcp: unknown): void;
-  setMcpManagement(mcpManagement: unknown): void;
-  setAttachmentIngestor(ingest: unknown): void;
-  setImagePersister(persistImage: unknown): void;
-  setMediaBytesPersister(persistMediaBytes: unknown): void;
+  bindSessionServices(bindings: RunnerServiceBindings): void;
 }
 
 export interface HostRunnerCompositionDependencies<Runner extends ProductionSessionBoundRunner = ProductionSessionBoundRunner> {
@@ -212,7 +209,7 @@ export interface HostRunnerCompositionDependencies<Runner extends ProductionSess
   readonly ctx: unknown;
   emitGatewayEvent(event: unknown): void;
   buildRunner(options: Record<string, unknown>): Runner;
-  readonly createRunStep?: CreateProductionRunnerRunStep;
+  readonly createRunStep?: CreateRunnerStep;
   createRequestContext?(options: {
     transcriptsDir: string;
     getUserTimeZone(): unknown;
@@ -255,14 +252,14 @@ function asAutoReviewController(value: unknown): SlateAutoReviewController | und
   return value instanceof SlateAutoReviewController ? value : undefined;
 }
 
-function asActionAuditor(value: unknown): NonNullable<ProductionTurnAutoReviewHostProjection["actionAuditor"]> | undefined {
+function asActionAuditor(value: unknown): NonNullable<TurnAutoReviewBinding["actionAuditor"]> | undefined {
   if (typeof value !== "object" || value == null) return undefined;
   const record = (value as Record<string, unknown>).record;
   if (typeof record !== "function") return undefined;
   return { record: (entry) => record.call(value, entry) };
 }
 
-function asLocalToolPermissionProjection(value: unknown): NonNullable<ProductionTurnAutoReviewHostProjection["localToolPermission"]> | undefined {
+function asLocalToolPermissionProjection(value: unknown): NonNullable<TurnAutoReviewBinding["localToolPermission"]> | undefined {
   if (typeof value !== "object" || value == null) return undefined;
   const candidate = value as Record<string, unknown>;
   const awaitDesktopStandingDecision = candidate.awaitDesktopStandingDecision;
@@ -293,55 +290,10 @@ export async function extractProductionTurnAutoReviewConversationContext(context
   return [...(await tryExtractSlateAutoReviewClassifierConversationContext(context, candidate))];
 }
 
-function isAgentContext(value: unknown): value is Context {
-  if (typeof value !== "object" || value == null) return false;
-  const candidate = value as { with?: unknown; get?: unknown; withCancel?: unknown };
-  return typeof candidate.with === "function" && typeof candidate.get === "function" && typeof candidate.withCancel === "function";
-}
-
 /** What the prompt needs from a request context: the environment and the project's rules. */
 interface PromptRequestContext {
   resolve(): { readonly osVersion?: string; readonly shell?: string; readonly timeZone?: string; readonly transcriptsFolder?: string; readonly userFullName?: string };
-  resolveRules(): Promise<CursorRule[] | undefined>;
-}
-
-function asTransferBox(value: unknown): TransferBox | undefined {
-  if (typeof value !== "object" || value == null) return undefined;
-  const candidate = value as Record<string, unknown>;
-  const downloadFile = candidate.downloadFile;
-  const uploadFile = candidate.uploadFile;
-  if (typeof downloadFile !== "function" || typeof uploadFile !== "function") return undefined;
-  return {
-    downloadFile: (context, agentId, path) => downloadFile.call(value, context, agentId, path),
-    uploadFile: (context, agentId, path, data) => uploadFile.call(value, context, agentId, path, data),
-  };
-}
-
-/** A box that can also say where its terminals are and whether it is up: what the box tools need. */
-function asCapableTransferBox(value: unknown): (TransferBox & CapableBox) | undefined {
-  const transfer = asTransferBox(value);
-  if (transfer === undefined || typeof value !== "object" || value == null) return undefined;
-  const candidate = value as Record<string, unknown>;
-  const capable: TransferBox & CapableBox = transfer;
-  const getTerminalsFolder = candidate.getTerminalsFolder;
-  if (typeof getTerminalsFolder === "function") capable.getTerminalsFolder = () => getTerminalsFolder.call(value);
-  const isAvailable = candidate.isAvailable;
-  if (typeof isAvailable === "function") capable.isAvailable = () => isAvailable.call(value);
-  const isPreparing = candidate.isPreparing;
-  if (typeof isPreparing === "function") capable.isPreparing = (agentId) => isPreparing.call(value, agentId);
-  const getAgentWindowIndex = candidate.getAgentWindowIndex;
-  if (typeof getAgentWindowIndex === "function") capable.getAgentWindowIndex = (agentId) => getAgentWindowIndex.call(value, agentId);
-  return capable;
-}
-
-type RemoteBoxResourceOwner = RemoteBoxResourceHost["remoteBox"];
-
-function asRemoteBoxResourceOwner(value: unknown): RemoteBoxResourceOwner | undefined {
-  const capable = asCapableTransferBox(value);
-  if (capable === undefined || typeof value !== "object" || value == null) return undefined;
-  const ensureReady = (value as Record<string, unknown>).ensureReady;
-  if (typeof ensureReady !== "function") return undefined;
-  return { ...capable, ensureReady: (context, agentId) => ensureReady.call(value, context, agentId) };
+  resolveRules(): Promise<readonly unknown[] | undefined>;
 }
 
 /**
@@ -380,49 +332,6 @@ function asProductionResourceAccessor(registry: ReturnType<typeof createRemoteBo
       return value;
     },
   };
-}
-
-function asUserComputer(value: unknown): UserComputerHandle | undefined {
-  if (typeof value !== "object" || value == null) return undefined;
-  const candidate = value as Record<string, unknown>;
-  const box = asTransferBox(candidate.box);
-  if (typeof candidate.id !== "string" || typeof candidate.label !== "string" || typeof candidate.connected !== "boolean" || box === undefined) return undefined;
-  return { id: candidate.id, label: candidate.label, connected: candidate.connected, box };
-}
-
-function asPromptUserComputers(value: unknown): RunnerPromptGlueOwner["userComputers"] | undefined {
-  if (typeof value !== "object" || value == null) return undefined;
-  const candidate = value as Record<string, unknown>;
-  const resolve = candidate.resolve;
-  const list = candidate.list;
-  if (typeof resolve !== "function" || typeof list !== "function") return undefined;
-  return {
-    resolve: (computerId) => asUserComputer(resolve.call(value, computerId)),
-    list: () => {
-      const listed = list.call(value);
-      if (!Array.isArray(listed)) return [];
-      return listed.flatMap((computer) => {
-        const resolved = asUserComputer(computer);
-        return resolved === undefined ? [] : [resolved];
-      });
-    },
-  };
-}
-
-function isGeneratedSelectedVideo(value: unknown): value is NonNullable<GeneratedTurnPromptOptions["selectedVideos"]>[number] {
-  if (typeof value !== "object" || value == null) return false;
-  const candidate = value as Record<string, unknown>;
-  const dataOrBlobId = candidate.dataOrBlobId;
-  return (
-    typeof candidate.uuid === "string" &&
-    typeof candidate.path === "string" &&
-    typeof candidate.mimeType === "string" &&
-    typeof candidate.filename === "string" &&
-    typeof candidate.materializeToFilesystem === "boolean" &&
-    typeof dataOrBlobId === "object" &&
-    dataOrBlobId != null &&
-    typeof (dataOrBlobId as Record<string, unknown>).case === "string"
-  );
 }
 
 function isAgentProfilePromptSnapshot(value: unknown): value is AgentProfilePromptSnapshot {
@@ -510,52 +419,6 @@ function createTextExecutor(executor: {
   };
 }
 
-/** The run options the prompt collector wants, from the ones the turn received (dropping what it cannot project). */
-function toGeneratedTurnPromptOptions(options: {
-  readonly selectedImages?: readonly unknown[];
-  readonly selectedVideos?: readonly unknown[];
-  readonly attachedFilePaths?: readonly string[];
-  readonly attachedFileSizes?: ReadonlyMap<string, number>;
-  readonly richText?: string;
-  readonly replyContext?: unknown;
-  readonly messageId?: string;
-  readonly automationWake?: { readonly id: string };
-  readonly isSilenceAllowed?: boolean;
-  readonly appendReplyReminder?: boolean;
-  readonly hidden?: boolean;
-  readonly recentUserMessages?: readonly { readonly id: string; readonly text: string }[];
-}): GeneratedTurnPromptOptions {
-  return {
-    ...presentOptions({
-      selectedImages: options.selectedImages?.flatMap((image) => {
-        if (typeof image !== "object" || image == null) return [];
-        const record = image as Record<string, unknown>;
-        if (!(record.data instanceof Uint8Array)) return [];
-        return [
-          {
-            data: record.data,
-            ...presentOptions({
-              path: typeof record.path === "string" ? record.path : undefined,
-              mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
-            }),
-          },
-        ];
-      }),
-      selectedVideos: options.selectedVideos?.filter(isGeneratedSelectedVideo),
-      attachedFilePaths: options.attachedFilePaths,
-      attachedFileSizes: options.attachedFileSizes,
-      richText: options.richText,
-      replyContext: options.replyContext,
-      messageId: options.messageId,
-      automationWake: options.automationWake,
-      isSilenceAllowed: options.isSilenceAllowed,
-      appendReplyReminder: options.appendReplyReminder,
-      hidden: options.hidden,
-      recentUserMessages: options.recentUserMessages,
-    }),
-  };
-}
-
 function isPromptRequestContext(value: unknown): value is PromptRequestContext {
   return typeof value === "object" && value != null && typeof (value as { resolve?: unknown }).resolve === "function" && typeof (value as { resolveRules?: unknown }).resolveRules === "function";
 }
@@ -639,7 +502,10 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
   const { extensions, ctx } = deps;
   const auth = extensions.api("auth");
   const localToolPermission = extensions.api("local-tool-permission");
-  const localToolPermissionSurfaces = new Map<string, () => void>();
+  const subscribePermissionEvents = looseMethod(localToolPermission, "subscribe");
+  const localToolPermissionSurfaces = new HostRunnerPermissionSurfaces(
+    subscribePermissionEvents === undefined ? undefined : (listener) => subscribePermissionEvents(listener),
+  );
   const ownedRunners = new Set<Runner>();
   let mirrorOffloadPool: TranscriptMirrorOffloadPool | null = null;
 
@@ -653,43 +519,9 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     return roster.find((agent: any) => agent.id === agentId && agent.isGroup !== true)?.name ?? null;
   };
 
-  /** Local tool permission prompts go to this agent's transport, and a second turn replaces the subscription. */
-  function bindLocalPermissionSurface(session: HostRunnerSession, hooks: HostRunnerHooks, overrides: HostRunnerOverrides): void {
-    localToolPermissionSurfaces.get(session.id)?.();
-    localToolPermissionSurfaces.delete(session.id);
-    if (overrides.groupMemberTurn === true) return;
-    const subscribe = looseMethod(localToolPermission, "subscribe");
-    if (subscribe == null) return;
-    const unsubscribe = subscribe((event: any) => {
-      if (event?.request?.agentId !== session.id) return;
-      if (event.type === "created") {
-        hooks.transport.onUpdate({
-          type: "send-message",
-          message: {
-            type: "local-tool-permission",
-            ask: {
-              requestId: event.request.id,
-              action: event.request.action,
-              target: event.request.target,
-              status: "pending",
-              ...presentOptions({ description: event.request.description }),
-            },
-          },
-          timestampMs: Date.now(),
-        });
-        return;
-      }
-      hooks.transport.onUpdate({
-        type: "local-tool-permission-status",
-        requestId: event.request.id,
-        status: event.request.status === "pending" ? "expired" : event.request.status,
-      });
-    });
-    localToolPermissionSurfaces.set(session.id, unsubscribe);
-  }
-
   function createRunner(session: HostRunnerSession, hooks: HostRunnerHooks, overrides: HostRunnerOverrides = {}): Runner {
-    const isSharedRoomTurn = overrides.isSharedRoomTurn === true;
+    const scope = deriveHostRunnerScope(overrides);
+    const isSharedRoomTurn = scope.sharedRoomTurn;
     const localExec = extensions.api("local-exec");
     const attachments = extensions.api("attachments");
     const memory = extensions.api("memory");
@@ -733,7 +565,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     const autoReview =
       looseMethod(extensions.api("auto-review"), "bindRunner")?.({
         agentId: session.id,
-        approvalsResolvable: overrides.groupMemberTurn !== true,
+        approvalsResolvable: scope.approvalsResolvable,
         onUpdate: (update: unknown) => hooks.transport.onUpdate(update),
       }) ?? {};
     const autoReviewController = asAutoReviewController(autoReview.autoReviewController);
@@ -761,7 +593,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     const createTurnToolProjections =
       autoReviewGate == null
         ? undefined
-        : (input: ProductionTurnToolInputs): ProductionTurnHostToolProjections => {
+        : (input: RunnerToolInputs): TurnHostOverrides => {
             const shell = createHostShellExecutor({
               resourceAccessor: input.resourceAccessor,
               assertNoPendingApproval: autoReviewGate.assertNoPendingApproval,
@@ -824,7 +656,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           };
 
     /** The web tools and the await tool: the services come from inference, the context from the request context. */
-    const createTurnWebAndAwaitProjections = (input: ProductionTurnToolInputs): ProductionTurnHostToolProjections => {
+    const createTurnWebAndAwaitProjections = (input: RunnerToolInputs): TurnHostOverrides => {
       const inference = extensions.api("inference");
       const webSearchService = looseMethod(inference, "createWebSearch")?.({
         modelId: process.env.SLATE_AGENT_MODEL ?? DEFAULT_SLATE_MODEL,
@@ -877,20 +709,20 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
       };
     };
 
-    bindLocalPermissionSurface(session, hooks, overrides);
+    localToolPermissionSurfaces.bind(session.id, scope.groupMemberTurn, hooks.transport);
 
     let builtRunner: Runner | undefined;
     let transcriptMirrorForTurn: TurnSettleHost["transcriptMirror"] | undefined;
 
     // A shared room has no filesystem context of its own: it neither reads nor writes the project's rules.
-    const requestContext = isSharedRoomTurn
-      ? { resolve: () => ({}), resolveRules: async () => [] }
-      : deps.createRequestContext?.({
+    const requestContext = scope.hasConversationContext
+      ? deps.createRequestContext?.({
           transcriptsDir,
           getUserTimeZone: () => looseMethod(settings, "getUserTimeZone")?.(),
           resolveTeamRules: async () => await looseMethod(extensions.api("managed-setup"), "resolveTeamRules")?.(),
           getUserFullName: async () => await looseMethod(auth, "getUserFullName")?.(),
-        });
+        })
+      : { resolve: () => ({}), resolveRules: async () => [] };
 
     const resolveCloudAgentTitle = async (_context: unknown, bcId: string) => (await looseMethod(cloudAgents, "get")?.(bcId))?.name;
     const awaitCloudAgent = looseMethod(cloudAgents, "awaitCompletion");
@@ -912,7 +744,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         return summary == null ? null : { id: summary.id, name: summary.name, description: summary.description };
       },
     };
-    const agentStateOwner = !isSharedRoomTurn
+    const agentStateOwner = scope.hasConversationContext
       ? looseMethod(memory, "createAgentState")?.({
           memory: session.memory,
           automations: session.automations,
@@ -1057,7 +889,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
       isSharedRoomTurn,
       isSharedRoomBoxToolsEnabled: () =>
         !Boolean(looseMethod(experiments, "checkFeatureGate")?.("slate_shared_room_box_tools_kill_switch")) &&
-        resolveSharedRoomBoxToolsEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
+        sharedRoomBoxToolsAreEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
       getAgentId: () => session.id,
       agentProfileProvider: hooks.agentProfileProvider,
       connectorManifests: CONNECTOR_MANIFESTS,
@@ -1151,6 +983,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         return await baseProductionResourceAccessor(context);
       }
       const accessor = createRemoteBoxResourceAccessor({
+        executeWindowCommand: executeBoxWindowShellCommand,
         remoteBox: owner,
         remoteBoxHasDesktop: true,
         resolveBoxId: () => session.id,
@@ -1198,7 +1031,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
 
     // A shared room keeps no private mirror, memory, image persistence or local permission surface: those belong to the
     // conversation the agent is bound to, not to a room a group is talking in.
-    if (!isSharedRoomTurn) {
+    if (scope.hasConversationContext) {
       transcriptMirrorForTurn = deps.createTranscriptMirror?.({
         transcriptsDir,
         session,
@@ -1217,7 +1050,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           persistImage: hooks.persistImage,
           onRequestId: requestIdForwarder(hooks, "generate-image"),
         }),
-        generateImageResourceAccessor: looseMethod(attachments, "createGenerateImageResourceAccessor")?.(dirname(session.dbPath)),
+        generateImageResourceAccessor: looseMethod(attachments, "createAgentImageResourcePort")?.(dirname(session.dbPath)),
         getAgentDir: () => dirname(session.dbPath),
         uploadAttachmentsIntoBox: (hostPaths: readonly string[]) => looseMethod(attachments, "stageIntoBox")?.(session.id, hostPaths),
         agentStore: session.agentStore,
@@ -1237,7 +1070,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     const projectedLocalToolPermission = asLocalToolPermissionProjection(localToolPermission);
 
     /** The host-owned inputs the runner's tools need for this turn: sends, reactions, state, cloud agents, review. */
-    const hostDependencies = (): ProductionTurnHostDependencies => {
+    const hostDependencies = (): TurnHostServices => {
       const readMediaDimensions = looseMethod(attachments, "readMediaDimensions");
       const uploadFile = looseMethod(remoteBox, "uploadFile");
       const downloadFile = looseMethod(remoteBox, "downloadFile");
@@ -1335,7 +1168,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           hooks.transport.onUpdate({ type: "react-to-message", ...args });
         },
       };
-      type StateInputs = NonNullable<ProductionTurnHostDependencies["state"]>;
+      type StateInputs = NonNullable<TurnHostServices["state"]>;
       const reviewAutomationWrite: StateInputs["reviewAutomationWrite"] =
         productionContext === undefined || autoReviewGate === undefined
           ? undefined
@@ -1398,7 +1231,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
                 })) ?? undefined
               );
             };
-      const state: ProductionTurnHostDependencies["state"] =
+      const state: TurnHostServices["state"] =
         agentStateOwner === undefined
           ? undefined
           : {
@@ -1415,7 +1248,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
 
       const subagentManagement = createRunnerSubagentManagement(builtRunner);
       const projectedActionAuditor = asActionAuditor(actionAuditor);
-      const autoReviewProjection: ProductionTurnAutoReviewHostProjection | undefined =
+      const autoReviewProjection: TurnAutoReviewBinding | undefined =
         autoReviewController === undefined || autoReviewGate === undefined
           ? undefined
           : {
@@ -1424,7 +1257,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
               getModes: () => autoReviewGate.currentModes(),
               getInstructions: () => autoReviewGate.userInstructions(),
               getApprovalExpiryPolicy: () => slateAutoReviewApprovalExpiryPolicy("turn"),
-              requestContext: new RequestContext({ env: new RequestContextEnv({ smartModeClassifierAutoModeEnabled: true }) }),
+              smartModeClassifierControls: { automaticModeEnabled: true },
               getShellApprovalState: (surface) => autoReviewGate.shellApprovalState(surface),
               enforceModelFacingShellUiAutomationGuard: autoReviewGate.currentModes().hostShell === "enforce" || autoReviewGate.currentModes().computer === "enforce",
               ...presentOptions({
@@ -1446,7 +1279,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         agentManagement,
         ...presentOptions({
           state,
-          mcpManagement: !isSharedRoomTurn && mcp.management != null && typeof mcp.management.listPlugins === "function" ? mcp.management : undefined,
+          mcpManagement: scope.hasConversationContext && mcp.management != null && typeof mcp.management.listPlugins === "function" ? mcp.management : undefined,
           cloudAgent,
           subagentManagement,
           autoReview: autoReviewProjection,
@@ -1456,7 +1289,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
 
     /** The per-turn factory inputs the tools are built from: the host's identities plus this turn's emitter. */
     type MutableFactoryProvider = { -readonly [K in keyof TurnToolsetHostFactoryProvider]: TurnToolsetHostFactoryProvider[K] };
-    const createTurnToolsetFactoryProvider = (dependencies: ProductionTurnHostDependencies, turnInputs?: ProductionTurnToolInputs): TurnToolsetHostFactoryProvider => {
+    const createTurnToolsetFactoryProvider = (dependencies: TurnHostServices, turnInputs?: RunnerToolInputs): TurnToolsetHostFactoryProvider => {
       const cloudAgent = dependencies.cloudAgent;
       const mcpManagement = dependencies.mcpManagement;
       const inference = extensions.api("inference");
@@ -1555,11 +1388,11 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           isAwaitingUserSelection: () => (builtRunner as { isRunAwaitingUserSelection?: () => boolean } | undefined)?.isRunAwaitingUserSelection?.() === true,
           isMultiAccountEnabled: () => looseMethod(experiments, "isMcpMultiAccountEnabled")?.() ?? false,
           emitConnectorCard: (emission) => {
-            hooks.transport.onUpdate({ type: "send-message", message: connectorCardEmissionToMessage(emission), timestampMs: Date.now() });
+            hooks.transport.onUpdate({ type: "send-message", message: connectorMessageFromEmission(emission), timestampMs: Date.now() });
           },
         });
       }
-      if (!isSharedRoomTurn && cloudAgent !== undefined) {
+      if (scope.hasConversationContext && cloudAgent !== undefined) {
         provider.createCloudAgentToolInputs = (): TurnCloudAgentToolFactoryInput => ({
           dependencies: {
             api: cloudAgent.api,
@@ -1576,9 +1409,9 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     };
 
     /** The turn's tool inputs: what the runner assembled, the host's projections over it, and the host's dependencies. */
-    const createTurnToolInputs = (input: ProductionTurnToolInputs) => {
+    const createTurnToolInputs = (input: RunnerToolInputs) => {
       const dependencies = hostDependencies();
-      const projected = createProductionTurnToolInputs(input, {
+      const projected = createRunnerToolInputs(input, {
         ...(createTurnToolProjections?.(input) ?? {}),
         ...createTurnWebAndAwaitProjections(input),
         ...presentOptions({ emitUpdate: hooks.emitUpdate }),
@@ -1591,45 +1424,18 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
     };
 
     /** Where a completed turn's checkpoints and final state are kept: the Agent store, with this turn's generation. */
-    const createProductionTurnSettleHost = (): TurnSettleHost => {
-      const runner = builtRunner as
-        | {
-            readonly isSubagentRunner?: boolean;
-            getBlobStore?: () => unknown;
-            getConversationStateStructure?: () => unknown;
-            getLatestPromptMessages?: () => readonly unknown[];
-            currentRunGeneration?: number;
-            setAgentConversationStateStructure?: (structure: TurnCheckpoint) => void;
-          }
-        | undefined;
-      const store = session.agentStore;
-      if (store == null || typeof store.handleCheckpoint !== "function" || typeof store.getMetadata !== "function") {
-        throw new TypeError("the production Agent checkpoint store is not bound");
-      }
-      const generation = runner?.currentRunGeneration;
-      return {
-        isSubagentRunner: isSharedRoomTurn,
-        getTranscriptId: () => session.id,
-        getBlobStore: () => runner?.getBlobStore?.() ?? getAgentBlobStore(store as Parameters<typeof getAgentBlobStore>[0]),
-        agentStore: () => ({
-          handleCheckpoint: (context: unknown, checkpoint: unknown) => store.handleCheckpoint(context, checkpoint),
-          getMetadata: (key: string) => store.getMetadata(key),
-        }),
-        setLocalState: (checkpoint) => {
-          if (typeof runner?.setAgentConversationStateStructure !== "function") throw new TypeError("the production Agent local checkpoint store is not bound");
-          runner.setAgentConversationStateStructure(checkpoint);
-        },
-        ownsRunner: () => true,
-        isRunSuperseded: () => generation !== undefined && runner?.currentRunGeneration !== undefined && runner.currentRunGeneration !== generation,
-        latestPromptMessages: () => runner?.getLatestPromptMessages?.() ?? [],
-        persistAnnouncedAgentProfile: (snapshots, snapshot, identity) => {
-          productionSystemPromptAssembly?.persistAnnouncedAgentProfile(asPromptSnapshotStore(snapshots), snapshot, identity);
-        },
-        ...presentOptions({ transcriptMirror: transcriptMirrorForTurn }),
-      };
-    };
+    const createProductionTurnSettleHost = (): TurnSettleHost => createProductionTurnSettleHostAdapter({
+      transcriptId: session.id,
+      isSharedRoomTurn,
+      runner: builtRunner as ProductionTurnSettleRunner | undefined,
+      agentStore: session.agentStore,
+      ...presentOptions({ transcriptMirror: transcriptMirrorForTurn }),
+      persistAnnouncedAgentProfile: (snapshots, snapshot, identity) => {
+        productionSystemPromptAssembly?.persistAnnouncedAgentProfile(asPromptSnapshotStore(snapshots), snapshot, identity)
+      },
+    })
 
-    runnerOptions.createProductionTurnToolsetHost = (input: Omit<ProductionTurnToolsetHostInput, "factoryProvider">) =>
+    runnerOptions.createProductionTurnToolsetHost = (input: Omit<TurnToolsetHostBinding, "factoryProvider">) =>
       createProductionTurnToolsetHost({
         ...input,
         factoryProvider: createTurnToolsetFactoryProvider(hostDependencies()),
@@ -1668,7 +1474,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           spotlightEnabled: () => looseMethod(experiments, "isSpotlightEnabled")?.() ?? false,
           isDynamicToolsEnabled: () => looseMethod(experiments, "isDynamicToolsEnabled")?.() ?? false,
           isMultitaskEnabled: () => looseMethod(experiments, "isMultitaskEnabled")?.() ?? false,
-          isSharedRoomBoxToolsEnabled: () => resolveSharedRoomBoxToolsEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
+          isSharedRoomBoxToolsEnabled: () => sharedRoomBoxToolsAreEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
           ...presentOptions({ localToolPermission: projectedLocalToolPermission }),
         });
       const getProductionConversationState = () => {
@@ -1687,7 +1493,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           mode,
           agentId: session.id,
           surface,
-          requestContext: new RequestContext({ env: new RequestContextEnv({ smartModeClassifierAutoModeEnabled: true }) }),
+          smartModeClassifierControls: { automaticModeEnabled: true },
           getApprovalExpiryPolicy: () => slateAutoReviewApprovalExpiryPolicy("turn"),
           smartModeShellApprovalState: turnAutoReviewGate.shellApprovalState(approvalSurface),
           enforceModelFacingShellUiAutomationGuard: liveModes.hostShell === "enforce" || liveModes.computer === "enforce",
@@ -1777,7 +1583,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
                   dispatch: (input) => runner.subagents.dispatchBackgroundSubagent(input),
                 },
                 requestContext: turnRequestContext,
-                includeTranscripts: !isSharedRoomTurn,
+                includeTranscripts: scope.hasConversationContext,
                 autoReviewEnforceEnabled: Object.values(autoReviewModes).includes("enforce"),
                 shellStreamExecutor: baseAccessor.get(shellStreamExecutorResource),
                 backgroundShellExecutor: baseAccessor.get(backgroundShellExecutorResource),
@@ -1807,7 +1613,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
             ...presentOptions({ profilePromptSnapshotStore: productionSystemPromptAssembly === undefined ? undefined : asPromptSnapshotStore(session.db) }),
           } satisfies ProductionTurnAgentOwnerInput;
         },
-        promptOptions: (_prompt, options) => toGeneratedTurnPromptOptions(options),
+        promptOptions: (_prompt, options) => interopTurnPromptOptionsFromRunner(options),
         assembleGeneratedTurnAction: productionPromptGlue.assembleGeneratedTurnAction,
         compactionEpoch: () => 0,
         getConversationState: getProductionConversationState,
@@ -1848,21 +1654,25 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
 
     /** Everything a runner needs from its session, bound once after construction. */
     function bindSessionOwnedRunner(runner: Runner): void {
-      runner.setAgentStore(session.agentStore, hooks.agentProfileProvider);
-      runner.setMemoryStore(session.memory);
-      runner.setUserMemory(runnerOptions.userMemory);
-      runner.setProjectMemory(runnerOptions.projectMemory);
-      runner.setMemorySnapshotStore(session.db);
-      runner.setProfilePromptSnapshotStore(session.db);
-      runner.setEpisodeProgress(session.db);
-      runner.setAutomationStore(session.automations);
-      runner.setWorkflowStore(session.workflows);
-      runner.setChannelStore(session.channels);
-      runner.setMcp(mcp.mcp);
-      runner.setMcpManagement(mcp.management);
-      runner.setAttachmentIngestor(hooks.ingestAttachment);
-      runner.setImagePersister(hooks.persistImage);
-      runner.setMediaBytesPersister(hooks.persistMediaBytes);
+      const bindings: RunnerServiceBindings = {
+        agentState: { store: session.agentStore, profileProvider: hooks.agentProfileProvider },
+        memory: {
+          primary: session.memory,
+          user: runnerOptions.userMemory,
+          project: runnerOptions.projectMemory,
+          snapshots: session.db,
+          profileSnapshots: session.db,
+          episodeProgress: session.db,
+        },
+        automation: { automations: session.automations, workflows: session.workflows, channels: session.channels },
+        toolAccess: { mcp: mcp.mcp, management: mcp.management },
+        attachments: {
+          ingestor: hooks.ingestAttachment,
+          imagePersister: hooks.persistImage,
+          mediaPersister: hooks.persistMediaBytes,
+        },
+      };
+      runner.bindSessionServices(bindings);
     }
 
     const runner = deps.buildRunner(runnerOptions);
@@ -1875,10 +1685,9 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
   return {
     createRunner: (session, hooks) => createRunner(session, hooks),
     createGroupMemberRunner: (session, hooks, groupOverrides) => createRunner(session, hooks, { ...groupOverrides, groupMemberTurn: true }),
-    canAskLocalToolPermission: (agentId) => localToolPermissionSurfaces.has(agentId),
+    canAskLocalToolPermission: (agentId) => localToolPermissionSurfaces.canAsk(agentId),
     forgetLocalToolPermission: (agentId) => {
-      localToolPermissionSurfaces.get(agentId)?.();
-      localToolPermissionSurfaces.delete(agentId);
+      localToolPermissionSurfaces.forget(agentId);
       looseMethod(localToolPermission, "forgetAgent")?.(agentId);
     },
     dispose: async () => {
@@ -1888,8 +1697,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         await candidate.dispose?.();
       }
       ownedRunners.clear();
-      for (const unsubscribe of localToolPermissionSurfaces.values()) unsubscribe();
-      localToolPermissionSurfaces.clear();
+      localToolPermissionSurfaces.dispose();
       await mirrorOffloadPool?.closeAll();
       mirrorOffloadPool = null;
     },

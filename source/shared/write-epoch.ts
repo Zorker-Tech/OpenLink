@@ -5,4 +5,36 @@
  * counts as a change even before it lands, so a reader that starts while a write is half-done is told to read again
  * rather than handed a half-written view; a reset makes every write in flight irrelevant at once.
  */
-export class WriteEpoch { #pending = 0; #epoch = 0; #generation = 0; begin(): () => void { this.#epoch += 1; this.#pending += 1; const generation = this.#generation; let settled = false; return () => { if (settled || generation !== this.#generation) return; settled = true; this.#pending -= 1; if (this.#pending === 0) this.#epoch += 1; }; } snapshot(): number { return this.#epoch; } isStale(snapshotAtStart: number): boolean { return this.#pending > 0 || this.#epoch !== snapshotAtStart; } reset(): void { this.#generation += 1; this.#pending = 0; this.#epoch += 1; } }
+export class WriteEpoch {
+  #inFlightWrites = 0;
+  #version = 0;
+  #resetId = 0;
+
+  begin(): () => void {
+    this.#version += 1;
+    this.#inFlightWrites += 1;
+    const resetIdAtStart = this.#resetId;
+    let finished = false;
+
+    return () => {
+      if (finished || resetIdAtStart !== this.#resetId) return;
+      finished = true;
+      this.#inFlightWrites -= 1;
+      if (this.#inFlightWrites === 0) this.#version += 1;
+    };
+  }
+
+  snapshot(): number {
+    return this.#version;
+  }
+
+  isStale(observedVersion: number): boolean {
+    return this.#inFlightWrites > 0 || observedVersion !== this.#version;
+  }
+
+  reset(): void {
+    this.#resetId += 1;
+    this.#inFlightWrites = 0;
+    this.#version += 1;
+  }
+}

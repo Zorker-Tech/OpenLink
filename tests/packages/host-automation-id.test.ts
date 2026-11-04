@@ -28,6 +28,17 @@ describe("stable automation identity", () => {
     );
   });
 
+  it("treats identity parts as exact strings without trimming or case folding", () => {
+    assert.notEqual(
+      stableAutomationId({ agentId: "agent-1", localId: "automation-1" }),
+      stableAutomationId({ agentId: " agent-1", localId: "automation-1" })
+    );
+    assert.notEqual(
+      stableAutomationId({ agentId: "Agent-1", localId: "automation-1" }),
+      stableAutomationId({ agentId: "agent-1", localId: "automation-1" })
+    );
+  });
+
   it("keeps a UUID-shaped version and variant", () => {
     const id = stableAutomationId({ agentId: "agent-with-a-longer-id", localId: "daily-check" });
     assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);

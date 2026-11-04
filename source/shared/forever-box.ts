@@ -1,34 +1,28 @@
-/**
- * When a box that was handed to the user comes back.
- *
- * A box is handed over for the user to work in, and it comes back either because they dismissed the hand-over or
- * because they gave it back deliberately; anything else is no decision at all, and a hand-over that is no longer the
- * current one is not resumed.
- */
-export interface BoxHandoff {
+/** A pending user interaction that can resume its waiting conversation. */
+export interface BoxReturnTicket {
   readonly requestId: string;
 }
 
-export type BoxHandBackTrigger = "dismissed" | string;
+export type BoxReturnCause = string;
 
-export type BoxHandBackDecision =
-  | { readonly kind: "none" }
+export type BoxReturnPlan =
+  | { readonly type: "untracked" }
   | {
-      readonly kind: "resume";
+      readonly type: "resume";
       readonly requestId: string;
-      readonly trigger: string;
-      readonly resolution: "dismissed" | "handed_back";
+      readonly cause: string;
+      readonly outcome: "dismissed" | "handed_back";
     };
 
-export function decideBoxHandBack(
-  handoff: BoxHandoff | null | undefined,
-  trigger: BoxHandBackTrigger,
-): BoxHandBackDecision {
-  if (handoff == null) return { kind: "none" };
+export function planBoxReturn(
+  ticket: BoxReturnTicket | null | undefined,
+  cause: BoxReturnCause,
+): BoxReturnPlan {
+  if (ticket == null) return { type: "untracked" };
   return {
-    kind: "resume",
-    requestId: handoff.requestId,
-    trigger,
-    resolution: trigger === "dismissed" ? "dismissed" : "handed_back",
+    type: "resume",
+    requestId: ticket.requestId,
+    cause,
+    outcome: cause === "dismissed" ? "dismissed" : "handed_back",
   };
 }

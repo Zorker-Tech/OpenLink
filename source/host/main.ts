@@ -13,7 +13,8 @@
  * - a shutdown that overruns its watchdog reports itself, flushes what it can, releases the lock and exits non-zero —
  *   a process that looks alive but is not is worse than one that fails.
  */
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { installInvariantReporter } from "../shared/invariant.ts";
 import { gatewayScheme, resolveGatewayServerConfig } from "../gateway/gateway-config.ts";
 import { startGatewayServer } from "../gateway/gateway-server.ts";
@@ -22,7 +23,7 @@ import { pinHostDiagnosticsReporter } from "./host-diagnostics.ts";
 import { acquireHostLock } from "./host-lock.ts";
 import { getSlateRootDir } from "./host-paths.ts";
 import { installProcessCrashGuards } from "./process-crash-guard.ts";
-import { createProductionSlateHost, type ProductionSlateHostPorts } from "./slate-host.ts";
+import { createProductionSlateHost, type ProductionSlateHostPorts } from "./slate-host-production.ts";
 import { launchBoxExecDaemon, resolveBoxDaemonEntryFromHost, type HostOwnedBoxExecDaemon } from "./boxes/exec-daemon-process.ts";
 
 export const BOX_COPY_IN_ARG = "--box-copy-in";
@@ -449,4 +450,15 @@ export function installShutdownHandlers(
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) processControl.on(signal, () => shutdown(signal));
   return { shutdown };
+}
+
+/** Running the built module is the packaged production entry; imports keep the injectable orchestration surface only. */
+const directEntryPath = process.argv[1];
+if (directEntryPath !== undefined && pathToFileURL(resolve(directEntryPath)).href === import.meta.url) {
+  void import("./production-composition.ts")
+    .then(({ createProductionHostPorts }) => startProductionHost(createProductionHostPorts()))
+    .catch((error: unknown) => {
+      console.error(`${HOST_LOG_PREFIX} production bootstrap failed:`, error);
+      process.exitCode = 1;
+    });
 }

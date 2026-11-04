@@ -234,7 +234,7 @@ describe("the box this build offers", () => {
       createControlClient: () => ({
         ping: async (_ctx: unknown, _request: unknown, options: unknown) => { controlCalls.push(["ping", options]); return {}; },
         updateEnvironmentVariables: async (_ctx: unknown, request: unknown) => { controlCalls.push(["env", request]); return {}; },
-        loadMcpServers: async (_ctx: unknown, request: unknown) => { controlCalls.push(["mcp", request]); return { loadedServerNames: ["from-config"] }; },
+        loadServers: async (_ctx: unknown, configurationJson: string) => { controlCalls.push(["mcp", configurationJson]); return ["from-config"]; },
       }),
       createExecClient: () => ({ exec: async function* () { /* no elements */ } }),
       createResourceAccessor: () => ({ ...accessor, wrapped: true }),
@@ -254,7 +254,7 @@ describe("the box this build offers", () => {
     assert.equal((await inner.listBoxes()).length > 0, true);
     assert.equal(inner.getAgentWindowIndex?.("agent-1"), 1);
     assert.equal(inner.maxWindows?.(), 1);
-    assert.equal(inner.getTerminalsFolder?.(), "/root/.cursor/projects/workspace/terminals");
+    assert.equal(inner.getTerminalsFolder?.(), "/root/.slate/projects/workspace/terminals");
     assert.equal(await inner.isAvailable?.(), true);
     assert.deepEqual(inner.describe?.(), { backend: "loopback" });
 
@@ -264,7 +264,7 @@ describe("the box this build offers", () => {
     assert.deepEqual(ports.controlCalls.at(-1), ["env", { env: { SLATE_BOX_MODE: "release" }, replace: true }]);
     // What the box says it loaded is handed back to the caller.
     assert.deepEqual(await inner.loadMcpServers?.(context, "{}"), ["from-config"]);
-    assert.deepEqual(ports.controlCalls.at(-1), ["mcp", { mcpConfigJson: "{}", removeMissing: true }]);
+    assert.deepEqual(ports.controlCalls.at(-1), ["mcp", "{}"]);
   });
 
   it("refuses an environment update it cannot understand, before it reaches the box", () => {
@@ -288,7 +288,7 @@ describe("the box this build offers", () => {
     // The standalone box has no desktop of its own to offer, and takes the monitor-free accessor instead.
     const accessor = ready.remoteAccessor as unknown as { noMonitor?: boolean; wrapped?: boolean };
     assert.deepEqual({ vncUrl: ready.vncUrl, noMonitor: accessor.noMonitor, built: accessor.wrapped }, { vncUrl: "", noMonitor: true, built: true });
-    assert.equal(ready.terminalsFolder, "/root/.cursor/projects/workspace/terminals");
+    assert.equal(ready.terminalsFolder, "/root/.slate/projects/workspace/terminals");
     await inner.uploadFile(context, "agent-1", "/root/notes/today.txt", new TextEncoder().encode("hello"));
     // The file is written beside its name and then moved into place, so a reader never sees half of it.
     // The directory is made first, with the path quoted for the shell it runs in.
@@ -313,7 +313,7 @@ describe("the box this build offers", () => {
     const composedReady = await composed.ensureReady(context, "agent-1") as { vncUrl: string; terminalsFolder?: string };
     // With the box's own image, a window is reached through it, and its accessor is the box's own.
     assert.equal(composedReady.vncUrl.startsWith("http://127.0.0.1:6081/vnc.html?path="), true);
-    assert.equal(composedReady.terminalsFolder, "/root/.cursor/projects/workspace/terminals");
+    assert.equal(composedReady.terminalsFolder, "/root/.slate/projects/workspace/terminals");
     const standalonePorts = generatedPorts();
     const standalone = createProductionBoxInner(options(standalonePorts.generated, false));
     assert.equal((await standalone.ensureReady(context, "agent-1")).vncUrl, "");

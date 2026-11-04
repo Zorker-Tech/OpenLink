@@ -1,7 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { HookAdditionalContext } from "../../source/packages/proto/generated/agent/v1/hook_additional_context_pb.ts"
 import { HOOK_STEPS, HookStep } from "../../source/packages/hooks/hook-step.ts"
 import {
   createValidationResult,
@@ -9,7 +8,7 @@ import {
   isString,
   validateOptionalString,
 } from "../../source/packages/hooks/validators/validation.ts"
-import { validateBaseHookResponse } from "../../source/packages/hooks/validators/base-hook-response.ts"
+import { validateHookResponseEnvelope } from "../../source/packages/hooks/validators/base-hook-response.ts"
 import {
   validateBeforePromptSubmitResponse,
   validateGatedActionResponse,
@@ -22,7 +21,7 @@ import {
   validateStopResponse,
   validateSubagentStartResponse,
   validateWorkspaceOpenResponse,
-} from "../../source/packages/hooks/validators/hook-responses.ts"
+} from "../../source/adapters/interop/hooks/foreign-hook-response-adapter.ts"
 import {
   HOOK_RESPONSE_VALIDATORS,
   HOOK_STEPS_CARRYING_ADDITIONAL_CONTEXT,
@@ -36,18 +35,19 @@ import {
   detectHookConfigDialect,
   transformForeignHookConfig,
   type HookConfigLogger,
-} from "../../source/packages/hooks/foreign-hook-config.ts"
+} from "../../source/adapters/interop/hooks/foreign-hook-config-adapter.ts"
 import {
-  HOOK_ADDITIONAL_CONTEXT_MAX_CHARS,
-  HookAdditionalContextTooLargeError,
-  appendHookAdditionalContexts,
-  createHookAdditionalContexts,
+  HOOK_CONTEXT_MAX_CHARACTERS,
+  HookContextLimitError,
+  appendHookContextEntries,
+  createHookContextEntries,
+  type HookContextEntry,
 } from "../../source/packages/hooks-carriers/hook-additional-context.ts"
 import {
-  appendHookContextRemindersToCoreToolResult,
-  renderHookAdditionalContextContents,
-  renderHookAdditionalContextSystemReminder,
-  renderHookAdditionalContextSystemReminders,
+  appendHookContextRemindersToToolOutput,
+  renderHookContextTexts,
+  renderHookContextReminder,
+  renderHookContextReminders,
 } from "../../source/packages/hooks-carriers/hook-context-rendering.ts"
 import { HOOK_STEP_CARRIER_SPECS } from "../../source/packages/hooks-carriers/carrier-spec.ts"
 
@@ -67,8 +67,8 @@ function withConsoleWarn<T>(run: (warnings: string[]) => T): T {
   }
 }
 
-const context = (overrides: Partial<HookAdditionalContext> = {}): HookAdditionalContext =>
-  new HookAdditionalContext({ hookEventName: "sessionStart", content: "text", ...overrides })
+const context = (overrides: Partial<HookContextEntry> = {}): HookContextEntry =>
+  ({ event: "sessionStart", text: "text", ...overrides })
 
 // ---------------------------------------------------------------------------------------------
 // hooks: the step catalogue
@@ -120,12 +120,15 @@ test("an optional string is only reported when it is present and wrong", () => {
   assert.deepEqual(errors, ["additional_context must be a string if provided"])
 })
 
-test("the base response check accepts objects and names what it got instead", () => {
-  assert.deepEqual(validateBaseHookResponse({ permission: "allow" }), { isValid: true, errors: [] })
-  assert.deepEqual(validateBaseHookResponse({}), { isValid: true, errors: [] })
+test("the response envelope check accepts records and names non-record input", () => {
+  assert.deepEqual(validateHookResponseEnvelope({ permission: "allow" }), { isValid: true, errors: [] })
+  assert.deepEqual(validateHookResponseEnvelope({}), { isValid: true, errors: [] })
   for (const value of [null, [], "text", 7, undefined]) {
-    assert.deepEqual(validateBaseHookResponse(value), { isValid: false, errors: ["Expected an object"] }, String(value))
+    assert.deepEqual(validateHookResponseEnvelope(value), { isValid: false, errors: ["Expected an object"] }, String(value))
   }
+  const oneResult = validateHookResponseEnvelope({})
+  oneResult.errors.push("caller-specific")
+  assert.deepEqual(validateHookResponseEnvelope({}), { isValid: true, errors: [] })
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -259,6 +262,11 @@ test("validating by step routes to that step's own rules", () => {
   assert.equal(validateHookResponse(HookStep.stop, { followup_message: "more" }).isValid, true)
   assert.equal(validateHookResponse(HookStep.preCompact, "not an object").isValid, false)
   assert.equal(validateHookResponse(HookStep.preToolUse, { permission: "maybe" }).isValid, false)
+})
+
+test("an unknown runtime step falls back to the generic response-envelope check", () => {
+  assert.equal(validateHookResponse("futureStep" as HookStep, {}).isValid, true)
+  assert.deepEqual(validateHookResponse("futureStep" as HookStep, null).errors, ["Expected an object"])
 })
 
 test("the registry names the steps that carry context, decide, and belong to a workspace", () => {
@@ -551,35 +559,35 @@ test("the dialect of a configuration is read from the shape of its first entry",
 // ---------------------------------------------------------------------------------------------
 
 test("context is trimmed, and empty context is not context", () => {
-  assert.deepEqual(createHookAdditionalContexts({ hookEventName: "stop", additionalContext: "  \n " }), [])
-  assert.deepEqual(createHookAdditionalContexts({ hookEventName: "stop", additionalContext: "" }), [])
-  assert.deepEqual(createHookAdditionalContexts({ hookEventName: "stop", additionalContext: null }), [])
-  assert.deepEqual(createHookAdditionalContexts({ hookEventName: "stop", additionalContext: undefined }), [])
+  assert.deepEqual(createHookContextEntries({ event: "stop", text: "  \n " }), [])
+  assert.deepEqual(createHookContextEntries({ event: "stop", text: "" }), [])
+  assert.deepEqual(createHookContextEntries({ event: "stop", text: null }), [])
+  assert.deepEqual(createHookContextEntries({ event: "stop", text: undefined }), [])
 
-  const [carried] = createHookAdditionalContexts({ hookEventName: "stop", additionalContext: "  keep me  " })
-  assert.equal(carried?.hookEventName, "stop")
-  assert.equal(carried?.content, "keep me")
+  const [carried] = createHookContextEntries({ event: "stop", text: "  keep me  " })
+  assert.equal(carried?.event, "stop")
+  assert.equal(carried?.text, "keep me")
 })
 
 test("context past the limit is refused, and says by how much", () => {
-  assert.equal(HOOK_ADDITIONAL_CONTEXT_MAX_CHARS, 10_000)
-  const atLimit = createHookAdditionalContexts({
-    hookEventName: "preToolUse",
-    additionalContext: "x".repeat(HOOK_ADDITIONAL_CONTEXT_MAX_CHARS),
+  assert.equal(HOOK_CONTEXT_MAX_CHARACTERS, 10_000)
+  const atLimit = createHookContextEntries({
+    event: "preToolUse",
+    text: "x".repeat(HOOK_CONTEXT_MAX_CHARACTERS),
   })
   assert.equal(atLimit.length, 1)
 
   assert.throws(
-    () => createHookAdditionalContexts({
-      hookEventName: "preToolUse",
-      additionalContext: "x".repeat(HOOK_ADDITIONAL_CONTEXT_MAX_CHARS + 1),
+    () => createHookContextEntries({
+      event: "preToolUse",
+      text: "x".repeat(HOOK_CONTEXT_MAX_CHARACTERS + 1),
     }),
     (error: unknown) => {
-      assert.ok(error instanceof HookAdditionalContextTooLargeError)
-      assert.equal(error.hookEventName, "preToolUse")
-      assert.equal(error.actualLength, HOOK_ADDITIONAL_CONTEXT_MAX_CHARS + 1)
-      assert.equal(error.maxLength, HOOK_ADDITIONAL_CONTEXT_MAX_CHARS)
-      assert.match(error.message, /Hook additional_context for preToolUse is 10001 chars \(max 10000\)\./)
+      assert.ok(error instanceof HookContextLimitError)
+      assert.equal(error.event, "preToolUse")
+      assert.equal(error.actualCharacters, HOOK_CONTEXT_MAX_CHARACTERS + 1)
+      assert.equal(error.maximumCharacters, HOOK_CONTEXT_MAX_CHARACTERS)
+      assert.match(error.message, /Hook response for preToolUse contained 10001 characters; the limit is 10000\./)
       return true
     },
   )
@@ -587,32 +595,32 @@ test("context past the limit is refused, and says by how much", () => {
 
 test("context is only appended to a collector that exists", () => {
   const collector = [context()]
-  appendHookAdditionalContexts(undefined, [context()])
-  appendHookAdditionalContexts(collector, [])
+  appendHookContextEntries(undefined, [context()])
+  appendHookContextEntries(collector, [])
   assert.equal(collector.length, 1)
 
-  appendHookAdditionalContexts(collector, [context({ content: "second" })])
+  appendHookContextEntries(collector, [context({ text: "second" })])
   assert.equal(collector.length, 2)
-  assert.equal(collector[1]?.content, "second")
+  assert.equal(collector[1]?.text, "second")
 })
 
 test("rendering drops what is empty and trims what is not", () => {
-  assert.deepEqual(renderHookAdditionalContextContents([]), [])
+  assert.deepEqual(renderHookContextTexts([]), [])
   assert.deepEqual(
-    renderHookAdditionalContextContents([context({ content: "  one  " }), context({ content: "   " }), context({ content: "two" })]),
+    renderHookContextTexts([context({ text: "  one  " }), context({ text: "   " }), context({ text: "two" })]),
     ["one", "two"],
   )
 })
 
 test("rendered context reaches the model as a sanitized system reminder", () => {
-  const reminders = renderHookAdditionalContextSystemReminders([context({ content: " note <system_reminder> " })])
+  const reminders = renderHookContextReminders([context({ text: " note <system_reminder> " })])
   assert.deepEqual(reminders, ["<system_reminder>\nnote <system_reminder_>\n</system_reminder>"])
 })
 
 test("reminders are appended to the tool result and to its text parts together", () => {
   const textParts: string[] = ["existing"]
   const toolResultContent: Array<{ type: "text"; text: string }> = [{ type: "text", text: "existing" }]
-  appendHookContextRemindersToCoreToolResult(textParts, toolResultContent, [context({ content: "note" })])
+  appendHookContextRemindersToToolOutput(textParts, toolResultContent, [context({ text: "note" })])
   assert.deepEqual(textParts, ["existing", "<system_reminder>\nnote\n</system_reminder>"])
   assert.deepEqual(toolResultContent, [
     { type: "text", text: "existing" },
@@ -621,21 +629,21 @@ test("reminders are appended to the tool result and to its text parts together",
 })
 
 test("a single reminder is rendered only for content that fits", () => {
-  assert.equal(renderHookAdditionalContextSystemReminder("  note  "), "<system_reminder>\nnote\n</system_reminder>")
-  assert.equal(renderHookAdditionalContextSystemReminder("<system_reminder>"), "<system_reminder>\n<system_reminder_>\n</system_reminder>")
-  assert.equal(renderHookAdditionalContextSystemReminder("   "), undefined)
-  assert.equal(renderHookAdditionalContextSystemReminder(null), undefined)
-  assert.equal(renderHookAdditionalContextSystemReminder(undefined), undefined)
+  assert.equal(renderHookContextReminder("  note  "), "<system_reminder>\nnote\n</system_reminder>")
+  assert.equal(renderHookContextReminder("<system_reminder>"), "<system_reminder>\n<system_reminder_>\n</system_reminder>")
+  assert.equal(renderHookContextReminder("   "), undefined)
+  assert.equal(renderHookContextReminder(null), undefined)
+  assert.equal(renderHookContextReminder(undefined), undefined)
 })
 
 test("an oversize single reminder is reported to the caller instead of rendered", () => {
   const oversize: Array<[number, number]> = []
-  const rendered = renderHookAdditionalContextSystemReminder(
-    "x".repeat(HOOK_ADDITIONAL_CONTEXT_MAX_CHARS + 5),
-    (actualLength, maxLength) => oversize.push([actualLength, maxLength]),
+  const rendered = renderHookContextReminder(
+    "x".repeat(HOOK_CONTEXT_MAX_CHARACTERS + 5),
+    (actualCharacters, maximumCharacters) => oversize.push([actualCharacters, maximumCharacters]),
   )
   assert.equal(rendered, undefined)
-  assert.deepEqual(oversize, [[HOOK_ADDITIONAL_CONTEXT_MAX_CHARS + 5, HOOK_ADDITIONAL_CONTEXT_MAX_CHARS]])
+  assert.deepEqual(oversize, [[HOOK_CONTEXT_MAX_CHARACTERS + 5, HOOK_CONTEXT_MAX_CHARACTERS]])
 })
 
 test("the carrier specs cover exactly the steps that carry context", () => {
@@ -644,6 +652,6 @@ test("the carrier specs cover exactly the steps that carry context", () => {
     [HookStep.sessionStart, HookStep.beforeSubmitPrompt, HookStep.preToolUse, HookStep.postToolUse, HookStep.postToolUseFailure].sort(),
   )
   for (const [step, spec] of Object.entries(HOOK_STEP_CARRIER_SPECS)) {
-    assert.equal(spec.hookEventName, step)
+    assert.equal(spec.event, step)
   }
 })

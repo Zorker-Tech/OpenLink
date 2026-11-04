@@ -23,21 +23,16 @@ import { randomUUID } from "node:crypto"
 
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/index.ts"
-import type { AskQuestionResult } from "../../proto/generated/agent/v1/ask_question_tool_pb.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts"
 import type { RedactedString } from "../../redaction/redacted-values.ts"
 import {
-  createRedactedAskQuestionArgs,
-  createRedactedAskQuestionToolCall,
-  fromRedactedAskQuestionResult,
-} from "../../redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
-import { createRedactedToolCall } from "../../redacted-protos/generated/agent/v1/agent_redacted.ts"
-import {
-  formatAskQuestionResultAsString,
-  shouldReceiptAskQuestionResult,
-} from "../tools/core/ask-question/index.ts"
+  createAskQuestionCompletionToolCall,
+  formatRedactedAskQuestionResultAsString,
+  shouldReceiptRedactedAskQuestionResult,
+  type InteropRedactedToolCall,
+} from "../../../adapters/interop/agent/ask-question-result-adapter.ts"
 
 /** The redacted question, as the action carries it. */
 interface RedactedAskQuestionOption {
@@ -114,7 +109,7 @@ interface ApplyAskQuestionCompletionArgs {
 interface AppliedAskQuestionCompletion {
   readonly outcome: "applied"
   readonly recordedToolCallId: string
-  readonly toolCall: ReturnType<typeof createRedactedToolCall>
+  readonly toolCall: InteropRedactedToolCall
   readonly promptMessages: ReturnType<typeof toRedactedCoreMessages>
 }
 
@@ -133,19 +128,6 @@ function displayText(value: RedactedString): string {
   return value.unwrap(UNSAFE_CAPABILITY)
 }
 
-/** The protocol result behind a redacted one. */
-function protocolResult(result: RedactedAskQuestionResult): AskQuestionResult {
-  return (fromRedactedAskQuestionResult as unknown as (
-    value: RedactedAskQuestionResult,
-    purpose: PrivacyCapability,
-  ) => AskQuestionResult)(result, UNSAFE_CAPABILITY)
-}
-
-/** The result behind an action, when the action carries one. */
-function actionProtocolResult(completion: AskQuestionCompletionAction): AskQuestionResult | undefined {
-  return completion.result ? protocolResult(completion.result) : undefined
-}
-
 /** A completion is only a completion when it names the question and says what came of it. */
 export function isValidAskQuestionCompletion(completion: AskQuestionCompletionAction): boolean {
   const resultCase = completion.result?.result.case
@@ -159,24 +141,6 @@ export function hasAppliedAskQuestionCompletion(
   originalToolCallId: string,
 ): boolean {
   return originalToolCallId.length > 0 && stateHandler.hasCompletedAskQuestion(originalToolCallId)
-}
-
-/** The tool call the completed ask is recorded as. */
-function syntheticToolCallOf(
-  completion: AskQuestionCompletionAction,
-  originalToolCallId: string,
-): ReturnType<typeof createRedactedAskQuestionToolCall> {
-  const syntheticArgs = completion.originalArgs
-    ? createRedactedAskQuestionArgs(completion._privacyMode, {
-      title: completion.originalArgs.title,
-      questions: completion.originalArgs.questions,
-      asyncOriginalToolCallId: originalToolCallId,
-    })
-    : undefined
-  return createRedactedAskQuestionToolCall(completion._privacyMode, {
-    args: syntheticArgs,
-    result: completion.result,
-  })
 }
 
 /** The arguments of the synthetic call, as the prompt's own tool would spell them. */
@@ -243,12 +207,11 @@ export async function applyAskQuestionCompletion(
   }
   const recordedToolCallId = originalToolCallId.length > 0 ? originalToolCallId : randomUUID()
   const promptToolCallId = randomUUID()
-  const toolCall = createRedactedToolCall(completion._privacyMode, {
-    toolCallId: recordedToolCallId,
-    tool: {
-      case: "askQuestionToolCall",
-      value: syntheticToolCallOf(completion, originalToolCallId),
-    },
+  const toolCall = createAskQuestionCompletionToolCall({
+    privacyMode: completion._privacyMode,
+    originalToolCallId: recordedToolCallId,
+    originalArgs: completion.originalArgs,
+    result: completion.result,
   })
   const promptMessages = promptMessagesOf(
     completion,
@@ -260,7 +223,7 @@ export async function applyAskQuestionCompletion(
   await turn.upsertToolCall(ctx, toolCall, recordedToolCallId)
   rootPromptExecutor.appendMessages(promptMessages)
   // An acknowledgement is not an answer, so the question stays open for the answer that follows.
-  if (originalToolCallId.length > 0 && shouldReceiptAskQuestionResult(actionProtocolResult(completion))) {
+  if (originalToolCallId.length > 0 && shouldReceiptRedactedAskQuestionResult(completion.result)) {
     stateHandler.markAskQuestionCompleted(originalToolCallId)
   }
   return { outcome: "applied", recordedToolCallId, toolCall, promptMessages }
@@ -292,7 +255,7 @@ function errorResultShape(completion: AskQuestionCompletionAction & { readonly r
 /** The answer as the session's tool expects it: a sentence, or the structured object. */
 function formatCompletionResult(completion: AskQuestionCompletionAction, resultFormat: string): string {
   if (resultFormat === "formatted-string") {
-    return completion.result ? formatAskQuestionResultAsString(protocolResult(completion.result)) : "Unknown error"
+    return completion.result ? formatRedactedAskQuestionResultAsString(completion.result) : "Unknown error"
   }
   // The structured shape is written the way the tool's own arguments are spelled.
   switch (completion.result?.result.case) {

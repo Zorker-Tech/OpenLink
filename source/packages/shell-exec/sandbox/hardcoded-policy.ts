@@ -21,17 +21,12 @@
 import { existsSync, lstatSync, statSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
+import { SANDBOX_WORKSPACE_WRITE_PROTECTION_PATTERNS } from "../../../adapters/interop/agent/sandbox-workspace-path-adapter.ts";
 
-type AllowedReadPath = {
-  platform: "linux" | "darwin";
-  scope: "global" | "home" | "bundled";
-  path: string;
-};
-
-type WriteProtectionPattern = {
-  type: "workspace" | "git" | "worktree" | "absolute" | "home";
-  pattern: string;
-};
+type ReadPathScope = "global" | "home" | "bundled";
+type ReadPathGroup = { readonly scope: ReadPathScope; readonly paths: readonly string[] };
+type HostPlatform = "linux" | "darwin";
+type WriteProtectionScope = "workspace" | "git" | "worktree" | "absolute" | "home";
 
 type IgnoreMapping = Record<string, string[]>;
 
@@ -46,29 +41,25 @@ export function getHardcodedAllowedReadPaths(
   bundledPaths: Record<string, string | undefined> = {},
 ): string[] {
   const paths: string[] = [];
-  for (const entry of HARDCODED_ALLOWED_READ_PATHS) {
-    if (entry.platform !== platform) {
+  const pathGroups = READ_PATH_GROUPS[platform as HostPlatform];
+  if (pathGroups === undefined) return paths;
+
+  for (const group of pathGroups) {
+    if (group.scope === "global") {
+      paths.push(...group.paths);
       continue;
     }
-    if (entry.scope === "global") {
-      paths.push(entry.path);
-      continue;
-    }
-    const candidate = entry.scope === "home"
-      ? join(homeDir, entry.path)
-      : bundledPaths[entry.path];
-    if (!candidate) {
-      continue;
-    }
-    try {
-      const isAllowedFile = entry.scope === "home"
-        ? lstatSync(candidate).isFile()
-        : statSync(candidate).isFile();
-      if (isAllowedFile) {
-        paths.push(candidate);
+    for (const path of group.paths) {
+      const candidate = group.scope === "home" ? join(homeDir, path) : bundledPaths[path];
+      if (!candidate) continue;
+      try {
+        const isAllowedFile = group.scope === "home"
+          ? lstatSync(candidate).isFile()
+          : statSync(candidate).isFile();
+        if (isAllowedFile) paths.push(candidate);
+      } catch {
+        // Unreadable optional paths do not enter the allowlist.
       }
-    } catch {
-      // Ignore individual inaccessible candidates.
     }
   }
   return paths;
@@ -106,24 +97,15 @@ export function convertPathsToIgnoreMapping(...paths: string[]): IgnoreMapping {
 }
 
 function getWorkspaceWriteProtectionMapping(workspaceDir: string): IgnoreMapping {
-  const patterns = HARDCODED_WRITE_PROTECTION_PATTERNS
-    .filter((entry) => entry.type === "workspace")
-    .map((entry) => entry.pattern);
-  return { [workspaceDir]: patterns };
+  return { [workspaceDir]: [...WRITE_PROTECTION_PATHS.workspace] };
 }
 
 export function getGitWriteProtectionMapping(gitDirParent: string): IgnoreMapping {
-  const patterns = HARDCODED_WRITE_PROTECTION_PATTERNS
-    .filter((entry) => entry.type === "git")
-    .map((entry) => entry.pattern);
-  return { [gitDirParent]: patterns };
+  return { [gitDirParent]: [...WRITE_PROTECTION_PATHS.git] };
 }
 
 export function getWorktreeWriteProtectionMapping(workspaceDir: string): IgnoreMapping {
-  const patterns = HARDCODED_WRITE_PROTECTION_PATTERNS
-    .filter((entry) => entry.type === "worktree")
-    .map((entry) => entry.pattern);
-  return { [workspaceDir]: patterns };
+  return { [workspaceDir]: [...WRITE_PROTECTION_PATHS.worktree] };
 }
 
 function getHardcodedNetworkPolicy(): HardcodedNetworkPolicy | undefined {
@@ -139,31 +121,10 @@ function getHardcodedNetworkPolicy(): HardcodedNetworkPolicy | undefined {
 export function getHardcodedSandboxPolicy(workspaceDir: string) {
   const networkPolicy = getHardcodedNetworkPolicy();
   const homeDir = os.homedir();
-  const additionalReadonlyPaths: string[] = [];
-  for (const entry of HARDCODED_WRITE_PROTECTION_PATTERNS) {
-    switch (entry.type) {
-      case "workspace":
-        break;
-      case "git":
-        break;
-      case "worktree":
-        break;
-      case "absolute": {
-        additionalReadonlyPaths.push(entry.pattern);
-        break;
-      }
-      case "home": {
-        if (homeDir.length > 0) {
-          additionalReadonlyPaths.push(join(homeDir, entry.pattern));
-        }
-        break;
-      }
-      default: {
-        const _exhaustive: never = entry.type;
-        throw new Error(`Unknown entry type: ${_exhaustive}`);
-      }
-    }
-  }
+  const additionalReadonlyPaths = [
+    ...WRITE_PROTECTION_PATHS.absolute,
+    ...(homeDir.length === 0 ? [] : WRITE_PROTECTION_PATHS.home.map((path) => join(homeDir, path))),
+  ];
   return {
     type: "workspace_readwrite" as const,
     additionalReadonlyPaths,
@@ -173,141 +134,49 @@ export function getHardcodedSandboxPolicy(workspaceDir: string) {
   };
 }
 
-const HARDCODED_ALLOWED_READ_PATHS: AllowedReadPath[] = [
-  { platform: "linux", scope: "global", path: "/bin" },
-  { platform: "linux", scope: "global", path: "/sbin" },
-  { platform: "linux", scope: "global", path: "/usr/bin" },
-  { platform: "linux", scope: "global", path: "/usr/sbin" },
-  { platform: "linux", scope: "global", path: "/usr/local/bin" },
-  { platform: "linux", scope: "global", path: "/lib" },
-  { platform: "linux", scope: "global", path: "/lib64" },
-  { platform: "linux", scope: "global", path: "/usr/lib" },
-  { platform: "linux", scope: "global", path: "/usr/lib64" },
-  { platform: "linux", scope: "global", path: "/usr/local/lib" },
-  { platform: "linux", scope: "global", path: "/usr/libexec" },
-  { platform: "linux", scope: "global", path: "/usr/share" },
-  { platform: "linux", scope: "global", path: "/etc/ld.so.cache" },
-  { platform: "linux", scope: "global", path: "/etc/ld.so.conf" },
-  { platform: "linux", scope: "global", path: "/etc/ld.so.conf.d" },
-  { platform: "linux", scope: "global", path: "/etc/ssl/certs" },
-  { platform: "linux", scope: "global", path: "/etc/ssl/openssl.cnf" },
-  { platform: "linux", scope: "global", path: "/etc/ssl/cert.pem" },
-  { platform: "linux", scope: "global", path: "/etc/ssl/ca-bundle.pem" },
-  { platform: "linux", scope: "global", path: "/etc/ssl/certs/ca-certificates.crt" },
-  { platform: "linux", scope: "global", path: "/etc/pki/tls/certs" },
-  { platform: "linux", scope: "global", path: "/etc/pki/tls/openssl.cnf" },
-  { platform: "linux", scope: "global", path: "/etc/pki/ca-trust/extracted" },
-  { platform: "linux", scope: "global", path: "/etc/resolv.conf" },
-  { platform: "linux", scope: "global", path: "/etc/hosts" },
-  { platform: "linux", scope: "global", path: "/etc/nsswitch.conf" },
-  { platform: "linux", scope: "global", path: "/etc/gai.conf" },
-  { platform: "linux", scope: "global", path: "/etc/profile" },
-  { platform: "linux", scope: "global", path: "/etc/bash.bashrc" },
-  { platform: "linux", scope: "global", path: "/etc/zsh/zshenv" },
-  { platform: "linux", scope: "global", path: "/etc/zsh/zprofile" },
-  { platform: "linux", scope: "global", path: "/etc/zsh/zshrc" },
-  { platform: "linux", scope: "global", path: "/etc/zsh/zlogin" },
-  { platform: "linux", scope: "global", path: "/etc/gitconfig" },
-  { platform: "linux", scope: "home", path: ".bashrc" },
-  { platform: "linux", scope: "home", path: ".bash_profile" },
-  { platform: "linux", scope: "home", path: ".profile" },
-  { platform: "linux", scope: "home", path: ".zshenv" },
-  { platform: "linux", scope: "home", path: ".zprofile" },
-  { platform: "linux", scope: "home", path: ".zshrc" },
-  { platform: "linux", scope: "home", path: ".zlogin" },
-  { platform: "linux", scope: "home", path: ".gitconfig" },
-  { platform: "linux", scope: "bundled", path: "ripgrep" },
-  { platform: "darwin", scope: "global", path: "/bin" },
-  { platform: "darwin", scope: "global", path: "/usr/bin" },
-  { platform: "darwin", scope: "global", path: "/usr/lib" },
-  { platform: "darwin", scope: "global", path: "/usr/libexec" },
-  { platform: "darwin", scope: "global", path: "/usr/share" },
-  { platform: "darwin", scope: "global", path: "/System/Library" },
-  { platform: "darwin", scope: "global", path: "/System/Cryptexes" },
-  { platform: "darwin", scope: "global", path: "/Library/Apple" },
-  { platform: "darwin", scope: "global", path: "/private/etc/ssl/cert.pem" },
-  { platform: "darwin", scope: "global", path: "/private/etc/ssl/certs" },
-  { platform: "darwin", scope: "global", path: "/private/etc/hosts" },
-  { platform: "darwin", scope: "global", path: "/private/etc/resolv.conf" },
-  { platform: "darwin", scope: "global", path: "/etc/profile" },
-  { platform: "darwin", scope: "global", path: "/etc/bashrc" },
-  { platform: "darwin", scope: "global", path: "/etc/zshenv" },
-  { platform: "darwin", scope: "global", path: "/etc/zprofile" },
-  { platform: "darwin", scope: "global", path: "/etc/zshrc" },
-  { platform: "darwin", scope: "global", path: "/etc/zlogin" },
-  { platform: "darwin", scope: "global", path: "/etc/gitconfig" },
-  { platform: "darwin", scope: "home", path: ".bashrc" },
-  { platform: "darwin", scope: "home", path: ".bash_profile" },
-  { platform: "darwin", scope: "home", path: ".profile" },
-  { platform: "darwin", scope: "home", path: ".zshenv" },
-  { platform: "darwin", scope: "home", path: ".zprofile" },
-  { platform: "darwin", scope: "home", path: ".zshrc" },
-  { platform: "darwin", scope: "home", path: ".zlogin" },
-  { platform: "darwin", scope: "home", path: ".gitconfig" },
-  { platform: "darwin", scope: "bundled", path: "ripgrep" },
-  { platform: "darwin", scope: "global", path: "/dev/null" },
-  { platform: "darwin", scope: "global", path: "/dev/zero" },
-  { platform: "darwin", scope: "global", path: "/dev/random" },
-  { platform: "darwin", scope: "global", path: "/dev/urandom" },
-  { platform: "darwin", scope: "global", path: "/dev/tty" },
-];
+const READ_PATH_GROUPS = {
+  linux: [
+    { scope: "global", paths: [
+      "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/usr/libexec", "/usr/share",
+      "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d", "/etc/ssl/certs", "/etc/ssl/openssl.cnf", "/etc/ssl/cert.pem", "/etc/ssl/ca-bundle.pem", "/etc/ssl/certs/ca-certificates.crt",
+      "/etc/pki/tls/certs", "/etc/pki/tls/openssl.cnf", "/etc/pki/ca-trust/extracted", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/gai.conf",
+      "/etc/profile", "/etc/bash.bashrc", "/etc/zsh/zshenv", "/etc/zsh/zprofile", "/etc/zsh/zshrc", "/etc/zsh/zlogin", "/etc/gitconfig",
+    ] },
+    { scope: "home", paths: [".bashrc", ".bash_profile", ".profile", ".zshenv", ".zprofile", ".zshrc", ".zlogin", ".gitconfig"] },
+    { scope: "bundled", paths: ["ripgrep"] },
+  ],
+  darwin: [
+    { scope: "global", paths: [
+      "/bin", "/usr/bin", "/usr/lib", "/usr/libexec", "/usr/share", "/System/Library", "/System/Cryptexes", "/Library/Apple",
+      "/private/etc/ssl/cert.pem", "/private/etc/ssl/certs", "/private/etc/hosts", "/private/etc/resolv.conf",
+      "/etc/profile", "/etc/bashrc", "/etc/zshenv", "/etc/zprofile", "/etc/zshrc", "/etc/zlogin", "/etc/gitconfig",
+    ] },
+    { scope: "home", paths: [".bashrc", ".bash_profile", ".profile", ".zshenv", ".zprofile", ".zshrc", ".zlogin", ".gitconfig"] },
+    { scope: "bundled", paths: ["ripgrep"] },
+    { scope: "global", paths: ["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom", "/dev/tty"] },
+  ],
+} as const satisfies Record<HostPlatform, readonly ReadPathGroup[]>;
 
-const HARDCODED_WRITE_PROTECTION_PATTERNS: WriteProtectionPattern[] = [
-  { type: "workspace", pattern: "**/.cursor/*.json" },
-  { type: "workspace", pattern: "**/.cursor/**/*.json" },
-  { type: "workspace", pattern: "**/.cursor/.workspace-trusted" },
-  { type: "workspace", pattern: "!**/.cursor/rules" },
-  { type: "workspace", pattern: "!**/.cursor/rules/**" },
-  { type: "workspace", pattern: "!**/.cursor/commands" },
-  { type: "workspace", pattern: "!**/.cursor/commands/**" },
-  { type: "workspace", pattern: "!**/.cursor/worktrees" },
-  { type: "workspace", pattern: "!**/.cursor/worktrees/**" },
-  { type: "workspace", pattern: "!**/.cursor/skills" },
-  { type: "workspace", pattern: "!**/.cursor/skills/**" },
-  { type: "workspace", pattern: "!**/.cursor/agents" },
-  { type: "workspace", pattern: "!**/.cursor/agents/**" },
-  { type: "workspace", pattern: "**/.claude/*.json" },
-  { type: "workspace", pattern: "**/.claude/**/*.json" },
-  { type: "workspace", pattern: "**/.vscode/**" },
-  { type: "workspace", pattern: "**/.idea/**" },
-  { type: "workspace", pattern: "**/.venv/" },
-  { type: "workspace", pattern: "**/venv/" },
-  { type: "workspace", pattern: "**/*.code-workspace" },
-  { type: "workspace", pattern: "**/.cursorignore" },
-  { type: "workspace", pattern: "**/.workspace-trusted" },
-  { type: "workspace", pattern: "**/.cursor/**/cli.json" },
-  { type: "workspace", pattern: "**/.cursor/**/cli-config.json" },
-  { type: "workspace", pattern: "**/.cursor/**/mcp.json" },
-  { type: "workspace", pattern: "**/.cursor/**/mcp-approvals.json" },
-  { type: "workspace", pattern: "**/.cursor/**/permissions.json" },
-  { type: "git", pattern: "**/.git/hooks/**" },
-  { type: "git", pattern: "**/.git/config" },
-  { type: "git", pattern: "**/.git/config.worktree" },
-  { type: "git", pattern: "**/.git/info/attributes" },
-  { type: "git", pattern: "**/.git/commondir" },
-  { type: "git", pattern: "**/.git/worktrees/*/commondir" },
-  { type: "worktree", pattern: ".git" },
-  { type: "absolute", pattern: "/etc/ssl/cert.pem" },
-  { type: "absolute", pattern: "/etc/ssl/ca-bundle.pem" },
-  { type: "absolute", pattern: "/private/etc/ssl/cert.pem" },
-  { type: "absolute", pattern: "/etc/ssl/certs/ca-certificates.crt" },
-  { type: "absolute", pattern: "/etc/pki/tls/certs/ca-bundle.crt" },
-  { type: "absolute", pattern: "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem" },
-  { type: "home", pattern: ".ssh" },
-  { type: "home", pattern: ".slate/sandbox-policies" },
-];
-
-const HARDCODED_PROTECTED_GIT_PATTERNS = HARDCODED_WRITE_PROTECTION_PATTERNS
-  .filter((entry) => entry.type === "git")
-  .map((entry) => entry.pattern);
-
-const SLATE_ALLOWED_WRITE_SUBDIRS = HARDCODED_WRITE_PROTECTION_PATTERNS
-  .filter((entry) => entry.type === "workspace" && entry.pattern.startsWith("!") && !entry.pattern.endsWith("/**"))
-  .map((entry) => entry.pattern.replace(/^!(\*\*\/)?/, ""));
+const WRITE_PROTECTION_PATHS = {
+  workspace: [...SANDBOX_WORKSPACE_WRITE_PROTECTION_PATTERNS],
+  git: [
+    "**/.git/hooks/**",
+    "**/.git/config",
+    "**/.git/config.worktree",
+    "**/.git/info/attributes",
+    "**/.git/commondir",
+    "**/.git/worktrees/*/commondir",
+  ],
+  worktree: [".git"],
+  absolute: [
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/ca-bundle.pem",
+    "/private/etc/ssl/cert.pem",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+  ],
+  home: [".ssh", ".slate/sandbox-policies"],
+} as const satisfies Record<WriteProtectionScope, readonly string[]>;
 
 const HARDCODED_NETWORK_DENYLIST: string[] = [];
-const _caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
-
-void HARDCODED_PROTECTED_GIT_PATTERNS;
-void SLATE_ALLOWED_WRITE_SUBDIRS;
-void _caseInsensitiveFs;

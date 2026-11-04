@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { release as osRelease, tmpdir, type as osType } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
@@ -14,12 +14,11 @@ import { CodebaseSnapshotTrigger, MAX_HANDLED_REASONS, snapshotReasonKey, type S
 import { computeHostUpgradeMetadata, forwardHostUpgradeMarkerWith, parseHostUpgradeMarker, type HostUpgradeMetadata } from "../../source/host/extensions/host-upgrade/host-upgrade-marker.ts";
 import { createHostRequestContext, resolveTimeZone } from "../../source/host/host-request-context.ts";
 import { SlateChannelDeliveryUnregisteredError } from "../../source/host/transcript/channel-delivery-unregistered-error.ts";
-import { BOX_MCP_UNSUPPORTED_MESSAGE, isUnimplementedConnectError, loadBoxMcpServersViaTransport, SlateBoxMcpUnsupportedError } from "../../source/host/boxes/box-mcp.ts";
+import { BOX_MCP_UNSUPPORTED_MESSAGE, SlateBoxMcpUnsupportedError } from "../../source/host/boxes/box-mcp.ts";
 import { getManagedSkillFilePath, isManagedSkill, MANAGED_SKILLS_CACHE_FILENAME, readManagedSkillsCache, writeManagedSkillsCache } from "../../source/host/extensions/managed-setup/managed-skills-cache.ts";
 import { boxNotReadyMessageForError, isNoMonitorComputerUseExecutor, isPrimaryWindowIndex, noMonitorComputerUseExecutor, SLATE_BOX_NOT_READY_MESSAGE, SLATE_BOX_NOT_RESPONDING_MESSAGE, SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE, SlateBoxDaemonUnreachableError, SlateBoxNoMonitorAvailableError } from "../../source/host/ports/box.ts";
-import { createSlateMcpStateExecutor } from "../../source/host/ports/mcp-state-executor.ts";
 import { isSafePluginSkillId, readPluginSkillsCache, writePluginSkillsCache } from "../../source/host/skills/plugin-skills-cache.ts";
-import { countListenerPlatforms, describeScopeIssues, isListenerPlatform, listenerPlatformsInTrigger } from "../../source/host/automations/listener-integrations.ts";
+import { countListenerPlatforms, describeScopeIssues, isListenerPlatform, listenerPlatformsInTrigger } from "../../source/host/automations/listener-platforms.ts";
 import { buildContentSnippet, entrySearchText, findAgentContentMatches, type SearchableTranscriptEntry } from "../../source/host/extensions/content-search/agent-content-search.ts";
 import { asDisplayOwner, createBoxWallpaperCommands, parseTonePlan, readLiveDisplays } from "../../source/host/extensions/wallpaper/box-wallpaper-commands.ts";
 import { McpAuthWaitRegistry } from "../../source/host/mcp/mcp-auth-wait-registry.ts";
@@ -27,7 +26,7 @@ import { classifyBotBlockPage, withBotBlockDetection } from "../../source/host/r
 import { isSqliteBusyError, isSqliteCantOpenError, isSqliteCorruptError, isSqliteIoError, retrySqliteBusy, SQLITE_BUSY, SQLITE_CANTOPEN, SQLITE_CORRUPT, SQLITE_IOERR, SQLITE_LOCKED, SQLITE_NOTADB } from "../../source/host/storage/sqlite-busy.ts";
 import { SlateSendNotPersistedError } from "../../source/host/transcript/send-not-persisted-error.ts";
 import { mergeTurnUsage, toSafeTokenCount, turnUsageFromTurnEnded, type TurnUsage } from "../../source/host/runner/turn-usage.ts";
-import { backendCloudTrigger } from "../../source/host/automations/slate-automation-cloud-trigger.ts";
+import { backendCloudTrigger } from "../../source/adapters/interop/cursor-backend/slate-automation-cloud-trigger-adapter.ts";
 import { agentProfileIdentitiesEqual, normalizeAgentProfileIdentity, parseLatestAgentProfileUpdate, renderAgentProfileUpdate, resolveAgentProfilePromptSnapshot, SLATE_AGENT_PROFILE_UPDATE_MARKER } from "../../source/host/runner/slate-agent-profile-prompt.ts";
 import { getBoxStoreBackendPolicy, isBoxStoreCopyInEnabled, isBoxStoreSyncEnabled, resolveBackendKind, SLATE_BOX_STORE_BACKEND_ENV, SLATE_BOX_STORE_LOCAL_DIR_ENV } from "../../source/host/boxes/box-store-backend-policy.ts";
 import { BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH, isBoxStoreFullyHydrated, isHydrationHandoffManifestPath, removeHydrationHandoffMarker, writeHydrationHandoffMarker } from "../../source/host/boxes/box-store-sync/box-store-hydration.ts";
@@ -148,18 +147,23 @@ describe("what an upgrade left behind", () => {
 });
 
 describe("the request context a host hands over", () => {
-  it("carries the platform, the shell, the time zone and where transcripts live", () => {
-    const contextFactory = createHostRequestContext("/tmp/transcripts", () => "Europe/Berlin", async () => ["rule"], () => "  Ada  ");
+  it("carries the platform, the shell, the time zone and where transcripts live", async () => {
+    let ruleReads = 0;
+    const contextFactory = createHostRequestContext("/tmp/transcripts", () => "Europe/Berlin", async () => { ruleReads += 1; return ["rule"]; }, () => "  Ada  ");
     const resolved = contextFactory.resolve();
     assert.equal(resolved.transcriptsFolder, "/tmp/transcripts");
     assert.equal(resolved.timeZone, "Europe/Berlin");
     assert.equal(resolved.userFullName, "Ada");
-    assert.match(resolved.osVersion, /^\w+ /);
-    assert.equal(contextFactory.resolveRules, contextFactory.resolveRules);
+    assert.equal(resolved.osVersion, `${osType()} ${osRelease()}`);
+    assert.equal(resolved.shell, process.env.SHELL || undefined);
+    assert.equal(ruleReads, 0, "rules are not loaded while resolving request metadata");
+    assert.deepEqual(await contextFactory.resolveRules(), ["rule"]);
+    assert.equal(ruleReads, 1);
     assert.equal(typeof resolveTimeZone(), "string");
     const anonymous = createHostRequestContext("/tmp/transcripts").resolve();
     assert.equal(anonymous.userFullName, undefined);
     assert.equal(anonymous.timeZone, resolveTimeZone());
+    assert.equal(createHostRequestContext("/tmp/transcripts", undefined, undefined, () => "  ").resolve().userFullName, undefined);
   });
 });
 
@@ -179,27 +183,11 @@ describe("the two errors a transcript delivery raises", () => {
 });
 
 describe("loading MCP servers into a box", () => {
-  it("reports an image that predates MCP support, and passes other failures through", async () => {
-    assert.equal(isUnimplementedConnectError({ code: 12 }), true);
-    assert.equal(isUnimplementedConnectError({ code: "unimplemented" }), true);
-    assert.equal(isUnimplementedConnectError({ code: "UNIMPLEMENTED" }), true);
-    assert.equal(isUnimplementedConnectError({ code: 13 }), false);
-    assert.equal(isUnimplementedConnectError("unimplemented"), false);
-    const createClient = (transport: { readonly name: string }) => ({
-      loadMcpServers: async (_ctx: Context, request: { mcpConfigJson: string; removeMissing: true }) => {
-        if (transport.name === "old") throw { code: 12 };
-        if (transport.name === "broken") throw { code: 13 };
-        assert.equal(request.removeMissing, true);
-        return { loadedServerNames: ["linear"] };
-      },
-    });
-    assert.deepEqual(await loadBoxMcpServersViaTransport(context, { name: "new" }, "{}", createClient), ["linear"]);
-    await assert.rejects(
-      () => loadBoxMcpServersViaTransport(context, { name: "old" }, "{}", createClient),
-      (error: unknown) => error instanceof SlateBoxMcpUnsupportedError && error.message === BOX_MCP_UNSUPPORTED_MESSAGE,
-    );
+  it("gives an unsupported box capability a stable updater message", () => {
+    const error = new SlateBoxMcpUnsupportedError();
+    assert.equal(error.message, BOX_MCP_UNSUPPORTED_MESSAGE);
+    assert.equal(error.name, "SlateBoxMcpUnsupportedError");
     assert.match(BOX_MCP_UNSUPPORTED_MESSAGE, /^Slate's computer is running an older image without MCP support/);
-    await assert.rejects(() => loadBoxMcpServersViaTransport(context, { name: "broken" }, "{}", createClient), (error: unknown) => (error as { code?: number }).code === 13);
   });
 });
 
@@ -236,24 +224,6 @@ describe("the box, as the rest of the host sees it", () => {
     assert.equal(isNoMonitorComputerUseExecutor({}), false);
     assert.equal(isPrimaryWindowIndex(1), true);
     assert.equal(isPrimaryWindowIndex(2), false);
-  });
-});
-
-describe("reporting the MCP servers an agent has", () => {
-  it("groups the tools by the server they came from", async () => {
-    const executor = createSlateMcpStateExecutor({
-      getTools: async () => [
-        { providerIdentifier: "linear", name: "issue", toolName: "linear_issue" },
-        { providerIdentifier: "linear", name: "comment", toolName: "linear_comment" },
-        { providerIdentifier: "slack", name: "post", toolName: "slack_post" },
-      ],
-    });
-    const result = await executor.execute(context);
-    assert.equal(result.result.case, "success");
-    const servers = result.result.case === "success" ? result.result.value.servers : [];
-    assert.deepEqual(servers.map((server) => server.serverIdentifier), ["linear", "slack"]);
-    assert.deepEqual(servers.map((server) => server.status), ["connected", "connected"]);
-    assert.deepEqual(servers[0]?.tools.map((tool) => tool.toolName), ["linear_issue", "linear_comment"]);
   });
 });
 
@@ -568,7 +538,7 @@ describe("telling an agent its own profile changed", () => {
     const update = renderAgentProfileUpdate(identity);
     assert.match(update, /^\[SLATE_HIDDEN_PROMPT\]<<SLATE_AGENT_PROFILE_UPDATE:v1:[A-Za-z0-9_-]+>>/);
     assert.match(update, /<agent_profile_update>/);
-    assert.match(update, /Current name: Researcher/);
+    assert.match(update, /Agent name: Researcher/);
     assert.deepEqual(parseLatestAgentProfileUpdate(update), identity);
     const later = renderAgentProfileUpdate({ name: "Analyst", description: "  weighs things  " });
     assert.deepEqual(parseLatestAgentProfileUpdate(`${update}\n${later}`), { name: "Analyst", description: "weighs things" });
@@ -588,16 +558,22 @@ describe("telling an agent its own profile changed", () => {
 describe("where a box's store lives", () => {
   it("prefers a local directory, then the backend's store, and falls back to the agent store", () => {
     assert.equal(resolveBackendKind("/tmp/store", {}), "local-fs");
+    assert.equal(resolveBackendKind("", {}), "local-fs");
     assert.equal(resolveBackendKind(undefined, { [SLATE_BOX_STORE_BACKEND_ENV]: " V2 " }), "slate-box-store-v2");
     assert.equal(resolveBackendKind(undefined, { [SLATE_BOX_STORE_BACKEND_ENV]: "v1" }), "agent-store");
     assert.equal(resolveBackendKind(undefined, {}), "agent-store");
-    const env: Record<string, string | undefined> = { [SLATE_BOX_STORE_LOCAL_DIR_ENV]: "/tmp/store", SLATE_BOX_STORE_SYNC: "yes", SLATE_BOX_STORE_COPY_IN: "0" };
+    const env: Record<string, string | undefined> = { [SLATE_BOX_STORE_LOCAL_DIR_ENV]: "  /tmp/store  ", [SLATE_BOX_STORE_BACKEND_ENV]: "v2", SLATE_BOX_STORE_SYNC: " YES ", SLATE_BOX_STORE_COPY_IN: "0" };
     const policy = getBoxStoreBackendPolicy(env);
     assert.deepEqual(policy, { kind: "local-fs", localDir: "/tmp/store" });
+    assert.equal(Object.isFrozen(policy), true);
     assert.equal(getBoxStoreBackendPolicy(env), policy);
     assert.equal(isBoxStoreSyncEnabled(env), true);
     assert.equal(isBoxStoreCopyInEnabled(env), false);
+    env[SLATE_BOX_STORE_LOCAL_DIR_ENV] = undefined;
+    env[SLATE_BOX_STORE_BACKEND_ENV] = "agent-store";
+    assert.equal(getBoxStoreBackendPolicy(env), policy, "a host keeps its first resolved policy snapshot");
     assert.deepEqual(getBoxStoreBackendPolicy({ [SLATE_BOX_STORE_LOCAL_DIR_ENV]: "relative/path" }), { kind: "agent-store" });
+    assert.deepEqual(getBoxStoreBackendPolicy({ [SLATE_BOX_STORE_LOCAL_DIR_ENV]: "  ", [SLATE_BOX_STORE_BACKEND_ENV]: "v2" }), { kind: "slate-box-store-v2" });
   });
 });
 

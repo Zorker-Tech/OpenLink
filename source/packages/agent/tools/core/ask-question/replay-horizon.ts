@@ -22,46 +22,50 @@ interface ReplayHorizonMessage {
   readonly content: unknown
 }
 
-function readAsyncOriginalToolCallId(args: RedactedToolArguments): string | undefined {
-  let parsedArgs: unknown
+interface ReplayToolCallPart {
+  readonly type: string
+  readonly toolName: string
+  readonly args: RedactedToolArguments
+  readonly toolCallId: string
+}
+
+const QUESTION_TOOL_NAMES = new Set(["askquestion", "multiplechoice"])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function originalQuestionId(args: RedactedToolArguments): string | undefined {
+  let decoded: unknown
   try {
-    parsedArgs = JSON.parse(args.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED))
+    decoded = JSON.parse(args.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED))
   } catch {
     return undefined
   }
-  if (
-    typeof parsedArgs !== "object" ||
-    parsedArgs === null ||
-    Array.isArray(parsedArgs) ||
-    !("async_original_tool_call_id" in parsedArgs)
-  ) {
-    return undefined
-  }
-  const originalToolCallId = parsedArgs.async_original_tool_call_id
-  return typeof originalToolCallId === "string" && originalToolCallId.length > 0 ? originalToolCallId : undefined
+  if (!isRecord(decoded)) return undefined
+  const originalId = decoded.async_original_tool_call_id
+  return typeof originalId === "string" && originalId.length > 0 ? originalId : undefined
 }
 
-function isAskQuestionToolName(toolName: string): boolean {
-  const normalized = toolName.toLowerCase().replace(/_/g, "")
-  return normalized === "askquestion" || normalized === "multiplechoice"
+function isQuestionTool(name: string): boolean {
+  const key = name.toLowerCase().replaceAll("_", "")
+  return QUESTION_TOOL_NAMES.has(key)
 }
 
 export function collectLiveAskQuestionOriginalIds(messages: readonly ReplayHorizonMessage[]): Set<string> {
-  const liveOriginalIds = new Set<string>()
+  const pendingOriginalIds = new Set<string>()
   for (const message of messages) {
-    if (message.role !== "assistant" || !Array.isArray(message.content)) continue
-    for (const part of message.content) {
-      const typedPart = part as {
-        readonly type: string
-        readonly toolName: string
-        readonly args: RedactedToolArguments
-        readonly toolCallId: string
-      }
-      if (typedPart.type !== "tool-call" || !isAskQuestionToolName(typedPart.toolName)) continue
-      // A foreground question names itself; an asynchronous one names the question it came from.
-      const originalToolCallId = readAsyncOriginalToolCallId(typedPart.args) ?? typedPart.toolCallId
-      if (originalToolCallId.length > 0) liveOriginalIds.add(originalToolCallId)
+    if (message.role !== "assistant") continue
+    if (!Array.isArray(message.content)) continue
+
+    for (const content of message.content) {
+      const part = content as ReplayToolCallPart
+      if (part.type !== "tool-call" || !isQuestionTool(part.toolName)) continue
+
+      const origin = originalQuestionId(part.args) ?? part.toolCallId
+      if (origin.length === 0) continue
+      pendingOriginalIds.add(origin)
     }
   }
-  return liveOriginalIds
+  return pendingOriginalIds
 }

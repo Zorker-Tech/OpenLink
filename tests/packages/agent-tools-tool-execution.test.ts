@@ -160,7 +160,7 @@ describe("executing a tool call", () => {
   it("passes a deferred interaction through and normalizes another failure", async () => {
     const ctx = createContext();
     const emitted: unknown[] = [];
-    const deferred = new DeferredInteractionResponseError({ id: 1, query: { case: "webSearchApproved" } } as never);
+    const deferred = new DeferredInteractionResponseError({ id: 1, kind: "web-search" });
     const deferredTool = tool({ execute: async () => { throw deferred; }, serializeError: () => ({}) });
     await assert.rejects(() => executeToolResultOrError(deferredTool, ctx, { emitToolCallError: async () => {} } as never, (async function* () {})(), { toolCallId: "c" }), (failure: unknown) => failure === deferred);
     const failure = new ToolCallArgParseError("bad args");

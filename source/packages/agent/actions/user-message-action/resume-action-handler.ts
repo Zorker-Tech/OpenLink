@@ -11,17 +11,18 @@
 import { AgentConversationTurnHandle } from "../../state.ts";
 import { InteractionHandler } from "../../interaction-handler.ts";
 import { FileOperationLockManager } from "../../tools/core/file-operation-locks.ts";
-import { appendToolCallIdTagsToToolResults, shouldTagToolCallIdsForCurrentContext } from "../../tools/tool-call-id-tagging.ts";
+import { attachToolReferenceHints, shouldExposeToolReferencesInCurrentContext } from "../../tools/tool-call-id-tagging.ts";
 import { extractToolMetadataMap, getDirectDynamicToolNames, getExecutableTools } from "../../tools/tool-execution.ts";
 import { executeDeferredToolCall } from "../../tool-stream-executor.ts";
 import { PrivacyCapability } from "../../../redaction/classification.ts";
 import { toRedactedCoreMessages } from "../../../redaction/message-redaction.ts";
-import { fromRedactedRequestContext } from "../../../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts";
-import { toUnredactedInteractionListener } from "../../../agent-core/redacted-interaction-listener.ts";
+import { decodeIncomingRequestContext } from "../../../../adapters/interop/agent/user-message-action-input-adapter.ts";
+import { toUnredactedInteractionListener } from "../../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 import { createSpan } from "../../../context/telemetry.ts";
 import type { Context } from "../../../context/context.ts";
 import { getInvocationId } from "../../utils/invocation-id.ts";
 import { getRequestContext, resolveRequestContext } from "../../utils/request-context.ts";
+import { SlateMode } from "../../mode-processing.ts";
 import { buildRequestContextOptions } from "../meta-agent-notes.ts";
 import {
   collectPendingToolAdmission,
@@ -30,7 +31,10 @@ import {
   resolveDescriptorForPendingToolCall,
   validatePendingToolContractIdentity,
 } from "../../pending-tool-call-contract.ts";
-import { AbstractUserMessageActionHandler } from "./abstract-user-message-action-handler.ts";
+import {
+  AbstractUserMessageActionHandler,
+  slateModeFromUserMessage,
+} from "./abstract-user-message-action-handler.ts";
 
 type Any = any;
 
@@ -50,7 +54,8 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
       this.config.thinkingStyle,
       this.config.featureFlags?.nalLoopDetection === true,
     );
-    const userMode = (await turn.userMessage.get(ctx)).userMode;
+    const userMessage = await turn.userMessage.get(ctx);
+    const userMode = slateModeFromUserMessage(userMessage.mode) ?? SlateMode.UNSPECIFIED;
     const fileLocks = new FileOperationLockManager();
     const toolSet = this.config.toolsGenerator({
       resourceAccessor: this.resourceAccessor,
@@ -110,7 +115,7 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
     }
     const resultMessages = await Promise.all(callPromises);
     messages.push(...resultMessages);
-    if (shouldTagToolCallIdsForCurrentContext(ctx)) appendToolCallIdTagsToToolResults(messages);
+    if (shouldExposeToolReferencesInCurrentContext(ctx)) attachToolReferenceHints(messages);
     turn.appendPromptMessages(toRedactedCoreMessages(messages, stateHandler.getPrivacyMode()));
     return true;
   }
@@ -120,7 +125,7 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
     const ctx = executionSpan.ctx;
     const invocationId = getInvocationId(ctx);
     executionSpan.span.setAttribute("invocationId", invocationId);
-    const requestContext = await getRequestContext(ctx, action.requestContext ? fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) : undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
+    const requestContext = await getRequestContext(ctx, action.requestContext ? decodeIncomingRequestContext(action.requestContext) : undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
     const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
     await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);
     if (stateHandler.turns.length === 0) return await stateHandler.computeNewStructure(ctx);
@@ -138,7 +143,7 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
       parentCtx: ctx,
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(this.config),
-      ...(action.requestContext ? { maybeRequestContext: fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) } : {}),
+      ...(action.requestContext ? { maybeRequestContext: decodeIncomingRequestContext(action.requestContext) } : {}),
     });
     const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
     await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);

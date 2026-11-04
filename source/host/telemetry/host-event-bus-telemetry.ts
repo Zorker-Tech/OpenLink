@@ -1,18 +1,21 @@
-/** An event-bus failure, in the shape the telemetry backend reports it. */
-export const HOST_EVENT_BUS_EVENT = "slate.host.event_bus";
-export interface HostEventBusReport {
-  kind: string;
-  topic: string;
-  errorClass: string;
+/** Values carried when reporting a host event-delivery failure. */
+import { HOST_EVENT_BUS_EVENT } from "../../shared/observability/telemetry-events.ts";
+
+export interface HostEventBusFailureInput {
+  readonly kind: string;
+  readonly topic: string;
+  readonly errorClass: string;
 }
-export function hostEventBusTelemetry(report: HostEventBusReport) {
+
+export function mapHostEventBusFailure(failure: HostEventBusFailureInput) {
+  const metadata = {
+    kind: failure.kind,
+    topic: failure.topic,
+    error_class: failure.errorClass,
+  };
   return {
     level: "error",
     event: HOST_EVENT_BUS_EVENT,
-    metadata: {
-      kind: report.kind,
-      topic: report.topic,
-      error_class: report.errorClass,
-    },
+    metadata,
   };
 }

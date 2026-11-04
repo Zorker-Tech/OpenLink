@@ -23,10 +23,10 @@ import type { AutoReviewModes } from "./runner/auto-review-gate.ts";
 import type { SlateAutoReviewController, SlateAutoReviewExpiryPolicy } from "./runner/slate-auto-review.ts";
 import type { SlateAutoReviewInstructions } from "../shared/slate-auto-review-instructions.ts";
 import type { AwaitToolOptions } from "../packages/agent/tools/core/await.ts";
-import type { WebFetchToolDependencies } from "../packages/agent/tools/core/web-fetch.ts";
+import type { WebFetchToolDependencies } from "../adapters/interop/agent/web-fetch-tool-adapter.ts";
 import type { WebSearchToolDependencies } from "../packages/agent/tools/core/web-search.ts";
 import type { ShellSmartModeApprovalState } from "../packages/agent/tools/core/shell/create-shell-tool.ts";
-import type { RequestContext } from "../packages/proto/generated/agent/v1/request_context_exec_pb.ts";
+import type { SmartModeClassifierControls } from "../packages/agent/tools/dev-smart-mode-classifier-block.ts";
 import type { CloudAgentApi, CloudAgentToolContext, CloudAgentToolDeps } from "./cloud-agents/cloud-agent-tool.ts";
 import type { BackgroundWatchesHost } from "./runner/background-work.ts";
 import type { SendMessageDependencies } from "./runner/tools/send-message-tool.ts";
@@ -37,33 +37,33 @@ import type { McpManagementDependencies } from "./runner/tools/slate-mcp-managem
 import type { SubagentManagementController } from "./runner/tools/slate-subagent-management-tools.ts";
 import { presentOptions } from "./runner/optional-options.ts";
 
-export type ProductionTurnCancelThisRun = (reason: { readonly intentional: boolean; readonly reason: string }) => void;
+export type CancelTurnExecution = (reason: { readonly intentional: boolean; readonly reason: string }) => void;
 
 /** A card or update the runner emits for this turn, with the cancellation it is allowed to use. */
-export type ProductionTurnEmitUpdate = (update: unknown, cancelThisRun: ProductionTurnCancelThisRun) => void;
+export type EmitTurnUpdate = (update: unknown, cancelThisRun: CancelTurnExecution) => void;
 
-export type ProductionRunnerRunStep = NonNullable<SlateAgentRunnerOptions["runStep"]>;
+export type RunnerStep = NonNullable<SlateAgentRunnerOptions["runStep"]>;
 
 /** Everything the turn engine is given for one step: the session, the host's hooks and overrides, and the tool inputs. */
-export interface ProductionRunnerRunStepInput {
+export interface RunnerStepBuildInput {
   readonly session: HostRunnerSession;
   readonly hooks: HostRunnerHooks;
   readonly overrides: HostRunnerOverrides;
   /** The complete option bag the host assembled for the runner constructor. */
   readonly runnerOptions: Readonly<Record<string, unknown>>;
   /** Creates the per-turn props object the runner's tools are built from. */
-  readonly createTurnToolInputs: CreateProductionTurnToolInputs;
+  readonly createTurnToolInputs: CreateRunnerToolInputs;
 }
 
 /** The runner's turn engine. It is required, so a host cannot substitute a step that does nothing. */
-export interface ProductionRunnerTurnEngine {
-  createRunStep(input: ProductionRunnerRunStepInput): ProductionRunnerRunStep;
+export interface RunnerTurnEngine {
+  createRunStep(input: RunnerStepBuildInput): RunnerStep;
 }
 
-export type CreateProductionRunnerRunStep = (input: ProductionRunnerRunStepInput) => ProductionRunnerRunStep;
+export type CreateRunnerStep = (input: RunnerStepBuildInput) => RunnerStep;
 
 /** The engine's step, checked once: a missing engine or a step that is not callable is a construction error. */
-export function createProductionRunnerRunStepProvider(engine: ProductionRunnerTurnEngine): CreateProductionRunnerRunStep {
+export function createRunnerStepProvider(engine: RunnerTurnEngine): CreateRunnerStep {
   if (typeof engine?.createRunStep !== "function") throw new TypeError("the production Runner has no turn engine");
   return (input) => {
     const runStep = engine.createRunStep(input);
@@ -72,79 +72,79 @@ export function createProductionRunnerRunStepProvider(engine: ProductionRunnerTu
   };
 }
 
-export interface ProductionTurnResourceAccessor {
+export interface TurnResourceAccessor {
   get(resource: unknown): unknown;
 }
 
-export interface ProductionTurnStateHandler {
+export interface TurnStateHandler {
   readonly [key: string]: unknown;
 }
 
-export interface ProductionTurnToolSession {
+export interface TurnToolSession {
   getExecutor(...args: readonly unknown[]): unknown;
 }
 
-export type ProductionTurnWebSearchDependencies = Omit<WebSearchToolDependencies, "resourceAccessor"> & { readonly resourceAccessor?: ProductionTurnResourceAccessor };
-export type ProductionTurnWebFetchDependencies = Omit<WebFetchToolDependencies, "resourceAccessor"> & { readonly resourceAccessor?: ProductionTurnResourceAccessor };
+export type TurnWebSearchPort = Omit<WebSearchToolDependencies, "resourceAccessor"> & { readonly resourceAccessor?: TurnResourceAccessor };
+export type TurnWebFetchPort = Omit<WebFetchToolDependencies, "resourceAccessor"> & { readonly resourceAccessor?: TurnResourceAccessor };
 
-export interface ProductionTurnExternalAwaitInputs {
-  readonly resourceAccessor: ProductionTurnResourceAccessor;
+export interface TurnAwaitPort {
+  readonly resourceAccessor: TurnResourceAccessor;
   readonly options: AwaitToolOptions;
   readonly promptVersion?: string;
 }
 
-export interface ProductionTurnAgentConfig {
+export interface TurnAgentConfiguration {
   readonly modelId: string;
   readonly [key: string]: unknown;
 }
 
-export interface ProductionTurnSummarizationHandler {
+export interface TurnSummarizer {
   getModelId(): string;
   readonly [key: string]: unknown;
 }
 
-export interface ProductionTurnModelInfo {
+export interface TurnModelDescriptor {
   readonly modelName?: string;
   readonly [key: string]: unknown;
 }
 
 /** What the runner's tools are built from for one turn. Nothing here is cached across turns. */
-export interface ProductionTurnToolInputs {
-  readonly resourceAccessor: ProductionTurnResourceAccessor;
-  readonly stateHandler: ProductionTurnStateHandler;
-  readonly toolSession: ProductionTurnToolSession;
-  readonly config: ProductionTurnAgentConfig;
-  readonly summarizationHandler: ProductionTurnSummarizationHandler;
-  readonly parentModelInfo: ProductionTurnModelInfo;
-  readonly subagentModels: readonly ProductionTurnModelInfo[];
+export interface RunnerToolInputs {
+  readonly resourceAccessor: TurnResourceAccessor;
+  readonly stateHandler: TurnStateHandler;
+  readonly toolSession: TurnToolSession;
+  readonly config: TurnAgentConfiguration;
+  readonly summarizationHandler: TurnSummarizer;
+  readonly parentModelInfo: TurnModelDescriptor;
+  readonly subagentModels: readonly TurnModelDescriptor[];
   readonly subagentConfigs: readonly unknown[];
   readonly fencedToolSet: unknown;
   readonly staticTools: readonly unknown[];
   readonly dynamicTools: readonly unknown[];
   /** WebSearch/WebFetch are built lazily per turn; their factories stay outside. */
-  readonly webSearch?: ProductionTurnWebSearchDependencies;
-  readonly webFetch?: ProductionTurnWebFetchDependencies;
+  readonly webSearch?: TurnWebSearchPort;
+  readonly webFetch?: TurnWebFetchPort;
   /** Awaiting an external event uses this turn's accessor and the terminal's own options. */
-  readonly externalAwait?: ProductionTurnExternalAwaitInputs;
+  readonly externalAwait?: TurnAwaitPort;
   /** This turn's MCP projection, when MCP is available at all. */
   readonly mcp?: TurnMcpProjectionInput;
   readonly ackToken?: string | undefined;
-  readonly cancelThisRun?: ProductionTurnCancelThisRun;
+  readonly cancelThisRun?: CancelTurnExecution;
   /** The two-argument card/update emitter; absent means a card is not emitted at all. */
-  readonly emitUpdate?: ProductionTurnEmitUpdate;
-  readonly createComputerToolDependencies?: (input: ProductionTurnToolInputs) => ComputerToolDependencies<unknown>;
-  readonly createScreenshotToolDependencies?: (input: ProductionTurnToolInputs) => ComputerToolDependencies<unknown>;
-  readonly createBrowserDriverDependencies?: (input: ProductionTurnToolInputs) => BrowserDriverDependencies<unknown>;
-  readonly createBoxShellExecutor?: (input: ProductionTurnToolInputs) => HostShellExecutor;
-  readonly hostDependencies?: ProductionTurnHostDependencies;
+  readonly emitUpdate?: EmitTurnUpdate;
+  readonly createComputerToolDependencies?: (input: RunnerToolInputs) => ComputerToolDependencies<unknown>;
+  readonly createScreenshotToolDependencies?: (input: RunnerToolInputs) => ComputerToolDependencies<unknown>;
+  readonly createBrowserDriverDependencies?: (input: RunnerToolInputs) => BrowserDriverDependencies<unknown>;
+  readonly createBoxShellExecutor?: (input: RunnerToolInputs) => HostShellExecutor;
+  readonly hostDependencies?: TurnHostServices;
   readonly turnToolsetFactoryProvider?: TurnToolsetHostFactoryProvider;
 }
 
-export type CreateProductionTurnToolInputs = (input: ProductionTurnToolInputs) => ProductionTurnToolInputs;
+export type CreateRunnerToolInputs = (input: RunnerToolInputs) => RunnerToolInputs;
 
-export interface ProductionTurnToolsetHostInput {
+export interface TurnToolsetHostBinding {
   readonly turn: TurnToolsetTurnInput;
-  readonly props: ProductionTurnToolInputs;
+  readonly props: RunnerToolInputs;
   readonly factoryProvider: TurnToolsetHostFactoryProvider;
   readonly isSubagentRunner: boolean;
   readonly isSharedRoomRunner: boolean;
@@ -166,14 +166,14 @@ export interface ProductionTurnToolsetHostInput {
 }
 
 /** The same host built before the Agent has a runtime state handle: the props arrive later. */
-export type ProductionTurnLazyToolsetHostInput = Omit<ProductionTurnToolsetHostInput, "props">;
+export type LazyTurnToolsetHostBinding = Omit<TurnToolsetHostBinding, "props">;
 
 /**
  * The runner's toolset host for one turn. The live identities come from the host and the factories from the provider;
  * a host that has no props yet still gets a host (the lazy form), with no factories, so the tools that need them stay
  * unavailable rather than being replaced by ones that do nothing.
  */
-export function createProductionTurnToolsetHost(input: ProductionTurnToolsetHostInput | ProductionTurnLazyToolsetHostInput): TurnToolsetHost {
+export function createProductionTurnToolsetHost(input: TurnToolsetHostBinding | LazyTurnToolsetHostBinding): TurnToolsetHost {
   const factories = !("props" in input) ? {} : createTurnToolsetFactoriesForTurn(input.factoryProvider, input.turn, input.props);
   return {
     isSubagentRunner: input.isSubagentRunner,
@@ -201,19 +201,19 @@ export function createProductionTurnToolsetHost(input: ProductionTurnToolsetHost
 }
 
 /** What the host can override on the tool inputs; a projection that is given wins over what the runner assembled. */
-export interface ProductionTurnHostToolProjections {
-  readonly webSearch?: ProductionTurnToolInputs["webSearch"];
-  readonly webFetch?: ProductionTurnToolInputs["webFetch"];
-  readonly externalAwait?: ProductionTurnToolInputs["externalAwait"];
-  readonly mcp?: ProductionTurnToolInputs["mcp"];
-  readonly ackToken?: ProductionTurnToolInputs["ackToken"];
-  readonly cancelThisRun?: ProductionTurnToolInputs["cancelThisRun"];
-  readonly emitUpdate?: ProductionTurnToolInputs["emitUpdate"];
-  readonly createComputerToolDependencies?: ProductionTurnToolInputs["createComputerToolDependencies"];
-  readonly createScreenshotToolDependencies?: ProductionTurnToolInputs["createScreenshotToolDependencies"];
-  readonly createBrowserDriverDependencies?: ProductionTurnToolInputs["createBrowserDriverDependencies"];
-  readonly createBoxShellExecutor?: ProductionTurnToolInputs["createBoxShellExecutor"];
-  readonly hostDependencies?: ProductionTurnHostDependencies;
+export interface TurnHostOverrides {
+  readonly webSearch?: RunnerToolInputs["webSearch"];
+  readonly webFetch?: RunnerToolInputs["webFetch"];
+  readonly externalAwait?: RunnerToolInputs["externalAwait"];
+  readonly mcp?: RunnerToolInputs["mcp"];
+  readonly ackToken?: RunnerToolInputs["ackToken"];
+  readonly cancelThisRun?: RunnerToolInputs["cancelThisRun"];
+  readonly emitUpdate?: RunnerToolInputs["emitUpdate"];
+  readonly createComputerToolDependencies?: RunnerToolInputs["createComputerToolDependencies"];
+  readonly createScreenshotToolDependencies?: RunnerToolInputs["createScreenshotToolDependencies"];
+  readonly createBrowserDriverDependencies?: RunnerToolInputs["createBrowserDriverDependencies"];
+  readonly createBoxShellExecutor?: RunnerToolInputs["createBoxShellExecutor"];
+  readonly hostDependencies?: TurnHostServices;
   readonly turnToolsetFactoryProvider?: TurnToolsetHostFactoryProvider;
 }
 
@@ -221,7 +221,7 @@ export interface ProductionTurnHostToolProjections {
  * The host-owned inputs for the factory slots the runner builds. Each is a named contract rather than a dictionary, and
  * each is recreated at this boundary per turn.
  */
-export interface ProductionTurnHostDependencies {
+export interface TurnHostServices {
   readonly isMultitaskEnabled: () => boolean;
   readonly sendMessage: SendMessageDependencies<unknown>;
   readonly sendToAgent: SendToAgentDependencies<unknown>;
@@ -247,10 +247,10 @@ export interface ProductionTurnHostDependencies {
    * The host's own auto-review identities. What is absent stays absent: a reviewer or classifier context the host does
    * not have is not synthesized here.
    */
-  readonly autoReview?: ProductionTurnAutoReviewHostProjection;
+  readonly autoReview?: TurnAutoReviewBinding;
 }
 
-export interface ProductionTurnAutoReviewHostProjection {
+export interface TurnAutoReviewBinding {
   readonly controller: Pick<SlateAutoReviewController, "requestApproval">;
   /** The session identity shell approvals use; absent keeps those approvals unavailable. */
   readonly agentId?: string;
@@ -258,7 +258,7 @@ export interface ProductionTurnAutoReviewHostProjection {
   readonly getInstructions: () => Pick<SlateAutoReviewInstructions, "allowInstructions" | "blockInstructions"> | undefined;
   readonly getApprovalExpiryPolicy: () => SlateAutoReviewExpiryPolicy;
   /** This turn's resolved request context; without it the classifier cannot run. */
-  readonly requestContext?: Pick<RequestContext, "env">;
+  readonly smartModeClassifierControls?: SmartModeClassifierControls;
   readonly getShellApprovalState?: (surface: "host_shell" | "box_shell") => ShellSmartModeApprovalState | undefined;
   readonly enforceModelFacingShellUiAutomationGuard?: boolean;
   readonly actionAuditor?: { record(record: unknown): void };
@@ -279,7 +279,7 @@ export interface ProductionTurnAutoReviewHostProjection {
  * This turn's tool inputs, with the host's projections applied over what the runner assembled. A field neither side has
  * is left out entirely, so the tool that would have used it stays unavailable.
  */
-export function createProductionTurnToolInputs(input: ProductionTurnToolInputs, projections?: ProductionTurnHostToolProjections): ProductionTurnToolInputs {
+export function createRunnerToolInputs(input: RunnerToolInputs, projections?: TurnHostOverrides): RunnerToolInputs {
   return {
     resourceAccessor: input.resourceAccessor,
     stateHandler: input.stateHandler,

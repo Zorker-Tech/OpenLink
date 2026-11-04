@@ -12,12 +12,12 @@ import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../redaction/
 
 const DEFAULT_INLINE_VIDEO_MAX_BYTES = 15 * 1024 * 1024
 const DEFAULT_SIGNED_URL_VIDEO_MAX_BYTES = 15 * 1024 * 1024
-export const GEMINI_VIDEO_SUBAGENT_MAX_BYTES = 1024 * 1024 * 1024
+export const VIDEO_REVIEW_SUBAGENT_MAX_BYTES = 1024 * 1024 * 1024
 
 interface AttachedMediaConfig {
   readonly featureFlags?: {
-    readonly geminiVideoAttachmentInlineMaxBytes?: number
-    readonly geminiVideoAttachmentSignedUrlMaxBytes?: number
+    readonly videoAttachmentInlineMaxBytes?: number
+    readonly videoAttachmentSignedUrlMaxBytes?: number
   }
 }
 
@@ -30,11 +30,11 @@ interface UploadAttachedMediaOptions {
 }
 
 export function getInlineVideoMaxBytes(config: AttachedMediaConfig): number {
-  return config.featureFlags?.geminiVideoAttachmentInlineMaxBytes ?? DEFAULT_INLINE_VIDEO_MAX_BYTES
+  return config.featureFlags?.videoAttachmentInlineMaxBytes ?? DEFAULT_INLINE_VIDEO_MAX_BYTES
 }
 
 export function getSignedUrlVideoMaxBytes(config: AttachedMediaConfig): number {
-  return config.featureFlags?.geminiVideoAttachmentSignedUrlMaxBytes ?? DEFAULT_SIGNED_URL_VIDEO_MAX_BYTES
+  return config.featureFlags?.videoAttachmentSignedUrlMaxBytes ?? DEFAULT_SIGNED_URL_VIDEO_MAX_BYTES
 }
 
 /** A signed URL hands the file to storage outside the platform, so the privacy mode has to allow it. */
@@ -44,17 +44,12 @@ export function isSignedUrlStorageAllowed(privacyMode: PrivacyModeValue): boolea
     privacyMode === PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED
 }
 
-export function isGeminiModelId(modelId: string | undefined): boolean {
-  if (!modelId) return false
-  return modelId.toLowerCase().includes("gemini")
-}
-
 export async function uploadAttachedMediaToSignedUrl(options: UploadAttachedMediaOptions): Promise<void> {
   const response = await fetch(options.putUrl, {
     method: "PUT",
     body: options.data,
     headers: { "Content-Type": options.mimeType },
-    signal: options.signal!,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
   })
   if (!response.ok) {
     throw new Error(`Failed to upload attached media: ${response.status} ${response.statusText}`)

@@ -5,16 +5,16 @@
  * a review that finds nothing worth asking about says so rather than staying silent.
  */
 import { createHash } from "node:crypto";
-import { Struct } from "@bufbuild/protobuf";
 import type { Context } from "../../packages/context/context.ts";
 import type { RemoteExecManager } from "../../packages/agent-exec/executor-resources.ts";
 import type { ResourceAccessor } from "../../packages/agent-exec/resource-provider.ts";
 import { tryExtractSlateAutoReviewClassifierConversationContext } from "../../packages/agent/smart-mode-classifier-context.ts";
 import { withToolExecutionTimeoutSuspended } from "../../packages/agent/tools/tool-timeout-suspension.ts";
-import { SmartModeRiskTarget, type SmartModeClassifierConversationMessage } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+import type { SlateClassifierConversationMessage } from "../../packages/agent/smart-mode-classifier-context.ts";
 import { fingerprintSlateAutoReviewTarget, type SlateAutoReviewController, type SlateAutoReviewMode } from "./slate-auto-review.ts";
 import { summarizeSlateComputerTypedText } from "./slate-auto-review-summaries.ts";
 import { runSlateAutoReviewClassifier, type AutoReviewClassifierDecision } from "./slate-auto-review-classifier-run.ts";
+import { createSlateAutoReviewRiskTarget, type SlateAutoReviewRiskTarget } from "./auto-review-classifier-contracts.ts";
 export const SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION = "slate_computer";
 export const SLATE_COMPUTER_AUTO_REVIEW_MAX_DESCRIPTION_CHARS = 500;
 export const SLATE_COMPUTER_AUTO_REVIEW_MAX_TEXT_CHARS = 2_000;
@@ -56,7 +56,7 @@ export function buildProjectPermissionsContext(input: { personalInstructions?: {
   const allow = collect("allowInstructions"), block = collect("blockInstructions");
   return allow.length === 0 && block.length === 0 ? undefined : { auto_run: { allow_instructions: allow, block_instructions: block } };
 }
-export function buildSlateComputerClassifierRiskTarget(input: { canonicalTarget: ReturnType<typeof buildSlateComputerAutoReviewCanonicalTarget>; personalInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; userAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; projectAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] } }): unknown {
+export function buildSlateComputerClassifierRiskTarget(input: { canonicalTarget: ReturnType<typeof buildSlateComputerAutoReviewCanonicalTarget>; personalInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; userAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] }; projectAutoRunInstructions?: { allowInstructions?: readonly string[]; blockInstructions?: readonly string[] } }): SlateAutoReviewRiskTarget {
   const action = input.canonicalTarget.exactAction;
   const argumentsRecord = JSON.parse(JSON.stringify({
     surface: "computer",
@@ -78,11 +78,8 @@ export function buildSlateComputerClassifierRiskTarget(input: { canonicalTarget:
       display_state_identity: input.canonicalTarget.displayStateIdentity,
     },
     project_permissions: buildProjectPermissionsContext(input),
-  }));
-  return new SmartModeRiskTarget({
-    action: SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(argumentsRecord),
-  });
+  })) as Record<string, unknown>;
+  return createSlateAutoReviewRiskTarget(SLATE_COMPUTER_CLASSIFIER_TARGET_ACTION, argumentsRecord);
 }
 export function summarizeBlockedAction(target: ReturnType<typeof buildSlateComputerAutoReviewCanonicalTarget>, targetFingerprint: string, reason: string) {
   const action = target.exactAction, declaredPurpose = target.description == null ? "" : ` to ${target.description.slice(0, 160)}`;
@@ -99,7 +96,7 @@ export interface SlateComputerAutoReviewOptions {
   readonly personalInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
   readonly userAutoRunInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
   readonly projectAutoRunInstructions?: { readonly allowInstructions?: readonly string[]; readonly blockInstructions?: readonly string[] };
-  readonly extractConversationContext?: (ctx: Context, stateHandler: unknown) => Promise<readonly SmartModeClassifierConversationMessage[]>;
+  readonly extractConversationContext?: (ctx: Context, stateHandler: unknown) => Promise<readonly SlateClassifierConversationMessage[]>;
   readonly getApprovalExpiryPolicy?: () => "park" | "ttl";
   readonly devBlockState?: { consume(): boolean };
 }
@@ -129,7 +126,7 @@ async function classifyComputerAction(
       ...(input.options.personalInstructions === undefined ? {} : { personalInstructions: input.options.personalInstructions }),
       ...(input.options.userAutoRunInstructions === undefined ? {} : { userAutoRunInstructions: input.options.userAutoRunInstructions }),
       ...(input.options.projectAutoRunInstructions === undefined ? {} : { projectAutoRunInstructions: input.options.projectAutoRunInstructions }),
-    }) as SmartModeRiskTarget,
+    }),
     loadConversationContext: async () => {
       if (input.stateHandler === undefined) return [];
       if (input.options.extractConversationContext !== undefined) {

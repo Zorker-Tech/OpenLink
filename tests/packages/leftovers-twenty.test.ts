@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { applyToolCallArgs, buildStreamRequest, coreMessageToProto, toolCallArgsFromProto } from "../../source/packages/chat-inference-proto/converters.ts";
+import { applyToolCallArgs, buildStreamRequest, coreMessageToProto, toolCallArgsFromProto } from "../../source/adapters/interop/chat-inference-proto/converters.ts";
 import { ackPathSyncRequests, enqueuePathSyncRequest, listPathSyncRequests, PATH_SYNC_REQUEST_POLL_MS, PATH_SYNC_REQUEST_WAIT_POLL_MS, waitForPathSyncRequestAck } from "../../source/packages/agent-store-sync/path-sync-request.ts";
 import { deriveOutlineFromConversationState, MAX_TOOL_ACTIVITY_ARGS_CHARS, MCP_TOOL_CALL_OUTLINE_NAME, SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME } from "../../source/host/runner/conversation-outline.ts";
 

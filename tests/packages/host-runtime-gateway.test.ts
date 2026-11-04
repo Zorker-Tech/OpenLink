@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { assertValidSlateAgentId, getSlateAgentsRootDir, SlateInvalidAgentIdError } from "../../source/host/storage/agent-paths.ts";
-import { classifyGatewayCommandError } from "../../source/gateway/gateway-command-error.ts";
+import { classifyGatewayFailure } from "../../source/gateway/gateway-command-error.ts";
 import { SlateLocalToolPermissionResolutionError } from "../../source/host/extensions/local-tool-permission/local-tool-permission-resolution.ts";
 import { SlateGatewayConfigError } from "../../source/gateway/gateway-config.ts";
 import { getLocalToolApprovalsPath, LOCAL_TOOL_APPROVALS_FILENAME } from "../../source/host/local-exec/local-tool-approvals.ts";
@@ -29,7 +29,7 @@ describe("where an agent's files live", () => {
 
 describe("what a failed gateway command turns into", () => {
   it("knows the connection errors that are worth trying again", () => {
-    const report = classifyGatewayCommandError({ error: new Error("the command was rejected") } as never);
+    const report = classifyGatewayFailure({ error: new Error("the command was rejected") } as never);
     assert.equal(typeof report.reason, "string");
     assert.equal("errorClass" in report, true);
   });

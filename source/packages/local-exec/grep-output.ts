@@ -1,128 +1,43 @@
-/**
- * Reading what ripgrep printed.
- *
- * A search answers in one of three shapes — files, per-file counts, or matching lines with their numbers — and each is
- * read back into the shape the caller asked for, with the client's own line limit applied and ripgrep's hard cutoff
- * reported separately: a result that was cut short because the client asked for less is not the same as one that was
- * cut short because ripgrep stopped looking. A matching line is told from a context line by the separator ripgrep used.
- */
-import type { Context } from "../context/context.ts";
-import { createSpan } from "../context/telemetry.ts";
 import { clampInt32 } from "./int32.ts";
+import type { ParsedGrepCount, ParsedGrepCountOutput, ParsedGrepFilesOutput } from "./grep-output-contracts.ts";
+import { readCountRow, splitGrepLines } from "./grep-output-records.ts";
 
-export interface ParsedGrepFilesOutput {
-  readonly files: string[];
-  readonly totalFiles: number;
-  readonly clientTruncated: boolean;
-  readonly ripgrepTruncated: boolean;
-}
-
-export interface ParsedGrepCount {
-  readonly file: string;
-  readonly count: number;
-}
-
-export interface ParsedGrepCountOutput {
-  readonly counts: ParsedGrepCount[];
-  readonly totalFiles: number;
-  readonly totalMatches: number;
-  readonly clientTruncated: boolean;
-  readonly ripgrepTruncated: boolean;
-}
-
-export interface ParsedGrepContentMatch {
-  readonly lineNumber: number;
-  readonly content: string;
-  readonly isContextLine: boolean;
-}
-
-export interface ParsedGrepContentFile {
-  readonly file: string;
-  readonly matches: ParsedGrepContentMatch[];
-}
-
-export interface ParsedGrepContentOutput {
-  readonly byFile: Map<string, ParsedGrepContentFile>;
-  readonly totalLines: number;
-  readonly totalMatchedLines: number;
-  readonly totalFiles: number;
-  readonly clientTruncated: boolean;
-  readonly ripgrepTruncated: boolean;
-}
-
-export function splitGrepLines(value: string): string[] {
-  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-}
+export type {
+  ParsedGrepCount,
+  ParsedGrepCountOutput,
+  ParsedGrepContentFile,
+  ParsedGrepContentMatch,
+  ParsedGrepContentOutput,
+  ParsedGrepFilesOutput,
+} from "./grep-output-contracts.ts";
+export { splitGrepLines } from "./grep-output-records.ts";
+export { parseGrepContentOutput } from "./grep-output-content.ts";
 
 export function parseGrepFilesOutput(stdout: string, clientLimitLines: number, ripgrepHardCuttoffLines: number): ParsedGrepFilesOutput {
   const trimmed = stdout.trim();
-  const lines = trimmed !== "" ? splitGrepLines(trimmed) : [];
-  const totalFiles = lines.length;
-  const sliced = lines.slice(0, clientLimitLines);
+  const files = trimmed.length === 0 ? [] : splitGrepLines(trimmed);
   return {
-    files: sliced,
-    totalFiles: clampInt32(totalFiles),
-    clientTruncated: lines.length > clientLimitLines,
-    ripgrepTruncated: totalFiles >= ripgrepHardCuttoffLines,
+    files: files.slice(0, clientLimitLines),
+    totalFiles: clampInt32(files.length),
+    clientTruncated: files.length > clientLimitLines,
+    ripgrepTruncated: files.length >= ripgrepHardCuttoffLines,
   };
 }
 
 export function parseGrepCountOutput(stdout: string, clientLimitLines: number, ripgrepHardCuttoffLines: number): ParsedGrepCountOutput {
   const trimmed = stdout.trim();
-  const lines = trimmed !== "" ? splitGrepLines(trimmed) : [];
-  const allCounts: ParsedGrepCount[] = [];
-  for (const line of lines) {
-    if (line === "" || line === undefined) continue;
-    const colonIndex = line.lastIndexOf(":");
-    if (colonIndex <= 0) continue;
-    const parsedCount = Number.parseInt(line.substring(colonIndex + 1).trim(), 10);
-    if (!Number.isFinite(parsedCount)) continue;
-    allCounts.push({ file: line.substring(0, colonIndex), count: parsedCount });
-  }
-  const totalFiles = allCounts.length;
-  const totalMatches = allCounts.reduce((total, entry) => total + entry.count, 0);
-  const sliced = allCounts.slice(0, clientLimitLines);
+  const rows = trimmed.length === 0 ? [] : splitGrepLines(trimmed);
+  const counts: ParsedGrepCount[] = rows.flatMap((row) => {
+    if (row.length === 0) return [];
+    const parsed = readCountRow(row);
+    return parsed === undefined ? [] : [parsed];
+  });
+  const matches = counts.reduce((total, row) => total + row.count, 0);
   return {
-    counts: sliced,
-    totalFiles: clampInt32(totalFiles),
-    totalMatches: clampInt32(totalMatches),
-    clientTruncated: allCounts.length > clientLimitLines,
-    ripgrepTruncated: totalFiles >= ripgrepHardCuttoffLines,
-  };
-}
-
-export function parseGrepContentOutput(stdout: string, clientLimitLines: number, ripgrepHardCuttoffLines: number, ctx: Context): ParsedGrepContentOutput {
-  using span = createSpan(ctx.withName("parseContentOutput"));
-  const lines = stdout.trim() === "" ? [] : splitGrepLines(stdout);
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  const byFile = new Map<string, ParsedGrepContentFile>();
-  const allFiles = new Set<string>();
-  let totalMatchedLines = 0;
-  let linesProcessed = 0;
-  for (const line of lines) {
-    if (line === undefined || line === "--") continue;
-    const [filename, lineContent] = line.split("\0", 2);
-    if (filename === undefined || lineContent === undefined) continue;
-    const match = /^(\d+)([:-])(.*)$/.exec(lineContent);
-    if (match === null) continue;
-    const lineNumber = Number.parseInt(match[1]!, 10);
-    if (!Number.isFinite(lineNumber)) continue;
-    const isContextLine = match[2] === "-";
-    if (!isContextLine) totalMatchedLines++;
-    allFiles.add(filename);
-    if (linesProcessed >= clientLimitLines) continue;
-    const fileResults = byFile.get(filename) ?? { file: filename, matches: [] };
-    fileResults.matches.push({ lineNumber, content: match[3] ?? "", isContextLine });
-    byFile.set(filename, fileResults);
-    linesProcessed++;
-  }
-  const totalFiles = allFiles.size;
-  return {
-    byFile,
-    totalLines: clampInt32(lines.length),
-    totalMatchedLines: clampInt32(totalMatchedLines),
-    totalFiles: clampInt32(totalFiles),
-    clientTruncated: linesProcessed >= clientLimitLines,
-    ripgrepTruncated: lines.length >= ripgrepHardCuttoffLines,
+    counts: counts.slice(0, clientLimitLines),
+    totalFiles: clampInt32(counts.length),
+    totalMatches: clampInt32(matches),
+    clientTruncated: counts.length > clientLimitLines,
+    ripgrepTruncated: counts.length >= ripgrepHardCuttoffLines,
   };
 }

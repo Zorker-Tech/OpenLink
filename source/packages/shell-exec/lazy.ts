@@ -15,37 +15,36 @@ import type { Context } from "../context/context.ts";
 import type { TerminalEvent, TerminalExecuteOptions, TerminalExecutor } from "./naive.ts";
 
 export class LazyTerminalExecutor implements TerminalExecutor {
-  private readonly initializer: () => Promise<TerminalExecutor>;
-  private promise: Promise<TerminalExecutor> | undefined;
+  private readonly materialize: () => Promise<TerminalExecutor>;
 
-  constructor(initializer: () => Promise<TerminalExecutor>) {
-    this.initializer = initializer;
+  constructor(factory: () => Promise<TerminalExecutor>) {
+    this.materialize = memoizedFactory(factory);
   }
 
   getExecutor(): Promise<TerminalExecutor> {
-    if (this.promise === undefined) {
-      this.promise = this.initializer();
-    }
-    return this.promise;
+    return this.materialize();
   }
 
   async getCwd(): Promise<string> {
-    const executor = await this.getExecutor();
-    return executor.getCwd();
+    const ready = await this.materialize();
+    return ready.getCwd();
   }
 
   clone(workingDirectory?: string): TerminalExecutor {
-    return new LazyTerminalExecutor(async () => {
-      const executor = await this.getExecutor();
-      return executor.clone(workingDirectory);
-    });
+    return new LazyTerminalExecutor(async () => (await this.materialize()).clone(workingDirectory));
   }
 
   async *execute(ctx: Context, command: string, options?: TerminalExecuteOptions): AsyncIterable<TerminalEvent> {
     using span = createSpan(ctx.withName("LazyTerminalExecutor.execute"));
-    const executor = await this.getExecutor();
-    for await (const event of executor.execute(ctx, command, options)) {
-      yield event;
-    }
+    const ready = await this.materialize();
+    yield* ready.execute(ctx, command, options);
   }
+}
+
+function memoizedFactory(factory: () => Promise<TerminalExecutor>): () => Promise<TerminalExecutor> {
+  let pending: Promise<TerminalExecutor> | undefined;
+  return () => {
+    if (pending === undefined) pending = factory();
+    return pending;
+  };
 }

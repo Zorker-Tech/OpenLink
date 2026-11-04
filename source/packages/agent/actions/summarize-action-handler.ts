@@ -15,77 +15,35 @@
  * from the same generators the turn uses.
  */
 
-import { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts";
 import { BackgroundSummarizationMode } from "../../agent-summarization/background-summarization.ts";
-import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts";
 import { createLogger, type Context } from "../../context/index.ts";
-import { PrivacyCapability } from "../../redaction/classification.ts";
-import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts";
-import {
-  createRedactedConversationSummary,
-  createRedactedConversationTokenDetails,
-  fromRedactedPromptTokenBreakdownSnapshot,
-  toRedactedPromptTokenBreakdownSnapshot,
-} from "../../redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { FileOperationLockManager } from "../tools/core/file-operation-locks.ts";
 import { extractAutomationTriggerContext } from "./common.ts";
 import { buildRequestContextOptions } from "./meta-agent-notes.ts";
 import { getRequestContext } from "../utils/request-context.ts";
-import { buildSummarizeRefreshSnapshot } from "../utils/prompt-token-breakdown.ts";
-import { estimateTokenCount, extractTextContent } from "../self-summary/token-estimate.ts";
-
-type Any = any;
+import { addSummarySystemInstructions } from "./summarize-action-system-prompt.ts";
+import { applySummaryToConversation } from "./summarize-action-state.ts";
+import type {
+  RootPromptExecutor,
+  SummarizeConfig,
+  SummarizeLooseValue,
+  SummarizeStateHandler,
+} from "./summarize-action-contracts.ts";
 
 const logger = createLogger("@slate/agent:summarize");
 
-function summarizedConversationCharCount(messages: readonly Any[]): number {
-  let total = 0;
-  for (const message of messages) {
-    if (message.role !== "user" || message.providerOptions?.cursor?.isSummary !== true) continue;
-    total += extractTextContent(message).length;
-  }
-  return total;
-}
-
-interface SummarizeConfig {
-  readonly toolsGenerator: (options: Any) => Any;
-  readonly systemPromptGenerator: (options: Any, toolSetHandle: Any) => Any;
-  readonly agentSessionId?: string;
-  readonly summarizeActionClearTurns?: boolean;
-  readonly fireAndForgetCheckpoints?: boolean;
-  readonly automationInstructions?: unknown;
-  readonly [key: string]: unknown;
-}
-
-interface SummarizeStateHandler {
-  readonly mode?: AgentMode | undefined;
-  readonly tokenDetails: Any;
-  getBlobStore(): Any;
-  getPrivacyMode(): Any;
-  computeNewStructure(ctx: Context): Promise<Any>;
-  setSummary(summary: Any): void;
-  clearTurns(): Promise<void>;
-  setTokenDetails(tokenDetails: Any): void;
-}
-
-interface RootPromptExecutor {
-  getMessages(): readonly Any[];
-  appendMessages(messages: readonly Any[]): void;
-}
-
 export class SummarizeActionHandler {
   readonly config: SummarizeConfig;
-  readonly resourceAccessor: Any;
-  readonly interactionListener: Any;
-  readonly orchestrator: Any;
-  readonly conversationActionReceiver: Any;
+  readonly resourceAccessor: SummarizeLooseValue;
+  readonly interactionListener: SummarizeLooseValue;
+  readonly orchestrator: SummarizeLooseValue;
+  readonly conversationActionReceiver: SummarizeLooseValue;
 
   constructor(
     config: SummarizeConfig,
-    resourceAccessor: Any,
-    interactionListener: Any,
-    orchestrator: Any,
-    conversationActionReceiver: Any,
+    resourceAccessor: SummarizeLooseValue,
+    interactionListener: SummarizeLooseValue,
+    orchestrator: SummarizeLooseValue,
+    conversationActionReceiver: SummarizeLooseValue,
   ) {
     this.config = config;
     this.resourceAccessor = resourceAccessor;
@@ -96,54 +54,27 @@ export class SummarizeActionHandler {
 
   async handle(
     ctx: Context,
-    _action: Any,
+    _action: SummarizeLooseValue,
     rootPromptExecutor: RootPromptExecutor,
     stateHandler: SummarizeStateHandler,
-    _mcpTools: Any,
-    onStateUpdate?: ((ctx: Context, checkpoint: Any) => Promise<void>) | undefined,
-  ): Promise<Any> {
+    _mcpTools: SummarizeLooseValue,
+    onStateUpdate?: ((ctx: Context, checkpoint: SummarizeLooseValue) => Promise<void>) | undefined,
+  ): Promise<SummarizeLooseValue> {
     const hasAnyMessages = rootPromptExecutor.getMessages().length > 0;
     if (!hasAnyMessages) return await stateHandler.computeNewStructure(ctx);
-
-    const hasSystem = rootPromptExecutor.getMessages().some(message => message.role === "system");
-    if (!hasSystem) {
-      const requestContext = await getRequestContext(
-        ctx,
-        undefined,
-        this.resourceAccessor,
-        buildRequestContextOptions(this.config as Any),
-      );
-      const toolSetHandle = this.config.toolsGenerator({
-        resourceAccessor: this.resourceAccessor,
-        stateHandler,
-        agentSessionId: this.config.agentSessionId,
-        mcpTools: [],
-        repositoryInfos: requestContext.repositoryInfo,
-        blobStore: stateHandler.getBlobStore(),
-        mode: stateHandler.mode ?? AgentMode.AGENT,
-        loggingContext: ctx,
-        requestContext,
-        fileOperationLockManager: new FileOperationLockManager(),
-        smartModeClassifierMode: this.config.smartModeClassifierMode,
-        smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
-        autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
-      });
-      rootPromptExecutor.appendMessages(toRedactedCoreMessages([
-        {
-          role: "system",
-          content: this.config.systemPromptGenerator({
-            cursorRules: [],
-            mode: stateHandler.mode ?? AgentMode.AGENT,
-          }, toolSetHandle),
-        },
-      ], stateHandler.getPrivacyMode()));
-    }
+    await addSummarySystemInstructions({
+      context: ctx,
+      prompt: rootPromptExecutor,
+      state: stateHandler,
+      config: this.config,
+      resourceAccessor: this.resourceAccessor,
+    });
 
     const requestContext = await getRequestContext(
       ctx,
       undefined,
       this.resourceAccessor,
-      buildRequestContextOptions(this.config as Any),
+      buildRequestContextOptions(this.config as SummarizeLooseValue),
     );
     const automationTriggerContext = this.config.automationInstructions !== undefined
       ? extractAutomationTriggerContext(rootPromptExecutor.getMessages())
@@ -165,27 +96,15 @@ export class SummarizeActionHandler {
     );
     if (!summary) throw new Error("No summary generated, even though background summarization mode is WaitForCompletion");
 
-    stateHandler.setSummary(createRedactedConversationSummary(stateHandler.getPrivacyMode(), { summary }));
-    await this.interactionListener.sendUpdate(ctx, RedactedUpdates.summary(summary));
-    if (this.config.summarizeActionClearTurns) await stateHandler.clearTurns();
-
-    const postSummarizeMessages = rootPromptExecutor.getMessages();
-    const estimatedUsedTokens = estimateTokenCount(postSummarizeMessages, { includeNonTextContent: true });
-    const previousRedactedBreakdown = stateHandler.tokenDetails.breakdown;
-    const refreshedBreakdown = previousRedactedBreakdown !== undefined
-      ? toRedactedPromptTokenBreakdownSnapshot(buildSummarizeRefreshSnapshot({
-        previousSnapshot: fromRedactedPromptTokenBreakdownSnapshot(previousRedactedBreakdown, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
-        newSummarizedConversationCharCount: summarizedConversationCharCount(postSummarizeMessages),
-        totalUsedTokens: estimatedUsedTokens,
-        maxTokens: stateHandler.tokenDetails.maxTokens,
-      }), stateHandler.getPrivacyMode())
-      : previousRedactedBreakdown;
-    stateHandler.setTokenDetails(createRedactedConversationTokenDetails(stateHandler.getPrivacyMode(), {
-      usedTokens: estimatedUsedTokens,
-      maxTokens: stateHandler.tokenDetails.maxTokens,
-      breakdown: refreshedBreakdown,
-      promptContextUsageTree: undefined,
-    }));
+    await applySummaryToConversation({
+      context: ctx,
+      summary,
+      state: stateHandler,
+      prompt: rootPromptExecutor,
+      listener: this.interactionListener,
+      clearTurns: this.config.summarizeActionClearTurns === true,
+      privacyMode: stateHandler.getPrivacyMode(),
+    });
     if (onStateUpdate) {
       if (this.config.fireAndForgetCheckpoints) {
         void stateHandler.computeNewStructure(ctx).then(async checkpoint => {

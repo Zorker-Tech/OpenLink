@@ -7,11 +7,10 @@
  * did not name itself is still shown, labelled as unknown rather than dropped.
  */
 
-import type { McpInstructions } from "../../proto/generated/agent/v1/mcp_pb.ts"
-import { jsx } from "../../prompt-jsx/index.ts"
-import type { PromptNode } from "../../prompt-jsx/index.ts"
+import { jsx, type PromptElement } from "../../prompt-jsx/index.ts"
+import type { UserInfoMcpInstructions } from "./user-info-data-contracts.ts"
 
-export function McpInstructionsSection({ mcpEntries }: { readonly mcpEntries: readonly McpInstructions[] }): PromptNode {
+export function McpInstructionsSection({ mcpEntries }: { readonly mcpEntries: readonly UserInfoMcpInstructions[] }): PromptElement {
   return jsx("section", {
     title: "mcp_instructions",
     description: "Instructions provided by MCP servers to help use them properly",

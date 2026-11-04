@@ -15,7 +15,7 @@ import { HOST_ACCOUNT_SLOT } from "../../shared/send-acceptance.ts";
 import { filePathFromFileUrl } from "../../shared/node/paths.ts";
 import { loadSelectedImageInputs } from "../selected-image-inputs.ts";
 import { beginSendTrace, traceSendPhase } from "../send-trace-host.ts";
-import { BoxRequestEntries } from "./box-request-entries.ts";
+import { BoxRequestEntries, type BoxRequestEntryHost } from "./box-request-entries.ts";
 import {
   materializeInlineImages,
   type InlineImage,
@@ -34,7 +34,7 @@ import {
   applyAutoReplyThread,
   validateAiReplyTarget,
 } from "./send-thread-stamping.ts";
-import { nextEntryId } from "./transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "./transcript-entry-ids.ts";
 import { getTranscript, removeEntry } from "./transcript-store.ts";
 import { sendInputDigest } from "./prompt-acceptance-ledger.ts";
 import {
@@ -85,7 +85,7 @@ export class SendPipeline {
   readonly boxRequests: BoxRequestEntries;
 
   constructor(readonly tm: TranscriptManagerLike) {
-    this.boxRequests = new BoxRequestEntries(tm);
+    this.boxRequests = new BoxRequestEntries(tm as unknown as BoxRequestEntryHost);
   }
 
   promptAcceptanceStatus(input: {
@@ -280,7 +280,7 @@ export class SendPipeline {
             appendEcho(
               (entries) => ({
                 ...attachmentEntry,
-                id: nextEntryId(entries, "user-attachment"),
+                id: allocateTranscriptEntryId(entries, "user-attachment"),
               }),
               { onPersistOutcome: observePersistOutcome },
             ),
@@ -290,7 +290,7 @@ export class SendPipeline {
           const entry = appendEcho(
             (entries) =>
               createUserMessage(
-                nextEntryId(entries, "user-message"),
+                allocateTranscriptEntryId(entries, "user-message"),
                 cleanPrompt,
                 {
                   ...(settings.richText == null
@@ -559,7 +559,7 @@ export class SendPipeline {
     const resolved = await this.resolveDevSendMessage(incomingMessage);
     this.appendSendMessageEntry(
       createSendMessageEntry(
-        nextEntryId(getTranscript(), "send-message"),
+        allocateTranscriptEntryId(getTranscript(), "send-message"),
         resolved,
         Date.now(),
       ),
@@ -581,7 +581,7 @@ export class SendPipeline {
     };
     this.appendSendMessageEntry(
       createSendMessageEntry(
-        nextEntryId(getTranscript(), "send-message"),
+        allocateTranscriptEntryId(getTranscript(), "send-message"),
         incomingMessage,
         Date.now(),
       ),

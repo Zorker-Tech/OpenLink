@@ -169,34 +169,72 @@ async function stopDaemonProcess(
   }
 }
 
-export async function launchBoxExecDaemon(options: BoxExecDaemonLaunchOptions): Promise<HostOwnedBoxExecDaemon> {
-  const host = options.bindAddress ?? "127.0.0.1";
-  const port = options.bindPort ?? EXEC_DAEMON_PORT;
-  const authToken = options.controlToken ?? DEFAULT_AUTH_TOKEN;
-  const log = options.output ?? console;
-  await requireFreeDaemonPort(host, port);
-  await prepareDaemonDirectories(options);
+class BoxExecDaemonOwner implements HostOwnedBoxExecDaemon {
+  readonly pid: number;
+  readonly daemonEntryPath: string;
+  readonly ready: Promise<void>;
+  readonly #child: ChildProcess;
+  readonly #exited: Promise<ChildExit>;
+  readonly #host: string;
+  readonly #port: number;
+  readonly #shutdownTimeoutMs: number;
+  #closed = false;
 
-  const { child, exited, pid } = spawnDaemonProcess(options, port, authToken, log);
-  const ready = daemonReadiness(exited, options, host, port, authToken);
-
-  try {
-    await ready;
-  } catch (error) {
-    child.kill("SIGTERM");
-    await exited;
-    throw error;
+  private constructor(
+    options: BoxExecDaemonLaunchOptions,
+    endpoint: { readonly host: string; readonly port: number },
+    authToken: string,
+    spawned: SpawnedDaemon,
+  ) {
+    this.pid = spawned.pid;
+    this.daemonEntryPath = options.daemonEntryPath;
+    this.#child = spawned.child;
+    this.#exited = spawned.exited;
+    this.#host = endpoint.host;
+    this.#port = endpoint.port;
+    this.#shutdownTimeoutMs = options.shutdownTimeoutMs ?? BOX_DAEMON_STOP_GRACE_MS;
+    this.ready = daemonReadiness(spawned.exited, options, endpoint.host, endpoint.port, authToken);
   }
 
-  let closed = false;
-  return {
-    pid,
-    daemonEntryPath: options.daemonEntryPath,
-    ready,
-    async close() {
-      if (closed) return;
-      closed = true;
-      await stopDaemonProcess(child, exited, host, port, options.shutdownTimeoutMs ?? BOX_DAEMON_STOP_GRACE_MS);
-    },
+  static async start(
+    options: BoxExecDaemonLaunchOptions,
+    endpoint: { readonly host: string; readonly port: number },
+    authToken: string,
+    log: Pick<Console, "log" | "error">,
+  ): Promise<BoxExecDaemonOwner> {
+    await requireFreeDaemonPort(endpoint.host, endpoint.port);
+    await prepareDaemonDirectories(options);
+
+    const spawned = spawnDaemonProcess(options, endpoint.port, authToken, log);
+    const owner = new BoxExecDaemonOwner(options, endpoint, authToken, spawned);
+    try {
+      await owner.ready;
+    } catch (error) {
+      spawned.child.kill("SIGTERM");
+      await spawned.exited;
+      throw error;
+    }
+    return owner;
+  }
+
+  async close(): Promise<void> {
+    if (this.#closed) return;
+    this.#closed = true;
+    await stopDaemonProcess(
+      this.#child,
+      this.#exited,
+      this.#host,
+      this.#port,
+      this.#shutdownTimeoutMs,
+    );
+  }
+}
+
+export async function launchBoxExecDaemon(options: BoxExecDaemonLaunchOptions): Promise<HostOwnedBoxExecDaemon> {
+  const endpoint = {
+    host: options.bindAddress ?? "127.0.0.1",
+    port: options.bindPort ?? EXEC_DAEMON_PORT,
   };
+  const authToken = options.controlToken ?? DEFAULT_AUTH_TOKEN;
+  return await BoxExecDaemonOwner.start(options, endpoint, authToken, options.output ?? console);
 }

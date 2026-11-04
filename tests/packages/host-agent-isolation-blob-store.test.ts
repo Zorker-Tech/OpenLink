@@ -13,7 +13,8 @@ import { describe, it } from "node:test";
 
 import { ConversationBlobStoreDb } from "../../source/host/agents/isolation/conversation-blob-store.ts";
 import { CONVERSATION_BLOB_ADOPTION_COMPLETE, CONVERSATION_BLOB_SCHEMA } from "../../source/host/agents/isolation/conversation-blob-db.ts";
-import { ConversationStateStructure, ConversationTurnStructure } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
+import { ConversationStateStructure, ConversationTurnStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 const sha = (bytes: Uint8Array): Uint8Array => createHash("sha256").update(bytes).digest();
@@ -73,6 +74,17 @@ describe("what the store keeps", () => {
     assert.deepEqual(world.rows().map((row) => [row.len, typeof row.id]), [[1, "string"]]);
     world.store.clearBlobs();
     assert.deepEqual([world.rows().length, world.store.getBlob(id)], [0, undefined]);
+    world.store.close();
+  });
+
+  it("reads a content id from only the view a caller passed", () => {
+    const world = storeWorld();
+    const padded = Uint8Array.from([99, ...bytesOf(7), 88]);
+    const idView = padded.subarray(1, 33);
+    const data = Uint8Array.from([3, 2, 1]);
+    world.store.setBlob(idView, data);
+    assert.deepEqual(Array.from(world.store.getBlob(bytesOf(7)) ?? []), [3, 2, 1]);
+    assert.equal(world.rows()[0]?.id, hex(bytesOf(7)));
     world.store.close();
   });
 
@@ -223,6 +235,44 @@ describe("what may be collected", () => {
     world.store.close();
   });
 
+  it("keeps turn blobs reached from a Slate checkpoint root", () => {
+    const world = storeWorld();
+    const { turnBytes, turnId } = turnBlob();
+    world.store.setBlob(turnId, turnBytes);
+    const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [turnId] }));
+    const rootId = sha(rootBytes);
+    world.store.setBlob(rootId, rootBytes);
+    world.store.setBlob(bytesOf(4), Uint8Array.from([4, 4]));
+
+    const collected = world.store.collectGarbage({ retainedRootIdHex: hex(rootId), pendingWriteRetentionMs: 0 });
+    assert.deepEqual([collected.outcome, collected.deletedRows, collected.liveRows], ["collected", 1, 2]);
+    assert.deepEqual(world.rows().map((row) => row.id).sort(), [hex(rootId), hex(turnId)].sort());
+    world.store.close();
+  });
+
+  it("expires a pending write at the exact retention boundary", () => {
+    const originalNow = Date.now;
+    let now = 1_000;
+    Date.now = () => now;
+    try {
+      const world = storeWorld();
+      const { rootBytes, rootId } = checkpointRoot([]);
+      world.store.setBlob(rootId, rootBytes);
+      world.store.setBlob(bytesOf(6), Uint8Array.from([6]));
+      now = 1_001;
+      world.store.setBlob(bytesOf(7), Uint8Array.from([7]));
+
+      now = 2_000;
+      const result = world.store.collectGarbage({ retainedRootIdHex: hex(rootId), pendingWriteRetentionMs: 1_000 });
+      assert.deepEqual([result.outcome, result.deletedRows, result.retainedPendingRows], ["collected", 1, 1]);
+      assert.equal(world.store.getBlob(bytesOf(6)), undefined);
+      assert.deepEqual(Array.from(world.store.getBlob(bytesOf(7)) ?? []), [7]);
+      world.store.close();
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
   it("holds back when the root is missing, unreadable or points at something that is not there", () => {
     const world = storeWorld();
     // No blob for the root the caller named.
@@ -262,6 +312,21 @@ describe("what may be cleared and checked", () => {
     world.store.setBlob(misnamed, checkpointRoot([turnId]).rootBytes);
     assert.equal(world.store.clearStaleCheckpointRoots(hex(newer.rootId)), 0);
     assert.equal(world.store.getBlob(misnamed) !== undefined, true);
+    world.store.close();
+  });
+
+  it("keeps checkpoint candidates with no turns or a malformed turn id", () => {
+    const world = storeWorld();
+    const empty = checkpointRoot([]);
+    const malformedTurn = Uint8Array.from([3, 4]);
+    const malformed = checkpointRoot([malformedTurn]);
+    world.store.setBlob(empty.rootId, empty.rootBytes);
+    world.store.setBlob(malformedTurn, Uint8Array.from([1, 2, 3]));
+    world.store.setBlob(malformed.rootId, malformed.rootBytes);
+
+    assert.equal(world.store.clearStaleCheckpointRoots(hex(bytesOf(99))), 0);
+    assert.notEqual(world.store.getBlob(empty.rootId), undefined);
+    assert.notEqual(world.store.getBlob(malformed.rootId), undefined);
     world.store.close();
   });
 

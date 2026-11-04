@@ -19,10 +19,10 @@ import { Updates } from "../agent-core/interaction-updates.ts";
 import { BackgroundSummarizationMode, DISABLED_BACKGROUND_SUMMARIZATION_PROPS } from "../agent-summarization/background-summarization.ts";
 import { withLogAttributes, createSpan } from "../context/index.ts";
 import { createHistogram } from "../metrics/index.ts";
-import { fromRedactedConversationStateStructure, toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { createRedactedConversationTokenDetails } from "../redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { PrivacyCapability } from "../redaction/classification.ts";
 import { PrivacyMode } from "../redaction/privacy-mode.ts";
+import { restoreAgentConversationState } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
+import { redactInteractionUpdate } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
+import { createInteropConversationTokenDetails } from "../../adapters/interop/agent/summarize-action-adapter.ts";
 // the session and its state
 import { drainPendingWritesOnRunStreamError } from "./abort-drain.ts";
 import { normalizeAgentConfig } from "./agent-config-runtime.ts";
@@ -41,7 +41,7 @@ import { CancelActionHandler } from "./actions/cancel-action-handler.ts";
 import { ExecutePlanActionHandler } from "./actions/execute-plan-action-handler.ts";
 import { GoalContinuationActionHandler } from "./actions/goal-continuation-action-handler.ts";
 import { ShellCommandActionHandler } from "./actions/shell-command-action-handler.ts";
-import { SubscriptionNotificationActionHandler } from "./actions/subscription-notification-action-handler.ts";
+import { SubscriptionWakeupActionHandler } from "./actions/subscription-notification-action-handler.ts";
 import { SummarizeActionHandler } from "./actions/summarize-action-handler.ts";
 import { AbstractUserMessageActionHandler } from "./actions/user-message-action/abstract-user-message-action-handler.ts";
 import { ResumeActionHandler } from "./actions/user-message-action/resume-action-handler.ts";
@@ -62,7 +62,7 @@ function createActionHandlers(input: {
   const handlers = new Map<string, Any>();
   const user = new UserMessageActionHandler(config, resourceAccessor, interactionListener, summarizationHandler, conversationActionReceiver, orchestrator);
   handlers.set("userMessageAction", user);
-  handlers.set("subscriptionNotificationAction", new SubscriptionNotificationActionHandler(user));
+  handlers.set("subscriptionNotificationAction", new SubscriptionWakeupActionHandler(user));
   handlers.set("goalContinuationAction", new GoalContinuationActionHandler(user, config.toolsGenerator, resourceAccessor, config.agentSessionId));
   handlers.set("resumeAction", new ResumeActionHandler(config, resourceAccessor, interactionListener, summarizationHandler, conversationActionReceiver, orchestrator));
   handlers.set("summarizeAction", new SummarizeActionHandler(config, resourceAccessor, interactionListener, orchestrator, conversationActionReceiver));
@@ -165,13 +165,13 @@ export class AgentRoot {
       }
       if (!options?.skipTurnEndedUpdate) {
         const hasTokenUsage = Object.values(usage).some(value => value > 0);
-        await this.interactionListener.sendUpdate(ctx, toRedactedInteractionUpdate(Updates.turnEnded(hasTokenUsage ? usage as Any : undefined), action._privacyMode));
+        await this.interactionListener.sendUpdate(ctx, redactInteractionUpdate(Updates.turnEnded(hasTokenUsage ? usage as Any : undefined), action._privacyMode));
       }
       await flushPostTurnEndedWork(ctx, this.interactionListener);
       await pendingWrites;
       await this.blobStore.flush(ctx);
       options?.onTimings?.({ stateRestoreMs, actionHandlerMs: 0 });
-      return fromRedactedConversationStateStructure(liveState, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
+      return restoreAgentConversationState(liveState);
     } catch (error) {
       await drainPendingWritesOnRunStreamError(ctx, { pendingCheckpoints: pendingWrites, flush: () => this.blobStore.flush(ctx) });
       throw error;
@@ -194,12 +194,12 @@ export class AgentRoot {
     if (!("handleSingleStep" in stepSetup.handler)) throw new Error(`Action handler for ${action.action.case} does not support single-step execution`);
     const result = await stepSetup.handler.handleSingleStep(stepSetup.ctx, action.action.value, stepSetup.baseExecutor, stepSetup.stateHandler, mcpTools, stepSetup.onStateUpdateWithFlush);
     await stepSetup.onStateUpdateWithFlush(stepSetup.ctx, result.state);
-    return { state: fromRedactedConversationStateStructure(result.state, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), hasToolCall: result.hasToolCall };
+    return { state: restoreAgentConversationState(result.state), hasToolCall: result.hasToolCall };
   }
 
   getSplitStepHandler(actionCase?: string): Any {
     const handler = actionCase === undefined ? [...this.actionHandlers.values()].find(value => value instanceof AbstractUserMessageActionHandler) : this.actionHandlers.get(actionCase);
-    if (handler instanceof SubscriptionNotificationActionHandler || handler instanceof GoalContinuationActionHandler) return handler.getUserMessageActionHandler();
+    if (handler instanceof SubscriptionWakeupActionHandler || handler instanceof GoalContinuationActionHandler) return handler.getUserMessageActionHandler();
     if (handler instanceof AbstractUserMessageActionHandler) return handler;
     throw new Error(`Action handler for ${actionCase ?? "unknown"} does not support split-step execution`);
   }
@@ -209,7 +209,7 @@ export class AgentRoot {
     if (!("handleModelStep" in stepSetup.handler)) throw new Error(`Action handler for ${action.action.case} does not support split-step execution`);
     const result = await stepSetup.handler.handleModelStep(stepSetup.ctx, action.action.value, stepSetup.baseExecutor, stepSetup.stateHandler, mcpTools, stepSetup.onStateUpdateWithFlush);
     await stepSetup.onStateUpdateWithFlush(stepSetup.ctx, result.state);
-    return { state: fromRedactedConversationStateStructure(result.state, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), toolCallDescriptors: result.toolCallDescriptors, splitStepData: { ...result.splitStepData, actionCase: action.action.case } };
+    return { state: restoreAgentConversationState(result.state), toolCallDescriptors: result.toolCallDescriptors, splitStepData: { ...result.splitStepData, actionCase: action.action.case } };
   }
 
   async executeToolCall(parentCtx: Any, state: Any, descriptor: Any, mcpTools: Any, splitStepData: Any, fileOperationLockManager: Any, onStateWrite?: Any): Promise<Any> {
@@ -218,7 +218,7 @@ export class AgentRoot {
     const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: false }));
     const handler = this.getSplitStepHandler(splitStepData.actionCase);
     try { return await handler.executeToolCall(ctx, descriptor, stateHandler, mcpTools, splitStepData, splitStepData.requestContext ?? {}, fileOperationLockManager); }
-    catch (error) { if (error instanceof DeferredInteractionResponseError && onStateWrite !== undefined) await onStateWrite(ctx, fromRedactedConversationStateStructure(await stateHandler.computeNewStructure(ctx), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)); throw error; }
+    catch (error) { if (error instanceof DeferredInteractionResponseError && onStateWrite !== undefined) await onStateWrite(ctx, restoreAgentConversationState(await stateHandler.computeNewStructure(ctx))); throw error; }
   }
 
   async prepareSubagent(parentCtx: Any, state: Any, descriptor: Any, mcpTools: Any, splitStepData: Any, fileOperationLockManager: Any): Promise<Any> {
@@ -235,7 +235,7 @@ export class AgentRoot {
     const update = createRunStreamStateUpdateWithFlush({ blobStore: this.blobStore, onStateUpdate: onStateWrite });
     const result = await this.getSplitStepHandler(splitStepData.actionCase).finalizeStep(ctx, splitStepData, toolCallResults, baseExecutor, stateHandler, mcpTools, splitStepData.requestContext ?? {}, update);
     await update(ctx, result.state);
-    return { state: fromRedactedConversationStateStructure(result.state, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), hasToolCall: result.hasToolCall };
+    return { state: restoreAgentConversationState(result.state), hasToolCall: result.hasToolCall };
   }
 
   shouldPrecomputeSummary(tokenDetails: Any): boolean { return this.orchestrator.shouldStartBackgroundSummarization(tokenDetails, []); }
@@ -247,8 +247,8 @@ export class AgentRoot {
     const silentListener = { sendUpdate: async () => {}, query: async () => { throw new Error("Interaction queries are not supported during summarization"); } };
     const summarizedState = await this.orchestrator.handleSummarization(executionSpan.ctx, stateHandler, promptExecutor, silentListener, this.config, requestContext, { backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion, triggerReason: "approaching_token_limit", resourceAccessor: this.resourceAccessor, forceExternalModel: true, currentInvocationId: (stateHandler as Any).lastStepInvocationId });
     if (summarizedState === undefined) return undefined;
-    stateHandler.setTokenDetails(createRedactedConversationTokenDetails(stateHandler.getPrivacyMode(), { usedTokens: estimateTokenCount(promptExecutor.getMessages() as Any), maxTokens: stateHandler.tokenDetails.maxTokens, breakdown: undefined, promptContextUsageTree: undefined }));
-    return fromRedactedConversationStateStructure(await stateHandler.computeNewStructure(executionSpan.ctx), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
+    stateHandler.setTokenDetails(createInteropConversationTokenDetails(stateHandler.getPrivacyMode(), { usedTokens: estimateTokenCount(promptExecutor.getMessages() as Any), maxTokens: stateHandler.tokenDetails.maxTokens, breakdown: undefined, promptContextUsageTree: undefined }));
+    return restoreAgentConversationState(await stateHandler.computeNewStructure(executionSpan.ctx));
   }
 
   isSingleStepHandler(handler: Any): boolean { return "handleSingleStep" in handler; }

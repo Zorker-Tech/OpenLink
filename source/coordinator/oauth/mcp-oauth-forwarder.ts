@@ -6,7 +6,7 @@
  */
 import { createRealExpiryPolicy, type ExpiryPolicy } from "../../host/extensions/scheduling.ts";
 import { errorMessage } from "../../shared/errors/summary.ts";
-import { startMcpOAuthCallbackListener, type McpOAuthCallbackListenerArgs } from "./mcp-oauth-callback-listener.ts";
+import { startMcpOAuthCallbackListener, type McpOAuthCallbackPorts } from "./mcp-oauth-callback-listener.ts";
 import { McpOAuthLoopbackRegistry, type CoordinatorLogger } from "./mcp-oauth-loopback-registry.ts";
 
 export const MCP_OAUTH_PENDING_TTL_MS = 11 * 60 * 1_000;
@@ -73,7 +73,7 @@ export interface McpOAuthPendingPayload {
 }
 
 interface CallbackListener { close(): void }
-type ListenerStarter = (args: McpOAuthCallbackListenerArgs, registry: McpOAuthLoopbackRegistry) => Promise<CallbackListener>;
+type ListenerStarter = (args: McpOAuthCallbackPorts, registry: McpOAuthLoopbackRegistry) => Promise<CallbackListener>;
 
 export interface McpOAuthForwarderDependencies {
   completion: { completeMcpOAuth(value: { code: string; state: string }): Promise<unknown> };

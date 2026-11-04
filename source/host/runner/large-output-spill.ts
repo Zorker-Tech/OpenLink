@@ -7,16 +7,14 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-import {
-  MCP_TEXT_FILE_THRESHOLD_BYTES,
-  materializeMcpTextOutput,
-} from "../../packages/agent-exec/agent-tools-file.ts";
-import type { McpResult } from "../../packages/proto/generated/agent/v1/mcp_exec_pb.ts";
-import { OutputLocation } from "../../packages/proto/generated/agent/v1/utils_pb.ts";
+import { createMcpTextSpillAdapter } from "../../adapters/interop/agent/mcp-text-spill-adapter.ts";
+import { MCP_TEXT_FILE_THRESHOLD_BYTES } from "../../packages/agent/tools/mcp/mcp-output-spill-policy.ts";
+import { AGENT_TOOLS_DIR, encodeBoundedToolOutput } from "./large-output-spill-policy.ts";
+
+export { AGENT_TOOLS_DIR };
+export { MAX_OUTPUT_FILE_SIZE } from "./large-output-spill-policy.ts";
 
 export const SLATE_SHELL_FILE_OUTPUT_THRESHOLD_BYTES = BigInt(MCP_TEXT_FILE_THRESHOLD_BYTES);
-export const MAX_OUTPUT_FILE_SIZE = 1_000_000;
-export const AGENT_TOOLS_DIR = ".slate/tools";
 
 export const isLargeOutputSpillEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
   env.SLATE_DISABLE_LARGE_OUTPUT_SPILL !== "1";
@@ -26,41 +24,13 @@ export function createSlateMcpTextSpiller<C>(opts: {
   readonly uploadTextFile: (ctx: C, path: string, data: Uint8Array) => Promise<void>;
 }) {
   const thresholdBytes = opts.thresholdBytes ?? MCP_TEXT_FILE_THRESHOLD_BYTES;
-  return async (ctx: C, result: McpResult): Promise<McpResult> => {
-    if (result.result.case !== "success") {
-      return result;
-    }
-
-    const materialized = await materializeMcpTextOutput({
-      contentItems: result.result.value.content,
-      thresholdBytes,
-      write: async aggregateText => {
-        try {
-          const relativePath = path.posix.join(AGENT_TOOLS_DIR, `${randomUUID()}.txt`);
-          const capped = aggregateText.length > MAX_OUTPUT_FILE_SIZE
-            ? aggregateText.slice(0, MAX_OUTPUT_FILE_SIZE)
-            : aggregateText;
-          const data = new TextEncoder().encode(capped);
-          await opts.uploadTextFile(ctx, relativePath, data);
-          return new OutputLocation({
-            filePath: relativePath,
-            sizeBytes: BigInt(data.byteLength),
-            lineCount: BigInt(capped.split("\n").length),
-          });
-        } catch {
-          return undefined;
-        }
-      },
-    });
-
-    if (materialized === undefined || materialized === result.result.value.content) {
-      return result;
-    }
-
-    const spilled = result.clone();
-    if (spilled.result.case === "success") {
-      spilled.result.value.content = materialized;
-    }
-    return spilled;
-  };
+  return createMcpTextSpillAdapter<C>({
+    thresholdBytes,
+    persistText: async (ctx, text) => {
+      const relativePath = path.posix.join(AGENT_TOOLS_DIR, `${randomUUID()}.txt`);
+      const { bytes, lineCount } = encodeBoundedToolOutput(text);
+      await opts.uploadTextFile(ctx, relativePath, bytes);
+      return { path: relativePath, byteLength: bytes.byteLength, lineCount };
+    },
+  });
 }

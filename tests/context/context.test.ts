@@ -43,6 +43,20 @@ test("a value set to undefined shadows the declared default", () => {
   assert.equal(child.with(numberKey, 1).get(optionalKey), undefined, "and it stays shadowed below")
 })
 
+test("explicit null and undefined values survive contexts that inherit through their parent", () => {
+  const optionalKey = createKey<string | undefined>(Symbol("optional"), "declared default")
+  const nullableKey = createKey<string | null>(Symbol("nullable"), "declared default")
+  const root = createContext().with(optionalKey, undefined).with(nullableKey, null)
+  const named = root.withName("named")
+  const detached = root.withDetached()
+  const canceledScope = root.withCancel()[0]
+
+  for (const descendant of [named, detached, canceledScope]) {
+    assert.equal(descendant.get(optionalKey), undefined)
+    assert.equal(descendant.get(nullableKey), null)
+  }
+})
+
 test("canceling a child leaves its ancestors untouched and aborts its descendants", async () => {
   const root = createContext()
   const [child, cancel] = root.withCancel()

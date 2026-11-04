@@ -13,9 +13,10 @@ import {
   toPrivacyMode,
 } from "../../source/host/extensions/codebase-telemetry/privacy-mode.ts";
 import { createListenerIntegrationReads, DASHBOARD_INTEGRATIONS_URL, LISTENER_PLATFORMS } from "../../source/host/automations/listener-integrations.automations.ts";
-import { bestEffortToken, createMarketplaceInterceptor, CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/shared/node/marketplace/cursor-marketplace-client.ts";
+import { bestEffortToken, createMarketplaceInterceptor, MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
 import { notificationsExtension } from "../../source/host/notifications/extension.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 
 const auth = (authId: string) => ({ authId, authToken: `token-${authId}` });
 
@@ -31,14 +32,14 @@ function policies(): {
   };
 }
 
-function privacyWorld(load: (authId: string) => Promise<number> = async () => PrivacyModes.NoTraining) {
+function privacyWorld(load: (authId: string) => Promise<unknown> = async () => PrivacyModes.NoTraining) {
   const logged: string[] = [];
   const loads: string[] = [];
   let pollingDisposals = 0;
   const mode = createCodebaseTelemetryPrivacyMode({
     load: async ({ auth: account }: { auth: { authId: string } }) => {
       loads.push(account.authId);
-      return await load(account.authId);
+      return await load(account.authId) as PrivacyMode;
     },
     ...policies(),
     refreshPolling: {
@@ -66,9 +67,25 @@ describe("the privacy mode a codebase's telemetry is allowed under", () => {
   it("understands the modes it knows and leaves anything else unspecified", () => {
     assert.deepEqual(
       [PrivacyModes.Unspecified, PrivacyModes.NoStorage, PrivacyModes.NoTraining, PrivacyModes.UsageDataTrainingAllowed, PrivacyModes.UsageCodebaseTrainingAllowed],
-      [0, 1, 2, 3, 4],
+      [
+        PrivacyMode.UNSPECIFIED,
+        PrivacyMode.NO_STORAGE,
+        PrivacyMode.NO_TRAINING,
+        PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
+        PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED,
+      ],
     );
-    assert.deepEqual([1, 2, 3, 4, 0, 99, -1, 1.5].map((value) => toPrivacyMode(value)), [1, 2, 3, 4, 0, 0, 0, 0]);
+    const supported = [
+      PrivacyMode.NO_STORAGE,
+      PrivacyMode.NO_TRAINING,
+      PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
+      PrivacyMode.USAGE_CODEBASE_TRAINING_ALLOWED,
+      PrivacyMode.UNSPECIFIED,
+    ];
+    assert.deepEqual(
+      [...supported, "future-mode", 99, null].map(toPrivacyMode),
+      [...supported, PrivacyMode.UNSPECIFIED, PrivacyMode.UNSPECIFIED, PrivacyMode.UNSPECIFIED],
+    );
   });
 
   it("tries a lookup again only when it timed out or the backend said it may", () => {
@@ -87,7 +104,7 @@ describe("the privacy mode a codebase's telemetry is allowed under", () => {
 
   it("reads the mode when an account arrives, clears it when the account leaves, and stays quiet once let go", async () => {
     const world = privacyWorld();
-    const seen: number[] = [];
+    const seen: PrivacyMode[] = [];
     const subscription = world.mode.receiver.subscribe((value) => seen.push(value));
     assert.equal(world.mode.receiver.get(), PrivacyModes.Unspecified);
     world.mode.setAuth(auth("account-1") as never);
@@ -128,8 +145,8 @@ describe("the privacy mode a codebase's telemetry is allowed under", () => {
   });
 
   it("does not adopt a reading that no longer belongs to the account it was made for", async () => {
-    const answers: { authId: string; settle: (mode: number) => void }[] = [];
-    const world = privacyWorld(async (authId: string) => await new Promise<number>((resolve) => void answers.push({ authId, settle: resolve })));
+    const answers: { authId: string; settle: (mode: PrivacyMode) => void }[] = [];
+    const world = privacyWorld(async (authId: string) => await new Promise<PrivacyMode>((resolve) => void answers.push({ authId, settle: resolve })));
     world.mode.setAuth(auth("account-1") as never);
     await settle();
     assert.deepEqual(answers.map((answer) => answer.authId), ["account-1"]);
@@ -220,7 +237,7 @@ describe("the marketplace client", () => {
     assert.equal(await bestEffortToken(async () => {
       throw new Error("no token today");
     }), undefined);
-    assert.equal(CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS, 12_000);
+    assert.equal(MARKETPLACE_REQUEST_TIMEOUT_MS, 12_000);
     const headers = new Map<string, string>();
     const request = { header: { set: (name: string, value: string) => void headers.set(name, value) } };
     const run = createMarketplaceInterceptor(async () => "token-1", async () => "machine-1", { env: {}, uuid: () => "request-1" })(async () => ({ done: true }));

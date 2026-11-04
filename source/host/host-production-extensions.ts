@@ -57,7 +57,7 @@ import { traysExtension } from "./notifications/trays/extension.ts";
 import { turnExecutionExtension } from "./extensions/turn-execution/extension.ts";
 import { wallpaperExtension } from "./extensions/wallpaper/extension.ts";
 import { webauthnProxyExtension } from "./extensions/webauthn-proxy/extension.ts";
-import type { ProductionSlateHostPorts } from "./slate-host.ts";
+import type { ProductionSlateHostPorts } from "./slate-host-production.ts";
 
 /** The part of an extension declaration this file needs: what it is called, what it needs, and how it starts. */
 type DeclarationLike = {

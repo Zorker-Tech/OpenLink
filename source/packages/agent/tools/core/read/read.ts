@@ -23,57 +23,52 @@ import { z } from "zod"
 
 import type { Context } from "../../../../context/context.ts"
 import { createSpan } from "../../../../context/telemetry.ts"
-import { createImageResult, createStringResult } from "../../../../chat-inference/prompt-executor.ts"
 import type { BlobStore } from "../../../../agent-kv/blob-store.ts"
 import { getBlobId } from "../../../../agent-kv/blob-store.ts"
-import { toHex, utf8Serde } from "../../../../agent-kv/serde.ts"
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
-import { readExecutorResource, redactedReadExecutorResource } from "../../../../agent-exec/read-operation.ts"
-import { ReadArgs, type ReadResult as ReadExecResult } from "../../../../proto/generated/agent/v1/read_exec_pb.ts"
+import { resolveReadPromptProfile, type ReadPromptProfile } from "../../../../../adapters/interop/agent/read-tool-prompt-adapter.ts"
 import {
-  ReadRange,
-  ReadToolArgs,
-  ReadToolCall,
-  ReadToolError,
-  ReadToolResult,
-  ReadToolSuccess,
-} from "../../../../proto/generated/agent/v1/read_tool_pb.ts"
-import { ToolCall } from "../../../../proto/generated/agent/v1/agent_pb.ts"
-import type { CursorRule } from "../../../../proto/generated/agent/v1/rules_pb.ts"
-import type { HookAdditionalContext } from "../../../../proto/generated/agent/v1/hook_additional_context_pb.ts"
+  createReadConversationPort,
+  createReadExecutorPort,
+  fromInteropReadRules,
+  fromInteropReadToolResult,
+  toInteropReadToolCall,
+  toInteropReadToolErrorCall,
+  toInteropReadToolResult,
+} from "../../../../../adapters/interop/agent/read-tool-protocol-adapter.ts"
+import type {
+  ReadConversationPort,
+  ReadExecutionResultModel,
+  ReadFormattingOptions,
+  ReadRangeModel,
+  ReadRuleModel,
+  ReadToolCallModel,
+  ReadToolResultModel,
+} from "./read-contract.ts"
+import { createReadRenderer, type ReadRenderProps } from "./read-renderer.ts"
+import type { HookContextEntry } from "../../../../hooks-carriers/hook-additional-context.ts"
 import { ToolCallError, createZodAgentTool, generateSeededUuid, withSafeParsedArgs } from "../../tool-support.ts"
 import { ToolCallRejectedError, ToolCallUnexpectedEnvironmentError } from "../../tool-errors.ts"
-import { formatCodeBlock } from "../formatting.ts"
-import { isJupyterNotebook } from "../notebook-utils.ts"
-import { formatNotebookForLLM } from "./notebook-format.ts"
-import { detectImageMimeType } from "./image-utils.ts"
-import { LARGE_TEXT_BLOB_THRESHOLD, READ_CHAR_HARD_LIMIT } from "../../read-limits.ts"
+import { READ_OUTPUT_BOUNDS } from "../../read-limits.ts"
 import { isPdfBinary } from "./pdf-utils.ts"
-import { maybeRedirectWorktriesPath } from "../worktree-paths.ts"
+import { adaptLegacyWorktreePath } from "../../../../../adapters/interop/workspace/legacy-worktree-path-adapter.ts"
 import { getConversationId } from "../../../utils/request-scope.ts"
 import { isAgentTranscriptPath } from "../../../../utils/managed-paths.ts"
-import { getSkillSourceFromPath } from "../../../utils/common-helpers.ts"
+import { classifyInteropSkillSourcePath } from "../../../../../adapters/interop/agent/skill-source-path-adapter.ts"
 import { getAgentEventTracker, recordSkillApplied } from "../../../utils/event-tracking.ts"
 import { trackMcpDirectoryAccessIfApplicable, trackMcpDirectoryResponseBytes } from "../../../utils/mcp-metrics.ts"
-import { filterByAgentEnvironment } from "../../../utils/environment-filtering.ts"
+import { filterItemsForRunEnvironment } from "../../../utils/environment-filtering.ts"
 import type { AgentType } from "../../../utils/agent-config.ts"
 import { getSkillIdFromPath } from "../../../skill-id.ts"
 import { createCounter, createHistogram } from "../../../../metrics/index.ts"
 import { safeString } from "../../../../redaction/create.ts"
 import type { RedactedString } from "../../../../redaction/redacted-values.ts"
 
+export type { ReadFormattingOptions } from "./read-contract.ts"
+
 export type ReadResourceAccessor = ResourceAccessor<RemoteExecManager>
 export type PdfTextExtractor = (bytes: Uint8Array) => Promise<string>
-
-export interface ReadFormattingOptions {
-  readonly shouldUseFormatCodeblock?: boolean
-  readonly gpt5StyleLineNumbers?: boolean
-  readonly gpt5CodexCatN?: boolean
-  readonly enableLineNumbers?: boolean
-  readonly sparseLineNumbers?: number
-  readonly useSparseReadLineNumbers?: boolean
-}
 
 export interface ReadToolOptions {
   readonly toolName?: string
@@ -114,22 +109,11 @@ interface ReadMetadata {
   readonly [key: string]: unknown
   readonly toolCallId: string
   readonly stateHandler?: ReadStateHandler
-  readonly hookContextCollector?: HookAdditionalContext[]
+  readonly hookContextCollector?: HookContextEntry[]
   readonly stepReadPathDedup?: Set<string>
-  readonly cursorRules?: readonly CursorRule[]
+  readonly cursorRules?: readonly unknown[]
   readonly agentSkills?: readonly ReadSkill[]
   readonly workspacePaths?: readonly string[]
-}
-
-interface ReadInteractionHandler {
-  executeToolCall(
-    context: Context,
-    call: ToolCall,
-    callId: string,
-    execute: (context: Context) => Promise<ReadToolResult>,
-    merge: (result: ReadToolResult) => ToolCall,
-    hookContextCollector?: HookAdditionalContext[],
-  ): Promise<ReadToolResult>
 }
 
 interface ReadArgsLike {
@@ -141,20 +125,13 @@ interface ReadArgsLike {
   readonly include_line_numbers?: boolean
 }
 
-interface ReadRenderProps {
-  readonly blobStore?: BlobStore<Context>
-}
-
 /** Formats that are never text, so reading them as text would only produce noise. */
 const UNSUPPORTED_BINARY_EXTENSIONS = /\.(zip|tar|gz|exe|dll|so|dylib|bin|mp4|webm|mov|avi|mkv|wmv|flv|m4v)$/i
-const READ_LINE_NUMBER_INTERVAL = 10
 const MAX_CONVERSATION_ID_LENGTH = 200
 
 /** A PDF is extracted once per path, since the same document is often read twice in one turn. */
 const pdfTextCache = new Map<string, string>()
 /** The skills that belong to a result, kept beside it rather than recomputed when it is rendered. */
-const relatedSkillsBySuccess = new WeakMap<object, readonly ReadSkill[]>()
-
 const readErrorsDistribution = createHistogram("agent.tools.read.errors", {
   description: "Number of errors per read operation",
   labelNames: [],
@@ -163,10 +140,6 @@ const readTotalCounter = createCounter("agent.tools.read.total", {
   description: "Total file read operations",
   labelNames: [],
 })
-
-function createReadToolCall(value: ReadToolCall): ToolCall {
-  return new ToolCall({ tool: { case: "readToolCall", value } })
-}
 
 function getSafeConversationId(conversationId: string): string {
   let safe = encodeURIComponent(conversationId).replace(/%/g, "_")
@@ -202,7 +175,7 @@ function normalizeLineEndings(content: string): string {
 function computeReadSlice(totalLines: number, offset: number | undefined, limit: number | undefined): {
   readonly startIndex: number
   readonly endIndex: number
-  readonly readRange: ReadRange
+  readonly readRange: ReadRangeModel
 } | undefined {
   if (offset === undefined && limit === undefined) return undefined
   const effectiveOffset = offset ?? 1
@@ -212,7 +185,7 @@ function computeReadSlice(totalLines: number, offset: number | undefined, limit:
   if (startIndex >= totalLines) {
     throw new ToolCallUnexpectedEnvironmentError(`Offset ${offset} is beyond file length (${totalLines} lines)`)
   }
-  return { startIndex, endIndex, readRange: new ReadRange({ startLine: startIndex + 1, endLine: endIndex }) }
+  return { startIndex, endIndex, readRange: { startLine: startIndex + 1, endLine: endIndex } }
 }
 
 function createSuccessResult(
@@ -220,14 +193,14 @@ function createSuccessResult(
   totalLines: number,
   fileSize: number,
   filePath: string,
-  readRange: ReadRange | undefined,
+  readRange: ReadRangeModel | undefined,
   includeLineNumbers: boolean | undefined,
-): ReadToolResult {
-  const exceededLimit = content.length > READ_CHAR_HARD_LIMIT
-  return new ReadToolResult({
+): ReadToolResultModel {
+  const exceededLimit = content.length > READ_OUTPUT_BOUNDS.maximumCharacters
+  return {
     result: {
       case: "success",
-      value: new ReadToolSuccess({
+      value: {
         // Content over the hard limit is withheld rather than truncated: the caller is told to read a range.
         output: { case: "content", value: exceededLimit ? "" : content },
         isEmpty: !exceededLimit && totalLines === 0 && content === "",
@@ -237,9 +210,9 @@ function createSuccessResult(
         path: filePath,
         ...(readRange === undefined ? {} : { readRange }),
         ...(includeLineNumbers === undefined ? {} : { includeLineNumbers }),
-      }),
+      },
     },
-  })
+  }
 }
 
 function positiveIntegerSchema(description: string, allowNegative = false): z.ZodType<number | undefined> {
@@ -264,95 +237,51 @@ function lineNumbersSchema(sparse: boolean): z.ZodType<boolean | undefined> {
 }
 
 /** The arguments a version's model was trained to send, including what the file is called. */
-function parametersSchema(version: string, includeLineNumbers: boolean, includeNegativeOffset: boolean, sparse: boolean): z.ZodTypeAny {
+function parametersSchema(profile: ReadPromptProfile, includeLineNumbers: boolean, sparse: boolean): z.ZodTypeAny {
   const lineNumberField = includeLineNumbers ? { include_line_numbers: lineNumbersSchema(sparse) } : {}
-  if (version === "dsv3-1018") {
+  const pathField = profile.argumentStyle === "workspace-target"
+    ? { target_file: z.string().describe("Path of the file to inspect, relative to the workspace or absolute.") }
+    : { path: z.string().describe("Path of the file to inspect.") }
+  if (profile.argumentStyle === "path-only") return z.object(pathField)
+  if (profile.argumentStyle === "path-range") {
     return z.object({
-      target_file: z.string().describe("The path of the file to read. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is."),
-      offset: positiveIntegerSchema("The line number to start reading from. Only provide if the file is too large to read at once."),
-      limit: limitSchema(),
-      ...lineNumberField,
-    })
-  }
-  if (version === "haiku") {
-    return z.object({
-      path: z.string().describe("The absolute path of the file to read."),
+      ...pathField,
       line_range: z.array(z.number().int()).min(2).max(2).optional(),
       ...lineNumberField,
     })
   }
   return z.object({
-    path: z.string().describe("The absolute path of the file to read."),
-    offset: positiveIntegerSchema(
-      "The line number to start reading from. Only provide if the file is too large to read at once.",
-      version === "cursor-0226" || includeNegativeOffset,
-    ),
+    ...pathField,
+    offset: positiveIntegerSchema("First line to return. Omit to start at the beginning.", profile.allowNegativeOffset),
     limit: limitSchema(),
     ...lineNumberField,
   })
 }
 
-function toolName(version: string): string {
-  if (version === "dsv3-1018") return "read_file"
-  if (version === "gpt5-codex" || version === "codex-cloud") return "ReadFile"
-  if (version === "cursor-0226" || version === "dsv3-1205" || version === "latest" || version === "haiku") return "Read"
-  throw new Error(`Unhandled version: ${version}`)
-}
-
 function toolDescription(
-  version: string,
-  minimal: boolean,
+  profile: ReadPromptProfile,
   explicitOffsetLimit: boolean,
   includeLineNumbers: boolean,
   sparse: boolean,
 ): string {
-  if (minimal) {
-    return "View an image on the local filesystem. This tool can only view IMAGE files. For normal file reads use the Shell tool."
-  }
+  if (profile.descriptionStyle === "image-only") return "Preview an image from a local path. Use the shell tool for other file content."
+  if (profile.descriptionStyle === "compact-image") return "Read a local file. JPEG, PNG, GIF and WebP images can also be viewed."
   const usage = explicitOffsetLimit
-    ? "- Omit offset and limit to read the entire file.\n- Provide offset and limit to read a specific line range (especially for long files)."
-    : "- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters."
+    ? "- Leave offset and limit out to return the whole file.\n- Set both to read a particular range in a long file."
+    : "- For long files, set offset and limit to inspect one portion. Otherwise, omit them for the complete file."
   const numbers = includeLineNumbers && !sparse
-    ? "\n- Lines in the output are numbered starting at 1, using following format: LINE_NUMBER|LINE_CONTENT"
+    ? "\n- Returned lines use one-based labels in the form LINE_NUMBER|LINE_CONTENT."
     : ""
-  const base = `Reads a file from the local filesystem. You can access any file directly by using this tool.\nIf the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.\n\nUsage:\n${usage}${numbers}\n- You have the capability to call multiple tools in a single response. It is always better to speculatively read multiple files as a batch that are potentially useful.\n- If you read a file that exists but has empty contents you will receive 'File is empty.'`
-  if (version === "cursor-0226") {
-    return "Reads a file from the local filesystem. This tool can also read image files when called with the appropriate path. Formats supported: jpeg/jpg, png, gif, webp."
-  }
-  if (version === "dsv3-1018") return base
-  if (version === "dsv3-1205") {
-    return `${base}\n\nImage Support:\n- This tool can also read image files when called with the appropriate path.\n- Supported image formats: jpeg/jpg, png, gif, webp.`
-  }
-  if (version === "gpt5-codex" || version === "codex-cloud" || version === "latest" || version === "haiku") {
-    return `${base}\n\nImage Support:\n- This tool can also read image files when called with the appropriate path.\n- Supported image formats: jpeg/jpg, png, gif, webp.\n\nPDF Support:\n- PDF files are converted into text content automatically (subject to the same character limits as other files).`
-  }
-  throw new Error(`Unhandled version: ${version}`)
+  const base = `Read the file at the supplied path. A missing file is reported as an error, and an empty file is identified explicitly.\n\n${usage}${numbers}\n- Multiple independent file reads may be requested together when useful.`
+  const withImages = `${base}\n\nImage files are returned for visual inspection when supported (JPEG, PNG, GIF and WebP).`
+  return profile.descriptionStyle === "full"
+    ? `${withImages}\n\nPDF files are converted to text and follow the same output-size limit as other files.`
+    : profile.descriptionStyle === "image"
+      ? withImages
+      : base
 }
 
 /** What the model is told about the rules that belong to the file it just read. */
-function cursorRuleReminder(rules: readonly CursorRule[]): string | undefined {
-  if (rules.length === 0) return undefined
-  return [
-    "The following rule files are relevant to the files you just read:",
-    ...rules.map(rule => `- ${rule.fullPath ?? "(unknown rule path)"}\n${rule.content.trimEnd() || "(Rule file is empty.)"}`),
-    "Consider these rules if they affect your changes.",
-  ].join("\n\n")
-}
-
-function skillReminder(skills: readonly ReadSkill[]): string | undefined {
-  if (skills.length === 0) return undefined
-  return [
-    "The following skills may be relevant to the files you just read:",
-    ...skills.map(skill => `- ${skill.fullPath ?? "(unknown skill path)"}\n${skill.description || "(No description)"}`),
-  ].join("\n\n")
-}
-
-function mergeReminders(content: string, rules: readonly CursorRule[], skills: readonly ReadSkill[]): string {
-  const additions = [cursorRuleReminder(rules), skillReminder(skills)]
-    .filter((value): value is string => value !== undefined)
-  return additions.length === 0 ? content : `${content}\n\n${additions.join("\n\n")}`
-}
-
 function isMcpReadPath(filePath: string): boolean {
   return filePath.includes("/mcps/")
 }
@@ -363,35 +292,30 @@ export function createReadTool(
   promptVersion = "latest",
   options: ReadToolOptions = {},
 ): Record<string, unknown> {
-  const readExecutor = options.preferRedactedRead === true
-    ? resourceAccessor.get(redactedReadExecutorResource)
-    : resourceAccessor.get(readExecutorResource)
+  const readExecutor = createReadExecutorPort(resourceAccessor, options.preferRedactedRead === true)
   const minimal = options.useMinimalHarness === true
-  if (
-    !["dsv3-1018", "dsv3-1205", "gpt5-codex", "codex-cloud", "cursor-0226", "latest", "haiku"].includes(promptVersion) &&
-    !minimal
-  ) {
-    throw new Error(`Unhandled version: ${promptVersion}`)
-  }
   const includeLineNumbersArg = options.enableLineNumbersArg === true
   const sparse = formattingOptions.useSparseReadLineNumbers === true
-  const schema = minimal
-    ? z.object({ path: z.string().describe("The absolute path of the image to view.") })
-    : parametersSchema(promptVersion, includeLineNumbersArg, options.enableNegativeOffset === true, sparse)
-  const name = options.toolName ?? (minimal ? "ViewImage" : toolName(promptVersion))
+  const renderer = createReadRenderer(formattingOptions, sparse)
+  const profile = resolveReadPromptProfile(promptVersion, {
+    imageOnly: minimal,
+    allowNegativeOffset: options.enableNegativeOffset === true,
+  })
+  const schema = parametersSchema(profile, includeLineNumbersArg, sparse)
+  const name = options.toolName ?? profile.toolName
   const description = options.toolDescription ??
-    toolDescription(promptVersion, minimal, options.useExplicitOffsetLimitDescription === true, !includeLineNumbersArg, sparse)
+    toolDescription(profile, options.useExplicitOffsetLimitDescription === true, !includeLineNumbersArg, sparse)
 
   const execute = async (
     parentContext: Context,
-    interactionHandler: ReadInteractionHandler,
+    interactionHandler: ReadConversationPort,
     rawArgs: ReadArgsLike,
     meta: ReadMetadata,
-  ): Promise<ReadToolResult> => {
+  ): Promise<ReadToolResultModel> => {
     using span = createSpan(parentContext.withName("readExecute"))
     const originalPath = "target_file" in rawArgs ? rawArgs.target_file : rawArgs.path
     if (typeof originalPath !== "string") throw new ToolCallUnexpectedEnvironmentError("Read path is missing")
-    const filePath = maybeRedirectWorktriesPath(originalPath)
+    const filePath = adaptLegacyWorktreePath(originalPath)
     trackMcpDirectoryAccessIfApplicable(span.ctx, filePath, "read")
     if (isAgentTranscriptPath(filePath)) {
       // Reading one's own transcript is legitimate; the access is only worth noting for diagnostics.
@@ -404,9 +328,7 @@ export function createReadTool(
     }
     if (UNSUPPORTED_BINARY_EXTENSIONS.test(filePath)) {
       const extension = filePath.toLowerCase().match(/\.([^.]+)$/)?.[1] ?? "unknown"
-      return new ReadToolResult({
-        result: { case: "error", value: new ReadToolError({ errorMessage: `Cannot read binary files of type ${extension}` }) },
-      })
+      return { result: { case: "error", value: { errorMessage: `Cannot read binary files of type ${extension}` } } }
     }
     let offset: number | undefined
     let limit: number | undefined
@@ -418,28 +340,28 @@ export function createReadTool(
       limit = "limit" in rawArgs ? rawArgs.limit : undefined
     }
     const includeLineNumbers = "include_line_numbers" in rawArgs ? rawArgs.include_line_numbers : undefined
-    const baseToolCall = new ReadToolCall({
-      args: new ReadToolArgs({
+    const baseToolCall: ReadToolCallModel = {
+      args: {
         path: filePath,
         ...(offset === undefined ? {} : { offset }),
         ...(limit === undefined ? {} : { limit }),
         ...(includeLineNumbers === undefined ? {} : { includeLineNumbers }),
-      }),
-    })
+      },
+    }
     let errorCount = 0
     let blobBackedReturnedByteCount: number | undefined
 
     const result = await interactionHandler.executeToolCall(
       span.ctx,
-      createReadToolCall(baseToolCall),
+      baseToolCall,
       meta.toolCallId,
       async context => {
-        const execResult = await readExecutor.execute(context, new ReadArgs({
+        const execResult: ReadExecutionResultModel = await readExecutor.execute(context, {
           path: filePath,
           toolCallId: meta.toolCallId,
           ...(offset === undefined ? {} : { offset }),
           ...(limit === undefined ? {} : { limit }),
-        }), {
+        }, {
           execId: generateSeededUuid(meta.toolCallId),
           ...(meta.hookContextCollector === undefined ? {} : { hookContextCollector: meta.hookContextCollector }),
         })
@@ -468,6 +390,10 @@ export function createReadTool(
         const resolvedPath = success.path
         const fileSize = Number(success.fileSize)
         const output = success.output
+        if (output === undefined) {
+          errorCount += 1
+          throw new ToolCallUnexpectedEnvironmentError("Unknown output type")
+        }
         let pdfContentOverride: string | undefined
         if (output.case === "data") {
           if (isPdfBinary(output.value, resolvedPath)) {
@@ -489,19 +415,9 @@ export function createReadTool(
               } else {
                 await blobStore.setBlob(context, blobId, output.value)
               }
-              return new ReadToolResult({
-                result: {
-                  case: "success",
-                  value: new ReadToolSuccess({ output: { case: "dataBlobId", value: blobId }, fileSize, path: resolvedPath }),
-                },
-              })
+              return { result: { case: "success", value: { output: { case: "dataBlobId", value: blobId }, fileSize, path: resolvedPath } } }
             }
-            return new ReadToolResult({
-              result: {
-                case: "success",
-                value: new ReadToolSuccess({ output: { case: "data", value: output.value }, fileSize, path: resolvedPath }),
-              },
-            })
+            return { result: { case: "success", value: { output: { case: "data", value: output.value }, fileSize, path: resolvedPath } } }
           }
         }
         if (pdfContentOverride === undefined && output.case !== "content") {
@@ -516,7 +432,7 @@ export function createReadTool(
         // A range the executor already applied is reported as it is; otherwise the slice is taken here.
         if (success.rangeApplied === true) {
           const executorSlice = computeReadSlice(totalLines, offset, limit)
-          const executorRange = executorSlice?.readRange ?? new ReadRange({ startLine: 1, endLine: totalLines })
+          const executorRange = executorSlice?.readRange ?? { startLine: 1, endLine: totalLines }
           return createSuccessResult(content, totalLines, fileSize, resolvedPath, executorRange, includeLineNumbers)
         }
         const slice = computeReadSlice(totalLines, offset, limit)
@@ -530,9 +446,11 @@ export function createReadTool(
             includeLineNumbers,
           )
         }
-        const readRange = new ReadRange({ startLine: 1, endLine: totalLines })
+        const readRange = { startLine: 1, endLine: totalLines }
         const blobStore = meta.stateHandler?.getBlobStore?.()
-        if (blobStore !== undefined && content.length > LARGE_TEXT_BLOB_THRESHOLD && content.length <= READ_CHAR_HARD_LIMIT) {
+        if (blobStore !== undefined &&
+            content.length > READ_OUTPUT_BOUNDS.spillToBlobAboveCharacters &&
+            content.length <= READ_OUTPUT_BOUNDS.maximumCharacters) {
           const contentBytes = new TextEncoder().encode(content)
           blobBackedReturnedByteCount = contentBytes.byteLength
           const blobId = success.outputBlobId && success.outputBlobId.length > 0
@@ -543,42 +461,42 @@ export function createReadTool(
           } else {
             await blobStore.setBlob(context, blobId, contentBytes)
           }
-          return new ReadToolResult({
+          return {
             result: {
               case: "success",
-              value: new ReadToolSuccess({
+              value: {
                 output: { case: "contentBlobId", value: blobId },
                 totalLines,
                 fileSize,
                 path: resolvedPath,
                 readRange,
                 ...(includeLineNumbers === undefined ? {} : { includeLineNumbers }),
-              }),
+              },
             },
-          })
+          }
         }
         return createSuccessResult(content, totalLines, fileSize, resolvedPath, readRange, includeLineNumbers)
       },
-      resultValue => withReadResult(baseToolCall, resultValue),
       meta.hookContextCollector,
     )
 
-    if (result.result.case === "success") {
+    if (result.result?.case === "success") {
       const resolvedPath = result.result.value.path
       meta.stateHandler?.recordReadPath?.(safeString(resolvedPath))
       meta.stepReadPathDedup?.add(resolvedPath)
       // The rules and skills that belong to this file are attached to the result, not looked up again later.
-      const relatedRules = (meta.cursorRules ?? []).filter(rule =>
+      const cursorRules = fromInteropReadRules(meta.cursorRules ?? [])
+      const relatedRules = cursorRules.filter(rule =>
         rule.fullPath !== undefined && normalizeComparablePath(rule.fullPath) === normalizeComparablePath(resolvedPath))
       result.result.value.relatedCursorRules = relatedRules
       result.result.value.relatedCursorRulePaths = relatedRules.flatMap(rule => (rule.fullPath === undefined ? [] : [rule.fullPath]))
-      const eligibleSkills = filterByAgentEnvironment(Array.from(meta.agentSkills ?? []), meta.stateHandler?.agentType)
+      const eligibleSkills = filterItemsForRunEnvironment(Array.from(meta.agentSkills ?? []), meta.stateHandler?.agentType)
       const relatedSkills = eligibleSkills.filter(skill =>
         skill.disableModelInvocation !== true &&
         skill.parseError === undefined &&
         skill.fullPath !== undefined &&
         normalizeComparablePath(skill.fullPath) === normalizeComparablePath(resolvedPath))
-      relatedSkillsBySuccess.set(result.result.value, relatedSkills)
+      renderer.rememberRelatedSkills(result.result.value, relatedSkills)
       if (resolvedPath.endsWith("SKILL.md")) {
         const skill = matchingSkill(resolvedPath, meta.agentSkills)
         getAgentEventTracker(span.ctx).trackSkillUsed(span.ctx, {})
@@ -586,7 +504,7 @@ export function createReadTool(
           entrypoint: "agent_read",
           ...(meta.stateHandler === undefined ? {} : { stateHandler: meta.stateHandler }),
           skillId: getSkillIdFromPath(resolvedPath),
-          skillSource: getSkillSourceFromPath(resolvedPath),
+          skillSource: classifyInteropSkillSourcePath(resolvedPath),
           ...(skill?.plugin === undefined ? {} : { plugin: skill.plugin }),
           ...(skill?.marketplace === undefined ? {} : { marketplace: skill.marketplace }),
           ...(skill?.pluginId === undefined ? {} : { pluginId: skill.pluginId }),
@@ -596,91 +514,30 @@ export function createReadTool(
     }
     readTotalCounter.increment(span.ctx, 1)
     readErrorsDistribution.histogram(span.ctx, errorCount)
-    if (isMcpReadPath(filePath) && result.result.case === "success" && result.result.value.output.case === "content") {
+    if (isMcpReadPath(filePath) && result.result?.case === "success" && result.result.value.output?.case === "content") {
       trackMcpDirectoryResponseBytes(span.ctx, Buffer.byteLength(result.result.value.output.value, "utf8"), "read")
     }
     void blobBackedReturnedByteCount
     return result
   }
 
-  const render = async (context: Context, value: ReadToolResult, props: ReadRenderProps = {}): Promise<unknown> => {
-    const result = value.result
-    const hydratedBlobs = new Map<string, Uint8Array>()
-    if (result?.case === "success" && (result.value.output.case === "dataBlobId" || result.value.output.case === "contentBlobId")) {
-      const blobId = result.value.output.value
-      const blobStore = props.blobStore
-      if (blobStore === undefined) throw new Error("Cannot hydrate blobs for tool Read: no blob store available")
-      const blob = await blobStore.getBlob(context, blobId)
-      if (blob === undefined) throw new Error(`Failed to hydrate blob ${toHex(blobId)} for tool Read`)
-      hydratedBlobs.set(toHex(blobId), blob)
-    }
-    if (result === undefined) return createStringResult("Unknown error", true)
-    if (result.case === "error") return createStringResult(`Error: ${result.value.errorMessage}`, true)
-    if (result.case !== "success") return createStringResult("Unknown error", true)
-    const success = result.value
-    if (success.isEmpty) return createStringResult("File is empty.")
-    if (success.exceededLimit) {
-      return createStringResult(
-        `File content (${success.fileSize} characters) exceeds maximum allowed characters (${READ_CHAR_HARD_LIMIT} characters).\nPlease use offset and limit parameters to read specific portions of the file, or use the 'grep' tool to search for specific content.`,
-      )
-    }
-    const output = success.output
-    if (output.case === "data" || output.case === "dataBlobId") {
-      const bytes = output.case === "data" ? output.value : hydratedBlobs.get(toHex(output.value))
-      if (bytes === undefined) {
-        throw new Error(`Image blob not hydrated for render: ${toHex(output.value)} (path: ${success.path})`)
-      }
-      const mimeType = detectImageMimeType(bytes, success.path)
-      if (mimeType === undefined) return createStringResult(`Read binary file: ${success.path}`)
-      return createImageResult(Buffer.from(bytes).toString("base64"), mimeType, `Read image file: ${success.path}`)
-    }
-    if (output.case !== "content" && output.case !== "contentBlobId") {
-      return createStringResult("Unknown error: no output case", true)
-    }
-    const rawContent = output.case === "content"
-      ? output.value
-      : utf8Serde.deserialize(hydratedBlobs.get(toHex(output.value)) ?? new Uint8Array())
-    if (isJupyterNotebook(success.path)) {
-      return createStringResult(mergeReminders(formatNotebookForLLM(rawContent), [], relatedSkillsBySuccess.get(success) ?? []))
-    }
-    const includeLineNumbers = success.includeLineNumbers ?? formattingOptions.enableLineNumbers ?? false
-    const sparseLineNumbers = sparse ? READ_LINE_NUMBER_INTERVAL : formattingOptions.sparseLineNumbers
-    const finalFormattingOptions = {
-      ...formattingOptions,
-      enableLineNumbers: includeLineNumbers,
-      ...(sparseLineNumbers === undefined ? {} : { sparseLineNumbers }),
-    }
-    const formatted = formatCodeBlock({
-      content: rawContent,
-      filePath: success.path,
-      startLineNumber: success.readRange?.startLine ?? 1,
-      totalLineNumbersInFile: success.totalLines,
-      formattingOptions: finalFormattingOptions,
-    }, {
-      addAmountOfOmittedLines: success.readRange !== undefined &&
-        (success.readRange.startLine > 1 || success.readRange.endLine < success.totalLines),
-    })
-    return createStringResult(mergeReminders(formatted, success.relatedCursorRules, relatedSkillsBySuccess.get(success) ?? []))
-  }
+  const render = async (context: Context, wireValue: unknown, props: ReadRenderProps = {}): Promise<unknown> =>
+    await renderer.render(context, fromInteropReadToolResult(wireValue), props)
 
   return createZodAgentTool(options.toolIdentifier ?? "READ", {
     name,
     descriptionGenerator: () => description,
     parameters: schema,
-    execute: withSafeParsedArgs(schema, execute as never, createReadToolCall(new ReadToolCall())),
+    execute: withSafeParsedArgs(schema, async (context, rawHandler, rawArgs, rawMeta) => {
+      const result = await execute(
+        context,
+        createReadConversationPort(rawHandler),
+        rawArgs as ReadArgsLike,
+        rawMeta as ReadMetadata,
+      )
+      return toInteropReadToolResult(result)
+    }, toInteropReadToolCall({})),
     render,
-    serializeError: (error: unknown) => createReadToolCall(new ReadToolCall({
-      result: new ReadToolResult({
-        result: {
-          case: "error",
-          value: new ReadToolError({ errorMessage: error instanceof Error ? error.message : String(error) }),
-        },
-      }),
-    })),
+    serializeError: (error: unknown) => toInteropReadToolErrorCall(error instanceof Error ? error.message : String(error)),
   } as never)
-}
-
-/** The call the result belongs to, which is what the conversation records it under. */
-function withReadResult(baseToolCall: ReadToolCall, result: ReadToolResult): ToolCall {
-  return createReadToolCall(new ReadToolCall({ ...baseToolCall, result }))
 }

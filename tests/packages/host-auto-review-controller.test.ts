@@ -160,6 +160,17 @@ describe("how a card is decided", () => {
 });
 
 describe("the ways a card ends without a decision", () => {
+  it("settles the approval even when a lifecycle observer throws", async () => {
+    const { instance } = controller();
+    const stop = instance.subscribe(() => {
+      throw new Error("observer failed")
+    })
+    const decision = instance.requestApproval(request())
+    assert.equal(instance.resolveApproval("approval-1", "approved")?.status, "approved")
+    assert.deepEqual(await decision, { approved: true })
+    stop()
+  })
+
   it("expires on its own lifetime, and the asker is told it was not answered", async () => {
     const { instance, events } = controller({ approvalTtlMs: 5 });
     const decision = instance.requestApproval(request());

@@ -36,17 +36,19 @@ import { RedactedUpdates } from "../agent-core/redacted-interaction-updates.ts"
 import { Updates } from "../agent-core/interaction-updates.ts"
 import { hookExecutorResource } from "../agent-exec/hook-executor.ts"
 import { createLogger, createSpan, type Context } from "../context/index.ts"
-import { isProjectSendMessageEnabled } from "../constants/project-send-message.ts"
+import { canRootConversationSendToProject } from "../constants/project-send-message.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import {
-  AgentMode,
-  PreCompactRequestQuery,
-} from "../proto/generated/agent/v1/agent_pb.ts"
-import {
-  ExecuteHookArgs,
-  ExecuteHookRequest,
-  type ExecuteHookResult,
-} from "../proto/generated/agent/v1/exec_pb.ts"
+  createPreCompactHookArgsInterop,
+  createSummaryArchiveInterop,
+  createSummaryCompletedUpdateInterop,
+  preCompactHookUserMessageInterop,
+} from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
+import type {
+  SummarizationHookArgsInterop,
+  SummarizationHookResultInterop,
+  SummaryArchiveInterop,
+} from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
 import {
   fromRedactedCoreMessage,
@@ -56,14 +58,19 @@ import {
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { RedactedString } from "../redaction/redacted-values.ts"
 import {
-  createRedactedConversationSummaryArchive,
-  toRedactedInteractionUpdate,
-} from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
-import {
   coreMessageSerde,
   createRedactedCoreMessageSerde,
 } from "./serde.ts"
-import { processModeSystemReminder, type ModeProcessingConfig, type ModeProcessingRequestContext } from "./mode-processing.ts"
+import {
+  SlateMode,
+  type ModeProcessingConfig,
+  type ModeProcessingRequestContext,
+  type SlateMode as SlateModeValue,
+} from "./mode-processing.ts"
+import {
+  processModeSystemReminderWithInteropConfig,
+  type InteropModeProcessingConfig,
+} from "../../adapters/interop/agent/mode-processing-adapter.ts"
 import { formatProjectCompactionPrompt } from "./prompts/project-prompts.ts"
 import { refreshNamedAgentSelfDocumentInMessages } from "./prompts/cloud-meta-agent/self-document.ts"
 import { SELF_SUMMARY_CONTEXT_WINDOW_FRACTION } from "./self-summary/constants.ts"
@@ -71,6 +78,8 @@ import { shouldPerformSelfSummary } from "./self-summary/self-summary.ts"
 import { estimateTokenCount } from "./self-summary/token-estimate.ts"
 import { collectLiveAskQuestionOriginalIds } from "./tools/core/ask-question/replay-horizon.ts"
 import { formatTodosForSummarization } from "./tools/core/todo/common.ts"
+import { readStoredTodos } from "../../adapters/interop/agent/todo-schema-adapter.ts"
+import type { StoredTodoReference } from "../../adapters/interop/agent/todo-schema-adapter.ts"
 import { AgentType } from "./utils/agent-config.ts"
 import { getContextUsageInfo, isHookStepConfigured } from "./utils/common-helpers.ts"
 import { getAgentEventTracker } from "./utils/event-tracking.ts"
@@ -78,17 +87,16 @@ import {
   EVAL_ENFORCED_MAX_TOKENS_BEFORE_SUMMARIZATION,
   EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT,
 } from "./utils/config-overrides.ts"
-import { resolveProjectConversationContext } from "./utils/project-conversation.ts"
+import { resolveSlateProjectConversationContextFromInterop } from "../../adapters/interop/agent/project-conversation-adapter.ts"
 import {
   getClientVersionMetricTagsFromContext,
   getConversationId,
   getRequestId,
 } from "./utils/request-scope.ts"
 
-type ProjectConversationState = Parameters<typeof resolveProjectConversationContext>[1]
+type ProjectConversationState = Parameters<typeof resolveSlateProjectConversationContextFromInterop>[1]
 type ProjectRootPromptOptions = NonNullable<Parameters<typeof formatProjectCompactionPrompt>[0]>
-type RedactedTodoItem = Parameters<typeof formatTodosForSummarization>[0][number]
-type SummaryArchive = ReturnType<typeof createRedactedConversationSummaryArchive>
+type SummaryArchive = SummaryArchiveInterop
 type SummaryCompletedHookMessage = Parameters<typeof Updates.summaryCompleted>[0]
 
 export interface SummarizationTokenDetails {
@@ -143,9 +151,9 @@ export interface BackgroundSummarizationPromiseInfo {
 }
 
 export interface SummarizationStateHandler extends ProjectConversationState {
-  mode?: AgentMode | undefined
+  mode?: SlateModeValue | undefined
   isRootProjectConversation?: boolean
-  readonly todos: readonly { get(ctx: Context): Promise<RedactedTodoItem> }[]
+  readonly todos: readonly StoredTodoReference[]
   readonly tokenDetails: SummarizationTokenDetails
   readonly summaryArchives: readonly unknown[]
   readonly selfSummaryCount: number
@@ -183,7 +191,7 @@ export interface SummarizationInteractionListener {
 
 export interface SummarizationResourceAccessor {
   get(resource: typeof hookExecutorResource): {
-    execute(ctx: Context, args: InstanceType<typeof ExecuteHookArgs>): Promise<ExecuteHookResult>
+    execute(ctx: Context, args: SummarizationHookArgsInterop): Promise<SummarizationHookResultInterop>
   } | undefined
 }
 
@@ -192,7 +200,7 @@ export interface SummarizationRequestContext extends ModeProcessingRequestContex
   readonly hooksConfig?: { readonly configuredSteps?: readonly string[] | undefined } | undefined
 }
 
-export interface SummarizationOrchestratorConfig extends ModeProcessingConfig {
+export interface SummarizationOrchestratorConfig extends InteropModeProcessingConfig {
   readonly onExternalSummarizationStart?: (() => void) | undefined
   readonly projectPromptTextGenerator?: (() => ProjectRootPromptOptions["promptText"]) | undefined
   readonly featureFlags?: (ModeProcessingConfig["featureFlags"] & {
@@ -421,10 +429,10 @@ export class SummarizationOrchestrator {
   ): Promise<RedactedString | undefined> {
     using spanContext = createSpan(outerCtx.withName("handleSummarization"))
     const ctx = spanContext.ctx
-    const { lastMode, isRootProject } = await resolveProjectConversationContext(ctx, agentState)
+    const { lastMode, isRootProject } = await resolveSlateProjectConversationContextFromInterop(ctx, agentState)
     if (isRootProject) agentState.isRootProjectConversation = true
-    const modeSystemPrompt = processModeSystemReminder(
-      lastMode ?? agentState.mode ?? AgentMode.AGENT,
+    const modeSystemPrompt = processModeSystemReminderWithInteropConfig(
+      lastMode ?? agentState.mode ?? SlateMode.AGENT,
       config,
       requestSettings,
       undefined,
@@ -435,7 +443,7 @@ export class SummarizationOrchestrator {
     const rootProjectPrompt = agentState.isRootProjectConversation
       ? `<system_reminder>\n${formatProjectCompactionPrompt({
           promptText: config.projectPromptTextGenerator?.()!,
-          sendMessageEnabled: isProjectSendMessageEnabled(agentState),
+          sendMessageEnabled: canRootConversationSendToProject(agentState),
           coordinatorToolsEnabled: config.featureFlags?.cloudCoordinatorToolsEnabled === true,
         })}\n</system_reminder>`
       : undefined
@@ -552,7 +560,7 @@ export class SummarizationOrchestrator {
             },
           })
           backgroundSummarizationStarted.increment(ctx, 1, { model: modelLabel })
-          const todoEntries = await Promise.all(agentState.todos.map(todoRef => todoRef.get(ctx)))
+          const todoEntries = await readStoredTodos(ctx, agentState.todos)
           const todoText = formatTodosForSummarization(todoEntries)
           // The transcript pointer is only worth carrying when the folder is known and this is not a
           // background agent, whose conversation nobody is reading.
@@ -678,34 +686,25 @@ export class SummarizationOrchestrator {
         const hookContext = hookSpan.ctx
         const hookExecutorInstance = settings.resourceAccessor.get(hookExecutorResource)
         if (hookExecutorInstance) {
-          const hookRequest = new ExecuteHookArgs({
-            request: new ExecuteHookRequest({
-              request: {
-                case: "preCompact",
-                value: new PreCompactRequestQuery({
-                  trigger: hookMode,
-                  contextUsagePercent,
-                  contextTokens: BigInt(contextTokens),
-                  contextWindowSize: BigInt(contextWindowSize),
-                  messageCount: conversationMessages.length,
-                  messagesToCompact: summarizationInput.length,
-                  isFirstCompaction,
-                  conversationId: getConversationId(ctx)!,
-                  generationId: getRequestId(ctx)!,
-                  model: modelLabel,
-                }),
-              },
-            }),
+          const hookRequest = createPreCompactHookArgsInterop({
+            trigger: hookMode,
+            contextUsagePercent,
+            contextTokens,
+            contextWindowSize,
+            messageCount: conversationMessages.length,
+            messagesToCompact: summarizationInput.length,
+            isFirstCompaction,
+            conversationId: getConversationId(ctx)!,
+            generationId: getRequestId(ctx)!,
+            model: modelLabel,
           })
           const summarizationOutcome = await hookExecutorInstance.execute(hookContext, hookRequest)
-          if (summarizationOutcome.response?.response.case === "preCompact") {
-            const userMessage = summarizationOutcome.response.response.value.userMessage
-            if (userMessage) {
-              lifecycleHookMessage = userMessage
-              logger.info(hookContext, "[summarization] preCompact hook message", {
-                summarization: { userMessage: lifecycleHookMessage },
-              })
-            }
+          const userMessage = preCompactHookUserMessageInterop(summarizationOutcome)
+          if (userMessage) {
+            lifecycleHookMessage = userMessage
+            logger.info(hookContext, "[summarization] preCompact hook message", {
+              summarization: { userMessage: lifecycleHookMessage },
+            })
           }
         }
       } catch (error) {
@@ -788,15 +787,13 @@ export class SummarizationOrchestrator {
       const carrierBytes = messageSerde.serialize(newSummaryMessage)
       const carrierBlobId = await getBlobId(carrierBytes)
       await agentState.getBlobStore().setBlob(ctx, carrierBlobId, carrierBytes)
-      agentState.pushSummaryArchive(createRedactedConversationSummaryArchive(
-        agentState.getPrivacyMode(),
-        {
-          summarizedMessages: archiveBlobIds,
-          summary: summary.summary,
-          summaryMessage: carrierBlobId,
-          windowTail: Math.max(0, windowTailDelta),
-        },
-      ))
+      agentState.pushSummaryArchive(createSummaryArchiveInterop({
+        privacyMode: agentState.getPrivacyMode(),
+        summarizedMessages: archiveBlobIds,
+        summary: summary.summary,
+        summaryMessage: carrierBlobId,
+        windowTail: Math.max(0, windowTailDelta),
+      }))
       const generationDurationMsBeforeClear =
         agentState.backgroundSummarizationGenerationDurationMs
       agentState.clearBackgroundSummarizationState()
@@ -956,7 +953,7 @@ export class SummarizationOrchestrator {
       // must not be left waiting.
       await updateListener.sendUpdate(
         ctx,
-        toRedactedInteractionUpdate(
+        createSummaryCompletedUpdateInterop(
           Updates.summaryCompleted(lifecycleHookMessage as SummaryCompletedHookMessage),
           PrivacyMode.UNSPECIFIED,
         ),

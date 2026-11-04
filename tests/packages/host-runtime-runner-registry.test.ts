@@ -24,17 +24,7 @@ function recordingRunner() {
     named: (name: string) => calls.filter((call) => call.name === name),
     set: (name: string, ...args: unknown[]) => record(name, ...args),
     handler: (name: string) => handlers.get(name),
-    setAgentStore: (store: unknown, provider: unknown) => record("setAgentStore", store, provider),
-    setMemoryStore: (store: unknown) => record("setMemoryStore", store),
-    setMemorySnapshotStore: (store: unknown) => record("setMemorySnapshotStore", store),
-    setProfilePromptSnapshotStore: (store: unknown) => record("setProfilePromptSnapshotStore", store),
-    setEpisodeProgress: (store: unknown) => record("setEpisodeProgress", store),
-    setAutomationStore: (store: unknown) => record("setAutomationStore", store),
-    setWorkflowStore: (store: unknown) => record("setWorkflowStore", store),
-    setChannelStore: (store: unknown) => record("setChannelStore", store),
-    setAttachmentIngestor: (ingest: unknown) => record("setAttachmentIngestor", ingest),
-    setImagePersister: (persist: unknown) => record("setImagePersister", persist),
-    setMediaBytesPersister: (persist: unknown) => record("setMediaBytesPersister", persist),
+    bindSessionServices: (bindings: unknown) => record("bindSessionServices", bindings),
     setAgentIdProvider: (provider: () => string) => record("setAgentIdProvider", provider),
     requestQuiesceForUpgrade: () => record("requestQuiesceForUpgrade"),
     interrupt: (reason: string) => {
@@ -178,17 +168,17 @@ describe("attaching a runner", () => {
     const factory = world1.named("attachRunnerFactory")[0]?.args[0] as (session: unknown, hooks: Record<string, unknown>) => unknown;
     const hooks = { agentProfileProvider: () => ({ name: "profile" }), ingestAttachment: "ingest", persistImage: "image", persistMediaBytes: "media" };
     assert.equal(factory(world1.session, hooks), attached);
-    assert.deepEqual(attached.named("setAgentStore")[0]?.args, [world1.session.agentStore, hooks.agentProfileProvider]);
-    assert.deepEqual(attached.named("setMemoryStore")[0]?.args, [world1.session.memory]);
-    assert.deepEqual(attached.named("setMemorySnapshotStore")[0]?.args, [world1.session.db]);
-    assert.deepEqual(attached.named("setProfilePromptSnapshotStore")[0]?.args, [world1.session.db]);
-    assert.deepEqual(attached.named("setEpisodeProgress")[0]?.args, [world1.session.db]);
-    assert.deepEqual(attached.named("setAutomationStore")[0]?.args, [world1.session.automations]);
-    assert.deepEqual(attached.named("setWorkflowStore")[0]?.args, [world1.session.workflows]);
-    assert.deepEqual(attached.named("setChannelStore")[0]?.args, [world1.session.channels]);
-    assert.deepEqual(attached.named("setAttachmentIngestor")[0]?.args, ["ingest"]);
-    assert.deepEqual(attached.named("setImagePersister")[0]?.args, ["image"]);
-    assert.deepEqual(attached.named("setMediaBytesPersister")[0]?.args, ["media"]);
+    assert.deepEqual(attached.named("bindSessionServices")[0]?.args, [{
+      agentState: { store: world1.session.agentStore, profileProvider: hooks.agentProfileProvider },
+      memory: {
+        primary: world1.session.memory,
+        snapshots: world1.session.db,
+        profileSnapshots: world1.session.db,
+        episodeProgress: world1.session.db,
+      },
+      automation: { automations: world1.session.automations, workflows: world1.session.workflows, channels: world1.session.channels },
+      attachments: { ingestor: "ingest", imagePersister: "image", mediaPersister: "media" },
+    }]);
     const idProvider = attached.named("setAgentIdProvider")[0]?.args[0] as () => string;
     assert.equal(idProvider(), "agent-1");
   });

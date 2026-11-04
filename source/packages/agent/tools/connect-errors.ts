@@ -11,7 +11,11 @@
 
 import { Code, ConnectError } from "@connectrpc/connect"
 
-import { ErrorDetails, ErrorDetails_Error } from "../../proto/generated/aiserver/v1/utils_pb.ts"
+import {
+  createInteropExtensionHostTimeoutError,
+  hasInteropExtensionHostTimeoutMarker,
+  readInteropErrorDetailTexts,
+} from "../../../adapters/interop/agent/agent-error-details-adapter.ts"
 import {
   CustomToolCallError,
   RetryableToolEnvironmentOrchestrationError,
@@ -94,17 +98,11 @@ export function maybeNormalizeExecBoundaryError(failure: unknown): unknown {
 /** A stream that never started is worth a distinct, non-retryable turn error: reload, do not retry. */
 export function maybeCreateAgentStreamStartTimeoutTurnError(failure: unknown): ConnectError | undefined {
   if (!isAgentStreamStartTimeoutError(failure)) return undefined
-  return new ConnectError(AGENT_STREAM_START_TIMEOUT_TITLE, Code.DeadlineExceeded, undefined, [
-    new ErrorDetails({
-      error: ErrorDetails_Error.EXTENSION_HOST_TIMEOUT,
-      details: {
-        title: AGENT_STREAM_START_TIMEOUT_TITLE,
-        detail: AGENT_STREAM_START_TIMEOUT_DETAIL,
-        isRetryable: false,
-        shouldShowImmediateError: true,
-      },
-    }),
-  ], failure instanceof Error ? failure : undefined)
+  return createInteropExtensionHostTimeoutError({
+    title: AGENT_STREAM_START_TIMEOUT_TITLE,
+    detail: AGENT_STREAM_START_TIMEOUT_DETAIL,
+    cause: failure instanceof Error ? failure : undefined,
+  })
 }
 
 function isPodMissingBoundaryError(failure: unknown): boolean {
@@ -142,16 +140,12 @@ export function isAgentStreamStartTimeoutError(failure: unknown): boolean {
 export function isAgentStreamStartTimeoutRecoveryTurnError(failure: unknown): boolean {
   if (isAgentStreamStartTimeoutError(failure)) return true
   if (!(failure instanceof ConnectError) || failure.code !== Code.DeadlineExceeded) return false
-  return findDetailsOf(failure).some(errorDetail =>
-    errorDetail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT && errorDetail.details?.title === AGENT_STREAM_START_TIMEOUT_TITLE)
-}
-
-function findDetailsOf(failure: ConnectError): ErrorDetails[] {
-  return failure.findDetails(ErrorDetails) as ErrorDetails[]
+  return hasInteropExtensionHostTimeoutMarker(failure) &&
+    readInteropErrorDetailTexts(failure).some(errorDetail => errorDetail.title === AGENT_STREAM_START_TIMEOUT_TITLE)
 }
 
 function isExtensionHostTimeoutError(failure: unknown): boolean {
-  return failure instanceof ConnectError && findDetailsOf(failure).some(errorDetail => errorDetail.error === ErrorDetails_Error.EXTENSION_HOST_TIMEOUT)
+  return failure instanceof ConnectError && hasInteropExtensionHostTimeoutMarker(failure)
 }
 
 function isLegacyStreamStartTimeoutError(failure: unknown): boolean {
@@ -190,9 +184,9 @@ function errorTextsOf(failure: unknown): string[] {
     }
     if (currentError instanceof ConnectError) {
       if (typeof currentError.rawMessage === "string") errorTexts.push(currentError.rawMessage)
-      for (const errorDetail of findDetailsOf(currentError)) {
-        if (typeof errorDetail.details?.title === "string") errorTexts.push(errorDetail.details.title)
-        if (typeof errorDetail.details?.detail === "string") errorTexts.push(errorDetail.details.detail)
+      for (const detail of readInteropErrorDetailTexts(currentError)) {
+        if (typeof detail.title === "string") errorTexts.push(detail.title)
+        if (typeof detail.detail === "string") errorTexts.push(detail.detail)
       }
     }
   }

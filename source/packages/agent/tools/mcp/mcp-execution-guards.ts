@@ -1,17 +1,4 @@
-/**
- * What has to be true before an MCP tool is called.
- *
- * Two questions are asked first. Does the tool exist — because a call to a server or a tool the session
- * does not have is a failure the model should be told about in the terms it can act on, and the two cases
- * read differently: a missing server is answered by listing what is there, a missing tool by the same list
- * narrowed to its tools. And has the model read the tool's definition — because an MCP tool's arguments
- * are only described in that file, so calling one without reading it is guessing, and the answer says
- * which file was not read rather than that the call was wrong.
- *
- * Both checks are answered from the session's descriptors and from the paths already read this turn, and
- * a session that has no descriptors to check against, or a server whose tools are described elsewhere, is
- * allowed through: the check exists to catch a skipped read, not to invent a requirement.
- */
+/** Validates MCP calls against the descriptors and read-path history held by a session. */
 
 import type { RedactedString } from "../../../redaction/redacted-values.ts"
 import { safeString } from "../../../redaction/create.ts"
@@ -31,7 +18,17 @@ export interface McpReadPathStateHandler {
   hasReadPath(path: RedactedString): boolean
 }
 
-/** A call to a server or tool this session does not have is refused with what it does have. */
+function readOkay(): McpToolDefinitionReadCheck {
+  return { kind: "read" }
+}
+
+function discoveryHint(toolName: string, dynamicNamespaces: boolean, includeTools: boolean): string {
+  const where = dynamicNamespaces ? "namespaces" : "servers"
+  const suffix = includeTools ? " and their tools" : ""
+  return `Use ${toolName} to discover available ${where}${suffix}.`
+}
+
+/** Refuses a missing server or tool with the discovery route this session exposes. */
 export function assertMcpToolIsCallable(
   session: McpDescriptorIndex,
   serverIdentifier: string,
@@ -39,20 +36,32 @@ export function assertMcpToolIsCallable(
   getMcpToolsToolName: string,
   useDynamicToolNamespaces: boolean,
 ): void {
-  const descriptor = session.serverDescriptors.get(serverIdentifier)
-  if (descriptor === undefined) {
+  const server = session.serverDescriptors.get(serverIdentifier)
+  if (server === undefined) {
     throw new McpServerDoesNotExistError(
       serverIdentifier,
-      `Use ${getMcpToolsToolName} to discover available ${useDynamicToolNamespaces ? "namespaces" : "servers"}.`,
+      discoveryHint(getMcpToolsToolName, useDynamicToolNamespaces, false),
     )
   }
-  if (!descriptor.tools.some(tool => tool.toolName === toolName)) {
-    throw new McpExecToolNotFoundError(
-      `Tool ${toolName} was not found. Use ${getMcpToolsToolName} to discover available ${useDynamicToolNamespaces ? "namespaces" : "servers"} and their tools.`,
-    )
-  }
+
+  const matchingTool = server.tools.find(tool => tool.toolName === toolName)
+  if (matchingTool !== undefined) return
+
+  const hint = discoveryHint(getMcpToolsToolName, useDynamicToolNamespaces, true)
+  throw new McpExecToolNotFoundError(`Tool ${toolName} was not found. ${hint}`)
 }
 
+function missingServerResult(
+  session: McpDescriptorIndex,
+  mcpMetaToolEnabled: boolean,
+  serverIdentifier: string,
+): McpToolDefinitionReadCheck | undefined {
+  if (session.serverDescriptors.has(serverIdentifier)) return undefined
+  if (mcpMetaToolEnabled && session.serverDescriptors.size === 0) return readOkay()
+  return { kind: "noServer", serverIdentifier }
+}
+
+/** Returns why the definition is usable, missing, or not yet read in this turn. */
 export function checkToolDefinitionRead(
   session: McpDescriptorIndex,
   mcpMetaToolEnabled: boolean,
@@ -60,26 +69,23 @@ export function checkToolDefinitionRead(
   toolName: string,
   stateHandler: McpReadPathStateHandler | undefined,
 ): McpToolDefinitionReadCheck {
-  // A session that does not track what has been read cannot be held to having read anything.
-  if (stateHandler === undefined) return { kind: "read" }
+  if (stateHandler === undefined) return readOkay()
 
-  const serverDescriptor = session.serverDescriptors.get(serverIdentifier)
-  if (serverDescriptor === undefined) {
-    // Under the meta tool an empty list means the descriptors have not arrived yet, not that none exist.
-    if (mcpMetaToolEnabled && session.serverDescriptors.size === 0) return { kind: "read" }
-    return { kind: "noServer", serverIdentifier }
-  }
+  const missingServer = missingServerResult(session, mcpMetaToolEnabled, serverIdentifier)
+  if (missingServer !== undefined) return missingServer
 
+  const server = session.serverDescriptors.get(serverIdentifier)!
   const definitionPath = session.toolDefinitionPaths.get(`${serverIdentifier}:${toolName}`)
   if (definitionPath === undefined) {
-    // The meta tool describes its tools in the prompt rather than in files, so there is nothing to read.
-    if (mcpMetaToolEnabled) return { kind: "read" }
+    if (mcpMetaToolEnabled) return readOkay()
     return {
       kind: "noTool",
       toolName,
-      serverPath: serverDescriptor.folderPath,
+      serverPath: server.folderPath,
     }
   }
-  if (stateHandler.hasReadPath(safeString(definitionPath))) return { kind: "read" }
-  return { kind: "unread", unreadPath: definitionPath }
+
+  return stateHandler.hasReadPath(safeString(definitionPath))
+    ? readOkay()
+    : { kind: "unread", unreadPath: definitionPath }
 }

@@ -22,7 +22,6 @@ import {
   buildCopyInWatchdogEvent,
   classifyCopyInFailure,
   classifyCopyInMeteredOutcome,
-  empty,
   isTransientCopyInFailure,
   makeCopyInStatusWriter,
   outcomeToExitCode,
@@ -35,8 +34,9 @@ import {
   BOX_COPY_IN_EXIT_NOOP,
   COPY_IN_HYDRATE_ATTEMPTS,
   COPY_IN_STUCK_THRESHOLD_MS,
-  type CopyInResult,
-} from "../../source/host/boxes/box-store-sync/box-copy-in.ts";
+} from "../../source/host/boxes/box-store-sync/copy-in-reporting.ts";
+import { empty } from "../../source/host/boxes/box-store-sync/box-copy-in.ts";
+import type { CopyInResult } from "../../source/host/boxes/box-store-sync/copy-in-contracts.ts";
 
 
 
@@ -493,42 +493,42 @@ describe("capturing agent databases", () => {
 });
 
 describe("what a copy-in says", () => {
-  const result = (overrides: Partial<CopyInResult> = {}): CopyInResult => ({ outcome: "failed", reason: "boom", manifestEntries: 3, storeDbEntries: 1, files: 1, bytes: 10, verified: 1, failures: ["boom"], ...overrides });
+  const result = (overrides: Partial<CopyInResult> = {}): CopyInResult => ({ outcome: "failed", message: "boom", indexedEntries: 3, storeDatabases: 1, restoredFiles: 1, restoredBytes: 10, verifiedFiles: 1, issues: ["boom"], ...overrides });
 
   it("maps an outcome to an exit code, and to what a dashboard counts", () => {
     assert.deepEqual([outcomeToExitCode("hydrated"), outcomeToExitCode("noop"), outcomeToExitCode("failed")], [BOX_COPY_IN_EXIT_HYDRATED, BOX_COPY_IN_EXIT_NOOP, BOX_COPY_IN_EXIT_FAILED]);
-    assert.equal(classifyCopyInMeteredOutcome(result({ outcome: "hydrated", reason: "ok" })), "hydrated");
-    assert.equal(classifyCopyInMeteredOutcome(result({ outcome: "noop", reason: "empty" })), "empty");
-    assert.equal(classifyCopyInMeteredOutcome(result({ reason: "partial hydrate (1/3 files, 2 failures)" })), "partial");
+    assert.equal(classifyCopyInMeteredOutcome(result({ outcome: "hydrated", message: "ok" })), "hydrated");
+    assert.equal(classifyCopyInMeteredOutcome(result({ outcome: "noop", message: "empty" })), "empty");
+    assert.equal(classifyCopyInMeteredOutcome(result({ message: "partial hydrate (1/3 files, 2 failures)" })), "partial");
     assert.equal(classifyCopyInMeteredOutcome(result()), "failed");
   });
 
   it("classifies a failure by what the first error says, and decides whether a retry makes sense", () => {
-    assert.equal(classifyCopyInFailure(result({ failures: ["HTTP 401 unauthorized"] })), "auth");
-    assert.equal(classifyCopyInFailure(result({ failures: ["no inference credential for copy-in"] })), "no-credential");
-    assert.equal(classifyCopyInFailure(result({ failures: ["request timed out"] })), "timeout");
-    assert.equal(classifyCopyInFailure(result({ failures: ["ENOTFOUND object.invalid"] })), "network");
-    assert.equal(classifyCopyInFailure(result({ failures: ["NoSuchKey on the bucket"] })), "s3");
-    assert.equal(classifyCopyInFailure(result({ failures: ["something else"] })), "unknown");
-    assert.equal(classifyCopyInFailure(result({ reason: "lock-held", failures: [] })), "lock-held");
-    assert.equal(classifyCopyInFailure(result({ outcome: "hydrated", reason: "ok" })), "");
-    assert.equal(isTransientCopyInFailure(result({ failures: ["request timed out"] })), true);
-    assert.equal(isTransientCopyInFailure(result({ failures: ["HTTP 401 unauthorized"] })), false);
-    assert.equal(isTransientCopyInFailure(result({ reason: "partial hydrate (1/3 files, 2 failures)" })), true);
-    assert.equal(isTransientCopyInFailure(result({ outcome: "hydrated", reason: "ok" })), false);
+    assert.equal(classifyCopyInFailure(result({ issues: ["HTTP 401 unauthorized"] })), "auth");
+    assert.equal(classifyCopyInFailure(result({ issues: ["no inference credential for copy-in"] })), "no-credential");
+    assert.equal(classifyCopyInFailure(result({ issues: ["request timed out"] })), "timeout");
+    assert.equal(classifyCopyInFailure(result({ issues: ["ENOTFOUND object.invalid"] })), "network");
+    assert.equal(classifyCopyInFailure(result({ issues: ["NoSuchKey on the bucket"] })), "s3");
+    assert.equal(classifyCopyInFailure(result({ issues: ["something else"] })), "unknown");
+    assert.equal(classifyCopyInFailure(result({ message: "lock-held", issues: [] })), "lock-held");
+    assert.equal(classifyCopyInFailure(result({ outcome: "hydrated", message: "ok" })), "");
+    assert.equal(isTransientCopyInFailure(result({ issues: ["request timed out"] })), true);
+    assert.equal(isTransientCopyInFailure(result({ issues: ["HTTP 401 unauthorized"] })), false);
+    assert.equal(isTransientCopyInFailure(result({ message: "partial hydrate (1/3 files, 2 failures)" })), true);
+    assert.equal(isTransientCopyInFailure(result({ outcome: "hydrated", message: "ok" })), false);
   });
 
   it("buckets a reason, redacts an error, and builds the status the desktop reads", () => {
-    assert.equal(bucketCopyInReason(result({ outcome: "hydrated", reason: "ok" })), "hydrated");
-    assert.equal(bucketCopyInReason(result({ outcome: "noop", reason: "the store is empty" })), "noop");
-    assert.equal(bucketCopyInReason(result({ reason: "partial hydrate (1/3 files)" })), "partial-hydrate");
-    assert.equal(bucketCopyInReason(result({ reason: "store manifest unreadable: x" })), "manifest-unreadable");
-    assert.equal(bucketCopyInReason(result({ reason: "the download threw: x" })), "download-error");
+    assert.equal(bucketCopyInReason(result({ outcome: "hydrated", message: "ok" })), "hydrated");
+    assert.equal(bucketCopyInReason(result({ outcome: "noop", message: "the store is empty" })), "noop");
+    assert.equal(bucketCopyInReason(result({ message: "partial hydrate (1/3 files)" })), "partial-hydrate");
+    assert.equal(bucketCopyInReason(result({ message: "store manifest unreadable: x" })), "manifest-unreadable");
+    assert.equal(bucketCopyInReason(result({ message: "the download threw: x" })), "download-error");
     const redacted = redactCopyInErrorForTelemetry("failed at https://object.invalid/a/b for account abcdefghijklmnopqrstuvwxyz123456 in /home/box/secret.txt");
     assert.equal(redacted.includes("https://"), false);
     assert.equal(redacted.includes("abcdefghijklmnopqrstuvwxyz123456"), false);
     assert.equal(redacted.length <= 200, true);
-    const status = buildCopyInStatusFromResult(result({ outcome: "hydrated", reason: "ok", failures: [] }));
+    const status = buildCopyInStatusFromResult(result({ outcome: "hydrated", message: "ok", issues: [] }));
     assert.deepEqual([status.phase, status.outcome, status.restored, status.total], ["done", "hydrated", 1, 3]);
     assert.equal(buildCopyInStatusFromResult(result()).phase, "failed");
     assert.equal(empty("nothing").outcome, "noop");

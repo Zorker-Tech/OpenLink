@@ -22,7 +22,6 @@
  */
 
 import { jsonSchema } from "ai"
-import { Struct, Value, type JsonValue } from "@bufbuild/protobuf"
 
 import type { Context } from "../../../context/context.ts"
 import type { RedactedString } from "../../../redaction/redacted-values.ts"
@@ -30,22 +29,13 @@ import { createLogger } from "../../../context/logging.ts"
 import { createSpan } from "../../../context/telemetry.ts"
 import type { ResourceAccessor } from "../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../agent-exec/executor-resources.ts"
-import { mcpExecutorResource } from "../../../agent-exec/mcp-operations.ts"
-import { smartModeClassifierExecutorResource } from "../../../agent-exec/smart-mode-classifier-operation.ts"
-import { McpArgs, McpPermissionDenied, McpRejected } from "../../../proto/generated/agent/v1/mcp_exec_pb.ts"
-import { McpToolCall, McpToolError, McpToolResult } from "../../../proto/generated/agent/v1/mcp_tool_pb.ts"
-import type { McpFileSystemOptions, McpMetaToolOptions } from "../../../proto/generated/agent/v1/mcp_pb.ts"
-import { SmartModeApproval } from "../../../proto/generated/agent/v1/utils_pb.ts"
-import { SmartModeClassifierArgs, SmartModeClassifierDecision, SmartModeRiskTarget, type SmartModeClassifierConversationMessage } from "../../../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
-import type { RequestContext } from "../../../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { AgentType } from "../../utils/agent-config.ts"
 import { getConversationId } from "../../utils/request-scope.ts"
 import { getAgentEventTracker } from "../../utils/event-tracking.ts"
 import { loadSmartModeProjectPermissionsContext } from "../../smart-mode-project-permissions.ts"
-import { tryExtractSmartModeClassifierConversationContext } from "../../smart-mode-classifier-context.ts"
+import { tryExtractSmartModeClassifierConversationContext, type SlateClassifierConversationMessage } from "../../smart-mode-classifier-context.ts"
 import type { ConversationStateHandle } from "../../state.ts"
 import { AgentConversationTurnHandle } from "../../state.ts"
-import { executeSmartModeClassifierWithMeasurement } from "../../utils/smart-mode-classifier-measurement.ts"
 import { delayDevSmartModeClassifierIfRequested, type OneShotState } from "../dev-smart-mode-classifier-block.ts"
 import { withToolExecutionTimeoutSuspended } from "../tool-timeout-suspension.ts"
 import {
@@ -59,31 +49,41 @@ import { ToolCallError, agentToolExecutionMetaKey, convertTupleSchemaToDraft2020
 import { ToolErrorClassification } from "../tool-errors.ts"
 import { type McpInputSchemaLike, mcpInputSchemaToJson } from "../../../agent-exec/mcp-operations.ts"
 import { DynamicToolRegistry } from "./builtin-tools.ts"
+import { buildMcpCallSchemas } from "./mcp-call-options.ts"
 import {
-  buildMcpCallSchemas,
-  indexMcpDescriptors,
-} from "./mcp-call-options.ts"
+  indexInteropMcpDescriptors,
+  mcpMetaToolEnabledInterop,
+  mcpWorkspaceProjectDirInterop,
+  projectMcpFileSystemSettingsInterop,
+} from "../../../../adapters/interop/agent/mcp-descriptor-index-adapter.ts"
 import {
   McpExecToolNotFoundError,
   McpPermissionDeniedError,
   McpServerDoesNotExistError,
-  convertExecSuccessToToolSuccess,
-  createMcpToolCall,
   McpInvalidArgsToolDefinitionReminderError,
   getWrappedMcpErrorClassification,
   isInvalidMcpArgumentsError,
-  renderMcpToolResult,
 } from "./mcp-result-boundary.ts"
+import { convertExecSuccessToToolSuccess, renderMcpToolResultInterop } from "../../../../adapters/interop/agent/mcp-result-adapter.ts"
+import {
+  classifyMcpCallInterop,
+  createMcpFailureToolCallInterop,
+  createMcpToolCallInterop,
+  executeMcpCallInterop,
+  type McpApprovalView,
+  type McpCallRequestView,
+  type McpToolFailureView,
+} from "../../../../adapters/interop/agent/mcp-call-protocol-adapter.ts"
 import { assertMcpToolIsCallable, checkToolDefinitionRead } from "./mcp-execution-guards.ts"
-import type { HookAdditionalContext } from "../../../proto/generated/agent/v1/hook_additional_context_pb.ts"
+import type { HookContextEntry } from "../../../hooks-carriers/hook-additional-context.ts"
 import {
   CALL_MCP_TOOL_FAILURE_REASONS,
   emitCallMcpToolMetrics,
   emitMcpSearchThenCallResult,
 } from "../../utils/mcp-metrics.ts"
 import {
-  computeSmartModeMcpApprovalTargetFingerprint,
-  createSmartModeMcpApprovalRequest,
+  fingerprintMcpApprovalTarget,
+  createMcpApprovalRequest,
 } from "./smart-mode-approval.ts"
 import { smartModeMcpApprovalStoreResource } from "./smart-mode-approval-store.ts"
 
@@ -95,6 +95,7 @@ const AUTO_REVIEW_BLOCKED_SUFFIX = "\n\n<system_reminder>\nAuto-review blocked t
 // The same refusal, addressed to the tool the model actually called.
 const AUTO_REVIEW_DYNAMIC_BLOCKED_SUFFIX = AUTO_REVIEW_BLOCKED_SUFFIX.replace("call_mcp_tool", "CallDynamicTool")
 
+type JsonValue = null | string | number | boolean | JsonValue[] | { readonly [key: string]: JsonValue }
 type JsonObject = { readonly [key: string]: JsonValue }
 
 function jsonValueOf(value: unknown): JsonValue | undefined {
@@ -147,12 +148,12 @@ function schemaJsonOf(rawSchema: unknown, convertTupleSchema: boolean): JsonValu
 interface ToolCallBridge {
   executeToolCall(
     toolCtx: Context,
-    toolCall: ReturnType<typeof createMcpToolCall>,
+    toolCall: unknown,
     callId: string,
-    promiseFn: (toolCtx: Context) => Promise<McpToolResult>,
-    resultMergeFn: (result: McpToolResult) => ReturnType<typeof createMcpToolCall>,
-    hookContextCollector?: readonly HookAdditionalContext[],
-  ): Promise<McpToolResult>
+    promiseFn: (toolCtx: Context) => Promise<unknown>,
+    resultMergeFn: (result: unknown) => unknown,
+    hookContextCollector?: readonly HookContextEntry[],
+  ): Promise<unknown>
   getAbortSignal?(toolCtx: Context): AbortSignal
 }
 
@@ -164,7 +165,7 @@ interface McpCallMeta {
   readonly toolCallId: string
   readonly stateHandler?: ConversationStateWithReads
   readonly workspacePaths?: readonly string[]
-  readonly hookContextCollector?: HookAdditionalContext[]
+  readonly hookContextCollector?: HookContextEntry[]
 }
 
 interface AutoRunRules {
@@ -227,13 +228,13 @@ export interface McpToolDefinitionLike extends McpInputSchemaLike {
 export interface CreateCallMcpToolOptions {
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>
   readonly name?: string | undefined
-  readonly mcpFileSystemOptions?: McpFileSystemOptions | undefined
-  readonly mcpMetaToolOptions?: McpMetaToolOptions | undefined
+  readonly mcpFileSystemOptions?: unknown
+  readonly mcpMetaToolOptions?: unknown
   readonly validateMcpToolDescriptors?: boolean | undefined
   readonly getMcpToolsToolName?: string | undefined
   readonly allowInteractiveMcpAuth?: boolean | undefined
   readonly agentType?: AgentType | undefined
-  readonly requestContext?: Pick<RequestContext, "env"> | undefined
+  readonly requestContext?: unknown
   readonly smartModeClassifierMode?: boolean | undefined
   readonly smartModeClassifierShadowMode?: boolean | undefined
   readonly smartModeApprovalProvider?: McpApprovalProvider | undefined
@@ -241,7 +242,7 @@ export interface CreateCallMcpToolOptions {
   readonly devSmartModeClassifierDelayState?: OneShotState | undefined
   readonly dynamicToolRegistry?: DynamicToolRegistry | undefined
   readonly isMcpToolBlocked?: (input: { readonly serverIdentifier: string; readonly toolName: string }) => boolean
-  readonly extractSmartModeClassifierConversationContext?: (toolCtx: Context, state: ConversationStateHandle) => Promise<SmartModeClassifierConversationMessage[]>
+  readonly extractSmartModeClassifierConversationContext?: (toolCtx: Context, state: ConversationStateHandle) => Promise<SlateClassifierConversationMessage[]>
   readonly userAutoRunInstructions?: AutoRunRules | undefined
   readonly projectAutoRunInstructions?: AutoRunRules | undefined
   readonly suppressSmartModeClassifierTelemetryIds?: boolean | undefined
@@ -255,20 +256,17 @@ function mcpArgumentsOf(
   args: Record<string, unknown>,
   toolCallId: string,
   description?: string,
-): McpArgs {
-  const values: Record<string, Value> = {}
-  for (const [key, value] of Object.entries(args)) {
-    const jsonValue = jsonValueOf(value)
-    if (jsonValue !== undefined) values[key] = Value.fromJson(jsonValue)
-  }
-  return new McpArgs({
-    name: `${serverIdentifier}-${toolName}`,
-    args: values,
-    toolCallId,
-    providerIdentifier: serverName,
-    toolName,
+  approval?: McpApprovalView,
+): McpCallRequestView {
+  return {
     serverIdentifier,
-  })
+    serverName,
+    toolName,
+    arguments: args,
+    toolCallId,
+    ...(description === undefined ? {} : { description }),
+    ...(approval === undefined ? {} : { approval }),
+  }
 }
 
 async function readArgumentObject(argsStream: AsyncIterable<string>): Promise<Record<string, unknown>> {
@@ -314,16 +312,20 @@ function isDiscoverySearchStep(value: unknown): boolean {
   return isJsonObject(args) && args.pattern !== undefined
 }
 
-function serializeMcpFailure(error: unknown): ReturnType<typeof createMcpToolCall> {
+function serializeMcpFailure(error: unknown): unknown {
   if (error instanceof McpPermissionDeniedError) {
-    return createMcpToolCall(new McpToolCall({ result: new McpToolResult({ result: { case: "permissionDenied", value: new McpPermissionDenied({ error: error.error, isReadonly: error.isReadonly }) } }) }))
+    return createMcpFailureToolCallInterop({ kind: "permission-denied", error: error.error, isReadonly: error.isReadonly })
   }
   if (error instanceof ToolCallRejectedError) {
-    return createMcpToolCall(new McpToolCall({ result: new McpToolResult({ result: { case: "rejected", value: new McpRejected({ reason: error.message }) } }) }))
+    return createMcpFailureToolCallInterop({ kind: "rejected", reason: error.message })
   }
   const customError = error instanceof CustomToolCallError ? error : undefined
   const failureText = error instanceof Error ? error.message : String(error)
-  return createMcpToolCall(new McpToolCall({ result: new McpToolResult({ result: { case: "error", value: new McpToolError({ error: customError?.clientVisibleErrorMessage ?? "Tool execution error", readToolDefReminder: customError?.modelVisibleErrorMessage ?? failureText }) } }) }))
+  return createMcpFailureToolCallInterop({
+    kind: "error",
+    error: customError?.clientVisibleErrorMessage ?? "Tool execution error",
+    readToolDefReminder: customError?.modelVisibleErrorMessage ?? failureText,
+  })
 }
 
 /**
@@ -339,7 +341,7 @@ async function reviewMcpCall(
   toolCtx: Context,
   settings: CreateCallMcpToolOptions,
   args: McpReviewArgs,
-): Promise<SmartModeApproval | undefined> {
+): Promise<McpApprovalView | undefined> {
   if (!args.enabled && !args.shadowEnabled) return undefined
   // A developer can force the next call to be blocked, which is how the refusal path is exercised.
   if (settings.devSmartModeClassifierBlockState?.consume() === true && args.enabled) {
@@ -348,47 +350,41 @@ async function reviewMcpCall(
   }
   if (!args.enabled) return undefined
   try {
-    const toolExecutor = settings.resourceAccessor.get(smartModeClassifierExecutorResource)
     const conversationContext = args.stateHandler === undefined
       ? []
       : settings.extractSmartModeClassifierConversationContext !== undefined
         ? await settings.extractSmartModeClassifierConversationContext(toolCtx, args.stateHandler)
         : await tryExtractSmartModeClassifierConversationContext(toolCtx, args.stateHandler)
+    const workspaceProjectDir = mcpWorkspaceProjectDirInterop(settings.mcpFileSystemOptions)
     const projectPermissions = await loadSmartModeProjectPermissionsContext(
       toolCtx,
-      settings.mcpFileSystemOptions?.workspaceProjectDir === undefined ? undefined : [settings.mcpFileSystemOptions.workspaceProjectDir],
+      workspaceProjectDir === undefined ? undefined : [workspaceProjectDir],
       settings.userAutoRunInstructions,
       settings.projectAutoRunInstructions,
     )
-    const target = new SmartModeRiskTarget({
-      action: "mcp",
-      arguments: Struct.fromJson(jsonObjectOf({
+    const parentConversationId = getConversationId(toolCtx)
+    const classification = await classifyMcpCallInterop({
+      ctx: toolCtx,
+      resourceAccessor: settings.resourceAccessor,
+      toolCallId: args.toolCallId,
+      ...(parentConversationId === undefined ? {} : { parentConversationId }),
+      targetArguments: {
         server: { identifier: args.serverIdentifier, name: args.serverName },
         tool_name: args.toolName,
-        mcp_mode: settings.mcpMetaToolOptions?.enabled === true ? "meta_tool" : "file_system",
+        mcp_mode: mcpMetaToolEnabledInterop(settings.mcpMetaToolOptions) ? "meta_tool" : "file_system",
         arguments: args.mcpArguments,
-        tool_definition: args.description === undefined ? undefined : { description: args.description },
+        ...(args.description === undefined ? {} : { tool_definition: { description: args.description } }),
         project_permissions: projectPermissions,
-      })),
+      },
+      conversationContext,
+      ...(workspaceProjectDir === undefined ? {} : { workspacePaths: [workspaceProjectDir] }),
+      ...(settings.smartModeClassifierMaxAttempts === undefined ? {} : { maxAttempts: settings.smartModeClassifierMaxAttempts }),
+      ...(settings.suppressSmartModeClassifierTelemetryIds === undefined ? {} : { suppressToolCallIdLogging: settings.suppressSmartModeClassifierTelemetryIds }),
     })
-    const parentConversationId = getConversationId(toolCtx)
-    const classifierRequest = parentConversationId === undefined
-      ? new SmartModeClassifierArgs({ toolCallId: args.toolCallId, target, conversationContext })
-      : new SmartModeClassifierArgs({ toolCallId: args.toolCallId, parentConversationId, target, conversationContext })
-    const result = await executeSmartModeClassifierWithMeasurement(
-      toolCtx,
-      toolExecutor,
-      classifierRequest,
-      "enforce",
-      settings.mcpFileSystemOptions?.workspaceProjectDir === undefined ? undefined : [settings.mcpFileSystemOptions.workspaceProjectDir],
-      { maxAttempts: settings.smartModeClassifierMaxAttempts, suppressToolCallIdLogging: settings.suppressSmartModeClassifierTelemetryIds },
-    )
     // Anything that is not an allow or a block is not an answer, so the call is refused as unclassified.
-    if (result.result.case !== "success" || result.result.value.decision !== SmartModeClassifierDecision.BLOCK) {
-      if (result.result.case !== "success" || result.result.value.decision !== SmartModeClassifierDecision.ALLOW) throw new ToolCallRejectedError(AUTO_REVIEW_CLASSIFIER_FAILURE_REASON)
-      return undefined
-    }
-    const blockReason = result.result.value.blockReason ?? AUTO_REVIEW_BLOCK_REASON
+    if (classification.kind === "allow") return undefined
+    if (classification.kind !== "block") throw new ToolCallRejectedError(AUTO_REVIEW_CLASSIFIER_FAILURE_REASON)
+    const blockReason = classification.blockReason ?? AUTO_REVIEW_BLOCK_REASON
     return resolveBlockedMcpCall(toolCtx, settings, args, approvalTargetOf(settings, args, blockReason), blockReason)
   } catch (error) {
     // A store that was never configured is a platform bug, not a refusal, so it is raised as it is.
@@ -405,7 +401,7 @@ function approvalTargetOf(settings: CreateCallMcpToolOptions, args: McpReviewArg
     serverIdentifier: args.serverIdentifier,
     serverName: args.serverName,
     toolName: args.toolName,
-    mcpMode: settings.mcpMetaToolOptions?.enabled === true ? "meta_tool" : "file_system",
+    mcpMode: mcpMetaToolEnabledInterop(settings.mcpMetaToolOptions) ? "meta_tool" : "file_system",
     mcpArguments: args.mcpArguments,
     blockReason,
     ...(args.description !== undefined ? { description: args.description } : {}),
@@ -422,15 +418,15 @@ async function resolveBlockedMcpCall(
   args: McpReviewArgs,
   approvalTarget: McpApprovalTarget,
   blockReason: string,
-): Promise<SmartModeApproval | undefined> {
+): Promise<McpApprovalView | undefined> {
   if (settings.smartModeApprovalProvider === undefined && args.requestSmartModeApproval) {
     const parentRefusalReason = args.smartModeBlockReason !== undefined && args.smartModeBlockReason.trim().length > 0
       ? args.smartModeBlockReason.trim()
       : AUTO_REVIEW_PARENT_APPROVAL_FALLBACK
     if (settings.agentType === AgentType.BACKGROUND) throw new ToolCallRejectedError(parentRefusalReason)
     const approvalStore = settings.resourceAccessor.get(smartModeMcpApprovalStoreResource)
-    const storedApproval = await createSmartModeMcpApprovalRequest(toolCtx, approvalStore, { ...approvalTarget, blockReason: parentRefusalReason })
-    return new SmartModeApproval({ requestId: storedApproval.requestId, reason: storedApproval.blockReason })
+    const storedApproval = await createMcpApprovalRequest(toolCtx, approvalStore, { ...approvalTarget, blockReason: parentRefusalReason })
+    return { requestId: storedApproval.requestId, reason: storedApproval.blockReason }
   }
   if (settings.smartModeApprovalProvider === undefined) {
     throw new ToolCallRejectedError(`${blockReason}${settings.dynamicToolRegistry === undefined ? AUTO_REVIEW_BLOCKED_SUFFIX : AUTO_REVIEW_DYNAMIC_BLOCKED_SUFFIX}`)
@@ -439,7 +435,7 @@ async function resolveBlockedMcpCall(
   const approvalOutcome = await withToolExecutionTimeoutSuspended(toolCtx, () => settings.smartModeApprovalProvider!.requestApproval({
     kind: "mcp",
     target: approvalTarget,
-    fingerprint: computeSmartModeMcpApprovalTargetFingerprint(approvalTarget),
+    fingerprint: fingerprintMcpApprovalTarget(approvalTarget),
     toolCallId: args.toolCallId,
     conversationId: getConversationId(toolCtx),
     signal: toolCtx.signal,
@@ -455,7 +451,6 @@ export function createMcpTool(
   mcpToolDefinition: McpToolDefinitionLike,
   settings: { readonly name?: string | undefined; readonly convertTupleSchemaToDraft2020_12?: boolean | undefined } = {},
 ): Record<string, unknown> {
-  const toolExecutor = resourceAccessor.get(mcpExecutorResource)
   const rawSchema = mcpInputSchemaToJson(mcpToolDefinition)
   const toolName = settings.name ?? fitToolName(sanitizeToolName(mcpToolDefinition.name))
   const execute = async (
@@ -463,19 +458,22 @@ export function createMcpTool(
     bridge: ToolCallBridge,
     rawArguments: Record<string, unknown>,
     callMeta: McpCallMeta,
-  ): Promise<McpToolResult> => {
+  ): Promise<unknown> => {
     using executionSpan = createSpan(parentContext.withName("mcpExecute"))
     const args = mcpArgumentsOf(mcpToolDefinition.providerIdentifier, mcpToolDefinition.providerIdentifier, mcpToolDefinition.toolName, rawArguments, callMeta.toolCallId)
-    const baseCall = createMcpToolCall(new McpToolCall({ args }))
+    const baseCall = createMcpToolCallInterop({ request: args })
     return bridge.executeToolCall(executionSpan.ctx, baseCall, callMeta.toolCallId, async toolCtx => {
       const eventTracker = getAgentEventTracker(toolCtx)
       eventTracker.trackMcpToolCall(toolCtx, { name: mcpToolDefinition.toolName, mcpServerName: mcpToolDefinition.providerIdentifier, origin: "external" })
       const argumentsJson = JSON.stringify(rawArguments)
       try {
-        const result = await toolExecutor.execute(toolCtx.with(agentToolExecutionMetaKey, callMeta), args, {
-          execId: generateSeededUuid(callMeta.toolCallId),
-          ...(callMeta.hookContextCollector !== undefined ? { hookContextCollector: callMeta.hookContextCollector } : {}),
-        })
+        const result = await executeMcpCallInterop(
+          toolCtx.with(agentToolExecutionMetaKey, callMeta),
+          resourceAccessor,
+          args,
+          generateSeededUuid(callMeta.toolCallId),
+          callMeta.hookContextCollector,
+        )
         const projectedResult = convertExecSuccessToToolSuccess(result, undefined, undefined, undefined, undefined)
         eventTracker.trackMcpToolCallResult(toolCtx, { toolName: mcpToolDefinition.toolName, mcpServerName: mcpToolDefinition.providerIdentifier, paramsJson: argumentsJson, success: true })
         return projectedResult
@@ -486,14 +484,14 @@ export function createMcpTool(
         if (isInvalidMcpArgumentsError(classifiedFailure)) throw new McpInvalidArgsToolDefinitionReminderError(classifiedFailure, "Inspect this MCP tool's schema before retrying.")
         throw classifiedFailure
       }
-    }, result => createMcpToolCall(new McpToolCall({ args, result })), callMeta.hookContextCollector)
+    }, result => createMcpToolCallInterop({ request: args, result }), callMeta.hookContextCollector)
   }
   return {
     toolIdentifier: "MCP",
     name: toolName,
     descriptionGenerator: () => mcpToolDefinition.description ?? "",
     parameters: jsonSchema(schemaJsonOf(rawSchema, settings.convertTupleSchemaToDraft2020_12 === true) as Parameters<typeof jsonSchema>[0]),
-    render: (_ctx: Context, output: unknown) => renderMcpToolResult(renderedMcpResult(output)),
+    render: (_ctx: Context, output: unknown) => renderMcpToolResultInterop(output),
     execute: async (toolCtx: Context, bridge: unknown, argsStream: AsyncIterable<string>, callMeta: McpCallMeta) => {
       if (!isToolCallBridge(bridge)) throw new Error("MCP execution requires an interaction handler")
       return execute(toolCtx, bridge, await readArgumentObject(argsStream), callMeta)
@@ -505,8 +503,10 @@ export function createMcpTool(
 /** The one tool that calls any MCP tool by name, for the tools nobody knew about in advance. */
 export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<string, unknown> {
   const useDynamicToolNamespaces = settings.dynamicToolRegistry !== undefined
-  const descriptorIndex = indexMcpDescriptors({
-    mcpMetaToolEnabled: settings.mcpMetaToolOptions?.enabled === true,
+  const mcpMetaToolEnabled = mcpMetaToolEnabledInterop(settings.mcpMetaToolOptions)
+  const fileSystemSettings = projectMcpFileSystemSettingsInterop(settings.mcpFileSystemOptions)
+  const descriptorIndex = indexInteropMcpDescriptors({
+    mcpMetaToolEnabled,
     mcpMetaToolOptions: settings.mcpMetaToolOptions,
     mcpFileSystemOptions: settings.mcpFileSystemOptions,
     allowInteractiveMcpAuth: settings.allowInteractiveMcpAuth,
@@ -518,12 +518,12 @@ export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<st
     bridge: ToolCallBridge,
     args: Record<string, unknown>,
     callMeta: McpCallMeta,
-  ): Promise<McpToolResult> => {
+  ): Promise<unknown> => {
     using executionSpan = createSpan(parentContext.withName("callMcpToolExecute"))
     const serverIdentifier = typeof args.server === "string" ? args.server : ""
     const toolName = typeof args.toolName === "string" ? args.toolName : ""
     if (settings.validateMcpToolDescriptors === true) assertMcpToolIsCallable(descriptorIndex, serverIdentifier, toolName, settings.getMcpToolsToolName ?? "GetMcpTools", useDynamicToolNamespaces)
-    const readCheck = checkToolDefinitionRead(descriptorIndex, settings.mcpMetaToolOptions?.enabled === true, serverIdentifier, toolName, callMeta.stateHandler)
+    const readCheck = checkToolDefinitionRead(descriptorIndex, mcpMetaToolEnabled, serverIdentifier, toolName, callMeta.stateHandler)
     if (readCheck.kind === "noServer") throw new McpServerDoesNotExistError(readCheck.serverIdentifier, "Discover available MCP servers before calling this tool.")
     if (readCheck.kind === "noTool") throw new McpExecToolNotFoundError(`Tool ${readCheck.toolName} was not found.`)
     const descriptor = descriptorIndex.serverDescriptors.get(serverIdentifier)
@@ -561,10 +561,8 @@ export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<st
       requestSmartModeApproval: args.requestSmartModeApproval === true,
       ...(typeof args.smartModeBlockReason === "string" ? { smartModeBlockReason: args.smartModeBlockReason } : {}),
     })
-    const callArgs = mcpArgumentsOf(serverIdentifier, serverName, toolName, mcpArguments, callMeta.toolCallId, typeof args.description === "string" ? args.description : undefined)
-    if (approvalOutcome !== undefined) callArgs.smartModeApproval = approvalOutcome
-    const baseCall = createMcpToolCall(new McpToolCall({ args: callArgs, ...(description !== undefined ? { description } : {}) }))
-    const toolExecutor = settings.resourceAccessor.get(mcpExecutorResource)
+    const callArgs = mcpArgumentsOf(serverIdentifier, serverName, toolName, mcpArguments, callMeta.toolCallId, description, approvalOutcome)
+    const baseCall = createMcpToolCallInterop({ request: callArgs, ...(description === undefined ? {} : { description }) })
     return bridge.executeToolCall(executionSpan.ctx, baseCall, callMeta.toolCallId, async toolCtx => {
       const eventTracker = getAgentEventTracker(toolCtx)
       const argumentsJson = JSON.stringify(mcpArguments)
@@ -572,13 +570,16 @@ export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<st
       logger.info(toolCtx, "MCP tool call", { server: serverIdentifier, toolName })
       try {
         if (toolCtx.signal.aborted || bridge.getAbortSignal?.(toolCtx)?.aborted === true) throw new ToolCallAbortedError()
-        const result = await toolExecutor.execute(toolCtx.with(agentToolExecutionMetaKey, callMeta), callArgs, {
-          execId: generateSeededUuid(callMeta.toolCallId),
-          ...(callMeta.hookContextCollector !== undefined ? { hookContextCollector: callMeta.hookContextCollector } : {}),
-        })
-        const projectedResult = convertExecSuccessToToolSuccess(result, undefined, undefined, settings.mcpFileSystemOptions, settings.getMcpToolsToolName, serverIdentifier)
+        const result = await executeMcpCallInterop(
+          toolCtx.with(agentToolExecutionMetaKey, callMeta),
+          settings.resourceAccessor,
+          callArgs,
+          generateSeededUuid(callMeta.toolCallId),
+          callMeta.hookContextCollector,
+        )
+        const projectedResult = convertExecSuccessToToolSuccess(result, undefined, undefined, fileSystemSettings, settings.getMcpToolsToolName, serverIdentifier)
         eventTracker.trackMcpToolCallResult(toolCtx, { toolName, mcpServerName: serverName, paramsJson: argumentsJson, success: true })
-        emitCallMcpToolMetrics(toolCtx, { mcpMode: settings.mcpMetaToolOptions?.enabled === true ? "meta_tool" : "file_system", durationMs: Date.now() - startedAt, success: true })
+        emitCallMcpToolMetrics(toolCtx, { mcpMode: mcpMetaToolEnabled ? "meta_tool" : "file_system", durationMs: Date.now() - startedAt, success: true })
         if (followedDiscoverySearch) emitMcpSearchThenCallResult(toolCtx, "success")
         return projectedResult
       } catch (error) {
@@ -586,17 +587,17 @@ export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<st
         eventTracker.trackMcpToolCallResult(toolCtx, { toolName, mcpServerName: serverName, paramsJson: argumentsJson, success: false, failureText: classifiedFailure.message, errorClassification: getWrappedMcpErrorClassification(classifiedFailure) })
         // The reason is a label rather than a closed union, so a caller may compare it with any of them.
         const failureReason: string = classifiedFailure instanceof ToolCallRejectedError ? CALL_MCP_TOOL_FAILURE_REASONS.REJECTED : CALL_MCP_TOOL_FAILURE_REASONS.OTHER
-        emitCallMcpToolMetrics(toolCtx, { mcpMode: settings.mcpMetaToolOptions?.enabled === true ? "meta_tool" : "file_system", durationMs: Date.now() - startedAt, success: false, failureReason, retryable: false })
+        emitCallMcpToolMetrics(toolCtx, { mcpMode: mcpMetaToolEnabled ? "meta_tool" : "file_system", durationMs: Date.now() - startedAt, success: false, failureReason, retryable: false })
         if (followedDiscoverySearch) emitMcpSearchThenCallResult(toolCtx, failureReason === CALL_MCP_TOOL_FAILURE_REASONS.TOOL_NOT_FOUND ? "tool_not_found" : "error")
         throw classifiedFailure
       }
-    }, result => createMcpToolCall(new McpToolCall({ args: callArgs, result })), callMeta.hookContextCollector)
+    }, result => createMcpToolCallInterop({ request: callArgs, result, ...(description === undefined ? {} : { description }) }), callMeta.hookContextCollector)
   }
   return createZodAgentTool("MCP", {
     name,
     parameters: callSchemas.parsingParametersSchema,
     descriptionGenerator: () => "Call an MCP tool by server identifier and tool name with arbitrary JSON arguments.",
-    render: (_ctx: Context, output: unknown) => renderMcpToolResult(renderedMcpResult(output)),
+    render: (_ctx: Context, output: unknown) => renderMcpToolResultInterop(output),
     execute: async (toolCtx: Context, bridge: unknown, argsStream: AsyncIterable<string>, callMeta: McpCallMeta) => {
       if (!isToolCallBridge(bridge)) throw new Error("MCP execution requires an interaction handler")
       const args = callSchemas.parsingParametersSchema.parse(JSON.parse(await readArgumentObject(argsStream).then(value => JSON.stringify(value))))
@@ -609,13 +610,6 @@ export function createCallMcpTool(settings: CreateCallMcpToolOptions): Record<st
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
-}
-
-/** A rendered result that is not one is an empty result rather than a crash. */
-function renderedMcpResult(value: unknown): McpToolResult {
-  if (value instanceof McpToolResult) return value
-  if (isJsonObject(value) && value.result instanceof McpToolResult) return value.result
-  return new McpToolResult()
 }
 
 void logger

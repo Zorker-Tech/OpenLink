@@ -9,7 +9,8 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { fromRedactedCoreMessages } from "../../source/packages/redaction/message-redaction.ts"
 import { shellStreamExecutorResource } from "../../source/packages/agent-exec/shell-stream-operation.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
-import { RequestContext } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts"
+import { RequestContext } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts"
+import { SlateMode, type SlateMode as SlateModeValue } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the executor the handler streams through, and the transcript it writes
@@ -84,26 +85,26 @@ function turnHarness(): TurnHarness {
 /** The redaction layer reads the event's own fields, so the fakes carry the fields the proto has. */
 const streamEvent = (text: string): { data: string } => ({ data: text })
 
-function stateHandler(options: { dsv3?: boolean; messages?: unknown[] } = {}): {
+function stateHandler(options: { largeContext?: boolean; messages?: unknown[] } = {}): {
   readonly structureCalls: number
   readonly handler: {
-    mode: number
+    mode: SlateModeValue
     createShellTurn(ctx: Context, command: unknown): Promise<TurnHarness["turn"]>
     computeNewStructure(ctx: Context): Promise<{ turns: unknown[] }>
     getPrivacyMode(): PrivacyMode
     getBlobStore(): undefined
-    isDsv3(): boolean
+    usesLargeContextTreatment(): boolean
   }
 } {
   const holder = {
     structureCalls: 0,
     handler: {
-      mode: 1,
+      mode: SlateMode.AGENT,
       async createShellTurn() { return turnHarness().turn },
       async computeNewStructure() { holder.structureCalls += 1; return { turns: options.messages ?? [] } },
       getPrivacyMode: () => PrivacyMode.NO_STORAGE,
       getBlobStore: () => undefined,
-      isDsv3: () => options.dsv3 === true,
+      usesLargeContextTreatment: () => options.largeContext === true,
     },
   }
   return holder
@@ -140,7 +141,7 @@ const shellAction = (command: string, execId?: string): unknown => ({
 function handlerWith(options: {
   events: Array<Record<string, unknown>>
   throwAfter?: number
-  dsv3?: boolean
+  largeContext?: boolean
   config?: Record<string, unknown>
 }): {
   readonly handler: ShellCommandActionHandler
@@ -272,8 +273,8 @@ test("the command is written into the conversation as a turn the agent took", as
 })
 
 test("a large-context session writes the command the way that model expects", async () => {
-  const { handler } = handlerWith({ events: [], dsv3: true })
-  const state = stateHandler({ dsv3: true })
+  const { handler } = handlerWith({ events: [], largeContext: true })
+  const state = stateHandler({ largeContext: true })
   const executor = executorHarness()
   await handler.handle(createContext(), shellAction("ls"), executor.executor, state.handler, [], () => {})
 
@@ -282,7 +283,7 @@ test("a large-context session writes the command the way that model expects", as
   assert.equal(transcript[1]?.content[0]?.toolName, "run_terminal_cmd")
   assert.equal(transcript[2]?.content[0]?.toolName, "run_terminal_cmd")
   // That version's result repeats the command inside the output rather than only reporting the exit code.
-  assert.match(String(transcript[2]?.content[0]?.result), /Command output/)
+  assert.match(String(transcript[2]?.content[0]?.result), /Captured output/)
   assert.match(String(transcript[2]?.content[0]?.result), /\nls\n/)
 })
 

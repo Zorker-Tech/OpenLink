@@ -11,9 +11,9 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { ASK_MODE_MODEL_ERROR } from "../../source/packages/agent/tools/tool-support.ts"
 import { ToolCallRejectedError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
-import { GenerateImageResult } from "../../source/packages/proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/packages/proto/generated/agent/v1/write_exec_pb.ts"
+import { GenerateImageResult } from "../../source/adapters/interop/proto/generated/agent/v1/generate_image_tool_pb.ts"
+import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 

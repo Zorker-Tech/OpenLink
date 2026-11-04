@@ -1,0 +1,137 @@
+import { randomUUID } from "node:crypto";
+import { computeSubagentRequestId, type SubagentLineage, type SubagentSession } from "./subagent-runtime.ts";
+
+export class SlateSubagentDispatchError extends Error {
+  override readonly name = "SlateSubagentDispatchError";
+}
+
+export interface SubagentAdapterArgs {
+  readonly resumeAgentId?: string;
+  readonly subagentType: string;
+  readonly toolCallId: string;
+  readonly prompt: string;
+  readonly readonly?: boolean;
+  readonly selectedContext?: { selectedVideos?: readonly unknown[] };
+}
+
+export interface SubagentDispatcher {
+  isRunning(id: string): boolean;
+  allocateComputerUseWindow(id: string): unknown | null;
+  freeComputerUseWindow(id: string): void;
+  dispatch(args: {
+    subagentAgentId: string;
+    subagentType: string;
+    toolCallId: string;
+    prompt: string;
+    lineage?: SubagentLineage;
+    run(): Promise<{ text: string; aborted?: boolean }>;
+  }): void;
+}
+
+export interface SubagentSessionPolicy<BackgroundReason> {
+  readonly backgroundReason: BackgroundReason;
+  readonly makeDispatchError: (message: string) => Error;
+  readonly deriveLineage: (ctx: unknown, toolCallId: string) => SubagentLineage | undefined;
+}
+
+type LaunchReviewer = (ctx: unknown, args: SubagentAdapterArgs) => Promise<{ allowed: boolean; reason: string }>;
+
+/** Owns the session map and desktop reservation rules used by the runner-facing adapter. */
+export class SubagentSessionCoordinator<BackgroundReason> {
+  #reviewLaunch: LaunchReviewer | undefined;
+  #policy: SubagentSessionPolicy<BackgroundReason>;
+
+  readonly sessions: Map<string, SubagentSession>;
+  readonly createRunner: (id: string, args: SubagentAdapterArgs) => SubagentSession;
+  readonly dispatcher: SubagentDispatcher;
+
+  constructor(
+    sessions: Map<string, SubagentSession>,
+    createRunner: (id: string, args: SubagentAdapterArgs) => SubagentSession,
+    dispatcher: SubagentDispatcher,
+    policy: SubagentSessionPolicy<BackgroundReason>,
+  ) {
+    this.sessions = sessions;
+    this.createRunner = createRunner;
+    this.dispatcher = dispatcher;
+    this.#policy = policy;
+  }
+
+  setLaunchReviewer(review: LaunchReviewer): void {
+    this.#reviewLaunch = review;
+  }
+
+  async createOrResumeSession(_ctx: unknown, args: SubagentAdapterArgs): Promise<string> {
+    const existingId = args.resumeAgentId;
+    if (existingId != null && this.sessions.has(existingId)) {
+      if (this.dispatcher.isRunning(existingId)) {
+        throw this.#policy.makeDispatchError(
+          "That background subagent is still running, so it can't be resumed yet — use MessageSubagent or StopSubagent while it runs.",
+        );
+      }
+      return existingId;
+    }
+
+    const id = existingId ?? `subagent-${randomUUID()}`;
+    const needsDesktop = this.isComputerUse(args.subagentType);
+    if (needsDesktop && this.dispatcher.allocateComputerUseWindow(id) == null) {
+      throw this.#policy.makeDispatchError("A computerUse subagent is already using the box's desktop. Only one can run at a time.");
+    }
+
+    try {
+      this.sessions.set(id, this.createRunner(id, args));
+    } catch (error) {
+      if (needsDesktop) this.dispatcher.freeComputerUseWindow(id);
+      throw error;
+    }
+    return id;
+  }
+
+  async runSession(
+    ctx: unknown,
+    agentId: string,
+    args: SubagentAdapterArgs,
+  ): Promise<
+    | { status: "error"; error: string }
+    | { status: "background"; backgroundReason: BackgroundReason; toolCallCount: 0 }
+  > {
+    const runner = this.sessions.get(agentId);
+    if (runner == null) return { status: "error", error: `Unknown Slate subagent: ${agentId}` };
+    if (this.dispatcher.isRunning(agentId)) return { status: "error", error: "That background subagent is already running." };
+
+    const review = await this.#reviewLaunch?.(ctx, args);
+    if (review != null && !review.allowed) {
+      this.releaseSession(agentId);
+      return { status: "error", error: review.reason };
+    }
+
+    const lineage = this.#policy.deriveLineage(ctx, args.toolCallId);
+    this.dispatcher.dispatch({
+      subagentAgentId: agentId,
+      subagentType: args.subagentType || "generalPurpose",
+      toolCallId: args.toolCallId,
+      prompt: args.prompt,
+      ...(lineage == null ? {} : { lineage }),
+      run: () => runner.run(args.prompt, {
+        selectedVideos: args.selectedContext?.selectedVideos!,
+        inferenceRequestId: (args.toolCallId.length > 0 ? computeSubagentRequestId(args.toolCallId) : undefined)!,
+        ...(lineage == null ? {} : { lineage }),
+      }),
+    });
+    return {
+      status: "background",
+      backgroundReason: this.#policy.backgroundReason,
+      toolCallCount: 0,
+    };
+  }
+
+  releaseSession(agentId: string): void {
+    if (this.dispatcher.isRunning(agentId)) return;
+    this.sessions.delete(agentId);
+    this.dispatcher.freeComputerUseWindow(agentId);
+  }
+
+  private isComputerUse(subagentType: string): boolean {
+    return subagentType.replace(/[-_ ]/g, "").toLowerCase() === "computeruse";
+  }
+}

@@ -11,14 +11,14 @@ import { BUILTIN_MCP_SERVER_NAMES } from "../../source/shared/node/mcp/builtin-m
 import { SlateMcpConfigError } from "../../source/shared/node/mcp/mcp-config-error.ts";
 import { SlateMcpDefinitionSource } from "../../source/shared/node/mcp/mcp-definition-source.ts";
 import { pinMcpDiagnosticsReporter, type McpDiagnostic } from "../../source/shared/node/mcp/mcp-diagnostics.ts";
-import type { AccountDisplayConfig, DisplayServer, McpServerConfig } from "../../source/shared/node/mcp/mcp-display-runtime.ts";
+import type { SlateMcpAccountDisplay, SlateMcpDisplayRow, SlateMcpServerConfig } from "../../source/shared/node/mcp/mcp-display-runtime.ts";
 import { SlateMcpManager, type EffectivePluginRow, type McpManagerSettingsPort } from "../../source/shared/node/mcp/mcp-manager.ts";
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const url = (name: string) => `https://${name}.invalid/mcp`;
-const httpRow = (id: string, name: string, extra: Partial<DisplayServer> = {}): DisplayServer => ({ id, name, serverIdentifier: name, config: { url: url(name) }, isTeamServer: false, ...extra });
-const stdioRow = (id: string, name: string, extra: Partial<DisplayServer> = {}): DisplayServer => ({ id, name, serverIdentifier: name, config: { command: `run-${name}` }, isTeamServer: false, ...extra });
-const display = (servers: DisplayServer[], extra: Partial<AccountDisplayConfig> = {}): AccountDisplayConfig => ({ servers, ...extra });
+const httpRow = (id: string, name: string, extra: Partial<SlateMcpDisplayRow> = {}): SlateMcpDisplayRow => ({ id, name, serverIdentifier: name, config: { url: url(name) }, isTeamServer: false, ...extra });
+const stdioRow = (id: string, name: string, extra: Partial<SlateMcpDisplayRow> = {}): SlateMcpDisplayRow => ({ id, name, serverIdentifier: name, config: { command: `run-${name}` }, isTeamServer: false, ...extra });
+const display = (servers: SlateMcpDisplayRow[], extra: Partial<SlateMcpAccountDisplay> = {}): SlateMcpAccountDisplay => ({ servers, ...extra });
 
 /** The settings store, answering what the test put in it and writing down every call. */
 function settingsSpy(seed: { instructions?: Record<string, string>; instructionsById?: Record<string, string>; disabled?: Record<string, string[]> } = {}) {
@@ -94,7 +94,7 @@ function backendExecSpy(options: { entries?: Array<{ accountLabel: string; serve
 }
 
 /** The account writer the manager adds and removes servers through. */
-function writerSpy(options: { config?: Record<string, McpServerConfig>; ids?: Record<string, string> } = {}) {
+function writerSpy(options: { config?: Record<string, SlateMcpServerConfig>; ids?: Record<string, string> } = {}) {
   const calls: string[] = [];
   const written: Array<{ config: unknown; ids: unknown }> = [];
   return {
@@ -104,7 +104,7 @@ function writerSpy(options: { config?: Record<string, McpServerConfig>; ids?: Re
         written.push({ config, ids });
         calls.push(`setConfig:${JSON.stringify(config)}:${JSON.stringify(ids)}`);
       },
-      uninstallPlugin: async (args: { pluginId: bigint }) => void calls.push(`uninstallPlugin:${args.pluginId}`),
+      uninstallPlugin: async (args: { pluginId: string }) => void calls.push(`uninstallPlugin:${args.pluginId}`),
     },
     calls,
     written,
@@ -118,7 +118,7 @@ function writerSpy(options: { config?: Record<string, McpServerConfig>; ids?: Re
 function managerWorld(options: {
   displays?: boolean;
   accountServers?: boolean;
-  accountConfig?: Record<string, McpServerConfig>;
+  accountConfig?: Record<string, SlateMcpServerConfig>;
   settings?: ReturnType<typeof settingsSpy>;
   box?: ReturnType<typeof boxRuntimeSpy>;
   backend?: ReturnType<typeof backendExecSpy>;
@@ -127,12 +127,12 @@ function managerWorld(options: {
   onConnectorAuth?: (event: Record<string, unknown>) => void;
   onAccountScopeApplied?: () => void;
   includeBuiltins?: boolean;
-  parseServerConfig?: (value: unknown) => McpServerConfig;
+  parseServerConfig?: (value: unknown) => SlateMcpServerConfig;
 } = {}) {
-  const displayQueue: Array<AccountDisplayConfig | null> = [];
-  const accountQueue: Array<AccountDisplayConfig | null> = [];
+  const displayQueue: Array<SlateMcpAccountDisplay | null> = [];
+  const accountQueue: Array<SlateMcpAccountDisplay | null> = [];
   const readCalls: string[] = [];
-  const nextOf = (queue: Array<AccountDisplayConfig | null>, label: string): AccountDisplayConfig | null => {
+  const nextOf = (queue: Array<SlateMcpAccountDisplay | null>, label: string): SlateMcpAccountDisplay | null => {
     readCalls.push(label);
     if (queue.length === 0) return null;
     const next = queue.length > 1 ? queue.shift()! : queue[0]!;
@@ -160,7 +160,7 @@ function managerWorld(options: {
     ...(options.accountServers === true ? { accountServersProvider: async () => nextOf(accountQueue, "accountServers") } : {}),
     ...(options.displays === true ? { accountDisplayConfigProvider: async () => nextOf(displayQueue, "display") } : {}),
     ...(options.accountConfig === undefined ? {} : { accountConfigProvider: async () => (readCalls.push("config"), { mcpServers: options.accountConfig ?? {} }) }),
-    parseServerConfig: options.parseServerConfig ?? ((value) => value as McpServerConfig),
+    parseServerConfig: options.parseServerConfig ?? ((value) => value as SlateMcpServerConfig),
     getMachineId: async () => "machine-1",
     ...(options.onConnectorAuth === undefined ? {} : { onConnectorAuth: options.onConnectorAuth }),
     ...(options.onAccountScopeApplied === undefined ? {} : { onAccountScopeApplied: options.onAccountScopeApplied }),
@@ -173,11 +173,11 @@ function managerWorld(options: {
     writer,
     readCalls,
     // What is pushed becomes the account's state from here on; the last state pushed is the one that keeps answering.
-    pushDisplay: (...states: Array<AccountDisplayConfig | null>) => {
+    pushDisplay: (...states: Array<SlateMcpAccountDisplay | null>) => {
       displayQueue.length = 0;
       displayQueue.push(...states);
     },
-    pushAccountServers: (...states: Array<AccountDisplayConfig | null>) => {
+    pushAccountServers: (...states: Array<SlateMcpAccountDisplay | null>) => {
       accountQueue.length = 0;
       accountQueue.push(...states);
     },
@@ -187,7 +187,7 @@ function managerWorld(options: {
 describe("the manager's own ports and views", () => {
   it("answers for a host that never wired a settings store, and hands back what it was wired with", async () => {
     const world = managerWorld();
-    const bare = new SlateMcpManager({ parseServerConfig: (value) => value as McpServerConfig, getMachineId: async () => "machine-1" });
+    const bare = new SlateMcpManager({ parseServerConfig: (value) => value as SlateMcpServerConfig, getMachineId: async () => "machine-1" });
     // Without a store every read answers emptily and every write is silence.
     assert.deepEqual([...bare.getMcpCustomInstructions()], []);
     assert.doesNotThrow(() => bare.setSettingsStore(world.settings.store));
@@ -199,7 +199,7 @@ describe("the manager's own ports and views", () => {
     // A host with a display but no store still answers, with an empty instruction for every connector.
     const displayed = new SlateMcpManager({
       accountDisplayConfigProvider: async () => display([stdioRow("12", "local")]),
-      parseServerConfig: (value) => value as McpServerConfig,
+      parseServerConfig: (value) => value as SlateMcpServerConfig,
       getMachineId: async () => "machine-1",
     });
     await displayed.listServers();
@@ -319,7 +319,7 @@ describe("listing the servers", () => {
         return display([httpRow("11", "remote")]);
       },
       backendMcpExec: backendExecSpy().exec,
-      parseServerConfig: (value) => value as McpServerConfig,
+      parseServerConfig: (value) => value as SlateMcpServerConfig,
       getMachineId: async () => "machine-1",
     });
     const [first, second] = await Promise.all([manager.listServers(), manager.listServers()]);
@@ -401,7 +401,7 @@ describe("the account's scope", () => {
         return display([httpRow("11", "stale")]);
       },
       backendMcpExec: backendExecSpy().exec,
-      parseServerConfig: (value) => value as McpServerConfig,
+      parseServerConfig: (value) => value as SlateMcpServerConfig,
       getMachineId: async () => "machine-1",
     });
     const listing = manager.listServers();
@@ -421,7 +421,7 @@ describe("adding and removing a server", () => {
     // A name is validated before its configuration is read, so a bad name is refused even with no parser at all.
     const bare = new SlateMcpManager({ parseServerConfig: undefined as never, getMachineId: async () => "machine-1" });
     await assert.rejects(() => bare.addServer({ name: builtinName, configJson: "not json" }), /is reserved for a built-in Slate server/);
-    const unsigned = new SlateMcpManager({ parseServerConfig: (value) => value as McpServerConfig, getMachineId: async () => "machine-1" });
+    const unsigned = new SlateMcpManager({ parseServerConfig: (value) => value as SlateMcpServerConfig, getMachineId: async () => "machine-1" });
     await assert.rejects(() => unsigned.addServer({ name: "mine", configJson: "{}" }), /requires a signed-in Slate account/);
   });
 
@@ -537,7 +537,7 @@ describe("uninstalling a plugin", () => {
     teamRequired.pushDisplay(display([httpRow("11", "mine", { pluginId: "77" })]));
     await assert.rejects(() => teamRequired.manager.uninstallPlugin("77"), /required by the user's team/);
     // With no display and no plugin list there is nothing to check the policy against.
-    const uncheckable = new SlateMcpManager({ accountMcpWriter: writerSpy().writer, parseServerConfig: (value) => value as McpServerConfig, getMachineId: async () => "machine-1" });
+    const uncheckable = new SlateMcpManager({ accountMcpWriter: writerSpy().writer, parseServerConfig: (value) => value as SlateMcpServerConfig, getMachineId: async () => "machine-1" });
     await assert.rejects(() => uncheckable.uninstallPlugin("77"), /Couldn't verify this plugin's team policy right now/);
   });
 
@@ -569,7 +569,7 @@ describe("resolving a server's display row", () => {
   });
 
   it("refuses a fresh read with nothing to read, and falls back to the last display otherwise", async () => {
-    const bare = new SlateMcpManager({ parseServerConfig: (value) => value as McpServerConfig, getMachineId: async () => "machine-1" });
+    const bare = new SlateMcpManager({ parseServerConfig: (value) => value as SlateMcpServerConfig, getMachineId: async () => "machine-1" });
     await assert.rejects(() => bare.resolveDisplayServer("11", { requireFreshRead: true }), /no account display config provider/);
     assert.equal(await bare.resolveDisplayServer("11"), undefined);
     // A display provider that fails is only fatal when the caller asked for a fresh read.

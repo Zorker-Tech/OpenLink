@@ -17,36 +17,16 @@
 
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/index.ts"
-import { readExecutorResource } from "../../agent-exec/read-operation.ts"
-import { writeExecutorResource } from "../../agent-exec/write-operation.ts"
-import { ReadArgs } from "../../proto/generated/agent/v1/read_exec_pb.ts"
-import { WriteArgs } from "../../proto/generated/agent/v1/write_exec_pb.ts"
-import { PrivacyCapability } from "../../redaction/classification.ts"
 import { getRequestPathModule } from "../utils/request-paths.ts"
-
-type Any = any
+import type { PlanFileReference, ExecutePlanPlanFileIO } from "./execute-plan-contracts.ts"
 
 const logger = createLogger("@slate/agent:execute-plan")
-
-export interface ExecutePlanPlanFileAction {
-  readonly planFilePath?: { unwrap(purpose: PrivacyCapability): string } | undefined
-  readonly planId?: string | undefined
-}
 
 export interface ExecutePlanPlanFileRequestContext {
   readonly env?: {
     readonly artifactsFolder?: string | undefined
     readonly osVersion?: string | undefined
   } | undefined
-}
-
-export interface ExecutePlanPlanFileResourceAccessor {
-  get(resource: typeof readExecutorResource): {
-    execute(ctx: Context, args: ReadArgs): Promise<Any>
-  }
-  get(resource: typeof writeExecutorResource): {
-    execute(ctx: Context, args: WriteArgs): Promise<Any>
-  }
 }
 
 export interface ExecutePlanPlanFileResolution {
@@ -69,11 +49,11 @@ export function sanitizePlanFileName(candidate: string): string | undefined {
 export async function resolvePlanFilePath(
   ctx: Context,
   requestContext: ExecutePlanPlanFileRequestContext,
-  resourceAccessor: ExecutePlanPlanFileResourceAccessor,
-  action: ExecutePlanPlanFileAction,
+  fileIO: ExecutePlanPlanFileIO,
+  action: PlanFileReference,
   planFileContent: string,
 ): Promise<ExecutePlanPlanFileResolution> {
-  const providedPlanFilePath = action.planFilePath?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) || undefined
+  const providedPlanFilePath = action.path || undefined
   const artifactsFolder = requestContext.env?.artifactsFolder
   // With nowhere to write, the path the turn was given is all there is to go on.
   if (artifactsFolder === undefined || artifactsFolder.length === 0) {
@@ -85,16 +65,11 @@ export async function resolvePlanFilePath(
     }
   }
 
-  let readResultCase: string | undefined
+  let originalFileExists: boolean | undefined
   try {
     if (providedPlanFilePath !== undefined) {
-      const readResult = await resourceAccessor.get(readExecutorResource).execute(
-        ctx,
-        // One line is enough to learn whether the file is there; the plan itself is already in memory.
-        new ReadArgs({ path: providedPlanFilePath, limit: 1 }),
-      )
-      readResultCase = readResult.result.case
-      if (readResult.result.case === "success") {
+      originalFileExists = await fileIO.exists(ctx, providedPlanFilePath)
+      if (originalFileExists) {
         return {
           planFilePath: providedPlanFilePath,
           recreatedPlanFilePath: undefined,
@@ -114,8 +89,8 @@ export async function resolvePlanFilePath(
       (providedPlanFilePath !== undefined
         ? sanitizePlanFileName(providedPlanFilePath)
         : undefined) ??
-      (action.planId !== undefined
-        ? sanitizePlanFileName(`${action.planId}.plan.md`)
+      (action.id !== undefined
+        ? sanitizePlanFileName(`${action.id}.plan.md`)
         : undefined) ??
       "plan.md"
     const recreatedPlanFilePath = pathModule.join(
@@ -123,20 +98,12 @@ export async function resolvePlanFilePath(
       "plans",
       fallbackFileName,
     )
-    const writeResult = await resourceAccessor.get(writeExecutorResource).execute(
-      ctx,
-      new WriteArgs({
-        path: recreatedPlanFilePath,
-        fileText: planFileContent,
-        returnFileContentAfterWrite: false,
-      }),
-    )
-    if (writeResult.result.case !== "success") {
+    const restored = await fileIO.restoreFile(ctx, recreatedPlanFilePath, planFileContent)
+    if (!restored) {
       logger.warn(ctx, "agent.execute_plan.plan_file_recreate_failed", {
-        planId: action.planId,
+        planId: action.id,
         hasProvidedPlanFilePath: providedPlanFilePath !== undefined,
-        readResultCase,
-        writeResultCase: writeResult.result.case,
+        originalFileExists,
       })
       return {
         planFilePath: providedPlanFilePath,
@@ -146,9 +113,9 @@ export async function resolvePlanFilePath(
       }
     }
     logger.info(ctx, "agent.execute_plan.plan_file_recreated", {
-      planId: action.planId,
+      planId: action.id,
       hasProvidedPlanFilePath: providedPlanFilePath !== undefined,
-      readResultCase,
+      originalFileExists,
     })
     return {
       planFilePath: recreatedPlanFilePath,
@@ -158,9 +125,9 @@ export async function resolvePlanFilePath(
     }
   } catch (error) {
     logger.error(ctx, "agent.execute_plan.plan_file_resolution_failed", error, {
-      planId: action.planId,
+      planId: action.id,
       hasProvidedPlanFilePath: providedPlanFilePath !== undefined,
-      readResultCase,
+      originalFileExists,
     })
     return {
       planFilePath: providedPlanFilePath,

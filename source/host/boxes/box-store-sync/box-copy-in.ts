@@ -15,7 +15,7 @@
  * - **it can be retried safely** — a transient failure (not auth, not a missing credential, not a held lock) is retried with
  *   backoff, and a restore is idempotent because every file is verified against its hash.
  */
-import { existsSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -29,11 +29,11 @@ import {
   type DebouncePolicy,
   type RetryPolicy,
 } from "../../extensions/scheduling.ts";
-import { isAgentStoreSourceId } from "../../../packages/constants/agent-store-ids.ts";
+import { isAgentStoreSourceId } from "../../../packages/agent-store-sync/identifiers.ts";
 import { tryAcquireStoreLock } from "../../../packages/agent-store-sync/store-lock.ts";
 import { errorMessage } from "../../../shared/errors/summary.ts";
 import { STRUCTURED_LOG_SUBMIT_DEADLINE_MS } from "../../../shared/observability/structured-log-transport.ts";
-import { getSlateInferenceBackendUrl } from "../../../shared/node/cursor-backend/cursor-inference.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import { getOrCreateHostMachineId } from "../../host-secret-store.ts";
 import { getBoxStoreBackendPolicy, isBoxStoreCopyInEnabled } from "../box-store-backend-policy.ts";
@@ -57,14 +57,32 @@ import { BoxStoreSync } from "./box-store-sync.ts";
 import { BoxStoreSyncError } from "./box-store-sync-error.ts";
 import { BOX_STORE_MANIFEST_RETRY_ATTEMPTS, BOX_STORE_MANIFEST_RETRY_DELAY_MS } from "./box-store-sync-service.ts";
 import { BoxStoreCanonicalWriteConflictError } from "./object-store-port.ts";
+import { copyInFailureResult, emptyCopyInResult as empty, type CopyInResult, type CopyInSync } from "./copy-in-contracts.ts";
+import { chooseCopyInRestorePlan } from "./copy-in-source-policy.ts";
+import {
+  BOX_COPY_IN_EXIT_FAILED,
+  BOX_COPY_IN_EXIT_HYDRATED,
+  BOX_COPY_IN_EXIT_NOOP,
+  COPY_IN_HYDRATE_ATTEMPTS,
+  COPY_IN_STUCK_THRESHOLD_MS,
+  buildCopyInStatusFromResult,
+  buildCopyInWatchdogEvent,
+  bucketCopyInReason,
+  classifyCopyInFailure,
+  classifyCopyInMeteredOutcome,
+  isTransientCopyInFailure,
+  makeCopyInStatusWriter,
+  outcomeToExitCode,
+  redactCopyInErrorForTelemetry,
+  resolveCopyInAttempts,
+  resolveCopyInConcurrency,
+  resolveCopyInStuckThresholdMs,
+  type CopyInTraceStatus,
+} from "./copy-in-reporting.ts";
 
-export const BOX_COPY_IN_EXIT_NOOP = 0;
-export const BOX_COPY_IN_EXIT_FAILED = 1;
-export const BOX_COPY_IN_EXIT_HYDRATED = 10;
-export const SLATE_BOX_COPY_IN_STATUS_PATH = "/tmp/slate-copy-in-status.json";
-export const COPY_IN_STATUS_THROTTLE_MS = 750;
-export const COPY_IN_HYDRATE_ATTEMPTS = 8;
-export const COPY_IN_STUCK_THRESHOLD_MS = 5 * 60_000;
+export { empty };
+export type { CopyInResult, CopyInSync };
+export * from "./copy-in-reporting.ts";
 
 const COPY_IN_RETRY_ATTEMPTS = 5;
 const COPY_IN_RETRY_BASE_MS = 1_000;
@@ -81,129 +99,6 @@ const COPY_IN_MANIFEST_RETRY = createRetryPolicy(realClock, {
   maxDelayMs: BOX_STORE_MANIFEST_RETRY_DELAY_MS,
   shouldRetry: (error) => error instanceof BoxStoreCanonicalWriteConflictError,
 });
-
-export interface CopyInResult {
-  outcome: "hydrated" | "noop" | "failed";
-  reason: string;
-  manifestEntries: number;
-  storeDbEntries: number;
-  restoredStoreDbEntries?: number;
-  files: number;
-  bytes: number;
-  verified: number;
-  failures: string[];
-  hydrateSource?: "legacy";
-}
-
-interface CopyInSync {
-  readonly manifestV2Enabled?: boolean | undefined;
-  readManifestStrict(): Promise<BoxManifestMap>;
-  readManifestStrictDetailed(): Promise<{ present: boolean; manifest: BoxManifestMap; fullyHydrated?: boolean | undefined }>;
-  enrollManifestV2?(): void;
-  download(targetDir: string, options?: BoxStoreDownloadOptions): Promise<BoxStoreDownloadSummary>;
-  markLegacyHydrationIncomplete?(): Promise<void>;
-  markLegacyHydrationCompleteForHandoff?(): Promise<void>;
-}
-
-interface CopyInTraceStatus {
-  copyStage?: "manifest" | "symlink";
-  fileEntries?: number;
-  symlinkEntries?: number;
-  symlinksStarted?: number;
-  symlinksCompleted?: number;
-  symlinksInFlight?: number;
-  activeSymlinkSteps?: Record<string, number>;
-}
-
-export function resolveCopyInConcurrency(env: NodeJS.ProcessEnv = process.env): number | undefined {
-  const raw = env.SLATE_BOX_STORE_COPY_IN_CONCURRENCY?.trim();
-  if (raw == null || raw === "") return undefined;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-export function resolveCopyInAttempts(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.SLATE_BOX_COPY_IN_ATTEMPTS?.trim();
-  if (raw == null || raw === "") return COPY_IN_HYDRATE_ATTEMPTS;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : COPY_IN_HYDRATE_ATTEMPTS;
-}
-
-export function resolveCopyInStuckThresholdMs(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.SLATE_BOX_COPY_IN_STUCK_MS?.trim();
-  if (raw == null || raw === "") return COPY_IN_STUCK_THRESHOLD_MS;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : COPY_IN_STUCK_THRESHOLD_MS;
-}
-
-/** What a platform reader is told: a failed hydrate that got part of the store in is *partial*, not failed. */
-export function classifyCopyInMeteredOutcome(result: CopyInResult): "hydrated" | "empty" | "partial" | "failed" {
-  if (result.outcome === "hydrated") return "hydrated";
-  if (result.outcome === "noop") return "empty";
-  return result.reason.startsWith("partial hydrate") || result.reason.startsWith(INCOMPLETE_LEGACY_HYDRATE_REASON) ? "partial" : "failed";
-}
-
-export function buildCopyInStatusFromResult(result: CopyInResult): Record<string, unknown> {
-  return {
-    phase: result.outcome === "failed" ? "failed" : "done",
-    restored: result.files,
-    total: result.manifestEntries,
-    bytes: result.bytes,
-    outcome: classifyCopyInMeteredOutcome(result),
-    storeDbEntries: result.storeDbEntries,
-  };
-}
-
-/** A status file the desktop can read while the copy runs: written whole through a rename, and throttled. */
-export function makeCopyInStatusWriter(path = SLATE_BOX_COPY_IN_STATUS_PATH, now: () => number = Date.now): (status: unknown, options?: { force?: boolean }) => void {
-  let lastWriteMs = 0;
-  return (status, options) => {
-    const timestamp = now();
-    if (!(options?.force ?? false) && timestamp - lastWriteMs < COPY_IN_STATUS_THROTTLE_MS) return;
-    lastWriteMs = timestamp;
-    try {
-      const tempPath = `${path}.tmp`;
-      writeFileSync(tempPath, JSON.stringify(status));
-      renameSync(tempPath, path);
-    } catch {
-      // The status file is for the desktop's eyes: a write that fails must not fail the copy.
-    }
-  };
-}
-
-/** The watchdog's story of the copy: moving-but-slow, or stuck, and in which symlink step. */
-export function buildCopyInWatchdogEvent(input: {
-  progressedSinceLastTick: boolean;
-  progress: { total: number; files: number; bytes: number };
-  elapsedMs: number;
-  thresholdMs: number;
-  trace?: CopyInTraceStatus;
-}): { level: "info" | "warn"; metadata: Record<string, string> } {
-  const metadata: Record<string, string> = {
-    outcome: input.progressedSinceLastTick ? "slow" : "stuck",
-    reason: input.progressedSinceLastTick ? "moving-data-in-slow-but-advancing" : "moving-data-in-exceeded-threshold",
-    manifest_entries: String(input.progress.total),
-    files: String(input.progress.files),
-    bytes: String(input.progress.bytes),
-    duration_ms: String(input.elapsedMs),
-    threshold_ms: String(input.thresholdMs),
-  };
-  const trace = input.trace;
-  if (trace?.copyStage != null) metadata.stage = trace.copyStage;
-  if (trace?.fileEntries != null) metadata.file_entries = String(trace.fileEntries);
-  if (trace?.symlinkEntries != null) metadata.symlink_entries = String(trace.symlinkEntries);
-  if (trace?.symlinksStarted != null) metadata.symlinks_started = String(trace.symlinksStarted);
-  if (trace?.symlinksCompleted != null) metadata.symlinks_completed = String(trace.symlinksCompleted);
-  if (trace?.symlinksInFlight != null) metadata.symlinks_in_flight = String(trace.symlinksInFlight);
-  if (trace?.activeSymlinkSteps != null) {
-    const activeSteps = Object.entries(trace.activeSymlinkSteps)
-      .filter(([, count]) => count > 0)
-      .map(([step, count]) => `${step}:${count}`)
-      .join(",");
-    if (activeSteps !== "") metadata.active_symlink_steps = activeSteps;
-  }
-  return { level: input.progressedSinceLastTick ? "info" : "warn", metadata };
-}
 
 /** A root copy-in restores files as the box's user, not as root: the home directory names the owner. */
 async function resolveCopyInDownloadOwner(deps?: { getuid?: () => number; statHomeDir?: () => Promise<{ uid: number; gid: number }> }): Promise<{ uid: number; gid: number } | undefined> {
@@ -234,99 +129,21 @@ export async function runBoxCopyIn(deps: {
   onTrace?: BoxStoreDownloadOptions["onTrace"] | undefined;
 }): Promise<CopyInResult> {
   const log = deps.log ?? (() => {});
-  let manifestPresent: boolean;
-  let manifest: BoxManifestMap;
-  let primaryFullyHydrated: boolean | undefined;
-  try {
-    ({ present: manifestPresent, manifest, fullyHydrated: primaryFullyHydrated } = await deps.sync.readManifestStrictDetailed());
-  } catch (error) {
-    return { outcome: "failed", reason: `store manifest unreadable: ${errorMessage(error)}`, manifestEntries: 0, storeDbEntries: 0, files: 0, bytes: 0, verified: 0, failures: [errorMessage(error)] };
-  }
+  const sourcePlan = await chooseCopyInRestorePlan({
+    sync: deps.sync,
+    ...(deps.legacySync === undefined ? {} : { legacySync: deps.legacySync }),
+    log,
+  });
+  if (sourcePlan.kind === "finished") return sourcePlan.result;
+  const {
+    downloadFrom,
+    manifest,
+    hydrateSource,
+    downloadViaLegacy,
+    advertisedStoreDbEntries: authoritativeStoreDbEntries,
+    requiredStoreDbAgentIds: authoritativeStoreDbAgentIds,
+  } = sourcePlan;
 
-  let downloadVia = deps.sync;
-  let hydrateSource: "legacy" | undefined;
-  let downloadFromLegacy = false;
-  let authoritativeStoreDbEntries: number | undefined;
-  let authoritativeStoreDbAgentIds: Set<string> | undefined;
-  if ((!manifestPresent || primaryFullyHydrated === false) && deps.legacySync != null) {
-    let legacyManifest: BoxManifestMap;
-    try {
-      legacyManifest = await deps.legacySync.readManifestStrict();
-    } catch (error) {
-      return {
-        outcome: "failed",
-        reason: `legacy store manifest unreadable: ${errorMessage(error)}`,
-        manifestEntries: 0,
-        storeDbEntries: 0,
-        files: 0,
-        bytes: 0,
-        verified: 0,
-        failures: [errorMessage(error)],
-        hydrateSource: "legacy",
-      };
-    }
-    if (legacyManifest.size > 0) {
-      if (deps.legacySync.manifestV2Enabled === true) deps.sync.enrollManifestV2?.();
-      authoritativeStoreDbEntries = countStoreDbManifestEntries(legacyManifest);
-      authoritativeStoreDbAgentIds = getStoreDbManifestAgentIds(legacyManifest);
-      hydrateSource = "legacy";
-      if (primaryFullyHydrated === false && manifest.size > 0) {
-        // A primary store that is not sealed is only usable if it already covers every agent the legacy store has: the
-        // newer store wins, but only when nothing would be lost by it.
-        const primaryStoreDbAgentIds = getStoreDbManifestAgentIds(manifest);
-        if (authoritativeStoreDbAgentIds.size === 0) {
-          return {
-            outcome: "failed",
-            reason: `${INCOMPLETE_LEGACY_HYDRATE_REASON} the legacy source has no store.db identities to validate the newer store`,
-            manifestEntries: manifest.size,
-            storeDbEntries: 0,
-            restoredStoreDbEntries: 0,
-            files: 0,
-            bytes: 0,
-            verified: 0,
-            failures: ["the legacy source's store.db identity set is empty"],
-            hydrateSource,
-          };
-        }
-        const primaryCoversLegacyAgents = [...authoritativeStoreDbAgentIds].every((agentId) => primaryStoreDbAgentIds.has(agentId));
-        if (!primaryCoversLegacyAgents) {
-          return {
-            outcome: "failed",
-            reason: `${INCOMPLETE_LEGACY_HYDRATE_REASON} the newer store's store.db coverage is below the legacy source`,
-            manifestEntries: manifest.size,
-            storeDbEntries: authoritativeStoreDbEntries,
-            restoredStoreDbEntries: [...authoritativeStoreDbAgentIds].filter((agentId) => primaryStoreDbAgentIds.has(agentId)).length,
-            files: 0,
-            bytes: 0,
-            verified: 0,
-            failures: ["incomplete store.db agent coverage in the newer store"],
-            hydrateSource,
-          };
-        }
-        log(`the newer store's manifest is not sealed but covers all ${authoritativeStoreDbEntries} legacy store.db entries; hydrating the newer store`);
-      } else {
-        log(`this box's store was never seeded; hydrating ${legacyManifest.size} entries from the legacy store`);
-        manifest = legacyManifest;
-        downloadVia = deps.legacySync;
-        downloadFromLegacy = true;
-      }
-    } else if (primaryFullyHydrated === false) {
-      return {
-        outcome: "failed",
-        reason: "the legacy source's manifest is empty while the newer store is incomplete",
-        manifestEntries: manifest.size,
-        storeDbEntries: countStoreDbManifestEntries(manifest),
-        restoredStoreDbEntries: 0,
-        files: 0,
-        bytes: 0,
-        verified: 0,
-        failures: ["the legacy source's manifest is empty"],
-        hydrateSource: "legacy",
-      };
-    }
-  }
-
-  if (manifest.size === 0) return empty("the store is empty; this is a first boot");
   if (hydrateSource === "legacy") {
     // Before anything is written: the newer store records that a legacy hydrate is in progress, so a crash mid-restore is
     // visible to the next boot instead of looking like a complete store.
@@ -334,37 +151,29 @@ export async function runBoxCopyIn(deps: {
       if (deps.sync.markLegacyHydrationIncomplete == null) throw new BoxStoreSyncError("the primary store cannot mark a legacy hydrate incomplete");
       await deps.sync.markLegacyHydrationIncomplete();
     } catch (error) {
-      return {
-        outcome: "failed",
-        reason: `failed to mark the legacy hydrate incomplete: ${errorMessage(error)}`,
-        manifestEntries: manifest.size,
-        storeDbEntries: countStoreDbManifestEntries(manifest),
-        files: 0,
-        bytes: 0,
-        verified: 0,
-        failures: [errorMessage(error)],
-        hydrateSource,
-      };
+      return copyInFailureResult({
+        message: `failed to mark the legacy hydrate incomplete: ${errorMessage(error)}`,
+        indexedEntries: manifest.size,
+        storeDatabases: countStoreDbManifestEntries(manifest),
+        issues: [errorMessage(error)],
+        origin: hydrateSource,
+      });
     }
   }
 
   const advertisedStoreDbEntries = authoritativeStoreDbEntries ?? countStoreDbManifestEntries(manifest);
   let summary: BoxStoreDownloadSummary;
   try {
-    summary = await downloadVia.download(deps.targetDir, { manifest, onProgress: deps.onProgress!, onTrace: deps.onTrace!, ...deps.downloadOwner });
+    summary = await downloadFrom.download(deps.targetDir, { manifest, onProgress: deps.onProgress!, onTrace: deps.onTrace!, ...deps.downloadOwner });
   } catch (error) {
-    return {
-      outcome: "failed",
-      reason: `the download threw: ${errorMessage(error)}`,
-      manifestEntries: manifest.size,
-      storeDbEntries: advertisedStoreDbEntries,
-      restoredStoreDbEntries: 0,
-      files: 0,
-      bytes: 0,
-      verified: 0,
-      failures: [errorMessage(error)],
-      ...(hydrateSource === undefined ? {} : { hydrateSource }),
-    };
+    return copyInFailureResult({
+      message: `the download threw: ${errorMessage(error)}`,
+      indexedEntries: manifest.size,
+      storeDatabases: advertisedStoreDbEntries,
+      restoredStoreDatabases: 0,
+      issues: [errorMessage(error)],
+      ...(hydrateSource === undefined ? {} : { origin: hydrateSource }),
+    });
   }
 
   // How many store databases really landed: the legacy source's list is the count that matters when it exists.
@@ -375,7 +184,7 @@ export async function runBoxCopyIn(deps: {
   const legacyStoreDbsComplete = restoredStoreDbEntries >= advertisedStoreDbEntries;
   const fullyHydrated =
     isBoxStoreFullyHydrated({
-      hydrateSource: downloadFromLegacy ? "legacy" : (undefined as never),
+      hydrateSource: downloadViaLegacy ? "legacy" : (undefined as never),
       failures: summary.failures,
       manifestEntries: manifest.size,
       files: summary.files,
@@ -390,18 +199,17 @@ export async function runBoxCopyIn(deps: {
       hydrateSource === "legacy" && !legacyStoreDbsComplete
         ? `${INCOMPLETE_LEGACY_HYDRATE_REASON} advertised_store_db=${advertisedStoreDbEntries} restored_store_db=${restoredStoreDbEntries} advisory_advertised_files=${manifest.size} advisory_restored_files=${summary.files}`
         : `partial hydrate (${summary.files}/${manifest.size} files, ${summary.failures.length} failures)`;
-    return {
-      outcome: "failed",
-      reason,
-      manifestEntries: manifest.size,
-      storeDbEntries: advertisedStoreDbEntries,
-      restoredStoreDbEntries,
-      files: summary.files,
-      bytes: summary.bytes,
-      verified: summary.verified,
-      failures: summary.failures,
-      ...(hydrateSource === undefined ? {} : { hydrateSource }),
-    };
+    return copyInFailureResult({
+      message: reason,
+      indexedEntries: manifest.size,
+      storeDatabases: advertisedStoreDbEntries,
+      restoredStoreDatabases: restoredStoreDbEntries,
+      restoredFiles: summary.files,
+      restoredBytes: summary.bytes,
+      verifiedFiles: summary.verified,
+      issues: summary.failures,
+      ...(hydrateSource === undefined ? {} : { origin: hydrateSource }),
+    });
   }
 
   if (hydrateSource === "legacy") {
@@ -415,14 +223,15 @@ export async function runBoxCopyIn(deps: {
   }
   return {
     outcome: "hydrated",
-    reason: hydrateSource === "legacy" ? "the store was hydrated from the legacy store" : "the store was hydrated",
-    manifestEntries: manifest.size,
-    storeDbEntries: advertisedStoreDbEntries,
-    files: summary.files,
-    bytes: summary.bytes,
-    verified: summary.verified,
-    failures: [],
-    ...(hydrateSource === undefined ? {} : { hydrateSource }),
+    message: hydrateSource === "legacy" ? "the store was hydrated from the legacy store" : "the store was hydrated",
+    indexedEntries: manifest.size,
+    storeDatabases: advertisedStoreDbEntries,
+    ...(hydrateSource === undefined ? {} : { origin: hydrateSource }),
+    restoredStoreDatabases: restoredStoreDbEntries,
+    restoredFiles: summary.files,
+    restoredBytes: summary.bytes,
+    verifiedFiles: summary.verified,
+    issues: [],
   };
 }
 
@@ -455,7 +264,7 @@ async function runBoxCopyInWithRetry(
   let result = await runBoxCopyIn(retryDeps);
   for (let attempt = 1; attempt < options.attempts && isTransientCopyInFailure(result); attempt += 1) {
     const backoff = options.backoffMs(attempt);
-    deps.log?.(`copy-in failed transiently (attempt ${attempt}/${options.attempts}): ${result.reason}; retrying in ${backoff}ms`);
+    deps.log?.(`copy-in failed transiently (attempt ${attempt}/${options.attempts}): ${result.message}; retrying in ${backoff}ms`);
     await options.sleep(backoff, attempt);
     result = await runBoxCopyIn(retryDeps);
   }
@@ -528,17 +337,17 @@ export async function executeBoxCopyInFromEnv(env: NodeJS.ProcessEnv = process.e
   const reportCopyIn = (result: CopyInResult) => {
     telemetry.reportBoxCopyIn(result.outcome === "failed" ? "error" : "info", {
       outcome: result.outcome,
-      hydrate_source: result.hydrateSource,
+      hydrate_source: result.origin,
       reason: bucketCopyInReason(result),
       error_class: classifyCopyInFailure(result),
-      error_summary: result.outcome === "failed" ? redactCopyInErrorForTelemetry(result.failures[0] ?? result.reason) : "",
-      manifest_entries: String(result.manifestEntries),
-      store_db_entries: String(result.storeDbEntries),
-      restored_store_db_entries: result.restoredStoreDbEntries == null ? undefined : String(result.restoredStoreDbEntries),
-      files: String(result.files),
-      bytes: String(result.bytes),
-      verified: String(result.verified),
-      failures: String(result.failures.length),
+      error_summary: result.outcome === "failed" ? redactCopyInErrorForTelemetry(result.issues[0] ?? result.message) : "",
+      manifest_entries: String(result.indexedEntries),
+      store_db_entries: String(result.storeDatabases),
+      restored_store_db_entries: result.restoredStoreDatabases == null ? undefined : String(result.restoredStoreDatabases),
+      files: String(result.restoredFiles),
+      bytes: String(result.restoredBytes),
+      verified: String(result.verifiedFiles),
+      failures: String(result.issues.length),
       duration_ms: String(Date.now() - startedAt),
     });
   };
@@ -567,7 +376,7 @@ export async function executeBoxCopyInFromEnv(env: NodeJS.ProcessEnv = process.e
     const lock = await acquireCopyInLock(lockPath, log);
     if (lock == null) {
       log("could not acquire the box-store lock (a live writer?); failing closed");
-      const lockResult: CopyInResult = { outcome: "failed", reason: "lock-held", manifestEntries: 0, storeDbEntries: 0, files: 0, bytes: 0, verified: 0, failures: [] };
+      const lockResult = copyInFailureResult({ message: "lock-held", indexedEntries: 0, storeDatabases: 0, issues: [] });
       makeCopyInStatusWriter()(buildCopyInStatusFromResult(lockResult), { force: true });
       reportCopyIn(lockResult);
       return BOX_COPY_IN_EXIT_FAILED;
@@ -615,12 +424,12 @@ export async function executeBoxCopyInFromEnv(env: NodeJS.ProcessEnv = process.e
         },
       );
       writeStatus(buildCopyInStatusFromResult(result), { force: true });
-      log(`result outcome=${result.outcome} store_entries=${result.manifestEntries} files=${result.files} bytes=${result.bytes} verified=${result.verified} failures=${result.failures.length} duration_ms=${Date.now() - startedAt} reason="${result.reason}"`);
-      for (const failure of result.failures.slice(0, 20)) log(`  failure: ${failure}`);
+      log(`result outcome=${result.outcome} store_entries=${result.indexedEntries} files=${result.restoredFiles} bytes=${result.restoredBytes} verified=${result.verifiedFiles} failures=${result.issues.length} duration_ms=${Date.now() - startedAt} reason="${result.message}"`);
+      for (const failure of result.issues.slice(0, 20)) log(`  failure: ${failure}`);
       reportCopyIn(result);
       return outcomeToExitCode(result.outcome);
     } catch (error) {
-      const thrown: CopyInResult = { outcome: "failed", reason: `copy-in threw: ${errorMessage(error)}`, manifestEntries: 0, storeDbEntries: 0, files: 0, bytes: 0, verified: 0, failures: [errorMessage(error)] };
+      const thrown = copyInFailureResult({ message: `copy-in threw: ${errorMessage(error)}`, indexedEntries: 0, storeDatabases: 0, issues: [errorMessage(error)] });
       writeStatus(buildCopyInStatusFromResult(thrown), { force: true });
       reportCopyIn(thrown);
       return BOX_COPY_IN_EXIT_FAILED;
@@ -630,67 +439,6 @@ export async function executeBoxCopyInFromEnv(env: NodeJS.ProcessEnv = process.e
   } finally {
     stuckWatchdogHandle.dispose();
     await telemetry.dispose().catch(() => {});
-  }
-}
-
-/** The reason in a bucket a dashboard can count, rather than as free text. */
-export function bucketCopyInReason(result: CopyInResult): string {
-  if (result.outcome === "hydrated") return "hydrated";
-  if (result.outcome === "noop") return "noop";
-  if (result.reason.startsWith(INCOMPLETE_LEGACY_HYDRATE_REASON)) return INCOMPLETE_LEGACY_HYDRATE_REASON;
-  if (result.reason.startsWith("partial hydrate")) return "partial-hydrate";
-  if (result.reason.startsWith("store manifest unreadable") || result.reason.startsWith("legacy store manifest unreadable")) return "manifest-unreadable";
-  if (result.reason.startsWith("the download threw")) return "download-error";
-  return "error";
-}
-
-/** The class of a failure, from the first thing that went wrong: this is what decides whether a retry makes sense. */
-export function classifyCopyInFailure(result: CopyInResult): string {
-  if (result.outcome !== "failed") return "";
-  if (result.reason.startsWith("lock-held")) return "lock-held";
-  const text = (result.failures[0] ?? result.reason).toLowerCase();
-  if (/no inference credential/.test(text)) return "no-credential";
-  if (/\b(401|403)\b|forbidden|access denied|unauthorized|unauthenticated|notloggedin|does not have access|not authorized|access is not enabled/.test(text)) return "auth";
-  if (/timed?\s?out|etimedout|deadline/.test(text)) return "timeout";
-  if (/enotfound|econnrefused|econnreset|fetch failed|network|socket|getaddrinfo|dns/.test(text)) return "network";
-  if (/nosuchkey|presign|amazonaws|s3|bucket/.test(text)) return "s3";
-  return "unknown";
-}
-
-/** Whether a hydrate is worth another attempt: a partial restore is, a permission problem is not. */
-export function isTransientCopyInFailure(result: CopyInResult): boolean {
-  if (result.outcome !== "failed") return false;
-  if (
-    result.reason.includes("store.db coverage is below") ||
-    result.reason.includes("no store.db identities to validate") ||
-    result.reason.startsWith("the legacy source's manifest is empty")
-  ) {
-    return false;
-  }
-  if (result.reason.startsWith("partial hydrate") || result.reason.startsWith(INCOMPLETE_LEGACY_HYDRATE_REASON)) return true;
-  const classification = classifyCopyInFailure(result);
-  return classification !== "auth" && classification !== "no-credential" && classification !== "lock-held";
-}
-
-/** An error message with urls, paths and ids taken out: it goes to telemetry, not to a log file. */
-export function redactCopyInErrorForTelemetry(raw: string): string {
-  return raw
-    .replace(/https?:\/\/\S+/gi, "<url>")
-    .replace(/\/[^\s"']+/g, "<path>")
-    .replace(/[A-Za-z0-9_-]{24,}/g, "<id>")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
-}
-
-export function outcomeToExitCode(outcome: CopyInResult["outcome"]): number {
-  switch (outcome) {
-    case "hydrated":
-      return BOX_COPY_IN_EXIT_HYDRATED;
-    case "failed":
-      return BOX_COPY_IN_EXIT_FAILED;
-    case "noop":
-      return BOX_COPY_IN_EXIT_NOOP;
   }
 }
 
@@ -742,8 +490,4 @@ async function withRetry<T>(label: string, work: () => Promise<T>, log: (message
       throw error;
     }
   });
-}
-
-export function empty(reason: string): CopyInResult {
-  return { outcome: "noop", reason, manifestEntries: 0, storeDbEntries: 0, files: 0, bytes: 0, verified: 0, failures: [] };
 }

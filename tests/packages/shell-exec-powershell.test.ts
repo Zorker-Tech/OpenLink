@@ -100,8 +100,14 @@ test("a close that never arrives inside the timeout is warned about and the run 
 
 test("an aborted run reports an aborted exit", async () => {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 30);
-  const { events } = await collect("slow", {}, controller.signal);
+  process.env.FAKE_MODE = "slow";
+  const session = await initPowerShellState();
+  const events: Event[] = [];
+  for await (const event of session.execute(createContext(), "echo hello", { signal: controller.signal })) {
+    events.push(event as Event);
+    // Waiting for the spawn notification avoids aborting before the fake child exists under a loaded test runner.
+    if (event.type === "stdin_ready") controller.abort();
+  }
   const exit = events.find((event) => event.type === "exit");
   assert.equal(exit?.aborted, true);
 });

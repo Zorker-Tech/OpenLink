@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { BackgroundWakes, distinctChannelAddresses } from "../../source/host/transcript/background-wakes.ts";
 import { AgentGoneError } from "../../source/host/transcript/session-runtime.ts";
 import { getTranscript, setTranscript } from "../../source/host/transcript/transcript-store.ts";
-import { nextEntryId } from "../../source/host/transcript/transcript-entry-ids.ts";
+import { allocateTranscriptEntryId } from "../../source/host/transcript/transcript-entry-ids.ts";
 import { SLATE_DISK_SAVER_KICKSTART_PROMPT } from "../../source/shared/agents/disk-saver.ts";
 import { SlateError } from "../../source/shared/errors/registry.ts";
 
@@ -757,7 +757,7 @@ describe("the details of a written wake", () => {
   it("computes the entry id from the transcript the conversation is showing", async () => {
     setTranscript([{ id: "t0u", role: "user" } as never]);
     const world1 = world({ activeSession: fakeSession("agent-1") });
-    const expected = nextEntryId(getTranscript(), "user-message");
+    const expected = allocateTranscriptEntryId(getTranscript(), "user-message");
     world1.wakes.wakeForInbound("agent-1", envelopeOf());
     await new Promise((resolve) => setTimeout(resolve, 40));
     const written = world1.named("appendEntry")[0]?.args[0] as Record<string, unknown>;

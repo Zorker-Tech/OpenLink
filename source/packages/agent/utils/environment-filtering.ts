@@ -9,14 +9,8 @@
 import { AgentType } from "./agent-config.ts"
 import { filterByEnvironment, type EnvironmentScopedItem } from "../../plugins/environment-filter.ts"
 
-const ENVIRONMENT_BY_AGENT_TYPE: Record<AgentType, string> = {
-  [AgentType.BACKGROUND]: "cloud",
-  [AgentType.BUGBOT]: "local",
-  [AgentType.IDE]: "local",
-  [AgentType.CLI]: "local",
-}
-
-export function filterByAgentEnvironment<T extends EnvironmentScopedItem>(items: T[], agentType?: AgentType): T[] {
+export function filterItemsForRunEnvironment<T extends EnvironmentScopedItem>(items: T[], agentType?: AgentType): T[] {
   if (agentType === undefined || agentType === AgentType.BUGBOT) return items
-  return filterByEnvironment(items, ENVIRONMENT_BY_AGENT_TYPE[agentType])
+  const environment = agentType === AgentType.BACKGROUND ? "cloud" : "local"
+  return filterByEnvironment(items, environment)
 }

@@ -15,7 +15,7 @@ import {
   TOOLS_DISCOVERY_DEADLINE_MS,
 } from "../../source/shared/node/mcp/tools-discovery.ts";
 import { SlateMcpConfigError } from "../../source/shared/node/mcp/mcp-config-error.ts";
-import { generatedMcpResultFactory } from "../../source/shared/node/mcp/mcp-result-factory.ts";
+import { generatedMcpResultFactory } from "../../source/adapters/interop/mcp/mcp-result-factory.ts";
 import { formatMcpCustomInstructionToolNote } from "../../source/shared/mcp-custom-instructions.ts";
 import { pinMcpDiagnosticsReporter, type McpDiagnostic } from "../../source/shared/node/mcp/mcp-diagnostics.ts";
 

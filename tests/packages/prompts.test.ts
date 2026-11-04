@@ -2,7 +2,6 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { renderContent } from "../../source/packages/prompt-jsx/index.ts"
-import { CursorRule, CursorRuleSource, CursorRuleType } from "../../source/packages/proto/generated/agent/v1/rules_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import {
   buildAntiAskQuestionSystemReminder,
@@ -10,16 +9,18 @@ import {
 } from "../../source/packages/agent/prompts/ask-question-guidance.ts"
 import {
   buildRulesSection,
-  getGeneratedUserRulesForModel,
 } from "../../source/packages/agent/prompts/custom-user-rules.ts"
-import { categorizeCursorRules } from "../../source/packages/agent/prompts/rule-categorization.ts"
+import { getGeneratedUserRulesForModel } from "../../source/adapters/interop/agent/user-rule-profile-adapter.ts"
+import { resolveAdditionalUserRules } from "../../source/adapters/interop/agent/user-info-input-adapter.ts"
+import { categorizePromptRules } from "../../source/packages/agent/prompts/rule-categorization.ts"
+import type { UserInfoRule } from "../../source/packages/agent/prompts/user-info-data-contracts.ts"
 import { hasDisableModelInvocation, isSkillPath } from "../../source/packages/agent/prompts/rule-predicates.ts"
 import { applySkillCatalogBudget } from "../../source/packages/agent/prompts/skill-catalog-budget.ts"
 import { buildAvailableSkillsPromptSection } from "../../source/packages/agent/prompts/available-skills-section.ts"
 import { getSkillNameForTest } from "./helpers/prompt-test-helpers.ts"
 import { PROMPT_SUGGESTION_MAX_WORDS, promptSuggestionUserMessage } from "../../source/packages/agent/prompts/prompt-suggestion.ts"
-import { shouldInjectComposerGitUserRules } from "../../source/packages/agent/prompts/composer-git-rule-gate.ts"
-import { getComposerGitUserRules } from "../../source/packages/agent/prompts/git-workflow-rules.ts"
+import { shouldInjectGitWorkflowRules } from "../../source/packages/agent/prompts/git-workflow-rule-policy.ts"
+import { getGitWorkflowUserRules } from "../../source/packages/agent/prompts/git-workflow-rules.ts"
 import {
   getMcpFileSystemInstructions,
   getMcpFileSystemToolNames,
@@ -29,17 +30,16 @@ import { extractToolInfo } from "../../source/packages/agent/prompts/tool-info.t
 import { isThreadBoundSession } from "../../source/packages/agent/prompts/thread-bound-session.ts"
 import { usesPersistenceInstructions } from "../../source/packages/agent/prompts/persistence-instructions.ts"
 
-function rule(overrides: Record<string, unknown> = {}): CursorRule {
-  return new CursorRule({
+function rule(overrides: Partial<UserInfoRule> = {}): UserInfoRule {
+  return {
     fullPath: "/project/.cursor/rules/rule.mdc",
     content: "Rule body",
-    source: CursorRuleSource.UNSPECIFIED,
     ...overrides,
-  } as never)
+  }
 }
 
-function globalRule(fullPath = "/project/.cursor/rules/rule.mdc"): CursorRule {
-  return rule({ fullPath, type: { type: { case: "global", value: {} } } } as never)
+function globalRule(fullPath = "/project/.cursor/rules/rule.mdc"): UserInfoRule {
+  return rule({ fullPath, type: { type: { case: "global", value: {} } } })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -79,9 +79,9 @@ test("a rule that refuses model invocation says so in its frontmatter", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("a rule's origin decides which group it lands in", () => {
-  const categorized = categorizeCursorRules([
-    rule({ source: CursorRuleSource.USER }),
-    rule({ source: CursorRuleSource.TEAM, fullPath: "/project/.cursor/rules/team.mdc" }),
+  const categorized = categorizePromptRules([
+    rule({ source: "user" }),
+    rule({ source: "team", fullPath: "/project/.cursor/rules/team.mdc" }),
     globalRule(),
   ])
   assert.equal(categorized.userRules.length, 1)
@@ -90,9 +90,9 @@ test("a rule's origin decides which group it lands in", () => {
 })
 
 test("a skill is grouped as a skill unless it is always in force or refuses invocation", () => {
-  const categorized = categorizeCursorRules([
-    rule({ fullPath: "/project/.cursor/skills/a/SKILL.md", type: { type: { case: "agentFetched", value: {} } } } as never),
-    rule({ fullPath: "/project/.cursor/skills/b/SKILL.md", type: { type: { case: "global", value: {} } } } as never),
+  const categorized = categorizePromptRules([
+    rule({ fullPath: "/project/.cursor/skills/a/SKILL.md", type: { type: { case: "agentFetched", value: {} } } }),
+    rule({ fullPath: "/project/.cursor/skills/b/SKILL.md", type: { type: { case: "global", value: {} } } }),
     rule({ fullPath: "/project/.cursor/skills/c/SKILL.md", content: "---\ndisable-model-invocation: true\n---\nbody" }),
   ])
   assert.equal(categorized.skills.length, 1)
@@ -101,8 +101,8 @@ test("a skill is grouped as a skill unless it is always in force or refuses invo
 })
 
 test("a rule attached by hand is not offered for the model to request", () => {
-  const categorized = categorizeCursorRules([
-    rule({ type: { type: { case: "manuallyAttached", value: {} } } } as never),
+  const categorized = categorizePromptRules([
+    rule({ type: { type: { case: "manuallyAttached", value: {} } } }),
   ])
   assert.equal(categorized.agentRequestableRules.length, 0)
   assert.equal(categorized.globalRules.length, 0)
@@ -111,35 +111,35 @@ test("a rule attached by hand is not offered for the model to request", () => {
 test("a rule scoped to files the workspace has is requestable; one scoped elsewhere is global", () => {
   const fileScoped = rule({
     fullPath: "/project/.cursor/rules/scoped.mdc",
-    type: { type: { case: "fileGlobbed", value: { globs: ["src/**"] } } } as never,
+    type: { type: { case: "fileGlobbed", value: { globs: ["src/**"] } } },
   })
-  const categorized = categorizeCursorRules([fileScoped], ["/project"])
+  const categorized = categorizePromptRules([fileScoped], ["/project"])
   assert.equal(categorized.agentRequestableRules.length, 1)
 
   // A globbed rule is requestable wherever it lives; only a plain global rule can be nested.
   const otherProject = rule({
     fullPath: "/elsewhere/.cursor/rules/scoped.mdc",
-    type: { type: { case: "fileGlobbed", value: { globs: ["src/**"] } } } as never,
+    type: { type: { case: "fileGlobbed", value: { globs: ["src/**"] } } },
   })
-  const categorizedElsewhere = categorizeCursorRules([otherProject], ["/project"])
+  const categorizedElsewhere = categorizePromptRules([otherProject], ["/project"])
   assert.equal(categorizedElsewhere.agentRequestableRules.length, 1)
 
   // A global rule inside a project directory below the workspace root is requestable rather than global.
   const nestedGlobal = rule({
     fullPath: "/project/sub/.cursor/rules/nested.mdc",
-    type: { type: { case: "global", value: {} } } as never,
+    type: { type: { case: "global", value: {} } },
   })
-  assert.equal(categorizeCursorRules([nestedGlobal], ["/project"]).agentRequestableRules.length, 1)
+  assert.equal(categorizePromptRules([nestedGlobal], ["/project"]).agentRequestableRules.length, 1)
   // A rule directly under the workspace root is not nested, so it stays global.
   const rootGlobal = rule({
     fullPath: "/project/.cursor/rules/root.mdc",
-    type: { type: { case: "global", value: {} } } as never,
+    type: { type: { case: "global", value: {} } },
   })
-  assert.equal(categorizeCursorRules([rootGlobal], ["/project"]).globalRules.length, 1)
+  assert.equal(categorizePromptRules([rootGlobal], ["/project"]).globalRules.length, 1)
 })
 
 test("a rule scoped to another environment is dropped before anything else", () => {
-  const categorized = categorizeCursorRules(
+  const categorized = categorizePromptRules(
     [rule({ disabledEnvironments: ["cloud"] }), globalRule("/project/.cursor/rules/two.mdc")],
     [],
     AgentType.BACKGROUND,
@@ -160,7 +160,7 @@ test("a model trained on the raw slug is given none of the generated rules", () 
 test("the general rule set is returned for other models when the flag asks for it", () => {
   const rules = getGeneratedUserRulesForModel({}, { enableComposer2CustomUserRules: true })
   assert.equal(rules.length, 5)
-  assert.match(rules[0] as string, /^Follow ALL user, tool, system, and skill instructions/)
+  assert.match(rules[0] as string, /^Treat the user's request and the applicable system, tool and skill directions/)
   assert.equal(getGeneratedUserRulesForModel({}, {}).length, 0)
 })
 
@@ -170,8 +170,8 @@ test("the optional rules are added when their flags are set", () => {
     enableVegaFrontendUserRuleIntervention: true,
   })
   assert.equal(rules.length, 2)
-  assert.match(rules[0] as string, /frontend design tasks/)
-  assert.match(rules[1] as string, /final response for the user/)
+  assert.match(rules[0] as string, /For interface work/)
+  assert.match(rules[1] as string, /In the final response/)
 })
 
 test("a training-aligned model gets the worded rules and the tool-specific ones", () => {
@@ -180,12 +180,11 @@ test("a training-aligned model gets the worded rules and the tool-specific ones"
     { enableComposer2CustomUserRules: true, enableMatterhornPromptTweaks: true, enableGrepBroadGlobGuard: true },
     { awaitToolName: "Await", shellToolName: "Shell", grepToolName: "Grep" },
   )
-  assert.equal(rules.some(text => text.includes("Remember to use skills and MCP tools")), true)
-  assert.equal(rules.some(text => text.startsWith("When using Shell:")), true)
-  assert.equal(rules.some(text => text.startsWith("When using Grep:")), true)
-  assert.equal(rules.some(text => text.startsWith("When using Await on a background shell:")), true)
-  // The general communication rule is replaced by the training-aligned wording.
-  assert.equal(rules.some(text => text.includes("Use high quality prose with complete sentences")), true)
+  assert.equal(rules.some(text => text.includes("Check for relevant installed skills and connected tools")), true)
+  assert.equal(rules.some(text => text.startsWith("When using Shell,")), true)
+  assert.equal(rules.some(text => text.startsWith("When using Grep,")), true)
+  assert.equal(rules.some(text => text.startsWith("When waiting on Await")), true)
+  assert.equal(rules.some(text => text.startsWith("Write polished, direct responses")), true)
 })
 
 test("a training-aligned model without the tweak flag gets the general wording instead", () => {
@@ -194,27 +193,23 @@ test("a training-aligned model without the tweak flag gets the general wording i
     { enableComposer2CustomUserRules: true },
     { shellToolName: "Shell" },
   )
-  assert.equal(rules.some(text => text.startsWith("When using Shell:")), false)
-  assert.equal(rules.some(text => text.includes("Use code citation blocks")), true)
+  assert.equal(rules.some(text => text.startsWith("When using Shell,")), false)
+  assert.equal(rules.some(text => text.includes("Refer to code with useful file and line links")), true)
 })
 
-test("the git rules are given only to the models that lack the tool, and never to a background run", () => {
-  assert.equal(shouldInjectComposerGitUserRules({ promptVersion: "cursor-0226" }), true)
-  assert.equal(shouldInjectComposerGitUserRules({ isComposer2: true }), true)
-  assert.equal(shouldInjectComposerGitUserRules({ isComposer15: true }), true)
-  assert.equal(shouldInjectComposerGitUserRules({ isComposerMatterhorn: true }), true)
-  assert.equal(shouldInjectComposerGitUserRules({}), false)
-  assert.equal(shouldInjectComposerGitUserRules(undefined), false)
-  assert.equal(shouldInjectComposerGitUserRules({ isComposerMatterhorn: true, isRawTrainingSlug: true }), false)
-  assert.equal(shouldInjectComposerGitUserRules({ isComposer2: true }, AgentType.BACKGROUND), false)
+test("git workflow guidance is capability-gated and excluded from background runs", () => {
+  assert.equal(shouldInjectGitWorkflowRules({ needsGitWorkflowRules: true }), true)
+  assert.equal(shouldInjectGitWorkflowRules({ needsGitWorkflowRules: false }), false)
+  assert.equal(shouldInjectGitWorkflowRules(undefined), false)
+  assert.equal(shouldInjectGitWorkflowRules({ needsGitWorkflowRules: true }, AgentType.BACKGROUND), false)
 })
 
 test("the git rules name the shell tool the session actually has", () => {
-  const rules = getComposerGitUserRules({ allTools: { SHELL: { name: "RunCommand" } } })
+  const rules = getGitWorkflowUserRules({ allTools: { SHELL: { name: "RunCommand" } } })
   assert.equal(rules.length, 2)
   assert.match(rules[0] as string, /RunCommand/)
-  assert.match(rules[0] as string, /NEVER update the git config/)
-  assert.equal(getComposerGitUserRules({})[0]?.includes("Shell"), true)
+  assert.match(rules[0] as string, /Leave git configuration unchanged/)
+  assert.equal(getGitWorkflowUserRules({})[0]?.includes("Shell"), true)
 })
 
 test("the ask-question rule names the tool and comes in both lengths", () => {
@@ -231,18 +226,20 @@ test("the ask-question rule names the tool and comes in both lengths", () => {
 // the rules section
 // ---------------------------------------------------------------------------------------------
 
+const emptyRuleGroups = { globalRules: [], agentRequestableRules: [], userRules: [] }
+
 test("nothing is rendered when the session displays no rules", () => {
-  const result = buildRulesSection({ cursorRules: [globalRule()], displayOptions: { displayCursorRules: false } })
+  const result = buildRulesSection({ categorizedRules: { globalRules: [globalRule()], agentRequestableRules: [], userRules: [] }, displayRules: false })
   assert.equal(result.ruleCount, 0)
   assert.equal(result.section, undefined)
 })
 
 test("nothing is rendered when there is nothing to render", () => {
-  assert.equal(buildRulesSection({ cursorRules: [] }).ruleCount, 0)
+  assert.equal(buildRulesSection({ categorizedRules: emptyRuleGroups }).ruleCount, 0)
 })
 
 test("a workspace rule becomes a section with the rule count reported", () => {
-  const result = buildRulesSection({ cursorRules: [globalRule()], toolInfo: { allTools: { READ: { name: "read_file" } } } })
+  const result = buildRulesSection({ categorizedRules: { globalRules: [globalRule()], agentRequestableRules: [], userRules: [] } }, { readToolName: "read_file" })
   assert.equal(result.ruleCount, 1)
   const rendered = renderContent(result.section!)
   assert.match(rendered, /<rules>/)
@@ -252,23 +249,24 @@ test("a workspace rule becomes a section with the rule count reported", () => {
 
 test("a cloud run is given no git rules, and a local one is", () => {
   const props = {
-    cursorRules: [] as CursorRule[],
     modelInfo: { isComposer2: true },
+    featureFlags: { enableComposer2CustomUserRules: true },
     toolInfo: { allTools: { SHELL: { name: "Shell" }, ASK_QUESTION: { name: "AskQuestion" } } },
   }
-  const local = buildRulesSection({ ...props, featureFlags: { enableComposer2CustomUserRules: true } })
-  const cloud = buildRulesSection({ ...props, backgroundAgentSource: 1 as never, featureFlags: { enableComposer2CustomUserRules: true } })
-  assert.equal(cloud.ruleCount < local.ruleCount, true)
-  assert.match(renderContent(cloud.section!), /rules/)
-  assert.doesNotMatch(renderContent(cloud.section!), /Committing changes with git/)
+  const local = resolveAdditionalUserRules(props)
+  const cloud = resolveAdditionalUserRules({ ...props, backgroundAgentSource: 1 as never })
+  assert.equal(cloud.length < local.length, true)
+  const cloudSection = buildRulesSection({ categorizedRules: emptyRuleGroups, additionalUserRules: cloud })
+  assert.match(renderContent(cloudSection.section!), /<rules>/)
+  assert.doesNotMatch(renderContent(cloudSection.section!), /Committing changes with git/)
 })
 
 test("the ask-question rule is added to the user rules when the flag is set", () => {
-  const result = buildRulesSection({
-    cursorRules: [],
+  const additionalUserRules = resolveAdditionalUserRules({
     toolInfo: { allTools: { ASK_QUESTION: { name: "AskQuestion" } } },
     featureFlags: { enableAntiAskQuestionUserRule: true },
   })
+  const result = buildRulesSection({ categorizedRules: emptyRuleGroups, additionalUserRules })
   assert.equal(result.ruleCount, 1)
   assert.match(renderContent(result.section!), /AskQuestion tool guidance/)
 })
@@ -280,21 +278,15 @@ test("a requestable rule is described with where to read it, and the tool to rea
     type: { type: { case: "agentFetched", value: { description: "How to write release notes" } } } as never,
   })
   const result = buildRulesSection(
-    { cursorRules: [fetched], toolInfo: { allTools: { READ: { name: "read_file" } } } },
-    { categorizedRules: { globalRules: [], agentRequestableRules: [fetched], userRules: [] }, readToolName: "read_file" },
+    { categorizedRules: { globalRules: [], agentRequestableRules: [fetched], userRules: [] } },
+    { readToolName: "read_file" },
   )
   const rendered = renderContent(result.section!)
   assert.match(rendered, /agent_requestable_workspace_rule/)
   assert.match(rendered, /How to write release notes/)
-  assert.match(rendered, /Use the read_file tool/)
-  // A globbed rule is in force by itself, so it is not offered for the model to request.
-  const globbed = rule({
-    fullPath: "/project/.cursor/rules/scoped.mdc",
-    type: { type: { case: "fileGlobbed", value: { globs: ["src/**"] } } } as never,
-  })
-  const filtered = buildRulesSection({ cursorRules: [globbed] }, {
-    categorizedRules: { globalRules: [], agentRequestableRules: [globbed], userRules: [] },
-  })
+  assert.match(rendered, /use read_file to read its full text/)
+  // The caller supplies the already filtered groups; the section only renders what applies.
+  const filtered = buildRulesSection({ categorizedRules: emptyRuleGroups })
   assert.equal(filtered.ruleCount, 0)
 })
 
@@ -407,14 +399,14 @@ test("a session can protect one more skill", () => {
 
 test("a skill that refuses invocation is not offered, and a file-scoped one is not either", () => {
   const section = buildAvailableSkillsPromptSection({
-    cursorRules: [],
+    workspaceRules: [],
     displayOptions: { displaySkills: true },
     agentSkills: [
       { fullPath: "/p/.cursor/skills/a/SKILL.md", description: "a" },
       { fullPath: "/p/.cursor/skills/b/SKILL.md", description: "b", disableModelInvocation: true },
       { fullPath: "/p/.cursor/skills/c/SKILL.md", description: "c", globs: ["src/**"] },
-    ] as never,
-    env: { workspacePaths: ["/p"] } as never,
+    ],
+    env: { workspacePaths: ["/p"] },
     modelInfo: {},
   })
   assert.equal(section.skillCount, 1)
@@ -423,9 +415,9 @@ test("a skill that refuses invocation is not offered, and a file-scoped one is n
 
 test("nothing is shown unless the session displays skills, except for a desktop subagent", () => {
   const props = {
-    cursorRules: [],
-    agentSkills: [{ fullPath: "/p/.cursor/skills/a/SKILL.md", description: "a" }] as never,
-    env: { workspacePaths: ["/p"] } as never,
+    workspaceRules: [],
+    agentSkills: [{ fullPath: "/p/.cursor/skills/a/SKILL.md", description: "a" }],
+    env: { workspacePaths: ["/p"] },
     modelInfo: {},
   }
   assert.equal(buildAvailableSkillsPromptSection({ ...props, displayOptions: {} }).skillCount, 0)
@@ -435,7 +427,7 @@ test("nothing is shown unless the session displays skills, except for a desktop 
     agentSkills: [
       { fullPath: "/p/.cursor/skills/a/SKILL.md", description: "a" },
       { fullPath: "/p/.cursor/skills/computer-use/SKILL.md", description: "drive the desktop" },
-    ] as never,
+    ],
   })
   assert.equal(desktop.skillCount, 1)
   assert.match(renderContent(desktop.section!), /computer-use/)
@@ -443,9 +435,9 @@ test("nothing is shown unless the session displays skills, except for a desktop 
 
 test("a rule that is really a skill is offered through the legacy route too", () => {
   const section = buildAvailableSkillsPromptSection({
-    cursorRules: [rule({ fullPath: "/p/.cursor/skills/a/SKILL.md", type: { type: { case: "agentFetched", value: { description: "a skill" } } } } as never)],
+    workspaceRules: [rule({ fullPath: "/p/.cursor/skills/a/SKILL.md", type: { type: { case: "agentFetched", value: { description: "a skill" } } } })],
     displayOptions: { displaySkills: true },
-    env: { workspacePaths: ["/p"] } as never,
+    env: { workspacePaths: ["/p"] },
     modelInfo: {},
   })
   assert.equal(section.skillCount, 1)
@@ -468,7 +460,7 @@ test("the MCP file-system instructions are only written when that route is open"
   }), "")
   assert.equal(getMcpFileSystemInstructions({ ...base, featureFlags: {} }), "")
   assert.equal(getMcpFileSystemInstructions({ ...base, mcpMetaToolOptions: { enabled: true, mcpDescriptors: [] } as never }), "")
-  assert.equal(getMcpFileSystemInstructions({ ...base, mode: 2 as never, enableFilterEditToolsInAskMode: true }), "")
+  assert.equal(getMcpFileSystemInstructions({ ...base, mode: "ask", enableFilterEditToolsInAskMode: true }), "")
 })
 
 test("the MCP tool names follow the model's training, not the platform's preference", () => {
@@ -477,12 +469,12 @@ test("the MCP tool names follow the model's training, not the platform's prefere
     listMcpResources: "list_mcp_resources",
     fetchMcpResource: "fetch_mcp_resource",
   })
-  assert.deepEqual(getMcpFileSystemToolNames({ isComposerMatterhorn: true }), {
+  assert.deepEqual(getMcpFileSystemToolNames({ mcpToolNameStyle: "pascal" }), {
     callMcpTool: "CallMcpTool",
     listMcpResources: "ListMcpResources",
     fetchMcpResource: "FetchMcpResource",
   })
-  assert.equal(getMcpFileSystemToolNames({ isComposerMatterhorn: true, isRawTrainingSlug: true }).callMcpTool, "call_mcp_tool")
+  assert.equal(getMcpFileSystemToolNames({ mcpToolNameStyle: "snake" }).callMcpTool, "call_mcp_tool")
 })
 
 test("the tmux bootstrap command is safe to run repeatedly", () => {
@@ -514,17 +506,40 @@ test("the prompt knows what the tool set offers, including the subagent descript
   assert.equal(info.availableSubagentTypesDescription, "types")
 })
 
+test("subagent descriptions know when the task tool is hidden from the prompt", () => {
+  let promptVisible: boolean | undefined
+  const taskTool = {
+    toolIdentifier: "TASK",
+    name: "Task",
+    descriptionTokenPartsGenerator: (_props: unknown, options: { promptVisible: boolean }) => {
+      promptVisible = options.promptVisible
+      return { availableSubagentModelsDescriptionText: "models" }
+    },
+  }
+  const allTools = { Task: { name: "Task" } }
+  const info = extractToolInfo({
+    getAllTools: () => [taskTool],
+    getStaticTools: () => [],
+    getDescriptionProps: () => ({ allTools }),
+    hasTool: () => false,
+  })
+
+  assert.equal(promptVisible, false)
+  assert.equal(info.availableSubagentModelsDescription, "models")
+  assert.equal(info.allTools, allTools)
+  assert.equal(info.hasAnyEditTools, false)
+})
+
 test("a session is thread-bound only when it came from a thread surface", () => {
   assert.equal(isThreadBoundSession({ isThreadSurface: true }), true)
-  assert.equal(isThreadBoundSession({ isThreadSurface: true, namedAgentSessionKind: "slack_thread" }), true)
-  assert.equal(isThreadBoundSession({ isThreadSurface: true, namedAgentSessionKind: "other" }), false)
+  assert.equal(isThreadBoundSession({ isThreadSurface: true, sessionKind: "thread" }), true)
+  assert.equal(isThreadBoundSession({ isThreadSurface: true, sessionKind: "other" }), false)
   assert.equal(isThreadBoundSession({}), false)
 })
 
 test("the persistence instructions go to the family that reads them", () => {
-  assert.equal(usesPersistenceInstructions({ isGpt5: true }), true)
-  assert.equal(usesPersistenceInstructions({ isGpt5Family: true }), true)
-  assert.equal(usesPersistenceInstructions({ isGpt56: true }), true)
+  assert.equal(usesPersistenceInstructions({ needsLongRunningWorkGuidance: true }), true)
+  assert.equal(usesPersistenceInstructions({ needsLongRunningWorkGuidance: false }), false)
   assert.equal(usesPersistenceInstructions({}), false)
   assert.equal(usesPersistenceInstructions(null), false)
 })

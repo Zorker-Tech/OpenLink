@@ -8,13 +8,13 @@ import { describe, it } from "node:test";
 
 import { createContext } from "../../source/packages/context/context.ts";
 import { smartModeClassifierAttemptIndexKey, smartModeClassifierModeKey } from "../../source/packages/agent/utils/smart-mode-classifier-measurement.ts";
-import { ClassifySlateAutoReviewRequest, ClassifySlateAutoReviewResponse } from "../../source/packages/proto/generated/aiserver/v1/dashboard_pb.ts";
-import { RunGenerateImageRequest, RunGenerateImageResponse, RunWebFetchRequest, RunWebFetchResponse, RunWebSearchRequest, RunWebSearchResponse } from "../../source/packages/proto/generated/aiserver/v1/aiserver_pb.ts";
-import { SmartModeClassifierArgs, SmartModeClassifierConversationMessage, SmartModeClassifierDecision, SmartModeClassifierResult, SmartModeRiskTarget } from "../../source/packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
-import { createCursorGenerateImageService, SlateGenerateImageError, SlateGenerateImageModelRestrictedError } from "../../source/shared/node/cursor-backend/cursor-generate-image.ts";
-import { createCursorWebFetchService, createCursorWebSearchService } from "../../source/host/extensions/inference/cursor-web-tools.ts";
-import { fetchSlateModelCatalog } from "../../source/host/cloud-agents/model-catalog-fetch.ts";
-import { createSlateBackendSmartModeClassifierExecutor, SlateSmartModeClassifierError } from "../../source/host/extensions/auto-review/slate-backend-smart-mode-classifier-exec.ts";
+import { ClassifySlateAutoReviewRequest, ClassifySlateAutoReviewResponse } from "../../source/adapters/interop/proto/generated/aiserver/v1/dashboard_pb.ts";
+import { RunGenerateImageRequest, RunGenerateImageResponse, RunWebFetchRequest, RunWebFetchResponse, RunWebSearchRequest, RunWebSearchResponse } from "../../source/adapters/interop/proto/generated/aiserver/v1/aiserver_pb.ts";
+import { SmartModeClassifierArgs, SmartModeClassifierConversationMessage, SmartModeClassifierDecision, SmartModeClassifierResult, SmartModeRiskTarget } from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
+import { createCursorGenerateImageService, SlateGenerateImageError, SlateGenerateImageModelRestrictedError } from "../../source/adapters/interop/cursor-backend/cursor-generate-image.ts";
+import { createSlateWebFetchService, createSlateWebSearchService } from "../../source/adapters/interop/agent/slate-web-tools-adapter.ts";
+import { fetchSlateModelCatalogWithClient } from "../../source/adapters/interop/agent/model-catalog-adapter.ts";
+import { createSlateBackendSmartModeClassifierExecutor, SlateSmartModeClassifierError } from "../../source/adapters/interop/agent/auto-review-backend-executor-adapter.ts";
 
 const account = { getAccessToken: async () => "token", getMachineId: async () => "machine" };
 
@@ -62,15 +62,11 @@ describe("generating an image", () => {
 describe("fetching the model catalog", () => {
   it("asks for the parameters a turn would use, and answers with the platform's own entries", async () => {
     const requests: unknown[] = [];
-    const catalog = await fetchSlateModelCatalog({
-      ...account,
-      client: {
-        availableModels: async (request) => {
-          requests.push(request);
-          // A model the platform cannot name is not one of the catalog's own entries; the rest are mapped by the
-          // catalog module, which keeps a model only when it has a name and something to choose from.
-          return { models: [{ name: "model-one", clientDisplayName: "One", idAliases: [], parameterDefinitions: [], variants: [] }, { name: "  ", idAliases: [], parameterDefinitions: [], variants: [] }] } as unknown as never;
-        },
+    const catalog = await fetchSlateModelCatalogWithClient({
+      availableModels: async (request) => {
+        requests.push(request);
+        // A model Slate cannot name is omitted before the result reaches its selectable catalog.
+        return { models: [{ name: "model-one", clientDisplayName: "One", idAliases: [], parameterDefinitions: [], variants: [] }, { name: "  ", idAliases: [], parameterDefinitions: [], variants: [] }] } as unknown as never;
       },
     });
     assert.deepEqual([requests.length, catalog.length], [1, 1]);
@@ -83,7 +79,7 @@ describe("fetching the model catalog", () => {
 describe("searching the web and fetching a page", () => {
   it("sends the search as it was given and answers with the documents it read", async () => {
     const requests: RunWebSearchRequest[] = [];
-    const search = createCursorWebSearchService({
+    const search = createSlateWebSearchService({
       ...account,
       modelId: "web-model",
       client: {
@@ -102,7 +98,7 @@ describe("searching the web and fetching a page", () => {
 
   it("answers a fetch with the page, or with why it could not be had", async () => {
     const fetchAnswering = (result: unknown) =>
-      createCursorWebFetchService({
+      createSlateWebFetchService({
         ...account,
         client: {
           runWebFetch: async (request) => {

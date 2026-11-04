@@ -5,8 +5,9 @@ import os from "node:os"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-import { inferMcpPlaceholderVariables } from "../../source/packages/plugin-install/mcp-placeholder-variables.ts"
-import { resolveGitRemoteRef } from "../../source/packages/plugin-install/git-remote-ref-resolve.ts"
+import { inferMcpPlaceholderVariables } from "../../source/adapters/interop/plugin-marketplace/mcp-placeholder-variable-adapter.ts"
+import { PluginSourceSchema } from "../../source/adapters/interop/plugin-marketplace/plugin-manifest-adapter.ts"
+import { resolvePluginSourceRevision } from "../../source/packages/plugin-install/git-remote-ref-resolve.ts"
 import {
   containsPluginRootDir,
   isPathSafe,
@@ -18,7 +19,6 @@ import {
   PLUGIN_MANIFEST_PATHS,
   PLUGIN_ROOT_DIR_NAMES,
   parsePluginVariablesJsonSchema,
-  PluginSourceSchema,
   MARKETPLACE_MANIFEST_PATHS,
   resolvePluginSourcePath,
 } from "../../source/packages/plugin-install/manifest-parser.ts"
@@ -82,23 +82,35 @@ test("a ref a plugin named is resolved to the commit it points at", async () => 
   const { root, remote, sha } = createRemoteRepo()
   try {
     // A branch and a tag both resolve to the commit they point at.
-    assert.deepEqual(await resolveGitRemoteRef(remote, "main"), { fullSha: sha })
-    assert.deepEqual(await resolveGitRemoteRef(remote, "v1"), { fullSha: sha })
-    assert.deepEqual(await resolveGitRemoteRef(remote, "refs/heads/main"), { fullSha: sha })
+    assert.deepEqual(await resolvePluginSourceRevision(remote, "main"), { fullSha: sha })
+    assert.deepEqual(await resolvePluginSourceRevision(remote, "v1"), { fullSha: sha })
+    assert.deepEqual(await resolvePluginSourceRevision(remote, "refs/heads/main"), { fullSha: sha })
     // A ref that looks like a short hash is resolved against the branch and tag names it could be, and a tag
     // that points at its own object is followed to the commit underneath it.
-    assert.deepEqual(await resolveGitRemoteRef(remote, "abc1234"), { fullSha: sha })
+    assert.deepEqual(await resolvePluginSourceRevision(remote, "abc1234"), { fullSha: sha })
     // HEAD also reports what the remote said about it.
-    const head = await resolveGitRemoteRef(remote, "HEAD")
+    const head = await resolvePluginSourceRevision(remote, "HEAD")
     assert.equal(head.fullSha, sha)
     assert.equal(typeof head.headSymrefStdout, "string")
     // A full commit is taken as it is, without asking the remote.
-    assert.deepEqual(await resolveGitRemoteRef("/no/such/remote", sha.toUpperCase()), { fullSha: sha })
+    assert.deepEqual(await resolvePluginSourceRevision("/no/such/remote", sha.toUpperCase()), { fullSha: sha })
 
     // A ref that is not there is reported as a failure with what was being resolved.
-    await assert.rejects(() => resolveGitRemoteRef(remote, "no-such-branch"), /did not return a resolvable commit for ref "no-such-branch"/)
+    await assert.rejects(() => resolvePluginSourceRevision(remote, "no-such-branch"), /did not resolve plugin revision "no-such-branch" to a commit/)
     // And a remote that cannot be reached is reported as the failure it was.
-    await assert.rejects(() => resolveGitRemoteRef("/no/such/remote", "main"), /Failed to resolve git ref "main"/)
+    await assert.rejects(() => resolvePluginSourceRevision("/no/such/remote", "main"), /Could not resolve plugin revision "main"/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("hash-shaped plugin refs are checked as names before being treated as literal abbreviations", async () => {
+  const { root, remote, sha } = createRemoteRepo()
+  try {
+    const unknownPrefix = sha.slice(0, 7).toUpperCase()
+    assert.deepEqual(await resolvePluginSourceRevision(remote, unknownPrefix), { fullSha: unknownPrefix.toLowerCase() })
+    assert.deepEqual(await resolvePluginSourceRevision("/no/such/remote", " 0A1B2C3 "), { fullSha: "0a1b2c3" })
+    assert.deepEqual(await resolvePluginSourceRevision(remote, ` ${sha.toUpperCase()} `), { fullSha: sha })
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

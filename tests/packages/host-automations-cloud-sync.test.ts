@@ -10,16 +10,17 @@ import { describe, it } from "node:test";
 import {
   SLATE_SHADOW_MARKER_PREFIX,
   SlateAutomationCloudSync,
-  cloudTriggers,
   isServerSchedulable,
   slateCloudDefinition,
   type CloudSyncClient,
+  type CreateAutomationInput,
   type ScheduledCloudAutomation,
+  type UpdateAutomationInput,
 } from "../../source/host/automations/slate-automation-cloud-sync.ts";
 import { stableAutomationId } from "../../source/host/automations/automation-id.ts";
 import type { AutomationTrigger, AutomationTriggerMember, GithubTrigger, SlackTrigger } from "../../source/shared/automations.ts";
-import { Prompt, Trigger, Workflow } from "../../source/packages/proto/generated/aiserver/v1/automations_pb.ts";
-import type { CreateAutomationRequest, DeleteAutomationRequest, UpdateAutomationRequest } from "../../source/packages/proto/generated/aiserver/v1/automations_pb.ts";
+import { cloudTriggersForInterop as cloudTriggers } from "../../source/adapters/interop/automation/automation-cloud-definition-adapter.ts";
+import { Prompt, Trigger, Workflow } from "../../source/adapters/interop/proto/generated/aiserver/v1/automations_pb.ts";
 import { sha256Hex } from "../../source/host/sha256.ts";
 
 type Call = { name: string; args: unknown[] };
@@ -72,45 +73,44 @@ function syncWorld(
   let listCalls = 0;
   const client: CloudSyncClient & { remote: typeof remote } = {
     remote,
-    listSlateAutomations: async (request: { slateAgentId: string }) => {
-      record("listRemote", request.slateAgentId);
+    listAutomationsForAgent: async (request: { agentId: string }) => {
+      record("listRemote", request.agentId);
       listCalls += 1;
       if (options.listFailAfter !== undefined && listCalls > options.listFailAfter) throw options.listError ?? new Error("list failed");
       if (listFailures > 0) {
         listFailures -= 1;
         throw options.listError ?? new Error("list failed");
       }
-      return { workflows: (remote.get(request.slateAgentId) ?? []).map((workflow) => ({ workflow })) };
+      return { automations: (remote.get(request.agentId) ?? []).map((automation) => ({ id: automation.automationId, enabled: automation.enabled, ...(automation.description === undefined ? {} : { description: automation.description }) })) };
     },
-    createSlateAutomation: async (request: CreateAutomationRequest) => {
+    createAutomation: async (request: CreateAutomationInput) => {
       record("create", request);
       if (options.failOperations?.includes("create") === true) throw new Error("create failed");
-      const entries = remote.get(request.slateAgentId ?? "") ?? [];
+      const entries = remote.get(request.agentId) ?? [];
       entries.push({
-        automationId: request.slateAutomationId ?? "",
+        automationId: request.automationId,
         enabled: request.enabled === true,
         ...(request.description === undefined ? {} : { description: request.description }),
       });
-      remote.set(request.slateAgentId ?? "", entries);
+      remote.set(request.agentId, entries);
     },
-    updateSlateAutomation: async (request: UpdateAutomationRequest) => {
+    updateAutomation: async (request: UpdateAutomationInput) => {
       record("update", request);
       if (options.failOperations?.includes("update") === true) throw new Error("update failed");
       if (options.updateIsNoop === true) return;
-      const entries = remote.get((request as { slateAgentId?: string }).slateAgentId ?? "") ?? [];
-      const entry = entries.find((candidate) => candidate.automationId === request.automationId);
+      const entry = [...remote.values()].flat().find((candidate) => candidate.automationId === request.id);
       if (entry != null) {
         if (request.description === undefined) delete entry.description;
         else entry.description = request.description;
         entry.enabled = request.enabled === true;
       }
     },
-    deleteSlateAutomation: async (request: DeleteAutomationRequest) => {
+    deleteAutomation: async (request: { readonly id: string }) => {
       record("delete", request);
       if (options.failOperations?.includes("delete") === true) throw new Error("delete failed");
       if (options.deleteIsNoop === true) return;
       for (const [agentId, entries] of remote)
-        remote.set(agentId, entries.filter((entry) => entry.automationId !== request.automationId));
+        remote.set(agentId, entries.filter((entry) => entry.automationId !== request.id));
     },
   };
   const failures: unknown[] = [];
@@ -269,8 +269,9 @@ describe("what a definition looks like from outside", () => {
     assert.equal(definition?.enabled, true);
     assert.equal(definition?.marker.startsWith(SLATE_SHADOW_MARKER_PREFIX), true);
     assert.equal(definition?.marker, `${SLATE_SHADOW_MARKER_PREFIX}${definition?.hash}`);
-    assert.deepEqual(definition?.workflow.triggers.length, 1);
-    assert.deepEqual(definition?.workflow.prompts.map((prompt) => prompt.prompt), ["Write the morning report."]);
+    const definitionWorkflow = definition?.workflow as Workflow | undefined;
+    assert.deepEqual(definitionWorkflow?.triggers.length, 1);
+    assert.deepEqual(definitionWorkflow?.prompts.map((prompt) => prompt.prompt), ["Write the morning report."]);
     // The hash is stable for the same input, and changes when anything about the automation does.
     const same = slateCloudDefinition({ agentId: "agent-1", automation: automationOf() });
     assert.equal(same?.hash, definition?.hash);
@@ -330,7 +331,7 @@ describe("reconciling what is up there", () => {
     const gate = new Promise<void>((resolve) => {
       held = resolve;
     });
-    world1.client.createSlateAutomation = async (request) => {
+    world1.client.createAutomation = async (request) => {
       world1.calls.push({ name: "create", args: [request] });
       await gate;
     };
@@ -381,10 +382,10 @@ describe("reconciling what is up there", () => {
   it("creates what is missing, updates what drifted, and leaves what matches alone", async () => {
     const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }], agentIds: [], timeZone: "UTC" });
     await world1.sync.reconcileNow();
-    const created = world1.named("create")[0]?.args[0] as CreateAutomationRequest;
+    const created = world1.named("create")[0]?.args[0] as CreateAutomationInput;
     const definition = slateCloudDefinition({ agentId: "agent-1", automation: automationOf(), timeZone: "UTC" });
-    assert.deepEqual([created.slateAgentId, created.slateAutomationId, created.description, created.name, created.enabled], ["agent-1", stableAutomationId({ agentId: "agent-1", localId: "auto-1" }), definition?.marker, "Morning report", true]);
-    assert.deepEqual(created.workflow?.prompts.map((prompt) => prompt.prompt), ["Write the morning report."]);
+    assert.deepEqual([created.agentId, created.automationId, created.description, created.name, created.enabled], ["agent-1", stableAutomationId({ agentId: "agent-1", localId: "auto-1" }), definition?.marker, "Morning report", true]);
+    assert.deepEqual((created.workflow as Workflow | undefined)?.prompts.map((prompt) => prompt.prompt), ["Write the morning report."]);
     // A second pass has nothing left to do.
     await world1.sync.reconcileNow();
     await world1.sync.reconcileNow();
@@ -394,15 +395,15 @@ describe("reconciling what is up there", () => {
     const id = stableAutomationId({ agentId: "agent-1", localId: "auto-1" });
     const drifted = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }], remote: { "agent-1": [{ automationId: id, description: `${SLATE_SHADOW_MARKER_PREFIX}an-older-hash`, enabled: true }] } });
     await drifted.sync.reconcileNow();
-    const updated = drifted.named("update")[0]?.args[0] as UpdateAutomationRequest;
-    assert.deepEqual([drifted.named("create").length, updated.automationId, updated.description], [0, id, slateCloudDefinition({ agentId: "agent-1", automation: automationOf() })?.marker]);
+    const updated = drifted.named("update")[0]?.args[0] as UpdateAutomationInput;
+    assert.deepEqual([drifted.named("create").length, updated.id, updated.description], [0, id, slateCloudDefinition({ agentId: "agent-1", automation: automationOf() })?.marker]);
     const disabled = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf({ isEnabled: false }) }], remote: { "agent-1": [{ automationId: id, description: String(slateCloudDefinition({ agentId: "agent-1", automation: automationOf({ isEnabled: false }) })?.marker), enabled: true }] } });
     // An entry up there that the platform did not write is not a shadow of anything, so it is left alone.
     const foreign = syncWorld({ automations: [], agentIds: ["agent-1"], remote: { "agent-1": [{ automationId: "someone-elses", description: "their own automation", enabled: true }] } });
     await foreign.sync.reconcileNow();
     assert.deepEqual([foreign.named("delete").length, foreign.prunes.length], [0, 0]);
     await disabled.sync.reconcileNow();
-    assert.deepEqual((disabled.named("update")[0]?.args[0] as UpdateAutomationRequest).enabled, false);
+    assert.deepEqual((disabled.named("update")[0]?.args[0] as UpdateAutomationInput).enabled, false);
   });
 
   it("prunes a shadow automation nobody wants any more, and says what it knew about it", async () => {
@@ -413,7 +414,7 @@ describe("reconciling what is up there", () => {
       inspect: () => ({ state: "ok", validDefinitionCount: 1 }),
     });
     await world1.sync.reconcileNow();
-    assert.deepEqual((world1.named("delete")[0]?.args[0] as DeleteAutomationRequest).automationId, stray);
+    assert.deepEqual((world1.named("delete")[0]?.args[0] as { id: string }).id, stray);
     assert.deepEqual(world1.prunes[0], {
       conversationId: "agent-1",
       automationId: stray,
@@ -492,7 +493,7 @@ describe("a conversation that is going away", () => {
     const id = stableAutomationId({ agentId: "agent-1", localId: "auto-1" });
     const world1 = syncWorld({ remote: { "agent-1": [{ automationId: id, description: `${SLATE_SHADOW_MARKER_PREFIX}x`, enabled: true }] } });
     assert.equal(await world1.sync.deleteAgent("agent-1"), true);
-    assert.deepEqual((world1.named("delete")[0]?.args[0] as DeleteAutomationRequest).automationId, id);
+    assert.deepEqual((world1.named("delete")[0]?.args[0] as { id: string }).id, id);
     assert.equal(world1.remote.get("agent-1")?.length, 0);
     // A conversation with nothing up there is finished immediately.
     const empty = syncWorld();
@@ -559,7 +560,7 @@ describe("what the sync does with several conversations", () => {
       ],
     });
     await world1.sync.reconcileNow();
-    assert.deepEqual(world1.named("create").map((call) => (call.args[0] as { slateAgentId?: string }).slateAgentId).sort(), ["agent-1", "agent-2"]);
+    assert.deepEqual(world1.named("create").map((call) => (call.args[0] as { agentId?: string }).agentId).sort(), ["agent-1", "agent-2"]);
     assert.equal(world1.remote.get("agent-1")?.length, 1);
     assert.equal(world1.remote.get("agent-2")?.length, 1);
   });
@@ -568,8 +569,9 @@ describe("what the sync does with several conversations", () => {
     const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
     world1.sync.setSettings({ getUserTimeZone: () => "Asia/Tokyo" });
     await world1.sync.reconcileNow();
-    const request = world1.named("create")[0]?.args[0] as { workflow?: { toJson(): { triggers?: Array<{ cron?: { cron?: string } }> } } };
-    assert.equal(request.workflow?.toJson().triggers?.[0]?.cron?.cron, "CRON_TZ=Asia/Tokyo 0 9 * * *");
+    const request = world1.named("create")[0]?.args[0] as { workflow?: Workflow };
+    const workflowJson = (request.workflow?.toJson() as unknown as { triggers?: Array<{ cron?: { cron?: string } }> } | undefined);
+    assert.equal(workflowJson?.triggers?.[0]?.cron?.cron, "CRON_TZ=Asia/Tokyo 0 9 * * *");
   });
 
   it("does not call a first success a recovery", async () => {
@@ -706,7 +708,7 @@ describe("the sync's bookkeeping", () => {
     ] });
     await world1.sync.reconcileNow();
     assert.equal(world1.named("create").length, 1);
-    assert.equal((world1.named("create")[0]?.args[0] as { slateAgentId?: string }).slateAgentId, "agent-2");
+    assert.equal((world1.named("create")[0]?.args[0] as { agentId?: string }).agentId, "agent-2");
   });
 
   it("fails the pass when the readback after a create cannot be read", async () => {
@@ -725,10 +727,10 @@ describe("the sync's bookkeeping", () => {
     const world1 = syncWorld({ automations });
     await world1.sync.reconcileNow();
     automations.push({ agentId: "agent-1", automation: automationOf({ id: "auto-2" }) });
-    (world1.client as unknown as { listSlateAutomations: unknown }).listSlateAutomations = async (request: { slateAgentId: string }) => {
-      world1.calls.push({ name: "listRemote", args: [request.slateAgentId] });
+    (world1.client as unknown as { listAutomationsForAgent: unknown }).listAutomationsForAgent = async (request: { agentId: string }) => {
+      world1.calls.push({ name: "listRemote", args: [request.agentId] });
       if (world1.named("listRemote").length >= 4) throw new Error("readback failed");
-      return { workflows: (world1.remote.get(request.slateAgentId) ?? []).map((workflow) => ({ workflow })) };
+      return { automations: (world1.remote.get(request.agentId) ?? []).map((automation) => ({ id: automation.automationId, enabled: automation.enabled, ...(automation.description === undefined ? {} : { description: automation.description }) })) };
     };
     await world1.sync.reconcileNow();
     assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: automationOf({ id: "auto-9", trigger: slack("C1", { kind: "mention" }) }) }), false);
@@ -746,10 +748,10 @@ describe("the sync's bookkeeping", () => {
     const automation = automationOf();
     const automations = [{ agentId: "agent-1", automation }];
     const world1 = syncWorld({ automations });
-    (world1.client as unknown as { updateSlateAutomation: (request: Record<string, unknown>) => Promise<void> }).updateSlateAutomation = async (request) => {
+    (world1.client as unknown as { updateAutomation: (request: Record<string, unknown>) => Promise<void> }).updateAutomation = async (request) => {
       world1.calls.push({ name: "update", args: [request] });
       for (const entries of world1.remote.values()) {
-        const entry = entries.find((candidate) => candidate.automationId === request.automationId);
+        const entry = entries.find((candidate) => candidate.automationId === request.id);
         if (entry != null) entry.enabled = request.enabled === true;
       }
     };
@@ -764,7 +766,7 @@ describe("the sync's bookkeeping", () => {
     const definition = slateCloudDefinition({ agentId: "agent-1", automation: automationOf() });
     assert.ok(definition !== null);
     const world1 = syncWorld({ remote: { "agent-1": [{ automationId: definition.automationId, description: definition.marker, enabled: definition.enabled }] }, automations: [{ agentId: "agent-1", automation: automationOf() }] });
-    (world1.client as unknown as { listSlateAutomations: unknown }).listSlateAutomations = async (request: { slateAgentId: string }) => ({ workflows: (world1.remote.get(request.slateAgentId) ?? []).map((workflow) => ({ workflow: { ...workflow, description: "stale" } })) });
+    (world1.client as unknown as { listAutomationsForAgent: unknown }).listAutomationsForAgent = async (request: { agentId: string }) => ({ automations: (world1.remote.get(request.agentId) ?? []).map((automation) => ({ id: automation.automationId, enabled: automation.enabled, description: "stale" })) });
     await world1.sync.reconcileNow();
     assert.deepEqual(world1.failures.map((failure) => (failure as { operation: string }).operation), ["verify"]);
   });

@@ -4,7 +4,6 @@
  * The client is built from a transport, each call is traced with the span its own kind implies, and the context —
  * values, deadline and traceparent — travels with the call rather than being re-derived on the far side.
  */
-import type { ServiceType } from "@bufbuild/protobuf";
 import {
   createClient,
   createContextKey,
@@ -13,11 +12,19 @@ import {
   type Client,
   type Transport,
 } from "@connectrpc/connect";
-import { SpanKind, SpanStatusCode, type Span } from "@opentelemetry/api";
 import type { Context } from "../context/context.ts";
-import { getSpan, withSpan } from "../context/telemetry.ts";
+import {
+  getSpan,
+  getSpanContextData,
+  TelemetrySpanKind,
+  TelemetrySpanStatusCode,
+  withSpan,
+  type TelemetrySpan,
+} from "../context/telemetry.ts";
 
-export type ContextPropagatingClient<Service extends ServiceType> = {
+type ConnectService = Parameters<typeof createClient>[0];
+
+export type ContextPropagatingClient<Service extends ConnectService> = {
   [Method in keyof Client<Service>]: Client<Service>[Method] extends (
     ...args: infer Args
   ) => infer Result
@@ -51,7 +58,7 @@ function isPromiseLike(headerText: unknown): headerText is PromiseLike<unknown> 
 
 function wrapAsyncIterableWithSpan<T>(
   sourceStream: AsyncIterable<T>,
-  span: Span | undefined,
+  span: TelemetrySpan | undefined,
   releaseSignalListener?: () => void,
 ): AsyncIterable<T> {
   return {
@@ -64,11 +71,11 @@ function wrapAsyncIterableWithSpan<T>(
         if (failure) {
           span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
           span?.setStatus({
-            code: SpanStatusCode.ERROR,
+            code: TelemetrySpanStatusCode.ERROR,
             message: failure instanceof Error ? failure.message : "Stream failed",
           });
         } else {
-          span?.setStatus({ code: SpanStatusCode.OK });
+          span?.setStatus({ code: TelemetrySpanStatusCode.OK });
         }
         span?.end();
         releaseSignalListener?.();
@@ -102,23 +109,13 @@ function wrapAsyncIterableWithSpan<T>(
 function extractTraceHeaders(ctx: Context): Headers {
   const traceHeaders = new Headers();
   try {
-    const spanContext = getSpan(ctx)?.spanContext?.();
+    const spanContext = getSpanContextData(ctx);
     if (spanContext?.traceId && spanContext.spanId) {
       const traceFlags = spanContext.traceFlags ?? 0;
       const traceHeader = `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags.toString(16).padStart(2, "0")}`;
       traceHeaders.set("traceparent", traceHeader);
       traceHeaders.set("backend-traceparent", traceHeader);
-      if (spanContext.traceState) {
-        const traceStateValue = spanContext.traceState as typeof spanContext.traceState & {
-          serialize?: () => string;
-        };
-        traceHeaders.set(
-          "tracestate",
-          typeof traceStateValue.serialize === "function"
-            ? traceStateValue.serialize()
-            : String(traceStateValue),
-        );
-      }
+      if (spanContext.traceState) traceHeaders.set("tracestate", spanContext.traceState);
     }
   } catch {}
   return traceHeaders;
@@ -162,7 +159,7 @@ function mergeContextSignal(
   };
 }
 
-function addContextPropagation<Service extends ServiceType>(
+function addContextPropagation<Service extends ConnectService>(
   baseClient: Client<Service>,
   settings: ContextPropagationOptions,
 ): ContextPropagatingClient<Service> {
@@ -173,7 +170,7 @@ function addContextPropagation<Service extends ServiceType>(
       if (typeof originalMethod !== "function") return originalMethod;
       return (ctx: Context, input: unknown, callSettings: CallOptions = {}) => {
         const callSpanContext = withSpan(ctx.withName(`rpc.${String(property)}`), {
-          kind: SpanKind.CLIENT,
+          kind: TelemetrySpanKind.CLIENT,
           attributes: {
             "rpc.method": String(property),
             "rpc.system": "connect",
@@ -213,14 +210,14 @@ function addContextPropagation<Service extends ServiceType>(
               if (isAsyncIterable(callResponse)) {
                 return wrapAsyncIterableWithSpan(callResponse, span, releaseSignalListener);
               }
-              span?.setStatus({ code: SpanStatusCode.OK });
+              span?.setStatus({ code: TelemetrySpanStatusCode.OK });
               span?.end();
               releaseSignalListener?.();
               return callResponse;
             }).catch((failure: unknown) => {
               span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
               span?.setStatus({
-                code: SpanStatusCode.ERROR,
+                code: TelemetrySpanStatusCode.ERROR,
                 message: failure instanceof Error ? failure.message : "RPC call failed",
               });
               span?.end();
@@ -228,14 +225,14 @@ function addContextPropagation<Service extends ServiceType>(
               throw failure;
             });
           }
-          span?.setStatus({ code: SpanStatusCode.OK });
+          span?.setStatus({ code: TelemetrySpanStatusCode.OK });
           span?.end();
           releaseSignalListener?.();
           return callResult;
         } catch (failure) {
           span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
           span?.setStatus({
-            code: SpanStatusCode.ERROR,
+            code: TelemetrySpanStatusCode.ERROR,
             message: failure instanceof Error ? failure.message : "RPC call failed",
           });
           span?.end();
@@ -247,7 +244,7 @@ function addContextPropagation<Service extends ServiceType>(
   }) as ContextPropagatingClient<Service>;
 }
 
-export function createContextPropagatingClient<Service extends ServiceType>(
+export function createContextPropagatingClient<Service extends ConnectService>(
   serviceDefinition: Service,
   rpcTransport: Transport,
   settings: ContextPropagationOptions = {},

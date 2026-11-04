@@ -5,4 +5,25 @@
  * moment that has already passed is no wait at all rather than a negative one, and a header that says neither is
  * nothing rather than a guess.
  */
-export function parseRetryAfterHeaderMs(raw: string | null | undefined, nowMs = Date.now()): number | undefined { const trimmed = raw?.trim(); if (trimmed == null || trimmed === "") return undefined; const seconds = Number(trimmed); if (Number.isFinite(seconds)) return seconds <= 0 ? 0 : Math.round(seconds * 1_000); const whenMs = Date.parse(trimmed); if (Number.isNaN(whenMs)) return undefined; const delta = whenMs - nowMs; return delta <= 0 ? 0 : delta; }
+function delayFromSeconds(value: string): number | undefined {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return undefined;
+  return Math.max(0, Math.round(seconds * 1_000));
+}
+
+export function parseRetryAfterHeaderMs(
+  raw: string | null | undefined,
+  nowMs = Date.now(),
+): number | undefined {
+  if (raw == null) return undefined;
+
+  const value = raw.trim();
+  if (value.length === 0) return undefined;
+
+  const secondsDelay = delayFromSeconds(value);
+  if (secondsDelay !== undefined) return secondsDelay;
+
+  const retryAtMs = Date.parse(value);
+  if (Number.isNaN(retryAtMs)) return undefined;
+  return Math.max(0, retryAtMs - nowMs);
+}

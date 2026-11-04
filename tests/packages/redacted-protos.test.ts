@@ -6,9 +6,9 @@ import { pathToFileURL } from "node:url"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { CodeBlock, DetailedLine } from "../../source/packages/proto/generated/aiserver/v1/utils_pb.ts"
-import * as utilsRedactedModule from "../../source/packages/redacted-protos/generated/aiserver/v1/utils_redacted.ts"
-import * as mcpExecRedactedModule from "../../source/packages/redacted-protos/generated/agent/v1/mcp_exec_redacted.ts"
+import { CodeBlock, DetailedLine } from "../../source/adapters/interop/proto/generated/aiserver/v1/utils_pb.ts"
+import * as utilsRedactedModule from "../../source/adapters/interop/redacted-protos/generated/aiserver/v1/utils_redacted.ts"
+import * as mcpExecRedactedModule from "../../source/adapters/interop/redacted-protos/generated/agent/v1/mcp_exec_redacted.ts"
 
 /**
  * The generated surface is runtime-only (`@ts-nocheck`), so the shapes it is called with are stated
@@ -29,7 +29,7 @@ const fromRedactedCodeBlock = utilsRedacted.fromRedactedCodeBlock as GeneratedRe
 const toRedactedReadMcpResourceSuccess = mcpExecRedacted.toRedactedReadMcpResourceSuccess as GeneratedRedaction["toRedacted"]
 const fromRedactedReadMcpResourceSuccess = mcpExecRedacted.fromRedactedReadMcpResourceSuccess as GeneratedRedaction["fromRedacted"]
 
-import { ReadMcpResourceSuccess } from "../../source/packages/proto/generated/agent/v1/mcp_exec_pb.ts"
+import { ReadMcpResourceSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 
 const read = "unsafe_always_allowed"
 const mode = PrivacyMode.NO_STORAGE
@@ -110,7 +110,7 @@ test("an enforced surface refuses to rebuild without a purpose that allows it", 
 })
 
 test("every annotated message has both directions generated", async () => {
-  const root = path.join(import.meta.dirname, "..", "..", "source", "packages", "redacted-protos", "generated")
+  const root = path.join(import.meta.dirname, "..", "..", "source", "adapters", "interop", "redacted-protos", "generated")
   const namespaces = await readdir(root)
   let modules = 0
   let pairs = 0

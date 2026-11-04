@@ -4,11 +4,8 @@
  * Events are collected up to a bound and sent as one request; what cannot be sent is kept for the next attempt, and
  * what is too old to mean anything is dropped rather than sent late.
  */
-import {
-  AnalyticsEvent as AnalyticsEventMessage,
-  TrackEventsRequest,
-} from "../proto/generated/aiserver/v1/analytics_pb.ts";
-import { toEventData, type AnalyticsEventProperties } from "./to-event-data.ts";
+import type { AnalyticsBatchRequest, AnalyticsEventProperties, BufferedAnalyticsEvent } from "./events.ts";
+import { toAnalyticsEventProperties } from "./to-event-data.ts";
 
 const DEFAULT_BUFFER_LIMIT = 200;
 const DEFAULT_FLUSH_INTERVAL_MS = 3_000;
@@ -16,7 +13,7 @@ const DEFAULT_NORMAL_FLUSH_TIMEOUT_MS = 2_500;
 const TOKEN_CHECK_TIMEOUT = Symbol("token_check_timeout");
 
 export interface AnalyticsBufferClient {
-  trackEvents(request: TrackEventsRequest, options: { readonly signal: AbortSignal }): Promise<unknown>;
+  trackEvents(request: AnalyticsBatchRequest, options: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
 export interface AnalyticsBufferTokenProvider {
@@ -32,11 +29,11 @@ export interface AnalyticsBufferOptions {
   readonly onDebug?: ((tag: string, payload: unknown) => void) | undefined;
 }
 
-type DeliveryBatch = readonly AnalyticsEventMessage[];
+type DeliveryBatch = readonly BufferedAnalyticsEvent[];
 type FlushResult = { readonly sent: number; readonly retained: number };
 
 export class AnalyticsBuffer {
-  private readonly buffer: AnalyticsEventMessage[] = [];
+  private readonly buffer: BufferedAnalyticsEvent[] = [];
   private timer: NodeJS.Timeout | null = null;
   private flight: Promise<FlushResult> | null = null;
   private readonly client: AnalyticsBufferClient;
@@ -56,9 +53,11 @@ export class AnalyticsBuffer {
   }
 
   track(eventName: string, props: AnalyticsEventProperties | null | undefined, timestamp?: number): void {
-    const eventTimestamp = BigInt(timestamp ?? Date.now());
-    const message = new AnalyticsEventMessage({ eventName, eventData: toEventData(props), timestamp: eventTimestamp });
-    this.buffer.push(message);
+    this.buffer.push({
+      eventName,
+      eventData: toAnalyticsEventProperties(props),
+      timestamp: BigInt(timestamp ?? Date.now()),
+    });
     this.onQueueGrowth();
   }
 
@@ -125,7 +124,7 @@ export class AnalyticsBuffer {
 
   private async deliver(batch: DeliveryBatch, signal: AbortSignal): Promise<FlushResult> {
     try {
-      await this.client.trackEvents(new TrackEventsRequest({ events: [...batch] }), { signal });
+      await this.client.trackEvents({ events: batch }, { signal });
       this.buffer.splice(0, batch.length);
       return { sent: batch.length, retained: this.buffer.length };
     } catch (error) {

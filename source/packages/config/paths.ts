@@ -1,27 +1,27 @@
-/**
- * Where the platform keeps its own configuration on this machine.
- *
- * Configuration is per user rather than per project, so it lives in the user's home directory unless the
- * environment points somewhere else — which is what lets a test, a container or a second profile run with
- * its own settings without touching the real ones. The length constants beside it are for the socket path
- * the platform listens on, which has a hard limit on every platform it runs on and a shorter one on
- * Windows; the hashed form of a long path has to fit inside that limit, so the arithmetic is written down
- * once here rather than at each use.
- */
+/** User-scoped config location and the size budget for local socket paths. */
 
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { homedir } from "node:os";
+import { join } from "node:path";
 
-export const HASH_LENGTH = 7
-export const MAX_SOCKET_PATH_LENGTH = 104
-export const WINDOWS_SOCK_LENGTH = "worker.sock".length
-export const MAX_PREFIX_LENGTH_BEFORE_HASH = MAX_SOCKET_PATH_LENGTH - 1 - HASH_LENGTH - 1 - WINDOWS_SOCK_LENGTH
-export const MAX_FULL_PATH_LENGTH = MAX_SOCKET_PATH_LENGTH - WINDOWS_SOCK_LENGTH - 1
+const CONFIG_DIRECTORY = "slate";
+const USER_CONFIG_DIRECTORY = ".slate";
+const SOCKET_FILE_NAME = "worker.sock";
+
+export const HASH_LENGTH = 7;
+export const MAX_SOCKET_PATH_LENGTH = 104;
+export const WINDOWS_SOCK_LENGTH = SOCKET_FILE_NAME.length;
+export const MAX_PREFIX_LENGTH_BEFORE_HASH = MAX_SOCKET_PATH_LENGTH - HASH_LENGTH - WINDOWS_SOCK_LENGTH - 2;
+export const MAX_FULL_PATH_LENGTH = MAX_SOCKET_PATH_LENGTH - WINDOWS_SOCK_LENGTH - 1;
+
+function nonBlankOverride(value: string | undefined): string | undefined {
+  return value !== undefined && value.trim().length > 0 ? value : undefined;
+}
 
 export function getConfigDir(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.SLATE_CONFIG_DIR
-  if (override?.trim()) return override
-  const xdg = env.XDG_CONFIG_HOME
-  if (xdg?.trim()) return join(xdg, "slate")
-  return join(homedir(), ".slate")
+  const selected = nonBlankOverride(env.SLATE_CONFIG_DIR);
+  if (selected !== undefined) return selected;
+
+  const xdgDirectory = nonBlankOverride(env.XDG_CONFIG_HOME);
+  if (xdgDirectory !== undefined) return join(xdgDirectory, CONFIG_DIRECTORY);
+  return join(homedir(), USER_CONFIG_DIRECTORY);
 }

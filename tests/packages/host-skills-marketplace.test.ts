@@ -6,8 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isKnownPluginLogoUrl } from "../../source/shared/node/marketplace/cursor-marketplace-logo-registry.ts";
-import { CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/shared/node/marketplace/cursor-marketplace-client.ts";
+import { isMarketplaceLogoSourceKnown } from "../../source/shared/node/marketplace/marketplace-logo-registry.ts";
+import { MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
 import { fetchSkillCatalog, fetchSlateManagedSkills, type ManagedSkillsClient, type MarketplacePlugin } from "../../source/host/extensions/managed-setup/skills-marketplace.ts";
 
 function plugin(overrides: Partial<MarketplacePlugin> & { id: MarketplacePlugin["id"] }): MarketplacePlugin {
@@ -38,7 +38,7 @@ describe("the skills the platform manages", () => {
       { id: "one", description: "first", content: "body", enabled: true },
       { id: "two", description: "second", content: "body", enabled: false },
     ]);
-    assert.deepEqual(world.calls, [{ method: "getManagedSkills", request: {}, timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS }]);
+    assert.deepEqual(world.calls, [{ method: "getManagedSkills", request: {}, timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS }]);
   });
 });
 
@@ -56,10 +56,10 @@ describe("the catalog a marketplace offers", () => {
       { id: "plugin:7:zeta", name: "zeta", description: "last", source: "marketplace", publisher: "Two", iconUrl: "https://logo.test/two.png", install: { kind: "url", url: "https://install.test/zeta" } },
     ]);
     // The read excludes the plugins that belong to cloud agents, and runs under the same timeout as the other one.
-    assert.deepEqual(world.calls, [{ method: "listMarketplacePlugins", request: { excludeCloudAgentPlugins: true }, timeoutMs: CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS }]);
+    assert.deepEqual(world.calls, [{ method: "listMarketplacePlugins", request: { excludeCloudAgentPlugins: true }, timeoutMs: MARKETPLACE_REQUEST_TIMEOUT_MS }]);
     // A logo the catalog showed is a logo the platform now knows.
-    assert.equal(isKnownPluginLogoUrl("https://logo.test/one.png"), true);
-    assert.equal(isKnownPluginLogoUrl("https://logo.test/two.png"), true);
+    assert.equal(isMarketplaceLogoSourceKnown("https://logo.test/one.png"), true);
+    assert.equal(isMarketplaceLogoSourceKnown("https://logo.test/two.png"), true);
   });
 
   it("skips what cannot be installed, keeps the first of a name, and names a plugin that calls itself nothing", async () => {
@@ -88,9 +88,9 @@ describe("the catalog a marketplace offers", () => {
     const catalog = await fetchSkillCatalog(world.client);
     assert.deepEqual(catalog.map((entry) => entry.iconUrl), ["https://logo.test/publisher.png", "https://logo.test/own.png"]);
     // Whichever logo was shown is a logo the platform now knows.
-    assert.equal(isKnownPluginLogoUrl("https://logo.test/publisher.png"), true);
-    assert.equal(isKnownPluginLogoUrl("https://logo.test/own.png"), true);
-    assert.equal(isKnownPluginLogoUrl("https://logo.test/plugin.png"), false);
+    assert.equal(isMarketplaceLogoSourceKnown("https://logo.test/publisher.png"), true);
+    assert.equal(isMarketplaceLogoSourceKnown("https://logo.test/own.png"), true);
+    assert.equal(isMarketplaceLogoSourceKnown("https://logo.test/plugin.png"), false);
   });
 
   it("reports a read that failed, and answers with what it had collected", async () => {

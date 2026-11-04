@@ -1,42 +1,35 @@
-/**
- * What a conversation is, from its turns.
- *
- * A conversation can be a project's own, a subagent's, or a side chat's, and the difference matters
- * when the agent decides which instructions apply. The answer is not on the conversation but in its
- * turns: the newest turn that draws a project boundary decides, and turns that the platform simulated
- * (a reminder, a notification) are skipped rather than mistaken for the user's own.
- */
+/** Slate's project-conversation rules operate on owned, normalized turn data. */
 
-import { isRootProjectDetails } from "../../constants/project-conversation.ts"
+import {
+  ProjectConversationBoundary,
+  type ProjectConversationBoundary as ProjectBoundary,
+} from "../../constants/project-conversation.ts"
 import type { Context } from "../../context/context.ts"
-import type { AgentMode } from "../../proto/generated/agent/v1/agent_pb.ts"
-import { AgentMode as AgentModeValues } from "../../proto/generated/agent/v1/agent_pb.ts"
+import { SlateMode, type SlateMode as SlateModeValue } from "../mode-processing.ts"
 import { AgentType } from "./agent-config.ts"
 
-interface ProjectUserMessage {
-  readonly projectDetails?: Parameters<typeof isRootProjectDetails>[0]
-  readonly bestOfNGroupId?: unknown
-  readonly mode?: AgentMode
-  readonly isSimulatedMsg?: boolean
+export interface ProjectConversationMessage {
+  readonly mode?: SlateModeValue | undefined
+  readonly projectBoundary?: ProjectBoundary | undefined
+  readonly isSimulated?: boolean | undefined
 }
 
-interface ProjectConversationTurn {
+export interface ProjectConversationTurn {
   get(ctx: Context): Promise<{
-    readonly userMessage?: { get(ctx: Context): Promise<ProjectUserMessage> }
-    readonly [key: string]: unknown
+    readonly userMessage?: { get(ctx: Context): Promise<ProjectConversationMessage> } | undefined
   }>
 }
 
-interface ProjectConversationState {
+export interface ProjectConversationState {
   readonly turns: readonly ProjectConversationTurn[]
 }
 
-/** A project's own message: it belongs to the project and was not one of a best-of-N group. */
-export function isRootProjectUserMessage(userMessage: ProjectUserMessage): boolean {
-  return isRootProjectDetails(userMessage.projectDetails) && userMessage.bestOfNGroupId === undefined
+/** Root membership is assigned by the interop adapter from the incoming message's project markers. */
+export function isRootProjectUserMessage(message: ProjectConversationMessage): boolean {
+  return message.projectBoundary === ProjectConversationBoundary.ROOT
 }
 
-/** Whether the cloud-worker procedure is left out: only for an unnamed background agent in a project. */
+/** Only a background agent in the root project loses the cloud-worker procedure. */
 export function shouldOmitCloudWorkerProcedure({
   gateEnabled,
   agentType,
@@ -47,39 +40,48 @@ export function shouldOmitCloudWorkerProcedure({
 }: {
   readonly gateEnabled: boolean
   readonly agentType: AgentType
-  readonly mode: AgentMode
+  readonly mode: SlateModeValue
   readonly useLocalAgentPrompting: boolean
   readonly isNamedAgentSession: boolean
   readonly isRootProject: boolean
 }): boolean {
   return gateEnabled &&
     agentType === AgentType.BACKGROUND &&
-    mode === AgentModeValues.AGENT &&
+    mode === SlateMode.AGENT &&
     !useLocalAgentPrompting &&
     !isNamedAgentSession &&
     isRootProject
 }
 
+/** The most recent project boundary wins; simulated turns may be crossed, user turns may not. */
 export async function resolveProjectConversationContext(
   ctx: Context,
-  stateHandler: ProjectConversationState,
+  state: ProjectConversationState,
 ): Promise<{
-  lastMode: AgentMode | undefined
+  lastMode: SlateModeValue | undefined
   isRootProject: boolean
   hasProjectBoundary: boolean
 }> {
-  let lastMode: AgentMode | undefined
-  for (let index = stateHandler.turns.length - 1; index >= 0; index--) {
-    const turn = await stateHandler.turns[index]!.get(ctx)
-    if (!("userMessage" in turn)) continue
-    const userMessage = await turn.userMessage!.get(ctx)
-    lastMode ??= userMessage.mode
-    const hasProjectBoundary =
-      userMessage.projectDetails !== undefined || userMessage.bestOfNGroupId !== undefined
-    if (hasProjectBoundary) {
-      return { lastMode, isRootProject: isRootProjectUserMessage(userMessage), hasProjectBoundary: true }
+  let newestMode: SlateModeValue | undefined
+
+  for (let index = state.turns.length - 1; index >= 0; index--) {
+    const turn = await state.turns[index]!.get(ctx)
+    const messageHandle = turn.userMessage
+    if (messageHandle === undefined) continue
+
+    const message = await messageHandle.get(ctx)
+    if (newestMode === undefined) newestMode = message.mode
+
+    if (message.projectBoundary !== undefined) {
+      return {
+        lastMode: newestMode,
+        isRootProject: isRootProjectUserMessage(message),
+        hasProjectBoundary: true,
+      }
     }
-    if (userMessage.isSimulatedMsg !== true) break
+
+    if (message.isSimulated !== true) break
   }
-  return { lastMode, isRootProject: false, hasProjectBoundary: false }
+
+  return { lastMode: newestMode, isRootProject: false, hasProjectBoundary: false }
 }

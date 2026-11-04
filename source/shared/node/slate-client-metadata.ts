@@ -13,37 +13,31 @@ export const SLATE_CLIENT_VERSION_DEV_SUFFIX = "-dev";
 export const SLATE_CLIENT_VERSION_LAB_SUFFIX = "-lab";
 export const SLATE_BOX_NAMESPACE_HEADER = "x-slate-box-namespace";
 const STAMPED_VERSION_BASE = /^(\d+\.\d+\.\d+)(?:-.+)?$/;
+const CLIENT_VERSION_SUFFIX: Record<BoxNamespace, string> = {
+  dev: SLATE_CLIENT_VERSION_DEV_SUFFIX,
+  lab: SLATE_CLIENT_VERSION_LAB_SUFFIX,
+  prod: "",
+};
 
 export type BoxNamespace = "dev" | "lab" | "prod";
 
 export function getSlateClientBaseVersion(env: NodeJS.ProcessEnv = process.env): string {
-  const stamped = env.SLATE_CLIENT_APP_VERSION?.trim() ?? "";
-  return STAMPED_VERSION_BASE.exec(stamped)?.[1] ?? SLATE_CLIENT_FALLBACK_BASE_VERSION;
+  const candidate = env.SLATE_CLIENT_APP_VERSION?.trim();
+  const base = candidate === undefined ? undefined : STAMPED_VERSION_BASE.exec(candidate)?.[1];
+  return base ?? SLATE_CLIENT_FALLBACK_BASE_VERSION;
 }
 
 export function getBoxNamespace(env: NodeJS.ProcessEnv = process.env): BoxNamespace {
-  const ownerNamespace = env.SLATE_BOX_OWNER_NAMESPACE?.trim();
-  if (ownerNamespace === "dev" || ownerNamespace === "lab") return ownerNamespace;
-  switch (getSlateVariant()) {
-    case "slate-dev": return "dev";
-    case "slate-lab": return "lab";
-    default: return "prod";
-  }
+  const configured = env.SLATE_BOX_OWNER_NAMESPACE?.trim();
+  if (configured === "dev" || configured === "lab") return configured;
+
+  const variant = getSlateVariant();
+  if (variant === "slate-dev") return "dev";
+  if (variant === "slate-lab") return "lab";
+  return "prod";
 }
 
 export function getSlateClientVersion(env: NodeJS.ProcessEnv = process.env): string {
-  const baseVersion = getSlateClientBaseVersion(env);
-  switch (getBoxNamespace(env)) {
-    case "dev": return `${baseVersion}${SLATE_CLIENT_VERSION_DEV_SUFFIX}`;
-    case "lab": return `${baseVersion}${SLATE_CLIENT_VERSION_LAB_SUFFIX}`;
-    case "prod": return baseVersion;
-  }
-}
-
-export function getSlateBackendClientHeaders(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
-  return {
-    "x-cursor-client-type": SLATE_CLIENT_TYPE,
-    "x-cursor-client-version": getSlateClientVersion(env),
-    [SLATE_BOX_NAMESPACE_HEADER]: getBoxNamespace(env)
-  };
+  const base = getSlateClientBaseVersion(env);
+  return base + CLIENT_VERSION_SUFFIX[getBoxNamespace(env)];
 }

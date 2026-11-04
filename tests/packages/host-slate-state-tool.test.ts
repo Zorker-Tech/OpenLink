@@ -51,6 +51,7 @@ test("every target and action is a route, and nothing else is", () => {
   assert.equal(isSlateStateRoute("memory.nope"), false)
   assert.equal(isSlateStateRoute("nope.write"), false)
   assert.equal(isSlateStateRoute("memory"), false)
+  assert.equal(isSlateStateRoute("toString.call"), false, "inherited object methods are not routes")
 })
 
 test("the arguments are the state update the tool documents", () => {
@@ -87,11 +88,93 @@ test("a state update writes through the writer it is given", async () => {
   assert.deepEqual(avatar.calls, [["clearAvatar", null]])
 })
 
+test("memory ownership and tier are explicit at the writer boundary", async () => {
+  const project = apply({ target: "memory", action: "write", fact: "Project decision", scope: "project", project: "slate" })
+  await project.run()
+  assert.deepEqual(project.calls, [["writeMemory", { content: "Project decision", tier: "log", scope: "project", project: "slate" }]])
+
+  const profile = apply({ target: "memory", action: "write", fact: "Preferred name", tier: "profile", scope: "user" })
+  await profile.run()
+  assert.deepEqual(profile.calls, [["writeMemory", { content: "Preferred name", tier: "profile", scope: "user" }]])
+
+  const forgotten = apply({ target: "memory", action: "forget", fact: "Exact stored text", scope: "user" })
+  await forgotten.run()
+  assert.deepEqual(forgotten.calls, [["removeMemory", { content: "Exact stored text", scope: "user" }]])
+})
+
+test("routine updates keep omitted fields and only send an enabled change when requested", async () => {
+  const calls: Array<[string, unknown]> = []
+  let reviewed: unknown
+  const deps = makeDeps({
+    state: {
+      updateAutomation: async (args: Parameters<SlateStateDependencies["state"]["updateAutomation"]>[0]) => {
+        calls.push(["updateAutomation", args]);
+        return { ok: true, detail: "updated" };
+      },
+    } as unknown as SlateStateDependencies["state"],
+    automationStore: { list: () => [automations[0]!] },
+    reviewAutomationWrite: async (review) => { reviewed = review; return { allowed: true, reason: "" } },
+  }).deps
+
+  const result = await applySlateStateUpdate({ target: "routine", action: "update", id: "a1", prompt: "new instruction" }, deps)
+  assert.deepEqual(result, { ok: true, detail: "updated" })
+  assert.deepEqual(calls, [["updateAutomation", {
+    id: "a1",
+    spec: { name: "Daily", prompt: "new instruction", trigger: { type: "cron", schedule: "@daily" } },
+  }]])
+  assert.deepEqual(reviewed, {
+    operation: "update",
+    id: "a1",
+    spec: { name: "Daily", prompt: "new instruction", trigger: { type: "cron", schedule: "@daily" } },
+    referencedWorkflows: [],
+  })
+})
+
+test("a listener is registered only after the routine write succeeds", async () => {
+  let listenerRegistrations = 0
+  const deps = makeDeps({
+    state: {
+      createAutomation: async () => ({ ok: false, reason: "storage unavailable" }),
+    } as unknown as SlateStateDependencies["state"],
+    onListenerRoutineSaved: async () => { listenerRegistrations += 1; return "listener saved" },
+  }).deps
+
+  const result = await applySlateStateUpdate({ target: "routine", action: "create", name: "Watch", prompt: "watch changes", schedule: "@daily" }, deps)
+  assert.deepEqual(result, { ok: false, reason: "storage unavailable" })
+  assert.equal(listenerRegistrations, 0)
+})
+
+test("workflow creation leaves id allocation to the writer and reviews referenced routines", async () => {
+  const created = apply({ target: "workflow", action: "write", name: "Release Notes", description: "When preparing a release", body: "Collect changes." })
+  await created.run()
+  assert.deepEqual(created.calls, [["writeWorkflow", { name: "Release Notes", description: "When preparing a release", body: "Collect changes." }]])
+
+  let writes = 0
+  let reviewed = 0
+  const deps = makeDeps({
+    state: {
+      writeWorkflow: async () => { writes += 1; return { ok: true, detail: "saved" } },
+    } as unknown as SlateStateDependencies["state"],
+    automationStore: { list: () => [automations[1]!] },
+    reviewAutomationWrite: async (review) => {
+      reviewed += 1
+      assert.deepEqual(review.referencingRoutines, [{ id: "a2", name: "Watch", prompt: "watch wf-1 and report" }])
+      return { allowed: false, reason: "review required" }
+    },
+  }).deps
+  const refused = await applySlateStateUpdate({ target: "workflow", action: "write", id: "wf-1", name: "Deploy", description: "d", body: "changed" }, deps)
+  assert.deepEqual(refused, { ok: false, reason: "review required" })
+  assert.equal(reviewed, 1)
+  assert.equal(writes, 0)
+})
+
 test("a missing required field is a tool input error, not a write", async () => {
   const { calls, run } = apply({ target: "channel", action: "disconnect" })
   await assert.rejects(run(), (error: Error) => error instanceof SlateToolInputError)
   assert.deepEqual(calls, [])
   await assert.rejects(applySlateStateUpdate({ target: "memory", action: "nope" } as unknown as unknown as SlateStateUpdate, makeDeps().deps), SlateToolInputError)
+  await assert.rejects(applySlateStateUpdate({ target: "unknown", action: "write" } as unknown as SlateStateUpdate, makeDeps().deps), SlateToolInputError)
+  await assert.rejects(applySlateStateUpdate({ target: "toString", action: "call" } as unknown as SlateStateUpdate, makeDeps().deps), SlateToolInputError)
 })
 
 test("a routine update needs the routine, and a review that refuses stops the write", async () => {

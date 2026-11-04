@@ -17,16 +17,25 @@
  * cannot be read yields no context rather than failing the call the classifier was asked to judge.
  */
 import { AgentConversationTurnHandle, type ConversationStateHandle } from "./state.ts"
-import { renderSimulatedMessagePrompts } from "./simulated-message-prompts.ts"
-import { fromRedactedUserMessage } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
-import { fromRedactedAskQuestionArgs, fromRedactedAskQuestionResult } from "../redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
-import { fromRedactedComputerUseToolCall } from "../redacted-protos/generated/agent/v1/computer_use_tool_redacted.ts"
+import type { SlateConversationStep } from "./conversation-step-state.ts"
+import {
+  isAutomaticClassifierContextMessageInterop,
+  readClassifierAskQuestionArgsInterop,
+  readClassifierAskQuestionResultInterop,
+  readClassifierComputerUseCallInterop,
+  readClassifierUserMessageInterop,
+  renderSimulatedClassifierPromptsInterop,
+  selectedWorkflowPathsForClassifierInterop,
+  toSmartModeClassifierConversationMessagesInterop,
+} from "../../adapters/interop/agent/smart-mode-classifier-context-adapter.ts"
 import { fromRedactedCoreMessage } from "../redaction/message-redaction.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
-import { SimulatedMsgReason } from "../proto/generated/agent/v1/agent_pb.ts"
-import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
-import { SmartModeClassifierConversationMessage } from "../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
 import type { Context as OperationContext } from "../context/context.ts"
+
+export interface SlateClassifierConversationMessage {
+  readonly role: string
+  readonly content: string
+}
 
 /** How many of each kind the editor's classifier sees, and how big its whole slice may be. */
 const EDITOR_CONTEXT_LIMITS = {
@@ -51,16 +60,10 @@ type ClassifierStateHandler = Pick<ConversationStateHandle, "turns" | "rootPromp
 /** One line of the slice, before it becomes the classifier protocol's message shape. */
 type ClassifierLine = { role: string; content: string }
 
-/** The redacted readers used here, widened because their inputs are already redacted records. */
-const readUserMessage = fromRedactedUserMessage as unknown as (message: any, purpose: PrivacyCapability) => any
-const readAskQuestionArgs = fromRedactedAskQuestionArgs as unknown as (message: any, purpose: PrivacyCapability) => any
-const readAskQuestionResult = fromRedactedAskQuestionResult as unknown as (message: any, purpose: PrivacyCapability) => any
-const readComputerUseToolCall = fromRedactedComputerUseToolCall as unknown as (message: any, purpose: PrivacyCapability) => any
-
 /** The text of one assistant step, when the step is an assistant message with something in it. */
-function assistantTextOf(step: any): string | undefined {
-  if (step.message.case !== "assistantMessage") return undefined
-  const text = step.message.value.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).trim()
+function assistantTextOf(step: SlateConversationStep): string | undefined {
+  if (step.kind !== "assistant-message") return undefined
+  const text = step.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).trim()
   return text.length > 0 ? text : undefined
 }
 
@@ -71,9 +74,9 @@ async function recentAssistantTexts(ctx: OperationContext, stateHandler: Classif
     const turn = await stateHandler.turns[turnIndex]!.get(ctx)
     if (!(turn instanceof AgentConversationTurnHandle)) continue
     const steps = (turn as any).steps
-    const stepCount = turn.getInnerStructure().steps.length
+    const stepCount = turn.stepCount
     for (let stepIndex = stepCount - 1; stepIndex >= 0 && newestFirst.length < maxMessages; stepIndex--) {
-      const text = assistantTextOf(await steps[stepIndex].get(ctx) as any)
+      const text = assistantTextOf(await steps[stepIndex].get(ctx) as SlateConversationStep)
       if (text !== undefined) newestFirst.push(text)
     }
   }
@@ -142,10 +145,10 @@ async function intentComputerCalls(ctx: OperationContext, stateHandler: Classifi
     const turn = await stateHandler.turns[turnIndex]!.get(ctx)
     if (!(turn instanceof AgentConversationTurnHandle)) continue
     for (const stepRef of (turn as any).steps) {
-      const step = await stepRef.get(ctx) as any
-      const isComputerUseCall = step.message.case === "toolCall" && step.message.value.tool.case === "computerUseToolCall"
+      const step = await stepRef.get(ctx) as SlateConversationStep
+      const isComputerUseCall = step.kind === "tool-call" && step.tool.case === "computerUseToolCall"
       if (!isComputerUseCall) continue
-      computerCalls.push(computerCallContext(readComputerUseToolCall(step.message.value.tool.value, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)))
+      computerCalls.push(computerCallContext(readClassifierComputerUseCallInterop(step.tool.value, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)))
     }
   }
   return computerCalls
@@ -156,28 +159,6 @@ function pathInside(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
-}
-
-/** The skill file paths the user explicitly invoked, from the message's selected context. */
-function invokedSkillPaths(selectedContext: any): string[] {
-  if (selectedContext === undefined) return []
-  const paths = new Set<string>()
-  for (const skill of selectedContext.selectedSkills ?? []) {
-    const fullPath = pathInside(skill.fullPath)
-    if (fullPath !== undefined) paths.add(fullPath)
-  }
-  return [...paths]
-}
-
-/** The command file paths the turn invoked, from the message's selected context. */
-function invokedCommandPaths(selectedContext: any): string[] {
-  if (selectedContext === undefined) return []
-  const paths = new Set<string>()
-  for (const command of selectedContext.cursorCommands) {
-    const fullPath = pathInside(command.fullPath)
-    if (fullPath !== undefined) paths.add(fullPath)
-  }
-  return [...paths]
 }
 
 const INVOKED_SKILLS_OPEN_TAG = '<invoked_skills note="skill files the user explicitly invoked for this request">'
@@ -246,24 +227,27 @@ function userMessageContextText(userMessage: any, options: {
   excludedUserMessageTextPrefixes: readonly string[]
   trustedUserMessageTextPrefixes: readonly string[]
 }): string | undefined {
-  const plainMessage = readUserMessage(userMessage, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  const plainMessage = readClassifierUserMessageInterop(userMessage, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   const trustedPrefix = options.trustedUserMessageTextPrefixes.find(prefix => plainMessage.text.startsWith(prefix))
   const untrusted = options.excludedUserMessageTextPrefixes.some(prefix => plainMessage.text.startsWith(prefix))
   if (trustedPrefix === undefined && untrusted) return undefined
-  const automatic = plainMessage.simulatedMsgReason === SimulatedMsgReason.BACKGROUND_TASK_COMPLETION || plainMessage.simulatedMsgReason === SimulatedMsgReason.GOAL_CONTINUATION
-  if (automatic) return undefined
+  if (isAutomaticClassifierContextMessageInterop(plainMessage.simulatedMsgReason)) return undefined
   const rawText = plainMessage.text.slice(trustedPrefix?.length ?? 0).trim()
   let baseText = rawText.length > 0 ? rawText : undefined
   if (plainMessage.isSimulatedMsg === true) {
-    const simulatedText = renderSimulatedMessagePrompts({
-      selectedContext: plainMessage.selectedContext ?? new SelectedContext(),
-      simulatedMsgReason: plainMessage.simulatedMsgReason as SimulatedMsgReason,
-    }).map(part => part.text.trim()).filter(text => text.length > 0).join("\n\n").trim()
+    const simulatedText = renderSimulatedClassifierPromptsInterop({
+      selectedContext: plainMessage.selectedContext,
+      simulatedMsgReason: plainMessage.simulatedMsgReason,
+    }).map(text => text.trim()).filter(text => text.length > 0).join("\n\n").trim()
     if (simulatedText.length > 0) baseText = simulatedText
   }
   if (!options.includeInvokedWorkflowFilesAnnotation) return baseText
-  const skillPaths = [...new Set([...invokedSkillPaths(plainMessage.selectedContext), ...options.currentTurnInvokedSkillPaths])]
-  const commandPaths = invokedCommandPaths(plainMessage.selectedContext)
+  const selectedPaths = selectedWorkflowPathsForClassifierInterop(plainMessage.selectedContext)
+  const skillPaths = [...new Set([
+    ...selectedPaths.skillPaths.map(pathInside).filter((path): path is string => path !== undefined),
+    ...options.currentTurnInvokedSkillPaths,
+  ])]
+  const commandPaths = [...new Set(selectedPaths.commandPaths.map(pathInside).filter((path): path is string => path !== undefined))]
   if (skillPaths.length === 0 && commandPaths.length === 0) return baseText
   return withWorkflowAnnotations(baseText, { skillPaths, commandPaths })
 }
@@ -319,12 +303,13 @@ async function recentAskAnswers(ctx: OperationContext, stateHandler: ClassifierS
   const steps = (currentTurn as any).steps
   for (let stepIndex = steps.length - 1; stepIndex >= 0 && stepsScanned < maxSteps && newestFirst.length < maxResults; stepIndex--) {
     stepsScanned++
-    const step = await steps[stepIndex].get(ctx) as any
-    const isAskQuestionCall = step.message.case === "toolCall" && step.message.value.tool.case === "askQuestionToolCall"
+    const step = await steps[stepIndex].get(ctx) as SlateConversationStep
+    const isAskQuestionCall = step.kind === "tool-call" && step.tool.case === "askQuestionToolCall"
     if (!isAskQuestionCall) continue
-    const askQuestion = step.message.value.tool.value
-    const args = askQuestion.args !== undefined ? readAskQuestionArgs(askQuestion.args, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
-    const result = askQuestion.result !== undefined ? readAskQuestionResult(askQuestion.result, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
+    const askQuestion = step.tool.value as { args?: unknown; result?: unknown } | undefined
+    if (askQuestion === undefined) continue
+    const args = askQuestion.args !== undefined ? readClassifierAskQuestionArgsInterop(askQuestion.args, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
+    const result = askQuestion.result !== undefined ? readClassifierAskQuestionResultInterop(askQuestion.result, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
     const rendered = askQuestionAnswer(args, result)
     if (rendered !== undefined) newestFirst.push(rendered)
   }
@@ -415,7 +400,7 @@ async function conversationContext(
   limits = EDITOR_CONTEXT_LIMITS,
   truncateLines = (lines: ClassifierLine[]) => shrinkEditorLines(lines),
   options?: { excludedUserMessageTextPrefixes?: readonly string[]; trustedUserMessageTextPrefixes?: readonly string[]; includeComputerToolCalls?: boolean },
-): Promise<any[]> {
+): Promise<SlateClassifierConversationMessage[]> {
   const excludedPrefixes = options?.excludedUserMessageTextPrefixes ?? []
   const trustedPrefixes = options?.trustedUserMessageTextPrefixes ?? []
   const [assistantTexts, userTexts, questionAnswers, computerCalls] = await Promise.all([
@@ -430,25 +415,26 @@ async function conversationContext(
     ...questionAnswers.map(content => ({ role: "user_answer", content })),
     ...computerCalls.map(content => ({ role: "computer", content })),
   ]
-  return truncateLines(lines).map(line => new SmartModeClassifierConversationMessage({ role: line.role, content: line.content }))
+  return truncateLines(lines)
 }
 
 /** The auto-review classifier's slice: more of the conversation, a smaller per-message budget, and computer calls. */
-async function autoReviewConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler, options: { excludedUserMessageTextPrefixes?: readonly string[]; trustedUserMessageTextPrefixes?: readonly string[] } = {}): Promise<any[]> {
+async function autoReviewConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler, options: { excludedUserMessageTextPrefixes?: readonly string[]; trustedUserMessageTextPrefixes?: readonly string[] } = {}): Promise<SlateClassifierConversationMessage[]> {
   return conversationContext(ctx, stateHandler, AUTO_REVIEW_CONTEXT_LIMITS, autoReviewLines, { ...options, includeComputerToolCalls: true })
 }
 
 /** The editor classifier's slice, or nothing when the conversation cannot be read. */
-export async function tryExtractSmartModeClassifierConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler): Promise<any[]> {
+export async function tryExtractSmartModeClassifierConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler): Promise<SlateClassifierConversationMessage[]> {
   try {
-    return await conversationContext(ctx, stateHandler)
+    const messages = await conversationContext(ctx, stateHandler)
+    return toSmartModeClassifierConversationMessagesInterop(messages)
   } catch {
     return []
   }
 }
 
 /** The auto-review classifier's slice, or nothing when the conversation cannot be read. */
-export async function tryExtractSlateAutoReviewClassifierConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler, options?: { excludedUserMessageTextPrefixes?: readonly string[]; trustedUserMessageTextPrefixes?: readonly string[] }): Promise<any[]> {
+export async function tryExtractSlateAutoReviewClassifierConversationContext(ctx: OperationContext, stateHandler: ClassifierStateHandler, options?: { excludedUserMessageTextPrefixes?: readonly string[]; trustedUserMessageTextPrefixes?: readonly string[] }): Promise<SlateClassifierConversationMessage[]> {
   try {
     return await autoReviewConversationContext(ctx, stateHandler, options)
   } catch {

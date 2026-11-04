@@ -25,9 +25,10 @@ import {
 import { validateAndResolveSubpath } from "../../source/packages/plugin-install/validate-subpath.ts"
 import { expandEnvVarsWithLookup, recordToCaseInsensitiveLookup } from "../../source/packages/plugin-install/env-expansion.ts"
 import { packPluginArtifact } from "../../source/packages/plugin-install/tarball.ts"
-import { buildOriginTokenGitConfig, PREFER_ORIGIN_READS_HEADER } from "../../source/packages/plugin-install/origin-git-auth.ts"
-import { mcpConfigSchema, noopPluginMetricsLogger } from "../../source/packages/plugin-install/types.ts"
-import { execGitNonInteractive, resolveExtraGitConfig } from "../../source/packages/plugin-install/git-subprocess-env.ts"
+import { buildOriginTokenGitConfig, PREFER_ORIGIN_READS_HEADER } from "../../source/adapters/interop/git/origin-auth-config-adapter.ts"
+import { externalPluginMcpConfigSchema as mcpConfigSchema } from "../../source/adapters/interop/plugin-marketplace/plugin-mcp-config-adapter.ts"
+import { noopPluginMetricsLogger } from "../../source/packages/plugin-install/types.ts"
+import { execGitNonInteractive, resolveExtraGitConfig } from "../../source/packages/plugin-install/git-command.ts"
 import { synthesizeInlinePluginDir } from "../../source/packages/plugin-install/inline-plugin-synthesizer.ts"
 import { restoreSkillsFromPluginDir } from "../../source/packages/plugin-install/skill-plugin-restore.ts"
 import { canonicalRepoHost, parseAndValidateScmUrl, parseGitUrl, toScmSshUrl } from "../../source/packages/plugin-install/git-url-parsing.ts"
@@ -106,8 +107,8 @@ test("a plugin's files can name where the plugin is installed, in either spellin
 })
 
 test("a plugin is identified by its source, and only the published ones carry an id", () => {
-  const firstParty: PluginIdentifier = { source: "cursor-first-party", sourceInfo: { pluginDbId: "db-1" } }
-  const thirdParty: PluginIdentifier = { source: "cursor-third-party", sourceInfo: { pluginDbId: "db-2" } }
+  const firstParty: PluginIdentifier = { source: "first-party", sourceInfo: { pluginDbId: "db-1" } }
+  const thirdParty: PluginIdentifier = { source: "third-party", sourceInfo: { pluginDbId: "db-2" } }
   const local: PluginIdentifier = { source: "user-local" }
   assert.equal(getPluginDbId(firstParty), "db-1")
   assert.equal(getPluginDbId(thirdParty), "db-2")
@@ -194,6 +195,10 @@ test("the git configuration carries a token to the hosts the caller names", () =
   const header = `Authorization: Basic ${Buffer.from("x-access-token:token-1").toString("base64")}`
   assert.deepEqual(config, {
     "http.https://origin.example/.extraheader": [header, PREFER_ORIGIN_READS_HEADER],
+  })
+  assert.deepEqual(buildOriginTokenGitConfig("token-1", [" ", "origin.example", "origin.example", "mirror.example"]), {
+    "http.https://origin.example/.extraheader": [header, PREFER_ORIGIN_READS_HEADER],
+    "http.https://mirror.example/.extraheader": [header, PREFER_ORIGIN_READS_HEADER],
   })
 })
 

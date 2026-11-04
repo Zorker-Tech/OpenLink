@@ -12,7 +12,7 @@ import {
   ConversationStateStructure,
   ConversationTurnStructure,
   UserMessage,
-} from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"

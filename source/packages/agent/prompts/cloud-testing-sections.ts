@@ -12,17 +12,18 @@
  * exist — so the context is resolved once and passed to all three.
  */
 
-import { BackgroundComposerSource } from "../../proto/generated/aiserver/v1/background_composer_pb.ts"
 import { jsx, jsxs, type PromptNode } from "../../prompt-jsx/index.ts"
 import { getBrowserMcpProviderName } from "../browser-tools.ts"
 import {
   AgentType,
+  type BackgroundAgentSource,
   isCloudAgentTestingPromptEligibleEnvironment,
   shouldEnableComputerUse,
   shouldUseExperimentalCloudBehavior,
 } from "../utils/agent-config.ts"
 import { isNamedAgentHomePromptSession } from "./cloud-meta-agent/named-agent-sessions.ts"
 import { isThreadBoundSession } from "./thread-bound-session.ts"
+import { projectThreadSessionKind } from "../../../adapters/interop/agent/thread-session-kind-adapter.ts"
 import { ComputerUseInstructionsSection, GitOrNoRepositoryInstructions } from "./prompt-sections.ts"
 import { TestingInstructions2 } from "./testing/instructions.ts"
 
@@ -39,13 +40,12 @@ type ComposerEnvironment = {
 interface CloudTestingSectionsProps {
   readonly modelInfo?: {
     readonly modelName?: string | undefined
-    /** A catalogue value: the prompt version a model was trained against. */
-    readonly promptVersion?: string | undefined
+    readonly usesShellLessCloudPrompt?: boolean | undefined
     readonly isSlateProductPrompt?: boolean | undefined
     readonly [key: string]: unknown
   } | undefined
   readonly enableComposer2IntelligentTestingPromptSection?: boolean | undefined
-  readonly backgroundAgentSource?: BackgroundComposerSource | undefined
+  readonly backgroundAgentSource?: BackgroundAgentSource | undefined
   readonly agentType?: AgentType | undefined
   readonly enableCloudTesting?: boolean | undefined
   readonly priorUserInfoCloudTestingSectionsPlacement?: string | undefined
@@ -57,7 +57,6 @@ interface CloudTestingSectionsProps {
   readonly subagentType?: { readonly type?: { readonly case?: string | undefined } | undefined } | undefined
   readonly useLocalAgentPrompting?: boolean | undefined
   readonly env?: ComposerEnvironment | undefined
-  readonly cursorRules?: unknown
   readonly browserTools?: readonly string[] | undefined
   readonly cloudRule?: unknown
   readonly mode?: unknown
@@ -75,13 +74,11 @@ export function parseCloudTestingSectionsPlacementMetadata(value: unknown): "use
   return value === "user_info" || value === "system_prompt" ? value : undefined
 }
 
-const SHELL_LESS_GITHUB_PROMPT_VERSION = "cursor-0226"
-
 export function getCloudTestingSectionsPlacement(
   props: CloudTestingSectionsProps,
 ): "user_info" | "system_prompt" | undefined {
   const eligible = !isNamedAgentHomePromptSession(props) &&
-    props.modelInfo?.promptVersion === SHELL_LESS_GITHUB_PROMPT_VERSION &&
+    props.modelInfo?.usesShellLessCloudPrompt === true &&
     props.enableComposer2IntelligentTestingPromptSection === true &&
     props.backgroundAgentSource !== undefined &&
     props.agentType !== undefined &&
@@ -121,7 +118,6 @@ function getCloudSectionContext(props: CloudTestingSectionsProps) {
   }) ?? false
   const testingPromptProps = {
     env: props.env,
-    cursorRules: props.cursorRules,
     browserTools: props.browserTools,
     cloudRule: props.cloudRule,
     mode: props.mode,
@@ -164,7 +160,10 @@ export function getCloudTestingSectionElements(
             gitInstructionsProps: {
               toolInfo: props.toolInfo,
               shouldShowTestingInstructions: true,
-              suppressCreatedPrMention: isThreadBoundSession(props),
+              suppressCreatedPrMention: isThreadBoundSession({
+                isThreadSurface: props.isThreadSurface,
+                sessionKind: projectThreadSessionKind(props.namedAgentSessionKind),
+              }),
             },
           }),
         }),

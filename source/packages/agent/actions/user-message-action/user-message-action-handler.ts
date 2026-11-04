@@ -8,10 +8,12 @@
  * it is the most expensive part of the prompt and the least likely to have changed. An action that carries
  * no message at all is refused rather than turned into an empty turn.
  */
-import { AgentMode } from "../../../proto/generated/agent/v1/agent_pb.ts";
-import { fromRedactedRequestContext } from "../../../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts";
-import { fromRedactedUserMessage as fromRedactedUserMessage2 } from "../../../redacted-protos/generated/agent/v1/agent_redacted.ts";
-import { PrivacyCapability } from "../../../redaction/classification.ts";
+import {
+  decodeIncomingRequestContext,
+  decodeIncomingUserMessage,
+  shouldHideMcpMetaToolSnapshot,
+} from "../../../../adapters/interop/agent/user-message-action-input-adapter.ts";
+import { projectBackgroundAgentSource } from "../../../../adapters/interop/agent/background-agent-source-adapter.ts";
 import { fromRedactedCoreMessage, toRedactedCoreMessages } from "../../../redaction/message-redaction.ts";
 import { createLogger } from "../../../context/logging.ts";
 import { createSpan } from "../../../context/telemetry.ts";
@@ -20,42 +22,44 @@ import { RedactedUpdates } from "../../../agent-core/redacted-interaction-update
 import { FileOperationLockManager } from "../../tools/core/file-operation-locks.ts";
 import { extractToolInfo } from "../../prompts/tool-info.ts";
 import { getBrowserToolNames } from "../../browser-tools.ts";
-import { resolveCurrentTurnMode } from "../../mode-processing.ts";
-import { shouldOmitCloudWorkerProcedure, isRootProjectUserMessage } from "../../utils/project-conversation.ts";
+import { fromInteropAgentMode, toInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
+import {
+  isRootProjectUserMessageFromInterop,
+} from "../../../../adapters/interop/agent/project-conversation-adapter.ts";
+import { shouldOmitCloudWorkerProcedure } from "../../utils/project-conversation.ts";
+import { resolveCurrentTurnMode, SlateMode } from "../../mode-processing.ts";
 import {
   getNamedAgentSessionPromptContext,
   isNamedAgentHomePromptSession,
   renderCloudMetaParentUserTurnReminder,
   renderNamedAgentHomeUserTurnReminder,
 } from "../../prompts/cloud-meta-agent/named-agent-sessions.ts";
-import { buildRequestContextOptions, buildUserInfoAgentNotesProps } from "../meta-agent-notes.ts";
+import { buildRequestContextOptions } from "../meta-agent-notes.ts";
+import { buildUserInfoAgentNotesProps } from "../../../../adapters/interop/agent/meta-agent-notes-adapter.ts";
+import { adaptInteropCloudTestingModelProfile } from "../../../../adapters/interop/agent/testing-prompt-profile-adapter.ts";
 import { resolveRequestContext } from "../../utils/request-context.ts";
 import { getMcpMetaToolSnapshotToolNames, withToolSetMcpSnapshot } from "../../utils/mcp-meta-tool-options.ts";
-import { getMcpMetaToolOptionsWithUserDefinedTools } from "../../utils/mcp-user-defined-tools.ts";
+import { getMcpMetaToolOptionsWithUserDefinedTools } from "../../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts";
 import { getRequiredToolName, getExecutableTools } from "../../tools/tool-execution.ts";
 import { getAllRules } from "../common.ts";
 import { getCloudTestingSectionsPlacement } from "../../prompts/cloud-testing-sections.ts";
-import { getGeneratedUserRulesForModel } from "../../prompts/custom-user-rules.ts";
-import { UserInfo } from "../../prompts/user-info.ts";
-import { renderMultitaskModeEnterUserReminder } from "../../prompts/multitask-mode-reminders.ts";
-import { usesPersistenceInstructions } from "../../prompts/persistence-instructions.ts";
-import { getTaskToolName } from "../../tools/task-tool-name.ts";
+import { getGeneratedUserRulesForModel } from "../../../../adapters/interop/agent/user-rule-profile-adapter.ts";
+import { renderInteropMultitaskModeEnterUserReminder } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
+import { renderInteropUserInfo as UserInfo } from "../../../../adapters/interop/agent/user-info-input-adapter.ts";
 import { extractNamedAgentSelfDocumentBlock, renderNamedAgentSelfDocumentBlock } from "../../prompts/cloud-meta-agent/self-document.ts";
-import { shouldRerenderUserInfoForLocalPrCreationForge, LOCAL_PR_CREATION_FORGE_RULE_PATH } from "../../../utils/pull-request-guidance.ts";
-import { getRequestContextCompleteness, shouldRerenderUserInfoAfterSummarization, shouldRerenderUserInfoForRequestContextRecovery } from "../../prompts/user-info-rerender.ts";
+import { PULL_REQUEST_GUIDANCE_RULE_PATH } from "../../../utils/pull-request-guidance.ts";
+import { getRequestContextCompleteness } from "../../prompts/user-info-rerender.ts";
 import {
   getFirstUserInfoCloudTestingSectionsPlacement,
   getFirstUserInfoMessageContent,
-  getFirstUserInfoOmitCloudWorkerProcedure,
-  getFirstUserInfoRequestContextCompleteness,
-  getFirstUserInfoSummarizationEpoch,
   shouldMigrateMultitaskEnterReminderToUserInfo,
-  shouldRerenderUserInfo,
   userInfoHasMultitaskModeEnterReminder,
 } from "../../prompts/user-info-preparation.ts";
 import { deserializeConversationHistoryMessages } from "./conversation-history.ts";
 import { buildInterruptedPendingToolCallMessages } from "./interrupted-tool-reconstruction.ts";
+import { appendPrependedUserTurns, selectRecentPrependedMessages } from "./prepended-user-turns.ts";
 import { reactivatePausedGoalOnUserMessage } from "./reactivate-paused-goal.ts";
+import { evaluateUserInfoRefresh } from "./user-info-refresh-evaluation.ts";
 import { AbstractUserMessageActionHandler } from "./abstract-user-message-action-handler.ts";
 
 type Any = any;
@@ -97,17 +101,20 @@ function getRequestContextCompletenessAny(requestContext: Any): Any {
 export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
   async initializeConversation(ctx: Any, params: Any): Promise<Any> {
     const configAny: Any = this.config;
+    const promptBackgroundAgentSource = projectBackgroundAgentSource(configAny.backgroundAgentSource);
+    const namedAgentSessionProps = { ...configAny, backgroundAgentSource: promptBackgroundAgentSource };
     const { action, rootPromptExecutor, stateHandler, mcpTools, maxPrependedUserMessages, forcePrependedUserMessages, onStateUpdate } = params;
     if (!action.userMessage) throw new Error("User message is required");
     const userMessage = action.userMessage;
-    const resolvedTurnMode = resolveCurrentTurnMode(stateHandler.mode, userMessage.mode);
-    const isRootProject = isRootProjectUserMessage(userMessage);
+    const resolvedTurnMode = resolveCurrentTurnMode(stateHandler.mode, fromInteropAgentMode(userMessage.mode));
+    const interopTurnMode = toInteropAgentMode(resolvedTurnMode);
+    const isRootProject = isRootProjectUserMessageFromInterop(userMessage);
     const omitCloudWorkerProcedure = shouldOmitCloudWorkerProcedure({
       gateEnabled: configAny.featureFlags?.projectRootCoordinatorPrompt === true,
       agentType: configAny.agentType,
       mode: resolvedTurnMode,
       useLocalAgentPrompting: configAny.useLocalAgentPrompting === true,
-      isNamedAgentSession: getNamedAgentSessionPromptContext(configAny) !== undefined || isNamedAgentHomePromptSession(configAny),
+      isNamedAgentSession: getNamedAgentSessionPromptContext(configAny) !== undefined || isNamedAgentHomePromptSession(namedAgentSessionProps),
       isRootProject,
     });
     if (isRootProject) stateHandler.isRootProjectConversation = true;
@@ -116,7 +123,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     const getRequestContextStart = performance.now();
     const { requestContext, provenance: requestContextProvenance } = await resolveRequestContext({
       parentCtx: ctx,
-      ...(action.requestContext ? { maybeRequestContext: fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined) } : {}),
+      ...(action.requestContext ? { maybeRequestContext: decodeIncomingRequestContext(action.requestContext) } : {}),
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(configAny),
     });
@@ -150,40 +157,51 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     };
     const isProjectKickoffBeforePrepends = userMessage.projectDetails !== undefined && userMessage.projectDetails.sideChat === undefined && stateHandler.turns.length === 0;
     const prependedMessagesStart = performance.now();
-    let prependedCount = 0;
-    if (configAny.enablePrependedUserActions || forcePrependedUserMessages) {
-      const allPrepended = action.prependUserMessages ?? [];
-      const droppedCount = Math.max(0, allPrepended.length - maxPrependedUserMessages);
-      const prependedMessages = allPrepended.slice(-maxPrependedUserMessages);
-      prependedCount = prependedMessages.length;
-      if (droppedCount > 0) logger70.warn(ctx, "dropped excess prepended user messages", { droppedCount, totalCount: allPrepended.length, keptCount: prependedMessages.length });
-      if (prependedMessages.length > 0) logger70.info(ctx, "prepending user messages", { prependUserMessagesCount: prependedMessages.length });
-      const existingUserTurnMessageIds = prependedMessages.length > 0 ? await stateHandler.getUserTurnMessageIdsIndex(ctx) : undefined;
-      const prependedNamedAgentUserTurnReminder = prependedMessages.length === 0 ? undefined : isNamedAgentHomePromptSession(configAny) ? renderNamedAgentHomeUserTurnReminder() : configAny.isCloudMetaAgentParent ? renderCloudMetaParentUserTurnReminder(requiredToolName(extractToolInfo(toolSetHandle).allTools, "TASK"), getNamedAgentSessionPromptContext(configAny)) : undefined;
-      for (const prependedMessage of prependedMessages) {
-        const prependedUserMessage = fromRedactedUserMessage2(prependedMessage, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
-        const prependedMessageId = prependedUserMessage.messageId;
-        const duplicateByMessageId = prependedMessageId.length > 0 && existingUserTurnMessageIds?.has(prependedMessageId) === true;
-        if (duplicateByMessageId) {
-          logger70.info(ctx, "skipping duplicate prepended user message", { prependedMessageId, duplicateByMessageId });
-          continue;
-        }
-        if (sendToInteractionListener) await this.interactionListener.sendUpdate(ctx, RedactedUpdates.userMessageAppended(prependedMessage));
-        await stateHandler.createAgentTurn(ctx, prependedUserMessage, requestContext, configAny, this.resourceAccessor, {
-          additionalUserTurnSystemReminder: prependedNamedAgentUserTurnReminder,
-          ...dynamicToolTurnOptions,
-        });
-      }
-    }
-    prependedMessagesDuration.histogram(ctx, performance.now() - prependedMessagesStart, { count: String(prependedCount) });
+    const prependedSelection = action.prependUserMessages ?? [];
+    const prependedEnabled = configAny.enablePrependedUserActions || forcePrependedUserMessages;
+    const selectedPrepends = selectRecentPrependedMessages(prependedSelection, maxPrependedUserMessages).retained;
+    const prependedNamedAgentUserTurnReminder = !prependedEnabled || selectedPrepends.length === 0
+      ? undefined
+      : isNamedAgentHomePromptSession(namedAgentSessionProps)
+        ? renderNamedAgentHomeUserTurnReminder()
+        : configAny.isCloudMetaAgentParent
+          ? renderCloudMetaParentUserTurnReminder(requiredToolName(extractToolInfo(toolSetHandle).allTools, "TASK"), getNamedAgentSessionPromptContext(configAny))
+          : undefined;
+    const prependedResult = await appendPrependedUserTurns({
+      context: ctx,
+      enabled: prependedEnabled,
+      incoming: prependedSelection,
+      maximum: maxPrependedUserMessages,
+      reminder: prependedNamedAgentUserTurnReminder,
+      turnOptions: dynamicToolTurnOptions,
+      logger: {
+        warn: (event, fields) => logger70.warn(ctx, event, fields),
+        info: (event, fields) => logger70.info(ctx, event, fields),
+      },
+      decode: decodeIncomingUserMessage,
+      messageIdOf: (message) => message.messageId,
+      existingMessageIds: (context) => stateHandler.getUserTurnMessageIdsIndex(context),
+      ...(sendToInteractionListener
+        ? { publish: async (context: Any, message: Any) => this.interactionListener.sendUpdate(context, RedactedUpdates.userMessageAppended(message)) }
+        : {}),
+      createTurn: (context, message, turnOptions) => stateHandler.createAgentTurn(
+        context,
+        message,
+        requestContext,
+        configAny,
+        this.resourceAccessor,
+        turnOptions,
+      ),
+    });
+    prependedMessagesDuration.histogram(ctx, performance.now() - prependedMessagesStart, { count: String(prependedResult.candidateCount) });
     const systemPromptStart = performance.now();
     const rules = getAllRules(requestContext, configAny.nonFileRules, configAny.featureFlags);
     const priorMessages = rootPromptExecutor.getMessages().filter((message: Any) => message.role !== "system");
     const priorUserInfoCloudTestingSectionsPlacement = getFirstUserInfoCloudTestingSectionsPlacement(priorMessages);
     const userInfoCloudTestingSectionsPlacement = getCloudTestingSectionsPlacement({
-      modelInfo: configAny.modelInfo,
+      modelInfo: adaptInteropCloudTestingModelProfile(configAny.modelInfo),
       enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
-      backgroundAgentSource: configAny.backgroundAgentSource,
+      backgroundAgentSource: promptBackgroundAgentSource,
       agentType: configAny.agentType,
       enableCloudTesting: configAny.enableCloudTesting,
       featureFlags: configAny.featureFlags,
@@ -206,9 +224,9 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         priorUserInfoCloudTestingSectionsPlacement,
       }, toolSetHandle),
     });
-    const shouldRenderDsv3UserInfo = stateHandler.isDsv3() || configAny.modelInfo?.isComposerMatterhorn === true;
+        const shouldRenderLargeContextUserInfo = stateHandler.usesLargeContextTreatment() || configAny.modelInfo?.isComposerMatterhorn === true;
     const toolInfo: Any = extractToolInfo(toolSetHandle);
-    const namedAgentUserTurnReminder = isNamedAgentHomePromptSession(configAny) ? renderNamedAgentHomeUserTurnReminder() : configAny.isCloudMetaAgentParent ? renderCloudMetaParentUserTurnReminder(requiredToolName(toolInfo.allTools, "TASK"), getNamedAgentSessionPromptContext(configAny)) : undefined;
+    const namedAgentUserTurnReminder = isNamedAgentHomePromptSession(namedAgentSessionProps) ? renderNamedAgentHomeUserTurnReminder() : configAny.isCloudMetaAgentParent ? renderCloudMetaParentUserTurnReminder(requiredToolName(toolInfo.allTools, "TASK"), getNamedAgentSessionPromptContext(configAny)) : undefined;
     const toolMetadataMap = toolInfo.allTools;
     const awaitToolName = toolMetadataMap.AWAIT?.name;
     const shellToolName = toolMetadataMap.SHELL?.name;
@@ -216,38 +234,59 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     const matterhornCustomUserRuleOptions = { awaitToolName, shellToolName, grepToolName };
     const expectedCustomUserRules = getGeneratedUserRulesForModel(configAny.modelInfo, configAny.featureFlags, matterhornCustomUserRuleOptions);
     const userInfoMcpMetaToolOptions = withToolSetMcpSnapshot(getMcpMetaToolOptionsWithUserDefinedTools(requestContext.mcpMetaToolOptions, mergedMcpTools), toolSetHandle);
-    const hidesMcpMetaToolSnapshot = resolvedTurnMode === AgentMode.ASK && (configAny.enableFilterEditToolsInAskMode ?? true) || configAny.modelInfo?.isComposerMatterhorn === true && configAny.modelInfo.isRawTrainingSlug === true;
+    const hidesMcpMetaToolSnapshot = shouldHideMcpMetaToolSnapshot({
+      mode: resolvedTurnMode,
+      enableFilterEditToolsInAskMode: configAny.enableFilterEditToolsInAskMode,
+      modelInfo: configAny.modelInfo,
+    });
     const requestContextCompleteness = getRequestContextCompletenessAny(requestContext);
     const firstUserInfoContent = getFirstUserInfoMessageContent(priorMessages);
-    const firstUserInfoRequestContextCompleteness = getFirstUserInfoRequestContextCompleteness(priorMessages);
-    const needsUserInfoRerender = shouldRerenderUserInfo(hasExistingNonSystemMessages, priorMessages, expectedCustomUserRules, configAny.modelInfo, stateHandler.hasAgentTypeChangedFromPersistedState(), configAny.featureFlags, { ...matterhornCustomUserRuleOptions, availableSubagentModelsDescription: toolInfo.availableSubagentModelsDescription, availableSubagentTypesDescription: toolInfo.availableSubagentTypesDescription, mcpMetaToolOptions: userInfoMcpMetaToolOptions, skipDynamicToolSnapshotCheck: hidesMcpMetaToolSnapshot });
-    const needsRequestContextRecoveryRerender = configAny.featureFlags?.rerenderUserInfoOnRequestContextRecovery === true && shouldRerenderUserInfoForRequestContextRecovery({ previousCompleteness: firstUserInfoRequestContextCompleteness, currentCompleteness: requestContextCompleteness });
     const currentSummarizationEpoch = stateHandler.summaryArchives.length;
-    const needsSummarizationRerender = configAny.featureFlags?.rerenderUserInfoOnSummarization === true && shouldRerenderUserInfoAfterSummarization({ previousEpoch: getFirstUserInfoSummarizationEpoch(priorMessages), currentEpoch: currentSummarizationEpoch });
-    const needsOmitCloudWorkerProcedureRerender = hasExistingNonSystemMessages && firstUserInfoContent !== undefined && getFirstUserInfoOmitCloudWorkerProcedure(priorMessages) !== omitCloudWorkerProcedure;
-    const localPrCreationForgeRule = rules.find((rule: Any) => rule.fullPath === LOCAL_PR_CREATION_FORGE_RULE_PATH);
-    const needsLocalPrCreationForgeRerender = hasExistingNonSystemMessages && firstUserInfoContent !== undefined && shouldRerenderUserInfoForLocalPrCreationForge({ userInfoContent: firstUserInfoContent, ...(localPrCreationForgeRule?.content !== undefined ? { forgeRuleContent: localPrCreationForgeRule.content } : {}) });
+    const localPrCreationForgeRule = rules.find((rule: Any) => rule.fullPath === PULL_REQUEST_GUIDANCE_RULE_PATH);
     const userInfoAlreadyHasMultitaskEnterReminder = firstUserInfoContent !== undefined && userInfoHasMultitaskEnterReminder(firstUserInfoContent);
-    const shouldMigrateMultitaskEnterReminderInThisTurn = shouldMigrateMultitaskEnterReminderToUserInfo({ hasExistingNonSystemMessages, previousTurnMode: stateHandler.mode, resolvedTurnMode, priorMessages, firstUserInfoContent, userInfoAlreadyHasMultitaskEnterReminder });
+    const shouldMigrateMultitaskEnterReminderInThisTurn = shouldMigrateMultitaskEnterReminderToUserInfo({
+      hasExistingNonSystemMessages,
+      previousTurnWasMultitask: stateHandler.mode === SlateMode.MULTITASK,
+      resolvedTurnIsMultitask: resolvedTurnMode === SlateMode.MULTITASK,
+      priorMessages,
+      firstUserInfoContent,
+      userInfoAlreadyHasMultitaskEnterReminder,
+    });
     const shouldReplaceUserInfoWithImportedHistory = action.conversationHistory?.replaceUserInfo === true && action.conversationHistory.messages.length > 0;
-    const shouldRenderUserInfo = (!hasExistingNonSystemMessages || needsUserInfoRerender || needsRequestContextRecoveryRerender || needsSummarizationRerender || needsLocalPrCreationForgeRerender || needsOmitCloudWorkerProcedureRerender || shouldMigrateMultitaskEnterReminderInThisTurn || needsCloudTestingPlacementRerender) && !configAny.userInfoDisplayOptions?.disable && !shouldReplaceUserInfoWithImportedHistory;
-    const isMainTurnStillFirstConversationTurn = stateHandler.turns.length === 0;
-    const shouldAppendMultitaskEnterReminderToUserInfo = shouldRenderUserInfo && resolvedTurnMode === AgentMode.MULTITASK && (!hasExistingNonSystemMessages && isMainTurnStillFirstConversationTurn || userInfoAlreadyHasMultitaskEnterReminder || shouldMigrateMultitaskEnterReminderInThisTurn);
-    let didReplaceUserInfo = false;
+    const userInfoPlan = evaluateUserInfoRefresh({
+      priorMessages,
+      hasExistingNonSystemMessages,
+      expectedCustomUserRules,
+      modelInfo: configAny.modelInfo,
+      agentTypeChanged: stateHandler.hasAgentTypeChangedFromPersistedState(),
+      featureFlags: configAny.featureFlags,
+      ruleOptions: {
+        ...matterhornCustomUserRuleOptions,
+        availableSubagentModelsDescription: toolInfo.availableSubagentModelsDescription,
+        availableSubagentTypesDescription: toolInfo.availableSubagentTypesDescription,
+        mcpMetaToolOptions: userInfoMcpMetaToolOptions,
+        skipDynamicToolSnapshotCheck: hidesMcpMetaToolSnapshot,
+      },
+      currentRequestContextCompleteness: requestContextCompleteness,
+      currentSummarizationEpoch,
+      omitCloudWorkerProcedure,
+      firstUserInfoContent,
+      localPullRequestGuidance: localPrCreationForgeRule?.content,
+      reminderMigrationNeeded: shouldMigrateMultitaskEnterReminderInThisTurn,
+      cloudTestingPlacementRecoveryNeeded: needsCloudTestingPlacementRerender,
+      displayEnabled: !configAny.userInfoDisplayOptions?.disable,
+      importedHistoryReplacesUserInfo: shouldReplaceUserInfoWithImportedHistory,
+      isMultitaskTurn: resolvedTurnMode === SlateMode.MULTITASK,
+      isFirstConversationTurn: stateHandler.turns.length === 0,
+      userInfoAlreadyHasReminder: userInfoAlreadyHasMultitaskEnterReminder,
+    });
+    const shouldRenderUserInfo = userInfoPlan.shouldRender;
+    const didReplaceUserInfo = userInfoPlan.replacesExistingBlock;
+    const shouldAppendMultitaskEnterReminderToUserInfo = userInfoPlan.shouldAppendMultitaskReminder;
     if (shouldRenderUserInfo) {
-      didReplaceUserInfo = hasExistingNonSystemMessages;
       if (didReplaceUserInfo) {
-        const reasons: string[] = [];
-        if (needsUserInfoRerender) reasons.push("agent_type_or_composer_rules_change");
-        if (needsRequestContextRecoveryRerender) reasons.push("request_context_recovery");
-        if (needsSummarizationRerender) reasons.push("summarization_epoch_advanced");
-        if (needsOmitCloudWorkerProcedureRerender) reasons.push("omit_cloud_worker_procedure_change");
-        if (shouldMigrateMultitaskEnterReminderInThisTurn) reasons.push("multitask_reminder_migration");
-        if (needsCloudTestingPlacementRerender) reasons.push("cloud_testing_placement_recovery");
-        logger70.info(ctx, "agent.user_info.rerendered", { reasons });
+        logger70.info(ctx, "agent.user_info.rerendered", { reasons: userInfoPlan.reasons });
       }
-      const subagentToolName = configAny.modelInfo !== undefined ? getTaskToolName(configAny.modelInfo) : "Task";
-      const multitaskModeEnterReminderOptions = { ignoreGptPersistenceInstructions: usesPersistenceInstructions(configAny.modelInfo), modelInfo: configAny.modelInfo, hideAsyncSubagentTaskNotifications: configAny.featureFlags?.hideAsyncSubagentTaskNotifications };
       let namedAgentSelfDocumentBlock: Any;
       if (configAny.getNamedAgentSelfDocument !== undefined) {
         try {
@@ -264,10 +303,10 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         gitRepos: requestContext.gitRepos,
         gitRepoInfoComplete: requestContext.gitRepoInfoComplete,
         cloudRule: requestContext.cloudRule,
-        mode: resolvedTurnMode,
+        mode: interopTurnMode,
         isRootProject,
         omitCloudWorkerProcedure,
-        isLargeContextModel: shouldRenderDsv3UserInfo,
+        isLargeContextModel: shouldRenderLargeContextUserInfo,
         displayOptions: configAny.userInfoDisplayOptions,
         mcpInfoComplete: requestContext.mcpInfoComplete,
         mcpInstructions: requestContext.mcpInstructions,
@@ -280,7 +319,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         hooksAdditionalContext: requestContext.hooksAdditionalContext,
         automationInstructions: configAny.automationInstructions,
         ...(configAny.enableTerminalFiles !== false ? { terminalsFolder: requestContext.env?.terminalsFolder } : {}),
-        ...buildUserInfoAgentNotesProps(configAny, resolvedTurnMode, requestContext.env),
+        ...buildUserInfoAgentNotesProps(configAny, interopTurnMode, requestContext.env),
         designatedBranches: configAny.designatedBranches,
         branchPrefix: configAny.branchPrefix,
         branchSuffix: configAny.branchSuffix,
@@ -300,7 +339,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
         priorUserInfoCloudTestingSectionsPlacement,
       });
-      if (shouldAppendMultitaskEnterReminderToUserInfo) userInfoContent = `${userInfoContent}\n\n${renderMultitaskModeEnterUserReminder(subagentToolName, multitaskModeEnterReminderOptions)}`;
+      if (shouldAppendMultitaskEnterReminderToUserInfo) userInfoContent = `${userInfoContent}\n\n${renderInteropMultitaskModeEnterUserReminder(configAny.modelInfo, { hideAsyncSubagentTaskNotifications: configAny.featureFlags?.hideAsyncSubagentTaskNotifications })}`;
       newMessages.push({ role: "user", content: userInfoContent, providerOptions: { cursor: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { composer2CloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } } });
     }
     const effectivePriorMessages = didReplaceUserInfo ? priorMessages.slice(1) : priorMessages;
@@ -312,7 +351,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     systemPromptGenerationDuration.histogram(ctx, performance.now() - systemPromptStart);
     if (sendToInteractionListener) await this.interactionListener.sendUpdate(ctx, RedactedUpdates.userMessageAppended(userMessage));
     const createMainTurnStart = performance.now();
-    const turn = await stateHandler.createAgentTurn(ctx, fromRedactedUserMessage2(userMessage, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), requestContext, configAny, this.resourceAccessor, {
+    const turn = await stateHandler.createAgentTurn(ctx, decodeIncomingUserMessage(userMessage), requestContext, configAny, this.resourceAccessor, {
       additionalUserTurnSystemReminder: namedAgentUserTurnReminder,
       ...(isProjectKickoffBeforePrepends ? { isProjectKickoff: true } : {}),
       ...dynamicToolTurnOptions,

@@ -16,14 +16,6 @@ import { selectUnconfirmedUserMessages } from "./conversation-state.ts";
 import { SLATE_HIDDEN_PROMPT_MARKER } from "./slate-prompt-markers.ts";
 import { buildUserMessageAddressNote } from "./system-prompt.ts";
 import {
-  ConversationStateStructure,
-  ConversationTurnStructure,
-  UserMessage,
-} from "../../packages/proto/generated/agent/v1/agent_pb.ts";
-import { readExecutorResource } from "../../packages/agent-exec/read-operation.ts";
-import { ReadArgs, type ReadResult } from "../../packages/proto/generated/agent/v1/read_exec_pb.ts";
-import type { BlobStore } from "../../packages/agent-kv/blob-store.ts";
-import {
   SlateLocalToolPermissionDeniedError,
   slateLocalToolScopeKey,
 } from "../../shared/local-tool-permission-machinery.ts";
@@ -32,28 +24,18 @@ import type { Context } from "../../packages/context/context.ts";
 export class SlateTerminalReadError extends Error {
 }
 
-export type TerminalReadResult = ReadResult;
+export type TerminalReadResult =
+  | { readonly kind: "success"; readonly text?: string; readonly bytes?: Uint8Array }
+  | { readonly kind: "missing" }
+  | { readonly kind: "failure"; readonly resultName: string };
 
 export interface TerminalRemoteAccessor<Context> {
   read(turnContext: Context, args: { readonly path: string; readonly toolCallId: string }): Promise<TerminalReadResult>;
 }
 
-export interface ShellWatchResourceAccessor<Context = unknown> {
-  get(resource: typeof readExecutorResource): {
-    execute(turnContext: Context, args: ReadArgs, options?: unknown): Promise<ReadResult>;
-  };
-}
-
-export function createShellWatchReadAccessor<Context>(
-  reads: ShellWatchResourceAccessor<Context>,
-): TerminalRemoteAccessor<Context> {
-  return {
-    read: async (turnContext, args) => await reads.get(readExecutorResource).execute(
-      turnContext,
-      new ReadArgs({ path: args.path, toolCallId: args.toolCallId }),
-    ),
-  };
-}
+export type ShellWatchConversationTurn =
+  | { readonly kind: "agent"; readonly userMessageBlobId?: Uint8Array }
+  | { readonly kind: "other" };
 
 export interface TerminalConnection<Context> {
   readonly terminalsFolder: string;
@@ -87,45 +69,12 @@ export interface ShellTerminalWatchHost<Context> {
   terminalFilePath?(terminalsFolder: string, id: string): string | undefined;
   getConversationState(): { readonly turns: readonly Uint8Array[] };
   getBlob(turnContext: Context, blobRef: Uint8Array): Promise<Uint8Array | null>;
-  decodeConversationTurn(rawBytes: Uint8Array): ConversationTurnStructure;
-  decodeUserMessage(rawBytes: Uint8Array): { readonly text: string; readonly messageId: string };
+  decodeConversationTurn(rawBytes: Uint8Array): ShellWatchConversationTurn;
+  decodeUserMessage(rawBytes: Uint8Array): MaterializedUserMessage;
   getConfirmedUserTurnWatermarkCache(): ConfirmedUserTurnWatermark | undefined;
   setConfirmedUserTurnWatermarkCache(cache: ConfirmedUserTurnWatermark): void;
   now?(): number;
   delay?(milliseconds: number): Promise<void>;
-}
-
-/**
- * The generated conversationState/blob portion of the immutable shell-watch shellHost.
- *
- * The runner still owns box readiness and the remote read executor. Keeping
- * those concerns out of this projection is deliberate: this leaf only binds
- * the generated conversation conversationState and blob store to the decoders consumed by
- * watermark discovery.
- */
-export interface ShellWatchGeneratedStateOwner<Context = unknown> {
-  getConversationState(): ConversationStateStructure;
-  getBlobStore(): BlobStore<Context>;
-}
-
-export function createShellWatchGeneratedStateProjection<Context>(
-  stateOwner: ShellWatchGeneratedStateOwner<Context>,
-): Pick<
-  ShellTerminalWatchHost<Context>,
-  "getConversationState" | "getBlob" | "decodeConversationTurn" | "decodeUserMessage"
-> {
-  return {
-    getConversationState: () => stateOwner.getConversationState(),
-    getBlob: async (turnContext, blobRef) => {
-      const blob = await stateOwner.getBlobStore().getBlob(turnContext, blobRef);
-      return blob ?? null;
-    },
-    decodeConversationTurn: rawBytes => ConversationTurnStructure.fromBinary(rawBytes),
-    decodeUserMessage: rawBytes => {
-      const recentMessage = UserMessage.fromBinary(rawBytes);
-      return { text: recentMessage.text, messageId: recentMessage.messageId };
-    },
-  };
 }
 
 export interface TerminalFileSnapshot {
@@ -146,30 +95,12 @@ export async function readShellTerminalSnapshot<Context>(
   turnContext: Context,
 ): Promise<TerminalFileSnapshot> {
   const result = await reads.read(turnContext, { path, toolCallId: "" });
-  switch (result.result.case) {
-    case "success": {
-      const success = result.result.value as {
-        readonly output?: {
-          readonly case?: string;
-          readonly value?: unknown;
-        };
-      } | undefined;
-      const output = success?.output;
-      let content = "";
-      if (output?.case === "content" && typeof output.value === "string") {
-        content = output.value;
-      } else if (output?.case === "data" && output.value instanceof Uint8Array) {
-        content = Buffer.from(output.value).toString("utf8");
-      }
-      return { exists: true, content };
-    }
-    case "fileNotFound":
-      return { exists: false, content: "" };
-    default:
-      throw new SlateTerminalReadError(
-        `terminal file read failed (${result.result.case ?? "unknown"})`,
-      );
+  if (result.kind === "missing") return { exists: false, content: "" };
+  if (result.kind === "failure") {
+    throw new SlateTerminalReadError(`terminal file read failed (${result.resultName})`);
   }
+  const content = result.text ?? (result.bytes === undefined ? "" : Buffer.from(result.bytes).toString("utf8"));
+  return { exists: true, content };
 }
 
 export async function pollShellTerminalFile<Context>(
@@ -255,11 +186,11 @@ export async function pollShellTerminalFile<Context>(
   );
 }
 
-export async function collectPrependUserMessages<Context>(
+export async function collectPrependUserMessageRecords<Context>(
   shellHost: ShellTerminalWatchHost<Context>,
   recentMessages: readonly RecentTerminalUserMessage[] | null | undefined,
   currentMessageId?: string,
-): Promise<UserMessage[]> {
+): Promise<MaterializedUserMessage[]> {
   if (recentMessages == null || recentMessages.length === 0) return [];
   const conversationState = shellHost.getConversationState();
   const { lastUserMessageId, hasUserTurn } = await findConfirmedUserTurnWatermark(shellHost, conversationState);
@@ -272,13 +203,13 @@ export async function collectPrependUserMessages<Context>(
   return unconfirmed.map((recentMessage) => {
     const addressText = buildUserMessageAddressNote(recentMessage.id);
     const text = addressText.length > 0 ? `${addressText}\n${recentMessage.text}` : recentMessage.text;
-    return new UserMessage({
+    return {
       text,
       messageId: recentMessage.id,
       ...(recentMessage.richText != null && recentMessage.richText.length > 0
         ? { richText: recentMessage.richText }
         : {}),
-    });
+    };
   });
 }
 
@@ -318,11 +249,8 @@ export async function findConfirmedUserTurnWatermark<Context>(
       const turnBlob = await shellHost.getBlob(shellHost.ctx, turnBlobRef);
       if (turnBlob == null) return { hasUserTurn: true };
       const turn = shellHost.decodeConversationTurn(turnBlob);
-      if (turn.turn.case !== "agentConversationTurn") continue;
-      const agentTurn = turn.turn.value as {
-        readonly userMessage?: Uint8Array;
-      };
-      const userBlobRef = agentTurn.userMessage;
+      if (turn.kind !== "agent") continue;
+      const userBlobRef = turn.userMessageBlobId;
       if (userBlobRef == null || userBlobRef.length === 0) {
         return { hasUserTurn: true };
       }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { CursorRule, CursorRuleSource } from "../../source/packages/proto/generated/agent/v1/rules_pb.ts"
+import { CursorRule, CursorRuleSource } from "../../source/adapters/interop/proto/generated/agent/v1/rules_pb.ts"
 import { ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { SubagentRegistry, subagentRegistryResource } from "../../source/packages/agent/tools/subagent-registry.ts"
 import {
@@ -19,8 +19,7 @@ import {
   buildGitDiffUserContent,
 } from "../../source/packages/agent/git-diff-processing.ts"
 import { extractAutomationTriggerContext, getAllRules } from "../../source/packages/agent/actions/common.ts"
-import { renderDirectoryTreeWithinBudget } from "../../source/packages/agent/tools/core/ls/formatters.ts"
-import { LsDirectoryTreeNode, LsDirectoryTreeNode_File } from "../../source/packages/proto/generated/agent/v1/ls_exec_pb.ts"
+import { renderDirectoryTreeWithinBudget, type SlateDirectoryTreeNode } from "../../source/packages/agent/tools/core/ls/formatters.ts"
 
 const ctx = () => createContext()
 
@@ -62,6 +61,18 @@ test("cancelling by the tool call id reaches the subagent and forgets both ids",
   assert.deepEqual(registry.lastAbortOptions, { reason: "user" })
 })
 
+test("cancelling by the subagent id also clears its tool-call lookup", () => {
+  const registry = new SubagentRegistry()
+  let cancelled = 0
+  registry.register("sub-1", { cancel: () => { cancelled += 1 } }, "call-1")
+
+  registry.cancel("sub-1")
+  registry.cancel("call-1")
+
+  assert.equal(cancelled, 1)
+  assert.equal(registry.size, 0)
+})
+
 test("a cancel that throws still forgets the subagent", () => {
   const registry = new SubagentRegistry()
   registry.register("sub-1", { cancel: () => { throw new Error("already gone") } })
@@ -94,11 +105,13 @@ test("cancelling everything honours the excluded calls, and a failing cancel is 
   assert.deepEqual(cancelled, ["sub-1"])
   assert.equal(registry.size, 1)
   assert.equal(registry.has("sub-2"), true)
+  registry.cancel("call-3")
+  assert.equal(registry.size, 1)
 })
 
 test("the registry is a resource the environment provides", () => {
   assert.equal(typeof subagentRegistryResource.symbol, "symbol")
-  assert.ok(subagentRegistryResource.remoteImplementation(undefined) instanceof SubagentRegistry)
+  assert.ok(subagentRegistryResource.remoteImplementation(undefined as never) instanceof SubagentRegistry)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -109,67 +122,134 @@ test("the counts separate failures that are not the model's doing", () => {
   const state = new ToolCountingStateTracker()
   assert.equal(state.hasFailedToolCalls(), "false")
   assert.equal(state.getFailedToolCallCount(), 0)
-  state.resultClassificationCounts.set(ToolErrorClassification.TIMEOUT, 1)
   state.resultClassificationCounts.set(ToolErrorClassification.INVALID_ARGS, 2)
+  assert.equal(state.hasUnexpectedToolCallErrors(), "false")
+  state.resultClassificationCounts.set(ToolErrorClassification.TIMEOUT, 1)
   assert.equal(state.getFailedToolCallCount(), 3)
   assert.equal(state.getUnexpectedToolCallErrorCount(), 1)
   assert.equal(state.hasFailedToolCalls(), "true")
   assert.equal(state.hasUnexpectedToolCallErrors(), "true")
 })
 
+test("only environment and device failures count as unexpected", () => {
+  const state = new ToolCountingStateTracker()
+  state.resultClassificationCounts.set(ToolErrorClassification.TIMEOUT, 1)
+  state.resultClassificationCounts.set(ToolErrorClassification.PROVIDER_ERROR, 2)
+  state.resultClassificationCounts.set(ToolErrorClassification.BAD_USER_DEVICE_STATE, 3)
+  state.resultClassificationCounts.set(ToolErrorClassification.OTHER_ERROR, 4)
+  state.resultClassificationCounts.set(ToolErrorClassification.INVALID_ARGS, 5)
+
+  assert.equal(state.getFailedToolCallCount(), 15)
+  assert.equal(state.getUnexpectedToolCallErrorCount(), 10)
+  assert.equal(state.hasUnexpectedToolCallErrors(), "true")
+})
+
 test("the middleware counts what the executor records, and forwards everything else", async () => {
   const state = new ToolCountingStateTracker()
   const recorded: unknown[] = []
+  const forwarded: unknown[][] = []
+  const forwardedModel: unknown[][] = []
+  const forwardedStreams: unknown[][] = []
+  const appended: unknown[][] = []
+  let clearCount = 0
   const executor = {
-    appendMessages: () => "appended",
+    appendMessages: (...args: unknown[]) => { appended.push(args); return "appended" },
     getState: () => "state",
     getMessages: () => "messages",
-    clearMessages: () => "cleared",
+    clearMessages: () => { clearCount += 1; return "cleared" },
     async executeToolStream(
-      _ctx: unknown,
-      _convState: unknown,
-      _handler: unknown,
-      _tools: unknown,
-      _extra: unknown,
+      callContext: unknown,
+      convState: unknown,
+      interactionHandler: unknown,
+      tools: unknown,
+      extra: unknown,
       record: (ctx: unknown, result: unknown, name: unknown, classification: unknown) => Promise<void>,
+      descriptionProps: unknown,
+      firstToolCallHook: unknown,
     ) {
-      await record(ctx, "result", "shell", ToolErrorClassification.TIMEOUT)
-      await record(ctx, "result", "shell", undefined)
+      forwarded.push([callContext, convState, interactionHandler, tools, extra, descriptionProps, firstToolCallHook])
+      await record(callContext, "result", "shell", ToolErrorClassification.TIMEOUT)
+      await record(callContext, "result", "shell", undefined)
       return "streamed"
     },
-    executeModelStreamOnly: () => "model-only",
-    stream: () => "stream",
+    executeModelStreamOnly: (...args: unknown[]) => { forwardedModel.push(args); return "model-only" },
+    stream: (...args: unknown[]) => { forwardedStreams.push(args); return "stream" },
   }
   const wrapped = createToolCountingMiddleware(state)(executor as never) as unknown as {
-    appendMessages: () => unknown
+    appendMessages: (...args: unknown[]) => unknown
     getState: () => unknown
     getMessages: () => unknown
     clearMessages: () => unknown
-    executeModelStreamOnly: () => unknown
-    stream: () => unknown
+    executeModelStreamOnly: (...args: unknown[]) => unknown
+    stream: (...args: unknown[]) => unknown
     executeToolStream: (
       a: unknown, b: unknown, c: unknown, d: unknown, e: unknown,
       record: (ctx: unknown, result: unknown, name: unknown, classification: unknown) => Promise<void>,
+      descriptionProps?: unknown,
+      firstToolCallHook?: unknown,
     ) => Promise<unknown>
   }
   // Appending is chainable and clearing is not, which is how the platform's own executor behaves.
-  assert.equal(wrapped.appendMessages(), wrapped)
+  const callContext = ctx()
+  const convState = { state: true }
+  const interactionHandler = { handler: true }
+  const tools = { tools: true }
+  const extra = { extra: true }
+  const descriptionProps = { description: true }
+  const firstToolCallHook = () => {}
+  const invocationId = "invocation-1"
+  const streamOptions = { option: true }
+
+  assert.equal(wrapped.appendMessages("message"), wrapped)
+  assert.deepEqual(appended, [["message"]])
   assert.equal(wrapped.getState(), "state")
   assert.equal(wrapped.getMessages(), "messages")
   assert.equal(wrapped.clearMessages(), undefined)
-  assert.equal(wrapped.executeModelStreamOnly(), "model-only")
-  assert.equal(wrapped.stream(), "stream")
+  assert.equal(clearCount, 1)
+  assert.equal(wrapped.executeModelStreamOnly(callContext, convState, interactionHandler, tools, descriptionProps, firstToolCallHook), "model-only")
+  assert.equal(wrapped.stream(callContext, invocationId, tools, streamOptions), "stream")
+  assert.deepEqual(forwardedModel, [[callContext, convState, interactionHandler, tools, descriptionProps, firstToolCallHook]])
+  assert.deepEqual(forwardedStreams, [[callContext, invocationId, tools, streamOptions]])
 
   const result = await wrapped.executeToolStream(
-    ctx(), {}, {}, {}, {},
-    async (...args) => {
-      recorded.push(args)
-    },
+    callContext, convState, interactionHandler, tools, extra,
+    async (...args) => { recorded.push(args) },
+    descriptionProps, firstToolCallHook,
   )
   assert.equal(result, "streamed")
+  assert.deepEqual(forwarded, [[callContext, convState, interactionHandler, tools, extra, descriptionProps, firstToolCallHook]])
   assert.equal(state.toolCallCount, 2)
+  assert.equal(state.getFailedToolCallCount(), 1)
   assert.equal(state.resultClassificationCounts.get(ToolErrorClassification.TIMEOUT), 1)
   assert.equal(recorded.length, 2)
+})
+
+test("a result is counted only after its recorder accepts it", async () => {
+  const state = new ToolCountingStateTracker()
+  const executor = {
+    appendMessages() {}, getState() {}, getMessages() {}, clearMessages() {},
+    async executeToolStream(
+      _ctx: unknown, _state: unknown, _handler: unknown, _tools: unknown, _extra: unknown,
+      record: (ctx: unknown, result: unknown, name: unknown, classification: unknown) => Promise<void>,
+    ) {
+      await assert.rejects(record(ctx(), "not stored", "shell", ToolErrorClassification.TIMEOUT), /store unavailable/)
+      await record(ctx(), "stored", "shell", ToolErrorClassification.PROVIDER_ERROR)
+    },
+    executeModelStreamOnly() {}, stream() {},
+  }
+  const wrapped = createToolCountingMiddleware(state)(executor as never)
+  await wrapped.executeToolStream(
+    ctx(), {}, {}, {}, {},
+    async (_innerCtx, result) => {
+      if (result === "not stored") throw new Error("store unavailable")
+    },
+    {}, {},
+  )
+
+  assert.equal(state.toolCallCount, 1)
+  assert.equal(state.resultClassificationCounts.get(ToolErrorClassification.TIMEOUT), undefined)
+  assert.equal(state.resultClassificationCounts.get(ToolErrorClassification.PROVIDER_ERROR), 1)
+  assert.equal(state.getFailedToolCallCount(), 1)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -263,7 +343,7 @@ test("a diff that arrived shortened says so, and one cut here says so once", () 
 
 test("an empty diff renders as an empty block rather than nothing", () => {
   const empty = buildGitDiffUserContent({ fullContentLengthCharCount: 0 })
-  assert.match(empty.text, /^<git_diff_from_branch_to_main>\n {2}Relevant Diff: [\s\S]*\n {2}<\/git_diff_from_branch_to_main>$/)
+  assert.match(empty.text, /^<git_diff_from_branch_to_main>\n {2}Changes between this branch and the default branch:[\s\S]*\n {2}<\/git_diff_from_branch_to_main>$/)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -337,15 +417,16 @@ test("a message without a trigger block, and one that opens it but never closes 
 // rendering a directory tree
 // ---------------------------------------------------------------------------------------------
 
-function tree(overrides: Partial<LsDirectoryTreeNode> = {}): LsDirectoryTreeNode {
-  return new LsDirectoryTreeNode({
+function tree(overrides: Partial<SlateDirectoryTreeNode> = {}): SlateDirectoryTreeNode {
+  return {
     absPath: "/p",
     childrenWereProcessed: true,
     numFiles: 2,
-    childrenFiles: [new LsDirectoryTreeNode_File({ name: "a.ts" })],
+    fullSubtreeExtensionCounts: {},
+    childrenFiles: [{ name: "a.ts" }],
     childrenDirs: [],
     ...overrides,
-  } as never)
+  }
 }
 
 test("a small tree is rendered in full", () => {
@@ -355,8 +436,7 @@ test("a small tree is rendered in full", () => {
 })
 
 test("a tree that does not fit is collapsed to counts before its depth is limited", () => {
-  const manyFiles = Array.from({ length: 400 }, (_, index) =>
-    new LsDirectoryTreeNode_File({ name: `file-${index}.ts` }))
+  const manyFiles = Array.from({ length: 400 }, (_, index) => ({ name: `file-${index}.ts` }))
   const child = tree({
     absPath: "/p/sub",
     numFiles: 400,
@@ -384,7 +464,7 @@ test("the separator follows the root's own path", () => {
 })
 
 test("a terminal's history is shown with its commands", () => {
-  const file = new LsDirectoryTreeNode_File({
+  const file = {
     name: "session",
     terminalMetadata: {
       cwd: "/p",
@@ -392,7 +472,7 @@ test("a terminal's history is shown with its commands", () => {
       lastCommands: [{ command: "ls", exitCode: 0, timestampMs: 1_700_000_000_000n, durationMs: 12n }],
       currentCommand: { command: "sleep 100" },
     },
-  } as never)
+  }
   const rendered = renderDirectoryTreeWithinBudget(tree({ childrenFiles: [file] }))
   assert.match(rendered.result, /cwd: \/p/)
   assert.match(rendered.result, /last modified: 2023-11-14T22:13:20\.000Z/)

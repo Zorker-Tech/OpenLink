@@ -44,5 +44,6 @@ test("settings patches update valid fields and publish only their matching chang
   settings.setHostSettings({ userTimeZone: "not/a/time-zone" })
   assert.equal(settings.getUserTimeZone(), "America/New_York")
   assert.deepEqual(timeZones, ["America/New_York"])
+  assert.deepEqual(featureFlags, [{ newComposer: true }], "an unrelated update does not rebroadcast feature flags")
   assert.deepEqual(changes.at(-1), { fields: ["userTimeZone"] })
 })

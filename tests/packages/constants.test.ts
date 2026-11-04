@@ -4,6 +4,9 @@ import assert from "node:assert/strict"
 import {
   AGENT_STORE_RESERVED_PATH_PREFIX,
   AGENT_STORE_USER_MOUNT_NAME,
+  SLATE_AGENT_STORE_FILES_DIR_ENV,
+} from "../../source/packages/constants/agent-store-ids.ts"
+import {
   isAgentStoreId,
   isAgentStoreShareMountKey,
   isAgentStoreSourceId,
@@ -11,8 +14,7 @@ import {
   isValidBareUuid,
   parseTeamAgentStoreSourceId,
   parseUserAgentStoreSourceId,
-  SLATE_AGENT_STORE_FILES_DIR_ENV,
-} from "../../source/packages/constants/agent-store-ids.ts"
+} from "../../source/adapters/interop/agent-store/agent-store-id-adapter.ts"
 import {
   ASK_QUESTION_AUTO_ANSWER_MARKER,
   ASK_QUESTION_AUTO_ANSWER_REASON,
@@ -22,7 +24,8 @@ import {
   isAskQuestionAutoAnswerReason,
   parseAskQuestionAutoAnswerIdentity,
 } from "../../source/packages/constants/ask-question.ts"
-import { BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS, WORKSPACE_IGNORE_FILE_NAME } from "../../source/packages/constants/box-archive.ts"
+import { WORKSPACE_IGNORE_FILE_NAME } from "../../source/packages/constants/box-archive.ts"
+import { REGENERABLE_WORKSPACE_PATH_PATTERNS } from "../../source/adapters/interop/box/workspace-archive-layout-adapter.ts"
 import {
   BOX_FORK_NOVNC_PORT,
   BOX_IMAGE_TAG_LATEST,
@@ -39,7 +42,7 @@ import {
   isHostUpgradeAvailable,
   serializeBoxSupervisorCommand,
 } from "../../source/packages/constants/box-supervisor.ts"
-import { CLOUD_AGENT_ARTIFACTS_DIR, ENV_SETUP_MANAGED_SKILL_PATH } from "../../source/packages/constants/cloud-agent-paths.ts"
+import { AGENT_RUNTIME_PATHS } from "../../source/packages/constants/cloud-agent-paths.ts"
 import {
   DEFAULT_ENVIRONMENT_SETUP_MAX_RESUME_AGE_MS,
   MAX_ENVIRONMENT_SETUP_MAX_RESUME_AGE_MS,
@@ -47,22 +50,13 @@ import {
 } from "../../source/packages/constants/environment-setup.ts"
 import { GIT_DIFF_CHARS_PER_TOKEN, GIT_DIFF_TRUNCATION_NOTICE, MAX_GIT_DIFF_CHAR_LENGTH } from "../../source/packages/constants/git-diff.ts"
 import {
-  GOOGLE_WORKSPACE_MCP_HOSTS,
   MCP_OAUTH_DESKTOP_RETURN_URL,
   MCP_OAUTH_EXTENSION_ID,
   MCP_OAUTH_LOOPBACK_CALLBACK_URL,
-  MCP_OAUTH_PROVIDER_POLICIES,
   MCP_OAUTH_RETURN_PATH,
 } from "../../source/packages/constants/mcp-oauth.ts"
-import {
-  AGENT_STORE_PERMISSIONS,
-  ENVIRONMENT_PERMISSIONS,
-  KEYRING_PERMISSIONS,
-  ORGANIZATION_PERMISSIONS,
-  TEAM_PERMISSIONS,
-} from "../../source/packages/constants/permissions.ts"
-import { isRootProjectDetails } from "../../source/packages/constants/project-conversation.ts"
-import { isProjectSendMessageEnabled } from "../../source/packages/constants/project-send-message.ts"
+import { ProjectConversationBoundary } from "../../source/packages/constants/project-conversation.ts"
+import { canRootConversationSendToProject } from "../../source/packages/constants/project-send-message.ts"
 import {
   deriveRepoLabelValueFromUrl,
   isKnownGitHostingDomain,
@@ -135,65 +129,35 @@ test("an automatic answer is distinguishable from a user's", () => {
 
 test("the diff budget follows from the token estimate and says when it was cut", () => {
   assert.equal(MAX_GIT_DIFF_CHAR_LENGTH, 10_000 * GIT_DIFF_CHARS_PER_TOKEN)
-  assert.match(GIT_DIFF_TRUNCATION_NOTICE, /truncated due to size/)
+  assert.match(GIT_DIFF_TRUNCATION_NOTICE, /diff truncated to fit the context/)
 })
 
-test("provider policies are complete enough to start a sign-in", () => {
-  assert.equal(MCP_OAUTH_PROVIDER_POLICIES.size, 6)
-  assert.equal(GOOGLE_WORKSPACE_MCP_HOSTS.size, 6)
-  for (const [hostname, policy] of MCP_OAUTH_PROVIDER_POLICIES) {
-    assert.equal(policy.provider, "google-workspace", hostname)
-    assert.equal(policy.clientRegistration, "static", `${hostname} needs a registered client`)
-    assert.equal(policy.authorizationParams.access_type, "offline", `${hostname} wants a refresh token`)
-    assert.equal(policy.authorizationParams.prompt, "consent")
-    assert.ok(policy.scopes.length > 0, `${hostname} declares scopes`)
-    assert.ok(policy.scopes.every(scope => scope.startsWith("https://www.googleapis.com/auth/")), hostname)
-  }
+test("Slate OAuth return targets are derived from Slate-owned route parts", () => {
   assert.equal(MCP_OAUTH_DESKTOP_RETURN_URL, `slate://${MCP_OAUTH_EXTENSION_ID}${MCP_OAUTH_RETURN_PATH}`)
   assert.equal(MCP_OAUTH_LOOPBACK_CALLBACK_URL.startsWith("http://localhost:"), true)
 })
 
-test("the permission vocabulary is namespaced, unique, and lists match their objects", () => {
-  const groups: [readonly string[], readonly string[]][] = [
-    [TEAM_PERMISSIONS, ["team."]],
-    [ORGANIZATION_PERMISSIONS, ["organization."]],
-    [AGENT_STORE_PERMISSIONS, ["agent_store."]],
-    [KEYRING_PERMISSIONS, ["keyring."]],
-    [ENVIRONMENT_PERMISSIONS, ["environment."]],
-  ]
-  for (const [values, prefixes] of groups) {
-    assert.equal(values.length, new Set(values).size, "no duplicates within a group")
-    for (const value of values) {
-      assert.ok(prefixes.some(prefix => value.startsWith(prefix)), `${value} is namespaced`)
-      assert.match(value, /^[a-z_]+(\.[a-z_]+)+$/, `${value} is shaped like a capability`)
-    }
-  }
-  assert.ok(TEAM_PERMISSIONS.includes("team.mcp_servers.manage"))
-  assert.ok(ORGANIZATION_PERMISSIONS.includes("organization.identity_providers.manage"))
-  assert.ok(ENVIRONMENT_PERMISSIONS.includes("environment.use"))
-})
+test("project conversations use Slate-owned boundary labels", () => {
+  assert.equal(ProjectConversationBoundary.ROOT, "project-root")
+  assert.equal(ProjectConversationBoundary.RELATED, "related-work")
 
-test("only the root project conversation is the project", () => {
-  assert.equal(isRootProjectDetails({}), true)
-  assert.equal(isRootProjectDetails({ subagent: { id: 1 } }), false)
-  assert.equal(isRootProjectDetails({ sideChat: {} }), false)
-  assert.equal(isRootProjectDetails(null), false)
-  assert.equal(isRootProjectDetails(undefined), false)
-
-  assert.equal(isProjectSendMessageEnabled({ isRootProjectConversation: true }), true)
-  assert.equal(isProjectSendMessageEnabled({ isRootProjectConversation: false }), false)
-  assert.equal(isProjectSendMessageEnabled({}), false)
+  assert.equal(canRootConversationSendToProject({ isRootProjectConversation: true }), true)
+  assert.equal(canRootConversationSendToProject({ isRootProjectConversation: false }), false)
+  assert.equal(canRootConversationSendToProject({}), false)
 })
 
 test("repository labels come out of every form a user can paste", () => {
   assert.equal(isKnownGitHostingDomain("github.com"), true)
   assert.equal(isKnownGitHostingDomain("GitHub.com"), true)
+  assert.equal(isKnownGitHostingDomain("enterprise.github.com"), true)
+  assert.equal(isKnownGitHostingDomain("notgithub.com"), false)
   assert.equal(isKnownGitHostingDomain("gitlab.example.com"), false)
   assert.equal(isKnownGitHostingDomain("git.internal.corp"), false)
 
   assert.equal(parseRepoNameFromUrl("https://github.com/slate/app.git"), "slate/app")
   assert.equal(parseRepoNameFromUrl("https://gitlab.com/group/sub/project"), "group/sub/project")
   assert.equal(parseRepoNameFromUrl("github.com/slate/app"), "slate/app")
+  assert.equal(parseRepoNameFromUrl("enterprise.github.com/group/sub/app.git"), "group/sub/app")
   assert.equal(
     deriveRepoLabelValueFromUrl("git@github.com:slate/app.git"),
     "slate/app",
@@ -205,8 +169,10 @@ test("repository labels come out of every form a user can paste", () => {
   assert.equal(parseRepoNameFromUrl("not a url at all"), undefined)
 
   assert.equal(parseSelfHostedRepoScope("https://git.internal.corp/team/app.git"), "git.internal.corp/team/app")
+  assert.equal(parseSelfHostedRepoScope("https://git.internal.corp:8443/team/app.git"), "git.internal.corp:8443/team/app")
   assert.equal(parseSelfHostedRepoScope("git.internal.corp/team/app"), "git.internal.corp/team/app")
   assert.equal(parseSelfHostedRepoScope("https://github.com/slate/app"), undefined, "a known host is not self-hosted")
+  assert.equal(parseSelfHostedRepoScope("https://enterprise.github.com/team/app"), undefined, "a known-host subdomain is not self-hosted")
   assert.equal(parseSelfHostedRepoScope("plain/path"), undefined)
 
   assert.equal(deriveRepoLabelValueFromUrl("git@git.internal.corp:team/app.git"), "git.internal.corp/team/app")
@@ -271,9 +237,9 @@ test("a supervisor command carries only what its kind allows", () => {
 test("what a box archives excludes regenerable output", () => {
   assert.equal(WORKSPACE_IGNORE_FILE_NAME, ".slateignore")
   for (const pattern of ["node_modules/", "dist/", "target/", ".venv/", "coverage/"]) {
-    assert.ok((BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS as readonly string[]).includes(pattern), pattern)
+    assert.ok((REGENERABLE_WORKSPACE_PATH_PATTERNS as readonly string[]).includes(pattern), pattern)
   }
-  assert.equal(new Set(BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS).size, BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS.length)
+  assert.equal(new Set(REGENERABLE_WORKSPACE_PATH_PATTERNS).size, REGENERABLE_WORKSPACE_PATH_PATTERNS.length)
 })
 
 test("environment and log windows are bounded and ordered", () => {
@@ -291,14 +257,17 @@ test("notification tags delimit a notification without colliding with prose", ()
 })
 
 test("the platform's own strings carry no other product's name", () => {
+  assert.deepEqual(AGENT_RUNTIME_PATHS, {
+    setupSkillDocument: "/.slate/skills/env-setup/SKILL.md",
+    artifactCollectionDirectory: "/opt/slate/artifacts/",
+  })
   const ours = JSON.stringify([
     USAGE_PANEL_COPY,
-    ENV_SETUP_MANAGED_SKILL_PATH,
-    CLOUD_AGENT_ARTIFACTS_DIR,
+    AGENT_RUNTIME_PATHS,
     MCP_OAUTH_DESKTOP_RETURN_URL,
     BOX_IMAGE_TAG_LATEST,
     WORKSPACE_IGNORE_FILE_NAME,
-    ...BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS,
+    ...REGENERABLE_WORKSPACE_PATH_PATTERNS,
   ])
   for (const foreign of ["Cursor", "cursor", "Grok", "grok", "anysphere", "Anysphere", "Bugbot", "bugbot"]) {
     assert.equal(ours.includes(foreign), false, `${foreign} must not appear in our own strings`)

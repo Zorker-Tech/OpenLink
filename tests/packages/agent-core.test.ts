@@ -7,9 +7,9 @@ import {
   fromRedactedInteractionUpdate,
   toRedactedInteractionQuery,
   toRedactedInteractionUpdate,
-} from "../../source/packages/redacted-protos/generated/agent/v1/agent_redacted.ts"
-import { InteractionQuery, InteractionUpdate } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
-import { WebSearchRequestQuery } from "../../source/packages/proto/generated/agent/v1/web_search_tool_pb.ts"
+} from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { InteractionQuery, InteractionUpdate } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { WebSearchRequestQuery } from "../../source/adapters/interop/proto/generated/agent/v1/web_search_tool_pb.ts"
 import {
   appendAgentDenialNote,
   createHookDenialMessage,
@@ -41,6 +41,7 @@ import {
   queryWebSearch,
   Responses,
 } from "../../source/packages/agent-core/interaction-queries.ts"
+import type { SlateInteractionQuery } from "../../source/packages/agent-core/interaction-queries.ts"
 import {
   InteractionListenerStreamClosedError,
   flushPostTurnEndedWork,
@@ -49,7 +50,7 @@ import {
 import {
   toRedactedInteractionListener,
   toUnredactedInteractionListener,
-} from "../../source/packages/agent-core/redacted-interaction-listener.ts"
+} from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts"
 
 const GOAL_ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
 
@@ -215,82 +216,82 @@ test("the pursuit guidelines name the tools that exist and always carry the audi
 
 test("the response builders produce the answer each question expects", () => {
   const search = Responses.webSearchRejected(7, "not allowed")
-  assert.equal(search.id, 7)
-  assert.equal(search.result.case, "webSearchRequestResponse")
-  const searchValue = search.result.value as { result: { case?: string; value?: { reason?: string } } }
-  assert.equal(searchValue.result.case, "rejected")
-  assert.equal(searchValue.result.value?.reason, "not allowed")
+  assert.deepEqual(search, { id: 7, kind: "web-search", payload: { decision: "rejected", detail: "not allowed" } })
 
   const auth = Responses.mcpAuthRejected(3)
-  const authValue = auth.result.value as { result: { value?: { reason?: string } } }
-  assert.equal(authValue.result.value?.reason, "Authentication was rejected", "a rejection without a reason says so")
+  assert.deepEqual(auth, {
+    id: 3,
+    kind: "mcp-auth",
+    payload: { decision: "rejected", detail: "Authentication was rejected" },
+  }, "a rejection without a reason says so")
 
   const connect = Responses.connectScmFailed(4)
-  const connectValue = connect.result.value as { result: { case?: string; value?: { error?: string } } }
-  assert.equal(connectValue.result.case, "failed")
-  assert.match(connectValue.result.value?.error ?? "", /Failed to connect GitHub/)
+  assert.deepEqual(connect, {
+    id: 4,
+    kind: "connect-scm",
+    payload: { decision: "failed", detail: "The source-control connection failed" },
+  })
 
   const image = Responses.generateImageApproved(5, "a cat")
-  const imageValue = image.result.value as { result: { value?: { description?: string } } }
-  assert.equal(imageValue.result.value?.description, "a cat")
+  assert.deepEqual(image, {
+    id: 5,
+    kind: "generate-image",
+    payload: { decision: "approved", description: "a cat" },
+  })
 })
 
 test("the query helpers unwrap the answer and refuse a mismatched one", async () => {
-  const answering = { query: async (_context: unknown, query: InteractionQuery) => Responses.webSearchApproved(query.id) }
+  const answering = { query: async (_context: unknown, query: SlateInteractionQuery) => Responses.webSearchApproved(query.id) }
   const approved = await queryWebSearch(answering, {}, { searchTerm: "x" })
   assert.equal(approved.result.case, "approved")
 
-  const wrong = { query: async (_context: unknown, query: InteractionQuery) => Responses.webFetchApproved(query.id) }
+  const wrong = { query: async (_context: unknown, query: SlateInteractionQuery) => Responses.webFetchApproved(query.id) }
   await assert.rejects(queryWebSearch(wrong, {}, { searchTerm: "x" }), /Unexpected response for web search query/)
 
-  const fetching = { query: async (_context: unknown, query: InteractionQuery) => Responses.webFetchRejected(query.id, "no") }
+  const fetching = { query: async (_context: unknown, query: SlateInteractionQuery) => Responses.webFetchRejected(query.id, "no") }
   const rejected = await queryWebFetch(fetching, {}, { url: "https://example.com" }, true)
-  const rejectedValue = rejected.result.value as { reason?: string }
-  assert.equal(rejectedValue.reason, "no")
+  assert.equal(rejected.result.case, "rejected")
+  assert.equal(rejected.result.value.reason, "no")
 
-  const auth = { query: async (_context: unknown, query: InteractionQuery) => Responses.mcpAuthApproved(query.id) }
+  const auth = { query: async (_context: unknown, query: SlateInteractionQuery) => Responses.mcpAuthApproved(query.id) }
   assert.equal((await queryMcpAuth(auth, {}, {})).result.case, "approved")
 
-  const deferred = new DeferredInteractionResponseError(new InteractionQuery({
+  const deferred = new DeferredInteractionResponseError({
     id: 1,
-    query: { case: "webSearchRequestQuery", value: new WebSearchRequestQuery({ args: { searchTerm: "x" } }) },
-  }))
-  assert.match(deferred.message, /Deferred interaction response requested for query 1 \(webSearchRequestQuery\)/)
+    kind: "web-search",
+    payload: { searchTerm: "x" },
+  })
+  assert.match(deferred.message, /Deferred interaction response requested for query 1 \(web-search\)/)
 })
 
 test("the no-op listener answers every question a headless run can ask", async () => {
   const listener = new NoopInteractionListener()
-  const ask = async (query: InteractionQuery) => await listener.query({}, query)
+  const ask = async (query: SlateInteractionQuery) => await listener.query({}, query)
 
-  const search = await ask(new InteractionQuery({ id: 1, query: { case: "webSearchRequestQuery", value: new WebSearchRequestQuery({ args: { searchTerm: "x" } }) } }))
-  assert.equal((search.result.value as { result: { case?: string } }).result.case, "approved")
+  const search = await ask({ id: 1, kind: "web-search", payload: { searchTerm: "x" } })
+  assert.deepEqual(search.payload, { decision: "approved" })
 
-  const question = await ask(new InteractionQuery({ id: 2, query: { case: "askQuestionInteractionQuery", value: {} as never } }))
-  const questionValue = question.result.value as { result: { result: { case?: string; value?: { reason?: string } } } }
-  assert.equal(questionValue.result.result.case, "rejected")
-  assert.match(questionValue.result.result.value?.reason ?? "", /Questions skipped by user/)
+  const question = await ask({ id: 2, kind: "ask-question" })
+  assert.equal((question.payload as { decision: string }).decision, "rejected")
+  assert.match((question.payload as { reason: string }).reason, /Questions skipped by user/)
 
-  const mode = await ask(new InteractionQuery({ id: 3, query: { case: "switchModeRequestQuery", value: {} as never } }))
-  assert.equal((mode.result.value as { result: { case?: string } }).result.case, "rejected")
+  const mode = await ask({ id: 3, kind: "switch-mode" })
+  assert.equal((mode.payload as { decision: string }).decision, "rejected")
 
-  const plan = await ask(new InteractionQuery({ id: 4, query: { case: "createPlanRequestQuery", value: {} as never } }))
-  assert.equal((plan.result.value as { result: { result: { case?: string } } }).result.result.case, "success")
+  const plan = await ask({ id: 4, kind: "create-plan" })
+  assert.deepEqual(plan.payload, { decision: "success" })
 
-  const pr = await ask(new InteractionQuery({ id: 5, query: { case: "prManagementRequestQuery", value: {} as never } }))
-  const prValue = pr.result.value as { result: { case?: string; value?: { error?: string } } }
-  assert.equal(prValue.result.case, "error")
-  assert.match(prValue.result.value?.error ?? "", /only available in cloud agents/)
+  const pr = await ask({ id: 5, kind: "pr-management" })
+  assert.equal((pr.payload as { decision: string }).decision, "error")
+  assert.match((pr.payload as { error: string }).error, /only available in cloud agents/)
 
-  const mcp = await ask(new InteractionQuery({ id: 6, query: { case: "mcpAuthRequestQuery", value: {} as never } }))
-  assert.match(((mcp.result.value as { result: { value?: { reason?: string } } }).result.value?.reason) ?? "", /not supported/)
+  const mcp = await ask({ id: 6, kind: "mcp-auth" })
+  assert.match((mcp.payload as { detail: string }).detail, /not supported/)
 
-  const image = await ask(new InteractionQuery({
-    id: 7,
-    query: { case: "generateImageRequestQuery", value: { args: { description: "a cat" } } as never },
-  }))
-  assert.equal(((image.result.value as { result: { value?: { description?: string } } }).result.value?.description), "a cat")
+  const image = await ask({ id: 7, kind: "generate-image", payload: { description: "a cat" } })
+  assert.equal((image.payload as { description: string }).description, "a cat")
 
-  await assert.rejects(ask(new InteractionQuery({ id: 8, query: { case: "unknownQuery" as never, value: {} as never } })), /Unhandled interaction query type/)
+  await assert.rejects(ask({ id: 8, kind: "unknown-query" }), /Unhandled interaction query type/)
 })
 
 test("post-turn work is queued, flushed, and a failing task does not stop the others", async () => {
@@ -313,7 +314,7 @@ test("the listener adapters convert across the privacy boundary in both directio
   const seen: unknown[] = []
   const plainDelegate = {
     sendUpdate: (_ctx: unknown, update: InteractionUpdate) => { seen.push(update) },
-    query: async (_ctx: unknown, query: InteractionQuery) => Responses.webSearchApproved(query.id),
+    query: async (_ctx: unknown, query: SlateInteractionQuery) => Responses.webSearchApproved(query.id),
   }
 
   const redacting = toRedactedInteractionListener(plainDelegate, mode)
@@ -345,6 +346,9 @@ test("the listener adapters convert across the privacy boundary in both directio
     true,
     "the redacted delegate receives a redacted update",
   )
+  const reply = await reading.query({}, { id: 1, kind: "web-search", payload: { searchTerm: "x" } })
+  assert.equal(reply.kind, "web-search")
+  assert.deepEqual(reply.payload, { decision: "approved" })
   const roundTripped = fromRedactedInteractionUpdate(
     toRedactedInteractionUpdate(update, mode) as never,
     "unsafe_always_allowed",

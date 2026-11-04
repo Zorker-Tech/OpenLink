@@ -5,7 +5,7 @@
  * say something different, so a browser that is already stamped is left alone.
  */
 import { createHash } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { rename, writeFile } from "node:fs/promises";
 
 import { parseJwtPayload } from "../../../shared/node/slate-token.ts";
 
@@ -13,23 +13,38 @@ export const UA_OWNER_STAMP_PATH = "/tmp/slate-ua-user";
 export const UA_OWNER_STAMP_LENGTH = 16;
 
 export function uaOwnerStampForAccessToken(accessToken: string): string | null {
-  const sub = parseJwtPayload(accessToken)?.sub;
-  return sub == null || sub.length === 0 ? null : createHash("sha256").update(sub, "utf8").digest("hex").slice(0, UA_OWNER_STAMP_LENGTH);
+  const subject = parseJwtPayload(accessToken)?.sub;
+  if (subject == null || subject.length === 0) return null;
+  return digestOwnerSubject(subject);
 }
 
-export function createUaOwnerStampWriter(options: { readonly path?: string; readonly log: (message: string) => void }) {
-  const path = options.path ?? UA_OWNER_STAMP_PATH;
+function digestOwnerSubject(subject: string): string {
+  return createHash("sha256").update(subject, "utf8").digest("hex").slice(0, UA_OWNER_STAMP_LENGTH);
+}
+
+interface StampWriterOptions {
+  readonly path?: string | undefined;
+  readonly log: (message: string) => void;
+}
+
+export function createUaOwnerStampWriter(options: StampWriterOptions) {
+  const destination = options.path ?? UA_OWNER_STAMP_PATH;
   let lastWritten: string | null = null;
-  return async (accessToken: string | null): Promise<void> => {
-    if (accessToken == null) return;
-    const stamp = uaOwnerStampForAccessToken(accessToken);
-    if (stamp == null || stamp === lastWritten) return;
-    const tempPath = `${path}.tmp`;
+  return async (token: string | null): Promise<void> => {
+    const nextStamp = token == null ? null : uaOwnerStampForAccessToken(token);
+    if (nextStamp === null || nextStamp === lastWritten) return;
     try {
-      await fs.writeFile(tempPath, `${stamp}\n`, { encoding: "utf8", mode: 0o644 });
-      await fs.rename(tempPath, path);
-      lastWritten = stamp;
-    } catch (error) { options.log(`ua-owner stamp write failed: ${String(error)}`); }
+      await replaceStampFile(destination, nextStamp);
+      lastWritten = nextStamp;
+    } catch (error) {
+      options.log(`ua-owner stamp write failed: ${String(error)}`);
+    }
   };
+}
+
+async function replaceStampFile(destination: string, stamp: string): Promise<void> {
+  const stagingPath = `${destination}.tmp`;
+  await writeFile(stagingPath, `${stamp}\n`, { encoding: "utf8", mode: 0o644 });
+  await rename(stagingPath, destination);
 }
 

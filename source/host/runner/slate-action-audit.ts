@@ -4,14 +4,13 @@
  * Every action a turn takes is recorded with what it was and what it touched, in the order it happened, so what an agent
  * did can be read back after the fact rather than reconstructed from the transcript.
  */
-import { requestIdKey } from "../../packages/chat-inference-proto/client.ts";
-import { shellExecutorResource } from "../../packages/agent-exec/shell.ts";
 import { delay } from "../../packages/utils/promise-tools.ts";
 import {
-  buildHostShellArgs,
-  type HostShellArgsInput,
-} from "../boxes/box-shell-command.ts";
-import type { ShellArgs, ShellResult } from "../../packages/proto/generated/agent/v1/shell_exec_pb.ts";
+  requestIdFromInteropContext,
+  runNavigationProbeShellThroughInterop,
+  type NavigationProbeShellOutcome,
+} from "../../adapters/interop/agent/navigation-probe-shell-adapter.ts";
+import type { HostShellArgsInput } from "../boxes/box-shell-command.ts";
 import type { ActionAuditor } from "./site-visit-tracking.ts";
 
 /** Whether an MCP call's answer counts as a success or a failure for the audit. */
@@ -145,30 +144,7 @@ export interface NavigationProbeDependencies<Context> {
   readonly now?: () => number;
   readonly getBoxId?: () => string;
   readonly getTurnId?: (ctx: Context) => string | undefined;
-  /** Exact immutable path: generated ShellArgs plus the bound Shell resource. */
-  readonly buildShellArgs?: ((input: HostShellArgsInput) => ShellArgs) | undefined;
-  /** Legacy coordinator input retained until its production consumer flips. */
-  readonly executeShell?: ((ctx: Context, args: HostShellArgsInput) => Promise<ShellResult>) | undefined;
-}
-
-interface GeneratedShellAccessor<Context> {
-  get(resource: typeof shellExecutorResource): {
-    execute(context: Context, args: ShellArgs): Promise<ShellResult>;
-  };
-}
-
-/** Whether a value is the generated resource accessor a shell is run through. */
-function isGeneratedShellAccessor<Context>(value: unknown): value is GeneratedShellAccessor<Context> {
-  return typeof value === "object" && value !== null && typeof Reflect.get(value, "get") === "function";
-}
-
-/** The request id a context carries, when it carries one. */
-function requestIdFromContext(value: unknown): string | undefined {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) return undefined;
-  const get = Reflect.get(value, "get");
-  if (typeof get !== "function") return undefined;
-  const requestId: unknown = get.call(value, requestIdKey);
-  return typeof requestId === "string" ? requestId : undefined;
+  readonly executeShell?: ((ctx: Context, args: HostShellArgsInput) => Promise<NavigationProbeShellOutcome>) | undefined;
 }
 
 /** The shell call the navigation probe makes on one display. */
@@ -232,33 +208,22 @@ export function createSlateNavigationProbe<Context>(deps: NavigationProbeDepende
     }
   };
 
-  const probeWithAccessor = async (
-    context: Context,
-    remoteAccessor: unknown,
-    displayNumber: number,
-    mode: "baseline" | "report",
-  ): Promise<void> => {
-    if (!Number.isInteger(displayNumber) || displayNumber < 0) return;
-    if (!isGeneratedShellAccessor<Context>(remoteAccessor)) return;
-    const result = await remoteAccessor.get(shellExecutorResource).execute(
-      context,
-      (deps.buildShellArgs ?? buildHostShellArgs)(navigationProbeShellInput(displayNumber)),
-    );
-    if (result.result.case !== "success" || result.result.value.exitCode !== 0) return;
-    auditProbeAnswer(result.result.value.stdout, mode);
-  };
-
   const probeWithShell = async (context: Context, displayNumber: number, mode: "baseline" | "report"): Promise<void> => {
     if (deps.executeShell === undefined) return;
     const result = await deps.executeShell(context, navigationProbeShellInput(displayNumber));
-    if (result.result.case !== "success" || result.result.value?.exitCode !== 0) return;
-    auditProbeAnswer(result.result.value.stdout ?? "", mode);
+    if (result.case !== "success" || result.exitCode !== 0) return;
+    auditProbeAnswer(result.stdout, mode);
   };
 
-  const runProbe = (context: Context, remoteAccessor: unknown, displayNumber: number, mode: "baseline" | "report") =>
-    isGeneratedShellAccessor<Context>(remoteAccessor)
-      ? probeWithAccessor(context, remoteAccessor, displayNumber, mode)
-      : probeWithShell(context, displayNumber, mode);
+  const runProbe = async (context: Context, remoteAccessor: unknown, displayNumber: number, mode: "baseline" | "report"): Promise<void> => {
+    if (!Number.isInteger(displayNumber) || displayNumber < 0) return
+    const interopResult = await runNavigationProbeShellThroughInterop(context, remoteAccessor, navigationProbeShellInput(displayNumber))
+    if (interopResult !== undefined) {
+      if (interopResult.case === "success" && interopResult.exitCode === 0) auditProbeAnswer(interopResult.stdout, mode)
+      return
+    }
+    await probeWithShell(context, displayNumber, mode)
+  }
 
   const queueProbe = (context: Context, remoteAccessor: unknown, displayNumber: number): void => {
     if (baselineRunning) {
@@ -282,7 +247,7 @@ export function createSlateNavigationProbe<Context>(deps: NavigationProbeDepende
   };
 
   const probe = (context: Context, remoteAccessor: unknown, displayNumber: number): void => {
-    requestedTurnId = deps.getTurnId?.(context) ?? requestIdFromContext(context);
+    requestedTurnId = deps.getTurnId?.(context) ?? requestIdFromInteropContext(context);
     queueProbe(context, remoteAccessor, displayNumber);
   };
 

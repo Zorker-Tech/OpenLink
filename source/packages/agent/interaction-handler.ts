@@ -24,23 +24,20 @@ import { createLogger, createSpan } from "../context/index.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import { Updates } from "../agent-core/interaction-updates.ts"
 import { InputTokenLimitError } from "../chat-inference/prompt-executor.ts"
-import { EditArgs } from "../proto/generated/agent/v1/edit_tool_pb.ts"
-import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
-import { toRedactedToolCall } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import {
+  appendEditToolCallDeltaInterop,
+  isAskQuestionToolCallInterop,
+  mergeLatestToolCallArgsInterop,
+  redactInteractionToolCallInterop,
+  stampToolCallMetadataInterop,
+  toolCallNameInterop,
+} from "../../adapters/interop/agent/interaction-tool-call-adapter.ts"
 import { ToolCallAbortedError } from "./tools/tool-errors.ts"
-import { AgentLoopError, checkAgentLoop, AgentTextLoopDetector } from "./loop-detection/agent-loop-detector.ts"
+import { AgentLoopError } from "../../adapters/interop/agent/agent-loop-presentation-adapter.ts"
+import { checkAgentLoop, AgentTextLoopDetector } from "./loop-detection/agent-loop-detector.ts"
 
 type Loose = any;
-
-function assertGeneratedToolCall(value: unknown): ToolCall {
-  if (value instanceof ToolCall && typeof value.clone === "function" && typeof value.toBinary === "function") return value;
-  const constructorName = typeof value === "object" && value !== null
-    ? Object.getPrototypeOf(value)?.constructor?.name ?? "unknown"
-    : typeof value;
-  const keys = typeof value === "object" && value !== null ? Object.keys(value).sort().join(",") : "";
-  throw new TypeError(`tool call carrier is not agent.v1.ToolCall (constructor=${constructorName}; keys=${keys})`);
-}
 
 /** A promise whose settling is decided elsewhere: how a tool call is raced against an abort. */
 function makeDeferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(reason: unknown): void } {
@@ -137,31 +134,9 @@ export class InteractionHandler {
 
   applyArgsFromLatestToolCall(callId: string, incomingCall: Loose): Loose {
     const previousCall = this.latestToolCallsById.get(callId);
-    if (previousCall === undefined || previousCall.tool.case !== incomingCall.tool.case) return incomingCall;
-    const combinedCall = incomingCall.clone();
-    if (combinedCall.tool.case === "createAgentToolCall" && previousCall.tool.case === "createAgentToolCall") {
-      const latestArgs = previousCall.tool.value.args;
-      if (latestArgs !== undefined) combinedCall.tool.value.args = latestArgs.clone();
-      return combinedCall;
-    }
-    if (combinedCall.tool.case === "sendToAgentToolCall" && previousCall.tool.case === "sendToAgentToolCall") {
-      const latestArgs = previousCall.tool.value.args;
-      if (latestArgs !== undefined) combinedCall.tool.value.args = latestArgs.clone();
-      return combinedCall;
-    }
-    if (combinedCall.tool.case === "editToolCall" && previousCall.tool.case === "editToolCall") {
-      const latestArgs = previousCall.tool.value.args;
-      if (latestArgs === undefined) return combinedCall;
-      const mergedArgs = combinedCall.tool.value.args;
-      if (mergedArgs === undefined) {
-        combinedCall.tool.value.args = latestArgs.clone();
-        return combinedCall;
-      }
-      if (mergedArgs.path.length === 0 && latestArgs.path.length > 0) mergedArgs.path = latestArgs.path;
-      if (mergedArgs.streamContent === undefined && latestArgs.streamContent !== undefined) mergedArgs.streamContent = latestArgs.streamContent;
-      return combinedCall;
-    }
-    return combinedCall;
+    return previousCall === undefined
+      ? incomingCall
+      : mergeLatestToolCallArgsInterop(previousCall, incomingCall);
   }
 
   rememberLatestToolCall(callId: string, pendingCall: Loose): void {
@@ -179,23 +154,11 @@ export class InteractionHandler {
 
   applyDeltaToLatestToolCall(callId: string, callDelta: Loose): void {
     if (!this.shouldPreserveArgsOnErrorCallIds.has(callId)) return;
-    const previousCall = this.latestToolCallsById.get(callId);
-    if (previousCall?.tool.case !== "editToolCall" || callDelta.delta.case !== "editToolCallDelta") return;
-    const editToolCall = previousCall.tool.value;
-    editToolCall.args ??= new EditArgs();
-    editToolCall.args.streamContent = (editToolCall.args.streamContent ?? "") + callDelta.delta.value.streamContentDelta;
+    appendEditToolCallDeltaInterop(this.latestToolCallsById.get(callId), callDelta);
   }
 
-  withToolCallMetadata(callId: string, value: ToolCall, timestamps?: { startedAtMs?: number | undefined; completedAtMs?: number | undefined }): ToolCall {
-    const pendingCall = assertGeneratedToolCall(value);
-    const startedAtMs = timestamps?.startedAtMs !== undefined ? BigInt(timestamps.startedAtMs) : undefined;
-    const completedAtMs = timestamps?.completedAtMs !== undefined ? BigInt(timestamps.completedAtMs) : undefined;
-    if (pendingCall.toolCallId === callId && (startedAtMs === undefined || pendingCall.startedAtMs === startedAtMs) && (completedAtMs === undefined || pendingCall.completedAtMs === completedAtMs)) return pendingCall;
-    const stamped = pendingCall.clone();
-    stamped.toolCallId = callId;
-    if (startedAtMs !== undefined) stamped.startedAtMs = startedAtMs;
-    if (completedAtMs !== undefined) stamped.completedAtMs = completedAtMs;
-    return stamped;
+  withToolCallMetadata(callId: string, value: Loose, timestamps?: { startedAtMs?: number | undefined; completedAtMs?: number | undefined }): Loose {
+    return stampToolCallMetadataInterop(callId, value, timestamps) as Loose;
   }
 
   async emitTokenDeltaFromChars(context: Loose, addedChars: string): Promise<void> {
@@ -292,7 +255,7 @@ export class InteractionHandler {
 
   async recordPendingToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
     const stampedCall = this.withToolCallMetadata(callId, pendingCall, undefined);
-    const redactedCall = toRedactedToolCall(stampedCall, PrivacyMode.UNSPECIFIED);
+    const redactedCall = redactInteractionToolCallInterop(stampedCall, PrivacyMode.UNSPECIFIED);
     if (this.toolCallRecorder.recordPendingToolCall !== undefined) {
       await this.toolCallRecorder.recordPendingToolCall(context, redactedCall, callId);
       return;
@@ -313,8 +276,8 @@ export class InteractionHandler {
     this.latestToolCallsById.delete(callId);
     this.shouldPreserveArgsOnErrorCallIds.delete(callId);
     await this.interactionProvider.sendUpdate(context, Updates.toolCallCompleted(callId, stampedCall, this.invocationId));
-    const redactedCall = toRedactedToolCall(stampedCall, PrivacyMode.UNSPECIFIED);
-    if (stampedCall.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(context, callId, redactedCall);
+    const redactedCall = redactInteractionToolCallInterop(stampedCall, PrivacyMode.UNSPECIFIED);
+    if (isAskQuestionToolCallInterop(stampedCall)) await this.upsertRecordedToolCall(context, callId, redactedCall);
     else this.toolCallRecorder.recordToolCall(redactedCall, callId);
   }
 
@@ -357,7 +320,7 @@ export class InteractionHandler {
       await this.interactionProvider.sendUpdate(startUpdateSpan.ctx, Updates.toolCallStarted(callId, stampedCall, this.invocationId));
     }
     const startUpdateMs = Date.now() - startUpdateAt;
-    if (startUpdateMs > 1_000) logger.warn(context, "nal.await_stall.start_send_slow", { callId, toolName: pendingCall.tool?.case ?? "unknown", startSendMs: startUpdateMs });
+    if (startUpdateMs > 1_000) logger.warn(context, "nal.await_stall.start_send_slow", { callId, toolName: toolCallNameInterop(pendingCall), startSendMs: startUpdateMs });
     const executionStartedAt = Date.now();
     let result: Loose;
     const cancelSignal = this.getAbortSignal(context);
@@ -374,7 +337,7 @@ export class InteractionHandler {
     this.toolCallStartedAtMsByCallId.delete(callId);
     this.rememberLatestToolCall(callId, completedCall);
     const executionMs = Date.now() - executionStartedAt;
-    const toolName = pendingCall.tool?.case ?? "unknown";
+    const toolName = toolCallNameInterop(pendingCall);
     toolCallLatency.histogram(context, executionMs, { tool_name: toolName });
     toolCallCount.increment(context, 1, { tool_name: toolName });
     const completionSendStartMs = Date.now();
@@ -384,8 +347,8 @@ export class InteractionHandler {
     }
     const completionSendMs = Date.now() - completionSendStartMs;
     if (completionSendMs > 1_000) logger.warn(context, "nal.await_stall.completion_send_slow", { callId, toolName, toolExecutionMs: executionMs, completionSendMs });
-    const redactedCall = toRedactedToolCall(completedCall, PrivacyMode.UNSPECIFIED);
-    if (completedCall.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(context, callId, redactedCall);
+    const redactedCall = redactInteractionToolCallInterop(completedCall, PrivacyMode.UNSPECIFIED);
+    if (isAskQuestionToolCallInterop(completedCall)) await this.upsertRecordedToolCall(context, callId, redactedCall);
     else this.toolCallRecorder.recordToolCall(redactedCall, callId);
     this.latestToolCallsById.delete(callId);
     this.shouldPreserveArgsOnErrorCallIds.delete(callId);

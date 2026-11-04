@@ -93,7 +93,7 @@ const anthropic = (answer: string, options: Record<string, unknown> = {}) =>
 test("the openai compaction asks with its own checkpoint prompt", async () => {
   const { session, sent } = promptSession("the summary")
   const handler = new OpenAICompactionHandler(session, stateHandler(), { sendUpdate: async () => {} } as never, [tool], {}, "model-1")
-  const partitioned = handler.partitionMessages(largeConversation(), {} as never)
+  const partitioned = handler.separateMessages(largeConversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text, "the summary")
   assert.equal(result.inputTokens, 100)
@@ -104,7 +104,7 @@ test("the openai compaction asks with its own checkpoint prompt", async () => {
 
 test("the openai compaction keeps the user's own most recent requests", () => {
   const handler = openai("the summary")
-  const partitioned = handler.partitionMessages([
+  const partitioned = handler.separateMessages([
     message("system", "the platform's framing"),
     message("user", "the first request"),
     message("assistant", "an answer"),
@@ -117,7 +117,7 @@ test("the openai compaction keeps the user's own most recent requests", () => {
 
 test("the openai compaction keeps only the request part of a user message", () => {
   const handler = openai("the summary")
-  const partitioned = handler.partitionMessages([
+  const partitioned = handler.separateMessages([
     message("system", "the platform's framing"),
     message("user", "<user_query>the actual request</user_query>\n<user_info>their profile</user_info>"),
     message("assistant", "an answer"),
@@ -129,7 +129,7 @@ test("the openai compaction keeps only the request part of a user message", () =
 
 test("the openai compaction keeps nothing from a message with no request in it", () => {
   const handler = openai("the summary")
-  const partitioned = handler.partitionMessages([
+  const partitioned = handler.separateMessages([
     message("system", "the platform's framing"),
     message("user", "just some context"),
     message("assistant", "an answer"),
@@ -139,7 +139,7 @@ test("the openai compaction keeps nothing from a message with no request in it",
 
 test("the openai compaction does not keep a summary as if the user had said it", () => {
   const handler = openai("the summary")
-  const partitioned = handler.partitionMessages([
+  const partitioned = handler.separateMessages([
     message("system", "the platform's framing"),
     message("user", "<user_query>an earlier request</user_query>", { isSummary: true }),
     message("assistant", "an answer"),
@@ -149,8 +149,8 @@ test("the openai compaction does not keep a summary as if the user had said it",
 
 test("the openai summary carries a prefix telling the next model to inspect the state", () => {
   const handler = openai("the summary")
-  const partitioned = handler.partitionMessages(largeConversation(), {} as never)
-  const built = handler.buildSummaryMessage({ text: "the summary", inputTokens: 1, outputTokens: 2 }, partitioned, { skillBlocks: [] } as never)
+  const partitioned = handler.separateMessages(largeConversation(), {} as never)
+  const built = handler.formatSummaryCarrier({ text: "the summary", inputTokens: 1, outputTokens: 2 }, partitioned, { skillBlocks: [] } as never)
   const content = textOf(built.message)
   assert.match(content, /Another language model started to solve this problem/)
   assert.match(content, /use your tools to inspect the current state of files/)
@@ -160,7 +160,7 @@ test("the openai summary carries a prefix telling the next model to inspect the 
 test("the anthropic compaction in beta asks the provider to continue", async () => {
   const { session, sent } = promptSession("the summary")
   const handler = new AnthropicCompactionHandler(session, stateHandler(), { sendUpdate: async () => {} } as never, [tool], {}, "model-1")
-  const partitioned = handler.partitionMessages(largeConversation(), {} as never)
+  const partitioned = handler.separateMessages(largeConversation(), {} as never)
   await handler.generateSummary(ctx, partitioned, {} as never)
   const lastMessage = (sent[0] ?? [])[(sent[0]?.length ?? 0) - 1] as { content: string }
   assert.equal(lastMessage.content, "Continue from where you left off.")
@@ -172,7 +172,7 @@ test("the anthropic compaction in explicit mode asks with the instructions it wa
     explicit: true,
     anthropicCompactionInstructions: "summarize this please",
   })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   await handler.generateSummary(ctx, partitioned, {} as never)
   const lastMessage = (sent[0] ?? [])[(sent[0]?.length ?? 0) - 1] as { content: string }
   assert.equal(lastMessage.content, "summarize this please")
@@ -181,7 +181,7 @@ test("the anthropic compaction in explicit mode asks with the instructions it wa
 test("the anthropic compaction in explicit mode falls back to the platform's own instructions", async () => {
   const { session, sent } = promptSession("the summary")
   const handler = new AnthropicCompactionHandler(session, stateHandler(), { sendUpdate: async () => {} } as never, [tool], {}, "model-1", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   await handler.generateSummary(ctx, partitioned, {} as never)
   const lastMessage = (sent[0] ?? [])[(sent[0]?.length ?? 0) - 1] as { content: string }
   assert.equal(lastMessage.content.length > 0, true)
@@ -190,7 +190,7 @@ test("the anthropic compaction in explicit mode falls back to the platform's own
 
 test("the beta compaction refuses a conversation that is too small to be worth it", async () => {
   const handler = anthropic("the summary")
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   await assert.rejects(
     () => handler.generateSummary(ctx, partitioned, {} as never),
     /Refusing anthropic compaction for fewer than 50000 tokens/,
@@ -199,7 +199,7 @@ test("the beta compaction refuses a conversation that is too small to be worth i
 
 test("the explicit compaction is asked for a small conversation as well", async () => {
   const handler = anthropic("the summary", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text, "the summary")
 })
@@ -210,54 +210,54 @@ test("the explicit compaction is asked for a small conversation as well", async 
 
 test("the anthropic summary is written back in the tag the provider reads", () => {
   const handler = anthropic("the summary")
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
-  const built = handler.buildSummaryMessage({ text: "the summary", inputTokens: 1, outputTokens: 2 }, partitioned, { skillBlocks: [] } as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
+  const built = handler.formatSummaryCarrier({ text: "the summary", inputTokens: 1, outputTokens: 2 }, partitioned, { skillBlocks: [] } as never)
   const content = textOf(built.message)
   assert.match(content, /<summary>\nthe summary\n<\/summary>/)
 })
 
 test("the analysis the model wrote before the summary is taken off it", async () => {
   const handler = anthropic("<analysis>\nreasoning about the task\n</analysis>\n<summary>\nthe summary\n</summary>", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text, "the summary")
 })
 
 test("a trailing analysis block with no summary in it is taken off too", async () => {
   const handler = anthropic("<summary>\nthe summary\n</summary>\n<analysis>\nreasoning after\n</analysis>", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text, "the summary")
 })
 
 test("an answer with no tags at all is the summary", async () => {
   const handler = anthropic("the summary, untagged", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text, "the summary, untagged")
 })
 
 test("an answer that is only reasoning is still a summary rather than nothing", async () => {
   const handler = anthropic("<analysis>\nonly reasoning\n</analysis>", { explicit: true })
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   const result = await handler.generateSummary(ctx, partitioned, {} as never)
   assert.equal(result.text.length > 0, true)
 })
 
 test("the anthropic compaction keeps nothing of the conversation back", () => {
   const handler = anthropic("the summary")
-  const partitioned = handler.partitionMessages(conversation(), {} as never)
+  const partitioned = handler.separateMessages(conversation(), {} as never)
   assert.deepEqual(partitioned.preservedTailMessages, [])
   const summary = message("user", "the summary")
-  const assembled = handler.assembleFinalMessages(partitioned, summary)
+  const assembled = handler.rebuildConversation(partitioned, summary)
   assert.deepEqual(assembled.map(entry => entry.role), ["system", "user"])
   assert.equal(assembled.at(-1), summary)
 })
 
 test("both compactions carry the blocks a summary cannot", () => {
   const openaiHandler = openai("the summary")
-  const partitioned = openaiHandler.partitionMessages(largeConversation(), {} as never)
-  const openaiBuilt = openaiHandler.buildSummaryMessage(
+  const partitioned = openaiHandler.separateMessages(largeConversation(), {} as never)
+  const openaiBuilt = openaiHandler.formatSummaryCarrier(
     { text: "the summary", inputTokens: 1, outputTokens: 2 },
     partitioned,
     { skillBlocks: [], modePrompt: "the mode", projectRootPrompt: "the root" } as never,
@@ -265,8 +265,8 @@ test("both compactions carry the blocks a summary cannot", () => {
   assert.equal(textOf(openaiBuilt.message).startsWith("the mode\n\nthe root\n\n"), true)
 
   const anthropicHandler = anthropic("the summary")
-  const anthropicPartitioned = anthropicHandler.partitionMessages(conversation(), {} as never)
-  const anthropicBuilt = anthropicHandler.buildSummaryMessage(
+  const anthropicPartitioned = anthropicHandler.separateMessages(conversation(), {} as never)
+  const anthropicBuilt = anthropicHandler.formatSummaryCarrier(
     { text: "the summary", inputTokens: 1, outputTokens: 2 },
     anthropicPartitioned,
     { skillBlocks: [], modePrompt: "the mode", projectRootPrompt: "the root" } as never,
@@ -322,7 +322,7 @@ test("the anthropic answer is read out of the tags it was written in", async () 
   ]
   for (const [label, answer, expected] of cases) {
     const handler = anthropic(answer, { explicit: true })
-    const partitioned = handler.partitionMessages(conversation(), {} as never)
+    const partitioned = handler.separateMessages(conversation(), {} as never)
     const result = await handler.generateSummary(ctx, partitioned, {} as never)
     assert.equal(result.text, expected, label)
   }
@@ -330,7 +330,7 @@ test("the anthropic answer is read out of the tags it was written in", async () 
 
 test("the beta floor is measured at its boundary, and the estimate reads every kind of part", async () => {
   const nearFloor = anthropic("unused")
-  const refused = nearFloor.partitionMessages([message("system", "framing"), message("user", "x".repeat(199_990))], {} as never)
+  const refused = nearFloor.separateMessages([message("system", "framing"), message("user", "x".repeat(199_990))], {} as never)
   await assert.rejects(
     () => nearFloor.generateSummary(ctx, refused, {} as never),
     { message: "Refusing anthropic compaction for fewer than 50000 tokens; estimated 49999 tokens in messagesToSummarize." },
@@ -338,7 +338,7 @@ test("the beta floor is measured at its boundary, and the estimate reads every k
   )
 
   const aboveFloor = anthropic("the summary")
-  const allowed = aboveFloor.partitionMessages([message("system", "framing"), message("user", "x".repeat(200_000))], {} as never)
+  const allowed = aboveFloor.separateMessages([message("system", "framing"), message("user", "x".repeat(200_000))], {} as never)
   assert.equal((await aboveFloor.generateSummary(ctx, allowed, {} as never)).text, "the summary", "the floor itself is allowed")
 
   const estimatedCases: Array<[string, string, unknown, number]> = [
@@ -353,7 +353,7 @@ test("the beta floor is measured at its boundary, and the estimate reads every k
   ]
   for (const [label, role, content, expected] of estimatedCases) {
     const handler = anthropic("unused")
-    const partitioned = handler.partitionMessages([message("system", "framing"), message(role, content)], {} as never)
+    const partitioned = handler.separateMessages([message("system", "framing"), message(role, content)], {} as never)
     await assert.rejects(
       () => handler.generateSummary(ctx, partitioned, {} as never),
       { message: `Refusing anthropic compaction for fewer than 50000 tokens; estimated ${expected} tokens in messagesToSummarize.` },
@@ -375,7 +375,7 @@ test("the anthropic compaction reports its usage and its outcome through the con
     } as never)
 
   const explicit = anthropic("the summary", { explicit: true })
-  const partitioned = explicit.partitionMessages(conversation(), {} as never)
+  const partitioned = explicit.separateMessages(conversation(), {} as never)
   await explicit.generateSummary(recordingContext, partitioned, {} as never)
   const compactionMetrics = () => metrics.filter(entry => (entry.handle as { name: string }).name.startsWith("anthropic_compaction"))
   assert.deepEqual(compactionMetrics().map(entry => [entry.method, entry.value, entry.labels]), [
@@ -441,7 +441,7 @@ test("the anthropic summary message carries its blocks, its length and the priva
     preservedTailMessages: [tail],
     skillBlocks: [],
   }
-  const built = handler.buildSummaryMessage(
+  const built = handler.formatSummaryCarrier(
     { text: "the summary", inputTokens: 1, outputTokens: 2 },
     partitioned as never,
     { skillBlocks: [], modePrompt: "the mode", projectRootPrompt: "the root" } as never,
@@ -454,10 +454,10 @@ test("the anthropic summary message carries its blocks, its length and the priva
 
 test("the anthropic compaction keeps the framing, the profile and the summary in that order", () => {
   const handler = anthropic("the summary")
-  const partitioned = handler.partitionMessages(conversationWithUserInfo(), {} as never)
+  const partitioned = handler.separateMessages(conversationWithUserInfo(), {} as never)
   assert.notEqual(partitioned.userInfoMessage, undefined, "the profile is separated from the request")
-  const assembled = handler.assembleFinalMessages(partitioned, message("user", "the summary") as never)
+  const assembled = handler.rebuildConversation(partitioned, message("user", "the summary") as never)
   assert.deepEqual(assembled.map(entry => entry.role), ["system", "user", "user"])
-  assert.deepEqual(handler.partitionMessages(conversation(), {} as never).preservedTailMessages, [], "nothing of the conversation is kept back")
-  assert.throws(() => handler.assembleFinalMessages({ ...partitioned, systemMessage: undefined } as never, message("user", "s") as never), { message: "Expected system message in conversation" })
+  assert.deepEqual(handler.separateMessages(conversation(), {} as never).preservedTailMessages, [], "nothing of the conversation is kept back")
+  assert.throws(() => handler.rebuildConversation({ ...partitioned, systemMessage: undefined } as never, message("user", "s") as never), { message: "Expected system message in conversation" })
 })

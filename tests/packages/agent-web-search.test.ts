@@ -2,14 +2,15 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import {
-  createWebSearchTool,
   type WebSearchServiceRequest,
   type WebSearchServiceResult,
 } from "../../source/packages/agent/tools/core/web-search.ts"
+import { createWebSearchTool } from "../../source/adapters/interop/agent/web-search-tool-adapter.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { ToolCallRejectedError } from "../../source/packages/agent/tools/tool-errors.ts"
-import { WebSearchResult } from "../../source/packages/proto/generated/agent/v1/web_search_tool_pb.ts"
-import { AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES } from "../../source/packages/agent-exec/agent-tools-file.ts"
+import { Responses, type SlateInteractionQuery } from "../../source/packages/agent-core/interaction-queries.ts"
+import { WebSearchResult } from "../../source/adapters/interop/proto/generated/agent/v1/web_search_tool_pb.ts"
+import { AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES } from "../../source/adapters/interop/agent/agent-tools-file-adapter.ts"
 import { buildWebSearchYearGuidance } from "../../source/packages/utils/search-year-guidance.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -86,18 +87,11 @@ async function* argsOf(args: unknown): AsyncIterable<string> {
 function handler(harnessed: Harness, options: { rejectQuery?: string } = {}): unknown {
   return {
     listener: {
-      async query(_ctx: Context, query: { query: { case: string } }) {
-        harnessed.queries.push(query.query.case)
-        return {
-          result: {
-            case: "webSearchRequestResponse",
-            value: {
-              result: options.rejectQuery === undefined
-                ? { case: "approved", value: {} }
-                : { case: "rejected", value: { reason: options.rejectQuery } },
-            },
-          },
-        }
+      async query(_ctx: Context, query: SlateInteractionQuery) {
+        harnessed.queries.push(query.kind)
+        return options.rejectQuery === undefined
+          ? Responses.webSearchApproved(query.id)
+          : Responses.webSearchRejected(query.id, options.rejectQuery)
       },
     },
     emitPartialToolCall() {},
@@ -162,7 +156,7 @@ test("the arguments are a search term and an explanation", () => {
 test("the search is asked of the user and then of the provider", async () => {
   const harnessed = harness({ result: { documents: [{ title: "A page", url: "https://example.test", text: "the text" }] } })
   const result = await run(harnessed, { search_term: "how to do a thing" })
-  assert.deepEqual(harnessed.queries, ["webSearchRequestQuery"])
+  assert.deepEqual(harnessed.queries, ["web-search"])
   assert.deepEqual(harnessed.asked, [{ searchTerm: "how to do a thing" }])
   assert.equal(referencesOf(result).length, 1)
   assert.equal(referencesOf(result)[0]?.title, "A page")

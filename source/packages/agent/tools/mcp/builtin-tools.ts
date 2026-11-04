@@ -17,17 +17,7 @@
  * for whatever else may recognize it.
  */
 
-import { Value } from "@bufbuild/protobuf"
-
 import { DYNAMIC_TOOLS_NAMESPACE } from "../../../agent-exec/mcp-operations.ts"
-import {
-  McpImageContent,
-  McpResult as McpToolResult,
-  McpSuccess,
-  McpTextContent,
-  McpToolResultContentItem,
-} from "../../../proto/generated/agent/v1/mcp_exec_pb.ts"
-import { McpDescriptor, McpToolDescriptor } from "../../../proto/generated/agent/v1/mcp_pb.ts"
 import { buildDescriptionGeneratorProps, getConciseStaticContext } from "../tool-execution.ts"
 
 interface BuiltinTool {
@@ -37,6 +27,19 @@ interface BuiltinTool {
   readonly descriptionGenerator?: (props: Record<string, unknown>, settings: { promptVisible: boolean }) => string
   readonly contextType?: { readonly type?: string; readonly conciseStaticContext?: string } | undefined
   readonly parameters: { readonly jsonSchema?: unknown }
+}
+
+export interface SlateMcpToolDescriptor {
+  readonly toolName: string
+  readonly description?: string | undefined
+  readonly inputSchema?: unknown
+}
+
+export interface SlateMcpDescriptor {
+  readonly serverIdentifier: string
+  readonly serverName: string
+  readonly serverUseInstructions: string
+  readonly tools: readonly SlateMcpToolDescriptor[]
 }
 
 interface RegistryOptions {
@@ -65,7 +68,7 @@ export class DynamicToolRegistry {
   private registry = new Map<string, BuiltinTool>()
   private nonDynamicNames = new Set<string>()
   private generatorProps: Record<string, unknown> = { allEntries: {} }
-  private descriptorCache = new Map<string, McpDescriptor>()
+  private descriptorCache = new Map<string, SlateMcpDescriptor>()
 
   constructor(settings: RegistryOptions = {}) {
     this.settings = settings
@@ -85,7 +88,7 @@ export class DynamicToolRegistry {
       [...nextRegistry.values()].sort((a, b) => a.name.localeCompare(b.name)),
       nextGeneratorProps,
     )
-    const nextDescriptorCache = new Map<string, McpDescriptor>()
+    const nextDescriptorCache = new Map<string, SlateMcpDescriptor>()
     if (descriptor !== undefined) nextDescriptorCache.set("", descriptor)
     this.registry = nextRegistry
     this.nonDynamicNames = nextNonDynamicNames
@@ -121,7 +124,7 @@ export class DynamicToolRegistry {
     return this.generatorProps
   }
 
-  getMcpDescriptor(toolNames?: { discoveryToolName: string; invocationToolName: string }): McpDescriptor | undefined {
+  getMcpDescriptor(toolNames?: { discoveryToolName: string; invocationToolName: string }): SlateMcpDescriptor | undefined {
     const key = toolNames === undefined ? "" : `${toolNames.discoveryToolName}\0${toolNames.invocationToolName}`
     const cached = this.descriptorCache.get(key)
     if (cached !== undefined) return cached
@@ -134,22 +137,22 @@ export class DynamicToolRegistry {
 function descriptorFromTools(
   tools: BuiltinTool[],
   generatorProps: Record<string, unknown>,
-): McpDescriptor | undefined {
+): SlateMcpDescriptor | undefined {
   if (tools.length === 0) return undefined
   const descriptors = tools.map(tool => {
     const schema = tool.parameters.jsonSchema
-    return new McpToolDescriptor({
+    return {
       toolName: tool.name,
       description: toolDescriptionFor(tool, generatorProps) as string,
-      ...(schema !== undefined ? { inputSchema: Value.fromJson(schema as never) } : {}),
-    })
+      ...(schema !== undefined ? { inputSchema: schema } : {}),
+    }
   })
-  return new McpDescriptor({
+  return {
     serverIdentifier: DYNAMIC_TOOLS_NAMESPACE,
     serverName: DYNAMIC_TOOLS_NAMESPACE,
     serverUseInstructions: serverUseInstructionsFor(tools),
     tools: descriptors,
-  })
+  }
 }
 
 export function isReservedDynamicToolsNamespace(dispatchNamespace: string): boolean {
@@ -174,31 +177,4 @@ export function resolveDynamicDispatchToolName(
   const requestedToolName = body["toolName"]
   if (typeof requestedToolName !== "string") return undefined
   return toolRegistry.getTool(requestedToolName)?.name
-}
-
-/** The platform's own tool result, in the shape an MCP caller reads. */
-export function agentToolResultToMcpToolResult(toolResult: {
-  content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>
-  isError?: boolean
-}): McpToolResult {
-  const contentItems = toolResult.content.map(entry => {
-    if (entry.type === "text") {
-      return new McpToolResultContentItem({ content: { case: "text", value: new McpTextContent({ text: entry.text! }) } })
-    }
-    if (entry.type === "image") {
-      return new McpToolResultContentItem({
-        content: {
-          case: "image",
-          value: new McpImageContent({ data: Buffer.from(entry.data!, "base64"), mimeType: entry.mimeType ?? "image/png" }),
-        },
-      })
-    }
-    // Anything else is carried as its JSON, since MCP has no other way to say what it was.
-    return new McpToolResultContentItem({
-      content: { case: "text", value: new McpTextContent({ text: JSON.stringify(entry) }) },
-    })
-  })
-  return new McpToolResult({
-    result: { case: "success", value: new McpSuccess({ content: contentItems, isError: toolResult.isError as boolean }) },
-  })
 }

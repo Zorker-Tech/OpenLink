@@ -6,7 +6,7 @@ import { createContext } from "../../source/packages/context/context.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { ResponseComparisonSkipReason } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts"
+import { ResponseComparisonSkipReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The handler is the turn engine: it is handed the action's configuration and the things a turn

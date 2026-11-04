@@ -11,14 +11,14 @@
 import { HookStep } from "../hooks/hook-step.ts"
 import { HOOK_STEPS_CARRYING_ADDITIONAL_CONTEXT } from "../hooks/hook-registry.ts"
 
-type HookAdditionalContextStep =
+type ContextBearingHookStep =
   | typeof HookStep.sessionStart
   | typeof HookStep.beforeSubmitPrompt
   | typeof HookStep.preToolUse
   | typeof HookStep.postToolUse
   | typeof HookStep.postToolUseFailure
 
-function isHookAdditionalContextStep(step: HookStep): step is HookAdditionalContextStep {
+function isContextBearingHookStep(step: HookStep): step is ContextBearingHookStep {
   return step === HookStep.sessionStart ||
     step === HookStep.beforeSubmitPrompt ||
     step === HookStep.preToolUse ||
@@ -28,11 +28,11 @@ function isHookAdditionalContextStep(step: HookStep): step is HookAdditionalCont
 
 export const HOOK_STEP_CARRIER_SPECS = Object.fromEntries(
   Array.from(HOOK_STEPS_CARRYING_ADDITIONAL_CONTEXT).map(step => {
-    if (!isHookAdditionalContextStep(step)) {
+    if (!isContextBearingHookStep(step)) {
       throw new Error(
-        `The registry lists ${step} as carrying additional context but HookAdditionalContextStep does not include it. Extend the union in carrier-spec.ts.`,
+        `Hook step ${step} accepts context but is absent from the host's carrier catalog. Add it to carrier-spec.ts.`,
       )
     }
-    return [step, { hookEventName: step }]
+    return [step, { event: step }]
   }),
-) as Record<HookAdditionalContextStep, { hookEventName: HookAdditionalContextStep }>
+) as Record<ContextBearingHookStep, { event: ContextBearingHookStep }>

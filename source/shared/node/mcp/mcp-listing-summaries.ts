@@ -1,9 +1,38 @@
-/**
- * A listing of MCP servers, summarized for a reader.
- *
- * Each server's account is named the way the platform names it, its custom instructions are resolved, and what the
- * listing shows is what a user would see — not the configuration it came from.
- */
-import { DEFAULT_MCP_ACCOUNT_KEY, provisionalMcpAccountServerIdentifier } from "../../mcp.ts"; import { resolveMcpCustomInstruction } from "../../mcp-custom-instructions.ts"; import { getCommand, getTransport } from "./mcp-validation.ts"; import { pluginAttributionFromDisplayServer, statusFromBackendListStatus, statusFromBoxListStatus, type DisplayServer } from "./mcp-display-runtime.ts";
-interface ListedTool { toolName: string } interface BackendEntry { accountLabel: string; serverIdentifier?: string; status?: string; tools: ListedTool[] } interface BoxEntry { status?: string; statusDetail?: string; toolCount: number; tools: ListedTool[] }
-export class SlateMcpListingSummaries { constructor(private readonly deps: { settingsStore(): { getMcpDisabledToolsByServerId(): Record<string, string[]>; getRawMcpCustomInstructionByServerId(id: string): string | undefined; getRawMcpCustomInstruction(name: string): string | undefined }; isBoxExecWired(): boolean }) {} private count(serverId: string, tools: ListedTool[]): number { const disabled = this.deps.settingsStore().getMcpDisabledToolsByServerId()[serverId] ?? []; return disabled.length === 0 ? tools.length : tools.filter((tool) => !disabled.includes(tool.toolName)).length; } createBackendServerSummaries(server: DisplayServer, entries: BackendEntry[]) { const slots = server.accounts ?? []; if (slots.length === 0) return [this.backendSummary(server, entries.find((item) => item.accountLabel === DEFAULT_MCP_ACCOUNT_KEY) ?? entries[0], DEFAULT_MCP_ACCOUNT_KEY)]; return slots.map((slot) => this.backendSummary(server, entries.find((item) => item.accountLabel === slot.accountKey), slot.accountKey, slot)); } private backendSummary(server: DisplayServer, backend: BackendEntry | undefined, accountKey: string, slot?: { hasToken: boolean; serverIdentifier?: string }) { const row = server.serverIdentifier ?? `mcp-row-${server.id}`, enabled = this.count(server.id, backend?.tools ?? []), disabled = (backend?.tools.length ?? 0) - enabled, status = slot != null && !slot.hasToken ? { status: "needsAuth", statusDetail: "Authentication required" } : statusFromBackendListStatus(backend?.status); return { id: server.id, name: server.name, serverIdentifier: slot?.serverIdentifier ?? backend?.serverIdentifier ?? provisionalMcpAccountServerIdentifier(row, accountKey), accountKey, rowServerIdentifier: row, transport: getTransport(server.config), command: getCommand(server.config), url: "url" in server.config ? server.config.url : undefined, toolCount: enabled, ...(disabled > 0 ? { disabledToolCount: disabled } : {}), customInstructions: this.instruction(server), isTeamServer: server.isTeamServer, ...pluginAttributionFromDisplayServer(server), ...status }; } createBoxServerSummary(server: DisplayServer, box: BoxEntry | undefined, unavailable: boolean) { const identifier = server.serverIdentifier ?? `mcp-row-${server.id}`, enabled = box == null ? 0 : box.tools.length > 0 ? this.count(server.id, box.tools) : box.toolCount, disabled = box == null || box.tools.length === 0 ? 0 : box.tools.length - enabled, status = !this.deps.isBoxExecWired() ? { status: "disconnected", statusDetail: "Runs on Slate's computer" } : statusFromBoxListStatus(box?.status, unavailable, box?.statusDetail); return { id: server.id, name: server.name, serverIdentifier: identifier, accountKey: DEFAULT_MCP_ACCOUNT_KEY, rowServerIdentifier: identifier, transport: getTransport(server.config), command: getCommand(server.config), url: undefined, toolCount: enabled, ...(disabled > 0 ? { disabledToolCount: disabled } : {}), customInstructions: this.instruction(server), isTeamServer: server.isTeamServer, ...pluginAttributionFromDisplayServer(server), ...status }; } createAdminDisabledServerSummary(server: DisplayServer) { const identifier = server.serverIdentifier ?? `mcp-row-${server.id}`; return { id: server.id, name: server.name, serverIdentifier: identifier, accountKey: DEFAULT_MCP_ACCOUNT_KEY, rowServerIdentifier: identifier, transport: getTransport(server.config), command: getCommand(server.config), url: "url" in server.config ? server.config.url : undefined, toolCount: 0, customInstructions: this.instruction(server), isTeamServer: server.isTeamServer, ...pluginAttributionFromDisplayServer(server), status: "disabledByTeamAdminPolicy", statusDetail: "Disabled by team admin" }; } private instruction(server: DisplayServer): string { const settings = this.deps.settingsStore(); return resolveMcpCustomInstruction(server.name, settings.getRawMcpCustomInstructionByServerId(server.id) ?? settings.getRawMcpCustomInstruction(server.name)); } }
+import { DEFAULT_MCP_ACCOUNT_KEY } from "../../mcp.ts";
+import type { SlateMcpDisplayRow } from "./mcp-display-runtime.ts";
+import {
+  adminDisabledServerSummary,
+  backendAccountSummary,
+  boxServerSummary,
+} from "./mcp-listing-summary-projectors.ts";
+import type {
+  BackendMcpEntry,
+  BoxMcpEntry,
+  McpListingSummaryDependencies,
+} from "./mcp-listing-summary-contracts.ts";
+
+export type { BackendMcpEntry, BoxMcpEntry, McpListingSummaryDependencies } from "./mcp-listing-summary-contracts.ts";
+
+export class SlateMcpListingSummaries {
+  constructor(private readonly dependencies: McpListingSummaryDependencies) {}
+
+  createBackendServerSummaries(server: SlateMcpDisplayRow, entries: BackendMcpEntry[]) {
+    const slots = server.accounts ?? [];
+    if (slots.length === 0) {
+      const fallback = entries.find((entry) => entry.accountLabel === DEFAULT_MCP_ACCOUNT_KEY) ?? entries[0];
+      return [backendAccountSummary(server, fallback, DEFAULT_MCP_ACCOUNT_KEY, undefined, this.dependencies)];
+    }
+    return slots.map((slot) => {
+      const backend = entries.find((entry) => entry.accountLabel === slot.accountKey);
+      return backendAccountSummary(server, backend, slot.accountKey, slot, this.dependencies);
+    });
+  }
+
+  createBoxServerSummary(server: SlateMcpDisplayRow, box: BoxMcpEntry | undefined, unavailable: boolean) {
+    return boxServerSummary(server, box, unavailable, this.dependencies);
+  }
+
+  createAdminDisabledServerSummary(server: SlateMcpDisplayRow) {
+    return adminDisabledServerSummary(server, this.dependencies);
+  }
+}

@@ -4,19 +4,23 @@
  * The transport's error code, the details the backend attached and the kind of blob access that failed are read
  * together, so a caller is told whether to retry, re-authorize or stop.
  */
-import { Code } from "@connectrpc/connect";
-
-import { ErrorDetails, ErrorDetails_Error } from "../proto/generated/aiserver/v1/utils_pb.ts";
+import {
+  projectAgentTransportDisposition,
+  readInteropAgentErrorContext,
+} from "../../adapters/interop/agent/agent-error-details-adapter.ts";
 import { findBlobNotFoundError } from "../agent-kv/blob-not-found-error.ts";
+import type { AgentErrorCode, AgentErrorDetails } from "./error-contract.ts";
+
+export type { AgentErrorCode, AgentErrorDetails } from "./error-contract.ts";
 
 export interface AgentErrorDisplayInfo {
   readonly title?: string | undefined;
   readonly detail?: string | undefined;
   readonly isRetryable?: boolean | undefined;
   readonly connectCode?: number | undefined;
-  readonly errorCode?: ErrorDetails_Error | undefined;
+  readonly errorCode?: AgentErrorCode | undefined;
   readonly inferenceRequestErrorType?: string | undefined;
-  readonly errorDetails?: ErrorDetails | undefined;
+  readonly errorDetails?: AgentErrorDetails | undefined;
 }
 
 export interface AgentErrorOptions {
@@ -77,40 +81,6 @@ export class CancelledError extends AgentError {
   }
 }
 
-const AUTH_ERROR_CODES = new Set<ErrorDetails_Error>([
-  ErrorDetails_Error.NOT_LOGGED_IN,
-  ErrorDetails_Error.AGENT_REQUIRES_LOGIN,
-  ErrorDetails_Error.AUTH_TOKEN_NOT_FOUND,
-  ErrorDetails_Error.AUTH_TOKEN_EXPIRED,
-  ErrorDetails_Error.INVALID_AUTH_ID,
-  ErrorDetails_Error.UNAUTHORIZED,
-  ErrorDetails_Error.GITHUB_NO_USER_CREDENTIALS,
-  ErrorDetails_Error.GITHUB_USER_NO_ACCESS,
-]);
-const PLAN_ERROR_CODES = new Set<ErrorDetails_Error>([
-  ErrorDetails_Error.FREE_USER_USAGE_LIMIT,
-  ErrorDetails_Error.FREE_USER_RATE_LIMIT_EXCEEDED,
-  ErrorDetails_Error.PRO_USER_ONLY,
-  ErrorDetails_Error.PRO_USER_USAGE_LIMIT,
-  ErrorDetails_Error.PRO_USER_RATE_LIMIT_EXCEEDED,
-  ErrorDetails_Error.RATE_LIMITED,
-  ErrorDetails_Error.RATE_LIMITED_CHANGEABLE,
-  ErrorDetails_Error.GENERIC_RATE_LIMIT_EXCEEDED,
-]);
-const BILLING_ERROR_CODES = new Set<ErrorDetails_Error>([
-  ErrorDetails_Error.USAGE_PRICING_REQUIRED,
-  ErrorDetails_Error.USAGE_PRICING_REQUIRED_CHANGEABLE,
-]);
-const SETUP_ERROR_CODES = new Set<ErrorDetails_Error>([
-  ErrorDetails_Error.BAD_API_KEY,
-  ErrorDetails_Error.BAD_USER_API_KEY,
-  ErrorDetails_Error.OUTDATED_CLIENT,
-]);
-const ABORT_ERROR_CODES = new Set<ErrorDetails_Error>([
-  ErrorDetails_Error.USER_ABORTED_REQUEST,
-  ErrorDetails_Error.DEBOUNCED,
-]);
-const CUSTOM_MESSAGE_CODES = new Set<ErrorDetails_Error>([ErrorDetails_Error.CUSTOM_MESSAGE]);
 const TRANSPORT_PATTERNS = [
   "NGHTTP2",
   "ECONNRESET",
@@ -137,7 +107,6 @@ const NETWORK_ERRNO_CODES = new Set([
   "ENETUNREACH",
 ]);
 const NETWORK_ERRNO_RE = new RegExp(`\\b(${[...NETWORK_ERRNO_CODES].join("|")})\\b`);
-const INFERENCE_REQUEST_ERROR_TYPE_HEADER = "x-cursor-inference-request-error-type";
 
 interface ConnectErrorLike {
   readonly name: string;
@@ -145,7 +114,6 @@ interface ConnectErrorLike {
   readonly message: string;
   readonly metadata: { get(name: string): string | null };
   readonly cause?: unknown;
-  findDetails(type: typeof ErrorDetails): readonly ErrorDetails[];
 }
 
 export function classifyError(failure: unknown, settings: { readonly requestId?: string } = {}): AgentError {
@@ -177,55 +145,41 @@ function looksLikeConnectError(failure: unknown): failure is ConnectErrorLike {
 }
 
 function mapConnectError(failure: ConnectErrorLike, requestId: string | undefined): AgentError {
-  const errorDetail = readErrorDetails(failure);
+  const interop = readInteropAgentErrorContext(failure);
+  const errorDetail = interop.details;
   const displayInfo: AgentErrorDisplayInfo = {
-    title: errorDetail?.details?.title,
-    detail: errorDetail?.details?.detail,
-    isRetryable: errorDetail?.details?.isRetryable,
+    title: errorDetail?.title,
+    detail: errorDetail?.detail,
+    isRetryable: errorDetail?.isRetryable,
     connectCode: failure.code,
-    errorCode: errorDetail?.error,
-    inferenceRequestErrorType: failure.metadata.get(INFERENCE_REQUEST_ERROR_TYPE_HEADER) ?? undefined,
+    errorCode: errorDetail?.code,
+    inferenceRequestErrorType: interop.inferenceRequestErrorType,
     errorDetails: errorDetail,
   };
   const settings: AgentErrorOptions = { cause: failure, requestId, displayInfo };
-  if (failure.code === Code.Canceled || failure.code === Code.Aborted) {
+  const transportDisposition = projectAgentTransportDisposition(failure.code);
+  if (transportDisposition === "cancelled" || transportDisposition === "aborted") {
     if (hasTransportPattern(failure)) return new RetriableError(failure.message, settings);
     return new CancelledError(failure.message, settings);
   }
-  if (errorDetail?.error !== undefined) {
-    const reasonCode = errorDetail.error;
-    if (ABORT_ERROR_CODES.has(reasonCode)) return new CancelledError(combinedMessage(failure, errorDetail), settings);
-    const backendAction = errorDetail.details?.analyticsMetadata?.actionRequired;
+  if (errorDetail !== undefined) {
+    if (errorDetail.code === "cancelled") return new CancelledError(combinedMessage(failure, errorDetail), settings);
+    const backendAction = errorDetail.actionRequired;
     if (backendAction !== undefined && backendAction !== "") return new ActionRequiredError(combinedMessage(failure, errorDetail), backendAction, settings);
-    if (AUTH_ERROR_CODES.has(reasonCode)) return new ActionRequiredError(combinedMessage(failure, errorDetail), "login", settings);
-    if (PLAN_ERROR_CODES.has(reasonCode)) return new ActionRequiredError(combinedMessage(failure, errorDetail), "upgrade", settings);
-    if (BILLING_ERROR_CODES.has(reasonCode)) return new ActionRequiredError(combinedMessage(failure, errorDetail), "payment", settings);
-    if (SETUP_ERROR_CODES.has(reasonCode)) return new ActionRequiredError(combinedMessage(failure, errorDetail), "config", settings);
-    if (CUSTOM_MESSAGE_CODES.has(reasonCode) && errorDetail.details?.isRetryable !== true) return new NonRetriableError(combinedMessage(failure, errorDetail), settings);
-    if (errorDetail.details?.isRetryable === false) return new NonRetriableError(combinedMessage(failure, errorDetail), settings);
+    if (errorDetail.code === "authentication") return new ActionRequiredError(combinedMessage(failure, errorDetail), "login", settings);
+    if (errorDetail.code === "usage-limit") return new ActionRequiredError(combinedMessage(failure, errorDetail), "upgrade", settings);
+    if (errorDetail.code === "payment-required") return new ActionRequiredError(combinedMessage(failure, errorDetail), "payment", settings);
+    if (errorDetail.code === "configuration-required") return new ActionRequiredError(combinedMessage(failure, errorDetail), "config", settings);
+    if (errorDetail.code === "custom-message" && errorDetail.isRetryable !== true) return new NonRetriableError(combinedMessage(failure, errorDetail), settings);
+    if (errorDetail.isRetryable === false) return new NonRetriableError(combinedMessage(failure, errorDetail), settings);
   }
-  if (failure.code === Code.Unauthenticated) return new ActionRequiredError(failure.message, "login", settings);
+  if (transportDisposition === "unauthenticated") return new ActionRequiredError(failure.message, "login", settings);
   return new RetriableError(failure.message, settings);
 }
 
-function readErrorDetails(failure: ConnectErrorLike): ErrorDetails | undefined {
-  const errorDetail = failure.findDetails(ErrorDetails);
-  if (errorDetail.length > 0) return errorDetail[0];
-  try {
-    const cause = failure.cause;
-    if (cause !== null && typeof cause === "object" && "findDetails" in cause && typeof cause.findDetails === "function") {
-      const causeDetails = cause.findDetails(ErrorDetails) as readonly ErrorDetails[];
-      return causeDetails[0];
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
-function combinedMessage(failure: ConnectErrorLike, errorDetail: ErrorDetails | undefined): string {
-  if (errorDetail?.details !== undefined) {
-    const { title, detail } = errorDetail.details;
+function combinedMessage(failure: ConnectErrorLike, errorDetail: AgentErrorDetails | undefined): string {
+  if (errorDetail?.title !== undefined || errorDetail?.detail !== undefined) {
+    const { title, detail } = errorDetail;
     if (title && detail) return `${title} ${detail}`;
     return title || detail || failure.message;
   }

@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 
 import { LOCAL_EXEC_FAILED_EVENT, LOCAL_EXEC_PROVIDER_EVENT, LOCAL_EXEC_REFUSED_EVENT } from "../../source/host/telemetry/local-exec-telemetry.ts";
 import { MEMORY_MAX_CONTENT_LENGTH, MEMORY_PROFILE_PROMPT_LIMIT, MEMORY_RECENT_PROMPT_CHAR_BUDGET, MEMORY_RECENT_PROMPT_LIMIT, MEMORY_UI_LIMIT } from "../../source/host/runner/slate-memory.ts";
-import { SHIPPED_CLIENT_SIDE_TOOL_V2_UNION } from "../../source/host/transcript/client-side-tool-v2-inventory.ts";
+import { SHIPPED_CLIENT_SIDE_TOOL_V2_UNION } from "../../source/adapters/interop/agent/client-side-tool-v2-inventory-adapter.ts";
 
 describe("what local execution reports", () => {
   it("uses our own event names for a refusal, a failure and a provider", () => {

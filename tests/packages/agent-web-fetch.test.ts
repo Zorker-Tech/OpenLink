@@ -1,12 +1,14 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { createWebFetchTool, type WebFetchServiceResult } from "../../source/packages/agent/tools/core/web-fetch.ts"
+import { createWebFetchTool } from "../../source/adapters/interop/agent/web-fetch-tool-adapter.ts"
+import type { WebFetchServiceResult } from "../../source/packages/agent/tools/core/web-fetch.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { ToolCallRejectedError, ToolTimeoutError } from "../../source/packages/agent/tools/tool-errors.ts"
-import { WebFetchResult, WebFetchToolCall } from "../../source/packages/proto/generated/agent/v1/web_fetch_tool_pb.ts"
+import { Responses, type SlateInteractionQuery } from "../../source/packages/agent-core/interaction-queries.ts"
+import { WebFetchResult, WebFetchToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/web_fetch_tool_pb.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
-import { AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES } from "../../source/packages/agent-exec/agent-tools-file.ts"
+import { AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES } from "../../source/adapters/interop/agent/agent-tools-file-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the tool over a scripted fetch service and query listener
@@ -15,7 +17,7 @@ import { AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES } from "../../source/packages/ag
 interface Harness {
   readonly writes: Array<{ path: string; text: string }>
   readonly fetched: string[]
-  readonly queries: Array<{ case: string }>
+  readonly queries: Array<{ kind: string }>
   readonly tool: Record<string, unknown>
 }
 
@@ -31,7 +33,7 @@ function harness(options: {
 } = {}): Harness {
   const writes: Harness["writes"] = []
   const fetched: string[] = []
-  const queries: Array<{ case: string }> = []
+  const queries: Array<{ kind: string }> = []
   const resourceAccessor = {
     get: (resource?: unknown) => {
       void resource
@@ -81,7 +83,7 @@ async function* argsOf(args: unknown): AsyncIterable<string> {
 }
 
 interface HandlerHarness {
-  readonly listener: { query(ctx: Context, query: { query: { case: string } }): Promise<unknown> }
+  readonly listener: { query(ctx: Context, query: SlateInteractionQuery): Promise<unknown> }
   emitPartialToolCall(): void
   executeToolCall(ctx: Context, call: unknown, id: string, run: (ctx: Context) => Promise<WebFetchResult>, merge: (result: WebFetchResult) => unknown): Promise<WebFetchResult>
 }
@@ -90,18 +92,11 @@ function handler(harnessed: Harness, options: { rejectQuery?: string } = {}): Ha
   return {
     listener: {
       async query(_ctx, query) {
-        harnessed.queries.push({ case: query.query.case })
+        harnessed.queries.push({ kind: query.kind })
         // The listener answers with the response the query expects, whose own result is the decision.
-        return {
-          result: {
-            case: "webFetchRequestResponse",
-            value: {
-              result: options.rejectQuery === undefined
-                ? { case: "approved", value: {} }
-                : { case: "rejected", value: { reason: options.rejectQuery } },
-            },
-          },
-        }
+        return options.rejectQuery === undefined
+          ? Responses.webFetchApproved(query.id)
+          : Responses.webFetchRejected(query.id, options.rejectQuery)
       },
     },
     emitPartialToolCall() {},
@@ -185,7 +180,7 @@ test("a URL's own credentials are stripped when the session asks for that", asyn
 test("the user is asked before the page is fetched", async () => {
   const harnessed = harness()
   await run(harnessed, { url: "https://example.test/page" })
-  assert.deepEqual(harnessed.queries, [{ case: "webFetchRequestQuery" }])
+  assert.deepEqual(harnessed.queries, [{ kind: "web-fetch" }])
   assert.deepEqual(harnessed.fetched, ["https://example.test/page"])
 })
 

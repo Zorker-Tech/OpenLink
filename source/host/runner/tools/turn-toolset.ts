@@ -36,18 +36,19 @@ import type { ForwardedUpdate } from "../agent-adapters.ts";
 import { DynamicToolRegistry, resolveDynamicDispatchToolName } from "../../../packages/agent/tools/mcp/builtin-tools.ts";
 import { createCallMcpTool, type CreateCallMcpToolOptions } from "../../../packages/agent/tools/mcp/mcp.ts";
 import { createGetMcpToolsTool } from "../../../packages/agent/tools/mcp/get-mcp-tools.ts";
-import type { ProductionTurnToolInputs } from "../../runner-production-bridge.ts";
+import type { RunnerToolInputs } from "../../runner-production-bridge.ts";
 import { SLATE_BOX_WORKSPACE_ROOT } from "../../cloud-agents/cloud-agent-images.ts";
 import { slateToolCallExecutionTimeoutMs, wrapDynamicInvocationToolWithTimeout, type McpToolForMeta } from "./mcp-meta-tools.ts";
 import { fencedToolSet } from "./slate-spotlight-tools.ts";
-import { McpDescriptor, McpMetaToolOptions, McpToolDescriptor } from "../../../packages/proto/generated/agent/v1/mcp_pb.ts";
+import { projectTurnToolsIntoInteropMetaOptions } from "../../../adapters/interop/agent/mcp-meta-tool-options-adapter.ts";
 import { createComputerTool, createScreenshotTool, type ComputerToolDependencies } from "./slate-computer-tool.ts";
 import { createSlateBrowserTools, type BrowserDriverDependencies } from "./slate-browser-tools.ts";
 import { createFileTransferTools, type FileTransferController } from "./slate-file-transfer-tools.ts";
-import { createRequestBoxHelpTool, type BoxHelpDependencies } from "./box-help-tool.ts";
+import { createManualHandoffTool, type ManualHandoffPorts } from "./box-help-tool.ts";
 import { createGenerateImageTool, type GenerateImageToolDependencies } from "../../../packages/agent/tools/core/generate-image.ts";
-import { createWebSearchTool, type WebSearchToolDependencies } from "../../../packages/agent/tools/core/web-search.ts";
-import { createWebFetchTool, type WebFetchToolDependencies } from "../../../packages/agent/tools/core/web-fetch.ts";
+import { createWebSearchTool } from "../../../adapters/interop/agent/web-search-tool-adapter.ts";
+import type { WebSearchToolDependencies } from "../../../packages/agent/tools/core/web-search.ts";
+import { createWebFetchTool, type WebFetchToolDependencies } from "../../../adapters/interop/agent/web-fetch-tool-adapter.ts";
 import { createToolCallExecutionTimeoutError } from "../../../packages/agent/tools/tool-support.ts";
 import { createAwaitTool, type AwaitToolOptions, type AwaitToolResourceAccessor } from "../../../packages/agent/tools/core/await.ts";
 import { createSendMessageTool, type SendMessageDependencies } from "./send-message-tool.ts";
@@ -60,9 +61,10 @@ import { createCloudAgentTool, type CloudAgentToolDeps } from "../../cloud-agent
 import { createReadTool, type ReadFormattingOptions, type ReadResourceAccessor, type ReadToolOptions } from "../../../packages/agent/tools/core/read/read.ts";
 import { createShellTool, type ShellAutoRunInstructions, type ShellToolOptions, type ShellToolResourceAccessor } from "../../../packages/agent/tools/core/shell/create-shell-tool.ts";
 import { buildSlateShellAutoReviewTargetEnrichment } from "../slate-shell-auto-review-enrichment.ts";
+import { slateShellReadAccessorFromInterop } from "../../../adapters/interop/agent/shell-auto-review-read-adapter.ts";
 import { createSlateShellApprovalProvider } from "../slate-auto-review-tool-escalations.ts";
 import type { SlateAutoReviewController, SlateAutoReviewExpiryPolicy, SlateAutoReviewMode } from "../slate-auto-review.ts";
-import type { RequestContext } from "../../../packages/proto/generated/agent/v1/request_context_exec_pb.ts";
+import type { SmartModeClassifierControls } from "../../../packages/agent/tools/dev-smart-mode-classifier-block.ts";
 import { SLATE_AUTO_REVIEW_CLASSIFIER_MAX_ATTEMPTS } from "../slate-auto-review-classifier-run.ts";
 import { createSlateMultitaskTodoTool } from "../../slate-multitask.ts";
 import { maybeEntry, presentOptions } from "../optional-options.ts";
@@ -135,12 +137,12 @@ type TaskToolConfigFactory = TaskToolParameters[1];
 type TaskToolConfig = Awaited<ReturnType<TaskToolConfigFactory>>;
 type StreamingTurnTool = TurnTool & { execute(context: unknown, interactionHandler: unknown, argumentsStream: AsyncIterable<string>, metadata: unknown): Promise<unknown> };
 
-export type TurnToolsetBuildProps = ProductionTurnToolInputs;
+export type TurnToolsetBuildProps = RunnerToolInputs;
 
 export interface TurnToolsetTurnInput {
   /** The update relay the prepared turn installed, so a card goes out through the same channel as a message. */
   readonly emitUpdate?: (update: ForwardedUpdate) => void;
-  readonly remoteBoxResourceAccessor?: ProductionTurnToolInputs["resourceAccessor"];
+  readonly remoteBoxResourceAccessor?: RunnerToolInputs["resourceAccessor"];
   readonly subagentConfigs?: TaskToolParameters[4];
   readonly autoReviewModes: ToolFactoryContext["autoReviewModes"];
   readonly stateHandler?: unknown;
@@ -149,7 +151,7 @@ export interface TurnToolsetTurnInput {
   readonly summarizationHandler?: TaskToolConfig["summarizationHandler"];
   readonly parentModelInfo?: TaskToolParameters[2];
   readonly subagentModels?: TaskToolParameters[5]["subagentModels"];
-  readonly geminiVideoAttachedMediaUrlProvider?: unknown;
+  readonly videoReviewAttachedMediaUrlProvider?: unknown;
   readonly cancelThisRun?: (reason: { readonly intentional: boolean; readonly reason: string }) => void;
   readonly ackToken?: string;
   readonly pauseThisRun?: () => void;
@@ -164,7 +166,7 @@ export interface TurnShellAutoReviewInput {
   readonly mode: SlateAutoReviewMode;
   readonly agentId: string;
   readonly surface: "host_machine" | "isolated_box";
-  readonly requestContext: Pick<RequestContext, "env">;
+  readonly smartModeClassifierControls: SmartModeClassifierControls;
   readonly controller?: Pick<SlateAutoReviewController, "requestApproval">;
   readonly getApprovalExpiryPolicy: () => SlateAutoReviewExpiryPolicy;
   readonly smartModeShellApprovalState?: { readonly getIdentity: () => string | undefined; readonly markSideEffectStart: () => void };
@@ -173,9 +175,9 @@ export interface TurnShellAutoReviewInput {
   readonly enforceModelFacingShellUiAutomationGuard: boolean;
 }
 
-const shellReviewFor = (autoReview: NonNullable<ProductionTurnToolInputs["hostDependencies"]>["autoReview"], mode: SlateAutoReviewMode, surface: TurnShellAutoReviewInput["surface"], approvalSurface: "host_shell" | "box_shell"): TurnShellAutoReviewInput | undefined => {
+const shellReviewFor = (autoReview: NonNullable<RunnerToolInputs["hostDependencies"]>["autoReview"], mode: SlateAutoReviewMode, surface: TurnShellAutoReviewInput["surface"], approvalSurface: "host_shell" | "box_shell"): TurnShellAutoReviewInput | undefined => {
   if (autoReview === undefined || mode === "off") return undefined;
-  const requestContext = autoReview.requestContext!;
+  const smartModeClassifierControls = autoReview.smartModeClassifierControls!;
   const agentId = autoReview.agentId!;
   const instructions = autoReview.getInstructions();
   const modes = autoReview.getModes();
@@ -183,7 +185,7 @@ const shellReviewFor = (autoReview: NonNullable<ProductionTurnToolInputs["hostDe
     mode,
     agentId,
     surface,
-    requestContext,
+    smartModeClassifierControls,
     controller: autoReview.controller,
     getApprovalExpiryPolicy: autoReview.getApprovalExpiryPolicy,
     ...presentOptions({
@@ -206,9 +208,9 @@ const shellReviewFor = (autoReview: NonNullable<ProductionTurnToolInputs["hostDe
 export function resolveTurnShellAutoReviewInputs(turn: TurnToolsetTurnInput, props: TurnToolsetBuildProps): TurnToolsetTurnInput["shellAutoReview"] {
   if (turn.shellAutoReview !== undefined) return turn.shellAutoReview;
   const autoReview = props.hostDependencies?.autoReview;
-  // Without a request context and an agent identity there is nothing a Smart Mode review could be bound to, so the turn
+  // Without classifier controls and an agent identity there is nothing a Smart Mode review could be bound to, so the turn
   // gets no Smart Mode options at all rather than synthetic ones.
-  if (autoReview === undefined || autoReview.requestContext === undefined || autoReview.agentId === undefined) return undefined;
+  if (autoReview === undefined || autoReview.smartModeClassifierControls === undefined || autoReview.agentId === undefined) return undefined;
   const modes = autoReview.getModes();
   const host = shellReviewFor(autoReview, modes.hostShell, "host_machine", "host_shell");
   const box = shellReviewFor(autoReview, modes.boxShell, "isolated_box", "box_shell");
@@ -222,13 +224,13 @@ export function createTurnShellAutoReviewOptions(input: { readonly resourceAcces
   if (review === undefined) return input.options;
   return {
     ...input.options,
-    requestContext: review.requestContext,
+    smartModeClassifierControls: review.smartModeClassifierControls,
     smartModeClassifierMode: review.mode === "enforce",
     smartModeClassifierShadowMode: review.mode === "shadow",
     smartModeApprovalSurface: review.surface,
     smartModeShellTargetEnrichmentProvider: (context, args) =>
       buildSlateShellAutoReviewTargetEnrichment(context, {
-        resourceAccessor: args.resourceAccessor,
+        resourceAccessor: slateShellReadAccessorFromInterop(args.resourceAccessor),
         command: args.command,
         toolCallId: args.toolCallId,
         ...presentOptions({ workingDirectory: args.workingDirectory }),
@@ -414,7 +416,7 @@ export interface TurnFileTransferToolFactoryInput {
 }
 
 export interface TurnBoxHelpToolFactoryInput {
-  readonly dependencies: BoxHelpDependencies<unknown>;
+  readonly dependencies: ManualHandoffPorts;
 }
 
 export interface TurnGenerateImageToolFactoryInput {
@@ -552,36 +554,6 @@ function asTurnTool<T extends object>(value: T): T & TurnTool {
   return value as T & TurnTool;
 }
 
-/** The live MCP catalog as the descriptor the discovery/call pair consumes: one entry per server, tools sorted. */
-function asMcpMetaToolOptions(tools: readonly McpToolForMeta[]): McpMetaToolOptions {
-  const byServer = new Map<string, McpDescriptor>();
-  for (const tool of tools) {
-    let descriptor = byServer.get(tool.providerIdentifier);
-    if (descriptor === undefined) {
-      descriptor = new McpDescriptor({
-        serverIdentifier: tool.providerIdentifier,
-        serverName: tool.providerIdentifier,
-        ...presentOptions({
-          plugin: typeof tool.plugin === "string" ? tool.plugin : undefined,
-          marketplace: typeof tool.marketplace === "string" ? tool.marketplace : undefined,
-          pluginDbId: tool.pluginId,
-          marketplaceId: tool.marketplaceId,
-        }),
-      });
-      byServer.set(tool.providerIdentifier, descriptor);
-    }
-    descriptor.tools.push(
-      new McpToolDescriptor({
-        toolName: tool.toolName,
-        ...presentOptions({ description: tool.description }),
-        ...(typeof tool.inputSchema === "string" ? { inputSchemaJson: tool.inputSchema } : {}),
-      }),
-    );
-  }
-  for (const descriptor of byServer.values()) descriptor.tools.sort((left, right) => left.toolName.localeCompare(right.toolName));
-  return new McpMetaToolOptions({ enabled: true, mcpDescriptors: [...byServer.values()] });
-}
-
 export function createTurnTaskToolFactory(input: TurnTaskToolFactoryInput): () => TurnTool {
   return () => asTurnTool(createTaskTool(input.resourceAccessor, input.getTaskToolConfig, input.parentModelInfo, input.stateHandler, input.subagentConfigs, input.options));
 }
@@ -593,7 +565,7 @@ export function createTurnMultitaskToolFactory(input: TurnMultitaskToolFactoryIn
 /** The MCP discovery/call pair: the catalog is read per build, and the registry is the one placement produced. */
 export function createTurnMcpMetaToolFactory(input: TurnMcpMetaToolFactoryInput): (dynamicToolRegistry?: DynamicToolRegistry) => readonly TurnTool[] {
   return (dynamicToolRegistry) => {
-    const mcpMetaToolOptions = asMcpMetaToolOptions(input.getMcpTools());
+    const mcpMetaToolOptions = projectTurnToolsIntoInteropMetaOptions(input.getMcpTools());
     const discovery = createGetMcpToolsTool(mcpMetaToolOptions, {
       resourceAccessor: input.resourceAccessor,
       ...presentOptions({
@@ -630,7 +602,7 @@ export function createTurnFileTransferToolFactory(input: TurnFileTransferToolFac
 }
 
 export function createTurnBoxHelpToolFactory(input: TurnBoxHelpToolFactoryInput): () => TurnTool {
-  return () => asTurnTool(createRequestBoxHelpTool(input.dependencies));
+  return () => asTurnTool(createManualHandoffTool(input.dependencies));
 }
 
 export function createTurnGenerateImageToolFactory(input: TurnGenerateImageToolFactoryInput): () => TurnTool {
@@ -972,7 +944,7 @@ function taskFactoryInputFor(props: TurnToolsetBuildProps, turn: TurnToolsetTurn
       useClientSideSubagent: true,
       enableExploreParentModelInheritance: true,
       enableJobCompletionNotifications: true,
-      geminiVideoAttachedMediaUrlProvider: turn.geminiVideoAttachedMediaUrlProvider,
+      videoReviewAttachedMediaUrlProvider: turn.videoReviewAttachedMediaUrlProvider,
       enableAgentChatLinks: false,
       trustedVideoAttachmentRoots: host.remoteBoxHasDesktop ? [SLATE_BOX_WORKSPACE_ROOT] : [],
     } as unknown as TaskToolParameters[5],

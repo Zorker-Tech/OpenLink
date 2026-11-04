@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { collectAllSkillBlocks } from "../../source/packages/agent-summarization/skill-persistence.ts"
+import { collectAttachedSkillBlocksFromConversation } from "../../source/adapters/interop/agent/compaction-skill-message-adapter.ts"
 import { prepareMessagesForCompaction } from "../../source/packages/agent-summarization/prepare-messages.ts"
 import {
   BackgroundSummarizationMode,
@@ -12,7 +12,7 @@ import {
   type BackgroundSummarizationProps,
 } from "../../source/packages/agent-summarization/background-summarization.ts"
 import { estimateTokenCount, type TokenEstimateMessage } from "../../source/packages/agent-summarization/token-estimate.ts"
-import { runSummarizationPipeline, type SummarizationPipelineAdapter } from "../../source/packages/agent-summarization/pipeline.ts"
+import { runSummaryPass, type SummaryPassAdapter } from "../../source/packages/agent-summarization/pipeline.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { toRedactedCoreMessage, type CoreMessageLike } from "../../source/packages/redaction/message-redaction.ts"
@@ -55,12 +55,28 @@ test("a user-info message is only taken out when it is the pair the platform wri
   assert.deepEqual(alone.messagesForSummarization, [withTag])
 })
 
+test("a tagged preamble stays separate after empty assistant turns are filtered", () => {
+  const system = textMessage("system", "rules")
+  const userInfo = partsMessage("user", [
+    { type: "text", text: "<user_info>machine" },
+    { type: "text", text: "context</user_info>" },
+  ])
+  const emptyAssistant = textMessage("assistant", "")
+  const prompt = textMessage("user", "do the task")
+  const result = prepareMessagesForCompaction([system, userInfo, emptyAssistant, prompt])
+  assert.equal(result.systemMessage, system)
+  assert.equal(result.userInfoMessage, userInfo)
+  assert.deepEqual(result.messagesForSummarization, [prompt])
+})
+
 test("an assistant message with nothing in it is not worth summarizing", () => {
   const empty = textMessage("assistant", "")
   const partsEmpty = partsMessage("assistant", [])
   const real = textMessage("assistant", "an answer")
-  const { messagesForSummarization } = prepareMessagesForCompaction([empty, partsEmpty, real])
-  assert.deepEqual(messagesForSummarization, [real])
+  const whitespace = textMessage("assistant", " ")
+  const nonText = partsMessage("assistant", [{ type: "image" }])
+  const { messagesForSummarization } = prepareMessagesForCompaction([empty, partsEmpty, real, whitespace, nonText])
+  assert.deepEqual(messagesForSummarization, [real, whitespace, nonText])
 })
 
 test("a conversation with no system message is compacted as it is", () => {
@@ -78,19 +94,19 @@ test("a conversation with no system message is compacted as it is", () => {
 test("the skills attached by hand are taken from the most recent real user message", () => {
   const withSkills = textMessage("user", "before\n<manually_attached_skills>\nthe skill\n</manually_attached_skills>\nafter")
   const later = textMessage("user", "a later message with no skills")
-  const blocks = collectAllSkillBlocks([withSkills, later])
+  const blocks = collectAttachedSkillBlocksFromConversation([withSkills, later])
   assert.deepEqual(blocks, [])
 })
 
 test("a user message that carries skills hands them over verbatim", () => {
   const withSkills = textMessage("user", "<manually_attached_skills>\nthe skill body\n</manually_attached_skills>")
-  assert.deepEqual(collectAllSkillBlocks([withSkills]), ["<manually_attached_skills>\nthe skill body\n</manually_attached_skills>"])
+  assert.deepEqual(collectAttachedSkillBlocksFromConversation([withSkills]), ["<manually_attached_skills>\nthe skill body\n</manually_attached_skills>"])
 })
 
 test("a summary is not where skills are looked for", () => {
   const summaryWithSkills = summaryMessage("<manually_attached_skills>\nthe skill\n</manually_attached_skills>")
   const withSkills = textMessage("user", "<manually_attached_skills>\nthe real skill\n</manually_attached_skills>")
-  const blocks = collectAllSkillBlocks([withSkills, summaryWithSkills])
+  const blocks = collectAttachedSkillBlocksFromConversation([withSkills, summaryWithSkills])
   assert.deepEqual(blocks, ["<manually_attached_skills>\nthe real skill\n</manually_attached_skills>"])
 })
 
@@ -99,12 +115,12 @@ test("several skill blocks in one message are all kept", () => {
     "<manually_attached_skills>\none\n</manually_attached_skills>",
     "<manually_attached_skills>\ntwo\n</manually_attached_skills>",
   ].join("\n"))
-  assert.equal(collectAllSkillBlocks([message]).length, 2)
+  assert.equal(collectAttachedSkillBlocksFromConversation([message]).length, 2)
 })
 
 test("a message with no skills at all contributes none", () => {
-  assert.deepEqual(collectAllSkillBlocks([textMessage("user", "nothing attached")]), [])
-  assert.deepEqual(collectAllSkillBlocks([]), [])
+  assert.deepEqual(collectAttachedSkillBlocksFromConversation([textMessage("user", "nothing attached")]), [])
+  assert.deepEqual(collectAttachedSkillBlocksFromConversation([]), [])
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -229,14 +245,14 @@ interface PipelineMessage {
 
 function pipelineAdapter(options: { tail?: PipelineMessage[]; failGenerate?: boolean } = {}): {
   readonly calls: string[]
-  readonly adapter: SummarizationPipelineAdapter<PipelineMessage, string, PipelineMessage>
+  readonly adapter: SummaryPassAdapter<PipelineMessage, string, PipelineMessage>
 } {
   const calls: string[] = []
   const tail = options.tail ?? []
   return {
     calls,
     adapter: {
-      partitionMessages(messages) {
+      separateMessages(messages) {
         calls.push("partition")
         const tailLength = Math.min(tail.length, messages.length)
         return {
@@ -250,11 +266,11 @@ function pipelineAdapter(options: { tail?: PipelineMessage[]; failGenerate?: boo
         if (options.failGenerate === true) throw new Error("the summarizer is gone")
         return "the summary"
       },
-      buildSummaryMessage(rawSummary, _partitioned, enrichments) {
+      formatSummaryCarrier(rawSummary, _partitioned, enrichments) {
         calls.push("build")
         return { message: { role: "user", text: rawSummary }, summaryTextLength: rawSummary.length + enrichments.skillBlocks.length }
       },
-      assembleFinalMessages(partitioned, message) {
+      rebuildConversation(partitioned, message) {
         calls.push("assemble")
         return [message, ...partitioned.preservedTailMessages]
       },
@@ -265,7 +281,7 @@ function pipelineAdapter(options: { tail?: PipelineMessage[]; failGenerate?: boo
 test("a compaction splits, summarizes, builds and reassembles, in that order", async () => {
   const { adapter, calls } = pipelineAdapter()
   const messages: PipelineMessage[] = [{ role: "user", text: "one" }, { role: "assistant", text: "two" }]
-  const result = await runSummarizationPipeline(adapter, createContext(), messages, { todoContent: "the todos" })
+  const result = await runSummaryPass(adapter, createContext(), messages, { todoContent: "the todos" })
 
   assert.deepEqual(calls, ["partition", "generate", "build", "assemble"])
   assert.deepEqual(result.messagesActuallySummarized, messages)
@@ -280,7 +296,7 @@ test("a compaction splits, summarizes, builds and reassembles, in that order", a
 test("what was preserved beside the summary is handed back as it was", async () => {
   const { adapter } = pipelineAdapter({ tail: [{ role: "user", text: "the latest question" }] })
   const messages: PipelineMessage[] = [{ role: "user", text: "one" }, { role: "user", text: "the latest question" }]
-  const result = await runSummarizationPipeline(adapter, createContext(), messages, {})
+  const result = await runSummaryPass(adapter, createContext(), messages, {})
   assert.deepEqual(result.messagesActuallySummarized, [messages[0]])
   assert.deepEqual(result.preservedOriginalTailMessages, [messages[1]])
   assert.deepEqual(result.fullReplacementMessages, [{ role: "user", text: "the summary" }, messages[1]])
@@ -289,14 +305,14 @@ test("what was preserved beside the summary is handed back as it was", async () 
 test("the parts of the conversation a summary has to carry reach the builder", async () => {
   const seen: unknown[] = []
   const { adapter } = pipelineAdapter()
-  const capturing: SummarizationPipelineAdapter<PipelineMessage, string, PipelineMessage> = {
+  const capturing: SummaryPassAdapter<PipelineMessage, string, PipelineMessage> = {
     ...adapter,
-    buildSummaryMessage(rawSummary, partitioned, enrichments) {
+    formatSummaryCarrier(rawSummary, partitioned, enrichments) {
       seen.push(enrichments)
       return { message: { role: "user", text: rawSummary }, summaryTextLength: 1 }
     },
   }
-  await runSummarizationPipeline(capturing, createContext(), [{ role: "user", text: "one" }], {
+  await runSummaryPass(capturing, createContext(), [{ role: "user", text: "one" }], {
     todoContent: "the todos",
     currentPlan: "the plan",
     modePrompt: "the mode",
@@ -320,7 +336,7 @@ test("the parts of the conversation a summary has to carry reach the builder", a
 test("a summarizer that fails fails the compaction rather than producing an empty one", async () => {
   const { adapter } = pipelineAdapter({ failGenerate: true })
   await assert.rejects(
-    () => runSummarizationPipeline(adapter, createContext(), [{ role: "user", text: "one" }], {}),
+    () => runSummaryPass(adapter, createContext(), [{ role: "user", text: "one" }], {}),
     /the summarizer is gone/,
   )
 })
@@ -328,7 +344,7 @@ test("a summarizer that fails fails the compaction rather than producing an empt
 test("a tail that does not read as a conversation is reported rather than repaired", async () => {
   // A tail with two user turns means the split landed inside a turn.
   const { adapter } = pipelineAdapter({ tail: [{ role: "user" }, { role: "user" }] })
-  const result = await runSummarizationPipeline(adapter, createContext(), [
+  const result = await runSummaryPass(adapter, createContext(), [
     { role: "user", text: "one" },
     { role: "user", text: "two" },
     { role: "user", text: "three" },
@@ -339,7 +355,7 @@ test("a tail that does not read as a conversation is reported rather than repair
 
 test("a tail that is only a user message is the shape the invariant wants", async () => {
   const { adapter } = pipelineAdapter({ tail: [{ role: "user", text: "the latest" }] })
-  const result = await runSummarizationPipeline(adapter, createContext(), [
+  const result = await runSummaryPass(adapter, createContext(), [
     { role: "assistant", text: "one" },
     { role: "user", text: "the latest" },
   ], {})

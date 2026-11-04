@@ -15,26 +15,47 @@ export interface SlateTool {
   readonly contextType?: { readonly type?: string };
   readonly render?: (...args: readonly unknown[]) => Promise<{ content: unknown; readonly [key: string]: unknown }>;
 }
-export function withSpotlightedToolResult<T extends SlateTool>(tool: T): T {
-  if (tool.render === undefined) return tool;
+
+async function renderWithSpotlight(
+  toolName: string,
+  render: NonNullable<SlateTool["render"]>,
+  arguments_: readonly unknown[],
+): Promise<{ content: unknown; readonly [key: string]: unknown }> {
+  const result = await render(...arguments_);
+  if (!Array.isArray(result.content)) return result;
+
   return {
-    ...tool,
-    render: async (...args: readonly unknown[]) => {
-      const result = await tool.render!(...args);
-      const content = Array.isArray(result.content)
-        ? spotlightToolResultContent(tool.name, result.content as SpotlightContentPart[])
-        : result.content;
-      return { ...result, content };
-    },
+    ...result,
+    content: spotlightToolResultContent(toolName, result.content as SpotlightContentPart[]),
   };
 }
+
+export function withSpotlightedToolResult<T extends SlateTool>(tool: T): T {
+  const render = tool.render;
+  if (render === undefined) return tool;
+
+  return {
+    ...tool,
+    render: (...arguments_) => renderWithSpotlight(tool.name, render, arguments_),
+  };
+}
+
+function selectedTools<T extends SlateTool>(tools: readonly T[], enabled: boolean): T[] {
+  return enabled ? tools.map((tool) => withSpotlightedToolResult(tool)) : Array.from(tools);
+}
+
 export function fencedToolSet<T extends SlateTool>(
   tools: readonly T[],
   enabled: boolean,
   dynamicToolRegistry?: Pick<DynamicToolRegistry, "replaceTools">,
 ): ToolSetHandle {
-  const finalTools = enabled ? tools.map((tool) => withSpotlightedToolResult(tool)) : [...tools];
-  if (dynamicToolRegistry === undefined) return ToolSetHandle.fromTools(finalTools);
-  const { staticTools, dynamicTools } = partitionDynamicTools(finalTools, "final");
-  return ToolSetHandle.fromTools({ staticTools, dynamicTools, dynamicToolRegistry });
+  const offeredTools = selectedTools(tools, enabled);
+  if (dynamicToolRegistry === undefined) return ToolSetHandle.fromTools(offeredTools);
+
+  const partition = partitionDynamicTools(offeredTools, "final");
+  return ToolSetHandle.fromTools({
+    staticTools: partition.staticTools,
+    dynamicTools: partition.dynamicTools,
+    dynamicToolRegistry,
+  });
 }

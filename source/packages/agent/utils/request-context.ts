@@ -18,13 +18,16 @@
 
 import type { Context } from "../../context/context.ts"
 import { createSpan } from "../../context/telemetry.ts"
-import { PrivacyCapability } from "../../redaction/classification.ts"
-import { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import { RequestContextArgs, type RequestContext, type RequestContextResult } from "../../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
-  fromRedactedRequestContext,
-  toRedactedRequestContext,
-} from "../../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
+  createRequestContextArgs,
+  decodeRedactedRequestContext,
+  encodeRedactedRequestContext,
+  projectRequestContextResult,
+  type InteropRequestContext,
+  type InteropRequestContextArgs,
+  type InteropRequestContextResult,
+  type RedactedRequestContext,
+} from "../../../adapters/interop/agent/request-context-adapter.ts"
 import { requestContextExecutorResource } from "../../agent-exec/request-context-operation.ts"
 import { getRequestPathModule } from "./request-paths.ts"
 import { filterByActorIdentity, type ScopedItem } from "./rule-scoping.ts"
@@ -37,27 +40,25 @@ export interface RequestContextResolveOptions {
 
 export interface RequestContextResources {
   get(resource: typeof requestContextExecutorResource): {
-    execute(ctx: Context, args: RequestContextArgs): Promise<RequestContextResult>
+    execute(ctx: Context, args: InteropRequestContextArgs): Promise<InteropRequestContextResult>
   }
 }
 
 export type RequestContextProvenance = "providedModified" | "providedUnchanged" | "executorFetched"
 
-type RedactedRequestContext = Parameters<typeof fromRedactedRequestContext>[0]
-
 /** Drops the rules and skills scoped to someone else; says whether anything was dropped. */
 function filterRequestContextByActorIdentity(
-  requestContext: Pick<RequestContext, "rules" | "agentSkills">,
+  requestContext: Pick<InteropRequestContext, "rules" | "agentSkills">,
   actorIdentity: RequestContextResolveOptions["actorIdentity"],
 ): boolean {
   const filteredRules = filterByActorIdentity(
     requestContext.rules as unknown as readonly ScopedItem[],
     actorIdentity,
-  ) as unknown as RequestContext["rules"]
+  ) as unknown as InteropRequestContext["rules"]
   const filteredAgentSkills = filterByActorIdentity(
     requestContext.agentSkills as unknown as readonly ScopedItem[],
     actorIdentity,
-  ) as unknown as RequestContext["agentSkills"]
+  ) as unknown as InteropRequestContext["agentSkills"]
   const changed = filteredRules.length !== requestContext.rules.length ||
     filteredAgentSkills.length !== requestContext.agentSkills.length
   requestContext.rules = filteredRules
@@ -67,15 +68,15 @@ function filterRequestContextByActorIdentity(
 
 export async function resolveRequestContext({ parentCtx, maybeRequestContext, resources, options }: {
   readonly parentCtx: Context
-  readonly maybeRequestContext?: RequestContext
+  readonly maybeRequestContext?: InteropRequestContext
   readonly resources: RequestContextResources
   readonly options?: RequestContextResolveOptions
-}): Promise<{ readonly requestContext: RequestContext; readonly provenance: RequestContextProvenance }> {
+}): Promise<{ readonly requestContext: InteropRequestContext; readonly provenance: RequestContextProvenance }> {
   using span = createSpan(parentCtx.withName("getRequestContext"))
   const ctx = span.ctx
 
   /** Points the notes folders at this session; says whether anything changed. */
-  const applyAgentNotesFolderOverrides = (requestContext: RequestContext): boolean => {
+  const applyAgentNotesFolderOverrides = (requestContext: InteropRequestContext): boolean => {
     const env = requestContext.env
     if (env === undefined) return false
     const projectFolder = env.projectFolder
@@ -111,13 +112,11 @@ export async function resolveRequestContext({ parentCtx, maybeRequestContext, re
   }
 
   const requestContextExecutor = resources.get(requestContextExecutorResource)
-  const requestContextArgs = options?.notesSessionId === undefined
-    ? new RequestContextArgs()
-    : new RequestContextArgs({ notesSessionId: options.notesSessionId })
-  const requestContextResult = await requestContextExecutor.execute(ctx, requestContextArgs)
-  if (requestContextResult.result.case !== "success") throw new Error("Failed to get request context")
-  const requestContext = requestContextResult.result.value.requestContext
-  if (requestContext === undefined) throw new Error("Failed to get request context")
+  const requestContextResult = projectRequestContextResult(
+    await requestContextExecutor.execute(ctx, createRequestContextArgs(options?.notesSessionId)),
+  )
+  if (requestContextResult.kind === "unavailable") throw new Error("Failed to get request context")
+  const requestContext = requestContextResult.requestContext
   applyAgentNotesFolderOverrides(requestContext)
   filterRequestContextByActorIdentity(requestContext, options?.actorIdentity)
   return { requestContext, provenance: "executorFetched" }
@@ -125,10 +124,10 @@ export async function resolveRequestContext({ parentCtx, maybeRequestContext, re
 
 export async function getRequestContext(
   parentCtx: Context,
-  maybeRequestContext: RequestContext | undefined,
+  maybeRequestContext: InteropRequestContext | undefined,
   resources: RequestContextResources,
   options?: RequestContextResolveOptions,
-): Promise<RequestContext> {
+): Promise<InteropRequestContext> {
   const resolved = await resolveRequestContext({
     parentCtx,
     resources,
@@ -146,15 +145,9 @@ export async function getRedactedRequestContext(
 ): Promise<RedactedRequestContext> {
   const unredacted = await getRequestContext(
     parentCtx,
-    maybeRequestContext === undefined
-      ? undefined
-      : (fromRedactedRequestContext as unknown as (
-        msg: RedactedRequestContext,
-        purpose: PrivacyCapability,
-        opts?: unknown,
-      ) => RequestContext)(maybeRequestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    maybeRequestContext === undefined ? undefined : decodeRedactedRequestContext(maybeRequestContext),
     resources,
     options,
   )
-  return toRedactedRequestContext(unredacted, maybeRequestContext?._privacyMode ?? PrivacyMode.UNSPECIFIED)
+  return encodeRedactedRequestContext(unredacted, maybeRequestContext)
 }

@@ -11,11 +11,60 @@ import { ensureSearchIndexSchema, openSearchIndexDb } from "./search-index-db.ts
 import { SlateSearchIndexWriter, type SearchIndexJob } from "./search-index-writer.ts";
 export interface SearchIndexWorkerRequest { readonly requestId: number; readonly job: SearchIndexJob }
 export interface SearchIndexWorkerResponse { readonly requestId: number; readonly ok: boolean; readonly message?: string; readonly isIndexCorrupt?: boolean }
-export function startSearchIndexWorker(config: { readonly indexDbPath: string; readonly agentsRootDir: string }, port: { on(event: "message", listener: (request: SearchIndexWorkerRequest) => void): unknown; postMessage(value: SearchIndexWorkerResponse): void }): () => void { const db = openSearchIndexDb(config.indexDbPath); ensureSearchIndexSchema(db); const writer = new SlateSearchIndexWriter(db, config.agentsRootDir); port.on("message", (request) => { let response: SearchIndexWorkerResponse; try { writer.runJob(request.job); response = { requestId: request.requestId, ok: true }; } catch (error) { response = { requestId: request.requestId, ok: false, message: error instanceof Error ? error.message : String(error), isIndexCorrupt: isSqliteCorruptError(error) }; } port.postMessage(response); }); return () => { writer.close(); db.close(); }; }
+export interface SearchIndexWorkerConfig {
+  readonly indexDbPath: string
+  readonly agentsRootDir: string
+}
+
+export interface SearchIndexWorkerPort {
+  on(event: "message", listener: (request: SearchIndexWorkerRequest) => void): unknown;
+  postMessage(value: SearchIndexWorkerResponse): void;
+}
+
+function runIndexJob(
+  request: SearchIndexWorkerRequest,
+  writer: Pick<SlateSearchIndexWriter, "runJob">,
+): SearchIndexWorkerResponse {
+  try {
+    writer.runJob(request.job)
+    return { requestId: request.requestId, ok: true }
+  } catch (failure) {
+    return {
+      requestId: request.requestId,
+      ok: false,
+      message: failure instanceof Error ? failure.message : String(failure),
+      isIndexCorrupt: isSqliteCorruptError(failure),
+    }
+  }
+}
+
+export function attachSearchIndexWorker(
+  port: SearchIndexWorkerPort,
+  writer: Pick<SlateSearchIndexWriter, "runJob">,
+): void {
+  port.on("message", request => port.postMessage(runIndexJob(request, writer)))
+}
+
+export function startSearchIndexWorker(
+  config: SearchIndexWorkerConfig,
+  port: SearchIndexWorkerPort,
+): () => void {
+  const database = openSearchIndexDb(config.indexDbPath)
+  ensureSearchIndexSchema(database)
+  const indexWriter = new SlateSearchIndexWriter(database, config.agentsRootDir)
+  attachSearchIndexWorker(port, indexWriter)
+  return () => {
+    indexWriter.close()
+    database.close()
+  };
+}
 if (!isMainThread) {
   const port = parentPort;
-  invariant(port != null, "search-index-worker must run as a worker_thread");
-  const config = workerData as { indexDbPath?: unknown; agentsRootDir?: unknown } | null;
-  invariant(typeof config?.indexDbPath === "string" && typeof config.agentsRootDir === "string", "search-index-worker needs indexDbPath + agentsRootDir");
-  startSearchIndexWorker({ indexDbPath: config.indexDbPath, agentsRootDir: config.agentsRootDir }, port);
+  invariant(port !== null, "Search index worker has no message port")
+  const settings = workerData as { indexDbPath?: unknown; agentsRootDir?: unknown } | null
+  invariant(
+    typeof settings?.indexDbPath === "string" && typeof settings.agentsRootDir === "string",
+    "Worker data must include the index path and agent-store path",
+  )
+  startSearchIndexWorker({ indexDbPath: settings.indexDbPath, agentsRootDir: settings.agentsRootDir }, port)
 }

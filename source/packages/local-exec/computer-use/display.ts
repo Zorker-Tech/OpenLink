@@ -1,71 +1,34 @@
-/**
- * The display the computer-use surface drives.
- *
- * The display's size comes from `xrandr`: the active mode is the line marked with an asterisk, and a mode that is not
- * listed there is read from the summary line instead. The API the surface is driven through is the same picture at a
- * fixed width, so the API height follows from the display's aspect ratio, and the display string's number is parsed
- * out of the X11 spelling.
- */
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import type { ScreenPair } from "./scaling.ts";
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 
-const execFileAsync = promisify(execFile);
-export const API_WIDTH = 1280;
+import { createDisplayResolution, parseDisplayModes } from "./display-resolution-policy.ts"
+import type { DisplayInfo } from "./display-contracts.ts"
 
-export interface DisplayInfo { width: number; height: number; refreshRate: number }
+const runDisplayCommand = promisify(execFile)
 
-export function parseDisplayNum(display: string): number {
-  const colonIndex = display.lastIndexOf(":");
-  if (colonIndex === -1) throw new Error(`Invalid X11 display string: ${display} (missing ':')`);
-  const numStr = display.slice(colonIndex + 1).split(".")[0]!;
-  const num = Number.parseInt(numStr, 10);
-  if (!Number.isFinite(num) || num < 0) throw new Error(`Invalid X11 display number in: ${display} (parsed: ${numStr})`);
-  return num;
-}
+export {
+  API_FRAME_WIDTH,
+  API_FRAME_WIDTH as API_WIDTH,
+  createDisplayResolution,
+  createDisplayResolution as buildResolutionConfig,
+  parseDisplayIndex,
+  parseDisplayIndex as parseDisplayNum,
+  parseDisplayModes,
+  parseDisplayModes as parseXrandrOutput,
+} from "./display-resolution-policy.ts"
+export type { DisplayInfo } from "./display-contracts.ts"
 
-export function parseXrandrOutput(output: string): DisplayInfo {
-  let width: number | undefined;
-  let height: number | undefined;
-  let refreshRate: number | undefined;
-  for (const line of output.split("\n")) {
-    if (line.includes("*")) {
-      const resolution = line.trim().match(/^(\d+)x(\d+)/);
-      if (resolution?.[1] !== undefined && resolution[2] !== undefined) {
-        width = Number.parseInt(resolution[1], 10);
-        height = Number.parseInt(resolution[2], 10);
-      }
-      const rateMatch = line.match(/(\d+(?:\.\d+)?)\*(?:\+)?/);
-      if (rateMatch?.[1] !== undefined) {
-        const rate = Number.parseFloat(rateMatch[1]);
-        if (rate > 0 && rate <= 500) refreshRate = Math.round(rate);
-      }
-      if (width && height) break;
-    }
-  }
-  if (!width || !height) {
-    const current = output.match(/current\s+(\d+)\s*x\s*(\d+)/i);
-    if (current?.[1] !== undefined && current[2] !== undefined) {
-      width = Number.parseInt(current[1], 10);
-      height = Number.parseInt(current[2], 10);
-    }
-  }
-  if (!width || !height) {
-    throw new Error(`Could not detect display resolution from xrandr output.\nExpected a line with '*' indicating active mode, or 'current WxH'.\nxrandr output:\n${output}`);
-  }
-  if (!refreshRate) refreshRate = 60;
-  return { width, height, refreshRate };
-}
-
-export function buildResolutionConfig(displayWidth: number, displayHeight: number): ScreenPair {
+/** Reads the active X display size and the matching fixed-width input frame. */
+export async function detectDisplay(displayName: string): Promise<{
+  display: DisplayInfo
+  resolution: ReturnType<typeof createDisplayResolution>
+  resolutionString: string
+}> {
+  const { stdout } = await runDisplayCommand("xrandr", ["--display", displayName], { timeout: 5_000 })
+  const display = parseDisplayModes(stdout)
   return {
-    display: { width: displayWidth, height: displayHeight },
-    api: { width: API_WIDTH, height: Math.round(API_WIDTH / (displayWidth / displayHeight)) },
-  };
-}
-
-export async function detectDisplay(display: string): Promise<{ display: DisplayInfo; resolution: ScreenPair; resolutionString: string }> {
-  const { stdout } = await execFileAsync("xrandr", ["--display", display], { timeout: 5_000 });
-  const info = parseXrandrOutput(stdout);
-  return { display: info, resolution: buildResolutionConfig(info.width, info.height), resolutionString: `${info.width}x${info.height}` };
+    display,
+    resolution: createDisplayResolution(display.width, display.height),
+    resolutionString: `${display.width}x${display.height}`,
+  }
 }

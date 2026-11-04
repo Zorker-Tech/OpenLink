@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { ExecClientMessage, ExecServerMessage } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts";
+import { PiGrepExecArgs, PiGrepExecResult } from "../../source/adapters/interop/proto/generated/agent/v1/pi_grep_exec_pb.ts";
+import { createContext } from "../../source/packages/context/context.ts";
+import type { ControlledExecHandler } from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts";
+import type { ControlledExecManager } from "../../source/packages/agent-exec/resource-provider.ts";
+import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts";
+import { piGrepExecutorResource } from "../../source/adapters/interop/agent/pi-grep-operation-adapter.ts";
+
+test("Pi grep calls use their dedicated executor request and result cases", async () => {
+  const context = createContext();
+  const args = new PiGrepExecArgs();
+  const expected = new PiGrepExecResult();
+  let outgoing: ExecServerMessage | undefined;
+  const remote: RemoteExecManager = {
+    createExecInstance(_context, createMessage) {
+      outgoing = createMessage(231);
+      return (async function* () {
+        yield new ExecClientMessage({ id: 231, message: { case: "piGrepResult", value: expected } });
+      })();
+    },
+  };
+  assert.equal(await piGrepExecutorResource.remoteImplementation(remote).execute(context, args), expected);
+  assert.equal(outgoing?.message.case, "piGrepArgs");
+  if (outgoing?.message.case === "piGrepArgs") assert.deepEqual(outgoing.message.value, args);
+
+  let handler: ControlledExecHandler | undefined;
+  piGrepExecutorResource.registerControlledImplementation({ async execute() { return expected; } }, {
+    register(value) { handler = value as ControlledExecHandler; },
+  } as ControlledExecManager);
+  assert.ok(handler);
+  assert.equal(handler.handle(context, new ExecServerMessage({ id: 232, message: { case: "piFindArgs", value: {} } as never })), undefined);
+  const stream = handler.handle(context, new ExecServerMessage({ id: 233, message: { case: "piGrepArgs", value: args } }));
+  assert.ok(stream);
+  const replies: ExecClientMessage[] = [];
+  for await (const reply of stream) replies.push(reply);
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0]?.message.case, "piGrepResult");
+  if (replies[0]?.message.case === "piGrepResult") assert.deepEqual(replies[0].message.value, expected);
+});

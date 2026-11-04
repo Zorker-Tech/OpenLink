@@ -1,43 +1,52 @@
-/** A subagent or shell that was revived, in the shape the telemetry backend reports it: the same fields, under the two event names. */
-type RevivalFields = Record<
-  string,
-  string | number | boolean | null | undefined
->;
-export const SUBAGENT_REVIVAL_EVENT = "slate.subagent.revival",
-  SHELL_REVIVAL_EVENT = "slate.shell.revival";
-export function subagentRevivalTelemetry(r: RevivalFields) {
+/** Project revived background work into the two structured telemetry events. */
+type RevivalFields = Record<string, string | number | boolean | null | undefined>
+
+export const SUBAGENT_REVIVAL_EVENT = "slate.subagent.revival"
+export const SHELL_REVIVAL_EVENT = "slate.shell.revival"
+
+function severityForDroppedOutcome(outcome: unknown, reason: unknown, expectedDropReason: string): "warn" | "info" {
+  return outcome === "dropped" && reason !== expectedDropReason ? "warn" : "info"
+}
+
+function optionalTag(value: string | number | boolean | null | undefined): string | undefined {
+  return value == null ? undefined : String(value)
+}
+
+function commonRevivalMetadata(
+  report: RevivalFields,
+  conversationId: string | number | boolean | null | undefined,
+) {
   return {
-    level:
-      r.outcome === "dropped" && r.reason !== "agent_deleted" ? "warn" : "info",
+    conversation_id: conversationId,
+    outcome: report.outcome,
+    completion_count: String(report.completionCount),
+  }
+}
+
+export function subagentRevivalTelemetry(report: RevivalFields) {
+  return {
+    level: severityForDroppedOutcome(report.outcome, report.reason, "agent_deleted"),
     event: SUBAGENT_REVIVAL_EVENT,
     metadata: {
-      conversation_id: r.parentAgentId,
-      outcome: r.outcome,
-      completion_count: String(r.completionCount),
-      subagent_type: r.subagentType,
-      subagent_agent_id: r.subagentAgentId,
-      reason: r.reason,
-      sent_message_count:
-        r.sentMessageCount != null ? String(r.sentMessageCount) : undefined,
-      quiet_origin:
-        r.isQuietOrigin != null ? String(r.isQuietOrigin) : undefined,
+      ...commonRevivalMetadata(report, report.parentAgentId),
+      subagent_type: report.subagentType,
+      subagent_agent_id: report.subagentAgentId,
+      reason: report.reason,
+      sent_message_count: optionalTag(report.sentMessageCount),
+      quiet_origin: optionalTag(report.isQuietOrigin),
     },
-  };
+  }
 }
-export function shellRevivalTelemetry(r: RevivalFields) {
+
+export function shellRevivalTelemetry(report: RevivalFields) {
   return {
-    level:
-      r.outcome === "dropped" && r.reason !== "agent_gone" ? "warn" : "info",
+    level: severityForDroppedOutcome(report.outcome, report.reason, "agent_gone"),
     event: SHELL_REVIVAL_EVENT,
     metadata: {
-      conversation_id: r.conversationId,
-      outcome: r.outcome,
-      completion_count: String(r.completionCount),
-      sent_message_count:
-        r.sentMessageCount != null ? String(r.sentMessageCount) : undefined,
-      quiet_origin:
-        r.isQuietOrigin != null ? String(r.isQuietOrigin) : undefined,
-      reason: r.reason,
+      ...commonRevivalMetadata(report, report.conversationId),
+      sent_message_count: optionalTag(report.sentMessageCount),
+      quiet_origin: optionalTag(report.isQuietOrigin),
+      reason: report.reason,
     },
-  };
+  }
 }

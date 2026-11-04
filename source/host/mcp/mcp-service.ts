@@ -9,100 +9,38 @@
  * one change that is not a mutation of the account's servers but still tells the host to look again.
  */
 
-import { DashboardService } from "../../packages/proto/generated/aiserver/v1/dashboard_connect.ts";
-import { createAccountMcpWriter, fetchAccountMcpServers, fetchEffectiveUserPlugins, type AccountMcpClient, type AccountMcpDependencies } from "../../shared/node/cursor-backend/account-mcp.ts";
-import { createDashboardSlateBackendMcpExec, type DashboardMcpExecClient } from "../../shared/node/cursor-backend/backend-mcp-exec.ts";
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl } from "../../shared/node/cursor-backend/cursor-inference.ts";
+import { createAccountMcpWriter, fetchAccountMcpServers, fetchEffectiveUserPlugins, type AccountMcpClient, type AccountMcpDependencies } from "../../adapters/interop/cursor-backend/account-mcp.ts";
+import { createMcpAccountWriterAdapters } from "../../adapters/interop/agent/mcp-catalog-install-adapter.ts";
+import { createDashboardSlateBackendMcpExec, type DashboardMcpExecClient } from "../../adapters/interop/cursor-backend/backend-mcp-exec.ts";
+import { createMcpDashboardClient } from "../../adapters/interop/cursor-backend/mcp-dashboard-client-adapter.ts";
+import { getSlateInferenceBackendUrl } from "../../adapters/interop/cursor-backend/cursor-inference.ts";
 import { isEffectivePluginInstalled, uninstallClearedInstallRecord } from "../../shared/mcp.ts";
 import type { McpRuntimeConfig } from "../../shared/node/mcp/mcp-definition-source.ts";
-import type { AccountDisplayConfig, DisplayServer } from "../../shared/node/mcp/mcp-display-runtime.ts";
+import type { SlateMcpAccountDisplay, SlateMcpDisplayRow } from "../../shared/node/mcp/mcp-display-runtime.ts";
+import type { McpCatalogInstallPort } from "../../shared/node/mcp/mcp-catalog-flow.ts";
 import { SlateMcpManager, type McpAccountWriterPort, type McpBackendExecPort, type McpManagerSettingsPort } from "../../shared/node/mcp/mcp-manager.ts";
 import { createMcpToolsDiscovery, SlateMcpExecutor } from "../../shared/node/mcp/tools-discovery.ts";
 import type { CapableBox } from "../boxes/box-capabilities.ts";
-import { createSlateMcpStateExecutor } from "../ports/mcp-state-executor.ts";
-import { createBoxSlateMcpExec, type BoxMcpExecPort } from "./box-mcp-exec.ts";
+import { createMcpStateExecutorAdapter } from "../../adapters/interop/mcp/mcp-state-executor-adapter.ts";
+import {
+  asMcpBackendExecPort,
+  authOutcomeFromManager,
+  catalogViewsOf,
+  serverStateFromManager,
+  toAuthResult,
+  toCatalogFields,
+  toInstalledServer,
+  toInstalledServers,
+} from "../../adapters/interop/mcp/host-service-adapter.ts";
+import { createBoxSlateMcpExec, type BoxMcpExecPort } from "../../adapters/interop/agent/box-mcp-exec-adapter.ts";
+import type { CatalogField, CatalogPlugin, EffectivePlugin, McpServerSummary, ServerState } from "./mcp-service-contracts.ts";
 
 /** One server as the host's own port names it, and the catalog's views as the marketplace names them. */
-export interface McpServerSummary {
-  id: string;
-  name: string;
-  serverIdentifier: string;
-  accountKey: string;
-  pluginId?: string | undefined;
-  isTeamServer: boolean;
-  status: string;
-  statusDetail?: string | undefined;
-  transport: string;
-  toolCount: number;
-  disabledToolCount?: number | undefined;
-  customInstructions: string;
-}
-export interface CatalogField {
-  key: string;
-  label: string;
-  hint: string;
-  isRequired?: boolean;
-  isSecret?: boolean;
-}
-export interface CatalogPlugin {
-  id: string;
-  name: string;
-  displayName?: string;
-  description?: string;
-  category?: string;
-  fields?: CatalogField[];
-  connectors?: unknown[];
-  skills?: Array<{ name: string; description?: string; sourceUrl?: string }>;
-}
-export interface EffectivePlugin {
-  pluginId: string;
-  installMode?: string;
-  isEnabled: boolean;
-  hasTeamConfiguredVariables?: boolean;
-}
-export interface ServerState {
-  servers: McpServerSummary[];
-}
 /** The plugin skills a change to the account's plugins has to be told about. */
 export interface PluginSkillsPort {
   sync(trigger: string): Promise<unknown[]>;
   status(): unknown;
   removeLiveReferences?(sourceUrls: readonly string[]): void;
-}
-
-/** One server as the host's port hands it on: what the UI shows, with nothing it did not say. */
-export function toInstalledServer(summary: McpServerSummary): Record<string, unknown> {
-  return {
-    id: summary.id,
-    name: summary.name,
-    serverIdentifier: summary.serverIdentifier,
-    accountKey: summary.accountKey,
-    ...(summary.pluginId == null ? {} : { pluginId: summary.pluginId }),
-    isTeamServer: summary.isTeamServer,
-    status: summary.status,
-    ...(summary.statusDetail == null ? {} : { statusDetail: summary.statusDetail }),
-    transport: summary.transport,
-    toolCount: summary.toolCount,
-    ...(summary.disabledToolCount == null ? {} : { disabledToolCount: summary.disabledToolCount }),
-    customInstructions: summary.customInstructions,
-  };
-}
-
-export function toInstalledServers(state: ServerState): Record<string, unknown>[] {
-  return state.servers.map(toInstalledServer);
-}
-
-/** A plugin's own fields, with the two switches a form needs answered even when the catalog did not say. */
-export function toCatalogFields(fields?: readonly CatalogField[] | null): Array<Required<CatalogField>> {
-  return (fields ?? []).map((field) => ({ key: field.key, label: field.label, hint: field.hint, isRequired: field.isRequired === true, isSecret: field.isSecret === true }));
-}
-
-/** What the sign-in attempt answered, in the shape the host's port names. */
-export function toAuthResult(result: { status: string; serverName: string; authorizationUrl?: string; message?: string }): Record<string, unknown> {
-  if (result.status === "started") return { kind: "started", authorizationUrl: result.authorizationUrl, serverName: result.serverName };
-  if (result.status === "already-authenticated") return { kind: "already-authenticated", serverName: result.serverName };
-  if (result.status === "not-configured") return { kind: "not-configured", serverName: result.serverName };
-  return { kind: result.status, message: result.message, serverName: result.serverName };
 }
 
 /**
@@ -132,41 +70,17 @@ export function syncPluginSkillsInBackground(pluginSkills: PluginSkillsPort | un
   void pluginSkills?.sync(trigger).catch(() => {});
 }
 
-/** The catalog the manager answers with is the marketplace's own views; the host names their shape here. */
-const catalogViewsOf = (views: readonly unknown[]): CatalogPlugin[] => views as CatalogPlugin[];
-
-/** The listing a manager call answers with: those delegations are typed loosely, and this is the shape they carry. */
-const asServerState = (state: unknown): ServerState => state as ServerState;
-
-/** The sign-in the manager answers with, as this port names it. */
-const asAuthOutcome = (result: unknown): { status: string; serverName: string; authorizationUrl?: string; message?: string } =>
-  result as { status: string; serverName: string; authorizationUrl?: string; message?: string };
-
 /**
  * The backend's tool exec in the shape the manager's ports name. The wire takes a connector id as the decimal string it
  * is, and the calls that own one pass the number they parsed, so the host converts here; the wire's own status is only
  * handed on when it is something the listing can read.
  */
-function asMcpBackendExec(exec: ReturnType<typeof createDashboardSlateBackendMcpExec>): McpBackendExecPort {
-  const withDecimalId = <T extends { serverId: number }>(args: T): Omit<T, "serverId"> & { serverId: string } => ({ ...args, serverId: String(args.serverId) });
-  return {
-    listTools: async (identifiers) =>
-      (await exec.listTools(identifiers)).map((entry) => {
-        const { status, ...rest } = entry;
-        return { ...rest, ...(typeof status === "string" ? { status } : {}) };
-      }),
-    checkAuthStatus: (args) => exec.checkAuthStatus(withDecimalId(args)),
-    logoutAccount: (args) => exec.logoutAccount(args),
-    renameAccount: (args) => exec.renameAccount(withDecimalId(args)),
-    deleteAccount: (args) => exec.deleteAccount(withDecimalId(args)),
-  };
-}
-
 export interface CreateHostMcpOptions {
   accountConfigProvider?: () => Promise<McpRuntimeConfig | null>;
-  accountDisplayConfigProvider?: () => Promise<AccountDisplayConfig | null>;
-  accountServersProvider?: () => Promise<AccountDisplayConfig | null>;
+  accountDisplayConfigProvider?: () => Promise<SlateMcpAccountDisplay | null>;
+  accountServersProvider?: () => Promise<SlateMcpAccountDisplay | null>;
   accountMcpWriter?: McpAccountWriterPort;
+  catalogInstallPort?: McpCatalogInstallPort;
   backendMcpExec: McpBackendExecPort;
   settingsStore?: McpManagerSettingsPort;
   effectivePluginsProvider?: () => Promise<EffectivePlugin[]>;
@@ -187,7 +101,7 @@ export interface McpToolSurface {
   listTools(ctx?: unknown): Promise<unknown[]>;
   createExecutor(persistImage?: unknown, spillLargeText?: unknown, auditIdentity?: unknown): SlateMcpExecutor;
   refreshAccountConfig(): void;
-  createStateExecutor(): ReturnType<typeof createSlateMcpStateExecutor>;
+  createStateExecutor(): ReturnType<typeof createMcpStateExecutorAdapter>;
   getCustomInstructions(): Map<string, string>;
   resolveToolTransport(id: string): Promise<unknown>;
   resolveNeedsAuthSlot(id: string): Promise<{ serverId: string; serverName: string } | null>;
@@ -228,13 +142,14 @@ export function createHostMcp(deps: CreateHostMcpOptions): McpHostPort {
     ...(deps.accountDisplayConfigProvider === undefined ? {} : { accountDisplayConfigProvider: deps.accountDisplayConfigProvider }),
     ...(deps.accountServersProvider === undefined ? {} : { accountServersProvider: deps.accountServersProvider }),
     ...(deps.accountMcpWriter === undefined ? {} : { accountMcpWriter: deps.accountMcpWriter }),
+    ...(deps.catalogInstallPort === undefined ? {} : { catalogInstallPort: deps.catalogInstallPort }),
     backendMcpExec: deps.backendMcpExec,
     ...(deps.settingsStore === undefined ? {} : { settingsStore: deps.settingsStore }),
     ...(deps.effectivePluginsProvider === undefined ? {} : { effectivePluginsProvider: deps.effectivePluginsProvider }),
     ...(deps.onConnectorAuth === undefined ? {} : { onConnectorAuth: deps.onConnectorAuth }),
     getMachineId: deps.getMachineId,
     // The manager parses what a user typed into a server's configuration itself, from the JSON it was handed.
-    parseServerConfig: (value) => value as DisplayServer["config"],
+    parseServerConfig: (value) => value as SlateMcpDisplayRow["config"],
   });
   const discovery = createMcpToolsDiscovery(
     {
@@ -309,30 +224,30 @@ export function createHostMcp(deps: CreateHostMcpOptions): McpHostPort {
       }
       return { removed: result.removed, ...(result.reason == null ? {} : { reason: result.reason }) };
     },
-    setInstructions: async (args: { serverId: string; instructions: string }) => toInstalledServers(asServerState(await mutate(() => manager.setServerCustomInstructions(args)))),
+    setInstructions: async (args: { serverId: string; instructions: string }) => toInstalledServers(serverStateFromManager(await mutate(() => manager.setServerCustomInstructions(args)))),
     install: async (args: { id: string; values?: Record<string, string> }) => {
-      const servers = toInstalledServers(asServerState(await mutate(() => manager.installEntry({ entryId: args.id, ...(args.values == null ? {} : { values: args.values }) }, token))));
+      const servers = toInstalledServers(serverStateFromManager(await mutate(() => manager.installEntry({ entryId: args.id, ...(args.values == null ? {} : { values: args.values }) }, token))));
       try {
         deps.pluginSkills?.removeLiveReferences?.(await skillSourceUrls(args.id));
       } catch {}
       syncPluginSkillsInBackground(deps.pluginSkills, "install");
       return servers;
     },
-    add: async (args: { name: string; configJson: string }) => toInstalledServers(asServerState(await mutate(() => manager.addServer(args)))),
+    add: async (args: { name: string; configJson: string }) => toInstalledServers(serverStateFromManager(await mutate(() => manager.addServer(args)))),
     removeServer: async (serverId: string) => {
       const result = await mutate(() => manager.removeServer(serverId));
       return { removed: result.removed, ...(result.reason == null ? {} : { reason: result.reason }), servers: toInstalledServers(result.state) };
     },
-    restart: async () => toInstalledServers(asServerState(await mutate(() => manager.reloadServers()))),
+    restart: async () => toInstalledServers(serverStateFromManager(await mutate(() => manager.reloadServers()))),
     // A sign-in that started changed nothing about the account's servers yet, but the host should look again.
     authenticate: async (serverId: string, accountKey: string, requestingAgentId?: string, forceReauth?: boolean) => {
-      const result = toAuthResult(asAuthOutcome(await manager.authenticateServer(serverId, accountKey, requestingAgentId ?? null, forceReauth)));
+      const result = toAuthResult(authOutcomeFromManager(await manager.authenticateServer(serverId, accountKey, requestingAgentId ?? null, forceReauth)));
       if (result["kind"] === "started") deps.onServersMutated?.();
       return result;
     },
-    logoutAccount: async (args: { serverId: string; accountKey: string }) => toInstalledServers(asServerState(await mutate(() => manager.logoutAccount(args.serverId, args.accountKey)))),
-    renameAccount: async (args: { serverId: string; accountKey: string; newAccountKey: string }) => toInstalledServers(asServerState(await mutate(() => manager.renameAccount(args.serverId, args.accountKey, args.newAccountKey)))),
-    removeAccount: async (args: { serverId: string; accountKey: string }) => toInstalledServers(asServerState(await mutate(() => manager.removeAccount(args.serverId, args.accountKey)))),
+    logoutAccount: async (args: { serverId: string; accountKey: string }) => toInstalledServers(serverStateFromManager(await mutate(() => manager.logoutAccount(args.serverId, args.accountKey)))),
+    renameAccount: async (args: { serverId: string; accountKey: string; newAccountKey: string }) => toInstalledServers(serverStateFromManager(await mutate(() => manager.renameAccount(args.serverId, args.accountKey, args.newAccountKey)))),
+    removeAccount: async (args: { serverId: string; accountKey: string }) => toInstalledServers(serverStateFromManager(await mutate(() => manager.removeAccount(args.serverId, args.accountKey)))),
   };
   return {
     mcp: {
@@ -348,7 +263,7 @@ export function createHostMcp(deps: CreateHostMcpOptions): McpHostPort {
       },
       createExecutor: (persistImage?: unknown, spillLargeText?: unknown, auditIdentity?: unknown) => new SlateMcpExecutor(discovery, persistImage, spillLargeText, auditIdentity),
       refreshAccountConfig: () => manager.refreshAccountConfigInBackground(),
-      createStateExecutor: () => createSlateMcpStateExecutor({ getTools: (ctx: unknown) => discovery.getTools(ctx) }),
+      createStateExecutor: () => createMcpStateExecutorAdapter({ getTools: (ctx: unknown) => discovery.getTools(ctx) }),
       getCustomInstructions: () => manager.getMcpCustomInstructions(),
       resolveToolTransport: (id: string) => discovery.resolveProviderTransport(id),
       resolveNeedsAuthSlot: async (id: string) => {
@@ -403,23 +318,16 @@ export class McpHostService {
       getAccessToken: (options) => deps.auth.getAccessToken({ backendUrl: options?.backendUrl ?? getSlateInferenceBackendUrl() }),
       getMachineId: deps.auth.getMachineId,
       getBackendUrl: getSlateInferenceBackendUrl,
-      createClient: (credentials) =>
-        createSlateCursorBackendClient(DashboardService, {
-          getAccessToken: (options) => credentials.getAccessToken({ backendUrl: options.backendUrl }),
-          getMachineId: credentials.getMachineId,
-        }) as unknown as AccountMcpClient,
+      createClient: (credentials) => createMcpDashboardClient(credentials) as AccountMcpClient,
     };
-    const backendMcpExec = asMcpBackendExec(
+    const backendMcpExec = asMcpBackendExecPort(
       createDashboardSlateBackendMcpExec({
         getAccessToken: accountMcpDeps.getAccessToken,
         getMachineId: accountMcpDeps.getMachineId,
-        createClient: (credentials) =>
-          createSlateCursorBackendClient(DashboardService, {
-            getAccessToken: (options) => credentials.getAccessToken({ backendUrl: options.backendUrl }),
-            getMachineId: credentials.getMachineId,
-          }) as unknown as DashboardMcpExecClient,
+        createClient: (credentials) => createMcpDashboardClient(credentials) as DashboardMcpExecClient,
       }),
     );
+    const accountWriterPorts = createMcpAccountWriterAdapters(createAccountMcpWriter(accountMcpDeps));
     this.hostMcp = createHostMcp({
       log: deps.log,
       onServerAuthenticated: (completion) => this.emitAuthCompletion(completion),
@@ -435,7 +343,8 @@ export class McpHostService {
       },
       getMachineId: deps.auth.getMachineId,
       accountServersProvider: () => fetchAccountMcpServers(accountMcpDeps),
-      accountMcpWriter: createAccountMcpWriter(accountMcpDeps),
+      accountMcpWriter: accountWriterPorts.accountWriter,
+      catalogInstallPort: accountWriterPorts.catalogInstallPort,
       effectivePluginsProvider: () => fetchEffectiveUserPlugins(accountMcpDeps),
       backendMcpExec,
       boxMcpExec: createBoxSlateMcpExec(deps.foreverBox.box),

@@ -10,7 +10,7 @@ export const GATEWAY_ACCESS_DENIED_MESSAGE_MARKER = "slate box access refused by
 export const SLATE_BOX_BLOCKED = "SLATE_BOX_BLOCKED";
 export const SLATE_BOX_BLOCK_REASON_KEY = "slateBoxBlockReason";
 export const GATEWAY_BOX_BLOCKED_PREFIX = "slate box blocked by kill switch: ";
-const UNIT_SEPARATOR_NEVER_IN_COPY = "\u001f";
+const BOX_BLOCKED_FIELD_SEPARATOR = String.fromCharCode(31);
 
 export interface BoxBlockedInfo {
   reason: string;
@@ -19,12 +19,17 @@ export interface BoxBlockedInfo {
 }
 
 export function encodeBoxBlockedMessage(info: BoxBlockedInfo): string {
-  const fields = [info.reason, info.title, info.detail].join(UNIT_SEPARATOR_NEVER_IN_COPY);
-  return `${GATEWAY_BOX_BLOCKED_PREFIX}${fields}`;
+  const details = [info.reason, info.title, info.detail].join(BOX_BLOCKED_FIELD_SEPARATOR);
+  return GATEWAY_BOX_BLOCKED_PREFIX + details;
+}
+
+function suffixAtBlockedMarker(message: string): string | null {
+  const marker = message.indexOf(GATEWAY_BOX_BLOCKED_PREFIX);
+  return marker < 0 ? null : message.slice(marker);
 }
 
 export function hasBoxBlockedMarker(message: string): boolean {
-  return message.includes(GATEWAY_BOX_BLOCKED_PREFIX);
+  return suffixAtBlockedMarker(message) !== null;
 }
 
 export const SLATE_CLIENT_PAUSE_REASON = "SLATE_CLIENT_PAUSE";
@@ -35,16 +40,16 @@ export const SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE = encodeBoxBlockedMessage({
 });
 
 export function findBoxBlockedMessage(error: unknown): string | null {
-  const seen = new Set<object>();
-  let current = error;
-  while (current != null && typeof current === "object" && !seen.has(current)) {
-    seen.add(current);
-    const node = current as { message?: unknown; cause?: unknown };
-    if (typeof node.message === "string") {
-      const start = node.message.indexOf(GATEWAY_BOX_BLOCKED_PREFIX);
-      if (start !== -1) return node.message.slice(start);
+  const visited = new Set<object>();
+  let cause = error;
+  while (cause !== null && typeof cause === "object" && !visited.has(cause)) {
+    visited.add(cause);
+    const record = cause as { readonly message?: unknown; readonly cause?: unknown };
+    if (typeof record.message === "string") {
+      const blockedMessage = suffixAtBlockedMarker(record.message);
+      if (blockedMessage !== null) return blockedMessage;
     }
-    current = node.cause;
+    cause = record.cause;
   }
   return null;
 }

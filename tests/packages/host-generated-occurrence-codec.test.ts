@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   createGeneratedTranscriptOccurrenceCodec,
   type GeneratedTranscriptOccurrenceBindings,
-} from "../../source/host/transcript/mirror/generated-occurrence-codec.ts";
+} from "../../source/adapters/interop/agent/transcript-occurrence-codec-adapter.ts";
 import type { DecodedTranscriptStep, DecodedTranscriptTurn, TranscriptOccurrenceCodec } from "../../source/host/transcript/mirror/transcript-occurrence-deriver.ts";
 
 const bytes = (...values: number[]) => new Uint8Array(values);

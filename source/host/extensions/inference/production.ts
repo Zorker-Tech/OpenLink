@@ -8,42 +8,56 @@
 
 import type { SlateAgentModelSelection } from "../../../shared/agents/slate-agent-model.ts";
 import type { HostExtensionContext } from "../host-extensions.ts";
-import { createCursorWebFetchService, createCursorWebSearchService } from "./cursor-web-tools.ts";
+import { createSlateWebFetchService, createSlateWebSearchService } from "../../../adapters/interop/agent/slate-web-tools-adapter.ts";
 import { createHostInference } from "./inference-service.ts";
 import type { InferenceExtensionContext } from "./extension.ts";
 
-type ProductionContext = HostExtensionContext<unknown> & {
+type HostInferenceContext = HostExtensionContext<unknown> & {
   readonly deps: InferenceExtensionContext["deps"];
 };
 
-export function createInferenceProductionExtras(context: ProductionContext): Omit<InferenceExtensionContext, "deps"> {
+type RequestIdOption = { readonly onRequestId?: ((requestId: string) => void) | null };
+
+function requestIdOption(request: RequestIdOption): { readonly onRequestId?: (requestId: string) => void } {
+  return request.onRequestId == null ? {} : { onRequestId: request.onRequestId };
+}
+
+function webSearchFor(
+  auth: InferenceExtensionContext["deps"]["auth"],
+  input: unknown,
+) {
+  const request = input as { readonly modelId: string } & RequestIdOption;
+  return createSlateWebSearchService({
+    getAccessToken: auth.getAccessToken,
+    getMachineId: auth.getMachineId,
+    modelId: request.modelId,
+    ...requestIdOption(request),
+  });
+}
+
+function webFetchFor(auth: InferenceExtensionContext["deps"]["auth"], input: unknown) {
+  return createSlateWebFetchService({
+    getAccessToken: auth.getAccessToken,
+    getMachineId: auth.getMachineId,
+    ...requestIdOption(input as RequestIdOption),
+  });
+}
+
+function inferencePortFor(context: HostInferenceContext, onApplied: () => void) {
+  return createHostInference({
+    auth: context.deps.auth,
+    experiments: context.deps.experiments,
+    settings: context.deps.settings,
+    onModelExperimentApplied: onApplied,
+  });
+}
+
+export function createInferenceProductionExtras(context: HostInferenceContext): Omit<InferenceExtensionContext, "deps"> {
   const auth = context.deps.auth;
   return {
-    createPort(onModelExperimentApplied) {
-      return createHostInference({
-        auth,
-        experiments: context.deps.experiments,
-        settings: context.deps.settings,
-        onModelExperimentApplied,
-      });
-    },
-    createWebSearch(args) {
-      const request = args as { modelId: string; onRequestId?: (requestId: string) => void };
-      return createCursorWebSearchService({
-        getAccessToken: auth.getAccessToken,
-        getMachineId: auth.getMachineId,
-        modelId: request.modelId,
-        ...(request.onRequestId == null ? {} : { onRequestId: request.onRequestId }),
-      });
-    },
-    createWebFetch(args) {
-      const request = args as { onRequestId?: (requestId: string) => void };
-      return createCursorWebFetchService({
-        getAccessToken: auth.getAccessToken,
-        getMachineId: auth.getMachineId,
-        ...(request.onRequestId == null ? {} : { onRequestId: request.onRequestId }),
-      });
-    },
+    createPort: (onApplied) => inferencePortFor(context, onApplied),
+    createWebSearch: (input) => webSearchFor(auth, input),
+    createWebFetch: (input) => webFetchFor(auth, input),
   };
 }
 

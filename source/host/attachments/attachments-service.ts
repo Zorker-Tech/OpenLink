@@ -23,9 +23,9 @@ import { AttachmentTooLargeError, attachmentByteLimitForName, VIDEO_BYTE_LIMIT }
 import { audioMimeFromPath, extensionFromImageMime, imageMimeFromPath, servableImageMimeFromPath, videoMimeFromPath } from "../../shared/media/image-mime.ts";
 import { Mp4Dimensions } from "../../shared/media/video-dimensions.ts";
 import { isPathWithin } from "../../shared/node/paths.ts";
-import { createSlateGenerateImageResourceAccessor } from "./generate-image-resource-accessor.ts";
+import { createAgentImageResourcePort } from "./generate-image-resource-accessor.ts";
 import { createSlateGenerateImageService, type GenerateImageAuth } from "./generate-image-service.ts";
-import { stageAttachmentsIntoBox, type BoxStagingDependencies } from "./box-staging.ts";
+import { stageAttachmentsForAgent, type BoxAttachmentStagingPorts } from "./box-staging.ts";
 import { readEncodedImageSize, type ImageSize } from "./link-preview-image-bounds.ts";
 import { fetchSafeLinkPreviewResource, parseSafeLinkPreviewUrl, SlateLinkPreviewError } from "./safe-link-preview-fetch.ts";
 import { withVideoPlaybackSource } from "./video-playback-rendition.ts";
@@ -493,7 +493,7 @@ export async function persistImageBytes(destinationDirectory: string, data: Uint
 export interface AttachmentsServiceDependencies<Context> {
   readonly auth: GenerateImageAuth;
   readonly ctx: Context;
-  readonly box: BoxStagingDependencies<Context>["box"];
+  readonly box: BoxAttachmentStagingPorts<Context>["box"];
   readonly report?: (diagnostic: Record<string, unknown>) => void;
 }
 
@@ -546,8 +546,8 @@ export function createAttachmentsService<Context>(deps: AttachmentsServiceDepend
     readVideoBytes: readHostAttachmentVideoBytes,
     resolveChannelAttachment,
     resolveOwnerDir: resolveAttachmentOwnerDir,
-    createGenerateImageResourceAccessor: createSlateGenerateImageResourceAccessor,
-    stageIntoBox: (agentId: string, paths: readonly string[]) => stageAttachmentsIntoBox({
+    createAgentImageResourcePort,
+    stageIntoBox: (agentId: string, paths: readonly string[]) => stageAttachmentsForAgent({
       ctx: deps.ctx,
       box: deps.box,
       resolveOwnerDir: resolveAttachmentOwnerDir,

@@ -1,27 +1,40 @@
-/**
- * The managed-setup extension's ports: the skills service it refreshes and the auth it reads a token from.
- *
- * A token is asked for best-effort — a caller that cannot get one gets nothing rather than an error — and renewal
- * and change notifications are subscribed to only when the port offers them.
- */
-import type { SlateManagedSkillsService } from "./managed-skills-service.ts";
+import { bestEffortAccessToken, startManagedSkillsWhenAuthenticated } from "./auth-lifecycle.ts"
+import type { ManagedSetupContext, RenewalEvent } from "./extension-contracts.ts"
 
-export interface RenewalEvent { outcome: string; isFirstCredential?: boolean }
-export interface ManagedAuthPort { getAccessToken(args?: unknown): Promise<string>; getMachineId(): string; peekAccessToken(): string | null; subscribeToRenewal?(listener: (event: RenewalEvent) => void): () => void; onDidChange?(listener: () => void): () => void; getLastRenewalEvent?(): RenewalEvent | null }
-export function bestEffortAccessToken(auth: Pick<ManagedAuthPort, "getAccessToken">, args?: unknown): () => Promise<string | null> { return async () => { try { const token = await auth.getAccessToken(args); return token.length > 0 ? token : null; } catch { return null; } }; }
-export function startManagedSkillsWhenAuthenticated(options: { auth: ManagedAuthPort; service?: SlateManagedSkillsService; startManagedSkills?: () => void; refreshManagedSkills?: () => void }): () => void {
-  let started = false, disposed = false;
-  const start = (): void => { if (started || disposed) return; started = true; (options.startManagedSkills ?? (() => options.service?.start()))(); };
-  const handleRenewal = (event: RenewalEvent): void => { if (disposed || event.outcome !== "renewed") return; if (!started) { if (options.auth.peekAccessToken() !== null) start(); return; } if (event.isFirstCredential) (options.refreshManagedSkills ?? (() => options.service?.handleAuthChange()))(); };
-  const unsubscribe = options.auth.subscribeToRenewal?.(handleRenewal) ?? options.auth.onDidChange?.(() => handleRenewal({ outcome: "renewed", isFirstCredential: true })) ?? (() => {});
-  if (options.auth.peekAccessToken() !== null) start();
-  return () => { if (disposed) return; disposed = true; unsubscribe(); };
+export { bestEffortAccessToken, startManagedSkillsWhenAuthenticated } from "./auth-lifecycle.ts"
+export type { ManagedAuthPort, ManagedSetupContext, RenewalEvent } from "./extension-contracts.ts"
+
+export const managedSetupExtension = {
+  id: "managed-setup",
+  dependencies: ["auth", "telemetry"] as const,
+  start(context: ManagedSetupContext) {
+    const identity = context.deps.auth
+    const reportDiagnostic = (event: unknown) => context.deps.telemetry?.logs.reportHostExtensionDiagnostic(event)
+    const accessToken = bestEffortAccessToken(identity)
+    const managedSkills = context.createManagedSkills({ getAccessToken: accessToken, report: reportDiagnostic })
+    const stopManagingSkills = startManagedSkillsWhenAuthenticated({ auth: identity, service: managedSkills })
+    const teamRules = context.createTeamRules({ auth: identity, report: reportDiagnostic })
+
+    const handleRenewal = (event: RenewalEvent): void => {
+      if (event.outcome === "renewed" && event.isFirstCredential) teamRules.refresh()
+    }
+    const stopRenewalListener = identity.subscribeToRenewal?.(handleRenewal) ?? (() => {})
+    const dispose = (): void => {
+      stopRenewalListener()
+      stopManagingSkills()
+      managedSkills.dispose()
+    }
+
+    context.onStop(dispose)
+    const lastRenewal = identity.getLastRenewalEvent?.()
+    if (lastRenewal != null) handleRenewal(lastRenewal)
+    teamRules.start()
+
+    return {
+      dispose,
+      skillsCatalog: () => context.fetchSkillCatalog(accessToken),
+      ensureManagedSkill: (id: string) => managedSkills.ensureSkillIsCached(id),
+      resolveTeamRules: () => teamRules.resolveRules(),
+    }
+  },
 }
-export interface ManagedSetupContext {
-  deps: { auth: ManagedAuthPort; telemetry?: { logs: { reportHostExtensionDiagnostic(event: unknown): void } } };
-  createManagedSkills(args: { getAccessToken: () => Promise<string | null>; report(event: unknown): void }): SlateManagedSkillsService;
-  createTeamRules(args: { auth: ManagedAuthPort; report(event: unknown): void }): { start(): void; refresh(): void; resolveRules(): Promise<readonly unknown[] | undefined> };
-  fetchSkillCatalog(getAccessToken: () => Promise<string | null>): Promise<unknown[]>;
-  onStop(dispose: () => void): void;
-}
-export const managedSetupExtension = { id: "managed-setup", dependencies: ["auth", "telemetry"] as const, start(context: ManagedSetupContext) { const auth = context.deps.auth, report = (event: unknown) => context.deps.telemetry?.logs.reportHostExtensionDiagnostic(event), token = bestEffortAccessToken(auth), managed = context.createManagedSkills({ getAccessToken: token, report }), stopManaged = startManagedSkillsWhenAuthenticated({ auth, service: managed }), teamRules = context.createTeamRules({ auth, report }); const onRenewal = (event: RenewalEvent) => { if (event.outcome === "renewed" && event.isFirstCredential) teamRules.refresh(); }, unsubscribe = auth.subscribeToRenewal?.(onRenewal) ?? (() => {}), dispose = () => { unsubscribe(); stopManaged(); managed.dispose(); }; context.onStop(dispose); const last = auth.getLastRenewalEvent?.(); if (last != null) onRenewal(last); teamRules.start(); return { dispose, skillsCatalog: () => context.fetchSkillCatalog(token), ensureManagedSkill: (id: string) => managed.ensureSkill(id), resolveTeamRules: () => teamRules.resolveRules() }; } };

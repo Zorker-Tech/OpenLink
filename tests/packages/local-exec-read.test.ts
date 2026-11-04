@@ -4,9 +4,8 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { LocalReadExecutor } from "../../source/packages/local-exec/read.ts"
+import { LocalReadExecutor, type LocalReadOutcome } from "../../source/packages/local-exec/read.ts"
 import { createContext } from "../../source/packages/context/context.ts"
-import type { ReadResult, ReadSuccess } from "../../source/packages/proto/generated/agent/v1/read_exec_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
 // harness
@@ -36,16 +35,18 @@ const agentToolFile = (workspace: string, name: string, content: string | Buffer
   return path.join(".slate", "projects", "workspace-1", "agent-tools", name)
 }
 
-const successOf = (result: ReadResult): ReadSuccess => {
-  assert.equal(result.result.case, "success")
-  if (result.result.case !== "success") throw new Error("not a success")
-  return result.result.value
+type LocalReadSuccess = Extract<LocalReadOutcome, { readonly kind: "success" }>
+
+const successOf = (result: LocalReadOutcome): LocalReadSuccess => {
+  assert.equal(result.kind, "success")
+  if (result.kind !== "success") throw new Error("not a success")
+  return result
 }
 
-const contentOf = (result: ReadResult): string => {
+const contentOf = (result: LocalReadOutcome): string => {
   const success = successOf(result)
-  if (success.output.case !== "content") throw new Error("not content")
-  return success.output.value
+  if (success.output.kind !== "text") throw new Error("not content")
+  return success.output.text
 }
 
 const streaming = { useStreamingRead: async () => true }
@@ -100,19 +101,19 @@ test("a text file is handed back as data when it is an image, a PDF or a video",
     const executor = new LocalReadExecutor(allowAll, workspace)
 
     const image = successOf(await executor.execute(ctx, { path: "tiny.png" }))
-    assert.equal(image.output.case, "data")
-    assert.equal(Buffer.from(image.output.value as Uint8Array).subarray(0, 4).toString("hex"), "89504e47")
+    assert.equal(image.output.kind, "data")
+    assert.equal(image.output.kind === "data" ? Buffer.from(image.output.bytes).subarray(0, 4).toString("hex") : "", "89504e47")
     assert.equal(image.totalLines, 0)
     assert.equal(image.truncated, false)
-    assert.equal(image.fileSize, BigInt(png.length))
+    assert.equal(image.fileSize, png.length)
 
     const pdf = successOf(await executor.execute(ctx, { path: "data.pdf" }))
-    assert.equal(pdf.output.case, "data", "a PDF is data, not decoded text")
+    assert.equal(pdf.output.kind, "data", "a PDF is data, not decoded text")
     const video = successOf(await executor.execute(ctx, { path: "clip.mp4" }))
-    assert.equal(video.output.case, "data", "a video is data, not decoded text")
+    assert.equal(video.output.kind, "data", "a video is data, not decoded text")
 
     const broken = await executor.execute(ctx, { path: "broken.png" })
-    assert.equal(broken.result.case, "error", "an image that cannot be decoded is an answer, not a hang")
+    assert.equal(broken.kind, "error", "an image that cannot be decoded is an answer, not a hang")
   })
 })
 
@@ -122,10 +123,10 @@ test("a binary format the model cannot read is refused with the format named", a
     fs.writeFileSync(path.join(workspace, "no-extension"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
     const executor = new LocalReadExecutor(allowAll, workspace)
     const typed = await executor.execute(ctx, { path: "blob.bin" })
-    assert.equal(typed.result.case, "invalidFile")
-    assert.match(String((typed.result.value as { reason?: string }).reason), /Binary files of type \.bin are not supported/)
+    assert.equal(typed.kind, "invalid_file")
+    assert.match(typed.kind === "invalid_file" ? typed.reason : "", /Binary files of type \.bin are not supported/)
     const untyped = await executor.execute(ctx, { path: "no-extension" })
-    assert.equal(untyped.result.case, "error", "an extension-less file the text decoder cannot read is an error, not mojibake")
+    assert.equal(untyped.kind, "error", "an extension-less file the text decoder cannot read is an error, not mojibake")
   })
 })
 
@@ -133,10 +134,10 @@ test("what cannot be read is reported as its own answer", async () => {
   await withWorkspace(async (workspace) => {
     fs.mkdirSync(path.join(workspace, "a-directory"))
     const executor = new LocalReadExecutor(allowAll, workspace)
-    assert.equal((await executor.execute(ctx, { path: "not-here.txt" })).result.case, "fileNotFound")
+    assert.equal((await executor.execute(ctx, { path: "not-here.txt" })).kind, "not_found")
     const directory = await executor.execute(ctx, { path: "a-directory" })
-    assert.equal(directory.result.case, "invalidFile")
-    assert.match(String((directory.result.value as { reason?: string }).reason), /is a directory, not a file/)
+    assert.equal(directory.kind, "invalid_file")
+    assert.match(directory.kind === "invalid_file" ? directory.reason : "", /is a directory, not a file/)
   })
 })
 
@@ -145,8 +146,8 @@ test("a path the user may not read is refused before anything is read", async ()
     fs.writeFileSync(path.join(workspace, "secret.txt"), "hidden")
     const executor = new LocalReadExecutor({ shouldBlockRead: candidate => candidate.endsWith("secret.txt") }, workspace)
     const result = await executor.execute(ctx, { path: "secret.txt" })
-    assert.equal(result.result.case, "permissionDenied")
-    assert.equal((result.result.value as { path?: string }).path, path.join(workspace, "secret.txt"))
+    assert.equal(result.kind, "permission_denied")
+    assert.equal(result.kind === "permission_denied" ? result.path : "", path.join(workspace, "secret.txt"))
     await assert.rejects(async () => {
       const failing = new LocalReadExecutor({ shouldBlockRead: () => { throw new Error("permission service failed"); } }, workspace)
       await failing.execute(ctx, { path: "secret.txt" })
@@ -214,7 +215,7 @@ test("a streaming read keeps the text within its budget and says it was cut", as
     const executor = new LocalReadExecutor(allowAll, workspace, streaming)
     const result = successOf(await executor.execute(ctx, { path: "big.txt" }))
     assert.equal(result.truncated, true)
-    assert.equal(String(result.output.value).length <= 8 * 1024 * 1024, true)
+    assert.equal(result.output.kind === "text" && result.output.text.length <= 8 * 1024 * 1024, true)
     assert.equal(result.totalLines, 1_800_001)
   })
 })
@@ -255,7 +256,7 @@ test("an agent-tool output is read as records unless its bytes name a binary for
     const executor = new LocalReadExecutor(allowAll, workspace)
     assert.equal(contentOf(await executor.execute(ctx, { path: text })), "agent tool output\nsecond line\n")
     const refused = await executor.execute(ctx, { path: binary })
-    assert.equal(refused.result.case, "invalidFile")
-    assert.match(String((refused.result.value as { reason?: string }).reason), /Binary files of type \.txt are not supported/)
+    assert.equal(refused.kind, "invalid_file")
+    assert.match(refused.kind === "invalid_file" ? refused.reason : "", /Binary files of type \.txt are not supported/)
   })
 })

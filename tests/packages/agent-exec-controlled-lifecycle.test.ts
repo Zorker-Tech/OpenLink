@@ -6,7 +6,7 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import {
   SimpleControlledExecManager,
   type ControlledExecHandler,
-} from "../../source/packages/agent-exec/controlled-exec.ts"
+} from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts"
 
 test("a completed controlled operation cancels the context it was given", async () => {
   const parent = createContext()

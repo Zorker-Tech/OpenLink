@@ -5,17 +5,31 @@
  * so an agent is not left waiting on a question nobody can answer any more.
  */
 import { settledAutoReviewEntry, settledToolPermissionEntry } from "../../../shared/transcript.ts";
+import type { PendingTranscriptCard, SessionCardDatabase } from "./pending-card-sweep-contracts.ts";
+import { expirePendingCards } from "./pending-card-sweep-policy.ts";
 
-interface TranscriptDb { getTranscriptEntries(): Array<Record<string, unknown>>; updateTranscriptEntry(id: string, update: (entry: Record<string, unknown>) => Record<string, unknown>): void }
-type Entry = Record<string, unknown> & { id: string; kind: string; timestampMs?: number; message?: { type?: string; approval?: { requestId: string; status: string }; ask?: { requestId: string; status: string } } };
-
-export function expirePendingAutoReviewApprovalEntries(db: TranscriptDb, onlyRequestId?: string): string[] {
-  const expired: string[] = [];
-  for (const raw of db.getTranscriptEntries()) { const entry = raw as Entry; if (entry.kind !== "send-message" || entry.message?.type !== "auto-review-approval" || entry.message.approval?.status !== "pending") continue; const requestId = entry.message.approval.requestId; const settled = settledAutoReviewEntry(entry, "expired", onlyRequestId ?? requestId); if (settled == null) continue; db.updateTranscriptEntry(entry.id, () => settled); expired.push(requestId); }
-  return expired;
+export function expirePendingAutoReviewApprovalEntries(database: SessionCardDatabase, onlyRequestId?: string): string[] {
+  return expirePendingCards(database, {
+    messageType: "auto-review-approval",
+    ...(onlyRequestId === undefined ? {} : { onlyRequestId }),
+    statusOf: (entry) => entry.message?.approval?.status,
+    requestIdOf: (entry) => entry.message?.approval?.requestId,
+    settle: (entry, requestId) =>
+      settledAutoReviewEntry(entry as never, "expired", requestId) as PendingTranscriptCard | null,
+  });
 }
-export function expirePendingLocalToolPermissionAskEntries(db: TranscriptDb, options?: { onlyRequestId?: string; ifPendingBeforeMs?: number }): string[] {
-  const expired: string[] = [];
-  for (const raw of db.getTranscriptEntries()) { const entry = raw as Entry; if (entry.kind !== "send-message" || entry.message?.type !== "local-tool-permission" || entry.message.ask?.status !== "pending") continue; if (options?.ifPendingBeforeMs != null && entry.timestampMs != null && entry.timestampMs >= options.ifPendingBeforeMs) continue; const requestId = entry.message.ask.requestId; const settled = settledToolPermissionEntry(entry, "expired", options?.onlyRequestId ?? requestId); if (settled == null) continue; db.updateTranscriptEntry(entry.id, () => settled); expired.push(requestId); }
-  return expired;
+
+export function expirePendingLocalToolPermissionAskEntries(
+  database: SessionCardDatabase,
+  options?: { readonly onlyRequestId?: string; readonly ifPendingBeforeMs?: number },
+): string[] {
+  return expirePendingCards(database, {
+    messageType: "local-tool-permission",
+    ...(options?.onlyRequestId === undefined ? {} : { onlyRequestId: options.onlyRequestId }),
+    ...(options?.ifPendingBeforeMs === undefined ? {} : { ifPendingBeforeMs: options.ifPendingBeforeMs }),
+    statusOf: (entry) => entry.message?.ask?.status,
+    requestIdOf: (entry) => entry.message?.ask?.requestId,
+    settle: (entry, requestId) =>
+      settledToolPermissionEntry(entry as never, "expired", requestId) as PendingTranscriptCard | null,
+  });
 }

@@ -20,13 +20,20 @@ export const toolExecutionTimeoutSuspensionKey = createKey<ToolExecutionTimeoutS
   undefined,
 )
 
-export async function withToolExecutionTimeoutSuspended<T>(ctx: Context, fn: () => T | Promise<T>): Promise<T> {
-  const suspension = ctx.get(toolExecutionTimeoutSuspensionKey)
-  if (suspension === undefined) return await fn()
-  const resume = suspension.suspend()
+async function invokeWhileTimeoutIsPaused<T>(
+  suspension: ToolExecutionTimeoutSuspension,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  const resumeTimeout = suspension.suspend()
   try {
-    return await fn()
+    return await operation()
   } finally {
-    resume()
+    resumeTimeout()
   }
+}
+
+export async function withToolExecutionTimeoutSuspended<T>(ctx: Context, fn: () => T | Promise<T>): Promise<T> {
+  const enclosingTimeout = ctx.get(toolExecutionTimeoutSuspensionKey)
+  if (enclosingTimeout === undefined) return await fn()
+  return await invokeWhileTimeoutIsPaused(enclosingTimeout, fn)
 }

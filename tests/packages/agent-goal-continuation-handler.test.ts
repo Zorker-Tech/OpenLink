@@ -4,9 +4,10 @@ import { describe, it } from "node:test";
 import { createContext, type Context } from "../../source/packages/context/context.ts";
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts";
 import { GoalContinuationActionHandler } from "../../source/packages/agent/actions/goal-continuation-action-handler.ts";
-import { GoalState, SimulatedMsgReason } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { GoalStatus } from "../../source/packages/proto/generated/agent/v1/goal_tool_pb.ts";
+import { AgentMode, GoalState, SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts";
 
 const GOAL_ID = "123e4567-e89b-42d3-a456-426614174000";
 const baseCtx = () => createContext().with(conversationIdKey, "conv-1");
@@ -24,7 +25,7 @@ function stateHandler(goal: unknown, overrides: Record<string, unknown> = {}) {
   const published: unknown[] = [];
   const state: any = {
     goalState: goal,
-    mode: 1,
+    mode: SlateMode.AGENT,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
     getBlobStore: () => ({}),
     setGoalState: (value: unknown) => written.push(value),
@@ -83,6 +84,7 @@ describe("the goal continuation handler", () => {
     assert.equal(written.activeDurationMs! > BigInt(0), true);
     assert.equal(typeof written.lastAccruedAtMs, "bigint");
     assert.notEqual(action.userMessage, undefined);
+    assert.equal((action.userMessage as any).mode, AgentMode.AGENT);
     assert.equal((action.userMessage as any).isSimulatedMsg, true);
     assert.equal((action.userMessage as any).simulatedMsgReason, SimulatedMsgReason.GOAL_CONTINUATION);
     assert.equal(action.sendToInteractionListener, true);

@@ -1,16 +1,12 @@
-/**
- * Running something that may throw, without a try/catch at every call site.
- *
- * A result is returned either way, so a caller can decide whether a failure is worth reporting,
- * retrying or ignoring — which is exactly the decision a bare `catch` hides.
- */
+/** A synchronous result that retains either the value or the original thrown value. */
+export type CapturedResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: unknown };
 
-export type AttemptResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: unknown }
-
-export function attemptSync<T>(operation: () => T): AttemptResult<T> {
+export function captureSync<T>(work: () => T): CapturedResult<T> {
   try {
-    return { ok: true, value: operation() }
-  } catch (error) {
-    return { ok: false, error }
+    return { ok: true, value: work() };
+  } catch (failure) {
+    return { ok: false, error: failure };
   }
 }

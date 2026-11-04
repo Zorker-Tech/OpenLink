@@ -1,36 +1,89 @@
-/**
- * The relay a host reaches its rooms through.
- *
- * What is fetched, added and removed travels to the backend with the host's own account, and a relay that is not reachable
- * is reported rather than left to look like an empty room.
- */
-import type { Clock, PollingPolicy } from "../extensions/scheduling.ts";
-import { getSlateBackendClientHeaders } from "../../shared/node/slate-client-metadata.ts";
-import { createNotifyDrainGate } from "../notifications/notify-drain-gate.ts";
+/** Public room relay client, composed from its HTTP routes and polling coordinator. */
+import { XuserRelayHttpApi } from "./xuser-relay-http-api.ts";
+import { XuserRelayPolling } from "./xuser-relay-polling.ts";
+import { XuserRelayRoomRoutes } from "./xuser-relay-room-routes.ts";
+import type { XuserRelayClientDependencies } from "./xuser-relay-contracts.ts";
 
-export const XUSER_RELAY_POLL_INTERVAL_MS = 4_000;
-export const XUSER_RELAY_ERROR_BACKOFF_MS = 30_000;
-export class SlateXuserRelayHttpError extends Error { constructor(readonly status: number, readonly path: string) { super(`slate sharing ${path} returned ${status}`); this.name = "SlateXuserRelayHttpError"; } }
-export interface XuserRelayClientDependencies { readonly getBackendUrl: () => string; readonly getAccessToken: (options: { backendUrl: string }) => Promise<string>; readonly onEvent: (event: Record<string, unknown>) => Promise<boolean>; readonly pollPolicy: PollingPolicy; readonly clock: Pick<Clock, "now">; readonly fetchImpl?: typeof fetch; readonly isNotifyConnected?: () => boolean; readonly isNotifySafetyPollEnabled?: () => boolean; readonly onPollError?: (error: unknown) => void }
+export { describeRelayError } from "./xuser-relay-room-routes.ts";
+export { SlateXuserRelayHttpError, XUSER_RELAY_ERROR_BACKOFF_MS, XUSER_RELAY_POLL_INTERVAL_MS } from "./xuser-relay-contracts.ts";
+export type { XuserRelayClientDependencies } from "./xuser-relay-contracts.ts";
+
 export class SlateXuserRelayClient {
-  private readonly fetchImpl: typeof fetch; private polling: { dispose(): void } | null = null; private isTicking = false; private backoffUntilMs = 0; private pendingAckIds: string[] = []; private readonly notifyGate;
-  constructor(readonly deps: XuserRelayClientDependencies) { this.fetchImpl = deps.fetchImpl ?? fetch; this.notifyGate = createNotifyDrainGate({ isConnected: () => deps.isNotifyConnected?.() ?? false, isSafetyPollEnabled: () => deps.isNotifySafetyPollEnabled?.() ?? true, now: () => deps.clock.now() }); }
-  start(): void { if (this.polling != null) return; this.notifyGate.reset(); this.polling = this.deps.pollPolicy.start(() => this.tick()); }
-  stop(): void { this.polling?.dispose(); this.polling = null; this.backoffUntilMs = 0; }
-  requestDrain(): void { this.notifyGate.recordNotify(); if (this.polling != null) void this.tick(); }
-  async tick(): Promise<void> { if (this.isTicking || this.deps.clock.now() < this.backoffUntilMs || !this.notifyGate.shouldDrain({ hasOwedWork: this.pendingAckIds.length > 0 })) return; this.isTicking = true; try { const result = await this.call<{ events?: unknown }>("/slate/xuser/poll", { ackIds: this.pendingAckIds }), previouslyAcked = new Set(this.pendingAckIds), nextAckIds: string[] = [], nextAckSet = new Set<string>(), recordAck = (id: string) => { nextAckIds.push(id); nextAckSet.add(id); }; for (const value of Array.isArray(result.events) ? result.events : []) { if (typeof value !== "object" || value === null) continue; const event = value as Record<string, unknown>; if (typeof event.id !== "string" || typeof event.kind !== "string") continue; if (previouslyAcked.has(event.id) || nextAckSet.has(event.id)) { recordAck(event.id); continue; } try { if (await this.deps.onEvent(event)) recordAck(event.id); } catch {} } this.pendingAckIds = nextAckIds; this.notifyGate.recordPoll(); } catch (error) { this.backoffUntilMs = this.deps.clock.now() + XUSER_RELAY_ERROR_BACKOFF_MS; this.deps.onPollError?.(error); } finally { this.isTicking = false; } }
-  async call<Result>(path: string, body: unknown): Promise<Result> { const backendUrl = this.deps.getBackendUrl(), accessToken = await this.deps.getAccessToken({ backendUrl }), response = await this.fetchImpl(new URL(path, backendUrl).toString(), { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}`, ...getSlateBackendClientHeaders() }, body: JSON.stringify(body) }); if (!response.ok) throw new SlateXuserRelayHttpError(response.status, path); return await response.json() as Result; }
-  async createRoomFromAgent(args: unknown): Promise<Record<string, unknown>> { try { const result = await this.call<{ shareUrl: string; expiresAtMs: number; room: { roomId: string } }>("/slate/share-rooms/from-agent", args); return { status: "ok", shareUrl: result.shareUrl, expiresAtMs: result.expiresAtMs, roomId: result.room.roomId }; } catch (error) { return { status: "error", message: describeRelayError(error) }; } }
-  createRoom<Result>(args: unknown): Promise<Result> { return this.call("/slate/share-rooms", args); }
-  async createRoomInvite(roomId: string): Promise<Record<string, unknown>> { try { const result = await this.call<{ shareUrl: string; expiresAtMs: number; room: { roomId: string } }>("/slate/share-rooms/invite-links", { roomId }); return { status: "ok", shareUrl: result.shareUrl, expiresAtMs: result.expiresAtMs, roomId: result.room.roomId }; } catch (error) { return { status: "error", message: describeRelayError(error) }; } }
-  async joinRoom(link: string): Promise<Record<string, unknown>> { try { const result = await this.call<Record<string, unknown>>("/slate/share-rooms/join", { link }); if (result.status === "pending") return { status: "pending", roomName: result.roomName ?? "the shared room" }; if (result.status === "already-member") { const room = typeof result.room === "object" && result.room !== null ? result.room as Record<string, unknown> : undefined; return { status: "already-member", roomName: room?.name ?? "the shared room", ...(room?.roomId != null ? { roomId: room.roomId } : {}) }; } if (result.status === "invalid" || result.status === "denied" || result.status === "rate-limited") return { status: result.status }; return { status: "error", message: "Unexpected response." }; } catch (error) { return { status: "error", message: describeRelayError(error) }; } }
-  respondToJoinRequest<Result>(args: unknown): Promise<Result> { return this.call("/slate/share-rooms/join/respond", args); }
-  addOwnAgent<Result>(args: unknown): Promise<Result> { return this.call("/slate/share-rooms/agents/add", args); }
-  setRoomPicture<Result>(args: unknown): Promise<Result> { return this.call("/slate/share-rooms/picture", args); }
-  removeOwnAgent<Result>(args: unknown): Promise<Result> { return this.call("/slate/share-rooms/agents/remove", args); }
-  removeDeletedAgent<Result>(agentId: string): Promise<Result> { return this.call("/slate/share-rooms/agents/remove-deleted", { agentId }); }
-  leaveRoom<Result>(roomId: string, targetAuthId?: string): Promise<Result> { return this.call("/slate/share-rooms/leave", { roomId, ...(targetAuthId == null ? {} : { targetAuthId }) }); }
-  fetchShareState<Result>(): Promise<Result> { return this.call("/slate/share-state", {}); }
-  async send(payload: unknown): Promise<{ timestampMs?: number }> { const result = await this.call<{ timestampMs?: unknown }>("/slate/xuser/send", payload); return typeof result.timestampMs === "number" && Number.isFinite(result.timestampMs) ? { timestampMs: result.timestampMs } : {}; }
+  readonly #http: XuserRelayHttpApi;
+  readonly #polling: XuserRelayPolling;
+  readonly #routes: XuserRelayRoomRoutes;
+
+  constructor(readonly deps: XuserRelayClientDependencies) {
+    this.#http = new XuserRelayHttpApi(deps);
+    this.#polling = new XuserRelayPolling(deps, (path, body) => this.call(path, body));
+    this.#routes = new XuserRelayRoomRoutes((path, body) => this.call(path, body));
+  }
+
+  start(): void {
+    this.#polling.start();
+  }
+
+  stop(): void {
+    this.#polling.stop();
+  }
+
+  requestDrain(): void {
+    this.#polling.requestDrain();
+  }
+
+  tick(): Promise<void> {
+    return this.#polling.tick();
+  }
+
+  call<Result>(path: string, body: unknown): Promise<Result> {
+    return this.#http.call(path, body);
+  }
+
+  createRoomFromAgent(args: unknown): Promise<Record<string, unknown>> {
+    return this.#routes.createFromAgent(args);
+  }
+
+  createRoom<Result>(args: unknown): Promise<Result> {
+    return this.#routes.create(args);
+  }
+
+  createRoomInvite(roomId: string): Promise<Record<string, unknown>> {
+    return this.#routes.invite(roomId);
+  }
+
+  joinRoom(link: string): Promise<Record<string, unknown>> {
+    return this.#routes.join(link);
+  }
+
+  respondToJoinRequest<Result>(args: unknown): Promise<Result> {
+    return this.#routes.answerJoin(args);
+  }
+
+  addOwnAgent<Result>(args: unknown): Promise<Result> {
+    return this.#routes.addAgent(args);
+  }
+
+  setRoomPicture<Result>(args: unknown): Promise<Result> {
+    return this.#routes.changePicture(args);
+  }
+
+  removeOwnAgent<Result>(args: unknown): Promise<Result> {
+    return this.#routes.removeAgent(args);
+  }
+
+  removeDeletedAgent<Result>(agentId: string): Promise<Result> {
+    return this.#routes.forgetAgent(agentId);
+  }
+
+  leaveRoom<Result>(roomId: string, targetAuthId?: string): Promise<Result> {
+    return this.#routes.leave(roomId, targetAuthId);
+  }
+
+  fetchShareState<Result>(): Promise<Result> {
+    return this.#routes.fetchState();
+  }
+
+  send(payload: unknown): Promise<{ timestampMs?: number }> {
+    return this.#routes.send(payload);
+  }
 }
-export function describeRelayError(error: unknown): string { if (error instanceof SlateXuserRelayHttpError) { if (error.status === 403) return "Sharing isn't enabled for your account."; if (error.status === 429) return "You're doing that too often. Try again in a minute."; } return "Couldn't reach the sharing service. Check your connection and try again."; }

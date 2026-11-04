@@ -7,15 +7,15 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { AGENT_STORE_RESERVED_PATH_PREFIX } from "../constants/agent-store-ids.ts"
 import {
-  AGENT_STORE_RESERVED_PATH_PREFIX,
   isAgentStoreId,
   isAgentStoreShareMountKey,
   isCloudAgentStoreId,
   isValidBareUuid,
   parseTeamAgentStoreSourceId,
   parseUserAgentStoreSourceId,
-} from "../constants/agent-store-ids.ts";
+} from "./identifiers.ts";
 
 export const AGENT_STORE_SYNC_DIR_NAME = ".sync";
 

@@ -7,7 +7,9 @@ import assert from "node:assert/strict";
 import { ResumeActionHandler } from "../../source/packages/agent/actions/user-message-action/resume-action-handler.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { AgentConversationTurnHandle } from "../../source/packages/agent/state.ts";
-import { RequestContext, RequestContextResult, RequestContextSuccess } from "../../source/packages/proto/generated/agent/v1/request_context_exec_pb.ts";
+import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts";
+import { RequestContext, RequestContextResult, RequestContextSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts";
 
 function stateHandler(options: Record<string, unknown> = {}) {
   return {
@@ -67,9 +69,9 @@ test("the setup step refuses a non-agent last turn", async () => {
   );
 });
 
-function realTurn(append: unknown[]): unknown {
+function realTurn(append: unknown[], mode: unknown = "user-message"): unknown {
   const turn = Object.create(AgentConversationTurnHandle.prototype) as Record<string, any>;
-  turn.userMessage = { get: async () => ({ mode: "user-message" }) };
+  turn.userMessage = { get: async () => ({ mode }) };
   turn.appendPromptMessages = (messages: unknown) => { append.push(messages); };
   return turn;
 }
@@ -107,6 +109,27 @@ test("an assistant message without tool calls resumes with nothing to execute", 
   const state = stateHandler({ messages: [resumeInput("plain answer")], turns: [{ get: async () => turn }] });
   assert.equal(await handler.executePendingToolCalls(ctx, state, {}, { repositoryInfo: [] }, "inv"), true);
   assert.equal(appended.length, 1);
+});
+
+test("a resumed turn gives its tools the mode stored on the user message", async () => {
+  const ctx = createContext();
+  const modes: unknown[] = [];
+  const handler = instance();
+  handler.config.toolsGenerator = (options: { mode?: unknown }) => {
+    modes.push(options.mode);
+    return {
+      getStaticTools: () => [],
+      getToolExecutionSet: () => ({ modelVisibleTools: [], additionalExecutableTools: [] }),
+    };
+  };
+  const turn = realTurn([], AgentMode.PLAN);
+  const state = stateHandler({
+    messages: [resumeInput("plain answer")],
+    turns: [{ get: async () => turn }],
+  });
+
+  assert.equal(await handler.executePendingToolCalls(ctx, state, {}, { repositoryInfo: [] }, "inv"), true);
+  assert.deepEqual(modes, [SlateMode.PLAN]);
 });
 
 test("a turn that is present is resumed through the loop", async () => {

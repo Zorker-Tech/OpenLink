@@ -1,97 +1,48 @@
-/**
- * Shrinking an image before it is sent anywhere.
- *
- * Screenshots and pasted images arrive far larger than anything useful: they cost tokens, upload time
- * and memory, and a model reads a 4000-pixel-wide screenshot no better than a 1024-pixel one. Two
- * caps apply — a longest-edge dimension and a byte budget — and when the byte budget is what binds,
- * the image is scaled down step by step until it fits.
- */
-
 import { getImageCodecs } from "./image-codecs.ts"
-import { decodeWebp, encodeWebp, isWebp, webpSize } from "./webp.ts"
+import { encodeWithinByteLimit } from "./image-resize-byte-budget.ts"
+import {
+  MAX_IMAGE_SIZE_BYTES,
+  targetDimensions,
+} from "./image-resize-dimensions.ts"
+import { isWebp, resizeWebpBufferIfNeeded } from "./image-resize-webp.ts"
 
-export const MAX_IMAGE_DIMENSION = 1024
-export const MAX_WEBP_IMAGE_DIMENSION = 1280
-export const MAX_IMAGE_SIZE_BYTES = 1024 * 1024
-const BYTE_BUDGET_SCALE_STEP = 0.8
-
-const toUint8Array = (buffer: Buffer): Uint8Array =>
-  new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+export { MAX_IMAGE_DIMENSION, MAX_IMAGE_SIZE_BYTES, MAX_WEBP_IMAGE_DIMENSION, targetDimensions } from "./image-resize-dimensions.ts"
 
 type SupportedMimeType = "image/png" | "image/bmp" | "image/tiff" | "image/x-ms-bmp" | "image/gif" | "image/jpeg"
 
-function mimeTypeOf(image: { mime?: string }): SupportedMimeType {
-  switch (image.mime) {
-    case "image/png": return "image/png"
-    case "image/bmp": return "image/bmp"
-    case "image/tiff": return "image/tiff"
-    case "image/x-ms-bmp": return "image/x-ms-bmp"
-    case "image/gif": return "image/gif"
-    case "image/jpeg": return "image/jpeg"
-    default: return "image/png"
-  }
+const MIME_BY_SOURCE: Readonly<Record<string, SupportedMimeType>> = {
+  "image/png": "image/png",
+  "image/bmp": "image/bmp",
+  "image/tiff": "image/tiff",
+  "image/x-ms-bmp": "image/x-ms-bmp",
+  "image/gif": "image/gif",
+  "image/jpeg": "image/jpeg",
 }
 
-/** The largest size that fits the cap, preserving the aspect ratio. */
-export function targetDimensions(
-  width: number,
-  height: number,
-  maxDimension = MAX_IMAGE_DIMENSION,
-): { width: number; height: number; needsResize: boolean } {
-  let newWidth = width
-  let newHeight = height
-  if (width > height) {
-    if (width > maxDimension) {
-      newWidth = maxDimension
-      newHeight = Math.max(1, Math.round(height * maxDimension / width))
-    }
-  } else if (height > maxDimension) {
-    newHeight = maxDimension
-    newWidth = Math.max(1, Math.round(width * maxDimension / height))
-  }
-  return { width: newWidth, height: newHeight, needsResize: newWidth !== width || newHeight !== height }
+function outputMimeType(image: { mime?: string }): SupportedMimeType {
+  return MIME_BY_SOURCE[image.mime ?? ""] ?? "image/png"
 }
 
-async function resizeWebp(imageData: Buffer): Promise<{ data: Uint8Array; mimeType: "image/webp" }> {
-  const dimensions = webpSize(imageData)
-  const withinCap = dimensions !== undefined &&
-    !targetDimensions(dimensions.width, dimensions.height, MAX_WEBP_IMAGE_DIMENSION).needsResize
-  if (withinCap && imageData.length <= MAX_IMAGE_SIZE_BYTES) {
-    return { data: toUint8Array(imageData), mimeType: "image/webp" }
-  }
-  const decoded = await decodeWebp(imageData)
-  const codecs = await getImageCodecs()
-  const image = codecs.fromBitmap({ data: Buffer.from(decoded.data), width: decoded.width, height: decoded.height })
-  let { width, height, needsResize } = targetDimensions(image.bitmap.width, image.bitmap.height, MAX_WEBP_IMAGE_DIMENSION)
-  if (needsResize) image.resize({ w: width, h: height })
-  let result = await encodeWebp({ data: image.bitmap.data, width: image.bitmap.width, height: image.bitmap.height })
-  while (result.length > MAX_IMAGE_SIZE_BYTES && width > 1 && height > 1) {
-    width = Math.max(1, Math.round(width * BYTE_BUDGET_SCALE_STEP))
-    height = Math.max(1, Math.round(height * BYTE_BUDGET_SCALE_STEP))
-    image.resize({ w: width, h: height })
-    result = await encodeWebp({ data: image.bitmap.data, width: image.bitmap.width, height: image.bitmap.height })
-  }
-  return { data: toUint8Array(result), mimeType: "image/webp" }
+function copyBytes(buffer: Buffer): Uint8Array {
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 }
 
 export async function resizeImageBufferIfNeeded(imageData: Buffer): Promise<{ data: Uint8Array; mimeType: string }> {
-  if (isWebp(imageData)) return resizeWebp(imageData)
+  if (isWebp(imageData)) return resizeWebpBufferIfNeeded(imageData)
+
   const codecs = await getImageCodecs()
   const image = await codecs.read(imageData)
-  const mimeType = mimeTypeOf(image)
-  const dimensions = targetDimensions(image.width, image.height)
-  if (!dimensions.needsResize && imageData.length <= MAX_IMAGE_SIZE_BYTES) {
-    return { data: toUint8Array(imageData), mimeType }
+  const mimeType = outputMimeType(image)
+  const target = targetDimensions(image.width, image.height)
+  if (!target.needsResize && imageData.length <= MAX_IMAGE_SIZE_BYTES) {
+    return { data: copyBytes(imageData), mimeType }
   }
-  let width = dimensions.width
-  let height = dimensions.height
-  if (dimensions.needsResize) image.resize({ w: width, h: height })
-  let result = await image.getBuffer(mimeType)
-  while (result.length > MAX_IMAGE_SIZE_BYTES && width > 1 && height > 1) {
-    width = Math.max(1, Math.round(width * BYTE_BUDGET_SCALE_STEP))
-    height = Math.max(1, Math.round(height * BYTE_BUDGET_SCALE_STEP))
-    image.resize({ w: width, h: height })
-    result = await image.getBuffer(mimeType)
-  }
-  return { data: toUint8Array(result), mimeType }
+
+  const encoded = await encodeWithinByteLimit(
+    image,
+    target,
+    async () => await image.getBuffer(mimeType),
+    MAX_IMAGE_SIZE_BYTES,
+  )
+  return { data: copyBytes(encoded), mimeType }
 }

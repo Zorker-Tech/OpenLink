@@ -20,16 +20,18 @@
 import type { Context } from "../../../../context/context.ts"
 import { createLogger } from "../../../../context/index.ts"
 import { createCounter } from "../../../../metrics/index.ts"
-import { canvasDiagnosticsExecutorResource } from "../../../../agent-exec/canvas-diagnostics.ts"
 import { agentStoreConflictNoticeExecutorResource, conflictNoticeAck, conflictNoticeNoteDeferredEagerWrittenPaths, conflictNoticePeek, conflictNoticeRelease, conflictNoticeSyncAndPeek } from "../../../../agent-exec/agent-store-conflict-notice.ts"
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
-import type { Executor, RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
-import { CanvasDiagnosticsArgs, type CanvasDiagnosticsResult } from "../../../../proto/generated/agent/v1/canvas_diagnostics_exec_pb.ts"
-import { DiagnosticSeverity, type Diagnostic } from "../../../../proto/generated/agent/v1/diagnostics_exec_pb.ts"
+import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
+import {
+  canvasDiagnosticsReaderFromResources,
+  type SlateCanvasDiagnostic,
+  type SlateCanvasDiagnosticsReader,
+} from "../../../../../adapters/interop/agent/canvas-diagnostics-operation-adapter.ts"
 import { getConversationId } from "../../../utils/request-scope.ts"
 import { CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS } from "../../../utils/config-overrides.ts"
 import { delay } from "../../../../utils/promise-tools.ts"
-import { isManagedCanvasPath } from "../../../../utils/canvas-paths.ts"
+import { isWorkspaceCanvasDocument } from "../../../../utils/canvas-paths.ts"
 
 
 const logger = createLogger("@slate/agent");
@@ -66,8 +68,6 @@ export interface PostWriteDecorationOptions {
   readonly forceGraceTimeoutMs?: number | undefined;
   readonly onWriteBarrier?: ((event: { readonly durationMs: number; readonly outcome: string }) => void) | undefined;
 }
-
-interface CanvasDiagnosticExecutor extends Executor<CanvasDiagnosticsArgs, CanvasDiagnosticsResult> {}
 
 /** One conflict the journal still holds, by the id the store gave it. */
 interface ConflictEvent {
@@ -121,18 +121,16 @@ const CANVAS_DIAGNOSTICS_TIMEOUT = Symbol("canvasPostEditDiagnosticsTimeout");
 const NO_CANVAS_ISSUES = "Canvas TypeScript check: no errors.";
 
 /** One diagnostic as the model reads it: its severity, position, message and source. */
-function formatCanvasDiagnostic(diagnostic: Diagnostic): string {
-  const severity = diagnostic.severity === DiagnosticSeverity.WARNING ? "WARNING" : "ERROR";
-  const line = diagnostic.range?.start?.line ?? 0;
-  const column = diagnostic.range?.start?.column ?? 0;
+function formatCanvasDiagnostic(diagnostic: SlateCanvasDiagnostic): string {
+  const severity = diagnostic.severity === "warning" ? "WARNING" : "ERROR";
   const source = diagnostic.source ? ` (${diagnostic.source})` : "";
-  return `  [${severity}] L${line}:${column} - ${diagnostic.message}${source}`;
+  return `  [${severity}] L${diagnostic.line}:${diagnostic.column} - ${diagnostic.message}${source}`;
 }
 
 /** What a canvas check found, or nothing when there was nothing worth appending. */
-function formatCanvasIssues(path: string, diagnostics: readonly Diagnostic[]): string | undefined {
+function formatCanvasIssues(path: string, diagnostics: readonly SlateCanvasDiagnostic[]): string | undefined {
   const filtered = diagnostics.filter(
-    (diagnostic: Diagnostic) => diagnostic.severity === DiagnosticSeverity.ERROR || diagnostic.severity === DiagnosticSeverity.WARNING,
+    diagnostic => diagnostic.severity === "error" || diagnostic.severity === "warning",
   );
   if (filtered.length === 0) return NO_CANVAS_ISSUES;
   const heading = `Canvas TypeScript check: ${filtered.length} issue${filtered.length > 1 ? "s" : ""} in ${path}:`;
@@ -142,7 +140,7 @@ function formatCanvasIssues(path: string, diagnostics: readonly Diagnostic[]): s
 /** Runs the canvas check for a file that was just written, bounded by its own timeout. */
 async function runCanvasPostEditDiagnostics(
   ctx: Context,
-  executor: CanvasDiagnosticExecutor,
+  reader: SlateCanvasDiagnosticsReader,
   filePath: string,
   timeoutMs: number,
   toolCallId: string,
@@ -152,26 +150,13 @@ async function runCanvasPostEditDiagnostics(
     timeoutId = setTimeout(() => resolve(CANVAS_DIAGNOSTICS_TIMEOUT), timeoutMs);
   });
   try {
-    const raced = await Promise.race([
-      executor.execute(ctx, new CanvasDiagnosticsArgs({ path: filePath, toolCallId })),
-      timedOut,
-    ]);
-    if (raced === CANVAS_DIAGNOSTICS_TIMEOUT || raced.result.case !== "success") return undefined;
-    const canvas = raced.result.value;
-    return formatCanvasIssues(canvas.path, canvas.diagnostics);
+    const raced = await Promise.race([reader.read(ctx, filePath, toolCallId), timedOut]);
+    if (raced === CANVAS_DIAGNOSTICS_TIMEOUT || raced === undefined) return undefined;
+    return formatCanvasIssues(raced.path, raced.diagnostics);
   } catch {
     return undefined;
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
-  }
-}
-
-/** The canvas diagnostics executor, or nothing when this session does not have one. */
-function canvasDiagnosticsExecutor(resourceAccessor: ResourceAccessor<RemoteExecManager>): CanvasDiagnosticExecutor | undefined {
-  try {
-    return resourceAccessor.get(canvasDiagnosticsExecutorResource);
-  } catch {
-    return undefined;
   }
 }
 
@@ -183,10 +168,10 @@ async function decorateWithCanvasDiagnostics(
   resultForModel: string,
   toolCallId: string,
 ): Promise<string> {
-  if (!isManagedCanvasPath(path)) return resultForModel;
-  const executor = canvasDiagnosticsExecutor(resourceAccessor);
-  if (executor === undefined) return resultForModel;
-  const diagnostics = await runCanvasPostEditDiagnostics(ctx, executor, path, CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS(ctx), toolCallId);
+  if (!isWorkspaceCanvasDocument(path)) return resultForModel;
+  const reader = canvasDiagnosticsReaderFromResources(resourceAccessor);
+  if (reader === undefined) return resultForModel;
+  const diagnostics = await runCanvasPostEditDiagnostics(ctx, reader, path, CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS(ctx), toolCallId);
   return diagnostics === undefined ? resultForModel : `${resultForModel}\n\n${diagnostics}`;
 }
 

@@ -7,43 +7,39 @@
  * falling back to the default, and nothing has to be threaded through the call graph.
  */
 
-import { createKey, type Context } from "../../context/context.ts"
+import { readContextOverride } from "./config-override-reader.ts"
 
-export const configOverridesKey = createKey<Record<string, unknown>>(Symbol("configOverrides"), {})
+export { slateConfigOverridesKey } from "./config-override-reader.ts"
 
-export function overridableConfig<T>(key: string, defaultValue: T): (ctx: Context) => T {
-  return ctx => (ctx.get(configOverridesKey)[key] as T | null | undefined) ?? defaultValue
-}
+export const READ_LINT_TIMEOUT_MS = readContextOverride("read_lint_timeout_ms", 10_000)
+export const WRITE_EVAL_TRANSCRIPTS = readContextOverride("writeEvalTranscripts", false)
 
-export const READ_LINT_TIMEOUT_MS = overridableConfig("read_lint_timeout_ms", 10_000)
-export const WRITE_EVAL_TRANSCRIPTS = overridableConfig("writeEvalTranscripts", false)
-
-export const EVAL_ENFORCED_TEMPERATURE = overridableConfig<number | undefined>("evalServiceEnforcedTemperature", undefined)
-export const EVAL_ENFORCED_TOP_P = overridableConfig<number | undefined>("evalServiceEnforcedTopP", undefined)
-export const EVAL_ENFORCED_TOP_K = overridableConfig<number | undefined>("evalServiceEnforcedTopK", undefined)
-export const EVAL_ENFORCED_MIN_P = overridableConfig<number | undefined>("evalServiceEnforcedMinP", undefined)
+export const EVAL_ENFORCED_TEMPERATURE = readContextOverride<number | undefined>("evalServiceEnforcedTemperature", undefined)
+export const EVAL_ENFORCED_TOP_P = readContextOverride<number | undefined>("evalServiceEnforcedTopP", undefined)
+export const EVAL_ENFORCED_TOP_K = readContextOverride<number | undefined>("evalServiceEnforcedTopK", undefined)
+export const EVAL_ENFORCED_MIN_P = readContextOverride<number | undefined>("evalServiceEnforcedMinP", undefined)
 export const EVAL_ENFORCED_TEMPERATURE_NON_THINKING =
-  overridableConfig<number | undefined>("evalServiceEnforcedTemperatureNonThinking", undefined)
+  readContextOverride<number | undefined>("evalServiceEnforcedTemperatureNonThinking", undefined)
 export const EVAL_ENFORCED_AGENT_TOKEN_LIMIT =
-  overridableConfig<number | undefined>("evalServiceEnforcedAgentTokenLimit", undefined)
+  readContextOverride<number | undefined>("evalServiceEnforcedAgentTokenLimit", undefined)
 export const EVAL_ENFORCED_MAX_TOKENS_BEFORE_SUMMARIZATION =
-  overridableConfig<number | undefined>("evalServiceEnforcedMaxTokensBeforeSummarization", undefined)
-export const EVAL_ENFORCED_SELF_SUMMARY = overridableConfig<boolean | undefined>("evalServiceEnforcedSelfSummary", undefined)
+  readContextOverride<number | undefined>("evalServiceEnforcedMaxTokensBeforeSummarization", undefined)
+export const EVAL_ENFORCED_SELF_SUMMARY = readContextOverride<boolean | undefined>("evalServiceEnforcedSelfSummary", undefined)
 export const EVAL_ENFORCED_WAIT_FOR_SUMMARIZATION_COMPLETION =
-  overridableConfig<string | undefined>("evalServiceEnforcedWaitForSummarizationCompletion", undefined)
+  readContextOverride<string | undefined>("evalServiceEnforcedWaitForSummarizationCompletion", undefined)
 export const EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT =
-  overridableConfig<number | undefined>("evalServiceEnforcedSelfSummaryTokenLimit", undefined)
+  readContextOverride<number | undefined>("evalServiceEnforcedSelfSummaryTokenLimit", undefined)
 export const EVAL_ENFORCED_SUMMARIZATION_MODEL_V3_VARIANT =
-  overridableConfig<string | undefined>("evalServiceEnforcedSummarizationModelV3Variant", undefined)
-export const EVAL_ENFORCED_EFFORT_LEVEL = overridableConfig<string | undefined>("evalServiceEnforcedEffortLevel", undefined)
+  readContextOverride<string | undefined>("evalServiceEnforcedSummarizationModelV3Variant", undefined)
+export const EVAL_ENFORCED_EFFORT_LEVEL = readContextOverride<string | undefined>("evalServiceEnforcedEffortLevel", undefined)
 export const EVAL_ENFORCED_IS_EAGER_EDITING_MODEL =
-  overridableConfig<boolean | undefined>("evalServiceEnforcedIsEagerEditingModel", undefined)
+  readContextOverride<boolean | undefined>("evalServiceEnforcedIsEagerEditingModel", undefined)
 
-export const DISABLE_SEMANTIC_SEARCH = overridableConfig("disableSemanticSearch", false)
-export const ALLOW_PROMPT_TWEAKS = overridableConfig("allowPromptTweaks", false)
-export const ALLOW_TASK_TOOL_IN_RL_HARNESS = overridableConfig("allowTaskToolInRlHarness", false)
-export const ALLOW_NESTED_TASK_TOOL_IN_RL_HARNESS = overridableConfig("allowNestedTaskToolInRlHarness", false)
+export const DISABLE_SEMANTIC_SEARCH = readContextOverride("disableSemanticSearch", false)
+export const ALLOW_PROMPT_TWEAKS = readContextOverride("allowPromptTweaks", false)
+export const ALLOW_TASK_TOOL_IN_RL_HARNESS = readContextOverride("allowTaskToolInRlHarness", false)
+export const ALLOW_NESTED_TASK_TOOL_IN_RL_HARNESS = readContextOverride("allowNestedTaskToolInRlHarness", false)
 export const SUMMARIZATION_FORCE_DETERMINISTIC_FALLBACK =
-  overridableConfig<boolean | undefined>("summarizationForceDeterministicFallback", undefined)
+  readContextOverride<boolean | undefined>("summarizationForceDeterministicFallback", undefined)
 export const CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS =
-  overridableConfig("canvas_post_edit_diagnostics_timeout_ms", 2_000)
+  readContextOverride("canvas_post_edit_diagnostics_timeout_ms", 2_000)

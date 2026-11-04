@@ -7,12 +7,12 @@
  * attached without a tree is skipped rather than shown empty, since a path alone says nothing.
  */
 
-import type { LsDirectoryTreeNode } from "../../proto/generated/agent/v1/ls_exec_pb.ts"
+import { projectLsDirectoryTree } from "../../../adapters/interop/agent/ls-directory-tree-adapter.ts"
 import { renderDirectoryTreeWithinBudget } from "../tools/core/ls/formatters.ts"
 
 export interface SelectedFolderForPrompt {
   readonly path: string
-  readonly directoryTree?: LsDirectoryTreeNode | undefined
+  readonly directoryTree?: unknown
 }
 
 export function renderAttachedFoldersContext(folders: readonly SelectedFolderForPrompt[]): string | undefined {
@@ -20,7 +20,9 @@ export function renderAttachedFoldersContext(folders: readonly SelectedFolderFor
   const folderContents: string[] = []
   for (const folder of folders) {
     if (!folder.directoryTree) continue
-    const formattedTree = renderDirectoryTreeWithinBudget(folder.directoryTree)
+    const tree = projectLsDirectoryTree(folder.directoryTree)
+    if (tree === undefined) continue
+    const formattedTree = renderDirectoryTreeWithinBudget(tree)
     folderContents.push(`Folder: ${folder.path}
 Contents of directory:
 ${formattedTree.result}`)

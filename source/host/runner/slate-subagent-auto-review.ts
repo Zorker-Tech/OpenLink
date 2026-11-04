@@ -4,8 +4,6 @@
  * What the subagent was asked for and what it came back with are put side by side, so a review can tell work that was
  * done from work that was claimed.
  */
-import { Struct } from "@bufbuild/protobuf";
-import { SmartModeRiskTarget } from "../../packages/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
 import {
   fingerprintSlateAutoReviewTarget,
   type SlateAutoReviewController,
@@ -15,6 +13,7 @@ import {
 import type { AutoReviewClassifierDecision } from "./slate-auto-review-classifier-run.ts";
 import { buildProjectPermissionsContext } from "./slate-computer-auto-review.ts";
 import { summarizeSlateSubagentAction } from "./slate-auto-review-summaries.ts";
+import { createSlateAutoReviewRiskTarget, type SlateAutoReviewRiskTarget } from "./auto-review-classifier-contracts.ts";
 
 export const SLATE_SUBAGENT_CLASSIFIER_TARGET_ACTION = "slate_subagent";
 export const SLATE_SUBAGENT_CLASSIFIER_ERROR_REASON =
@@ -75,7 +74,7 @@ export function buildSlateSubagentRiskTarget(input: {
   readonly personalInstructions?: InstructionPermissions;
   readonly userAutoRunInstructions?: InstructionPermissions;
   readonly projectAutoRunInstructions?: InstructionPermissions;
-}) {
+}): SlateAutoReviewRiskTarget {
   const { target } = input;
   const argumentsRecord = JSON.parse(JSON.stringify({
       surface: "subagent",
@@ -86,11 +85,8 @@ export function buildSlateSubagentRiskTarget(input: {
       readonly: target.readonly,
       resume: target.resume,
       project_permissions: buildProjectPermissionsContext(input),
-    }));
-  return new SmartModeRiskTarget({
-    action: SLATE_SUBAGENT_CLASSIFIER_TARGET_ACTION,
-    arguments: Struct.fromJson(argumentsRecord),
-  });
+    })) as Record<string, unknown>;
+  return createSlateAutoReviewRiskTarget(SLATE_SUBAGENT_CLASSIFIER_TARGET_ACTION, argumentsRecord);
 }
 
 export interface SubagentReviewOptions<Context> {

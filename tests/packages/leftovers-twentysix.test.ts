@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { BOOTSTRAP_CACHE_FILENAME, SLATE_EXPERIMENT_CLIENT_KEY } from "../../source/shared/node/experiments/slate-experiment-bootstrap.ts";
+import { BOOTSTRAP_CACHE_FILENAME } from "../../source/shared/node/experiments/slate-experiment-bootstrap.ts";
+import { SLATE_EXPERIMENT_CLIENT_KEY } from "../../source/adapters/interop/experiments/experiment-bootstrap-adapter.ts";
 import { AUTOMATIONS_DIRNAME, AUTOMATION_CHANGE_DEBOUNCE_MS, CONFIG_FILENAME, FileAutomationStore, RUNS_FILENAME } from "../../source/host/automations/automation-store.ts";
 import { MAX_IN_FLIGHT_TRANSPORT_REPORTS, PENDING_SEND_ECHO_MAX, SSE_ECHO_STAGE } from "../../source/coordinator/telemetry/transport-stage-recorder.ts";
 import { classifyBaseUrlKind, classifyGatewayError, classifyGatewayFetchFailure, SlateGatewayUnreachableError } from "../../source/coordinator/gateway/gateway-reachability.ts";

@@ -1,8 +1,59 @@
-/**
- * The account a server answered as, as its life goes on.
- *
- * A server that is not signed in answers provisionally, and the slot it occupies is only named as the account it really
- * is once the sign-in says so — so a caller never files an answer under an account it has not proven.
- */
-import { provisionalMcpAccountServerIdentifier } from "../../mcp.ts"; import { runtimeConfigFromDisplay, normalizeAccountKey, type AccountDisplayConfig, type DisplayServer } from "./mcp-display-runtime.ts"; import { SlateMcpConfigError } from "./mcp-config-error.ts"; import { parseInt32McpServerId, validateMcpServerId } from "./mcp-server-id.ts";
-export class SlateMcpAccountSlotLifecycle { constructor(private readonly deps: { backendMcpExec: { logoutAccount(args: unknown): Promise<void>; renameAccount(args: unknown): Promise<void>; deleteAccount(args: unknown): Promise<void> }; resolveDisplayServer(id: string): Promise<DisplayServer | undefined>; reloadServers(): Promise<any>; clearPendingAuthWatch(id: string, key: string): any; notifyWatchCancelled(watch: any): void; lastAccountDisplayConfig(): AccountDisplayConfig | null; setLastAccountDisplayConfig(display: AccountDisplayConfig): void; lastListedState(): any; setLastListedState(state: any): void; definitionSource: { adoptAccountConfig(config: any): void }; invalidateToolsCache(): void; resetPushState(): void }) {} private async resolve(raw: string) { const serverId = validateMcpServerId(raw), server = await this.deps.resolveDisplayServer(serverId); if (server == null) throw new SlateMcpConfigError("MCP server not found."); if (!("url" in server.config)) throw new SlateMcpConfigError("This connector runs on Slate's computer and has no OAuth accounts."); return { serverId, serverUrl: server.config.url }; } async logoutAccount(id: string, key: string) { const accountKey = normalizeAccountKey(key), server = await this.resolve(id); await this.deps.backendMcpExec.logoutAccount({ serverUrl: server.serverUrl, accountKey }); this.deps.clearPendingAuthWatch(server.serverId, accountKey); return this.deps.reloadServers(); } async renameAccount(id: string, key: string, next: string) { const accountKey = normalizeAccountKey(key), newAccountKey = normalizeAccountKey(next), { serverId } = await this.resolve(id); await this.deps.backendMcpExec.renameAccount({ serverId: parseInt32McpServerId(serverId), accountKey, newAccountKey }); const watch = this.deps.clearPendingAuthWatch(serverId, accountKey); if (watch != null) this.deps.notifyWatchCancelled(watch); return this.commit(serverId, (slots) => slots.map((slot) => slot.accountKey === accountKey ? { accountKey: newAccountKey, hasToken: slot.hasToken } : slot), (summaries, row) => summaries.map((summary: any) => summary.id === serverId && summary.accountKey === accountKey ? { ...summary, accountKey: newAccountKey, serverIdentifier: provisionalMcpAccountServerIdentifier(row, newAccountKey) } : summary)) ?? this.deps.reloadServers(); } async removeAccount(id: string, key: string) { const accountKey = normalizeAccountKey(key), { serverId } = await this.resolve(id); await this.deps.backendMcpExec.deleteAccount({ serverId: parseInt32McpServerId(serverId), accountKey }); const watch = this.deps.clearPendingAuthWatch(serverId, accountKey); if (watch != null) this.deps.notifyWatchCancelled(watch); return this.commit(serverId, (slots) => slots.filter((slot) => slot.accountKey !== accountKey), (summaries) => summaries.filter((summary: any) => !(summary.id === serverId && summary.accountKey === accountKey))) ?? this.deps.reloadServers(); } private commit(serverId: string, patchSlots: (slots: NonNullable<DisplayServer["accounts"]>) => NonNullable<DisplayServer["accounts"]>, patchSummaries: (summaries: any[], row: string) => any[]): any | null { const display = this.deps.lastAccountDisplayConfig(), state = this.deps.lastListedState(); if (display == null || state == null) return null; const row = display.servers.find((server) => server.id === serverId); if (row == null) return null; const rowIdentifier = row.serverIdentifier ?? `mcp-row-${row.id}`, accounts = patchSlots(row.accounts ?? []); if (accounts.length === 0) return null; const patchedDisplay = { ...display, servers: display.servers.map((server) => server.id === serverId ? { ...server, accounts } : server) }; this.deps.setLastAccountDisplayConfig(patchedDisplay); this.deps.definitionSource.adoptAccountConfig(runtimeConfigFromDisplay(patchedDisplay)); this.deps.invalidateToolsCache(); this.deps.resetPushState(); const patchedState = { ...state, servers: patchSummaries(state.servers, rowIdentifier) }; this.deps.setLastListedState(patchedState); return patchedState; } }
+import { normalizeAccountLabel } from "./mcp-account-display-policy.ts";
+import { parseInt32McpServerId } from "./mcp-server-id.ts";
+import { commitAccountSlotChange, accountSlotSummaryIdentifier } from "./mcp-account-slot-commit.ts";
+import { resolveOAuthAccountServer } from "./mcp-account-slot-resolution.ts";
+import type { McpAccountSlotLifecycleDependencies } from "./mcp-account-slot-contracts.ts";
+
+export class SlateMcpAccountSlotLifecycle {
+  constructor(private readonly dependencies: McpAccountSlotLifecycleDependencies) {}
+
+  async logoutAccount(id: string, rawAccountKey: string): Promise<unknown> {
+    const accountKey = normalizeAccountLabel(rawAccountKey);
+    const { serverId, serverUrl } = await resolveOAuthAccountServer(this.dependencies, id);
+    await this.dependencies.backendMcpExec.logoutAccount({ serverUrl, accountKey });
+    this.dependencies.clearPendingAuthWatch(serverId, accountKey);
+    return this.dependencies.reloadServers();
+  }
+
+  async renameAccount(id: string, rawAccountKey: string, rawNewAccountKey: string): Promise<unknown> {
+    const accountKey = normalizeAccountLabel(rawAccountKey);
+    const newAccountKey = normalizeAccountLabel(rawNewAccountKey);
+    const { serverId } = await resolveOAuthAccountServer(this.dependencies, id);
+    await this.dependencies.backendMcpExec.renameAccount({
+      serverId: parseInt32McpServerId(serverId),
+      accountKey,
+      newAccountKey,
+    });
+    const pendingWatch = this.dependencies.clearPendingAuthWatch(serverId, accountKey);
+    if (pendingWatch != null) this.dependencies.notifyWatchCancelled(pendingWatch);
+
+    const updated = commitAccountSlotChange(
+      this.dependencies,
+      serverId,
+      (slots) => slots.map((slot) => slot.accountKey === accountKey
+        ? { accountKey: newAccountKey, hasToken: slot.hasToken }
+        : slot),
+      (summaries, rowIdentifier) => summaries.map((summary: any) =>
+        summary.id === serverId && summary.accountKey === accountKey
+          ? { ...summary, accountKey: newAccountKey, serverIdentifier: accountSlotSummaryIdentifier(rowIdentifier, newAccountKey) }
+          : summary),
+    );
+    return updated ?? this.dependencies.reloadServers();
+  }
+
+  async removeAccount(id: string, rawAccountKey: string): Promise<unknown> {
+    const accountKey = normalizeAccountLabel(rawAccountKey);
+    const { serverId } = await resolveOAuthAccountServer(this.dependencies, id);
+    await this.dependencies.backendMcpExec.deleteAccount({ serverId: parseInt32McpServerId(serverId), accountKey });
+    const pendingWatch = this.dependencies.clearPendingAuthWatch(serverId, accountKey);
+    if (pendingWatch != null) this.dependencies.notifyWatchCancelled(pendingWatch);
+
+    const updated = commitAccountSlotChange(
+      this.dependencies,
+      serverId,
+      (slots) => slots.filter((slot) => slot.accountKey !== accountKey),
+      (summaries) => summaries.filter((summary: any) => !(summary.id === serverId && summary.accountKey === accountKey)),
+    );
+    return updated ?? this.dependencies.reloadServers();
+  }
+}

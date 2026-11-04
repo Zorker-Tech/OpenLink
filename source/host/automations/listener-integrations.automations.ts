@@ -1,43 +1,87 @@
-/**
- * The integrations a listener may be connected for.
- *
- * The platform holds the list of what a listener can be connected to, as its own values rather than as anything a
- * surface sent.
- */
-import type { MethodInfoUnary } from "@bufbuild/protobuf";
-import { countListenerPlatforms, type ListenerPlatform } from "./listener-integrations.ts";
-import { DashboardService } from "../../packages/proto/generated/aiserver/v1/dashboard_connect.ts";
-import {
-  GetScmConnectionStatusRequest,
-  type GetScmConnectionStatusResponse,
-  GetSlackInstallUrlRequest,
-  type GetSlackInstallUrlResponse,
-  GetSlackUserSettingsRequest,
-  type GetSlackUserSettingsResponse
-} from "../../packages/proto/generated/aiserver/v1/dashboard_pb.ts";
-import { createSlateCursorBackendClient } from "../../shared/node/cursor-backend/cursor-inference.ts";
-export const DASHBOARD_INTEGRATIONS_URL = "https://cursor.com/dashboard?tab=integrations";
-export const LISTENER_PLATFORMS = [{ platform: "slack" as const }, { platform: "github" as const }];
-export const CONNECTOR_MANIFESTS = [{ platform: "slack" as const }, { platform: "github" as const }];
-export interface ListenerDashboardClient { getSlackUserSettings(): Promise<{ hasSlackAuth?: boolean }>; getScmConnectionStatus(): Promise<{ connected?: boolean }>; getSlackInstallUrl(): Promise<{ url: string }> }
-export function createListenerIntegrationReads(deps: { readonly auth?: { getAccessToken(args: { backendUrl: string }): Promise<string>; getMachineId(): Promise<string> }; readonly dashboard?: () => ListenerDashboardClient; readonly transcript: { listAllAutomationDefinitions(): Promise<readonly { automation: { isEnabled: boolean; trigger: Parameters<typeof countListenerPlatforms>[0][number]["trigger"] } }[]>; getAgentChannels(agentId: string): Promise<readonly { platform: string; [key: string]: unknown }[]> }; readonly sourceStatuses: () => ReadonlyMap<string, { state: string; detail?: string; scopeIssues?: readonly unknown[] }>; readonly log?: (message: string) => void }) {
-  const log = deps.log ?? ((message: string) => console.log(`[slate-listener-integrations] ${message}`));
+import { createListenerIntegrationsDashboard, DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/cursor-backend/listener-integrations-dashboard.ts"
+import { countListenerPlatforms, type ListenerPlatform } from "./listener-platforms.ts"
+
+export { DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/cursor-backend/listener-integrations-dashboard.ts"
+
+export const LISTENER_PLATFORMS = [{ platform: "slack" as const }, { platform: "github" as const }]
+export const CONNECTOR_MANIFESTS = [{ platform: "slack" as const }, { platform: "github" as const }]
+
+export interface ListenerDashboardClient {
+  getSlackUserSettings(): Promise<{ hasSlackAuth?: boolean }>
+  getScmConnectionStatus(): Promise<{ connected?: boolean }>
+  getSlackInstallUrl(): Promise<{ url: string }>
+}
+
+interface ListenerIntegrationDependencies {
+  readonly auth?: {
+    getAccessToken(args: { readonly backendUrl: string }): Promise<string>
+    getMachineId(): Promise<string>
+  }
+  readonly dashboard?: () => ListenerDashboardClient
+  readonly transcript: {
+    listAllAutomationDefinitions(): Promise<readonly { automation: { isEnabled: boolean; trigger: Parameters<typeof countListenerPlatforms>[0][number]["trigger"] } }[]>
+    getAgentChannels(agentId: string): Promise<readonly { platform: string; [key: string]: unknown }[]>
+  }
+  readonly sourceStatuses: () => ReadonlyMap<string, { state: string; detail?: string; scopeIssues?: readonly unknown[] }>
+  readonly log?: (message: string) => void
+}
+
+export function createListenerIntegrationReads(deps: ListenerIntegrationDependencies) {
+  const log = deps.log ?? ((message: string) => console.log(`[slate-listener-integrations] ${message}`))
   const dashboard = deps.dashboard ?? (() => {
-    if (deps.auth === undefined) throw new TypeError("listener integrations require auth");
-    const service = DashboardService as typeof DashboardService & {
-      readonly methods: typeof DashboardService.methods & {
-        readonly getSlackUserSettings: MethodInfoUnary<GetSlackUserSettingsRequest, GetSlackUserSettingsResponse>;
-        readonly getScmConnectionStatus: MethodInfoUnary<GetScmConnectionStatusRequest, GetScmConnectionStatusResponse>;
-        readonly getSlackInstallUrl: MethodInfoUnary<GetSlackInstallUrlRequest, GetSlackInstallUrlResponse>;
-      };
-    };
-    const client = createSlateCursorBackendClient(service, { getAccessToken: deps.auth.getAccessToken, getMachineId: deps.auth.getMachineId });
+    if (deps.auth === undefined) throw new TypeError("listener integrations require auth")
+    return createListenerIntegrationsDashboard(deps.auth)
+  })
+
+  async function isPlatformConnected(platform: ListenerPlatform): Promise<boolean> {
+    if (platform === "slack") return (await dashboard().getSlackUserSettings()).hasSlackAuth === true
+    return (await dashboard().getScmConnectionStatus()).connected === true
+  }
+
+  async function getIntegrations() {
+    const statuses = deps.sourceStatuses()
+    const definitions = await deps.transcript.listAllAutomationDefinitions()
+    const counts = countListenerPlatforms(definitions.map(({ automation }) => automation))
+    const readStatus = (platform: ListenerPlatform) => isPlatformConnected(platform).catch(error => {
+      const name = error instanceof Error ? error.name : typeof error
+      log(`${platform} connection read degraded to disconnected: ${name}`)
+      return false
+    })
+    const [slackConnected, githubConnected] = await Promise.all([readStatus("slack"), readStatus("github")])
+    const connectionState = { slack: slackConnected, github: githubConnected }
+
     return {
-      getSlackUserSettings: () => client.getSlackUserSettings(new GetSlackUserSettingsRequest({})),
-      getScmConnectionStatus: () => client.getScmConnectionStatus(new GetScmConnectionStatusRequest({})),
-      getSlackInstallUrl: () => client.getSlackInstallUrl(new GetSlackInstallUrlRequest({}))
-    };
-  });
-  const isPlatformConnected = async (platform: ListenerPlatform) => platform === "slack" ? (await dashboard().getSlackUserSettings()).hasSlackAuth === true : (await dashboard().getScmConnectionStatus()).connected === true;
-  return { isPlatformConnected, async getIntegrations() { const statuses = deps.sourceStatuses(), counts = countListenerPlatforms((await deps.transcript.listAllAutomationDefinitions()).map((entry) => entry.automation)), read = (platform: ListenerPlatform) => isPlatformConnected(platform).catch((error) => { log(`${platform} connection read degraded to disconnected: ${error instanceof Error ? error.name : typeof error}`); return false; }), [slack, github] = await Promise.all([read("slack"), read("github")]), connected = { slack, github }; return { integrations: LISTENER_PLATFORMS.map(({ platform }) => { const status = statuses.get(platform); return { platform, isConnected: connected[platform], state: status?.state ?? "idle", ...(status?.detail == null ? {} : { detail: status.detail }), ...(status?.scopeIssues?.length ? { scopeIssues: status.scopeIssues } : {}), neededByCount: counts[platform] }; }) }; }, async getConnectUrl(platform: ListenerPlatform) { if (platform !== "slack") return DASHBOARD_INTEGRATIONS_URL; try { return (await dashboard().getSlackInstallUrl()).url || DASHBOARD_INTEGRATIONS_URL; } catch { return DASHBOARD_INTEGRATIONS_URL; } }, async getAgentChannels(agentId: string) { const known = new Set(CONNECTOR_MANIFESTS.map(({ platform }) => platform)); return { manifests: CONNECTOR_MANIFESTS, connections: (await deps.transcript.getAgentChannels(agentId)).filter((connection) => known.has(connection.platform as ListenerPlatform)) }; } };
+      integrations: LISTENER_PLATFORMS.map(({ platform }) => {
+        const status = statuses.get(platform)
+        return {
+          platform,
+          isConnected: connectionState[platform],
+          state: status?.state ?? "idle",
+          ...(status?.detail == null ? {} : { detail: status.detail }),
+          ...(status?.scopeIssues?.length ? { scopeIssues: status.scopeIssues } : {}),
+          neededByCount: counts[platform],
+        }
+      }),
+    }
+  }
+
+  async function getConnectUrl(platform: ListenerPlatform): Promise<string> {
+    if (platform !== "slack") return DASHBOARD_INTEGRATIONS_URL
+    try {
+      return (await dashboard().getSlackInstallUrl()).url || DASHBOARD_INTEGRATIONS_URL
+    } catch {
+      return DASHBOARD_INTEGRATIONS_URL
+    }
+  }
+
+  async function getAgentChannels(agentId: string) {
+    const supported = new Set(CONNECTOR_MANIFESTS.map(({ platform }) => platform))
+    const connections = await deps.transcript.getAgentChannels(agentId)
+    return {
+      manifests: CONNECTOR_MANIFESTS,
+      connections: connections.filter(connection => supported.has(connection.platform as ListenerPlatform)),
+    }
+  }
+
+  return { isPlatformConnected, getIntegrations, getConnectUrl, getAgentChannels }
 }

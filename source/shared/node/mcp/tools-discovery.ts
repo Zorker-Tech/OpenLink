@@ -6,7 +6,7 @@
  * new look is in flight. A call goes to the side that owns its server — and a server on neither side is answered with
  * where it could have run rather than a silent failure.
  */
-import type { JsonValue } from "@bufbuild/protobuf";
+import type { JsonValue } from "@slate/work-domain";
 import { errorMessage } from "../../errors/summary.ts";
 import {
   formatMcpCustomInstructionToolNote,
@@ -19,7 +19,7 @@ import {
 } from "../../../host/extensions/scheduling.ts";
 import { displayRowOwnsIdentifier } from "./mcp-definition-source.ts";
 import { SlateMcpConfigError } from "./mcp-config-error.ts";
-import { generatedMcpResultFactory } from "./mcp-result-factory.ts";
+import { generatedMcpResultFactory } from "../../../adapters/interop/mcp/mcp-result-factory.ts";
 import {
   reportMcpHostEdgeDegraded,
   reportMcpHostEdgeFailure,
@@ -29,8 +29,8 @@ import {
   type McpContentItem,
   type McpResultLike,
   type McpResultFactory,
-} from "./mcp-image-assets.ts";
-import { toJsonArgs } from "./mcp-validation.ts";
+} from "../../../adapters/interop/mcp/mcp-image-result-adapter.ts";
+import { projectMcpArguments } from "./mcp-value-projection.ts";
 
 export const MCP_TOOLS_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const TOOLS_DISCOVERY_DEADLINE_MS = 120_000;
@@ -410,7 +410,7 @@ export function createMcpToolsDiscovery(
       const result = await host.backendMcpExec.executeTool({
         serverIdentifier: args.providerIdentifier,
         toolName: args.name,
-        args: toJsonArgs(args.args),
+        args: projectMcpArguments(args.args),
         toolCallId: args.toolCallId,
         agentId: auditIdentity?.agentId,
       });

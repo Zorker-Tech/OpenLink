@@ -12,12 +12,12 @@ import { describe, it } from "node:test";
 
 import { mcpExecutorResource } from "../../source/packages/agent-exec/mcp-operations.ts";
 import { createContext } from "../../source/packages/context/context.ts";
-import { ExecClientMessage } from "../../source/packages/proto/generated/agent/v1/exec_pb.ts";
+import { ExecClientMessage } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 import { createLocalExecExtension } from "../../source/host/local-exec/extension.ts";
 import { createBridgeUserComputers, GatewayLocalExecBox, type GatewayExecControl, type GatewayLocalExecCodec, type GatewayLocalExecManager } from "../../source/host/local-exec/gateway-local-exec-slate-box.ts";
 import { SlateLocalExecBridge, type LocalExecBridgeFrame } from "../../source/host/local-exec/local-exec-bridge.ts";
-import { productionLocalExecCodec } from "../../source/host/local-exec/production.ts";
+import { productionLocalExecCodec } from "../../source/adapters/interop/agent/local-exec-codec-adapter.ts";
 import { createCrossUserSharingExtension, crossUserSharingExtension, SHARING_DISABLED_MESSAGE } from "../../source/host/rooms/extension.ts";
 import { evaluateAutomationSpendGuard, interpretSpendGuardAnswer, isSpendGuardCard, SPEND_GUARD_ANSWER_VALUES, SPEND_GUARD_IDLE_TTL_MS, SPEND_GUARD_MIN_FIRES_SINCE_VIEWED, SPEND_GUARD_MIN_UNREAD_COUNT, SPEND_GUARD_PAUSE_DELAY_MS, SPEND_GUARD_SNOOZE_MS, SPEND_GUARD_VALUE_PREFIX, countAutomationRunsSince, buildSpendGuardNudgeWidget, buildSpendGuardPausedWidget, renderSpendGuardAnswerAck, renderSpendGuardNudgeReminder } from "../../source/host/transcript/slate-automation-spend-guard.ts";
 import { coerceMarker, coercePendingWakeMarkers, coerceQuietOrigin, markerKeyMatches, PENDING_WAKE_KINDS, parsePendingWakeFile, SlatePendingWakeStore, upsertPendingWakeMarker } from "../../source/host/transcript/slate-pending-wake-store.ts";
@@ -55,6 +55,8 @@ describe("sharing wired into the host", () => {
     const originalFetch = globalThis.fetch;
     const originalWarn = console.warn;
     const calls: Array<{ path: string; body: unknown }> = [];
+    const origins: string[] = [];
+    const gateNames: string[] = [];
     const warns: string[] = [];
     const logs: string[] = [];
     const stops: Array<() => void> = [];
@@ -63,7 +65,9 @@ describe("sharing wired into the host", () => {
     const topics = new Map<string, () => void>();
     const notices = new Map<string, (value: boolean) => void>();
     globalThis.fetch = (async (input: string | URL | Request) => {
-      calls.push({ path: new URL(String(input)).pathname, body: undefined });
+      const url = new URL(String(input));
+      calls.push({ path: url.pathname, body: undefined });
+      origins.push(url.origin);
       return new Response(JSON.stringify({ pendingJoinRequests: [], rooms: [] }), { status: 200 });
     }) as typeof fetch;
     console.warn = (...args: unknown[]) => { warns.push(args.join(" ")); };
@@ -80,7 +84,7 @@ describe("sharing wired into the host", () => {
           isSafetyPollEnabled: () => true,
           onNotify: (topic: string, callback: () => void) => { topics.set(topic, callback); return () => topics.delete(topic); },
         },
-        [HostExtensions.Experiments]: { getFeatureGateProperty: (name: string) => (notices.set(name, () => {}), { get: () => gateValue.current, subscribe: (listener: (value: boolean) => void) => { const previous = notices.get(name); notices.set(name, (value: boolean) => { previous?.(value); listener(value); }); return () => {}; } }) },
+        [HostExtensions.Experiments]: { getFeatureGateProperty: (name: string) => { gateNames.push(name); return (notices.set(name, () => {}), { get: () => gateValue.current, subscribe: (listener: (value: boolean) => void) => { const previous = notices.get(name); notices.set(name, (value: boolean) => { previous?.(value); listener(value); }); return () => {}; } }); } },
       },
       host: { log: (message: string) => { logs.push(message); }, whenBackgroundWorkReady: Promise.resolve() },
       onStop: (teardown: () => void) => { stops.push(teardown); },
@@ -89,6 +93,8 @@ describe("sharing wired into the host", () => {
     return {
       api,
       calls,
+      origins,
+      gateNames,
       warns,
       logs,
       stops,
@@ -144,6 +150,8 @@ describe("sharing wired into the host", () => {
     host.setGate(true);
     await settle();
     assert.equal(host.api.isEnabled, true);
+    assert.deepEqual(host.gateNames, ["slate_multiplayer"]);
+    assert.deepEqual([...new Set(host.origins)], ["https://backend.test.invalid"]);
     // The transcript is handed the delegate that publishes what the host has to say into a room.
     assert.deepEqual([...new Set(host.delegates.map(([name]) => name))], ["setXuserDelegate"]);
     assert.equal(typeof host.delegates[0]?.[1], "object");
@@ -177,7 +185,8 @@ describe("sharing wired into the host", () => {
     assert.equal(host.api.isEnabled, false);
     assert.equal(host.calls.length, 0);
     assert.equal(host.warns.length, 1);
-    assert.equal(host.warns[0]?.startsWith("[slate:sharing] cross-user sharing stays OFF on this dev host:"), true);
+    assert.equal(host.warns[0]?.startsWith("[slate:sharing] Sharing another user's computer is disabled on developer builds."), true);
+    assert.equal(host.warns[0]?.includes("second box under this account"), true);
     assert.equal(host.warns[0]?.includes("SLATE_DEV_XUSER_SHARING=1"), true);
     for (const stop of host.stops) stop();
     host.restore();

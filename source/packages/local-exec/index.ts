@@ -8,4 +8,5 @@ export * from "./mcp.ts";
 export * from "./read.ts";
 export * from "./shell-core.ts";
 export * from "./shell-stream.ts";
-export * from "./tests/common.ts";
+export * from "./runtime-ignore-policy.ts";
+export * from "./runtime-permission-policy.ts";

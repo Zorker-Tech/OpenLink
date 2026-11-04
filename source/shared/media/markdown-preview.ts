@@ -7,30 +7,28 @@
  * The order matters — an image has to be recognised before the link inside it, and a bold run before the single
  * asterisks it is made of — so the transforms are one list applied in order rather than a set of independent rules.
  */
-type PreviewTransform = readonly [pattern: RegExp, replacement: string];
+type PreviewTransform = (text: string) => string
 
-/** The marks a preview does not show, in the order they have to be removed. */
-const MARKS: readonly PreviewTransform[] = [
-  [/`+/g, ""],
-  [/!\[([^\]]*)\]\([^)]*\)/g, "$1"],
-  [/\[([^\]]+)\]\([^)]*\)/g, "$1"],
-  [/\$\$((?:[^$\\]|\\[\s\S])+)\$\$/g, "$1"],
-  [/\\\(([\s\S]+?)\\\)/g, "$1"],
-  [/\\\[([\s\S]+?)\\\]/g, "$1"],
-  [/\\\$/g, "$"],
-  [/^\s{0,3}#{1,6}\s+/gm, ""],
-  [/^\s{0,3}>\s?/gm, ""],
-  [/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, ""],
-  [/\*\*([^*]+)\*\*/g, "$1"],
-  [/__([^_]+)__/g, "$1"],
-  [/~~([^~]+)~~/g, "$1"],
-  [/\*([^*\n]+)\*/g, "$1"],
-  [/(?<!\w)_([^_\n]+)_(?!\w)/g, "$1"],
-  [/\|/g, " "],
-];
+const previewTransforms: readonly PreviewTransform[] = [
+  text => text.replace(/`+/g, ""),
+  text => text.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1"),
+  text => text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"),
+  text => text.replace(/\$\$((?:[^$\\]|\\[\s\S])+)\$\$/g, "$1"),
+  text => text.replace(/\\\(([\s\S]+?)\\\)/g, "$1"),
+  text => text.replace(/\\\[([\s\S]+?)\\\]/g, "$1"),
+  text => text.replace(/\\\$/g, "$"),
+  text => text.replace(/^\s{0,3}#{1,6}\s+/gm, ""),
+  text => text.replace(/^\s{0,3}>\s?/gm, ""),
+  text => text.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, ""),
+  text => text.replace(/\*\*([^*]+)\*\*/g, "$1"),
+  text => text.replace(/__([^_]+)__/g, "$1"),
+  text => text.replace(/~~([^~]+)~~/g, "$1"),
+  text => text.replace(/\*([^*\n]+)\*/g, "$1"),
+  text => text.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g, "$1"),
+  text => text.replace(/\|/g, " "),
+]
 
-/** The marks removed, in order, leaving one run of text: applying the list is what keeps each rule where it belongs. */
 export function previewTextOf(input: string): string {
-  const stripped = MARKS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), input);
-  return stripped.replace(/\s+/g, " ").trim();
+  const rendered = previewTransforms.reduce((text, transform) => transform(text), input)
+  return rendered.replace(/\s+/g, " ").trim()
 }

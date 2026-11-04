@@ -11,45 +11,14 @@
  * carries, which is the only record of what woke the run.
  */
 
-import { CursorRuleSource, type CursorRule } from "../../proto/generated/agent/v1/rules_pb.ts"
-import { fromRedactedCoreMessage } from "../../redaction/message-redaction.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
+export { getAllRules } from "../../../adapters/interop/agent/prompt-rule-policy-adapter.ts"
 import {
   getFirstUserInfoCloudTestingSectionsPlacement as readCloudTestingSectionsPlacement,
   getFirstUserInfoMessageContent,
   type PriorUserInfoMessage,
 } from "../prompts/user-info-preparation.ts"
 
-type RequestContextWithRules = {
-  readonly rules: readonly CursorRule[]
-  readonly disabledTeamRules: readonly string[]
-}
-
-type RuleFeatureFlags = {
-  readonly dropCustomPromptContext?: boolean | undefined
-}
-
-export function getAllRules(
-  requestContext: RequestContextWithRules,
-  serverFetchedRules: readonly CursorRule[],
-  featureFlags?: RuleFeatureFlags,
-): CursorRule[] {
-  if (featureFlags?.dropCustomPromptContext === true) return []
-  const teamRuleName = (rule: CursorRule) => rule.fullPath.split("/").pop() ?? rule.fullPath
-  const allRules = [...requestContext.rules, ...serverFetchedRules]
-  const disabled = new Set(requestContext.disabledTeamRules)
-  // A required team rule cannot be switched off, and the user's own rules are never filtered here.
-  const enabledRules = allRules.filter(rule =>
-    rule.source !== CursorRuleSource.TEAM || rule.isRequired || !disabled.has(teamRuleName(rule)))
-  const seenTeamRules = new Set<string>()
-  return enabledRules.filter(rule => {
-    if (rule.source !== CursorRuleSource.TEAM) return true
-    const name = teamRuleName(rule)
-    if (seenTeamRules.has(name)) return false
-    seenTeamRules.add(name)
-    return true
-  })
-}
 
 type PriorUserMessage = PriorUserInfoMessage
 
@@ -94,5 +63,3 @@ export function extractAutomationTriggerContext(
   }
   return undefined
 }
-
-void fromRedactedCoreMessage

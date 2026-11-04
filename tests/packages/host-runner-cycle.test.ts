@@ -7,9 +7,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { Context } from "../../source/packages/context/context.ts";
-import { ConversationAction, ConversationStateStructure, ResumeAction, UserMessage, UserMessageAction } from "../../source/packages/proto/generated/agent/v1/agent_pb.ts";
-import { RESUME_TURN_ACTION, SlateEmptyPromptError, createTurnRunShell, createTurnAgentRunContext } from "../../source/host/runner/turn-run-shell.ts";
-import { createTurnAgentRunInputProjection, createTurnAgentRunStreamInput, createTurnAgentStreamStart, createTurnRedactedRunProjection, createTurnToolSession } from "../../source/host/runner/turn-agent-composition.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
+import { ConversationAction, ConversationStateStructure, ResumeAction, UserMessage, UserMessageAction } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { SlateEmptyPromptError, createTurnRunShell, createTurnAgentRunContext } from "../../source/host/runner/turn-run-shell.ts";
+import { RESUME_TURN_ACTION } from "../../source/adapters/interop/agent/turn-resume-action-adapter.ts";
+import { createTurnAgentRunInputProjection, createTurnAgentRunStreamInput, createTurnAgentStreamStart, createTurnToolSession } from "../../source/host/runner/turn-agent-composition.ts";
+import { cloneTurnState } from "../../source/host/runner/production-turn-agent-owner.ts";
+import { projectInteropTurnRun } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts";
 import { SlateAgentRunner } from "../../source/host/runner/slate-agent-runner.ts";
 import { presentOptions } from "../../source/host/runner/optional-options.ts";
 
@@ -38,17 +42,25 @@ async function until(predicate: () => boolean): Promise<void> {
 }
 
 describe("the state and action a stream starts from", () => {
+  it("clones a conversation snapshot without sharing its mutable arrays", () => {
+    const original = stateWith(1);
+    const copy = cloneTurnState(original);
+    assert.notEqual(copy, original);
+    copy.turns.push(new Uint8Array());
+    assert.equal(original.turns.length, 1);
+  });
+
   it("projects the state and action to their redacted forms, and resumes with the canonical resume action", () => {
     const baseState = stateWith(1);
     // A user message, so a retained action and a resume action are distinguishable.
     const action = new ConversationAction({
       action: { case: "userMessageAction", value: new UserMessageAction({ userMessage: new UserMessage({ text: "hi", messageId: "m1" }), prependUserMessages: [] }) },
     });
-    const fresh = createTurnRedactedRunProjection({ baseState, action, privacyMode: 0 as never });
+    const fresh = projectInteropTurnRun({ baseState, action, resumeAction: RESUME_TURN_ACTION, privacyMode: PrivacyMode.UNSPECIFIED });
     assert.equal(fresh.isResume, false);
     assert.equal(fresh.action.action.case, "userMessageAction");
     // A retry resumes from the accepted checkpoint and sends the empty resume action, not the original request again.
-    const resumed = createTurnRedactedRunProjection({ baseState, action, resumeFrom: stateWith(2), privacyMode: 0 as never });
+    const resumed = projectInteropTurnRun({ baseState, action, resumeFrom: stateWith(2), resumeAction: RESUME_TURN_ACTION, privacyMode: PrivacyMode.UNSPECIFIED });
     assert.equal(resumed.isResume, true);
     assert.equal(resumed.action.action.case, RESUME_TURN_ACTION.action.case);
   });
@@ -96,7 +108,7 @@ describe("the state and action a stream starts from", () => {
       agent: { agent: { runStream: async (...args: unknown[]) => (calls.push(args), stateWith(0)) } as never },
       baseState: stateWith(1),
       action: { action: { case: "resumeAction", value: new ResumeAction() } } as never,
-      privacyMode: 0 as never,
+      privacyMode: PrivacyMode.UNSPECIFIED,
       mcpTools: [{ name: "tool" }],
     });
     const result = await start.startStream(fakeContext(), undefined, persistCheckpoint);
@@ -263,6 +275,35 @@ describe("the runner that holds a conversation", () => {
     return { runner, updates };
   }
 
+  it("keeps the runner's Agent checkpoint isolated from callers", () => {
+    const { runner } = runnerWith();
+    const source = new ConversationStateStructure({ turns: [new Uint8Array([1])] });
+    runner.setAgentConversationStateStructure(source);
+    const snapshot = runner.getAgentConversationStateStructure();
+    assert.notEqual(snapshot, source);
+    snapshot.turns.push(new Uint8Array([2]));
+    assert.equal(runner.getAgentConversationStateStructure().turns.length, 1);
+  });
+
+  it("binds the session graph as one snapshot and advances the generation with its Agent owner", () => {
+    const { runner } = runnerWith();
+    const source = new ConversationStateStructure({ turns: [new Uint8Array([4])] });
+    const generation = runner.runGeneration;
+    runner.bindSessionServices({
+      agentState: { store: { getConversationStateStructure: () => source }, profileProvider: undefined },
+      memory: { primary: {}, user: {}, project: {}, snapshots: {}, profileSnapshots: {}, episodeProgress: {} },
+      automation: { automations: {}, workflows: {}, channels: {} },
+      toolAccess: { mcp: {}, management: {} },
+      attachments: { ingestor: () => "", imagePersister: () => undefined, mediaPersister: () => undefined },
+    });
+
+    assert.equal(runner.runGeneration, generation + 1);
+    assert.equal(runner.getAgentConversationStateStructure().turns.length, 1);
+
+    runner.bindSessionServices({ memory: { primary: { refreshed: true } } });
+    assert.equal(runner.runGeneration, generation + 1);
+  });
+
   it("counts what a run produced: streamed text, sent messages, a reaction, and a pause for the user", () => {
     const { runner, updates } = runnerWith();
     (runner as unknown as { emitUpdate(update: unknown): void }).emitUpdate({ type: "text-delta", text: "hello" });
@@ -278,6 +319,57 @@ describe("the runner that holds a conversation", () => {
     runner.requestQuiesceForUpgrade();
     const result = (await runner.run("hello")) as { quiescedForUpgrade?: boolean; text: string };
     assert.deepEqual(result, { text: "", sentMessageCount: 0, reacted: false, aborted: false, quiescedForUpgrade: true });
+  });
+
+  it("aborts only the active attempt and includes its output in the result", async () => {
+    let activeSignal: AbortSignal | undefined;
+    let enteredStep!: () => void;
+    const inStep = new Promise<void>((resolve) => { enteredStep = resolve; });
+    const { runner } = runnerWith({
+      async runStep(_step, context) {
+        activeSignal = context.signal;
+        context.emitUpdate({ type: "text-delta", text: "partial" });
+        enteredStep();
+        await new Promise<void>((resolve) => context.signal.addEventListener("abort", () => resolve(), { once: true }));
+        return { done: true };
+      },
+    });
+
+    const running = runner.run("hello");
+    await inStep;
+    assert.equal(runner.interrupt("user stopped"), true);
+    const result = await running as { aborted: boolean; text: string };
+    assert.equal(activeSignal?.aborted, true);
+    assert.equal(result.aborted, true);
+    assert.equal(result.text, "partial");
+    assert.equal(runner.interrupt("late stop"), false);
+  });
+
+  it("allows a pre-dispatch replacement only when the unchanged user message can be recovered", async () => {
+    let releasePreparation!: () => void;
+    let preparationStarted!: () => void;
+    const preparation = new Promise<void>((resolve) => { releasePreparation = resolve; });
+    const started = new Promise<void>((resolve) => { preparationStarted = resolve; });
+    const { runner } = runnerWith({
+      async prepare() {
+        preparationStarted();
+        await preparation;
+      },
+      async runStep() {
+        return { done: true, value: "should not run" };
+      },
+    });
+    const running = runner.run("same request", {
+      messageId: "message-1",
+      recentUserMessages: [{ id: "message-1", text: "same request" }],
+    });
+    await started;
+
+    assert.equal(runner.interrupt("replace", { carriesRecovery: false }), false);
+    assert.equal(runner.interrupt("replace", { carriesRecovery: true }), true);
+    releasePreparation();
+    const result = await running as { aborted: boolean };
+    assert.equal(result.aborted, true);
   });
 
   it("runs a step loop until a step says it is done, and refuses an empty prompt", async () => {

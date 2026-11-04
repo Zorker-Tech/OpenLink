@@ -24,12 +24,12 @@ import {
 } from "../../agent-summarization/durable-blocks.ts"
 import { getRetryDirective } from "../../agent-summarization/error-handling.ts"
 import {
-  runSummarizationPipeline,
-  type SummarizationEnrichments,
-  type SummarizationPipelineOptions,
+  runSummaryPass,
+  type SummaryCarryData,
+  type SummaryRunOptions,
 } from "../../agent-summarization/pipeline.ts"
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts"
-import { collectAllSkillBlocks } from "../../agent-summarization/skill-persistence.ts"
+import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
 import { SUMMARIZATION_CURSOR_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
 import type { Context } from "../../context/context.ts"
 import { createLogger, createSpan } from "../../context/index.ts"
@@ -286,19 +286,19 @@ export class AnthropicCompactionHandler {
   getMetricsModelLabel(): string { return this.modelId }
 
   /** Nothing is kept back: this compaction replaces the whole conversation. */
-  partitionMessages(messages: readonly RedactedCoreMessage[], _options: SummarizationPipelineOptions): CompactionPartition {
+  separateMessages(messages: readonly RedactedCoreMessage[], _options: SummaryRunOptions): CompactionPartition {
     const { systemMessage, userInfoMessage, messagesForSummarization } = prepareMessagesForCompaction(messages)
     return {
       systemMessage,
       userInfoMessage,
       messagesToSummarize: messagesForSummarization,
       preservedTailMessages: [],
-      skillBlocks: collectAllSkillBlocks(messagesForSummarization),
+      skillBlocks: collectAttachedSkillBlocksFromConversation(messagesForSummarization),
     }
   }
 
   /** Ask the model for the summary: the provider's own request on beta, the instructions on explicit. */
-  async generateSummary(ctx: Context, partitioned: CompactionPartition, _options: SummarizationPipelineOptions): Promise<CompactionSummary> {
+  async generateSummary(ctx: Context, partitioned: CompactionPartition, _options: SummaryRunOptions): Promise<CompactionSummary> {
     if (this.compactionMode === "beta") assertCompactionFloor(partitioned.messagesToSummarize)
     const systemMessage = requireSystemMessage(partitioned)
     const privacySource = partitioned.preservedTailMessages[0] ?? partitioned.userInfoMessage ?? systemMessage
@@ -326,10 +326,10 @@ export class AnthropicCompactionHandler {
   }
 
   /** Write the summary back in the shape the next turn reads it in. */
-  buildSummaryMessage(
+  formatSummaryCarrier(
     rawSummary: CompactionSummary,
     partitioned: CompactionPartition,
-    enrichments: SummarizationEnrichments,
+    enrichments: SummaryCarryData,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
     const durableBlocks = renderDurableBlocks(COMPACTION_NAMESPACE, enrichments as DurableBlockEnrichments)
     const wrappedContent = summaryEnvelope(rawSummary.text, durableBlocks)
@@ -347,13 +347,13 @@ export class AnthropicCompactionHandler {
   }
 
   /** The conversation the next turn continues from: its framing, then the summary. */
-  assembleFinalMessages(partitioned: CompactionPartition, summaryMessage: RedactedCoreMessage): readonly RedactedCoreMessage[] {
+  rebuildConversation(partitioned: CompactionPartition, summaryMessage: RedactedCoreMessage): readonly RedactedCoreMessage[] {
     const systemMessage = requireSystemMessage(partitioned)
     return [...conversationPreface(systemMessage, partitioned.userInfoMessage), summaryMessage]
   }
 
   /** Run the whole compaction, reporting how it ended and how long it took. */
-  async summarize(ctx: Context, messages: readonly RedactedCoreMessage[], options: SummarizationPipelineOptions): Promise<Record<string, unknown>> {
+  async summarize(ctx: Context, messages: readonly RedactedCoreMessage[], options: SummaryRunOptions): Promise<Record<string, unknown>> {
     using spanContext = createSpan(ctx.withName("AnthropicCompactionHandler.summarize"))
     const scopedCtx = spanContext.ctx
     const startedAt = performance.now()
@@ -363,7 +363,7 @@ export class AnthropicCompactionHandler {
       mode: this.compactionMode,
     })
     try {
-      const pipelineResult = await runSummarizationPipeline(this, scopedCtx, messages, options)
+      const pipelineResult = await runSummaryPass(this, scopedCtx, messages, options)
       // The summary is redacted before the completion is reported, because the report describes its length.
       const summaryCodeString = createRedactedString(
         pipelineResult.rawSummary.text,

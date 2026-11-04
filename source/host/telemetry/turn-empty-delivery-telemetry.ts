@@ -1,36 +1,54 @@
-/** A turn that delivered nothing, in the shape the telemetry backend reports it. */
-export const TURN_EMPTY_DELIVERY_EVENT = "slate.turn.empty_delivery";
-export interface TurnEmptyDeliveryReport {
-  conversationId: string;
-  requestId?: string;
-  source: string;
-  requestSource?: string;
-  replyNudgeAttempts?: number;
-  redriveAttempts?: number;
-  toolCallCount: number;
-  streamOutputProduced: boolean;
-  durationMs: number;
-  ackOutstanding: boolean;
+export const TURN_EMPTY_DELIVERY_EVENT = "slate.turn.empty_delivery"
+
+interface DeliveryIdentity {
+  conversationId: string
+  requestId?: string
+  source: string
+  requestSource?: string
 }
-export function turnEmptyDeliveryTelemetry(r: TurnEmptyDeliveryReport) {
+
+interface RecoveryAttemptCounts {
+  replyNudgeAttempts?: number
+  redriveAttempts?: number
+}
+
+interface DeliveryOutcome {
+  toolCallCount: number
+  streamOutputProduced: boolean
+  durationMs: number
+  ackOutstanding: boolean
+}
+
+export type TurnEmptyDeliveryReport = DeliveryIdentity & RecoveryAttemptCounts & DeliveryOutcome
+
+const METADATA_FIELDS: readonly (readonly [keyof TurnEmptyDeliveryReport, string])[] = [
+  ["conversationId", "conversation_id"],
+  ["requestId", "request_id"],
+  ["source", "source"],
+  ["requestSource", "request_source"],
+  ["replyNudgeAttempts", "reply_nudge_attempts"],
+  ["redriveAttempts", "redrive_attempts"],
+  ["toolCallCount", "tool_call_count"],
+  ["streamOutputProduced", "stream_output_produced"],
+  ["durationMs", "duration_ms"],
+  ["ackOutstanding", "ack_outstanding"],
+]
+
+function telemetryValue(report: TurnEmptyDeliveryReport, field: keyof TurnEmptyDeliveryReport): string | undefined {
+  const value = report[field]
+  if (value === undefined) return undefined
+  if (field === "durationMs" && typeof value === "number") return String(Math.round(value))
+  return String(value)
+}
+
+function metadataFor(report: TurnEmptyDeliveryReport): Record<string, string | undefined> {
+  return Object.fromEntries(METADATA_FIELDS.map(([field, key]) => [key, telemetryValue(report, field)]))
+}
+
+export function turnEmptyDeliveryTelemetry(report: TurnEmptyDeliveryReport) {
   return {
     level: "warn",
     event: TURN_EMPTY_DELIVERY_EVENT,
-    metadata: {
-      conversation_id: r.conversationId,
-      request_id: r.requestId,
-      source: r.source,
-      request_source: r.requestSource,
-      reply_nudge_attempts:
-        r.replyNudgeAttempts !== undefined
-          ? String(r.replyNudgeAttempts)
-          : undefined,
-      redrive_attempts:
-        r.redriveAttempts !== undefined ? String(r.redriveAttempts) : undefined,
-      tool_call_count: String(r.toolCallCount),
-      stream_output_produced: String(r.streamOutputProduced),
-      duration_ms: String(Math.round(r.durationMs)),
-      ack_outstanding: String(r.ackOutstanding),
-    },
-  };
+    metadata: metadataFor(report),
+  }
 }

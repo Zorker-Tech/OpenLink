@@ -27,7 +27,7 @@ export interface MessageLike {
 }
 
 /** The mark a reminder carries in the provider options, so a reader can tell it from something the user wrote. */
-type ReminderMark = "slateSendMessageReminder" | "slateEarlyResultReminder" | "slateStartOfTurnAckReminder" | "slateDiskPressureReminder";
+type ReminderMark = "slateSendMessageReminder" | "slateEarlyResultReminder" | "slateOpeningMessageReminder" | "slateStartOfTurnAckReminder" | "slateDiskPressureReminder";
 
 /** The text of a message the user wrote, or nothing when the message is not one of theirs. */
 export function getUserMessageText(message: MessageLike): string | undefined {
@@ -51,7 +51,7 @@ function isMarked(message: MessageLike, mark: ReminderMark): boolean {
 
 /** Whether a message is a reminder this build injected, rather than something the user or the agent said. */
 export function isInjectedReminderMessage(message: MessageLike): boolean {
-  const marks: readonly ReminderMark[] = ["slateSendMessageReminder", "slateEarlyResultReminder", "slateStartOfTurnAckReminder", "slateDiskPressureReminder"];
+  const marks: readonly ReminderMark[] = ["slateSendMessageReminder", "slateEarlyResultReminder", "slateOpeningMessageReminder", "slateStartOfTurnAckReminder", "slateDiskPressureReminder"];
   if (marks.some((mark) => isMarked(message, mark))) return true;
   return carriesReminderText(message, SEND_MESSAGE_REMINDER_MESSAGE) || carriesReminderText(message, EARLY_RESULT_REMINDER_MESSAGE);
 }
