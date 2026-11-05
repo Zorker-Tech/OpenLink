@@ -5,7 +5,8 @@ import { appendNonMediaSelectedContextContent } from "../../source/packages/agen
 import type { GitPullRequestPromptInput } from "../../source/packages/agent/git-pr-processing-contracts.ts"
 import { toSelectedUIElementInputs } from "../../source/adapters/interop/agent/selected-ui-elements-adapter.ts"
 import { toRecentAgentPromptInputs } from "../../source/adapters/interop/agent/recent-agents-adapter.ts"
-import { toPrReviewInputs } from "../../source/adapters/interop/agent/selected-pr-review-adapter.ts"
+import { toPrReviewInputs } from "../../source/packages/agent/context/pr-review-context.ts"
+import type { SlatePullRequestDiffSelection } from "../../source/packages/agent/context/selected-context-processing-contracts.ts"
 import { toBrowserTabPromptInputs } from "../../source/adapters/interop/agent/selected-browsers-adapter.ts"
 import { toSubagentNameInputs } from "../../source/adapters/interop/agent/selected-subagents-adapter.ts"
 import { toConsoleLogPromptInputs } from "../../source/adapters/interop/agent/selected-console-logs-adapter.ts"
@@ -17,7 +18,6 @@ import {
   SelectedAgenticGitActionPushParams,
   SelectedContext,
   SelectedGitDiff,
-  SelectedGitPRDiffSelection,
   SelectedConsoleLog,
   SelectedBrowser,
   SelectedUIElement,
@@ -35,7 +35,7 @@ interface TextPart {
 
 function append(selectedContext: SelectedContext, options: {
   pullRequests?: readonly GitPullRequestPromptInput[]
-  prDiffSelections?: readonly SelectedGitPRDiffSelection[]
+  prDiffSelections?: readonly SlatePullRequestDiffSelection[]
   extraContexts?: readonly string[]
   simulatedMsgReason?: number
   modelInfo?: { promptVersion: string }
@@ -135,7 +135,7 @@ test("the ambient context is written only for what was attached", () => {
 
 test("a review in progress is written from the hydrated diff selections", () => {
   const context = new SelectedContext({})
-  const parts = append(context, { prDiffSelections: [new SelectedGitPRDiffSelection({ prUrl: "https://example.test/pr/7", filePath: "src/a.ts" })] })
+  const parts = append(context, { prDiffSelections: [{ url: "https://example.test/pr/7", filePath: "src/a.ts", startLine: 0, endLine: 0 }] })
   assert.equal(parts.length, 1)
 })
 

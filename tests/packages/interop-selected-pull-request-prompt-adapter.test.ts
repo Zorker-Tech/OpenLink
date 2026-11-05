@@ -1,16 +1,15 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { SelectedPullRequest } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
-import { projectSelectedPullRequestsForPrompt } from "../../source/adapters/interop/agent/pull-request-prompt-adapter.ts"
+import { createPullRequestPromptInputs } from "../../source/packages/agent/context/pull-request-prompt.ts"
 
 test("the prompt projection translates the stored summary into Slate's review context", () => {
-  const selected = new SelectedPullRequest({
+  const selected = {
     number: 7,
     url: "https://review.example/7",
     title: "Fix",
-    folderPath: "/workspace/review-7",
-    summaryJson: JSON.stringify({
+    localReviewDirectory: "/workspace/review-7",
+    summaryDocument: JSON.stringify({
       headRef: "feature",
       baseRef: "main",
       description: "A change",
@@ -22,9 +21,9 @@ test("the prompt projection translates the stored summary into Slate's review co
         { path: "src/b.ts", diffFileName: "custom.diff", status: "added", diffLines: 10, diffSizeBytes: 300 },
       ],
     }),
-  })
+  }
 
-  assert.deepEqual(projectSelectedPullRequestsForPrompt([selected]), [{
+  assert.deepEqual(createPullRequestPromptInputs([selected]), [{
     number: 7,
     url: "https://review.example/7",
     title: "Fix",
@@ -60,16 +59,17 @@ test("the prompt projection translates the stored summary into Slate's review co
 })
 
 test("absent and malformed summaries stay distinct for prompt fallback", () => {
-  const absent = new SelectedPullRequest({ number: 1, folderPath: "/workspace/one", description: "not the summary" })
-  const malformed = new SelectedPullRequest({ number: 2, folderPath: "/workspace/two", summaryJson: "{not json" })
-  const invalidEntry = new SelectedPullRequest({
+  const absent = { number: 1, localReviewDirectory: "/workspace/one", description: "not the summary", url: "" }
+  const malformed = { number: 2, localReviewDirectory: "/workspace/two", summaryDocument: "{not json", url: "" }
+  const invalidEntry = {
     number: 3,
-    folderPath: "/workspace/three",
-    summaryJson: JSON.stringify({ files: [null] }),
-  })
+    localReviewDirectory: "/workspace/three",
+    summaryDocument: JSON.stringify({ files: [null] }),
+    url: "",
+  }
 
   assert.deepEqual(
-    projectSelectedPullRequestsForPrompt([absent, malformed, invalidEntry]).map(({ summary }) => summary.kind),
+    createPullRequestPromptInputs([absent, malformed, invalidEntry]).map(({ summary }) => summary.kind),
     ["absent", "invalid", "invalid"],
   )
 })

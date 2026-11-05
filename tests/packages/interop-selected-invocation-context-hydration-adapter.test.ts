@@ -7,7 +7,10 @@ import {
   InvocationContext_IdeState_File,
 } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import { createContext } from "../../source/packages/context/context.ts"
-import { hydrateSelectedInvocationContext } from "../../source/adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
+import {
+  hydrateSelectedInvocationContext,
+  resolveSlateInvocationSelection,
+} from "../../source/adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
 
 test("an inline invocation is preserved and an absent one stays absent", async () => {
   const invocationContext = new InvocationContext({
@@ -75,4 +78,40 @@ test("missing storage and missing blob data remain explicit errors", async () =>
     }),
     /Invocation context blob not found/,
   )
+})
+
+test("Slate invocation selections resolve inline values and migrate stored legacy bytes", async () => {
+  const ctx = createContext()
+  const storedContext = new InvocationContext({
+    data: {
+      case: "ideState",
+      value: new InvocationContext_IdeState({
+        visibleFiles: [new InvocationContext_IdeState_File({ path: "/repo/stored.ts" })],
+      }),
+    },
+  })
+  const inline = {
+    kind: "inline" as const,
+    context: {
+      kind: "editor" as const,
+      editor: {
+        recentlyViewedFiles: [],
+        visibleFiles: [{ path: "/repo/inline.ts" }],
+        openPullRequests: [],
+      },
+    },
+  }
+  assert.deepEqual(await resolveSlateInvocationSelection({ ctx, selection: inline }), inline.context)
+  assert.deepEqual(await resolveSlateInvocationSelection({
+    ctx,
+    selection: { kind: "stored", blobId: new Uint8Array([4, 7, 2]) },
+    blobStore: { async getBlob() { return storedContext.toBinary() } },
+  }), {
+    kind: "editor",
+    editor: {
+      recentlyViewedFiles: [],
+      visibleFiles: [{ path: "/repo/stored.ts", totalLines: 0, activeCommand: undefined }],
+      openPullRequests: [],
+    },
+  })
 })

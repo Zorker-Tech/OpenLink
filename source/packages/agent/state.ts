@@ -40,7 +40,6 @@ import {
   fromInteropPlanRegistryEntry,
   attachAgentSelectedContextMediaInterop,
   createRedactedConversationTokenDetailsInterop,
-  emptyAgentSelectedContextInterop,
   type AgentStateGitRepoInfoInterop,
   type AgentStateCommunicateHistoryEntryInterop,
   type AgentStateCommunicateTurnStateInterop,
@@ -59,6 +58,7 @@ import {
   toInteropGoalState,
   toInteropPlanRegistryEntry,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { projectSelectedContextForProcessing } from "../../adapters/interop/agent/selected-context-processing-adapter.ts"
 import {
   fromInteropSubagentPersistedState,
   toInteropSubagentPersistedState,
@@ -1797,17 +1797,26 @@ export class ConversationStateHandle {
       }
       await this.hydrateUserMessageBlobText(ctx, userMessage);
       const turnMode = resolveCurrentTurnMode(this.slateMode, userMessage.mode);
+      const selectedContextForProcessing = projectSelectedContextForProcessing(
+        userMessage.selectedContext as never,
+        {
+          simulatedMsgReason: toInteropSimulatedMessageReason(userMessage.simulatedMsgReason),
+          modelInfo: turnSettings.modelInfo,
+          environmentParamForSubagent: turnSettings.featureFlags?.environmentParamForSubagent === true,
+          babysitV2Prompt: turnSettings.featureFlags?.babysitV2Prompt === true,
+          enablePrCreationForgeGuidance: turnSettings.featureFlags?.prCreationForgeGuidance === true,
+        },
+      );
       const { userContent: contentParts, selectedImages, selectedVideos, selectedDocuments, imageFilePaths } = await processSelectedContext(
         ctx,
-        (userMessage.selectedContext as never) ?? emptyAgentSelectedContextInterop(),
+        selectedContextForProcessing,
         this.blobStore,
         turnSettings,
         hostContext,
         resourceAccessor,
-        toInteropAgentMode(turnMode),
+        turnMode,
         this.modelId,
         unwrapSlateUserMessageText(userMessage.text),
-        toInteropSimulatedMessageReason(userMessage.simulatedMsgReason),
         this.privacyMode,
       );
       if (overlapSnapshot) {

@@ -64,8 +64,8 @@ function viewedPullRequest(input: {
     title: input.title,
     url: input.url,
     description: input.description,
-    folderPath: input.folderPath,
-    summaryJson: input.summaryJson,
+    reviewDirectory: input.folderPath,
+    summaryDocument: input.summaryJson,
   }
 }
 
@@ -77,7 +77,7 @@ function editorState(input: {
   return {
     recentlyViewedFiles: input.recentlyViewedFiles.map(editorFile),
     visibleFiles: input.visibleFiles.map(editorFile),
-    currentlyViewedPullRequests: input.currentlyViewedPrs.map(viewedPullRequest),
+    openPullRequests: input.currentlyViewedPrs.map(viewedPullRequest),
   }
 }
 

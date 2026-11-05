@@ -29,12 +29,7 @@ import { createLogger } from "../../context/index.ts"
 import { createHistogram } from "../../metrics/index.ts"
 import type { BlobStore } from "../../agent-kv/blob-store.ts"
 import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
-import type {
-  SelectedContextEntryInterop,
-  SelectedContextEntryModeInterop,
-  SelectedContextSimulatedReasonInterop,
-} from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
-import { fromInteropSelectedImage, projectSelectedWorkspaceContext } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
+import type { SlateSelectedContextForProcessing } from "./selected-context-processing-contracts.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import { getFilenameWithoutExtension } from "../utils/common-helpers.ts"
@@ -44,12 +39,10 @@ import { recordSkillApplied } from "../utils/event-tracking.ts"
 import { getInlineVideoMaxBytes, getSignedUrlVideoMaxBytes, isSignedUrlStorageAllowed } from "../attached-media.ts"
 import { detectImageMimeType } from "../tools/core/read/image-utils.ts"
 import { renderAgentNotesContext } from "./agent-notes-context.ts"
-import { toAgentNotesPromptInput } from "../../../adapters/interop/agent/agent-notes-context-adapter.ts"
 import { renderSelectedCodeSelections } from "./code-selection-context.ts"
 import { renderConsoleLogsContext } from "./console-logs-context.ts"
-import { fromInteropSelectedDocument, processSlateDocumentAttachment } from "../../../adapters/interop/agent/document-attachment-adapter.ts"
-import type { DocumentationHydrationService } from "./documentation-hydration.ts"
-import { hydrateSelectedDocumentation } from "../../../adapters/interop/agent/selected-documentation-hydration-adapter.ts"
+import { processSlateDocumentAttachment } from "../../../adapters/interop/agent/document-attachment-adapter.ts"
+import { hydrateDocumentation, type DocumentationHydrationService } from "./documentation-hydration.ts"
 import { renderDocumentationContext, type DocumentationResult } from "./documentation-context.ts"
 import { hydrateSelectedExtraContext } from "./extra-context-hydration.ts"
 import { renderExternalLinksContext } from "./external-links-context.ts"
@@ -57,31 +50,21 @@ import { renderAttachedFoldersContext } from "./attached-folders-context.ts"
 import { hydrateSlateImage } from "./image-attachment-hydration.ts"
 import type { SlateImageAttachment } from "./image-attachment-contracts.ts"
 import { writeSelectedImageToProjectAssets } from "./image-file-spill.ts"
-import { hydrateSelectedInvocationContext } from "../../../adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
+import { resolveSlateInvocationSelection } from "../../../adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
 import { renderInvocationPlatformContext } from "./invocation-platforms.ts"
-import { toSlateInvocationContext } from "../../../adapters/interop/agent/invocation-platforms-adapter.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
 import { appendNonMediaSelectedContextContent } from "./non-media-assembly.ts"
-import { projectSelectedNonMediaContext } from "../../../adapters/interop/agent/selected-non-media-context-adapter.ts"
-import { renderInteropSimulatedMessagePrompts } from "../../../adapters/interop/agent/git-action-prompt-adapter.ts"
 import { hydrateGitPrDiffSelections, hydrateSelectedPullRequests } from "../../../adapters/interop/agent/pull-request-hydration-adapter.ts"
-import { projectSelectedPullRequestsForPrompt } from "../../../adapters/interop/agent/pull-request-prompt-adapter.ts"
-import { renderPrReviewContext } from "./pr-review-context.ts"
+import { createPullRequestPromptInputs } from "./pull-request-prompt.ts"
+import { renderPrReviewContext, toPrReviewInputs } from "./pr-review-context.ts"
 import { renderRecentAgentsContext } from "./recent-agents-context.ts"
 import { resolveSkillAttachments } from "../skill-attachment-policy.ts"
-import { decodeSelectedContextSkillAttachments } from "../../../adapters/interop/agent/selected-context-skills-adapter.ts"
-import { toSelectedUIElementInputs } from "../../../adapters/interop/agent/selected-ui-elements-adapter.ts"
-import { toRecentAgentPromptInputs } from "../../../adapters/interop/agent/recent-agents-adapter.ts"
-import { toPrReviewInputs } from "../../../adapters/interop/agent/selected-pr-review-adapter.ts"
-import { toBrowserTabPromptInputs } from "../../../adapters/interop/agent/selected-browsers-adapter.ts"
-import { toSubagentNameInputs } from "../../../adapters/interop/agent/selected-subagents-adapter.ts"
-import { toConsoleLogPromptInputs } from "../../../adapters/interop/agent/selected-console-logs-adapter.ts"
 import { renderSelectedBrowsersContext } from "./selected-browsers-context.ts"
 import { renderSelectedSubagentDelegation } from "./selected-subagents-context.ts"
 import { renderSelectedTerminalContext } from "./terminal-context.ts"
 import { renderSelectedUIElementsContext } from "./ui-elements-context.ts"
 import { renderUploadedDocumentsContext } from "./uploaded-documents.ts"
-import { fromInteropSelectedVideo, processSlateVideoAttachment } from "../../../adapters/interop/agent/video-attachment-adapter.ts"
+import { processSlateVideoAttachment } from "../../../adapters/interop/agent/video-attachment-adapter.ts"
 import { enrichExternalLinks, type ExternalLinkPage } from "./external-link-enrichment.ts"
 import { processSlateVideoPathOnlyAttachment } from "./video-path-processing.ts"
 import type { SlateVideoAttachment } from "./video-attachment-contracts.ts"
@@ -92,6 +75,7 @@ import type { AttachmentPathRequestContext } from "./path-trust.ts"
 import type { AttachedMediaUrlProvider } from "./video-attachment.ts"
 import type { CodeSelectionFormattingOptions } from "./code-selection-context.ts"
 import type { TaskToolModelInfo } from "../tools/task-tool-name.ts"
+import { SlateMode } from "../mode-processing.ts"
 
 interface TextPart { readonly type: "text"; readonly text: string }
 interface ImagePart {
@@ -173,15 +157,14 @@ const MAX_RULE_LENGTH = 100_000;
 
 export async function processSelectedContext(
   ctx: Context,
-  selectedContext: SelectedContextEntryInterop,
+  selectedContext: SlateSelectedContextForProcessing,
   blobStore: BlobStore<Context> | undefined,
   config: ContextProcessingConfig,
   requestContext: ProcessRequestContext | undefined,
   resourceAccessor: ResourceAccessor | undefined,
-  mode: SelectedContextEntryModeInterop,
+  mode: SlateMode,
   _modelId: string | undefined,
   conversationQuery: string,
-  simulatedMsgReason: SelectedContextSimulatedReasonInterop,
   privacyMode: PrivacyMode,
 ): Promise<{
   userContent: UserContentPart[];
@@ -196,24 +179,21 @@ export async function processSelectedContext(
   const selectedImages: SlateImageAttachment[] = [];
   const selectedVideos: SlateVideoAttachment[] = [];
   const selectedDocuments: SlateDocumentAttachment[] = [];
-  const workspaceSelection = projectSelectedWorkspaceContext(selectedContext)
-  const imageAttachments = selectedContext.selectedImages.map(fromInteropSelectedImage)
-  const videoAttachments = selectedContext.selectedVideos.map(fromInteropSelectedVideo)
-  const documentAttachments = selectedContext.selectedDocuments.map(fromInteropSelectedDocument)
+  const workspaceSelection = selectedContext.workspace
+  const imageAttachments = selectedContext.images
+  const videoAttachments = selectedContext.videos
+  const documentAttachments = selectedContext.documents
   const imageFilePaths: string[] = [];
   const videoFilePaths: string[] = [];
   const documentFilePaths: string[] = [];
   const processStart = performance.now();
 
   const invocationStart = performance.now();
-  const resolvedInvocationContext = await hydrateSelectedInvocationContext({
+  const invocation = await resolveSlateInvocationSelection({
     ctx,
-    invocationContext: selectedContext.invocationContext,
+    selection: selectedContext.invocation,
     blobStore,
   });
-  const invocation = resolvedInvocationContext === undefined
-    ? undefined
-    : toSlateInvocationContext(resolvedInvocationContext)
   if (invocation !== undefined) {
     const invocationContent = renderInvocationPlatformContext(invocation, config.enableTerminalFiles)
     if (invocationContent) userContent.push(invocationContent);
@@ -221,13 +201,13 @@ export async function processSelectedContext(
   invocationContextDuration.histogram(ctx, performance.now() - invocationStart, {
     kind: invocation === undefined || invocation.kind === "unsupported" ? "none" : invocation.kind,
   });
-  const agentNotes = renderAgentNotesContext(toAgentNotesPromptInput({
-    mode,
+  const agentNotes = renderAgentNotesContext({
+    isProjectConversation: mode === SlateMode.PROJECT,
     enableAgentNotes: config.enableAgentNotes,
     metaAgentNotes: config.featureFlags?.metaAgentNotes === true,
     conversationNotesListing: requestContext?.conversationNotesListing,
     sharedNotesListing: requestContext?.sharedNotesListing,
-  }));
+  });
   if (agentNotes) userContent.push(agentNotes);
 
   const hasImages = imageAttachments.length > 0;
@@ -343,13 +323,13 @@ export async function processSelectedContext(
     userContent.push({ type: "text", text: `<attached_files>\n${attachedFilesContent.map(part => part.text).join("\n")}\n</attached_files>` });
   }
 
-  const hasExternalLinks = selectedContext.externalLinks.length > 0;
-  const hasDocumentation = selectedContext.documentations.length > 0;
-  const hasBlobStoreWork = selectedContext.selectedPullRequests.length > 0 || selectedContext.gitPrDiffSelections.length > 0 || selectedContext.extraContextEntries.length > 0 || selectedContext.extraContext.length > 0;
+  const hasExternalLinks = selectedContext.externalLinkUrls.length > 0;
+  const hasDocumentation = selectedContext.documentReferences.length > 0;
+  const hasBlobStoreWork = selectedContext.pullRequests.length > 0 || selectedContext.pullRequestDiffs.length > 0 || selectedContext.extraContextEntries.length > 0 || selectedContext.extraContextText.length > 0;
   const enrichStart = performance.now();
   const externalStart = performance.now();
   const externalResult = await enrichExternalLinks({
-    urls: selectedContext.externalLinks.map(link => link.url),
+    urls: selectedContext.externalLinkUrls,
     fetchPage: url => config.webScraperService.getContentInWebsiteFast(ctx, url),
     ...(requestContext?.env?.projectFolder === undefined && requestContext?.env?.workspacePaths?.[0] === undefined
       ? {}
@@ -364,13 +344,16 @@ export async function processSelectedContext(
   });
   enrichContextExternalLinksDuration.histogram(ctx, performance.now() - externalStart, { hasWork: hasExternalLinks ? "true" : "false" });
   const documentationStart = performance.now();
-  const documentationResult = await hydrateSelectedDocumentation({ ctx, documentations: selectedContext.documentations, documentationHydrationService: config.documentationHydrationService, conversationQuery });
+  const documentationResult = await hydrateDocumentation(ctx, selectedContext.documentReferences, config.documentationHydrationService, conversationQuery);
   enrichContextDocumentationDuration.histogram(ctx, performance.now() - documentationStart, { hasWork: hasDocumentation ? "true" : "false" });
   const blobStart = performance.now();
-  const hydratedSelectedPullRequests = await hydrateSelectedPullRequests({ ctx, selectedPullRequests: selectedContext.selectedPullRequests, blobStore });
-  const pullRequestPrompts = projectSelectedPullRequestsForPrompt(hydratedSelectedPullRequests);
-  const hydratedGitPrDiffSelections = await hydrateGitPrDiffSelections({ ctx, gitPrDiffSelections: selectedContext.gitPrDiffSelections, blobStore });
-  const extraContextsToInclude = await hydrateSelectedExtraContext(ctx, selectedContext, blobStore);
+  const hydratedSelectedPullRequests = await hydrateSelectedPullRequests({ ctx, selectedPullRequests: selectedContext.pullRequests, blobStore });
+  const pullRequestPrompts = createPullRequestPromptInputs(hydratedSelectedPullRequests);
+  const hydratedGitPrDiffSelections = await hydrateGitPrDiffSelections({ ctx, gitPrDiffSelections: selectedContext.pullRequestDiffs, blobStore });
+  const extraContextsToInclude = await hydrateSelectedExtraContext(ctx, {
+    entries: selectedContext.extraContextEntries,
+    inlineText: selectedContext.extraContextText,
+  }, blobStore);
   enrichContextBlobStoreDuration.histogram(ctx, performance.now() - blobStart, { hasWork: hasBlobStoreWork ? "true" : "false" });
   enrichContextActiveTaskCount.histogram(ctx, Number(hasExternalLinks) + Number(hasDocumentation) + Number(hasBlobStoreWork));
   enrichContextDuration.histogram(ctx, performance.now() - enrichStart);
@@ -394,9 +377,7 @@ export async function processSelectedContext(
   }
   const documentationText = renderDocumentationContext(documentationResult);
   if (documentationText) userContent.push({ type: "text", text: documentationText });
-  const { skills: selectedSkills, rules: regularRules } = resolveSkillAttachments(
-    decodeSelectedContextSkillAttachments(selectedContext),
-  );
+  const { skills: selectedSkills, rules: regularRules } = resolveSkillAttachments(selectedContext.skillAttachments);
   const dropCustomPromptContext = config.featureFlags?.dropCustomPromptContext === true;
   if (!dropCustomPromptContext && regularRules.length > 0) {
     const rulesText = regularRules.map(rule => `Rule Name: ${rule.path ? getFilenameWithoutExtension(rule.path) : "Workspace Rule"}\nDescription: ${rule.text?.slice(0, MAX_RULE_LENGTH) ?? ""}`).join("\n\n");
@@ -426,23 +407,15 @@ export async function processSelectedContext(
     if (skillsText) userContent.push({ type: "text", text: skillsText });
   }
   const nonMediaContent: TextPart[] = [];
-  const simulatedMessagePrompts = renderInteropSimulatedMessagePrompts({
-    selectedContext,
-    simulatedMsgReason,
-    modelInfo: config.modelInfo,
-    environmentParamForSubagent: config.featureFlags?.environmentParamForSubagent === true,
-    babysitV2Prompt: config.featureFlags?.babysitV2Prompt === true,
-    enablePrCreationForgeGuidance: config.featureFlags?.prCreationForgeGuidance === true,
-  });
   appendNonMediaSelectedContextContent({
     userContent: nonMediaContent,
-    selectedContext: projectSelectedNonMediaContext(selectedContext),
-    simulatedMessagePrompts,
-    recentAgents: toRecentAgentPromptInputs(selectedContext.recentAgentsContext?.recentAgents ?? []),
-    selectedUIElements: toSelectedUIElementInputs(selectedContext.uiElements),
-    selectedBrowsers: toBrowserTabPromptInputs(selectedContext.selectedBrowsers),
-    selectedSubagents: toSubagentNameInputs(selectedContext.selectedSubagents),
-    consoleLogs: toConsoleLogPromptInputs(selectedContext.consoleLogs),
+    selectedContext: selectedContext.nonMedia,
+    simulatedMessagePrompts: [...selectedContext.simulatedMessagePrompts],
+    recentAgents: [...selectedContext.recentAgents],
+    selectedUIElements: [...selectedContext.uiElements],
+    selectedBrowsers: [...selectedContext.browserTabs],
+    selectedSubagents: [...selectedContext.selectedSubagents],
+    consoleLogs: [...selectedContext.consoleLogs],
     pullRequestPrompts,
     prReviewSelections: toPrReviewInputs(hydratedGitPrDiffSelections),
     extraContextsToInclude,

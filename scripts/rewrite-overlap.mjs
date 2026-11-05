@@ -278,7 +278,6 @@ const EXEMPT = [
   ["adapters/interop/egress-tunnel/websocket-client-adapter.ts", "interop adapter: maps the external ws constructor to the egress tunnel socket port"],
   ["adapters/interop/agent/selected-ui-elements-adapter.ts", "interop adapter: projects counterpart UI element messages into Slate-owned prompt inputs"],
   ["adapters/interop/agent/recent-agents-adapter.ts", "interop adapter: maps counterpart recent-agent messages into Slate-owned transcript references"],
-  ["adapters/interop/agent/selected-pr-review-adapter.ts", "interop adapter: projects counterpart PR diff selections into Slate-owned review inputs"],
   ["adapters/interop/agent/selected-browsers-adapter.ts", "interop adapter: projects counterpart browser messages into Slate-owned tab references"],
   ["adapters/interop/agent/selected-subagents-adapter.ts", "interop adapter: maps counterpart selected-subagent records into Slate-owned names"],
   ["adapters/interop/agent/selected-console-logs-adapter.ts", "interop adapter: projects counterpart console log messages into prompt-owned log lines"],
@@ -2480,9 +2479,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ]],
   ["packages/agent/context-processing-recent-agents.ts", [
     "adapters/interop/agent/recent-agents-adapter.ts",
-  ]],
-  ["packages/agent/context-processing-pr-review.ts", [
-    "adapters/interop/agent/selected-pr-review-adapter.ts",
   ]],
   ["packages/agent/context-processing-selected-browsers.ts", [
     "adapters/interop/agent/selected-browsers-adapter.ts",

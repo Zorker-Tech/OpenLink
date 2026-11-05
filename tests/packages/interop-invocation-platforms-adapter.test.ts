@@ -85,8 +85,8 @@ test("the editor snapshot and viewed pull requests become Slate editor context",
     activeCommand: undefined,
     cursorLine: 12,
   })
-  assert.equal(result.editor.currentlyViewedPullRequests?.[0]?.number, 7)
-  assert.equal(result.editor.currentlyViewedPullRequests?.[0]?.title, "Improve startup")
+  assert.equal(result.editor.openPullRequests?.[0]?.number, 7)
+  assert.equal(result.editor.openPullRequests?.[0]?.title, "Improve startup")
 })
 
 test("invocation variants outside this adapter return the Slate unsupported case", () => {

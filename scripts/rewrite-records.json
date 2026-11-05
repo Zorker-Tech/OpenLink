@@ -2422,8 +2422,9 @@
     },
     "packages/agent/context-processing-pr-review.ts": {
       "claim": "rewritten",
-      "overlap": 0.4576271186440678,
-      "evidence": "Agent-blocks, PR-selection adapter, non-media assembly and selected-context suites pass 74/74. Contracts pin single-line/range labels, omission of empty diff text, included diff content, field mapping and exclusion of blob references. Work-host typecheck passes. The renderer uses Slate-owned review inputs and wire selection projection is isolated in interop."
+      "overlap": 0.4915254237288136,
+      "refreshReason": "Moved pull-request review input projection from the interop adapter into the Slate prompt contract and removed the obsolete wire-shaped helper.",
+      "evidence": "The 131/131 selected-context batch covers ordered review lines, inline and stored patch hydration, missing-blob errors, and exclusion of blob references from prompt inputs. `PrReviewInput` and its projection now use Slate-owned URL/diff vocabulary; the package typecheck passes. Measured overlap is 0.4915254237288136 against 59 baseline pairs."
     },
     "host/telemetry/search-index-health-telemetry.ts": {
       "claim": "rewritten",
@@ -2790,9 +2791,9 @@
     },
     "packages/agent/context-processing.ts": {
       "claim": "rewritten",
-      "overlap": 0.6827354260089686,
-      "refreshReason": "Moved media hydration and workspace selection projection through Slate attachment/workspace records, leaving generated selected-context fields behind explicit ingress adapters.",
-      "evidence": "The focused media/context suite passes 97/97 for image hydration/spill, video placement/privacy, document recovery and returned Slate attachments; workspace projection, folder, code-selection and process-selected-context suites pass 61/61 for file/code/terminal/folder order, ranges, invalid-tree refusal and rendering. Work-host typecheck passes and interop:check records 341 core imports across 225 files."
+      "overlap": 0.6513452914798207,
+      "refreshReason": "Rebuilt the entire prompt-processing input around one Slate-owned selected-context view, moving media, workspace, invocation, documentation, review, extra-context, skill, UI, browser and transcript-field projection to the compatibility boundary.",
+      "evidence": "The focused selected-context, media, workspace, attachment, invocation, PR, review and extra-context suites pass 131/131. The Slate view preserves ordering/ranges, media bytes and blob references, malformed-folder refusal, PR/review hydration errors, rule/skill fields, and simulated-action prompts. Core prompt processing no longer accepts or reads generated SelectedContext fields; package typecheck, rewrite gate and interop gate pass. Interop reports 328 core imports across 225 files. Measured overlap is 0.6513452914798207 against 1784 baseline pairs."
     },
     "packages/agent/context-processing-watch-video.ts": {
       "claim": "rewritten",

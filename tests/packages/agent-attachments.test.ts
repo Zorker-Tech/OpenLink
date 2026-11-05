@@ -24,6 +24,8 @@ import { calculateDiff } from "../../source/packages/agent/tools/core/edit/diff-
 import {
   hydrateGitPrDiffSelections,
   hydrateSelectedPullRequests,
+  fromInteropSelectedPullRequest,
+  fromInteropSelectedPullRequestDiff,
 } from "../../source/adapters/interop/agent/pull-request-hydration-adapter.ts"
 import {
   GENERAL_PURPOSE_SUBAGENT_TYPE,
@@ -168,25 +170,27 @@ test("a missing file name falls back to a placeholder", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("an attached pull request is left alone unless it names a blob", async () => {
-  const inline = { blobId: new Uint8Array(0) }
-  assert.deepEqual(await hydrateSelectedPullRequests({ ctx: ctx(), selectedPullRequests: [inline] as never }), [inline])
-  assert.deepEqual(await hydrateGitPrDiffSelections({ ctx: ctx(), gitPrDiffSelections: [inline] as never }), [inline])
+  const inlinePullRequest = { number: 7, url: "https://code.example/pull/7", localReviewDirectory: "/workspace/review-7", blobId: new Uint8Array(0) }
+  const inlineDiff = { url: "https://code.example/pull/7", filePath: "src/a.ts", startLine: 1, endLine: 2, blobId: new Uint8Array(0) }
+  assert.deepEqual(await hydrateSelectedPullRequests({ ctx: ctx(), selectedPullRequests: [inlinePullRequest] }), [inlinePullRequest])
+  assert.deepEqual(await hydrateGitPrDiffSelections({ ctx: ctx(), gitPrDiffSelections: [inlineDiff] }), [inlineDiff])
 })
 
 test("a pull request blob is fetched, and both failures are thrown", async () => {
-  const withBlob = { blobId: new Uint8Array([1, 2]) }
+  const pullRequestWithBlob = { number: 7, url: "https://code.example/pull/7", localReviewDirectory: "/workspace/review-7", blobId: new Uint8Array([1, 2]) }
+  const diffWithBlob = { url: "https://code.example/pull/7", filePath: "src/a.ts", startLine: 1, endLine: 2, blobId: new Uint8Array([1, 2]) }
   await assert.rejects(
-    hydrateSelectedPullRequests({ ctx: ctx(), selectedPullRequests: [withBlob] as never }),
+    hydrateSelectedPullRequests({ ctx: ctx(), selectedPullRequests: [pullRequestWithBlob] }),
     /Blob store is required/,
   )
   await assert.rejects(
-    hydrateGitPrDiffSelections({ ctx: ctx(), gitPrDiffSelections: [withBlob] as never }),
+    hydrateGitPrDiffSelections({ ctx: ctx(), gitPrDiffSelections: [diffWithBlob] }),
     /Blob store is required/,
   )
   await assert.rejects(
     hydrateSelectedPullRequests({
       ctx: ctx(),
-      selectedPullRequests: [withBlob] as never,
+      selectedPullRequests: [pullRequestWithBlob],
       blobStore: { getBlob: async () => undefined },
     }),
     /pull request blob not found/,
@@ -194,7 +198,7 @@ test("a pull request blob is fetched, and both failures are thrown", async () =>
   await assert.rejects(
     hydrateGitPrDiffSelections({
       ctx: ctx(),
-      gitPrDiffSelections: [withBlob] as never,
+      gitPrDiffSelections: [diffWithBlob],
       blobStore: { getBlob: async () => undefined },
     }),
     /diff selection blob not found/,
@@ -227,17 +231,17 @@ test("pull requests and diff selections are decoded from their stored messages",
 
   const hydratedPullRequests = await hydrateSelectedPullRequests({
     ctx: ctx(),
-    selectedPullRequests: [new SelectedPullRequest({ blobId: new Uint8Array([1]) })],
+    selectedPullRequests: [fromInteropSelectedPullRequest(new SelectedPullRequest({ blobId: new Uint8Array([1]) }))],
     blobStore,
   })
   const hydratedDiffs = await hydrateGitPrDiffSelections({
     ctx: ctx(),
-    gitPrDiffSelections: [new SelectedGitPRDiffSelection({ blobId: new Uint8Array([2]) })],
+    gitPrDiffSelections: [fromInteropSelectedPullRequestDiff(new SelectedGitPRDiffSelection({ blobId: new Uint8Array([2]) }))],
     blobStore,
   })
 
-  assert.equal(SelectedPullRequest.equals(hydratedPullRequests[0], pullRequest), true)
-  assert.equal(SelectedGitPRDiffSelection.equals(hydratedDiffs[0], diffSelection), true)
+  assert.deepEqual(hydratedPullRequests[0], fromInteropSelectedPullRequest(pullRequest))
+  assert.deepEqual(hydratedDiffs[0], fromInteropSelectedPullRequestDiff(diffSelection))
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -283,12 +287,12 @@ test("a subagent with no mapping starts from an empty structure, and one with a 
 
 test("extra context is collected and deduplicated, blobs included", async () => {
   const result = await hydrateSelectedExtraContext(ctx(), {
-    extraContextEntries: [
-      { dataOrBlobId: { case: "data", value: "inline" } },
-      { dataOrBlobId: { case: "blobId", value: new Uint8Array([1]) } },
-      { dataOrBlobId: { case: undefined } },
+    entries: [
+      { kind: "inline-text", text: "inline" },
+      { kind: "stored-text", blobId: new Uint8Array([1]) },
+      { kind: "empty" },
     ],
-    extraContext: ["inline", "another"],
+    inlineText: ["inline", "another"],
   }, { getBlob: async () => new TextEncoder().encode("from blob") })
   assert.deepEqual(result, ["inline", "from blob", "another"])
 })
@@ -296,21 +300,21 @@ test("extra context is collected and deduplicated, blobs included", async () => 
 test("a missing extra-context blob is an error, and an empty value is not context", async () => {
   await assert.rejects(
     hydrateSelectedExtraContext(ctx(), {
-      extraContextEntries: [{ dataOrBlobId: { case: "blobId", value: new Uint8Array([1]) } }],
-      extraContext: [],
+      entries: [{ kind: "stored-text", blobId: new Uint8Array([1]) }],
+      inlineText: [],
     }, undefined),
     /Blob store is required/,
   )
   await assert.rejects(
     hydrateSelectedExtraContext(ctx(), {
-      extraContextEntries: [{ dataOrBlobId: { case: "blobId", value: new Uint8Array([1]) } }],
-      extraContext: [],
+      entries: [{ kind: "stored-text", blobId: new Uint8Array([1]) }],
+      inlineText: [],
     }, { getBlob: async () => undefined }),
     /blob not found/,
   )
   assert.deepEqual(await hydrateSelectedExtraContext(ctx(), {
-    extraContextEntries: [],
-    extraContext: ["", "kept"],
+    entries: [],
+    inlineText: ["", "kept"],
   }, undefined), ["kept"])
 })
 

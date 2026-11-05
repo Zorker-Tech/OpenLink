@@ -60,14 +60,14 @@ export interface InvocationViewedPullRequest {
   readonly title?: string | undefined;
   readonly url?: string | undefined;
   readonly description?: string | undefined;
-  readonly folderPath?: string | undefined;
-  readonly summaryJson?: string | undefined;
+  readonly reviewDirectory?: string | undefined;
+  readonly summaryDocument?: string | undefined;
 }
 
 export interface InvocationEditorState {
   readonly recentlyViewedFiles: readonly InvocationEditorFile[];
   readonly visibleFiles: readonly InvocationEditorFile[];
-  readonly currentlyViewedPullRequests?: readonly InvocationViewedPullRequest[] | undefined;
+  readonly openPullRequests?: readonly InvocationViewedPullRequest[] | undefined;
 }
 
 export type SlateInvocationContext =
@@ -148,9 +148,9 @@ function renderViewedPullRequest(pullRequest: InvocationViewedPullRequest): stri
   section += "\n";
 
   if (pullRequest.url) section += "- Link: " + pullRequest.url + "\n";
-  if (pullRequest.summaryJson) {
+  if (pullRequest.summaryDocument) {
     try {
-      const summary = JSON.parse(pullRequest.summaryJson) as Pick<InvocationPullRequestSummary, "headRef" | "baseRef">;
+      const summary = JSON.parse(pullRequest.summaryDocument) as Pick<InvocationPullRequestSummary, "headRef" | "baseRef">;
       const head = summary.headRef?.trim();
       const base = summary.baseRef?.trim();
       if (head) section += "- Branch: " + head + (base ? " → " + base : "") + "\n";
@@ -169,17 +169,17 @@ function renderViewedPullRequest(pullRequest: InvocationViewedPullRequest): stri
     }
   }
 
-  if (!pullRequest.folderPath) return section;
-  section += "- Review files are available in " + pullRequest.folderPath + "\n";
+  if (!pullRequest.reviewDirectory) return section;
+  section += "- Review files are available in " + pullRequest.reviewDirectory + "\n";
   section += "  - Contents:\n";
   section += "    - all.diff: complete change set\n";
   section += "    - diffs/: per-file change details\n";
   section += "    - summary.json: request and file metadata\n";
   section += "    - comments.json: review discussion\n";
 
-  if (!pullRequest.summaryJson) return section;
+  if (!pullRequest.summaryDocument) return section;
   try {
-    const summary = JSON.parse(pullRequest.summaryJson) as InvocationPullRequestSummary;
+    const summary = JSON.parse(pullRequest.summaryDocument) as InvocationPullRequestSummary;
     const diffSize = summary.totalDiffSizeChars ?? summary.totalDiffSizeBytes;
     section += "- Summary: " + summary.totalFiles + " files, " +
       summary.totalDiffLines + " lines, " + diffSize + " characters\n";
@@ -247,7 +247,7 @@ function renderEditorState(state: InvocationEditorState, enableTerminalFiles: bo
   }
 
   let pullRequestSection = "";
-  const pullRequests = state.currentlyViewedPullRequests ?? [];
+  const pullRequests = state.openPullRequests ?? [];
   if (pullRequests.length > 0) {
     pullRequestSection = pullRequests.length === 1
       ? "\nPull request currently being viewed:\n"

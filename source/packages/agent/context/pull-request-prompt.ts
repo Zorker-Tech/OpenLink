@@ -1,10 +1,5 @@
-import type { SelectedPullRequest } from "../proto/generated/agent/v1/selected_context_pb.ts"
-import type {
-  GitPullRequestPromptFile,
-  GitPullRequestPromptInput,
-  GitPullRequestPromptSummary,
-  GitPullRequestPromptSummaryState,
-} from "../../../packages/agent/git-pr-processing-contracts.ts"
+import type { GitPullRequestPromptFile, GitPullRequestPromptInput, GitPullRequestPromptSummary, GitPullRequestPromptSummaryState } from "../git-pr-processing-contracts.ts"
+import type { SlatePullRequestSelection } from "./selected-context-processing-contracts.ts"
 
 type JsonRecord = Record<string, unknown>
 
@@ -35,12 +30,12 @@ function promptFile(value: unknown): GitPullRequestPromptFile | undefined {
   }
 }
 
-function summaryFromJson(summaryJson: string | undefined): GitPullRequestPromptSummaryState {
-  if (summaryJson === undefined || summaryJson.length === 0) return { kind: "absent" }
+function summaryFromDocument(summaryDocument: string | undefined): GitPullRequestPromptSummaryState {
+  if (summaryDocument === undefined || summaryDocument.length === 0) return { kind: "absent" }
 
   let decoded: unknown
   try {
-    decoded = JSON.parse(summaryJson)
+    decoded = JSON.parse(summaryDocument)
   } catch {
     return { kind: "invalid" }
   }
@@ -77,14 +72,15 @@ function summaryFromJson(summaryJson: string | undefined): GitPullRequestPromptS
   return { kind: "available", value: summary }
 }
 
-export function projectSelectedPullRequestsForPrompt(
-  selected: readonly SelectedPullRequest[],
+/** Converts Slate's selected review records into the compact context the prompt renderer needs. */
+export function createPullRequestPromptInputs(
+  selected: readonly SlatePullRequestSelection[],
 ): GitPullRequestPromptInput[] {
   return selected.map(pullRequest => ({
     number: pullRequest.number,
     url: pullRequest.url,
-    folderPath: pullRequest.folderPath,
+    folderPath: pullRequest.localReviewDirectory,
     ...(pullRequest.title === undefined ? {} : { title: pullRequest.title }),
-    summary: summaryFromJson(pullRequest.summaryJson),
+    summary: summaryFromDocument(pullRequest.summaryDocument),
   }))
 }
