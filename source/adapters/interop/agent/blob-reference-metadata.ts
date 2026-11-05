@@ -63,7 +63,7 @@ export const BLOB_REFERENCE_METADATA_BY_MESSAGE_ID: Readonly<Record<string, Blob
       { protoFieldName: "summary_archive", localFieldName: "summaryArchive", fieldNumber: 11, blobReferenceType: "agent.v1.ConversationSummaryArchive" },
       { protoFieldName: "file_states", localFieldName: "fileStates", fieldNumber: 12, blobReferenceType: "agent.v1.FileState" },
       { protoFieldName: "summary_archives", localFieldName: "summaryArchives", fieldNumber: 13, blobReferenceType: "agent.v1.ConversationSummaryArchive" },
-      { protoFieldName: "subagent_state_refs", localFieldName: "subagentStateRefs", fieldNumber: 31, blobReferenceType: "agent.v1.SubagentPersistedState" }
+      { protoFieldName: "subagent_state_refs", localFieldName: "subagentStateRefs", fieldNumber: 31, blobReferenceType: "slate.agent-subagent-state" }
     ]
   },
   "agent.v1.ConversationSummaryArchive": {

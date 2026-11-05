@@ -10,6 +10,7 @@ import {
   SLATE_MULTITASK_PROMPT_SECTION,
   SLATE_MULTITASK_TODO_DESCRIPTION,
 } from "./slate-multitask-guidance.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../packages/agent/subagent-type.ts"
 
 export const EXECUTOR_SUBAGENT_TYPE = "executor"
 export { SLATE_MULTITASK_PROMPT_SECTION }
@@ -37,6 +38,16 @@ export function createSlateExecutorSubagentDefinition(): SlateExecutorSubagentDe
     description: SLATE_EXECUTOR_SUBAGENT_DESCRIPTION,
     preserveTaskTool: false,
     subagentSource: "builtin",
+  }
+}
+
+export function createSlateExecutorSubagentConfig() {
+  const definition = createSlateExecutorSubagentDefinition()
+  return {
+    subagentType: createSlateSubagentType(SlateSubagentKind.CUSTOM, { customName: definition.typeName }),
+    description: definition.description,
+    preserveTaskTool: definition.preserveTaskTool,
+    subagentSource: definition.subagentSource,
   }
 }
 

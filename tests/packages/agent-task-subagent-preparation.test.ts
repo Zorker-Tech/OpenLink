@@ -5,14 +5,12 @@ import path from "node:path"
 import {
   attachmentPathEnvironment,
   buildClientSubagentAttachmentsContext,
-  buildPreparedTaskToolHookInput,
   getEffectiveSubagentEnvironment,
   getPotentialVideoMimeTypeFromPath,
   getVideoMimeTypeFromPath,
   isPathWithinAllowedPrefix,
   isPriorSubagentModelUsable,
   prepareTaskSubagent,
-  protoEnvironmentToTaskEnvironment,
   resolveCanonicalSubagentId,
   resolveSubagentConversationState,
   resolveTaskSubagentConfig,
@@ -20,6 +18,8 @@ import {
   untrustedAttachmentPathError,
   type TaskRawArguments,
 } from "../../source/packages/agent/tools/task-subagent-preparation.ts"
+import { buildPreparedTaskHookInputInterop } from "../../source/adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
+import { taskEnvironmentFromProtoInterop } from "../../source/adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
 import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/subagent-model-policy.ts"
@@ -37,11 +37,9 @@ import type {
   SlateTaskConversationState,
 } from "../../source/packages/agent/subagent-persisted-state.ts"
 import {
-  SubagentType,
-  SubagentTypeCustom,
-  SubagentTypeUnspecified,
   CustomSubagentPermissionMode,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
@@ -57,57 +55,56 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 const credentials: SubagentCredentials["credentials"] = { case: "apiKeyCredentials", value: new ApiKeyCredentials({ apiKey: "secret" }) }
 
 const restoredState = (
-  overrides: Partial<Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId">> = {},
-): Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> => ({
-  // Every field is optional on the proto, so a fake can leave the ones a test does not care about out.
-  conversationState: undefined,
-  cloudSubagent: undefined,
+  overrides: Partial<Pick<SlateSubagentPersistedState, "conversationSnapshot" | "cloudAgent" | "subagentType" | "modelId" | "targetMachine" | "executionEnvironment" | "firstClassAgentId" | "requestedRuntimeBuildId">> = {},
+): Pick<SlateSubagentPersistedState, "conversationSnapshot" | "cloudAgent" | "subagentType" | "modelId" | "targetMachine" | "executionEnvironment" | "firstClassAgentId" | "requestedRuntimeBuildId"> => ({
+  conversationSnapshot: undefined,
+  cloudAgent: undefined,
   subagentType: undefined,
   modelId: undefined,
-  machine: undefined,
-  environment: undefined,
-  firstClassBcId: undefined,
-  cloudRequestedEnvironmentBuildId: undefined,
+  targetMachine: undefined,
+  executionEnvironment: "unspecified",
+  firstClassAgentId: undefined,
+  requestedRuntimeBuildId: undefined,
   ...overrides,
 } as never)
 
 test("a stored environment is read back as the request spells it", () => {
-  assert.equal(protoEnvironmentToTaskEnvironment(SubagentExecutionEnvironment.CLOUD), "cloud")
-  assert.equal(protoEnvironmentToTaskEnvironment(SubagentExecutionEnvironment.LOCAL), "local")
-  assert.equal(protoEnvironmentToTaskEnvironment(SubagentExecutionEnvironment.UNSPECIFIED), undefined)
+  assert.equal(taskEnvironmentFromProtoInterop(SubagentExecutionEnvironment.CLOUD), "cloud")
+  assert.equal(taskEnvironmentFromProtoInterop(SubagentExecutionEnvironment.LOCAL), "local")
+  assert.equal(taskEnvironmentFromProtoInterop(SubagentExecutionEnvironment.UNSPECIFIED), undefined)
 })
 
 test("what the request asked for wins, and the saved state is the fallback", () => {
   // A machine in the request decides it, whatever else says.
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "new_cloud_vm" } }, { environment: "local" }),
-    SubagentExecutionEnvironment.CLOUD,
+    getEffectiveSubagentEnvironment({ machine: { type: "new_cloud_vm" } }, restoredState({ executionEnvironment: "local" })),
+    "cloud",
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "same_machine" } }, { environment: "cloud" }),
-    SubagentExecutionEnvironment.LOCAL,
+    getEffectiveSubagentEnvironment({ machine: { type: "same_machine" } }, restoredState({ executionEnvironment: "cloud" })),
+    "local",
   )
   // Then the older environment field.
   assert.equal(
-    getEffectiveSubagentEnvironment({ environment: "cloud" }, { environment: "local" }),
-    SubagentExecutionEnvironment.CLOUD,
+    getEffectiveSubagentEnvironment({ environment: "cloud" }, restoredState({ executionEnvironment: "local" })),
+    "cloud",
   )
   // Then the saved state's machine, then its environment, then a cloud reference.
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ machine: { type: "new_cloud_vm" } })),
-    SubagentExecutionEnvironment.CLOUD,
+    getEffectiveSubagentEnvironment({}, restoredState({ targetMachine: { type: "new_cloud_vm" } })),
+    "cloud",
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ environment: "cloud" })),
-    SubagentExecutionEnvironment.CLOUD,
+    getEffectiveSubagentEnvironment({}, restoredState({ executionEnvironment: "cloud" })),
+    "cloud",
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ cloudSubagent: { bcId: "bc-1" } })),
-    SubagentExecutionEnvironment.CLOUD,
+    getEffectiveSubagentEnvironment({}, restoredState({ cloudAgent: { agentId: "bc-1" } })),
+    "cloud",
   )
-  assert.equal(getEffectiveSubagentEnvironment({}, undefined), SubagentExecutionEnvironment.UNSPECIFIED)
+  assert.equal(getEffectiveSubagentEnvironment({}, undefined), undefined)
   // And a saved state that says nothing is the same as none at all.
-  assert.equal(getEffectiveSubagentEnvironment({}, restoredState()), SubagentExecutionEnvironment.UNSPECIFIED)
+  assert.equal(getEffectiveSubagentEnvironment({}, restoredState()), undefined)
 })
 
 test("a subagent named by its cloud run is resolved to the id it was started with", () => {
@@ -186,7 +183,7 @@ const parentStateWith = (state: SlateTaskConversationState): {
   readonly asked: string[]
   readonly parentState: {
     getConversationState(ctx: Context): Promise<SlateTaskConversationState>
-    restoreSubagentState(ctx: Context, subagentId: string): Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> | undefined
+    restoreSubagentState(ctx: Context, subagentId: string): Pick<SlateSubagentPersistedState, "conversationSnapshot" | "cloudAgent" | "subagentType" | "modelId" | "targetMachine" | "executionEnvironment" | "firstClassAgentId" | "requestedRuntimeBuildId"> | undefined
   }
 } => {
   const asked: string[] = []
@@ -213,7 +210,7 @@ test("a resumed subagent starts from the conversation it was saved with", async 
   const saved = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([2])] }))
   const parentState = {
     async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure()) },
-    restoreSubagentState() { return restoredState({ conversationState: saved }) },
+    restoreSubagentState() { return restoredState({ conversationSnapshot: saved }) },
   }
   const resolved = await resolveSubagentConversationState(createContext(), {}, parentState, "subagent-1", false, "call-1", "generalPurpose")
   assert.equal(resolved, saved)
@@ -222,7 +219,7 @@ test("a resumed subagent starts from the conversation it was saved with", async 
 test("a resumed cloud subagent with no saved conversation starts from nothing", async () => {
   const parentState = {
     async getConversationState() { return fromInteropTaskConversationState(new ConversationStateStructure({ turns: [new Uint8Array([3])] })) },
-    restoreSubagentState() { return restoredState({ cloudSubagent: { bcId: "bc-1" } }) },
+    restoreSubagentState() { return restoredState({ cloudAgent: { agentId: "bc-1" } }) },
   }
   const resolved = await resolveSubagentConversationState(createContext(), {}, parentState, "subagent-1", false, "call-1", "generalPurpose")
   assert.deepEqual(resolved.turns, [])
@@ -268,11 +265,11 @@ test("a resumed subagent's model is only usable when it is not blocked and the m
 
 const generalConfig = {
   permissionMode: CustomSubagentPermissionMode.DEFAULT,
-  subagent_type: new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
+  subagentType: createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE),
 }
 const customConfig = {
   permissionMode: CustomSubagentPermissionMode.READONLY,
-  subagent_type: new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "releaseBot" }) } }),
+  subagentType: createSlateSubagentType(SlateSubagentKind.CUSTOM, { customName: "releaseBot" }),
 }
 
 const models = createSubagentModels({ standard: { slug: "composer-2" }, fast: { slug: "composer-2-fast" } })
@@ -359,7 +356,7 @@ test("a resume mode that resumes by itself asks the parent which agent to contin
     configs,
     rawArgs: { subagent_type: "releaseBot" },
     getSubagentIdToResume: (typeName, mode) => `${typeName}:${mode}`,
-    restore: () => ({ subagentType: customConfig.subagent_type, modelId: "composer-2-fast" }),
+    restore: () => ({ subagentType: customConfig.subagentType, modelId: "composer-2-fast" }),
   })
   const resolved = await resolveTaskSubagentConfig(args as never)
   assert.deepEqual(args.restoreCalls, ["releaseBot:LAST_AGENT"])
@@ -372,7 +369,7 @@ test("a resume mode that resumes by itself asks the parent which agent to contin
 test("an explicit resume names the agent to continue, and its type comes from the saved state", async () => {
   const args = resolutionArgs({
     rawArgs: { subagent_type: "generalPurpose", resume: "subagent-9" },
-    restore: () => ({ subagentType: customConfig.subagent_type }),
+    restore: () => ({ subagentType: customConfig.subagentType }),
   })
   const resolved = await resolveTaskSubagentConfig(args as never)
   assert.deepEqual(args.restoreCalls, ["subagent-9"])
@@ -385,7 +382,7 @@ test("resuming an agent whose type is gone is refused rather than started as som
   await assert.rejects(
     () => resolveTaskSubagentConfig(resolutionArgs({
       rawArgs: { resume: "subagent-9" },
-      restore: () => ({ subagentType: new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "goneBot" }) } }) }),
+      restore: () => ({ subagentType: createSlateSubagentType(SlateSubagentKind.CUSTOM, { customName: "goneBot" }) }),
     }) as never),
     /Cannot resume subagent of type "goneBot" because that subagent type is not available\./,
   )
@@ -395,7 +392,7 @@ test("a resume that would contradict the pinned model is refused", async () => {
   await assert.rejects(
     () => resolveTaskSubagentConfig(resolutionArgs({
       rawArgs: { resume: "subagent-9" },
-      restore: () => ({ subagentType: generalConfig.subagent_type, modelId: "composer-2-fast" }),
+      restore: () => ({ subagentType: generalConfig.subagentType, modelId: "composer-2-fast" }),
       policy: SubagentModelForcePolicy.ParentPin,
       forceModelId: "composer-2",
     }) as never),
@@ -407,7 +404,7 @@ test("a resumed model that is blocked is refused", async () => {
   await assert.rejects(
     () => resolveTaskSubagentConfig(resolutionArgs({
       rawArgs: { resume: "subagent-9" },
-      restore: () => ({ subagentType: generalConfig.subagent_type, modelId: "composer-2-fast" }),
+      restore: () => ({ subagentType: generalConfig.subagentType, modelId: "composer-2-fast" }),
       blocked: ["composer-2-fast"],
     }) as never),
     /Cannot resume subagent with model "composer-2-fast" because it is blocked or unavailable\./,
@@ -435,11 +432,11 @@ test("the parent's model parameters are carried only when the subagent runs on t
 
 test("where the subagent runs follows the request, then the saved state, then the cloud fields", async () => {
   const cloud = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { environment: "cloud", cloud_base_branch: "main" } }) as never)
-  assert.equal(cloud.effectiveEnvironment, SubagentExecutionEnvironment.CLOUD)
+  assert.equal(cloud.effectiveEnvironment, "cloud")
   assert.deepEqual(cloud.effectiveTargetMachine, { type: "new_cloud_vm", base_branch: "main" })
 
   const local = await resolveTaskSubagentConfig(resolutionArgs() as never)
-  assert.equal(local.effectiveEnvironment, SubagentExecutionEnvironment.UNSPECIFIED)
+  assert.equal(local.effectiveEnvironment, undefined)
   assert.deepEqual(local.effectiveTargetMachine, { type: "same_machine" })
 })
 
@@ -447,13 +444,13 @@ test("a resumed cloud run keeps the build it was started with", async () => {
   const resolved = await resolveTaskSubagentConfig(resolutionArgs({
     rawArgs: { resume: "subagent-9", environment: "cloud" },
     restore: () => ({
-      subagentType: generalConfig.subagent_type,
-      cloudSubagent: { bcId: "bc-7" },
-      cloudRequestedEnvironmentBuildId: "bld-1",
+      subagentType: generalConfig.subagentType,
+      cloudAgent: { agentId: "bc-7" },
+      requestedRuntimeBuildId: "bld-1",
     }),
   }) as never)
-  assert.equal(resolved.cloudSubagentBcId, "bc-7")
-  assert.equal(resolved.cloudRequestedEnvironmentBuildId, "bld-1")
+  assert.equal(resolved.cloudAgentId, "bc-7")
+  assert.equal(resolved.requestedRuntimeBuildId, "bld-1")
   assert.deepEqual(resolved.effectiveTargetMachine, { type: "new_cloud_vm", environment_build_id: "bld-1" })
 })
 
@@ -709,7 +706,7 @@ test("the hook input mirrors the call the way a hook expects to read it", async 
     rawArgs: { environment: "cloud", cloud_base_branch: "main", run_in_background: false },
     attachments: ["/repo/uploads/diagram.png"],
   })
-  const input = buildPreparedTaskToolHookInput(message)
+  const input = buildPreparedTaskHookInputInterop(message)
   assert.equal(input.prompt, "do the thing")
   assert.equal(input.description, "the thing")
   assert.equal(input.environment, "cloud")
@@ -722,7 +719,7 @@ test("the hook input mirrors the call the way a hook expects to read it", async 
 
 test("a hook input built from a subagent with no raw arguments says only what it knows", () => {
   const bare = new PreparedTaskSubagent({ subagentTypeName: "explore" })
-  const input = buildPreparedTaskToolHookInput(bare)
+  const input = buildPreparedTaskHookInputInterop(bare)
   assert.equal(input.subagent_type, "explore")
   assert.equal(input.prompt, undefined)
   assert.equal(input.environment, undefined)

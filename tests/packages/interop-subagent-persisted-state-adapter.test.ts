@@ -58,28 +58,29 @@ test("a persisted subagent round-trips through Slate metadata and its conversati
   })
 
   const slate = fromInteropSubagentPersistedState(wire, PrivacyMode.NO_STORAGE)
-  assert.deepEqual(slate.conversationState?.turns, [new Uint8Array([1, 2])])
-  assert.equal(slate.conversationState?.mode, SlateMode.PLAN)
-  assert.equal(slate.conversationState?.privacyMode, PrivacyMode.NO_STORAGE)
-  assert.equal(slate.conversationState?.activeBranchName, "feature/slate")
-  assert.deepEqual(slate.conversationState?.readPaths, ["/repo/read.ts", "/repo/ spaced.ts "])
-  assert.deepEqual(slate.conversationState?.fileStatesV2.get("/repo/file.ts"), {
+  assert.deepEqual(slate.conversationSnapshot?.turns, [new Uint8Array([1, 2])])
+  assert.equal(slate.conversationSnapshot?.mode, SlateMode.PLAN)
+  assert.equal(slate.conversationSnapshot?.privacyMode, PrivacyMode.NO_STORAGE)
+  assert.equal(slate.conversationSnapshot?.activeBranchName, "feature/slate")
+  assert.deepEqual(slate.conversationSnapshot?.readPaths, ["/repo/read.ts", "/repo/ spaced.ts "])
+  assert.deepEqual(slate.conversationSnapshot?.fileStatesV2.get("/repo/file.ts"), {
     contentBlobId: new Uint8Array([3, 4]),
     initialContentBlobId: new Uint8Array([5, 6]),
   })
-  assert.equal(slate.conversationState?.selfSummaryCount, 2)
-  assert.equal(slate.createdTimestampMs, BigInt(10))
-  assert.equal(slate.lastUsedTimestampMs, BigInt(20))
-  assert.equal(slate.subagentType?.type.case, "unspecified")
+  assert.equal(slate.conversationSnapshot?.selfSummaryCount, 2)
+  assert.equal(slate.createdAtMs, BigInt(10))
+  assert.equal(slate.lastUsedAtMs, BigInt(20))
+  assert.equal(slate.subagentType?.kind, "general-purpose")
+  assert.equal(slate.subagentType?.compatibility?.legacyDiscriminator, "unspecified")
   assert.equal(slate.modelId, "model-1")
-  assert.equal(slate.environment, "cloud")
-  assert.deepEqual(slate.cloudSubagent, {
-    bcId: "worker-1",
-    transcriptPath: "/repo/transcript.jsonl",
+  assert.equal(slate.executionEnvironment, "cloud")
+  assert.deepEqual(slate.cloudAgent, {
+    agentId: "worker-1",
+    transcriptUri: "/repo/transcript.jsonl",
   })
-  assert.equal(slate.firstClassBcId, "worker-1")
-  assert.equal(slate.cloudRequestedEnvironmentBuildId, "build-1")
-  assert.deepEqual(slate.machine, {
+  assert.equal(slate.firstClassAgentId, "worker-1")
+  assert.equal(slate.requestedRuntimeBuildId, "build-1")
+  assert.deepEqual(slate.targetMachine, {
     type: "new_cloud_vm",
     base_branch: "main",
   })
@@ -96,7 +97,7 @@ test("an unknown mode nested in a subagent snapshot keeps its source enum value"
     conversationState: new ConversationStateStructure({ mode: unknownMode }),
   }))
 
-  assert.equal(slate.conversationState?.mode, SlateMode.UNSPECIFIED)
-  assert.equal(slate.conversationState?.unknownModeCode, unknownMode)
+  assert.equal(slate.conversationSnapshot?.mode, SlateMode.UNSPECIFIED)
+  assert.equal(slate.conversationSnapshot?.unknownModeCode, unknownMode)
   assert.equal(toInteropSubagentPersistedState(slate).conversationState?.mode, unknownMode)
 })

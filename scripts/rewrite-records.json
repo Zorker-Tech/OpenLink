@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6768733153638814,
+      "overlap": 0.6734231805929919,
       "refreshReason": "Conversation state now uses Slate-owned conversation-state, turn, step, user-message, goal, active-plan and read-path records; persisted privacy wrappers are reconstructed only at the checkpoint boundary.",
-      "evidence": "Conversation checkpoint/state, turn/step, shell invocation/result, user-message, plan, read-path, goal and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9897/9897 with test concurrency 1. New shell turns use Slate's version 2 turn envelope and Slate-owned versioned invocation/result blobs, with historical protobuf payloads as read-only migration inputs. The migration preserves privacy classifications, separate stdout/stderr, signed exit status and unknown legacy fields; the current runner projection stays at an adapter boundary. Read paths remain exact strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode; real steps expose Slate assistant/thinking kinds; unknown conversation modes retain their source code unless Slate explicitly replaces them. Four path-boundary mutations were caught. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.6768733153638814."
+      "evidence": "Conversation checkpoint/state, turn/step, shell invocation/result, subagent kind/state, user-message, plan, read-path, goal and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9912/9912 with test concurrency 1. New shell turns use Slate's version 2 turn envelope and Slate-owned invocation/result blobs. Out-of-line subagent refs now write SLATE-AGENT-SUBAGENT-STATE v1 with Slate type/environment fields and nested Slate conversation values; legacy environment codes and unknown protobuf paths survive read/write, and explicit type/environment changes retire stale compatibility data. Runner projections remain in adapters. Read paths remain exact strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode; real steps expose Slate assistant/thinking kinds; unknown conversation modes retain their source code unless Slate explicitly replaces them. Four path-boundary mutations were caught. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.6734231805929919."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
@@ -2211,8 +2211,9 @@
     },
     "host/runner/tools/slate-computer-use-subagent.ts": {
       "claim": "rewritten",
-      "overlap": 0.616,
-      "evidence": "Host runtime-services, runner-composition and subagent adapter suites pass 38/38. Contracts pin type-name normalization, browser/page-only routing guidance, bounded background work, single-desktop serialization, human handoff instructions and the Slate-owned subagent config. Work-host typecheck passes; the counterpart config envelope is isolated in interop."
+      "overlap": 0.5205479452054794,
+      "refreshReason": "The built-in registration now emits Slate computer-use kind data directly; the unused interop re-export was removed, while PreparedTask mapping remains in its protocol adapter.",
+      "evidence": "Host runtime-services, runner-composition and subagent adapter suites pass 38/38. Focused Slate subagent contracts pin kind normalization, browser/page-only routing guidance, bounded background work, single-desktop serialization, human handoff instructions and one registration per config. PreparedTask conversion maps Slate computer-use to the existing custom runner alias. Work-host typecheck passes."
     },
     "host/selected-image-inputs.ts": {
       "claim": "rewritten",
@@ -2367,8 +2368,9 @@
     },
     "packages/agent/prompts/shared.ts": {
       "claim": "rewritten",
-      "overlap": 0.455456570155902,
-      "evidence": "Prompt-section and testing-instruction contracts pass 8/8. Mutations that omit the artifact path separator and that claim a PR tool exists when none was supplied are caught. Tests pin computer-use subagent guidance, tool-name lookup, repository access boundaries, PR permissions and testing artifact placement."
+      "overlap": 0.44097995545657015,
+      "refreshReason": "Computer-use prompt policy now consumes SlateSubagentType.kind instead of a generated oneof view.",
+      "evidence": "Prompt-section and testing-instruction contracts pass 8/8. Mutations that omit the artifact path separator and that claim a PR tool exists when none was supplied are caught. Tests pin Slate computer-use kind guidance, tool-name lookup, repository access boundaries, PR permissions and testing artifact placement."
     },
     "packages/agent/prompts/project-prompt.ts": {
       "claim": "rewritten",
@@ -2407,9 +2409,9 @@
     },
     "packages/agent/prompts/composer2-cloud-testing-sections.ts": {
       "claim": "rewritten",
-      "overlap": 0.7306122448979592,
-      "refreshReason": "Removed unused request wire data from the cloud-testing prompt contract while keeping thread-session mapping at the interop boundary.",
-      "evidence": "prompts.test passes 40/40, and the thread policy and interop projection contracts pass 3/3. Work-host typecheck/build pass. The external `slack_thread` value is mapped to `thread` only in interop, and a wrong mapping is caught. The testing prompt no longer accepts the unused raw rule field. Measured overlap is 0.7306122448979592 against 490 baseline pairs."
+      "overlap": 0.7142857142857143,
+      "refreshReason": "Cloud testing prompt props now type the optional subagent identity as SlateSubagentType instead of the generated oneof shape.",
+      "evidence": "prompts.test passes 40/40, and the thread policy and interop projection contracts pass 3/3. The `slack_thread` value is mapped to `thread` only in interop, and a wrong mapping is caught. The testing prompt now consumes Slate subagent values. Measured overlap is 0.7142857142857143 against 490 baseline pairs."
     },
     "host/boxes/box-env.ts": {
       "claim": "rewritten",

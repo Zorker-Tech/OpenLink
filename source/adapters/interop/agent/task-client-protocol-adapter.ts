@@ -23,8 +23,10 @@ import type { PrivacyCapability } from "../../../packages/redaction/classificati
 import type { Context } from "../../../packages/context/context.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts"
+import type { TaskEnvironment } from "../../../packages/agent/tools/task-runtime-types.ts"
 import { forceBackgroundSubagentExecutorResource } from "./subagent-control-exec-adapter.ts"
 import { subagentExecutorResource } from "./subagent-exec-adapter.ts"
+import { taskEnvironmentToProtoInterop } from "./task-runtime-protocol-adapter.ts"
 
 export type TaskClientBackgroundReason = "unspecified" | "agent_request" | "user_request" | "queued_follow_up" | "unknown"
 
@@ -65,7 +67,7 @@ export interface TaskClientSubagentRequest {
   readonly rootParentConversationId?: string
   readonly parentConversationId?: string
   readonly selectedContext?: unknown
-  readonly environment: unknown
+  readonly environment: TaskEnvironment
   readonly cloudBaseBranch?: string
   readonly modelParameters?: readonly { readonly id: string; readonly value: string }[]
   readonly credentials?: unknown
@@ -248,7 +250,7 @@ export async function runClientSubagentInterop(
     ...(request.rootParentConversationId === undefined ? {} : { rootParentConversationId: request.rootParentConversationId }),
     ...(request.parentConversationId === undefined ? {} : { parentConversationId: request.parentConversationId }),
     ...(request.selectedContext === undefined ? {} : { selectedContext: request.selectedContext as NonNullable<SubagentArgs["selectedContext"]> }),
-    environment: request.environment as SubagentExecutionEnvironment,
+    environment: taskEnvironmentToProtoInterop(request.environment),
     ...(request.cloudBaseBranch === undefined ? {} : { cloudBaseBranch: request.cloudBaseBranch }),
     ...(request.modelParameters === undefined ? {} : { modelParameters: [...request.modelParameters] }),
     ...(request.credentials === undefined ? {} : { credentials: request.credentials as SubagentArgs["credentials"] }),

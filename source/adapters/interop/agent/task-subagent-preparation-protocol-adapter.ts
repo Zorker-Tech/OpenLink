@@ -24,7 +24,16 @@ import type {
   SelectedCursorCommand,
 } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { SlateTaskConversationState } from "../../../packages/agent/subagent-persisted-state.ts"
+import type { SlateSubagentType } from "../../../packages/agent/subagent-type.ts"
+import type { SlatePreparedTaskRawArgs, TaskEnvironment, TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
+import { subagentTypeToInterop } from "./subagent-type-adapter.ts"
 import { toInteropTaskConversationState } from "./task-conversation-state-adapter.ts"
+import {
+  targetMachineFromProtoInterop,
+  targetMachineToProtoInterop,
+  taskEnvironmentFromProtoInterop,
+  taskEnvironmentToProtoInterop,
+} from "./task-runtime-protocol-adapter.ts"
 
 export const taskSubagentEnvironmentInterop = {
   cloud: SubagentExecutionEnvironment.CLOUD,
@@ -160,21 +169,87 @@ export function createTaskSelectedVideoSignedUrlInterop(input: {
 }
 
 export function createPreparedTaskSubagentInterop(
-  input: Omit<NonNullable<ConstructorParameters<typeof PreparedTaskSubagent>[0]>, "rawArgs" | "subagentCredentials" | "conversationState"> & {
-    readonly rawArgs: NonNullable<TaskSubagentRawArgsInterop>
+  input: Omit<NonNullable<ConstructorParameters<typeof PreparedTaskSubagent>[0]>, "rawArgs" | "subagentCredentials" | "conversationState" | "subagentType" | "cloudSubagentBcId"> & {
+    readonly rawArgs: SlatePreparedTaskRawArgs
+    readonly subagentType: SlateSubagentType
+    readonly cloudAgentId?: string | undefined
     readonly subagentCredentials?: TaskSubagentCredentialsInterop | undefined
     readonly conversationState?: SlateTaskConversationState | undefined
   },
 ): TaskPreparedSubagentInterop {
-  const { rawArgs, subagentCredentials, conversationState, ...prepared } = input
+  const { rawArgs, subagentCredentials, conversationState, subagentType, cloudAgentId, ...prepared } = input
+  const interopSubagentType = subagentTypeToInterop(subagentType)
   return new PreparedTaskSubagent({
     ...prepared,
+    ...(interopSubagentType === undefined ? {} : { subagentType: interopSubagentType }),
+    ...(cloudAgentId === undefined ? {} : { cloudSubagentBcId: cloudAgentId }),
     ...(conversationState === undefined
       ? {}
       : { conversationState: toInteropTaskConversationState(conversationState) }),
-    rawArgs: new TaskToolCallArgsProto(rawArgs),
+    rawArgs: new TaskToolCallArgsProto({
+      description: rawArgs.description,
+      prompt: rawArgs.prompt,
+      ...(rawArgs.model === undefined ? {} : { model: rawArgs.model }),
+      subagentType: rawArgs.subagentType,
+      ...(rawArgs.resume === undefined ? {} : { resume: rawArgs.resume }),
+      ...(rawArgs.runInBackground === undefined ? {} : { runInBackground: rawArgs.runInBackground }),
+      attachments: [...rawArgs.attachments],
+      environment: taskEnvironmentToProtoInterop(rawArgs.environment),
+      ...(rawArgs.cloudBaseBranch === undefined ? {} : { cloudBaseBranch: rawArgs.cloudBaseBranch }),
+      ...(rawArgs.requestedRuntimeBuildId === undefined
+        ? {}
+        : { cloudRequestedEnvironmentBuildId: rawArgs.requestedRuntimeBuildId }),
+      machine: targetMachineToProtoInterop(rawArgs.targetMachine),
+    }),
     ...(subagentCredentials === undefined
       ? {}
       : { subagentCredentials: new SubagentCredentials({ credentials: subagentCredentials }) }),
   })
+}
+
+export interface PreparedTaskHookInput {
+  readonly description: string | undefined
+  readonly prompt: string | undefined
+  readonly model: string | undefined
+  readonly resume: string | undefined
+  readonly environment: TaskEnvironment
+  readonly cloud_base_branch: string | undefined
+  readonly cloud_requested_environment_build_id: string | undefined
+  readonly machine: TaskTargetMachine | undefined
+  readonly subagent_type: string
+  readonly run_in_background: boolean | undefined
+  readonly file_attachments: readonly string[] | undefined
+}
+
+/** Projects the generated prepared task into the Slate task-tool shape consumed by hooks. */
+export function buildPreparedTaskHookInputInterop(subagent: TaskPreparedSubagentInterop): PreparedTaskHookInput {
+  const storedArgs = subagent.rawArgs
+  if (storedArgs === undefined) {
+    return {
+      description: undefined,
+      prompt: undefined,
+      model: undefined,
+      resume: undefined,
+      environment: undefined,
+      cloud_base_branch: undefined,
+      cloud_requested_environment_build_id: undefined,
+      machine: undefined,
+      subagent_type: subagent.subagentTypeName,
+      run_in_background: undefined,
+      file_attachments: undefined,
+    }
+  }
+  return {
+    description: storedArgs.description,
+    prompt: storedArgs.prompt,
+    model: storedArgs.model,
+    resume: storedArgs.resume,
+    environment: taskEnvironmentFromProtoInterop(storedArgs.environment),
+    cloud_base_branch: storedArgs.cloudBaseBranch,
+    cloud_requested_environment_build_id: storedArgs.cloudRequestedEnvironmentBuildId,
+    machine: targetMachineFromProtoInterop(storedArgs.machine),
+    subagent_type: subagent.subagentTypeName,
+    run_in_background: storedArgs.runInBackground,
+    file_attachments: storedArgs.attachments.length > 0 ? storedArgs.attachments : undefined,
+  }
 }

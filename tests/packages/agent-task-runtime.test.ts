@@ -39,10 +39,8 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   CustomSubagentPermissionMode,
-  SubagentType,
-  SubagentTypeExplore,
-  SubagentTypeUnspecified,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 
 // ---------------------------------------------------------------------------------------------
 // which model a subagent runs on
@@ -54,11 +52,11 @@ const models = createSubagentModels({
   other: { slug: "other-model" },
 })
 
-const exploreType = new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore({}) } })
-const generalType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+const exploreType = createSlateSubagentType(SlateSubagentKind.EXPLORE)
+const generalType = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
 
 function config(overrides: Partial<TaskSubagentModelConfig> = {}): TaskSubagentModelConfig {
-  return { permissionMode: CustomSubagentPermissionMode.DEFAULT, subagent_type: generalType, ...overrides }
+  return { permissionMode: CustomSubagentPermissionMode.DEFAULT, subagentType: generalType, ...overrides }
 }
 
 function resolve(
@@ -165,7 +163,7 @@ test("the user's own default is used when it is a real model", async () => {
 })
 
 test("an explore subagent may inherit the parent's model instead of the catalogue default", async () => {
-  const exploreConfig = config({ subagent_type: exploreType, defaultModelIds: ["composer-2-fast"] })
+  const exploreConfig = config({ subagentType: exploreType, defaultModelIds: ["composer-2-fast"] })
   assert.equal(await resolve(exploreConfig, { parentModelId: "other-model" }), "composer-2-fast")
   assert.equal(
     await resolve(exploreConfig, { parentModelId: "other-model", enableExploreParentModelInheritance: true }),
@@ -194,18 +192,18 @@ test("an explore subagent takes the cheaper default first, and never one costlie
   // The first default is the cheap tier; when it is not actually cheaper it moves behind the other one.
   const fastIsCostlier = (candidate: string, _parent: string): number => candidate === "composer-2-fast" ? 1 : -1
   assert.equal(
-    await resolve(config({ subagent_type: exploreType, defaultModelIds: defaults }), { parentModelId: "other-model", compareModelCosts: fastIsCostlier }),
+    await resolve(config({ subagentType: exploreType, defaultModelIds: defaults }), { parentModelId: "other-model", compareModelCosts: fastIsCostlier }),
     "composer-2",
   )
   const fastIsCheaper = (candidate: string, _parent: string): number => candidate === "composer-2-fast" ? -1 : 1
   assert.equal(
-    await resolve(config({ subagent_type: exploreType, defaultModelIds: defaults }), { parentModelId: "other-model", compareModelCosts: fastIsCheaper }),
+    await resolve(config({ subagentType: exploreType, defaultModelIds: defaults }), { parentModelId: "other-model", compareModelCosts: fastIsCheaper }),
     "composer-2-fast",
   )
   // A default that costs more than the parent's model is skipped even when it is the only one.
   await assert.rejects(
     () => resolve(
-      config({ subagent_type: exploreType, defaultModelIds: ["composer-2-fast"] }),
+      config({ subagentType: exploreType, defaultModelIds: ["composer-2-fast"] }),
       { parentModelId: "blocked-parent", blocked: ["blocked-parent"], compareModelCosts: fastIsCostlier },
     ),
     /No usable model is available for this subagent\./,
@@ -406,11 +404,11 @@ test("a placement is read into the environment the protocol spells", () => {
 
 test("a client-executed subagent can run here or on a cloud VM, and nowhere else", () => {
   assert.deepEqual(toClientSubagentPlacement({ type: "same_machine" }), {
-    environment: SubagentExecutionEnvironment.LOCAL,
+    environment: "local",
     cloudBaseBranch: undefined,
   })
   assert.deepEqual(toClientSubagentPlacement({ type: "new_cloud_vm", base_branch: "main" }), {
-    environment: SubagentExecutionEnvironment.CLOUD,
+    environment: "cloud",
     cloudBaseBranch: "main",
   })
   assert.throws(
@@ -460,7 +458,7 @@ test("a pool with no labels carries no labels on the wire", () => {
 })
 
 test("a cloud subagent's saved state carries how to find it again", () => {
-  const state = buildCloudSubagentPersistedStateInterop({ bcId: "bc-1", machine: { type: "new_cloud_vm", base_branch: "main" } })
+  const state = buildCloudSubagentPersistedStateInterop({ agentId: "bc-1", targetMachine: { type: "new_cloud_vm", base_branch: "main" } })
   assert.equal(state.environment, SubagentExecutionEnvironment.CLOUD)
   assert.equal(state.cloudSubagent?.bcId, "bc-1")
   assert.equal(state.cloudSubagent?.transcriptPath, undefined)
@@ -468,10 +466,10 @@ test("a cloud subagent's saved state carries how to find it again", () => {
   assert.equal(state.machine?.machine.case, "newCloudVm")
 
   const withExtras = buildCloudSubagentPersistedStateInterop({
-    bcId: "bc-2",
-    transcriptPath: "/repo/.slate/transcripts/bc-2.txt",
+    agentId: "bc-2",
+    transcriptUri: "/repo/.slate/transcripts/bc-2.txt",
     modelId: "composer-2",
-    machine: { type: "same_machine" },
+    targetMachine: { type: "same_machine" },
   })
   assert.equal(withExtras.cloudSubagent?.transcriptPath, "/repo/.slate/transcripts/bc-2.txt")
   assert.equal(withExtras.modelId, "composer-2")

@@ -633,20 +633,21 @@ describe("the subagent that drives the box's browser", () => {
     assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.endsWith("continue."), true);
   });
 
-  it("registers itself as a custom built-in subagent, with its own type and description each time", () => {
+  it("registers itself as a Slate built-in subagent, with its own type and description each time", () => {
     const config = createSlateBrowserUseSubagentConfig();
     assert.deepEqual(config, {
-      subagent_type: { type: { case: "custom", value: { name: "browserUse" } } },
+      subagentType: { kind: "browser-use" },
       description: BROWSER_USE_SUBAGENT_DESCRIPTION,
       preserveTaskTool: false,
       subagentSource: "builtin",
     });
-    assert.deepEqual(Object.keys(config), ["subagent_type", "description", "preserveTaskTool", "subagentSource"]);
+    assert.deepEqual(Object.keys(config), ["subagentType", "description", "preserveTaskTool", "subagentSource"]);
     const second = createSlateBrowserUseSubagentConfig();
     assert.equal(config !== second, true, "every registration is its own object");
-    assert.equal(config.subagent_type !== second.subagent_type, true);
-    config.subagent_type.type.value.name = "changed";
-    assert.equal(second.subagent_type.type.value.name, "browserUse", "one registration cannot change the next");
+    assert.equal(config.subagentType !== second.subagentType, true);
+    const mutableType = config.subagentType as { kind: string };
+    mutableType.kind = "changed";
+    assert.equal(second.subagentType.kind, "browser-use", "one registration cannot change the next");
   });
 });
 

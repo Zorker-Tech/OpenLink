@@ -5,6 +5,8 @@
  * model when to prefer it over pixel-level computer use: page snapshots give it exact element targets.
  */
 
+import { createSlateSubagentType, SlateSubagentKind } from "../../../packages/agent/subagent-type.ts"
+
 /** The type name this platform gives the page-level browser subagent. */
 export const BROWSER_USE_SUBAGENT_TYPE = "browserUse";
 
@@ -37,9 +39,8 @@ export const BROWSER_USE_SUBAGENT_DESCRIPTION = BROWSER_USE_SUBAGENT_DESCRIPTION
 
 /** The subagent's configuration, as the runner registers it. */
 export const createSlateBrowserUseSubagentConfig = () => {
-  const type = { type: { case: "custom", value: { name: BROWSER_USE_SUBAGENT_TYPE } } };
   return {
-    subagent_type: type,
+    subagentType: createSlateSubagentType(SlateSubagentKind.BROWSER_USE),
     description: BROWSER_USE_SUBAGENT_DESCRIPTION,
     preserveTaskTool: false,
     subagentSource: "builtin" as const,

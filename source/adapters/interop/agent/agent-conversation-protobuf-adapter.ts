@@ -6,13 +6,13 @@ import {
   ConversationStep,
   ConversationTurn,
   ShellConversationTurn,
-  SubagentPersistedState,
   type ConversationState as ConversationStateMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { ProtobufBlobSerde } from "./protobuf-blob-serde-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import {
   deserializeSlateConversationStepInterop,
+  deserializeSlateSubagentPersistedStateInterop,
   deserializeSlateShellInvocationInterop,
   deserializeSlateShellResultInterop,
   deserializeSlateUserMessageInterop,
@@ -303,7 +303,7 @@ export function createSlateAgentConversationCodec<Context>(): AgentConversationC
         ctx,
         checkpoint,
         blobStore,
-        bytes => SubagentPersistedState.fromBinary(bytes),
+        deserializeSlateSubagentPersistedStateInterop,
       )
       return states as Record<string, PersistedAgentSubconversation<ConversationStateStructure>>
     },

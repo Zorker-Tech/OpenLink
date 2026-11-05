@@ -258,7 +258,6 @@ const EXEMPT = [
   ["adapters/interop/mcp/host-service-adapter.ts", "interop adapter: maps counterpart account, catalog and auth responses to Slate MCP host views"],
   ["adapters/interop/telemetry/analytics-client-adapter.ts", "interop adapter: constructs the counterpart analytics client and projects optional log authentication"],
   ["adapters/interop/agent/hook-context-adapter.ts", "interop adapter: maps Slate hook context entries to and from the counterpart hook-context message"],
-  ["adapters/interop/agent/computer-use-subagent-adapter.ts", "interop adapter: encodes the desktop subagent as the counterpart config envelope"],
   ["adapters/interop/agent/box-environment-transport-adapter.ts", "interop adapter: copies Slate box environment values into the counterpart control request"],
   ["adapters/interop/agent/box-shell-command-adapter.ts", "interop adapter: projects Slate command inputs into the counterpart shell execution message"],
   ["adapters/interop/agent/box-file-write-adapter.ts", "interop adapter: maps Slate box file writes to counterpart executor requests and result cases"],
@@ -2503,9 +2502,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ]],
   ["host/boxes/box-shell-command.ts", [
     "adapters/interop/agent/box-shell-command-adapter.ts",
-  ]],
-  ["host/runner/tools/slate-computer-use-subagent.ts", [
-    "adapters/interop/agent/computer-use-subagent-adapter.ts",
   ]],
   ["host/auth/auth-service.ts", [
     "host/auth/auth-service-contracts.ts",

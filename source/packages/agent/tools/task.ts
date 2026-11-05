@@ -48,20 +48,20 @@ import {
   buildTaskToolDescriptionParts,
   type TaskSchemaSubagentConfig,
 } from "./task-tool-schema.ts";
-import { slateSubagentTypeName } from "../subagent-type.ts";
+import { isComputerUseSubagentType, slateSubagentTypeName } from "../subagent-type.ts";
 import {
   assertCloudOnlyTaskArgsAllowed,
   assertMachineAndLegacyArgsNotBothSet,
   type TaskSubagentModelConfig,
 } from "./task-runtime.ts";
 import {
-  buildPreparedTaskToolHookInput,
   prepareTaskSubagent,
   resolveTaskSubagentConfig,
   type TaskRawArguments,
   type TaskResolutionParentState,
   type TaskSubagentResolution,
 } from "./task-subagent-preparation.ts";
+import { buildPreparedTaskHookInputInterop } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts";
 import {
   executeClientSideTaskSubagent,
   renderTaskResultToString,
@@ -229,7 +229,7 @@ function createSubagentAgentConfig(args: {
     isCloudMetaAgentParent: false,
     preTurnAssistantNotice: undefined,
     getNamedAgentSelfDocument: undefined,
-    userInfoDisplayOptions: subagentUserInfoDisplayOptions(baseAgentConfig.userInfoDisplayOptions, subagentConfig.subagent_type.type.case === "computerUse"),
+    userInfoDisplayOptions: subagentUserInfoDisplayOptions(baseAgentConfig.userInfoDisplayOptions, isComputerUseSubagentType(subagentConfig.subagentType)),
     toolsGenerator: (props: Any) => baseAgentConfig.toolsGenerator({
       ...props,
       isCloudMetaAgentParent: false,
@@ -237,7 +237,7 @@ function createSubagentAgentConfig(args: {
       subagentConfig,
     }),
     systemPromptGenerator: (props: Any, toolSet: Any) => {
-      const subagentPromptProps = { ...props, isCloudMetaAgentParent: false, subagentType: subagentConfig.subagent_type };
+      const subagentPromptProps = { ...props, isCloudMetaAgentParent: false, subagentType: subagentConfig.subagentType };
       const basePrompt = runtimeSubagentConfig.systemPromptOverride
         ? runtimeSubagentConfig.systemPromptOverride(subagentPromptProps, toolSet, { subagentInstanceId, baseSystemPromptGenerator: baseAgentConfig.systemPromptGenerator })
         : baseAgentConfig.systemPromptGenerator(subagentPromptProps, toolSet);
@@ -330,7 +330,7 @@ async function runServerTaskSubagent(args: {
     ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
   });
   // The model a subagent starts on is the one it resolved to, but its config is fetched after that resolution.
-  const taskToolConfig = await getTaskToolConfig(prepared.resolvedModelId, prepared.subagentType);
+  const taskToolConfig = await getTaskToolConfig(prepared.resolvedModelId, resolved.subagentConfig.subagentType);
   const subagentRequestId = prepared.subagentRequestId;
   const [subagentCtx, cancelSubagent] = ctx.withDetached().withCancel();
   const registry = resourceAccessor.get(subagentRegistryResource);
@@ -384,7 +384,7 @@ async function runServerTaskSubagent(args: {
     ctx,
     registry,
     hookContext: completionHookContext,
-    postToolUseHookInput: buildPreparedTaskToolHookInput(prepared),
+    postToolUseHookInput: buildPreparedTaskHookInputInterop(prepared),
     toolName: getTaskToolName(parentModelInfo),
     configuredSteps: options.configuredSteps ?? [],
     enableTaskToolHooksExec: options.enableExecuteHookExec === true,
@@ -397,7 +397,7 @@ async function runServerTaskSubagent(args: {
     stateHandler.getPrivacyMode(),
   );
   const persist = (persistCtx: Context, persistId: string, _type: Any, persistedState: Any) =>
-    stateHandler.persistSubagentState(persistCtx, persistId, resolved.subagentConfig.subagent_type, persistedState);
+    stateHandler.persistSubagentState(persistCtx, persistId, resolved.subagentConfig.subagentType, persistedState);
   try {
     for (;;) {
       iterState.runStreamCompleted = false;
@@ -425,7 +425,7 @@ async function runServerTaskSubagent(args: {
         completionCtx,
         completionDeps,
         persist,
-        resolved.subagentConfig.subagent_type,
+        resolved.subagentConfig.subagentType,
       );
       if (!iteration.shouldContinue) {
         return (iteration.finalResult as TaskResultInterop | undefined) ?? createMissingSubagentResultInterop();
@@ -455,7 +455,7 @@ export function createTaskTool(
   const notificationHints = options.enableJobCompletionNotifications === true && includeRunInBackground;
   const toolName = getTaskToolName(parentModelInfo);
   const schemaSubagentConfigs: TaskSchemaSubagentConfig[] = subagentConfigs.map(config => ({
-    typeName: slateSubagentTypeName(config.subagent_type),
+    typeName: slateSubagentTypeName(config.subagentType),
     resumeModeOverride: config.resumeModeOverride,
   }));
   const { schemaTowardsModel, schemaForParsing } = buildTaskParameterSchemas(schemaSubagentConfigs, {

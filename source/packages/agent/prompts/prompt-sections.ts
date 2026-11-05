@@ -10,6 +10,7 @@
 import { AGENT_RUNTIME_PATHS } from "../../constants/cloud-agent-paths.ts"
 import { Fragment, jsx, jsxs } from "../../prompt-jsx/index.ts"
 import { repositoryAccessGuidance } from "./repository-access-bullets.ts"
+import { isComputerUseSubagentType, type SlateSubagentType } from "../subagent-type.ts"
 
 interface PromptArtifactProps {
   readonly env?: { readonly artifactsFolder?: string | undefined } | undefined
@@ -32,7 +33,7 @@ interface ComputerUseToolInfo {
 }
 
 interface ComputerUsePromptProps {
-  readonly subagentType?: { readonly type?: { readonly case?: string | undefined } | undefined } | undefined
+  readonly subagentType?: SlateSubagentType | undefined
   readonly toolInfo: ComputerUseToolInfo
 }
 
@@ -47,7 +48,7 @@ function getRequiredToolName(allTools: ComputerUseToolInfo["allTools"], toolId: 
  * less — it already knows why it is there — and is told which tool to use for commands instead.
  */
 export function ComputerUseInstructionsSection({ props }: { readonly props: ComputerUsePromptProps }) {
-  const isComputerUseSubagent = props.subagentType?.type?.case === "computerUse"
+  const isComputerUseSubagent = isComputerUseSubagentType(props.subagentType)
   const reflectToolName = isComputerUseSubagent ? props.toolInfo.allTools.REFLECT?.name : undefined
   return jsxs("section", {
     title: "computer_use",

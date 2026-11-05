@@ -4,6 +4,7 @@ import { test } from "node:test"
 import { AGENT_RUNTIME_PATHS } from "../../source/packages/constants/cloud-agent-paths.ts"
 import { ComputerUseInstructionsSection, GitOrNoRepositoryInstructions, resolvePromptArtifactsDir } from "../../source/packages/agent/prompts/prompt-sections.ts"
 import { renderContent } from "../../source/packages/prompt-jsx/index.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 
 const textOf = (value: unknown): string => renderContent(value as never)
 
@@ -22,7 +23,7 @@ test("computer-use guidance changes for its dedicated subagent and resolves requ
 
   const dedicated = textOf(ComputerUseInstructionsSection({
     props: {
-      subagentType: { type: { case: "computerUse" } },
+      subagentType: createSlateSubagentType(SlateSubagentKind.COMPUTER_USE),
       toolInfo: { allTools: { SHELL: { name: "RunShell" }, REFLECT: { name: "Reflect" } } },
     },
   }))
@@ -30,7 +31,7 @@ test("computer-use guidance changes for its dedicated subagent and resolves requ
   assert.match(dedicated, /Reflect/)
   assert.doesNotMatch(dedicated, /Manually test built applications/)
   assert.throws(
-    () => ComputerUseInstructionsSection({ props: { subagentType: { type: { case: "computerUse" } }, toolInfo: { allTools: {} } } }),
+    () => ComputerUseInstructionsSection({ props: { subagentType: createSlateSubagentType(SlateSubagentKind.COMPUTER_USE), toolInfo: { allTools: {} } } }),
     /Required tool SHELL not found/,
   )
 })

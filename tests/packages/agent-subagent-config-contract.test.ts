@@ -18,8 +18,12 @@ import {
 import {
   isVideoReviewSubagentType,
   mapSubagentConversationState,
+  slateSubagentConfigFromInterop,
+  slateSubagentTypeFromInterop,
   subagentTypeNameFromInterop,
+  subagentTypeToInterop,
 } from "../../source/adapters/interop/agent/subagent-type-adapter.ts"
+import { SlateSubagentKind, slateSubagentTypeName } from "../../source/packages/agent/subagent-type.ts"
 
 describe("subagent type and state boundary", () => {
   it("normalizes casing and separators, removes one type suffix, and keeps the old media alias searchable", () => {
@@ -45,6 +49,34 @@ describe("subagent type and state boundary", () => {
     assert.equal(isVideoReviewSubagentType(cases[5]![0]), true)
     assert.equal(isVideoReviewSubagentType(cases[2]![0]), false)
     assert.equal(isVideoReviewSubagentType(undefined), false)
+  })
+
+  it("maps generated oneofs into Slate values and projects them back at the runner edge", () => {
+    const source = new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "release-helper" }) } })
+    const slate = slateSubagentTypeFromInterop(source)
+    assert.deepEqual(slate, {
+      kind: SlateSubagentKind.CUSTOM,
+      customName: "release-helper",
+      compatibility: { legacyDiscriminator: "custom" },
+    })
+    assert.equal(SubagentType.equals(subagentTypeToInterop(slate), source), true)
+
+    const slateConfig = slateSubagentConfigFromInterop({ subagent_type: source, description: "release tools" }) as {
+      readonly subagentType: typeof slate
+      readonly description: string
+    }
+    assert.deepEqual(slateConfig, { subagentType: slate, description: "release tools" })
+    assert.equal("subagent_type" in slateConfig, false)
+  })
+
+  it("keeps Slate built-ins on the same runner aliases", () => {
+    const computerUse = subagentTypeToInterop({ kind: SlateSubagentKind.COMPUTER_USE })
+    const browserUse = subagentTypeToInterop({ kind: SlateSubagentKind.BROWSER_USE })
+    assert.equal(computerUse?.type.case, "custom")
+    assert.equal(computerUse?.type.case === "custom" ? computerUse.type.value.name : undefined, "computerUse")
+    assert.equal(browserUse?.type.case, "custom")
+    assert.equal(browserUse?.type.case === "custom" ? browserUse.type.value.name : undefined, "browserUse")
+    assert.equal(slateSubagentTypeName({ kind: SlateSubagentKind.BROWSER_USE }), "browserUse")
   })
 
   it("starts with a fresh empty conversation state unless a mapper is explicitly supplied", () => {

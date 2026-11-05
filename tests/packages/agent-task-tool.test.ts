@@ -5,8 +5,8 @@ import { createTaskTool } from "../../source/packages/agent/tools/task.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
-import { SubagentType, SubagentTypeExplore, SubagentTypeUnspecified } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { SubagentBackgroundReason, TaskResult, TaskSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 
 // The task tool hands work to a subagent. Building one needs a configuration, a parent state and the
 // subagent configs it may offer; the assertions below are about what the tool looks like to the model and
@@ -49,8 +49,8 @@ async function* argsStream(args: unknown) {
 
 /** The subagent types a configured tool offers. */
 const subagentConfigs = [
-  { subagent_type: new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }) },
-  { subagent_type: new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore({}) } }), description: "Search the codebase." },
+  { subagentType: createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE) },
+  { subagentType: createSlateSubagentType(SlateSubagentKind.EXPLORE), description: "Search the codebase." },
 ]
 const subagentModelCatalog = createSubagentModels({ standard: { slug: "standard-model" }, fast: { slug: "fast-model" } })
 

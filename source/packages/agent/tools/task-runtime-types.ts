@@ -15,6 +15,25 @@ export type TaskTargetMachine =
       readonly labels?: Readonly<Record<string, string>>
     }
 
+export function taskEnvironmentForTargetMachine(placement: TaskTargetMachine): Exclude<TaskEnvironment, undefined> {
+  return placement.type === "same_machine" ? "local" : "cloud"
+}
+
+/** Slate's prepared task arguments, before the runtime adapter encodes the runner message. */
+export interface SlatePreparedTaskRawArgs {
+  readonly description: string
+  readonly prompt: string
+  readonly model?: string
+  readonly subagentType: string
+  readonly resume?: string
+  readonly runInBackground?: boolean
+  readonly attachments: readonly string[]
+  readonly environment: TaskEnvironment
+  readonly cloudBaseBranch?: string
+  readonly requestedRuntimeBuildId?: string
+  readonly targetMachine: TaskTargetMachine
+}
+
 export type LegacyTaskTargetArgs = {
   readonly environment?: TaskEnvironment | undefined
   readonly cloud_base_branch?: string | undefined
@@ -26,8 +45,8 @@ export type TaskTargetValidationArgs = LegacyTaskTargetArgs & {
 }
 
 export type CloudSubagentPersistedStateArgs = {
-  readonly bcId: string
-  readonly transcriptPath?: string
+  readonly agentId: string
+  readonly transcriptUri?: string
   readonly modelId?: string
-  readonly machine: TaskTargetMachine
+  readonly targetMachine: TaskTargetMachine
 }
