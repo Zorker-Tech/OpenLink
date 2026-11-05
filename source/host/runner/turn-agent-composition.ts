@@ -58,7 +58,8 @@ import type { BackgroundWatchesHost } from "./background-work.ts";
 import type { BlobStore } from "../../packages/agent-kv/blob-store.ts";
 import { CombinedResourceAccessor, resourceEntry, type RemoteResource, type ResourceAccessor } from "../../packages/agent-exec/resource-provider.ts";
 import type { ExecutorOptions, RemoteExecManager } from "../../packages/agent-exec/executor-resources.ts";
-import { createInteropSubagentExecutor, subagentExecutorResource } from "../../adapters/interop/agent/subagent-exec-adapter.ts";
+import { createInteropSubagentExecutorFromSlate, subagentExecutorResource } from "../../adapters/interop/agent/subagent-exec-adapter.ts";
+import { createSubagentExecutor, slateSubagentExecutorResource } from "../../packages/agent-exec/subagent.ts";
 import { backgroundShellExecutorResource } from "../../packages/agent-exec/background-shell.ts";
 import { requestContextExecutorResource } from "../../packages/agent-exec/request-context-operation.ts";
 import { shellStreamExecutorResource } from "../../packages/agent-exec/shell-stream-operation.ts";
@@ -1070,6 +1071,7 @@ function createTurnShellAudit(input: Pick<TurnLocalResourceProjectionInput, "act
  */
 export function createTurnLocalResourceProjection(input: TurnLocalResourceProjectionInput): TurnLocalResourceProjection {
   const adapter = new SlateSubagentHostAdapter(input.subagentSessions, input.createSubagentRunner, input.subagentDispatcher);
+  const subagentExecutor = createSubagentExecutor(adapter);
   const requestContextExecutor = new SlateRequestContextExecutor(input.requestContext, input.includeTranscripts, input.autoReviewEnforceEnabled, input.resolveAgentSkills);
   const subagentRegistry = new SubagentRegistry();
   const auditShellCommand = createTurnShellAudit(input);
@@ -1078,7 +1080,8 @@ export function createTurnLocalResourceProjection(input: TurnLocalResourceProjec
     auditShellCommand: (kind: "foreground" | "background", command: string) => auditShellCommand(kind, command),
   };
   const localEntries: TurnLocalResourceEntry[] = [
-    resourceEntry(subagentExecutorResource, createInteropSubagentExecutor(adapter)),
+    resourceEntry(slateSubagentExecutorResource, subagentExecutor),
+    resourceEntry(subagentExecutorResource, createInteropSubagentExecutorFromSlate(subagentExecutor)),
     resourceEntry(requestContextExecutorResource, requestContextExecutor),
     resourceEntry(subagentRegistryResource, subagentRegistry),
   ];

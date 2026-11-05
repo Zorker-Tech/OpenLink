@@ -17,23 +17,17 @@ import type { SlateTaskRequest } from "../../source/packages/agent/tools/task-ru
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey, conversationGroupIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { subagentExecutorResource } from "../../source/adapters/interop/agent/subagent-exec-adapter.ts"
+import { slateSubagentExecutorResource } from "../../source/packages/agent-exec/subagent.ts"
+import type { SubagentContinuationConfig, SubagentExecutionArgs, SubagentExecutionResult } from "../../source/packages/agent-exec/subagent.ts"
 import { RUNNING_SUBAGENT_FOLLOWUP_ERROR, RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT } from "../../source/packages/agent-exec/subagent.ts"
 import { forceBackgroundSubagentExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts"
 import { WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 import {
-  AssistantMessage,
-  SubagentBackgroundReason,
-  SubagentExecutionEnvironment,
   TaskResult,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
-  ClientContinuationConfig,
   ForceBackgroundSubagentStatus,
-  SubagentArgs,
-  SubagentResult,
-  SubagentSuccess,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
@@ -102,13 +96,13 @@ function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolu
 const rawArgs = (overrides: Partial<SlateTaskRequest> = {}): SlateTaskRequest => ({ prompt: "do the thing", ...overrides })
 
 interface Executed {
-  readonly args: SubagentArgs
+  readonly args: SubagentExecutionArgs
   readonly ctx: Context
 }
 
 /** A run that answers: the executor records the request it was handed and returns the result asked for. */
 function executionHarness(options: {
-  result?: SubagentResult
+  result?: SubagentExecutionResult
   fail?: Error
   forceBackgroundStatus?: ForceBackgroundSubagentStatus
 } = {}) {
@@ -117,10 +111,15 @@ function executionHarness(options: {
   const persisted: Array<{ subagentId: string; state: SlateSubagentPersistedState }> = []
   const injections: Array<() => void> = []
   const subagentExecutor = {
-    async execute(ctx: Context, args: SubagentArgs) {
+    async execute(ctx: Context, args: SubagentExecutionArgs) {
       executed.push({ args, ctx })
       if (options.fail !== undefined) throw options.fail
-      return options.result ?? new SubagentResult({ result: { case: "success", value: new SubagentSuccess({ agentId: "agent-1", finalMessage: "the answer" }) } })
+      return options.result ?? {
+        status: "success",
+        agentId: "agent-1",
+        finalMessage: "the answer",
+        toolCallCount: 0,
+      }
     },
   }
   const forceBackgroundExecutor = {
@@ -130,7 +129,7 @@ function executionHarness(options: {
     },
   }
   const accessor = {
-    get: (resource: unknown) => resource === subagentExecutorResource ? subagentExecutor : forceBackgroundExecutor,
+    get: (resource: unknown) => resource === slateSubagentExecutorResource ? subagentExecutor : forceBackgroundExecutor,
   }
   const stateHandler: ClientTaskStateHandler = {
     turns: [],
@@ -302,8 +301,8 @@ test("a thrown failure is serialized into the call's own error result", () => {
   assert.equal(((serializeError("just a string") as ToolCall).tool as { value: { result: { result: { value: { error: string } } } } }).value.result.result.value.error, "just a string")
 })
 
-function continuationConfigOf(value: unknown): ClientContinuationConfig | undefined {
-  return value as ClientContinuationConfig | undefined
+function continuationConfigOf(value: unknown): SubagentContinuationConfig | undefined {
+  return value as SubagentContinuationConfig | undefined
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -385,11 +384,11 @@ test("a run that answers comes back as its answer", async () => {
   assert.equal(executed?.prompt, "do the thing")
   assert.equal(executed?.subagentType, "generalPurpose")
   assert.equal(executed?.modelId, "model-1")
-  assert.equal(executed?.environment, SubagentExecutionEnvironment.LOCAL)
+  assert.equal(executed?.environment, "local")
 })
 
 test("a run that failed comes back as an error rather than throwing", async () => {
-  const harnessed = executionHarness({ result: new SubagentResult({ result: { case: "error", value: { error: "the box was unreachable" } } as never }) })
+  const harnessed = executionHarness({ result: { status: "error", error: "the box was unreachable" } })
   const result = await harnessed.run()
   assert.deepEqual(result, { kind: "error", message: "the box was unreachable" })
 })
@@ -404,12 +403,7 @@ test("a stream that was torn down is reported as transient", async () => {
 
 test("a follow-up to a running subagent is an error that says how to retry", async () => {
   const harnessed = executionHarness({
-    result: new SubagentResult({
-      result: {
-        case: "success",
-        value: new SubagentSuccess({ backgroundReason: SubagentBackgroundReason.QUEUED_FOLLOW_UP }),
-      },
-    }),
+    result: { status: "success", agentId: "agent-1", toolCallCount: 0, backgroundReason: "queued-follow-up" },
   })
   const result = await harnessed.run()
   assert.deepEqual(result, { kind: "error", message: RUNNING_SUBAGENT_FOLLOWUP_ERROR })
@@ -417,16 +411,13 @@ test("a follow-up to a running subagent is an error that says how to retry", asy
 
 test("a background run has no answer to show and keeps its transcript", async () => {
   const harnessed = executionHarness({
-    result: new SubagentResult({
-      result: {
-        case: "success",
-        value: new SubagentSuccess({
-          agentId: "agent-1",
-          backgroundReason: SubagentBackgroundReason.AGENT_REQUEST,
-          transcriptPath: "/tmp/transcript.jsonl",
-        }),
-      },
-    }),
+    result: {
+      status: "success",
+      agentId: "agent-1",
+      toolCallCount: 0,
+      backgroundReason: "agent-request",
+      transcriptPath: "/tmp/transcript.jsonl",
+    },
   })
   const result = await harnessed.run()
   assert.equal(result.kind, "success")
@@ -437,14 +428,8 @@ test("a background run has no answer to show and keeps its transcript", async ()
 })
 
 test("an unrecognized background reason stays background and round-trips through the result", async () => {
-  const unknownReason = 4096 as SubagentBackgroundReason
   const harnessed = executionHarness({
-    result: new SubagentResult({
-      result: {
-        case: "success",
-        value: new SubagentSuccess({ agentId: "agent-unknown", backgroundReason: unknownReason }),
-      },
-    }),
+    result: { status: "success", agentId: "agent-unknown", toolCallCount: 0, backgroundReason: "unknown-4096" },
   })
   const result = await harnessed.run()
   assert.equal(result.kind, "success")
@@ -466,7 +451,7 @@ test("a run's identity is recorded so a follow-up reaches it", async () => {
 
 test("a cloud run records the box it ran in", async () => {
   const harnessed = executionHarness({
-    result: new SubagentResult({ result: { case: "success", value: new SubagentSuccess({ agentId: "bc-9", finalMessage: "done" }) } }),
+    result: { status: "success", agentId: "bc-9", finalMessage: "done", toolCallCount: 0 },
   })
   await harnessed.run({ resolved: { effectiveEnvironment: "cloud" } })
   const state = harnessed.persisted[0]?.state

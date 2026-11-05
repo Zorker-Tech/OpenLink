@@ -910,9 +910,9 @@
     },
     "host/runner/agent-adapters.ts": {
       "claim": "rewritten",
-      "overlap": 0.6723910171730515,
-      "refreshReason": "Moved generated request-context, subagent-reason, and client-side-update construction out of the host-facing facade into a narrow interop adapter; the measured source group now excludes only that declared adapter.",
-      "evidence": "host/runner/agent-adapters.ts now re-exports a stable Slate runner surface while adapters/interop/agent/runner-agent-adapters.ts owns direct generated types. tests/packages/host-runtime-agent-adapters.test.ts passes 10/10, covering request-context completeness and transcript gating, lineage, subagent lifecycle/review, and forwarded updates; tests/scripts/rewrite-overlap.test.ts passes 62/62. An isolated mutation sweep caught 7/7 changes with no misses. Work-host typecheck passes. interop:check now tracks 63 existing direct consumers with no new imports. Measured overlap is 0.6723910171730515 against 757 baseline pairs; the wire adapter is explicitly exempted as interop."
+      "overlap": 0.6472919418758256,
+      "refreshReason": "Moved generated request-context, subagent-reason, and client-side-update construction out of the host-facing facade; turn-local subagent execution now uses Slate request/result contracts and shares its executor with the remaining legacy message adapter.",
+      "evidence": "host/runner/agent-adapters.ts re-exports a stable Slate runner surface; the generated adapter remains only for legacy executor callers. tests/packages/host-runtime-agent-adapters.test.ts and the task/subagent adapter suites pass 46/46, covering Slate background reasons, request-context completeness, lineage, attachment handoff, lifecycle/review, and forwarded updates. The full Work-host suite passes 9956/9956 under Node 24.14; package typecheck passes. Measured overlap is 0.6472919418758256 against 757 baseline pairs; the wire adapter is explicitly exempted as interop."
     },
     "host/boxes/forever-box/disk-pressure.ts": {
       "claim": "rewritten",
@@ -2620,9 +2620,9 @@
     },
     "packages/agent/tools/task-client.ts": {
       "claim": "rewritten",
-      "overlap": 0.5292841648590022,
-      "refreshReason": "Moved client subagent wire requests, result decoding, continuation envelopes, persistence messages, and redacted media decoding behind an interop adapter while keeping run and display policy in Slate; normalized model-facing task arguments into SlateTaskRequest before client execution.",
-      "evidence": "The request adapter, task schema, task tool, preparation, client, completion and runtime suites pass 143/143. The product client path consumes SlateTaskRequest and SlateTaskResult; legacy model argument names are converted once at ingress. Work-host typecheck passes rewrite:check (1204 claims under 0.8, zero floors), interop:check (344 core imports across 226 files), and tsc. The full Work-host suite was not rerun for this request slice. Measured overlap is 0.5292841648590022 against 1383 baseline pairs."
+      "overlap": 0.5184381778741866,
+      "refreshReason": "Turn-local client subagent execution now uses a Slate-owned executor resource and typed request/result instead of constructing the inherited SubagentArgs message; legacy runner messages are isolated behind an adapter.",
+      "evidence": "The client task path consumes Slate request, continuation, attachment, and result contracts; the TaskToolCall result is still projected at the AgentRoot boundary. Task-client and host/subagent adapter suites pass 46/46, including branch selection, resume/fork identity, background handoff, queued follow-up errors, unknown background codes, and attachment forwarding. The full Work-host suite passes 9956/9956 under Node 24.14; package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (327 imports across 225 files, zero direct proto consumers), and TypeScript checks. Measured overlap is 0.5184381778741866 against 1383 baseline pairs."
     },
     "packages/agent/interaction-handler.ts": {
       "claim": "rewritten",
