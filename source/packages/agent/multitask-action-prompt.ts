@@ -14,7 +14,7 @@ function selfForkReminder(taskToolName: string | undefined): string {
   return `<system_reminder>
 The user chose Start Multitasking.
 
-Launch one background child of this agent using ${toolInstruction(taskToolName)}. Set run_in_background to true and resume to "self". Give it this exact handoff line: "${FORK_HANDOFF}"
+Launch one background child of this agent using ${toolInstruction(taskToolName)}. Set runInBackground to true and resume to "self". Give it this exact handoff line: "${FORK_HANDOFF}"
 
 When you later receive that exact handoff line, continue the assigned work and do not launch another child. If the handoff line is absent, stop now: do not keep planning in the foreground and do not send another reply to the user.
 </system_reminder>`

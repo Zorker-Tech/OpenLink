@@ -296,7 +296,7 @@ test("starting multitasking asks for exactly one fork, and says how it recognize
   const prompt = synthesizeMultitaskActionPrompt("start-self-fork", { taskToolName: "Task" })
   assert.match(prompt!, /^<system_reminder>/)
   assert.match(prompt!, /Launch one background child of this agent using the Task tool/)
-  assert.match(prompt!, /run_in_background to true/)
+  assert.match(prompt!, /runInBackground to true/)
   assert.match(prompt!, /resume to "self"/)
   assert.match(prompt!, /You are the continuation worker\. Continue the assigned task\./)
   assert.match(prompt!, /do not launch another child/i)

@@ -16,6 +16,6 @@ export function renderSelectedSubagentDelegation(
   const firstName = subagents[0]?.name
   return {
     type: "text",
-    text: `<subagent_delegation_context>\nUser requested delegation to these agents: ${names}\n\nStart a delegated task with the Task tool and set subagent_type to the desired name. Example:\nTask(subagent_type="${firstName}", prompt="Describe the delegated task here")\n</subagent_delegation_context>\n`,
+    text: `<subagent_delegation_context>\nUser requested delegation to these agents: ${names}\n\nStart a delegated task with the Task tool and set subagentType to the desired name. Example:\nTask(subagentType="${firstName}", prompt="Describe the delegated task here")\n</subagent_delegation_context>\n`,
   }
 }
