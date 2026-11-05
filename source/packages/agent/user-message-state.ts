@@ -72,8 +72,8 @@ export interface SlateProjectSideChatDetails {
 
 /** Slate's execution metadata for a turn that was started from a saved plan. */
 export interface SlatePlanExecutionIntent {
-  readonly id: string
-  readonly title: string
+  readonly id: SlateUserMessageText
+  readonly title: SlateUserMessageText
 }
 
 /**
