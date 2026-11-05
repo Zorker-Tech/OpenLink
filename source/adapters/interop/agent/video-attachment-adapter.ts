@@ -37,6 +37,10 @@ export interface ProcessedInteropVideoAttachment extends Omit<ProcessedVideoAtta
   readonly processedSelectedVideo: InteropSelectedVideo | undefined;
 }
 
+export interface ProcessSlateVideoAttachmentArgs extends Omit<ProcessInteropVideoAttachmentArgs, "selectedVideo"> {
+  readonly selectedVideo: SlateVideoAttachment
+}
+
 export function fromInteropSelectedVideo(video: InteropSelectedVideo): SlateVideoAttachment {
   let content: SlateVideoContent = { kind: "empty" };
   switch (video.dataOrBlobId?.case) {
@@ -114,18 +118,28 @@ export function toInteropSelectedVideo(video: SlateVideoAttachment): InteropSele
   });
 }
 
-export async function processInteropVideoAttachment(
-  input: ProcessInteropVideoAttachmentArgs,
-): Promise<ProcessedInteropVideoAttachment> {
+export async function processSlateVideoAttachment(
+  input: ProcessSlateVideoAttachmentArgs,
+): Promise<ProcessedVideoAttachment> {
   const { resourceAccessor, selectedVideo, ...coreInput } = input;
-  const result = await processVideoAttachment({
+  return await processVideoAttachment({
     ...coreInput,
-    video: fromInteropSelectedVideo(selectedVideo),
+    video: selectedVideo,
     ...(resourceAccessor === undefined ? {} : {
       writeWorkspaceFile: async (context, path, bytes) => {
         await writeWorkspaceBytesThroughInterop(resourceAccessor, context, path, bytes);
       },
     }),
+  });
+
+}
+
+export async function processInteropVideoAttachment(
+  input: ProcessInteropVideoAttachmentArgs,
+): Promise<ProcessedInteropVideoAttachment> {
+  const result = await processSlateVideoAttachment({
+    ...input,
+    selectedVideo: fromInteropSelectedVideo(input.selectedVideo),
   });
   return {
     ...result,

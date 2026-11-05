@@ -36,7 +36,7 @@ function baseArgs(overrides: Record<string, unknown> = {}) {
     args: {
       ctx: ctx(),
       imageData,
-      selectedImage: { path: "/p/src/photo.png" },
+      selectedImage: { sourcePath: "/p/src/photo.png", id: "image-1" },
       resolvedMimeType: "image/png",
       index: 0,
       enableImageFiles: true,
@@ -55,7 +55,7 @@ test("an image already inside the workspace is used where it is, and nothing is 
 })
 
 test("an image from outside the workspace is written into the project's assets folder", () => {
-  const { args, writes } = baseArgs({ selectedImage: { path: "/elsewhere/photo.png" } })
+  const { args, writes } = baseArgs({ selectedImage: { sourcePath: "/elsewhere/photo.png", id: "image-1" } })
   const imageFilePath = writeSelectedImageToProjectAssets(args as never)
   assert.equal(imageFilePath, path.join("/p", "assets", "photo.png"))
   assert.equal(writes.length, 1)
@@ -64,28 +64,28 @@ test("an image from outside the workspace is written into the project's assets f
 })
 
 test("the extension comes from the path first, and the mime type when there is no path", () => {
-  const fromPath = baseArgs({ selectedImage: { path: "/elsewhere/photo.jpeg" }, resolvedMimeType: "image/png" })
+  const fromPath = baseArgs({ selectedImage: { sourcePath: "/elsewhere/photo.jpeg", id: "image-1" }, resolvedMimeType: "image/png" })
   assert.equal(writeSelectedImageToProjectAssets(fromPath.args as never), path.join("/p", "assets", "photo.jpg"))
 
-  const fromMime = baseArgs({ selectedImage: { uuid: "abc" }, resolvedMimeType: "image/gif" })
+  const fromMime = baseArgs({ selectedImage: { id: "abc", sourcePath: "" }, resolvedMimeType: "image/gif" })
   assert.equal(writeSelectedImageToProjectAssets(fromMime.args as never), path.join("/p", "assets", "abc.gif"))
 
-  const webp = baseArgs({ selectedImage: { uuid: "abc" }, resolvedMimeType: "image/webp" })
+  const webp = baseArgs({ selectedImage: { id: "abc", sourcePath: "" }, resolvedMimeType: "image/webp" })
   assert.equal(writeSelectedImageToProjectAssets(webp.args as never), path.join("/p", "assets", "abc.webp"))
 
   // Anything else, including a mime type with no extension of its own, is written as a PNG.
-  const unknown = baseArgs({ selectedImage: { uuid: "abc" }, resolvedMimeType: "image/avif" })
+  const unknown = baseArgs({ selectedImage: { id: "abc", sourcePath: "" }, resolvedMimeType: "image/avif" })
   assert.equal(writeSelectedImageToProjectAssets(unknown.args as never), path.join("/p", "assets", "abc.png"))
 })
 
 test("an image with no name at all is named after its identifier", () => {
-  const { args } = baseArgs({ selectedImage: {} })
+  const { args } = baseArgs({ selectedImage: { id: "", sourcePath: "" } })
   const imageFilePath = writeSelectedImageToProjectAssets(args as never)
   assert.match(String(imageFilePath), /^\/p\/assets\/image-\d+-0\.png$/)
 })
 
 test("an unsafe name is made safe rather than written as it is", () => {
-  const { args } = baseArgs({ selectedImage: { path: "/elsewhere/a b:c.png" } })
+  const { args } = baseArgs({ selectedImage: { sourcePath: "/elsewhere/a b:c.png", id: "image-1" } })
   assert.equal(writeSelectedImageToProjectAssets(args as never), path.join("/p", "assets", "a_b_c.png"))
 })
 
@@ -106,7 +106,7 @@ test("nothing is produced when there are no bytes, when the feature is off, or w
 
 test("a path inside another workspace root is written, since it is not this workspace's file", () => {
   const { args, writes } = baseArgs({
-    selectedImage: { path: "/other/photo.png" },
+    selectedImage: { sourcePath: "/other/photo.png", id: "image-1" },
     requestContext: { env: { projectFolder: "/p", workspacePaths: ["/p"] } },
   })
   assert.equal(writeSelectedImageToProjectAssets(args as never), path.join("/p", "assets", "photo.png"))
@@ -122,7 +122,7 @@ test("a write that fails still yields the path the caller asked for", async () =
     }),
   }
   const imageFilePath = writeSelectedImageToProjectAssets(baseArgs({
-    selectedImage: { path: "/elsewhere/photo.png" },
+    selectedImage: { sourcePath: "/elsewhere/photo.png", id: "image-1" },
     resourceAccessor: failing,
   }).args as never)
   assert.equal(imageFilePath, path.join("/p", "assets", "photo.png"))

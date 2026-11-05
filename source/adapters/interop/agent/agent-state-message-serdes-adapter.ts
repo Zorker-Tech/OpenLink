@@ -136,6 +136,12 @@ import {
 } from "../../../packages/agent/goal-state.ts"
 import { SlateGoalStatus } from "../../../packages/agent-core/goal-continuation.ts"
 import type { SlateCheckpointUnknownField, SlateCheckpointUnknownFieldPathStep } from "../../../packages/agent/conversation-checkpoint-state.ts"
+import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
+import type { SlateVideoAttachment } from "../../../packages/agent/context/video-attachment-contracts.ts"
+import type { SlateDocumentAttachment } from "../../../packages/agent/context/document-attachment-contracts.ts"
+import { toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
+import { toInteropSelectedVideo } from "./video-attachment-adapter.ts"
+import { toInteropSelectedDocument } from "./document-attachment-adapter.ts"
 
 export type RedactedAgentConversationStateInterop = ReturnType<typeof toRedactedConversationStateStructure>
 export type AgentStateSelectedContextInterop = SelectedContext
@@ -560,15 +566,15 @@ export function emptyAgentSelectedContextInterop(): AgentStateSelectedContextInt
 
 export function attachAgentSelectedContextMediaInterop(input: {
   readonly selectedContext: AgentStateSelectedContextInterop | undefined
-  readonly selectedDocuments: readonly unknown[]
-  readonly selectedImages: readonly unknown[]
-  readonly selectedVideos: readonly unknown[]
+  readonly selectedDocuments: readonly SlateDocumentAttachment[]
+  readonly selectedImages: readonly SlateImageAttachment[]
+  readonly selectedVideos: readonly SlateVideoAttachment[]
 }): AgentStateSelectedContextInterop {
   return new SelectedContext({
     ...(input.selectedContext ?? {}),
-    selectedDocuments: [...input.selectedDocuments] as never,
-    selectedImages: [...input.selectedImages] as never,
-    selectedVideos: [...input.selectedVideos] as never,
+    selectedDocuments: input.selectedDocuments.map(toInteropSelectedDocument),
+    selectedImages: input.selectedImages.map(toInteropSelectedImage),
+    selectedVideos: input.selectedVideos.map(toInteropSelectedVideo),
   })
 }
 
