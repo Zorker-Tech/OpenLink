@@ -201,7 +201,10 @@ test("user messages persist in Slate's versioned field schema and rehydrate ever
   assert.equal(stored.format, "slate.agent-user-message")
   assert.equal(stored.version, 2)
   const storedPlan = stored.message.planExecution as { id?: unknown; title?: unknown }
-  assert.deepEqual(storedPlan, { id: "plan-1", title: "Plan" })
+  assert.deepEqual(storedPlan, {
+    id: { kind: "string", value: "plan-1" },
+    title: { kind: "string", value: "Plan" },
+  })
   assert.deepEqual(serde.deserialize(bytes).planExecution, { id: "plan-1", title: "Plan" })
   assert.equal(stored.message.id, "message-1")
   assert.equal(stored.message.mode, SlateMode.PLAN)
@@ -246,7 +249,31 @@ test("version-one plan metadata is imported and rewritten as a typed Slate recor
     message: Record<string, unknown>
   }
   assert.equal(migrated.version, 2)
-  assert.deepEqual(migrated.message.planExecution, { id: "plan-1", title: "Plan" })
+  assert.deepEqual(migrated.message.planExecution, {
+    id: { kind: "string", value: "plan-1" },
+    title: { kind: "string", value: "Plan" },
+  })
+})
+
+test("plan execution title redaction survives the versioned Slate storage envelope", () => {
+  const serde = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE)
+  const message: SlateUserMessage = {
+    text: "execute this plan",
+    messageId: "plan-message",
+    mode: SlateMode.PLAN,
+    conversationStateBlobId: new Uint8Array([1]),
+    hookContexts: [],
+    planExecution: {
+      id: "plan-1",
+      title: createRedactedString("Private plan", DataClassification.CODE, "plan_title", PrivacyMode.NO_STORAGE),
+    },
+  }
+  const restored = serde.deserialize(serde.serialize(message))
+  const title = restored.planExecution?.title
+  if (title === undefined || typeof title === "string") assert.fail("expected the plan title to remain redacted")
+  assert.equal(title.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Private plan")
+  assert.equal(title.__classification, DataClassification.CODE)
+  assert.equal(title.__fieldName, "plan_title")
 })
 
 test("user-message privacy metadata and unknown legacy fields survive the migration write", () => {

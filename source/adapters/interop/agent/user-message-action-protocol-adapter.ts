@@ -341,8 +341,8 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
       ? {}
       : {
           executePlanInfo: new ExecutePlanInfo({
-            planId: message.planExecution.id,
-            planTitle: message.planExecution.title,
+            planId: message.planExecution.id as never,
+            planTitle: message.planExecution.title as never,
           }),
         }),
     ...(message.simulatedMessageMetadata === undefined

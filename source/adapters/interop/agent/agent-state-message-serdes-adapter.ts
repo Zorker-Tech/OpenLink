@@ -994,8 +994,8 @@ interface StoredSlateUserMessageV1 {
 }
 
 interface StoredSlatePlanExecution {
-  readonly id: string
-  readonly title: string
+  readonly id: StoredSlateValue
+  readonly title: StoredSlateValue
 }
 
 interface StoredSlateUserMessageV2 extends Omit<StoredSlateUserMessageV1, "planExecution"> {
@@ -1487,8 +1487,8 @@ function isStoredProjectDetails(value: unknown): boolean {
 function isStoredSlatePlanExecution(value: unknown): value is StoredSlatePlanExecution {
   return value !== null && typeof value === "object" && !Array.isArray(value) &&
     hasOnlyKeys(value as Record<string, unknown>, ["id", "title"]) &&
-    typeof (value as Record<string, unknown>).id === "string" &&
-    typeof (value as Record<string, unknown>).title === "string"
+    isStoredTextValue((value as Record<string, unknown>).id) &&
+    isStoredTextValue((value as Record<string, unknown>).title)
 }
 
 function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateUserMessageEnvelope {
@@ -1565,7 +1565,10 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
     ...(message.subagentSystemReminder === undefined ? {} : { workerReminder: encodeSlateUserMessageValue(message.subagentSystemReminder) }),
     ...(message.triggeringUserInfo === undefined ? {} : { actor: encodeSlateUserMessageValue(message.triggeringUserInfo) }),
     ...(message.planExecution === undefined ? {} : {
-      planExecution: { id: message.planExecution.id, title: message.planExecution.title },
+      planExecution: {
+        id: encodeSlateUserMessageValue(message.planExecution.id),
+        title: encodeSlateUserMessageValue(message.planExecution.title),
+      },
     }),
     ...(message.simulatedMessageMetadata === undefined ? {} : { simulation: encodeSlateUserMessageValue(message.simulatedMessageMetadata) }),
     ...(message.promptReferenceId === undefined ? {} : { promptReference: message.promptReferenceId }),
@@ -1619,14 +1622,18 @@ function planExecutionFromSlateV1(value: StoredSlateValue | undefined, privacyMo
   const record = decoded as Record<string, unknown>
   const id = typeof record.planId === "string" ? record.planId : record.id
   const title = typeof record.planTitle === "string" ? record.planTitle : record.title
-  if (typeof id !== "string" || typeof title !== "string") {
+  if (!(typeof id === "string" || id instanceof RedactedString) ||
+      !(typeof title === "string" || title instanceof RedactedString)) {
     throw new TypeError("Stored legacy Slate plan execution metadata is missing its id or title")
   }
   return { id, title }
 }
 
-function planExecutionFromSlateV2(value: StoredSlatePlanExecution | undefined): SlatePlanExecutionIntent | undefined {
-  return value === undefined ? undefined : { id: value.id, title: value.title }
+function planExecutionFromSlateV2(value: StoredSlatePlanExecution | undefined, privacyMode: PrivacyMode): SlatePlanExecutionIntent | undefined {
+  return value === undefined ? undefined : {
+    id: decodeSlateValue(value.id, privacyMode) as SlateUserMessageText,
+    title: decodeSlateValue(value.title, privacyMode) as SlateUserMessageText,
+  }
 }
 
 function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMode): SlateUserMessage | undefined {
@@ -1643,7 +1650,7 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
   const project = message.project
   const planExecution = envelope.version === 1
     ? planExecutionFromSlateV1(envelope.message.planExecution, privacyMode)
-    : planExecutionFromSlateV2(envelope.message.planExecution)
+    : planExecutionFromSlateV2(envelope.message.planExecution, privacyMode)
   const decodeOptionalText = (value: StoredSlateValue | undefined) =>
     value === undefined ? undefined : decodeSlateValue(value, privacyMode) as SlateUserMessage["text"]
   const decoded: SlateUserMessage = {
