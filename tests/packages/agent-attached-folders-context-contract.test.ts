@@ -17,8 +17,8 @@ function directory(absPath: string, fileName: string) {
 test("missing and malformed directory trees do not create empty folder entries", () => {
   const result = renderAttachedFoldersContext([
     { path: "/missing" },
-    { path: "/wrong-shape", directoryTree: "not a directory tree" },
-    { path: "/partial", directoryTree: { absPath: "/partial", childrenFiles: [], childrenDirs: null } },
+    { path: "/wrong-shape", directoryTree: "not a directory tree" as never },
+    { path: "/partial", directoryTree: { absPath: "/partial", childrenFiles: [], childrenDirs: null } as never },
   ])
 
   assert.equal(result, undefined)
@@ -27,7 +27,7 @@ test("missing and malformed directory trees do not create empty folder entries",
 test("valid folder trees keep selection order while malformed entries are skipped", () => {
   const result = renderAttachedFoldersContext([
     { path: "/first", directoryTree: directory("/first", "one.ts") },
-    { path: "/broken", directoryTree: { absPath: "/broken", childrenFiles: [], childrenDirs: null } },
+    { path: "/broken", directoryTree: { absPath: "/broken", childrenFiles: [], childrenDirs: null } as never },
     { path: "/last", directoryTree: directory("/last", "two.ts") },
   ])
 

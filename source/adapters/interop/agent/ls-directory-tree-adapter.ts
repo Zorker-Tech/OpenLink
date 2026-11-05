@@ -10,6 +10,7 @@ import type {
   SlateTerminalCommand,
   SlateTerminalMetadata,
 } from "../../../packages/agent/tools/core/ls/directory-tree-contracts.ts"
+import { isSlateDirectoryTreeNode } from "../../../packages/agent/tools/core/ls/directory-tree-contracts.ts"
 
 function commandOf(command: TerminalMetadata_Command): SlateTerminalCommand {
   return {
@@ -49,8 +50,7 @@ function nodeOf(node: LsDirectoryTreeNode): SlateDirectoryTreeNode {
 
 /** Project the generated directory listing to the fields Slate's renderer needs. */
 export function projectLsDirectoryTree(value: unknown): SlateDirectoryTreeNode | undefined {
-  if (typeof value !== "object" || value === null) return undefined
+  if (!isSlateDirectoryTreeNode(value)) return undefined
   const candidate = value as LsDirectoryTreeNode
-  if (typeof candidate.absPath !== "string" || !Array.isArray(candidate.childrenFiles) || !Array.isArray(candidate.childrenDirs)) return undefined
   return nodeOf(candidate)
 }

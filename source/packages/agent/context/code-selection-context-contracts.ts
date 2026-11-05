@@ -3,8 +3,8 @@ import type { CodeSelectionResourceAccessor } from "./code-selection-spill.ts"
 import type { AttachmentPathRequestContext } from "./path-trust.ts"
 
 interface CodeSelectionRange {
-  readonly start?: { readonly line?: number | undefined } | undefined
-  readonly end?: { readonly line?: number | undefined } | undefined
+  readonly start?: { readonly line?: number | undefined; readonly column?: number | undefined } | undefined
+  readonly end?: { readonly line?: number | undefined; readonly column?: number | undefined } | undefined
 }
 
 export interface SelectedCodeSelectionForPrompt {
