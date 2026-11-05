@@ -19,9 +19,9 @@
 
 import type { Context } from "../../context/context.ts"
 import {
-  conversationStepFromBinaryInterop,
+  conversationStepFromBlobInterop,
   conversationStepViewInterop,
-  conversationTurnFromBinaryInterop,
+  conversationTurnFromBlobInterop,
   isReadonlySubagentPermissionModeInterop,
 } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import type { ConversationTurnView } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
@@ -269,7 +269,7 @@ export async function extractLastAssistantMessage(
     if (turnBytes === undefined) {
       continue
     }
-    const turnValue = conversationTurnFromBinaryInterop(turnBytes)
+    const turnValue = conversationTurnFromBlobInterop(turnBytes)
     if (turnValue.kind !== "agent") {
       continue
     }
@@ -299,7 +299,7 @@ export async function collectConversationStepsFromStepBlobIds(input: {
   )
   return stepBlobs
     .filter((stepBlob): stepBlob is Uint8Array => stepBlob !== undefined)
-    .map((stepBlob) => conversationStepFromBinaryInterop(stepBlob).value)
+    .map((stepBlob) => conversationStepFromBlobInterop(stepBlob).value)
 }
 
 export async function collectConversationTurns(input: {
@@ -311,7 +311,7 @@ export async function collectConversationTurns(input: {
     input.turns.map((turnBlobId) => input.blobStore.getBlob(input.ctx, turnBlobId)),
   )
   return turnBytes.map((turnBytes) =>
-    turnBytes === undefined ? undefined : conversationTurnFromBinaryInterop(turnBytes),
+    turnBytes === undefined ? undefined : conversationTurnFromBlobInterop(turnBytes),
   )
 }
 

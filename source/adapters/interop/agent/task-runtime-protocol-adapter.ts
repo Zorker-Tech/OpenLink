@@ -20,6 +20,7 @@ import type {
 } from "../../../packages/agent/tools/task-runtime-types.ts"
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
 import { toInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
+import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 
 export type ConversationTurnView =
@@ -48,7 +49,7 @@ export function createTaskInitialUserActionInterop(input: {
   })
 }
 
-export function conversationTurnFromBinaryInterop(bytes: Uint8Array): ConversationTurnView {
+export function conversationTurnFromBlobInterop(bytes: Uint8Array): ConversationTurnView {
   try {
     const turn = slateConversationTurnSerde.deserialize(bytes)
     return turn.kind === "agent"
@@ -62,8 +63,8 @@ export function conversationTurnFromBinaryInterop(bytes: Uint8Array): Conversati
   }
 }
 
-export function conversationStepFromBinaryInterop(bytes: Uint8Array): ConversationStepView {
-  return conversationStepViewInterop(ConversationStep.fromBinary(bytes))
+export function conversationStepFromBlobInterop(bytes: Uint8Array): ConversationStepView {
+  return conversationStepViewInterop(deserializeSlateConversationStepInterop(bytes))
 }
 
 export function conversationStepViewInterop(value: unknown): ConversationStepView {
