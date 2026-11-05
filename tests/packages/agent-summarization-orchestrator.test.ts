@@ -11,7 +11,7 @@ import {
 } from "../../source/packages/agent/summarization-orchestrator.ts"
 import { BackgroundSummarizationMode } from "../../source/packages/agent-summarization/background-summarization.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import type { SlateConversationSummaryArchive } from "../../source/packages/agent/conversation-summary-state.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"
@@ -261,10 +261,10 @@ test("the archive records what was summarized and what was left in the window", 
   const messages = conversation()
   const harnessed = stateHandler(messages)
   await orchestrator.handleSummarization(ctx, harnessed.state, promptExecutor(messages), listener().listener, config(), {}, handleOptions())
-  const archive = harnessed.archives[0] as ConversationSummaryArchive
-  assert.equal(archive.summarizedMessages.length, 1)
-  assert.equal(archive.windowTail >= 0, true)
-  assert.equal(archive.summaryMessage !== undefined, true)
+  const archive = harnessed.archives[0] as SlateConversationSummaryArchive
+  assert.equal(archive.summarizedMessageBlobIds.length, 1)
+  assert.equal(archive.unsummarizedWindowTail >= 0, true)
+  assert.equal(archive.summaryMessageBlobId !== undefined, true)
 })
 
 test("the summarizer is asked for the mode, the plan, the transcript and the todos", async () => {
@@ -415,7 +415,7 @@ test("a window tail that would be negative is clamped", async () => {
   const messages = conversation()
   const harnessed = stateHandler(messages)
   await orchestrator.handleSummarization(ctx, harnessed.state, promptExecutor(messages), listener().listener, config(), {}, handleOptions())
-  assert.equal((harnessed.archives[0] as ConversationSummaryArchive).windowTail, 0)
+  assert.equal((harnessed.archives[0] as SlateConversationSummaryArchive).unsummarizedWindowTail, 0)
 })
 
 test("a summary already underway is reused when the conversation still starts with it", async () => {

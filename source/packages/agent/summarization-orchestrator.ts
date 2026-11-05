@@ -40,15 +40,14 @@ import { canRootConversationSendToProject } from "../constants/project-send-mess
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import {
   createPreCompactHookArgsInterop,
-  createSummaryArchiveInterop,
   createSummaryCompletedUpdateInterop,
   preCompactHookUserMessageInterop,
 } from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
 import type {
   SummarizationHookArgsInterop,
   SummarizationHookResultInterop,
-  SummaryArchiveInterop,
 } from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
+import type { SlateConversationSummaryArchive } from "./conversation-summary-state.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
 import {
   fromRedactedCoreMessage,
@@ -96,7 +95,7 @@ import {
 
 type ProjectConversationState = Parameters<typeof resolveSlateProjectConversationContextFromInterop>[1]
 type ProjectRootPromptOptions = NonNullable<Parameters<typeof formatProjectCompactionPrompt>[0]>
-type SummaryArchive = SummaryArchiveInterop
+type SummaryArchive = SlateConversationSummaryArchive
 type SummaryCompletedHookMessage = Parameters<typeof Updates.summaryCompleted>[0]
 
 export interface SummarizationTokenDetails {
@@ -787,13 +786,12 @@ export class SummarizationOrchestrator {
       const carrierBytes = messageSerde.serialize(newSummaryMessage)
       const carrierBlobId = await getBlobId(carrierBytes)
       await agentState.getBlobStore().setBlob(ctx, carrierBlobId, carrierBytes)
-      agentState.pushSummaryArchive(createSummaryArchiveInterop({
-        privacyMode: agentState.getPrivacyMode(),
-        summarizedMessages: archiveBlobIds,
+      agentState.pushSummaryArchive({
+        summarizedMessageBlobIds: archiveBlobIds,
         summary: summary.summary,
-        summaryMessage: carrierBlobId,
-        windowTail: Math.max(0, windowTailDelta),
-      }))
+        summaryMessageBlobId: carrierBlobId,
+        unsummarizedWindowTail: Math.max(0, windowTailDelta),
+      })
       const generationDurationMsBeforeClear =
         agentState.backgroundSummarizationGenerationDurationMs
       agentState.clearBackgroundSummarizationState()

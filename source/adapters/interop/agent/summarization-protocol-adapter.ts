@@ -5,7 +5,6 @@ import {
   type ExecuteHookResult,
 } from "../proto/generated/agent/v1/exec_pb.ts"
 import {
-  createRedactedConversationSummaryArchive,
   toRedactedInteractionUpdate,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
@@ -13,8 +12,6 @@ import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 export type SummarizationModeInterop = AgentMode
 export type SummarizationHookArgsInterop = InstanceType<typeof ExecuteHookArgs>
 export type SummarizationHookResultInterop = ExecuteHookResult
-export type SummaryArchiveInterop = ReturnType<typeof createRedactedConversationSummaryArchive>
-
 export const defaultSummarizationModeInterop = AgentMode.AGENT
 
 export function createPreCompactHookArgsInterop(input: {
@@ -56,21 +53,6 @@ export function preCompactHookUserMessageInterop(
   return result.response?.response.case === "preCompact"
     ? result.response.response.value.userMessage || undefined
     : undefined
-}
-
-export function createSummaryArchiveInterop(input: {
-  readonly privacyMode: PrivacyMode
-  readonly summarizedMessages: readonly Uint8Array[]
-  readonly summary: unknown
-  readonly summaryMessage: Uint8Array
-  readonly windowTail: number
-}): SummaryArchiveInterop {
-  return createRedactedConversationSummaryArchive(input.privacyMode, {
-    summarizedMessages: [...input.summarizedMessages],
-    summary: input.summary as never,
-    summaryMessage: input.summaryMessage,
-    windowTail: input.windowTail,
-  })
 }
 
 export function createSummaryCompletedUpdateInterop(

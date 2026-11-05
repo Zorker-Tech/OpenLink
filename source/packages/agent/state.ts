@@ -33,6 +33,8 @@ import {
   createEmptyRedactedShellOutputInterop,
   createSlateConversationStepSerde,
   redactSlateTodoItem,
+  redactSlateConversationSummary,
+  redactSlateConversationSummaryArchive,
   fromInteropToolCallStep,
   fromInteropConversationState,
   fromInteropGoalState,
@@ -48,8 +50,6 @@ import {
   encodeSlateConversationStateSnapshotInterop,
   fromRedactedCommunicateUpdateHistoryEntryInterop,
   fromRedactedCommunicateUpdateTurnStateInterop,
-  fromRedactedConversationSummaryArchiveInterop,
-  fromRedactedConversationSummaryInterop,
   fromRedactedConversationTokenDetailsInterop,
   fromRedactedGoalStateInterop,
   fromRedactedPlanRegistryEntryInterop,
@@ -59,8 +59,6 @@ import {
   toInteropConversationState,
   toInteropGoalState,
   toInteropPlanRegistryEntry,
-  toRedactedConversationSummaryArchiveInterop,
-  toRedactedConversationSummaryInterop,
   toRedactedSubagentPersistedStateInterop,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import {
@@ -88,6 +86,12 @@ import {
   slateConversationPlanFromValue,
   type SlateConversationPlanState,
 } from "./conversation-plan-state.ts"
+import type {
+  SlateConversationSummaryArchive,
+  SlateConversationSummary,
+  SlateStoredConversationSummaryArchive,
+  SlateStoredConversationSummary,
+} from "./conversation-summary-state.ts"
 import {
   type SlateGoalState,
   type SlatePlanRegistryEntry,
@@ -1245,6 +1249,12 @@ type ValueRef<Context extends OperationContext> = EagerReference<any, Context> |
 type TodoRef<Context extends OperationContext> =
   | EagerReference<SlateStoredTodoItem, Context>
   | LazyReference<SlateStoredTodoItem, Context>;
+type SummaryRef<Context extends OperationContext> =
+  | EagerReference<SlateStoredConversationSummary, Context>
+  | LazyReference<SlateStoredConversationSummary, Context>;
+type SummaryArchiveRef<Context extends OperationContext> =
+  | EagerReference<SlateStoredConversationSummaryArchive, Context>
+  | LazyReference<SlateStoredConversationSummaryArchive, Context>;
 type UsageDelta = {
   readonly inputTokens: number;
   readonly outputTokens: number;
@@ -1277,7 +1287,7 @@ export class ConversationStateHandle {
   backgroundSummarizationGenerationDurationMs: number | null;
   backgroundSummarizationCancellationToken: unknown;
   tokenDetailsStaleAfterSummarization: boolean;
-  summaryArchives: ValueRef<OperationContext>[];
+  summaryArchives: SummaryArchiveRef<OperationContext>[];
   selfSummaryCount: number;
   selfSummaryInputLimitFailureTokenCount: number;
   trackedGitRepoBranches: BranchRef[];
@@ -1313,7 +1323,7 @@ export class ConversationStateHandle {
   turns: ValueRef<OperationContext>[];
   todos: TodoRef<OperationContext>[];
   tokenDetails: TokenDetails;
-  summary: ValueRef<OperationContext> | undefined;
+  summary: SummaryRef<OperationContext> | undefined;
   plan: ValueRef<OperationContext> | undefined;
   communicateUpdateFinalSummary: string | undefined;
   communicateUpdateCompletedSubtitle: string | undefined;
@@ -2094,12 +2104,20 @@ These images can be copied for use in other locations.
     )));
   }
 
-  setSummary(summary: unknown): void {
-    this.summary = new EagerReference(this.serdes.conversationSummary, this.blobStore, summary);
+  setSummary(summary: SlateConversationSummary): void {
+    this.summary = new EagerReference(
+      this.serdes.conversationSummary,
+      this.blobStore,
+      redactSlateConversationSummary(summary, this.privacyMode),
+    );
   }
 
-  pushSummaryArchive(summaryArchive: unknown): void {
-    this.summaryArchives.push(new EagerReference(this.serdes.conversationSummaryArchive, this.blobStore, summaryArchive));
+  pushSummaryArchive(summaryArchive: SlateConversationSummaryArchive): void {
+    this.summaryArchives.push(new EagerReference(
+      this.serdes.conversationSummaryArchive,
+      this.blobStore,
+      redactSlateConversationSummaryArchive(summaryArchive, this.privacyMode),
+    ));
   }
 
   incrementSelfSummaryCount(): void {

@@ -60,6 +60,16 @@ import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import { conversationStateStructureSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import { createSlateTodoItemSerde, redactSlateTodoItem } from "./todo-schema-adapter.ts"
+import {
+  createSlateConversationSummarySerde,
+  createSlateConversationSummaryArchiveSerde,
+} from "./conversation-summary-storage-adapter.ts"
+export {
+  deserializeSlateConversationSummaryInterop,
+  deserializeSlateConversationSummaryArchiveInterop,
+  redactSlateConversationSummary,
+  redactSlateConversationSummaryArchive,
+} from "./conversation-summary-storage-adapter.ts"
 export { deserializeSlateTodoItemInterop } from "./todo-schema-adapter.ts"
 export { redactSlateTodoItem } from "./todo-schema-adapter.ts"
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
@@ -1672,8 +1682,8 @@ export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
     shellOutput: createRedactedProtoSerde(ShellOutput, toRedactedShellOutput, serdeDecoder(fromRedactedShellOutput), privacyMode),
     userMessage: createSlateUserMessageSerde(privacyMode),
     conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, serdeDecoder(fromRedactedConversationStep), privacyMode),
-    conversationSummary: createRedactedProtoSerde(ConversationSummary, toRedactedConversationSummary, serdeDecoder(fromRedactedConversationSummary), privacyMode),
-    conversationSummaryArchive: createRedactedProtoSerde(ConversationSummaryArchive, toRedactedConversationSummaryArchive, serdeDecoder(fromRedactedConversationSummaryArchive), privacyMode),
+    conversationSummary: createSlateConversationSummarySerde(privacyMode),
+    conversationSummaryArchive: createSlateConversationSummaryArchiveSerde(privacyMode),
     conversationPlan: createSlateConversationPlanSerde(privacyMode),
     todoItem: createSlateTodoItemSerde(privacyMode),
     subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, serdeDecoder(fromRedactedSubagentPersistedState), privacyMode),

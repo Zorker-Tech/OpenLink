@@ -48,6 +48,10 @@ import { DataClassification } from "../../source/packages/redaction/classificati
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
 import { createSlateTodoItemSerde } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
+import {
+  createSlateConversationSummarySerde,
+  redactSlateConversationSummary,
+} from "../../source/adapters/interop/agent/conversation-summary-storage-adapter.ts"
 
 const ctx = createContext()
 
@@ -410,10 +414,20 @@ test("full conversation hydration reads Slate user-message and step blobs throug
   })
   const todoId = await getBlobId(todoBytes)
   await store.setBlob(ctx, todoId, todoBytes)
-  await conversation.handleCheckpoint(ctx, new ConversationStateStructure({ turns: [turnId], todos: [todoId] }))
+  const summaryBytes = createSlateConversationSummarySerde(PrivacyMode.NO_STORAGE).serialize(
+    redactSlateConversationSummary({ content: "restored summary" }, PrivacyMode.NO_STORAGE),
+  )
+  const summaryId = await getBlobId(summaryBytes)
+  await store.setBlob(ctx, summaryId, summaryBytes)
+  await conversation.handleCheckpoint(ctx, new ConversationStateStructure({
+    turns: [turnId],
+    todos: [todoId],
+    summary: summaryId,
+  }))
 
   const full = await conversation.getFullConversation(ctx)
   assert.equal(full.todos[0]?.content, "restored todo")
+  assert.equal(full.summary?.summary, "restored summary")
   const loadedTurn = full.turns[0]?.turn
   assert.equal(loadedTurn?.case, "agentConversationTurn")
   if (loadedTurn?.case !== "agentConversationTurn") assert.fail("expected the stored agent turn")

@@ -17,7 +17,7 @@
  *
  * Two markers end a turn's output: a line saying how the turn ended, and an overview the caller can supply a way to make.
  */
-import { summaryMessageBlobIdsFromInterop } from "../../../adapters/interop/agent/transcript-summary-archive-adapter.ts"
+import { summaryMessageBlobIdsFromStored } from "../../../adapters/interop/agent/transcript-summary-archive-adapter.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import { createSpan, withSuppressedChildSpans } from "../../../packages/context/telemetry.ts"
 import { transcriptFilePath } from "./paths.ts"
@@ -215,7 +215,7 @@ async function hydrateSummaryArchives(ctx: Context, blobStore: TranscriptBlobSto
     getBlobCount += 1
     const archiveBlob = await blobStore.getBlob(ctx, archiveRef)
     if (!archiveBlob) return undefined
-    const summarizedMessageBlobIds = summaryMessageBlobIdsFromInterop(archiveBlob)
+    const summarizedMessageBlobIds = summaryMessageBlobIdsFromStored(archiveBlob)
     if (summarizedMessageBlobIds === undefined) return undefined
     getBlobCount += summarizedMessageBlobIds.length
     return hydrateBlobIds(ctx, blobStore, summarizedMessageBlobIds)
