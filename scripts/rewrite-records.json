@@ -2617,9 +2617,9 @@
     },
     "packages/agent/tools/task-client.ts": {
       "claim": "rewritten",
-      "overlap": 0.5401301518438177,
-      "refreshReason": "Moved client subagent wire requests, result decoding, continuation envelopes, persistence messages, and redacted media decoding behind an interop adapter while keeping run and display policy in Slate.",
-      "evidence": "The Task client behavior and rewrite-boundary suites pass 129/129; the full Work-host suite passes 9761/9761. Work-host typecheck passes rewrite:check (1187 claims under 0.8), interop:check (16 direct consumers), and tsc. Measured overlap is 0.5401301518438177 against 1383 baseline pairs."
+      "overlap": 0.5292841648590022,
+      "refreshReason": "Moved client subagent wire requests, result decoding, continuation envelopes, persistence messages, and redacted media decoding behind an interop adapter while keeping run and display policy in Slate; normalized model-facing task arguments into SlateTaskRequest before client execution.",
+      "evidence": "The request adapter, task schema, task tool, preparation, client, completion and runtime suites pass 143/143. The product client path consumes SlateTaskRequest and SlateTaskResult; legacy model argument names are converted once at ingress. Work-host typecheck passes rewrite:check (1204 claims under 0.8, zero floors), interop:check (344 core imports across 226 files), and tsc. The full Work-host suite was not rerun for this request slice. Measured overlap is 0.5292841648590022 against 1383 baseline pairs."
     },
     "packages/agent/interaction-handler.ts": {
       "claim": "rewritten",

@@ -23,6 +23,7 @@ import {
   type SlateTaskBackgroundReason as SlateTaskBackgroundReasonValue,
   type SlateTaskResult,
 } from "../../../packages/agent/tools/task-result-state.ts"
+import type { SlateTaskRequest, TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
 export {
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
@@ -33,6 +34,68 @@ export type TaskResultInterop = TaskResult
 export { fromRedactedConversationStateStructureInterop }
 export const toRedactedConversationActionInterop = toRedactedConversationAction
 export const toRedactedConversationStateStructureInterop = toRedactedTaskConversationState
+
+function slateTargetMachineFromModelArgumentsInterop(value: unknown): TaskTargetMachine | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined
+  const machine = value as Record<string, unknown>
+  switch (machine.type) {
+    case "same_machine":
+      return { type: "same_machine" }
+    case "new_cloud_vm":
+      return {
+        type: "new_cloud_vm",
+        ...(typeof machine.base_branch === "string" ? { base_branch: machine.base_branch } : {}),
+        ...(typeof machine.environment_build_id === "string" ? { environment_build_id: machine.environment_build_id } : {}),
+      }
+    case "self_hosted_worker":
+      return typeof machine.worker_id === "string" && machine.worker_id.length > 0
+        ? { type: "self_hosted_worker", worker_id: machine.worker_id }
+        : undefined
+    case "self_hosted_pool": {
+      const labels = machine.labels
+      const clonedLabels = labels !== null && typeof labels === "object" && !Array.isArray(labels)
+        ? Object.fromEntries(Object.entries(labels).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        : undefined
+      return {
+        type: "self_hosted_pool",
+        ...(typeof machine.pool === "string" ? { pool: machine.pool } : {}),
+        ...(clonedLabels === undefined ? {} : { labels: clonedLabels }),
+      }
+    }
+    default:
+      return undefined
+  }
+}
+
+/** Converts the established model tool argument names into Slate's task request contract. */
+export function slateTaskRequestFromModelArgumentsInterop(value: unknown): SlateTaskRequest {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Task tool input must be an object")
+  }
+  const input = value as Record<string, unknown>
+  if (typeof input.prompt !== "string") throw new TypeError("Task tool prompt must be a string")
+  const targetMachine = slateTargetMachineFromModelArgumentsInterop(input.machine)
+  return {
+    prompt: input.prompt,
+    ...(typeof input.description === "string" ? { description: input.description } : {}),
+    ...(typeof input.model === "string" ? { model: input.model } : {}),
+    ...(typeof input.resume === "string" ? { resume: input.resume } : {}),
+    ...(typeof input.subagent_type === "string" ? { subagentType: input.subagent_type } : {}),
+    ...(Array.isArray(input.file_attachments)
+      ? { fileAttachments: (input.file_attachments as string[]).slice() }
+      : {}),
+    ...(input.environment === "cloud" || input.environment === "local"
+      ? { environment: input.environment }
+      : {}),
+    ...(typeof input.cloud_base_branch === "string" ? { cloudBaseBranch: input.cloud_base_branch } : {}),
+    ...(typeof input.cloud_requested_environment_build_id === "string"
+      ? { requestedRuntimeBuildId: input.cloud_requested_environment_build_id }
+      : {}),
+    ...(targetMachine === undefined ? {} : { targetMachine }),
+    ...(typeof input.run_in_background === "boolean" ? { runInBackground: input.run_in_background } : {}),
+    ...(typeof input.interrupt === "boolean" ? { interrupt: input.interrupt } : {}),
+  }
+}
 
 function backgroundReasonFromInterop(value: unknown): SlateTaskBackgroundReasonValue {
   switch (value) {
