@@ -36,16 +36,16 @@ export interface ConversationStepView {
   readonly assistantText?: string
 }
 
-export type TaskInitialActionInterop = ConversationAction
+export type TaskUserMessageActionInterop = ConversationAction
 export type CloudSubagentPersistedStateInterop = SubagentPersistedState
 
 export function isReadonlySubagentPermissionModeInterop(permissionMode: number): boolean {
   return permissionMode === CustomSubagentPermissionMode.READONLY
 }
 
-export function createTaskInitialUserActionInterop(input: {
+export function createTaskUserMessageActionInterop(input: {
   readonly message: SlateUserMessage
-}): TaskInitialActionInterop {
+}): TaskUserMessageActionInterop {
   const userMessage = toInteropUserMessage(input.message)
   return new ConversationAction({
     action: { case: "userMessageAction", value: new UserMessageAction({ userMessage }) },

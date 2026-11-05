@@ -21,7 +21,7 @@ import {
 } from "../../source/packages/agent/tools/task-runtime.ts"
 import {
   buildCloudSubagentPersistedStateInterop,
-  createTaskInitialUserActionInterop,
+  createTaskUserMessageActionInterop,
   conversationStepViewInterop,
   taskEnvironmentForTargetMachineInterop,
   taskEnvironmentToProtoInterop,
@@ -283,7 +283,7 @@ test("the AgentRoot boundary projects a Slate first message without changing its
     selectedContext,
   )
 
-  const action = createTaskInitialUserActionInterop({ message })
+  const action = createTaskUserMessageActionInterop({ message })
   assert.equal(action.action.case, "userMessageAction")
   if (action.action.case !== "userMessageAction") assert.fail("expected a first user message")
   assert.equal(action.action.value.userMessage?.text, "open the report")

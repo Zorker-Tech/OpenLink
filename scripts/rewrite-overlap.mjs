@@ -129,7 +129,6 @@ const EXEMPT = [
   ["adapters/interop/agent/await-tool-protocol-adapter.ts", "interop adapter: constructs and projects counterpart await, executor, and tool-call messages"],
   ["adapters/interop/agent/get-mcp-tools-protocol-adapter.ts", "interop adapter: maps Slate MCP catalog views to and from counterpart executor and tool-call messages"],
   ["adapters/interop/agent/remote-hooks-protocol-adapter.ts", "interop adapter: builds and projects generated hook executor messages at the workspace boundary"],
-  ["adapters/interop/agent/task-subagent-completion-adapter.ts", "interop adapter: builds counterpart subagent action, persistence, and completion envelopes from Slate-owned decisions"],
   ["adapters/interop/agent/compaction-skill-message-adapter.ts", "interop adapter: projects external redacted conversation messages and summary markers into Slate skill-retention policy"],
   ["adapters/interop/agent/recording-file-name-adapter.ts", "interop adapter: maps Slate recording-name decisions to the counterpart rejection enum"],
   ["adapters/interop/agent/local-ls-exec-adapter.ts", "interop adapter: executes a local listing while projecting tree and result values into the external Agent LS messages"],

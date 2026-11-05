@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import {
-  buildFollowupAction,
+  buildFollowupMessage,
   executeSubagentStopHook,
   handleSubagentExecutionError,
   handleSubagentRunStreamError,
@@ -12,7 +12,6 @@ import {
   type TaskSubagentCompletionDependencies,
   type TaskSubagentIterationState,
 } from "../../source/packages/agent/tools/task-subagent-completion.ts"
-import type { ConversationAction } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import type { ConversationBlobStore } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
@@ -100,10 +99,6 @@ function taskResultOf(value: unknown): SlateTaskResult | undefined {
   return value as SlateTaskResult | undefined
 }
 
-function conversationActionOf(value: unknown): ConversationAction | undefined {
-  return value as ConversationAction | undefined
-}
-
 // ---------------------------------------------------------------------------------------------
 // the subagent's own stop hook
 // ---------------------------------------------------------------------------------------------
@@ -149,18 +144,16 @@ test("a hook that cannot run does not make a finished subagent look unfinished",
 })
 
 test("a follow-up is a message to the subagent, with an id that does not change between retries", () => {
-  const action = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false }))!
-  assert.equal(action.action.case, "userMessageAction")
-  const message = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
-  assert.equal(message?.text, "keep going")
-  assert.equal(message?.mode, AgentMode.AGENT)
+  const message = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  assert.equal(message.text, "keep going")
+  assert.equal(message.mode, SlateMode.AGENT)
 
-  const again = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false }))!
-  assert.equal(again.action.case === "userMessageAction" ? again.action.value.userMessage?.messageId : "", message?.messageId)
+  const again = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  assert.equal(again.messageId, message.messageId)
 
-  const askMode = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 3, useAskMode: true }))!
-  assert.equal(askMode.action.case === "userMessageAction" ? askMode.action.value.userMessage?.mode : undefined, AgentMode.ASK)
-  assert.notEqual(askMode.action.case === "userMessageAction" ? askMode.action.value.userMessage?.messageId : "", message?.messageId)
+  const askMode = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 3, useAskMode: true })
+  assert.equal(askMode.mode, SlateMode.CHAT)
+  assert.notEqual(askMode.messageId, message.messageId)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -310,10 +303,9 @@ test("a subagent that is asked to keep going continues instead of finishing", as
   assert.equal(result.shouldContinue, true)
   assert.equal(result.finalResult, undefined)
   assert.equal(iterState.loopCount, 1)
-  const nextAction = conversationActionOf(result.nextAction)
-  const message = nextAction?.action.case === "userMessageAction" ? nextAction.action.value.userMessage : undefined
-  assert.equal(message?.text, "check the tests too")
-  assert.equal(message?.mode, AgentMode.AGENT)
+  const nextMessage = result.nextAction
+  assert.equal(nextMessage?.text, "check the tests too")
+  assert.equal(nextMessage?.mode, SlateMode.AGENT)
   // The subagent is still running, so nothing has been cleaned up and no result has been built.
   assert.deepEqual(cleaned, [])
   assert.equal(harness.calls.some(call => call.step === "postToolUse"), false)
@@ -446,13 +438,11 @@ test("an execution failure drops the subagent and reports it only when there is 
 
 test("a follow-up message id is seeded from the call and the turn, so retries agree", () => {
   const expected = generateSeededUuid("call-1-followup-2")
-  const action = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false }))!
-  const message = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
-  assert.equal(message?.messageId, expected)
+  const message = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  assert.equal(message.messageId, expected)
 
-  const withoutContext = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false }))!
-  const withoutMessage = withoutContext.action.case === "userMessageAction" ? withoutContext.action.value.userMessage : undefined
-  assert.equal(withoutMessage?.selectedContext, undefined, "a follow-up without a context carries none")
+  const withoutContext = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  assert.equal(withoutContext.selectedContext, undefined, "a follow-up without a context carries none")
 })
 
 test("a subagent that is asked to keep going in ask mode produces an ask-mode follow-up", async () => {
@@ -469,9 +459,8 @@ test("a subagent that is asked to keep going in ask mode produces an ask-mode fo
     () => {},
     UNKNOWN_TYPE,
   )
-  const nextAction = conversationActionOf(result.nextAction)
-  const message = nextAction?.action.case === "userMessageAction" ? nextAction.action.value.userMessage : undefined
-  assert.equal(message?.mode, AgentMode.ASK)
+  const nextMessage = result.nextAction
+  assert.equal(nextMessage?.mode, SlateMode.CHAT)
   assert.equal(iterState.loopCount, 1)
 })
 
@@ -513,9 +502,8 @@ test("a hook that answers something other than a string does not continue the su
 
 test("a follow-up carries the selected context it was given", () => {
   const context = new SelectedContext({})
-  const action = conversationActionOf(buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false, selectedContext: context }))!
-  const message = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
-  assert.notEqual(message?.selectedContext, undefined, "the context it was given is carried")
+  const message = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false, selectedContext: context })
+  assert.notEqual(message.selectedContext, undefined, "the context it was given is carried")
 })
 
 test("only the turns of this iteration are collected into the result", async () => {
