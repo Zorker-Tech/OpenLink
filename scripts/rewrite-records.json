@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6734231805929919,
-      "refreshReason": "Conversation state now uses Slate-owned conversation-state, turn, step, user-message, goal, active-plan and read-path records; persisted privacy wrappers are reconstructed only at the checkpoint boundary.",
-      "evidence": "Conversation checkpoint/state, turn/step, shell invocation/result, subagent kind/state, user-message, plan, read-path, goal and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9912/9912 with test concurrency 1. New shell turns use Slate's version 2 turn envelope and Slate-owned invocation/result blobs. Out-of-line subagent refs now write SLATE-AGENT-SUBAGENT-STATE v1 with Slate type/environment fields and nested Slate conversation values; legacy environment codes and unknown protobuf paths survive read/write, and explicit type/environment changes retire stale compatibility data. Runner projections remain in adapters. Read paths remain exact strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode; real steps expose Slate assistant/thinking kinds; unknown conversation modes retain their source code unless Slate explicitly replaces them. Four path-boundary mutations were caught. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.6734231805929919."
+      "overlap": 0.6713746630727763,
+      "refreshReason": "The conversation snapshot now types plan registry entries as SlatePlanRegistryEntry and goals as SlateGoalState; redacted generated plan/goal values are decoded and encoded only at the state-message adapter.",
+      "evidence": "tests/packages/agent-state.test.ts and slate-conversation-state.test.ts pass 47/47, including unknown goal-status preservation and plan/goal round-trip. The full Work-host suite passes 9962/9962 under Node 24.14. Work-host typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (325 imports across 223 files, zero direct proto consumers), and TypeScript checks. The State handle now reads and writes Slate plan/goal values; runner projections and persisted schema compatibility remain adapter-owned. Measured overlap is 0.6713746630727763 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",

@@ -1,5 +1,6 @@
 /** Slate's in-memory conversation snapshot, before historical serialization. */
 import type { PrivacyMode } from "../redaction/privacy-mode.ts"
+import type { SlateGoalState, SlatePlanRegistryEntry } from "./goal-state.ts"
 import type { SlateMode } from "./mode-processing.ts"
 
 export interface SlateRedactedValue<T> {
@@ -39,7 +40,7 @@ export interface SlateConversationState {
   readonly selfSummaryCount?: number
   readonly readPaths: readonly string[]
   readonly activeBranchName?: string
-  readonly plans?: ReadonlyMap<string, unknown>
+  readonly plans?: ReadonlyMap<string, SlatePlanRegistryEntry>
   readonly trackedGitRepoBranches?: readonly SlateTrackedGitRepository[]
   readonly agentType?: string
   readonly communicateUpdateHistory?: readonly {
@@ -55,7 +56,7 @@ export interface SlateConversationState {
   readonly conversationStartedTimestampMs?: bigint
   readonly conversationStartedTimeZone?: string
   readonly subagentStateRefs?: ReadonlyMap<string, Uint8Array>
-  readonly goalState?: unknown
+  readonly goalState?: SlateGoalState
   readonly isRootProjectConversation?: boolean
   readonly completedAskQuestionToolCallIds?: readonly string[]
 }

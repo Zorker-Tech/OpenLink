@@ -43,6 +43,8 @@ import {
   toRedactedConversationSummaryArchive,
   toRedactedConversationStateStructure,
   toRedactedSubagentPersistedState,
+  toRedactedGoalState,
+  toRedactedPlanRegistryEntry,
   toRedactedUserMessage,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { fromRedactedTodoItem, toRedactedTodoItem } from "../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
@@ -271,6 +273,7 @@ export function fromInteropConversationState(
     readPaths,
     subagentStates,
     plans,
+    goalState,
     subagentThreads,
     ...fields
   } = state
@@ -311,9 +314,26 @@ export function fromInteropConversationState(
     plans: new Map(
       entriesOfUnknownStringMap(plans).map(([key, value]) => [
         slateStringMapKey(key, "plans"),
-        value,
+        fromInteropPlanRegistryEntry(
+          fromRedactedPlanRegistryEntry(
+            value,
+            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+            undefined,
+          ),
+        ),
       ]),
     ),
+    ...(goalState === undefined
+      ? {}
+      : {
+          goalState: fromInteropGoalState(
+            fromRedactedGoalState(
+              goalState,
+              PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+              undefined,
+            ),
+          ),
+        }),
     subagentThreads: new Map(
       entriesOfUnknownStringMap(subagentThreads).map(([key, value]) => [
         slateStringMapKey(key, "subagentThreads"),
@@ -335,6 +355,8 @@ export function toInteropConversationState(
     unknownModeCode,
     fileStatesV2,
     readPaths,
+    plans,
+    goalState,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
@@ -361,7 +383,15 @@ export function toInteropConversationState(
       ]),
     ),
     subagentStates: fields.subagentStates ?? new Map(),
-    plans: fields.plans ?? new Map(),
+    plans: new Map(
+      [...(plans ?? new Map())].map(([planId, entry]) => [
+        planId,
+        toRedactedPlanRegistryEntry(toInteropPlanRegistryEntry(entry), privacyMode),
+      ]),
+    ),
+    ...(goalState === undefined
+      ? {}
+      : { goalState: toRedactedGoalState(toInteropGoalState(goalState), privacyMode) }),
     trackedGitRepoBranches: fields.trackedGitRepoBranches ?? [],
     communicateUpdateHistory: fields.communicateUpdateHistory ?? [],
     subagentThreads: fields.subagentThreads ?? new Map(),
@@ -615,6 +645,20 @@ export function encodeSlateConversationStateSnapshotInterop(
   snapshot: Record<string, unknown>,
   privacyMode: PrivacyMode,
 ): { readonly redactedState: RedactedAgentConversationStateInterop; readonly stats: AgentConversationStateSnapshotStatsInterop } {
+  const {
+    plans: slatePlanRegistry,
+    goalState: slateGoal,
+    ...stateFields
+  } = snapshot
+  const plans = Object.fromEntries(
+    entriesOfUnknownStringMap(slatePlanRegistry).map(([id, entry]) => [
+      id,
+      toInteropPlanRegistryEntry(entry as SlatePlanRegistryEntry),
+    ]),
+  )
+  const goalState = slateGoal === undefined
+    ? undefined
+    : toInteropGoalState(slateGoal as SlateGoalState)
   const fileStatesV2 = Object.fromEntries(
     Object.entries((snapshot.fileStatesV2 as Record<string, {
       readonly contentBlobId?: Uint8Array
@@ -630,7 +674,9 @@ export function encodeSlateConversationStateSnapshotInterop(
     ]),
   )
   const state = new ConversationStateStructure({
-    ...snapshot,
+    ...stateFields,
+    plans,
+    ...(goalState === undefined ? {} : { goalState }),
     fileStatesV2,
   } as never)
   return {
