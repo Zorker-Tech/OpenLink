@@ -31,8 +31,6 @@ import { forceBackgroundSubagentExecutorResource } from "./subagent-control-exec
 import { subagentExecutorResource } from "./subagent-exec-adapter.ts"
 import { taskEnvironmentToProtoInterop } from "./task-runtime-protocol-adapter.ts"
 
-export type TaskClientBackgroundReason = "unspecified" | "agent_request" | "user_request" | "queued_follow_up" | "unknown"
-
 export interface TaskClientContinuationConfigInput {
   readonly idleThreshold: number
   readonly maxLoops: number
@@ -68,44 +66,53 @@ export type TaskClientSubagentRunView =
       readonly kind: "success"
       readonly agentId?: string
       readonly finalMessage?: string
-      readonly backgroundReason: TaskClientBackgroundReason
+      readonly backgroundReason: SlateTaskBackgroundReasonValue
       readonly backgroundReasonInterop?: unknown
       readonly transcriptPath?: string
     }
   | { readonly kind: "unknown" }
 
-export function normalizeTaskClientBackgroundReasonInterop(value: unknown): TaskClientBackgroundReason {
+export function normalizeTaskClientBackgroundReasonInterop(value: unknown): SlateTaskBackgroundReasonValue {
   switch (value) {
-    case "unspecified":
-    case "agent_request":
-    case "user_request":
-    case "queued_follow_up":
-    case "unknown":
+    case SlateTaskBackgroundReason.UNSPECIFIED:
+    case SlateTaskBackgroundReason.AGENT_REQUEST:
+    case SlateTaskBackgroundReason.USER_REQUEST:
+    case SlateTaskBackgroundReason.QUEUED_FOLLOW_UP:
+    case SlateTaskBackgroundReason.UNKNOWN:
       return value
+    case "agent_request": return SlateTaskBackgroundReason.AGENT_REQUEST
+    case "user_request": return SlateTaskBackgroundReason.USER_REQUEST
+    case "queued_follow_up": return SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
     case SubagentBackgroundReason.UNSPECIFIED:
-      return "unspecified"
+      return SlateTaskBackgroundReason.UNSPECIFIED
     case SubagentBackgroundReason.AGENT_REQUEST:
-      return "agent_request"
+      return SlateTaskBackgroundReason.AGENT_REQUEST
     case SubagentBackgroundReason.USER_REQUEST:
-      return "user_request"
+      return SlateTaskBackgroundReason.USER_REQUEST
     case SubagentBackgroundReason.QUEUED_FOLLOW_UP:
-      return "queued_follow_up"
+      return SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
     default:
-      return "unknown"
+      return typeof value === "number" && Number.isInteger(value)
+        ? `unknown-${value}`
+        : SlateTaskBackgroundReason.UNKNOWN
   }
 }
 
-function backgroundReasonToInterop(value: TaskClientBackgroundReason): SubagentBackgroundReason {
+function backgroundReasonToInterop(value: SlateTaskBackgroundReasonValue): SubagentBackgroundReason {
   switch (value) {
-    case "agent_request":
+    case SlateTaskBackgroundReason.AGENT_REQUEST:
       return SubagentBackgroundReason.AGENT_REQUEST
-    case "user_request":
+    case SlateTaskBackgroundReason.USER_REQUEST:
       return SubagentBackgroundReason.USER_REQUEST
-    case "queued_follow_up":
+    case SlateTaskBackgroundReason.QUEUED_FOLLOW_UP:
       return SubagentBackgroundReason.QUEUED_FOLLOW_UP
-    case "unspecified":
-    case "unknown":
+    case SlateTaskBackgroundReason.UNSPECIFIED:
+    case SlateTaskBackgroundReason.UNKNOWN:
       return SubagentBackgroundReason.UNSPECIFIED
+    default: {
+      const unknown = /^unknown-(-?\d+)$/.exec(value)
+      return unknown === null ? SubagentBackgroundReason.UNSPECIFIED : Number(unknown[1]) as SubagentBackgroundReason
+    }
   }
 }
 
@@ -156,25 +163,15 @@ export function createSlateTaskClientSuccessResultInterop(input: {
   readonly agentId?: string
   readonly isBackground: boolean
 }): SlateTaskResult {
-  const backgroundReason = input.run.backgroundReasonInterop as SubagentBackgroundReason | undefined
-    ?? backgroundReasonToInterop(input.run.backgroundReason)
-  const slateBackgroundReason: SlateTaskBackgroundReasonValue = backgroundReason === SubagentBackgroundReason.AGENT_REQUEST
-    ? SlateTaskBackgroundReason.AGENT_REQUEST
-    : backgroundReason === SubagentBackgroundReason.USER_REQUEST
-      ? SlateTaskBackgroundReason.USER_REQUEST
-      : backgroundReason === SubagentBackgroundReason.QUEUED_FOLLOW_UP
-        ? SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
-        : backgroundReason === SubagentBackgroundReason.UNSPECIFIED
-          ? SlateTaskBackgroundReason.UNSPECIFIED
-          : typeof backgroundReason === "number" && Number.isInteger(backgroundReason)
-            ? `unknown-${backgroundReason}`
-            : SlateTaskBackgroundReason.UNKNOWN
+  const backgroundReason = input.run.backgroundReasonInterop === undefined
+    ? input.run.backgroundReason
+    : normalizeTaskClientBackgroundReasonInterop(input.run.backgroundReasonInterop)
   return createSlateTaskSuccessResult({
     conversationSteps: input.conversationSteps,
     ...(input.agentId === undefined ? {} : { agentId: input.agentId }),
     isBackground: input.isBackground,
     durationMs: BigInt(input.durationMs),
-    backgroundReason: slateBackgroundReason,
+    backgroundReason,
     ...(input.run.transcriptPath === undefined ? {} : { transcriptUri: input.run.transcriptPath }),
   })
 }
