@@ -21,17 +21,17 @@ describe("selected non-media context projection", () => {
 
     const projected = projectSelectedNonMediaContext(source);
     assert.deepEqual(projected, {
-      cursorCommands: [{ name: "read", content: "cat" }],
+      attachedCommands: [{ name: "read", content: "cat" }],
       gitDiff: { content: "work diff", fullContentLengthCharCount: 9 },
       gitDiffFromBranchToMain: { content: "branch diff", fullContentLengthCharCount: 11 },
       gitCommits: [{ objectId: "abc", subject: "subject", explanation: "detail", patch: "patch" }],
     });
-    assert.equal("fullPath" in (projected.cursorCommands[0] as object), false);
+    assert.equal("fullPath" in (projected.attachedCommands[0] as object), false);
   });
 
   it("projects an empty wire selection as empty Slate-owned collections", () => {
     assert.deepEqual(projectSelectedNonMediaContext(new SelectedContext()), {
-      cursorCommands: [],
+      attachedCommands: [],
       gitDiff: undefined,
       gitDiffFromBranchToMain: undefined,
       gitCommits: [],

@@ -5,7 +5,7 @@ import { toAttachedGitCommits } from "./selected-git-commits-adapter.ts";
 /** Projects the generated selection message into the fields Slate's text assembler understands. */
 export function projectSelectedNonMediaContext(selected: SelectedContext): NonMediaSelectedContext {
   return {
-    cursorCommands: selected.cursorCommands.map(command => ({
+    attachedCommands: selected.cursorCommands.map(command => ({
       name: command.name,
       content: command.content,
     })),

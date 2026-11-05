@@ -3883,9 +3883,9 @@
     },
     "packages/agent/context-processing-non-media-assembly.ts": {
       "claim": "rewritten",
-      "overlap": 0.5814814814814815,
+      "overlap": 0.5666666666666667,
       "refreshReason": "Moved generated selected-context and simulated-reason projection out of the Slate assembler into interop; the core now accepts only its own non-media view and rendered prompts.",
-      "evidence": "agent-non-media-assembly.test.ts, interop-selected-non-media-context-adapter.test.ts and agent-process-selected-context.test.ts pass 35/35. Work-host typecheck passes; interop:check drops from 53 to 52 direct consumers. Removing the commit projection is caught by the assembly case. Measured overlap is 0.5814814814814815 against 270 baseline pairs."
+      "evidence": "agent-leaves.test.ts, agent-non-media-assembly.test.ts, agent-process-selected-context.test.ts and interop-selected-non-media-context-adapter.test.ts pass 80/80. Slate prompt assembly names the owned value attachedCommands; only the interop projection reads the legacy cursorCommands field, while ordering and output boundaries remain covered. Work-host rewrite overlap measures 0.5666666666666667 against 270 baseline pairs."
     },
     "packages/utils/find-executable.ts": {
       "claim": "rewritten",
