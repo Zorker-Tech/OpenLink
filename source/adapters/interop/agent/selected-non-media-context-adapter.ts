@@ -8,6 +8,7 @@ export function projectSelectedNonMediaContext(selected: SelectedContext): NonMe
     attachedCommands: selected.cursorCommands.map(command => ({
       name: command.name,
       content: command.content,
+      ...(command.fullPath === undefined ? {} : { sourcePath: command.fullPath }),
     })),
     gitDiff: selected.gitDiff === undefined
       ? undefined

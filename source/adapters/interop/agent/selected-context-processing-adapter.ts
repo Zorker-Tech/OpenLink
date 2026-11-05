@@ -3,6 +3,8 @@ import type { SimulatedMsgReason as InteropSimulatedMsgReason } from "../proto/g
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { TaskToolModelInfo } from "../../../packages/agent/tools/task-tool-name.ts"
 import type { SlateSelectedContextForProcessing } from "../../../packages/agent/context/selected-context-processing-contracts.ts"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { fromInteropSelectedImage, projectSelectedWorkspaceContext } from "./selected-context-entry-adapter.ts"
 import { fromInteropSelectedVideo } from "./video-attachment-adapter.ts"
 import { fromInteropSelectedDocument } from "./document-attachment-adapter.ts"
@@ -15,6 +17,12 @@ import { toBrowserTabPromptInputs } from "./selected-browsers-adapter.ts"
 import { toSubagentNameInputs } from "./selected-subagents-adapter.ts"
 import { toConsoleLogPromptInputs } from "./selected-console-logs-adapter.ts"
 import { renderInteropSimulatedMessagePrompts } from "./git-action-prompt-adapter.ts"
+
+function contextText(value: unknown): string | undefined {
+  if (typeof value === "string") return value
+  if (value instanceof RedactedString) return value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  return undefined
+}
 
 export interface SelectedContextProcessingProjectionOptions {
   readonly simulatedMsgReason?: InteropSimulatedMsgReason | undefined
@@ -74,7 +82,7 @@ export function projectSelectedContextForProcessing(
       }
     }),
     extraContextText: [...selected.extraContext],
-    skillAttachments: decodeSelectedContextSkillAttachments(selected),
+    skillAttachments: decodeSelectedContextSkillAttachments(selected, contextText),
     nonMedia: projectSelectedNonMediaContext(selected),
     recentAgents: toRecentAgentPromptInputs(selected.recentAgentsContext?.recentAgents ?? []),
     uiElements: toSelectedUIElementInputs(selected.uiElements),

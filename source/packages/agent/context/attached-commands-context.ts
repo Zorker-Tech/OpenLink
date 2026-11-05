@@ -3,6 +3,7 @@
 export interface AttachedCommandForPrompt {
   readonly name: string;
   readonly content: string;
+  readonly sourcePath?: string | undefined;
 }
 
 export interface AttachedCommandsTextContent {

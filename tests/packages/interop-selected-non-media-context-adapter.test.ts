@@ -21,7 +21,7 @@ describe("selected non-media context projection", () => {
 
     const projected = projectSelectedNonMediaContext(source);
     assert.deepEqual(projected, {
-      attachedCommands: [{ name: "read", content: "cat" }],
+      attachedCommands: [{ name: "read", content: "cat", sourcePath: "/repo/.slate/commands/read.md" }],
       gitDiff: { content: "work diff", fullContentLengthCharCount: 9 },
       gitDiffFromBranchToMain: { content: "branch diff", fullContentLengthCharCount: 11 },
       gitCommits: [{ objectId: "abc", subject: "subject", explanation: "detail", patch: "patch" }],
