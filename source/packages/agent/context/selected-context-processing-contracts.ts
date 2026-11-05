@@ -63,6 +63,45 @@ export interface SlateSelectedContextForProcessing {
   readonly simulatedMessagePrompts: readonly SimulatedMessagePromptText[]
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+/** Recognizes the first-party processing view when a message is already in Slate form. */
+export function isSlateSelectedContextForProcessing(value: unknown): value is SlateSelectedContextForProcessing {
+  if (!isRecord(value) || !isRecord(value.workspace) || !isRecord(value.nonMedia) || !isRecord(value.skillAttachments)) {
+    return false
+  }
+  const arrays = [
+    value.images,
+    value.videos,
+    value.documents,
+    value.externalLinkUrls,
+    value.documentReferences,
+    value.pullRequests,
+    value.pullRequestDiffs,
+    value.extraContextEntries,
+    value.extraContextText,
+    value.recentAgents,
+    value.uiElements,
+    value.browserTabs,
+    value.selectedSubagents,
+    value.consoleLogs,
+    value.simulatedMessagePrompts,
+  ]
+  const workspaceArrays = [
+    value.workspace.files,
+    value.workspace.codeSelections,
+    value.workspace.terminals,
+    value.workspace.terminalSelections,
+    value.workspace.folders,
+  ]
+  return arrays.every(Array.isArray) &&
+    workspaceArrays.every(Array.isArray) &&
+    Array.isArray(value.nonMedia.attachedCommands) &&
+    Array.isArray(value.nonMedia.gitCommits)
+}
+
 /** Empty Slate input used when a user message carries no selected context. */
 export function emptySlateSelectedContextForProcessing(): SlateSelectedContextForProcessing {
   return {

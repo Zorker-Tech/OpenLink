@@ -129,9 +129,9 @@
     },
     "packages/agent/context-processing-cursor-commands.ts": {
       "claim": "rewritten",
-      "overlap": 0.4583333333333333,
-      "refreshReason": "Renamed the command renderer, its value types and module path to Slate-owned attached-command terms.",
-      "evidence": "agent-leaves passes 46/46, agent-non-media-assembly passes 12/12, and agent-process-selected-context passes 21/21; these cover absent commands, individual boundaries, ordering, and assembled context placement. Package typecheck passes."
+      "overlap": 0.4375,
+      "refreshReason": "Renamed the command renderer and its prompt contract to Slate-owned attached-command terms, and preserved the selected command's source path for classifier workflow annotations.",
+      "evidence": "The focused agent-leaves, non-media assembly, selected-context projection and classifier-context suites pass 91/91. They cover empty/ordered command rendering, wire fullPath to Slate sourcePath projection, and newest-turn skill/command annotations. Package typecheck and interop gate pass. Measured overlap is 0.4375 against 48 baseline pairs."
     },
     "packages/agent/utils/agent-mode-guidance.ts": {
       "claim": "rewritten",

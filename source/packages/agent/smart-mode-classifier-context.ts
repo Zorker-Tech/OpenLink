@@ -24,7 +24,6 @@ import {
   readClassifierAskQuestionResultInterop,
   readClassifierComputerUseCallInterop,
   readClassifierUserMessageInterop,
-  renderSimulatedClassifierPromptsInterop,
   selectedWorkflowPathsForClassifierInterop,
   toSmartModeClassifierConversationMessagesInterop,
 } from "../../adapters/interop/agent/smart-mode-classifier-context-adapter.ts"
@@ -235,10 +234,11 @@ function userMessageContextText(userMessage: any, options: {
   const rawText = plainMessage.text.slice(trustedPrefix?.length ?? 0).trim()
   let baseText = rawText.length > 0 ? rawText : undefined
   if (plainMessage.isSimulatedMsg === true) {
-    const simulatedText = renderSimulatedClassifierPromptsInterop({
-      selectedContext: plainMessage.selectedContext,
-      simulatedMsgReason: plainMessage.simulatedMsgReason,
-    }).map(text => text.trim()).filter(text => text.length > 0).join("\n\n").trim()
+    const simulatedText = (plainMessage.selectedContext?.simulatedMessagePrompts ?? [])
+      .map(prompt => prompt.text.trim())
+      .filter(text => text.length > 0)
+      .join("\n\n")
+      .trim()
     if (simulatedText.length > 0) baseText = simulatedText
   }
   if (!options.includeInvokedWorkflowFilesAnnotation) return baseText
