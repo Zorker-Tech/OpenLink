@@ -82,6 +82,7 @@ test("the user-message boundary preserves every top-level persisted field", () =
 
   assert.equal(slate.mode, SlateMode.PLAN)
   assert.equal(slate.simulatedMsgReason, SlateSimulatedMessageReason.SUBSCRIPTION)
+  assert.deepEqual(slate.planExecution, { id: "plan-1", title: "Plan" })
   assert.deepEqual(slate.hookContexts, [{ event: "agentStoreConflict", text: "notice" }])
   assert.ok(UserMessage.equals(roundTripped, message))
   assert.notEqual(slate.conversationStateBlobId, message.conversationStateBlobId)
@@ -120,6 +121,7 @@ test("an unknown persisted mode uses Slate's fallback without losing the stored 
 })
 
 test("copying a Slate user message does not retain caller-owned byte or context arrays", () => {
+  const planExecution = { id: "plan-1", title: "Plan" }
   const message: SlateUserMessage = {
     text: "hello",
     messageId: "message-1",
@@ -127,16 +129,19 @@ test("copying a Slate user message does not retain caller-owned byte or context 
     conversationStateBlobId: new Uint8Array([1]),
     textBlobId: new Uint8Array([2]),
     hookContexts: [{ event: "event", text: "notice" }],
+    planExecution,
     projectDetails: { name: "Project", subagent: { storeDir: "/store" } },
   }
 
   const copy = cloneSlateUserMessage(message)
   message.conversationStateBlobId[0] = 9
   message.textBlobId![0] = 8
+  planExecution.title = "Changed"
   message.projectDetails!.name = "Changed"
 
   assert.deepEqual(copy.conversationStateBlobId, new Uint8Array([1]))
   assert.deepEqual(copy.textBlobId, new Uint8Array([2]))
+  assert.deepEqual(copy.planExecution, { id: "plan-1", title: "Plan" })
   assert.equal(copy.projectDetails?.name, "Project")
   assert.notEqual(copy.hookContexts, message.hookContexts)
 })
@@ -190,15 +195,58 @@ test("user messages persist in Slate's versioned field schema and rehydrate ever
   assert.deepEqual(serde.getBlobType?.(), { kind: "json", typeName: "slate.agent-user-message" })
   const stored = JSON.parse(json.slice("SLATE-AGENT-USER\n".length)) as {
     format: string
+    version: number
     message: Record<string, unknown>
   }
   assert.equal(stored.format, "slate.agent-user-message")
+  assert.equal(stored.version, 2)
+  const storedPlan = stored.message.planExecution as { id?: unknown; title?: unknown }
+  assert.deepEqual(storedPlan, { id: "plan-1", title: "Plan" })
+  assert.deepEqual(serde.deserialize(bytes).planExecution, { id: "plan-1", title: "Plan" })
   assert.equal(stored.message.id, "message-1")
   assert.equal(stored.message.mode, SlateMode.PLAN)
   assert.equal(Object.hasOwn(stored.message, "message_id"), false)
 
   const restored = toInteropUserMessage(serde.deserialize(bytes))
   assert.ok(UserMessage.equals(restored, original))
+})
+
+test("version-one plan metadata is imported and rewritten as a typed Slate record", () => {
+  const serde = createSlateUserMessageSerde(PrivacyMode.UNSPECIFIED)
+  const slate: SlateUserMessage = {
+    text: "execute this plan",
+    messageId: "plan-message",
+    mode: SlateMode.PLAN,
+    conversationStateBlobId: new Uint8Array([1]),
+    hookContexts: [],
+    planExecution: { id: "plan-1", title: "Plan" },
+  }
+  const currentBytes = serde.serialize(slate)
+  const envelope = JSON.parse(new TextDecoder().decode(currentBytes).slice("SLATE-AGENT-USER\n".length)) as {
+    version: number
+    message: Record<string, unknown>
+  }
+  envelope.version = 1
+  envelope.message.planExecution = {
+    kind: "object",
+    entries: [
+      ["planId", { kind: "string", value: "plan-1" }],
+      ["planTitle", { kind: "string", value: "Plan" }],
+      ["_privacyMode", { kind: "number", value: 0 }],
+    ],
+  }
+  const versionOneBytes = new TextEncoder().encode(`SLATE-AGENT-USER\n${JSON.stringify(envelope)}`)
+
+  const imported = serde.deserialize(versionOneBytes)
+  assert.deepEqual(imported.planExecution, { id: "plan-1", title: "Plan" })
+
+  const migratedBytes = serde.serialize(imported)
+  const migrated = JSON.parse(new TextDecoder().decode(migratedBytes).slice("SLATE-AGENT-USER\n".length)) as {
+    version: number
+    message: Record<string, unknown>
+  }
+  assert.equal(migrated.version, 2)
+  assert.deepEqual(migrated.message.planExecution, { id: "plan-1", title: "Plan" })
 })
 
 test("user-message privacy metadata and unknown legacy fields survive the migration write", () => {
@@ -225,4 +273,17 @@ test("user-message privacy metadata and unknown legacy fields survive the migrat
   const restored = deserializeSlateUserMessageInterop(rewritten)
   assert.equal(restored.getType().runtime.bin.listUnknownFields(restored).length, 1)
   assert.equal(restored.selectedContext?.getType().runtime.bin.listUnknownFields(restored.selectedContext).length, 1)
+})
+
+test("unknown fields inside legacy plan execution metadata survive Slate conversion", () => {
+  const info = new ExecutePlanInfo({ planId: "plan-1", planTitle: "Plan" })
+  ExecutePlanInfo.runtime.bin.onUnknownField(info, 101, 0, new Uint8Array([7]))
+  const legacy = new UserMessage({ text: "Start this plan", messageId: "kickoff", executePlanInfo: info })
+
+  const slate = fromInteropUserMessage(legacy)
+  assert.deepEqual(slate.planExecution, { id: "plan-1", title: "Plan" })
+  assert.equal(slate.compatibility?.legacyUnknownFields?.length, 1)
+
+  const restored = toInteropUserMessage(slate)
+  assert.deepEqual(restored.executePlanInfo?.getType().runtime.bin.listUnknownFields(restored.executePlanInfo).map(field => [...field.data]), [[7]])
 })

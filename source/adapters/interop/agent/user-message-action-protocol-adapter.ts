@@ -1,6 +1,7 @@
 import { isMessage, type FieldInfo, type Message } from "@bufbuild/protobuf"
 import {
   AgentMode,
+  ExecutePlanInfo,
   ProjectDetails,
   SimulatedMsgReason,
   UserMessage,
@@ -34,6 +35,7 @@ import {
   SlateSimulatedMessageReason,
   type SlateSimulatedMessageReason as SlateSimulatedMessageReasonValue,
   type SlateUserMessage,
+  type SlatePlanExecutionIntent,
 } from "../../../packages/agent/user-message-state.ts"
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
 import { fromHex } from "../../../packages/agent-kv/serde.ts"
@@ -225,6 +227,10 @@ export function fromInteropSimulatedMessageReason(
   return INTEROP_TO_SLATE_SIMULATED_REASON.get(reason) ?? `unknown-${reason}`
 }
 
+function planExecutionFromInterop(value: ExecutePlanInfo | undefined): SlatePlanExecutionIntent | undefined {
+  return value === undefined ? undefined : { id: value.planId, title: value.planTitle }
+}
+
 export function toInteropSimulatedMessageReason(
   reason: SlateSimulatedMessageReasonValue | undefined,
 ): SimulatedMsgReason {
@@ -242,6 +248,7 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
   const simulatedMsgReason = message.simulatedMsgReason === undefined
     ? undefined
     : fromInteropSimulatedMessageReason(message.simulatedMsgReason)
+  const planExecution = planExecutionFromInterop(message.executePlanInfo)
   const legacyUnknownFields = isMessage(message) ? collectLegacyUnknownFields(message) : []
   const compatibility = legacyModeCode === undefined && legacyUnknownFields.length === 0
     ? undefined
@@ -266,7 +273,7 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder }),
     ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo }),
-    ...(message.executePlanInfo === undefined ? {} : { executePlanInfo: message.executePlanInfo }),
+    ...(planExecution === undefined ? {} : { planExecution }),
     ...(message.simulatedMessageMetadata === undefined
       ? {}
       : { simulatedMessageMetadata: message.simulatedMessageMetadata }),
@@ -330,7 +337,14 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder as never }),
     ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo as never }),
-    ...(message.executePlanInfo === undefined ? {} : { executePlanInfo: message.executePlanInfo as never }),
+    ...(message.planExecution === undefined
+      ? {}
+      : {
+          executePlanInfo: new ExecutePlanInfo({
+            planId: message.planExecution.id,
+            planTitle: message.planExecution.title,
+          }),
+        }),
     ...(message.simulatedMessageMetadata === undefined
       ? {}
       : { simulatedMessageMetadata: message.simulatedMessageMetadata as never }),

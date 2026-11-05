@@ -70,11 +70,17 @@ export interface SlateProjectSideChatDetails {
   storeDir?: SlateUserMessageText
 }
 
+/** Slate's execution metadata for a turn that was started from a saved plan. */
+export interface SlatePlanExecutionIntent {
+  readonly id: string
+  readonly title: string
+}
+
 /**
  * The top-level user-message record needed while a turn is prepared.
  *
- * Nested selected-context, simulated metadata and custom-mode values remain opaque until their own
- * product models are introduced. They are carried unchanged through the compatibility adapter.
+ * Selected-context, triggering-user, simulation and custom-mode values remain separate product-schema
+ * migrations. Plan execution metadata already has a Slate-owned record here.
  */
 export interface SlateUserMessage {
   text: SlateUserMessageText
@@ -89,7 +95,7 @@ export interface SlateUserMessage {
   conversationStateBlobId: Uint8Array
   subagentSystemReminder?: SlateUserMessageText
   triggeringUserInfo?: unknown
-  executePlanInfo?: unknown
+  planExecution?: SlatePlanExecutionIntent
   simulatedMessageMetadata?: unknown
   promptReferenceId?: string
   threadId?: string
@@ -169,7 +175,7 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder }),
     ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo }),
-    ...(message.executePlanInfo === undefined ? {} : { executePlanInfo: message.executePlanInfo }),
+    ...(message.planExecution === undefined ? {} : { planExecution: { ...message.planExecution } }),
     ...(message.simulatedMessageMetadata === undefined
       ? {}
       : { simulatedMessageMetadata: message.simulatedMessageMetadata }),
