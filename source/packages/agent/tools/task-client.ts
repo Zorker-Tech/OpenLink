@@ -37,14 +37,17 @@ import {
 } from "../subagent-type.ts"
 import {
   createSerializedTaskToolCallErrorInterop,
-  createTaskClientContinuationConfigInterop,
-  createSlateTaskClientSuccessResultInterop,
+  createSlateTaskClientContinuationConfig,
+  createSlateTaskClientSuccessResult,
   createTaskToolCallInterop,
   getVideoPathsFromRedactedSelectedContextInterop,
   requestSubagentBackgroundHandoffInterop,
-  runClientSubagentInterop,
-  type TaskClientSubagentRunView,
+  runClientSubagent,
 } from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
+import type {
+  SlateTaskClientContinuationConfig,
+  SlateTaskClientSubagentRunView,
+} from "./task-client-contracts.ts"
 import { fromInteropTaskSelectedContext } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import {
   createSlateCloudSubagentPersistedState,
@@ -215,7 +218,7 @@ interface ContinuationSubagentConfig {
 
 export function buildClientContinuationConfig(
   subagentConfig: ContinuationSubagentConfig,
-): unknown {
+): SlateTaskClientContinuationConfig | undefined {
   const continuationPolicy = subagentConfig.continuationPolicy
   if (!continuationPolicy) return undefined
   const continuationMessage = continuationPolicy.continuationMessage
@@ -230,7 +233,7 @@ export function buildClientContinuationConfig(
       .replace(sentinelToken, "{escape_token}")
     : "You've made {idle_count} responses without tool calls. If you're done, respond with exactly: {escape_token}\nIf not, continue working."
   const isCoordinator = slateSubagentTypeName(subagentConfig.subagentType) === "coordinator-agent"
-  return createTaskClientContinuationConfigInterop({
+  return createSlateTaskClientContinuationConfig({
     idleThreshold: continuationPolicy.idleThreshold,
     maxLoops: continuationPolicy.maxLoops ?? 0,
     nudgeMessage: nudgeText,
@@ -397,9 +400,9 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     if (contextInjectionSignal.hasPendingUserInjections()) requestHandoff()
   }
   try {
-    let result: TaskClientSubagentRunView
+    let result: SlateTaskClientSubagentRunView
     try {
-      result = await runClientSubagentInterop(ctx, resourceAccessor, {
+      result = await runClientSubagent(ctx, resourceAccessor, {
         toolCallId: args.toolCallId,
         subagentType: resolved.typeName,
         modelId: resolved.resolvedModelId,
@@ -425,7 +428,6 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
               : {}
           : rawInput.cloudBaseBranch !== undefined ? { cloudBaseBranch: rawInput.cloudBaseBranch } : {}),
         ...(modelParameters(resolved.resolvedModelParameters) !== undefined ? { modelParameters: modelParameters(resolved.resolvedModelParameters)! } : {}),
-        ...(args.subagentCredentials !== undefined ? { credentials: args.subagentCredentials } : {}),
       })
     } finally {
       stopHandoff?.()
@@ -457,7 +459,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     if (!wentToBackground && successResult.finalMessage) {
       conversationSteps.push(createSlateTaskAssistantStep(successResult.finalMessage))
     }
-    return createSlateTaskClientSuccessResultInterop({
+    return createSlateTaskClientSuccessResult({
       conversationSteps,
       durationMs: Date.now() - startedAt,
       ...(runAgentId === undefined ? {} : { agentId: runAgentId }),

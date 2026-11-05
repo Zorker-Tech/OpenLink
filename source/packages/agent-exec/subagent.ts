@@ -2,7 +2,10 @@
 
 import type { Context } from "../context/context.ts"
 import type { Executor, ExecutorOptions } from "./executor-resources.ts"
+import type { RemoteExecManager } from "./executor-resources.ts"
+import type { ControlledExecManager, Resource } from "./resource-provider.ts"
 import type { SlateTaskAttachmentSelection } from "../agent/tools/task-attachment-contracts.ts"
+import type { TaskEnvironment } from "../agent/tools/task-runtime-types.ts"
 
 export const RUNNING_SUBAGENT_FOLLOWUP_ERROR =
   "Sub-agent is currently running. You may send the follow-up message when it has completed."
@@ -11,20 +14,43 @@ export const RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT =
 
 export type SubagentBackgroundReason =
   | "unspecified"
-  | "agent_request"
-  | "user_request"
-  | "queued_follow_up"
+  | "agent-request"
+  | "user-request"
+  | "queued-follow-up"
+  | `unknown-${number}`
+
+export interface SubagentContinuationConfig {
+  readonly idleThreshold: number
+  readonly maxLoops: number
+  readonly nudgeMessage: string
+  readonly escapeMessageTemplate: string
+  readonly collectBackgroundChildren: boolean
+  readonly childrenCompletedMessageTemplate: string
+}
+
+export interface SubagentModelParameter {
+  readonly id: string
+  readonly value: string
+}
 
 /** The identifiers that make two concurrent requests the same run. */
 export interface SubagentExecutionArgs {
   readonly toolCallId?: string
   readonly parentConversationId?: string
+  readonly rootParentConversationId?: string
   readonly resumeAgentId?: string
   readonly forkAgentId?: string
   readonly subagentType?: string
+  readonly modelId?: string
   readonly prompt?: string
   readonly readonly?: boolean
+  readonly interrupt?: boolean
+  readonly runInBackground?: boolean
+  readonly continuationConfig?: SubagentContinuationConfig
   readonly selectedContext?: SlateTaskAttachmentSelection
+  readonly environment?: TaskEnvironment
+  readonly cloudBaseBranch?: string
+  readonly modelParameters?: readonly SubagentModelParameter[]
 }
 
 export type SubagentRunOutcome =
@@ -151,3 +177,20 @@ export function createSubagentExecutor(
     },
   }
 }
+
+/** A turn-local resource; a missing local binding is a composition error, never a wire fallback. */
+export const slateSubagentExecutorResource: Resource<
+  Executor<SubagentExecutionArgs, SubagentExecutionResult>,
+  RemoteExecManager,
+  ControlledExecManager
+> = Object.freeze({
+  symbol: Symbol("slate.exec.resource.local-subagent"),
+  remoteImplementation: (_manager: RemoteExecManager) => ({
+    async execute(): Promise<SubagentExecutionResult> {
+      throw new Error("The Slate subagent executor is only available in its owning turn")
+    },
+  }),
+  registerControlledImplementation: () => {
+    throw new Error("The Slate subagent executor is only registered in its owning turn")
+  },
+})

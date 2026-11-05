@@ -2,7 +2,8 @@
 import type { Context } from "../../../packages/context/context.ts";
 import { getRootParentRequestId } from "../../../packages/agent/utils/request-scope.ts";
 import { requestIdKey } from "../chat-inference-proto/client.ts";
-import { SubagentBackgroundReason, type ToolCall } from "../proto/generated/agent/v1/agent_pb.ts";
+import { type ToolCall } from "../proto/generated/agent/v1/agent_pb.ts";
+import type { SubagentBackgroundReason as SlateSubagentBackgroundReason } from "../../../packages/agent-exec/subagent.ts";
 import {
   RequestContext,
   RequestContextEnv,
@@ -64,14 +65,14 @@ export class SlateRequestContextExecutor {
 }
 
 /** Bind host subagent sessions to the generated background-run reason. */
-export class SlateSubagentHostAdapter extends SubagentSessionCoordinator<SubagentBackgroundReason> {
+export class SlateSubagentHostAdapter extends SubagentSessionCoordinator<SlateSubagentBackgroundReason> {
   constructor(
     sessions: Map<string, SubagentSession>,
     createRunner: (id: string, args: SubagentAdapterArgs) => SubagentSession,
     dispatcher: SubagentDispatcher,
   ) {
     super(sessions, createRunner, dispatcher, {
-      backgroundReason: SubagentBackgroundReason.AGENT_REQUEST,
+      backgroundReason: "agent-request",
       makeDispatchError: (message) => new SlateSubagentDispatchError(message),
       deriveLineage: (context, toolCallId) => deriveSlateSubagentRequestLineage(context as Context, toolCallId),
     });

@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { requestIdKey } from "../../source/adapters/interop/chat-inference-proto/client.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { withRootParentRequestId } from "../../source/packages/agent/utils/request-scope.ts";
-import { SubagentBackgroundReason, ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
 import { computeSubagentRequestId } from "../../source/host/runner/subagent-runtime.ts";
 import { SlateSubagentDispatchError, SlateRequestContextExecutor, SlateSubagentHostAdapter, ForwardingInteractionListener, deriveSlateSubagentRequestLineage, type SubagentAdapterArgs } from "../../source/host/runner/agent-adapters.ts";
@@ -134,7 +134,7 @@ describe("the subagent sessions a host keeps", () => {
     const ctx = createContext().with(requestIdKey, "request-9");
     const selectedImage = { id: "image-1", sourcePath: "one.png", mediaType: "image/png", content: { kind: "inline-bytes", bytes: new Uint8Array([1, 2]) } as const };
     const selectedVideo = { sourcePath: "one.mov", displayName: "one.mov", mediaType: "video/mp4", writeToWorkspace: false, content: { kind: "empty" } as const };
-    assert.deepEqual(await allowed.adapter.runSession(ctx, sessionId, args({ subagentType: "computerUse", toolCallId: "call-9", prompt: "check it", selectedContext: { images: [selectedImage], videos: [selectedVideo], commands: [] } })), { status: "background", backgroundReason: SubagentBackgroundReason.AGENT_REQUEST, toolCallCount: 0 });
+    assert.deepEqual(await allowed.adapter.runSession(ctx, sessionId, args({ subagentType: "computerUse", toolCallId: "call-9", prompt: "check it", selectedContext: { images: [selectedImage], videos: [selectedVideo], commands: [] } })), { status: "background", backgroundReason: "agent-request", toolCallCount: 0 });
     const dispatched = allowed.kinds("dispatch")[0]?.[1] as { subagentAgentId: string; subagentType: string; toolCallId: string; prompt: string; lineage?: { parentRequestId: string }; run(): Promise<{ text: string }> };
     assert.deepEqual({ id: dispatched.subagentAgentId, type: dispatched.subagentType, call: dispatched.toolCallId, prompt: dispatched.prompt, parent: dispatched.lineage?.parentRequestId }, { id: sessionId, type: "computerUse", call: "call-9", prompt: "check it", parent: "request-9" });
     // The run it was given calls the session's runner with what the caller selected and against the same request.

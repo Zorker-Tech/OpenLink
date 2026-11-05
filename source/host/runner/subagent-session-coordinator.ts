@@ -1,18 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { computeSubagentRequestId, type SubagentLineage, type SubagentSession } from "./subagent-runtime.ts";
-import type { SlateTaskAttachmentSelection } from "../../packages/agent/tools/task-attachment-contracts.ts";
+import type { SubagentExecutionArgs } from "../../packages/agent-exec/subagent.ts";
 
 export class SlateSubagentDispatchError extends Error {
   override readonly name = "SlateSubagentDispatchError";
 }
 
-export interface SubagentAdapterArgs {
-  readonly resumeAgentId?: string;
+export type SubagentAdapterArgs = SubagentExecutionArgs & {
   readonly subagentType: string;
   readonly toolCallId: string;
   readonly prompt: string;
-  readonly readonly?: boolean;
-  readonly selectedContext?: SlateTaskAttachmentSelection;
 }
 
 export interface SubagentDispatcher {
@@ -36,6 +33,15 @@ export interface SubagentSessionPolicy<BackgroundReason> {
 }
 
 type LaunchReviewer = (ctx: unknown, args: SubagentAdapterArgs) => Promise<{ allowed: boolean; reason: string }>;
+
+function adapterArgsFromExecution(args: SubagentExecutionArgs): SubagentAdapterArgs {
+  return {
+    ...args,
+    toolCallId: args.toolCallId ?? "",
+    subagentType: args.subagentType ?? "",
+    prompt: args.prompt ?? "",
+  }
+}
 
 /** Owns the session map and desktop reservation rules used by the runner-facing adapter. */
 export class SubagentSessionCoordinator<BackgroundReason> {
@@ -62,7 +68,8 @@ export class SubagentSessionCoordinator<BackgroundReason> {
     this.#reviewLaunch = review;
   }
 
-  async createOrResumeSession(_ctx: unknown, args: SubagentAdapterArgs): Promise<string> {
+  async createOrResumeSession(_ctx: unknown, request: SubagentExecutionArgs): Promise<string> {
+    const args = adapterArgsFromExecution(request);
     const existingId = args.resumeAgentId;
     if (existingId != null && this.sessions.has(existingId)) {
       if (this.dispatcher.isRunning(existingId)) {
@@ -91,11 +98,12 @@ export class SubagentSessionCoordinator<BackgroundReason> {
   async runSession(
     ctx: unknown,
     agentId: string,
-    args: SubagentAdapterArgs,
+    request: SubagentExecutionArgs,
   ): Promise<
     | { status: "error"; error: string }
     | { status: "background"; backgroundReason: BackgroundReason; toolCallCount: 0 }
   > {
+    const args = adapterArgsFromExecution(request);
     const runner = this.sessions.get(agentId);
     if (runner == null) return { status: "error", error: `Unknown Slate subagent: ${agentId}` };
     if (this.dispatcher.isRunning(agentId)) return { status: "error", error: "That background subagent is already running." };

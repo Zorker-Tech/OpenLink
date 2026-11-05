@@ -54,6 +54,7 @@ import {
 } from "./runner/tools/turn-toolset.ts";
 import type { RemoteResource, ResourceAccessor } from "../packages/agent-exec/resource-provider.ts";
 import { subagentExecutorResource } from "../adapters/interop/agent/subagent-exec-adapter.ts";
+import { slateSubagentExecutorResource } from "../packages/agent-exec/subagent.ts";
 import { requestContextExecutorResource } from "../packages/agent-exec/request-context-operation.ts";
 import { subagentRegistryResource } from "../packages/agent/tools/subagent-registry.ts";
 import { smartModeClassifierExecutorResource } from "../packages/agent-exec/smart-mode-classifier-operation.ts";
@@ -307,6 +308,7 @@ function asProductionResourceAccessor(registry: ReturnType<typeof createRemoteBo
       if (value === undefined) {
         const knownResources: ReadonlyArray<readonly [symbol, string]> = [
           [subagentExecutorResource.symbol, "subagentExecutorResource"],
+          [slateSubagentExecutorResource.symbol, "slateSubagentExecutorResource"],
           [requestContextExecutorResource.symbol, "requestContextExecutorResource"],
           [subagentRegistryResource.symbol, "subagentRegistryResource"],
           [smartModeClassifierExecutorResource.symbol, "smartModeClassifierExecutorResource"],
