@@ -18,8 +18,8 @@ export interface SlateAgentConversationTurn {
 
 export interface SlateShellConversationTurn {
   readonly kind: "shell"
-  readonly shellCommandBlobId: Uint8Array
-  readonly shellOutputBlobId: Uint8Array
+  readonly invocationBlobId: Uint8Array
+  readonly resultBlobId: Uint8Array
   readonly compatibility?: SlateConversationTurnCompatibility
 }
 
@@ -49,8 +49,8 @@ export interface SlateAgentConversationTurnInput {
 }
 
 export interface SlateShellConversationTurnInput {
-  readonly shellCommandBlobId: Uint8Array
-  readonly shellOutputBlobId: Uint8Array
+  readonly invocationBlobId: Uint8Array
+  readonly resultBlobId: Uint8Array
   readonly compatibility?: SlateConversationTurnCompatibility
 }
 
@@ -84,8 +84,8 @@ export function createSlateShellConversationTurn(
 ): SlateShellConversationTurn {
   return {
     kind: "shell",
-    shellCommandBlobId: cloneBytes(input.shellCommandBlobId),
-    shellOutputBlobId: cloneBytes(input.shellOutputBlobId),
+    invocationBlobId: cloneBytes(input.invocationBlobId),
+    resultBlobId: cloneBytes(input.resultBlobId),
     ...(input.compatibility === undefined ? {} : { compatibility: cloneCompatibility(input.compatibility) }),
   }
 }

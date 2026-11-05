@@ -63,7 +63,7 @@ function streamHarness(events: Array<Record<string, unknown>>, throwAfter?: numb
 
 interface TurnHarness {
   readonly outputs: Array<{ stdout: string; stderr: string; exitCode: number }>
-  readonly turn: { recordShellOutput(output: unknown): void }
+  readonly turn: { recordShellResult(output: unknown): void }
 }
 
 function turnHarness(): TurnHarness {
@@ -71,10 +71,14 @@ function turnHarness(): TurnHarness {
   return {
     outputs,
     turn: {
-      recordShellOutput(output: { stdout: { unwrap(p: PrivacyCapability): string }; stderr: { unwrap(p: PrivacyCapability): string }; exitCode: number }) {
+      recordShellResult(output: {
+        standardOutput: { unwrap(p: PrivacyCapability): string }
+        standardError: { unwrap(p: PrivacyCapability): string }
+        exitCode: number
+      }) {
         outputs.push({
-          stdout: output.stdout.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
-          stderr: output.stderr.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+          stdout: output.standardOutput.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+          stderr: output.standardError.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
           exitCode: output.exitCode,
         })
       },

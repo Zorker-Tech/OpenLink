@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6892722371967654,
+      "overlap": 0.6768733153638814,
       "refreshReason": "Conversation state now uses Slate-owned conversation-state, turn, step, user-message, goal, active-plan and read-path records; persisted privacy wrappers are reconstructed only at the checkpoint boundary.",
-      "evidence": "Conversation-state, turn-step, user-message-state, plan, read-path and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9872/9872. Active plans are restored from historical blobs and written back in their legacy encoding; read paths are strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode through historical UserMessage bytes, real steps expose Slate assistant/thinking kinds, and unknown conversation modes retain their source code unless Slate explicitly replaces them. The read-path set still deduplicates exact paths and the checkpoint round-trip preserves the original path. Four path-boundary mutations were caught. Work-host build and process smoke pass. Measured overlap is 0.6892722371967654."
+      "evidence": "Conversation checkpoint/state, turn/step, shell invocation/result, user-message, plan, read-path, goal and smart-classifier suites pass under Node 24; the complete Work-host suite passes 9897/9897 with test concurrency 1. New shell turns use Slate's version 2 turn envelope and Slate-owned versioned invocation/result blobs, with historical protobuf payloads as read-only migration inputs. The migration preserves privacy classifications, separate stdout/stderr, signed exit status and unknown legacy fields; the current runner projection stays at an adapter boundary. Read paths remain exact strings in Slate state and are reclassified as PATH only at the checkpoint boundary. Agent-turn creation round-trips text, message id and mode; real steps expose Slate assistant/thinking kinds; unknown conversation modes retain their source code unless Slate explicitly replaces them. Four path-boundary mutations were caught. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.6768733153638814."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",

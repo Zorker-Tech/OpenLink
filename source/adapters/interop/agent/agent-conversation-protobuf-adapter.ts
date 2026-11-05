@@ -5,9 +5,7 @@ import {
   ConversationStateStructure,
   ConversationStep,
   ConversationTurn,
-  ShellCommand,
   ShellConversationTurn,
-  ShellOutput,
   SubagentPersistedState,
   type ConversationState as ConversationStateMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts"
@@ -15,6 +13,8 @@ import { ProtobufBlobSerde } from "./protobuf-blob-serde-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import {
   deserializeSlateConversationStepInterop,
+  deserializeSlateShellInvocationInterop,
+  deserializeSlateShellResultInterop,
   deserializeSlateUserMessageInterop,
   deserializeSlateTodoItemInterop,
 } from "./agent-state-message-serdes-adapter.ts"
@@ -40,8 +40,6 @@ import {
   slateConversationCheckpointFromInterop,
 } from "./slate-agent-checkpoint-interop-adapter.ts"
 
-const shellCommandSerde = new ProtobufBlobSerde(ShellCommand)
-const shellOutputSerde = new ProtobufBlobSerde(ShellOutput)
 const checkpointSerde = new ProtobufBlobSerde(ConversationStateStructure)
 const PRESERVED_UNKNOWN_FIELDS_KEY = "$slateInteropUnknownFields"
 
@@ -186,16 +184,16 @@ export async function deriveInteropConversationStateFromStructure<Context>(
         },
       })
     } else {
-      const shellCommandBlob = await blobStore.getBlob(ctx, turnStructure.shellCommandBlobId)
-      if (!shellCommandBlob) continue
-      const shellOutputBlob = await blobStore.getBlob(ctx, turnStructure.shellOutputBlobId)
-      if (!shellOutputBlob) continue
+      const invocationBlob = await blobStore.getBlob(ctx, turnStructure.invocationBlobId)
+      if (!invocationBlob) continue
+      const resultBlob = await blobStore.getBlob(ctx, turnStructure.resultBlobId)
+      if (!resultBlob) continue
       turn = new ConversationTurn({
         turn: {
           case: "shellConversationTurn",
           value: new ShellConversationTurn({
-            shellCommand: shellCommandSerde.deserialize(shellCommandBlob),
-            shellOutput: shellOutputSerde.deserialize(shellOutputBlob),
+            shellCommand: deserializeSlateShellInvocationInterop(invocationBlob),
+            shellOutput: deserializeSlateShellResultInterop(resultBlob),
           }),
         },
       })

@@ -23,15 +23,15 @@ import { toRedactedCoreMessages } from "../../source/packages/redaction/message-
 import { ConversationStateHandle } from "../../source/packages/agent/state.ts"
 import {
   toRedactedConversationStateStructure,
-  toRedactedShellCommand,
   toRedactedAsyncAskQuestionCompletionAction,
 } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { AskQuestionArgs, AskQuestionResult, AskQuestionSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
-import { AgentMode, AsyncAskQuestionCompletionAction, ConversationStateStructure, ShellCommand, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { AgentMode, AsyncAskQuestionCompletionAction, ConversationStateStructure, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
+import { createSlateShellInvocation, storeSlateShellInvocation } from "../../source/packages/agent/shell-state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The action handlers are the ways a turn can start. Each is handed the action and the things a turn
@@ -150,7 +150,7 @@ async function stateWithShellTurn() {
   const state = createConversationState()
   const turn = await state.createShellTurn(
     createContext(),
-    toRedactedShellCommand(new ShellCommand({ command: "pwd" }), PrivacyMode.NO_STORAGE),
+    storeSlateShellInvocation(createSlateShellInvocation("pwd"), PrivacyMode.NO_STORAGE),
   )
   return { state, turn }
 }

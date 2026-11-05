@@ -30,7 +30,6 @@ import {
   createAgentStateMessageSerdesInterop,
   createAgentStateCommunicateHistoryEntryInterop,
   createAgentStateCommunicateTurnStateInterop,
-  createEmptyRedactedShellOutputInterop,
   createSlateConversationStepSerde,
   redactSlateTodoItem,
   redactSlateConversationSummary,
@@ -74,6 +73,11 @@ import {
   type SlateAgentConversationTurn,
   type SlateShellConversationTurn,
 } from "./conversation-turn-state.ts"
+import {
+  createEmptyStoredSlateShellResult,
+  type SlateStoredShellInvocation,
+  type SlateStoredShellResult,
+} from "./shell-state.ts"
 import {
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
@@ -910,8 +914,8 @@ type AgentTurnSerdes = {
 };
 type RedactedToolCallInput = Parameters<typeof fromInteropToolCallStep>[0];
 type ShellTurnSerdes = {
-  shellCommand: Serde<unknown>;
-  shellOutput: Serde<unknown>;
+  shellInvocation: Serde<SlateStoredShellInvocation>;
+  shellResult: Serde<SlateStoredShellResult>;
 };
 type StepRef =
   | LazyReference<SlateConversationStep, OperationContext>
@@ -923,8 +927,8 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
   private turnStructure: SlateShellConversationTurn;
   private blobId: Uint8Array | undefined;
   private dirty: boolean;
-  private readonly shellCommand: LazyReference<unknown, Context>;
-  private readonly shellOutput: LazyReference<unknown, Context>;
+  private readonly shellInvocation: LazyReference<SlateStoredShellInvocation, Context>;
+  private readonly shellResult: LazyReference<SlateStoredShellResult, Context>;
 
   constructor(
     blobStore: BlobStore<Context>,
@@ -938,8 +942,8 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
     this.turnStructure = turnStructure;
     this.blobId = blobId;
     this.dirty = false;
-    this.shellCommand = new LazyReference(serdes.shellCommand, blobStore, this.turnStructure.shellCommandBlobId);
-    this.shellOutput = new LazyReference(serdes.shellOutput, blobStore, this.turnStructure.shellOutputBlobId);
+    this.shellInvocation = new LazyReference(serdes.shellInvocation, blobStore, this.turnStructure.invocationBlobId);
+    this.shellResult = new LazyReference(serdes.shellResult, blobStore, this.turnStructure.resultBlobId);
   }
 
   serialize(): Uint8Array {
@@ -950,11 +954,11 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
     if (!this.dirty && this.blobId !== undefined) {
       return this.blobId;
     }
-    const newShellCommandBlobId = await this.shellCommand.writeToBlobStore(ctx);
-    const newShellOutputBlobId = await this.shellOutput.writeToBlobStore(ctx);
+    const newInvocationBlobId = await this.shellInvocation.writeToBlobStore(ctx);
+    const newResultBlobId = await this.shellResult.writeToBlobStore(ctx);
     const newTurnStructure = createSlateShellConversationTurn({
-      shellCommandBlobId: newShellCommandBlobId,
-      shellOutputBlobId: newShellOutputBlobId,
+      invocationBlobId: newInvocationBlobId,
+      resultBlobId: newResultBlobId,
       ...(this.turnStructure.compatibility === undefined ? {} : { compatibility: this.turnStructure.compatibility }),
     });
     const serializedWrapper = slateConversationTurnSerde.serialize(newTurnStructure);
@@ -977,8 +981,8 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
     return newBlobId;
   }
 
-  recordShellOutput(shellOutput: unknown): void {
-    this.shellOutput.set(shellOutput);
+  recordShellResult(shellResult: SlateStoredShellResult): void {
+    this.shellResult.set(shellResult);
     this.dirty = true;
   }
 }
@@ -2706,26 +2710,26 @@ These images can be copied for use in other locations.
 
   async createShellTurn(
     ctx: OperationContext,
-    shellCommand: Parameters<CodecSet["shellCommand"]["serialize"]>[0],
+    shellInvocation: SlateStoredShellInvocation,
   ): Promise<ShellConversationTurnHandle> {
-    const shellCommandBlob = this.serdes.shellCommand.serialize(shellCommand);
-    const shellCommandBlobId = await getBlobId(shellCommandBlob);
+    const invocationBlob = this.serdes.shellInvocation.serialize(shellInvocation);
+    const invocationBlobId = await getBlobId(invocationBlob);
     metadataObserverForStore(this.blobStore)?.({
-      blobId: shellCommandBlobId,
-      blobType: { kind: "proto", typeName: "agent.v1.ShellCommand" },
+      blobId: invocationBlobId,
+      blobType: this.serdes.shellInvocation.getBlobType?.() ?? { kind: "json", typeName: "slate.agent-shell-invocation" },
     });
-    await this.blobStore.setBlob(ctx, shellCommandBlobId, shellCommandBlob);
-    const emptyOutput = createEmptyRedactedShellOutputInterop(this.privacyMode);
-    const shellOutputBlob = this.serdes.shellOutput.serialize(emptyOutput);
-    const shellOutputBlobId = await getBlobId(shellOutputBlob);
+    await this.blobStore.setBlob(ctx, invocationBlobId, invocationBlob);
+    const emptyResult = createEmptyStoredSlateShellResult(this.privacyMode);
+    const resultBlob = this.serdes.shellResult.serialize(emptyResult);
+    const resultBlobId = await getBlobId(resultBlob);
     metadataObserverForStore(this.blobStore)?.({
-      blobId: shellOutputBlobId,
-      blobType: { kind: "proto", typeName: "agent.v1.ShellOutput" },
+      blobId: resultBlobId,
+      blobType: this.serdes.shellResult.getBlobType?.() ?? { kind: "json", typeName: "slate.agent-shell-result" },
     });
-    await this.blobStore.setBlob(ctx, shellOutputBlobId, shellOutputBlob);
+    await this.blobStore.setBlob(ctx, resultBlobId, resultBlob);
     const shellTurnInner = createSlateShellConversationTurn({
-      shellCommandBlobId,
-      shellOutputBlobId,
+      invocationBlobId,
+      resultBlobId,
     });
     const turn = new ShellConversationTurnHandle(this.blobStore, this.serdes, shellTurnInner);
     this.turns.push(new EagerReference({

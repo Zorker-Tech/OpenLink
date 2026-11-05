@@ -45,15 +45,15 @@ test("constructing a Slate shell turn does not retain caller-owned blob ids", ()
   const command = new Uint8Array([1])
   const output = new Uint8Array([2])
   const turn = createSlateShellConversationTurn({
-    shellCommandBlobId: command,
-    shellOutputBlobId: output,
+    invocationBlobId: command,
+    resultBlobId: output,
   })
 
   command[0] = 9
   output[0] = 8
 
-  assert.deepEqual(turn.shellCommandBlobId, new Uint8Array([1]))
-  assert.deepEqual(turn.shellOutputBlobId, new Uint8Array([2]))
+  assert.deepEqual(turn.invocationBlobId, new Uint8Array([1]))
+  assert.deepEqual(turn.resultBlobId, new Uint8Array([2]))
 })
 
 test("the persistence adapter preserves every agent turn field", () => {
@@ -80,14 +80,39 @@ test("the persistence adapter preserves every agent turn field", () => {
 
 test("the persistence adapter preserves a shell turn", () => {
   const turn = createSlateShellConversationTurn({
-    shellCommandBlobId: new Uint8Array([4]),
-    shellOutputBlobId: new Uint8Array([5]),
+    invocationBlobId: new Uint8Array([4]),
+    resultBlobId: new Uint8Array([5]),
   })
 
-  assert.deepEqual(
-    slateConversationTurnSerde.deserialize(slateConversationTurnSerde.serialize(turn)),
-    turn,
-  )
+  const bytes = slateConversationTurnSerde.serialize(turn)
+  const decoded = slateConversationTurnSerde.deserialize(bytes)
+  const envelope = JSON.parse(new TextDecoder().decode(bytes).slice("SLATE-AGENT-TURN\n".length))
+
+  assert.equal(envelope.version, 2)
+  assert.deepEqual(envelope.turn, {
+    kind: "shell",
+    invocationBlobId: "04",
+    resultBlobId: "05",
+  })
+  assert.deepEqual(decoded, turn)
+})
+
+test("the current turn schema imports and upgrades stored Slate version one shell references", () => {
+  const bytes = new TextEncoder().encode("SLATE-AGENT-TURN\n" + JSON.stringify({
+    format: "slate.agent-conversation-turn",
+    version: 1,
+    turn: { kind: "shell", shellCommandBlobId: "04", shellOutputBlobId: "05" },
+  }))
+
+  const migrated = slateConversationTurnSerde.deserialize(bytes)
+  assert.deepEqual(migrated, {
+    kind: "shell",
+    invocationBlobId: new Uint8Array([4]),
+    resultBlobId: new Uint8Array([5]),
+  })
+  const rewritten = JSON.parse(new TextDecoder().decode(slateConversationTurnSerde.serialize(migrated)).slice("SLATE-AGENT-TURN\n".length))
+  assert.equal(rewritten.version, 2)
+  assert.deepEqual(rewritten.turn, { kind: "shell", invocationBlobId: "04", resultBlobId: "05" })
 })
 
 test("the adapter reconstructs the historical envelope without changing either case", () => {
