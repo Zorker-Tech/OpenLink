@@ -166,7 +166,6 @@ source/packages/agent-exec/shell-stream-operation.ts	../../adapters/interop/agen
 source/packages/agent-exec/shell.ts	../../adapters/interop/agent/shell-operation-adapter.ts
 source/packages/agent-exec/smart-mode-classifier-operation.ts	../../adapters/interop/agent/smart-mode-classifier-exec-adapter.ts
 source/packages/agent-exec/subagent-await.ts	../../adapters/interop/agent/subagent-await-exec-adapter.ts
-source/packages/agent-exec/subagent-control.ts	../../adapters/interop/agent/subagent-control-exec-adapter.ts
 source/packages/agent-exec/web-fetch-allowlist-precheck.ts	../../adapters/interop/agent/web-fetch-allowlist-precheck-exec-adapter.ts
 source/packages/agent-exec/write-operation.ts	../../adapters/interop/agent/write-operation-adapter.ts
 source/packages/agent-store-sync/bcs-transport.ts	../../adapters/interop/agent-store/bcs-agent-store-client-adapter.ts

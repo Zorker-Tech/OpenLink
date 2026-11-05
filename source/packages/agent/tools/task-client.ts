@@ -37,13 +37,15 @@ import {
 } from "../subagent-type.ts"
 import {
   createSerializedTaskToolCallErrorInterop,
-  createSlateTaskClientContinuationConfig,
-  createSlateTaskClientSuccessResult,
   createTaskToolCallInterop,
   getVideoPathsFromRedactedSelectedContextInterop,
-  requestSubagentBackgroundHandoffInterop,
-  runClientSubagent,
 } from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
+import {
+  createSlateTaskClientContinuationConfig,
+  createSlateTaskClientSuccessResult,
+  requestSlateSubagentBackgroundHandoff,
+  runClientSubagent,
+} from "./task-client-execution.ts"
 import type {
   SlateTaskClientContinuationConfig,
   SlateTaskClientSubagentRunView,
@@ -376,7 +378,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       handoffRunning = true
       void (async () => {
         try {
-          handoffGranted = await requestSubagentBackgroundHandoffInterop(ctx, resourceAccessor, args.toolCallId)
+          handoffGranted = await requestSlateSubagentBackgroundHandoff(ctx, resourceAccessor, args.toolCallId)
         } catch {
           // A missing or torn-down handoff resource is intentionally fail-closed.
         } finally {

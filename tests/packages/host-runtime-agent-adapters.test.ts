@@ -60,6 +60,7 @@ describe("the subagent sessions a host keeps", () => {
     const calls: unknown[][] = [];
     const sessions = new Map<string, never>();
     const windows = new Set<string>();
+    const runningToolCalls = new Set<string>();
     const adapter = new SlateSubagentHostAdapter(
       sessions,
       (id, sessionArgs) => {
@@ -68,14 +69,23 @@ describe("the subagent sessions a host keeps", () => {
       },
       {
         isRunning: (id) => { calls.push(["is-running", id]); return running.has(id); },
+        hasRunningToolCall: (toolCallId) => { calls.push(["has-running-tool-call", toolCallId]); return runningToolCalls.has(toolCallId); },
         allocateComputerUseWindow: (id) => { calls.push(["allocate", id]); if (windows.size > 0) return null; windows.add(id); return { window: id }; },
         freeComputerUseWindow: (id) => { calls.push(["free", id]); windows.delete(id); },
         dispatch: (dispatchArgs) => { calls.push(["dispatch", dispatchArgs]); },
       },
     );
     const running = new Set<string>();
-    return { adapter, sessions, windows, running, calls, kinds: (of: string) => calls.filter((call) => call[0] === of) };
+    return { adapter, sessions, windows, running, runningToolCalls, calls, kinds: (of: string) => calls.filter((call) => call[0] === of) };
   }
+
+  it("acknowledges a background handoff only for a live subagent tool call", () => {
+    const world = harness();
+    assert.equal(world.adapter.hasRunningToolCall("call-1"), false);
+    world.runningToolCalls.add("call-1");
+    assert.equal(world.adapter.hasRunningToolCall("call-1"), true);
+    assert.equal(world.adapter.hasRunningToolCall(""), false);
+  });
 
   it("makes a session or resumes one, and keeps a computer-use subagent to a single desktop", async () => {
     const world = harness();

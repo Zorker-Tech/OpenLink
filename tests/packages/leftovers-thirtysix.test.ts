@@ -319,6 +319,8 @@ describe("running a subagent", () => {
     runtime.sessions.set("sub-1", scripted.session as never)
     runtime.dispatchBackgroundSubagent({ subagentAgentId: "sub-1", subagentType: "generalPurpose", toolCallId: "call-1", prompt: "do the thing", quietOrigin: "wake", run: () => scripted.session.run("do the thing") as never })
     assert.equal(runtime.hasRunningSubagents(), true)
+    assert.equal(runtime.hasRunningToolCall("call-1"), true)
+    assert.equal(runtime.hasRunningToolCall("other-call"), false)
     // The duplicate dispatch of a running subagent is ignored, and it is listed while it runs.
     runtime.dispatchBackgroundSubagent({ subagentAgentId: "sub-1", subagentType: "generalPurpose", toolCallId: "call-1", prompt: "again", run: () => scripted.session.run("again") as never })
     assert.equal(runtime.getRunningSubagent("sub-1")?.title, "do the thing")
@@ -336,6 +338,7 @@ describe("running a subagent", () => {
     assert.deepEqual(events.freed, ["sub-1"])
     assert.deepEqual(await runtime.getSubagentOutline("sub-1"), [{ a: 1 }])
     assert.equal(runtime.listSubagents()[0]?.status, "done")
+    assert.equal(runtime.hasRunningToolCall("call-1"), false)
   })
 
   it("settles a run that throws or rejects as an error", async () => {

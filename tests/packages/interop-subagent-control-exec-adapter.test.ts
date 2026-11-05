@@ -7,7 +7,7 @@ import { createContext } from "../../source/packages/context/context.ts";
 import type { ControlledExecHandler } from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts";
 import type { ControlledExecManager } from "../../source/packages/agent-exec/resource-provider.ts";
 import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts";
-import { forceBackgroundSubagentExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts";
+import { forceBackgroundSubagentExecutorResource } from "../../source/adapters/interop/agent/subagent-control-exec-adapter.ts";
 
 test("subagent control uses its own remote and controlled message cases", async () => {
   const context = createContext();
