@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path"
 import {
   isAzureDevopsServicesHost,
   isBitbucketCloudHost,
@@ -124,6 +125,9 @@ export function parseAndValidateScmUrl(input: string): ScmUrlResult {
 
 /** Rewrite an enabled SCM URL to the canonical HTTPS-style SSH form where supported. */
 export function toScmSshUrl(gitUrl: string): string | null {
+  const source = gitUrl.trim()
+  if (source.startsWith("file:") || source.startsWith("./") || source.startsWith("../") ||
+      isAbsolute(source) || /^[A-Za-z]:[\\/]/.test(source) || /^\\\\/.test(source)) return null
   const repository = parseAndValidateScmUrl(gitUrl);
   if ("error" in repository) return null;
   switch (repository.provider) {
