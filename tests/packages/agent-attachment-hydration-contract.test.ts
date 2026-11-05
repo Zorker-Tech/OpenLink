@@ -84,6 +84,6 @@ test("size limits are checked before writes and after stored reads", async () =>
 test("missing bytes and unresolved upload references are errors, while no source is an empty result", async () => {
   const world = storeWith()
   await assert.rejects(hydrateAttachmentContent(request(world.store, { kind: "stored-blob", blobId: new Uint8Array([9]) })), /missing bytes/)
-  await assert.rejects(hydrateAttachmentContent(request(world.store, { kind: "unresolved-upload-reference", reference: {} })), /unresolved prompt upload/)
+  await assert.rejects(hydrateAttachmentContent(request(world.store, { kind: "unresolved-upload-reference", uploadId: "upload-1" })), /unresolved prompt upload/)
   assert.deepEqual(await hydrateAttachmentContent(request(world.store, undefined)), { data: undefined, attachment: undefined })
 })

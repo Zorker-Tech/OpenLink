@@ -1,4 +1,5 @@
 import {
+  PromptUploadRef,
   SelectedDocument,
   SelectedDocument_BlobIdWithData,
   type SelectedDocument as InteropSelectedDocument,
@@ -13,6 +14,7 @@ import type { AttachmentContentStore } from "../../../packages/agent/context/att
 import type { SlateDocumentAttachment } from "../../../packages/agent/context/document-attachment-contracts.ts"
 import type { AttachmentPathRequestContext } from "../../../packages/agent/context/path-trust.ts"
 import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "./workspace-file-write-adapter.ts"
+import { copySelectedContextBytes, readSelectedContextText } from "./selected-context-value-adapter.ts"
 
 export interface ProcessInteropDocumentAttachmentArgs {
   readonly ctx: Context
@@ -36,25 +38,32 @@ export function fromInteropSelectedDocument(document: InteropSelectedDocument): 
   let content: SlateDocumentAttachment["content"]
   switch (payload.case) {
     case "data":
-      content = { kind: "inline-bytes", bytes: payload.value }
+      content = { kind: "inline-bytes", bytes: copySelectedContextBytes(payload.value, "document data") }
       break
     case "blobId":
-      content = { kind: "stored-blob", blobId: payload.value }
+      content = { kind: "stored-blob", blobId: copySelectedContextBytes(payload.value, "document blob id") }
       break
     case "blobIdWithData":
-      content = { kind: "blob-with-bytes", blobId: payload.value.blobId, bytes: payload.value.data }
+      content = {
+        kind: "blob-with-bytes",
+        blobId: copySelectedContextBytes(payload.value.blobId, "document blob id"),
+        bytes: copySelectedContextBytes(payload.value.data, "document data"),
+      }
       break
     case "promptUploadRef":
-      content = { kind: "unresolved-upload-reference", reference: payload.value }
+      content = {
+        kind: "unresolved-upload-reference",
+        uploadId: readSelectedContextText(payload.value.uploadId, "document upload id"),
+      }
       break
     default:
       content = undefined
   }
   return {
     uuid: document.uuid,
-    filename: document.filename,
+    filename: readSelectedContextText(document.filename, "document filename"),
     mimeType: document.mimeType,
-    path: document.path,
+    path: readSelectedContextText(document.path, "document path"),
     content,
   }
 }
@@ -63,10 +72,10 @@ export function toInteropSelectedDocument(document: SlateDocumentAttachment): In
   let dataOrBlobId: InteropSelectedDocument["dataOrBlobId"] | undefined
   switch (document.content?.kind) {
     case "inline-bytes":
-      dataOrBlobId = { case: "data", value: document.content.bytes }
+      dataOrBlobId = { case: "data", value: new Uint8Array(document.content.bytes) }
       break
     case "stored-blob":
-      dataOrBlobId = { case: "blobId", value: document.content.blobId }
+      dataOrBlobId = { case: "blobId", value: new Uint8Array(document.content.blobId) }
       break
     case "blob-with-bytes":
       dataOrBlobId = {
@@ -75,7 +84,7 @@ export function toInteropSelectedDocument(document: SlateDocumentAttachment): In
       }
       break
     case "unresolved-upload-reference":
-      dataOrBlobId = { case: "promptUploadRef", value: document.content.reference as never }
+      dataOrBlobId = { case: "promptUploadRef", value: new PromptUploadRef({ uploadId: document.content.uploadId }) }
       break
     default:
       dataOrBlobId = undefined
