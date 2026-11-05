@@ -20,15 +20,12 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { slateSubagentExecutorResource } from "../../source/packages/agent-exec/subagent.ts"
 import type { SubagentContinuationConfig, SubagentExecutionArgs, SubagentExecutionResult } from "../../source/packages/agent-exec/subagent.ts"
 import { RUNNING_SUBAGENT_FOLLOWUP_ERROR, RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT } from "../../source/packages/agent-exec/subagent.ts"
-import { forceBackgroundSubagentExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts"
+import { slateSubagentBackgroundHandoffExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts"
 import { WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 import {
   TaskResult,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import {
-  ForceBackgroundSubagentStatus,
-} from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import {
@@ -104,7 +101,7 @@ interface Executed {
 function executionHarness(options: {
   result?: SubagentExecutionResult
   fail?: Error
-  forceBackgroundStatus?: ForceBackgroundSubagentStatus
+  forceBackgroundStatus?: "accepted" | "not-found"
 } = {}) {
   const executed: Executed[] = []
   const handoffs: string[] = []
@@ -125,11 +122,13 @@ function executionHarness(options: {
   const forceBackgroundExecutor = {
     async execute(_ctx: Context, args: { toolCallId: string }) {
       handoffs.push(args.toolCallId)
-      return { status: options.forceBackgroundStatus ?? ForceBackgroundSubagentStatus.ACCEPTED }
+      return { status: options.forceBackgroundStatus ?? "accepted" }
     },
   }
   const accessor = {
-    get: (resource: unknown) => resource === slateSubagentExecutorResource ? subagentExecutor : forceBackgroundExecutor,
+    get: (resource: unknown) => resource === slateSubagentExecutorResource
+      ? subagentExecutor
+      : resource === slateSubagentBackgroundHandoffExecutorResource ? forceBackgroundExecutor : undefined,
   }
   const stateHandler: ClientTaskStateHandler = {
     turns: [],
@@ -507,7 +506,7 @@ test("a run that is being steered hands itself to the background", async () => {
 test("a finished run stops asking to be backgrounded", async () => {
   // The handoff is refused, which leaves the retry that keeps an unserved injection alive armed — until
   // the run itself ends, which is when it has to stop.
-  const harnessed = executionHarness({ forceBackgroundStatus: ForceBackgroundSubagentStatus.NOT_FOUND })
+  const harnessed = executionHarness({ forceBackgroundStatus: "not-found" })
   harnessed.signal.pending = true
   await harnessed.run({ signal: true })
   assert.equal(harnessed.handoffs.length, 1)

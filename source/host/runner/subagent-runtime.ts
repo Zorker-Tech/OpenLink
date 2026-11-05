@@ -460,6 +460,14 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     return infos;
   }
 
+  function hasRunningToolCall(toolCallId: string): boolean {
+    if (toolCallId.length === 0) return false
+    for (const [subagentId, dispatch] of dispatchMeta) {
+      if (dispatch.toolCallId === toolCallId && backgroundRuns.has(subagentId)) return true
+    }
+    return false
+  }
+
   function getRunningSubagent(id: string): RunningSubagentInfo | null {
     return buildRunningSubagentInfo(id);
   }
@@ -537,6 +545,7 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     startBackgroundSubagentTurn,
     listRunningSubagents,
     getRunningSubagent,
+    hasRunningToolCall,
     steerSubagent,
     abortSubagent,
     listSubagents,

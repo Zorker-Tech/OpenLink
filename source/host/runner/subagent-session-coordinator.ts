@@ -14,6 +14,7 @@ export type SubagentAdapterArgs = SubagentExecutionArgs & {
 
 export interface SubagentDispatcher {
   isRunning(id: string): boolean;
+  hasRunningToolCall?(toolCallId: string): boolean;
   allocateComputerUseWindow(id: string): unknown | null;
   freeComputerUseWindow(id: string): void;
   dispatch(args: {
@@ -66,6 +67,10 @@ export class SubagentSessionCoordinator<BackgroundReason> {
 
   setLaunchReviewer(review: LaunchReviewer): void {
     this.#reviewLaunch = review;
+  }
+
+  hasRunningToolCall(toolCallId: string): boolean {
+    return toolCallId.length > 0 && this.dispatcher.hasRunningToolCall?.(toolCallId) === true;
   }
 
   async createOrResumeSession(_ctx: unknown, request: SubagentExecutionArgs): Promise<string> {

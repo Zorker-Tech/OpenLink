@@ -55,6 +55,7 @@ import {
 import type { RemoteResource, ResourceAccessor } from "../packages/agent-exec/resource-provider.ts";
 import { subagentExecutorResource } from "../adapters/interop/agent/subagent-exec-adapter.ts";
 import { slateSubagentExecutorResource } from "../packages/agent-exec/subagent.ts";
+import { slateSubagentBackgroundHandoffExecutorResource } from "../packages/agent-exec/subagent-control.ts";
 import { requestContextExecutorResource } from "../packages/agent-exec/request-context-operation.ts";
 import { subagentRegistryResource } from "../packages/agent/tools/subagent-registry.ts";
 import { smartModeClassifierExecutorResource } from "../packages/agent-exec/smart-mode-classifier-operation.ts";
@@ -188,6 +189,7 @@ export interface ProductionSessionBoundRunner {
   readonly subagents: {
     readonly sessions: Map<string, SubagentSession>;
     isRunning(agentId: string): boolean;
+    hasRunningToolCall(toolCallId: string): boolean;
     dispatchBackgroundSubagent(input: Parameters<TurnLocalResourceProjectionInput["subagentDispatcher"]["dispatch"]>[0]): void;
   };
   readonly computerUse:
@@ -309,6 +311,7 @@ function asProductionResourceAccessor(registry: ReturnType<typeof createRemoteBo
         const knownResources: ReadonlyArray<readonly [symbol, string]> = [
           [subagentExecutorResource.symbol, "subagentExecutorResource"],
           [slateSubagentExecutorResource.symbol, "slateSubagentExecutorResource"],
+          [slateSubagentBackgroundHandoffExecutorResource.symbol, "slateSubagentBackgroundHandoffExecutorResource"],
           [requestContextExecutorResource.symbol, "requestContextExecutorResource"],
           [subagentRegistryResource.symbol, "subagentRegistryResource"],
           [smartModeClassifierExecutorResource.symbol, "smartModeClassifierExecutorResource"],
@@ -1578,6 +1581,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
                 createSubagentRunner,
                 subagentDispatcher: {
                   isRunning: (agentId) => runner.subagents.isRunning(agentId),
+                  hasRunningToolCall: (toolCallId) => runner.subagents.hasRunningToolCall(toolCallId),
                   allocateComputerUseWindow: (agentId) => computerUse?.allocateWindow(agentId) ?? null,
                   freeComputerUseWindow: (agentId) => {
                     computerUse?.freeWindow(agentId);
