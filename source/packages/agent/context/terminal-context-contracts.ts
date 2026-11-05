@@ -12,8 +12,8 @@ export interface SelectedTerminalForPrompt {
 }
 
 export interface SelectedTerminalRange {
-  readonly start?: { readonly line?: number | undefined } | undefined
-  readonly end?: { readonly line?: number | undefined } | undefined
+  readonly start?: { readonly line?: number | undefined; readonly column?: number | undefined } | undefined
+  readonly end?: { readonly line?: number | undefined; readonly column?: number | undefined } | undefined
 }
 
 export interface SelectedTerminalSelectionForPrompt extends SelectedTerminalForPrompt {

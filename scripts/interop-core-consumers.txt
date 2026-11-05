@@ -219,7 +219,6 @@ source/packages/agent/agent-config-tooling.ts	../../adapters/interop/agent/agent
 source/packages/agent/automations/platform-communication-tools.ts	../../../adapters/interop/automation/platform-communication-tool-policy-adapter.ts
 source/packages/agent/configs/project-workspace-mcp-tools.ts	../../../adapters/interop/agent/project-conversation-adapter.ts
 source/packages/agent/configs/project-workspace-mcp-tools.ts	../../../adapters/interop/agent/project-workspace-mcp-adapter.ts
-source/packages/agent/context/attached-folders-context.ts	../../../adapters/interop/agent/ls-directory-tree-adapter.ts
 source/packages/agent/context/code-selection-spill.ts	../../../adapters/interop/agent/workspace-file-write-adapter.ts
 source/packages/agent/context/image-file-spill.ts	../../../adapters/interop/agent/workspace-file-write-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/agent-notes-context-adapter.ts

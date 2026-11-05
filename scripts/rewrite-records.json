@@ -2790,9 +2790,9 @@
     },
     "packages/agent/context-processing.ts": {
       "claim": "rewritten",
-      "overlap": 0.6872197309417041,
-      "refreshReason": "Moved selected image, video and document hydration through Slate attachment records, leaving the generated context message only at the non-media and transport boundary.",
-      "evidence": "The focused media/context suite passes 97/97, verifying image hydration/spill and variant projection, video placement/privacy, document recovery, external context ordering, and returned Slate attachment records. Work-host typecheck passes; interop:check records 342 core imports across 226 files after the two media adapters moved out of processSelectedContext."
+      "overlap": 0.6827354260089686,
+      "refreshReason": "Moved media hydration and workspace selection projection through Slate attachment/workspace records, leaving generated selected-context fields behind explicit ingress adapters.",
+      "evidence": "The focused media/context suite passes 97/97 for image hydration/spill, video placement/privacy, document recovery and returned Slate attachments; workspace projection, folder, code-selection and process-selected-context suites pass 61/61 for file/code/terminal/folder order, ranges, invalid-tree refusal and rendering. Work-host typecheck passes and interop:check records 341 core imports across 225 files."
     },
     "packages/agent/context-processing-watch-video.ts": {
       "claim": "rewritten",
@@ -4143,8 +4143,8 @@
     "packages/agent/context-processing-folders.ts": {
       "claim": "rewritten",
       "overlap": 0.71875,
-      "refreshReason": "Specified structural validation before projecting attached folder trees, with invalid selections omitted while valid trees retain their order and labels.",
-      "evidence": "agent-attached-folders-context-contract.test.ts and agent-formatting.test.ts pass 16/16. Work-host typecheck and build pass. Returning early for one malformed folder is caught because later valid folders must remain in the context. Measured overlap is 0.71875 against 64 baseline pairs."
+      "refreshReason": "Moved generated directory-tree projection out of the Slate folder prompt renderer and added runtime validation so malformed trees remain skipped without aborting later folders.",
+      "evidence": "Workspace selection projection, folder renderer and process-selected-context suites pass 61/61, preserving folder path/tree order and skipping malformed trees safely. Work-host typecheck passes; measured overlap is 0.71875 against 64 baseline pairs."
     },
     "host/boxes/box-store-sync/object-store-port.ts": {
       "claim": "rewritten",

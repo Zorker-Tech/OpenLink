@@ -7,22 +7,20 @@
  * attached without a tree is skipped rather than shown empty, since a path alone says nothing.
  */
 
-import { projectLsDirectoryTree } from "../../../adapters/interop/agent/ls-directory-tree-adapter.ts"
 import { renderDirectoryTreeWithinBudget } from "../tools/core/ls/formatters.ts"
+import { isSlateDirectoryTreeNode, type SlateDirectoryTreeNode } from "../tools/core/ls/directory-tree-contracts.ts"
 
 export interface SelectedFolderForPrompt {
   readonly path: string
-  readonly directoryTree?: unknown
+  readonly directoryTree?: SlateDirectoryTreeNode
 }
 
 export function renderAttachedFoldersContext(folders: readonly SelectedFolderForPrompt[]): string | undefined {
   if (folders.length === 0) return undefined
   const folderContents: string[] = []
   for (const folder of folders) {
-    if (!folder.directoryTree) continue
-    const tree = projectLsDirectoryTree(folder.directoryTree)
-    if (tree === undefined) continue
-    const formattedTree = renderDirectoryTreeWithinBudget(tree)
+    if (!isSlateDirectoryTreeNode(folder.directoryTree)) continue
+    const formattedTree = renderDirectoryTreeWithinBudget(folder.directoryTree)
     folderContents.push(`Folder: ${folder.path}
 Contents of directory:
 ${formattedTree.result}`)

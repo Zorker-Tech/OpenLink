@@ -34,7 +34,7 @@ import type {
   SelectedContextEntryModeInterop,
   SelectedContextSimulatedReasonInterop,
 } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
-import { fromInteropSelectedImage } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
+import { fromInteropSelectedImage, projectSelectedWorkspaceContext } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import { getFilenameWithoutExtension } from "../utils/common-helpers.ts"
@@ -196,6 +196,7 @@ export async function processSelectedContext(
   const selectedImages: SlateImageAttachment[] = [];
   const selectedVideos: SlateVideoAttachment[] = [];
   const selectedDocuments: SlateDocumentAttachment[] = [];
+  const workspaceSelection = projectSelectedWorkspaceContext(selectedContext)
   const imageAttachments = selectedContext.selectedImages.map(fromInteropSelectedImage)
   const videoAttachments = selectedContext.selectedVideos.map(fromInteropSelectedVideo)
   const documentAttachments = selectedContext.selectedDocuments.map(fromInteropSelectedDocument)
@@ -327,7 +328,7 @@ export async function processSelectedContext(
 
   const renderedCodeSelections = await renderSelectedCodeSelections({
     ctx,
-    codeSelections: selectedContext.codeSelections,
+    codeSelections: workspaceSelection.codeSelections,
     formattingOptions: config.formattingOptions,
     enableLongCodeSelectionSpillToFile: config.enableLongCodeSelectionSpillToFile,
     requestContext,
@@ -335,8 +336,8 @@ export async function processSelectedContext(
   });
   allDocumentInfos.push(...renderedCodeSelections.documentInfos);
   const attachedFilesContent = [...renderedCodeSelections.attachedFilesContent];
-  attachedFilesContent.push(...renderSelectedTerminalContext(selectedContext.terminals, selectedContext.terminalSelections, config.formattingOptions));
-  const attachedFoldersText = renderAttachedFoldersContext(selectedContext.folders);
+  attachedFilesContent.push(...renderSelectedTerminalContext(workspaceSelection.terminals, workspaceSelection.terminalSelections, config.formattingOptions));
+  const attachedFoldersText = renderAttachedFoldersContext(workspaceSelection.folders);
   if (attachedFoldersText) attachedFilesContent.push({ type: "text", text: attachedFoldersText });
   if (attachedFilesContent.length > 0) {
     userContent.push({ type: "text", text: `<attached_files>\n${attachedFilesContent.map(part => part.text).join("\n")}\n</attached_files>` });
