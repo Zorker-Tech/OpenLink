@@ -64,6 +64,10 @@ import {
   createSlateSubagentBackgroundHandoffExecutor,
   slateSubagentBackgroundHandoffExecutorResource,
 } from "../../packages/agent-exec/subagent-control.ts";
+import {
+  createSlateSubagentAwaitExecutor,
+  slateSubagentAwaitExecutorResource,
+} from "../../packages/agent-exec/subagent-await.ts";
 import { backgroundShellExecutorResource } from "../../packages/agent-exec/background-shell.ts";
 import { requestContextExecutorResource } from "../../packages/agent-exec/request-context-operation.ts";
 import { shellStreamExecutorResource } from "../../packages/agent-exec/shell-stream-operation.ts";
@@ -1079,6 +1083,9 @@ export function createTurnLocalResourceProjection(input: TurnLocalResourceProjec
   const subagentHandoffExecutor = createSlateSubagentBackgroundHandoffExecutor(
     (toolCallId) => adapter.hasRunningToolCall(toolCallId),
   );
+  const subagentAwaitExecutor = createSlateSubagentAwaitExecutor(
+    (request, signal) => adapter.awaitSubagent(request, signal),
+  );
   const requestContextExecutor = new SlateRequestContextExecutor(input.requestContext, input.includeTranscripts, input.autoReviewEnforceEnabled, input.resolveAgentSkills);
   const subagentRegistry = new SubagentRegistry();
   const auditShellCommand = createTurnShellAudit(input);
@@ -1090,6 +1097,7 @@ export function createTurnLocalResourceProjection(input: TurnLocalResourceProjec
     resourceEntry(slateSubagentExecutorResource, subagentExecutor),
     resourceEntry(subagentExecutorResource, createInteropSubagentExecutorFromSlate(subagentExecutor)),
     resourceEntry(slateSubagentBackgroundHandoffExecutorResource, subagentHandoffExecutor),
+    resourceEntry(slateSubagentAwaitExecutorResource, subagentAwaitExecutor),
     resourceEntry(requestContextExecutorResource, requestContextExecutor),
     resourceEntry(subagentRegistryResource, subagentRegistry),
   ];

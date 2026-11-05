@@ -341,6 +341,52 @@ describe("running a subagent", () => {
     assert.equal(runtime.hasRunningToolCall("call-1"), false)
   })
 
+  it("awaits a running subagent and returns its settled transcript path", async () => {
+    const { runtime } = world()
+    const scripted = sessionOf({ transcriptPath: "/transcripts/sub-1.jsonl" })
+    runtime.sessions.set("sub-1", scripted.session as never)
+    runtime.dispatchBackgroundSubagent({
+      subagentAgentId: "sub-1",
+      subagentType: "generalPurpose",
+      toolCallId: "call-1",
+      prompt: "do the thing",
+      run: () => scripted.session.run("do the thing") as never,
+    })
+
+    assert.deepEqual(await runtime.awaitSubagent({ agentId: "sub-1", bounded: false }, new AbortController().signal), {
+      kind: "complete",
+      agentId: "sub-1",
+      transcriptPathKnown: true,
+      transcriptPath: "/transcripts/sub-1.jsonl",
+    })
+  })
+
+  it("returns a live status on a zero timeout and not-found for an unknown id", async () => {
+    const { runtime } = world()
+    let release: (value: unknown) => void = () => {}
+    const pending = new Promise((resolve) => { release = resolve })
+    const scripted = sessionOf({ run: () => pending })
+    runtime.sessions.set("sub-1", scripted.session as never)
+    runtime.dispatchBackgroundSubagent({
+      subagentAgentId: "sub-1",
+      subagentType: "generalPurpose",
+      toolCallId: "call-1",
+      prompt: "do the thing",
+      run: () => scripted.session.run("do the thing") as never,
+    })
+
+    assert.deepEqual(await runtime.awaitSubagent({ agentId: "sub-1", bounded: true, timeoutMs: 0 }, new AbortController().signal), {
+      kind: "still-running",
+      agentId: "sub-1",
+    })
+    assert.deepEqual(await runtime.awaitSubagent({ agentId: "missing", bounded: false }, new AbortController().signal), {
+      kind: "not-found",
+      agentId: "missing",
+    })
+    release({ text: "finished", aborted: false })
+    await settle(runtime)
+  })
+
   it("settles a run that throws or rejects as an error", async () => {
     const sync = world()
     sync.runtime.dispatchBackgroundSubagent({ subagentAgentId: "sync", subagentType: "generalPurpose", toolCallId: "c", prompt: "x", run: () => { throw new Error("sync boom") } })

@@ -7,7 +7,7 @@ import { createContext } from "../../source/packages/context/context.ts";
 import type { ControlledExecHandler } from "../../source/adapters/interop/agent/controlled-exec-manager-adapter.ts";
 import type { ControlledExecManager } from "../../source/packages/agent-exec/resource-provider.ts";
 import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts";
-import { subagentAwaitExecutorResource } from "../../source/packages/agent-exec/subagent-await.ts";
+import { subagentAwaitExecutorResource } from "../../source/adapters/interop/agent/subagent-await-exec-adapter.ts";
 
 test("subagent-await calls keep their request and result cases paired", async () => {
   const context = createContext();

@@ -10,14 +10,12 @@ import {
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
 import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { LsArgs } from "../proto/generated/agent/v1/ls_exec_pb.ts"
-import { SubagentArgs, SubagentAwaitArgs } from "../proto/generated/agent/v1/subagent_exec_pb.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts"
 import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
 import { lsExecutorResource } from "../../../packages/agent-exec/ls.ts"
-import { subagentAwaitExecutorResource } from "../../../packages/agent-exec/subagent-await.ts"
-import { subagentExecutorResource } from "./subagent-exec-adapter.ts"
+import { slateSubagentAwaitExecutorResource } from "../../../packages/agent-exec/subagent-await.ts"
 
 export interface AwaitRequestView {
   readonly taskId: string
@@ -64,12 +62,8 @@ export interface AwaitDirectoryNode {
 
 export interface AwaitSubagentRequestView {
   readonly bounded: boolean
-  readonly toolCallId: string
   readonly taskId: string
   readonly timeoutMs: number
-  readonly parentConversationId: string
-  readonly subagentType: string
-  readonly modelId: string
 }
 
 export interface AwaitSubagentOutcomeView {
@@ -256,23 +250,13 @@ export async function runAwaitSubagentInterop(
   resourceAccessor: ResourceAccessor<RemoteExecManager>,
   input: AwaitSubagentRequestView,
 ): Promise<AwaitSubagentOutcomeView> {
-  const value = input.bounded
-    ? await resourceAccessor.get(subagentAwaitExecutorResource).execute(ctx, new SubagentAwaitArgs({ agentId: input.taskId, timeoutMs: input.timeoutMs }) as never)
-    : await resourceAccessor.get(subagentExecutorResource).execute(ctx, new SubagentArgs({
-        toolCallId: input.toolCallId,
-        resumeAgentId: input.taskId,
-        parentConversationId: input.parentConversationId,
-        prompt: "",
-        readonly: true,
-        runInBackground: false,
-        subagentType: input.subagentType,
-        modelId: input.modelId,
-      }) as never)
-  const result = (value as { readonly result?: { readonly case?: string; readonly value?: { readonly transcriptPath?: string } } }).result
-  if (result?.case !== "complete") throw new Error("Failed to await subagent task")
-  const complete = result.value as { readonly transcriptPath?: string } | undefined
+  const request = input.bounded
+    ? { agentId: input.taskId, bounded: true as const, timeoutMs: input.timeoutMs }
+    : { agentId: input.taskId, bounded: false as const }
+  const result = await resourceAccessor.get(slateSubagentAwaitExecutorResource).execute(ctx, request)
+  if (result.kind !== "complete") throw new Error("Failed to await subagent task")
   return {
-    hasTranscriptPathField: complete !== undefined && "transcriptPath" in complete,
-    ...(complete?.transcriptPath === undefined ? {} : { transcriptPath: complete.transcriptPath }),
+    hasTranscriptPathField: result.transcriptPathKnown,
+    ...(result.transcriptPath === undefined ? {} : { transcriptPath: result.transcriptPath }),
   }
 }

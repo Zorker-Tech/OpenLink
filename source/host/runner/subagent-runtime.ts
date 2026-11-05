@@ -7,6 +7,7 @@
 import { deriveBackgroundSubagentTitle, formatSteerPrompt } from "./background-work.ts";
 import type { SlateImageAttachment } from "../../packages/agent/context/image-attachment-contracts.ts";
 import type { SlateVideoAttachment } from "../../packages/agent/context/video-attachment-contracts.ts";
+import type { SlateSubagentAwaitRequest, SlateSubagentAwaitResult } from "../../packages/agent-exec/subagent-await.ts";
 
 export interface SubagentLineage {
   readonly parentRequestId?: string;
@@ -73,6 +74,8 @@ export interface SubagentRecord {
   readonly title: string;
   readonly startedAtMs: number;
   status: "running" | "done" | "error" | "aborted";
+  transcriptPath?: string;
+  failureMessage?: string;
 }
 
 export interface BackgroundSubagentCompletion {
@@ -162,6 +165,76 @@ function errorMessage(error: unknown): string {
 /** The quiet origin of a run, when it has one, as a spreadable field; absent rather than undefined otherwise. */
 const quietOriginField = (quietOrigin: string | undefined): { quietOrigin?: string } =>
   quietOrigin == null ? {} : { quietOrigin };
+
+function raceBackgroundRun(
+  run: Promise<void>,
+  timeoutMs: number | undefined,
+  signal: AbortSignal,
+): Promise<"settled" | "timeout"> {
+  if (signal.aborted) {
+    const reason = signal.reason;
+    return Promise.reject(reason instanceof Error ? reason : new Error("Subagent await was aborted"));
+  }
+  if (timeoutMs !== undefined && timeoutMs <= 0) return Promise.resolve("timeout");
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let finished = false;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const finish = (result: "settled" | "timeout") => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve(result);
+    };
+    const onAbort = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      const reason = signal.reason;
+      reject(reason instanceof Error ? reason : new Error("Subagent await was aborted"));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    run.then(() => finish("settled"), () => finish("settled"));
+    if (timeoutMs !== undefined) timer = setTimeout(() => finish("timeout"), timeoutMs);
+  });
+}
+
+function pauseForSubagentStateChange(timeoutMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve();
+    };
+    const onAbort = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      const reason = signal.reason;
+      reject(reason instanceof Error ? reason : new Error("Subagent await was aborted"));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    timer = setTimeout(finish, timeoutMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 /** The dispatch of one background subagent, as the platform reports it when it starts. */
 function dispatchEventOf(parentAgentId: string, request: DispatchParams) {
@@ -406,6 +479,15 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     const record = registry.get(subagentId);
     if (record != null) {
       record.status = settledStatus(aborted, ending);
+      try {
+        const transcriptPath = session?.getTranscriptPath();
+        if (transcriptPath != null) record.transcriptPath = transcriptPath;
+      } catch {}
+      if (record.status === "error") {
+        record.failureMessage = ending.status === "error" ? ending.error : "The background task failed."
+      } else if (record.status === "aborted") {
+        record.failureMessage = "The background task was interrupted before it finished."
+      }
       logLifecycle("settled", subagentId, record.status);
       emitSubagentsChanged();
     }
@@ -470,6 +552,51 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
 
   function getRunningSubagent(id: string): RunningSubagentInfo | null {
     return buildRunningSubagentInfo(id);
+  }
+
+  async function awaitSubagent(
+    request: SlateSubagentAwaitRequest,
+    signal: AbortSignal,
+  ): Promise<SlateSubagentAwaitResult> {
+    const timeoutMs = request.bounded
+      ? Math.max(0, Math.floor(Number.isFinite(request.timeoutMs) ? request.timeoutMs : 0))
+      : undefined;
+    const deadline = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
+    for (;;) {
+      if (signal.aborted) {
+        const reason = signal.reason;
+        throw reason instanceof Error ? reason : new Error("Subagent await was aborted");
+      }
+      const record = registry.get(request.agentId);
+      if (record === undefined) return { kind: "not-found", agentId: request.agentId };
+
+      if (record.status !== "running") {
+        if (record.status === "done") {
+          return {
+            kind: "complete",
+            agentId: request.agentId,
+          transcriptPathKnown: record.transcriptPath !== undefined || request.bounded,
+            ...(record.transcriptPath === undefined ? {} : { transcriptPath: record.transcriptPath }),
+          };
+        }
+        return {
+          kind: "error",
+          agentId: request.agentId,
+          error: record.failureMessage ?? "The subagent did not complete successfully.",
+        };
+      }
+
+      const run = backgroundRuns.get(request.agentId);
+      const remaining = deadline === undefined ? undefined : Math.max(0, deadline - Date.now());
+      if (run !== undefined) {
+        const waited = await raceBackgroundRun(run, remaining, signal);
+        if (waited === "timeout") return { kind: "still-running", agentId: request.agentId };
+        continue;
+      }
+
+      if (remaining === 0) return { kind: "still-running", agentId: request.agentId };
+      await pauseForSubagentStateChange(Math.min(remaining ?? 10, 10), signal);
+    }
   }
 
   /** The session of a subagent that can be steered or stopped, when there is a running one. */
@@ -546,6 +673,7 @@ export function createSubagentRuntime(host: SubagentRuntimeHost) {
     listRunningSubagents,
     getRunningSubagent,
     hasRunningToolCall,
+    awaitSubagent,
     steerSubagent,
     abortSubagent,
     listSubagents,

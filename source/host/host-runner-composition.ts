@@ -56,6 +56,8 @@ import type { RemoteResource, ResourceAccessor } from "../packages/agent-exec/re
 import { subagentExecutorResource } from "../adapters/interop/agent/subagent-exec-adapter.ts";
 import { slateSubagentExecutorResource } from "../packages/agent-exec/subagent.ts";
 import { slateSubagentBackgroundHandoffExecutorResource } from "../packages/agent-exec/subagent-control.ts";
+import { slateSubagentAwaitExecutorResource } from "../packages/agent-exec/subagent-await.ts";
+import type { SlateSubagentAwaitRequest, SlateSubagentAwaitResult } from "../packages/agent-exec/subagent-await.ts";
 import { requestContextExecutorResource } from "../packages/agent-exec/request-context-operation.ts";
 import { subagentRegistryResource } from "../packages/agent/tools/subagent-registry.ts";
 import { smartModeClassifierExecutorResource } from "../packages/agent-exec/smart-mode-classifier-operation.ts";
@@ -190,6 +192,7 @@ export interface ProductionSessionBoundRunner {
     readonly sessions: Map<string, SubagentSession>;
     isRunning(agentId: string): boolean;
     hasRunningToolCall(toolCallId: string): boolean;
+    awaitSubagent(request: SlateSubagentAwaitRequest, signal: AbortSignal): Promise<SlateSubagentAwaitResult>;
     dispatchBackgroundSubagent(input: Parameters<TurnLocalResourceProjectionInput["subagentDispatcher"]["dispatch"]>[0]): void;
   };
   readonly computerUse:
@@ -312,6 +315,7 @@ function asProductionResourceAccessor(registry: ReturnType<typeof createRemoteBo
           [subagentExecutorResource.symbol, "subagentExecutorResource"],
           [slateSubagentExecutorResource.symbol, "slateSubagentExecutorResource"],
           [slateSubagentBackgroundHandoffExecutorResource.symbol, "slateSubagentBackgroundHandoffExecutorResource"],
+          [slateSubagentAwaitExecutorResource.symbol, "slateSubagentAwaitExecutorResource"],
           [requestContextExecutorResource.symbol, "requestContextExecutorResource"],
           [subagentRegistryResource.symbol, "subagentRegistryResource"],
           [smartModeClassifierExecutorResource.symbol, "smartModeClassifierExecutorResource"],
@@ -1582,6 +1586,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
                 subagentDispatcher: {
                   isRunning: (agentId) => runner.subagents.isRunning(agentId),
                   hasRunningToolCall: (toolCallId) => runner.subagents.hasRunningToolCall(toolCallId),
+                  awaitSubagent: (request, signal) => runner.subagents.awaitSubagent(request, signal),
                   allocateComputerUseWindow: (agentId) => computerUse?.allocateWindow(agentId) ?? null,
                   freeComputerUseWindow: (agentId) => {
                     computerUse?.freeWindow(agentId);
