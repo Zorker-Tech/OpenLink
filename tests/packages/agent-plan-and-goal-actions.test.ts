@@ -236,7 +236,7 @@ test("the plan boundary turns omitted and explicit modes into host-owned choices
 })
 
 test("a plan becomes a simulated turn with its content and context attached", () => {
-  const { userMessage, listenerUpdate } = createPlanExecutionMessage({
+  const { userMessage, slateUserMessage, listenerUpdate } = createPlanExecutionMessage({
     text: "Implement the plan",
     messageId: "kickoff-1",
     planContent: "# Plan\n\nFirst step",
@@ -251,6 +251,7 @@ test("a plan becomes a simulated turn with its content and context attached", ()
   assert.equal(userMessage.mode, AgentMode.ASK)
   assert.equal(userMessage.isSimulatedMsg, true)
   assert.equal(userMessage.executePlanInfo?.planId, "plan-42")
+  assert.deepEqual(slateUserMessage.planExecution, { id: "plan-42", title: "Plan" })
   assert.equal(userMessage.selectedContext?.codeSelections[0]?.path, "/workspace/plan.md")
   assert.equal(userMessage.selectedContext?.codeSelections[0]?.range?.end?.line, 3)
   assert.ok(listenerUpdate)

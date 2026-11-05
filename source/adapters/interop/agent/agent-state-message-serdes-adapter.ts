@@ -110,6 +110,7 @@ import {
 } from "./subagent-persisted-state-adapter.ts"
 import {
   SlateSimulatedMessageReason,
+  type SlatePlanExecutionIntent,
   type SlateUserMessage,
   type SlateUserMessageText,
   type SlateUserMessageCompatibility,
@@ -992,6 +993,31 @@ interface StoredSlateUserMessageV1 {
   }
 }
 
+interface StoredSlatePlanExecution {
+  readonly id: string
+  readonly title: string
+}
+
+interface StoredSlateUserMessageV2 extends Omit<StoredSlateUserMessageV1, "planExecution"> {
+  readonly planExecution?: StoredSlatePlanExecution
+}
+
+interface StoredSlateUserMessageEnvelopeV1 {
+  readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
+  readonly version: 1
+  readonly message: StoredSlateUserMessageV1
+  readonly compatibility?: SlateUserMessageCompatibility
+}
+
+interface StoredSlateUserMessageEnvelopeV2 {
+  readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
+  readonly version: 2
+  readonly message: StoredSlateUserMessageV2
+  readonly compatibility?: SlateUserMessageCompatibility
+}
+
+type StoredSlateUserMessageEnvelope = StoredSlateUserMessageEnvelopeV1 | StoredSlateUserMessageEnvelopeV2
+
 const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
 const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
 const USER_MESSAGE_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-USER\n")
@@ -1458,11 +1484,18 @@ function isStoredProjectDetails(value: unknown): boolean {
   return true
 }
 
-function isStoredSlateUserMessageEnvelope(value: unknown): value is Record<string, unknown> {
+function isStoredSlatePlanExecution(value: unknown): value is StoredSlatePlanExecution {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    hasOnlyKeys(value as Record<string, unknown>, ["id", "title"]) &&
+    typeof (value as Record<string, unknown>).id === "string" &&
+    typeof (value as Record<string, unknown>).title === "string"
+}
+
+function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateUserMessageEnvelope {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "message", "compatibility"]) ||
-      envelope.format !== USER_MESSAGE_STORAGE_FORMAT || envelope.version !== 1 ||
+      envelope.format !== USER_MESSAGE_STORAGE_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
       envelope.message === null || typeof envelope.message !== "object" || Array.isArray(envelope.message)) return false
   if (envelope.compatibility !== undefined) {
     if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
@@ -1477,6 +1510,9 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is Record<strin
             !compatibility.legacyUnknownFields.every(isStepUnknownField)))) return false
   }
   const message = envelope.message as Record<string, unknown>
+  const planExecutionIsValid = message.planExecution === undefined || (envelope.version === 1
+    ? isStoredSlateValue(message.planExecution)
+    : isStoredSlatePlanExecution(message.planExecution))
   if (!hasOnlyKeys(message, [
     "id", "content", "context", "mode", "simulated", "promotionGroupId", "promotionEligible",
     "richContent", "origin", "conversationSnapshotId", "workerReminder", "actor", "planExecution",
@@ -1494,7 +1530,7 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is Record<strin
       typeof message.conversationSnapshotId !== "string" || !/^(?:[0-9a-f]{2})*$/.test(message.conversationSnapshotId) ||
       (message.workerReminder !== undefined && !isStoredTextValue(message.workerReminder)) ||
       (message.actor !== undefined && !isStoredSlateValue(message.actor)) ||
-      (message.planExecution !== undefined && !isStoredSlateValue(message.planExecution)) ||
+      !planExecutionIsValid ||
       (message.simulation !== undefined && !isStoredSlateValue(message.simulation)) ||
       (message.promptReference !== undefined && typeof message.promptReference !== "string") ||
       (message.thread !== undefined && typeof message.thread !== "string") ||
@@ -1515,7 +1551,7 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is Record<strin
 }
 
 function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
-  const stored: StoredSlateUserMessageV1 = {
+  const stored: StoredSlateUserMessageV2 = {
     id: message.messageId,
     content: encodeSlateUserMessageValue(message.text),
     ...(message.selectedContext === undefined ? {} : { context: encodeSlateUserMessageValue(message.selectedContext) }),
@@ -1528,7 +1564,9 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
     conversationSnapshotId: toHex(message.conversationStateBlobId),
     ...(message.subagentSystemReminder === undefined ? {} : { workerReminder: encodeSlateUserMessageValue(message.subagentSystemReminder) }),
     ...(message.triggeringUserInfo === undefined ? {} : { actor: encodeSlateUserMessageValue(message.triggeringUserInfo) }),
-    ...(message.executePlanInfo === undefined ? {} : { planExecution: encodeSlateUserMessageValue(message.executePlanInfo) }),
+    ...(message.planExecution === undefined ? {} : {
+      planExecution: { id: message.planExecution.id, title: message.planExecution.title },
+    }),
     ...(message.simulatedMessageMetadata === undefined ? {} : { simulation: encodeSlateUserMessageValue(message.simulatedMessageMetadata) }),
     ...(message.promptReferenceId === undefined ? {} : { promptReference: message.promptReferenceId }),
     ...(message.threadId === undefined ? {} : { thread: message.threadId }),
@@ -1561,7 +1599,7 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
   const compatibility = message.compatibility
   const envelope = {
     format: USER_MESSAGE_STORAGE_FORMAT,
-    version: 1,
+    version: 2,
     message: stored,
     ...(compatibility === undefined ||
       (compatibility.legacyModeCode === undefined &&
@@ -1570,6 +1608,25 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
       : { compatibility }),
   }
   return utf8Serde.serialize(`SLATE-AGENT-USER\n${JSON.stringify(envelope)}`)
+}
+
+function planExecutionFromSlateV1(value: StoredSlateValue | undefined, privacyMode: PrivacyMode): SlatePlanExecutionIntent | undefined {
+  if (value === undefined) return undefined
+  const decoded = decodeSlateValue(value, privacyMode)
+  if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new TypeError("Stored legacy Slate plan execution metadata is invalid")
+  }
+  const record = decoded as Record<string, unknown>
+  const id = typeof record.planId === "string" ? record.planId : record.id
+  const title = typeof record.planTitle === "string" ? record.planTitle : record.title
+  if (typeof id !== "string" || typeof title !== "string") {
+    throw new TypeError("Stored legacy Slate plan execution metadata is missing its id or title")
+  }
+  return { id, title }
+}
+
+function planExecutionFromSlateV2(value: StoredSlatePlanExecution | undefined): SlatePlanExecutionIntent | undefined {
+  return value === undefined ? undefined : { id: value.id, title: value.title }
 }
 
 function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMode): SlateUserMessage | undefined {
@@ -1581,12 +1638,12 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
     throw new TypeError("Stored Slate user message is not valid JSON", { cause: error })
   }
   if (!isStoredSlateUserMessageEnvelope(parsed)) throw new TypeError("Stored Slate user message envelope is invalid")
-  const envelope = parsed as {
-    readonly message: StoredSlateUserMessageV1
-    readonly compatibility?: SlateUserMessageCompatibility
-  }
+  const envelope = parsed
   const message = envelope.message
   const project = message.project
+  const planExecution = envelope.version === 1
+    ? planExecutionFromSlateV1(envelope.message.planExecution, privacyMode)
+    : planExecutionFromSlateV2(envelope.message.planExecution)
   const decodeOptionalText = (value: StoredSlateValue | undefined) =>
     value === undefined ? undefined : decodeSlateValue(value, privacyMode) as SlateUserMessage["text"]
   const decoded: SlateUserMessage = {
@@ -1604,7 +1661,7 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
     conversationStateBlobId: fromHex(message.conversationSnapshotId),
     ...(message.workerReminder === undefined ? {} : { subagentSystemReminder: decodeOptionalText(message.workerReminder) as SlateUserMessageText }),
     ...(message.actor === undefined ? {} : { triggeringUserInfo: decodeSlateValue(message.actor, privacyMode) }),
-    ...(message.planExecution === undefined ? {} : { executePlanInfo: decodeSlateValue(message.planExecution, privacyMode) }),
+    ...(planExecution === undefined ? {} : { planExecution }),
     ...(message.simulation === undefined ? {} : { simulatedMessageMetadata: decodeSlateValue(message.simulation, privacyMode) }),
     ...(message.promptReference === undefined ? {} : { promptReferenceId: message.promptReference }),
     ...(message.thread === undefined ? {} : { threadId: message.thread }),
