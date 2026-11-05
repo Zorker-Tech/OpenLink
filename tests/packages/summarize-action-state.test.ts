@@ -14,13 +14,14 @@ test("summary action stores Slate text and emits the same privacy-aware summary 
   const summary = createRedactedString("compressed text", DataClassification.CODE, "summary", PrivacyMode.NO_STORAGE)
   const state = {
     tokenDetails: { maxTokens: 100 },
+    getBlobStore: () => undefined,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
     computeNewStructure: async () => ({}),
     setSummary: (value: unknown) => stored.push(value),
     clearTurns: async () => {},
     setTokenDetails: () => {},
   }
-  const prompt = { getMessages: () => [] }
+  const prompt = { getMessages: () => [], appendMessages: () => {} }
   const listener = { async sendUpdate(_context: unknown, update: unknown) { updates.push(update) } }
 
   await applySummaryToConversation({
