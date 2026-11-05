@@ -22,14 +22,10 @@ import { forceBackgroundSubagentExecutorResource } from "../../source/packages/a
 import { WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 import {
   AssistantMessage,
-  ConversationStep,
   SubagentBackgroundReason,
   SubagentExecutionEnvironment,
-  TaskError,
   TaskResult,
-  TaskSuccess,
   ToolCall,
-  type ConversationStep as ConversationStepValue,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   ClientContinuationConfig,
@@ -38,9 +34,22 @@ import {
   SubagentResult,
   SubagentSuccess,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
-import { SendFinalSummaryArgs, SendFinalSummaryToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
+import {
+  createSlateTaskAssistantStep,
+  createSlateTaskErrorResult,
+  createSlateTaskSuccessResult,
+  createSlateTaskSummaryStep,
+  projectSlateTaskResult,
+  SlateTaskBackgroundReason,
+  type SlateTaskResult,
+} from "../../source/packages/agent/tools/task-result-state.ts"
+import type { SlateConversationStep } from "../../source/packages/agent/conversation-step-state.ts"
+import {
+  fromInteropTaskResultInterop,
+  toInteropTaskResultInterop,
+} from "../../source/adapters/interop/agent/task-tool-protocol-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -49,40 +58,27 @@ import type { SlateSubagentPersistedState } from "../../source/packages/agent/su
 const GENERAL_PURPOSE = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
 const COORDINATOR = createSlateSubagentType(SlateSubagentKind.CUSTOM, { customName: "coordinator-agent" })
 
-const answerStep = (text: string): ConversationStepValue =>
-  new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text }) } })
+const answerStep = (text: string): SlateConversationStep => createSlateTaskAssistantStep(text)
 
-const summaryStep = (finalSummary: string): ConversationStepValue =>
-  new ConversationStep({
-    message: {
-      case: "toolCall",
-      value: new ToolCall({ tool: { case: "sendFinalSummaryToolCall", value: new SendFinalSummaryToolCall({ args: { finalSummary } } as never) } }),
-    },
-  })
+const summaryStep = (finalSummary: string): SlateConversationStep => createSlateTaskSummaryStep(finalSummary)
 
 const successResult = (fields: {
-  conversationSteps?: ConversationStepValue[]
-  backgroundReason?: SubagentBackgroundReason
-  transcriptPath?: string
+  conversationSteps?: SlateConversationStep[]
+  backgroundReason?: SlateTaskBackgroundReason
+  transcriptUri?: string
   agentId?: string
   resultSuffix?: string
-} = {}) => new TaskResult({
-  result: {
-    case: "success",
-    value: new TaskSuccess({
-      conversationSteps: fields.conversationSteps ?? [],
-      durationMs: 12n,
-      isBackground: (fields.backgroundReason ?? SubagentBackgroundReason.UNSPECIFIED) !== SubagentBackgroundReason.UNSPECIFIED,
-      backgroundReason: fields.backgroundReason ?? SubagentBackgroundReason.UNSPECIFIED,
-      ...(fields.transcriptPath === undefined ? {} : { transcriptPath: fields.transcriptPath }),
-      ...(fields.agentId === undefined ? {} : { agentId: fields.agentId }),
-      ...(fields.resultSuffix === undefined ? {} : { resultSuffix: fields.resultSuffix }),
-    }),
-  },
+} = {}): SlateTaskResult => createSlateTaskSuccessResult({
+  conversationSteps: fields.conversationSteps ?? [],
+  durationMs: 12n,
+  isBackground: (fields.backgroundReason ?? SlateTaskBackgroundReason.UNSPECIFIED) !== SlateTaskBackgroundReason.UNSPECIFIED,
+  backgroundReason: fields.backgroundReason ?? SlateTaskBackgroundReason.UNSPECIFIED,
+  ...(fields.transcriptUri === undefined ? {} : { transcriptUri: fields.transcriptUri }),
+  ...(fields.agentId === undefined ? {} : { agentId: fields.agentId }),
+  ...(fields.resultSuffix === undefined ? {} : { resultSuffix: fields.resultSuffix }),
 })
 
-const errorResult = (error: string) =>
-  new TaskResult({ result: { case: "error", value: new TaskError({ error }) } })
+const errorResult = (error: string) => createSlateTaskErrorResult(error)
 
 function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolution {
   return {
@@ -159,7 +155,7 @@ function executionHarness(options: {
     stateHandler,
     parentModelName: "parent-model",
     ...(args.signal === true ? { contextInjectionSignal: signal } : {}),
-  } as ClientTaskExecutionArgs) as TaskResult
+  } as ClientTaskExecutionArgs)
   return { run, executed, handoffs, persisted, signal, injections, stateHandler }
 }
 
@@ -208,8 +204,8 @@ test("a run that said nothing is reported as having said nothing", () => {
 
 test("a background run reads as a note that it is still going", () => {
   const rendered = renderTaskResultToString(successResult({
-    backgroundReason: SubagentBackgroundReason.AGENT_REQUEST,
-    transcriptPath: "/tmp/transcript.jsonl",
+    backgroundReason: SlateTaskBackgroundReason.AGENT_REQUEST,
+    transcriptUri: "/tmp/transcript.jsonl",
   }))
   assert.match(rendered, /^Subagent is running in the background\./)
   assert.match(rendered, /tailing the transcript at: \/tmp\/transcript\.jsonl/)
@@ -218,7 +214,7 @@ test("a background run reads as a note that it is still going", () => {
 
 test("with completion notifications the note says the answer arrives on its own", () => {
   const rendered = renderTaskResultToString(
-    successResult({ backgroundReason: SubagentBackgroundReason.AGENT_REQUEST, transcriptPath: "/tmp/transcript.jsonl" }),
+    successResult({ backgroundReason: SlateTaskBackgroundReason.AGENT_REQUEST, transcriptUri: "/tmp/transcript.jsonl" }),
     { enableJobCompletionNotifications: true },
   )
   assert.match(rendered, /you will be automatically sent the subagent's final response/)
@@ -227,15 +223,15 @@ test("with completion notifications the note says the answer arrives on its own"
 
 test("a background run without a transcript is told only that it is running", () => {
   assert.equal(
-    formatSubagentBackgroundMessage(SubagentBackgroundReason.AGENT_REQUEST, "   "),
+    formatSubagentBackgroundMessage(SlateTaskBackgroundReason.AGENT_REQUEST, "   "),
     "Subagent is running in the background.",
   )
   assert.equal(
-    formatSubagentBackgroundMessage(SubagentBackgroundReason.USER_REQUEST, undefined),
+    formatSubagentBackgroundMessage(SlateTaskBackgroundReason.USER_REQUEST, undefined),
     "The user manually backgrounded the subagent. It is still running; you can continue with other work.",
   )
   assert.equal(
-    formatSubagentBackgroundMessage(SubagentBackgroundReason.QUEUED_FOLLOW_UP, undefined),
+    formatSubagentBackgroundMessage(SlateTaskBackgroundReason.QUEUED_FOLLOW_UP, undefined),
     RUNNING_SUBAGENT_FOLLOWUP_ERROR,
   )
 })
@@ -257,9 +253,37 @@ test("a suffix the platform added is shown after the answer", () => {
   assert.match(rendered, /the box was reclaimed$/)
 })
 
+test("Slate task results preserve conversation content and unknown background codes at the runner boundary", () => {
+  const source = createSlateTaskSuccessResult({
+    conversationSteps: [answerStep("answer"), summaryStep("summary")],
+    agentId: "agent-8",
+    isBackground: true,
+    durationMs: 22n,
+    resultSuffix: "done",
+    backgroundReason: "unknown-4096",
+    transcriptUri: "/tmp/transcript.jsonl",
+  })
+  const restored = fromInteropTaskResultInterop(toInteropTaskResultInterop(source))
+
+  assert.equal(restored.kind, "success")
+  if (restored.kind !== "success") assert.fail("expected a successful task result")
+  assert.equal(restored.backgroundReason, "unknown-4096")
+  assert.equal(restored.durationMs, 22n)
+  assert.equal(restored.transcriptUri, "/tmp/transcript.jsonl")
+  assert.deepEqual(projectSlateTaskResult(restored), {
+    kind: "success",
+    agentId: "agent-8",
+    resultSuffix: "done",
+    backgroundReason: "unknown-4096",
+    transcriptUri: "/tmp/transcript.jsonl",
+    finalAssistantText: "answer",
+    chosenSummary: "summary",
+  })
+})
+
 test("a failed run reads as its error", () => {
   assert.equal(renderTaskResultToString(errorResult("the subagent died")), "Error: the subagent died")
-  assert.equal(renderTaskResultToString(new TaskResult()), "Unknown error")
+  assert.equal(renderTaskResultToString({ kind: "unknown" }), "Unknown error")
 })
 
 test("a rendered result carries whether it failed", () => {
@@ -347,12 +371,13 @@ test("the retry hint is added only where it applies", () => {
 test("a run that answers comes back as its answer", async () => {
   const harnessed = executionHarness()
   const result = await harnessed.run()
-  assert.equal(result.result.case, "success")
-  const success = (result.result as { value: TaskSuccess }).value
-  assert.equal(success.conversationSteps.length, 1)
-  assert.equal((success.conversationSteps[0]?.message as { value: { text: string } }).value.text, "the answer")
-  assert.equal(success.isBackground, false)
-  assert.equal(typeof success.durationMs, "bigint")
+  assert.equal(result.kind, "success")
+  if (result.kind !== "success") assert.fail("expected a successful task result")
+  assert.equal(result.conversationSteps.length, 1)
+  const view = projectSlateTaskResult(result)
+  assert.equal(view.kind === "success" ? view.finalAssistantText : undefined, "the answer")
+  assert.equal(result.isBackground, false)
+  assert.equal(typeof result.durationMs, "bigint")
   // The request that reached the executor is the resolved one, not the raw arguments.
   const executed = harnessed.executed[0]?.args
   assert.equal(executed?.toolCallId, "call-1")
@@ -365,15 +390,15 @@ test("a run that answers comes back as its answer", async () => {
 test("a run that failed comes back as an error rather than throwing", async () => {
   const harnessed = executionHarness({ result: new SubagentResult({ result: { case: "error", value: { error: "the box was unreachable" } } as never }) })
   const result = await harnessed.run()
-  assert.equal(result.result.case, "error")
-  assert.equal((result.result as { value: { error: string } }).value.error, "the box was unreachable")
+  assert.deepEqual(result, { kind: "error", message: "the box was unreachable" })
 })
 
 test("a stream that was torn down is reported as transient", async () => {
   const harnessed = executionHarness({ fail: new WriteIterableClosedError("WritableIterable is closed") })
   const result = await harnessed.run()
-  assert.equal(result.result.case, "error")
-  assert.match((result.result as { value: { error: string } }).value.error, /connection closed before it finished/)
+  assert.equal(result.kind, "error")
+  if (result.kind !== "error") assert.fail("expected a task error")
+  assert.match(result.message, /connection closed before it finished/)
 })
 
 test("a follow-up to a running subagent is an error that says how to retry", async () => {
@@ -386,8 +411,7 @@ test("a follow-up to a running subagent is an error that says how to retry", asy
     }),
   })
   const result = await harnessed.run()
-  assert.equal(result.result.case, "error")
-  assert.equal((result.result as { value: { error: string } }).value.error, RUNNING_SUBAGENT_FOLLOWUP_ERROR)
+  assert.deepEqual(result, { kind: "error", message: RUNNING_SUBAGENT_FOLLOWUP_ERROR })
 })
 
 test("a background run has no answer to show and keeps its transcript", async () => {
@@ -404,10 +428,11 @@ test("a background run has no answer to show and keeps its transcript", async ()
     }),
   })
   const result = await harnessed.run()
-  const success = (result.result as { value: TaskSuccess }).value
-  assert.equal(success.isBackground, true)
-  assert.deepEqual(success.conversationSteps, [])
-  assert.equal(success.transcriptPath, "/tmp/transcript.jsonl")
+  assert.equal(result.kind, "success")
+  if (result.kind !== "success") assert.fail("expected a successful task result")
+  assert.equal(result.isBackground, true)
+  assert.deepEqual(result.conversationSteps, [])
+  assert.equal(result.transcriptUri, "/tmp/transcript.jsonl")
 })
 
 test("an unrecognized background reason stays background and round-trips through the result", async () => {
@@ -421,10 +446,11 @@ test("an unrecognized background reason stays background and round-trips through
     }),
   })
   const result = await harnessed.run()
-  const success = (result.result as { value: TaskSuccess }).value
-  assert.equal(success.isBackground, true)
-  assert.equal(success.backgroundReason, unknownReason)
-  assert.deepEqual(success.conversationSteps, [])
+  assert.equal(result.kind, "success")
+  if (result.kind !== "success") assert.fail("expected a successful task result")
+  assert.equal(result.isBackground, true)
+  assert.equal(result.backgroundReason, "unknown-4096")
+  assert.deepEqual(result.conversationSteps, [])
 })
 
 test("a run's identity is recorded so a follow-up reaches it", async () => {

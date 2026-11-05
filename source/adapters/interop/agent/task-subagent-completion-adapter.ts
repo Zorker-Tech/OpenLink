@@ -2,8 +2,6 @@ import {
   AgentMode,
   ConversationAction,
   SubagentPersistedState,
-  TaskResult,
-  TaskSuccess,
   UserMessage,
   UserMessageAction,
   type ConversationStateStructure,
@@ -29,26 +27,6 @@ export function createTaskSubagentFollowupActionInterop(input: {
             ? { selectedContext: input.selectedContext as SelectedContext }
             : {}),
         }),
-      }),
-    },
-  })
-}
-
-/** Builds the counterpart result envelope after Slate has collected its own completion data. */
-export function createTaskSubagentSuccessResultInterop(input: {
-  readonly agentId: string
-  readonly conversationSteps: readonly unknown[]
-  readonly durationMs: number
-  readonly resultSuffix?: string
-}): unknown {
-  return new TaskResult({
-    result: {
-      case: "success",
-      value: new TaskSuccess({
-        conversationSteps: input.conversationSteps as TaskSuccess["conversationSteps"],
-        agentId: input.agentId,
-        durationMs: BigInt(input.durationMs),
-        ...(input.resultSuffix !== undefined ? { resultSuffix: input.resultSuffix } : {}),
       }),
     },
   })

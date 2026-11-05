@@ -25,6 +25,7 @@
 import type { Context } from "../../context/context.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
+import type { SlateConversationStep } from "../conversation-step-state.ts"
 import type { ResourceAccessor } from "../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts"
 import { getConversationGroupId, getConversationId } from "../utils/request-scope.ts"
@@ -35,17 +36,13 @@ import {
 } from "../subagent-type.ts"
 import {
   createSerializedTaskToolCallErrorInterop,
-  createTaskClientAssistantStepInterop,
   createTaskClientContinuationConfigInterop,
-  createTaskClientErrorResultInterop,
-  createTaskClientSuccessResultInterop,
+  createSlateTaskClientSuccessResultInterop,
   createTaskToolCallInterop,
   getVideoPathsFromRedactedSelectedContextInterop,
-  normalizeTaskClientBackgroundReasonInterop,
-  projectTaskClientResultInterop,
   requestSubagentBackgroundHandoffInterop,
   runClientSubagentInterop,
-  type TaskClientResultView,
+  type TaskClientBackgroundReason,
   type TaskClientSubagentRunView,
 } from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
 import {
@@ -64,6 +61,14 @@ import {
 } from "../../agent-exec/subagent.ts"
 import { createStringResult, type TextResult } from "../../chat-inference/prompt-executor.ts"
 import { WriteIterableClosedError } from "../../utils/writable-iterable.ts"
+import {
+  createSlateTaskErrorResult,
+  createSlateTaskAssistantStep,
+  SlateTaskBackgroundReason,
+  projectSlateTaskResult,
+  type SlateTaskResult,
+  type SlateTaskResultView,
+} from "./task-result-state.ts"
 
 const SUBAGENT_STREAM_CLOSED_ERROR =
   "The subagent's connection closed before it finished (the run was torn down mid-flight). This is usually transient — please try again."
@@ -75,7 +80,7 @@ export interface TaskResultRenderingOptions {
 }
 
 function getTaskSuccessResultText(
-  successValue: Extract<TaskClientResultView, { readonly kind: "success" }>,
+  successValue: Extract<SlateTaskResultView, { readonly kind: "success" }>,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
   const finalAssistantText = successValue.finalAssistantText
@@ -107,20 +112,22 @@ export function formatSubagentBackgroundMessage(
   transcriptPath: string | undefined,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
-  const backgroundReason = normalizeTaskClientBackgroundReasonInterop(reason)
+  const backgroundReason = normalizeTaskResultBackgroundReason(reason)
   let intro: string
   switch (backgroundReason) {
-    case "user_request":
+    case SlateTaskBackgroundReason.USER_REQUEST:
       intro = "The user manually backgrounded the subagent. It is still running; you can continue with other work."
       break
-    case "queued_follow_up":
+    case SlateTaskBackgroundReason.QUEUED_FOLLOW_UP:
       intro = RUNNING_SUBAGENT_FOLLOWUP_ERROR
       break
-    case "agent_request":
-    case "unspecified":
-    case "unknown":
+    case SlateTaskBackgroundReason.AGENT_REQUEST:
+    case SlateTaskBackgroundReason.UNSPECIFIED:
+    case SlateTaskBackgroundReason.UNKNOWN:
       intro = "Subagent is running in the background."
       break
+    default:
+      intro = "Subagent is running in the background."
   }
   const displayTranscriptPath = transcriptPath?.trim()
   if (!displayTranscriptPath) return intro
@@ -131,15 +138,34 @@ export function formatSubagentBackgroundMessage(
   return `${intro} You can monitor its output by tailing the transcript at: ${displayTranscriptPath}. Do not mention the transcript path to the user.`
 }
 
+function normalizeTaskResultBackgroundReason(value: unknown): SlateTaskBackgroundReason {
+  switch (value as TaskClientBackgroundReason | SlateTaskBackgroundReason) {
+    case "agent_request":
+    case SlateTaskBackgroundReason.AGENT_REQUEST:
+      return SlateTaskBackgroundReason.AGENT_REQUEST
+    case "user_request":
+    case SlateTaskBackgroundReason.USER_REQUEST:
+      return SlateTaskBackgroundReason.USER_REQUEST
+    case "queued_follow_up":
+    case SlateTaskBackgroundReason.QUEUED_FOLLOW_UP:
+      return SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
+    case "unspecified":
+    case SlateTaskBackgroundReason.UNSPECIFIED:
+      return SlateTaskBackgroundReason.UNSPECIFIED
+    default:
+      return SlateTaskBackgroundReason.UNKNOWN
+  }
+}
+
 export function renderTaskResultToString(
-  resultValue: unknown,
+  resultValue: SlateTaskResult,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
-  return renderTaskResultView(projectTaskClientResultInterop(resultValue), renderOptions)
+  return renderTaskResultView(projectSlateTaskResult(resultValue), renderOptions)
 }
 
 function renderTaskResultView(
-  resultValue: TaskClientResultView,
+  resultValue: SlateTaskResultView,
   renderOptions?: TaskResultRenderingOptions,
 ): string {
   const enableAgentChatLinks = renderOptions?.enableAgentChatLinks ?? true
@@ -155,7 +181,7 @@ function renderTaskResultView(
         : ""
       const suffixInfo = resultValue.resultSuffix ? `\n\n${resultValue.resultSuffix}` : ""
       if (resultValue.backgroundReason !== "unspecified") {
-        return `${formatSubagentBackgroundMessage(resultValue.backgroundReason, resultValue.transcriptPath, renderOptions)}${agentIdInfo}${suffixInfo}`
+        return `${formatSubagentBackgroundMessage(resultValue.backgroundReason, resultValue.transcriptUri, renderOptions)}${agentIdInfo}${suffixInfo}`
       }
       return `This is the output of the subagent:\n\n${getTaskSuccessResultText(resultValue, renderOptions)}${agentIdInfo}${suffixInfo}`
     }
@@ -163,8 +189,6 @@ function renderTaskResultView(
       return `Error: ${resultValue.error}`
     case "unknown":
       return "Unknown error"
-    case "unsupported":
-      throw new Error(`Unhandled result case: ${resultValue.resultCase}`)
   }
 }
 
@@ -298,7 +322,7 @@ function modelParameters(value: readonly unknown[] | undefined): Array<{ id: str
   })
 }
 
-export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArgs): Promise<unknown> {
+export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArgs): Promise<SlateTaskResult> {
   const {
     ctx,
     rawArgs: rawInput,
@@ -411,7 +435,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     // A follow-up that arrived while the subagent was still running is an error the model should read as
     // one, since the run it meant to steer never took it.
     if (successResult.backgroundReason === "queued_follow_up") {
-      return createTaskClientErrorResultInterop(maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true))
+      return createSlateTaskErrorResult(maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true))
     }
     // A cloud run's identity is the box it ran in; a local one keeps the id it already had.
     const isCloudRun = resolved.effectiveEnvironment === "cloud"
@@ -425,12 +449,12 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       stateHandler.persistSubagentState(ctx, runAgentId, resolved.subagentConfig.subagentType, savedState)
     }
     const wentToBackground = successResult.backgroundReason !== "unspecified"
-    const conversationSteps: unknown[] = []
+    const conversationSteps: SlateConversationStep[] = []
     // A background run has not answered yet, so its final message is not an answer to show.
     if (!wentToBackground && successResult.finalMessage) {
-      conversationSteps.push(createTaskClientAssistantStepInterop(successResult.finalMessage))
+      conversationSteps.push(createSlateTaskAssistantStep(successResult.finalMessage))
     }
-    return createTaskClientSuccessResultInterop({
+    return createSlateTaskClientSuccessResultInterop({
       conversationSteps,
       durationMs: Date.now() - startedAt,
       ...(runAgentId === undefined ? {} : { agentId: runAgentId }),
@@ -441,11 +465,11 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     const failureMessage = isWritableIterableClosedError(error)
       ? SUBAGENT_STREAM_CLOSED_ERROR
       : error instanceof Error ? error.message : String(error)
-    return createTaskClientErrorResultInterop(failureMessage)
+    return createSlateTaskErrorResult(failureMessage)
   }
 }
 
-export function renderClientTaskResult(result: unknown, renderOptions?: TaskResultRenderingOptions): TextResult {
-  const view = projectTaskClientResultInterop(result)
+export function renderClientTaskResult(result: SlateTaskResult, renderOptions?: TaskResultRenderingOptions): TextResult {
+  const view = projectSlateTaskResult(result)
   return createStringResult(renderTaskResultView(view, renderOptions), view.kind === "error")
 }

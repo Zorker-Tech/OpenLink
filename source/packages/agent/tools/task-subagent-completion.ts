@@ -16,10 +16,7 @@
  * with the outcome as its input.
  */
 
-import {
-  createTaskSubagentFollowupActionInterop,
-  createTaskSubagentSuccessResultInterop,
-} from "../../../adapters/interop/agent/task-subagent-completion-adapter.ts"
+import { createTaskSubagentFollowupActionInterop } from "../../../adapters/interop/agent/task-subagent-completion-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import {
   collectConversationStepsWithToolCallCount,
@@ -30,6 +27,8 @@ import {
 import { createSlateSubagentConversationState } from "../subagent-persisted-state.ts"
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
 import type { SlateSubagentType } from "../subagent-type.ts"
+import type { SlateConversationStep } from "../conversation-step-state.ts"
+import { createSlateTaskSuccessResult, type SlateTaskResult } from "./task-result-state.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
 
@@ -83,7 +82,7 @@ export interface TaskSubagentCompletionDependencies {
 export interface TaskSubagentIterationResult {
   readonly shouldContinue: boolean
   readonly nextAction?: unknown
-  readonly finalResult?: unknown
+  readonly finalResult?: SlateTaskResult
 }
 
 /** The completion policy reads turn references and persists the complete Slate conversation snapshot. */
@@ -199,13 +198,15 @@ function postToolUseRequest(
 /** The success result a completed subagent produces from the turns it added. */
 function successResult(
   completion: TaskSubagentCompletionContext,
-  conversationSteps: readonly unknown[],
+  conversationSteps: readonly SlateConversationStep[],
   durationMs: number,
-): unknown {
-  return createTaskSubagentSuccessResultInterop({
+): SlateTaskResult {
+  return createSlateTaskSuccessResult({
     agentId: completion.subagentId,
     conversationSteps,
-    durationMs,
+    durationMs: BigInt(durationMs),
+    isBackground: false,
+    backgroundReason: "unspecified",
     ...(completion.resultSuffix !== undefined ? { resultSuffix: completion.resultSuffix } : {}),
   })
 }

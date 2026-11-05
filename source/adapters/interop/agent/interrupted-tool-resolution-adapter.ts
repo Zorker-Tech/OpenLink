@@ -2,6 +2,7 @@
 import { fromRedactedInterruptedPendingToolCallResolution } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import { renderTaskResultToString } from "../../../packages/agent/tools/task-client.ts"
+import { fromInteropTaskResultInterop } from "./task-tool-protocol-adapter.ts"
 import { renderInteropShellResultToString } from "./shell-result-format-adapter.ts"
 
 export interface InterruptedToolOutcome {
@@ -44,11 +45,13 @@ export function renderInterruptedToolResolution(
         isError: recordedShell.result.case !== "success",
       }
     }
-    case "taskResult":
+    case "taskResult": {
+      const taskResult = fromInteropTaskResultInterop(resolution.value)
       return {
-        result: renderTaskResultToString(resolution.value),
-        isError: resolution.value.result.case === "error",
+        result: renderTaskResultToString(taskResult),
+        isError: taskResult.kind === "error",
       }
+    }
     case undefined:
       return undefined
     default: {

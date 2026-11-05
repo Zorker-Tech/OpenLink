@@ -49,6 +49,7 @@ import { resolveForcedSubagentModel } from "./subagent-forced-model-resolution.t
 import { SubagentModelForcePolicy } from "./subagent-model-policy.ts"
 import { slateSubagentTypeName, type SlateSubagentType } from "../subagent-type.ts"
 import type { SlateConversationStateMapper } from "../subagent-conversation-state.ts"
+import type { SlateConversationStep } from "../conversation-step-state.ts"
 import { SlateMode } from "../mode-processing.ts"
 import type { SlateUserMessage } from "../user-message-state.ts"
 import type { SubagentModels } from "./core/subagent/models.ts"
@@ -279,7 +280,9 @@ export async function extractLastAssistantMessage(
       blobStore,
     })
     for (let position = steps.length - 1; position >= 0; position -= 1) {
-      const stepView = conversationStepViewInterop(steps[position])
+      const step = steps[position]
+      if (step === undefined) continue
+      const stepView = conversationStepViewInterop(step)
       if (stepView.kind === "assistant") {
         return stepView.assistantText
       }
@@ -293,7 +296,7 @@ export async function collectConversationStepsFromStepBlobIds(input: {
   readonly ctx: Context
   readonly stepBlobIds: readonly Uint8Array[]
   readonly blobStore: ConversationBlobStore
-}): Promise<unknown[]> {
+}): Promise<SlateConversationStep[]> {
   const stepBlobs = await Promise.all(
     input.stepBlobIds.map((stepBlobId) => input.blobStore.getBlob(input.ctx, stepBlobId)),
   )
@@ -319,7 +322,7 @@ export async function collectConversationStepsWithToolCallCount(
   ctx: Context,
   turns: readonly Uint8Array[],
   blobStore: ConversationBlobStore,
-): Promise<{ readonly conversationSteps: unknown[]; readonly toolCallCount: number }> {
+): Promise<{ readonly conversationSteps: SlateConversationStep[]; readonly toolCallCount: number }> {
   const turnStructures = await collectConversationTurns({ ctx, turns, blobStore })
   const stepsByTurn = await Promise.all(
     turnStructures.map((turnValue) =>

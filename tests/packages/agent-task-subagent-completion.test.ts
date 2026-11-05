@@ -12,13 +12,14 @@ import {
   type TaskSubagentCompletionDependencies,
   type TaskSubagentIterationState,
 } from "../../source/packages/agent/tools/task-subagent-completion.ts"
-import type { ConversationAction, TaskResult } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import type { ConversationAction } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import type { ConversationBlobStore } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
 import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
 import type { SlateTaskConversationState } from "../../source/packages/agent/subagent-persisted-state.ts"
+import type { SlateTaskResult } from "../../source/packages/agent/tools/task-result-state.ts"
 import {
   AgentMode,
   ConversationStateStructure,
@@ -95,8 +96,8 @@ const baseStopArgs = {
   description: "the thing",
 }
 
-function taskResultOf(value: unknown): TaskResult | undefined {
-  return value as TaskResult | undefined
+function taskResultOf(value: unknown): SlateTaskResult | undefined {
+  return value as SlateTaskResult | undefined
 }
 
 function conversationActionOf(value: unknown): ConversationAction | undefined {
@@ -274,11 +275,11 @@ test("a subagent that finishes without a follow-up produces its result and is dr
   })
   assert.equal(result.shouldContinue, false)
   const finalResult = taskResultOf(result.finalResult)
-  assert.equal(finalResult?.result.case, "success")
-  if (finalResult?.result.case !== "success") return
-  assert.equal(finalResult.result.value.agentId, "subagent-1")
-  assert.equal(finalResult.result.value.conversationSteps.length, 3)
-  assert.equal(typeof finalResult.result.value.durationMs, "bigint")
+  assert.equal(finalResult?.kind, "success")
+  if (finalResult?.kind !== "success") return
+  assert.equal(finalResult.agentId, "subagent-1")
+  assert.equal(finalResult.conversationSteps.length, 3)
+  assert.equal(typeof finalResult.durationMs, "bigint")
   assert.deepEqual(cleaned, ["subagent-1"])
   // The stop hook saw the summary and the counts; the post-tool-use hook saw the outcome.
   assert.equal(harness.calls.filter(call => call.step === "subagentStop").length, 1)
@@ -334,8 +335,8 @@ test("only the turns since the last iteration are counted", async () => {
     GENERAL_PURPOSE_TYPE,
   )
   const finalResult = taskResultOf(result.finalResult)
-  if (finalResult?.result.case !== "success") throw new Error("expected a result")
-  assert.equal(finalResult.result.value.conversationSteps.length, 2)
+  if (finalResult?.kind !== "success") throw new Error("expected a result")
+  assert.equal(finalResult.conversationSteps.length, 2)
   assert.equal(harness.calls.find(call => call.step === "subagentStop")?.request.messageCount, 3)
 })
 
@@ -347,7 +348,7 @@ test("a post-tool-use hook that fails does not turn a finished subagent into a f
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps, cleaned } = dependencies(harness, blobStore)
   const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
-  assert.equal(taskResultOf(result.finalResult)?.result.case, "success")
+  assert.equal(taskResultOf(result.finalResult)?.kind, "success")
   assert.deepEqual(cleaned, ["subagent-1"])
 })
 
@@ -356,7 +357,7 @@ test("the post-tool-use hook runs only where the tool allows hooks to run", asyn
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
   const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
-  assert.equal(taskResultOf(result.finalResult)?.result.case, "success")
+  assert.equal(taskResultOf(result.finalResult)?.kind, "success")
   // The subagent's own stop hook still runs: it is the only place a subagent ending can be observed.
   assert.deepEqual(harness.calls.map(call => call.step), ["subagentStop"])
 })
@@ -368,7 +369,7 @@ test("a result suffix is carried into the result only when the type asked for on
 
   const plain = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   const plainResult = taskResultOf(plain.finalResult)
-  assert.equal(plainResult?.result.case === "success" ? plainResult.result.value.resultSuffix : "unset", undefined)
+  assert.equal(plainResult?.kind === "success" ? plainResult.resultSuffix : "unset", undefined)
 
   const suffixed = await processSubagentIterationSuccess(
     state,
@@ -380,7 +381,7 @@ test("a result suffix is carried into the result only when the type asked for on
     UNKNOWN_TYPE,
   )
   const suffixedResult = taskResultOf(suffixed.finalResult)
-  assert.equal(suffixedResult?.result.case === "success" ? suffixedResult.result.value.resultSuffix : "", "\n\nDone.")
+  assert.equal(suffixedResult?.kind === "success" ? suffixedResult.resultSuffix : "", "\n\nDone.")
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -493,8 +494,8 @@ test("the duration a finished subagent reports is measured from when it was star
   const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   const after = Date.now()
   const final = taskResultOf(result.finalResult)
-  if (final?.result.case !== "success") throw new Error("expected a success")
-  const duration = final.result.value.durationMs ?? 0n
+  if (final?.kind !== "success") throw new Error("expected a success")
+  const duration = final.durationMs ?? 0n
   assert.equal(duration >= BigInt(before - startedAt), true, "at least the time before the call has passed")
   assert.equal(duration <= BigInt(after - startedAt), true, "and not more than the time after it")
 })
@@ -533,6 +534,6 @@ test("only the turns of this iteration are collected into the result", async () 
   const state = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [idOf(7), idOf(8), idOf(1)] }))
   const result = await processSubagentIterationSuccess(state, 2, iterationState(), { ...completionCtx, initialTurnsCount: 2 }, deps, () => {}, UNKNOWN_TYPE)
   const finalResult = taskResultOf(result.finalResult)
-  if (finalResult?.result.case !== "success") throw new Error("expected a success")
-  assert.equal(finalResult.result.value.conversationSteps.length, 1, "the older turns are not collected")
+  if (finalResult?.kind !== "success") throw new Error("expected a success")
+  assert.equal(finalResult.conversationSteps.length, 1, "the older turns are not collected")
 })

@@ -385,7 +385,9 @@ test("the subagent reader restores its answer from new Slate turn and step blobs
   assert.equal(await extractLastAssistantMessage(ctx, [idOf(1)], store), "Slate answer")
   const steps = await collectConversationStepsFromStepBlobIds({ ctx, stepBlobIds: [idOf(10)], blobStore: store })
   assert.equal(steps.length, 1)
-  assert.equal(conversationStepViewInterop(steps[0]).assistantText, "Slate answer")
+  const step = steps[0]
+  assert.ok(step)
+  assert.equal(conversationStepViewInterop(step).assistantText, "Slate answer")
 })
 
 test("turns and steps that are no longer there are skipped rather than treated as empty", async () => {
@@ -415,7 +417,9 @@ test("the steps of a turn are collected and the ones that are gone are left out"
   ])
   const steps = await collectConversationStepsFromStepBlobIds({ ctx, stepBlobIds: [idOf(9), idOf(10)], blobStore: store })
   assert.equal(steps.length, 1)
-  assert.equal(conversationStepViewInterop(steps[0]).kind, "assistant")
+  const step = steps[0]
+  assert.ok(step)
+  assert.equal(conversationStepViewInterop(step).kind, "assistant")
 })
 
 test("turns are read into structures, with the missing ones kept as gaps", async () => {
