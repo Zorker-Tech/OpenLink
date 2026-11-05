@@ -139,6 +139,13 @@ import type { SlateCheckpointUnknownField, SlateCheckpointUnknownFieldPathStep }
 import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
 import type { SlateVideoAttachment } from "../../../packages/agent/context/video-attachment-contracts.ts"
 import type { SlateDocumentAttachment } from "../../../packages/agent/context/document-attachment-contracts.ts"
+import {
+  cloneSlateSelectedContextState,
+  emptySlateSelectedContextState,
+  isSlateSelectedContextState,
+  type SlateSelectedContextState,
+} from "../../../packages/agent/context/selected-context-state.ts"
+import { fromInteropSelectedContextState, toInteropSelectedContextState } from "./selected-context-state-adapter.ts"
 import { toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
 import { toInteropSelectedVideo } from "./video-attachment-adapter.ts"
 import { toInteropSelectedDocument } from "./document-attachment-adapter.ts"
@@ -576,6 +583,23 @@ export function attachAgentSelectedContextMediaInterop(input: {
     selectedImages: input.selectedImages.map(toInteropSelectedImage),
     selectedVideos: input.selectedVideos.map(toInteropSelectedVideo),
   })
+}
+
+export function attachProcessedSelectedMediaToSlateContext(input: {
+  readonly selectedContext: SlateSelectedContextState | undefined
+  readonly selectedDocuments: readonly SlateDocumentAttachment[]
+  readonly selectedImages: readonly SlateImageAttachment[]
+  readonly selectedVideos: readonly SlateVideoAttachment[]
+}): SlateSelectedContextState {
+  const current = input.selectedContext === undefined
+    ? emptySlateSelectedContextState()
+    : cloneSlateSelectedContextState(input.selectedContext)
+  const processedMedia = fromInteropSelectedContextState(new SelectedContext({
+    selectedDocuments: input.selectedDocuments.map(toInteropSelectedDocument),
+    selectedImages: input.selectedImages.map(toInteropSelectedImage),
+    selectedVideos: input.selectedVideos.map(toInteropSelectedVideo),
+  }))
+  return { ...current, media: processedMedia.media }
 }
 
 export interface AgentConversationStateSnapshotStatsInterop {
@@ -1074,6 +1098,16 @@ interface StoredSlateUserMessageV3 extends Omit<StoredSlateUserMessageV2, "actor
   readonly modeIntent?: StoredSlateCustomModeIntent
 }
 
+interface StoredSlateSelectedContextV1 {
+  readonly schema: "slate.selected-context"
+  readonly version: 1
+  readonly payload: StoredSlateValue
+}
+
+interface StoredSlateUserMessageV4 extends Omit<StoredSlateUserMessageV3, "context"> {
+  readonly context?: StoredSlateSelectedContextV1
+}
+
 interface StoredSlateUserMessageEnvelopeV1 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 1
@@ -1095,10 +1129,18 @@ interface StoredSlateUserMessageEnvelopeV3 {
   readonly compatibility?: SlateUserMessageCompatibility
 }
 
+interface StoredSlateUserMessageEnvelopeV4 {
+  readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
+  readonly version: 4
+  readonly message: StoredSlateUserMessageV4
+  readonly compatibility?: SlateUserMessageCompatibility
+}
+
 type StoredSlateUserMessageEnvelope =
   | StoredSlateUserMessageEnvelopeV1
   | StoredSlateUserMessageEnvelopeV2
   | StoredSlateUserMessageEnvelopeV3
+  | StoredSlateUserMessageEnvelopeV4
 
 const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
 const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
@@ -1662,12 +1704,20 @@ function isStoredSlateCustomModeIntent(value: unknown): value is StoredSlateCust
     (intent.exitedMode === undefined || isStoredSlateExitedCustomMode(intent.exitedMode))
 }
 
+function isStoredSlateSelectedContextV1(value: unknown): value is StoredSlateSelectedContextV1 {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const context = value as Record<string, unknown>
+  return hasOnlyKeys(context, ["schema", "version", "payload"]) &&
+    context.schema === "slate.selected-context" && context.version === 1 &&
+    isStoredSlateValue(context.payload)
+}
+
 function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateUserMessageEnvelope {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "message", "compatibility"]) ||
       envelope.format !== USER_MESSAGE_STORAGE_FORMAT ||
-      (envelope.version !== 1 && envelope.version !== 2 && envelope.version !== 3) ||
+      (envelope.version !== 1 && envelope.version !== 2 && envelope.version !== 3 && envelope.version !== 4) ||
       envelope.message === null || typeof envelope.message !== "object" || Array.isArray(envelope.message)) return false
   if (envelope.compatibility !== undefined) {
     if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
@@ -1685,15 +1735,18 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateU
   const planExecutionIsValid = message.planExecution === undefined || (envelope.version === 1
     ? isStoredSlateValue(message.planExecution)
     : isStoredSlatePlanExecution(message.planExecution))
-  const actorIsValid = message.actor === undefined || (envelope.version === 3
+  const actorIsValid = message.actor === undefined || (envelope.version >= 3
     ? isStoredSlateTriggeringActor(message.actor)
     : isStoredSlateValue(message.actor))
-  const simulationIsValid = message.simulation === undefined || (envelope.version === 3
+  const simulationIsValid = message.simulation === undefined || (envelope.version >= 3
     ? isStoredSlateSimulationDetails(message.simulation)
     : isStoredSlateValue(message.simulation))
-  const modeIntentIsValid = message.modeIntent === undefined || (envelope.version === 3
+  const modeIntentIsValid = message.modeIntent === undefined || (envelope.version >= 3
     ? isStoredSlateCustomModeIntent(message.modeIntent)
     : isStoredSlateValue(message.modeIntent))
+  const contextIsValid = message.context === undefined || (envelope.version === 4
+    ? isStoredSlateSelectedContextV1(message.context)
+    : isStoredSlateValue(message.context))
   if (!hasOnlyKeys(message, [
     "id", "content", "context", "mode", "simulated", "promotionGroupId", "promotionEligible",
     "richContent", "origin", "conversationSnapshotId", "workerReminder", "actor", "planExecution",
@@ -1701,7 +1754,7 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateU
     "modeIntent", "project",
   ]) ||
       typeof message.id !== "string" || !isStoredTextValue(message.content) ||
-      (message.context !== undefined && !isStoredSlateValue(message.context)) ||
+      !contextIsValid ||
       typeof message.mode !== "string" || !SLATE_MODE_VALUES.has(message.mode) ||
       (message.simulated !== undefined && typeof message.simulated !== "boolean") ||
       (message.promotionGroupId !== undefined && typeof message.promotionGroupId !== "string") ||
@@ -1781,10 +1834,14 @@ function storedSlateCustomModeIntent(value: SlateCustomModeIntent): StoredSlateC
 }
 
 function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
-  const stored: StoredSlateUserMessageV3 = {
+  const stored: StoredSlateUserMessageV4 = {
     id: message.messageId,
     content: encodeSlateUserMessageValue(message.text),
-    ...(message.selectedContext === undefined ? {} : { context: encodeSlateUserMessageValue(message.selectedContext) }),
+    ...(message.selectedContext === undefined ? {} : { context: {
+      schema: "slate.selected-context",
+      version: 1,
+      payload: encodeSlateUserMessageValue(message.selectedContext),
+    } }),
     mode: message.mode,
     ...(message.isSimulatedMsg === undefined ? {} : { simulated: message.isSimulatedMsg }),
     ...(message.bestOfNGroupId === undefined ? {} : { promotionGroupId: message.bestOfNGroupId }),
@@ -1832,7 +1889,7 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
   const compatibility = message.compatibility
   const envelope = {
     format: USER_MESSAGE_STORAGE_FORMAT,
-    version: 3,
+    version: 4,
     message: stored,
     ...(compatibility === undefined ||
       (compatibility.legacyModeCode === undefined &&
@@ -1918,6 +1975,23 @@ function customModeIntentFromSlateV3(value: StoredSlateCustomModeIntent | undefi
   }
 }
 
+function selectedContextFromStoredSlateValue(
+  value: StoredSlateValue,
+  version: number,
+  privacyMode: PrivacyMode,
+): SlateSelectedContextState | undefined {
+  const decoded = decodeSlateValue(value, privacyMode)
+  if (decoded === undefined || decoded === null) return undefined
+  if (isSlateSelectedContextState(decoded)) return decoded
+  if (version >= 4) throw new TypeError("Stored Slate selected-context schema is invalid")
+  if (typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new TypeError("Stored legacy selected-context data is invalid")
+  }
+  // Versions 1–3 stored generated-message field trees. The adapter reads them once and projects them
+  // into Slate's versioned source model; business logic never consumes the legacy field tree.
+  return fromInteropSelectedContextState(decoded as SelectedContext)
+}
+
 function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMode): SlateUserMessage | undefined {
   if (!beginsWith(bytes, USER_MESSAGE_STORAGE_HEADER)) return undefined
   let parsed: unknown
@@ -1930,30 +2004,40 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
   const envelope = parsed
   const message = envelope.message
   const project = message.project
+  const storedContext = message.context
+  const selectedContext = storedContext === undefined
+    ? undefined
+    : envelope.version === 4
+      ? selectedContextFromStoredSlateValue(
+          (storedContext as StoredSlateSelectedContextV1).payload,
+          4,
+          privacyMode,
+        )
+      : selectedContextFromStoredSlateValue(storedContext as StoredSlateValue, envelope.version, privacyMode)
   const planExecution = envelope.version === 1
     ? planExecutionFromSlateV1(envelope.message.planExecution, privacyMode)
     : planExecutionFromSlateV2(envelope.message.planExecution, privacyMode)
-  const triggeringActor = envelope.version === 3
-    ? envelope.message.actor
+  const triggeringActor = envelope.version >= 3
+    ? (message as StoredSlateUserMessageV3).actor
     : envelope.message.actor === undefined
       ? undefined
-      : triggeringActorFromInterop(decodeSlateValue(envelope.message.actor, privacyMode))
-  const simulation = envelope.version === 3
-    ? simulationDetailsFromSlateV3(envelope.message.simulation, privacyMode)
+      : triggeringActorFromInterop(decodeSlateValue(envelope.message.actor as StoredSlateValue, privacyMode))
+  const simulation = envelope.version >= 3
+    ? simulationDetailsFromSlateV3((message as StoredSlateUserMessageV3).simulation, privacyMode)
     : envelope.message.simulation === undefined
       ? undefined
-      : simulationDetailsFromInterop(decodeSlateValue(envelope.message.simulation, privacyMode))
-  const modeIntent = envelope.version === 3
-    ? customModeIntentFromSlateV3(envelope.message.modeIntent, privacyMode)
+      : simulationDetailsFromInterop(decodeSlateValue(envelope.message.simulation as StoredSlateValue, privacyMode))
+  const modeIntent = envelope.version >= 3
+    ? customModeIntentFromSlateV3((message as StoredSlateUserMessageV3).modeIntent, privacyMode)
     : envelope.message.modeIntent === undefined
       ? undefined
-      : customModeIntentFromInterop(decodeSlateValue(envelope.message.modeIntent, privacyMode))
+      : customModeIntentFromInterop(decodeSlateValue(envelope.message.modeIntent as StoredSlateValue, privacyMode))
   const decodeOptionalText = (value: StoredSlateValue | undefined) =>
     value === undefined ? undefined : decodeSlateValue(value, privacyMode) as SlateUserMessage["text"]
   const decoded: SlateUserMessage = {
     messageId: message.id,
     text: decodeSlateValue(message.content, privacyMode) as SlateUserMessage["text"],
-    ...(message.context === undefined ? {} : { selectedContext: decodeSlateValue(message.context, privacyMode) }),
+    ...(selectedContext === undefined ? {} : { selectedContext }),
     mode: message.mode as SlateMode,
     ...(message.simulated === undefined ? {} : { isSimulatedMsg: message.simulated }),
     ...(message.promotionGroupId === undefined ? {} : { bestOfNGroupId: message.promotionGroupId }),

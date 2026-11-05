@@ -10,7 +10,7 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyCapability, DataClassification } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
-import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
+import { RedactedBytes, RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import {
   createSlateUserMessageSerde,
   deserializeSlateUserMessageInterop,
@@ -18,6 +18,7 @@ import {
 import {
   fromInteropSimulatedMessageReason,
   fromInteropUserMessage,
+  redactSlateUserMessage,
   toInteropSimulatedMessageReason,
   toInteropUserMessage,
 } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
@@ -40,6 +41,21 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import { HookAdditionalContext } from "../../source/adapters/interop/proto/generated/agent/v1/hook_additional_context_pb.ts"
+
+function legacyStoredValue(value: unknown): unknown {
+  if (value === undefined) return { kind: "undefined" }
+  if (value === null) return { kind: "null" }
+  if (typeof value === "boolean") return { kind: "boolean", value }
+  if (typeof value === "number") return { kind: "number", value }
+  if (typeof value === "string") return { kind: "string", value }
+  if (typeof value === "bigint") return { kind: "bigint", decimal: value.toString(10) }
+  if (value instanceof Uint8Array) return { kind: "bytes", hex: Buffer.from(value).toString("hex") }
+  if (Array.isArray(value)) return { kind: "array", entries: value.map(legacyStoredValue) }
+  if (typeof value === "object") {
+    return { kind: "object", entries: Object.entries(value).map(([key, entry]) => [key, legacyStoredValue(entry)]) }
+  }
+  throw new TypeError("Unsupported legacy test value")
+}
 
 test("the user-message boundary preserves every top-level persisted field", () => {
   const selectedContext = new SelectedContext()
@@ -342,7 +358,10 @@ test("user messages persist in Slate's versioned field schema and rehydrate ever
     message: Record<string, unknown>
   }
   assert.equal(stored.format, "slate.agent-user-message")
-  assert.equal(stored.version, 3)
+  assert.equal(stored.version, 4)
+  const storedContext = stored.message.context as { schema?: string; version?: number; payload?: unknown }
+  assert.equal(storedContext.schema, "slate.selected-context")
+  assert.equal(storedContext.version, 1)
   const storedPlan = stored.message.planExecution as { id?: unknown; title?: unknown }
   assert.deepEqual(storedPlan, {
     id: { kind: "string", value: "plan-1" },
@@ -363,7 +382,121 @@ test("user messages persist in Slate's versioned field schema and rehydrate ever
   assert.ok(UserMessage.equals(restored, original))
 })
 
-test("version-one and version-two message metadata migrate to typed Slate version three", () => {
+test("a full selected-context source state persists in V4 and reconstructs the original message", () => {
+  const original = new UserMessage({
+    text: "review this",
+    messageId: "selected-context-v4",
+    selectedContext: new SelectedContext({
+      selectedImages: [{ uuid: "image-1", path: "/repo/image.png", mimeType: "image/png", dataOrBlobId: { case: "data", value: new Uint8Array([1, 2, 3]) } }],
+      externalLinks: [{ uuid: "link-1", url: "https://docs.test/a", pdfContent: "document text", isPdf: true, filename: "guide.pdf", blobId: new Uint8Array([4]) }],
+      cursorCommands: [{ name: "check", content: "pnpm test", fullPath: "/repo/.slate/commands/check.md" }],
+      gitCommits: [{ sha: "commit-1", message: "subject", description: "details", diff: "patch" }],
+      selectedBrowsers: [{ browserId: "browser-1", url: "https://app.test", pageTitle: "App" }],
+      selectedAgenticGitAction: { pathToTemplateFile: "/templates/pr.md", params: { case: "pushParams", value: { filesToPush: ["a.ts"], createPrDraft: true } } },
+    } as never),
+  })
+  const slate = fromInteropUserMessage(original)
+  const serde = createSlateUserMessageSerde(PrivacyMode.UNSPECIFIED)
+  const bytes = serde.serialize(slate)
+  const envelope = JSON.parse(new TextDecoder().decode(bytes).slice("SLATE-AGENT-USER\n".length)) as {
+    version: number
+    message: { context?: { schema?: string; version?: number; payload?: unknown } }
+  }
+  assert.equal(envelope.version, 4)
+  assert.equal(envelope.message.context?.schema, "slate.selected-context")
+  assert.equal(envelope.message.context?.version, 1)
+
+  const restored = serde.deserialize(bytes)
+  assert.deepEqual(restored.selectedContext, slate.selectedContext)
+  assert.ok(UserMessage.equals(toInteropUserMessage(restored), original))
+})
+
+test("V4 selected-context persistence retains redaction metadata and attachment bytes", () => {
+  const original = fromInteropUserMessage(new UserMessage({
+    text: "inspect the image",
+    messageId: "redacted-selected-context",
+    selectedContext: new SelectedContext({
+      selectedImages: [{ uuid: "image-1", path: "/private/image.png", mimeType: "image/png", dataOrBlobId: { case: "data", value: new Uint8Array([9, 10]) } }],
+    } as never),
+  }))
+  const redacted = redactSlateUserMessage(original, PrivacyMode.NO_STORAGE)
+  const serde = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE)
+  const restored = serde.deserialize(serde.serialize(redacted))
+  const image = restored.selectedContext?.media.images[0]
+  assert.ok(image?.path instanceof RedactedString)
+  assert.equal(image.path.__classification, DataClassification.PATH)
+  assert.equal(image.path.__fieldName, "path")
+  if (image?.content?.kind !== "inline") assert.fail("expected inline image bytes")
+  assert.ok(image.content.bytes instanceof RedactedBytes)
+  assert.equal(image.content.bytes.__classification, DataClassification.CODE)
+  assert.equal(image.content.bytes.__fieldName, "data")
+  assert.deepEqual(image.content.bytes.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), new Uint8Array([9, 10]))
+  const interop = deserializeSlateUserMessageInterop(serde.serialize(redacted))
+  assert.equal(interop.selectedContext?.selectedImages[0]?.path, "/private/image.png")
+  assert.deepEqual(interop.selectedContext?.selectedImages[0]?.dataOrBlobId?.value, new Uint8Array([9, 10]))
+})
+
+test("a stored V3 generated context migrates to Slate state and rewrites as V4", () => {
+  const oldContext = new SelectedContext({
+    selectedImages: [{ uuid: "image-legacy", path: "/repo/legacy.png", mimeType: "image/png", dataOrBlobId: { case: "data", value: new Uint8Array([21, 22]) } }],
+    files: [{ path: "/repo/legacy.ts", content: "legacy file" }],
+  } as never)
+  const legacyEnvelope = {
+    format: "slate.agent-user-message",
+    version: 3,
+    message: {
+      id: "legacy-v3",
+      content: { kind: "string", value: "legacy message" },
+      context: legacyStoredValue(oldContext),
+      mode: SlateMode.AGENT,
+      conversationSnapshotId: "",
+      hooks: [],
+    },
+  }
+  const legacyBytes = new TextEncoder().encode(`SLATE-AGENT-USER\n${JSON.stringify(legacyEnvelope)}`)
+  const serde = createSlateUserMessageSerde(PrivacyMode.UNSPECIFIED)
+  const migrated = serde.deserialize(legacyBytes)
+  assert.equal(migrated.selectedContext?.schema, "slate.selected-context")
+  assert.deepEqual(migrated.selectedContext?.media.images[0]?.content, {
+    kind: "inline",
+    bytes: new Uint8Array([21, 22]),
+  })
+  assert.deepEqual(migrated.selectedContext?.workspace.files[0], {
+    path: "/repo/legacy.ts",
+    content: "legacy file",
+  })
+
+  const rewritten = JSON.parse(new TextDecoder().decode(serde.serialize(migrated)).slice("SLATE-AGENT-USER\n".length)) as {
+    version: number
+    message: { context?: { schema?: string; version?: number } }
+  }
+  assert.equal(rewritten.version, 4)
+  assert.equal(rewritten.message.context?.schema, "slate.selected-context")
+  assert.equal(rewritten.message.context?.version, 1)
+})
+
+test("V4 rejects malformed nested selected-context values instead of exposing a partial record", () => {
+  const slate = fromInteropUserMessage(new UserMessage({
+    text: "validate the saved context",
+    messageId: "invalid-selected-context",
+    selectedContext: new SelectedContext(),
+  }))
+  const serde = createSlateUserMessageSerde(PrivacyMode.UNSPECIFIED)
+  const envelope = JSON.parse(new TextDecoder().decode(serde.serialize(slate)).slice("SLATE-AGENT-USER\n".length)) as {
+    message: { context: { schema: string; version: number; payload: unknown } }
+  }
+  const selectedContext = slate.selectedContext
+  assert.ok(selectedContext)
+  const invalidState = {
+    ...selectedContext,
+    media: { ...selectedContext.media, images: [null], videos: [], documents: [] },
+  }
+  envelope.message.context.payload = legacyStoredValue(invalidState)
+  const corrupt = new TextEncoder().encode(`SLATE-AGENT-USER\n${JSON.stringify(envelope)}`)
+  assert.throws(() => serde.deserialize(corrupt), /Stored Slate selected-context schema is invalid/)
+})
+
+test("version-one and version-two message metadata migrate to typed Slate version four", () => {
   const serde = createSlateUserMessageSerde(PrivacyMode.UNSPECIFIED)
   const slate: SlateUserMessage = {
     text: "execute this plan",
@@ -463,7 +596,7 @@ test("version-one and version-two message metadata migrate to typed Slate versio
       version: number
       message: Record<string, unknown>
     }
-    assert.equal(migrated.version, 3)
+    assert.equal(migrated.version, 4)
     assert.equal((migrated.message.actor as { authId?: string }).authId, "actor-1")
     assert.deepEqual(migrated.message.modeIntent, {
       kind: "enter",

@@ -3,6 +3,10 @@ import type { HookContextEntry } from "../hooks-carriers/hook-additional-context
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import type { SlateMode } from "./mode-processing.ts"
 import {
+  cloneSlateSelectedContextState,
+  type SlateSelectedContextState,
+} from "./context/selected-context-state.ts"
+import {
   cloneSlateCustomModeIntent,
   cloneSlateSimulationDetails,
   type SlateCustomModeIntent,
@@ -86,13 +90,12 @@ export interface SlatePlanExecutionIntent {
 /**
  * The top-level user-message record needed while a turn is prepared.
  *
- * Selected-context remains a separate product-schema migration. Actor, simulation and custom-mode
- * metadata use Slate-owned records alongside the plan execution details.
+ * Selected material is a versioned Slate-owned state model alongside message and turn metadata.
  */
 export interface SlateUserMessage {
   text: SlateUserMessageText
   messageId: string
-  selectedContext?: unknown
+  selectedContext?: SlateSelectedContextState
   mode: SlateMode
   isSimulatedMsg?: boolean
   bestOfNGroupId?: string
@@ -159,7 +162,7 @@ function copyCompatibility(
   }
 }
 
-/** Copies mutable byte arrays and typed metadata; selected context remains shared until its own model lands. */
+/** Copies mutable byte arrays and every nested selected-context attachment. */
 export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
   const projectDetails = message.projectDetails === undefined
     ? undefined
@@ -168,7 +171,7 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
   return {
     text: message.text,
     messageId: message.messageId,
-    ...(message.selectedContext === undefined ? {} : { selectedContext: message.selectedContext }),
+    ...(message.selectedContext === undefined ? {} : { selectedContext: cloneSlateSelectedContextState(message.selectedContext) }),
     mode: message.mode,
     ...(message.isSimulatedMsg === undefined ? {} : { isSimulatedMsg: message.isSimulatedMsg }),
     ...(message.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: message.bestOfNGroupId }),

@@ -33,7 +33,7 @@ import { createSlateTaskSuccessResult, type SlateTaskResult } from "./task-resul
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
 import type { SlateTaskAttachmentSelection } from "./task-attachment-contracts.ts"
-import { toInteropTaskSelectedContext } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
+import { selectedContextFromTaskAttachments } from "../context/selected-context-state.ts"
 
 /** How far into its run a subagent has got: its turns so far, whether the stream is done, whether it was told to stop. */
 export interface TaskSubagentIterationState {
@@ -157,6 +157,7 @@ export function buildFollowupMessage(request: {
   readonly useAskMode: boolean
   readonly selectedContext?: SlateTaskAttachmentSelection
 }): SlateUserMessage {
+  const selectedContext = selectedContextFromTaskAttachments(request.selectedContext)
   return {
     text: request.followupMessage,
     // The id is derived from the call and the turn it belongs to, so a retry produces the same one.
@@ -164,9 +165,7 @@ export function buildFollowupMessage(request: {
     mode: request.useAskMode ? SlateMode.CHAT : SlateMode.AGENT,
     conversationStateBlobId: new Uint8Array(),
     hookContexts: [],
-    ...(request.selectedContext === undefined
-      ? {}
-      : { selectedContext: toInteropTaskSelectedContext(request.selectedContext) }),
+    ...(selectedContext === undefined ? {} : { selectedContext }),
   }
 }
 

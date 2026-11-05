@@ -34,6 +34,8 @@ import type {
   TaskTargetMachine,
   TaskTargetValidationArgs,
 } from "./task-runtime-types.ts"
+import type { SlateTaskAttachmentSelection } from "./task-attachment-contracts.ts"
+import { selectedContextFromTaskAttachments } from "../context/selected-context-state.ts"
 export type {
   LegacyTaskTargetArgs,
   LegacyTaskTargetMachine,
@@ -236,7 +238,7 @@ export function createTaskInitialMessage(
   prompt: string,
   messageId: string,
   useAskMode: boolean,
-  selectedContext: unknown,
+  selectedContext: SlateTaskAttachmentSelection | undefined,
 ): SlateUserMessage {
   const reminder = subagentConfig.systemReminder
   // A reminder that never varies is written once rather than generated for every message.
@@ -244,13 +246,14 @@ export function createTaskInitialMessage(
     reminder !== undefined && reminder.length === 0
       ? reminder()
       : undefined
+  const slateSelectedContext = selectedContextFromTaskAttachments(selectedContext)
   return {
     text: prompt,
     messageId,
     mode: useAskMode ? SlateMode.CHAT : SlateMode.AGENT,
     conversationStateBlobId: new Uint8Array(),
     hookContexts: [],
-    ...(selectedContext === undefined ? {} : { selectedContext }),
+    ...(slateSelectedContext === undefined ? {} : { selectedContext: slateSelectedContext }),
     ...(staticReminder === undefined || staticReminder.length === 0
       ? {}
       : { subagentSystemReminder: staticReminder }),

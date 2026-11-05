@@ -2603,8 +2603,8 @@
     "packages/agent/tools/task-subagent-completion.ts": {
       "claim": "rewritten",
       "overlap": 0.6176911544227887,
-      "refreshReason": "Moved generated follow-up, persistence, and success-result construction to the interop adapter while keeping completion policy on Slate-owned state and outcomes.",
-      "evidence": "The completion behavior and interop adapter contract suites pass 22/22; the full Work-host suite passes 9872/9872. Work-host typecheck, rewrite:check, and interop:check pass with 17 direct consumers. The Slate completion module no longer imports generated wire types. Measured overlap is 0.6176911544227887 against 667 baseline pairs."
+      "refreshReason": "Follow-up messages now persist complete SlateSelectedContextState records; task attachment conversion stays in the migration and transport adapters.",
+      "evidence": "Task preparation/completion, selected-context state and processing, V4 user-message storage, and media-redaction suites pass 197/197. The full Node 24 Work-host suite passes 9955/9955. Work-host typecheck and all rewrite/interop gates pass; the core completion module no longer imports the task Proto adapter. Measured overlap is 0.6176911544227887 against 667 baseline pairs."
     },
     "packages/constants/auto-spillover-ui.ts": {
       "claim": "rewritten",

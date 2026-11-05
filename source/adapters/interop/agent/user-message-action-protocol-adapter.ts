@@ -22,6 +22,7 @@ import {
   fromRedactedTodoItem,
   toRedactedTodoItem,
 } from "../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
+import { toRedactedSelectedContext } from "../redacted-protos/generated/agent/v1/selected_context_redacted.ts"
 import { fromRedactedMcpToolDefinition } from "../redacted-protos/generated/agent/v1/mcp_redacted.ts"
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
@@ -49,6 +50,8 @@ import { SlateMode } from "../../../packages/agent/mode-processing.ts"
 import { fromHex } from "../../../packages/agent-kv/serde.ts"
 import { PrivacyMode as PrivacyModes } from "../../../packages/redaction/privacy-mode.ts"
 import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { fromInteropSelectedContextState, toInteropSelectedContextState } from "./selected-context-state-adapter.ts"
+import type { SlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
 import type {
   SlateCheckpointUnknownField,
   SlateCheckpointUnknownFieldPathStep,
@@ -179,13 +182,13 @@ function restoreLegacyUnknownFields(
 
 export function attachSelectedContextToUserMessageInterop(input: {
   readonly message: UserMessageInterop
-  readonly selectedContext: unknown
+  readonly selectedContext: SlateSelectedContextState
   readonly promptReferenceId?: string
 }): UserMessageInterop {
   return new UserMessage({
     ...input.message,
     ...(input.promptReferenceId === undefined ? {} : { promptReferenceId: input.promptReferenceId }),
-    selectedContext: input.selectedContext as never,
+    selectedContext: toInteropSelectedContextState(input.selectedContext),
   })
 }
 
@@ -260,6 +263,9 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
   const planExecution = planExecutionFromInterop(message.executePlanInfo)
   const simulation = simulationDetailsFromInterop(message.simulatedMessageMetadata)
   const modeIntent = customModeIntentFromInterop(message.customModeIntent)
+  const selectedContext = message.selectedContext === undefined
+    ? undefined
+    : fromInteropSelectedContextState(message.selectedContext)
   const legacyUnknownFields = isMessage(message) ? collectLegacyUnknownFields(message) : []
   const compatibility = legacyModeCode === undefined && legacyUnknownFields.length === 0
     ? undefined
@@ -270,7 +276,7 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
   return {
     text: message.text as never,
     messageId: message.messageId,
-    ...(message.selectedContext === undefined ? {} : { selectedContext: message.selectedContext }),
+    ...(selectedContext === undefined ? {} : { selectedContext }),
     mode,
     ...(message.isSimulatedMsg === undefined ? {} : { isSimulatedMsg: message.isSimulatedMsg }),
     ...(message.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: message.bestOfNGroupId }),
@@ -328,10 +334,13 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
   const triggeringUserInfo = triggeringActorToInterop(message.triggeringActor)
   const simulatedMessageMetadata = simulationDetailsToInterop(message.simulation)
   const customModeIntent = customModeIntentToInterop(message.modeIntent)
+  const selectedContext = message.selectedContext === undefined
+    ? undefined
+    : toInteropSelectedContextState(message.selectedContext)
   const interop = new UserMessage({
     text: message.text as never,
     messageId: message.messageId,
-    ...(message.selectedContext === undefined ? {} : { selectedContext: message.selectedContext as never }),
+    ...(selectedContext === undefined ? {} : { selectedContext }),
     mode: message.compatibility?.legacyModeCode === undefined
       ? toInteropAgentMode(message.mode)
       : message.compatibility.legacyModeCode as AgentMode,
@@ -392,7 +401,12 @@ export function toPlainInteropUserMessage(message: SlateUserMessage): UserMessag
   const projected = toInteropUserMessage(message)
   const projectedText: unknown = (projected as unknown as { readonly text: unknown }).text
   const redacted = projectedText instanceof RedactedString
-    ? projected
+    ? projected.selectedContext === undefined
+      ? projected
+      : {
+          ...projected,
+          selectedContext: toRedactedSelectedContext(projected.selectedContext, PrivacyModes.UNSPECIFIED),
+        } as unknown as UserMessageInterop
     : toRedactedUserMessage(projected, PrivacyModes.UNSPECIFIED)
   const plain = fromRedactedUserMessage(
     redacted as never,

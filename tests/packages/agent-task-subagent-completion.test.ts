@@ -15,7 +15,6 @@ import {
 import type { ConversationBlobStore } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
-import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
 import type { SlateTaskConversationState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import type { SlateTaskResult } from "../../source/packages/agent/tools/task-result-state.ts"
@@ -508,8 +507,8 @@ test("a follow-up carries the selected context it was given", () => {
     commands: [{ name: "build", content: "pnpm test", sourcePath: "/repo/.slate/commands/build.md" }],
   }
   const message = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false, selectedContext: context })
-  assert.ok(message.selectedContext instanceof SelectedContext)
-  assert.equal(message.selectedContext.cursorCommands[0]?.fullPath, "/repo/.slate/commands/build.md")
+  assert.equal(message.selectedContext?.schema, "slate.selected-context")
+  assert.equal(message.selectedContext?.commands[0]?.sourcePath, "/repo/.slate/commands/build.md")
 })
 
 test("only the turns of this iteration are collected into the result", async () => {
