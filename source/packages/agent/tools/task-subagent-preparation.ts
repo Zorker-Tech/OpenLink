@@ -543,7 +543,7 @@ export async function resolveTaskSubagentConfig(args: {
   const environmentField = getEffectiveSubagentEnvironment(requestArgs, restoredState);
   const requestedMachine = requestArgs.targetMachine ?? restoredState?.targetMachine ?? (environmentField === "cloud"
     ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: requestArgs.cloudBaseBranch, cloud_requested_environment_build_id: requestArgs.requestedRuntimeBuildId })
-    : { type: "same_machine" });
+    : { kind: "same-device" });
   const priorModel = selfForkRequested ? settings.parentRequestedModelName ?? parentModel.modelName : restoredState?.modelId?.trim() || undefined;
   if (priorModel !== undefined && settings.subagentModelForcePolicy === SubagentModelForcePolicy.ParentPin && settings.forceModelId !== undefined && priorModel !== settings.forceModelId) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModel}" because the active policy requires model "${settings.forceModelId}".`);
   const chosenModelId = priorModel ?? await resolveSubagentModel({
@@ -565,9 +565,9 @@ export async function resolveTaskSubagentConfig(args: {
   const parentKey = getRequestId(turnContext);
   const rootParentKey = getRootParentRequestId(turnContext) ?? parentKey;
   const resumeCloudAgentId = restoredState?.cloudAgent?.agentId?.trim() || restoredState?.firstClassAgentId?.trim() || undefined;
-  const runtimeBuildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.requestedRuntimeBuildId?.trim() || restoredState?.requestedRuntimeBuildId?.trim() || undefined : undefined;
-  const targetMachineFinal = requestedMachine.type === "new_cloud_vm" && runtimeBuildId !== requestedMachine.environment_build_id
-    ? { ...requestedMachine, ...(runtimeBuildId !== undefined ? { environment_build_id: runtimeBuildId } : {}) }
+  const runtimeBuildId = requestedMachine.kind === "cloud-machine" ? requestedMachine.environmentBuildId?.trim() || requestArgs.requestedRuntimeBuildId?.trim() || restoredState?.requestedRuntimeBuildId?.trim() || undefined : undefined;
+  const targetMachineFinal = requestedMachine.kind === "cloud-machine" && runtimeBuildId !== requestedMachine.environmentBuildId
+    ? { ...requestedMachine, ...(runtimeBuildId !== undefined ? { environmentBuildId: runtimeBuildId } : {}) }
     : requestedMachine;
   const parentModelForParams = settings.parentRequestedModelName ?? parentModel.modelName;
   const modelParametersChosen = chosenModelId === parentModelForParams && (settings.parentModelParameters?.length ?? 0) > 0 ? settings.parentModelParameters : undefined;
@@ -691,7 +691,7 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       ...(rawArgs.runInBackground !== undefined ? { runInBackground: rawArgs.runInBackground } : {}),
       attachments: rawArgs.fileAttachments === undefined ? [] : [...rawArgs.fileAttachments],
       environment: resolved.effectiveEnvironment,
-      ...((rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : "") } : {}),
+      ...((rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.kind === "cloud-machine" ? resolved.effectiveTargetMachine.baseBranch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.kind === "cloud-machine" ? resolved.effectiveTargetMachine.baseBranch : "") } : {}),
       ...(runtimeBuildId !== undefined ? { requestedRuntimeBuildId: runtimeBuildId } : {}),
       targetMachine: resolved.effectiveTargetMachine,
     } satisfies SlatePreparedTaskRawArgs,

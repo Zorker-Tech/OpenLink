@@ -81,8 +81,8 @@ test("a persisted subagent round-trips through Slate metadata and its conversati
   assert.equal(slate.firstClassAgentId, "worker-1")
   assert.equal(slate.requestedRuntimeBuildId, "build-1")
   assert.deepEqual(slate.targetMachine, {
-    type: "new_cloud_vm",
-    base_branch: "main",
+    kind: "cloud-machine",
+    baseBranch: "main",
   })
 
   const interop = toInteropSubagentPersistedState(slate)

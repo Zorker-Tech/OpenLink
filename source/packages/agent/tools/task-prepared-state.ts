@@ -1,7 +1,7 @@
 import { cloneSlateUserMessage, type SlateUserMessage } from "../user-message-state.ts"
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
 import type { SlateSubagentType } from "../subagent-type.ts"
-import type { SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
+import { cloneTaskTargetMachine, type SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
 
 /** Attachment slots owned by task preparation; each item remains at its media-provider boundary. */
 export interface SlateTaskAttachmentSelection {
@@ -112,12 +112,7 @@ export function createSlatePreparedTask(input: SlatePreparedTask): SlatePrepared
     request: {
       ...input.request,
       attachments: [...input.request.attachments],
-      targetMachine: {
-        ...input.request.targetMachine,
-        ...(input.request.targetMachine.type === "self_hosted_pool" && input.request.targetMachine.labels !== undefined
-          ? { labels: { ...input.request.targetMachine.labels } }
-          : {}),
-      },
+      targetMachine: cloneTaskTargetMachine(input.request.targetMachine),
     },
     configuredSteps: [...input.configuredSteps],
   }

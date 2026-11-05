@@ -1,6 +1,6 @@
 import type { SlateSubagentExecutionEnvironment } from "./subagent-run-state.ts"
 import { createSlateSubagentType, type SlateSubagentType } from "./subagent-type.ts"
-import type { CloudSubagentPersistedStateArgs, TaskTargetMachine } from "./tools/task-runtime-types.ts"
+import { cloneTaskTargetMachine, type CloudSubagentPersistedStateArgs, type TaskTargetMachine } from "./tools/task-runtime-types.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import type { SlateConversationState } from "./conversation-state.ts"
@@ -93,7 +93,7 @@ export function createSlateSubagentPersistedState(
     ...(input.requestedRuntimeBuildId === undefined
       ? {}
       : { requestedRuntimeBuildId: input.requestedRuntimeBuildId }),
-    ...(input.targetMachine === undefined ? {} : { targetMachine: input.targetMachine }),
+    ...(input.targetMachine === undefined ? {} : { targetMachine: cloneTaskTargetMachine(input.targetMachine) }),
     ...(compatibility === undefined ? {} : { compatibility }),
   }
 }

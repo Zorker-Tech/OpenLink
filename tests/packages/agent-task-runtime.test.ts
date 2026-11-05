@@ -455,50 +455,50 @@ test("a placement is read into the environment the protocol spells", () => {
   assert.equal(taskEnvironmentToProtoInterop("local"), SubagentExecutionEnvironment.LOCAL)
   assert.equal(taskEnvironmentToProtoInterop(undefined), SubagentExecutionEnvironment.UNSPECIFIED)
 
-  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "same_machine" }), SubagentExecutionEnvironment.LOCAL)
-  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "new_cloud_vm" }), SubagentExecutionEnvironment.CLOUD)
-  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "self_hosted_worker", worker_id: "w" }), SubagentExecutionEnvironment.CLOUD)
-  assert.equal(taskEnvironmentForTargetMachineInterop({ type: "self_hosted_pool" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ kind: "same-device" }), SubagentExecutionEnvironment.LOCAL)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ kind: "cloud-machine" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ kind: "hosted-worker", workerId: "w" }), SubagentExecutionEnvironment.CLOUD)
+  assert.equal(taskEnvironmentForTargetMachineInterop({ kind: "worker-pool" }), SubagentExecutionEnvironment.CLOUD)
 })
 
 test("a client-executed subagent can run here or on a cloud VM, and nowhere else", () => {
-  assert.deepEqual(toClientSubagentPlacement({ type: "same_machine" }), {
+  assert.deepEqual(toClientSubagentPlacement({ kind: "same-device" }), {
     environment: "local",
     cloudBaseBranch: undefined,
   })
-  assert.deepEqual(toClientSubagentPlacement({ type: "new_cloud_vm", base_branch: "main" }), {
+  assert.deepEqual(toClientSubagentPlacement({ kind: "cloud-machine", baseBranch: "main" }), {
     environment: "cloud",
     cloudBaseBranch: "main",
   })
   assert.throws(
-    () => toClientSubagentPlacement({ type: "self_hosted_worker", worker_id: "worker-1" }),
+    () => toClientSubagentPlacement({ kind: "hosted-worker", workerId: "worker-1" }),
     /Self-hosted machine placement requires server-side first-class subagent execution/,
   )
-  assert.throws(() => toClientSubagentPlacement({ type: "self_hosted_pool" }), /not supported by a fresh client-executed Task\./)
+  assert.throws(() => toClientSubagentPlacement({ kind: "worker-pool" }), /not supported by a fresh client-executed Task\./)
 })
 
 test("the older environment fields are read into a placement, with blank fields meaning nothing", () => {
-  assert.deepEqual(targetMachineFromLegacyArgs({}), { type: "same_machine" })
-  assert.deepEqual(targetMachineFromLegacyArgs({ environment: "local" }), { type: "same_machine" })
-  assert.deepEqual(targetMachineFromLegacyArgs({ environment: "cloud" }), { type: "new_cloud_vm" })
+  assert.deepEqual(targetMachineFromLegacyArgs({}), { kind: "same-device" })
+  assert.deepEqual(targetMachineFromLegacyArgs({ environment: "local" }), { kind: "same-device" })
+  assert.deepEqual(targetMachineFromLegacyArgs({ environment: "cloud" }), { kind: "cloud-machine" })
   assert.deepEqual(
     targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: "  main  ", cloud_requested_environment_build_id: " bld-1 " }),
-    { type: "new_cloud_vm", base_branch: "main", environment_build_id: "bld-1" },
+    { kind: "cloud-machine", baseBranch: "main", environmentBuildId: "bld-1" },
   )
   assert.deepEqual(
     targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: "   ", cloud_requested_environment_build_id: "" }),
-    { type: "new_cloud_vm" },
+    { kind: "cloud-machine" },
   )
 })
 
 test("a placement survives the trip through the protocol in both directions", () => {
   const targets: TaskTargetMachine[] = [
-    { type: "same_machine" },
-    { type: "new_cloud_vm" },
-    { type: "new_cloud_vm", base_branch: "main", environment_build_id: "bld-1" },
-    { type: "self_hosted_worker", worker_id: "worker-1" },
-    { type: "self_hosted_pool" },
-    { type: "self_hosted_pool", pool: "team-pool", labels: { region: "eu", tier: "gpu" } },
+    { kind: "same-device" },
+    { kind: "cloud-machine" },
+    { kind: "cloud-machine", baseBranch: "main", environmentBuildId: "bld-1" },
+    { kind: "hosted-worker", workerId: "worker-1" },
+    { kind: "worker-pool" },
+    { kind: "worker-pool", pool: "team-pool", labels: { region: "eu", tier: "gpu" } },
   ]
   for (const target of targets) {
     assert.deepEqual(targetMachineFromProtoInterop(targetMachineToProtoInterop(target)), target)
@@ -511,13 +511,13 @@ test("a placement that says nothing, or something unknown, reads as no placement
 })
 
 test("a pool with no labels carries no labels on the wire", () => {
-  const machine = targetMachineToProtoInterop({ type: "self_hosted_pool" })
+  const machine = targetMachineToProtoInterop({ kind: "worker-pool" })
   assert.equal(machine.machine.case === "selfHostedPool" ? machine.machine.value.labels.length : -1, 0)
-  assert.equal(targetMachineFromProtoInterop(machine)?.type, "self_hosted_pool")
+  assert.equal(targetMachineFromProtoInterop(machine)?.kind, "worker-pool")
 })
 
 test("a cloud subagent's saved state carries how to find it again", () => {
-  const state = buildCloudSubagentPersistedStateInterop({ agentId: "bc-1", targetMachine: { type: "new_cloud_vm", base_branch: "main" } })
+  const state = buildCloudSubagentPersistedStateInterop({ agentId: "bc-1", targetMachine: { kind: "cloud-machine", baseBranch: "main" } })
   assert.equal(state.environment, SubagentExecutionEnvironment.CLOUD)
   assert.equal(state.cloudSubagent?.bcId, "bc-1")
   assert.equal(state.cloudSubagent?.transcriptPath, undefined)
@@ -528,7 +528,7 @@ test("a cloud subagent's saved state carries how to find it again", () => {
     agentId: "bc-2",
     transcriptUri: "/repo/.slate/transcripts/bc-2.txt",
     modelId: "composer-2",
-    targetMachine: { type: "same_machine" },
+    targetMachine: { kind: "same-device" },
   })
   assert.equal(withExtras.cloudSubagent?.transcriptPath, "/repo/.slate/transcripts/bc-2.txt")
   assert.equal(withExtras.modelId, "composer-2")

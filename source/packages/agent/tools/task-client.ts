@@ -416,8 +416,8 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
         ...(resolved.subagentIdToResume === undefined
           ? rawInput.cloudBaseBranch !== undefined
             ? { cloudBaseBranch: rawInput.cloudBaseBranch }
-            : resolved.effectiveTargetMachine.type === "new_cloud_vm" && resolved.effectiveTargetMachine.base_branch !== undefined
-              ? { cloudBaseBranch: resolved.effectiveTargetMachine.base_branch }
+            : resolved.effectiveTargetMachine.kind === "cloud-machine" && resolved.effectiveTargetMachine.baseBranch !== undefined
+              ? { cloudBaseBranch: resolved.effectiveTargetMachine.baseBranch }
               : {}
           : rawInput.cloudBaseBranch !== undefined ? { cloudBaseBranch: rawInput.cloudBaseBranch } : {}),
         ...(modelParameters(resolved.resolvedModelParameters) !== undefined ? { modelParameters: modelParameters(resolved.resolvedModelParameters)! } : {}),
