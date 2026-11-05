@@ -367,7 +367,7 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   assert.equal(restored?.modelId, "model-1")
   assert.equal(restored?.executionEnvironment, "cloud")
   assert.equal(restored?.cloudAgent?.agentId, "worker-1")
-  assert.deepEqual(restored?.targetMachine, { type: "new_cloud_vm", base_branch: "main" })
+  assert.deepEqual(restored?.targetMachine, { kind: "cloud-machine", baseBranch: "main" })
 
   const snapshot = await harnessed.handle.computeNewStructure(createContext())
   const persistedRedacted = snapshot.subagentStates?.get("subagent-1")
@@ -411,7 +411,7 @@ test("out-of-line subagent state writes and restores the Slate schema", async ()
     executionEnvironment: "cloud",
     cloudAgent: { agentId: "worker-slate", transcriptUri: "/repo/transcript.jsonl" },
     requestedRuntimeBuildId: "runtime-1",
-    targetMachine: { type: "new_cloud_vm", base_branch: "main", environment_build_id: "runtime-1" },
+    targetMachine: { kind: "cloud-machine", baseBranch: "main", environmentBuildId: "runtime-1" },
   })
 
   await harnessed.handle.computeNewStructure(ctx)

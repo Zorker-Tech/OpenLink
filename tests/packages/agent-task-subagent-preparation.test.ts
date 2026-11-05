@@ -75,11 +75,11 @@ test("a stored environment is read back as the request spells it", () => {
 test("what the request asked for wins, and the saved state is the fallback", () => {
   // A machine in the request decides it, whatever else says.
   assert.equal(
-    getEffectiveSubagentEnvironment({ targetMachine: { type: "new_cloud_vm" } }, restoredState({ executionEnvironment: "local" })),
+    getEffectiveSubagentEnvironment({ targetMachine: { kind: "cloud-machine" } }, restoredState({ executionEnvironment: "local" })),
     "cloud",
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({ targetMachine: { type: "same_machine" } }, restoredState({ executionEnvironment: "cloud" })),
+    getEffectiveSubagentEnvironment({ targetMachine: { kind: "same-device" } }, restoredState({ executionEnvironment: "cloud" })),
     "local",
   )
   // Then the older environment field.
@@ -89,7 +89,7 @@ test("what the request asked for wins, and the saved state is the fallback", () 
   )
   // Then the saved state's machine, then its environment, then a cloud reference.
   assert.equal(
-    getEffectiveSubagentEnvironment({}, restoredState({ targetMachine: { type: "new_cloud_vm" } })),
+    getEffectiveSubagentEnvironment({}, restoredState({ targetMachine: { kind: "cloud-machine" } })),
     "cloud",
   )
   assert.equal(
@@ -431,11 +431,11 @@ test("the parent's model parameters are carried only when the subagent runs on t
 test("where the subagent runs follows the request, then the saved state, then the cloud fields", async () => {
   const cloud = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { environment: "cloud", cloudBaseBranch: "main" } }) as never)
   assert.equal(cloud.effectiveEnvironment, "cloud")
-  assert.deepEqual(cloud.effectiveTargetMachine, { type: "new_cloud_vm", base_branch: "main" })
+  assert.deepEqual(cloud.effectiveTargetMachine, { kind: "cloud-machine", baseBranch: "main" })
 
   const local = await resolveTaskSubagentConfig(resolutionArgs() as never)
   assert.equal(local.effectiveEnvironment, undefined)
-  assert.deepEqual(local.effectiveTargetMachine, { type: "same_machine" })
+  assert.deepEqual(local.effectiveTargetMachine, { kind: "same-device" })
 })
 
 test("a resumed cloud run keeps the build it was started with", async () => {
@@ -449,7 +449,7 @@ test("a resumed cloud run keeps the build it was started with", async () => {
   }) as never)
   assert.equal(resolved.cloudAgentId, "bc-7")
   assert.equal(resolved.requestedRuntimeBuildId, "bld-1")
-  assert.deepEqual(resolved.effectiveTargetMachine, { type: "new_cloud_vm", environment_build_id: "bld-1" })
+  assert.deepEqual(resolved.effectiveTargetMachine, { kind: "cloud-machine", environmentBuildId: "bld-1" })
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -665,8 +665,8 @@ test("the normalized Slate request carries task arguments and placement", async 
   assert.equal(raw?.runInBackground, true)
   assert.equal(raw?.cloudBaseBranch, "main")
   assert.equal(raw?.environment, "cloud")
-  assert.equal(raw?.targetMachine.type, "new_cloud_vm")
-  assert.equal(raw?.targetMachine.type === "new_cloud_vm" ? raw.targetMachine.base_branch : undefined, "main")
+  assert.equal(raw?.targetMachine.kind, "cloud-machine")
+  assert.equal(raw?.targetMachine.kind === "cloud-machine" ? raw.targetMachine.baseBranch : undefined, "main")
 })
 
 test("credentials are kept for a subagent that runs here, and not for one that runs in the cloud", async () => {
@@ -712,7 +712,7 @@ test("the hook input mirrors the call the way a hook expects to read it", async 
   assert.equal(input.cloud_base_branch, "main")
   assert.equal(input.run_in_background, false)
   assert.equal(input.subagent_type, "generalPurpose")
-  assert.deepEqual(input.machine, { type: "new_cloud_vm", base_branch: "main" })
+  assert.deepEqual(input.machine, { kind: "cloud-machine", baseBranch: "main" })
   assert.deepEqual(input.file_attachments, ["/repo/uploads/diagram.png"])
 })
 
@@ -739,6 +739,6 @@ test("a requested cloud build is trimmed", async () => {
   const resolved = await resolveTaskSubagentConfig(resolutionArgs({
     rawArgs: { environment: "cloud", requestedRuntimeBuildId: " build-1 " },
   }) as never);
-  assert.equal((resolved.effectiveTargetMachine as { environment_build_id?: string }).environment_build_id, "build-1");
+  assert.equal((resolved.effectiveTargetMachine as { environmentBuildId?: string }).environmentBuildId, "build-1");
 });
 

@@ -5,7 +5,7 @@ import { slateTaskRequestFromModelArgumentsInterop } from "../../source/adapters
 
 test("model tool argument names enter the task core as a detached Slate request", () => {
   const attachments = ["/repo/report.png"]
-  const labels: Record<string, string> = { region: "eu" }
+  const labels: Record<string, string> = { tier: "gpu", region: "eu" }
   const request = slateTaskRequestFromModelArgumentsInterop({
     description: "read the report",
     prompt: "summarize the report",
@@ -18,6 +18,11 @@ test("model tool argument names enter the task core as a detached Slate request"
     interrupt: true,
   })
 
+  assert.equal(request.targetMachine?.kind, "worker-pool")
+  if (request.targetMachine?.kind === "worker-pool") {
+    assert.deepEqual(Object.keys(request.targetMachine.labels ?? {}), ["region", "tier"])
+  }
+
   attachments.push("/repo/second.png")
   labels.region = "us"
 
@@ -28,7 +33,7 @@ test("model tool argument names enter the task core as a detached Slate request"
     resume: "agent-7",
     subagentType: "browserUse",
     fileAttachments: ["/repo/report.png"],
-    targetMachine: { type: "self_hosted_pool", pool: "reviewers", labels: { region: "eu" } },
+    targetMachine: { kind: "worker-pool", pool: "reviewers", labels: { region: "eu", tier: "gpu" } },
     runInBackground: false,
     interrupt: true,
   })
@@ -45,6 +50,17 @@ test("legacy cloud placement arguments are normalized to Slate request names", (
     environment: "cloud",
     cloudBaseBranch: "release",
     requestedRuntimeBuildId: "build-4",
+  })
+})
+
+test("legacy target variants normalize to Slate placement kinds and fields", () => {
+  assert.deepEqual(slateTaskRequestFromModelArgumentsInterop({
+    prompt: "delegate this",
+    machine: { type: "new_cloud_vm", base_branch: "release", environment_build_id: "build-4" },
+  }).targetMachine, {
+    kind: "cloud-machine",
+    baseBranch: "release",
+    environmentBuildId: "build-4",
   })
 })
 

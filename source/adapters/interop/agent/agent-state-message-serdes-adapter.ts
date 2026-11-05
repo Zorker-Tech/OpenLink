@@ -1693,7 +1693,7 @@ interface StoredSlateSubagentState {
 
 interface StoredSlateSubagentStateEnvelope {
   readonly format: typeof SUBAGENT_STATE_STORAGE_FORMAT
-  readonly version: 1
+  readonly version: 1 | 2
   readonly state: StoredSlateSubagentState
 }
 
@@ -1711,7 +1711,7 @@ function isStoredSlateSubagentType(value: unknown): value is StoredSlateSubagent
     (value.compatibility.legacyDiscriminator === undefined || typeof value.compatibility.legacyDiscriminator === "string")
 }
 
-function isStoredSlateTargetMachine(value: unknown): value is TaskTargetMachine {
+function isStoredLegacyTaskTargetMachine(value: unknown): boolean {
   if (!isRecordValue(value) || typeof value.type !== "string") return false
   switch (value.type) {
     case "same_machine":
@@ -1731,6 +1731,52 @@ function isStoredSlateTargetMachine(value: unknown): value is TaskTargetMachine 
   }
 }
 
+function isStoredSlateTargetMachine(value: unknown): value is TaskTargetMachine {
+  if (!isRecordValue(value) || typeof value.kind !== "string") return false
+  switch (value.kind) {
+    case "same-device":
+      return hasOnlyKeys(value, ["kind"])
+    case "cloud-machine":
+      return hasOnlyKeys(value, ["kind", "baseBranch", "environmentBuildId"]) &&
+        (value.baseBranch === undefined || typeof value.baseBranch === "string") &&
+        (value.environmentBuildId === undefined || typeof value.environmentBuildId === "string")
+    case "hosted-worker":
+      return hasOnlyKeys(value, ["kind", "workerId"]) && typeof value.workerId === "string"
+    case "worker-pool":
+      return hasOnlyKeys(value, ["kind", "pool", "labels"]) &&
+        (value.pool === undefined || typeof value.pool === "string") &&
+        (value.labels === undefined || (isRecordValue(value.labels) && Object.values(value.labels).every(label => typeof label === "string")))
+    default:
+      return false
+  }
+}
+
+function taskTargetMachineFromV1(value: unknown): TaskTargetMachine {
+  const machine = value as Record<string, unknown>
+  switch (machine.type) {
+    case "same_machine":
+      return { kind: "same-device" }
+    case "new_cloud_vm":
+      return {
+        kind: "cloud-machine",
+        ...(typeof machine.base_branch === "string" ? { baseBranch: machine.base_branch } : {}),
+        ...(typeof machine.environment_build_id === "string" ? { environmentBuildId: machine.environment_build_id } : {}),
+      }
+    case "self_hosted_worker":
+      return { kind: "hosted-worker", workerId: machine.worker_id as string }
+    case "self_hosted_pool":
+      return {
+        kind: "worker-pool",
+        ...(typeof machine.pool === "string" ? { pool: machine.pool } : {}),
+        ...(isRecordValue(machine.labels)
+          ? { labels: Object.fromEntries(Object.entries(machine.labels).filter((entry): entry is [string, string] => typeof entry[1] === "string")) }
+          : {}),
+      }
+    default:
+      throw new TypeError("Legacy Slate subagent target machine is unsupported")
+  }
+}
+
 function isStoredSlateSubagentCompatibility(value: unknown): value is SlateSubagentStateCompatibility {
   return isRecordValue(value) && hasOnlyKeys(value, ["legacyEnvironmentCode", "legacyUnknownFields"]) &&
     (value.legacyEnvironmentCode === undefined ||
@@ -1742,7 +1788,7 @@ function isStoredSlateSubagentCompatibility(value: unknown): value is SlateSubag
 
 function isStoredSlateSubagentStateEnvelope(value: unknown): value is StoredSlateSubagentStateEnvelope {
   if (!isRecordValue(value) || !hasOnlyKeys(value, ["format", "version", "state"]) ||
-      value.format !== SUBAGENT_STATE_STORAGE_FORMAT || value.version !== 1 || !isRecordValue(value.state)) return false
+      value.format !== SUBAGENT_STATE_STORAGE_FORMAT || (value.version !== 1 && value.version !== 2) || !isRecordValue(value.state)) return false
   const state = value.state
   return hasOnlyKeys(state, [
     "createdAtMs", "lastUsedAtMs", "executionEnvironment", "conversationSnapshot", "subagentType", "modelId",
@@ -1759,7 +1805,9 @@ function isStoredSlateSubagentStateEnvelope(value: unknown): value is StoredSlat
       (state.cloudAgent.transcriptUri === undefined || typeof state.cloudAgent.transcriptUri === "string"))) &&
     (state.firstClassAgentId === undefined || typeof state.firstClassAgentId === "string") &&
     (state.requestedRuntimeBuildId === undefined || typeof state.requestedRuntimeBuildId === "string") &&
-    (state.targetMachine === undefined || isStoredSlateTargetMachine(state.targetMachine)) &&
+    (state.targetMachine === undefined || (value.version === 1
+      ? isStoredLegacyTaskTargetMachine(state.targetMachine)
+      : isStoredSlateTargetMachine(state.targetMachine))) &&
     (state.compatibility === undefined || isStoredSlateSubagentCompatibility(state.compatibility))
 }
 
@@ -1790,7 +1838,7 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
       }
       const envelope: StoredSlateSubagentStateEnvelope = {
         format: SUBAGENT_STATE_STORAGE_FORMAT,
-        version: 1,
+        version: 2,
         state: {
           createdAtMs: state.createdAtMs.toString(),
           lastUsedAtMs: state.lastUsedAtMs.toString(),
@@ -1868,7 +1916,9 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
           : { requestedRuntimeBuildId: parsed.state.requestedRuntimeBuildId as string }),
         ...(parsed.state.targetMachine === undefined
           ? {}
-          : { targetMachine: parsed.state.targetMachine as TaskTargetMachine }),
+          : { targetMachine: parsed.version === 1
+            ? taskTargetMachineFromV1(parsed.state.targetMachine)
+            : parsed.state.targetMachine as TaskTargetMachine }),
         ...(parsed.state.compatibility === undefined
           ? {}
           : { compatibility: parsed.state.compatibility as SlateSubagentStateCompatibility }),

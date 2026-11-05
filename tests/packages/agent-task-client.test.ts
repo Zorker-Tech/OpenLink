@@ -94,7 +94,7 @@ function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolu
     subagentRequestId: "request-1",
     isSelfForkRequested: false,
     effectiveEnvironment: "local",
-    effectiveTargetMachine: { type: "same_machine" },
+    effectiveTargetMachine: { kind: "same-device" },
     ...overrides,
   } as unknown as TaskSubagentResolution
 }
@@ -489,7 +489,7 @@ test("a self-fork runs as a fork of this conversation", async () => {
 })
 
 test("a resumed run keeps its own base branch", async () => {
-  const machine = { type: "new_cloud_vm", base_branch: "feature/other" }
+  const machine = { kind: "cloud-machine", baseBranch: "feature/other" }
   const resumed = executionHarness()
   await resumed.run({ resolved: { subagentIdToResume: "agent-old", effectiveTargetMachine: machine } })
   assert.equal(resumed.executed[0]?.args.resumeAgentId, "agent-old")
@@ -502,12 +502,12 @@ test("a resumed run keeps its own base branch", async () => {
 
 test("a fresh cloud run takes the branch the request or the machine asked for", async () => {
   const fromMachine = executionHarness()
-  await fromMachine.run({ resolved: { effectiveTargetMachine: { type: "new_cloud_vm", base_branch: "feature/machine" } } })
+  await fromMachine.run({ resolved: { effectiveTargetMachine: { kind: "cloud-machine", baseBranch: "feature/machine" } } })
   assert.equal(fromMachine.executed[0]?.args.cloudBaseBranch, "feature/machine")
   const fromRequest = executionHarness()
   await fromRequest.run({
     raw: { cloudBaseBranch: "feature/asked" },
-    resolved: { effectiveTargetMachine: { type: "new_cloud_vm", base_branch: "feature/machine" } },
+    resolved: { effectiveTargetMachine: { kind: "cloud-machine", baseBranch: "feature/machine" } },
   })
   assert.equal(fromRequest.executed[0]?.args.cloudBaseBranch, "feature/asked")
 })

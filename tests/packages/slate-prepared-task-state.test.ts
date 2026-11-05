@@ -39,7 +39,7 @@ function preparedTask(overrides: Partial<SlatePreparedTask> = {}): SlatePrepared
       subagentType: "generalPurpose",
       attachments: [],
       environment: undefined,
-      targetMachine: { type: "same_machine" },
+      targetMachine: { kind: "same-device" },
     },
     parentModelName: "parent-model",
     allowExecuteHook: false,
@@ -75,7 +75,7 @@ test("prepared task owns mutable turn, message, request and setting lists", () =
       subagentType: "generalPurpose",
       attachments,
       environment: "cloud",
-      targetMachine: { type: "self_hosted_pool", labels },
+      targetMachine: { kind: "worker-pool", labels },
     },
     configuredSteps,
   })
@@ -90,7 +90,7 @@ test("prepared task owns mutable turn, message, request and setting lists", () =
   assert.deepEqual(prepared.conversationSnapshot.turns, [new Uint8Array([1, 2])])
   assert.deepEqual(prepared.firstMessage.conversationStateBlobId, new Uint8Array([3, 4]))
   assert.deepEqual(prepared.request.attachments, ["/repo/image.png"])
-  assert.deepEqual(prepared.request.targetMachine, { type: "self_hosted_pool", labels: { region: "eu" } })
+  assert.deepEqual(prepared.request.targetMachine, { kind: "worker-pool", labels: { region: "eu" } })
   assert.deepEqual(prepared.configuredSteps, ["preToolUse"])
 })
 
@@ -108,7 +108,7 @@ test("hook input is projected from Slate task request fields", () => {
       environment: "cloud",
       cloudBaseBranch: "release",
       requestedRuntimeBuildId: "build-4",
-      targetMachine: { type: "new_cloud_vm", base_branch: "release", environment_build_id: "build-4" },
+      targetMachine: { kind: "cloud-machine", baseBranch: "release", environmentBuildId: "build-4" },
     },
   })
 
@@ -120,7 +120,7 @@ test("hook input is projected from Slate task request fields", () => {
     environment: "cloud",
     cloud_base_branch: "release",
     cloud_requested_environment_build_id: "build-4",
-    machine: { type: "new_cloud_vm", base_branch: "release", environment_build_id: "build-4" },
+    machine: { kind: "cloud-machine", baseBranch: "release", environmentBuildId: "build-4" },
     subagent_type: "browserUse",
     run_in_background: false,
     file_attachments: ["/repo/report.png"],

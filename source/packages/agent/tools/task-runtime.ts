@@ -28,12 +28,14 @@ import type { ConversationTurnView } from "../../../adapters/interop/agent/task-
 import { taskEnvironmentForTargetMachine } from "./task-runtime-types.ts"
 import type {
   LegacyTaskTargetArgs,
+  LegacyTaskTargetMachine,
   TaskEnvironment,
   TaskTargetMachine,
   TaskTargetValidationArgs,
 } from "./task-runtime-types.ts"
 export type {
   LegacyTaskTargetArgs,
+  LegacyTaskTargetMachine,
   TaskEnvironment,
   TaskTargetMachine,
   TaskTargetValidationArgs,
@@ -361,19 +363,19 @@ export type ClientSubagentPlacement = {
 export function toClientSubagentPlacement(
   placement: TaskTargetMachine,
 ): ClientSubagentPlacement {
-  switch (placement.type) {
-    case "same_machine":
+  switch (placement.kind) {
+    case "same-device":
       return {
         environment: taskEnvironmentForTargetMachine(placement),
         cloudBaseBranch: undefined,
       }
-    case "new_cloud_vm":
+    case "cloud-machine":
       return {
         environment: taskEnvironmentForTargetMachine(placement),
-        cloudBaseBranch: placement.base_branch,
+        cloudBaseBranch: placement.baseBranch,
       }
-    case "self_hosted_worker":
-    case "self_hosted_pool":
+    case "hosted-worker":
+    case "worker-pool":
       // A client-executed subagent runs where the client is, so it has no way to reach a worker.
       throw new ToolCallArgParseError(
         "Invalid arguments:\nSelf-hosted machine placement requires server-side first-class subagent execution and is not supported by a fresh client-executed Task.",
@@ -386,17 +388,17 @@ export function targetMachineFromLegacyArgs(
   input: LegacyTaskTargetArgs,
 ): TaskTargetMachine {
   if (input.environment !== "cloud") {
-    return { type: "same_machine" }
+    return { kind: "same-device" }
   }
   const baseBranch = input.cloud_base_branch?.trim()
   const buildId = input.cloud_requested_environment_build_id?.trim()
   return {
-    type: "new_cloud_vm",
+    kind: "cloud-machine",
     ...(baseBranch !== undefined && baseBranch.length > 0
-      ? { base_branch: baseBranch }
+      ? { baseBranch }
       : {}),
     ...(buildId !== undefined && buildId.length > 0
-      ? { environment_build_id: buildId }
+      ? { environmentBuildId: buildId }
       : {}),
   }
 }

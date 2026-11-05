@@ -55,7 +55,7 @@ test("new subagent state blobs use Slate field names and reapply snapshot privac
     cloudAgent: { agentId: "worker-1", transcriptUri: "/repo/transcript.jsonl" },
     firstClassAgentId: "agent-1",
     requestedRuntimeBuildId: "build-1",
-    targetMachine: { type: "new_cloud_vm", base_branch: "main", environment_build_id: "build-1" },
+    targetMachine: { kind: "cloud-machine", baseBranch: "main", environmentBuildId: "build-1" },
   })
   const codec = serde()
   const bytes = codec.serialize(state)
@@ -68,12 +68,17 @@ test("new subagent state blobs use Slate field names and reapply snapshot privac
     readonly state: Record<string, unknown>
   }
   assert.equal(stored.format, "slate.agent-subagent-state")
-  assert.equal(stored.version, 1)
+  assert.equal(stored.version, 2)
   assert.equal(stored.state.createdAtMs, "10")
   assert.equal(stored.state.lastUsedAtMs, "20")
   assert.equal(stored.state.executionEnvironment, "cloud")
   assert.deepEqual(stored.state.subagentType, { kind: "computer-use" })
   assert.deepEqual(stored.state.cloudAgent, { agentId: "worker-1", transcriptUri: "/repo/transcript.jsonl" })
+  assert.deepEqual(stored.state.targetMachine, {
+    kind: "cloud-machine",
+    baseBranch: "main",
+    environmentBuildId: "build-1",
+  })
   assert.equal("createdTimestampMs" in stored.state, false)
   assert.equal("cloudSubagent" in stored.state, false)
 
@@ -90,6 +95,42 @@ test("new subagent state blobs use Slate field names and reapply snapshot privac
   assert.ok(note instanceof RedactedString)
   assert.equal(note.__privacyMode, PrivacyMode.NO_STORAGE)
   assert.equal(note.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "usage detail")
+})
+
+test("Slate subagent state v1 placement migrates to the Slate v2 vocabulary", () => {
+  const legacyEnvelope = {
+    format: "slate.agent-subagent-state",
+    version: 1,
+    state: {
+      createdAtMs: "10",
+      lastUsedAtMs: "20",
+      executionEnvironment: "cloud",
+      targetMachine: {
+        type: "new_cloud_vm",
+        base_branch: "release",
+        environment_build_id: "build-4",
+      },
+    },
+  }
+  const legacyBytes = new TextEncoder().encode(`SLATE-AGENT-SUBAGENT-STATE\n${JSON.stringify(legacyEnvelope)}`)
+  const codec = serde()
+  const imported = codec.deserialize(legacyBytes)
+
+  assert.deepEqual(imported.targetMachine, {
+    kind: "cloud-machine",
+    baseBranch: "release",
+    environmentBuildId: "build-4",
+  })
+  const rewritten = JSON.parse(new TextDecoder().decode(codec.serialize(imported)).slice("SLATE-AGENT-SUBAGENT-STATE\n".length)) as {
+    readonly version: number
+    readonly state: { readonly targetMachine?: unknown }
+  }
+  assert.equal(rewritten.version, 2)
+  assert.deepEqual(rewritten.state.targetMachine, {
+    kind: "cloud-machine",
+    baseBranch: "release",
+    environmentBuildId: "build-4",
+  })
 })
 
 test("legacy subagent blobs upgrade to Slate while preserving enum values and nested unknown fields", () => {

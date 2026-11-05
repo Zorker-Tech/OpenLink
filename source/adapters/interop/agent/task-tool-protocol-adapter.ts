@@ -40,24 +40,26 @@ function slateTargetMachineFromModelArgumentsInterop(value: unknown): TaskTarget
   const machine = value as Record<string, unknown>
   switch (machine.type) {
     case "same_machine":
-      return { type: "same_machine" }
+      return { kind: "same-device" }
     case "new_cloud_vm":
       return {
-        type: "new_cloud_vm",
-        ...(typeof machine.base_branch === "string" ? { base_branch: machine.base_branch } : {}),
-        ...(typeof machine.environment_build_id === "string" ? { environment_build_id: machine.environment_build_id } : {}),
+        kind: "cloud-machine",
+        ...(typeof machine.base_branch === "string" ? { baseBranch: machine.base_branch } : {}),
+        ...(typeof machine.environment_build_id === "string" ? { environmentBuildId: machine.environment_build_id } : {}),
       }
     case "self_hosted_worker":
       return typeof machine.worker_id === "string" && machine.worker_id.length > 0
-        ? { type: "self_hosted_worker", worker_id: machine.worker_id }
+        ? { kind: "hosted-worker", workerId: machine.worker_id }
         : undefined
     case "self_hosted_pool": {
       const labels = machine.labels
       const clonedLabels = labels !== null && typeof labels === "object" && !Array.isArray(labels)
-        ? Object.fromEntries(Object.entries(labels).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        ? Object.fromEntries(Object.entries(labels)
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+            .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0))
         : undefined
       return {
-        type: "self_hosted_pool",
+        kind: "worker-pool",
         ...(typeof machine.pool === "string" ? { pool: machine.pool } : {}),
         ...(clonedLabels === undefined ? {} : { labels: clonedLabels }),
       }

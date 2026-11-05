@@ -97,7 +97,7 @@ export function taskEnvironmentToProtoInterop(environment: TaskEnvironment): num
 }
 
 export function taskEnvironmentForTargetMachineInterop(placement: TaskTargetMachine): number {
-  return placement.type === "same_machine"
+  return placement.kind === "same-device"
     ? SubagentExecutionEnvironment.LOCAL
     : SubagentExecutionEnvironment.CLOUD
 }
@@ -114,22 +114,22 @@ export function taskEnvironmentFromProtoInterop(environment: unknown): TaskEnvir
 }
 
 export function targetMachineToProtoInterop(placement: TaskTargetMachine): TargetMachine {
-  switch (placement.type) {
-    case "same_machine":
+  switch (placement.kind) {
+    case "same-device":
       return new TargetMachine({ machine: { case: "sameMachine", value: new SameMachineTarget() } })
-    case "new_cloud_vm":
+    case "cloud-machine":
       return new TargetMachine({
         machine: {
           case: "newCloudVm",
           value: new NewCloudVmTarget({
-            ...(placement.environment_build_id === undefined ? {} : { environmentBuildId: placement.environment_build_id }),
-            ...(placement.base_branch === undefined ? {} : { baseBranch: placement.base_branch }),
+            ...(placement.environmentBuildId === undefined ? {} : { environmentBuildId: placement.environmentBuildId }),
+            ...(placement.baseBranch === undefined ? {} : { baseBranch: placement.baseBranch }),
           }),
         },
       })
-    case "self_hosted_worker":
-      return new TargetMachine({ machine: { case: "selfHostedWorker", value: new SelfHostedWorkerTarget({ workerId: placement.worker_id }) } })
-    case "self_hosted_pool":
+    case "hosted-worker":
+      return new TargetMachine({ machine: { case: "selfHostedWorker", value: new SelfHostedWorkerTarget({ workerId: placement.workerId }) } })
+    case "worker-pool":
       return new TargetMachine({
         machine: {
           case: "selfHostedPool",
@@ -146,18 +146,18 @@ export function targetMachineFromProtoInterop(value: unknown): TaskTargetMachine
   const wire = value as TargetMachine | undefined
   switch (wire?.machine.case) {
     case "sameMachine":
-      return { type: "same_machine" }
+      return { kind: "same-device" }
     case "newCloudVm":
       return {
-        type: "new_cloud_vm",
-        ...(wire.machine.value.environmentBuildId === undefined ? {} : { environment_build_id: wire.machine.value.environmentBuildId }),
-        ...(wire.machine.value.baseBranch === undefined ? {} : { base_branch: wire.machine.value.baseBranch }),
+        kind: "cloud-machine",
+        ...(wire.machine.value.environmentBuildId === undefined ? {} : { environmentBuildId: wire.machine.value.environmentBuildId }),
+        ...(wire.machine.value.baseBranch === undefined ? {} : { baseBranch: wire.machine.value.baseBranch }),
       }
     case "selfHostedWorker":
-      return { type: "self_hosted_worker", worker_id: wire.machine.value.workerId }
+      return { kind: "hosted-worker", workerId: wire.machine.value.workerId }
     case "selfHostedPool":
       return {
-        type: "self_hosted_pool",
+        kind: "worker-pool",
         ...(wire.machine.value.pool === undefined ? {} : { pool: wire.machine.value.pool }),
         ...(wire.machine.value.labels.length === 0 ? {} : { labels: Object.fromEntries(wire.machine.value.labels.map(({ key, value: labelValue }) => [key, labelValue])) }),
       }
