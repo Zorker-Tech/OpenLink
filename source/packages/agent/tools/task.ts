@@ -28,6 +28,7 @@ import {
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
   normalizePreparedTaskConversationStateInterop,
+  slateTaskRequestFromModelArgumentsInterop,
   toInteropTaskResultInterop,
   toRedactedConversationActionInterop,
   toRedactedConversationStateStructureInterop,
@@ -60,10 +61,10 @@ import {
 import {
   prepareTaskSubagent,
   resolveTaskSubagentConfig,
-  type TaskRawArguments,
   type TaskResolutionParentState,
   type TaskSubagentResolution,
 } from "./task-subagent-preparation.ts";
+import type { SlateTaskRequest } from "./task-runtime-types.ts";
 import {
   executeClientSideTaskSubagent,
   renderTaskResultToString,
@@ -265,7 +266,7 @@ function createParentStateAccessor(stateHandler: ParentStateHandler): TaskResolu
 function createCompletionContext(args: {
   readonly resolved: TaskSubagentResolution;
   readonly prepared: SlatePreparedTask;
-  readonly rawArgs: TaskRawArguments;
+  readonly rawArgs: SlateTaskRequest;
   readonly meta: ToolExecutionMetaLike;
   readonly parentModelInfo: Any;
   readonly registrySize: number;
@@ -302,7 +303,7 @@ async function runServerTaskSubagent(args: {
   readonly ctx: Context;
   readonly interactionHandler: Any;
   readonly meta: ToolExecutionMetaLike;
-  readonly rawArgs: TaskRawArguments;
+  readonly rawArgs: SlateTaskRequest;
   readonly resolved: TaskSubagentResolution;
   readonly parentState: TaskResolutionParentState;
   readonly stateHandler: ParentStateHandler;
@@ -543,7 +544,7 @@ export function createTaskTool(
     return new Error("Invalid arguments:\n" + lines.join("\n"));
   };
 
-  const parse = (raw: Any): TaskRawArguments => {
+  const parse = (raw: Any): SlateTaskRequest => {
     let parsedJson: Any;
     try { parsedJson = typeof raw === "string" ? JSON.parse(raw) : raw; }
     catch (error) { throw new Error(`Invalid arguments:\nargument: ${error instanceof Error ? error.message : "Failed to parse arguments"}`); }
@@ -552,7 +553,7 @@ export function createTaskTool(
     assertMachineAndLegacyArgsNotBothSet(result.data);
     assertCloudOnlyTaskArgsAllowed(result.data);
     if (result.data.resume?.trim().toLowerCase() === "self" && !allowResumeSelfFork) throw new Error('Invalid arguments:\nresume="self" is not available for this Task tool.');
-    return result.data as TaskRawArguments;
+    return slateTaskRequestFromModelArgumentsInterop(result.data);
   };
 
   /** What the client-side launch carries besides the resolved call: credentials, media and interrupt wiring. */
@@ -607,7 +608,8 @@ export function createTaskTool(
     )
   }
 
-  const execute = async (ctx: Context, interactionHandler: Any, rawArgs: TaskRawArguments, meta: ToolExecutionMetaLike): Promise<TaskResultInterop> => {
+  const execute = async (ctx: Context, interactionHandler: Any, modelArgs: Any, meta: ToolExecutionMetaLike): Promise<TaskResultInterop> => {
+    const rawArgs = parse(modelArgs);
     const parentState = createParentStateAccessor(stateHandler);
     const resolved = await resolveTaskSubagentConfig({
       parentModelInfo,

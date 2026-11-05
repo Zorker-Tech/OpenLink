@@ -12,7 +12,8 @@ import {
   type ClientTaskExecutionArgs,
   type ClientTaskStateHandler,
 } from "../../source/packages/agent/tools/task-client.ts"
-import type { TaskRawArguments, TaskSubagentResolution } from "../../source/packages/agent/tools/task-subagent-preparation.ts"
+import type { TaskSubagentResolution } from "../../source/packages/agent/tools/task-subagent-preparation.ts"
+import type { SlateTaskRequest } from "../../source/packages/agent/tools/task-runtime-types.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey, conversationGroupIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -98,7 +99,7 @@ function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolu
   } as unknown as TaskSubagentResolution
 }
 
-const rawArgs = (overrides: Partial<TaskRawArguments> = {}): TaskRawArguments => ({ prompt: "do the thing", ...overrides })
+const rawArgs = (overrides: Partial<SlateTaskRequest> = {}): SlateTaskRequest => ({ prompt: "do the thing", ...overrides })
 
 interface Executed {
   readonly args: SubagentArgs
@@ -143,7 +144,7 @@ function executionHarness(options: {
   }
   const run = async (args: {
     ctx?: Context
-    raw?: Partial<TaskRawArguments>
+    raw?: Partial<SlateTaskRequest>
     resolved?: Record<string, unknown>
     signal?: boolean
   } = {}) => await executeClientSideTaskSubagent({
@@ -161,7 +162,7 @@ function executionHarness(options: {
 
 test("a background run sends the background flag to the executor", async () => {
   const harnessed = executionHarness()
-  await harnessed.run({ raw: { run_in_background: true } })
+  await harnessed.run({ raw: { runInBackground: true } })
   assert.equal(harnessed.executed[0]?.args.runInBackground, true)
 })
 
@@ -495,7 +496,7 @@ test("a resumed run keeps its own base branch", async () => {
   // The branch a resumed run was created on is not replaced by the target machine's default.
   assert.equal(resumed.executed[0]?.args.cloudBaseBranch, undefined)
   const explicit = executionHarness()
-  await explicit.run({ raw: { cloud_base_branch: "feature/asked" }, resolved: { subagentIdToResume: "agent-old", effectiveTargetMachine: machine } })
+  await explicit.run({ raw: { cloudBaseBranch: "feature/asked" }, resolved: { subagentIdToResume: "agent-old", effectiveTargetMachine: machine } })
   assert.equal(explicit.executed[0]?.args.cloudBaseBranch, "feature/asked")
 })
 
@@ -505,7 +506,7 @@ test("a fresh cloud run takes the branch the request or the machine asked for", 
   assert.equal(fromMachine.executed[0]?.args.cloudBaseBranch, "feature/machine")
   const fromRequest = executionHarness()
   await fromRequest.run({
-    raw: { cloud_base_branch: "feature/asked" },
+    raw: { cloudBaseBranch: "feature/asked" },
     resolved: { effectiveTargetMachine: { type: "new_cloud_vm", base_branch: "feature/machine" } },
   })
   assert.equal(fromRequest.executed[0]?.args.cloudBaseBranch, "feature/asked")
@@ -534,6 +535,6 @@ test("a finished run stops asking to be backgrounded", async () => {
 test("a run that is already in the background is never handed off", async () => {
   const harnessed = executionHarness()
   harnessed.signal.pending = true
-  await harnessed.run({ raw: { run_in_background: true }, signal: true })
+  await harnessed.run({ raw: { runInBackground: true }, signal: true })
   assert.deepEqual(harnessed.handoffs, [])
 })

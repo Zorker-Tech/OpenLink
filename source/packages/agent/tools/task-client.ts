@@ -51,9 +51,9 @@ import {
 } from "../subagent-persisted-state.ts"
 import {
   buildClientSubagentAttachmentsContext,
-  type TaskRawArguments,
   type TaskSubagentResolution,
 } from "./task-subagent-preparation.ts"
+import type { SlateTaskRequest } from "./task-runtime-types.ts"
 import {
   RUNNING_SUBAGENT_FOLLOWUP_ERROR,
   RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT,
@@ -268,7 +268,7 @@ export interface ClientTaskContextInjectionSignal {
 export interface ClientTaskExecutionArgs {
   readonly ctx: Context
   readonly toolCallId: string
-  readonly rawArgs: TaskRawArguments
+  readonly rawArgs: SlateTaskRequest
   readonly resolved: TaskSubagentResolution
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>
   readonly stateHandler: ClientTaskStateHandler
@@ -335,9 +335,9 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
   const continuationConfig = buildClientContinuationConfig(resolved.subagentConfig)
   const parentConversation = getConversationId(ctx)
   const rootParentConversation = getConversationGroupId(ctx)
-  const backgroundRun = rawInput.run_in_background ?? resolved.subagentConfig.isBackground
+  const backgroundRun = rawInput.runInBackground ?? resolved.subagentConfig.isBackground
   let attachedContext
-  if ((rawInput.file_attachments?.length ?? 0) > 0) {
+  if ((rawInput.fileAttachments?.length ?? 0) > 0) {
     const videoPaths = await getUserAttachedVideoPaths(ctx, stateHandler)
     const mediaOptions = {
       resolvedModelId: resolved.resolvedModelId,
@@ -355,7 +355,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       videoPaths,
       ...(args.trustedVideoAttachmentRoots !== undefined ? { trustedVideoAttachmentRoots: args.trustedVideoAttachmentRoots } : {}),
     }
-    attachedContext = await buildClientSubagentAttachmentsContext(ctx, rawInput.file_attachments!, resourceAccessor, args.toolCallId, mediaOptions)
+    attachedContext = await buildClientSubagentAttachmentsContext(ctx, rawInput.fileAttachments!, resourceAccessor, args.toolCallId, mediaOptions)
   }
   let stopHandoff: (() => void) | undefined
   if (contextInjectionSignal !== undefined && backgroundRun !== true) {
@@ -414,12 +414,12 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
         // A resumed run keeps its own base branch; a fresh cloud run takes the one the request or the
         // target machine asked for.
         ...(resolved.subagentIdToResume === undefined
-          ? rawInput.cloud_base_branch !== undefined
-            ? { cloudBaseBranch: rawInput.cloud_base_branch }
+          ? rawInput.cloudBaseBranch !== undefined
+            ? { cloudBaseBranch: rawInput.cloudBaseBranch }
             : resolved.effectiveTargetMachine.type === "new_cloud_vm" && resolved.effectiveTargetMachine.base_branch !== undefined
               ? { cloudBaseBranch: resolved.effectiveTargetMachine.base_branch }
               : {}
-          : rawInput.cloud_base_branch !== undefined ? { cloudBaseBranch: rawInput.cloud_base_branch } : {}),
+          : rawInput.cloudBaseBranch !== undefined ? { cloudBaseBranch: rawInput.cloudBaseBranch } : {}),
         ...(modelParameters(resolved.resolvedModelParameters) !== undefined ? { modelParameters: modelParameters(resolved.resolvedModelParameters)! } : {}),
         ...(args.subagentCredentials !== undefined ? { credentials: args.subagentCredentials } : {}),
       })

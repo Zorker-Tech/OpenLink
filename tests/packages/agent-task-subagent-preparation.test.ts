@@ -16,7 +16,6 @@ import {
   resolveTaskSubagentConfig,
   resolveTrustedAttachmentPath,
   untrustedAttachmentPathError,
-  type TaskRawArguments,
 } from "../../source/packages/agent/tools/task-subagent-preparation.ts"
 import { taskEnvironmentFromProtoInterop } from "../../source/adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import { buildSlatePreparedTaskHookInput, type SlatePreparedTask } from "../../source/packages/agent/tools/task-prepared-state.ts"
@@ -34,6 +33,7 @@ import type {
   SlateSubagentPersistedState,
   SlateTaskConversationState,
 } from "../../source/packages/agent/subagent-persisted-state.ts"
+import type { SlateTaskRequest } from "../../source/packages/agent/tools/task-runtime-types.ts"
 import {
   CustomSubagentPermissionMode,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
@@ -75,11 +75,11 @@ test("a stored environment is read back as the request spells it", () => {
 test("what the request asked for wins, and the saved state is the fallback", () => {
   // A machine in the request decides it, whatever else says.
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "new_cloud_vm" } }, restoredState({ executionEnvironment: "local" })),
+    getEffectiveSubagentEnvironment({ targetMachine: { type: "new_cloud_vm" } }, restoredState({ executionEnvironment: "local" })),
     "cloud",
   )
   assert.equal(
-    getEffectiveSubagentEnvironment({ machine: { type: "same_machine" } }, restoredState({ executionEnvironment: "cloud" })),
+    getEffectiveSubagentEnvironment({ targetMachine: { type: "same_machine" } }, restoredState({ executionEnvironment: "cloud" })),
     "local",
   )
   // Then the older environment field.
@@ -273,7 +273,7 @@ const customConfig = {
 const models = createSubagentModels({ standard: { slug: "composer-2" }, fast: { slug: "composer-2-fast" } })
 
 function resolutionArgs(options: {
-  rawArgs?: Partial<TaskRawArguments>
+  rawArgs?: Partial<SlateTaskRequest>
   configs?: readonly unknown[]
   restore?: (subagentId: string) => unknown
   getSubagentIdToResume?: (typeName: string, mode: string) => string | undefined
@@ -286,7 +286,7 @@ function resolutionArgs(options: {
   return {
     restoreCalls,
     ctx: createContext(),
-    rawArgs: { prompt: "do the thing", ...options.rawArgs } as TaskRawArguments,
+    rawArgs: { prompt: "do the thing", ...options.rawArgs } as SlateTaskRequest,
     meta: { toolCallId: "call-1" },
     subagentConfigs: (options.configs ?? [generalConfig, customConfig]) as never,
     parentState: {
@@ -331,12 +331,12 @@ test("a call with no subagent types available is refused", async () => {
 })
 
 test("a type is matched however it was spelled", async () => {
-  const resolved = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { subagent_type: "release-bot" } }) as never)
+  const resolved = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { subagentType: "release-bot" } }) as never)
   assert.equal(resolved.typeName, "releaseBot")
 })
 
 test("a type that is not in the catalogue falls back to the default", async () => {
-  const resolved = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { subagent_type: "noSuchAgent" } }) as never)
+  const resolved = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { subagentType: "noSuchAgent" } }) as never)
   assert.equal(resolved.typeName, "generalPurpose")
 })
 
@@ -352,7 +352,7 @@ test("a resume mode that resumes by itself asks the parent which agent to contin
   const configs = [{ ...customConfig, resumeModeOverride: "LAST_AGENT" as const }]
   const args = resolutionArgs({
     configs,
-    rawArgs: { subagent_type: "releaseBot" },
+    rawArgs: { subagentType: "releaseBot" },
     getSubagentIdToResume: (typeName, mode) => `${typeName}:${mode}`,
     restore: () => ({ subagentType: customConfig.subagentType, modelId: "composer-2-fast" }),
   })
@@ -366,7 +366,7 @@ test("a resume mode that resumes by itself asks the parent which agent to contin
 
 test("an explicit resume names the agent to continue, and its type comes from the saved state", async () => {
   const args = resolutionArgs({
-    rawArgs: { subagent_type: "generalPurpose", resume: "subagent-9" },
+    rawArgs: { subagentType: "generalPurpose", resume: "subagent-9" },
     restore: () => ({ subagentType: customConfig.subagentType }),
   })
   const resolved = await resolveTaskSubagentConfig(args as never)
@@ -429,7 +429,7 @@ test("the parent's model parameters are carried only when the subagent runs on t
 })
 
 test("where the subagent runs follows the request, then the saved state, then the cloud fields", async () => {
-  const cloud = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { environment: "cloud", cloud_base_branch: "main" } }) as never)
+  const cloud = await resolveTaskSubagentConfig(resolutionArgs({ rawArgs: { environment: "cloud", cloudBaseBranch: "main" } }) as never)
   assert.equal(cloud.effectiveEnvironment, "cloud")
   assert.deepEqual(cloud.effectiveTargetMachine, { type: "new_cloud_vm", base_branch: "main" })
 
@@ -596,7 +596,7 @@ test("a trusted video is handed over as a video with a frame rate", async () => 
 // ---------------------------------------------------------------------------------------------
 
 async function prepared(options: {
-  rawArgs?: Partial<TaskRawArguments>
+  rawArgs?: Partial<SlateTaskRequest>
   parentCursorCommands?: readonly unknown[]
   subagentCredentials?: SubagentCredentials["credentials"]
   configuredSteps?: readonly string[]
@@ -606,7 +606,7 @@ async function prepared(options: {
   environment?: "cloud" | "local"
 } = {}): Promise<{ prepared: SlatePreparedTask; attachments: AttachmentHarness }> {
   const attachments = attachmentHarness()
-  const rawArgs = { prompt: "do the thing", description: "the thing", ...options.rawArgs, ...(options.attachments === undefined ? {} : { file_attachments: options.attachments }) } as TaskRawArguments
+  const rawArgs = { prompt: "do the thing", description: "the thing", ...options.rawArgs, ...(options.attachments === undefined ? {} : { fileAttachments: options.attachments }) } as SlateTaskRequest
   const resolved = await resolveTaskSubagentConfig({
     ...resolutionArgs({ rawArgs, ...(options.environment === undefined ? {} : { rawArgs: { ...rawArgs, environment: options.environment } }) }),
   } as never)
@@ -655,7 +655,7 @@ test("a prepared Slate task carries what the run loop needs to start it", async 
 
 test("the normalized Slate request carries task arguments and placement", async () => {
   const { prepared: message } = await prepared({
-    rawArgs: { model: "composer-2-fast", resume: "self", environment: "cloud", cloud_base_branch: "main", run_in_background: true },
+    rawArgs: { model: "composer-2-fast", resume: "self", environment: "cloud", cloudBaseBranch: "main", runInBackground: true },
   })
   const raw = message.request
   assert.equal(raw?.prompt, "do the thing")
@@ -702,7 +702,7 @@ test("attachments are read while the subagent is prepared", async () => {
 
 test("the hook input mirrors the call the way a hook expects to read it", async () => {
   const { prepared: message } = await prepared({
-    rawArgs: { environment: "cloud", cloud_base_branch: "main", run_in_background: false },
+    rawArgs: { environment: "cloud", cloudBaseBranch: "main", runInBackground: false },
     attachments: ["/repo/uploads/diagram.png"],
   })
   const input = buildSlatePreparedTaskHookInput({ typeName: message.typeName, request: message.request })
@@ -737,7 +737,7 @@ test("a sibling of a trusted prefix is not inside it", () => {
 
 test("a requested cloud build is trimmed", async () => {
   const resolved = await resolveTaskSubagentConfig(resolutionArgs({
-    rawArgs: { environment: "cloud", cloud_requested_environment_build_id: " build-1 " },
+    rawArgs: { environment: "cloud", requestedRuntimeBuildId: " build-1 " },
   }) as never);
   assert.equal((resolved.effectiveTargetMachine as { environment_build_id?: string }).environment_build_id, "build-1");
 });

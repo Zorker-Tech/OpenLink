@@ -19,6 +19,22 @@ export function taskEnvironmentForTargetMachine(placement: TaskTargetMachine): E
   return placement.type === "same_machine" ? "local" : "cloud"
 }
 
+/** Slate's normalized request from the model-facing delegated-task tool. */
+export interface SlateTaskRequest {
+  readonly description?: string
+  readonly prompt: string
+  readonly model?: string
+  readonly resume?: string
+  readonly subagentType?: string
+  readonly fileAttachments?: readonly string[]
+  readonly environment?: TaskEnvironment
+  readonly cloudBaseBranch?: string
+  readonly requestedRuntimeBuildId?: string
+  readonly targetMachine?: TaskTargetMachine
+  readonly runInBackground?: boolean
+  readonly interrupt?: boolean
+}
+
 /** Slate's prepared task arguments, before the runtime adapter encodes the runner message. */
 export interface SlatePreparedTaskRawArgs {
   readonly description: string

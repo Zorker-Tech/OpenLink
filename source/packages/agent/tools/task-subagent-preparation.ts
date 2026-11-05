@@ -35,7 +35,11 @@ import {
   type SlateTaskConversationState,
 } from "../subagent-persisted-state.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import { taskEnvironmentForTargetMachine, type SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
+import {
+  taskEnvironmentForTargetMachine,
+  type SlatePreparedTaskRawArgs,
+  type SlateTaskRequest,
+} from "./task-runtime-types.ts"
 import { createSlatePreparedTask, type SlatePreparedTask } from "./task-prepared-state.ts"
 import { GENERAL_PURPOSE_SUBAGENT_TYPE } from "./core/subagent/subagent-config.ts"
 import {
@@ -78,18 +82,15 @@ function assertVideoModelSupported(resolvedModelId: string | undefined): void {
   }
 }
 
-export type RawTaskEnvironmentArgs = {
-  readonly environment?: TaskEnvironment;
-  readonly machine?: TaskTargetMachine;
-};
+export type RawTaskEnvironmentArgs = Pick<SlateTaskRequest, "environment" | "targetMachine">
 
 /** Where a subagent runs: what the request asked for, or failing that what its saved state says. */
 export function getEffectiveSubagentEnvironment(
   rawArgs: RawTaskEnvironmentArgs,
   restoredState: Pick<SlateSubagentPersistedState, "targetMachine" | "executionEnvironment" | "cloudAgent"> | undefined,
 ): TaskEnvironment {
-  if (rawArgs.machine !== undefined) {
-    return taskEnvironmentForTargetMachine(rawArgs.machine);
+  if (rawArgs.targetMachine !== undefined) {
+    return taskEnvironmentForTargetMachine(rawArgs.targetMachine);
   }
   if (rawArgs.environment !== undefined) return rawArgs.environment;
   const restoredMachine = restoredState?.targetMachine;
@@ -435,19 +436,8 @@ export async function isPriorSubagentModelUsable(
   return options.parentMaxMode || !modelRequiresMaxMode;
 }
 
-export interface TaskRawArguments {
-  readonly description?: string;
-  readonly prompt: string;
-  readonly model?: string;
-  readonly resume?: string;
-  readonly subagent_type?: string;
-  readonly file_attachments?: readonly string[];
-  readonly environment?: TaskEnvironment;
-  readonly cloud_base_branch?: string;
-  readonly cloud_requested_environment_build_id?: string;
-  readonly machine?: TaskTargetMachine;
-  readonly run_in_background?: boolean;
-}
+/** Legacy name retained for callers; SlateTaskRequest is the canonical product model. */
+export type TaskRawArguments = SlateTaskRequest
 
 export interface TaskResolutionParentState extends ConversationStateParent {
   resolveSubagentId?: (subagentIdOrBcId: string) => string | undefined;
@@ -513,7 +503,7 @@ function resumeMeansSelf(resume: string | undefined): boolean {
 /** Which catalogue entry, model, placement and identity a task call resolves to. */
 export async function resolveTaskSubagentConfig(args: {
   readonly ctx: Context;
-  readonly rawArgs: TaskRawArguments;
+  readonly rawArgs: SlateTaskRequest;
   readonly meta: TaskResolutionMeta;
   readonly subagentConfigs: readonly TaskSubagentModelConfig[];
   readonly parentState: TaskResolutionParentState;
@@ -531,7 +521,7 @@ export async function resolveTaskSubagentConfig(args: {
   } = args;
   const fallbackConfig = subagentConfigNamed(catalogue, GENERAL_PURPOSE_SUBAGENT_TYPE) ?? catalogue[0];
   if (fallbackConfig === undefined) throw new ToolCallArgParseError("No subagent types are available.");
-  const requestedConfig = subagentConfigNamed(catalogue, requestArgs.subagent_type) ?? fallbackConfig;
+  const requestedConfig = subagentConfigNamed(catalogue, requestArgs.subagentType) ?? fallbackConfig;
   const resumeMode = requestedConfig.resumeModeOverride ?? "DEFAULT";
   const requestedType = slateSubagentTypeName(requestedConfig.subagentType);
   const requestKey = computeSubagentRequestId(callMeta.toolCallId);
@@ -551,8 +541,8 @@ export async function resolveTaskSubagentConfig(args: {
   const resolvedTypeName = slateSubagentTypeName(subagentConfig.subagentType);
   const analyticsType = isCustomSubagentType(subagentConfig.subagentType) ? "custom" : resolvedTypeName;
   const environmentField = getEffectiveSubagentEnvironment(requestArgs, restoredState);
-  const requestedMachine = requestArgs.machine ?? restoredState?.targetMachine ?? (environmentField === "cloud"
-    ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: requestArgs.cloud_base_branch, cloud_requested_environment_build_id: requestArgs.cloud_requested_environment_build_id })
+  const requestedMachine = requestArgs.targetMachine ?? restoredState?.targetMachine ?? (environmentField === "cloud"
+    ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: requestArgs.cloudBaseBranch, cloud_requested_environment_build_id: requestArgs.requestedRuntimeBuildId })
     : { type: "same_machine" });
   const priorModel = selfForkRequested ? settings.parentRequestedModelName ?? parentModel.modelName : restoredState?.modelId?.trim() || undefined;
   if (priorModel !== undefined && settings.subagentModelForcePolicy === SubagentModelForcePolicy.ParentPin && settings.forceModelId !== undefined && priorModel !== settings.forceModelId) throw new ToolCallArgParseError(`Cannot resume subagent with model "${priorModel}" because the active policy requires model "${settings.forceModelId}".`);
@@ -575,7 +565,7 @@ export async function resolveTaskSubagentConfig(args: {
   const parentKey = getRequestId(turnContext);
   const rootParentKey = getRootParentRequestId(turnContext) ?? parentKey;
   const resumeCloudAgentId = restoredState?.cloudAgent?.agentId?.trim() || restoredState?.firstClassAgentId?.trim() || undefined;
-  const runtimeBuildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.cloud_requested_environment_build_id?.trim() || restoredState?.requestedRuntimeBuildId?.trim() || undefined : undefined;
+  const runtimeBuildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.requestedRuntimeBuildId?.trim() || restoredState?.requestedRuntimeBuildId?.trim() || undefined : undefined;
   const targetMachineFinal = requestedMachine.type === "new_cloud_vm" && runtimeBuildId !== requestedMachine.environment_build_id
     ? { ...requestedMachine, ...(runtimeBuildId !== undefined ? { environment_build_id: runtimeBuildId } : {}) }
     : requestedMachine;
@@ -606,7 +596,7 @@ export async function resolveTaskSubagentConfig(args: {
 export interface PrepareTaskSubagentArgs {
   readonly resolved: TaskSubagentResolution;
   readonly ctx: Context;
-  readonly rawArgs: TaskRawArguments;
+  readonly rawArgs: SlateTaskRequest;
   readonly meta: TaskResolutionMeta;
   readonly parentState: ConversationStateParent;
   readonly resourceAccessor: AttachmentResourceAccessor;
@@ -645,9 +635,9 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     requestedRuntimeBuildId: runtimeBuildId,
   } = resolved;
   let attachmentSelection: TaskSelectedContextInterop | undefined;
-  if (rawArgs.file_attachments !== undefined && rawArgs.file_attachments.length > 0) {
+  if (rawArgs.fileAttachments !== undefined && rawArgs.fileAttachments.length > 0) {
     const mediaProvider = isVideoReviewSubagentType(subagentConfig.subagentType) ? args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
-    attachmentSelection = await collectAttachments(ctx, rawArgs.file_attachments, resourceAccessor, meta.toolCallId, {
+    attachmentSelection = await collectAttachments(ctx, rawArgs.fileAttachments, resourceAccessor, meta.toolCallId, {
       resolvedModelId: chosenModelId,
       ...(args.privacyMode !== undefined ? { privacyMode: args.privacyMode } : {}),
       ...(mediaProvider !== undefined ? { attachedMediaUrlProvider: mediaProvider } : {}),
@@ -696,12 +686,12 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       description: rawArgs.description ?? "",
       prompt: rawArgs.prompt,
       ...(rawArgs.model !== undefined ? { model: rawArgs.model } : {}),
-      subagentType: rawArgs.subagent_type ?? resolvedTypeName,
+      subagentType: rawArgs.subagentType ?? resolvedTypeName,
       ...(rawArgs.resume !== undefined ? { resume: rawArgs.resume } : {}),
-      ...(rawArgs.run_in_background !== undefined ? { runInBackground: rawArgs.run_in_background } : {}),
-      attachments: rawArgs.file_attachments === undefined ? [] : [...rawArgs.file_attachments],
+      ...(rawArgs.runInBackground !== undefined ? { runInBackground: rawArgs.runInBackground } : {}),
+      attachments: rawArgs.fileAttachments === undefined ? [] : [...rawArgs.fileAttachments],
       environment: resolved.effectiveEnvironment,
-      ...((rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : "") } : {}),
+      ...((rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloudBaseBranch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : "") } : {}),
       ...(runtimeBuildId !== undefined ? { requestedRuntimeBuildId: runtimeBuildId } : {}),
       targetMachine: resolved.effectiveTargetMachine,
     } satisfies SlatePreparedTaskRawArgs,
