@@ -691,12 +691,12 @@ test("the session's own settings are carried onto the subagent", async () => {
 test("the parent's saved commands travel with the subagent", async () => {
   const commands = [{ name: "commit", content: "commit the work" }]
   const { prepared: message } = await prepared({ parentCursorCommands: commands })
-  assert.deepEqual(message.attachmentSelection?.cursorCommands, commands)
+  assert.deepEqual(message.attachmentSelection?.commands, commands)
 })
 
 test("attachments are read while the subagent is prepared", async () => {
   const { prepared: message, attachments } = await prepared({ attachments: ["/repo/uploads/diagram.png"] })
-  assert.equal(message.attachmentSelection?.selectedImages.length, 1)
+  assert.equal(message.attachmentSelection?.images.length, 1)
   assert.equal(attachments.reads.length, 1)
 })
 

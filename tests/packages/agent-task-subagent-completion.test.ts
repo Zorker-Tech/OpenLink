@@ -30,6 +30,7 @@ import type { ExecuteHookArgs } from "../../source/adapters/interop/proto/genera
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
+import type { SlateTaskAttachmentSelection } from "../../source/packages/agent/tools/task-attachment-contracts.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a hook executor that answers the way a workspace would
@@ -501,9 +502,14 @@ test("a hook that answers something other than a string does not continue the su
 })
 
 test("a follow-up carries the selected context it was given", () => {
-  const context = new SelectedContext({})
+  const context: SlateTaskAttachmentSelection = {
+    images: [],
+    videos: [],
+    commands: [{ name: "build", content: "pnpm test", sourcePath: "/repo/.slate/commands/build.md" }],
+  }
   const message = buildFollowupMessage({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false, selectedContext: context })
-  assert.notEqual(message.selectedContext, undefined, "the context it was given is carried")
+  assert.ok(message.selectedContext instanceof SelectedContext)
+  assert.equal(message.selectedContext.cursorCommands[0]?.fullPath, "/repo/.slate/commands/build.md")
 })
 
 test("only the turns of this iteration are collected into the result", async () => {

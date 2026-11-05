@@ -14,6 +14,7 @@ export type SlateVideoContent =
 
 /** The video information Slate's context pipeline needs, without its storage message shape. */
 export interface SlateVideoAttachment {
+  readonly id?: string | undefined
   readonly sourcePath: string;
   readonly displayName: string;
   readonly mediaType: string;

@@ -32,6 +32,8 @@ import type { SlateUserMessage } from "../user-message-state.ts"
 import { createSlateTaskSuccessResult, type SlateTaskResult } from "./task-result-state.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
+import type { SlateTaskAttachmentSelection } from "./task-attachment-contracts.ts"
+import { toInteropTaskSelectedContext } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 
 /** How far into its run a subagent has got: its turns so far, whether the stream is done, whether it was told to stop. */
 export interface TaskSubagentIterationState {
@@ -55,7 +57,7 @@ export interface TaskSubagentCompletionContext {
   readonly isParallel: boolean
   readonly parentModelName: string
   readonly resultSuffix?: string
-  readonly selectedContext?: unknown
+  readonly selectedContext?: SlateTaskAttachmentSelection
   readonly plugin?: string
   readonly marketplace?: string
   readonly pluginId?: string
@@ -153,7 +155,7 @@ export function buildFollowupMessage(request: {
   readonly toolCallId: string
   readonly loopCount: number
   readonly useAskMode: boolean
-  readonly selectedContext?: unknown
+  readonly selectedContext?: SlateTaskAttachmentSelection
 }): SlateUserMessage {
   return {
     text: request.followupMessage,
@@ -162,7 +164,9 @@ export function buildFollowupMessage(request: {
     mode: request.useAskMode ? SlateMode.CHAT : SlateMode.AGENT,
     conversationStateBlobId: new Uint8Array(),
     hookContexts: [],
-    ...(request.selectedContext !== undefined ? { selectedContext: request.selectedContext } : {}),
+    ...(request.selectedContext === undefined
+      ? {}
+      : { selectedContext: toInteropTaskSelectedContext(request.selectedContext) }),
   }
 }
 

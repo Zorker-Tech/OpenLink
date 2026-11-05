@@ -8,13 +8,20 @@ import {
   SelectedContext,
   SelectedImage,
   SelectedImage_BlobIdWithData,
+  SelectedCursorCommand,
+  SelectedPluginCapabilityRef,
+  SelectedPluginCapabilityType,
   SelectedVideo,
   SelectedVideo_BlobIdWithData,
   SelectedVideo_SignedUrl,
 } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type {
-  SelectedCursorCommand,
-} from "../proto/generated/agent/v1/selected_context_pb.ts"
+  SlateTaskAttachmentSelection,
+  SlateTaskCommandAttachment,
+  SlateTaskPluginCapability,
+} from "../../../packages/agent/tools/task-attachment-contracts.ts"
+import { fromInteropSelectedImage, toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
+import { fromInteropSelectedVideo, toInteropSelectedVideo } from "./video-attachment-adapter.ts"
 export type TaskAttachmentRequestContextResultInterop = RequestContextResult
 export type TaskAttachmentReadResultInterop = ReadResult
 export type TaskAttachmentRequestContextArgsInterop = InstanceType<typeof RequestContextArgs>
@@ -23,6 +30,79 @@ export type TaskSelectedContextInterop = SelectedContext
 export type TaskSelectedImageInterop = InstanceType<typeof SelectedImage>
 export type TaskSelectedVideoInterop = InstanceType<typeof SelectedVideo>
 export type TaskSelectedCursorCommandInterop = SelectedCursorCommand
+
+function capabilityKindFromInterop(value: SelectedPluginCapabilityType): SlateTaskPluginCapability {
+  if (value === SelectedPluginCapabilityType.COMMAND) return "command"
+  if (value === SelectedPluginCapabilityType.SKILL) return "skill"
+  if (value === SelectedPluginCapabilityType.SUBAGENT) return "subagent"
+  if (value === SelectedPluginCapabilityType.UNSPECIFIED) return "unspecified"
+  return `unknown-${value}`
+}
+
+function capabilityKindToInterop(value: SlateTaskPluginCapability): SelectedPluginCapabilityType {
+  if (value === "command") return SelectedPluginCapabilityType.COMMAND
+  if (value === "skill") return SelectedPluginCapabilityType.SKILL
+  if (value === "subagent") return SelectedPluginCapabilityType.SUBAGENT
+  if (value === "unspecified") return SelectedPluginCapabilityType.UNSPECIFIED
+  const unknown = /^unknown-(-?\d+)$/.exec(value)
+  return unknown === null ? SelectedPluginCapabilityType.UNSPECIFIED : Number(unknown[1]) as SelectedPluginCapabilityType
+}
+
+function fromInteropTaskCommand(command: TaskSelectedCursorCommandInterop): SlateTaskCommandAttachment {
+  const capability = command.pluginCapability
+  return {
+    name: command.name,
+    content: command.content,
+    ...(command.fullPath === undefined ? {} : { sourcePath: command.fullPath }),
+    ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
+    ...(capability === undefined ? {} : {
+      capability: {
+        pluginId: capability.pluginId,
+        capability: capabilityKindFromInterop(capability.capabilityType),
+        sourcePath: capability.sourcePath,
+        snapshotToken: capability.snapshotToken,
+        ...(capability.resolvedCommitSha === undefined ? {} : { resolvedCommit: capability.resolvedCommitSha }),
+      },
+    }),
+  }
+}
+
+function toInteropTaskCommand(command: SlateTaskCommandAttachment): TaskSelectedCursorCommandInterop {
+  const capability = command.capability
+  return new SelectedCursorCommand({
+    name: command.name,
+    content: command.content,
+    ...(command.sourcePath === undefined ? {} : { fullPath: command.sourcePath }),
+    ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
+    ...(capability === undefined ? {} : {
+      pluginCapability: new SelectedPluginCapabilityRef({
+        pluginId: capability.pluginId,
+        capabilityType: capabilityKindToInterop(capability.capability),
+        sourcePath: capability.sourcePath,
+        snapshotToken: capability.snapshotToken,
+        ...(capability.resolvedCommit === undefined ? {} : { resolvedCommitSha: capability.resolvedCommit }),
+      }),
+    }),
+  })
+}
+
+export function fromInteropTaskSelectedContext(context: SelectedContext | undefined): SlateTaskAttachmentSelection | undefined {
+  if (context === undefined) return undefined
+  return {
+    images: context.selectedImages.map(fromInteropSelectedImage),
+    videos: context.selectedVideos.map(fromInteropSelectedVideo),
+    commands: context.cursorCommands.map(fromInteropTaskCommand),
+  }
+}
+
+export function toInteropTaskSelectedContext(context: SlateTaskAttachmentSelection | undefined): SelectedContext | undefined {
+  if (context === undefined) return undefined
+  return new SelectedContext({
+    selectedImages: context.images.map(toInteropSelectedImage),
+    selectedVideos: context.videos.map(toInteropSelectedVideo),
+    cursorCommands: context.commands.map(toInteropTaskCommand),
+  })
+}
 
 export function createTaskAttachmentRequestContextArgsInterop(): InstanceType<typeof RequestContextArgs> {
   return new RequestContextArgs()

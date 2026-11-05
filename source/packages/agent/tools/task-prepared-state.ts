@@ -2,13 +2,7 @@ import { cloneSlateUserMessage, type SlateUserMessage } from "../user-message-st
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
 import type { SlateSubagentType } from "../subagent-type.ts"
 import { cloneTaskTargetMachine, type SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
-
-/** Attachment slots owned by task preparation; each item remains at its media-provider boundary. */
-export interface SlateTaskAttachmentSelection {
-  readonly selectedImages: readonly unknown[]
-  readonly selectedVideos: readonly unknown[]
-  readonly cursorCommands: readonly unknown[]
-}
+import { cloneSlateTaskAttachmentSelection, type SlateTaskAttachmentSelection } from "./task-attachment-contracts.ts"
 
 /** Slate's in-memory handoff from task resolution to the subagent run loop. */
 export interface SlatePreparedTask {
@@ -30,7 +24,7 @@ export interface SlatePreparedTask {
   readonly rootParentRequestId?: string
   readonly prompt: string
   readonly description: string
-  /** Selected media remains opaque until the attachment protocol receives its own Slate model. */
+  /** Slate media and command records prepared for the subagent's launch. */
   readonly attachmentSelection?: SlateTaskAttachmentSelection
   readonly plugin?: string
   readonly marketplace?: string
@@ -109,6 +103,9 @@ export function createSlatePreparedTask(input: SlatePreparedTask): SlatePrepared
       turns: input.conversationSnapshot.turns.map(turn => new Uint8Array(turn)),
     },
     firstMessage: cloneSlateUserMessage(input.firstMessage),
+    ...(input.attachmentSelection === undefined
+      ? {}
+      : { attachmentSelection: cloneSlateTaskAttachmentSelection(input.attachmentSelection) }),
     request: {
       ...input.request,
       attachments: [...input.request.attachments],

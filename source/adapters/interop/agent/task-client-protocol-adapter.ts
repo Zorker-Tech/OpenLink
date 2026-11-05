@@ -30,6 +30,8 @@ import {
 import { forceBackgroundSubagentExecutorResource } from "./subagent-control-exec-adapter.ts"
 import { subagentExecutorResource } from "./subagent-exec-adapter.ts"
 import { taskEnvironmentToProtoInterop } from "./task-runtime-protocol-adapter.ts"
+import type { SlateTaskAttachmentSelection } from "../../../packages/agent/tools/task-attachment-contracts.ts"
+import { toInteropTaskSelectedContext } from "./task-subagent-preparation-protocol-adapter.ts"
 
 export interface TaskClientContinuationConfigInput {
   readonly idleThreshold: number
@@ -53,7 +55,7 @@ export interface TaskClientSubagentRequest {
   readonly continuationConfig?: unknown
   readonly rootParentConversationId?: string
   readonly parentConversationId?: string
-  readonly selectedContext?: unknown
+  readonly selectedContext?: SlateTaskAttachmentSelection
   readonly environment: TaskEnvironment
   readonly cloudBaseBranch?: string
   readonly modelParameters?: readonly { readonly id: string; readonly value: string }[]
@@ -195,7 +197,7 @@ export async function runClientSubagentInterop(
     ...(request.continuationConfig === undefined ? {} : { continuationConfig: request.continuationConfig as ClientContinuationConfig }),
     ...(request.rootParentConversationId === undefined ? {} : { rootParentConversationId: request.rootParentConversationId }),
     ...(request.parentConversationId === undefined ? {} : { parentConversationId: request.parentConversationId }),
-    ...(request.selectedContext === undefined ? {} : { selectedContext: request.selectedContext as NonNullable<SubagentArgs["selectedContext"]> }),
+    ...(request.selectedContext === undefined ? {} : { selectedContext: toInteropTaskSelectedContext(request.selectedContext) as NonNullable<SubagentArgs["selectedContext"]> }),
     environment: taskEnvironmentToProtoInterop(request.environment),
     ...(request.cloudBaseBranch === undefined ? {} : { cloudBaseBranch: request.cloudBaseBranch }),
     ...(request.modelParameters === undefined ? {} : { modelParameters: [...request.modelParameters] }),

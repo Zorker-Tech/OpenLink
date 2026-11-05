@@ -68,6 +68,7 @@ export function fromInteropSelectedVideo(video: InteropSelectedVideo): SlateVide
       };
   }
   return {
+    ...(video.uuid.length === 0 ? {} : { id: video.uuid }),
     sourcePath: video.path,
     displayName: video.filename,
     mediaType: video.mimeType,
@@ -109,6 +110,7 @@ export function toInteropSelectedVideo(video: SlateVideoAttachment): InteropSele
       break;
   }
   return new SelectedVideo({
+    uuid: video.id ?? "",
     path: video.sourcePath,
     filename: video.displayName,
     mimeType: video.mediaType,

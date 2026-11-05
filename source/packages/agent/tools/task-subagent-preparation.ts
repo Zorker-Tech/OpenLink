@@ -14,6 +14,7 @@ import {
   createTaskSelectedVideoDataInterop,
   createTaskSelectedVideoInterop,
   createTaskSelectedVideoSignedUrlInterop,
+  fromInteropTaskSelectedContext,
 } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import type { AttachedMediaUrlProvider } from "../context/video-attachment.ts"
 import { detectImageMimeType } from "./core/read/image-utils.ts"
@@ -634,10 +635,10 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     cloudAgentId: resumeCloudAgentId,
     requestedRuntimeBuildId: runtimeBuildId,
   } = resolved;
-  let attachmentSelection: TaskSelectedContextInterop | undefined;
+  let attachmentSelectionInterop: TaskSelectedContextInterop | undefined;
   if (rawArgs.fileAttachments !== undefined && rawArgs.fileAttachments.length > 0) {
     const mediaProvider = isVideoReviewSubagentType(subagentConfig.subagentType) ? args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
-    attachmentSelection = await collectAttachments(ctx, rawArgs.fileAttachments, resourceAccessor, meta.toolCallId, {
+    attachmentSelectionInterop = await collectAttachments(ctx, rawArgs.fileAttachments, resourceAccessor, meta.toolCallId, {
       resolvedModelId: chosenModelId,
       ...(args.privacyMode !== undefined ? { privacyMode: args.privacyMode } : {}),
       ...(mediaProvider !== undefined ? { attachedMediaUrlProvider: mediaProvider } : {}),
@@ -649,12 +650,13 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     });
   }
   if (args.parentCursorCommands !== undefined && args.parentCursorCommands.length > 0) {
-    attachmentSelection = appendTaskSelectedCursorCommandsInterop(
-      attachmentSelection,
+    attachmentSelectionInterop = appendTaskSelectedCursorCommandsInterop(
+      attachmentSelectionInterop,
       args.parentCursorCommands,
     );
   }
-  const firstMessage = createTaskInitialMessage(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
+  const attachmentSelection = fromInteropTaskSelectedContext(attachmentSelectionInterop);
+  const firstMessage = createTaskInitialMessage(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelectionInterop);
   const startingState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, resumeId, selfForkRequested, meta.toolCallId, resolvedTypeName);
   const persistCredentials = resolved.effectiveEnvironment !== "cloud";
   return createSlatePreparedTask({

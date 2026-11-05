@@ -44,6 +44,7 @@ import {
   runClientSubagentInterop,
   type TaskClientSubagentRunView,
 } from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
+import { fromInteropTaskSelectedContext } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import {
   createSlateCloudSubagentPersistedState,
   createSlateLocalSubagentPersistedState,
@@ -355,7 +356,9 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       videoPaths,
       ...(args.trustedVideoAttachmentRoots !== undefined ? { trustedVideoAttachmentRoots: args.trustedVideoAttachmentRoots } : {}),
     }
-    attachedContext = await buildClientSubagentAttachmentsContext(ctx, rawInput.fileAttachments!, resourceAccessor, args.toolCallId, mediaOptions)
+    attachedContext = fromInteropTaskSelectedContext(
+      await buildClientSubagentAttachmentsContext(ctx, rawInput.fileAttachments!, resourceAccessor, args.toolCallId, mediaOptions),
+    )
   }
   let stopHandoff: (() => void) | undefined
   if (contextInjectionSignal !== undefined && backgroundRun !== true) {
