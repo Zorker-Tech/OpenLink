@@ -4,7 +4,7 @@ import type { AttachedCommandForPrompt } from "./attached-commands-context.ts";
 
 /** Slate-owned fields needed to assemble the non-media part of a turn. */
 export interface NonMediaSelectedContext {
-  readonly cursorCommands: readonly AttachedCommandForPrompt[];
+  readonly attachedCommands: readonly AttachedCommandForPrompt[];
   readonly gitDiff?: SelectedGitDiffAttachment | undefined;
   readonly gitDiffFromBranchToMain?: SelectedGitDiffAttachment | undefined;
   readonly gitCommits: readonly AttachedGitCommit[];

@@ -72,8 +72,8 @@ export function appendNonMediaSelectedContextContent({
   isComposerMatterhorn,
   isRawTrainingSlug,
 }: AppendNonMediaSelectedContextContentArgs): void {
-  if (selectedContext.cursorCommands.length > 0) {
-    const commandsText = renderAttachedCommands(selectedContext.cursorCommands);
+  if (selectedContext.attachedCommands.length > 0) {
+    const commandsText = renderAttachedCommands(selectedContext.attachedCommands);
     if (commandsText !== undefined) {
       userContent.push(commandsText);
     }
