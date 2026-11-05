@@ -4,7 +4,6 @@ import {
   ConversationState,
   ConversationStateStructure,
   ConversationStep,
-  ConversationSummary,
   ConversationTurn,
   ShellCommand,
   ShellConversationTurn,
@@ -19,6 +18,7 @@ import {
   deserializeSlateUserMessageInterop,
   deserializeSlateTodoItemInterop,
 } from "./agent-state-message-serdes-adapter.ts"
+import { deserializeSlateConversationSummaryInterop } from "./conversation-summary-storage-adapter.ts"
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
@@ -40,7 +40,6 @@ import {
   slateConversationCheckpointFromInterop,
 } from "./slate-agent-checkpoint-interop-adapter.ts"
 
-const conversationSummarySerde = new ProtobufBlobSerde(ConversationSummary)
 const shellCommandSerde = new ProtobufBlobSerde(ShellCommand)
 const shellOutputSerde = new ProtobufBlobSerde(ShellOutput)
 const checkpointSerde = new ProtobufBlobSerde(ConversationStateStructure)
@@ -213,7 +212,7 @@ export async function deriveInteropConversationStateFromStructure<Context>(
   state.todos = todos
   if (structure.summary) {
     const summaryBlob = await blobStore.getBlob(ctx, structure.summary)
-    if (summaryBlob) state.summary = conversationSummarySerde.deserialize(summaryBlob)
+    if (summaryBlob) state.summary = deserializeSlateConversationSummaryInterop(summaryBlob)
   }
   return state
 }

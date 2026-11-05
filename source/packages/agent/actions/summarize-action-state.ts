@@ -1,10 +1,12 @@
 import { buildSummarizeRefreshSnapshot } from "../utils/prompt-token-breakdown.ts"
 import { estimateTokenCount, extractTextContent } from "../self-summary/token-estimate.ts"
 import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts"
+import { createRedactedString } from "../../redaction/create.ts"
+import { DataClassification, PrivacyCapability } from "../../redaction/classification.ts"
+import { RedactedString } from "../../redaction/redacted-values.ts"
 import type { Context } from "../../context/context.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import {
-  createInteropConversationSummary,
   createInteropConversationTokenDetails,
   decodeInteropPromptTokenBreakdown,
   encodeInteropPromptTokenBreakdown,
@@ -22,15 +24,21 @@ function summarizedConversationCharCount(messages: readonly SummarizeLooseValue[
 
 export async function applySummaryToConversation(options: {
   readonly context: Context
-  readonly summary: SummarizeLooseValue
+  readonly summary: string | RedactedString
   readonly state: SummarizeStateHandler
   readonly prompt: RootPromptExecutor
   readonly listener: { sendUpdate(context: Context, update: unknown): Promise<void> }
   readonly clearTurns: boolean
   readonly privacyMode: PrivacyMode
 }): Promise<void> {
-  options.state.setSummary(createInteropConversationSummary(options.privacyMode, options.summary))
-  await options.listener.sendUpdate(options.context, RedactedUpdates.summary(options.summary))
+  const summaryText = options.summary instanceof RedactedString
+    ? options.summary.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : options.summary
+  const redactedSummary = options.summary instanceof RedactedString
+    ? options.summary
+    : createRedactedString(options.summary, DataClassification.CODE, "summary", options.privacyMode)
+  options.state.setSummary({ content: summaryText })
+  await options.listener.sendUpdate(options.context, RedactedUpdates.summary(redactedSummary))
   if (options.clearTurns) await options.state.clearTurns()
 
   const messages = options.prompt.getMessages()

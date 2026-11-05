@@ -1,6 +1,5 @@
 /** Reads the provider-only marker that says a user message carries a prior summary. */
 import {
-  createRedactedConversationSummary,
   createRedactedConversationTokenDetails,
   fromRedactedPromptTokenBreakdownSnapshot,
   toRedactedPromptTokenBreakdownSnapshot,
@@ -19,10 +18,6 @@ export function isInteropSummaryPromptMessage(message: unknown): boolean {
     } | undefined
   }
   return fields.role === "user" && fields.providerOptions?.cursor?.isSummary === true
-}
-
-export function createInteropConversationSummary(privacyMode: PrivacyMode, summary: string) {
-  return createRedactedConversationSummary(privacyMode, { summary })
 }
 
 export function decodeInteropPromptTokenBreakdown(value: unknown): PromptTokenBreakdownSnapshotValue {
