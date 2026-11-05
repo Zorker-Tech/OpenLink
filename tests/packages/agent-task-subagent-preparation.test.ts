@@ -18,8 +18,8 @@ import {
   untrustedAttachmentPathError,
   type TaskRawArguments,
 } from "../../source/packages/agent/tools/task-subagent-preparation.ts"
-import { buildPreparedTaskHookInputInterop } from "../../source/adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import { taskEnvironmentFromProtoInterop } from "../../source/adapters/interop/agent/task-runtime-protocol-adapter.ts"
+import { buildSlatePreparedTaskHookInput, type SlatePreparedTask } from "../../source/packages/agent/tools/task-prepared-state.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
 import { SubagentModelForcePolicy } from "../../source/packages/agent/tools/subagent-model-policy.ts"
@@ -27,8 +27,6 @@ import {
   SubagentCredentials,
   SubagentExecutionEnvironment,
   ConversationStateStructure,
-  PreparedTaskSubagent,
-  TaskToolCallArgsProto,
   ApiKeyCredentials,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
@@ -606,7 +604,7 @@ async function prepared(options: {
   toolName?: string
   attachments?: string[]
   environment?: "cloud" | "local"
-} = {}): Promise<{ prepared: PreparedTaskSubagent; attachments: AttachmentHarness }> {
+} = {}): Promise<{ prepared: SlatePreparedTask; attachments: AttachmentHarness }> {
   const attachments = attachmentHarness()
   const rawArgs = { prompt: "do the thing", description: "the thing", ...options.rawArgs, ...(options.attachments === undefined ? {} : { file_attachments: options.attachments }) } as TaskRawArguments
   const resolved = await resolveTaskSubagentConfig({
@@ -632,50 +630,51 @@ async function prepared(options: {
   return { prepared: preparedMessage, attachments }
 }
 
-test("a prepared subagent carries what the turn needs to start it", async () => {
+test("a prepared Slate task carries what the run loop needs to start it", async () => {
   const { prepared: message } = await prepared()
-  assert.equal(message.subagentTypeName, "generalPurpose")
-  assert.equal(message.resolvedModelId, "composer-2")
+  assert.equal(message.typeName, "generalPurpose")
+  assert.equal(message.modelId, "composer-2")
   assert.equal(message.toolCallId, "call-1")
-  assert.equal(message.isResume, false)
-  assert.equal(message.taskPrompt, "do the thing")
-  assert.equal(message.taskDescription, "the thing")
+  assert.equal(message.isResuming, false)
+  assert.equal(message.prompt, "do the thing")
+  assert.equal(message.description, "the thing")
   assert.equal(message.parentModelName, "composer-2")
   // A type that maps nothing out of the parent's conversation starts from an empty structure, and the count
   // says where its own turns begin.
-  assert.equal(message.conversationState instanceof ConversationStateStructure, true)
-  assert.equal(message.conversationState?.turns.length, 0)
-  assert.equal(message.initialTurnsCount, 0)
-  assert.equal(message.initialAction?.action.case, "userMessageAction")
+  assert.equal(message.conversationSnapshot.turns.length, 0)
+  assert.equal(message.startingTurnCount, 0)
+  assert.equal(message.firstMessage.text, "do the thing")
+  assert.equal(message.firstMessage.mode, "agent")
   // The defaults a caller can leave out.
-  assert.equal(message.enableExecuteHookExec, false)
+  assert.equal(message.allowExecuteHook, false)
   assert.deepEqual(message.configuredSteps, [])
   assert.equal(message.readonlyShellEnabled, false)
   assert.equal(message.toolName, "Task")
-  assert.equal(typeof message.preparedTimestampUnixMs, "bigint")
+  assert.equal(typeof message.preparedAtMs, "bigint")
 })
 
-test("the raw arguments are mirrored onto the subagent, placement included", async () => {
+test("the normalized Slate request carries task arguments and placement", async () => {
   const { prepared: message } = await prepared({
     rawArgs: { model: "composer-2-fast", resume: "self", environment: "cloud", cloud_base_branch: "main", run_in_background: true },
   })
-  const raw = message.rawArgs as TaskToolCallArgsProto
+  const raw = message.request
   assert.equal(raw?.prompt, "do the thing")
   assert.equal(raw?.description, "the thing")
   assert.equal(raw?.model, "composer-2-fast")
   assert.equal(raw?.resume, "self")
   assert.equal(raw?.runInBackground, true)
   assert.equal(raw?.cloudBaseBranch, "main")
-  assert.equal(raw?.environment, SubagentExecutionEnvironment.CLOUD)
-  assert.equal(raw?.machine?.machine.case, "newCloudVm")
+  assert.equal(raw?.environment, "cloud")
+  assert.equal(raw?.targetMachine.type, "new_cloud_vm")
+  assert.equal(raw?.targetMachine.type === "new_cloud_vm" ? raw.targetMachine.base_branch : undefined, "main")
 })
 
 test("credentials are kept for a subagent that runs here, and not for one that runs in the cloud", async () => {
   const local = await prepared({ subagentCredentials: credentials })
-  assert.deepEqual(local.prepared.subagentCredentials?.credentials, credentials)
+  assert.deepEqual(local.prepared.credentials, credentials)
 
   const cloud = await prepared({ subagentCredentials: credentials, environment: "cloud" })
-  assert.equal(cloud.prepared.subagentCredentials, undefined)
+  assert.equal(cloud.prepared.credentials, undefined)
 })
 
 test("the session's own settings are carried onto the subagent", async () => {
@@ -692,12 +691,12 @@ test("the session's own settings are carried onto the subagent", async () => {
 test("the parent's saved commands travel with the subagent", async () => {
   const commands = [{ name: "commit", content: "commit the work" }]
   const { prepared: message } = await prepared({ parentCursorCommands: commands })
-  assert.deepEqual(message.selectedContext?.cursorCommands, commands)
+  assert.deepEqual(message.attachmentSelection?.cursorCommands, commands)
 })
 
 test("attachments are read while the subagent is prepared", async () => {
   const { prepared: message, attachments } = await prepared({ attachments: ["/repo/uploads/diagram.png"] })
-  assert.equal(message.selectedContext?.selectedImages.length, 1)
+  assert.equal(message.attachmentSelection?.selectedImages.length, 1)
   assert.equal(attachments.reads.length, 1)
 })
 
@@ -706,7 +705,7 @@ test("the hook input mirrors the call the way a hook expects to read it", async 
     rawArgs: { environment: "cloud", cloud_base_branch: "main", run_in_background: false },
     attachments: ["/repo/uploads/diagram.png"],
   })
-  const input = buildPreparedTaskHookInputInterop(message)
+  const input = buildSlatePreparedTaskHookInput({ typeName: message.typeName, request: message.request })
   assert.equal(input.prompt, "do the thing")
   assert.equal(input.description, "the thing")
   assert.equal(input.environment, "cloud")
@@ -717,9 +716,8 @@ test("the hook input mirrors the call the way a hook expects to read it", async 
   assert.deepEqual(input.file_attachments, ["/repo/uploads/diagram.png"])
 })
 
-test("a hook input built from a subagent with no raw arguments says only what it knows", () => {
-  const bare = new PreparedTaskSubagent({ subagentTypeName: "explore" })
-  const input = buildPreparedTaskHookInputInterop(bare)
+test("a hook input without a prepared request says only what it knows", () => {
+  const input = buildSlatePreparedTaskHookInput({ typeName: "explore" })
   assert.equal(input.subagent_type, "explore")
   assert.equal(input.prompt, undefined)
   assert.equal(input.environment, undefined)

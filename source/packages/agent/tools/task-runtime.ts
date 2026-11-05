@@ -22,7 +22,6 @@ import {
   conversationStepFromBinaryInterop,
   conversationStepViewInterop,
   conversationTurnFromBinaryInterop,
-  createTaskInitialUserActionInterop,
   isReadonlySubagentPermissionModeInterop,
 } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import type { ConversationTurnView } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
@@ -50,6 +49,8 @@ import { resolveForcedSubagentModel } from "./subagent-forced-model-resolution.t
 import { SubagentModelForcePolicy } from "./subagent-model-policy.ts"
 import { slateSubagentTypeName, type SlateSubagentType } from "../subagent-type.ts"
 import type { SlateConversationStateMapper } from "../subagent-conversation-state.ts"
+import { SlateMode } from "../mode-processing.ts"
+import type { SlateUserMessage } from "../user-message-state.ts"
 import type { SubagentModels } from "./core/subagent/models.ts"
 
 export interface TaskSubagentConfigRuntime {
@@ -226,26 +227,30 @@ export function shouldUseAskModeForSubagent(
   return effectiveReadonly && !subagentConfig.computeAllowedWritePaths
 }
 
-export function createUserMessageAction(
+export function createTaskInitialMessage(
   subagentConfig: TaskSubagentConfigRuntime,
   prompt: string,
   messageId: string,
   useAskMode: boolean,
   selectedContext: unknown,
-): ReturnType<typeof createTaskInitialUserActionInterop> {
+): SlateUserMessage {
   const reminder = subagentConfig.systemReminder
   // A reminder that never varies is written once rather than generated for every message.
   const staticReminder =
     reminder !== undefined && reminder.length === 0
       ? reminder()
       : undefined
-  return createTaskInitialUserActionInterop({
+  return {
     text: prompt,
     messageId,
-    useAskMode,
+    mode: useAskMode ? SlateMode.CHAT : SlateMode.AGENT,
+    conversationStateBlobId: new Uint8Array(),
+    hookContexts: [],
     ...(selectedContext === undefined ? {} : { selectedContext }),
-    ...(staticReminder === undefined ? {} : { systemReminder: staticReminder }),
-  })
+    ...(staticReminder === undefined || staticReminder.length === 0
+      ? {}
+      : { subagentSystemReminder: staticReminder }),
+  }
 }
 
 /** The part of a blob store this needs: turns and steps are read back by the id they were stored under. */
