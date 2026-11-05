@@ -5,6 +5,7 @@ import {
   fromInteropConversationState,
   toInteropConversationState,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { fromRedactedConversationStateStructureInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import {
   fromRedactedConversationStateStructure,
   toRedactedConversationStateStructure,
@@ -13,9 +14,14 @@ import {
   AgentMode,
   ConversationStateStructure,
   FileStateStructure,
+  GoalState,
+  PlanRegistryEntry,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
+import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import type { SlateRedactedValue } from "../../source/packages/agent/conversation-state.ts"
 import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
@@ -116,4 +122,37 @@ test("read paths are plain Slate values in memory and privacy-wrapped only in ch
     undefined,
   )
   assert.deepEqual(plain.readPaths, ["/repo/a.ts", "/repo/b.ts", exactPath])
+})
+
+test("plan registry and goal state use Slate types and retain an unknown status code", () => {
+  const unknownStatus = 4_096 as GoalStatus
+  const redacted = toRedactedConversationStateStructure(
+    new ConversationStateStructure({
+      plans: {
+        "plan-1": new PlanRegistryEntry({ id: "plan-1", path: "/repo/plan.md" }),
+      },
+      goalState: new GoalState({
+        conversationId: "conversation-1",
+        goalId: "goal-1",
+        objective: "ship the first version",
+        status: unknownStatus,
+        continuationCount: 2,
+      }),
+    }),
+    PrivacyMode.NO_STORAGE,
+  )
+  const slate = fromInteropConversationState(redacted)
+
+  assert.deepEqual(slate.plans?.get("plan-1"), { id: "plan-1", path: "/repo/plan.md" })
+  assert.ok(slate.goalState instanceof SlateGoalState)
+  assert.equal(slate.goalState.status, SlateGoalStatus.UNSPECIFIED)
+  assert.equal(slate.goalState.unknownStatusCode, unknownStatus)
+
+  const restored = fromRedactedConversationStateStructureInterop(
+    toInteropConversationState(slate),
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.equal(Object.values(restored.plans)[0]?.path, "/repo/plan.md")
+  assert.equal(restored.goalState?.status, unknownStatus)
 })

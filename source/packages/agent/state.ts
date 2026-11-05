@@ -36,8 +36,6 @@ import {
   redactSlateConversationSummaryArchive,
   fromInteropToolCallStep,
   fromInteropConversationState,
-  fromInteropGoalState,
-  fromInteropPlanRegistryEntry,
   attachProcessedSelectedMediaToSlateContext,
   createRedactedConversationTokenDetailsInterop,
   type AgentStateGitRepoInfoInterop,
@@ -49,14 +47,10 @@ import {
   fromRedactedCommunicateUpdateHistoryEntryInterop,
   fromRedactedCommunicateUpdateTurnStateInterop,
   fromRedactedConversationTokenDetailsInterop,
-  fromRedactedGoalStateInterop,
-  fromRedactedPlanRegistryEntryInterop,
   fromRedactedSubagentPersistedStateInterop,
   fromRedactedSubagentRunStateInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
-  toInteropGoalState,
-  toInteropPlanRegistryEntry,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { projectSelectedContextForProcessing } from "../../adapters/interop/agent/selected-context-processing-adapter.ts"
 import {
@@ -1527,28 +1521,9 @@ export class ConversationStateHandle {
         state.completedAskQuestionToolCallIds.add(toolCallId);
       }
       if (conversationStateStructure.plans !== undefined) {
-        for (const [planId, redactedEntry] of conversationStateStructure.plans) {
-          state.plans.set(
-            planId,
-            fromInteropPlanRegistryEntry(
-              fromRedactedPlanRegistryEntryInterop(
-                redactedEntry,
-                PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-                undefined,
-              ),
-            ),
-          );
-        }
+        for (const [planId, entry] of conversationStateStructure.plans) state.plans.set(planId, entry);
       }
-      if (conversationStateStructure.goalState !== undefined) {
-        state.goalState = fromInteropGoalState(
-          fromRedactedGoalStateInterop(
-            conversationStateStructure.goalState,
-            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-            undefined,
-          ),
-        );
-      }
+      state.goalState = conversationStateStructure.goalState;
       const restoreMs = performance.now() - restoreStartedAt;
       const crossedLarge = promptBytes >= LARGE_RESTORE_BYTES || promptImageBytes >= LARGE_RESTORE_IMAGE || restoreMs >= SLOW_RESTORE_MS;
       recordRestoreMetrics({
@@ -2659,7 +2634,7 @@ These images can be copied for use in other locations.
       for (const [parentToolCallId, state] of this.communicateUpdateStatesByParentToolCallId) {
         communicateStatesRecord[parentToolCallId] = createAgentStateCommunicateTurnStateInterop({ ...communicateState(state) });
       }
-      const plansRecord: Record<string, { id: string; path: string }> = {};
+      const plansRecord: Record<string, SlatePlanRegistryEntry> = {};
       for (const [planId, entry] of this.plans) {
         plansRecord[planId] = { id: entry.id, path: entry.path };
       }
@@ -2703,7 +2678,7 @@ These images can be copied for use in other locations.
         readPaths: Array.from(this.readPaths),
         completedAskQuestionToolCallIds: Array.from(this.completedAskQuestionToolCallIds),
         plans: plansRecord,
-        goalState: this.goalState === undefined ? undefined : toInteropGoalState(this.goalState),
+        goalState: this.goalState,
         communicateUpdateHistory: this.communicateUpdateHistory.map((entry) => createAgentStateCommunicateHistoryEntryInterop({
           step: entry.step,
           messageIndex: entry.messageIndex,
