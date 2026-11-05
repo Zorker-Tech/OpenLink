@@ -33,6 +33,14 @@ export function fromInteropTaskConversationState(
   )
 }
 
+/** Keeps the preparation-to-run privacy normalization while the enclosing task record stays Slate-owned. */
+export function normalizePreparedTaskConversationStateInterop(
+  value: SlateTaskConversationState,
+  privacyMode: PrivacyModeValue,
+): SlateTaskConversationState {
+  return fromInteropTaskConversationState(toInteropTaskConversationState(value), privacyMode)
+}
+
 /** Reconstructs the historical message at the launch and persistence interop boundary. */
 export function toInteropTaskConversationState(
   value: SlateTaskConversationState,

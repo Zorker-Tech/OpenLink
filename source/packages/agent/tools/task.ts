@@ -21,6 +21,7 @@ import { createReadonlyResourceAccessor } from "../../agent-exec/readonly-resour
 import { subagentRegistryResource } from "./subagent-registry.ts";
 import {
   createMissingSubagentResultInterop,
+  createTaskInitialUserActionInterop,
   createTaskErrorResultInterop,
   createTaskToolCallDeltaInterop,
   createTaskToolCallInterop,
@@ -28,12 +29,14 @@ import {
   taskResultIsErrorInterop,
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
+  normalizePreparedTaskConversationStateInterop,
   toRedactedConversationActionInterop,
   toRedactedConversationStateStructureInterop,
   type TaskResultInterop,
-  type TaskSubagentCredentialsInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
+import type { SlatePreparedTask } from "./task-prepared-state.ts";
+import { buildSlatePreparedTaskHookInput } from "./task-prepared-state.ts";
 import { requestModelNameKey, withParentRequestId } from "../utils/request-scope.ts";
 import { NoopConversationActionReceiver } from "../../agent-core/conversation-actions/remote-receiver.ts";
 import { Responses } from "../../agent-core/interaction-queries.ts";
@@ -61,7 +64,6 @@ import {
   type TaskResolutionParentState,
   type TaskSubagentResolution,
 } from "./task-subagent-preparation.ts";
-import { buildPreparedTaskHookInputInterop } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts";
 import {
   executeClientSideTaskSubagent,
   renderTaskResultToString,
@@ -136,7 +138,7 @@ interface TaskPresentationOptions {
 
 /** The credentials and attached media a subagent call may carry. */
 interface SubagentMediaOptions {
-  readonly subagentCredentials?: TaskSubagentCredentialsInterop;
+  readonly subagentCredentials?: unknown;
   readonly attachedMediaUrlProvider?: Any;
   readonly videoReviewAttachedMediaUrlProvider?: Any;
   readonly trustedVideoAttachmentRoots?: readonly string[];
@@ -262,7 +264,7 @@ function createParentStateAccessor(stateHandler: ParentStateHandler): TaskResolu
 /** The completion context a server-side subagent reports its iterations with. */
 function createCompletionContext(args: {
   readonly resolved: TaskSubagentResolution;
-  readonly prepared: Any;
+  readonly prepared: SlatePreparedTask;
   readonly rawArgs: TaskRawArguments;
   readonly meta: ToolExecutionMetaLike;
   readonly parentModelInfo: Any;
@@ -273,19 +275,19 @@ function createCompletionContext(args: {
   return {
     toolCallId: meta.toolCallId,
     subagentId: resolved.subagentId,
-    subagentRequestId: prepared.subagentRequestId,
+    subagentRequestId: prepared.requestId,
     typeName: resolved.typeName,
     analyticsSubagentType: resolved.analyticsSubagentType,
     parentModelName: parentModelInfo.modelName,
     isParallel: registrySize > 1,
     executionStartTime,
-    initialTurnsCount: prepared.initialTurnsCount,
+    initialTurnsCount: prepared.startingTurnCount,
     overriddenModelId: resolved.resolvedModelId,
     effectiveReadonly: resolved.effectiveReadonly,
     useAskModeForSubagent: resolved.useAskModeForSubagent,
     ...presentFields({
       resultSuffix: resolved.subagentConfig.resultSuffix,
-      selectedContext: prepared.selectedContext,
+      selectedContext: prepared.attachmentSelection,
       plugin: resolved.subagentConfig.plugin,
       marketplace: resolved.subagentConfig.marketplace,
       pluginId: resolved.subagentConfig.pluginId,
@@ -330,8 +332,8 @@ async function runServerTaskSubagent(args: {
     ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
   });
   // The model a subagent starts on is the one it resolved to, but its config is fetched after that resolution.
-  const taskToolConfig = await getTaskToolConfig(prepared.resolvedModelId, resolved.subagentConfig.subagentType);
-  const subagentRequestId = prepared.subagentRequestId;
+  const taskToolConfig = await getTaskToolConfig(prepared.modelId, resolved.subagentConfig.subagentType);
+  const subagentRequestId = prepared.requestId;
   const [subagentCtx, cancelSubagent] = ctx.withDetached().withCancel();
   const registry = resourceAccessor.get(subagentRegistryResource);
   registry.register(resolved.subagentId, { cancel: cancelSubagent }, meta.toolCallId);
@@ -384,16 +386,14 @@ async function runServerTaskSubagent(args: {
     ctx,
     registry,
     hookContext: completionHookContext,
-    postToolUseHookInput: buildPreparedTaskHookInputInterop(prepared),
+    postToolUseHookInput: buildSlatePreparedTaskHookInput({ typeName: prepared.typeName, request: prepared.request }),
     toolName: getTaskToolName(parentModelInfo),
     configuredSteps: options.configuredSteps ?? [],
     enableTaskToolHooksExec: options.enableExecuteHookExec === true,
   };
-  const preparedConversationState = prepared.conversationState;
-  let action = prepared.initialAction;
-  if (preparedConversationState === undefined || action === undefined) throw new Error("Prepared subagent launch is missing state or action");
-  let state: SlateTaskConversationState = fromInteropTaskConversationState(
-    preparedConversationState,
+  let action: unknown = createTaskInitialUserActionInterop({ message: prepared.firstMessage });
+  let state: SlateTaskConversationState = normalizePreparedTaskConversationStateInterop(
+    prepared.conversationSnapshot,
     stateHandler.getPrivacyMode(),
   );
   const persist = (persistCtx: Context, persistId: string, _type: Any, persistedState: Any) =>
@@ -401,7 +401,7 @@ async function runServerTaskSubagent(args: {
   try {
     for (;;) {
       iterState.runStreamCompleted = false;
-      const turnsAtStart = iterState.loopCount === 0 ? prepared.initialTurnsCount : state!.turns.length;
+      const turnsAtStart = iterState.loopCount === 0 ? prepared.startingTurnCount : state!.turns.length;
       try {
         const updatedState = await agent.runStream(
           withParentRequestId(

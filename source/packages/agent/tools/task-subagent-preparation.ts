@@ -6,7 +6,6 @@ import { isVideoAttachmentModelId } from "../../../adapters/interop/inference/vi
 import type { Context } from "../../context/context.ts"
 import {
   appendTaskSelectedCursorCommandsInterop,
-  createPreparedTaskSubagentInterop,
   createTaskAttachmentReadArgsInterop,
   createTaskAttachmentRequestContextArgsInterop,
   createTaskSelectedContextInterop,
@@ -25,12 +24,10 @@ import type {
   TaskAttachmentReadResultInterop,
   TaskAttachmentRequestContextArgsInterop,
   TaskAttachmentRequestContextResultInterop,
-  TaskPreparedSubagentInterop,
   TaskSelectedContextInterop,
   TaskSelectedCursorCommandInterop,
   TaskSelectedImageInterop,
   TaskSelectedVideoInterop,
-  TaskSubagentCredentialsInterop,
 } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import {
   createEmptySlateSubagentConversationSnapshot,
@@ -39,6 +36,7 @@ import {
 } from "../subagent-persisted-state.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { taskEnvironmentForTargetMachine, type SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
+import { createSlatePreparedTask, type SlatePreparedTask } from "./task-prepared-state.ts"
 import { GENERAL_PURPOSE_SUBAGENT_TYPE } from "./core/subagent/subagent-config.ts"
 import {
   mapSubagentConversationState,
@@ -59,7 +57,7 @@ import {
   getEffectiveReadonlyForSubagent,
   shouldUseAskModeForSubagent,
   targetMachineFromLegacyArgs,
-  createUserMessageAction,
+  createTaskInitialMessage,
   type TaskEnvironment,
   type TaskTargetMachine,
   type TaskSubagentModelConfig,
@@ -613,7 +611,7 @@ export interface PrepareTaskSubagentArgs {
   readonly parentState: ConversationStateParent;
   readonly resourceAccessor: AttachmentResourceAccessor;
   readonly parentModelInfo: TaskResolutionModelInfo;
-  readonly subagentCredentials?: TaskSubagentCredentialsInterop | undefined;
+  readonly subagentCredentials?: unknown | undefined;
   readonly enableExecuteHookExec?: boolean | undefined;
   readonly configuredSteps?: readonly string[] | undefined;
   readonly readonlyShellEnabled?: boolean | undefined;
@@ -627,7 +625,7 @@ export interface PrepareTaskSubagentArgs {
 }
 
 /** Everything a subagent needs to start, assembled from the request and the state it resumes from. */
-export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promise<TaskPreparedSubagentInterop> {
+export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promise<SlatePreparedTask> {
   const { resolved, ctx, rawArgs, meta, parentState, resourceAccessor, parentModelInfo } = args;
   const {
     subagentConfig,
@@ -666,35 +664,35 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       args.parentCursorCommands,
     );
   }
-  const firstAction = createUserMessageAction(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
+  const firstMessage = createTaskInitialMessage(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
   const startingState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, resumeId, selfForkRequested, meta.toolCallId, resolvedTypeName);
   const persistCredentials = resolved.effectiveEnvironment !== "cloud";
-  return createPreparedTaskSubagentInterop({
-    subagentId: newSubagentId,
-    subagentTypeName: resolvedTypeName,
-    subagentType: subagentConfig.subagentType as never,
-    analyticsSubagentType: analyticsType,
-    resolvedModelId: chosenModelId,
-    effectiveReadonly: readonlyEffective,
-    useAskModeForSubagent: askMode,
-    conversationState: startingState,
-    initialAction: firstAction,
-    initialTurnsCount: startingState.turns.length,
-    subagentRequestId: requestKey,
+  return createSlatePreparedTask({
+    agentId: newSubagentId,
+    typeName: resolvedTypeName,
+    type: subagentConfig.subagentType,
+    analyticsType,
+    modelId: chosenModelId,
+    isReadOnly: readonlyEffective,
+    useChatMode: askMode,
+    conversationSnapshot: startingState,
+    firstMessage,
+    startingTurnCount: startingState.turns.length,
+    requestId: requestKey,
     ...(resumeCloudAgentId !== undefined ? { cloudAgentId: resumeCloudAgentId } : {}),
     toolCallId: meta.toolCallId,
-    isResume: isResumeFlag,
+    isResuming: isResumeFlag,
     ...(parentKey !== undefined ? { parentRequestId: parentKey } : {}),
     ...(rootParentKey !== undefined ? { rootParentRequestId: rootParentKey } : {}),
-    taskPrompt: rawArgs.prompt,
-    taskDescription: rawArgs.description ?? "",
-    ...(attachmentSelection !== undefined ? { selectedContext: attachmentSelection } : {}),
+    prompt: rawArgs.prompt,
+    description: rawArgs.description ?? "",
+    ...(attachmentSelection !== undefined ? { attachmentSelection } : {}),
     ...(subagentConfig.plugin !== undefined ? { plugin: subagentConfig.plugin } : {}),
     ...(subagentConfig.marketplace !== undefined ? { marketplace: subagentConfig.marketplace } : {}),
     ...(subagentConfig.pluginId !== undefined ? { pluginId: subagentConfig.pluginId } : {}),
     ...(subagentConfig.marketplaceId !== undefined ? { marketplaceId: subagentConfig.marketplaceId } : {}),
-    ...(subagentConfig.subagentSource !== undefined ? { subagentSource: subagentConfig.subagentSource } : {}),
-    rawArgs: {
+    ...(subagentConfig.subagentSource !== undefined ? { source: subagentConfig.subagentSource } : {}),
+    request: {
       description: rawArgs.description ?? "",
       prompt: rawArgs.prompt,
       ...(rawArgs.model !== undefined ? { model: rawArgs.model } : {}),
@@ -708,13 +706,13 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       targetMachine: resolved.effectiveTargetMachine,
     } satisfies SlatePreparedTaskRawArgs,
     parentModelName: parentModelInfo.modelName,
-    ...(args.subagentCredentials !== undefined && persistCredentials ? { subagentCredentials: args.subagentCredentials } : {}),
+    ...(args.subagentCredentials !== undefined && persistCredentials ? { credentials: args.subagentCredentials } : {}),
     ...(subagentConfig.resultSuffix !== undefined ? { resultSuffix: subagentConfig.resultSuffix } : {}),
-    enableExecuteHookExec: args.enableExecuteHookExec ?? false,
+    allowExecuteHook: args.enableExecuteHookExec ?? false,
     configuredSteps: args.configuredSteps === undefined ? [] : [...args.configuredSteps],
     readonlyShellEnabled: args.readonlyShellEnabled ?? false,
     toolName: args.toolName ?? "Task",
-    preparedTimestampUnixMs: BigInt(Date.now()),
+    preparedAtMs: BigInt(Date.now()),
   });
 }
 

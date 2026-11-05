@@ -8,7 +8,7 @@ import {
   collectConversationStepsWithToolCallCount,
   collectConversationTurns,
   countToolCallsFromTurns,
-  createUserMessageAction,
+  createTaskInitialMessage,
   extractLastAssistantMessage,
   getEffectiveReadonlyForSubagent,
   resolveSubagentModel,
@@ -21,6 +21,7 @@ import {
 } from "../../source/packages/agent/tools/task-runtime.ts"
 import {
   buildCloudSubagentPersistedStateInterop,
+  createTaskInitialUserActionInterop,
   conversationStepViewInterop,
   taskEnvironmentForTargetMachineInterop,
   taskEnvironmentToProtoInterop,
@@ -37,10 +38,12 @@ import {
   SubagentExecutionEnvironment,
   TargetMachine,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import {
   CustomSubagentPermissionMode,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
 // which model a subagent runs on
@@ -248,38 +251,55 @@ test("a readonly subagent runs in ask mode only when it has nowhere to write", (
   assert.equal(shouldUseAskModeForSubagent(false, readonlyConfig), false)
 })
 
-test("the subagent's first message carries its mode, its context and a reminder that never varies", () => {
-  const action = createUserMessageAction(
+test("the subagent's first Slate message carries its mode, context and nonvarying reminder", () => {
+  const message = createTaskInitialMessage(
     { permissionMode: CustomSubagentPermissionMode.DEFAULT, systemReminder: () => "Stay in scope." },
     "do the thing",
     "message-1",
     false,
     undefined,
   )
+  assert.equal(message.text, "do the thing")
+  assert.equal(message.messageId, "message-1")
+  assert.equal(message.mode, SlateMode.AGENT)
+  assert.equal(message.subagentSystemReminder, "Stay in scope.")
+  assert.equal(message.selectedContext, undefined)
+})
+
+test("the AgentRoot boundary projects a Slate first message without changing its wire meaning", () => {
+  const selectedContext = new SelectedContext()
+  const message = createTaskInitialMessage(
+    { permissionMode: CustomSubagentPermissionMode.DEFAULT, systemReminder: () => "Stay in scope." },
+    "open the report",
+    "message-4",
+    true,
+    selectedContext,
+  )
+
+  const action = createTaskInitialUserActionInterop({ message })
   assert.equal(action.action.case, "userMessageAction")
-  const userMessage = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
-  assert.equal(userMessage?.text, "do the thing")
-  assert.equal(userMessage?.messageId, "message-1")
-  assert.equal(userMessage?.mode, AgentMode.AGENT)
-  assert.equal(userMessage?.subagentSystemReminder, "Stay in scope.")
-  assert.equal(userMessage?.selectedContext, undefined)
+  if (action.action.case !== "userMessageAction") assert.fail("expected a first user message")
+  assert.equal(action.action.value.userMessage?.text, "open the report")
+  assert.equal(action.action.value.userMessage?.messageId, "message-4")
+  assert.equal(action.action.value.userMessage?.mode, AgentMode.ASK)
+  assert.equal(action.action.value.userMessage?.subagentSystemReminder, "Stay in scope.")
+  assert.equal(SelectedContext.equals(action.action.value.userMessage?.selectedContext, selectedContext), true)
 })
 
 test("an empty reminder is left out, and a reminder that takes arguments is not called", () => {
-  const empty = createUserMessageAction(
+  const empty = createTaskInitialMessage(
     { permissionMode: CustomSubagentPermissionMode.DEFAULT, systemReminder: () => "" },
     "go",
     "message-2",
     true,
     undefined,
   )
-  const emptyMessage = empty.action.case === "userMessageAction" ? empty.action.value.userMessage : undefined
-  assert.equal(emptyMessage?.mode, AgentMode.ASK)
-  assert.equal(emptyMessage?.subagentSystemReminder, undefined)
+  assert.equal(empty.mode, SlateMode.CHAT)
+  assert.equal(empty.subagentSystemReminder, undefined)
 
   let called = false
   const perCall = ((_arg: unknown) => { called = true; return "reminder" }) as unknown as () => string
-  createUserMessageAction({ permissionMode: CustomSubagentPermissionMode.DEFAULT, systemReminder: perCall }, "go", "message-3", false, undefined)
+  createTaskInitialMessage({ permissionMode: CustomSubagentPermissionMode.DEFAULT, systemReminder: perCall }, "go", "message-3", false, undefined)
   assert.equal(called, false)
 })
 

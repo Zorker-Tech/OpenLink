@@ -6,19 +6,19 @@ import {
   ToolCall,
   ToolCallDelta,
 } from "../proto/generated/agent/v1/agent_pb.ts"
-import { SubagentArgs } from "../proto/generated/agent/v1/subagent_exec_pb.ts"
 import {
   toRedactedConversationAction,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { toRedactedTaskConversationState } from "./task-conversation-state-adapter.ts"
+export { createTaskInitialUserActionInterop } from "./task-runtime-protocol-adapter.ts"
 import { fromRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
 export {
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
+  normalizePreparedTaskConversationStateInterop,
 } from "./task-conversation-state-adapter.ts"
 
 export type TaskResultInterop = TaskResult
-export type TaskSubagentCredentialsInterop = SubagentArgs["credentials"]
 export { fromRedactedConversationStateStructureInterop }
 export const toRedactedConversationActionInterop = toRedactedConversationAction
 export const toRedactedConversationStateStructureInterop = toRedactedTaskConversationState

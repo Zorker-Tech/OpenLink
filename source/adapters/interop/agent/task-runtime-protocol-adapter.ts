@@ -1,5 +1,4 @@
 import {
-  AgentMode,
   CloudSubagentReference,
   ConversationAction,
   ConversationStep,
@@ -11,16 +10,16 @@ import {
   SubagentExecutionEnvironment,
   SubagentPersistedState,
   TargetMachine,
-  UserMessage,
   UserMessageAction,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { CustomSubagentPermissionMode } from "../proto/generated/agent/v1/subagents_pb.ts"
-import type { SelectedContext as SelectedContextMessage } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type {
   CloudSubagentPersistedStateArgs,
   TaskEnvironment,
   TaskTargetMachine,
 } from "../../../packages/agent/tools/task-runtime-types.ts"
+import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
+import { toInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 
 export type ConversationTurnView =
@@ -41,19 +40,9 @@ export function isReadonlySubagentPermissionModeInterop(permissionMode: number):
 }
 
 export function createTaskInitialUserActionInterop(input: {
-  readonly text: string
-  readonly messageId: string
-  readonly useAskMode: boolean
-  readonly selectedContext?: unknown
-  readonly systemReminder?: string
+  readonly message: SlateUserMessage
 }): TaskInitialActionInterop {
-  const userMessage = new UserMessage({
-    text: input.text,
-    messageId: input.messageId,
-    mode: input.useAskMode ? AgentMode.ASK : AgentMode.AGENT,
-    ...(input.selectedContext === undefined ? {} : { selectedContext: input.selectedContext as SelectedContextMessage }),
-    ...(input.systemReminder !== undefined && input.systemReminder !== "" ? { subagentSystemReminder: input.systemReminder } : {}),
-  })
+  const userMessage = toInteropUserMessage(input.message)
   return new ConversationAction({
     action: { case: "userMessageAction", value: new UserMessageAction({ userMessage }) },
   })
