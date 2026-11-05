@@ -44,6 +44,13 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { createSlateConversationStepSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
+import { createRedactedString } from "../../source/packages/redaction/create.ts"
+import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 
 // ---------------------------------------------------------------------------------------------
 // which model a subagent runs on
@@ -351,6 +358,34 @@ test("the last thing the subagent said is found by walking its turns backwards",
   const store = blobStoreOf(blobs)
   assert.equal(await extractLastAssistantMessage(ctx, [idOf(1), idOf(2)], store), "second answer")
   assert.equal(await extractLastAssistantMessage(ctx, [idOf(1)], store), "first answer")
+})
+
+test("the subagent reader restores its answer from new Slate turn and step blobs", async () => {
+  const ctx = createContext()
+  const stepBytes = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(
+    createSlateAssistantMessageStep(createRedactedString(
+      "Slate answer",
+      DataClassification.CODE,
+      "text",
+      PrivacyMode.NO_STORAGE,
+    )),
+  )
+  const store = blobStoreOf([
+    {
+      id: idOf(1),
+      bytes: slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+        userMessageBlobId: idOf(99),
+        stepBlobIds: [idOf(10)],
+        sendMessageStepIndices: [],
+      })),
+    },
+    { id: idOf(10), bytes: stepBytes },
+  ])
+
+  assert.equal(await extractLastAssistantMessage(ctx, [idOf(1)], store), "Slate answer")
+  const steps = await collectConversationStepsFromStepBlobIds({ ctx, stepBlobIds: [idOf(10)], blobStore: store })
+  assert.equal(steps.length, 1)
+  assert.equal(conversationStepViewInterop(steps[0]).assistantText, "Slate answer")
 })
 
 test("turns and steps that are no longer there are skipped rather than treated as empty", async () => {
