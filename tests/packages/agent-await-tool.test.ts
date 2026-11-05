@@ -7,11 +7,9 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { lsExecutorResource } from "../../source/packages/agent-exec/ls.ts"
-import { subagentExecutorResource } from "../../source/adapters/interop/agent/subagent-exec-adapter.ts"
-import { subagentAwaitExecutorResource } from "../../source/packages/agent-exec/subagent-await.ts"
+import { slateSubagentAwaitExecutorResource, type SlateSubagentAwaitResult } from "../../source/packages/agent-exec/subagent-await.ts"
 import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { LsResult, LsSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
-import { SubagentAwaitComplete, SubagentAwaitResult, SubagentAwaitStillRunning } from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
 import { AwaitResult } from "../../source/adapters/interop/proto/generated/agent/v1/await_tool_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
@@ -32,8 +30,7 @@ function harness(options: {
   /** Contents that change between reads, which is how a job that finishes during a wait is modelled. */
   sequence?: Record<string, string[]>
   listing?: unknown
-  subagentAwait?: SubagentAwaitResult | "throw"
-  subagentResume?: unknown
+  subagentAwait?: SlateSubagentAwaitResult | "throw"
   readError?: "permissionDenied" | "rejected" | "invalidFile" | "error"
   readData?: boolean
   fileSizes?: Record<string, number>
@@ -86,21 +83,16 @@ function harness(options: {
           },
         }
       }
-      if (resource === subagentAwaitExecutorResource) {
+      if (resource === slateSubagentAwaitExecutorResource) {
         return {
           async execute(_ctx: Context, args: unknown) {
             subagentCalls.push(args)
             if (options.subagentAwait === "throw") throw new Error("no such subagent")
-            return options.subagentAwait ?? new SubagentAwaitResult({ result: { case: "stillRunning", value: new SubagentAwaitStillRunning({}) } as never })
+            return options.subagentAwait ?? { kind: "still-running", agentId: "" }
           },
         }
       }
-      return {
-        async execute(_ctx: Context, args: unknown) {
-          subagentCalls.push(args)
-          return options.subagentResume
-        },
-      }
+      throw new Error("Unexpected Await resource")
     },
   }
   const meta = {
@@ -375,9 +367,7 @@ test("a subagent that finished reports its transcript", async () => {
   const transcript = `${TRANSCRIPTS}/agent-1.jsonl`
   const harnessed = harness({
     files: { [transcript]: "the transcript\n" },
-    subagentAwait: new SubagentAwaitResult({
-      result: { case: "complete", value: new SubagentAwaitComplete({ agentId: "agent-1", transcriptPath: transcript }) } as never,
-    }),
+    subagentAwait: { kind: "complete", agentId: "agent-1", transcriptPathKnown: true, transcriptPath: transcript },
     tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const result = await harnessed.call({ task_id: "agent-1", block_until_ms: 1_000 }, createContext().with(conversationIdKey, "conversation-1"))
@@ -386,6 +376,7 @@ test("a subagent that finished reports its transcript", async () => {
   assert.equal(awaited?.value?.outputFilePath, transcript)
   assert.equal(awaited?.value?.outputLength, BigInt("the transcript\n".length))
   assert.equal(harnessed.subagentCalls.length, 1)
+  assert.deepEqual(harnessed.subagentCalls[0], { agentId: "agent-1", bounded: true, timeoutMs: 1_000 })
 })
 
 test("a subagent that finished without a transcript path reports none", async () => {
@@ -393,9 +384,7 @@ test("a subagent that finished without a transcript path reports none", async ()
   // is reported as having none rather than searched for.
   const harnessed = harness({
     listing: { absPath: TRANSCRIPTS, childrenFiles: [{ name: "agent-2.jsonl" }], childrenDirs: [] },
-    subagentAwait: new SubagentAwaitResult({
-      result: { case: "complete", value: new SubagentAwaitComplete({ agentId: "agent-2" }) } as never,
-    }),
+    subagentAwait: { kind: "complete", agentId: "agent-2", transcriptPathKnown: true },
     tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const result = await harnessed.call({ task_id: "agent-2", block_until_ms: 1_000 }, createContext().with(conversationIdKey, "conversation-1"))
@@ -409,7 +398,7 @@ test("a subagent that finished without a transcript path reports none", async ()
 
 test("a subagent that has not finished is not reported as one that has", async () => {
   const harnessed = harness({
-    subagentAwait: new SubagentAwaitResult({ result: { case: "stillRunning", value: new SubagentAwaitStillRunning({ agentId: "agent-1" }) } as never }),
+    subagentAwait: { kind: "still-running", agentId: "agent-1" },
     tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true },
   })
   const error = await failureOf(harnessed.call({ task_id: "agent-1", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
@@ -554,12 +543,13 @@ test("a malformed footer still finishes the wait without an exit code", async ()
 test("a transcript in a nested directory is found by listing", async () => {
   const harnessed = harness({
     listing: { absPath: TRANSCRIPTS, childrenFiles: [], childrenDirs: [{ absPath: TRANSCRIPTS + "/run-1", childrenFiles: [{ name: "agent-5.jsonl" }], childrenDirs: [] }] },
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-5", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const result = await harnessed.call({ task_id: "agent-5", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1"))
   const awaited = awaitResultOf(result)
   assert.equal(awaited?.value?.outputFilePath, TRANSCRIPTS + "/run-1/agent-5.jsonl")
+  assert.deepEqual(harnessed.subagentCalls[0], { agentId: "agent-5", bounded: false })
 })
 
 test("a function terminals folder is resolved when the wait needs it", async () => {
@@ -589,7 +579,7 @@ test("a non-error failure is serialized with its text", () => {
 
 test("an id with letters is a subagent, not a shell", async () => {
   const harnessed = harness({
-    subagentAwait: new SubagentAwaitResult({ result: { case: "complete", value: new SubagentAwaitComplete({ agentId: "abcdef" }) } as never }),
+    subagentAwait: { kind: "complete", agentId: "abcdef", transcriptPathKnown: true },
     tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true },
   })
   const result = await harnessed.call({ task_id: "abcdef", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1"))
@@ -641,7 +631,7 @@ test("a reported file size of zero falls back to the content length", async () =
 
 test("a resume answer without a transcript path is searched for and left empty when nothing lists", async () => {
   const harnessed = harness({
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-x", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-x", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
@@ -651,7 +641,7 @@ test("a resume answer without a transcript path is searched for and left empty w
 
 test("an empty transcripts folder is not searched", async () => {
   const harnessed = harness({
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-y", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: "" },
   })
   const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-y", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
@@ -663,7 +653,7 @@ test("a transcript under the parent conversation is found without listing", asyn
   const conversationTranscript = TRANSCRIPTS + "/conversation-1/subagents/agent-6.jsonl"
   const harnessed = harness({
     files: { [conversationTranscript]: "transcript\n" },
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-6", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-6", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
@@ -674,7 +664,7 @@ test("a transcript under the parent conversation is found without listing", asyn
 test("a failed transcript read does not fail the wait", async () => {
   const harnessed = harness({
     files: { [TRANSCRIPTS + "/agent-z.jsonl"]: "transcript\n" },
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-z", transcriptPathKnown: false },
     readError: "error",
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
@@ -687,7 +677,7 @@ test("a timed-out listing still finds a transcript", async () => {
   const harnessed = harness({
     listing: { absPath: TRANSCRIPTS, childrenFiles: [{ name: "agent-t.jsonl" }], childrenDirs: [] },
     listingTimeout: true,
-    subagentResume: { result: { case: "complete", value: {} } },
+    subagentAwait: { kind: "complete", agentId: "agent-t", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
   const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-t", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))

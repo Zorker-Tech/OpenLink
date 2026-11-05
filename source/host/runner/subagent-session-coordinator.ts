@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { computeSubagentRequestId, type SubagentLineage, type SubagentSession } from "./subagent-runtime.ts";
 import type { SubagentExecutionArgs } from "../../packages/agent-exec/subagent.ts";
+import type { SlateSubagentAwaitRequest, SlateSubagentAwaitResult } from "../../packages/agent-exec/subagent-await.ts";
 
 export class SlateSubagentDispatchError extends Error {
   override readonly name = "SlateSubagentDispatchError";
@@ -15,6 +16,7 @@ export type SubagentAdapterArgs = SubagentExecutionArgs & {
 export interface SubagentDispatcher {
   isRunning(id: string): boolean;
   hasRunningToolCall?(toolCallId: string): boolean;
+  awaitSubagent?(request: SlateSubagentAwaitRequest, signal: AbortSignal): Promise<SlateSubagentAwaitResult>;
   allocateComputerUseWindow(id: string): unknown | null;
   freeComputerUseWindow(id: string): void;
   dispatch(args: {
@@ -71,6 +73,14 @@ export class SubagentSessionCoordinator<BackgroundReason> {
 
   hasRunningToolCall(toolCallId: string): boolean {
     return toolCallId.length > 0 && this.dispatcher.hasRunningToolCall?.(toolCallId) === true;
+  }
+
+  awaitSubagent(
+    request: SlateSubagentAwaitRequest,
+    signal: AbortSignal,
+  ): Promise<SlateSubagentAwaitResult> {
+    return this.dispatcher.awaitSubagent?.(request, signal)
+      ?? Promise.resolve({ kind: "not-found", agentId: request.agentId });
   }
 
   async createOrResumeSession(_ctx: unknown, request: SubagentExecutionArgs): Promise<string> {

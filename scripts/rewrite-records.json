@@ -38,15 +38,15 @@
     },
     "packages/agent-exec/subagent-await.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "The package keeps its child-task wait resource while executor message binding moves to interop.",
-      "evidence": "tests/packages/interop-subagent-await-exec-adapter.test.ts verifies remote routing, controlled dispatch, unrelated-case refusal, and result serialization; the agent-await-tool suite passes (69/69). Both used local esbuild bundles because Node 22.20 cannot parse repository using declarations. Package typecheck passes and interop:check removes one direct schema consumer."
+      "overlap": 0.1896551724137931,
+      "refreshReason": "The turn-local package now owns Await requests, completion states and the runtime resource; generated SubagentAwait messages remain only in the legacy executor adapter.",
+      "evidence": "tests/packages/leftovers-thirtysix.test.ts pins waiting through settlement, zero-time status checks, missing ids and transcript paths; tests/packages/agent-await-tool.test.ts pins bounded/unbounded request shapes, transcript fallback and user-visible outcomes. The legacy interop adapter suite still covers its remote and controlled message cases. The focused Await/runtime wave passes 115/115, and the full Work-host suite passes 9961/9961 under Node 24.14. Package typecheck passes with 325 interop imports across 223 files and zero direct proto consumers. Measured overlap is 0.1896551724137931 against 58 baseline pairs."
     },
     "packages/agent-exec/subagent-control.ts": {
       "claim": "rewritten",
       "overlap": 0.1896551724137931,
       "refreshReason": "The Slate package now owns the turn-local handoff request/result and a local-only resource; generated control messages are limited to the legacy executor adapter.",
-      "evidence": "tests/packages/slate-subagent-control.test.ts pins accepted, stale, empty and unbound-resource behavior; host-runtime-agent-adapters and subagent-runtime tests pin live call-id lookup and cleanup; the legacy interop adapter suite remains green. The focused subagent control/client/runtime wave passes 68/68, and the full Work-host suite passes 9959/9959 under Node 24.14. Package typecheck passes with 326 interop imports across 224 files and zero direct proto consumers. Measured overlap is 0.1896551724137931 against 58 baseline pairs."
+      "evidence": "tests/packages/slate-subagent-control.test.ts pins accepted, stale, empty and unbound-resource behavior; host-runtime-agent-adapters and subagent-runtime tests pin live call-id lookup and cleanup; the legacy interop adapter suite remains green. The focused subagent control/client/runtime wave passes 68/68, and the full Work-host suite passes 9961/9961 under Node 24.14. Package typecheck passes with 325 interop imports across 223 files and zero direct proto consumers. Measured overlap is 0.1896551724137931 against 58 baseline pairs."
     },
     "packages/agent-exec/web-fetch-allowlist-precheck.ts": {
       "claim": "rewritten",
@@ -912,7 +912,7 @@
       "claim": "rewritten",
       "overlap": 0.6486129458388376,
       "refreshReason": "Moved generated request-context, subagent-reason, and client-side-update construction out of the host-facing facade; turn-local subagent execution now uses Slate request/result contracts and shares its executor with the remaining legacy message adapter.",
-      "evidence": "host/runner/agent-adapters.ts re-exports a stable Slate runner surface; the generated adapter remains only for legacy executor callers. tests/packages/host-runtime-agent-adapters.test.ts and the task/subagent adapter suites pass 68/68, covering Slate background reasons, request-context completeness, lineage, attachment handoff, live handoff lookup, lifecycle/review, and forwarded updates. The full Work-host suite passes 9959/9959 under Node 24.14; package typecheck passes. Measured overlap is 0.6486129458388376 against 757 baseline pairs; the wire adapter is explicitly exempted as interop."
+      "evidence": "host/runner/agent-adapters.ts re-exports a stable Slate runner surface; the generated adapter remains only for legacy executor callers. tests/packages/host-runtime-agent-adapters.test.ts and the task/subagent adapter suites pass 68/68, covering Slate background reasons, request-context completeness, lineage, attachment handoff, live handoff lookup, lifecycle/review, and forwarded updates. The full Work-host suite passes 9961/9961 under Node 24.14; package typecheck passes. Measured overlap is 0.6486129458388376 against 757 baseline pairs; the wire adapter is explicitly exempted as interop."
     },
     "host/boxes/forever-box/disk-pressure.ts": {
       "claim": "rewritten",
@@ -2622,7 +2622,7 @@
       "claim": "rewritten",
       "overlap": 0.5191612436731743,
       "refreshReason": "Turn-local client subagent execution now uses a Slate-owned executor resource and typed request/result instead of constructing the inherited SubagentArgs message; legacy runner messages are isolated behind an adapter.",
-      "evidence": "The client task path consumes Slate request, continuation, attachment, result, and handoff contracts; the TaskToolCall result is still projected at the AgentRoot boundary. Task-client and host/subagent adapter suites pass 68/68, including branch selection, resume/fork identity, background handoff, queued follow-up errors, unknown background codes, and attachment forwarding. The full Work-host suite passes 9959/9959 under Node 24.14; package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (326 imports across 224 files, zero direct proto consumers), and TypeScript checks. Measured overlap is 0.5191612436731743 against 1383 baseline pairs."
+      "evidence": "The client task path consumes Slate request, continuation, attachment, result, and handoff contracts; the TaskToolCall result is still projected at the AgentRoot boundary. Task-client and host/subagent adapter suites pass 68/68, including branch selection, resume/fork identity, background handoff, queued follow-up errors, unknown background codes, and attachment forwarding. The full Work-host suite passes 9961/9961 under Node 24.14; package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (325 imports across 223 files, zero direct proto consumers), and TypeScript checks. Measured overlap is 0.5191612436731743 against 1383 baseline pairs."
     },
     "packages/agent/interaction-handler.ts": {
       "claim": "rewritten",

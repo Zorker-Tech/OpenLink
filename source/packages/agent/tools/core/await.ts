@@ -422,12 +422,8 @@ async function subagentAwaitResult(
   // read-only resume of the subagent, which is what reports its transcript.
   const outcome = await runAwaitSubagentInterop(toolCtx, resourceAccessor, {
     bounded: options.enableBoundedSubagentAwait === true,
-    toolCallId,
     taskId: request.taskId,
     timeoutMs: request.blockUntilMs,
-    parentConversationId,
-    subagentType: options.defaultSubagentType ?? "generalPurpose",
-    modelId: options.defaultModelId ?? "default-model",
   })
   const transcriptPath = outcome.hasTranscriptPathField
     ? outcome.transcriptPath
