@@ -26,6 +26,7 @@ import type { Context } from "../../context/context.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import type { SlateConversationStep } from "../conversation-step-state.ts"
+import type { SlateSelectedContextState } from "../context/selected-context-state.ts"
 import type { ResourceAccessor } from "../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts"
 import { getConversationGroupId, getConversationId } from "../utils/request-scope.ts"
@@ -258,7 +259,7 @@ export interface ClientTaskStateHandler {
 }
 
 export interface ClientTaskTurnHandle {
-  get(ctx: Context): Promise<{ readonly userMessage?: { get(ctx: Context): Promise<{ readonly isSimulatedMsg?: boolean; readonly selectedContext?: unknown }> } }>
+  get(ctx: Context): Promise<{ readonly userMessage?: { get(ctx: Context): Promise<{ readonly isSimulatedMsg?: boolean; readonly selectedContext?: SlateSelectedContextState }> } }>
 }
 
 export interface ClientTaskContextInjectionSignal {

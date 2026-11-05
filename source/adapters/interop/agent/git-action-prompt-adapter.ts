@@ -17,6 +17,11 @@ import {
 import type { TaskToolModelInfo } from "../../../packages/agent/tools/task-tool-name.ts"
 import { synthesizeGitActionPrompt } from "../../../packages/agent/git-action-prompt.ts"
 import { renderSimulatedMessagePrompts, type SimulatedMessagePromptText } from "../../../packages/agent/simulated-message-prompts.ts"
+import { SlateSimulatedMessageReason, type SlateSimulatedMessageReason as SlateSimulatedReason } from "../../../packages/agent/user-message-state.ts"
+import type { SlateRepositoryActionSelection, SlateRepositoryCommitIntent, SlateContextText } from "../../../packages/agent/context/selected-context-state.ts"
+import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import { toInteropSimulatedMessageReason } from "./user-message-action-protocol-adapter.ts"
 import { multitaskActionForReason } from "./multitask-action-reason-adapter.ts"
 
 export interface InteropGitActionPromptInput {
@@ -138,6 +143,114 @@ export function renderInteropSimulatedMessagePrompts(input: InteropSimulatedProm
   return renderSimulatedMessagePrompts({
     gitAction: projectInteropGitActionPrompt(input),
     multitaskAction: multitaskActionForReason(input.simulatedMsgReason),
+    modelInfo: input.modelInfo,
+  })
+}
+
+function slateText(value: SlateContextText | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return value instanceof RedactedString ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : value
+}
+
+function slateGitActionReason(reason: SlateSimulatedReason): GitActionPromptReason | undefined {
+  switch (reason) {
+    case SlateSimulatedMessageReason.DIFF_TAB_COMMIT: return "diff-tab-commit"
+    case SlateSimulatedMessageReason.DIFF_TAB_COMMIT_AND_PUSH: return "diff-tab-commit-and-push"
+    case SlateSimulatedMessageReason.DIFF_TAB_PUSH: return "diff-tab-push"
+    case SlateSimulatedMessageReason.DIFF_TAB_CREATE_PR: return "diff-tab-create-pr"
+    case SlateSimulatedMessageReason.DIFF_TAB_CREATE_BRANCH: return "diff-tab-create-branch"
+    case SlateSimulatedMessageReason.DIFF_TAB_FIX_MERGE_CONFLICTS: return "diff-tab-fix-merge-conflicts"
+    case SlateSimulatedMessageReason.BABYSIT_PR_IN_CLOUD: return "babysit-pr-in-cloud"
+    case SlateSimulatedMessageReason.MULTITASK_SPLIT_PRS: return "multitask-split-prs"
+    case SlateSimulatedMessageReason.APPLY_LOCALLY: return "apply-locally"
+    case SlateSimulatedMessageReason.CHECKOUT_BRANCH: return "checkout-branch"
+    default: return undefined
+  }
+}
+
+function slateBranchContext(action: SlateRepositoryActionSelection["branch"]): GitActionBranchContext | undefined {
+  if (action === undefined) return undefined
+  return {
+    currentBranch: slateText(action.currentBranch),
+    baseBranch: slateText(action.baseBranch),
+    agentBranchPrefix: slateText(action.agentBranchPrefix),
+  }
+}
+
+function slateCommitData(commit: SlateRepositoryCommitIntent): GitCommitPromptData {
+  return {
+    filesToCommit: commit.files.map(value => slateText(value) ?? ""),
+    filesToCommitWithStatus: commit.filesWithStatus.map(file => ({
+      path: slateText(file.path) ?? "",
+      ...(file.status === undefined ? {} : { status: slateText(file.status) }),
+    })),
+    filesToExcludeFromCommit: commit.excludedFiles.map(value => slateText(value) ?? ""),
+    filesToExcludeFromCommitWithStatus: commit.excludedFilesWithStatus.map(file => ({
+      path: slateText(file.path) ?? "",
+      ...(file.status === undefined ? {} : { status: slateText(file.status) }),
+    })),
+    shouldStageAllChanges: commit.stageAllChanges,
+    createPrDraft: commit.draftPullRequest,
+  }
+}
+
+function slateActionSelection(action: SlateRepositoryActionSelection): GitActionPromptSelection | undefined {
+  const parameters = action.parameters
+  if (parameters === undefined) return undefined
+  const branchContext = slateBranchContext(action.branch)
+  switch (parameters.kind) {
+    case "commit": return { kind: "commit", params: slateCommitData(parameters.commit), branchContext }
+    case "commit-and-push": return { kind: "commit-and-push", params: slateCommitData(parameters.commit), branchContext }
+    case "create-branch-and-commit": return { kind: "create-branch-and-commit", params: slateCommitData(parameters.commit), branchContext }
+    case "create-branch-commit-and-push": return { kind: "create-branch-commit-and-push", params: slateCommitData(parameters.commit), branchContext }
+    case "create-branch": return { kind: "create-branch", branchContext }
+    case "create-pull-request-with-changes": return { kind: "create-pr-with-changes", params: slateCommitData(parameters.commit), branchContext }
+    case "push": return { kind: "push", branchContext }
+    case "create-pull-request": return { kind: "create-pr", draft: parameters.draft, branchContext }
+    case "fix-merge-conflicts": return {
+      kind: "fix-merge-conflicts",
+      baseBranch: slateText(parameters.baseBranch),
+      prUrl: slateText(parameters.pullRequestUrl),
+      branchContext,
+    }
+    case "babysit-pull-request": return { kind: "babysit-pr", baseBranch: slateText(parameters.baseBranch), branchContext }
+    case "apply-locally": return { kind: "apply-locally", remoteBranch: slateText(parameters.remoteBranch) ?? "" }
+    case "checkout-branch": return { kind: "checkout-branch", remoteBranch: slateText(parameters.remoteBranch) ?? "" }
+    case "update-branch": return undefined
+  }
+}
+
+/** Prompt view projected directly from the Slate-owned selected-context state. */
+export function renderSlateSelectedContextSimulatedMessagePrompts(input: {
+  readonly action?: SlateRepositoryActionSelection
+  readonly reason: SlateSimulatedReason | undefined
+  readonly modelInfo?: TaskToolModelInfo | undefined
+  readonly environmentParamForSubagent?: boolean | undefined
+  readonly babysitV2Prompt?: boolean | undefined
+  readonly enablePrCreationForgeGuidance?: boolean | undefined
+}): SimulatedMessagePromptText[] {
+  const reason = input.reason
+  const promptReason = reason === undefined ? undefined : slateGitActionReason(reason)
+  const action = input.action === undefined ? undefined : slateActionSelection(input.action)
+  const gitAction = promptReason === undefined
+    ? undefined
+    : {
+        reason: promptReason,
+        ...(action === undefined ? {} : { action }),
+        template: {
+          filePath: slateText(input.action?.templateFilePath),
+          directoryPath: slateText(input.action?.templateDirectoryPath),
+        },
+        environmentParamForSubagent: input.environmentParamForSubagent,
+        babysitV2Prompt: input.babysitV2Prompt,
+        enablePrCreationForgeGuidance: input.enablePrCreationForgeGuidance,
+      }
+  const interopReason = reason === undefined
+    ? SimulatedMsgReason.UNSPECIFIED
+    : toInteropSimulatedMessageReason(reason)
+  return renderSimulatedMessagePrompts({
+    gitAction,
+    multitaskAction: multitaskActionForReason(interopReason),
     modelInfo: input.modelInfo,
   })
 }

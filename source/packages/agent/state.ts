@@ -38,7 +38,7 @@ import {
   fromInteropConversationState,
   fromInteropGoalState,
   fromInteropPlanRegistryEntry,
-  attachAgentSelectedContextMediaInterop,
+  attachProcessedSelectedMediaToSlateContext,
   createRedactedConversationTokenDetailsInterop,
   type AgentStateGitRepoInfoInterop,
   type AgentStateCommunicateHistoryEntryInterop,
@@ -1798,7 +1798,7 @@ export class ConversationStateHandle {
       await this.hydrateUserMessageBlobText(ctx, userMessage);
       const turnMode = resolveCurrentTurnMode(this.slateMode, userMessage.mode);
       const selectedContextForProcessing = projectSelectedContextForProcessing(
-        userMessage.selectedContext as never,
+        userMessage.selectedContext,
         {
           simulatedMsgReason: toInteropSimulatedMessageReason(userMessage.simulatedMsgReason),
           modelInfo: turnSettings.modelInfo,
@@ -2012,8 +2012,8 @@ These images can be copied for use in other locations.
       userMessage = {
         ...userMessage,
         ...(referenceTag !== undefined ? { promptReferenceId: referenceTag } : {}),
-        selectedContext: attachAgentSelectedContextMediaInterop({
-          selectedContext: userMessage.selectedContext as never,
+        selectedContext: attachProcessedSelectedMediaToSlateContext({
+          selectedContext: userMessage.selectedContext,
           selectedDocuments: savedDocuments,
           selectedImages,
           selectedVideos: savedVideos,

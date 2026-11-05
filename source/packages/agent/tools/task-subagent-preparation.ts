@@ -656,7 +656,7 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     );
   }
   const attachmentSelection = fromInteropTaskSelectedContext(attachmentSelectionInterop);
-  const firstMessage = createTaskInitialMessage(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelectionInterop);
+  const firstMessage = createTaskInitialMessage(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
   const startingState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, resumeId, selfForkRequested, meta.toolCallId, resolvedTypeName);
   const persistCredentials = resolved.effectiveEnvironment !== "cloud";
   return createSlatePreparedTask({

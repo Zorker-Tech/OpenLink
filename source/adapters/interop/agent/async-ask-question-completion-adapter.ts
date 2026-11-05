@@ -5,20 +5,21 @@ import { UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
 import { toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
 import { fromRedactedRepositoryIndexingInfo } from "../redacted-protos/generated/agent/v1/repo_redacted.ts"
-import { fromRedactedSelectedContext } from "../redacted-protos/generated/agent/v1/selected_context_redacted.ts"
 import { Updates } from "../../../packages/agent-core/interaction-updates.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { SlateConversationStep } from "../../../packages/agent/conversation-step-state.ts"
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
+import type { SlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
 import { toInteropAgentMode } from "./mode-processing-adapter.ts"
 import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
+import { toInteropSelectedContextState } from "./selected-context-state-adapter.ts"
 
 const FULL_ACCESS = PrivacyCapability.UNSAFE_ALWAYS_ALLOWED
 
 export interface ContinuationMessageSource {
-  readonly selectedContext?: unknown
+  readonly selectedContext?: SlateSelectedContextState
   readonly mode?: SlateUserMessage["mode"] | undefined
   readonly compatibility?: SlateUserMessage["compatibility"]
   readonly bestOfNGroupId?: unknown
@@ -59,9 +60,9 @@ export function createQuestionnaireContinuation(
   const message = new UserMessage({
     text: "Continue with the questionnaire results.",
     messageId: randomUUID(),
-    ...(source.selectedContext == null
+    ...(source.selectedContext === undefined
       ? {}
-      : { selectedContext: fromRedactedSelectedContext(source.selectedContext as never, FULL_ACCESS, undefined) }),
+      : { selectedContext: toInteropSelectedContextState(source.selectedContext) }),
     mode: source.mode === undefined
       ? AgentMode.UNSPECIFIED
       : source.compatibility?.legacyModeCode === undefined

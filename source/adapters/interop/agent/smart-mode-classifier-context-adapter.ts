@@ -18,6 +18,7 @@ import {
   isSlateSelectedContextForProcessing,
   type SlateSelectedContextForProcessing,
 } from "../../../packages/agent/context/selected-context-processing-contracts.ts"
+import type { SlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
 import { projectSelectedContextForProcessing } from "./selected-context-processing-adapter.ts"
 
 /** Decodes a redacted user message into fields consumed by Slate's classifier policy. */
@@ -35,13 +36,13 @@ export function readClassifierUserMessageInterop(
       readonly text: string | RedactedString
       readonly isSimulatedMsg?: boolean | undefined
       readonly simulatedMsgReason?: SlateSimulatedMessageReasonValue | undefined
-      readonly selectedContext?: unknown
+      readonly selectedContext?: SelectedContext | SlateSelectedContextState | SlateSelectedContextForProcessing
     }
     const selectedContext = slate.selectedContext === undefined
       ? undefined
       : isSlateSelectedContextForProcessing(slate.selectedContext)
         ? slate.selectedContext
-        : projectSelectedContextForProcessing(slate.selectedContext as SelectedContext, {
+        : projectSelectedContextForProcessing(slate.selectedContext, {
             simulatedMsgReason: slate.simulatedMsgReason === undefined
               ? SimulatedMsgReason.UNSPECIFIED
               : typeof slate.simulatedMsgReason === "string"

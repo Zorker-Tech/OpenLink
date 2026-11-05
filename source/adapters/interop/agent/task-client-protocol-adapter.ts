@@ -15,6 +15,8 @@ import {
   type SubagentResult,
 } from "../proto/generated/agent/v1/subagent_exec_pb.ts"
 import { fromRedactedSelectedContext } from "../redacted-protos/generated/agent/v1/selected_context_redacted.ts"
+import { isSlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
+import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import type { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
@@ -136,6 +138,11 @@ export function getVideoPathsFromRedactedSelectedContextInterop(
   selectedContext: unknown,
   capability: PrivacyCapability,
 ): string[] {
+  if (isSlateSelectedContextState(selectedContext)) {
+    return selectedContext.media.videos.map(video =>
+      video.path instanceof RedactedString ? video.path.unwrap(capability) : video.path,
+    )
+  }
   const context = fromRedactedSelectedContext(selectedContext, capability, {})
   return context.selectedVideos.map(({ path }) => path)
 }

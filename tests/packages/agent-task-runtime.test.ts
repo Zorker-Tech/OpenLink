@@ -282,7 +282,7 @@ test("the AgentRoot boundary projects a Slate first message without changing its
     "open the report",
     "message-4",
     true,
-    selectedContext,
+    { images: [], videos: [], commands: [] },
   )
 
   const action = createTaskUserMessageActionInterop({ message })
