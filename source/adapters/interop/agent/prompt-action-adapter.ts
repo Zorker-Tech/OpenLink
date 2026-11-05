@@ -8,6 +8,10 @@ import {
   SelectedImage,
   SelectedVideo,
 } from "../proto/generated/agent/v1/selected_context_pb.ts";
+import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
+import type { SlateVideoAttachment } from "../../../packages/agent/context/video-attachment-contracts.ts"
+import { toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
+import { toInteropSelectedVideo } from "./video-attachment-adapter.ts"
 
 export interface InteropTurnPromptOptions {
   readonly attachedFilePaths?: readonly string[];
@@ -21,7 +25,7 @@ export interface InteropTurnPromptOptions {
   readonly hidden?: boolean;
   readonly skippedQuestionPrompts?: readonly string[];
   readonly dismissedQuestionPrompts?: readonly string[];
-  readonly selectedImages?: readonly { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string }[];
+  readonly selectedImages?: readonly (SelectedImage | SlateImageAttachment | { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string })[];
   readonly selectedVideos?: readonly SelectedVideo[];
   readonly recentUserMessages?: readonly { readonly id: string; readonly text: string; readonly richText?: string }[];
 }
@@ -62,21 +66,53 @@ export function isInteropSelectedVideo(value: unknown): value is SelectedVideo {
     && typeof (dataOrBlobId as Record<string, unknown>).case === "string";
 }
 
+function isSlateImage(value: unknown): value is SlateImageAttachment {
+  if (typeof value !== "object" || value === null) return false
+  const fields = value as Record<string, unknown>
+  return typeof fields.id === "string" && typeof fields.sourcePath === "string" && typeof fields.mediaType === "string"
+}
+
+function isSlateVideo(value: unknown): value is SlateVideoAttachment {
+  if (typeof value !== "object" || value === null) return false
+  const fields = value as Record<string, unknown>
+  return typeof fields.sourcePath === "string" && typeof fields.displayName === "string" &&
+    typeof fields.mediaType === "string" && typeof fields.writeToWorkspace === "boolean"
+}
+
+function selectedImageFromRunner(value: unknown): SelectedImage | undefined {
+  if (isSlateImage(value)) return toInteropSelectedImage(value)
+  if (value instanceof SelectedImage) return value
+  if (typeof value !== "object" || value === null) return undefined
+  const fields = value as Record<string, unknown>
+  if (fields.dataOrBlobId !== undefined && typeof fields.path === "string" && typeof fields.mimeType === "string") {
+    return new SelectedImage(value as never)
+  }
+  if (!(fields.data instanceof Uint8Array)) return undefined
+  return new SelectedImage({
+    dataOrBlobId: { case: "data", value: new Uint8Array(fields.data) },
+    path: typeof fields.path === "string" ? fields.path : "",
+    mimeType: typeof fields.mimeType === "string" ? fields.mimeType : "",
+  })
+}
+
+function selectedVideoFromRunner(value: unknown): SelectedVideo | undefined {
+  if (isSlateVideo(value)) return toInteropSelectedVideo(value)
+  return isInteropSelectedVideo(value) ? value : undefined
+}
+
 /** Projects runner inputs into the generated prompt boundary while filtering malformed image/video attachments. */
 export function interopTurnPromptOptionsFromRunner(options: RunnerTurnPromptOptionsInput): InteropTurnPromptOptions {
   const selectedImages = options.selectedImages?.flatMap((image) => {
-    if (typeof image !== "object" || image === null) return [];
-    const fields = image as Record<string, unknown>;
-    if (!(fields.data instanceof Uint8Array)) return [];
-    return [{
-      data: fields.data,
-      ...(typeof fields.path === "string" ? { path: fields.path } : {}),
-      ...(typeof fields.mimeType === "string" ? { mimeType: fields.mimeType } : {}),
-    }];
+    const selected = selectedImageFromRunner(image)
+    return selected === undefined ? [] : [selected]
   });
+  const selectedVideos = options.selectedVideos?.flatMap(video => {
+    const selected = selectedVideoFromRunner(video)
+    return selected === undefined ? [] : [selected]
+  })
   return {
     ...(selectedImages === undefined ? {} : { selectedImages }),
-    ...(options.selectedVideos === undefined ? {} : { selectedVideos: options.selectedVideos.filter(isInteropSelectedVideo) }),
+    ...(selectedVideos === undefined ? {} : { selectedVideos }),
     ...(options.attachedFilePaths === undefined ? {} : { attachedFilePaths: options.attachedFilePaths }),
     ...(options.attachedFileSizes === undefined ? {} : { attachedFileSizes: options.attachedFileSizes }),
     ...(options.richText === undefined ? {} : { richText: options.richText }),
@@ -125,18 +161,22 @@ export function generatedTurnActionFromSlate(args: {
   readonly text: string;
   readonly messageId?: string;
   readonly richText?: string;
-  readonly selectedImages: readonly { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string }[];
+  readonly selectedImages: readonly (SelectedImage | SlateImageAttachment | { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string })[];
   readonly selectedVideos: readonly SelectedVideo[];
   readonly prependUserMessages: readonly unknown[];
   readonly unansweredQuestionsNote?: string;
   readonly automationStatusReminder: string | null;
   readonly automationStatusCompactionEpoch: number;
 }): InteropTurnActionAssembly {
-  const selectedImages = args.selectedImages.map((image) => new SelectedImage({
-    dataOrBlobId: { case: "data", value: image.data },
-    path: image.path ?? "",
-    mimeType: image.mimeType ?? "",
-  }));
+  const selectedImages = args.selectedImages.map((image) => {
+    if (image instanceof SelectedImage) return image
+    if ("sourcePath" in image) return toInteropSelectedImage(image)
+    return new SelectedImage({
+      dataOrBlobId: { case: "data", value: new Uint8Array(image.data) },
+      path: image.path ?? "",
+      mimeType: image.mimeType ?? "",
+    })
+  });
   const selectedContext = selectedImages.length > 0 || args.selectedVideos.length > 0
     ? new SelectedContext({ selectedImages, selectedVideos: [...args.selectedVideos] })
     : undefined;

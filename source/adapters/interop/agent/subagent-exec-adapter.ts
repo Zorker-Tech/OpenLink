@@ -29,6 +29,7 @@ import {
 } from "../../../packages/agent-exec/subagent.ts"
 import type { SubagentAdapterArgs } from "../../../host/runner/subagent-session-coordinator.ts"
 import type { Context } from "../../../packages/context/context.ts"
+import { fromInteropTaskSelectedContext } from "./task-subagent-preparation-protocol-adapter.ts"
 
 interface WireSubagentHostAdapter {
   createOrResumeSession(context: Context, args: SubagentAdapterArgs): Promise<string>
@@ -67,6 +68,9 @@ const reasonToWire: Readonly<Record<SlateSubagentBackgroundReason, SubagentBackg
 }
 
 function argsFromWire(args: SubagentArgs): SubagentExecutionArgs {
+  const selectedContext = args.selectedContext === undefined
+    ? undefined
+    : fromInteropTaskSelectedContext(args.selectedContext)
   return {
     toolCallId: args.toolCallId,
     subagentType: args.subagentType,
@@ -75,9 +79,7 @@ function argsFromWire(args: SubagentArgs): SubagentExecutionArgs {
     ...(args.parentConversationId === undefined ? {} : { parentConversationId: args.parentConversationId }),
     ...(args.resumeAgentId === undefined ? {} : { resumeAgentId: args.resumeAgentId }),
     ...(args.forkAgentId === undefined ? {} : { forkAgentId: args.forkAgentId }),
-    ...(args.selectedContext === undefined ? {} : {
-      selectedContext: { selectedVideos: args.selectedContext.selectedVideos },
-    }),
+    ...(selectedContext === undefined ? {} : { selectedContext }),
   }
 }
 

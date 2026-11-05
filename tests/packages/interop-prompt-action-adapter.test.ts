@@ -6,8 +6,11 @@ import {
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import {
+  SelectedImage,
   SelectedVideo,
 } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
+import type { SlateImageAttachment } from "../../source/packages/agent/context/image-attachment-contracts.ts"
+import type { SlateVideoAttachment } from "../../source/packages/agent/context/video-attachment-contracts.ts"
 import {
   generatedTurnActionFromSlate,
   hydrateInteropSelectedVideos,
@@ -24,10 +27,40 @@ describe("prompt action interop adapter", () => {
       messageId: "message-1",
       recentUserMessages: [{ id: "prior", text: "earlier" }],
     });
-    assert.deepEqual(options.selectedImages, [{ data: new Uint8Array([1]), path: "/workspace/a.png", mimeType: "image/png" }]);
+    assert.deepEqual(options.selectedImages, [new SelectedImage({
+      uuid: "",
+      path: "/workspace/a.png",
+      mimeType: "image/png",
+      dataOrBlobId: { case: "data", value: new Uint8Array([1]) },
+    })]);
     assert.deepEqual(options.selectedVideos, [video]);
     assert.deepEqual([options.attachedFilePaths, options.messageId, options.recentUserMessages], [["/workspace/file.txt"], "message-1", [{ id: "prior", text: "earlier" }]]);
   });
+
+  it("keeps Slate image/video selections intact until the generated prompt boundary", () => {
+    const image: SlateImageAttachment = {
+      id: "image-1",
+      sourcePath: "/workspace/image.png",
+      mediaType: "image/png",
+      content: { kind: "blob-with-bytes", blobId: new Uint8Array([5]), bytes: new Uint8Array([1, 2]) },
+    }
+    const video: SlateVideoAttachment = {
+      id: "video-1",
+      sourcePath: "/workspace/video.mp4",
+      displayName: "video.mp4",
+      mediaType: "video/mp4",
+      writeToWorkspace: false,
+      content: { kind: "bytes", bytes: new Uint8Array([3, 4]) },
+    }
+    const options = interopTurnPromptOptionsFromRunner({ selectedImages: [image], selectedVideos: [video] })
+    assert.deepEqual(options.selectedImages, [new SelectedImage({
+      uuid: "image-1",
+      path: "/workspace/image.png",
+      mimeType: "image/png",
+      dataOrBlobId: { case: "blobIdWithData", value: { blobId: new Uint8Array([5]), data: new Uint8Array([1, 2]) } },
+    })])
+    assert.deepEqual(options.selectedVideos?.[0]?.dataOrBlobId, { case: "data", value: new Uint8Array([3, 4]) })
+  })
 
   it("hydrates only unmaterialized subagent videos and keeps the caller's refusal", async () => {
     const ready = new SelectedVideo({ uuid: "ready", path: "/workspace/ready.mp4", mimeType: "video/mp4", filename: "ready.mp4", materializeToFilesystem: false, dataOrBlobId: { case: "blobId", value: new Uint8Array([2]) } });

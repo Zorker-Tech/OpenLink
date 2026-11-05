@@ -32,7 +32,10 @@ describe("the subagent executor interop adapter", () => {
       resumeAgentId: "agent-existing",
       forkAgentId: "agent-fork",
       readonly: true,
-      selectedContext: { selectedVideos: [] },
+      selectedContext: {
+        selectedImages: [{ uuid: "image-1", path: "/workspace/image.png", mimeType: "image/png", dataOrBlobId: { case: "data", value: new Uint8Array([1, 2]) } }],
+        selectedVideos: [{ uuid: "video-1", path: "/workspace/video.mp4", filename: "video.mp4", mimeType: "video/mp4", dataOrBlobId: { case: "data", value: new Uint8Array([3, 4]) } }],
+      },
     }), {})
 
     assert.deepEqual(received, {
@@ -41,7 +44,11 @@ describe("the subagent executor interop adapter", () => {
       prompt: "run this",
       resumeAgentId: "agent-existing",
       readonly: true,
-      selectedContext: { selectedVideos: [] },
+      selectedContext: {
+        images: [{ id: "image-1", sourcePath: "/workspace/image.png", mediaType: "image/png", content: { kind: "inline-bytes", bytes: new Uint8Array([1, 2]) } }],
+        videos: [{ id: "video-1", sourcePath: "/workspace/video.mp4", displayName: "video.mp4", mediaType: "video/mp4", writeToWorkspace: false, content: { kind: "bytes", bytes: new Uint8Array([3, 4]) } }],
+        commands: [],
+      },
     })
     assert.equal(result.result.case, "success")
     if (result.result.case !== "success") assert.fail("expected a successful background result")

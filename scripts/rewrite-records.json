@@ -2818,9 +2818,9 @@
     },
     "packages/agent/utils/prompt-token-tracking.ts": {
       "claim": "rewritten",
-      "overlap": 0.7229437229437229,
-      "refreshReason": "Token tracking now receives schema-opaque rule, skill and environment records and delegates redacted directory-tree decoding to an interop adapter; the source was remeasured after removing direct wire imports.",
-      "evidence": "tests/packages/prompt-token-tracking.test.ts and tests/packages/interop-user-info-projection.test.ts pass 24/24, covering conversation and MCP metrics, selected-context attachment classes including decoded folder trees, attached skills, and zero-input output. Token tracking now consumes Slate-owned prompt facts; 24 direct wire-schema consumers remain. Work-host typecheck passes."
+      "overlap": 0.6173160173160173,
+      "refreshReason": "File-attachment and manual-skill accounting now consume SlateSelectedContextState directly, including a Slate-owned folder-tree token view, instead of the inherited flat selected-context shape.",
+      "evidence": "tests/packages/prompt-token-tracking.test.ts passes 21/21 and selected-context state plus V4 migration suites pass 20/20. Cases pin file, range, terminal and folder counts, redacted text, manual skills, and empty selections. The full Work-host suite passes 9956/9956 under Node 24.14; package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (327 imports across 225 files, zero direct proto consumers), and TypeScript checks. Overlap is 0.6173160173160173 against 1155 baseline pairs."
     },
     "packages/context/logger.ts": {
       "claim": "rewritten",
