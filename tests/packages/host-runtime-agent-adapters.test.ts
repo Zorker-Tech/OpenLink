@@ -132,16 +132,19 @@ describe("the subagent sessions a host keeps", () => {
     const sessionId = await allowed.adapter.createOrResumeSession(undefined, args({ subagentType: "computerUse" }));
     allowed.adapter.setLaunchReviewer(async () => ({ allowed: true, reason: "" }));
     const ctx = createContext().with(requestIdKey, "request-9");
-    assert.deepEqual(await allowed.adapter.runSession(ctx, sessionId, args({ subagentType: "computerUse", toolCallId: "call-9", prompt: "check it", selectedContext: { selectedVideos: ["one.mov"] } })), { status: "background", backgroundReason: SubagentBackgroundReason.AGENT_REQUEST, toolCallCount: 0 });
+    const selectedImage = { id: "image-1", sourcePath: "one.png", mediaType: "image/png", content: { kind: "inline-bytes", bytes: new Uint8Array([1, 2]) } as const };
+    const selectedVideo = { sourcePath: "one.mov", displayName: "one.mov", mediaType: "video/mp4", writeToWorkspace: false, content: { kind: "empty" } as const };
+    assert.deepEqual(await allowed.adapter.runSession(ctx, sessionId, args({ subagentType: "computerUse", toolCallId: "call-9", prompt: "check it", selectedContext: { images: [selectedImage], videos: [selectedVideo], commands: [] } })), { status: "background", backgroundReason: SubagentBackgroundReason.AGENT_REQUEST, toolCallCount: 0 });
     const dispatched = allowed.kinds("dispatch")[0]?.[1] as { subagentAgentId: string; subagentType: string; toolCallId: string; prompt: string; lineage?: { parentRequestId: string }; run(): Promise<{ text: string }> };
     assert.deepEqual({ id: dispatched.subagentAgentId, type: dispatched.subagentType, call: dispatched.toolCallId, prompt: dispatched.prompt, parent: dispatched.lineage?.parentRequestId }, { id: sessionId, type: "computerUse", call: "call-9", prompt: "check it", parent: "request-9" });
     // The run it was given calls the session's runner with what the caller selected and against the same request.
     const outcome = await dispatched.run();
     assert.equal(outcome.text, "done");
-    const run = allowed.kinds("run")[0] as [string, string, string, { selectedVideos?: readonly unknown[]; inferenceRequestId?: string; lineage?: { parentRequestId: string } }] | undefined;
-    assert.deepEqual({ prompt: run?.[2], videos: run?.[3].selectedVideos, request: run?.[3].inferenceRequestId, parent: run?.[3].lineage?.parentRequestId }, {
+    const run = allowed.kinds("run")[0] as [string, string, string, { selectedImages?: readonly unknown[]; selectedVideos?: readonly unknown[]; inferenceRequestId?: string; lineage?: { parentRequestId: string } }] | undefined;
+    assert.deepEqual({ prompt: run?.[2], images: run?.[3].selectedImages, videos: run?.[3].selectedVideos, request: run?.[3].inferenceRequestId, parent: run?.[3].lineage?.parentRequestId }, {
       prompt: "check it",
-      videos: ["one.mov"],
+      images: [selectedImage],
+      videos: [selectedVideo],
       request: computeSubagentRequestId("call-9"),
       parent: "request-9",
     });

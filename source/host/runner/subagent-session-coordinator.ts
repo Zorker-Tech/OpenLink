@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { computeSubagentRequestId, type SubagentLineage, type SubagentSession } from "./subagent-runtime.ts";
+import type { SlateTaskAttachmentSelection } from "../../packages/agent/tools/task-attachment-contracts.ts";
 
 export class SlateSubagentDispatchError extends Error {
   override readonly name = "SlateSubagentDispatchError";
@@ -11,7 +12,7 @@ export interface SubagentAdapterArgs {
   readonly toolCallId: string;
   readonly prompt: string;
   readonly readonly?: boolean;
-  readonly selectedContext?: { selectedVideos?: readonly unknown[] };
+  readonly selectedContext?: SlateTaskAttachmentSelection;
 }
 
 export interface SubagentDispatcher {
@@ -113,7 +114,10 @@ export class SubagentSessionCoordinator<BackgroundReason> {
       prompt: args.prompt,
       ...(lineage == null ? {} : { lineage }),
       run: () => runner.run(args.prompt, {
-        selectedVideos: args.selectedContext?.selectedVideos!,
+        ...(args.selectedContext === undefined ? {} : {
+          selectedImages: args.selectedContext.images,
+          selectedVideos: args.selectedContext.videos,
+        }),
         inferenceRequestId: (args.toolCallId.length > 0 ? computeSubagentRequestId(args.toolCallId) : undefined)!,
         ...(lineage == null ? {} : { lineage }),
       }),

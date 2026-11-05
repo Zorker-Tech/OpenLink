@@ -5,6 +5,8 @@
  * what it may spend, and what it produced is handed back to the parent as a result rather than as a transcript.
  */
 import { deriveBackgroundSubagentTitle, formatSteerPrompt } from "./background-work.ts";
+import type { SlateImageAttachment } from "../../packages/agent/context/image-attachment-contracts.ts";
+import type { SlateVideoAttachment } from "../../packages/agent/context/video-attachment-contracts.ts";
 
 export interface SubagentLineage {
   readonly parentRequestId?: string;
@@ -51,7 +53,8 @@ export interface ComputerUseUsageSnapshot {
 export interface SubagentRunOptions {
   readonly inferenceRequestId?: string;
   readonly lineage?: SubagentLineage;
-  readonly selectedVideos?: readonly unknown[];
+  readonly selectedImages?: readonly SlateImageAttachment[];
+  readonly selectedVideos?: readonly SlateVideoAttachment[];
 }
 
 export interface SubagentSession {

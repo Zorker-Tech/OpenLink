@@ -4,11 +4,10 @@ import assert from "node:assert/strict"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { agentEventTrackerKey, type AgentEventTracker } from "../../source/packages/agent/utils/event-tracking.ts"
 import { CursorRule, CursorRuleSource } from "../../source/adapters/interop/proto/generated/agent/v1/rules_pb.ts"
-import { LsDirectoryTreeNode } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
-import { toRedactedLsDirectoryTreeNode } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/ls_exec_redacted.ts"
-import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { emptySlateSelectedContextState } from "../../source/packages/agent/context/selected-context-state.ts"
 import { renderManuallyAttachedSkillsSection } from "../../source/packages/agent/manually-attached-skills.ts"
 import { resolveSkillAttachments } from "../../source/packages/agent/skill-attachment-policy.ts"
+import { estimateStringTokenCount } from "../../source/packages/agent/utils/token-estimate.ts"
 import {
   countConversationHistoryTokens,
   trackPromptTokenUsage,
@@ -235,42 +234,67 @@ test("the file-system route is reported when the meta tool is not enabled", () =
 
 test("what the user attached is counted, including a folder's tree", () => {
   tracked.length = 0
+  const empty = emptySlateSelectedContextState()
   trackPromptTokenUsage(trackingParams({
     selectedContext: {
-      codeSelections: [{ path: redactedString("/p/a.ts"), content: redactedString("const a = 1") }],
-      terminals: [{ content: redactedString("$ ls"), title: redactedString("shell") }],
-      terminalSelections: [{ content: redactedString("selected output"), title: redactedString("terminal selection") }],
-      files: [{ path: redactedString("/p/b.ts"), content: redactedString("const b = 2") }],
-      folders: [{
+      ...empty,
+      workspace: {
+        ...empty.workspace,
+        codeSelections: [{ path: redactedString("/p/a.ts"), content: redactedString("const a = 1") }],
+        terminalOutputs: [{ content: redactedString("$ ls"), title: redactedString("shell") }],
+        terminalRanges: [{ content: redactedString("selected output"), title: redactedString("terminal selection") }],
+        files: [{ path: redactedString("/p/b.ts"), content: redactedString("const b = 2") }],
+        folders: [{
         path: redactedString("/p/src"),
-        // A real redacted tree, so the counting goes through the same decode the platform uses.
-        directoryTree: toRedactedLsDirectoryTreeNode(
-          new LsDirectoryTreeNode({ absPath: "/p/src", numFiles: 3 }),
-          PrivacyMode.UNSPECIFIED,
-        ),
-      }],
+          tree: { path: "/p/src", processed: false, files: [], directories: [], fileCount: 3, extensionCounts: {} },
+        }],
+      },
     },
   }) as never)
   const event = tracked[0] as AnyRecord
   assert.equal(event.fileAttachmentCount, 5)
-  assert.ok(event.fileAttachmentTokens > 0)
+  const workspaceTree = {
+    absPath: "/p/src",
+    childrenWereProcessed: false,
+    childrenFiles: [],
+    childrenDirs: [],
+    numFiles: 3,
+    fullSubtreeExtensionCounts: {},
+  }
+  const expectedTexts = [
+    "/p/a.ts", "const a = 1", "$ ls", "shell", "selected output", "terminal selection",
+    "/p/b.ts", "const b = 2", "/p/src",
+  ]
+  const expectedTokens = expectedTexts.reduce((sum, value) => sum + estimateStringTokenCount(value), 0) +
+    estimateStringTokenCount(JSON.stringify(workspaceTree))
+  assert.equal(event.fileAttachmentTokens, expectedTokens)
 })
 
 test("an attached skill is counted through the block that inlines it", () => {
   tracked.length = 0
+  const empty = emptySlateSelectedContextState()
   trackPromptTokenUsage(trackingParams({
     selectedContext: {
-      codeSelections: [],
-      terminals: [],
-      terminalSelections: [],
-      files: [],
-      folders: [],
-      selectedSkills: [{ fullPath: "/p/.cursor/skills/a/SKILL.md", content: "do the thing" }],
+      ...empty,
+      skills: [{
+        path: "/p/.cursor/skills/a/SKILL.md",
+        content: "do the thing",
+        description: "",
+        environments: [],
+        disabledEnvironments: [],
+        modelInvocationDisabled: false,
+        filePatterns: [],
+        scopedTo: [],
+      }],
     },
   }) as never)
   const event = tracked[0] as AnyRecord
   assert.equal(event.manuallyAttachedSkillCount, 1)
-  assert.ok(event.manuallyAttachedSkillTokens > 0)
+  const renderedSkill = renderManuallyAttachedSkillsSection([{
+    fullPath: "/p/.cursor/skills/a/SKILL.md",
+    content: "do the thing",
+  }])
+  assert.equal(event.manuallyAttachedSkillTokens, estimateStringTokenCount(renderedSkill ?? ""))
 })
 
 test("no attachments at all is reported as none", () => {

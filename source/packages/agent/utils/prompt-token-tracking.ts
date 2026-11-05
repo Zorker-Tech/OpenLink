@@ -17,7 +17,6 @@
  */
 
 import { PrivacyCapability } from "../../redaction/classification.ts"
-import { decodeRedactedDirectoryTree } from "../../../adapters/interop/agent/redacted-ls-directory-tree-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import {
   projectInteropAgentSkills,
@@ -26,7 +25,7 @@ import {
 } from "../../../adapters/interop/agent/user-info-input-adapter.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
 import { resolveSkillAttachments } from "../skill-attachment-policy.ts"
-import { decodeSelectedContextSkillAttachments } from "../../../adapters/interop/agent/selected-context-skills-adapter.ts"
+import type { SlateContextText, SlateSelectedContextState, SlateSelectedDirectoryNode } from "../context/selected-context-state.ts"
 import { buildAvailableSkillsPromptSection } from "../prompts/available-skills-section.ts"
 import { categorizePromptRules } from "../prompts/rule-categorization.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
@@ -77,34 +76,6 @@ interface McpPromptTrackingContext {
   readonly serverCount: number
 }
 
-interface RedactedAttachmentStringLike {
-  readonly length: number
-  unwrap(purpose: PrivacyCapability): string
-}
-
-interface SelectedContextFileAttachmentLike {
-  readonly path: RedactedAttachmentStringLike | null | undefined
-  readonly content: RedactedAttachmentStringLike | null | undefined
-}
-
-interface SelectedContextTerminalLike {
-  readonly content: RedactedAttachmentStringLike | null | undefined
-  readonly title: RedactedAttachmentStringLike | null | undefined
-}
-
-interface SelectedContextFolderLike {
-  readonly path: RedactedAttachmentStringLike | null | undefined
-  readonly directoryTree?: unknown
-}
-
-interface SelectedContextFileAttachmentsLike {
-  readonly codeSelections: readonly SelectedContextFileAttachmentLike[]
-  readonly terminals: readonly SelectedContextTerminalLike[]
-  readonly terminalSelections: readonly SelectedContextTerminalLike[]
-  readonly files: readonly SelectedContextFileAttachmentLike[]
-  readonly folders: readonly SelectedContextFolderLike[]
-}
-
 interface PromptTokenTrackingDisplayOptions {
   readonly agentType?: AgentType | undefined
   readonly computerUseSubagentSurface?: boolean | undefined
@@ -121,7 +92,7 @@ interface PromptTokenTrackingParams {
   readonly mcpTools: readonly McpToolLike[]
   readonly requestContext: McpPromptTrackingRequestContext
   readonly messages: readonly PromptMessageLike[]
-  readonly selectedContext: SelectedContextFileAttachmentsLike | null | undefined
+  readonly selectedContext: SlateSelectedContextState | undefined
   readonly userInfoDisplayOptions: PromptTokenTrackingDisplayOptions | undefined
   readonly readToolName: string | undefined
   readonly invocationId: string
@@ -188,43 +159,69 @@ function getMcpPromptTrackingContext(requestContext: McpPromptTrackingRequestCon
   return { mcpEnabled: false, discoveryMode: "disabled", serverCount: 0 }
 }
 
-function estimateRedactedStringTokenCount(str: {
-  readonly length: number
-  unwrap(purpose: PrivacyCapability): string
-} | null | undefined): number {
-  if (!str || str.length === 0) return 0
-  return estimateStringTokenCount(str.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED))
+function selectedText(value: SlateContextText): string
+function selectedText(value: undefined): undefined
+function selectedText(value: SlateContextText | undefined): string | undefined
+function selectedText(value: SlateContextText | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return typeof value === "string" ? value : value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+}
+
+function estimateSelectedTextTokens(value: SlateContextText | undefined): number {
+  const text = selectedText(value)
+  return text === undefined || text.length === 0 ? 0 : estimateStringTokenCount(text)
+}
+
+function usageDirectoryTree(node: SlateSelectedDirectoryNode): unknown {
+  const command = (value: NonNullable<NonNullable<SlateSelectedDirectoryNode["files"][number]["terminalMetadata"]>["lastCommands"]>[number]) => ({
+    command: selectedText(value.command),
+    ...(value.exitCode === undefined ? {} : { exitCode: value.exitCode }),
+    ...(value.timestampMs === undefined ? {} : { timestampMs: value.timestampMs }),
+    ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+  })
+  return {
+    absPath: selectedText(node.path),
+    childrenWereProcessed: node.processed,
+    childrenFiles: node.files.map(file => ({
+      name: selectedText(file.name),
+      ...(file.terminalMetadata === undefined ? {} : { terminalMetadata: {
+        ...(file.terminalMetadata.cwd === undefined ? {} : { cwd: selectedText(file.terminalMetadata.cwd) }),
+        ...(file.terminalMetadata.lastModifiedMs === undefined ? {} : { lastModifiedMs: file.terminalMetadata.lastModifiedMs }),
+        lastCommands: file.terminalMetadata.lastCommands?.map(command) ?? [],
+        ...(file.terminalMetadata.currentCommand === undefined ? {} : { currentCommand: command(file.terminalMetadata.currentCommand) }),
+      } }),
+    })),
+    childrenDirs: node.directories.map(usageDirectoryTree),
+    numFiles: node.fileCount,
+    fullSubtreeExtensionCounts: { ...node.extensionCounts },
+  }
 }
 
 function countFileAttachmentTokens(
-  selectedContext: SelectedContextFileAttachmentsLike | null | undefined,
+  selectedContext: SlateSelectedContextState | undefined,
 ): { readonly fileAttachmentTokens: number; readonly fileAttachmentCount: number } {
   if (!selectedContext) return { fileAttachmentTokens: 0, fileAttachmentCount: 0 }
   type AttachmentRecord = {
-    readonly values: readonly (RedactedAttachmentStringLike | null | undefined)[]
-    readonly tree?: unknown
+    readonly values: readonly (SlateContextText | undefined)[]
+    readonly tree?: SlateSelectedDirectoryNode | undefined
   }
-  const record = (
-    values: readonly (RedactedAttachmentStringLike | null | undefined)[],
-    tree?: unknown,
-  ): AttachmentRecord => ({ values, tree })
+  const record = (values: readonly (SlateContextText | undefined)[], tree?: SlateSelectedDirectoryNode): AttachmentRecord => ({ values, tree })
   // Normalize each attachment kind before counting so adding a kind cannot fork the accounting loop.
   const attachments: AttachmentRecord[] = [
-    ...selectedContext.codeSelections.map(({ path, content }) => record([path, content])),
-    ...selectedContext.terminals.map(({ content, title }) => record([content, title])),
-    ...selectedContext.terminalSelections.map(({ content, title }) => record([content, title])),
-    ...selectedContext.files.map(({ path, content }) => record([path, content])),
-    ...selectedContext.folders.map(({ path, directoryTree }) => record([path], directoryTree)),
+    ...selectedContext.workspace.codeSelections.map(({ path, content }) => record([path, content])),
+    ...selectedContext.workspace.terminalOutputs.map(({ content, title }) => record([content, title])),
+    ...selectedContext.workspace.terminalRanges.map(({ content, title }) => record([content, title])),
+    ...selectedContext.workspace.files.map(({ path, content }) => record([path, content])),
+    ...selectedContext.workspace.folders.map(({ path, tree }) => record([path], tree)),
   ]
   const fileAttachmentCount = attachments.length
   let fileAttachmentTokens = 0
   for (const attachment of attachments) {
     for (const value of attachment.values) {
-      fileAttachmentTokens += estimateRedactedStringTokenCount(value)
+      fileAttachmentTokens += estimateSelectedTextTokens(value)
     }
     if (attachment.tree) {
-      const decodedTree = decodeRedactedDirectoryTree(attachment.tree, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-      fileAttachmentTokens += estimateStringTokenCount(JSON.stringify(decodedTree))
+      fileAttachmentTokens += estimateStringTokenCount(JSON.stringify(usageDirectoryTree(attachment.tree)))
     }
   }
   return { fileAttachmentTokens, fileAttachmentCount }
@@ -232,14 +229,27 @@ function countFileAttachmentTokens(
 
 /** What the attached skills cost is what the block that inlines them costs. */
 function countManuallyAttachedSkillPromptUsage(
-  selectedContext: SelectedContextFileAttachmentsLike | null | undefined,
+  selectedContext: SlateSelectedContextState | undefined,
 ): { readonly manuallyAttachedSkillTokens: number; readonly manuallyAttachedSkillCount: number } {
   if (!selectedContext) return { manuallyAttachedSkillTokens: 0, manuallyAttachedSkillCount: 0 }
-  const attachments = decodeSelectedContextSkillAttachments(
-    selectedContext,
-    unwrapMaybeRedactedString,
-  )
-  const { skills } = resolveSkillAttachments(attachments)
+  const { skills } = resolveSkillAttachments({
+    explicitSkills: selectedContext.skills.map(skill => ({
+      path: selectedText(skill.path) ?? "",
+      text: selectedText(skill.content) ?? "",
+      ...(skill.pluginName === undefined ? {} : { pluginName: selectedText(skill.pluginName) }),
+      ...(skill.marketplaceName === undefined ? {} : { marketplaceName: selectedText(skill.marketplaceName) }),
+      ...(skill.pluginId === undefined ? {} : { pluginId: selectedText(skill.pluginId) }),
+      ...(skill.marketplaceId === undefined ? {} : { marketplaceId: selectedText(skill.marketplaceId) }),
+    })),
+    ruleCandidates: selectedContext.rules.map(({ rule }) => rule === undefined ? undefined : ({
+      path: selectedText(rule.path) ?? "",
+      text: selectedText(rule.content) ?? "",
+      ...(rule.pluginName === undefined ? {} : { pluginName: selectedText(rule.pluginName) }),
+      ...(rule.marketplaceName === undefined ? {} : { marketplaceName: selectedText(rule.marketplaceName) }),
+      ...(rule.pluginId === undefined ? {} : { pluginId: selectedText(rule.pluginId) }),
+      ...(rule.marketplaceId === undefined ? {} : { marketplaceId: selectedText(rule.marketplaceId) }),
+    })),
+  })
   const manuallyAttachedSkillsText = renderManuallyAttachedSkillsSection(skills.map(skill => ({
     fullPath: skill.path,
     content: skill.text,
@@ -248,14 +258,6 @@ function countManuallyAttachedSkillPromptUsage(
     manuallyAttachedSkillTokens: manuallyAttachedSkillsText ? estimateStringTokenCount(manuallyAttachedSkillsText) : 0,
     manuallyAttachedSkillCount: skills.length,
   }
-}
-
-function unwrapMaybeRedactedString(value: unknown): string | undefined {
-  if (typeof value === "string") return value
-  if (typeof value === "object" && value !== null && "unwrap" in value && typeof value.unwrap === "function") {
-    return (value as { unwrap(purpose: PrivacyCapability): string }).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-  }
-  return undefined
 }
 
 function renderSection(section: PromptNode): string {

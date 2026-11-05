@@ -296,8 +296,6 @@ source/packages/agent/tools/task.ts	../../../adapters/interop/agent/redacted-int
 source/packages/agent/tools/task.ts	../../../adapters/interop/agent/task-tool-protocol-adapter.ts
 source/packages/agent/tools/tool-support.ts	../../../adapters/interop/inference/tool-marker-adapter.ts
 source/packages/agent/utils/mcp-meta-tool-options.ts	../../../adapters/interop/agent/mcp-meta-tool-options-adapter.ts
-source/packages/agent/utils/prompt-token-tracking.ts	../../../adapters/interop/agent/redacted-ls-directory-tree-adapter.ts
-source/packages/agent/utils/prompt-token-tracking.ts	../../../adapters/interop/agent/selected-context-skills-adapter.ts
 source/packages/agent/utils/prompt-token-tracking.ts	../../../adapters/interop/agent/user-info-input-adapter.ts
 source/packages/agent/utils/request-context.ts	../../../adapters/interop/agent/request-context-adapter.ts
 source/packages/agent/utils/rule-matching.ts	../../../adapters/interop/agent/rule-scope-boundary-adapter.ts

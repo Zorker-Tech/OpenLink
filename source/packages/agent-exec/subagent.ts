@@ -2,6 +2,7 @@
 
 import type { Context } from "../context/context.ts"
 import type { Executor, ExecutorOptions } from "./executor-resources.ts"
+import type { SlateTaskAttachmentSelection } from "../agent/tools/task-attachment-contracts.ts"
 
 export const RUNNING_SUBAGENT_FOLLOWUP_ERROR =
   "Sub-agent is currently running. You may send the follow-up message when it has completed."
@@ -23,7 +24,7 @@ export interface SubagentExecutionArgs {
   readonly subagentType?: string
   readonly prompt?: string
   readonly readonly?: boolean
-  readonly selectedContext?: { readonly selectedVideos?: readonly unknown[] }
+  readonly selectedContext?: SlateTaskAttachmentSelection
 }
 
 export type SubagentRunOutcome =
