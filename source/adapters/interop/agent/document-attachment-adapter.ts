@@ -27,6 +27,10 @@ export interface ProcessedInteropDocumentAttachment extends Omit<ProcessedDocume
   readonly selectedDocument: InteropSelectedDocument | undefined
 }
 
+export interface ProcessSlateDocumentAttachmentArgs extends Omit<ProcessInteropDocumentAttachmentArgs, "selectedDocument"> {
+  readonly selectedDocument: SlateDocumentAttachment
+}
+
 export function fromInteropSelectedDocument(document: InteropSelectedDocument): SlateDocumentAttachment {
   const payload = document.dataOrBlobId
   let content: SlateDocumentAttachment["content"]
@@ -85,19 +89,28 @@ export function toInteropSelectedDocument(document: SlateDocumentAttachment): In
   })
 }
 
-export async function processInteropDocumentAttachment(
-  input: ProcessInteropDocumentAttachmentArgs,
-): Promise<ProcessedInteropDocumentAttachment> {
+export async function processSlateDocumentAttachment(
+  input: ProcessSlateDocumentAttachmentArgs,
+): Promise<ProcessedDocumentAttachment> {
   const { selectedDocument, resourceAccessor, ...coreInput } = input
-  const result = await processDocumentAttachment({
+  return await processDocumentAttachment({
     ...coreInput,
-    selectedDocument: fromInteropSelectedDocument(selectedDocument),
+    selectedDocument,
     ...(resourceAccessor === undefined ? {} : {
       writeWorkspaceFile: async (context, path, bytes) => {
         await writeWorkspaceBytesThroughInterop(resourceAccessor, context, path, bytes)
       },
     }),
   } satisfies Omit<ProcessDocumentAttachmentArgs, "selectedDocument"> & { selectedDocument: SlateDocumentAttachment })
+}
+
+export async function processInteropDocumentAttachment(
+  input: ProcessInteropDocumentAttachmentArgs,
+): Promise<ProcessedInteropDocumentAttachment> {
+  const result = await processSlateDocumentAttachment({
+    ...input,
+    selectedDocument: fromInteropSelectedDocument(input.selectedDocument),
+  })
   return {
     ...result,
     selectedDocument: result.selectedDocument === undefined ? undefined : toInteropSelectedDocument(result.selectedDocument),

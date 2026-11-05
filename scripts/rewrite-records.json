@@ -1255,8 +1255,9 @@
     },
     "packages/agent/context-processing-video-path.ts": {
       "claim": "rewritten",
-      "overlap": 0.487012987012987,
-      "evidence": "The attachment and video suites pass 72/72, covering path-only detection, trusted-path resolution, MIME refusal, filename fallback and the byte-carrying alternatives. Work-host typecheck passes. Trusted path handling now consumes a Slate-owned video-path shape, with SelectedVideo decoding confined to an interop adapter."
+      "overlap": 0.4675324675324675,
+      "refreshReason": "Moved selected-video path processing from the generated attachment message to SlateVideoAttachment so the core media pipeline no longer consumes the counterpart video message shape.",
+      "evidence": "The focused media/context suite passes 97/97, covering path-only detection, trusted-path resolution, MIME refusal, filename fallback, byte-carrying alternatives and media aggregation. Work-host typecheck and rewrite/interop gates pass."
     },
     "host/extensions/session/pending-card-sweeps.ts": {
       "claim": "rewritten",
@@ -2789,9 +2790,9 @@
     },
     "packages/agent/context-processing.ts": {
       "claim": "rewritten",
-      "overlap": 0.7107623318385651,
-      "refreshReason": "Moved selected-context and mode wire type imports behind the selected-context entry adapter, keeping the context processing module on the interop boundary; remeasured after that source change.",
-      "evidence": "agent-process-selected-context passes 22/22, agent-leaves 44/44, interop-video-attachment-adapter 3/3, agent-watch-video-eligibility-contract 3/3 and host-context-stripping 6/6. The combined video suites run as esbuild bundles because Node 22 cannot parse repository using declarations. Typecheck confirms the refreshed source boundary; external background-source enums map in interop and the core context package uses Slate-owned names. Measured overlap is 0.7107623318385651 against 1784 baseline pairs."
+      "overlap": 0.6872197309417041,
+      "refreshReason": "Moved selected image, video and document hydration through Slate attachment records, leaving the generated context message only at the non-media and transport boundary.",
+      "evidence": "The focused media/context suite passes 97/97, verifying image hydration/spill and variant projection, video placement/privacy, document recovery, external context ordering, and returned Slate attachment records. Work-host typecheck passes; interop:check records 342 core imports across 226 files after the two media adapters moved out of processSelectedContext."
     },
     "packages/agent/context-processing-watch-video.ts": {
       "claim": "rewritten",
@@ -3876,9 +3877,9 @@
     },
     "packages/agent/context-processing-image-file.ts": {
       "claim": "rewritten",
-      "overlap": 0.7370242214532872,
-      "refreshReason": "Kept selected-image path reuse and asset naming in Slate policy while routing generated write calls through the workspace-file interop adapter.",
-      "evidence": "agent-image-file.test.ts and interop-write-file-exec-adapter.test.ts pass 9/9. Work-host typecheck passes. Disabling in-workspace path reuse is caught by the path reuse case. Measured overlap is 0.7370242214532872 against 289 baseline pairs; the write adapter is exempt as interop."
+      "overlap": 0.6920415224913494,
+      "refreshReason": "Moved selected-image path and identity fields into SlateImageAttachment while preserving the existing path-reuse and asset-naming policy.",
+      "evidence": "The focused media/context suite passes 97/97, covering in-workspace reuse, external asset writes, mime-derived extensions, safe naming and best-effort write failures. Work-host typecheck and rewrite/interop gates pass."
     },
     "packages/agent/context-processing-non-media-assembly.ts": {
       "claim": "rewritten",

@@ -18,6 +18,7 @@ import path from "node:path"
 
 import type { Context } from "../../context/context.ts"
 import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
+import type { SlateImageAttachment } from "./image-attachment-contracts.ts"
 import { sanitizeFilename } from "../../utils/managed-paths.ts"
 
 export type ImageResourceAccessor = InteropWorkspaceFileWriteAccessor
@@ -25,10 +26,7 @@ export type ImageResourceAccessor = InteropWorkspaceFileWriteAccessor
 export interface SelectedImageFilePathInput {
   readonly ctx: Context
   readonly imageData: Uint8Array | undefined
-  readonly selectedImage: {
-    readonly path?: string | undefined
-    readonly uuid?: string | undefined
-  }
+  readonly selectedImage: Pick<SlateImageAttachment, "sourcePath" | "id">
   readonly resolvedMimeType: string
   readonly index: number
   readonly enableImageFiles: boolean
@@ -61,7 +59,7 @@ export function writeSelectedImageToProjectAssets({
       requestContext.env.projectFolder !== ""
     ) {
       try {
-        const originalPath = selectedImage.path
+        const originalPath = selectedImage.sourcePath
         const extensionFromPath = originalPath !== undefined
           ? path.extname(originalPath).replace(/^\./, "").toLowerCase()
           : undefined
@@ -79,7 +77,7 @@ export function writeSelectedImageToProjectAssets({
         const originalFilename = originalPath !== undefined ? path.basename(originalPath) : undefined
         const baseFilename = originalFilename !== undefined && originalFilename !== ""
           ? path.basename(originalFilename, path.extname(originalFilename))
-          : selectedImage.uuid || `image-${Date.now()}-${index}`
+          : selectedImage.id || `image-${Date.now()}-${index}`
         const safeBaseFilename = sanitizeFilename(baseFilename) || `image-${Date.now()}-${index}`
         const fileName = `${safeBaseFilename}.${extension}`
         const workspaceRoot = requestContext.env.workspacePaths[0]

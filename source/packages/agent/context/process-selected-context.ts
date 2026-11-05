@@ -27,16 +27,14 @@
 import type { Context } from "../../context/context.ts"
 import { createLogger } from "../../context/index.ts"
 import { createHistogram } from "../../metrics/index.ts"
-import { getBlobId, type BlobStore } from "../../agent-kv/blob-store.ts"
+import type { BlobStore } from "../../agent-kv/blob-store.ts"
 import { writeWorkspaceBytesThroughInterop, type InteropWorkspaceFileWriteAccessor } from "../../../adapters/interop/agent/workspace-file-write-adapter.ts"
 import type {
   SelectedContextEntryInterop,
   SelectedContextEntryModeInterop,
   SelectedContextSimulatedReasonInterop,
-  SelectedContextImageInterop,
-  SelectedContextVideoInterop,
-  SelectedContextDocumentInterop,
 } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
+import { fromInteropSelectedImage } from "../../../adapters/interop/agent/selected-context-entry-adapter.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { AgentType } from "../utils/agent-config.ts"
 import { getFilenameWithoutExtension } from "../utils/common-helpers.ts"
@@ -49,14 +47,15 @@ import { renderAgentNotesContext } from "./agent-notes-context.ts"
 import { toAgentNotesPromptInput } from "../../../adapters/interop/agent/agent-notes-context-adapter.ts"
 import { renderSelectedCodeSelections } from "./code-selection-context.ts"
 import { renderConsoleLogsContext } from "./console-logs-context.ts"
-import { processInteropDocumentAttachment } from "../../../adapters/interop/agent/document-attachment-adapter.ts"
+import { fromInteropSelectedDocument, processSlateDocumentAttachment } from "../../../adapters/interop/agent/document-attachment-adapter.ts"
 import type { DocumentationHydrationService } from "./documentation-hydration.ts"
 import { hydrateSelectedDocumentation } from "../../../adapters/interop/agent/selected-documentation-hydration-adapter.ts"
 import { renderDocumentationContext, type DocumentationResult } from "./documentation-context.ts"
 import { hydrateSelectedExtraContext } from "./extra-context-hydration.ts"
 import { renderExternalLinksContext } from "./external-links-context.ts"
 import { renderAttachedFoldersContext } from "./attached-folders-context.ts"
-import { hydrateSelectedImageData } from "../../../adapters/interop/agent/selected-image-blob-adapter.ts"
+import { hydrateSlateImage } from "./image-attachment-hydration.ts"
+import type { SlateImageAttachment } from "./image-attachment-contracts.ts"
 import { writeSelectedImageToProjectAssets } from "./image-file-spill.ts"
 import { hydrateSelectedInvocationContext } from "../../../adapters/interop/agent/selected-invocation-context-hydration-adapter.ts"
 import { renderInvocationPlatformContext } from "./invocation-platforms.ts"
@@ -82,9 +81,11 @@ import { renderSelectedSubagentDelegation } from "./selected-subagents-context.t
 import { renderSelectedTerminalContext } from "./terminal-context.ts"
 import { renderSelectedUIElementsContext } from "./ui-elements-context.ts"
 import { renderUploadedDocumentsContext } from "./uploaded-documents.ts"
-import { processInteropVideoAttachment } from "../../../adapters/interop/agent/video-attachment-adapter.ts"
+import { fromInteropSelectedVideo, processSlateVideoAttachment } from "../../../adapters/interop/agent/video-attachment-adapter.ts"
 import { enrichExternalLinks, type ExternalLinkPage } from "./external-link-enrichment.ts"
-import { processSelectedVideoPathOnly } from "../../../adapters/interop/agent/selected-video-path-adapter.ts"
+import { processSlateVideoPathOnlyAttachment } from "./video-path-processing.ts"
+import type { SlateVideoAttachment } from "./video-attachment-contracts.ts"
+import type { SlateDocumentAttachment } from "./document-attachment-contracts.ts"
 import { canUseWatchVideoSubagent } from "./watch-video-eligibility.ts"
 import { backgroundSourceForVideoPolicy } from "../../../adapters/interop/agent/watch-video-eligibility-adapter.ts"
 import type { AttachmentPathRequestContext } from "./path-trust.ts"
@@ -184,17 +185,20 @@ export async function processSelectedContext(
   privacyMode: PrivacyMode,
 ): Promise<{
   userContent: UserContentPart[];
-  selectedImages: SelectedContextImageInterop[];
-  selectedVideos: SelectedContextVideoInterop[];
-  selectedDocuments: SelectedContextDocumentInterop[];
+  selectedImages: SlateImageAttachment[];
+  selectedVideos: SlateVideoAttachment[];
+  selectedDocuments: SlateDocumentAttachment[];
   imageFilePaths: string[];
   videoFilePaths: string[];
   documentFilePaths: string[];
 }> {
   const userContent: UserContentPart[] = [];
-  const selectedImages: SelectedContextImageInterop[] = [];
-  const selectedVideos: SelectedContextVideoInterop[] = [];
-  const selectedDocuments: SelectedContextDocumentInterop[] = [];
+  const selectedImages: SlateImageAttachment[] = [];
+  const selectedVideos: SlateVideoAttachment[] = [];
+  const selectedDocuments: SlateDocumentAttachment[] = [];
+  const imageAttachments = selectedContext.selectedImages.map(fromInteropSelectedImage)
+  const videoAttachments = selectedContext.selectedVideos.map(fromInteropSelectedVideo)
+  const documentAttachments = selectedContext.selectedDocuments.map(fromInteropSelectedDocument)
   const imageFilePaths: string[] = [];
   const videoFilePaths: string[] = [];
   const documentFilePaths: string[] = [];
@@ -225,13 +229,13 @@ export async function processSelectedContext(
   }));
   if (agentNotes) userContent.push(agentNotes);
 
-  const hasImages = selectedContext.selectedImages.length > 0;
-  const hasVideos = selectedContext.selectedVideos.length > 0;
-  const hasDocs = selectedContext.selectedDocuments.length > 0;
+  const hasImages = imageAttachments.length > 0;
+  const hasVideos = videoAttachments.length > 0;
+  const hasDocs = documentAttachments.length > 0;
   const blobHydrationStart = performance.now();
-  const imageProcessingPromise = Promise.all(selectedContext.selectedImages.map(async (selectedImage, index) => {
-    const hydrated = await hydrateSelectedImageData({ ctx, blobStore: blobStore!, selectedImage });
-    const mimeType = selectedImage.mimeType.trim() || (hydrated.imageData ? detectImageMimeType(hydrated.imageData, selectedImage.path) : undefined) || "image/png";
+  const imageProcessingPromise = Promise.all(imageAttachments.map(async (selectedImage, index) => {
+    const hydrated = await hydrateSlateImage({ ctx, blobStore: blobStore!, image: selectedImage });
+    const mimeType = selectedImage.mediaType.trim() || (hydrated.imageData ? detectImageMimeType(hydrated.imageData, selectedImage.sourcePath) : undefined) || "image/png";
     const imageFilePath = writeSelectedImageToProjectAssets({
       ctx,
       imageData: hydrated.imageData,
@@ -242,14 +246,14 @@ export async function processSelectedContext(
       requestContext,
       resourceAccessor,
     });
-    return { selectedImage: hydrated.selectedImage, imageData: hydrated.imageData, mimeType, imageFilePath };
+    return { image: hydrated.image, imageData: hydrated.imageData, mimeType, imageFilePath };
   }));
-  const videoProcessingPromise = Promise.all(selectedContext.selectedVideos.map(async (selectedVideo, index) => {
-    const pathOnly = await processSelectedVideoPathOnly({ ctx, selectedVideo, requestContext });
+  const videoProcessingPromise = Promise.all(videoAttachments.map(async (selectedVideo, index) => {
+    const pathOnly = await processSlateVideoPathOnlyAttachment({ ctx, video: selectedVideo, requestContext });
     if (pathOnly !== undefined) return pathOnly;
-    const useSignedUrl = !selectedVideo.materializeToFilesystem &&
+    const useSignedUrl = !selectedVideo.writeToWorkspace &&
       isSignedUrlStorageAllowed(privacyMode) && config.attachedMediaUrlProvider !== undefined;
-    return processInteropVideoAttachment({
+    return processSlateVideoAttachment({
       ctx,
       blobStore: blobStore!,
       selectedVideo,
@@ -265,7 +269,7 @@ export async function processSelectedContext(
       ...(config.conversationId === undefined ? {} : { conversationId: config.conversationId }),
     });
   }));
-  const documentProcessingPromise = Promise.all(selectedContext.selectedDocuments.map((selectedDocument, index) => processInteropDocumentAttachment({
+  const documentProcessingPromise = Promise.all(documentAttachments.map((selectedDocument, index) => processSlateDocumentAttachment({
     ctx,
     blobStore,
     selectedDocument,
@@ -287,12 +291,12 @@ export async function processSelectedContext(
   const allDocumentInfos: Array<{ readonly path: string }> = [];
   const allVideoInfos: Array<{ readonly path: string }> = [];
   for (const result of imageResults) {
-    if (result.selectedImage) selectedImages.push(result.selectedImage);
+    if (result.image) selectedImages.push(result.image);
     if (result.imageFilePath) imageFilePaths.push(result.imageFilePath);
     if (result.imageData) userContent.push({ type: "image", image: new Uint8Array(result.imageData), mimeType: result.mimeType });
   }
   for (const result of videoResults) {
-    if (result.processedSelectedVideo) selectedVideos.push(result.processedSelectedVideo);
+    if (result.processedVideo) selectedVideos.push(result.processedVideo);
     if (result.localFilePath) {
       videoFilePaths.push(result.localFilePath);
       allVideoInfos.push({ path: result.localFilePath });

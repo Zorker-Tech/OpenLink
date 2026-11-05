@@ -19,6 +19,7 @@ import {
   resolveTrustedPathOnlyAttachmentPath,
   type AttachmentPathRequestContext,
 } from "./path-trust.ts"
+import type { SlateVideoAttachment } from "./video-attachment-contracts.ts"
 
 export interface ProcessVideoPathOnlyArgs {
   readonly ctx: Context
@@ -37,6 +38,16 @@ export interface ProcessedVideoPathOnly {
   readonly fps: number | undefined
   readonly filename: string
   readonly localFilePath: string | undefined
+}
+
+export interface ProcessSlateVideoPathOnlyArgs {
+  readonly ctx: Context
+  readonly video: SlateVideoAttachment
+  readonly requestContext: AttachmentPathRequestContext | undefined
+}
+
+export interface ProcessedSlateVideoPathOnly extends Omit<ProcessedVideoPathOnly, "trustedPath"> {
+  readonly processedVideo: SlateVideoAttachment | undefined
 }
 
 export async function processVideoPathOnlyAttachment({
@@ -73,5 +84,31 @@ export async function processVideoPathOnlyAttachment({
     fps,
     localFilePath: attachment.trustedPath,
     filename: filename || path.basename(attachment.trustedPath),
+  }
+}
+
+/** Resolves an already-Slate path-only video without crossing the wire-message boundary. */
+export async function processSlateVideoPathOnlyAttachment({
+  ctx,
+  video,
+  requestContext,
+}: ProcessSlateVideoPathOnlyArgs): Promise<ProcessedSlateVideoPathOnly | undefined> {
+  const processed = await processVideoPathOnlyAttachment({
+    ctx,
+    path: video.sourcePath,
+    hasStoredContent: video.content.kind !== "empty",
+    mimeType: video.mediaType,
+    filename: video.displayName,
+    fps: video.frameRate,
+    requestContext,
+  })
+  if (processed === undefined) return undefined
+  return {
+    processedVideo: processed.trustedPath === undefined ? undefined : { ...video, sourcePath: processed.trustedPath },
+    videoData: undefined,
+    mimeType: processed.mimeType,
+    fps: processed.fps,
+    filename: processed.filename,
+    localFilePath: processed.localFilePath,
   }
 }

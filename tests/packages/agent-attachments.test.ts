@@ -7,7 +7,15 @@ import path from "node:path"
 import { createContext } from "../../source/packages/context/context.ts"
 import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { AskQuestionResult } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
-import { SelectedGitPRDiffSelection, SelectedPullRequest, SelectedVideo } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
+import {
+  SelectedGitPRDiffSelection,
+  SelectedImage,
+  SelectedImage_Dimension,
+  SelectedImage_BlobIdWithData,
+  SelectedPullRequest,
+  SelectedVideo,
+} from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
+import { PromptUploadRef } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import {
   attachToolReferenceHints,
   shouldExposeToolReferencesInCurrentContext,
@@ -28,6 +36,7 @@ import {
 } from "../../source/adapters/interop/agent/subagent-type-adapter.ts"
 import { hydrateSelectedExtraContext } from "../../source/packages/agent/context/extra-context-hydration.ts"
 import { hydrateSelectedImageData } from "../../source/adapters/interop/agent/selected-image-blob-adapter.ts"
+import { fromInteropSelectedImage, toInteropSelectedImage } from "../../source/adapters/interop/agent/selected-context-entry-adapter.ts"
 import {
   canonicalSubagentModelId,
   isBuiltInSubagentModelId,
@@ -412,6 +421,45 @@ test("an image with nothing in it produces nothing", async () => {
   assert.deepEqual(spy.calls, [])
   assert.equal(result.imageData, undefined)
   assert.equal(result.selectedImage, undefined)
+})
+
+test("selected image variants use a Slate record and reconstruct the same attachment", () => {
+  const images = [
+    new SelectedImage({
+      uuid: "image-1",
+      path: "/repo/one.png",
+      mimeType: "image/png",
+      dimension: new SelectedImage_Dimension({ width: 640, height: 480 }),
+      dataOrBlobId: { case: "data", value: new Uint8Array([1, 2]) },
+    }),
+    new SelectedImage({ uuid: "image-2", path: "/repo/two.png", dataOrBlobId: { case: "blobId", value: new Uint8Array([3]) } }),
+    new SelectedImage({ uuid: "image-3", path: "/repo/three.png", dataOrBlobId: {
+      case: "blobIdWithData", value: new SelectedImage_BlobIdWithData({ blobId: new Uint8Array([4]), data: new Uint8Array([5]) }),
+    } }),
+    new SelectedImage({ uuid: "image-4", path: "/repo/four.png", dataOrBlobId: {
+      case: "promptUploadRef", value: new PromptUploadRef({ uploadId: "upload-4" }),
+    } }),
+  ]
+
+  const slate = images.map(fromInteropSelectedImage)
+  assert.deepEqual(slate[0], {
+    id: "image-1",
+    sourcePath: "/repo/one.png",
+    mediaType: "image/png",
+    dimensions: { width: 640, height: 480 },
+    content: { kind: "inline-bytes", bytes: new Uint8Array([1, 2]) },
+  })
+  assert.deepEqual(slate.map(image => image.content?.kind), ["inline-bytes", "stored-blob", "blob-with-bytes", "unresolved-upload"])
+  assert.equal(slate[3]?.content?.kind === "unresolved-upload" ? slate[3].content.uploadId : undefined, "upload-4")
+  for (let index = 0; index < images.length; index += 1) {
+    assert.ok(SelectedImage.equals(toInteropSelectedImage(slate[index]!), images[index]))
+  }
+  const payload = images[0]!.dataOrBlobId
+  if (payload.case !== "data") assert.fail("expected inline image data")
+  payload.value[0] = 9
+  const slatePayload = slate[0]!.content
+  if (slatePayload?.kind !== "inline-bytes") assert.fail("expected Slate inline image data")
+  assert.deepEqual(slatePayload.bytes, new Uint8Array([1, 2]), "Slate owns a detached byte copy")
 })
 
 // ---------------------------------------------------------------------------------------------

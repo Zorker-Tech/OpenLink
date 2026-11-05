@@ -234,13 +234,11 @@ source/packages/agent/context/process-selected-context.ts	../../../adapters/inte
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-context-entry-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-context-skills-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-documentation-hydration-adapter.ts
-source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-image-blob-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-invocation-context-hydration-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-non-media-context-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-pr-review-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-subagents-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-ui-elements-adapter.ts
-source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/selected-video-path-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/skill-source-path-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/video-attachment-adapter.ts
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/watch-video-eligibility-adapter.ts
