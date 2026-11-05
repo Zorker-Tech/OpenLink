@@ -204,6 +204,14 @@ test("Bitbucket, Azure DevOps, and refused hosts have no SSH form", () => {
   assert.equal(toScmSshUrl("not a url"), null);
 });
 
+test("local Git paths stay local instead of being rewritten as SSH hosts", () => {
+  assert.equal(toScmSshUrl("/var/folders/tmp/repository.git"), null);
+  assert.equal(toScmSshUrl("file:///var/folders/tmp/repository.git"), null);
+  assert.equal(toScmSshUrl("./workspace/repository.git"), null);
+  assert.equal(toScmSshUrl("../workspace/repository.git"), null);
+  assert.equal(toScmSshUrl("C:\\workspace\\repository.git"), null);
+});
+
 test("credentials and query fragments do not leak into canonical repository URLs", () => {
   const value = parseAndValidateScmUrl("https://user:secret@github.com/acme/widgets.git?ref=main#readme");
   assert.deepEqual(value, {
