@@ -31,6 +31,14 @@ import {
 } from "./hook-context-adapter.ts"
 import { fromInteropAgentMode, toInteropAgentMode } from "./mode-processing-adapter.ts"
 import {
+  customModeIntentFromInterop,
+  customModeIntentToInterop,
+  simulationDetailsFromInterop,
+  simulationDetailsToInterop,
+  triggeringActorFromInterop,
+  triggeringActorToInterop,
+} from "./user-message-metadata-adapter.ts"
+import {
   cloneSlateUserMessage,
   SlateSimulatedMessageReason,
   type SlateSimulatedMessageReason as SlateSimulatedMessageReasonValue,
@@ -248,7 +256,10 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
   const simulatedMsgReason = message.simulatedMsgReason === undefined
     ? undefined
     : fromInteropSimulatedMessageReason(message.simulatedMsgReason)
+  const triggeringActor = triggeringActorFromInterop(message.triggeringUserInfo)
   const planExecution = planExecutionFromInterop(message.executePlanInfo)
+  const simulation = simulationDetailsFromInterop(message.simulatedMessageMetadata)
+  const modeIntent = customModeIntentFromInterop(message.customModeIntent)
   const legacyUnknownFields = isMessage(message) ? collectLegacyUnknownFields(message) : []
   const compatibility = legacyModeCode === undefined && legacyUnknownFields.length === 0
     ? undefined
@@ -272,11 +283,9 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
     ...(message.subagentSystemReminder === undefined
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder }),
-    ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo }),
+    ...(triggeringActor === undefined ? {} : { triggeringActor }),
     ...(planExecution === undefined ? {} : { planExecution }),
-    ...(message.simulatedMessageMetadata === undefined
-      ? {}
-      : { simulatedMessageMetadata: message.simulatedMessageMetadata }),
+    ...(simulation === undefined ? {} : { simulation }),
     ...(message.promptReferenceId === undefined ? {} : { promptReferenceId: message.promptReferenceId }),
     ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
     ...(message.textBlobId === undefined ? {} : { textBlobId: new Uint8Array(message.textBlobId) }),
@@ -284,7 +293,7 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
       ? {}
       : { richTextBlobId: new Uint8Array(message.richTextBlobId) }),
     hookContexts: fromInteropHookContextMessages(message.hookAdditionalContexts),
-    ...(message.customModeIntent === undefined ? {} : { customModeIntent: message.customModeIntent }),
+    ...(modeIntent === undefined ? {} : { modeIntent }),
     ...(message.projectDetails === undefined
       ? {}
       : {
@@ -316,6 +325,9 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
 
 /** Reconstructs the persisted message only after Slate's turn policy has finished. */
 export function toInteropUserMessage(message: SlateUserMessage): UserMessageInterop {
+  const triggeringUserInfo = triggeringActorToInterop(message.triggeringActor)
+  const simulatedMessageMetadata = simulationDetailsToInterop(message.simulation)
+  const customModeIntent = customModeIntentToInterop(message.modeIntent)
   const interop = new UserMessage({
     text: message.text as never,
     messageId: message.messageId,
@@ -336,7 +348,7 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
     ...(message.subagentSystemReminder === undefined
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder as never }),
-    ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo as never }),
+    ...(triggeringUserInfo === undefined ? {} : { triggeringUserInfo }),
     ...(message.planExecution === undefined
       ? {}
       : {
@@ -345,9 +357,7 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
             planTitle: message.planExecution.title as never,
           }),
         }),
-    ...(message.simulatedMessageMetadata === undefined
-      ? {}
-      : { simulatedMessageMetadata: message.simulatedMessageMetadata as never }),
+    ...(simulatedMessageMetadata === undefined ? {} : { simulatedMessageMetadata }),
     ...(message.promptReferenceId === undefined ? {} : { promptReferenceId: message.promptReferenceId }),
     ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
     ...(message.textBlobId === undefined ? {} : { textBlobId: new Uint8Array(message.textBlobId) }),
@@ -358,7 +368,7 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
       event: context.event,
       text: context.text as never,
     }))),
-    ...(message.customModeIntent === undefined ? {} : { customModeIntent: message.customModeIntent as never }),
+    ...(customModeIntent === undefined ? {} : { customModeIntent }),
     ...(message.projectDetails === undefined
       ? {}
       : {

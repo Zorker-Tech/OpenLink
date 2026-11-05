@@ -2,9 +2,16 @@
 import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import type { SlateMode } from "./mode-processing.ts"
-import type { RedactedString } from "../redaction/redacted-values.ts"
+import {
+  cloneSlateCustomModeIntent,
+  cloneSlateSimulationDetails,
+  type SlateCustomModeIntent,
+  type SlateSimulationDetails,
+  type SlateTriggeringActor,
+  type SlateUserMessageText,
+} from "./user-message-metadata-state.ts"
 
-export type SlateUserMessageText = string | RedactedString
+export type { SlateUserMessageText } from "./user-message-metadata-state.ts"
 
 export interface SlateUserMessageHookContext extends Omit<HookContextEntry, "text"> {
   text: SlateUserMessageText
@@ -79,8 +86,8 @@ export interface SlatePlanExecutionIntent {
 /**
  * The top-level user-message record needed while a turn is prepared.
  *
- * Selected-context, triggering-user, simulation and custom-mode values remain separate product-schema
- * migrations. Plan execution metadata already has a Slate-owned record here.
+ * Selected-context remains a separate product-schema migration. Actor, simulation and custom-mode
+ * metadata use Slate-owned records alongside the plan execution details.
  */
 export interface SlateUserMessage {
   text: SlateUserMessageText
@@ -94,15 +101,15 @@ export interface SlateUserMessage {
   simulatedMsgReason?: SlateSimulatedMessageReason
   conversationStateBlobId: Uint8Array
   subagentSystemReminder?: SlateUserMessageText
-  triggeringUserInfo?: unknown
+  triggeringActor?: SlateTriggeringActor
   planExecution?: SlatePlanExecutionIntent
-  simulatedMessageMetadata?: unknown
+  simulation?: SlateSimulationDetails
   promptReferenceId?: string
   threadId?: string
   textBlobId?: Uint8Array
   richTextBlobId?: Uint8Array
   hookContexts: readonly SlateUserMessageHookContext[]
-  customModeIntent?: unknown
+  modeIntent?: SlateCustomModeIntent
   projectDetails?: SlateProjectConversationDetails
   compatibility?: SlateUserMessageCompatibility
 }
@@ -152,7 +159,7 @@ function copyCompatibility(
   }
 }
 
-/** Copies mutable inputs while sharing only opaque nested wire values that have no Slate projector yet. */
+/** Copies mutable byte arrays and typed metadata; selected context remains shared until its own model lands. */
 export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
   const projectDetails = message.projectDetails === undefined
     ? undefined
@@ -174,17 +181,17 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
     ...(message.subagentSystemReminder === undefined
       ? {}
       : { subagentSystemReminder: message.subagentSystemReminder }),
-    ...(message.triggeringUserInfo === undefined ? {} : { triggeringUserInfo: message.triggeringUserInfo }),
+    ...(message.triggeringActor === undefined ? {} : { triggeringActor: { ...message.triggeringActor } }),
     ...(message.planExecution === undefined ? {} : { planExecution: { ...message.planExecution } }),
-    ...(message.simulatedMessageMetadata === undefined
+    ...(message.simulation === undefined
       ? {}
-      : { simulatedMessageMetadata: message.simulatedMessageMetadata }),
+      : { simulation: cloneSlateSimulationDetails(message.simulation) }),
     ...(message.promptReferenceId === undefined ? {} : { promptReferenceId: message.promptReferenceId }),
     ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
     ...(message.textBlobId === undefined ? {} : { textBlobId: cloneBytes(message.textBlobId) }),
     ...(message.richTextBlobId === undefined ? {} : { richTextBlobId: cloneBytes(message.richTextBlobId) }),
     hookContexts: message.hookContexts.map(context => ({ ...context })),
-    ...(message.customModeIntent === undefined ? {} : { customModeIntent: message.customModeIntent }),
+    ...(message.modeIntent === undefined ? {} : { modeIntent: cloneSlateCustomModeIntent(message.modeIntent) }),
     ...(projectDetails === undefined ? {} : { projectDetails }),
     ...(compatibility === undefined ? {} : { compatibility }),
   }

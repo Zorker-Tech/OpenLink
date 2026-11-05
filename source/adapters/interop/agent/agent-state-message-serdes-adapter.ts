@@ -105,6 +105,11 @@ import {
   toPlainInteropUserMessage,
 } from "./user-message-action-protocol-adapter.ts"
 import {
+  customModeIntentFromInterop,
+  triggeringActorFromInterop,
+  simulationDetailsFromInterop,
+} from "./user-message-metadata-adapter.ts"
+import {
   fromInteropSubagentPersistedState,
   toInteropSubagentPersistedState,
 } from "./subagent-persisted-state-adapter.ts"
@@ -115,6 +120,16 @@ import {
   type SlateUserMessageText,
   type SlateUserMessageCompatibility,
 } from "../../../packages/agent/user-message-state.ts"
+import type {
+  SlateCustomModeIntent,
+  SlateSimulationDetails,
+  SlateTriggeringActor,
+  SlateSubscriptionSource,
+  SlateCustomModeSource,
+  SlateCustomModeNextMode,
+  SlateSubmittedCustomMode,
+  SlateExitedCustomMode,
+} from "../../../packages/agent/user-message-metadata-state.ts"
 import {
   SlateGoalState,
   type SlatePlanRegistryEntry,
@@ -1002,6 +1017,57 @@ interface StoredSlateUserMessageV2 extends Omit<StoredSlateUserMessageV1, "planE
   readonly planExecution?: StoredSlatePlanExecution
 }
 
+interface StoredSlateTriggeringActor {
+  readonly authId?: string
+  readonly userId?: number
+}
+
+interface StoredSlateSubscriptionEventDisplay {
+  readonly label?: StoredSlateValue
+  readonly resourceUrl?: StoredSlateValue
+  readonly subscriptionId?: string
+}
+
+interface StoredSlateSimulationDetails {
+  readonly title?: StoredSlateValue
+  readonly taskId?: string
+  readonly findingAction?: string
+  readonly url?: StoredSlateValue
+  readonly subscriptionSource?: SlateSubscriptionSource
+  readonly subscriptionEvent?: StoredSlateSubscriptionEventDisplay
+}
+
+interface StoredSlateSubmittedCustomMode {
+  readonly id: StoredSlateValue
+  readonly label: string
+  readonly source: SlateCustomModeSource
+  readonly sourcePath?: StoredSlateValue
+  readonly sourceHash?: string
+  readonly managedSkillId?: string
+  readonly pluginId?: string
+  readonly pluginSnapshotToken?: StoredSlateValue
+}
+
+interface StoredSlateExitedCustomMode {
+  readonly id: StoredSlateValue
+  readonly label: string
+}
+
+type StoredSlateCustomModeIntent =
+  | { readonly kind: "unspecified" }
+  | { readonly kind: "enter"; readonly mode: StoredSlateSubmittedCustomMode }
+  | {
+      readonly kind: "exit"
+      readonly nextMode: SlateCustomModeNextMode
+      readonly exitedMode?: StoredSlateExitedCustomMode
+    }
+
+interface StoredSlateUserMessageV3 extends Omit<StoredSlateUserMessageV2, "actor" | "simulation" | "modeIntent"> {
+  readonly actor?: StoredSlateTriggeringActor
+  readonly simulation?: StoredSlateSimulationDetails
+  readonly modeIntent?: StoredSlateCustomModeIntent
+}
+
 interface StoredSlateUserMessageEnvelopeV1 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 1
@@ -1016,7 +1082,17 @@ interface StoredSlateUserMessageEnvelopeV2 {
   readonly compatibility?: SlateUserMessageCompatibility
 }
 
-type StoredSlateUserMessageEnvelope = StoredSlateUserMessageEnvelopeV1 | StoredSlateUserMessageEnvelopeV2
+interface StoredSlateUserMessageEnvelopeV3 {
+  readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
+  readonly version: 3
+  readonly message: StoredSlateUserMessageV3
+  readonly compatibility?: SlateUserMessageCompatibility
+}
+
+type StoredSlateUserMessageEnvelope =
+  | StoredSlateUserMessageEnvelopeV1
+  | StoredSlateUserMessageEnvelopeV2
+  | StoredSlateUserMessageEnvelopeV3
 
 const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
 const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
@@ -1028,6 +1104,8 @@ const MAX_SUBAGENT_TIMESTAMP_MS = (1n << 64n) - 1n
 const CLASSIFICATION_VALUES = new Set<string>(Object.values(DataClassification))
 const SLATE_MODE_VALUES = new Set<string>(Object.values(SlateMode))
 const SLATE_SIMULATED_REASON_VALUES = new Set<string>(Object.values(SlateSimulatedMessageReason))
+const SLATE_SUBSCRIPTION_SOURCE_VALUES = new Set<string>(["unspecified", "slack", "github", "linear", "origin"])
+const SLATE_CUSTOM_MODE_SOURCE_VALUES = new Set<string>(["unspecified", "agent-skill", "plugin-skill", "repository-skill", "managed-skill"])
 const SUBAGENT_ENVIRONMENT_VALUES = new Set<string>(["unspecified", "local", "cloud"])
 
 function encodeSlateValue(
@@ -1491,11 +1569,99 @@ function isStoredSlatePlanExecution(value: unknown): value is StoredSlatePlanExe
     isStoredTextValue((value as Record<string, unknown>).title)
 }
 
+function isUnknownInt32Enum(value: string): boolean {
+  const match = /^unknown-(-?\d+)$/.exec(value)
+  if (match === null) return false
+  const code = Number(match[1])
+  return Number.isSafeInteger(code) && code >= -2_147_483_648 && code <= 2_147_483_647
+}
+
+function isStoredSlateSubscriptionSource(value: unknown): value is SlateSubscriptionSource {
+  return typeof value === "string" && (
+    SLATE_SUBSCRIPTION_SOURCE_VALUES.has(value) || isUnknownInt32Enum(value)
+  )
+}
+
+function isStoredSlateCustomModeSource(value: unknown): value is SlateCustomModeSource {
+  return typeof value === "string" && (
+    SLATE_CUSTOM_MODE_SOURCE_VALUES.has(value) || isUnknownInt32Enum(value)
+  )
+}
+
+function isStoredSlateCustomModeNextMode(value: unknown): value is SlateCustomModeNextMode {
+  if (typeof value === "string") return SLATE_MODE_VALUES.has(value)
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const code = record.code
+  return hasOnlyKeys(record, ["kind", "code"]) && record.kind === "unrecognized" &&
+    typeof code === "number" && Number.isSafeInteger(code) &&
+    code >= -2_147_483_648 && code <= 2_147_483_647
+}
+
+function isStoredSlateTriggeringActor(value: unknown): value is StoredSlateTriggeringActor {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const actor = value as Record<string, unknown>
+  return hasOnlyKeys(actor, ["authId", "userId"]) &&
+    (actor.authId === undefined || typeof actor.authId === "string") &&
+    (actor.userId === undefined || (Number.isInteger(actor.userId) &&
+      (actor.userId as number) >= -2_147_483_648 && (actor.userId as number) <= 2_147_483_647))
+}
+
+function isStoredSlateSubscriptionEventDisplay(value: unknown): value is StoredSlateSubscriptionEventDisplay {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const display = value as Record<string, unknown>
+  return hasOnlyKeys(display, ["label", "resourceUrl", "subscriptionId"]) &&
+    (display.label === undefined || isStoredTextValue(display.label)) &&
+    (display.resourceUrl === undefined || isStoredTextValue(display.resourceUrl)) &&
+    (display.subscriptionId === undefined || typeof display.subscriptionId === "string")
+}
+
+function isStoredSlateSimulationDetails(value: unknown): value is StoredSlateSimulationDetails {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const simulation = value as Record<string, unknown>
+  return hasOnlyKeys(simulation, ["title", "taskId", "findingAction", "url", "subscriptionSource", "subscriptionEvent"]) &&
+    (simulation.title === undefined || isStoredTextValue(simulation.title)) &&
+    (simulation.taskId === undefined || typeof simulation.taskId === "string") &&
+    (simulation.findingAction === undefined || typeof simulation.findingAction === "string") &&
+    (simulation.url === undefined || isStoredTextValue(simulation.url)) &&
+    (simulation.subscriptionSource === undefined || isStoredSlateSubscriptionSource(simulation.subscriptionSource)) &&
+    (simulation.subscriptionEvent === undefined || isStoredSlateSubscriptionEventDisplay(simulation.subscriptionEvent))
+}
+
+function isStoredSlateSubmittedCustomMode(value: unknown): value is StoredSlateSubmittedCustomMode {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const mode = value as Record<string, unknown>
+  return hasOnlyKeys(mode, ["id", "label", "source", "sourcePath", "sourceHash", "managedSkillId", "pluginId", "pluginSnapshotToken"]) &&
+    isStoredTextValue(mode.id) && typeof mode.label === "string" && isStoredSlateCustomModeSource(mode.source) &&
+    (mode.sourcePath === undefined || isStoredTextValue(mode.sourcePath)) &&
+    (mode.sourceHash === undefined || typeof mode.sourceHash === "string") &&
+    (mode.managedSkillId === undefined || typeof mode.managedSkillId === "string") &&
+    (mode.pluginId === undefined || typeof mode.pluginId === "string") &&
+    (mode.pluginSnapshotToken === undefined || isStoredTextValue(mode.pluginSnapshotToken))
+}
+
+function isStoredSlateExitedCustomMode(value: unknown): value is StoredSlateExitedCustomMode {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const mode = value as Record<string, unknown>
+  return hasOnlyKeys(mode, ["id", "label"]) && isStoredTextValue(mode.id) && typeof mode.label === "string"
+}
+
+function isStoredSlateCustomModeIntent(value: unknown): value is StoredSlateCustomModeIntent {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const intent = value as Record<string, unknown>
+  if (intent.kind === "unspecified") return hasOnlyKeys(intent, ["kind"])
+  if (intent.kind === "enter") return hasOnlyKeys(intent, ["kind", "mode"]) && isStoredSlateSubmittedCustomMode(intent.mode)
+  return intent.kind === "exit" && hasOnlyKeys(intent, ["kind", "nextMode", "exitedMode"]) &&
+    isStoredSlateCustomModeNextMode(intent.nextMode) &&
+    (intent.exitedMode === undefined || isStoredSlateExitedCustomMode(intent.exitedMode))
+}
+
 function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateUserMessageEnvelope {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "message", "compatibility"]) ||
-      envelope.format !== USER_MESSAGE_STORAGE_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
+      envelope.format !== USER_MESSAGE_STORAGE_FORMAT ||
+      (envelope.version !== 1 && envelope.version !== 2 && envelope.version !== 3) ||
       envelope.message === null || typeof envelope.message !== "object" || Array.isArray(envelope.message)) return false
   if (envelope.compatibility !== undefined) {
     if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
@@ -1513,6 +1679,15 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateU
   const planExecutionIsValid = message.planExecution === undefined || (envelope.version === 1
     ? isStoredSlateValue(message.planExecution)
     : isStoredSlatePlanExecution(message.planExecution))
+  const actorIsValid = message.actor === undefined || (envelope.version === 3
+    ? isStoredSlateTriggeringActor(message.actor)
+    : isStoredSlateValue(message.actor))
+  const simulationIsValid = message.simulation === undefined || (envelope.version === 3
+    ? isStoredSlateSimulationDetails(message.simulation)
+    : isStoredSlateValue(message.simulation))
+  const modeIntentIsValid = message.modeIntent === undefined || (envelope.version === 3
+    ? isStoredSlateCustomModeIntent(message.modeIntent)
+    : isStoredSlateValue(message.modeIntent))
   if (!hasOnlyKeys(message, [
     "id", "content", "context", "mode", "simulated", "promotionGroupId", "promotionEligible",
     "richContent", "origin", "conversationSnapshotId", "workerReminder", "actor", "planExecution",
@@ -1529,9 +1704,9 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateU
       (message.origin !== undefined && typeof message.origin !== "string") ||
       typeof message.conversationSnapshotId !== "string" || !/^(?:[0-9a-f]{2})*$/.test(message.conversationSnapshotId) ||
       (message.workerReminder !== undefined && !isStoredTextValue(message.workerReminder)) ||
-      (message.actor !== undefined && !isStoredSlateValue(message.actor)) ||
+      !actorIsValid ||
       !planExecutionIsValid ||
-      (message.simulation !== undefined && !isStoredSlateValue(message.simulation)) ||
+      !simulationIsValid ||
       (message.promptReference !== undefined && typeof message.promptReference !== "string") ||
       (message.thread !== undefined && typeof message.thread !== "string") ||
       (message.contentBlobId !== undefined &&
@@ -1543,15 +1718,64 @@ function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateU
         hasOnlyKeys(hook as Record<string, unknown>, ["event", "text"]) &&
         typeof (hook as Record<string, unknown>).event === "string" &&
         isStoredTextValue((hook as Record<string, unknown>).text)) ||
-      (message.modeIntent !== undefined && !isStoredSlateValue(message.modeIntent)) ||
+      !modeIntentIsValid ||
       (message.project !== undefined && !isStoredProjectDetails(message.project))) return false
   if (message.origin !== undefined && !SLATE_SIMULATED_REASON_VALUES.has(message.origin) &&
       !/^unknown-(-?\d+)$/.test(message.origin)) return false
   return true
 }
 
+function storedSlateSimulationDetails(value: SlateSimulationDetails): StoredSlateSimulationDetails {
+  return {
+    ...(value.title === undefined ? {} : { title: encodeSlateUserMessageValue(value.title) }),
+    ...(value.taskId === undefined ? {} : { taskId: value.taskId }),
+    ...(value.findingAction === undefined ? {} : { findingAction: value.findingAction }),
+    ...(value.url === undefined ? {} : { url: encodeSlateUserMessageValue(value.url) }),
+    ...(value.subscriptionSource === undefined ? {} : { subscriptionSource: value.subscriptionSource }),
+    ...(value.subscriptionEvent === undefined ? {} : {
+      subscriptionEvent: {
+        ...(value.subscriptionEvent.label === undefined ? {} : { label: encodeSlateUserMessageValue(value.subscriptionEvent.label) }),
+        ...(value.subscriptionEvent.resourceUrl === undefined ? {} : { resourceUrl: encodeSlateUserMessageValue(value.subscriptionEvent.resourceUrl) }),
+        ...(value.subscriptionEvent.subscriptionId === undefined ? {} : { subscriptionId: value.subscriptionEvent.subscriptionId }),
+      },
+    }),
+  }
+}
+
+function storedSlateSubmittedCustomMode(value: SlateSubmittedCustomMode): StoredSlateSubmittedCustomMode {
+  return {
+    id: encodeSlateUserMessageValue(value.id),
+    label: value.label,
+    source: value.source,
+    ...(value.sourcePath === undefined ? {} : { sourcePath: encodeSlateUserMessageValue(value.sourcePath) }),
+    ...(value.sourceHash === undefined ? {} : { sourceHash: value.sourceHash }),
+    ...(value.managedSkillId === undefined ? {} : { managedSkillId: value.managedSkillId }),
+    ...(value.pluginId === undefined ? {} : { pluginId: value.pluginId }),
+    ...(value.pluginSnapshotToken === undefined ? {} : { pluginSnapshotToken: encodeSlateUserMessageValue(value.pluginSnapshotToken) }),
+  }
+}
+
+function storedSlateExitedCustomMode(value: SlateExitedCustomMode): StoredSlateExitedCustomMode {
+  return { id: encodeSlateUserMessageValue(value.id), label: value.label }
+}
+
+function storedSlateCustomModeIntent(value: SlateCustomModeIntent): StoredSlateCustomModeIntent {
+  switch (value.kind) {
+    case "unspecified":
+      return { kind: "unspecified" }
+    case "enter":
+      return { kind: "enter", mode: storedSlateSubmittedCustomMode(value.mode) }
+    case "exit":
+      return {
+        kind: "exit",
+        nextMode: value.nextMode,
+        ...(value.exitedMode === undefined ? {} : { exitedMode: storedSlateExitedCustomMode(value.exitedMode) }),
+      }
+  }
+}
+
 function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
-  const stored: StoredSlateUserMessageV2 = {
+  const stored: StoredSlateUserMessageV3 = {
     id: message.messageId,
     content: encodeSlateUserMessageValue(message.text),
     ...(message.selectedContext === undefined ? {} : { context: encodeSlateUserMessageValue(message.selectedContext) }),
@@ -1563,20 +1787,20 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
     ...(message.simulatedMsgReason === undefined ? {} : { origin: message.simulatedMsgReason }),
     conversationSnapshotId: toHex(message.conversationStateBlobId),
     ...(message.subagentSystemReminder === undefined ? {} : { workerReminder: encodeSlateUserMessageValue(message.subagentSystemReminder) }),
-    ...(message.triggeringUserInfo === undefined ? {} : { actor: encodeSlateUserMessageValue(message.triggeringUserInfo) }),
+    ...(message.triggeringActor === undefined ? {} : { actor: { ...message.triggeringActor } }),
     ...(message.planExecution === undefined ? {} : {
       planExecution: {
         id: encodeSlateUserMessageValue(message.planExecution.id),
         title: encodeSlateUserMessageValue(message.planExecution.title),
       },
     }),
-    ...(message.simulatedMessageMetadata === undefined ? {} : { simulation: encodeSlateUserMessageValue(message.simulatedMessageMetadata) }),
+    ...(message.simulation === undefined ? {} : { simulation: storedSlateSimulationDetails(message.simulation) }),
     ...(message.promptReferenceId === undefined ? {} : { promptReference: message.promptReferenceId }),
     ...(message.threadId === undefined ? {} : { thread: message.threadId }),
     ...(message.textBlobId === undefined ? {} : { contentBlobId: toHex(message.textBlobId) }),
     ...(message.richTextBlobId === undefined ? {} : { richContentBlobId: toHex(message.richTextBlobId) }),
     hooks: message.hookContexts.map(context => ({ event: context.event, text: encodeSlateUserMessageValue(context.text) })),
-    ...(message.customModeIntent === undefined ? {} : { modeIntent: encodeSlateUserMessageValue(message.customModeIntent) }),
+    ...(message.modeIntent === undefined ? {} : { modeIntent: storedSlateCustomModeIntent(message.modeIntent) }),
     ...(message.projectDetails === undefined
       ? {}
       : {
@@ -1602,7 +1826,7 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
   const compatibility = message.compatibility
   const envelope = {
     format: USER_MESSAGE_STORAGE_FORMAT,
-    version: 2,
+    version: 3,
     message: stored,
     ...(compatibility === undefined ||
       (compatibility.legacyModeCode === undefined &&
@@ -1636,6 +1860,58 @@ function planExecutionFromSlateV2(value: StoredSlatePlanExecution | undefined, p
   }
 }
 
+function simulationDetailsFromSlateV3(value: StoredSlateSimulationDetails | undefined, privacyMode: PrivacyMode): SlateSimulationDetails | undefined {
+  if (value === undefined) return undefined
+  const display = value.subscriptionEvent
+  return {
+    ...(value.title === undefined ? {} : { title: decodeSlateValue(value.title, privacyMode) as SlateUserMessageText }),
+    ...(value.taskId === undefined ? {} : { taskId: value.taskId }),
+    ...(value.findingAction === undefined ? {} : { findingAction: value.findingAction }),
+    ...(value.url === undefined ? {} : { url: decodeSlateValue(value.url, privacyMode) as SlateUserMessageText }),
+    ...(value.subscriptionSource === undefined ? {} : { subscriptionSource: value.subscriptionSource }),
+    ...(display === undefined ? {} : {
+      subscriptionEvent: {
+        ...(display.label === undefined ? {} : { label: decodeSlateValue(display.label, privacyMode) as SlateUserMessageText }),
+        ...(display.resourceUrl === undefined ? {} : { resourceUrl: decodeSlateValue(display.resourceUrl, privacyMode) as SlateUserMessageText }),
+        ...(display.subscriptionId === undefined ? {} : { subscriptionId: display.subscriptionId }),
+      },
+    }),
+  }
+}
+
+function submittedCustomModeFromSlateV3(value: StoredSlateSubmittedCustomMode, privacyMode: PrivacyMode): SlateSubmittedCustomMode {
+  return {
+    id: decodeSlateValue(value.id, privacyMode) as SlateUserMessageText,
+    label: value.label,
+    source: value.source,
+    ...(value.sourcePath === undefined ? {} : { sourcePath: decodeSlateValue(value.sourcePath, privacyMode) as SlateUserMessageText }),
+    ...(value.sourceHash === undefined ? {} : { sourceHash: value.sourceHash }),
+    ...(value.managedSkillId === undefined ? {} : { managedSkillId: value.managedSkillId }),
+    ...(value.pluginId === undefined ? {} : { pluginId: value.pluginId }),
+    ...(value.pluginSnapshotToken === undefined ? {} : { pluginSnapshotToken: decodeSlateValue(value.pluginSnapshotToken, privacyMode) as SlateUserMessageText }),
+  }
+}
+
+function exitedCustomModeFromSlateV3(value: StoredSlateExitedCustomMode, privacyMode: PrivacyMode): SlateExitedCustomMode {
+  return { id: decodeSlateValue(value.id, privacyMode) as SlateUserMessageText, label: value.label }
+}
+
+function customModeIntentFromSlateV3(value: StoredSlateCustomModeIntent | undefined, privacyMode: PrivacyMode): SlateCustomModeIntent | undefined {
+  if (value === undefined) return undefined
+  switch (value.kind) {
+    case "unspecified":
+      return { kind: "unspecified" }
+    case "enter":
+      return { kind: "enter", mode: submittedCustomModeFromSlateV3(value.mode, privacyMode) }
+    case "exit":
+      return {
+        kind: "exit",
+        nextMode: typeof value.nextMode === "string" ? value.nextMode : { ...value.nextMode },
+        ...(value.exitedMode === undefined ? {} : { exitedMode: exitedCustomModeFromSlateV3(value.exitedMode, privacyMode) }),
+      }
+  }
+}
+
 function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMode): SlateUserMessage | undefined {
   if (!beginsWith(bytes, USER_MESSAGE_STORAGE_HEADER)) return undefined
   let parsed: unknown
@@ -1651,6 +1927,21 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
   const planExecution = envelope.version === 1
     ? planExecutionFromSlateV1(envelope.message.planExecution, privacyMode)
     : planExecutionFromSlateV2(envelope.message.planExecution, privacyMode)
+  const triggeringActor = envelope.version === 3
+    ? envelope.message.actor
+    : envelope.message.actor === undefined
+      ? undefined
+      : triggeringActorFromInterop(decodeSlateValue(envelope.message.actor, privacyMode))
+  const simulation = envelope.version === 3
+    ? simulationDetailsFromSlateV3(envelope.message.simulation, privacyMode)
+    : envelope.message.simulation === undefined
+      ? undefined
+      : simulationDetailsFromInterop(decodeSlateValue(envelope.message.simulation, privacyMode))
+  const modeIntent = envelope.version === 3
+    ? customModeIntentFromSlateV3(envelope.message.modeIntent, privacyMode)
+    : envelope.message.modeIntent === undefined
+      ? undefined
+      : customModeIntentFromInterop(decodeSlateValue(envelope.message.modeIntent, privacyMode))
   const decodeOptionalText = (value: StoredSlateValue | undefined) =>
     value === undefined ? undefined : decodeSlateValue(value, privacyMode) as SlateUserMessage["text"]
   const decoded: SlateUserMessage = {
@@ -1667,9 +1958,9 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
       : { simulatedMsgReason: message.origin as Exclude<SlateUserMessage["simulatedMsgReason"], undefined> }),
     conversationStateBlobId: fromHex(message.conversationSnapshotId),
     ...(message.workerReminder === undefined ? {} : { subagentSystemReminder: decodeOptionalText(message.workerReminder) as SlateUserMessageText }),
-    ...(message.actor === undefined ? {} : { triggeringUserInfo: decodeSlateValue(message.actor, privacyMode) }),
+    ...(triggeringActor === undefined ? {} : { triggeringActor }),
     ...(planExecution === undefined ? {} : { planExecution }),
-    ...(message.simulation === undefined ? {} : { simulatedMessageMetadata: decodeSlateValue(message.simulation, privacyMode) }),
+    ...(simulation === undefined ? {} : { simulation }),
     ...(message.promptReference === undefined ? {} : { promptReferenceId: message.promptReference }),
     ...(message.thread === undefined ? {} : { threadId: message.thread }),
     ...(message.contentBlobId === undefined ? {} : { textBlobId: fromHex(message.contentBlobId) }),
@@ -1678,7 +1969,7 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
       event: context.event,
       text: decodeSlateValue(context.text, privacyMode) as SlateUserMessageText,
     })),
-    ...(message.modeIntent === undefined ? {} : { customModeIntent: decodeSlateValue(message.modeIntent, privacyMode) }),
+    ...(modeIntent === undefined ? {} : { modeIntent }),
     ...(project === undefined
       ? {}
       : {
