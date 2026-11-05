@@ -17,7 +17,7 @@ import {
   fromInteropConversationStep,
   toPlainInteropConversationStep,
 } from "./agent-state-message-serdes-adapter.ts"
-export { createTaskInitialUserActionInterop } from "./task-runtime-protocol-adapter.ts"
+export { createTaskUserMessageActionInterop } from "./task-runtime-protocol-adapter.ts"
 import {
   SlateTaskBackgroundReason,
   type SlateTaskBackgroundReason as SlateTaskBackgroundReasonValue,

@@ -16,7 +16,6 @@
  * with the outcome as its input.
  */
 
-import { createTaskSubagentFollowupActionInterop } from "../../../adapters/interop/agent/task-subagent-completion-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import {
   collectConversationStepsWithToolCallCount,
@@ -28,6 +27,8 @@ import { createSlateSubagentConversationState } from "../subagent-persisted-stat
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
 import type { SlateSubagentType } from "../subagent-type.ts"
 import type { SlateConversationStep } from "../conversation-step-state.ts"
+import { SlateMode } from "../mode-processing.ts"
+import type { SlateUserMessage } from "../user-message-state.ts"
 import { createSlateTaskSuccessResult, type SlateTaskResult } from "./task-result-state.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
@@ -81,7 +82,7 @@ export interface TaskSubagentCompletionDependencies {
 /** What one turn of a subagent answers with: carry on with an action, or stop with a result. */
 export interface TaskSubagentIterationResult {
   readonly shouldContinue: boolean
-  readonly nextAction?: unknown
+  readonly nextAction?: SlateUserMessage
   readonly finalResult?: SlateTaskResult
 }
 
@@ -146,21 +147,23 @@ export async function executeSubagentStopHook(args: TaskHookContext & {
   }
 }
 
-/** The action that turns a follow-up message into another turn of the same subagent. */
-export function buildFollowupAction(request: {
+/** The Slate message that turns a follow-up into another turn of the same subagent. */
+export function buildFollowupMessage(request: {
   readonly followupMessage: string
   readonly toolCallId: string
   readonly loopCount: number
   readonly useAskMode: boolean
   readonly selectedContext?: unknown
-}): unknown {
-  return createTaskSubagentFollowupActionInterop({
+}): SlateUserMessage {
+  return {
     text: request.followupMessage,
     // The id is derived from the call and the turn it belongs to, so a retry produces the same one.
     messageId: generateSeededUuid(`${request.toolCallId}-followup-${request.loopCount}`),
-    useAskMode: request.useAskMode,
+    mode: request.useAskMode ? SlateMode.CHAT : SlateMode.AGENT,
+    conversationStateBlobId: new Uint8Array(),
+    hookContexts: [],
     ...(request.selectedContext !== undefined ? { selectedContext: request.selectedContext } : {}),
-  })
+  }
 }
 
 /** The request the post-tool-use hook is called with after a successful run. */
@@ -283,7 +286,7 @@ export async function processSubagentIterationSuccess(
     iteration.loopCount += 1
     return {
       shouldContinue: true,
-      nextAction: buildFollowupAction({
+      nextAction: buildFollowupMessage({
         followupMessage,
         toolCallId: completion.toolCallId,
         loopCount: iteration.loopCount,

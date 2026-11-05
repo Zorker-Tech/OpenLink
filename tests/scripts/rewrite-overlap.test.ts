@@ -121,11 +121,8 @@ describe("rewrite overlap gate inputs", () => {
     assert.match(exemptSourceReason("adapters/interop/agent/subagent-exec-adapter.ts") ?? "", /interop adapter/);
   });
 
-  it("keeps subagent completion wire envelopes in its interop adapter", () => {
-    assert.match(
-      exemptSourceReason("adapters/interop/agent/task-subagent-completion-adapter.ts") ?? "",
-      /interop adapter/,
-    );
+  it("does not exempt the retired generated subagent completion bridge", () => {
+    assert.equal(exemptSourceReason("adapters/interop/agent/task-subagent-completion-adapter.ts"), undefined);
   });
 
   it("keeps client-side subagent protocol messages in interop", () => {

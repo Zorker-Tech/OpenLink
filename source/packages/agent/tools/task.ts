@@ -20,7 +20,7 @@ import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts";
 import { createReadonlyResourceAccessor } from "../../agent-exec/readonly-resource-accessor.ts";
 import { subagentRegistryResource } from "./subagent-registry.ts";
 import {
-  createTaskInitialUserActionInterop,
+  createTaskUserMessageActionInterop,
   createTaskToolCallDeltaInterop,
   createTaskToolCallInterop,
   serializeTaskErrorInterop,
@@ -391,7 +391,7 @@ async function runServerTaskSubagent(args: {
     configuredSteps: options.configuredSteps ?? [],
     enableTaskToolHooksExec: options.enableExecuteHookExec === true,
   };
-  let action: unknown = createTaskInitialUserActionInterop({ message: prepared.firstMessage });
+  let message = prepared.firstMessage;
   let state: SlateTaskConversationState = normalizePreparedTaskConversationStateInterop(
     prepared.conversationSnapshot,
     stateHandler.getPrivacyMode(),
@@ -409,7 +409,10 @@ async function runServerTaskSubagent(args: {
             resolved.parentRequestId,
           ),
           toRedactedConversationStateStructureInterop(state, stateHandler.getPrivacyMode()),
-          toRedactedConversationActionInterop(action, stateHandler.getPrivacyMode()),
+          toRedactedConversationActionInterop(
+            createTaskUserMessageActionInterop({ message }),
+            stateHandler.getPrivacyMode(),
+          ),
           [],
           async () => {},
         );
@@ -430,7 +433,7 @@ async function runServerTaskSubagent(args: {
       if (!iteration.shouldContinue) {
         return iteration.finalResult ?? createSlateTaskErrorResult("Subagent completed without a result");
       }
-      action = iteration.nextAction as typeof action;
+      message = iteration.nextAction as typeof message;
     }
   } catch (error) {
     return await handleSubagentExecutionError(error, state, iterState, completionCtx, completionDeps, subagentCtx.canceled, registry.lastAbortOptions);

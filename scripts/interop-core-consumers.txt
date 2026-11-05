@@ -305,7 +305,6 @@ source/packages/agent/tools/subagent-model-ids.ts	../../../adapters/interop/agen
 source/packages/agent/tools/subagent-model-resolution.ts	../../../adapters/interop/agent/subagent-model-id-adapter.ts
 source/packages/agent/tools/task-client.ts	../../../adapters/interop/agent/task-client-protocol-adapter.ts
 source/packages/agent/tools/task-runtime.ts	../../../adapters/interop/agent/task-runtime-protocol-adapter.ts
-source/packages/agent/tools/task-subagent-completion.ts	../../../adapters/interop/agent/task-subagent-completion-adapter.ts
 source/packages/agent/tools/task-subagent-preparation.ts	../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts
 source/packages/agent/tools/task-subagent-preparation.ts	../../../adapters/interop/inference/video-model-adapter.ts
 source/packages/agent/tools/task.ts	../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
