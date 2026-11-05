@@ -4,13 +4,13 @@ import { describe, it } from "node:test";
 import {
   hydrateSelectedExtraContext,
   type ExtraContextBlobStore,
-  type ExtraContextEntry,
+  type SlateExtraContextEntry,
 } from "../../source/packages/agent/context/extra-context-hydration.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
-const inline = (value: string): ExtraContextEntry => ({ dataOrBlobId: { case: "data", value } });
-const fromBlob = (key: string): ExtraContextEntry => ({ dataOrBlobId: { case: "blobId", value: bytes(key) } });
-const nothing: ExtraContextEntry = { dataOrBlobId: { case: undefined } };
+const inline = (text: string): SlateExtraContextEntry => ({ kind: "inline-text", text });
+const fromBlob = (key: string): SlateExtraContextEntry => ({ kind: "stored-text", blobId: bytes(key) });
+const nothing: SlateExtraContextEntry = { kind: "empty" };
 
 /** A blob store that holds these texts under these keys. */
 function store(blobs: Record<string, string>): ExtraContextBlobStore<string> & { readonly asked: string[] } {
@@ -26,8 +26,8 @@ function store(blobs: Record<string, string>): ExtraContextBlobStore<string> & {
 }
 
 /** The extra context for a prompt made of these entries and these texts. */
-const hydrate = (entries: ExtraContextEntry[], extraContext: string[], blobStore?: ExtraContextBlobStore<string>) =>
-  hydrateSelectedExtraContext("ctx", { extraContextEntries: entries, extraContext }, blobStore);
+const hydrate = (entries: SlateExtraContextEntry[], extraContext: string[], blobStore?: ExtraContextBlobStore<string>) =>
+  hydrateSelectedExtraContext("ctx", { entries, inlineText: extraContext }, blobStore);
 
 describe("collecting the extra context for a prompt", () => {
   it("takes inline text and blob text into one list, in the order they were attached", async () => {

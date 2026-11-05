@@ -2,6 +2,9 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { processSelectedContext } from "../../source/packages/agent/context/process-selected-context.ts"
+import { projectSelectedContextForProcessing } from "../../source/adapters/interop/agent/selected-context-processing-adapter.ts"
+import { fromInteropAgentMode } from "../../source/adapters/interop/agent/mode-processing-adapter.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
@@ -110,17 +113,23 @@ async function process(
 ): Promise<Awaited<ReturnType<typeof processSelectedContext>>> {
   const projectFolder = options.projectFolder ?? "/repo"
   const requestContext = options.requestContext ?? { env: { projectFolder, workspacePaths: [projectFolder] } }
+  const selectedContextForProcessing = projectSelectedContextForProcessing(selectedContext, {
+    simulatedMsgReason: (options.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED) as never,
+    modelInfo: harnessed.config.modelInfo as never,
+    environmentParamForSubagent: (harnessed.config.featureFlags as Record<string, unknown> | undefined)?.environmentParamForSubagent === true,
+    babysitV2Prompt: (harnessed.config.featureFlags as Record<string, unknown> | undefined)?.babysitV2Prompt === true,
+    enablePrCreationForgeGuidance: (harnessed.config.featureFlags as Record<string, unknown> | undefined)?.prCreationForgeGuidance === true,
+  })
   return await processSelectedContext(
     harnessed.ctx,
-    selectedContext,
+    selectedContextForProcessing,
     blobStoreHarness().store as never,
     harnessed.config as never,
     requestContext as never,
     harnessed.resourceAccessor as never,
-    (options.mode ?? AgentMode.AGENT) as never,
+    fromInteropAgentMode((options.mode ?? AgentMode.AGENT) as AgentMode) ?? SlateMode.AGENT,
     options.modelId ?? "composer-2",
     "what does this do?",
-    (options.simulatedMsgReason ?? SimulatedMsgReason.UNSPECIFIED) as never,
     options.privacyMode ?? PrivacyMode.NO_STORAGE,
   )
 }

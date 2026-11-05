@@ -14,31 +14,26 @@ export interface ExtraContextBlobStore<Context = unknown> {
   getBlob(ctx: Context, blobId: Uint8Array): Promise<Uint8Array | undefined>
 }
 
-export type ExtraContextDataOrBlobId =
-  | { readonly case: "data"; readonly value: string }
-  | { readonly case: "blobId"; readonly value: Uint8Array }
-  | { readonly case: undefined; readonly value?: undefined }
-
-export interface ExtraContextEntry {
-  readonly dataOrBlobId: ExtraContextDataOrBlobId
-}
+export type SlateExtraContextEntry =
+  | { readonly kind: "inline-text"; readonly text: string }
+  | { readonly kind: "stored-text"; readonly blobId: Uint8Array }
+  | { readonly kind: "empty" }
 
 export interface SelectedExtraContext {
-  readonly extraContextEntries: readonly ExtraContextEntry[]
-  readonly extraContext: readonly string[]
+  readonly entries: readonly SlateExtraContextEntry[]
+  readonly inlineText: readonly string[]
 }
 
 /** One piece of text read out of an entry, or nothing when the entry pointed at nothing. */
 async function readEntry<Context>(
   ctx: Context,
-  entry: ExtraContextEntry,
+  entry: SlateExtraContextEntry,
   blobStore: ExtraContextBlobStore<Context> | undefined,
 ): Promise<string | undefined> {
-  const source = entry.dataOrBlobId
-  if (source.case === undefined) return undefined
-  if (source.case === "data") return source.value
+  if (entry.kind === "empty") return undefined
+  if (entry.kind === "inline-text") return entry.text
   if (!blobStore) throw new Error("Blob store is required to hydrate extra context blob")
-  const blob = await blobStore.getBlob(ctx, source.value)
+  const blob = await blobStore.getBlob(ctx, entry.blobId)
   if (!blob) throw new Error("Extra context blob not found")
   return new TextDecoder().decode(blob)
 }
@@ -74,9 +69,9 @@ export async function hydrateSelectedExtraContext<Context>(
   selectedContext: SelectedExtraContext,
   blobStore: ExtraContextBlobStore<Context> | undefined,
 ): Promise<string[]> {
-  const read = await Promise.all(selectedContext.extraContextEntries.map((entry) => readEntry(ctx, entry, blobStore)))
+  const read = await Promise.all(selectedContext.entries.map((entry) => readEntry(ctx, entry, blobStore)))
   const collected = uniqueTexts()
   for (const value of read) collected.add(value)
-  for (const value of selectedContext.extraContext) collected.add(value)
+  for (const value of selectedContext.inlineText) collected.add(value)
   return collected.values
 }

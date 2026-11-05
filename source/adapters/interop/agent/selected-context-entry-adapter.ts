@@ -1,7 +1,3 @@
-import type {
-  AgentMode,
-  SimulatedMsgReason,
-} from "../proto/generated/agent/v1/agent_pb.ts"
 import type { SelectedCodeSelection, SelectedContext, SelectedTerminalSelection } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import {
   PromptUploadRef,
@@ -13,11 +9,6 @@ import {
 import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
 import type { SlateWorkspaceSelectionContext } from "../../../packages/agent/context/workspace-selection-contracts.ts"
 import { projectLsDirectoryTree } from "./ls-directory-tree-adapter.ts"
-
-/** Wire-facing input types for the selected-context processing boundary. */
-export type SelectedContextEntryInterop = SelectedContext
-export type SelectedContextEntryModeInterop = AgentMode
-export type SelectedContextSimulatedReasonInterop = SimulatedMsgReason
 
 function lineRangeFromInterop(range: SelectedCodeSelection["range"] | SelectedTerminalSelection["range"]) {
   if (range === undefined) return undefined

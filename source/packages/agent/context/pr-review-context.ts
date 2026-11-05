@@ -1,9 +1,23 @@
+import type { SlatePullRequestDiffSelection } from "./selected-context-processing-contracts.ts"
+
 export interface PrReviewInput {
   readonly filePath: string
   readonly startLine: number
   readonly endLine: number
   readonly prUrl: string
   readonly diffContent?: string | undefined
+}
+
+export function toPrReviewInputs(
+  selections: readonly SlatePullRequestDiffSelection[],
+): PrReviewInput[] {
+  return selections.map(selection => ({
+    filePath: selection.filePath,
+    startLine: selection.startLine,
+    endLine: selection.endLine,
+    prUrl: selection.url,
+    ...(selection.diff === undefined ? {} : { diffContent: selection.diff }),
+  }))
 }
 
 export interface PrReviewTextContent {
