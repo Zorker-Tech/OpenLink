@@ -20,16 +20,15 @@ import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts";
 import { createReadonlyResourceAccessor } from "../../agent-exec/readonly-resource-accessor.ts";
 import { subagentRegistryResource } from "./subagent-registry.ts";
 import {
-  createMissingSubagentResultInterop,
   createTaskInitialUserActionInterop,
-  createTaskErrorResultInterop,
   createTaskToolCallDeltaInterop,
   createTaskToolCallInterop,
   serializeTaskErrorInterop,
-  taskResultIsErrorInterop,
+  fromInteropTaskResultInterop,
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
   normalizePreparedTaskConversationStateInterop,
+  toInteropTaskResultInterop,
   toRedactedConversationActionInterop,
   toRedactedConversationStateStructureInterop,
   type TaskResultInterop,
@@ -37,6 +36,7 @@ import {
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
 import type { SlatePreparedTask } from "./task-prepared-state.ts";
 import { buildSlatePreparedTaskHookInput } from "./task-prepared-state.ts";
+import { createSlateTaskErrorResult, type SlateTaskResult } from "./task-result-state.ts";
 import { requestModelNameKey, withParentRequestId } from "../utils/request-scope.ts";
 import { NoopConversationActionReceiver } from "../../agent-core/conversation-actions/remote-receiver.ts";
 import { Responses } from "../../agent-core/interaction-queries.ts";
@@ -310,7 +310,7 @@ async function runServerTaskSubagent(args: {
   readonly getTaskToolConfig: (modelId: string, subagentType: Any) => Promise<TaskToolConfig>;
   readonly parentModelInfo: Any;
   readonly options: TaskToolOptions;
-}): Promise<TaskResultInterop> {
+}): Promise<SlateTaskResult> {
   const { options, parentModelInfo, getTaskToolConfig, resourceAccessor, stateHandler, parentState, resolved, rawArgs, meta, interactionHandler, ctx } = args;
   const prepared = await prepareTaskSubagent({
     ctx,
@@ -428,7 +428,7 @@ async function runServerTaskSubagent(args: {
         resolved.subagentConfig.subagentType,
       );
       if (!iteration.shouldContinue) {
-        return (iteration.finalResult as TaskResultInterop | undefined) ?? createMissingSubagentResultInterop();
+        return iteration.finalResult ?? createSlateTaskErrorResult("Subagent completed without a result");
       }
       action = iteration.nextAction as typeof action;
     }
@@ -592,14 +592,17 @@ export function createTaskTool(
   };
 
   /** What the rendered result of a task run says, and whether it is an error. */
-  const renderResult = (result: TaskResultInterop) => createStringResult(
-    renderTaskResultToString(result, {
-      enableJobCompletionNotifications: notificationHints,
-      ...(options.hideAsyncSubagentTaskNotifications !== undefined ? { hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications } : {}),
-      ...(options.enableAgentChatLinks !== undefined ? { enableAgentChatLinks: options.enableAgentChatLinks } : {}),
-    }),
-    taskResultIsErrorInterop(result),
-  );
+  const renderResult = (result: TaskResultInterop) => {
+    const slateResult = fromInteropTaskResultInterop(result)
+    return createStringResult(
+      renderTaskResultToString(slateResult, {
+        enableJobCompletionNotifications: notificationHints,
+        ...(options.hideAsyncSubagentTaskNotifications !== undefined ? { hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications } : {}),
+        ...(options.enableAgentChatLinks !== undefined ? { enableAgentChatLinks: options.enableAgentChatLinks } : {}),
+      }),
+      slateResult.kind === "error",
+    )
+  }
 
   const execute = async (ctx: Context, interactionHandler: Any, rawArgs: TaskRawArguments, meta: ToolExecutionMetaLike): Promise<TaskResultInterop> => {
     const parentState = createParentStateAccessor(stateHandler);
@@ -613,7 +616,7 @@ export function createTaskTool(
       options: executeResolutionOptions(),
     });
     if (canUseClientSideSubagent) {
-      return await executeClientSideTaskSubagent({
+      const result = await executeClientSideTaskSubagent({
         ctx,
         toolCallId: meta.toolCallId,
         rawArgs,
@@ -624,13 +627,14 @@ export function createTaskTool(
         ...clientLaunchOptions(),
         interrupt: (rawArgs as Any).interrupt,
         contextInjectionSignal: (meta as Any).contextInjectionSignal,
-      }) as TaskResultInterop;
+      })
+      return toInteropTaskResultInterop(result)
     }
     const serverLaunch = { options, parentModelInfo, getTaskToolConfig, resourceAccessor, stateHandler, parentState, resolved, rawArgs, meta, interactionHandler, ctx };
     try {
-      return await runServerTaskSubagent(serverLaunch);
+      return toInteropTaskResultInterop(await runServerTaskSubagent(serverLaunch));
     } catch (error) {
-      return createTaskErrorResultInterop(error);
+      return toInteropTaskResultInterop(createSlateTaskErrorResult(error));
     }
   };
 

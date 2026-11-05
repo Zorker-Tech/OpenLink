@@ -1,7 +1,6 @@
 import {
   CloudSubagentReference,
   ConversationAction,
-  ConversationStep,
   NewCloudVmTarget,
   SameMachineTarget,
   SelfHostedPoolTarget,
@@ -19,8 +18,12 @@ import type {
   TaskTargetMachine,
 } from "../../../packages/agent/tools/task-runtime-types.ts"
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
+import type { SlateConversationStep } from "../../../packages/agent/conversation-step-state.ts"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { toInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
-import { deserializeSlateConversationStepInterop } from "./agent-state-message-serdes-adapter.ts"
+import { createSlateConversationStepSerde } from "./agent-state-message-serdes-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
 
 export type ConversationTurnView =
@@ -28,7 +31,7 @@ export type ConversationTurnView =
   | { readonly kind: "other" }
 
 export interface ConversationStepView {
-  readonly value: unknown
+  readonly value: SlateConversationStep
   readonly kind: "assistant" | "tool-call" | "other"
   readonly assistantText?: string
 }
@@ -63,16 +66,23 @@ export function conversationTurnFromBlobInterop(bytes: Uint8Array): Conversation
   }
 }
 
+const taskResultConversationStepSerde = createSlateConversationStepSerde(PrivacyMode.UNSPECIFIED)
+
 export function conversationStepFromBlobInterop(bytes: Uint8Array): ConversationStepView {
-  return conversationStepViewInterop(deserializeSlateConversationStepInterop(bytes))
+  return conversationStepViewInterop(taskResultConversationStepSerde.deserialize(bytes))
 }
 
-export function conversationStepViewInterop(value: unknown): ConversationStepView {
-  const step = value as ConversationStep
-  if (step.message.case === "assistantMessage") {
-    return { value: step, kind: "assistant", assistantText: step.message.value.text }
+export function conversationStepViewInterop(step: SlateConversationStep): ConversationStepView {
+  if (step.kind === "assistant-message") {
+    return {
+      value: step,
+      kind: "assistant",
+      assistantText: step.text instanceof RedactedString
+        ? step.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+        : step.text,
+    }
   }
-  return { value: step, kind: step.message.case === "toolCall" ? "tool-call" : "other" }
+  return { value: step, kind: step.kind === "tool-call" ? "tool-call" : "other" }
 }
 
 export function taskEnvironmentToProtoInterop(environment: TaskEnvironment): number {

@@ -4,18 +4,17 @@ import assert from "node:assert/strict"
 import {
   createTaskSubagentFollowupActionInterop,
   createTaskSubagentPersistedStateInterop,
-  createTaskSubagentSuccessResultInterop,
 } from "../../source/adapters/interop/agent/task-subagent-completion-adapter.ts"
+import { createSlateTaskSuccessResult } from "../../source/packages/agent/tools/task-result-state.ts"
 import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import {
   AgentMode,
   ConversationAction,
   ConversationStateStructure,
   SubagentPersistedState,
-  TaskResult,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
-test("subagent completion interop preserves the external action, persistence, and result envelopes", () => {
+test("subagent completion keeps external action and persistence edges and a Slate success result", () => {
   const selectedContext = new SelectedContext({})
   const action = createTaskSubagentFollowupActionInterop({
     text: "continue the task",
@@ -39,15 +38,17 @@ test("subagent completion interop preserves the external action, persistence, an
   assert.equal(persisted.conversationState, conversationState)
   assert.equal(persisted.modelId, "slate-model")
 
-  const result = createTaskSubagentSuccessResultInterop({
+  const result = createSlateTaskSuccessResult({
     agentId: "subagent-42",
     conversationSteps: [],
-    durationMs: 17,
+    durationMs: 17n,
+    isBackground: false,
+    backgroundReason: "unspecified",
     resultSuffix: "Done.",
-  }) as TaskResult
-  assert.equal(result.result.case, "success")
-  if (result.result.case !== "success") throw new Error("expected a successful task result")
-  assert.equal(result.result.value.agentId, "subagent-42")
-  assert.equal(result.result.value.durationMs, 17n)
-  assert.equal(result.result.value.resultSuffix, "Done.")
+  })
+  assert.equal(result.kind, "success")
+  if (result.kind !== "success") throw new Error("expected a successful task result")
+  assert.equal(result.agentId, "subagent-42")
+  assert.equal(result.durationMs, 17n)
+  assert.equal(result.resultSuffix, "Done.")
 })
