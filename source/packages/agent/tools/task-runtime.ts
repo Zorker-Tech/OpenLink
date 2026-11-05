@@ -29,6 +29,7 @@ import { taskEnvironmentForTargetMachine } from "./task-runtime-types.ts"
 import type {
   LegacyTaskTargetArgs,
   LegacyTaskTargetMachine,
+  SlateTaskRequest,
   TaskEnvironment,
   TaskTargetMachine,
   TaskTargetValidationArgs,
@@ -439,6 +440,41 @@ export function assertCloudOnlyTaskArgsAllowed(
   if (buildGiven && input.environment !== "cloud") {
     throw new ToolCallArgParseError(
       "Invalid arguments:\ncloud_requested_environment_build_id may only be specified when environment equals cloud.",
+    )
+  }
+}
+
+/** Checks Slate's normalized placement request before any subagent work is prepared. */
+export function assertSlateTaskPlacementIsUnambiguous(
+  input: Pick<SlateTaskRequest, "targetMachine" | "environment" | "cloudBaseBranch" | "requestedRuntimeBuildId">,
+): void {
+  if (input.targetMachine === undefined) return
+  const conflicts = [
+    ...(input.environment === undefined ? [] : ["environment"]),
+    ...(input.cloudBaseBranch === undefined ? [] : ["cloudBaseBranch"]),
+    ...(input.requestedRuntimeBuildId === undefined ? [] : ["requestedRuntimeBuildId"]),
+  ]
+  if (conflicts.length > 0) {
+    throw new ToolCallArgParseError(
+      `Invalid arguments:\ntargetMachine replaces ${conflicts.join(", ")}; specify targetMachine alone.`,
+    )
+  }
+}
+
+/** Cloud branch and build overrides only apply to a cloud environment. */
+export function assertSlateTaskCloudFieldsAllowed(
+  input: Pick<SlateTaskRequest, "environment" | "cloudBaseBranch" | "requestedRuntimeBuildId">,
+): void {
+  const branchGiven = input.cloudBaseBranch !== undefined && input.cloudBaseBranch.trim().length > 0
+  if (branchGiven && input.environment !== "cloud") {
+    throw new ToolCallArgParseError(
+      "Invalid arguments:\ncloudBaseBranch may only be specified when environment equals cloud.",
+    )
+  }
+  const buildGiven = input.requestedRuntimeBuildId !== undefined && input.requestedRuntimeBuildId.trim().length > 0
+  if (buildGiven && input.environment !== "cloud") {
+    throw new ToolCallArgParseError(
+      "Invalid arguments:\nrequestedRuntimeBuildId may only be specified when environment equals cloud.",
     )
   }
 }

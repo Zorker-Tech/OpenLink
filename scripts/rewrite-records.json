@@ -1316,8 +1316,9 @@
     },
     "packages/agent/tools/task-tool-schema.ts": {
       "claim": "rewritten",
-      "overlap": 0.7673975214489991,
-      "evidence": "The task tool schema suite and attachment/preparation/runtime suites pass 167/167; work-host typecheck passes. Schema construction now accepts Slate-owned typeName values, task.ts maps counterpart type variants at the interop boundary, and model-facing instructions use first-party wording."
+      "overlap": 0.7082936129647283,
+      "refreshReason": "The model-visible Task schema now publishes Slate-owned camel-case fields and placement kinds; previous spellings remain parser-only migration inputs.",
+      "evidence": "Task schema/request/runtime/tool/prompt suites pass 182/182, covering the Slate request contract, legacy parsing, alias-conflict refusal, cloud-only validation, defaults, existing placement choices and legacy refusal wording. Work-host typecheck passes: 1204 rewrite claims under 0.8, 0 floors, 40 removals; interop reports 344 core imports across 226 files and 0 direct proto consumers."
     },
     "packages/agent/prompts/bugbot/automations.ts": {
       "claim": "rewritten",

@@ -4,6 +4,8 @@ import assert from "node:assert/strict"
 import {
   assertCloudOnlyTaskArgsAllowed,
   assertMachineAndLegacyArgsNotBothSet,
+  assertSlateTaskCloudFieldsAllowed,
+  assertSlateTaskPlacementIsUnambiguous,
   collectConversationStepsFromStepBlobIds,
   collectConversationStepsWithToolCallCount,
   collectConversationTurns,
@@ -568,6 +570,26 @@ test("a cloud-only field without the cloud environment is refused, and blank doe
   assert.throws(
     () => assertCloudOnlyTaskArgsAllowed({ cloud_requested_environment_build_id: "bld-1" }),
     /cloud_requested_environment_build_id may only be specified when environment equals cloud\./,
+  )
+})
+
+test("Slate placement fields reject ambiguous targets and local cloud overrides", () => {
+  assertSlateTaskPlacementIsUnambiguous({})
+  assertSlateTaskPlacementIsUnambiguous({ targetMachine: { kind: "cloud-machine" } })
+  assert.throws(
+    () => assertSlateTaskPlacementIsUnambiguous({ targetMachine: { kind: "same-device" }, environment: "local" }),
+    /targetMachine replaces environment; specify targetMachine alone\./,
+  )
+
+  assertSlateTaskCloudFieldsAllowed({})
+  assertSlateTaskCloudFieldsAllowed({ environment: "cloud", cloudBaseBranch: "main" })
+  assert.throws(
+    () => assertSlateTaskCloudFieldsAllowed({ environment: "local", cloudBaseBranch: "main" }),
+    /cloudBaseBranch may only be specified when environment equals cloud\./,
+  )
+  assert.throws(
+    () => assertSlateTaskCloudFieldsAllowed({ requestedRuntimeBuildId: "bld-1" }),
+    /requestedRuntimeBuildId may only be specified when environment equals cloud\./,
   )
 })
 

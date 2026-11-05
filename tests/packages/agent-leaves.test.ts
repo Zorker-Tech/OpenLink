@@ -252,7 +252,7 @@ test("a console log line keeps its level, its time and its message", () => {
 test("the subagent delegation names the subagents and shows how to call one", () => {
   const rendered = renderSelectedSubagentDelegation([{ name: "explore" }, { name: "plan" }])
   assert.match(rendered!.text, /User requested delegation to these agents: explore, plan/)
-  assert.match(rendered!.text, /Task\(subagent_type="explore"/)
+  assert.match(rendered!.text, /Task\(subagentType="explore"/)
   assert.match(rendered!.text, /prompt="Describe the delegated task here"/)
 })
 

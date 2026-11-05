@@ -138,10 +138,10 @@ test("arguments that are not JSON are refused before anything is resolved", asyn
 test("the schema and the description follow how the subagent is launched", () => {
   const parameters = (options: Record<string, unknown>) => JSON.stringify(createConfiguredTool(options).parameters)
   // A client-side or cloud launch may run in the background; a server-side one may not.
-  assert.equal(parameters({ useClientSideSubagent: true }).includes("run_in_background"), true)
-  assert.equal(parameters({ enableCloudAsyncSubagents: true }).includes("run_in_background"), true)
-  assert.equal(parameters({}).includes("run_in_background"), false)
-  assert.equal(parameters({ useClientSideSubagent: true, requireServerSideSubagent: true }).includes("run_in_background"), false)
+  assert.equal(parameters({ useClientSideSubagent: true }).includes("runInBackground"), true)
+  assert.equal(parameters({ enableCloudAsyncSubagents: true }).includes("runInBackground"), true)
+  assert.equal(parameters({}).includes("runInBackground"), false)
+  assert.equal(parameters({ useClientSideSubagent: true, requireServerSideSubagent: true }).includes("runInBackground"), false)
   // Interrupts, background defaults and resume-self are only offered when their launch asks for them.
   assert.notEqual(parameters({ useClientSideSubagent: true, enableSubagentInterrupt: true }), parameters({ useClientSideSubagent: true }))
   assert.notEqual(parameters({ useClientSideSubagent: true, defaultSubagentsRunInBackground: true }), parameters({ useClientSideSubagent: true }))

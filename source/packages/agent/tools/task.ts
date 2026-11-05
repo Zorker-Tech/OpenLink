@@ -54,8 +54,8 @@ import {
 } from "./task-tool-schema.ts";
 import { isComputerUseSubagentType, slateSubagentTypeName } from "../subagent-type.ts";
 import {
-  assertCloudOnlyTaskArgsAllowed,
-  assertMachineAndLegacyArgsNotBothSet,
+  assertSlateTaskCloudFieldsAllowed,
+  assertSlateTaskPlacementIsUnambiguous,
   type TaskSubagentModelConfig,
 } from "./task-runtime.ts";
 import {
@@ -462,7 +462,7 @@ export function createTaskTool(
     typeName: slateSubagentTypeName(config.subagentType),
     resumeModeOverride: config.resumeModeOverride,
   }));
-  const { schemaTowardsModel, schemaForParsing } = buildTaskParameterSchemas(schemaSubagentConfigs, {
+  const { schemaTowardsModel, schemaForParsing, defaultSubagentTypeName } = buildTaskParameterSchemas(schemaSubagentConfigs, {
     subagentModels: options.subagentModels,
     allowCustomModelId: options.allowCustomModelId === true,
     useClientSideSubagent: canUseClientSideSubagent,
@@ -550,10 +550,11 @@ export function createTaskTool(
     catch (error) { throw new Error(`Invalid arguments:\nargument: ${error instanceof Error ? error.message : "Failed to parse arguments"}`); }
     const result = schemaForParsing.safeParse(parsedJson);
     if (!result.success) throw invalidArguments(result.error.errors);
-    assertMachineAndLegacyArgsNotBothSet(result.data);
-    assertCloudOnlyTaskArgsAllowed(result.data);
-    if (result.data.resume?.trim().toLowerCase() === "self" && !allowResumeSelfFork) throw new Error('Invalid arguments:\nresume="self" is not available for this Task tool.');
-    return slateTaskRequestFromModelArgumentsInterop(result.data);
+    const request = slateTaskRequestFromModelArgumentsInterop(result.data, { defaultSubagentTypeName });
+    assertSlateTaskPlacementIsUnambiguous(request);
+    assertSlateTaskCloudFieldsAllowed(request);
+    if (request.resume?.trim().toLowerCase() === "self" && !allowResumeSelfFork) throw new Error('Invalid arguments:\nresume="self" is not available for this Task tool.');
+    return request;
   };
 
   /** What the client-side launch carries besides the resolved call: credentials, media and interrupt wiring. */
