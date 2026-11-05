@@ -42,7 +42,6 @@ import {
   getVideoPathsFromRedactedSelectedContextInterop,
   requestSubagentBackgroundHandoffInterop,
   runClientSubagentInterop,
-  type TaskClientBackgroundReason,
   type TaskClientSubagentRunView,
 } from "../../../adapters/interop/agent/task-client-protocol-adapter.ts"
 import {
@@ -139,7 +138,7 @@ export function formatSubagentBackgroundMessage(
 }
 
 function normalizeTaskResultBackgroundReason(value: unknown): SlateTaskBackgroundReason {
-  switch (value as TaskClientBackgroundReason | SlateTaskBackgroundReason) {
+  switch (value as SlateTaskBackgroundReason | "agent_request" | "user_request" | "queued_follow_up") {
     case "agent_request":
     case SlateTaskBackgroundReason.AGENT_REQUEST:
       return SlateTaskBackgroundReason.AGENT_REQUEST
@@ -434,7 +433,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
     const successResult = result
     // A follow-up that arrived while the subagent was still running is an error the model should read as
     // one, since the run it meant to steer never took it.
-    if (successResult.backgroundReason === "queued_follow_up") {
+    if (successResult.backgroundReason === SlateTaskBackgroundReason.QUEUED_FOLLOW_UP) {
       return createSlateTaskErrorResult(maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true))
     }
     // A cloud run's identity is the box it ran in; a local one keeps the id it already had.
