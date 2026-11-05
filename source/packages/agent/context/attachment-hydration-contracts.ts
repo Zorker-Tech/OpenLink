@@ -8,7 +8,7 @@ export type AttachmentContentReference =
   | { readonly kind: "inline-bytes"; readonly bytes: Uint8Array }
   | { readonly kind: "stored-blob"; readonly blobId: Uint8Array }
   | { readonly kind: "blob-with-bytes"; readonly blobId: Uint8Array; readonly bytes: Uint8Array }
-  | { readonly kind: "unresolved-upload-reference"; readonly reference: unknown }
+  | { readonly kind: "unresolved-upload-reference"; readonly uploadId: string }
 
 export interface HydrateAttachmentContentInput<Context, Attachment> {
   readonly ctx: Context

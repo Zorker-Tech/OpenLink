@@ -9,6 +9,7 @@ import {
 import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
 import type { SlateWorkspaceSelectionContext } from "../../../packages/agent/context/workspace-selection-contracts.ts"
 import { projectLsDirectoryTree } from "./ls-directory-tree-adapter.ts"
+import { copySelectedContextBytes, readSelectedContextText } from "./selected-context-value-adapter.ts"
 
 function lineRangeFromInterop(range: SelectedCodeSelection["range"] | SelectedTerminalSelection["range"]) {
   if (range === undefined) return undefined
@@ -68,20 +69,20 @@ export function fromInteropSelectedImage(image: InteropSelectedImage): SlateImag
   const dataOrBlobId = image.dataOrBlobId
   switch (dataOrBlobId?.case) {
     case "data":
-      content = { kind: "inline-bytes", bytes: new Uint8Array(dataOrBlobId.value) }
+      content = { kind: "inline-bytes", bytes: copySelectedContextBytes(dataOrBlobId.value, "image data") }
       break
     case "blobId":
-      content = { kind: "stored-blob", blobId: new Uint8Array(dataOrBlobId.value) }
+      content = { kind: "stored-blob", blobId: copySelectedContextBytes(dataOrBlobId.value, "image blob id") }
       break
     case "blobIdWithData":
       content = {
         kind: "blob-with-bytes",
-        blobId: new Uint8Array(dataOrBlobId.value.blobId),
-        bytes: new Uint8Array(dataOrBlobId.value.data),
+        blobId: copySelectedContextBytes(dataOrBlobId.value.blobId, "image blob id"),
+        bytes: copySelectedContextBytes(dataOrBlobId.value.data, "image data"),
       }
       break
     case "promptUploadRef":
-      content = { kind: "unresolved-upload", uploadId: dataOrBlobId.value.uploadId }
+      content = { kind: "unresolved-upload", uploadId: readSelectedContextText(dataOrBlobId.value.uploadId, "image upload id") }
       break
     case undefined:
       content = undefined
@@ -89,7 +90,7 @@ export function fromInteropSelectedImage(image: InteropSelectedImage): SlateImag
   }
   return {
     id: image.uuid,
-    sourcePath: image.path,
+    sourcePath: readSelectedContextText(image.path, "image path"),
     mediaType: image.mimeType,
     ...(image.dimension === undefined ? {} : {
       dimensions: { width: image.dimension.width, height: image.dimension.height },

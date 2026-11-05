@@ -16,6 +16,7 @@ import type { AttachmentContentStore } from "../../../packages/agent/context/att
 import type { SlateVideoAttachment, SlateVideoContent } from "../../../packages/agent/context/video-attachment-contracts.ts";
 import type { AttachmentPathRequestContext } from "../../../packages/agent/context/path-trust.ts";
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
+import { copySelectedContextBytes, readSelectedContextText } from "./selected-context-value-adapter.ts";
 
 export type VideoResourceAccessor = InteropWorkspaceFileWriteAccessor;
 
@@ -43,24 +44,25 @@ export interface ProcessSlateVideoAttachmentArgs extends Omit<ProcessInteropVide
 
 export function fromInteropSelectedVideo(video: InteropSelectedVideo): SlateVideoAttachment {
   let content: SlateVideoContent = { kind: "empty" };
+  const id = readSelectedContextText(video.uuid, "video id");
   switch (video.dataOrBlobId?.case) {
     case "data":
-      content = { kind: "bytes", bytes: video.dataOrBlobId.value };
+      content = { kind: "bytes", bytes: copySelectedContextBytes(video.dataOrBlobId.value, "video data") };
       break;
     case "blobId":
-      content = { kind: "blob", blobId: video.dataOrBlobId.value };
+      content = { kind: "blob", blobId: copySelectedContextBytes(video.dataOrBlobId.value, "video blob id") };
       break;
     case "blobIdWithData":
       content = {
         kind: "blob-with-bytes",
-        blobId: video.dataOrBlobId.value.blobId,
-        bytes: video.dataOrBlobId.value.data,
+        blobId: copySelectedContextBytes(video.dataOrBlobId.value.blobId, "video blob id"),
+        bytes: copySelectedContextBytes(video.dataOrBlobId.value.data, "video data"),
       };
       break;
     case "signedUrl":
       content = {
         kind: "signed-link",
-        url: video.dataOrBlobId.value.url,
+        url: readSelectedContextText(video.dataOrBlobId.value.url, "video signed URL"),
         key: video.dataOrBlobId.value.key,
         expiresAtUnixMs: video.dataOrBlobId.value.expiresAtUnixMs,
         refreshAfterUnixMs: video.dataOrBlobId.value.refreshAfterUnixMs,
@@ -68,9 +70,9 @@ export function fromInteropSelectedVideo(video: InteropSelectedVideo): SlateVide
       };
   }
   return {
-    ...(video.uuid.length === 0 ? {} : { id: video.uuid }),
-    sourcePath: video.path,
-    displayName: video.filename,
+    ...(id.length === 0 ? {} : { id }),
+    sourcePath: readSelectedContextText(video.path, "video path"),
+    displayName: readSelectedContextText(video.filename, "video filename"),
     mediaType: video.mimeType,
     ...(video.fps === undefined ? {} : { frameRate: video.fps }),
     writeToWorkspace: video.materializeToFilesystem,

@@ -815,7 +815,7 @@ test("a missing blob and an unresolved upload are both errors, and nothing at al
       ctx: ctx(),
       blobStore: spy.store as never,
       attachment: {},
-      contentReference: { kind: "unresolved-upload-reference", reference: {} },
+      contentReference: { kind: "unresolved-upload-reference", uploadId: "upload-1" },
       missingBlobError: "gone",
       sizeErrorLabel: "Document",
       withBlobId: (blobId: Uint8Array): Record<string, unknown> => ({ blobId }),
