@@ -172,10 +172,10 @@ export function buildCloudSubagentPersistedStateInterop(
   return new SubagentPersistedState({
     environment: SubagentExecutionEnvironment.CLOUD,
     cloudSubagent: new CloudSubagentReference({
-      bcId: input.bcId,
-      ...(input.transcriptPath === undefined ? {} : { transcriptPath: input.transcriptPath }),
+      bcId: input.agentId,
+      ...(input.transcriptUri === undefined ? {} : { transcriptPath: input.transcriptUri }),
     }),
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
-    machine: targetMachineToProtoInterop(input.machine),
+    machine: targetMachineToProtoInterop(input.targetMachine),
   })
 }

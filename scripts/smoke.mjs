@@ -60,6 +60,8 @@ async function hostProcess() {
   const started = startProcess(join(dist, "host", "main.js"), {
     SLATE_DATA_ROOT: dataRoot,
     SLATE_HOST_PORT: String(port),
+    // This lifecycle smoke needs no backend; keep optional privacy lookups on a local closed port.
+    SLATE_BACKEND_URL: "http://127.0.0.1:1",
     SLATE_USE_EXISTING_BOX_EXEC_DAEMON: "1",
   });
   try {

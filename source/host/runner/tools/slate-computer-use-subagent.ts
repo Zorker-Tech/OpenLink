@@ -1,4 +1,5 @@
 import { displaySpaceSentence } from "../../boxes/box-monitor-layout.ts";
+import { createSlateSubagentType, SlateSubagentKind } from "../../../packages/agent/subagent-type.ts";
 
 export const COMPUTER_USE_SUBAGENT_TYPE = "computerUse";
 
@@ -44,12 +45,7 @@ export function createSlateComputerUseSubagentConfig(args: {
   readonly browserUseOffered: boolean
 }) {
   return {
-    subagent_type: {
-      type: {
-        case: "custom",
-        value: { name: COMPUTER_USE_SUBAGENT_TYPE },
-      },
-    },
+    subagentType: createSlateSubagentType(SlateSubagentKind.COMPUTER_USE),
     description: computerUseSubagentDescription(args.browserUseOffered),
     preserveTaskTool: false,
     subagentSource: "builtin" as const,

@@ -35,11 +35,9 @@ test("page automation is preferred for page-only work when it is available", () 
   assert.match(description, /desktop/i)
 })
 
-test("the interop adapter builds the counterpart subagent envelope", () => {
+test("the built-in subagent config uses Slate's own kind value", () => {
   const config = createSlateComputerUseSubagentConfig({ browserUseOffered: false })
-  assert.deepEqual(config.subagent_type, {
-    type: { case: "custom", value: { name: "computerUse" } },
-  })
+  assert.deepEqual(config.subagentType, { kind: "computer-use" })
   assert.equal(config.preserveTaskTool, false)
   assert.equal(config.subagentSource, "builtin")
   assert.match(config.description, /desktop/i)

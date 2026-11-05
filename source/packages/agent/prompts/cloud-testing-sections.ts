@@ -13,6 +13,7 @@
  */
 
 import { jsx, jsxs, type PromptNode } from "../../prompt-jsx/index.ts"
+import type { SlateSubagentType } from "../subagent-type.ts"
 import { getBrowserMcpProviderName } from "../browser-tools.ts"
 import {
   AgentType,
@@ -54,7 +55,7 @@ interface CloudTestingSectionsProps {
   } | undefined
   readonly namedAgentSessionKind?: string | undefined
   readonly isCloudMetaAgentParent?: boolean | undefined
-  readonly subagentType?: { readonly type?: { readonly case?: string | undefined } | undefined } | undefined
+  readonly subagentType?: SlateSubagentType | undefined
   readonly useLocalAgentPrompting?: boolean | undefined
   readonly env?: ComposerEnvironment | undefined
   readonly browserTools?: readonly string[] | undefined

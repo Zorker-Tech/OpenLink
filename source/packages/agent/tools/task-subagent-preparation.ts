@@ -5,13 +5,6 @@ import { isSignedUrlStorageAllowed, VIDEO_REVIEW_SUBAGENT_MAX_BYTES, getInlineVi
 import { isVideoAttachmentModelId } from "../../../adapters/interop/inference/video-model-adapter.ts"
 import type { Context } from "../../context/context.ts"
 import {
-  taskEnvironmentForTargetMachineInterop,
-  taskEnvironmentFromProtoInterop,
-  taskEnvironmentToProtoInterop,
-  targetMachineFromProtoInterop,
-  targetMachineToProtoInterop,
-} from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
-import {
   appendTaskSelectedCursorCommandsInterop,
   createPreparedTaskSubagentInterop,
   createTaskAttachmentReadArgsInterop,
@@ -22,7 +15,6 @@ import {
   createTaskSelectedVideoDataInterop,
   createTaskSelectedVideoInterop,
   createTaskSelectedVideoSignedUrlInterop,
-  taskSubagentEnvironmentInterop,
 } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import type { AttachedMediaUrlProvider } from "../context/video-attachment.ts"
 import { detectImageMimeType } from "./core/read/image-utils.ts"
@@ -39,14 +31,14 @@ import type {
   TaskSelectedImageInterop,
   TaskSelectedVideoInterop,
   TaskSubagentCredentialsInterop,
-  TaskSubagentEnvironmentInterop,
 } from "../../../adapters/interop/agent/task-subagent-preparation-protocol-adapter.ts"
 import {
-  createEmptySlateTaskConversationState,
+  createEmptySlateSubagentConversationSnapshot,
   type SlateSubagentPersistedState,
   type SlateTaskConversationState,
 } from "../subagent-persisted-state.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
+import { taskEnvironmentForTargetMachine, type SlatePreparedTaskRawArgs } from "./task-runtime-types.ts"
 import { GENERAL_PURPOSE_SUBAGENT_TYPE } from "./core/subagent/subagent-config.ts"
 import {
   mapSubagentConversationState,
@@ -56,7 +48,7 @@ import {
   isCustomSubagentType,
   isVideoReviewSubagentType,
   slateSubagentTypeName,
-  type SlateSubagentTypeLike,
+  type SlateSubagentType,
 } from "../subagent-type.ts"
 import { computeSubagentRequestId, generateSeededUuid } from "./tool-support.ts"
 import { ToolCallArgParseError } from "./tool-errors.ts"
@@ -93,38 +85,29 @@ export type RawTaskEnvironmentArgs = {
   readonly machine?: TaskTargetMachine;
 };
 
-export function protoEnvironmentToTaskEnvironment(
-  environment: TaskSubagentEnvironmentInterop,
-): TaskEnvironment {
-  return taskEnvironmentFromProtoInterop(environment);
-}
-
 /** Where a subagent runs: what the request asked for, or failing that what its saved state says. */
 export function getEffectiveSubagentEnvironment(
   rawArgs: RawTaskEnvironmentArgs,
-  restoredState: Pick<SlateSubagentPersistedState, "machine" | "environment" | "cloudSubagent"> | undefined,
-): TaskSubagentEnvironmentInterop {
+  restoredState: Pick<SlateSubagentPersistedState, "targetMachine" | "executionEnvironment" | "cloudAgent"> | undefined,
+): TaskEnvironment {
   if (rawArgs.machine !== undefined) {
-    return taskEnvironmentForTargetMachineInterop(rawArgs.machine);
+    return taskEnvironmentForTargetMachine(rawArgs.machine);
   }
-  const requestedEnvironment = taskEnvironmentToProtoInterop(rawArgs.environment);
-  if (requestedEnvironment !== taskSubagentEnvironmentInterop.unspecified) {
-    return requestedEnvironment;
-  }
-  const restoredMachine = restoredState?.machine;
+  if (rawArgs.environment !== undefined) return rawArgs.environment;
+  const restoredMachine = restoredState?.targetMachine;
   if (restoredMachine !== undefined) {
-    return taskEnvironmentForTargetMachineInterop(restoredMachine);
+    return taskEnvironmentForTargetMachine(restoredMachine);
   }
-  if (restoredState?.environment === "cloud") {
-    return taskSubagentEnvironmentInterop.cloud;
+  if (restoredState?.executionEnvironment === "cloud") {
+    return "cloud";
   }
-  if (restoredState?.environment === "local") {
-    return taskSubagentEnvironmentInterop.local;
+  if (restoredState?.executionEnvironment === "local") {
+    return "local";
   }
-  if (restoredState?.cloudSubagent !== undefined) {
-    return taskSubagentEnvironmentInterop.cloud;
+  if (restoredState?.cloudAgent !== undefined) {
+    return "cloud";
   }
-  return taskSubagentEnvironmentInterop.unspecified;
+  return undefined;
 }
 
 export interface CanonicalSubagentIdResolver {
@@ -298,7 +281,7 @@ export interface AttachmentProcessingOptions {
   readonly conversationId?: string;
   readonly inlineVideoMaxBytes?: number;
   readonly signedUrlVideoMaxBytes?: number;
-  readonly subagentType?: SlateSubagentTypeLike;
+  readonly subagentType?: SlateSubagentType;
   readonly useVideoReviewSubagentUploadLimit?: boolean;
   readonly skipTrustedPathValidation?: boolean;
   readonly userAttachedVideoPaths?: readonly string[];
@@ -397,7 +380,7 @@ export interface ConversationStateParent {
   restoreSubagentState(
     ctx: Context,
     subagentId: string,
-  ): Pick<SlateSubagentPersistedState, "conversationState" | "cloudSubagent" | "subagentType" | "modelId" | "machine" | "environment" | "firstClassBcId" | "cloudRequestedEnvironmentBuildId"> | undefined;
+  ): Pick<SlateSubagentPersistedState, "conversationSnapshot" | "cloudAgent" | "subagentType" | "modelId" | "targetMachine" | "executionEnvironment" | "firstClassAgentId" | "requestedRuntimeBuildId"> | undefined;
 }
 
 export interface ConversationStateSubagentConfig {
@@ -419,17 +402,17 @@ export async function resolveSubagentConversationState(
   }
   if (subagentIdToResume !== undefined) {
     const restoredState = parentState.restoreSubagentState(ctx, subagentIdToResume);
-    if (restoredState?.conversationState !== undefined) {
-      return restoredState.conversationState;
+    if (restoredState?.conversationSnapshot !== undefined) {
+      return restoredState.conversationSnapshot;
     }
-    if (restoredState?.cloudSubagent !== undefined) {
-      return createEmptySlateTaskConversationState();
+    if (restoredState?.cloudAgent !== undefined) {
+      return createEmptySlateSubagentConversationSnapshot();
     }
   }
   return mapSubagentConversationState(
     subagentConfig,
     await parentState.getConversationState(ctx),
-    createEmptySlateTaskConversationState(),
+    createEmptySlateSubagentConversationSnapshot(),
   );
 }
 
@@ -510,10 +493,10 @@ export interface TaskSubagentResolution {
   readonly rootParentRequestId?: string | undefined;
   readonly subagentRequestId: string;
   readonly isSelfForkRequested: boolean;
-  readonly effectiveEnvironment: TaskSubagentEnvironmentInterop;
+  readonly effectiveEnvironment: TaskEnvironment;
   readonly effectiveTargetMachine: TaskTargetMachine;
-  readonly cloudSubagentBcId?: string | undefined;
-  readonly cloudRequestedEnvironmentBuildId?: string | undefined;
+  readonly cloudAgentId?: string | undefined;
+  readonly requestedRuntimeBuildId?: string | undefined;
 }
 
 function subagentConfigNamed(
@@ -522,7 +505,7 @@ function subagentConfigNamed(
 ): TaskSubagentModelConfig | undefined {
   if (name === undefined) return undefined;
   const normalizedInput = name.trim().toLowerCase().replace(/[-_]/g, "");
-  return configs.find(config => slateSubagentTypeName(config.subagent_type).trim().toLowerCase().replace(/[-_]/g, "") === normalizedInput);
+  return configs.find(config => slateSubagentTypeName(config.subagentType).trim().toLowerCase().replace(/[-_]/g, "") === normalizedInput);
 }
 
 function resumeMeansSelf(resume: string | undefined): boolean {
@@ -552,7 +535,7 @@ export async function resolveTaskSubagentConfig(args: {
   if (fallbackConfig === undefined) throw new ToolCallArgParseError("No subagent types are available.");
   const requestedConfig = subagentConfigNamed(catalogue, requestArgs.subagent_type) ?? fallbackConfig;
   const resumeMode = requestedConfig.resumeModeOverride ?? "DEFAULT";
-  const requestedType = slateSubagentTypeName(requestedConfig.subagent_type);
+  const requestedType = slateSubagentTypeName(requestedConfig.subagentType);
   const requestKey = computeSubagentRequestId(callMeta.toolCallId);
   const selfForkRequested = resumeMeansSelf(requestArgs.resume);
   let resumeId: string | undefined;
@@ -567,10 +550,10 @@ export async function resolveTaskSubagentConfig(args: {
   const subagentConfig = persistedConfig ?? requestedConfig;
   const readonlyEffective = getEffectiveReadonlyForSubagent(subagentConfig);
   const askMode = shouldUseAskModeForSubagent(readonlyEffective, subagentConfig);
-  const resolvedTypeName = slateSubagentTypeName(subagentConfig.subagent_type);
-  const analyticsType = isCustomSubagentType(subagentConfig.subagent_type) ? "custom" : resolvedTypeName;
+  const resolvedTypeName = slateSubagentTypeName(subagentConfig.subagentType);
+  const analyticsType = isCustomSubagentType(subagentConfig.subagentType) ? "custom" : resolvedTypeName;
   const environmentField = getEffectiveSubagentEnvironment(requestArgs, restoredState);
-  const requestedMachine = requestArgs.machine ?? restoredState?.machine ?? (environmentField === taskSubagentEnvironmentInterop.cloud
+  const requestedMachine = requestArgs.machine ?? restoredState?.targetMachine ?? (environmentField === "cloud"
     ? targetMachineFromLegacyArgs({ environment: "cloud", cloud_base_branch: requestArgs.cloud_base_branch, cloud_requested_environment_build_id: requestArgs.cloud_requested_environment_build_id })
     : { type: "same_machine" });
   const priorModel = selfForkRequested ? settings.parentRequestedModelName ?? parentModel.modelName : restoredState?.modelId?.trim() || undefined;
@@ -593,10 +576,10 @@ export async function resolveTaskSubagentConfig(args: {
   const newSubagentId = resumeId ?? generateSeededUuid(`subagent-${resolvedTypeName}-${callMeta.toolCallId}`);
   const parentKey = getRequestId(turnContext);
   const rootParentKey = getRootParentRequestId(turnContext) ?? parentKey;
-  const resumeBcId = restoredState?.cloudSubagent?.bcId?.trim() || restoredState?.firstClassBcId?.trim() || undefined;
-  const buildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.cloud_requested_environment_build_id?.trim() || restoredState?.cloudRequestedEnvironmentBuildId?.trim() || undefined : undefined;
-  const targetMachineFinal = requestedMachine.type === "new_cloud_vm" && buildId !== requestedMachine.environment_build_id
-    ? { ...requestedMachine, ...(buildId !== undefined ? { environment_build_id: buildId } : {}) }
+  const resumeCloudAgentId = restoredState?.cloudAgent?.agentId?.trim() || restoredState?.firstClassAgentId?.trim() || undefined;
+  const runtimeBuildId = requestedMachine.type === "new_cloud_vm" ? requestedMachine.environment_build_id?.trim() || requestArgs.cloud_requested_environment_build_id?.trim() || restoredState?.requestedRuntimeBuildId?.trim() || undefined : undefined;
+  const targetMachineFinal = requestedMachine.type === "new_cloud_vm" && runtimeBuildId !== requestedMachine.environment_build_id
+    ? { ...requestedMachine, ...(runtimeBuildId !== undefined ? { environment_build_id: runtimeBuildId } : {}) }
     : requestedMachine;
   const parentModelForParams = settings.parentRequestedModelName ?? parentModel.modelName;
   const modelParametersChosen = chosenModelId === parentModelForParams && (settings.parentModelParameters?.length ?? 0) > 0 ? settings.parentModelParameters : undefined;
@@ -617,8 +600,8 @@ export async function resolveTaskSubagentConfig(args: {
     isSelfForkRequested: selfForkRequested,
     effectiveEnvironment: environmentField,
     effectiveTargetMachine: targetMachineFinal,
-    cloudSubagentBcId: resumeBcId,
-    cloudRequestedEnvironmentBuildId: buildId,
+    cloudAgentId: resumeCloudAgentId,
+    requestedRuntimeBuildId: runtimeBuildId,
   };
 }
 
@@ -660,20 +643,20 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     parentRequestId: parentKey,
     rootParentRequestId: rootParentKey,
     subagentRequestId: requestKey,
-    cloudSubagentBcId: resumeBcId,
-    cloudRequestedEnvironmentBuildId: buildId,
+    cloudAgentId: resumeCloudAgentId,
+    requestedRuntimeBuildId: runtimeBuildId,
   } = resolved;
   let attachmentSelection: TaskSelectedContextInterop | undefined;
   if (rawArgs.file_attachments !== undefined && rawArgs.file_attachments.length > 0) {
-    const mediaProvider = isVideoReviewSubagentType(subagentConfig.subagent_type) ? args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
+    const mediaProvider = isVideoReviewSubagentType(subagentConfig.subagentType) ? args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider : args.attachedMediaUrlProvider;
     attachmentSelection = await collectAttachments(ctx, rawArgs.file_attachments, resourceAccessor, meta.toolCallId, {
       resolvedModelId: chosenModelId,
       ...(args.privacyMode !== undefined ? { privacyMode: args.privacyMode } : {}),
       ...(mediaProvider !== undefined ? { attachedMediaUrlProvider: mediaProvider } : {}),
       ...(args.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: args.inlineVideoMaxBytes } : {}),
       ...(args.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: args.signedUrlVideoMaxBytes } : {}),
-      subagentType: subagentConfig.subagent_type,
-      useVideoReviewSubagentUploadLimit: isVideoReviewSubagentType(subagentConfig.subagent_type) && args.videoReviewAttachedMediaUrlProvider !== undefined,
+      subagentType: subagentConfig.subagentType,
+      useVideoReviewSubagentUploadLimit: isVideoReviewSubagentType(subagentConfig.subagentType) && args.videoReviewAttachedMediaUrlProvider !== undefined,
       skipTrustedPathValidation: true,
     });
   }
@@ -685,11 +668,11 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
   }
   const firstAction = createUserMessageAction(subagentConfig, rawArgs.prompt, generateSeededUuid(meta.toolCallId), askMode, attachmentSelection);
   const startingState = await resolveSubagentConversationState(ctx, subagentConfig, parentState, resumeId, selfForkRequested, meta.toolCallId, resolvedTypeName);
-  const persistCredentials = resolved.effectiveEnvironment !== taskSubagentEnvironmentInterop.cloud;
+  const persistCredentials = resolved.effectiveEnvironment !== "cloud";
   return createPreparedTaskSubagentInterop({
     subagentId: newSubagentId,
     subagentTypeName: resolvedTypeName,
-    subagentType: subagentConfig.subagent_type as never,
+    subagentType: subagentConfig.subagentType as never,
     analyticsSubagentType: analyticsType,
     resolvedModelId: chosenModelId,
     effectiveReadonly: readonlyEffective,
@@ -698,7 +681,7 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     initialAction: firstAction,
     initialTurnsCount: startingState.turns.length,
     subagentRequestId: requestKey,
-    ...(resumeBcId !== undefined ? { cloudSubagentBcId: resumeBcId } : {}),
+    ...(resumeCloudAgentId !== undefined ? { cloudAgentId: resumeCloudAgentId } : {}),
     toolCallId: meta.toolCallId,
     isResume: isResumeFlag,
     ...(parentKey !== undefined ? { parentRequestId: parentKey } : {}),
@@ -721,9 +704,9 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
       attachments: rawArgs.file_attachments === undefined ? [] : [...rawArgs.file_attachments],
       environment: resolved.effectiveEnvironment,
       ...((rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : undefined)) !== undefined ? { cloudBaseBranch: rawArgs.cloud_base_branch ?? (resolved.effectiveTargetMachine.type === "new_cloud_vm" ? resolved.effectiveTargetMachine.base_branch : "") } : {}),
-      ...(buildId !== undefined ? { cloudRequestedEnvironmentBuildId: buildId } : {}),
-      machine: targetMachineToProtoInterop(resolved.effectiveTargetMachine),
-    },
+      ...(runtimeBuildId !== undefined ? { requestedRuntimeBuildId: runtimeBuildId } : {}),
+      targetMachine: resolved.effectiveTargetMachine,
+    } satisfies SlatePreparedTaskRawArgs,
     parentModelName: parentModelInfo.modelName,
     ...(args.subagentCredentials !== undefined && persistCredentials ? { subagentCredentials: args.subagentCredentials } : {}),
     ...(subagentConfig.resultSuffix !== undefined ? { resultSuffix: subagentConfig.resultSuffix } : {}),
@@ -733,50 +716,6 @@ export async function prepareTaskSubagent(args: PrepareTaskSubagentArgs): Promis
     toolName: args.toolName ?? "Task",
     preparedTimestampUnixMs: BigInt(Date.now()),
   });
-}
-
-export function buildPreparedTaskToolHookInput(subagent: TaskPreparedSubagentInterop): {
-  readonly description: string | undefined;
-  readonly prompt: string | undefined;
-  readonly model: string | undefined;
-  readonly resume: string | undefined;
-  readonly environment: TaskEnvironment;
-  readonly cloud_base_branch: string | undefined;
-  readonly cloud_requested_environment_build_id: string | undefined;
-  readonly machine: TaskTargetMachine | undefined;
-  readonly subagent_type: string;
-  readonly run_in_background: boolean | undefined;
-  readonly file_attachments: readonly string[] | undefined;
-} {
-  const storedArgs = subagent.rawArgs;
-  if (storedArgs === undefined) {
-    return {
-      description: undefined,
-      prompt: undefined,
-      model: undefined,
-      resume: undefined,
-      environment: undefined,
-      cloud_base_branch: undefined,
-      cloud_requested_environment_build_id: undefined,
-      machine: undefined,
-      subagent_type: subagent.subagentTypeName,
-      run_in_background: undefined,
-      file_attachments: undefined,
-    };
-  }
-  return {
-    description: storedArgs.description,
-    prompt: storedArgs.prompt,
-    model: storedArgs.model,
-    resume: storedArgs.resume,
-    environment: protoEnvironmentToTaskEnvironment(storedArgs.environment),
-    cloud_base_branch: storedArgs.cloudBaseBranch,
-    cloud_requested_environment_build_id: storedArgs.cloudRequestedEnvironmentBuildId,
-    machine: targetMachineFromProtoInterop(storedArgs.machine),
-    subagent_type: subagent.subagentTypeName,
-    run_in_background: storedArgs.runInBackground,
-    file_attachments: storedArgs.attachments.length > 0 ? storedArgs.attachments : undefined,
-  };
 }
 
 /** Reads the attachments a subagent was given and turns each into what the protocol carries. */

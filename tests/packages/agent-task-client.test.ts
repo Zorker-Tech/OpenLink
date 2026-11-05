@@ -25,7 +25,6 @@ import {
   ConversationStep,
   SubagentBackgroundReason,
   SubagentExecutionEnvironment,
-  SubagentPersistedState,
   TaskError,
   TaskResult,
   TaskSuccess,
@@ -40,18 +39,15 @@ import {
   SubagentSuccess,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagent_exec_pb.ts"
 import { SendFinalSummaryArgs, SendFinalSummaryToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
-import {
-  SubagentType,
-  SubagentTypeCustom,
-  SubagentTypeUnspecified,
-} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
+import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
 // ---------------------------------------------------------------------------------------------
 
-const GENERAL_PURPOSE = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
-const COORDINATOR = new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "coordinator-agent" }) } })
+const GENERAL_PURPOSE = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
+const COORDINATOR = createSlateSubagentType(SlateSubagentKind.CUSTOM, { customName: "coordinator-agent" })
 
 const answerStep = (text: string): ConversationStepValue =>
   new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text }) } })
@@ -90,7 +86,7 @@ const errorResult = (error: string) =>
 
 function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolution {
   return {
-    subagentConfig: { subagent_type: GENERAL_PURPOSE, isBackground: false },
+    subagentConfig: { subagentType: GENERAL_PURPOSE, isBackground: false },
     effectiveReadonly: false,
     useAskModeForSubagent: false,
     typeName: "generalPurpose",
@@ -100,7 +96,7 @@ function resolution(overrides: Record<string, unknown> = {}): TaskSubagentResolu
     isResume: false,
     subagentRequestId: "request-1",
     isSelfForkRequested: false,
-    effectiveEnvironment: SubagentExecutionEnvironment.LOCAL,
+    effectiveEnvironment: "local",
     effectiveTargetMachine: { type: "same_machine" },
     ...overrides,
   } as unknown as TaskSubagentResolution
@@ -121,7 +117,7 @@ function executionHarness(options: {
 } = {}) {
   const executed: Executed[] = []
   const handoffs: string[] = []
-  const persisted: Array<{ subagentId: string; state: SubagentPersistedState }> = []
+  const persisted: Array<{ subagentId: string; state: SlateSubagentPersistedState }> = []
   const injections: Array<() => void> = []
   const subagentExecutor = {
     async execute(ctx: Context, args: SubagentArgs) {
@@ -142,7 +138,7 @@ function executionHarness(options: {
   const stateHandler: ClientTaskStateHandler = {
     turns: [],
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
-    persistSubagentState(_ctx, subagentId, _type, state) { persisted.push({ subagentId, state: state as SubagentPersistedState }) },
+    persistSubagentState(_ctx, subagentId, _type, state) { persisted.push({ subagentId, state }) },
   }
   const signal = {
     pending: false,
@@ -290,12 +286,12 @@ function continuationConfigOf(value: unknown): ClientContinuationConfig | undefi
 // ---------------------------------------------------------------------------------------------
 
 test("a subagent with no continuation policy is not continued", () => {
-  assert.equal(buildClientContinuationConfig({ subagent_type: GENERAL_PURPOSE }), undefined)
+  assert.equal(buildClientContinuationConfig({ subagentType: GENERAL_PURPOSE }), undefined)
 })
 
 test("a policy's nudge and escape messages reach the platform", () => {
   const config = continuationConfigOf(buildClientContinuationConfig({
-    subagent_type: GENERAL_PURPOSE,
+    subagentType: GENERAL_PURPOSE,
     continuationPolicy: { idleThreshold: 3, continuationMessage: "keep going" },
   }))
   assert.equal(config?.idleThreshold, 3)
@@ -308,7 +304,7 @@ test("a policy's nudge and escape messages reach the platform", () => {
 test("a message written as a function is asked for both of its forms", () => {
   const asked: Array<{ isEscapeHatch: boolean; idleCount: number; escapeToken: string }> = []
   const config = continuationConfigOf(buildClientContinuationConfig({
-    subagent_type: GENERAL_PURPOSE,
+    subagentType: GENERAL_PURPOSE,
     continuationPolicy: {
       idleThreshold: 5,
       maxLoops: 2,
@@ -327,10 +323,10 @@ test("a message written as a function is asked for both of its forms", () => {
 
 test("only a coordinator is told about the children it left running", () => {
   const policy = { idleThreshold: 1, continuationMessage: "keep going" }
-  const coordinator = continuationConfigOf(buildClientContinuationConfig({ subagent_type: COORDINATOR, continuationPolicy: policy }))
+  const coordinator = continuationConfigOf(buildClientContinuationConfig({ subagentType: COORDINATOR, continuationPolicy: policy }))
   assert.equal(coordinator?.collectBackgroundChildren, true)
   assert.match(coordinator?.childrenCompletedMessageTemplate ?? "", /background agents have completed/)
-  const other = continuationConfigOf(buildClientContinuationConfig({ subagent_type: GENERAL_PURPOSE, continuationPolicy: policy }))
+  const other = continuationConfigOf(buildClientContinuationConfig({ subagentType: GENERAL_PURPOSE, continuationPolicy: policy }))
   assert.equal(other?.childrenCompletedMessageTemplate, "")
 })
 
@@ -438,17 +434,17 @@ test("a run's identity is recorded so a follow-up reaches it", async () => {
   assert.equal(harnessed.persisted[0]?.subagentId, "agent-1")
   assert.equal(harnessed.persisted[0]?.state.modelId, "model-1")
   // A local run has no box to remember.
-  assert.equal(harnessed.persisted[0]?.state.cloudSubagent, undefined)
+  assert.equal(harnessed.persisted[0]?.state.cloudAgent, undefined)
 })
 
 test("a cloud run records the box it ran in", async () => {
   const harnessed = executionHarness({
     result: new SubagentResult({ result: { case: "success", value: new SubagentSuccess({ agentId: "bc-9", finalMessage: "done" }) } }),
   })
-  await harnessed.run({ resolved: { effectiveEnvironment: SubagentExecutionEnvironment.CLOUD } })
+  await harnessed.run({ resolved: { effectiveEnvironment: "cloud" } })
   const state = harnessed.persisted[0]?.state
-  assert.equal(state?.environment, "cloud")
-  assert.equal(state?.cloudSubagent?.bcId, "bc-9")
+  assert.equal(state?.executionEnvironment, "cloud")
+  assert.equal(state?.cloudAgent?.agentId, "bc-9")
 })
 
 test("a self-fork runs as a fork of this conversation", async () => {

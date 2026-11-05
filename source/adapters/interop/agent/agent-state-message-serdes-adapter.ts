@@ -89,6 +89,14 @@ import type {
   SlateConversationState,
   SlateRedactedValue,
 } from "../../../packages/agent/conversation-state.ts"
+import type {
+  SlateSubagentPersistedState,
+  SlateSubagentConversationSnapshot,
+  SlateSubagentStateCompatibility,
+} from "../../../packages/agent/subagent-persisted-state.ts"
+import { createSlateSubagentPersistedState } from "../../../packages/agent/subagent-persisted-state.ts"
+import type { SlateSubagentType } from "../../../packages/agent/subagent-type.ts"
+import type { TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
 import type { SlateConversationPlanState } from "../../../packages/agent/conversation-plan-state.ts"
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
 import { fromInteropAgentMode, toInteropAgentMode } from "./mode-processing-adapter.ts"
@@ -96,6 +104,10 @@ import {
   fromInteropUserMessage,
   toPlainInteropUserMessage,
 } from "./user-message-action-protocol-adapter.ts"
+import {
+  fromInteropSubagentPersistedState,
+  toInteropSubagentPersistedState,
+} from "./subagent-persisted-state-adapter.ts"
 import {
   SlateSimulatedMessageReason,
   type SlateUserMessage,
@@ -984,9 +996,13 @@ const STEP_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-STEP\n")
 const STEP_STORAGE_FORMAT = "slate.agent-conversation-step"
 const USER_MESSAGE_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-USER\n")
 const USER_MESSAGE_STORAGE_FORMAT = "slate.agent-user-message"
+const SUBAGENT_STATE_STORAGE_HEADER = utf8Serde.serialize("SLATE-AGENT-SUBAGENT-STATE\n")
+const SUBAGENT_STATE_STORAGE_FORMAT = "slate.agent-subagent-state"
+const MAX_SUBAGENT_TIMESTAMP_MS = (1n << 64n) - 1n
 const CLASSIFICATION_VALUES = new Set<string>(Object.values(DataClassification))
 const SLATE_MODE_VALUES = new Set<string>(Object.values(SlateMode))
 const SLATE_SIMULATED_REASON_VALUES = new Set<string>(Object.values(SlateSimulatedMessageReason))
+const SUBAGENT_ENVIRONMENT_VALUES = new Set<string>(["unspecified", "local", "cloud"])
 
 function encodeSlateValue(
   value: unknown,
@@ -1655,6 +1671,219 @@ export function deserializeSlateUserMessageInterop(bytes: Uint8Array): UserMessa
   return toPlainInteropUserMessage(slate)
 }
 
+interface StoredSlateSubagentType {
+  readonly kind: string
+  readonly customName?: string
+  readonly compatibility?: { readonly legacyDiscriminator?: string }
+}
+
+interface StoredSlateSubagentState {
+  readonly createdAtMs: string
+  readonly lastUsedAtMs: string
+  readonly executionEnvironment: string
+  readonly conversationSnapshot?: StoredSlateValue
+  readonly subagentType?: StoredSlateSubagentType
+  readonly modelId?: string
+  readonly cloudAgent?: { readonly agentId: string; readonly transcriptUri?: string | undefined }
+  readonly firstClassAgentId?: string
+  readonly requestedRuntimeBuildId?: string
+  readonly targetMachine?: Record<string, unknown>
+  readonly compatibility?: SlateSubagentStateCompatibility
+}
+
+interface StoredSlateSubagentStateEnvelope {
+  readonly format: typeof SUBAGENT_STATE_STORAGE_FORMAT
+  readonly version: 1
+  readonly state: StoredSlateSubagentState
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function isStoredSlateSubagentType(value: unknown): value is StoredSlateSubagentType {
+  if (!isRecordValue(value) || !hasOnlyKeys(value, ["kind", "customName", "compatibility"]) ||
+      typeof value.kind !== "string" || value.kind.length === 0 ||
+      (value.customName !== undefined && typeof value.customName !== "string")) return false
+  if (value.compatibility === undefined) return true
+  return isRecordValue(value.compatibility) &&
+    hasOnlyKeys(value.compatibility, ["legacyDiscriminator"]) &&
+    (value.compatibility.legacyDiscriminator === undefined || typeof value.compatibility.legacyDiscriminator === "string")
+}
+
+function isStoredSlateTargetMachine(value: unknown): value is TaskTargetMachine {
+  if (!isRecordValue(value) || typeof value.type !== "string") return false
+  switch (value.type) {
+    case "same_machine":
+      return hasOnlyKeys(value, ["type"])
+    case "new_cloud_vm":
+      return hasOnlyKeys(value, ["type", "base_branch", "environment_build_id"]) &&
+        (value.base_branch === undefined || typeof value.base_branch === "string") &&
+        (value.environment_build_id === undefined || typeof value.environment_build_id === "string")
+    case "self_hosted_worker":
+      return hasOnlyKeys(value, ["type", "worker_id"]) && typeof value.worker_id === "string"
+    case "self_hosted_pool":
+      return hasOnlyKeys(value, ["type", "pool", "labels"]) &&
+        (value.pool === undefined || typeof value.pool === "string") &&
+        (value.labels === undefined || (isRecordValue(value.labels) && Object.values(value.labels).every(label => typeof label === "string")))
+    default:
+      return false
+  }
+}
+
+function isStoredSlateSubagentCompatibility(value: unknown): value is SlateSubagentStateCompatibility {
+  return isRecordValue(value) && hasOnlyKeys(value, ["legacyEnvironmentCode", "legacyUnknownFields"]) &&
+    (value.legacyEnvironmentCode === undefined ||
+      (typeof value.legacyEnvironmentCode === "number" && Number.isInteger(value.legacyEnvironmentCode) &&
+        value.legacyEnvironmentCode >= -2_147_483_648 && value.legacyEnvironmentCode <= 2_147_483_647)) &&
+    (value.legacyUnknownFields === undefined ||
+      (Array.isArray(value.legacyUnknownFields) && value.legacyUnknownFields.every(isStepUnknownField)))
+}
+
+function isStoredSlateSubagentStateEnvelope(value: unknown): value is StoredSlateSubagentStateEnvelope {
+  if (!isRecordValue(value) || !hasOnlyKeys(value, ["format", "version", "state"]) ||
+      value.format !== SUBAGENT_STATE_STORAGE_FORMAT || value.version !== 1 || !isRecordValue(value.state)) return false
+  const state = value.state
+  return hasOnlyKeys(state, [
+    "createdAtMs", "lastUsedAtMs", "executionEnvironment", "conversationSnapshot", "subagentType", "modelId",
+    "cloudAgent", "firstClassAgentId", "requestedRuntimeBuildId", "targetMachine", "compatibility",
+  ]) &&
+    typeof state.createdAtMs === "string" && isUnsignedTimestamp(state.createdAtMs) &&
+    typeof state.lastUsedAtMs === "string" && isUnsignedTimestamp(state.lastUsedAtMs) &&
+    typeof state.executionEnvironment === "string" && SUBAGENT_ENVIRONMENT_VALUES.has(state.executionEnvironment) &&
+    (state.conversationSnapshot === undefined || isStoredSlateValue(state.conversationSnapshot)) &&
+    (state.subagentType === undefined || isStoredSlateSubagentType(state.subagentType)) &&
+    (state.modelId === undefined || typeof state.modelId === "string") &&
+    (state.cloudAgent === undefined || (isRecordValue(state.cloudAgent) &&
+      hasOnlyKeys(state.cloudAgent, ["agentId", "transcriptUri"]) && typeof state.cloudAgent.agentId === "string" &&
+      (state.cloudAgent.transcriptUri === undefined || typeof state.cloudAgent.transcriptUri === "string"))) &&
+    (state.firstClassAgentId === undefined || typeof state.firstClassAgentId === "string") &&
+    (state.requestedRuntimeBuildId === undefined || typeof state.requestedRuntimeBuildId === "string") &&
+    (state.targetMachine === undefined || isStoredSlateTargetMachine(state.targetMachine)) &&
+    (state.compatibility === undefined || isStoredSlateSubagentCompatibility(state.compatibility))
+}
+
+function isUnsignedTimestamp(value: string): boolean {
+  if (!/^(?:0|[1-9][0-9]*)$/.test(value)) return false
+  return BigInt(value) <= MAX_SUBAGENT_TIMESTAMP_MS
+}
+
+function isSlateSubagentConversationSnapshot(value: unknown): value is SlateSubagentConversationSnapshot {
+  if (!isRecordValue(value) || typeof value.privacyMode !== "string" ||
+      !Array.isArray(value.rootPromptMessagesJson) || !value.rootPromptMessagesJson.every(entry => entry instanceof Uint8Array) ||
+      !Array.isArray(value.turns) || !value.turns.every(entry => entry instanceof Uint8Array) ||
+      !Array.isArray(value.todos) || !value.todos.every(entry => entry instanceof Uint8Array) ||
+      !Array.isArray(value.previousWorkspaceUris) || !Array.isArray(value.summaryArchives) ||
+      !value.summaryArchives.every(entry => entry instanceof Uint8Array) ||
+      !(value.fileStatesV2 instanceof Map) || !Array.isArray(value.readPaths)) return false
+  return true
+}
+
+/** Writes new durable subagent references with Slate fields and imports old generated blobs on read. */
+export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode): Serde<SlateSubagentPersistedState> {
+  return {
+    serialize(value) {
+      const state = createSlateSubagentPersistedState(value)
+      if (state.createdAtMs < 0n || state.createdAtMs > MAX_SUBAGENT_TIMESTAMP_MS ||
+          state.lastUsedAtMs < 0n || state.lastUsedAtMs > MAX_SUBAGENT_TIMESTAMP_MS) {
+        throw new TypeError("Slate subagent timestamps must be unsigned 64-bit milliseconds")
+      }
+      const envelope: StoredSlateSubagentStateEnvelope = {
+        format: SUBAGENT_STATE_STORAGE_FORMAT,
+        version: 1,
+        state: {
+          createdAtMs: state.createdAtMs.toString(),
+          lastUsedAtMs: state.lastUsedAtMs.toString(),
+          executionEnvironment: state.executionEnvironment,
+          ...(state.conversationSnapshot === undefined
+            ? {}
+            : { conversationSnapshot: encodeSlateValue(state.conversationSnapshot, new Set(), "Subagent snapshot") }),
+          ...(state.subagentType === undefined ? {} : { subagentType: state.subagentType }),
+          ...(state.modelId === undefined ? {} : { modelId: state.modelId }),
+          ...(state.cloudAgent === undefined
+            ? {}
+            : { cloudAgent: {
+                agentId: state.cloudAgent.agentId,
+                ...(state.cloudAgent.transcriptUri === undefined ? {} : { transcriptUri: state.cloudAgent.transcriptUri }),
+              } }),
+          ...(state.firstClassAgentId === undefined ? {} : { firstClassAgentId: state.firstClassAgentId }),
+          ...(state.requestedRuntimeBuildId === undefined ? {} : { requestedRuntimeBuildId: state.requestedRuntimeBuildId }),
+          ...(state.targetMachine === undefined ? {} : { targetMachine: state.targetMachine }),
+          ...(state.compatibility === undefined ? {} : { compatibility: state.compatibility }),
+        },
+      }
+      if (state.conversationSnapshot !== undefined && !isStoredSlateValue(envelope.state.conversationSnapshot)) {
+        throw new TypeError("Slate subagent conversation snapshot is invalid")
+      }
+      if (state.subagentType !== undefined && !isStoredSlateSubagentType(state.subagentType)) {
+        throw new TypeError("Slate subagent type is invalid")
+      }
+      if (state.targetMachine !== undefined && !isStoredSlateTargetMachine(state.targetMachine)) {
+        throw new TypeError("Slate subagent target machine is invalid")
+      }
+      if (state.compatibility !== undefined && !isStoredSlateSubagentCompatibility(state.compatibility)) {
+        throw new TypeError("Slate subagent compatibility data is invalid")
+      }
+      return utf8Serde.serialize(`SLATE-AGENT-SUBAGENT-STATE\n${JSON.stringify(envelope)}`)
+    },
+    deserialize(bytes) {
+      if (!beginsWith(bytes, SUBAGENT_STATE_STORAGE_HEADER)) {
+        const legacy = SubagentPersistedState.fromBinary(bytes)
+        const redacted = toRedactedSubagentPersistedState(legacy, privacyMode)
+        const projected = fromRedactedSubagentPersistedStateInterop(
+          redacted as never,
+          PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+          undefined,
+        )
+        return fromInteropSubagentPersistedState(projected, privacyMode, collectStepUnknownFields(legacy))
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(SUBAGENT_STATE_STORAGE_HEADER.length)))
+      } catch (error) {
+        throw new TypeError("Stored Slate subagent state is not valid JSON", { cause: error })
+      }
+      if (!isStoredSlateSubagentStateEnvelope(parsed)) throw new TypeError("Stored Slate subagent state envelope is invalid")
+      const snapshot = parsed.state.conversationSnapshot === undefined
+        ? undefined
+        : decodeSlateValue(parsed.state.conversationSnapshot, privacyMode)
+      if (snapshot !== undefined && !isSlateSubagentConversationSnapshot(snapshot)) {
+        throw new TypeError("Stored Slate subagent conversation snapshot is invalid")
+      }
+      return createSlateSubagentPersistedState({
+        createdAtMs: BigInt(parsed.state.createdAtMs),
+        lastUsedAtMs: BigInt(parsed.state.lastUsedAtMs),
+        executionEnvironment: parsed.state.executionEnvironment as SlateSubagentPersistedState["executionEnvironment"],
+        ...(snapshot === undefined
+          ? {}
+          : { conversationSnapshot: { ...snapshot, privacyMode } }),
+        ...(parsed.state.subagentType === undefined ? {} : { subagentType: parsed.state.subagentType as SlateSubagentType }),
+        ...(parsed.state.modelId === undefined ? {} : { modelId: parsed.state.modelId as string }),
+        ...(parsed.state.cloudAgent === undefined
+          ? {}
+          : { cloudAgent: parsed.state.cloudAgent as SlateSubagentPersistedState["cloudAgent"] }),
+        ...(parsed.state.firstClassAgentId === undefined ? {} : { firstClassAgentId: parsed.state.firstClassAgentId as string }),
+        ...(parsed.state.requestedRuntimeBuildId === undefined
+          ? {}
+          : { requestedRuntimeBuildId: parsed.state.requestedRuntimeBuildId as string }),
+        ...(parsed.state.targetMachine === undefined
+          ? {}
+          : { targetMachine: parsed.state.targetMachine as TaskTargetMachine }),
+        ...(parsed.state.compatibility === undefined
+          ? {}
+          : { compatibility: parsed.state.compatibility as SlateSubagentStateCompatibility }),
+      })
+    },
+    getBlobType() {
+      return { kind: "json", typeName: SUBAGENT_STATE_STORAGE_FORMAT }
+    },
+  }
+}
+
+export function deserializeSlateSubagentPersistedStateInterop(bytes: Uint8Array): SubagentPersistedState {
+  return toInteropSubagentPersistedState(createSlateSubagentPersistedStateSerde(PrivacyModes.UNSPECIFIED).deserialize(bytes))
+}
+
 export function createFileStateStructureInterop(input: {
   readonly contentBlobId: Uint8Array
   readonly initialContentBlobId: Uint8Array
@@ -1682,7 +1911,7 @@ export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
     conversationSummaryArchive: createSlateConversationSummaryArchiveSerde(privacyMode),
     conversationPlan: createSlateConversationPlanSerde(privacyMode),
     todoItem: createSlateTodoItemSerde(privacyMode),
-    subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, serdeDecoder(fromRedactedSubagentPersistedState), privacyMode),
+    subagentPersistedState: createSlateSubagentPersistedStateSerde(privacyMode),
   }
 }
 

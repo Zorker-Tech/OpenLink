@@ -1,37 +1,42 @@
-import type {
-  SlateSubagentExecutionEnvironment,
-} from "./subagent-run-state.ts"
-import type { SlateSubagentTypeLike } from "./subagent-type.ts"
-import type {
-  CloudSubagentPersistedStateArgs,
-  TaskTargetMachine,
-} from "./tools/task-runtime-types.ts"
+import type { SlateSubagentExecutionEnvironment } from "./subagent-run-state.ts"
+import { createSlateSubagentType, type SlateSubagentType } from "./subagent-type.ts"
+import type { CloudSubagentPersistedStateArgs, TaskTargetMachine } from "./tools/task-runtime-types.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
+import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import type { SlateConversationState } from "./conversation-state.ts"
 
 /** Subagent snapshots use the same first-party conversation schema as their owning conversation. */
-export type SlateTaskConversationState = SlateConversationState
+export type SlateSubagentConversationSnapshot = SlateConversationState
+export type SlateTaskConversationState = SlateSubagentConversationSnapshot
 
-export interface SlateSubagentCloudReference {
-  readonly bcId: string
-  readonly transcriptPath?: string | undefined
+export interface SlateSubagentCloudAgent {
+  readonly agentId: string
+  readonly transcriptUri?: string | undefined
 }
 
-/** Everything Slate needs to resume a subagent without importing the external persisted message. */
+export interface SlateSubagentStateCompatibility {
+  /** Historical environment enum preserved until that old value can be retired. */
+  readonly legacyEnvironmentCode?: number | undefined
+  /** Unknown fields in the historical persisted message, retained for lossless runner projection. */
+  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[] | undefined
+}
+
+/** Product-owned state required to resume a delegated task. */
 export interface SlateSubagentPersistedState {
-  readonly conversationState?: SlateTaskConversationState | undefined
-  readonly createdTimestampMs: bigint
-  readonly lastUsedTimestampMs: bigint
-  readonly subagentType?: SlateSubagentTypeLike | undefined
+  readonly conversationSnapshot?: SlateSubagentConversationSnapshot | undefined
+  readonly createdAtMs: bigint
+  readonly lastUsedAtMs: bigint
+  readonly subagentType?: SlateSubagentType | undefined
   readonly modelId?: string | undefined
-  readonly environment: SlateSubagentExecutionEnvironment
-  readonly cloudSubagent?: SlateSubagentCloudReference | undefined
-  readonly firstClassBcId?: string | undefined
-  readonly cloudRequestedEnvironmentBuildId?: string | undefined
-  readonly machine?: TaskTargetMachine | undefined
+  readonly executionEnvironment: SlateSubagentExecutionEnvironment
+  readonly cloudAgent?: SlateSubagentCloudAgent | undefined
+  readonly firstClassAgentId?: string | undefined
+  readonly requestedRuntimeBuildId?: string | undefined
+  readonly targetMachine?: TaskTargetMachine | undefined
+  readonly compatibility?: SlateSubagentStateCompatibility | undefined
 }
 
-export function createEmptySlateTaskConversationState(): SlateTaskConversationState {
+export function createEmptySlateSubagentConversationSnapshot(): SlateSubagentConversationSnapshot {
   return {
     privacyMode: PrivacyMode.UNSPECIFIED,
     rootPromptMessagesJson: [],
@@ -44,23 +49,52 @@ export function createEmptySlateTaskConversationState(): SlateTaskConversationSt
   }
 }
 
-/** Creates a persisted subagent record with stable empty defaults and only the supplied optional fields. */
+function copyCompatibility(
+  compatibility: SlateSubagentStateCompatibility | undefined,
+): SlateSubagentStateCompatibility | undefined {
+  if (compatibility === undefined) return undefined
+  const fields = compatibility.legacyUnknownFields
+  return {
+    ...(compatibility.legacyEnvironmentCode === undefined
+      ? {}
+      : { legacyEnvironmentCode: compatibility.legacyEnvironmentCode }),
+    ...(fields === undefined
+      ? {}
+      : {
+          legacyUnknownFields: fields.map(field => ({
+            ...field,
+            path: field.path.map(step => ({ ...step })),
+          })),
+        }),
+  }
+}
+
+/** Creates a persisted subagent record with stable defaults and only supplied optional values. */
 export function createSlateSubagentPersistedState(
   input: Partial<SlateSubagentPersistedState> = {},
 ): SlateSubagentPersistedState {
+  const compatibility = copyCompatibility(input.compatibility)
   return {
-    createdTimestampMs: input.createdTimestampMs ?? BigInt(0),
-    lastUsedTimestampMs: input.lastUsedTimestampMs ?? BigInt(0),
-    environment: input.environment ?? "unspecified",
-    ...(input.conversationState === undefined ? {} : { conversationState: input.conversationState }),
-    ...(input.subagentType === undefined ? {} : { subagentType: input.subagentType }),
+    createdAtMs: input.createdAtMs ?? BigInt(0),
+    lastUsedAtMs: input.lastUsedAtMs ?? BigInt(0),
+    executionEnvironment: input.executionEnvironment ?? "unspecified",
+    ...(input.conversationSnapshot === undefined ? {} : { conversationSnapshot: input.conversationSnapshot }),
+    ...(input.subagentType === undefined ? {} : {
+      subagentType: createSlateSubagentType(input.subagentType.kind, {
+        ...(input.subagentType.customName === undefined ? {} : { customName: input.subagentType.customName }),
+        ...(input.subagentType.compatibility === undefined
+          ? {}
+          : { compatibility: { ...input.subagentType.compatibility } }),
+      }),
+    }),
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
-    ...(input.cloudSubagent === undefined ? {} : { cloudSubagent: input.cloudSubagent }),
-    ...(input.firstClassBcId === undefined ? {} : { firstClassBcId: input.firstClassBcId }),
-    ...(input.cloudRequestedEnvironmentBuildId === undefined
+    ...(input.cloudAgent === undefined ? {} : { cloudAgent: { ...input.cloudAgent } }),
+    ...(input.firstClassAgentId === undefined ? {} : { firstClassAgentId: input.firstClassAgentId }),
+    ...(input.requestedRuntimeBuildId === undefined
       ? {}
-      : { cloudRequestedEnvironmentBuildId: input.cloudRequestedEnvironmentBuildId }),
-    ...(input.machine === undefined ? {} : { machine: input.machine }),
+      : { requestedRuntimeBuildId: input.requestedRuntimeBuildId }),
+    ...(input.targetMachine === undefined ? {} : { targetMachine: input.targetMachine }),
+    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
@@ -68,7 +102,7 @@ export function createSlateLocalSubagentPersistedState(
   modelId: string | undefined,
 ): SlateSubagentPersistedState {
   return createSlateSubagentPersistedState({
-    environment: "local",
+    executionEnvironment: "local",
     ...(modelId === undefined ? {} : { modelId }),
   })
 }
@@ -77,22 +111,22 @@ export function createSlateCloudSubagentPersistedState(
   input: CloudSubagentPersistedStateArgs,
 ): SlateSubagentPersistedState {
   return createSlateSubagentPersistedState({
-    environment: "cloud",
-    cloudSubagent: {
-      bcId: input.bcId,
-      ...(input.transcriptPath === undefined ? {} : { transcriptPath: input.transcriptPath }),
+    executionEnvironment: "cloud",
+    cloudAgent: {
+      agentId: input.agentId,
+      ...(input.transcriptUri === undefined ? {} : { transcriptUri: input.transcriptUri }),
     },
-    machine: input.machine,
+    targetMachine: input.targetMachine,
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
   })
 }
 
 export function createSlateSubagentConversationState(input: {
-  readonly conversationState: SlateTaskConversationState
+  readonly conversationSnapshot: SlateSubagentConversationSnapshot
   readonly modelId: string | undefined
 }): SlateSubagentPersistedState {
   return createSlateSubagentPersistedState({
-    conversationState: input.conversationState,
+    conversationSnapshot: input.conversationSnapshot,
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
   })
 }

@@ -24,9 +24,9 @@ import {
   conversationTurnFromBinaryInterop,
   createTaskInitialUserActionInterop,
   isReadonlySubagentPermissionModeInterop,
-  taskEnvironmentForTargetMachineInterop,
 } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
 import type { ConversationTurnView } from "../../../adapters/interop/agent/task-runtime-protocol-adapter.ts"
+import { taskEnvironmentForTargetMachine } from "./task-runtime-types.ts"
 import type {
   LegacyTaskTargetArgs,
   TaskEnvironment,
@@ -48,7 +48,7 @@ import {
 } from "./subagent-model-resolution.ts"
 import { resolveForcedSubagentModel } from "./subagent-forced-model-resolution.ts"
 import { SubagentModelForcePolicy } from "./subagent-model-policy.ts"
-import { slateSubagentTypeName, type SlateSubagentTypeLike } from "../subagent-type.ts"
+import { slateSubagentTypeName, type SlateSubagentType } from "../subagent-type.ts"
 import type { SlateConversationStateMapper } from "../subagent-conversation-state.ts"
 import type { SubagentModels } from "./core/subagent/models.ts"
 
@@ -74,7 +74,7 @@ export interface TaskSubagentConfigRuntime {
 export interface TaskSubagentModelConfig extends TaskSubagentConfigRuntime {
   readonly userRequestedModelId?: string
   readonly forceDefaultModel?: boolean
-  readonly subagent_type: SlateSubagentTypeLike
+  readonly subagentType: SlateSubagentType
   readonly defaultModelIds?: readonly string[]
   readonly inheritParentModel?: boolean
 }
@@ -123,7 +123,7 @@ export async function resolveSubagentModel(
   } = input
   const userModelId = config.userRequestedModelId
   const defaultsForced = config.forceDefaultModel === true
-  const exploring = slateSubagentTypeName(config.subagent_type) === "explore"
+  const exploring = slateSubagentTypeName(config.subagentType) === "explore"
   const slugs = [...catalogue.modelsBySlug.keys()].sort()
   const slugList =
     slugs.length > 0 ? slugs.map((slug) => `- ${slug}`).join("\n") : "- (none)"
@@ -346,7 +346,7 @@ export async function countToolCallsFromTurns(
 }
 
 export type ClientSubagentPlacement = {
-  readonly environment: number
+  readonly environment: TaskEnvironment
   readonly cloudBaseBranch: string | undefined
 }
 
@@ -356,12 +356,12 @@ export function toClientSubagentPlacement(
   switch (placement.type) {
     case "same_machine":
       return {
-        environment: taskEnvironmentForTargetMachineInterop(placement),
+        environment: taskEnvironmentForTargetMachine(placement),
         cloudBaseBranch: undefined,
       }
     case "new_cloud_vm":
       return {
-        environment: taskEnvironmentForTargetMachineInterop(placement),
+        environment: taskEnvironmentForTargetMachine(placement),
         cloudBaseBranch: placement.base_branch,
       }
     case "self_hosted_worker":

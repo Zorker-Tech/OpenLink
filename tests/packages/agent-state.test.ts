@@ -37,6 +37,7 @@ import { SubagentType, SubagentTypeUnspecified } from "../../source/adapters/int
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { deserializeSlateConversationPlan } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
@@ -65,7 +66,10 @@ interface Harness {
   }
 }
 
-function harness(state: ConversationStateStructure = new ConversationStateStructure({})): Harness {
+function harness(
+  state: ConversationStateStructure = new ConversationStateStructure({}),
+  restoreOptions: { readonly serializeSubagentStatesAsBlobRefs?: boolean } = {},
+): Harness {
   const blobs = new Map<string, Uint8Array>()
   const written: string[] = []
   const keyOf = (id: Uint8Array): string => Buffer.from(id).toString("hex")
@@ -94,6 +98,7 @@ function harness(state: ConversationStateStructure = new ConversationStateStruct
       builder as never,
       {},
       "composer-2",
+      restoreOptions as never,
     ),
   }
 }
@@ -271,17 +276,43 @@ test("the goal state is kept and cleared", () => {
 
 test("a subagent's state is persisted with its type, and found again by either id", () => {
   const harnessed = harness()
-  const subagentType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+  const subagentType = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
   harnessed.handle.persistSubagentState(createContext(), "subagent-1", subagentType, { modelId: "composer-2-fast" })
   const restored = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
   assert.equal(restored?.modelId, "composer-2-fast")
-  assert.equal(typeof restored?.createdTimestampMs, "bigint")
-  assert.equal(restored?.createdTimestampMs, restored?.lastUsedTimestampMs)
+  assert.equal(typeof restored?.createdAtMs, "bigint")
+  assert.equal(restored?.createdAtMs, restored?.lastUsedAtMs)
+})
+
+test("an explicit subagent type and environment transition retires stale legacy markers", () => {
+  const harnessed = harness()
+  const legacyType = createSlateSubagentType(SlateSubagentKind.UNKNOWN, {
+    compatibility: { legacyDiscriminator: "future-agent" },
+  })
+  harnessed.handle.persistSubagentState(createContext(), "subagent-1", legacyType, {
+    executionEnvironment: "unspecified",
+    compatibility: {
+      legacyEnvironmentCode: 987,
+      legacyUnknownFields: [
+        { path: [], number: 100, wireType: 0, dataHex: "01" },
+        { path: [{ field: "subagentType" }], number: 101, wireType: 0, dataHex: "02" },
+      ],
+    },
+  })
+
+  harnessed.handle.persistSubagentState(createContext(), "subagent-1", createSlateSubagentType(SlateSubagentKind.EXPLORE), {
+    executionEnvironment: "cloud",
+  })
+
+  const state = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
+  assert.equal(state?.executionEnvironment, "cloud")
+  assert.equal(state?.compatibility?.legacyEnvironmentCode, undefined)
+  assert.deepEqual(state?.compatibility?.legacyUnknownFields?.map(field => field.number), [100])
 })
 
 test("the most recent subagent of a type is the one a resume mode finds", () => {
   const harnessed = harness()
-  const subagentType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+  const subagentType = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
   assert.equal(harnessed.handle.getSubagentIdToResume("generalPurpose", "DEFAULT"), undefined)
   harnessed.handle.persistSubagentState(createContext(), "subagent-1", subagentType, {})
   assert.equal(harnessed.handle.getSubagentIdToResume("generalPurpose", "LAST_AGENT"), "subagent-1")
@@ -323,20 +354,20 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   }))
 
   const restored = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
-  assert.equal(restored?.conversationState?.turns.length, 1)
-  assert.equal(restored?.conversationState?.mode, SlateMode.PLAN)
-  assert.equal(restored?.conversationState?.activeBranchName, "feature/subagent")
-  assert.deepEqual(restored?.conversationState?.readPaths, ["/repo/subagent-read.ts"])
-  assert.deepEqual(restored?.conversationState?.fileStatesV2.get("/repo/subagent-file.ts"), {
+  assert.equal(restored?.conversationSnapshot?.turns.length, 1)
+  assert.equal(restored?.conversationSnapshot?.mode, SlateMode.PLAN)
+  assert.equal(restored?.conversationSnapshot?.activeBranchName, "feature/subagent")
+  assert.deepEqual(restored?.conversationSnapshot?.readPaths, ["/repo/subagent-read.ts"])
+  assert.deepEqual(restored?.conversationSnapshot?.fileStatesV2.get("/repo/subagent-file.ts"), {
     contentBlobId: new Uint8Array([8]),
   })
-  assert.equal(restored?.conversationState?.selfSummaryCount, 2)
-  assert.equal(restored?.createdTimestampMs, BigInt(10))
-  assert.equal(restored?.lastUsedTimestampMs, BigInt(20))
+  assert.equal(restored?.conversationSnapshot?.selfSummaryCount, 2)
+  assert.equal(restored?.createdAtMs, BigInt(10))
+  assert.equal(restored?.lastUsedAtMs, BigInt(20))
   assert.equal(restored?.modelId, "model-1")
-  assert.equal(restored?.environment, "cloud")
-  assert.equal(restored?.cloudSubagent?.bcId, "worker-1")
-  assert.deepEqual(restored?.machine, { type: "new_cloud_vm", base_branch: "main" })
+  assert.equal(restored?.executionEnvironment, "cloud")
+  assert.equal(restored?.cloudAgent?.agentId, "worker-1")
+  assert.deepEqual(restored?.targetMachine, { type: "new_cloud_vm", base_branch: "main" })
 
   const snapshot = await harnessed.handle.computeNewStructure(createContext())
   const persistedRedacted = snapshot.subagentStates?.get("subagent-1")
@@ -361,6 +392,51 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   assert.equal(persisted?.modelId, "model-1")
   assert.equal(persisted?.environment, SubagentExecutionEnvironment.CLOUD)
   assert.equal(persisted?.cloudSubagent?.bcId, "worker-1")
+})
+
+test("out-of-line subagent state writes and restores the Slate schema", async () => {
+  const harnessed = harness(new ConversationStateStructure(), { serializeSubagentStatesAsBlobRefs: true })
+  const ctx = createContext()
+  harnessed.handle.persistSubagentState(ctx, "subagent-blob", createSlateSubagentType(SlateSubagentKind.COMPUTER_USE), {
+    conversationSnapshot: {
+      privacyMode: PrivacyMode.NO_STORAGE,
+      rootPromptMessagesJson: [new Uint8Array([1])],
+      turns: [new Uint8Array([2, 3])],
+      todos: [],
+      previousWorkspaceUris: [],
+      summaryArchives: [],
+      fileStatesV2: new Map([["/repo/file.txt", { contentBlobId: new Uint8Array([4]) }]]),
+      readPaths: ["/repo/file.txt"],
+    },
+    executionEnvironment: "cloud",
+    cloudAgent: { agentId: "worker-slate", transcriptUri: "/repo/transcript.jsonl" },
+    requestedRuntimeBuildId: "runtime-1",
+    targetMachine: { type: "new_cloud_vm", base_branch: "main", environment_build_id: "runtime-1" },
+  })
+
+  await harnessed.handle.computeNewStructure(ctx)
+  const blobId = harnessed.handle.conversationStateStructure.subagentStateRefs?.get("subagent-blob")
+  assert.ok(blobId)
+  const blob = harnessed.blobs.get(Buffer.from(blobId).toString("hex"))
+  assert.ok(blob)
+  const json = new TextDecoder().decode(blob)
+  assert.ok(json.startsWith("SLATE-AGENT-SUBAGENT-STATE\n"))
+  const envelope = JSON.parse(json.slice("SLATE-AGENT-SUBAGENT-STATE\n".length)) as {
+    readonly state: { readonly executionEnvironment: string; readonly createdAtMs: string }
+  }
+  assert.equal(envelope.state.executionEnvironment, "cloud")
+  assert.match(envelope.state.createdAtMs, /^\d+$/)
+
+  harnessed.handle.subagentStates.clear()
+  await harnessed.handle.loadSubagentStateRefs(ctx)
+  const restored = harnessed.handle.restoreSubagentState(ctx, "subagent-blob")
+  assert.equal(restored?.subagentType?.kind, SlateSubagentKind.COMPUTER_USE)
+  assert.equal(restored?.cloudAgent?.agentId, "worker-slate")
+  assert.equal(restored?.requestedRuntimeBuildId, "runtime-1")
+  assert.deepEqual(restored?.conversationSnapshot?.turns, [new Uint8Array([2, 3])])
+  assert.deepEqual(restored?.conversationSnapshot?.fileStatesV2.get("/repo/file.txt"), {
+    contentBlobId: new Uint8Array([4]),
+  })
 })
 
 test("a file's state is recorded and read back", async () => {
@@ -675,13 +751,10 @@ test("a persisted subagent run is restored into Slate state and written back com
 
 test("a finished subagent completion updates Slate's durable run record", () => {
   const harnessed = harness()
-  const subagentType = new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } })
+  const subagentType = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
   harnessed.handle.persistSubagentState(createContext(), "agent-1", subagentType, {
-    environment: "cloud",
-    cloudSubagent: new CloudSubagentReference({
-      bcId: "worker-1",
-      transcriptPath: "/repo/transcript.jsonl",
-    }),
+    executionEnvironment: "cloud",
+    cloudAgent: { agentId: "worker-1", transcriptUri: "/repo/transcript.jsonl" },
   })
 
   harnessed.handle.recordSubagentRunCompletion({

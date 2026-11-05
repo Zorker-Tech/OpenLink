@@ -18,11 +18,15 @@ import {
   createSlateUserMessageSerde,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { createSlateTodoItemSerde } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
+import { createSlateSubagentPersistedStateSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import {
+  createSlateSubagentPersistedState,
+} from "../../source/packages/agent/subagent-persisted-state.ts"
 import {
   collectReachableBlobHexIds,
   EDGES_NOT_WALKED_SO_REFERENTS_COLLECT,
@@ -108,6 +112,51 @@ test("reachability follows turn and step refs from Slate-encoded blobs", () => {
   const result = collectReachableBlobHexIds({ rootBytes, getBlobByHexId: id => blobs.get(id) })
 
   assert.deepEqual([...result.reachableHexIds].sort(), [hex(turnId), hex(userId), hex(stepId), hex(textId)].sort())
+  assert.equal(result.unresolvedProtoRefs, 0)
+})
+
+test("reachability follows a Slate subagent-state blob into its nested conversation", () => {
+  const textId = id(22)
+  const userBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(
+    fromInteropUserMessage(new UserMessage({ text: "nested question", textBlobId: textId })),
+  )
+  const userId = digest(userBytes)
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId: userId,
+    stepBlobIds: [],
+    sendMessageStepIndices: [],
+  }))
+  const turnId = digest(turnBytes)
+  const subagentBytes = createSlateSubagentPersistedStateSerde(PrivacyMode.NO_STORAGE).serialize(
+    createSlateSubagentPersistedState({
+      createdAtMs: BigInt(1),
+      lastUsedAtMs: BigInt(2),
+      executionEnvironment: "local",
+      conversationSnapshot: {
+        privacyMode: PrivacyMode.NO_STORAGE,
+        rootPromptMessagesJson: [],
+        turns: [turnId],
+        todos: [],
+        previousWorkspaceUris: [],
+        summaryArchives: [],
+        fileStatesV2: new Map(),
+        readPaths: [],
+      },
+    }),
+  )
+  const subagentId = digest(subagentBytes)
+  const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({
+    subagentStateRefs: { "child-1": subagentId },
+  }))
+  const blobs = new Map([
+    [hex(subagentId), subagentBytes],
+    [hex(turnId), turnBytes],
+    [hex(userId), userBytes],
+  ])
+
+  const result = collectReachableBlobHexIds({ rootBytes, getBlobByHexId: key => blobs.get(key) })
+
+  assert.deepEqual([...result.reachableHexIds].sort(), [hex(subagentId), hex(turnId), hex(userId), hex(textId)].sort())
   assert.equal(result.unresolvedProtoRefs, 0)
 })
 

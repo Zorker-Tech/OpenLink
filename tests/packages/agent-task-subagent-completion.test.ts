@@ -26,13 +26,10 @@ import {
   ConversationStep,
   ConversationTurnStructure,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import {
-  SubagentType,
-  SubagentTypeUnspecified,
-} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import type { ExecuteHookArgs } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import type { SlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
+import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a hook executor that answers the way a workspace would
@@ -66,11 +63,14 @@ function stopHookAnswer(followupMessage?: string): unknown {
   return { response: { response: { case: "subagentStop", value: followupMessage === undefined ? {} : { followupMessage } } } }
 }
 
+const GENERAL_PURPOSE_TYPE = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
+const UNKNOWN_TYPE = createSlateSubagentType(SlateSubagentKind.UNKNOWN)
+
 function hookContext(overrides: Record<string, unknown> = {}): TaskHookContext {
   return {
     ctx: createContext(),
     subagentId: "subagent-1",
-    subagentType: new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
+    subagentType: GENERAL_PURPOSE_TYPE,
     toolCallId: "call-1",
     overriddenModelId: "composer-2",
     ...overrides,
@@ -260,16 +260,16 @@ test("a subagent that finishes without a follow-up produces its result and is dr
     (_ctx, subagentId, _type, persistedState) => {
       persisted.push({ subagentId, state: persistedState as SlateSubagentPersistedState })
     },
-    new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
+    GENERAL_PURPOSE_TYPE,
   )
 
   assert.equal(iterState.subagentStopCalled, true)
   assert.deepEqual(persisted.map(entry => entry.subagentId), ["subagent-1"])
   assert.equal(persisted[0]?.state.modelId, "composer-2")
-  assert.equal(persisted[0]?.state.conversationState?.mode, SlateMode.PLAN)
-  assert.equal(persisted[0]?.state.conversationState?.activeBranchName, "feature/subagent")
-  assert.deepEqual(persisted[0]?.state.conversationState?.readPaths, ["/repo/read.ts"])
-  assert.deepEqual(persisted[0]?.state.conversationState?.fileStatesV2.get("/repo/file.ts"), {
+  assert.equal(persisted[0]?.state.conversationSnapshot?.mode, SlateMode.PLAN)
+  assert.equal(persisted[0]?.state.conversationSnapshot?.activeBranchName, "feature/subagent")
+  assert.deepEqual(persisted[0]?.state.conversationSnapshot?.readPaths, ["/repo/read.ts"])
+  assert.deepEqual(persisted[0]?.state.conversationSnapshot?.fileStatesV2.get("/repo/file.ts"), {
     contentBlobId: new Uint8Array([7]),
   })
   assert.equal(result.shouldContinue, false)
@@ -303,7 +303,7 @@ test("a subagent that is asked to keep going continues instead of finishing", as
     completionCtx,
     deps,
     () => {},
-    new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
+    GENERAL_PURPOSE_TYPE,
   )
 
   assert.equal(result.shouldContinue, true)
@@ -331,7 +331,7 @@ test("only the turns since the last iteration are counted", async () => {
     completionCtx,
     deps,
     () => {},
-    new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified({}) } }),
+    GENERAL_PURPOSE_TYPE,
   )
   const finalResult = taskResultOf(result.finalResult)
   if (finalResult?.result.case !== "success") throw new Error("expected a result")
@@ -346,7 +346,7 @@ test("a post-tool-use hook that fails does not turn a finished subagent into a f
   })
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps, cleaned } = dependencies(harness, blobStore)
-  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   assert.equal(taskResultOf(result.finalResult)?.result.case, "success")
   assert.deepEqual(cleaned, ["subagent-1"])
 })
@@ -355,7 +355,7 @@ test("the post-tool-use hook runs only where the tool allows hooks to run", asyn
   const harness = hookHarness(call => call.step === "subagentStop" ? stopHookAnswer() : { response: { response: { case: "postToolUse", value: {} } } })
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
-  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   assert.equal(taskResultOf(result.finalResult)?.result.case, "success")
   // The subagent's own stop hook still runs: it is the only place a subagent ending can be observed.
   assert.deepEqual(harness.calls.map(call => call.step), ["subagentStop"])
@@ -366,7 +366,7 @@ test("a result suffix is carried into the result only when the type asked for on
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
 
-  const plain = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, new SubagentType({}))
+  const plain = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   const plainResult = taskResultOf(plain.finalResult)
   assert.equal(plainResult?.result.case === "success" ? plainResult.result.value.resultSuffix : "unset", undefined)
 
@@ -377,7 +377,7 @@ test("a result suffix is carried into the result only when the type asked for on
     { ...completionCtx, resultSuffix: "\n\nDone." },
     deps,
     () => {},
-    new SubagentType({}),
+    UNKNOWN_TYPE,
   )
   const suffixedResult = taskResultOf(suffixed.finalResult)
   assert.equal(suffixedResult?.result.case === "success" ? suffixedResult.result.value.resultSuffix : "", "\n\nDone.")
@@ -466,7 +466,7 @@ test("a subagent that is asked to keep going in ask mode produces an ask-mode fo
     { ...completionCtx, useAskModeForSubagent: true },
     deps,
     () => {},
-    new SubagentType({}),
+    UNKNOWN_TYPE,
   )
   const nextAction = conversationActionOf(result.nextAction)
   const message = nextAction?.action.case === "userMessageAction" ? nextAction.action.value.userMessage : undefined
@@ -479,7 +479,7 @@ test("an empty follow-up answer finishes the subagent instead of continuing it",
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
   const iterState = iterationState()
-  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, UNKNOWN_TYPE)
   assert.equal(result.shouldContinue, false)
   assert.equal(iterState.loopCount, 0)
 })
@@ -490,7 +490,7 @@ test("the duration a finished subagent reports is measured from when it was star
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
   const startedAt = completionCtx.executionStartTime
   const before = Date.now()
-  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, UNKNOWN_TYPE)
   const after = Date.now()
   const final = taskResultOf(result.finalResult)
   if (final?.result.case !== "success") throw new Error("expected a success")
@@ -505,7 +505,7 @@ test("a hook that answers something other than a string does not continue the su
   const { state, blobStore } = conversationWith("the answer", 0)
   const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
   const iterState = iterationState()
-  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, UNKNOWN_TYPE)
   assert.equal(result.shouldContinue, false)
   assert.equal(iterState.loopCount, 0)
 })
@@ -531,7 +531,7 @@ test("only the turns of this iteration are collected into the result", async () 
   ]
   const { deps } = dependencies(harness, blobStoreOf(entries), { enableTaskToolHooksExec: false })
   const state = fromInteropTaskConversationState(new ConversationStateStructure({ turns: [idOf(7), idOf(8), idOf(1)] }))
-  const result = await processSubagentIterationSuccess(state, 2, iterationState(), { ...completionCtx, initialTurnsCount: 2 }, deps, () => {}, new SubagentType({}))
+  const result = await processSubagentIterationSuccess(state, 2, iterationState(), { ...completionCtx, initialTurnsCount: 2 }, deps, () => {}, UNKNOWN_TYPE)
   const finalResult = taskResultOf(result.finalResult)
   if (finalResult?.result.case !== "success") throw new Error("expected a success")
   assert.equal(finalResult.result.value.conversationSteps.length, 1, "the older turns are not collected")

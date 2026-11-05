@@ -29,6 +29,7 @@ import {
 } from "./task-runtime.ts"
 import { createSlateSubagentConversationState } from "../subagent-persisted-state.ts"
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts"
+import type { SlateSubagentType } from "../subagent-type.ts"
 import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
 
@@ -248,17 +249,17 @@ export async function processSubagentIterationSuccess(
   persistState: (
     ctx: Context,
     subagentId: string,
-    subagentType: unknown,
+    subagentType: SlateSubagentType,
     persistedState: unknown,
   ) => void,
-  subagentType: unknown,
+  subagentType: SlateSubagentType,
 ): Promise<TaskSubagentIterationResult> {
   persistState(
     dependencies.ctx,
     completion.subagentId,
     subagentType,
     createSlateSubagentConversationState({
-      conversationState: currentState,
+      conversationSnapshot: currentState,
       modelId: completion.overriddenModelId,
     }),
   )

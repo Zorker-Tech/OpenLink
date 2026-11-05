@@ -15,6 +15,7 @@ import {
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts";
 import {
   deserializeSlateConversationStepInterop,
+  deserializeSlateSubagentPersistedStateInterop,
   deserializeSlateConversationPlan,
   deserializeSlateUserMessageInterop,
   deserializeSlateTodoItemInterop,
@@ -66,7 +67,8 @@ export function collectReachableBlobHexIds(options: {
     if (reachableHexIds.has(hexId)) return;
     reachableHexIds.add(hexId);
     if (!isProtoBlobReferenceTypeName(blobReferenceType) &&
-        blobReferenceType !== "agent.v1.ConversationTurnStructure") return;
+        blobReferenceType !== "agent.v1.ConversationTurnStructure" &&
+        blobReferenceType !== "slate.agent-subagent-state") return;
     const childBytes = options.getBlobByHexId(hexId);
     if (childBytes == null) {
       unresolvedProtoRefs += 1;
@@ -94,6 +96,14 @@ export function collectReachableBlobHexIds(options: {
     if (blobReferenceType === "agent.v1.ConversationStep") {
       try {
         visitMessage(deserializeSlateConversationStepInterop(childBytes));
+      } catch {
+        unresolvedProtoRefs += 1;
+      }
+      return;
+    }
+    if (blobReferenceType === "slate.agent-subagent-state") {
+      try {
+        visitMessage(deserializeSlateSubagentPersistedStateInterop(childBytes));
       } catch {
         unresolvedProtoRefs += 1;
       }

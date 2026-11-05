@@ -58,7 +58,6 @@ import {
   toInteropConversationState,
   toInteropGoalState,
   toInteropPlanRegistryEntry,
-  toRedactedSubagentPersistedStateInterop,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import {
   fromInteropSubagentPersistedState,
@@ -124,7 +123,7 @@ import type { Context as OperationContext } from "../context/context.ts"
 import { createLogger } from "../context/index.ts"
 import { createSpan, withSuppressedChildSpans } from "../context/telemetry.ts"
 import { recordCompletedSpanIfParented } from "../context/telemetry.ts"
-import type { SlateSubagentTypeLike } from "./subagent-type.ts"
+import type { SlateSubagentType } from "./subagent-type.ts"
 import type { SlateBackgroundTaskCompletion } from "./actions/background-task-completion-contracts.ts"
 import {
   updateSlateSubagentRun,
@@ -133,6 +132,7 @@ import {
 import {
   createSlateSubagentPersistedState,
   type SlateSubagentPersistedState,
+  type SlateSubagentStateCompatibility,
 } from "./subagent-persisted-state.ts"
 import { isEqual } from "./array-equality.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
@@ -854,9 +854,45 @@ function communicateState(state: CommunicateStateLike): AgentStateCommunicateTur
 }
 
 type SubagentTracking = {
-  readonly lastUsedTimestampMs: bigint;
-  readonly subagentType?: SlateSubagentTypeLike | undefined;
+  readonly lastUsedAtMs: bigint;
+  readonly subagentType?: SlateSubagentType | undefined;
 };
+
+function subagentCompatibilityAfterTransition(args: {
+  readonly existing: SlateSubagentPersistedState | undefined;
+  readonly update: Partial<SlateSubagentPersistedState>;
+  readonly nextType: SlateSubagentType;
+}): SlateSubagentStateCompatibility | undefined {
+  const { existing, update, nextType } = args;
+  const existingCompatibility = existing?.compatibility
+  const updatedCompatibility = update.compatibility
+  const environmentChanged = existing !== undefined && update.executionEnvironment !== undefined &&
+    update.executionEnvironment !== existing.executionEnvironment
+  const typeChanged = existing !== undefined && (
+    existing.subagentType === undefined ||
+    slateSubagentTypeName(existing.subagentType) !== slateSubagentTypeName(nextType)
+  )
+  const rawFields = [
+    ...(existingCompatibility?.legacyUnknownFields ?? []),
+    ...(updatedCompatibility?.legacyUnknownFields ?? []),
+  ]
+  const seen = new Set<string>()
+  const legacyUnknownFields = rawFields.filter(field => {
+    if (typeChanged && field.path[0] !== undefined && "field" in field.path[0] && field.path[0].field === "subagentType") return false
+    const id = JSON.stringify([field.path, field.number, field.wireType, field.dataHex])
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+  const legacyEnvironmentCode = environmentChanged
+    ? undefined
+    : updatedCompatibility?.legacyEnvironmentCode ?? existingCompatibility?.legacyEnvironmentCode
+  if (legacyUnknownFields.length === 0 && legacyEnvironmentCode === undefined) return undefined
+  return {
+    ...(legacyEnvironmentCode === undefined ? {} : { legacyEnvironmentCode }),
+    ...(legacyUnknownFields.length === 0 ? {} : { legacyUnknownFields }),
+  }
+}
 
 function subagentTracking(
   subagentStates: ReadonlyMap<string, SubagentTracking>,
@@ -868,7 +904,7 @@ function subagentTracking(
   let maxTimestamp = BigInt(0);
   const typeMaxTimestamps = new Map<string, { id: string; timestamp: bigint }>();
   for (const [subagentId, state] of subagentStates) {
-    const timestamp = state.lastUsedTimestampMs;
+    const timestamp = state.lastUsedAtMs;
     const subagentType = state.subagentType;
     if (timestamp > maxTimestamp) {
       maxTimestamp = timestamp;
@@ -2050,15 +2086,7 @@ These images can be copied for use in other locations.
         return { kind: "fallback" as const };
       }
       try {
-        const redactedState = this.serdes.subagentPersistedState.deserialize(blob);
-        const state = fromInteropSubagentPersistedState(
-          fromRedactedSubagentPersistedStateInterop(
-            redactedState,
-            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-            undefined,
-          ),
-          this.privacyMode,
-        );
+        const state = this.serdes.subagentPersistedState.deserialize(blob);
         return { kind: "loaded" as const, subagentId, state, blobId, blobData: blob };
       } catch (error4) {
         return { kind: "failed" as const, error: error4 };
@@ -2594,17 +2622,12 @@ These images can be copied for use in other locations.
             subagentRefsRecord[subagentId] = cached.blobId;
             return;
           }
-          const serialized = this.serdes.subagentPersistedState.serialize(
-            toRedactedSubagentPersistedStateInterop(
-              toInteropSubagentPersistedState(state),
-              this.privacyMode,
-            ),
-          );
+          const serialized = this.serdes.subagentPersistedState.serialize(state);
           const blobId = await getBlobId(serialized);
           blobWriteCount += 1;
           metadataObserverForStore(this.blobStore)?.({
             blobId,
-            blobType: { kind: "proto", typeName: "agent.v1.SubagentPersistedState" },
+            blobType: this.serdes.subagentPersistedState.getBlobType?.() ?? { kind: "json", typeName: "slate.agent-subagent-state" },
           });
           await this.blobStore.setBlob(quietContext, blobId, serialized);
           subagentBlobCache.set(state, { blobId, blobData: serialized });
@@ -2806,20 +2829,22 @@ These images can be copied for use in other locations.
   persistSubagentState(
     _ctx: OperationContext,
     subagentId: string,
-    subagentType: SlateSubagentTypeLike,
+    subagentType: SlateSubagentType,
     state: Partial<SlateSubagentPersistedState>,
   ): void {
     const now = BigInt(Date.now());
     const knownState = this.subagentStates.get(subagentId);
-    const createdTimestamp = knownState?.createdTimestampMs ?? now;
+    const createdAt = knownState?.createdAtMs ?? now;
     const persistedModelId = state.modelId ?? knownState?.modelId;
+    const compatibility = subagentCompatibilityAfterTransition({ existing: knownState, update: state, nextType: subagentType });
     const updatedState = createSlateSubagentPersistedState({
       ...knownState,
       ...state,
-      createdTimestampMs: createdTimestamp,
-      lastUsedTimestampMs: now,
+      createdAtMs: createdAt,
+      lastUsedAtMs: now,
       subagentType,
       modelId: persistedModelId!,
+      compatibility,
     });
     this.subagentStates.set(subagentId, updatedState);
     const typeName = slateSubagentTypeName(subagentType);
@@ -2840,18 +2865,18 @@ These images can be copied for use in other locations.
     const persistedSubagentState = subagentId !== undefined
       ? this.subagentStates.get(this.resolveSubagentId(subagentId) ?? subagentId)
       : undefined;
-    const persistedEnvironment = persistedSubagentState?.environment === undefined ||
-        persistedSubagentState.environment === "unspecified"
+    const persistedEnvironment = persistedSubagentState?.executionEnvironment === undefined ||
+        persistedSubagentState.executionEnvironment === "unspecified"
       ? undefined
-      : persistedSubagentState.environment;
+      : persistedSubagentState.executionEnvironment;
     this.subagentRunsByParentToolCallId.set(parentToolCallId, updateSlateSubagentRun({
       completion,
       parentToolCallId,
       ...(subagentId === undefined ? {} : { subagentId }),
       ...(persistedEnvironment === undefined ? {} : { environment: persistedEnvironment }),
-      ...(persistedSubagentState?.cloudSubagent?.transcriptPath === undefined
+      ...(persistedSubagentState?.cloudAgent?.transcriptUri === undefined
         ? {}
-        : { transcriptPath: persistedSubagentState.cloudSubagent.transcriptPath }),
+        : { transcriptPath: persistedSubagentState.cloudAgent.transcriptUri }),
       ...(existingRun === undefined ? {} : { existingRun }),
       completedTimestampMs: BigInt(Date.now()),
     }));
@@ -2862,7 +2887,7 @@ These images can be copied for use in other locations.
       return subagentIdOrBcId;
     }
     for (const [subagentId, state] of this.subagentStates) {
-      if (state.cloudSubagent?.bcId === subagentIdOrBcId) {
+      if (state.cloudAgent?.agentId === subagentIdOrBcId || state.firstClassAgentId === subagentIdOrBcId) {
         return subagentId;
       }
     }

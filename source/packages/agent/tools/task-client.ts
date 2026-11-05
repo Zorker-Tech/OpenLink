@@ -31,7 +31,7 @@ import { getConversationGroupId, getConversationId } from "../utils/request-scop
 import {
   isVideoReviewSubagentType,
   slateSubagentTypeName,
-  type SlateSubagentTypeLike,
+  type SlateSubagentType,
 } from "../subagent-type.ts"
 import {
   createSerializedTaskToolCallErrorInterop,
@@ -41,7 +41,6 @@ import {
   createTaskClientSuccessResultInterop,
   createTaskToolCallInterop,
   getVideoPathsFromRedactedSelectedContextInterop,
-  isCloudSubagentEnvironmentInterop,
   normalizeTaskClientBackgroundReasonInterop,
   projectTaskClientResultInterop,
   requestSubagentBackgroundHandoffInterop,
@@ -52,6 +51,7 @@ import {
 import {
   createSlateCloudSubagentPersistedState,
   createSlateLocalSubagentPersistedState,
+  type SlateSubagentPersistedState,
 } from "../subagent-persisted-state.ts"
 import {
   buildClientSubagentAttachmentsContext,
@@ -184,7 +184,7 @@ export interface ClientContinuationPolicy {
 }
 
 interface ContinuationSubagentConfig {
-  readonly subagent_type: SlateSubagentTypeLike
+  readonly subagentType: SlateSubagentType
   readonly continuationPolicy?: ClientContinuationPolicy
 }
 
@@ -204,7 +204,7 @@ export function buildClientContinuationConfig(
       .replace(String(sentinelIdle), "{idle_count}")
       .replace(sentinelToken, "{escape_token}")
     : "You've made {idle_count} responses without tool calls. If you're done, respond with exactly: {escape_token}\nIf not, continue working."
-  const isCoordinator = slateSubagentTypeName(subagentConfig.subagent_type) === "coordinator-agent"
+  const isCoordinator = slateSubagentTypeName(subagentConfig.subagentType) === "coordinator-agent"
   return createTaskClientContinuationConfigInterop({
     idleThreshold: continuationPolicy.idleThreshold,
     maxLoops: continuationPolicy.maxLoops ?? 0,
@@ -230,7 +230,7 @@ export function maybeAppendInterruptRetryHint(
 export interface ClientTaskStateHandler {
   readonly turns: readonly ClientTaskTurnHandle[]
   getPrivacyMode(): PrivacyMode
-  persistSubagentState(ctx: Context, subagentId: string, subagentType: SlateSubagentTypeLike, state: unknown): void
+  persistSubagentState(ctx: Context, subagentId: string, subagentType: SlateSubagentType, state: SlateSubagentPersistedState): void
 }
 
 export interface ClientTaskTurnHandle {
@@ -321,7 +321,7 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       privacyMode: stateHandler.getPrivacyMode(),
       // A model that watches video gets the bytes or a signed URL; which provider can do that depends on
       // the subagent type, so the video-review provider is preferred for the types that need it.
-      ...(isVideoReviewSubagentType(resolved.subagentConfig.subagent_type)
+      ...(isVideoReviewSubagentType(resolved.subagentConfig.subagentType)
         ? (args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider) !== undefined
           ? { attachedMediaUrlProvider: args.videoReviewAttachedMediaUrlProvider ?? args.attachedMediaUrlProvider }
           : {}
@@ -414,15 +414,15 @@ export async function executeClientSideTaskSubagent(args: ClientTaskExecutionArg
       return createTaskClientErrorResultInterop(maybeAppendInterruptRetryHint(RUNNING_SUBAGENT_FOLLOWUP_ERROR, args.enableSubagentInterrupt === true, args.interrupt === true))
     }
     // A cloud run's identity is the box it ran in; a local one keeps the id it already had.
-    const isCloudRun = isCloudSubagentEnvironmentInterop(resolved.effectiveEnvironment)
+    const isCloudRun = resolved.effectiveEnvironment === "cloud"
     const runAgentId = isCloudRun
       ? successResult.agentId
       : successResult.agentId ?? resolved.subagentId
     if (runAgentId !== undefined && runAgentId.length > 0) {
       const savedState = isCloudRun
-        ? createSlateCloudSubagentPersistedState({ bcId: runAgentId, modelId: resolved.resolvedModelId, ...(successResult.transcriptPath !== undefined ? { transcriptPath: successResult.transcriptPath } : {}), machine: resolved.effectiveTargetMachine })
+        ? createSlateCloudSubagentPersistedState({ agentId: runAgentId, modelId: resolved.resolvedModelId, ...(successResult.transcriptPath !== undefined ? { transcriptUri: successResult.transcriptPath } : {}), targetMachine: resolved.effectiveTargetMachine })
         : createSlateLocalSubagentPersistedState(resolved.resolvedModelId)
-      stateHandler.persistSubagentState(ctx, runAgentId, resolved.subagentConfig.subagent_type, savedState)
+      stateHandler.persistSubagentState(ctx, runAgentId, resolved.subagentConfig.subagentType, savedState)
     }
     const wentToBackground = successResult.backgroundReason !== "unspecified"
     const conversationSteps: unknown[] = []
