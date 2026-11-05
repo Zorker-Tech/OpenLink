@@ -106,7 +106,7 @@ export class ShellCommandActionHandler {
       // The output collected so far is still recorded: a command that failed to stream still ran.
       logger.error(ctx, "Shell command action handler error", error)
     }
-    turn.recordShellOutput(invocation.createStoredOutput(stdout, stderr, exitCode))
+    turn.recordShellResult(invocation.createStoredOutput(stdout, stderr, exitCode))
     const toolCallId = randomUUID()
     const commandText = invocation.commandText
     const largeContextMode = invocation.isLargeContextMode(stateHandler)

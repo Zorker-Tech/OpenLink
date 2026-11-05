@@ -134,8 +134,8 @@ export function fromInteropConversationTurn(
     case "shellConversationTurn": {
       const payloadUnknownFields = unknownTurnFields(value.turn.value)
       return createSlateShellConversationTurn({
-        shellCommandBlobId: value.turn.value.shellCommand,
-        shellOutputBlobId: value.turn.value.shellOutput,
+        invocationBlobId: value.turn.value.shellCommand,
+        resultBlobId: value.turn.value.shellOutput,
         ...((envelopeUnknownFields.length === 0 && payloadUnknownFields.length === 0)
           ? {}
           : { compatibility: {
@@ -168,8 +168,8 @@ export function toInteropConversationTurn(
     payload = agentTurn
   } else {
     const shellTurn = createShellConversationTurnInterop({
-      shellCommandBlobId: value.shellCommandBlobId,
-      shellOutputBlobId: value.shellOutputBlobId,
+      shellCommandBlobId: value.invocationBlobId,
+      shellOutputBlobId: value.resultBlobId,
     })
     outer = wrapShellConversationTurnInterop(shellTurn)
     payload = shellTurn
@@ -226,14 +226,14 @@ function isTurnCompatibility(value: unknown): value is SlateConversationTurnComp
 
 function isSlateTurnEnvelope(value: unknown): value is {
   readonly format: typeof SLATE_TURN_FORMAT
-  readonly version: 1
+  readonly version: 1 | 2
   readonly turn: Record<string, unknown>
   readonly compatibility?: SlateConversationTurnCompatibility
 } {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "turn", "compatibility"]) ||
-      envelope.format !== SLATE_TURN_FORMAT || envelope.version !== 1 ||
+      envelope.format !== SLATE_TURN_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
       envelope.turn === null || typeof envelope.turn !== "object" || Array.isArray(envelope.turn) ||
       !isTurnCompatibility(envelope.compatibility)) return false
   const turn = envelope.turn as Record<string, unknown>
@@ -248,8 +248,11 @@ function isSlateTurnEnvelope(value: unknown): value is {
         Number.isSafeInteger(index) && (index as number) >= 0 && (index as number) <= 0xffff_ffff)
   }
   if (turn.kind === "shell") {
-    return hasOnlyKeys(turn, ["kind", "shellCommandBlobId", "shellOutputBlobId"]) &&
-      isHexId(turn.shellCommandBlobId) && isHexId(turn.shellOutputBlobId)
+    return envelope.version === 1
+      ? hasOnlyKeys(turn, ["kind", "shellCommandBlobId", "shellOutputBlobId"]) &&
+          isHexId(turn.shellCommandBlobId) && isHexId(turn.shellOutputBlobId)
+      : hasOnlyKeys(turn, ["kind", "invocationBlobId", "resultBlobId"]) &&
+          isHexId(turn.invocationBlobId) && isHexId(turn.resultBlobId)
   }
   return false
 }
@@ -274,12 +277,12 @@ function serializeSlateConversationTurn(value: SlateConversationTurn): Uint8Arra
       }
     : {
         kind: "shell",
-        shellCommandBlobId: toHex(value.shellCommandBlobId),
-        shellOutputBlobId: toHex(value.shellOutputBlobId),
+        invocationBlobId: toHex(value.invocationBlobId),
+        resultBlobId: toHex(value.resultBlobId),
       }
   const envelope = {
     format: SLATE_TURN_FORMAT,
-    version: 1,
+    version: 2,
     turn,
     ...(value.compatibility === undefined ? {} : { compatibility: turnCompatibilityFromEnvelope(value.compatibility) }),
   }
@@ -308,8 +311,12 @@ function deserializeSlateConversationTurn(bytes: Uint8Array): SlateConversationT
     })
   }
   return createSlateShellConversationTurn({
-    shellCommandBlobId: fromHex(turn.shellCommandBlobId as string),
-    shellOutputBlobId: fromHex(turn.shellOutputBlobId as string),
+    invocationBlobId: fromHex(
+      (parsed.version === 1 ? turn.shellCommandBlobId : turn.invocationBlobId) as string,
+    ),
+    resultBlobId: fromHex(
+      (parsed.version === 1 ? turn.shellOutputBlobId : turn.resultBlobId) as string,
+    ),
     ...(parsed.compatibility === undefined ? {} : { compatibility: turnCompatibilityFromEnvelope(parsed.compatibility) }),
   })
 }

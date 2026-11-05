@@ -1,4 +1,4 @@
-import { AgentMode, type ShellCommand } from "../proto/generated/agent/v1/agent_pb.ts";
+import { AgentMode } from "../proto/generated/agent/v1/agent_pb.ts";
 import {
   createRedactedShellArgs,
   createRedactedShellCommandParsingResult,
@@ -9,15 +9,20 @@ import {
   fromRedactedShellArgs,
   toRedactedShellStream,
 } from "../redacted-protos/generated/agent/v1/shell_exec_redacted.ts";
-import { createRedactedShellOutput } from "../redacted-protos/generated/agent/v1/agent_redacted.ts";
 import { RedactedUpdates } from "../../../packages/agent-core/redacted-interaction-updates.ts";
 import { shellStreamExecutorResource } from "../../../packages/agent-exec/shell-stream-operation.ts";
-import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts";
-import { createRedactedString } from "../../../packages/redaction/create.ts";
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts";
 import { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
 import type { Context } from "../../../packages/context/context.ts";
 import { formatShellResult, formatShellResultForVersion } from "../../../packages/agent/tools/core/shell/formatters.ts";
 import { renderInteropUserInfo, type InteropUserInfoInput } from "./user-info-input-adapter.ts";
+import {
+  createSlateShellInvocation,
+  createSlateShellResult,
+  storeSlateShellInvocation,
+  storeSlateShellResult,
+  type SlateStoredShellResult,
+} from "../../../packages/agent/shell-state.ts";
 
 type Any = any;
 
@@ -43,7 +48,7 @@ export interface ShellCommandActionInteropHandle {
   providerOptionsForPromptPlacement(placement: unknown): Record<string, unknown> | undefined;
   createTurn(ctx: Context, stateHandler: Any): Promise<Any>;
   run(ctx: Context, resourceAccessor: Any): AsyncIterable<ShellCommandActionStreamEvent>;
-  createStoredOutput(stdout: string, stderr: string, exitCode: number): unknown;
+  createStoredOutput(stdout: string, stderr: string, exitCode: number): SlateStoredShellResult;
 }
 
 /** Maps Slate prompt inputs to the generated field names expected by the installed prompt builder. */
@@ -145,12 +150,15 @@ function streamEvents(
 /** Decodes one action invocation and keeps its generated message details behind closures. */
 export function adaptShellCommandAction(action: unknown): ShellCommandActionInteropHandle | undefined {
   if (!isRecord(action) || !isRecord(action.shellCommand)) return undefined;
-  const shellCommand = action.shellCommand as unknown as ShellCommand;
   const redactedCommand = (action.shellCommand as Record<string, unknown>).command as {
     unwrap(capability: PrivacyCapability): string;
   } | undefined;
   if (redactedCommand == null || typeof redactedCommand.unwrap !== "function") return undefined;
   const privacyMode = action._privacyMode as PrivacyMode;
+  const shellInvocation = storeSlateShellInvocation(
+    createSlateShellInvocation(redactedCommand.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+    privacyMode,
+  );
   const execId = typeof action.execId === "string" ? action.execId : undefined;
 
   return {
@@ -174,7 +182,7 @@ export function adaptShellCommandAction(action: unknown): ShellCommandActionInte
         ? undefined
         : { providerOptions: { cursor: { composer2CloudTestingSectionsPlacement: placement } } };
     },
-    createTurn: (ctx, stateHandler) => stateHandler.createShellTurn(ctx, shellCommand),
+    createTurn: (ctx, stateHandler) => stateHandler.createShellTurn(ctx, shellInvocation),
     run(ctx, resourceAccessor) {
       const shellExecutor = resourceAccessor.get(shellStreamExecutorResource);
       const redactedArgs = createRedactedShellArgs(privacyMode, {
@@ -191,11 +199,10 @@ export function adaptShellCommandAction(action: unknown): ShellCommandActionInte
       return streamEvents(stream, privacyMode);
     },
     createStoredOutput(stdout, stderr, exitCode) {
-      return createRedactedShellOutput(privacyMode, {
-        stdout: createRedactedString(stdout, DataClassification.CODE, "stdout", privacyMode),
-        stderr: createRedactedString(stderr, DataClassification.CODE, "stderr", privacyMode),
-        exitCode,
-      });
+      return storeSlateShellResult(
+        createSlateShellResult({ standardOutput: stdout, standardError: stderr, exitCode }),
+        privacyMode,
+      );
     },
   };
 }

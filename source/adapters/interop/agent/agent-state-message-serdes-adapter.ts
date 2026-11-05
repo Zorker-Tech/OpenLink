@@ -11,8 +11,6 @@ import {
   CommunicateUpdateHistoryEntry,
   CommunicateUpdateTurnState,
   FileStateStructure,
-  ShellCommand,
-  ShellOutput,
   SubagentPersistedState,
   SubagentExecutionEnvironment,
   SubagentRunState,
@@ -37,8 +35,6 @@ import {
   fromRedactedGoalState,
   fromRedactedPlanRegistryEntry,
   fromRedactedSubagentRunState,
-  fromRedactedShellCommand,
-  fromRedactedShellOutput,
   fromRedactedSubagentPersistedState,
   fromRedactedUserMessage,
   toRedactedConversationPlan,
@@ -46,8 +42,6 @@ import {
   toRedactedConversationSummary,
   toRedactedConversationSummaryArchive,
   toRedactedConversationStateStructure,
-  toRedactedShellCommand,
-  toRedactedShellOutput,
   toRedactedSubagentPersistedState,
   toRedactedUserMessage,
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
@@ -58,6 +52,16 @@ import { createRedactedBytes, createRedactedString } from "../../../packages/red
 import { RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
+import {
+  importLegacyShellInvocation,
+  importLegacyShellResult,
+  shellInvocationToRunner,
+  shellResultToRunner,
+} from "./legacy-shell-state-adapter.ts"
+import {
+  createSlateShellInvocationSerde,
+  createSlateShellResultSerde,
+} from "../../storage/agent/shell-state-storage-adapter.ts"
 import { conversationStateStructureSerde } from "./agent-conversation-state-serdes-adapter.ts"
 import { createSlateTodoItemSerde, redactSlateTodoItem } from "./todo-schema-adapter.ts"
 import {
@@ -1651,14 +1655,6 @@ export function deserializeSlateUserMessageInterop(bytes: Uint8Array): UserMessa
   return toPlainInteropUserMessage(slate)
 }
 
-export function createEmptyRedactedShellOutputInterop(privacyMode: PrivacyMode) {
-  return toRedactedShellOutput(new ShellOutput({
-    stdout: "",
-    stderr: "",
-    exitCode: 0,
-  }), privacyMode)
-}
-
 export function createFileStateStructureInterop(input: {
   readonly contentBlobId: Uint8Array
   readonly initialContentBlobId: Uint8Array
@@ -1678,8 +1674,8 @@ function serdeDecoder<Redacted, Plain>(
 /** Agent records use Slate-owned serdes where migrated; remaining legacy codecs stay at this adapter boundary. */
 export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
   return {
-    shellCommand: createRedactedProtoSerde(ShellCommand, toRedactedShellCommand, serdeDecoder(fromRedactedShellCommand), privacyMode),
-    shellOutput: createRedactedProtoSerde(ShellOutput, toRedactedShellOutput, serdeDecoder(fromRedactedShellOutput), privacyMode),
+    shellInvocation: createSlateShellInvocationSerde(privacyMode, importLegacyShellInvocation),
+    shellResult: createSlateShellResultSerde(privacyMode, importLegacyShellResult),
     userMessage: createSlateUserMessageSerde(privacyMode),
     conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, serdeDecoder(fromRedactedConversationStep), privacyMode),
     conversationSummary: createSlateConversationSummarySerde(privacyMode),
@@ -1688,6 +1684,20 @@ export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
     todoItem: createSlateTodoItemSerde(privacyMode),
     subagentPersistedState: createRedactedProtoSerde(SubagentPersistedState, toRedactedSubagentPersistedState, serdeDecoder(fromRedactedSubagentPersistedState), privacyMode),
   }
+}
+
+export function deserializeSlateShellInvocationInterop(bytes: Uint8Array) {
+  return shellInvocationToRunner(createSlateShellInvocationSerde(
+    PrivacyModes.UNSPECIFIED,
+    importLegacyShellInvocation,
+  ).deserialize(bytes))
+}
+
+export function deserializeSlateShellResultInterop(bytes: Uint8Array) {
+  return shellResultToRunner(createSlateShellResultSerde(
+    PrivacyModes.UNSPECIFIED,
+    importLegacyShellResult,
+  ).deserialize(bytes))
 }
 
 export const fromRedactedConversationPlanInterop = fromRedactedConversationPlan
@@ -1707,8 +1717,6 @@ export const toRedactedConversationPlanInterop = toRedactedConversationPlan
 export const toRedactedConversationStepInterop = toRedactedConversationStep
 export const toRedactedConversationSummaryInterop = toRedactedConversationSummary
 export const toRedactedConversationSummaryArchiveInterop = toRedactedConversationSummaryArchive
-export const toRedactedShellCommandInterop = toRedactedShellCommand
-export const toRedactedShellOutputInterop = toRedactedShellOutput
 export const toRedactedSubagentPersistedStateInterop = toRedactedSubagentPersistedState
 export const toRedactedUserMessageInterop = toRedactedUserMessage
 export const fromRedactedTodoItemInterop = fromRedactedTodoItem

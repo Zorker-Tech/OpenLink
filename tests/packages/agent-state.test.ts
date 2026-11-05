@@ -14,8 +14,6 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import {
   toRedactedConversationStateStructure,
-  toRedactedShellCommand,
-  toRedactedShellOutput,
 } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import {
   AgentMode,
@@ -24,8 +22,6 @@ import {
   CommunicateUpdateTurnState,
   ConversationStateStructure,
   FileStateStructure,
-  ShellCommand,
-  ShellOutput,
   SubagentRunState,
   SubagentRunStatus,
   SubagentPersistedState,
@@ -46,6 +42,12 @@ import { deserializeSlateConversationPlan } from "../../source/adapters/interop/
 import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import {
+  createSlateShellInvocation,
+  createSlateShellResult,
+  storeSlateShellInvocation,
+  storeSlateShellResult,
+} from "../../source/packages/agent/shell-state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the state handle over a blob store
@@ -97,9 +99,9 @@ function harness(state: ConversationStateStructure = new ConversationStateStruct
 }
 
 const redactedPath = (value: string) => createRedactedString(value, DataClassification.PATH, "path", PrivacyMode.NO_STORAGE)
-/** The state handle stores redacted values, so a caller hands it one rather than a plain message. */
+/** The state handle stores Slate values after applying the conversation's privacy policy. */
 const redactedShellCommand = (command: string) =>
-  toRedactedShellCommand(new ShellCommand({ command }), PrivacyMode.NO_STORAGE)
+  storeSlateShellInvocation(createSlateShellInvocation(command), PrivacyMode.NO_STORAGE)
 
 // ---------------------------------------------------------------------------------------------
 // the two prompt helpers
@@ -378,7 +380,10 @@ test("a shell turn is created with its command stored, and its output recorded",
   assert.equal(turn instanceof ShellConversationTurnHandle, true)
   // The command was written to the store as its own blob.
   assert.equal(harnessed.written.length, 2)
-  turn.recordShellOutput(toRedactedShellOutput(new ShellOutput({ stdout: "a file\n", stderr: "", exitCode: 0 }), PrivacyMode.NO_STORAGE))
+  turn.recordShellResult(storeSlateShellResult(
+    createSlateShellResult({ standardOutput: "a file\n", standardError: "", exitCode: 0 }),
+    PrivacyMode.NO_STORAGE,
+  ))
   const blobId = await turn.writeToBlobStore(createContext())
   assert.equal(blobId instanceof Uint8Array, true)
   // Writing again without a change returns the same blob rather than writing a second copy.

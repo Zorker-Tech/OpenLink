@@ -81,8 +81,8 @@ export function collectReachableBlobHexIds(options: {
             visitBlobReference(stepBlobId, "agent.v1.ConversationStep");
           }
         } else {
-          visitBlobReference(turn.shellCommandBlobId, "agent.v1.ShellCommand");
-          visitBlobReference(turn.shellOutputBlobId, "agent.v1.ShellOutput");
+          visitBlobReference(turn.invocationBlobId, "slate.agent-shell-invocation");
+          visitBlobReference(turn.resultBlobId, "slate.agent-shell-result");
         }
       } catch (error) {
         if (!(error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case")) {
