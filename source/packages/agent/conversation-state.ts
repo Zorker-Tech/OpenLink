@@ -4,14 +4,52 @@ import type { SlateGoalState, SlatePlanRegistryEntry } from "./goal-state.ts"
 import type { SlateSubagentPersistedState } from "./subagent-persisted-state.ts"
 import type { SlateSubagentRunState } from "./subagent-run-state.ts"
 import type { SlateMode } from "./mode-processing.ts"
+import type {
+  PromptContextUsageTreeValue,
+  PromptTokenBreakdownSnapshotValue,
+} from "./utils/prompt-usage-contracts.ts"
 
 export interface SlateRedactedValue<T> {
   unwrap(purpose: import("../redaction/classification.ts").PrivacyCapability, options?: object): T
 }
 
+export type SlateConversationTokenDetailCompatibilityValue =
+  | null
+  | boolean
+  | number
+  | string
+  | bigint
+  | Uint8Array
+  | Date
+  | SlateRedactedValue<string>
+  | SlateRedactedValue<Uint8Array>
+  | SlateConversationTokenDetailLegacyMessage
+  | readonly SlateConversationTokenDetailCompatibilityValue[]
+  | ReadonlyMap<SlateConversationTokenDetailCompatibilityValue, SlateConversationTokenDetailCompatibilityValue>
+  | ReadonlySet<SlateConversationTokenDetailCompatibilityValue>
+  | SlateConversationTokenDetailCompatibilityObject
+
+export interface SlateConversationTokenDetailLegacyMessage {
+  readonly kind: "legacy-protobuf-message"
+  readonly typeName: string
+  readonly binary: Uint8Array
+}
+
+export interface SlateConversationTokenDetailCompatibilityObject {
+  readonly [key: string]: SlateConversationTokenDetailCompatibilityValue
+}
+
+export interface SlateConversationTokenDetailsCompatibility {
+  readonly legacyFields?: Readonly<Record<string, SlateConversationTokenDetailCompatibilityValue>>
+}
+
 export interface SlateConversationTokenDetails {
-  readonly promptContextUsageTree?: unknown
-  readonly [key: string]: unknown
+  readonly usedTokens: number
+  readonly maximumTokens: number
+  readonly breakdown?: PromptTokenBreakdownSnapshotValue
+  readonly contextTree?: PromptContextUsageTreeValue
+  readonly usageSnapshotBlobId?: Uint8Array
+  readonly compatibility?: SlateConversationTokenDetailsCompatibility
 }
 
 export interface SlateCommunicationHistoryEntry {

@@ -15,6 +15,7 @@ import {
   CommunicateUpdateHistoryEntry,
   CommunicateUpdateTurnState,
   ConversationStateStructure,
+  ConversationTokenDetails,
   FileStateStructure,
   GoalState,
   PlanRegistryEntry,
@@ -23,6 +24,11 @@ import {
   SubagentRunState,
   SubagentRunStatus,
   BackgroundTaskCompletionReason,
+  PromptContextNode,
+  PromptContextSourceRef,
+  PromptContextUsageTree,
+  PromptTokenBreakdownCategory,
+  PromptTokenBreakdownSnapshot,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -32,6 +38,7 @@ import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuat
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import type {
   SlateCommunicationTurnState,
+  SlateConversationTokenDetails,
   SlateRedactedValue,
 } from "../../source/packages/agent/conversation-state.ts"
 import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
@@ -123,6 +130,94 @@ test("communication update contracts are Slate-owned and redact only at the inte
   assert.equal(persistedTurn?.history[0]?.step, "call step")
   assert.equal(persistedTurn?.finalSummary, "call summary")
   assert.equal(persistedTurn?.completedSubtitle, "call subtitle")
+})
+
+test("conversation token details use Slate values and are redacted only at the interop boundary", () => {
+  const tokenDetails = new ConversationTokenDetails({
+    usedTokens: 12,
+    maxTokens: 100,
+    breakdown: new PromptTokenBreakdownSnapshot({
+      totalUsedTokens: 12,
+      maxTokens: 100,
+      categories: [new PromptTokenBreakdownCategory({
+        id: "conversation",
+        label: "Conversation",
+        estimatedTokens: 12,
+        characterCount: 48,
+      })],
+    }),
+    promptContextUsageTree: new PromptContextUsageTree({
+      schemaVersion: 1,
+      nodes: [new PromptContextNode({
+        id: "message:0:content",
+        kind: "user_message",
+        label: "User Message",
+        categoryId: "conversation",
+        estimatedTokens: 12,
+        characterCount: 48,
+        contentAvailable: true,
+        source: new PromptContextSourceRef({
+          sourceType: "root_prompt_message",
+          messageIndex: 0,
+          contentPath: "content",
+          startOffset: 0,
+          endOffset: 48,
+        }),
+        inlineContent: "private prompt text",
+      })],
+    }),
+    promptContextUsageSnapshotBlobId: new Uint8Array([4, 5]),
+  })
+  const slate = fromInteropConversationState(toRedactedConversationStateStructure(
+    new ConversationStateStructure({ tokenDetails }),
+    PrivacyMode.NO_STORAGE,
+  ))
+
+  const expected: SlateConversationTokenDetails = {
+    usedTokens: 12,
+    maximumTokens: 100,
+    breakdown: {
+      totalUsedTokens: 12,
+      maxTokens: 100,
+      categories: [{ id: "conversation", label: "Conversation", estimatedTokens: 12, characterCount: 48 }],
+    },
+    contextTree: {
+      schemaVersion: 1,
+      nodes: [{
+        id: "message:0:content",
+        kind: "user_message",
+        label: "User Message",
+        categoryId: "conversation",
+        estimatedTokens: 12,
+        characterCount: 48,
+        contentAvailable: true,
+        source: {
+          sourceType: "root_prompt_message",
+          messageIndex: 0,
+          contentPath: "content",
+          startOffset: 0,
+          endOffset: 48,
+        },
+        inlineContent: "private prompt text",
+      }],
+    },
+    usageSnapshotBlobId: new Uint8Array([4, 5]),
+  }
+  assert.deepEqual(slate.tokenDetails, expected)
+
+  const interop = toInteropConversationState(slate)
+  const storedTree = interop.tokenDetails?.promptContextUsageTree
+  assert.ok(storedTree?.nodes[0]?.label instanceof RedactedString)
+  assert.equal(storedTree?.nodes[0]?.label.__classification, DataClassification.CODE)
+  assert.equal(storedTree?.nodes[0]?.inlineContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "private prompt text")
+  const restored = fromRedactedConversationStateStructureInterop(
+    interop,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.equal(restored.tokenDetails?.usedTokens, 12)
+  assert.equal(restored.tokenDetails?.maxTokens, 100)
+  assert.equal(restored.tokenDetails?.promptContextUsageSnapshotBlobId?.join(","), "4,5")
 })
 
 test("file state paths and blob references become plain Slate values", () => {

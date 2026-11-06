@@ -714,10 +714,12 @@ test("Slate communication updates remain available in memory and in persisted co
   assert.equal(persistedTurn?.completedSubtitle?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "subtitle")
 })
 
-test("token details are stored as they were given", () => {
+test("Slate token details are stored as the values they contain", () => {
   const harnessed = harness()
-  const details = harnessed.handle.tokenDetails
-  const replacement = new (details.constructor as new (data: Record<string, unknown>) => typeof details)({ inputTokens: 42 })
+  const replacement = {
+    usedTokens: 42,
+    maximumTokens: 100,
+  }
   harnessed.handle.setTokenDetails(replacement)
   assert.equal(harnessed.handle.tokenDetails, replacement)
 })

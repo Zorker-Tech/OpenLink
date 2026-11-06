@@ -1,84 +1,60 @@
 /**
- * The next token details of a conversation, in the form a reader may see.
+ * Compute the Slate token breakdown and optional prompt-context tree for the next turn.
  *
- * The breakdown and the context tree are computed from the prompt itself — which is unredacted text —
- * and then converted to their redacted forms before they are stored on the conversation state, so the
- * text they describe never travels with them. The conversion happens once, here, rather than at every
- * place that reads the details.
+ * These are first-party values in memory. The state-message adapter applies the conversation's privacy
+ * policy when it writes a persisted snapshot, so prompt-derived text does not leak through storage.
  *
  * Two things make the next details depend on the previous ones. The breakdown reuses what the last
- * turn learned about each category's token ratio, which is why the previous breakdown is converted
- * back — the arithmetic needs the numbers, and they are the same numbers on either side of the privacy
- * boundary. The tree, on the other hand, is not recomputed unless the feature is on: when it is off,
- * the previous tree is carried over untouched rather than replaced with a fresh one nobody asked for.
+ * turn learned about each category's token ratio. The tree is not recomputed unless the feature is on:
+ * when it is off, the previous tree is carried over untouched rather than replaced with a fresh one.
  */
 
 import { createSpan } from "../../context/telemetry.ts"
 import type { Context } from "../../context/context.ts"
-import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { buildPromptContextUsageTree } from "./prompt-context-usage-tree.ts"
 import { buildPromptTokenBreakdownSnapshot, type PromptTokenBreakdownParams } from "./prompt-token-breakdown.ts"
+import type {
+  PromptContextUsageTreeValue,
+  PromptTokenBreakdownSnapshotValue,
+} from "./prompt-usage-contracts.ts"
 
-export interface PromptTokenDetailsRedactionCodec<Snapshot, UsageTree, StoredBreakdown, StoredUsageTree> {
-  decodeBreakdown(value: StoredBreakdown): Snapshot
-  encodeBreakdown(value: Snapshot, privacyMode: PrivacyMode): StoredBreakdown
-  encodeUsageTree(value: UsageTree, privacyMode: PrivacyMode): StoredUsageTree
-}
-
-export interface RedactedPromptTokenDetails<StoredBreakdown = unknown, StoredUsageTree = unknown> {
-  breakdown?: StoredBreakdown | undefined
-  promptContextUsageTree?: StoredUsageTree | undefined
-}
-
-export interface PromptTokenDetailsState<StoredBreakdown = unknown, StoredUsageTree = unknown> {
-  // The same field also carries the running counts the summarizer watches, so it is described as the
-  // redacted details plus those counts rather than as the details alone.
-  tokenDetails: RedactedPromptTokenDetails<StoredBreakdown, StoredUsageTree> & {
-    readonly usedTokens?: number | undefined
-    readonly maxTokens?: number | undefined
+export interface PromptTokenDetailsState {
+  readonly tokenDetails: {
+    readonly breakdown?: PromptTokenBreakdownSnapshotValue | undefined
+    readonly contextTree?: PromptContextUsageTreeValue | undefined
   }
-  getPrivacyMode(): PrivacyMode
 }
 
 export interface PromptTokenDetailsConfig {
   featureFlags?: { promptContextUsageTree?: boolean | undefined } | undefined
 }
 
-export function computeNextRedactedPromptContextDetails<StoredBreakdown, StoredUsageTree>(
+export function computeNextPromptContextDetails(
   ctx: Context,
   config: PromptTokenDetailsConfig,
-  stateHandler: PromptTokenDetailsState<StoredBreakdown, StoredUsageTree>,
+  stateHandler: PromptTokenDetailsState,
   params: PromptTokenBreakdownParams,
-  codec: PromptTokenDetailsRedactionCodec<
-    ReturnType<typeof buildPromptTokenBreakdownSnapshot>,
-    ReturnType<typeof buildPromptContextUsageTree>,
-    StoredBreakdown,
-    StoredUsageTree
-  >,
-): RedactedPromptTokenDetails<StoredBreakdown, StoredUsageTree> {
-  using span = createSpan(ctx.withName("nextRedactedPromptContextDetails"))
+): {
+  readonly breakdown: PromptTokenBreakdownSnapshotValue
+  readonly contextTree?: PromptContextUsageTreeValue
+} {
+  using span = createSpan(ctx.withName("nextPromptContextDetails"))
   const tracedCtx = span.ctx
-  const previousRedacted = stateHandler.tokenDetails.breakdown
-  const previousUsageTree = stateHandler.tokenDetails.promptContextUsageTree
+  const previousSnapshot = stateHandler.tokenDetails.breakdown
+  const previousUsageTree = stateHandler.tokenDetails.contextTree
   const promptContextUsageTreeEnabled = config.featureFlags?.promptContextUsageTree === true
   span.span.setAttribute("promptContextUsageTreeEnabled", promptContextUsageTreeEnabled)
-  const previousSnapshot = previousRedacted
-    ? codec.decodeBreakdown(previousRedacted)
-    : undefined
   const breakdownSnapshot = buildPromptTokenBreakdownSnapshot(tracedCtx, { ...params, previousSnapshot })
-  const privacyMode = stateHandler.getPrivacyMode()
+  const contextTree = promptContextUsageTreeEnabled
+    ? buildPromptContextUsageTree({
+        messages: params.messages,
+        tools: params.tools,
+        descriptionProps: params.descriptionProps,
+        breakdown: breakdownSnapshot,
+      })
+    : previousUsageTree
   return {
-    breakdown: codec.encodeBreakdown(breakdownSnapshot, privacyMode),
-    promptContextUsageTree: promptContextUsageTreeEnabled
-      ? codec.encodeUsageTree(
-        buildPromptContextUsageTree({
-          messages: params.messages,
-          tools: params.tools,
-          descriptionProps: params.descriptionProps,
-          breakdown: breakdownSnapshot,
-        }),
-        privacyMode,
-      )
-      : previousUsageTree,
+    breakdown: breakdownSnapshot,
+    ...(contextTree === undefined ? {} : { contextTree }),
   }
 }

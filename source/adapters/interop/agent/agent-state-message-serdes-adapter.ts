@@ -5,6 +5,7 @@ import {
   ConversationStep,
   ConversationSummary,
   ConversationSummaryArchive,
+  ConversationTokenDetails,
   GoalState,
   PlanRegistryEntry,
   AssistantMessage,
@@ -23,7 +24,6 @@ import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
-  createRedactedConversationTokenDetails,
   fromRedactedConversationPlan,
   fromRedactedConversationStep,
   fromRedactedConversationSummary,
@@ -42,6 +42,7 @@ import {
   toRedactedConversationSummary,
   toRedactedConversationSummaryArchive,
   toRedactedConversationStateStructure,
+  toRedactedConversationTokenDetails,
   toRedactedCommunicateUpdateHistoryEntry,
   toRedactedCommunicateUpdateTurnState,
   toRedactedSubagentPersistedState,
@@ -95,7 +96,15 @@ import type {
   SlateRedactedValue,
   SlateCommunicationHistoryEntry,
   SlateCommunicationTurnState,
+  SlateConversationTokenDetailCompatibilityValue,
+  SlateConversationTokenDetails,
 } from "../../../packages/agent/conversation-state.ts"
+import {
+  promptContextUsageTreeFromProto,
+  promptContextUsageTreeToProto,
+  promptTokenBreakdownFromProto,
+  promptTokenBreakdownToProto,
+} from "./redacted-prompt-token-details-adapter.ts"
 import type {
   SlateSubagentPersistedState,
   SlateSubagentConversationSnapshot,
@@ -271,6 +280,189 @@ function slateStringMapKey(value: unknown, fieldName: string): string {
   throw new TypeError(`conversation state ${fieldName} key must be a string`)
 }
 
+const CONVERSATION_TOKEN_DETAILS_INTEROP_FIELDS = new Set([
+  "_privacyMode",
+  "usedTokens",
+  "maxTokens",
+  "breakdown",
+  "promptContextUsageTree",
+  "promptContextUsageSnapshotBlobId",
+  "compatibility",
+])
+
+function conversationTokenDetailsFromInterop(
+  value: Parameters<typeof fromRedactedConversationTokenDetails>[0],
+): SlateConversationTokenDetails {
+  const details = fromRedactedConversationTokenDetails(
+    value,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  const legacyFields = Object.fromEntries(
+    Object.entries(value as unknown as Record<string, unknown>).filter(([key]) =>
+      !CONVERSATION_TOKEN_DETAILS_INTEROP_FIELDS.has(key),
+    ),
+  ) as Record<string, SlateConversationTokenDetailCompatibilityValue>
+  return {
+    usedTokens: details.usedTokens,
+    maximumTokens: details.maxTokens,
+    ...(details.breakdown === undefined ? {} : { breakdown: promptTokenBreakdownFromProto(details.breakdown) }),
+    ...(details.promptContextUsageTree === undefined
+      ? {}
+      : { contextTree: promptContextUsageTreeFromProto(details.promptContextUsageTree) }),
+    ...(details.promptContextUsageSnapshotBlobId === undefined
+      ? {}
+      : { usageSnapshotBlobId: new Uint8Array(details.promptContextUsageSnapshotBlobId) }),
+    ...(Object.keys(legacyFields).length === 0 ? {} : { compatibility: { legacyFields } }),
+  }
+}
+
+function conversationTokenDetailsToProto(value: SlateConversationTokenDetails): ConversationTokenDetails {
+  return new ConversationTokenDetails({
+    usedTokens: value.usedTokens,
+    maxTokens: value.maximumTokens,
+    ...(value.breakdown === undefined ? {} : { breakdown: promptTokenBreakdownToProto(value.breakdown) }),
+    ...(value.contextTree === undefined
+      ? {}
+      : { promptContextUsageTree: promptContextUsageTreeToProto(value.contextTree) }),
+    ...(value.usageSnapshotBlobId === undefined
+      ? {}
+      : { promptContextUsageSnapshotBlobId: new Uint8Array(value.usageSnapshotBlobId) }),
+  })
+}
+
+function conversationTokenDetailsToInterop(
+  value: SlateConversationTokenDetails,
+  privacyMode: PrivacyMode,
+): ReturnType<typeof toRedactedConversationTokenDetails> {
+  const redacted = toRedactedConversationTokenDetails(conversationTokenDetailsToProto(value), privacyMode)
+  const legacyFields = value.compatibility?.legacyFields
+  if (legacyFields === undefined) return redacted
+  return {
+    ...redacted,
+    ...Object.fromEntries(Object.entries(legacyFields).filter(([key]) =>
+      !CONVERSATION_TOKEN_DETAILS_INTEROP_FIELDS.has(key),
+    )),
+  }
+}
+
+function legacyTokenDetailValue(value: unknown, ancestors = new Set<object>()): SlateConversationTokenDetailCompatibilityValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number" || typeof value === "bigint") {
+    return value
+  }
+  if (value instanceof RedactedString || value instanceof RedactedBytes || value instanceof Uint8Array || value instanceof Date) {
+    return value as SlateConversationTokenDetailCompatibilityValue
+  }
+  if (isMessage(value)) {
+    return {
+      kind: "legacy-protobuf-message",
+      typeName: value.getType().typeName,
+      binary: value.toBinary(),
+    }
+  }
+  if (typeof value !== "object") throw new TypeError("Legacy token detail contains an unsupported value")
+  if (ancestors.has(value)) throw new TypeError("Legacy token detail contains a cycle")
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) return value.map(entry => legacyTokenDetailValue(entry, ancestors))
+    if (value instanceof Map) {
+      return new Map([...value.entries()].map(([key, entry]) => [
+        legacyTokenDetailValue(key, ancestors),
+        legacyTokenDetailValue(entry, ancestors),
+      ]))
+    }
+    if (value instanceof Set) return new Set([...value].map(entry => legacyTokenDetailValue(entry, ancestors)))
+    if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) {
+      throw new TypeError("Legacy token detail contains an unsupported object")
+    }
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      legacyTokenDetailValue(entry, ancestors),
+    ]))
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+function conversationTokenDetailsFromStoredSlateValue(value: unknown): SlateConversationTokenDetails {
+  if (!isRecordValue(value)) {
+    return {
+      usedTokens: 0,
+      maximumTokens: 0,
+      compatibility: { legacyFields: { value: legacyTokenDetailValue(value) } },
+    }
+  }
+  if ("_privacyMode" in value) {
+    try {
+      return conversationTokenDetailsFromInterop(value as never)
+    } catch {
+      // Keep malformed historical fields in the compatibility bag below; the active policy uses zero defaults.
+    }
+  }
+  const usedTokens = typeof value.usedTokens === "number" && Number.isFinite(value.usedTokens) && value.usedTokens >= 0
+    ? value.usedTokens
+    : 0
+  const maximumTokensValue = value.maximumTokens ?? value.maxTokens
+  const maximumTokens = typeof maximumTokensValue === "number" && Number.isFinite(maximumTokensValue) && maximumTokensValue >= 0
+    ? maximumTokensValue
+    : 0
+  let breakdown: SlateConversationTokenDetails["breakdown"]
+  let contextTree: SlateConversationTokenDetails["contextTree"]
+  let usageSnapshotBlobId: Uint8Array | undefined
+  const recognized = new Set(["_privacyMode", "usedTokens", "maximumTokens", "maxTokens", "compatibility"])
+  if (value.breakdown !== undefined) {
+    try {
+      breakdown = promptTokenBreakdownFromProto(value.breakdown as never)
+      recognized.add("breakdown")
+    } catch {
+      // The old value is retained below if it is not a supported breakdown shape.
+    }
+  }
+  const storedTree = value.contextTree ?? value.promptContextUsageTree
+  if (storedTree !== undefined) {
+    try {
+      contextTree = promptContextUsageTreeFromProto(storedTree as never)
+      recognized.add("contextTree")
+      recognized.add("promptContextUsageTree")
+    } catch {
+      // The old value is retained below if it is not a supported usage-tree shape.
+    }
+  }
+  const storedSnapshotId = value.usageSnapshotBlobId ?? value.promptContextUsageSnapshotBlobId
+  if (storedSnapshotId instanceof Uint8Array) {
+    usageSnapshotBlobId = new Uint8Array(storedSnapshotId)
+    recognized.add("usageSnapshotBlobId")
+    recognized.add("promptContextUsageSnapshotBlobId")
+  }
+  const legacyFields = Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !recognized.has(key))
+    .map(([key, field]) => [key, legacyTokenDetailValue(field)]))
+  const legacyCompatibility = value.compatibility
+  const priorLegacyFields = isRecordValue(legacyCompatibility) && isRecordValue(legacyCompatibility.legacyFields)
+    ? legacyCompatibility.legacyFields as Record<string, SlateConversationTokenDetailCompatibilityValue>
+    : {}
+  const mergedLegacyFields = { ...priorLegacyFields, ...legacyFields }
+  return {
+    usedTokens,
+    maximumTokens,
+    ...(breakdown === undefined ? {} : { breakdown }),
+    ...(contextTree === undefined ? {} : { contextTree }),
+    ...(usageSnapshotBlobId === undefined ? {} : { usageSnapshotBlobId }),
+    ...(Object.keys(mergedLegacyFields).length === 0 ? {} : { compatibility: { legacyFields: mergedLegacyFields } }),
+  }
+}
+
+function normalizeStoredSlateConversationTokenDetails(
+  snapshot: SlateSubagentConversationSnapshot,
+): SlateSubagentConversationSnapshot {
+  const rawSnapshot = snapshot as unknown as Record<string, unknown>
+  if (rawSnapshot.tokenDetails === undefined) return snapshot
+  return {
+    ...snapshot,
+    tokenDetails: conversationTokenDetailsFromStoredSlateValue(rawSnapshot.tokenDetails),
+  }
+}
+
 export function fromInteropConversationState(
   state: RedactedAgentConversationStateInterop,
 ): SlateConversationState {
@@ -288,6 +480,7 @@ export function fromInteropConversationState(
     communicateUpdateFinalSummary,
     communicateUpdateCompletedSubtitle,
     communicateUpdateStatesByParentToolCallId,
+    tokenDetails,
     ...fields
   } = state
   const slateMode = fromInteropAgentMode(mode) ?? SlateMode.UNSPECIFIED
@@ -404,6 +597,9 @@ export function fromInteropConversationState(
         return [slateStringMapKey(key, "communicateUpdateStatesByParentToolCallId"), communicationTurn] as const
       }),
     ),
+    ...(tokenDetails === undefined
+      ? {}
+      : { tokenDetails: conversationTokenDetailsFromInterop(tokenDetails) }),
     privacyMode: _privacyMode,
     mode: slateMode,
     ...(toInteropAgentMode(slateMode) === mode ? {} : { unknownModeCode: mode }),
@@ -427,11 +623,15 @@ export function toInteropConversationState(
     communicationFinalSummary,
     communicationCompletedSubtitle,
     communicationTurnsByCallId,
+    tokenDetails,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
   return {
     ...fields,
+    ...(tokenDetails === undefined
+      ? {}
+      : { tokenDetails: conversationTokenDetailsToInterop(tokenDetails, privacyMode) }),
     pendingToolCalls: fields.pendingToolCalls ?? [],
     fileStates: optionalFields.fileStates ?? new Map(),
     turnTimings: optionalFields.turnTimings ?? [],
@@ -732,12 +932,18 @@ export function encodeSlateConversationStateSnapshotInterop(
     goalState: slateGoal,
     subagentStates: slateSubagentStates,
     subagentRunsByParentToolCallId: slateSubagentRuns,
+    tokenDetails: slateTokenDetails,
     communicationHistory: slateCommunicationHistory,
     communicationFinalSummary: slateCommunicationFinalSummary,
     communicationCompletedSubtitle: slateCommunicationCompletedSubtitle,
     communicationTurnsByCallId: slateCommunicationTurns,
     ...stateFields
   } = snapshot
+  if (slateTokenDetails !== undefined &&
+      (slateTokenDetails === null || typeof slateTokenDetails !== "object" || Array.isArray(slateTokenDetails))) {
+    throw new TypeError("Slate conversation token details must be a record")
+  }
+  const ownedTokenDetails = slateTokenDetails as SlateConversationTokenDetails | undefined
   const plans = Object.fromEntries(
     entriesOfUnknownStringMap(slatePlanRegistry).map(([id, entry]) => [
       id,
@@ -803,10 +1009,19 @@ export function encodeSlateConversationStateSnapshotInterop(
       ? {}
       : { communicateUpdateCompletedSubtitle: slateCommunicationCompletedSubtitle }),
     communicateUpdateStatesByParentToolCallId,
+    ...(ownedTokenDetails === undefined
+      ? {}
+      : { tokenDetails: conversationTokenDetailsToProto(ownedTokenDetails) }),
     fileStatesV2,
   } as never)
+  const redactedState = toRedactedConversationStateStructureInterop(state, privacyMode)
   return {
-    redactedState: toRedactedConversationStateStructureInterop(state, privacyMode),
+    redactedState: {
+      ...redactedState,
+      ...(ownedTokenDetails === undefined
+        ? {}
+        : { tokenDetails: conversationTokenDetailsToInterop(ownedTokenDetails, privacyMode) }),
+    } as RedactedAgentConversationStateInterop,
     stats: {
       rootPromptMessageCount: state.rootPromptMessagesJson.length,
       turnCount: state.turns.length,
@@ -2509,12 +2724,15 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
         throw new TypeError("Stored Slate subagent state is not valid JSON", { cause: error })
       }
       if (!isStoredSlateSubagentStateEnvelope(parsed)) throw new TypeError("Stored Slate subagent state envelope is invalid")
-      const snapshot = parsed.state.conversationSnapshot === undefined
+      const decodedSnapshot = parsed.state.conversationSnapshot === undefined
         ? undefined
         : decodeSlateValue(parsed.state.conversationSnapshot, privacyMode)
-      if (snapshot !== undefined && !isSlateSubagentConversationSnapshot(snapshot)) {
+      if (decodedSnapshot !== undefined && !isSlateSubagentConversationSnapshot(decodedSnapshot)) {
         throw new TypeError("Stored Slate subagent conversation snapshot is invalid")
       }
+      const snapshot = decodedSnapshot === undefined
+        ? undefined
+        : normalizeStoredSlateConversationTokenDetails(decodedSnapshot)
       return createSlateSubagentPersistedState({
         createdAtMs: BigInt(parsed.state.createdAtMs),
         lastUsedAtMs: BigInt(parsed.state.lastUsedAtMs),
@@ -2601,7 +2819,6 @@ export const fromRedactedConversationStepInterop = fromRedactedConversationStep
 export const fromRedactedConversationSummaryInterop = fromRedactedConversationSummary
 export const fromRedactedConversationSummaryArchiveInterop = fromRedactedConversationSummaryArchive
 // fromRedactedConversationStateStructureInterop is implemented above to normalize identity map keys.
-export const fromRedactedConversationTokenDetailsInterop = fromRedactedConversationTokenDetails
 export const fromRedactedCommunicateUpdateHistoryEntryInterop = fromRedactedCommunicateUpdateHistoryEntry
 export const fromRedactedCommunicateUpdateTurnStateInterop = fromRedactedCommunicateUpdateTurnState
 export const fromRedactedGoalStateInterop = fromRedactedGoalState
@@ -2617,4 +2834,3 @@ export const toRedactedSubagentPersistedStateInterop = toRedactedSubagentPersist
 export const toRedactedUserMessageInterop = toRedactedUserMessage
 export const fromRedactedTodoItemInterop = fromRedactedTodoItem
 export const toRedactedTodoItemInterop = toRedactedTodoItem
-export const createRedactedConversationTokenDetailsInterop = createRedactedConversationTokenDetails

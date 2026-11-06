@@ -70,7 +70,7 @@ function stateHandler(initial: readonly unknown[] = [], options: StateOptions = 
   const state = {
     mode: SlateMode.AGENT,
     todos: [] as readonly { get(ctx: Context): Promise<never> }[],
-    tokenDetails: { usedTokens: 100, maxTokens: 1_000 },
+    tokenDetails: { usedTokens: 100, maximumTokens: 1_000 },
     summaryArchives: archives as readonly unknown[],
     selfSummaryCount: options.selfSummaryCount ?? 0,
     backgroundSummarizationPromiseInfo: options.background ?? null,
@@ -185,10 +185,10 @@ test("whether to start a summary depends on the tokens used", () => {
   const orchestrator = new SummarizationOrchestrator(summarizer().summarizer, undefined, {
     unusedPercentTokensThresholdToStartBackgroundSummarization: 0.5,
   })
-  assert.equal(orchestrator.shouldStartBackgroundSummarization({ usedTokens: 100, maxTokens: 1_000 }, []), false)
-  assert.equal(orchestrator.shouldStartBackgroundSummarization({ usedTokens: 600, maxTokens: 1_000 }, []), true)
+  assert.equal(orchestrator.shouldStartBackgroundSummarization({ usedTokens: 100, maximumTokens: 1_000 }, []), false)
+  assert.equal(orchestrator.shouldStartBackgroundSummarization({ usedTokens: 600, maximumTokens: 1_000 }, []), true)
   // With no props and no self-summarizer there is nothing to start.
-  assert.equal(new SummarizationOrchestrator(summarizer().summarizer).shouldStartBackgroundSummarization({ usedTokens: 900, maxTokens: 1_000 }, []), false)
+  assert.equal(new SummarizationOrchestrator(summarizer().summarizer).shouldStartBackgroundSummarization({ usedTokens: 900, maximumTokens: 1_000 }, []), false)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -245,7 +245,7 @@ test("what arrived while the summary was being written is kept", async () => {
       summarizerType: "external",
       startInvocationId: "invocation-0",
       startUsedTokens: 10,
-      startMaxTokens: 100,
+      startMaximumTokens: 100,
     },
     // The summary was started when the conversation was two messages shorter.
     messagesUndergoingSummarization: messages.slice(0, 2) as never,
@@ -437,7 +437,7 @@ test("a summary already underway is reused when the conversation still starts wi
       summarizerType: "external",
       startInvocationId: "invocation-0",
       startUsedTokens: 10,
-      startMaxTokens: 100,
+      startMaximumTokens: 100,
     },
     messagesUndergoingSummarization: [message("system", "the platform's framing")] as never,
   })
@@ -458,7 +458,7 @@ test("a summary underway against a different conversation is discarded", async (
       summarizerType: "external",
       startInvocationId: "invocation-0",
       startUsedTokens: 10,
-      startMaxTokens: 100,
+      startMaximumTokens: 100,
     },
     // The stored prefix is a different message than the conversation now starts with.
     messagesUndergoingSummarization: [message("system", "something else entirely")] as never,

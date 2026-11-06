@@ -22,10 +22,7 @@ test("run-step state operations and checkpoint controls have first-party contrac
   }
   const details: RunStepTokenDetails = {
     usedTokens: 7,
-    maxTokens: 20,
-    breakdown: undefined,
-    promptContextUsageTree: undefined,
-    promptContextUsageSnapshotBlobId: undefined,
+    maximumTokens: 20,
   }
   const usage: RunStepTurnUsage = {
     inputTokens: 3,

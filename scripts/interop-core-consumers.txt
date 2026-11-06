@@ -194,7 +194,6 @@ source/packages/agent/actions/summarize-action-state.ts	../../../adapters/intero
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/agent-loop-presentation-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/mode-processing-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
-source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/redacted-prompt-token-details-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/response-comparison-interaction-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/smart-mode-permissions-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts
@@ -229,7 +228,6 @@ source/packages/agent/context/process-selected-context.ts	../../../adapters/inte
 source/packages/agent/context/video-attachment.ts	../../../adapters/interop/inference/video-model-adapter.ts
 source/packages/agent/index.ts	../../adapters/interop/agent/redacted-conversation-state-adapter.ts
 source/packages/agent/index.ts	../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
-source/packages/agent/index.ts	../../adapters/interop/agent/summarize-action-adapter.ts
 source/packages/agent/interaction-handler.ts	../../adapters/interop/agent/agent-loop-presentation-adapter.ts
 source/packages/agent/interaction-handler.ts	../../adapters/interop/agent/interaction-tool-call-adapter.ts
 source/packages/agent/prompts/cloud-testing-sections.ts	../../../adapters/interop/agent/thread-session-kind-adapter.ts

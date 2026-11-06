@@ -41,7 +41,13 @@ test("new subagent state blobs use Slate field names and reapply snapshot privac
     ]]),
     readPaths: ["/repo/readme.txt"],
     tokenDetails: {
-      note: createRedactedString("usage detail", DataClassification.CODE, "usage", PrivacyMode.NO_STORAGE),
+      usedTokens: 0,
+      maximumTokens: 0,
+      compatibility: {
+        legacyFields: {
+          note: createRedactedString("usage detail", DataClassification.CODE, "usage", PrivacyMode.NO_STORAGE),
+        },
+      },
     },
     conversationStartedTimestampMs: BigInt("9223372036854775807"),
   }
@@ -91,10 +97,47 @@ test("new subagent state blobs use Slate field names and reapply snapshot privac
     initialContentBlobId: new Uint8Array([6]),
   })
   assert.equal(restored.conversationSnapshot?.conversationStartedTimestampMs, snapshot.conversationStartedTimestampMs)
-  const note = restored.conversationSnapshot?.tokenDetails?.note
+  const note = restored.conversationSnapshot?.tokenDetails?.compatibility?.legacyFields?.note
   assert.ok(note instanceof RedactedString)
   assert.equal(note.__privacyMode, PrivacyMode.NO_STORAGE)
   assert.equal(note.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "usage detail")
+})
+
+test("legacy loose token fields migrate into the Slate compatibility area without loss", () => {
+  const codec = serde()
+  const bytes = codec.serialize(createSlateSubagentPersistedState({
+    conversationSnapshot: {
+      privacyMode: PrivacyMode.NO_STORAGE,
+      rootPromptMessagesJson: [],
+      turns: [],
+      todos: [],
+      previousWorkspaceUris: [],
+      summaryArchives: [],
+      fileStatesV2: new Map(),
+      readPaths: [],
+    },
+  }))
+  const prefix = "SLATE-AGENT-SUBAGENT-STATE\n"
+  const envelope = JSON.parse(new TextDecoder().decode(bytes.subarray(prefix.length))) as {
+    state: { conversationSnapshot: { kind: string; entries: [string, unknown][] } }
+  }
+  envelope.state.conversationSnapshot.entries.push(["tokenDetails", {
+    kind: "object",
+    entries: [["note", {
+      kind: "redacted-string",
+      rawText: "legacy usage detail",
+      classification: DataClassification.CODE,
+      fieldName: "usage",
+    }]],
+  }])
+
+  const restored = codec.deserialize(new TextEncoder().encode(`${prefix}${JSON.stringify(envelope)}`))
+  const tokenDetails = restored.conversationSnapshot?.tokenDetails
+  assert.equal(tokenDetails?.usedTokens, 0)
+  assert.equal(tokenDetails?.maximumTokens, 0)
+  const note = tokenDetails?.compatibility?.legacyFields?.note
+  assert.ok(note instanceof RedactedString)
+  assert.equal(note.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "legacy usage detail")
 })
 
 test("Slate subagent state v1 placement migrates to the Slate v2 vocabulary", () => {

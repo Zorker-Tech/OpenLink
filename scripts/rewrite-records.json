@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.662533692722372,
-      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run and communication values. Communication history, per-call turns and summaries use Slate names and plain values in the state handle; privacy wrapping and legacy shape conversion happen only at the interop adapter. Snapshot computation now declares its redacted interop result accurately.",
-      "evidence": "agent-state.test.ts and slate-conversation-state.test.ts pass 50/50, including communication ordering, message indexes, summaries, subtitles, per-call history and privacy classification across the legacy boundary. The full Work-host suite passes 9967/9967 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop gates (323 imports across 223 files, zero direct proto consumers) pass. State handles store plan, goal, subagent, run and communication values as Slate types; generated communication messages remain only in the adapter. Measured overlap is 0.662533692722372 against 9275 baseline pairs."
+      "overlap": 0.660700808625337,
+      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication and token-detail values. Token counts, breakdowns and usage trees use Slate fields in the state handle; generated redaction and snapshot conversion remain in the interop adapter. Snapshot computation declares its redacted interop output accurately.",
+      "evidence": "agent-state.test.ts, slate-conversation-state.test.ts, prompt-token-details.test.ts, interop-prompt-token-details-adapter.test.ts and subagent-state storage recovery tests pass 215/215. The full Work-host suite passes 9969/9969 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. State handles store communication and token details as Slate values; legacy generated conversion stays at the interop adapter. Measured overlap is 0.660700808625337 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
@@ -1407,8 +1407,9 @@
     },
     "packages/agent/utils/next-redacted-prompt-context-details.ts": {
       "claim": "rewritten",
-      "overlap": 0.16332378223495703,
-      "evidence": "Prompt token details now depend on a Slate codec interface; the generated redacted breakdown and usage-tree serialization live in an interop adapter. prompt-token-details.test.ts passes 38/38, including privacy round-trip and disabled-feature carry-forward. Work-host typecheck passes."
+      "overlap": 0.12034383954154727,
+      "refreshReason": "Prompt analysis now reads and returns Slate breakdown/tree values directly; redaction and generated storage projection stay at interop boundaries.",
+      "evidence": "prompt-token-details.test.ts and interop-prompt-token-details-adapter.test.ts pass, including stable breakdown reuse, disabled-tree carry-forward, enabled-tree rebuild, redacted field classification and wire round-trip. Work-host TypeScript checks pass. Measured overlap is 0.12034383954154727 against 349 baseline pairs."
     },
     "packages/agent/utils/mcp-custom-user-tools.ts": {
       "claim": "rewritten",
@@ -2274,8 +2275,9 @@
     },
     "packages/agent/utils/run-step-state-contract.ts": {
       "claim": "rewritten",
-      "overlap": 0.7538461538461538,
-      "evidence": "Run-step contract test passes 1/1 and Work-host typecheck passes. The contract pins checkpoint state, generic step state calculation, first-party token-detail shape, usage reporting and checkpoint controls. Generated redacted token-detail types are no longer imported; the state handler can specialize its details type where a boundary requires it."
+      "overlap": 0.7384615384615385,
+      "refreshReason": "Run-step token details now reuse SlateConversationTokenDetails, including maximumTokens, contextTree and typed usage breakdowns.",
+      "evidence": "agent-run-step-contract.test.ts passes 1/1 and Work-host typecheck passes. The contract pins checkpoint state, generic step state calculation, Slate token-detail fields, usage reporting and checkpoint controls. Generated redacted token-detail types are not part of the run-step contract. Measured overlap is 0.7384615384615385 against 65 baseline pairs."
     },
     "packages/agent/tools/lenient-enum.ts": {
       "claim": "rewritten",
@@ -3316,9 +3318,9 @@
     },
     "packages/agent/utils/prompt-context-usage-snapshot.ts": {
       "claim": "rewritten",
-      "overlap": 0.5634517766497462,
-      "refreshReason": "Reprojected the storage gate onto Slate-owned string privacy values while keeping generated snapshot serialization in the interop adapter.",
-      "evidence": "Usage-snapshot, agent utility and rewrite-gate suites pass 30/30. The broader privacy-mode/redaction/telemetry suite passes 172/172 and Work-host typecheck passes. A prior Node 24 full suite result was 9227/9227 before this privacy-type change. Snapshot caching and core blob writes remain Slate-owned; generated serialization and wire enum translation remain in interop. Measured overlap was refreshed to 0.5634517766497462 against 197 baseline pairs."
+      "overlap": 0.5076142131979695,
+      "refreshReason": "The snapshot writer now accepts Slate PromptContextUsageTreeValue directly; the adapter alone creates the external snapshot message and blob type metadata.",
+      "evidence": "usage-snapshot.test.ts and agent-utils-contracts.test.ts pass, including cache reuse by tree/root-message identity and the NO_STORAGE refusal. Work-host typecheck passes. Snapshot caching and blob policy remain in Slate core; the external binary snapshot representation remains in interop. Measured overlap is 0.5076142131979695 against 197 baseline pairs."
     },
     "coordinator/gateway/box-vnc-proxy.ts": {
       "claim": "rewritten",
@@ -3432,8 +3434,9 @@
     },
     "packages/agent/utils/common.ts": {
       "claim": "rewritten",
-      "overlap": 0.3710691823899371,
-      "evidence": "Agent utility, selected-context and interop skill-path suites pass 37/37; Work-host typecheck passes and the full Node 24 suite passes 10564/10564. Provider-specific skill folder conventions now live in interop while shared helpers keep Slate-owned behavior."
+      "overlap": 0.3584905660377358,
+      "refreshReason": "Context usage formatting now consumes Slate maximumTokens while preserving the zero-window calculation.",
+      "evidence": "agent-utils-contracts.test.ts passes, including normal and zero-window context usage; Work-host typecheck passes. Provider-specific skill path behavior remains in interop. Measured overlap is 0.3584905660377358 against 159 baseline pairs."
     },
     "host/transcript/mirror/generated-occurrence-codec.ts": {
       "claim": "rewritten",
