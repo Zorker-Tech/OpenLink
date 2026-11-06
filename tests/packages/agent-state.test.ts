@@ -27,6 +27,7 @@ import {
   SubagentPersistedState,
   SubagentExecutionEnvironment,
   TrackedGitRepo,
+  StepTiming,
   NewCloudVmTarget,
   TargetMachine,
   UserMessage,
@@ -171,6 +172,21 @@ test("pending calls and workspace snapshots are Slate strings in the state handl
   assert.deepEqual(harnessed.handle.getPendingToolCalls(), [pendingMessage])
   assert.deepEqual(harnessed.handle.previousWorkspaceUris, ["file:///workspace"])
   assert.deepEqual(harnessed.handle.trackedGitRepoBranches, [{ repoPath: "/repo", branchName: "feature" }])
+})
+
+test("a recomputed snapshot preserves the single archive reference and turn timings", async () => {
+  const harnessed = harness(new ConversationStateStructure({
+    summaryArchive: new Uint8Array([9]),
+    turnTimings: [new StepTiming({ durationMs: BigInt(12), timestampMs: BigInt(34) })],
+  }))
+
+  await harnessed.handle.computeNewStructure(createContext())
+
+  assert.deepEqual(harnessed.handle.conversationStateStructure.summaryArchiveBlobId, new Uint8Array([9]))
+  assert.deepEqual(harnessed.handle.conversationStateStructure.turnTimings, [{
+    durationMs: BigInt(12),
+    timestampMs: BigInt(34),
+  }])
 })
 
 test("the paths read in a turn are remembered, deduplicated and checkpointed", async () => {

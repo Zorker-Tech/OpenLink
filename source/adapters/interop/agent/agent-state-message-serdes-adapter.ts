@@ -16,6 +16,7 @@ import {
   SubagentExecutionEnvironment,
   SubagentRunState,
   SubagentRunStatus,
+  StepTiming,
   TrackedGitRepo,
   ThinkingMessage,
   ToolCall,
@@ -472,6 +473,8 @@ export function fromInteropConversationState(
   const {
     _privacyMode,
     mode,
+    summaryArchive,
+    turnTimings,
     fileStates,
     fileStatesV2,
     readPaths,
@@ -630,6 +633,11 @@ export function fromInteropConversationState(
     ...(tokenDetails === undefined
       ? {}
       : { tokenDetails: conversationTokenDetailsFromInterop(tokenDetails) }),
+    ...(summaryArchive === undefined ? {} : { summaryArchiveBlobId: new Uint8Array(summaryArchive) }),
+    turnTimings: (turnTimings ?? []).map((timing: StepTiming) => ({
+      durationMs: timing.durationMs,
+      timestampMs: timing.timestampMs,
+    })),
     privacyMode: _privacyMode,
     mode: slateMode,
     ...(toInteropAgentMode(slateMode) === mode ? {} : { unknownModeCode: mode }),
@@ -643,6 +651,8 @@ export function toInteropConversationState(
     privacyMode,
     mode,
     unknownModeCode,
+    summaryArchiveBlobId,
+    turnTimings,
     legacyFileContentBlobIds,
     fileStatesV2,
     readPaths,
@@ -660,7 +670,6 @@ export function toInteropConversationState(
     trackedGitRepoBranches,
     ...fields
   } = state
-  const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
   return {
     ...fields,
     ...(tokenDetails === undefined
@@ -678,7 +687,11 @@ export function toInteropConversationState(
         new Uint8Array(blobId as Uint8Array),
       ]),
     ),
-    turnTimings: optionalFields.turnTimings ?? [],
+    ...(summaryArchiveBlobId === undefined ? {} : { summaryArchive: new Uint8Array(summaryArchiveBlobId) }),
+    turnTimings: (turnTimings ?? []).map(timing => new StepTiming({
+      durationMs: timing.durationMs,
+      timestampMs: timing.timestampMs,
+    })),
     fileStatesV2: new Map(
       [...fileStatesV2].map(([path, fileState]) => [
         createRedactedString(path, DataClassification.PATH, "path", privacyMode),
@@ -987,6 +1000,8 @@ export function encodeSlateConversationStateSnapshotInterop(
     subagentRunsByParentToolCallId: slateSubagentRuns,
     tokenDetails: slateTokenDetails,
     legacyFileContentBlobIds: slateLegacyFileStates,
+    summaryArchiveBlobId: slateSummaryArchiveBlobId,
+    turnTimings: slateTurnTimings,
     communicationHistory: slateCommunicationHistory,
     communicationFinalSummary: slateCommunicationFinalSummary,
     communicationCompletedSubtitle: slateCommunicationCompletedSubtitle,
@@ -1055,9 +1070,17 @@ export function encodeSlateConversationStateSnapshotInterop(
       new Uint8Array(blobId as Uint8Array),
     ]),
   )
+  const turnTimings = ((slateTurnTimings as SlateConversationState["turnTimings"]) ?? []).map(timing => new StepTiming({
+    durationMs: timing.durationMs,
+    timestampMs: timing.timestampMs,
+  }))
   const state = new ConversationStateStructure({
     ...stateFields,
+    ...(slateSummaryArchiveBlobId === undefined
+      ? {}
+      : { summaryArchive: new Uint8Array(slateSummaryArchiveBlobId as Uint8Array) }),
     fileStates: legacyFileStates,
+    turnTimings,
     plans,
     ...(goalState === undefined ? {} : { goalState }),
     subagentStates,

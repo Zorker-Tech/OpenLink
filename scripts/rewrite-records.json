@@ -105,8 +105,8 @@
     "packages/agent/state.ts": {
       "claim": "rewritten",
       "overlap": 0.6563881401617251,
-      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication, token-detail, pending-call, workspace-URI, tracked-repository and legacy-file-state values. Old file blob IDs load lazily and migrate to the versioned file map after a successful write; redaction and generated snapshot conversion remain in interop.",
-      "evidence": "Communication and token-detail state/adapter suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, root checkpoint, GC and subagent recovery suites pass 89/89. The full Work-host suite passes 9971/9971 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Measured overlap is 0.6563881401617251 against 9275 baseline pairs."
+      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication, token-detail, pending-call, workspace-URI, tracked-repository, legacy-file-state, timing and archive-reference values. Old file blob IDs load lazily and migrate to the versioned file map after a successful write; redaction and generated snapshot conversion remain in interop.",
+      "evidence": "Communication and token-detail state/adapter suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, timing/archive round-trip, root checkpoint, GC and subagent recovery suites pass 115/115. The full Work-host suite passes 9972/9972 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Measured overlap is 0.6563881401617251 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
