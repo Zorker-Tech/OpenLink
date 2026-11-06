@@ -26,6 +26,20 @@ import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
+  CommunicateUpdateArgs,
+  CommunicateUpdateError,
+  CommunicateUpdateResult,
+  CommunicateUpdateSuccess,
+  CommunicateUpdateToolCall,
+} from "../proto/generated/agent/v1/communicate_update_tool_pb.ts"
+import {
+  SendFinalSummaryArgs,
+  SendFinalSummaryError,
+  SendFinalSummaryResult,
+  SendFinalSummarySuccess,
+  SendFinalSummaryToolCall,
+} from "../proto/generated/agent/v1/send_final_summary_tool_pb.ts"
+import {
   fromRedactedConversationPlan,
   fromRedactedConversationStep,
   fromRedactedConversationSummary,
@@ -59,7 +73,7 @@ import { fromRedactedTodoItem, toRedactedTodoItem } from "../redacted-protos/gen
 import { DataClassification, PrivacyCapability, type DataClassification as DataClassificationValue } from "../../../packages/redaction/classification.ts"
 import { PrivacyMode as PrivacyModes, type PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { createRedactedBytes, createRedactedString } from "../../../packages/redaction/create.ts"
-import { RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { isRedactedString, RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import {
@@ -88,12 +102,18 @@ export { deserializeSlateTodoItemInterop } from "./todo-schema-adapter.ts"
 export { redactSlateTodoItem } from "./todo-schema-adapter.ts"
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
 import {
+  createSlateConversationSummaryToolCall,
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
   createSlateUnsupportedConversationStep,
+  isSlateConversationSummaryToolCall,
   type SlateConversationStepCompatibility,
   type SlateConversationStep,
+  type SlateConversationSummaryResult,
+  type SlateProgressUpdateResult,
+  type SlateToolCallText,
+  type SlateToolCallValue,
 } from "../../../packages/agent/conversation-step-state.ts"
 import type {
   SlateConversationState,
@@ -1258,6 +1278,186 @@ function restoreStepUnknownFields(
   }
 }
 
+function slateToolCallTextFromInterop(value: unknown): SlateToolCallText | undefined {
+  if (typeof value === "string" || isRedactedString(value)) return value
+  return undefined
+}
+
+function slateSummaryToolCallFromInterop(
+  operation: string | undefined,
+  value: unknown,
+): SlateToolCallValue | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined
+  const call = value as Record<string, unknown>
+  const args = call.args === undefined ? undefined : isRecordValue(call.args) ? call.args : null
+  const result = call.result === undefined ? undefined : isRecordValue(call.result) ? call.result : null
+  if (args === null || result === null) return undefined
+
+  if (operation === "sendFinalSummaryToolCall") {
+    const finalSummary = args?.finalSummary === undefined
+      ? undefined
+      : slateToolCallTextFromInterop(args.finalSummary)
+    if (args?.finalSummary !== undefined && finalSummary === undefined) return undefined
+    let slateResult: SlateConversationSummaryResult | undefined
+    if (result !== undefined) {
+      switch ((result.result as { readonly case?: unknown } | undefined)?.case) {
+        case "success": {
+          const success = (result.result as { readonly value?: unknown }).value
+          if (!isRecordValue(success)) return undefined
+          const summary = slateToolCallTextFromInterop(success.finalSummary)
+          if (summary === undefined) return undefined
+          slateResult = { kind: "success", summary }
+          break
+        }
+        case "error": {
+          const error = (result.result as { readonly value?: unknown }).value
+          if (!isRecordValue(error)) return undefined
+          const message = slateToolCallTextFromInterop(error.error)
+          if (message === undefined) return undefined
+          slateResult = { kind: "error", message }
+          break
+        }
+        default:
+          slateResult = { kind: "unspecified" }
+      }
+    }
+    return createSlateConversationSummaryToolCall({
+      source: "final",
+      ...(args === undefined ? {} : { args: { ...(finalSummary === undefined ? {} : { finalSummary }) } }),
+      ...(slateResult === undefined ? {} : { result: slateResult }),
+    })
+  }
+
+  if (operation === "communicateUpdateToolCall") {
+    const currentStep = args?.currentStep === undefined
+      ? undefined
+      : slateToolCallTextFromInterop(args.currentStep)
+    const finalSummary = args?.finalSummary === undefined
+      ? undefined
+      : slateToolCallTextFromInterop(args.finalSummary)
+    const completedSubtitle = args?.completedSubtitle === undefined
+      ? undefined
+      : slateToolCallTextFromInterop(args.completedSubtitle)
+    if ((args?.currentStep !== undefined && currentStep === undefined) ||
+        (args?.finalSummary !== undefined && finalSummary === undefined) ||
+        (args?.completedSubtitle !== undefined && completedSubtitle === undefined)) return undefined
+    let slateResult: SlateProgressUpdateResult | undefined
+    if (result !== undefined) {
+      switch ((result.result as { readonly case?: unknown } | undefined)?.case) {
+        case "success": {
+          const success = (result.result as { readonly value?: unknown }).value
+          if (!isRecordValue(success) || typeof success.messageIndex !== "number" ||
+              !Number.isInteger(success.messageIndex) || success.messageIndex < 0 ||
+              success.messageIndex > 0xffff_ffff) return undefined
+          const step = slateToolCallTextFromInterop(success.currentStep)
+          if (step === undefined) return undefined
+          slateResult = { kind: "success", currentStep: step, messageIndex: success.messageIndex }
+          break
+        }
+        case "error": {
+          const error = (result.result as { readonly value?: unknown }).value
+          if (!isRecordValue(error)) return undefined
+          const message = slateToolCallTextFromInterop(error.error)
+          if (message === undefined) return undefined
+          slateResult = { kind: "error", message }
+          break
+        }
+        default:
+          slateResult = { kind: "unspecified" }
+      }
+    }
+    return createSlateConversationSummaryToolCall({
+      source: "progress",
+      ...(args === undefined ? {} : {
+        args: {
+          ...(currentStep === undefined ? {} : { currentStep }),
+          ...(finalSummary === undefined ? {} : { finalSummary }),
+          ...(completedSubtitle === undefined ? {} : { completedSubtitle }),
+        },
+      }),
+      ...(slateResult === undefined ? {} : { result: slateResult }),
+    })
+  }
+
+  return undefined
+}
+
+function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  return slateSummaryToolCallFromInterop(operation, value) ?? {
+    ...(operation === undefined ? {} : { case: operation }),
+    ...(value === undefined ? {} : { value }),
+  }
+}
+
+function interopToolCallValueFromSlate(
+  tool: SlateToolCallValue,
+  plain: boolean,
+): { readonly case: string | undefined; readonly value?: unknown } {
+  if (isSlateConversationSummaryToolCall(tool)) {
+    const text = (value: SlateToolCallText): string | RedactedString =>
+      isRedactedString(value) && plain
+        ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+        : value
+    if (tool.source === "final") {
+      const result = tool.result === undefined
+        ? undefined
+        : tool.result.kind === "success"
+          ? new SendFinalSummaryResult({ result: {
+              case: "success",
+              value: new SendFinalSummarySuccess({ finalSummary: text(tool.result.summary) as never }),
+            } })
+          : tool.result.kind === "error"
+            ? new SendFinalSummaryResult({ result: {
+                case: "error",
+                value: new SendFinalSummaryError({ error: text(tool.result.message) as never }),
+              } })
+            : new SendFinalSummaryResult()
+      return {
+        case: "sendFinalSummaryToolCall",
+        value: new SendFinalSummaryToolCall({
+          ...(tool.args === undefined ? {} : { args: new SendFinalSummaryArgs({
+            ...(tool.args.finalSummary === undefined ? {} : { finalSummary: text(tool.args.finalSummary) as never }),
+          }) }),
+          ...(result === undefined ? {} : { result }),
+        }),
+      }
+    }
+    const result = tool.result === undefined
+      ? undefined
+      : tool.result.kind === "success"
+        ? new CommunicateUpdateResult({ result: {
+            case: "success",
+            value: new CommunicateUpdateSuccess({
+              currentStep: text(tool.result.currentStep) as never,
+              messageIndex: tool.result.messageIndex,
+            }),
+          } })
+        : tool.result.kind === "error"
+          ? new CommunicateUpdateResult({ result: {
+              case: "error",
+              value: new CommunicateUpdateError({ error: text(tool.result.message) as never }),
+            } })
+          : new CommunicateUpdateResult()
+    return {
+      case: "communicateUpdateToolCall",
+      value: new CommunicateUpdateToolCall({
+        ...(tool.args === undefined ? {} : { args: new CommunicateUpdateArgs({
+          ...(tool.args.currentStep === undefined ? {} : { currentStep: text(tool.args.currentStep) as never }),
+          ...(tool.args.finalSummary === undefined ? {} : { finalSummary: text(tool.args.finalSummary) as never }),
+          ...(tool.args.completedSubtitle === undefined
+            ? {}
+            : { completedSubtitle: text(tool.args.completedSubtitle) as never }),
+        }) }),
+        ...(result === undefined ? {} : { result }),
+      }),
+    }
+  }
+  return {
+    case: tool.case,
+    ...(Object.prototype.hasOwnProperty.call(tool, "value") ? { value: plain ? unredactStepValue(tool.value) : tool.value } : {}),
+  }
+}
+
 /** Projects the generated step oneof into Slate's discriminated step vocabulary. */
 export function fromInteropConversationStep(
   step: ConversationStep,
@@ -1291,10 +1491,7 @@ export function fromInteropConversationStep(
           event: context.hookEventName,
           text: context.content as never,
         })),
-        tool: {
-          ...(step.message.value.tool.case === undefined ? {} : { case: step.message.value.tool.case }),
-          ...(step.message.value.tool.value === undefined ? {} : { value: step.message.value.tool.value }),
-        },
+        tool: slateToolCallValueFromInterop(step.message.value.tool.case, step.message.value.tool.value),
         ...(compatibility === undefined ? {} : { compatibility }),
       })
     default: {
@@ -1322,10 +1519,7 @@ export function fromInteropToolCallStep(
       event: context.hookEventName,
       text: context.content as never,
     })),
-    tool: {
-      ...(toolCall.tool.case === undefined ? {} : { case: toolCall.tool.case }),
-      ...(toolCall.tool.value === undefined ? {} : { value: toolCall.tool.value }),
-    },
+    tool: slateToolCallValueFromInterop(toolCall.tool.case, toolCall.tool.value),
   })
 }
 
@@ -1358,9 +1552,7 @@ export function toInteropConversationStep(step: SlateConversationStep): Conversa
               hookEventName: context.event,
               content: context.text as never,
             })) as never,
-            tool: step.tool.case === undefined
-              ? { case: undefined }
-              : { case: step.tool.case as never, value: step.tool.value as never },
+            tool: interopToolCallValueFromSlate(step.tool, false) as never,
           }),
         },
       })
@@ -1443,9 +1635,7 @@ export function toPlainInteropConversationStep(step: SlateConversationStep): Con
               hookEventName: context.event,
               content: plainText(context.text),
             })) as never,
-            tool: step.tool.case === undefined
-              ? { case: undefined }
-              : { case: step.tool.case as never, value: unredactStepValue(step.tool.value) as never },
+            tool: interopToolCallValueFromSlate(step.tool, true) as never,
           }),
         },
       })
@@ -1855,7 +2045,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "step", "compatibility"]) ||
-      envelope.format !== STEP_STORAGE_FORMAT || envelope.version !== 1 ||
+      envelope.format !== STEP_STORAGE_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
       envelope.step === null || typeof envelope.step !== "object" || Array.isArray(envelope.step)) return false
   if (envelope.compatibility !== undefined) {
     if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
@@ -1881,6 +2071,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       const tool = step.tool as Record<string, unknown>
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
+          (envelope.version === 1 && tool.operation === "conversation-summary") ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -1920,7 +2111,7 @@ function serializeStoredStepEnvelope(
 ): Uint8Array {
   const envelope = {
     format: STEP_STORAGE_FORMAT,
-    version: 1,
+    version: 2,
     step: storedStep,
     ...(legacyUnknownFields === undefined || legacyUnknownFields.length === 0
       ? {}
@@ -1943,6 +2134,12 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       }
       break
     case "tool-call":
+      if (step.tool.kind === "conversation-summary" && !isSlateConversationSummaryToolCall(step.tool)) {
+        throw new TypeError("Slate conversation summary operation is invalid")
+      }
+      if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" && step.tool.kind !== "legacy") {
+        throw new TypeError("Slate tool operation kind is unsupported")
+      }
       storedStep = {
         kind: step.kind,
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId }),
@@ -1956,12 +2153,14 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: {
-          ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
-          ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
-            ? { payload: encodeSlateValue(step.tool.value) }
-            : {}),
-        },
+        tool: isSlateConversationSummaryToolCall(step.tool)
+          ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
+          : {
+              ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
+              ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
+                ? { payload: encodeSlateValue(step.tool.value) }
+                : {}),
+            },
       }
       break
     case "unsupported":
@@ -2004,6 +2203,15 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
       })
     case "tool-call": {
       const tool = step.tool as Record<string, unknown>
+      const storedOperation = typeof tool.operation === "string" ? tool.operation : undefined
+      const storedPayload = Object.prototype.hasOwnProperty.call(tool, "payload")
+        ? decodeSlateValue(tool.payload as StoredSlateValue, privacyMode)
+        : undefined
+      const toolValue = storedOperation === "conversation-summary"
+        ? isSlateConversationSummaryToolCall(storedPayload)
+          ? storedPayload
+          : (() => { throw new TypeError("Stored Slate conversation summary tool call is invalid") })()
+        : slateToolCallValueFromInterop(storedOperation, storedPayload)
       return createSlateToolCallStep({
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
         ...(step.startedAtMs === undefined ? {} : { startedAtMs: BigInt(step.startedAtMs as string) }),
@@ -2012,12 +2220,7 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
           event: context.event as string,
           text: decodeRedactedStepText(context.text as StoredRedactedStepText, privacyMode),
         })),
-        tool: {
-          ...(tool.operation === undefined ? {} : { case: tool.operation as string }),
-          ...(Object.prototype.hasOwnProperty.call(tool, "payload")
-            ? { value: decodeSlateValue(tool.payload as StoredSlateValue, privacyMode) }
-            : {}),
-        },
+        tool: toolValue,
         ...(compatibility === undefined ? {} : { compatibility }),
       })
     }

@@ -16,6 +16,8 @@ import type { TaskSubagentResolution } from "../../source/packages/agent/tools/t
 import type { SlateTaskRequest } from "../../source/packages/agent/tools/task-runtime-types.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey, conversationGroupIdKey } from "../../source/packages/agent/utils/request-scope.ts"
+import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { slateSubagentExecutorResource } from "../../source/packages/agent-exec/subagent.ts"
 import type { SubagentContinuationConfig, SubagentExecutionArgs, SubagentExecutionResult } from "../../source/packages/agent-exec/subagent.ts"
@@ -37,7 +39,11 @@ import {
   SlateTaskBackgroundReason,
   type SlateTaskResult,
 } from "../../source/packages/agent/tools/task-result-state.ts"
-import type { SlateConversationStep } from "../../source/packages/agent/conversation-step-state.ts"
+import {
+  createSlateConversationSummaryToolCall,
+  createSlateToolCallStep,
+  type SlateConversationStep,
+} from "../../source/packages/agent/conversation-step-state.ts"
 import {
   fromInteropTaskResultInterop,
   toInteropTaskResultInterop,
@@ -186,6 +192,27 @@ test("the subagent's own summary is shown above its answer", () => {
   const rendered = renderTaskResultToString(successResult({ conversationSteps: [answerStep("the answer"), summaryStep("the summary")] }))
   assert.match(rendered, /<user_visible_high_level_summary>\nthe summary\n<\/user_visible_high_level_summary>/)
   assert.match(rendered, /<response>\nthe answer\n<\/response>/)
+})
+
+test("task result projection does not reveal a redacted summary string", () => {
+  const redactedSummary = createSlateToolCallStep({
+    tool: createSlateConversationSummaryToolCall({
+      source: "final",
+      args: {
+        finalSummary: createRedactedString(
+          "private summary",
+          DataClassification.CODE,
+          "final_summary",
+          PrivacyMode.NO_STORAGE,
+        ),
+      },
+    }),
+  })
+  const result = successResult({ conversationSteps: [summaryStep("prior summary"), redactedSummary] })
+  const view = projectSlateTaskResult(result)
+
+  assert.equal(view.kind, "success")
+  if (view.kind === "success") assert.equal(view.chosenSummary, "prior summary")
 })
 
 test("a run hidden from notifications shows only its answer", () => {
