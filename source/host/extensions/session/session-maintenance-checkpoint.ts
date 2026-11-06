@@ -16,7 +16,7 @@ export async function clearStaleCheckpointRootsOnce(
   try {
     const rootId = database.get("latestRootBlobId");
     if (!(rootId instanceof Uint8Array) || rootId.length === 0) return false;
-    if (store.getConversationStateStructure().turns.length === 0 || openHandles(host, dbPath) > 1) return false;
+    if (store.getConversationStateStructure().turnBlobIds.length === 0 || openHandles(host, dbPath) > 1) return false;
 
     const initialGeneration = generationAt(host, dbPath);
     await host.requireWorkerPool().clearStaleCheckpointRoots(

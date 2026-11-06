@@ -4,6 +4,8 @@ import { toRedactedConversationAction } from "../redacted-protos/generated/agent
 import { ConversationAction, ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { isSlateConversationCheckpointV2, type SlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts"
+import { interopAgentConversationCheckpointFromSlate } from "./agent-conversation-protobuf-adapter.ts"
 import { toRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
 
 export {
@@ -43,6 +45,18 @@ export interface InteropTurnRunProjection {
 
 export function cloneInteropConversationState(state: InteropConversationState): InteropConversationState {
   return ConversationStateStructure.fromBinary(state.toBinary())
+}
+
+/** Projects the store's Slate checkpoint at the runner boundary, while accepting old stores during migration. */
+export function runnerConversationStateFromStoreCheckpoint(value: unknown): InteropConversationState {
+  if (isSlateConversationCheckpointV2(value)) {
+    return interopAgentConversationCheckpointFromSlate(value)
+  }
+  if (value !== null && typeof value === "object") {
+    const toBinary = (value as { readonly toBinary?: unknown }).toBinary
+    if (typeof toBinary === "function") return cloneInteropConversationState(value as ConversationStateStructure)
+  }
+  throw new TypeError("Agent conversation store returned an unsupported checkpoint")
 }
 
 export function projectInteropTurnRun(input: {

@@ -1,4 +1,5 @@
 import type { TranscriptEntry } from "./agent-db.ts"
+import type { SlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts"
 
 export interface ConversationBlobStore<Value = Uint8Array> {
   getBlob(context: unknown, id: Uint8Array): Promise<Value | null>
@@ -6,11 +7,7 @@ export interface ConversationBlobStore<Value = Uint8Array> {
   flush(context: unknown): Promise<void>
 }
 
-export interface ConversationStateShape {
-  readonly turns: readonly Uint8Array[]
-  readonly todos: readonly Uint8Array[]
-  readonly summary?: Uint8Array
-}
+export type ConversationStateShape = SlateConversationCheckpointV2
 
 export interface ConversationSessionHandles {
   readonly db: { getTranscriptEntries(): TranscriptEntry[]; close(): void }

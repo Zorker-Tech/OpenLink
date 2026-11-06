@@ -703,8 +703,9 @@
     },
     "host/extensions/session/session-maintenance.ts": {
       "claim": "rewritten",
-      "overlap": 0.7439024390243902,
-      "evidence": "tests/packages/host-session-maintenance-contract.test.ts pins transcript backfill, stale-root stability gates, durable-root recovery, hidden-entry repair, legacy-blob retirement, filesystem cleanup and sequential error isolation; host-runtime-transcript.test.ts and host-runtime-upgrade-recreate-resume.test.ts cover surrounding recovery behavior."
+      "overlap": 0.724202626641651,
+      "refreshReason": "Session maintenance now reads the Slate V2 checkpoint's turnBlobIds; root reference validation accepts the versioned Slate checkpoint directly.",
+      "evidence": "Focused checkpoint codec/store, session recovery/maintenance, runner projection and blob reachability tests pass 180/180 across 24 suites. The full Work-host suite passes 9980/9980 across 1427 suites under Node 24.14 with concurrency 1. Extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals) and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Existing maintenance contracts continue to pin transcript backfill, stale-root stability, durable-root recovery, hidden-entry repair and legacy-blob retirement."
     },
     "host/boxes/box-store-sync/box-store-pack.ts": {
       "claim": "rewritten",
@@ -1569,8 +1570,9 @@
     },
     "host/extensions/session/session-conversation-state.ts": {
       "claim": "rewritten",
-      "overlap": 0.5561959654178674,
-      "evidence": "tests/packages/host-session-conversation-state-contract.test.ts adds 5 direct contracts for blob resolution/caching, outline projection, handle cleanup, DB-read fallbacks and session-store reads. The focused conversation-state, materialization, projection, runtime and session-store suites pass 48/48; work-host typecheck passes. Session resource lifetimes and database reads are separated into Slate-owned helpers."
+      "overlap": 0.5273775216138329,
+      "refreshReason": "Session conversation-state recovery now consumes SlateConversationCheckpointV2 references while legacy outline hydration is projected at the session adapter.",
+      "evidence": "Focused checkpoint codec/store, session recovery/maintenance, runner projection and blob reachability tests pass 180/180 across 24 suites. Session ConversationStatePort now consumes Slate V2 roots and retains its blob resolution/cache, outline, cleanup and fallback behavior. The full Work-host suite passes 9980/9980 across 1427 suites under Node 24.14 with concurrency 1; extension-id, rewrite and interop gates pass."
     },
     "host/automations/listener-integrations.automations.ts": {
       "claim": "rewritten",

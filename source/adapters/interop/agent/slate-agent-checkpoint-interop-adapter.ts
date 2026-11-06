@@ -61,6 +61,10 @@ import {
   toInteropGoalState,
   toInteropPlanRegistryEntry,
 } from "./agent-state-message-serdes-adapter.ts"
+import {
+  collectSubagentUnknownFieldsInterop,
+  restoreSubagentUnknownFieldsInterop,
+} from "./subagent-persisted-state-adapter.ts"
 import { fromHex, toHex } from "../../../packages/agent-kv/serde.ts"
 
 function sortedRecord<Value>(entries: Iterable<readonly [string, Value]>): Record<string, Value> {
@@ -215,10 +219,15 @@ function targetMachineToInterop(value: SlateCheckpointTargetMachine | undefined)
   }
 }
 
-function subagentFromInterop(value: SubagentPersistedState): SlateCheckpointSubagent {
+function subagentFromInterop(value: SubagentPersistedState, preserveUnknownFields = false): SlateCheckpointSubagent {
   const environment = environmentFromInterop(value.environment)
   const subagentType = subagentTypeFromInterop(value.subagentType)
   const targetMachine = targetMachineFromInterop(value.machine)
+  const unknownFields = preserveUnknownFields ? collectSubagentUnknownFieldsInterop(value) : []
+  const compatibility = {
+    ...(environment.compatibility ?? {}),
+    ...(unknownFields.length === 0 ? {} : { legacyUnknownFields: unknownFields }),
+  }
   return {
     ...(value.conversationState === undefined
       ? {}
@@ -243,14 +252,20 @@ function subagentFromInterop(value: SubagentPersistedState): SlateCheckpointSuba
       ? {}
       : { requestedRuntimeBuildId: value.cloudRequestedEnvironmentBuildId }),
     ...(targetMachine === undefined ? {} : { targetMachine }),
+    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
   }
+}
+
+/** Projects a legacy or referenced persisted subagent into Slate's checkpoint record. */
+export function slateCheckpointSubagentFromInterop(value: SubagentPersistedState): SlateCheckpointSubagent {
+  return subagentFromInterop(value, true)
 }
 
 function subagentToInterop(value: SlateCheckpointSubagent): SubagentPersistedState {
   const environment = environmentToInterop(value)
   const subagentType = subagentTypeToInterop(value.type)
   const machine = targetMachineToInterop(value.targetMachine)
-  return new SubagentPersistedState({
+  const interop = new SubagentPersistedState({
     ...(value.conversation === undefined ? {} : { conversationState: conversationStateToInterop(value.conversation) }),
     createdTimestampMs: BigInt(value.createdAtMs),
     lastUsedTimestampMs: BigInt(value.lastUsedAtMs),
@@ -271,6 +286,7 @@ function subagentToInterop(value: SlateCheckpointSubagent): SubagentPersistedSta
       : { cloudRequestedEnvironmentBuildId: value.requestedRuntimeBuildId }),
     ...(machine === undefined ? {} : { machine }),
   })
+  return interop
 }
 
 function communicationHistoryFromInterop(
@@ -667,5 +683,13 @@ function conversationStateToInterop(value: SlateConversationCheckpointV2): Conve
 export function interopConversationCheckpointFromSlate(
   value: SlateConversationCheckpointV2,
 ): ConversationStateStructure {
-  return conversationStateToInterop(value)
+  const interop = conversationStateToInterop(value)
+  for (const [subagentId, subagent] of Object.entries(value.subagents)) {
+    const fields = subagent.compatibility?.legacyUnknownFields
+    const target = interop.subagentStates[subagentId]
+    if (fields !== undefined && target !== undefined) {
+      restoreSubagentUnknownFieldsInterop(target, fields)
+    }
+  }
+  return interop
 }

@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { test } from "node:test"
 
 import { SlateSessionConversationState } from "../../source/host/extensions/session/session-conversation-state.ts"
+import { createEmptySlateConversationCheckpointV2 } from "../../source/packages/agent/conversation-checkpoint-state.ts"
 
 function hostShape(overrides: Record<string, unknown> = {}) {
   return {
@@ -19,13 +20,17 @@ function hostShape(overrides: Record<string, unknown> = {}) {
 
 test("state materialization refuses unresolved or incomplete turns and returns a complete projection", async () => {
   const id = Uint8Array.from([1, 2, 3])
-  const structure = { turns: [id], todos: [id] }
+  const structure = {
+    ...createEmptySlateConversationCheckpointV2(),
+    turnBlobIds: ["010203"],
+    todoBlobIds: ["010203"],
+  }
   let reads = 0
   let derived = 0
   const blobStore = {
     getBlob: async (_ctx: unknown, requested: Uint8Array) => {
       reads += 1
-      return requested === id ? Uint8Array.from([9]) : null
+      return Buffer.from(requested).equals(Buffer.from(id)) ? Uint8Array.from([9]) : null
     },
     setBlob: async () => {},
     flush: async () => {},
@@ -44,7 +49,7 @@ test("state materialization refuses unresolved or incomplete turns and returns a
 
   const missing = new SlateSessionConversationState(hostShape({ deriveState: async () => { derived += 1; return { turns: [] } } }))
   assert.equal(await missing.resolveConversationState(structure, { ...blobStore, getBlob: async () => null }), null)
-  assert.equal(await service.resolveConversationState({ turns: [], todos: [] }, blobStore), null)
+  assert.equal(await service.resolveConversationState(createEmptySlateConversationCheckpointV2(), blobStore), null)
 })
 
 test("session views forward transcript and outline data, then close both handles", async () => {

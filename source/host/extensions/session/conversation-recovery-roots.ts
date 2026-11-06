@@ -1,4 +1,5 @@
 import { fromHex, toHex } from "../../../packages/agent-kv/serde.ts";
+import type { SlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts";
 import { decodeConversationStateStructure } from "../../../adapters/interop/local-conversation-state.ts";
 import { MAX_ROOT_BLOB_BYTES, type ConversationStructureRefs, type RootScore } from "./conversation-recovery-contracts.ts";
 
@@ -13,16 +14,21 @@ interface RootDatabase {
 /** Verify that all references in a snapshot still resolve to bounded blobs. */
 export async function conversationStructureFullyResolves(
   ctx: unknown,
-  structure: ConversationStructureRefs,
+  structure: ConversationStructureRefs | SlateConversationCheckpointV2,
   blobStore: BlobReader,
 ): Promise<boolean> {
-  if (structure.turns.length === 0) return false;
+  const turns = "turnBlobIds" in structure ? structure.turnBlobIds.map(fromHex) : structure.turns;
+  const todos = "todoBlobIds" in structure ? structure.todoBlobIds.map(fromHex) : structure.todos;
+  const summary = "turnBlobIds" in structure
+    ? structure.summaryBlobId === undefined ? undefined : fromHex(structure.summaryBlobId)
+    : structure.summary;
+  if (turns.length === 0) return false;
 
-  const requiredIds = [...structure.turns, ...structure.todos];
+  const requiredIds = [...turns, ...todos];
   for (const id of requiredIds) {
     if (!await hasUsableBlob(ctx, id, blobStore)) return false;
   }
-  if (structure.summary?.length && !await hasUsableBlob(ctx, structure.summary, blobStore)) return false;
+  if (summary?.length && !await hasUsableBlob(ctx, summary, blobStore)) return false;
   return true;
 }
 

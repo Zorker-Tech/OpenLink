@@ -3,6 +3,7 @@ import { AgentConversationStore } from "../../../packages/agent-kv/agent-convers
 import {
   createSlateAgentConversationCodec,
   deriveInteropConversationStateFromStructure,
+  interopAgentConversationCheckpointFromSlate,
 } from "../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 import type { Context } from "../../../packages/context/context.ts";
 import { AgentWorkerPool } from "../../agents/isolation/agent-worker-pool.ts";
@@ -25,7 +26,7 @@ export function createSessionConversationState(
     openSession: agentId => store.openSession(agentId) as never,
     deriveState: (structure, blobStore) => deriveInteropConversationStateFromStructure(
       context,
-      structure as never,
+      interopAgentConversationCheckpointFromSlate(structure),
       blobStore as never,
     ),
     deriveOutline: state => deriveOutlineFromConversationState(state as ConversationState),

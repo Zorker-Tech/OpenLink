@@ -271,8 +271,11 @@ export class AgentConversationStore<Context = unknown, Checkpoint = unknown, Con
 
   /** Writes the structure as the new root blob and remembers its id as the agent's latest. */
   async handleCheckpoint(ctx: Context, checkpoint: Checkpoint): Promise<void> {
-    this.conversationStateStructure = checkpoint
-    const bytes = this.codec.encodeCheckpoint(checkpoint)
+    const ownedCheckpoint = this.codec.normalizeCheckpoint === undefined
+      ? checkpoint
+      : this.codec.normalizeCheckpoint(checkpoint)
+    this.conversationStateStructure = ownedCheckpoint
+    const bytes = this.codec.encodeCheckpoint(ownedCheckpoint)
     const blobId = this.fixedRootBlobId ?? await getBlobId(bytes)
     await this.blobStore.setBlob(ctx, blobId, bytes)
     this.setMetadata("latestRootBlobId", blobId)

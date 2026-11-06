@@ -26,6 +26,7 @@ import {
   type MaintenanceStore,
 } from "../../source/host/extensions/session/session-maintenance.ts";
 import { ConversationRecoveryScanError } from "../../source/host/extensions/session/session-recovery.ts";
+import { createEmptySlateConversationCheckpointV2 } from "../../source/packages/agent/conversation-checkpoint-state.ts";
 import {
   MAX_ROOT_BLOB_BYTES,
   REBUILT_ENTRY_ID_PREFIX,
@@ -103,7 +104,7 @@ function harness(options: {
     retireLegacyConversationBlobs(version) { retirementVersion = version; hasLegacy = false; return true; },
   };
 
-  const structure = { turns: [new Uint8Array([1])], todos: [] as Uint8Array[] };
+  const structure = { ...createEmptySlateConversationCheckpointV2(), turnBlobIds: ["01"] };
   const state = options.state === undefined ? { turns: [{ items: [{ kind: "user", id: "turn-1", text: "recovered" } as OutlineItem] }] } : options.state;
   const worker = {
     async clearStaleCheckpointRoots(agentId: string, blobDbPath: string, rootHex: string, dbPath: string) {

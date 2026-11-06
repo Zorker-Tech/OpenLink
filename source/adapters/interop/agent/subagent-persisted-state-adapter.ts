@@ -66,6 +66,10 @@ function collectUnknownFields(root: Message): SlateCheckpointUnknownField[] {
   return fields
 }
 
+export function collectSubagentUnknownFieldsInterop(value: SubagentPersistedState): SlateCheckpointUnknownField[] {
+  return collectUnknownFields(value)
+}
+
 function messageAtPath(root: Message, path: readonly SlateCheckpointUnknownFieldPathStep[]): Message {
   let current: unknown = root
   for (const step of path) {
@@ -102,6 +106,14 @@ function restoreUnknownFields(root: Message, fields: readonly SlateCheckpointUnk
       fromHex(field.dataHex),
     )
   }
+}
+
+export function restoreSubagentUnknownFieldsInterop(
+  value: SubagentPersistedState,
+  fields: readonly SlateCheckpointUnknownField[] | undefined,
+): SubagentPersistedState {
+  restoreUnknownFields(value, fields)
+  return value
 }
 
 function environmentFromInterop(value: number): {
@@ -146,7 +158,7 @@ export function fromInteropSubagentPersistedState(
   preservedUnknownFields?: readonly SlateCheckpointUnknownField[],
 ): SlateSubagentPersistedState {
   const environment = environmentFromInterop(value.environment)
-  const unknownFields = preservedUnknownFields ?? collectUnknownFields(value)
+  const unknownFields = preservedUnknownFields ?? collectSubagentUnknownFieldsInterop(value)
   const cloudAgent: SlateSubagentCloudAgent | undefined = value.cloudSubagent === undefined
     ? undefined
     : {
@@ -204,6 +216,5 @@ export function toInteropSubagentPersistedState(
       : { cloudRequestedEnvironmentBuildId: value.requestedRuntimeBuildId }),
     ...(value.targetMachine === undefined ? {} : { machine: targetMachineToProtoInterop(value.targetMachine) }),
   })
-  restoreUnknownFields(interop, value.compatibility?.legacyUnknownFields)
-  return interop
+  return restoreSubagentUnknownFieldsInterop(interop, value.compatibility?.legacyUnknownFields)
 }

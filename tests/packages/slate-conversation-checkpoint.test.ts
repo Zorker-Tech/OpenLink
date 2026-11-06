@@ -31,9 +31,39 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { SubagentType, SubagentTypeCustom, SubagentTypeShell } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { encodeInteropAgentConversationCheckpoint, decodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
-import { isSlateConversationCheckpointV2 } from "../../source/packages/agent/conversation-checkpoint-state.ts"
+import {
+  createEmptySlateConversationCheckpointV2,
+  isSlateConversationCheckpointV2,
+} from "../../source/packages/agent/conversation-checkpoint-state.ts"
 import { deserializeSlateAgentCheckpoint } from "../../source/packages/agent-kv/agent-checkpoint-schema.ts"
 import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
+
+test("an empty first-party checkpoint has complete, stable collection defaults", () => {
+  const checkpoint = createEmptySlateConversationCheckpointV2()
+  assert.equal(isSlateConversationCheckpointV2(checkpoint), true)
+  assert.deepEqual(checkpoint, {
+    promptMessageBlobIds: [],
+    todoBlobIds: [],
+    pendingOperationIds: [],
+    turnBlobIds: [],
+    workspaceUris: [],
+    legacyFileContentBlobIds: {},
+    summaryArchiveBlobIds: [],
+    turnTimings: [],
+    fileContentBlobIds: {},
+    subagents: {},
+    selfSummaryCount: 0,
+    readPaths: [],
+    planRegistry: {},
+    trackedRepositories: [],
+    communicationHistory: [],
+    subagentThreads: {},
+    communicationTurnsByCallId: {},
+    subagentRunsByCallId: {},
+    subagentStateBlobIds: {},
+    completedQuestionCallIds: [],
+  })
+})
 
 test("Slate checkpoint v2 owns all conversation fields and round-trips nested state", () => {
   const state = new ConversationStateStructure({

@@ -46,6 +46,7 @@ import type { PrivacyMode } from "../../packages/redaction/privacy-mode.ts";
 import {
   cloneInteropConversationState,
   projectInteropTurnRun,
+  runnerConversationStateFromStoreCheckpoint,
   restoreAgentConversationState,
   restoreSlateConversationState,
   type InteropConversationAction,
@@ -113,6 +114,7 @@ import { turnMcpExecutorPortFromInterop, turnMcpResourceImplementationFromIntero
 import type { TurnMcpCall, TurnMcpResultView } from "./turn-mcp-execution-contracts.ts";
 
 export const SLATE_AGENT_MAX_STEPS = 5_000;
+export { runnerConversationStateFromStoreCheckpoint };
 
 export interface TurnProfileIdentity {
   readonly name: string;

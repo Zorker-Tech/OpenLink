@@ -79,7 +79,7 @@ import { createHostBrowserDriverDependencies, createHostComputerToolDependencies
 import { createRemoteBoxResourceAccessor, type RemoteBoxResourceHost } from "./runner/remote-box-resources.ts";
 import { executeBoxWindowShellCommand } from "../adapters/interop/agent/box-window-shell-result-adapter.ts";
 import { createStreamAttempt } from "./runner/stream-attempt.ts";
-import { createTurnAgentRunStreamInput, createTurnAgentStreamStart, type TurnLocalResourceProjectionInput } from "./runner/turn-agent-composition.ts";
+import { createTurnAgentRunStreamInput, createTurnAgentStreamStart, runnerConversationStateFromStoreCheckpoint, type TurnLocalResourceProjectionInput } from "./runner/turn-agent-composition.ts";
 import { createProductionTurnAgentOwner, createProductionTurnAgentRunInput, type ProductionTurnAgentOwnerInput } from "./runner/production-turn-agent-owner.ts";
 import { createProductionTurnRunShellHostInput } from "./runner/production-turn-run-shell-adapter.ts";
 import { createPromptCollectorGlue, type PromptCollectorHost } from "./runner/prompt-collector-glue.ts";
@@ -812,7 +812,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
                 const shellHost: ShellTerminalWatchHost<Context> = {
                   ctx: productionContext,
                   ...createShellWatchGeneratedStateProjection({
-                    getConversationState: () => store.getConversationStateStructure(),
+                    getConversationState: () => runnerConversationStateFromStoreCheckpoint(store.getConversationStateStructure()),
                     getBlobStore: () => blobStore,
                   }),
                   getConversationId: () => session.id,
@@ -1486,11 +1486,11 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           isSharedRoomBoxToolsEnabled: () => sharedRoomBoxToolsAreEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
           ...presentOptions({ localToolPermission: projectedLocalToolPermission }),
         });
-      const getProductionConversationState = () => {
+      const getProductionConversationState = (): ReturnType<typeof runnerConversationStateFromStoreCheckpoint> => {
         const runner = builtRunner as { getAgentConversationStateStructure?: () => unknown } | undefined;
-        if (typeof runner?.getAgentConversationStateStructure === "function") return runner.getAgentConversationStateStructure();
+        if (typeof runner?.getAgentConversationStateStructure === "function") return runnerConversationStateFromStoreCheckpoint(runner.getAgentConversationStateStructure());
         const store = session.agentStore;
-        if (store != null && typeof store.getConversationStateStructure === "function") return store.getConversationStateStructure();
+        if (store != null && typeof store.getConversationStateStructure === "function") return runnerConversationStateFromStoreCheckpoint(store.getConversationStateStructure());
         throw new TypeError("the production Agent conversation state is not bound");
       };
       /** One shell review identity per surface: the approval, the instructions and the expiry are the turn's own. */
