@@ -4,8 +4,9 @@
 - Version: `1.0.2`
 - Imported commit: `9eb9b296192fcb70bda25e918cd6dd66abfa3d0d`
 - License: Apache-2.0 (`LICENSE`)
-- Import method: `git subtree add --prefix=services/agent-desktop`
-  with the full upstream history (no squash, no nested `.git`, no submodule).
+- Import method: `git subtree add --prefix=services/agent-desktop --squash`
+  (no nested `.git`, no submodule). Future updates use `git subtree pull
+  --squash` and retain the exact upstream revision in the source record.
 - Local source changes: none.
 
 The upstream Cargo workspace is kept independently buildable and is not part of
