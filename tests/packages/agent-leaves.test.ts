@@ -41,6 +41,7 @@ import { drainPendingWritesOnRunStreamError } from "../../source/packages/agent/
 import { hasPdfMagicBytes, isPdfBinary } from "../../source/packages/agent/tools/core/read/pdf-utils.ts"
 import { detectImageMimeType } from "../../source/packages/agent/tools/core/read/image-utils.ts"
 import { CancelActionHandler } from "../../source/packages/agent/actions/cancel-action-handler.ts"
+import { createSlateCancelActionPayload } from "../../source/packages/agent/actions/cancel-action-contracts.ts"
 import { BackgroundShellActionHandler, NoOpSideChannelActionHandler } from "../../source/packages/agent/actions/background-shell-action-handler.ts"
 import {
   NOTIFICATION_TAG_NAMES,
@@ -432,7 +433,10 @@ test("an image is typed from its bytes first, and its name as a fallback", () =>
 
 test("a cancellation routed to the turn is refused rather than ignored", async () => {
   const handler = new CancelActionHandler(undefined, undefined, undefined, undefined, undefined)
-  await assert.rejects(handler.handle(ctx(), {}, {}, {}, {}, {}), /should never be routed directly/)
+  await assert.rejects(
+    handler.handle(ctx(), createSlateCancelActionPayload("stop"), {}, {}, {}, {}),
+    /should never be routed directly/,
+  )
 })
 
 test("a side-channel action recomputes the state and runs no tool", async () => {

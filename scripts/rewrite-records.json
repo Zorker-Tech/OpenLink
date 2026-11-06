@@ -3009,6 +3009,11 @@
       "overlap": 0.48723404255319147,
       "evidence": "Focused ask-question completion, action-handler and route-contract suites pass 36/36; the full Work-host suite passes 9993/9993 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler selects the existing or next turn using Slate's versioned completion payload; historical action and request-context projection stays at the migration boundary."
     },
+    "packages/agent/actions/cancel-action-handler.ts": {
+      "claim": "rewritten",
+      "overlap": 0.6578947368421053,
+      "evidence": "Cancel route, handler and adjacent action suites pass 75/75; the full Work-host suite passes 9997/9997 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler accepts SlateCancelActionPayload and preserves the established misroute refusal. Measured overlap is 0.6578947368421053 against 38 baseline pairs."
+    },
     "packages/agent-exec/mcp.ts": {
       "claim": "rewritten",
       "overlap": 0.38876889848812096,

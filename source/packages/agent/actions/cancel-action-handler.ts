@@ -7,6 +7,8 @@
  * nothing, because reaching it means a caller routed the action to the wrong place.
  */
 
+import type { SlateCancelActionPayload } from "./cancel-action-contracts.ts"
+
 /** The refusal a cancellation raises when it reaches the turn runner: it was routed to the wrong place. */
 const CANCEL_CONVERSATION_ACTION_MISROUTED =
   "Cancel Conversation action should never be routed directly to runStream!";
@@ -28,7 +30,7 @@ export class CancelActionHandler {
   /** The turn's arguments are accepted because the handler's signature is the turn's, and none of them is used. */
   async handle(
     _turnContext: unknown,
-    _turnAction: unknown,
+    _turnAction: SlateCancelActionPayload,
     _promptExecutor: unknown,
     _stateComputer: unknown,
     _availableTools: unknown,

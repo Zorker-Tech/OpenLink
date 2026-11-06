@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { CancelActionHandler } from "../../source/packages/agent/actions/cancel-action-handler.ts";
+import { createSlateCancelActionPayload } from "../../source/packages/agent/actions/cancel-action-contracts.ts";
 
 const collaborators = () => ({
   config: { model: "m" },
@@ -16,7 +17,7 @@ const collaboratorsTuple = () => {
   return [given.config, given.resourceAccessor, given.interactionListener, given.summarizationHandler, given.conversationActionReceiver] as const;
 };
 
-const turnArguments = (extra?: unknown) => [undefined, undefined, undefined, undefined, extra, undefined] as const;
+const turnArguments = (extra?: unknown) => [undefined, createSlateCancelActionPayload("stop"), undefined, undefined, extra, undefined] as const;
 
 describe("the cancellation action's handler", () => {
   it("refuses the call with the message the agent expects", async () => {
@@ -57,7 +58,7 @@ describe("the cancellation action's handler", () => {
     const handler = new CancelActionHandler(...collaboratorsTuple());
     const unreadable = { get explode() { throw new Error("an ignored argument was read"); } };
     await assert.rejects(
-      handler.handle(unreadable, unreadable, unreadable, unreadable, unreadable, unreadable),
+      handler.handle(unreadable, unreadable as never, unreadable, unreadable, unreadable, unreadable),
       { message: "Cancel Conversation action should never be routed directly to runStream!" },
     );
   });

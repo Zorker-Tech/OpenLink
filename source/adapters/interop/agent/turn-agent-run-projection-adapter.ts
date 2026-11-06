@@ -3,6 +3,9 @@
 import { toRedactedConversationAction } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { ConversationAction, ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
+import { DataClassification } from "../../../packages/redaction/classification.ts"
+import { createRedactedString } from "../../../packages/redaction/create.ts"
+import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import {
   isSlateResumeActionPayload,
@@ -19,6 +22,11 @@ import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.t
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
 import { slateAskQuestionCompletionFromRedacted } from "./ask-question-result-adapter.ts"
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
+import {
+  createSlateCancelActionPayload,
+  isSlateCancelActionPayload,
+  redactSlateCancelActionPayload,
+} from "../../../packages/agent/actions/cancel-action-contracts.ts"
 import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
@@ -104,6 +112,29 @@ function slateResumeActionPayloadFromRedacted(
   }
 }
 
+function slateCancelActionPayloadFromRedacted(
+  value: Readonly<Record<string, unknown>> | undefined,
+  privacyMode: PrivacyMode,
+) {
+  const reasonValue = value?.reason
+  const reason = isRedactedString(reasonValue)
+    ? reasonValue
+    : createRedactedString(
+        typeof reasonValue === "string" ? reasonValue : "",
+        DataClassification.CODE,
+        "reason",
+        privacyMode,
+      )
+  const interruptedToolResolutions = value?.interruptedPendingToolCallResolutions
+  const compatibility = value === undefined
+    ? undefined
+    : {
+        ...(interruptedToolResolutions === undefined ? {} : { interruptedToolResolutions }),
+        legacyPayload: value,
+      }
+  return createSlateCancelActionPayload(reason, compatibility)
+}
+
 function isSlateAgentAction(value: InteropConversationAction | SlateAgentAction): value is SlateAgentAction {
   if (value === null || typeof value !== "object" || !("kind" in value) || !("context" in value)) return false
   return typeof value.kind === "string" && typeof value.context === "object" && value.context !== null
@@ -121,6 +152,15 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
       payload: isSlateSummarizeActionPayload(action.payload)
         ? action.payload
         : createSlateSummarizeActionPayload(),
+    }
+  }
+  if (action.kind === SlateAgentActionKind.CANCEL) {
+    return {
+      ...action,
+      context,
+      payload: isSlateCancelActionPayload(action.payload)
+        ? redactSlateCancelActionPayload(action.payload, privacyMode)
+        : slateCancelActionPayloadFromRedacted(undefined, privacyMode),
     }
   }
   if (action.kind === SlateAgentActionKind.RESUME) {
@@ -209,6 +249,12 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
   if (slateAction.kind === SlateAgentActionKind.RESUME) {
     return { ...slateAction, payload: slateResumeActionPayloadFromRedacted(action.action.value) }
   }
+  if (slateAction.kind === SlateAgentActionKind.CANCEL) {
+    return {
+      ...slateAction,
+      payload: slateCancelActionPayloadFromRedacted(action.action.value, action._privacyMode),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.SUMMARIZE) {
     return { ...slateAction, payload: createSlateSummarizeActionPayload() }
   }
@@ -250,6 +296,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "summarizeAction") {
     const wrapped = new ConversationAction({ action: { case: "summarizeAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "cancelAction") {
+    const wrapped = new ConversationAction({ action: { case: "cancelAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "executePlanAction") {
