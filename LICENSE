@@ -188,6 +188,34 @@ restriction or obligation.
 3.12 Compliance. You must comply with all applicable export control,
 sanctions, and other laws in connection with Your use of the Software.
 
+3.13 Public Repository Hosting Platforms. For this Section, an "Official Public
+Repository" means a public repository containing the Software that Haokir or a
+party authorized in writing by Haokir publishes or identifies as an official
+repository. The "Covered Hosting Platforms" are GitHub.com, GitLab.com,
+Bitbucket Cloud, and Gitee.com. Codeberg.org is covered only if its then-current
+policies permit the Software to be hosted under this License and Haokir
+identifies that repository as an official repository. A self-hosted GitLab,
+Gitea, Forgejo, or other instance is covered only if Haokir identifies that
+specific instance and repository in writing.
+
+Notwithstanding Sections 1.8 and 3.1, when Haokir makes an Official Public
+Repository available on a Covered Hosting Platform, You may access, view, clone,
+download, and create or maintain a fork of that repository using the platform's
+ordinary public-repository features. A clone or download may be kept locally
+only for uses otherwise authorized by Section 2. Any fork created under this
+Section must remain on that same platform. Any use or modification of a copy or
+fork remains subject to Sections 2 and 3 of this License. This Section does not
+permit You to publish or mirror a copy or fork on another platform, distribute
+the Software or a Derivative Work outside that platform, distribute binaries,
+or engage in Operational Use. It does not apply to a repository or mirror that
+Haokir has not designated as official.
+
+Any separate rights Haokir grants directly to a hosting provider by accepting
+that provider's terms are governed by those terms and are separate from the
+rights granted to You under this License. This Section neither grants those
+provider rights to You nor limits the provider rights Haokir has separately
+accepted.
+
 4. SEPARATELY LICENSED COMPONENTS
 
 4.1 The Software includes Separately Licensed Components. Your rights to those
