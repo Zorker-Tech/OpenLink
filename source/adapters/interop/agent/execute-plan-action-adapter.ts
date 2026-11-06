@@ -39,37 +39,57 @@ import {
 
 type Any = any
 
-function decodeExecutionMode(value: unknown): PlanExecutionMode {
-  if (value === undefined || value === AgentMode.UNSPECIFIED || value === AgentMode.AGENT) return "agent"
-  if (value === AgentMode.ASK) return "ask"
-  if (value === AgentMode.MULTITASK) return "multitask"
-  return { kind: "unrecognized", value }
+function decodeExecutionMode(value: unknown): { readonly mode: PlanExecutionMode; readonly legacyModeCode?: number } {
+  if (value === undefined || value === AgentMode.UNSPECIFIED || value === AgentMode.AGENT || value === "agent") return { mode: "agent" }
+  if (value === AgentMode.ASK || value === "ask" || value === "chat") return { mode: "chat" }
+  if (value === AgentMode.MULTITASK || value === "multitask") return { mode: "multitask" }
+  const isLegacyEnumCode = typeof value === "number" && Number.isInteger(value) &&
+    value >= -2_147_483_648 && value <= 2_147_483_647
+  return { mode: "unspecified", ...(isLegacyEnumCode ? { legacyModeCode: value } : {}) }
 }
 
-export function toInteropAgentMode(mode: PlanExecutionMode): AgentMode {
+export function toInteropAgentMode(mode: PlanExecutionMode, legacyModeCode?: number): AgentMode {
+  if (legacyModeCode !== undefined) return legacyModeCode as AgentMode
   if (mode === "agent") return AgentMode.AGENT
-  if (mode === "ask") return AgentMode.ASK
+  if (mode === "chat") return AgentMode.ASK
   if (mode === "multitask") return AgentMode.MULTITASK
-  return mode.value as AgentMode
+  return AgentMode.UNSPECIFIED
 }
 
-/** Decodes the action's redacted fields into the values the plan policy reasons about. */
+/** Decodes only the request-context sidecar retained from a historical plan action. */
+export function decodePlanRequestContext(value: unknown) {
+  return fromRedactedRequestContext(value as never, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
+}
+
+/** Projects the historical plan action into Slate's versioned request contract. */
 export function decodeExecutePlanAction(value: unknown): PlanExecutionRequest {
-  const action: Any = value
+  const action: Any = value !== null && typeof value === "object" ? value : {}
   const planFileContent = action.planFileContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   const planFilePath = action.planFilePath?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   const planFileUri = action.planFileUri?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  const { mode, legacyModeCode } = decodeExecutionMode(action.executionMode)
+  const requestContext = action.requestContext
+  const legacyPayload = value !== null && typeof value === "object"
+    ? value as Readonly<Record<string, unknown>>
+    : undefined
+  const compatibility = requestContext === undefined && legacyModeCode === undefined && legacyPayload === undefined
+    ? undefined
+    : {
+        ...(requestContext === undefined ? {} : { requestContext }),
+        ...(legacyModeCode === undefined ? {} : { legacyModeCode }),
+        ...(legacyPayload === undefined ? {} : { legacyPayload }),
+      }
   return {
-    requestContext: action.requestContext === undefined
-      ? undefined
-      : fromRedactedRequestContext(action.requestContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
-    planText: planFileContent,
-    path: planFilePath,
-    sourceUri: planFileUri,
-    id: action.planId,
-    messageId: action.kickoffMessageId,
-    mode: decodeExecutionMode(action.executionMode),
-    privacyMode: action._privacyMode as PrivacyMode | undefined,
+    schema: "slate.agent-action.execute-plan",
+    version: 1,
+    ...(planFileContent === undefined ? {} : { planText: planFileContent }),
+    ...(planFilePath === undefined ? {} : { path: planFilePath }),
+    ...(planFileUri === undefined ? {} : { sourceUri: planFileUri }),
+    ...(action.planId === undefined ? {} : { id: action.planId }),
+    ...(action.kickoffMessageId === undefined ? {} : { messageId: action.kickoffMessageId }),
+    mode,
+    ...(action._privacyMode === undefined ? {} : { privacyMode: action._privacyMode as PrivacyMode }),
+    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
@@ -90,7 +110,7 @@ export function createPlanExecutionMessage(input: PlanExecutionMessageInput) {
     text: input.text,
     messageId: input.messageId,
     selectedContext,
-    mode: toInteropAgentMode(input.executionMode),
+    mode: toInteropAgentMode(input.executionMode, input.legacyModeCode),
     ...(input.rootProject ? { projectDetails: new ProjectDetails() } : {}),
     isSimulatedMsg: true,
     simulatedMsgReason: SimulatedMsgReason.PLAN_EXECUTION,

@@ -17,6 +17,7 @@ import {
   fromInteropConversationStep,
   toPlainInteropConversationStep,
 } from "./agent-state-message-serdes-adapter.ts"
+import { slateAgentActionFromInterop } from "./turn-agent-run-projection-adapter.ts"
 export { createTaskUserMessageActionInterop } from "./task-runtime-protocol-adapter.ts"
 import {
   SlateTaskBackgroundReason,
@@ -32,6 +33,7 @@ export {
 
 export type TaskResultInterop = TaskResult
 export { fromRedactedConversationStateStructureInterop }
+export { slateAgentActionFromInterop }
 export const toRedactedConversationActionInterop = toRedactedConversationAction
 export const toRedactedConversationStateStructureInterop = toRedactedTaskConversationState
 

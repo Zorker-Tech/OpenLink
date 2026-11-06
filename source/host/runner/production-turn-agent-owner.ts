@@ -42,7 +42,7 @@ import type { AgentProfilePromptSnapshot } from "./slate-agent-profile-prompt.ts
 import type { PromptSnapshotStore } from "./system-prompt-assembly.ts";
 import type { ForwardedUpdate } from "./agent-adapters.ts";
 import type { MessageLike } from "./send-message-reminder-middleware.ts";
-import type { InteropTurnActionAssembly as GeneratedTurnActionAssembly, InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnPromptOptions, SlateTurnActionAssembly } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import { createTurnAgentRunContext, type TurnAgentInferenceOwner, type TurnAgentRunContext } from "./turn-run-shell.ts";
 import { presentOptions } from "./optional-options.ts";
 
@@ -97,14 +97,14 @@ export interface ProductionTurnAgentOwner {
 export interface ProductionTurnAgentRunInput {
   readonly runCtx: Context;
   readonly trimmedPrompt: string;
-  readonly promptOptions: GeneratedTurnPromptOptions;
-  readonly assembleGeneratedTurnAction: (input: {
+  readonly promptOptions: InteropTurnPromptOptions;
+  readonly assembleSlateTurnAction: (input: {
     readonly runCtx: Context;
     readonly trimmedPrompt: string;
-    readonly options: GeneratedTurnPromptOptions;
+    readonly options: InteropTurnPromptOptions;
     readonly profileUpdateForTurn?: { readonly text: string };
     readonly compactionEpoch: () => number;
-  }) => Promise<GeneratedTurnActionAssembly>;
+  }) => Promise<SlateTurnActionAssembly>;
   readonly profileUpdateForTurn?: { readonly text: string };
   readonly compactionEpoch: () => number;
   readonly getConversationState: () => InteropConversationState;
@@ -117,7 +117,7 @@ export interface ProductionTurnAgentRunInput {
  * happens first, so a prompt that cannot be assembled fails before any projection is built.
  */
 export async function createProductionTurnAgentRunInput(input: ProductionTurnAgentRunInput) {
-  const assembly = await input.assembleGeneratedTurnAction({
+  const assembly = await input.assembleSlateTurnAction({
     runCtx: input.runCtx,
     trimmedPrompt: input.trimmedPrompt,
     options: input.promptOptions,

@@ -10,6 +10,8 @@
 
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
+import { slateUserMessageUpdateCarrier } from "./user-message-action-protocol-adapter.ts"
 
 interface RedactedCarrier {
   readonly _privacyMode: PrivacyMode
@@ -123,6 +125,9 @@ export const RedactedUpdates = {
       _privacyMode: privacyMode,
       message: { case: "userMessageAppended", value: { _privacyMode: privacyMode, userMessage } },
     }
+  },
+  slateUserMessageAppended(userMessage: SlateUserMessage, privacyMode: PrivacyMode): RedactedInteractionUpdate {
+    return RedactedUpdates.userMessageAppended(slateUserMessageUpdateCarrier(userMessage, privacyMode) as RedactedCarrier)
   },
   partialToolCall(
     callId: string,

@@ -9,6 +9,8 @@ import { UserMessageActionHandler } from "../../source/packages/agent/actions/us
 import { AbstractUserMessageActionHandler } from "../../source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
+import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import {
   BackgroundTaskCompletion,
   BackgroundTaskCompletionAction,
@@ -29,9 +31,12 @@ import { AskQuestionArgs, AskQuestionResult, AskQuestionSuccess } from "../../so
 import { AgentMode, AsyncAskQuestionCompletionAction, ConversationStateStructure, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
+import type { SlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
 import { createSlateShellInvocation, storeSlateShellInvocation } from "../../source/packages/agent/shell-state.ts"
+import { decodeExecutePlanAction } from "../../source/adapters/interop/agent/execute-plan-action-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The action handlers are the ways a turn can start. Each is handed the action and the things a turn
@@ -80,6 +85,7 @@ function createPromptExecutor(messages: unknown[] = []) {
   return {
     appended,
     getMessages: () => messages,
+    clearMessages: () => { messages.length = 0 },
     appendMessages: (next: readonly unknown[]) => {
       appended.push(...next)
     },
@@ -260,13 +266,13 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
     appendMessages(next: readonly unknown[]) { promptMessages.push(...next) },
     clearMessages() { promptMessages.length = 0 },
   }
-  const action = {
+  const action = decodeExecutePlanAction({
     planFilePath: { unwrap: () => "/repo/plan.md" },
     executionMode: AgentMode.ASK,
     planId: "plan-1",
     kickoffMessageId: "message-1",
     _privacyMode: PrivacyMode.NO_STORAGE,
-  }
+  })
 
   await handler.initializeConversation(createContext(), action, prompt, state, [])
 
@@ -506,4 +512,78 @@ test("a user message action without a message is refused", async () => {
     }),
     /User message is required/,
   )
+})
+
+test("a Slate user-message payload creates earlier and current turns and publishes redacted updates", async () => {
+  const createdMessages: SlateUserMessage[] = []
+  const toolSet = {
+    getAllTools: () => [],
+    getStaticTools: () => [],
+    getStaticTool: () => undefined,
+    getDynamicTools: () => [],
+    getDynamicToolRegistry: () => undefined,
+    getDescriptionProps: () => ({ allTools: {} }),
+    hasTool: () => false,
+    getToolExecutionSet: () => ({ modelVisibleTools: [], additionalExecutableTools: [] }),
+  }
+  const { handler, updates } = createHandler<UserMessageActionHandler>(UserMessageActionHandler, {
+    agentType: AgentType.IDE,
+    agentSessionId: "session-1",
+    featureFlags: {},
+    nonFileRules: [],
+    toolsGenerator: () => toolSet,
+    systemPromptGenerator: () => "Slate system prompt",
+    userInfoDisplayOptions: { disable: true },
+    enablePrependedUserActions: true,
+  })
+  let currentMode: SlateMode | undefined
+  const state = createStateHandler({
+    turns: [],
+    mode: undefined,
+    summaryArchives: [],
+    getPrivacyMode: () => PrivacyMode.NO_STORAGE,
+    getBlobStore: () => undefined,
+    getOrInitializeConversationStartedDate: () => undefined,
+    getUserTurnMessageIdsIndex: async () => new Set<string>(),
+    hasAgentTypeChangedFromPersistedState: () => false,
+    setMode: (mode: SlateMode) => { currentMode = mode },
+    async createAgentTurn(_context: unknown, message: SlateUserMessage) {
+      createdMessages.push(message)
+      return { created: true }
+    },
+  })
+  const payload: SlateUserMessageActionPayload = {
+    schema: "slate.agent-action.user-message",
+    version: 1,
+    message: createSlateUserMessageInput({ text: "current question", messageId: "m-current" }),
+    earlierMessages: [createSlateUserMessageInput({ text: "earlier question", messageId: "m-earlier" })],
+    notifyUser: true,
+  }
+
+  await handler.initializeConversation(createContext(), {
+    action: payload,
+    rootPromptExecutor: createPromptExecutor(),
+    stateHandler: state,
+    mcpTools: [],
+    maxPrependedUserMessages: 5,
+    forcePrependedUserMessages: false,
+  })
+
+  assert.deepEqual(createdMessages.map(message => [message.messageId, message.text]), [
+    ["m-earlier", "earlier question"],
+    ["m-current", "current question"],
+  ])
+  assert.equal(currentMode, SlateMode.AGENT)
+  assert.deepEqual(updates.map(update => (update as { message: { case: string } }).message.case), [
+    "userMessageAppended",
+    "userMessageAppended",
+  ])
+  const publishedMessages = updates.map(update => (update as {
+    message: { value: { userMessage: { _privacyMode: string; text: unknown } } }
+  }).message.value.userMessage)
+  assert.deepEqual(publishedMessages.map(message => message._privacyMode), [PrivacyMode.NO_STORAGE, PrivacyMode.NO_STORAGE])
+  assert.equal(publishedMessages[0]?.text instanceof RedactedString, true)
+  if (publishedMessages[0]?.text instanceof RedactedString) {
+    assert.equal(publishedMessages[0].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "earlier question")
+  }
 })

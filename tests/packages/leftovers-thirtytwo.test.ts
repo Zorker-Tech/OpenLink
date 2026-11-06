@@ -251,99 +251,100 @@ describe("gathering a turn's prompt", () => {
   it("assembles a turn's words, its notes and the questions it carries", async () => {
     const base = createPromptCollectorGlue(host({}));
     const plain = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { messageId: " m9 " }, compactionEpoch: () => 7 });
-    const plainMessage = plain.action.action.value.userMessage;
+    const plainMessage = plain.action.payload.message;
+    assert.ok(plainMessage);
     assert.equal(plainMessage.text, "[m9]\nhello");
     assert.equal(plainMessage.messageId, " m9 ");
     assert.equal(plain.automationStatusReminder, null);
     assert.equal(plain.automationStatusCompactionEpoch, 7);
     // The reply note follows the address note, and the words follow both.
     const replying = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { messageId: "m9", replyContext: { targetId: "t1", quote: "q" } }, compactionEpoch: () => 1 });
-    assert.equal(replying.action.action.value.userMessage.text, "[m9]\n[In reply to t1: \"q\"]\nhello");
+    assert.equal(replying.action.payload.message?.text, "[m9]\n[In reply to t1: \"q\"]\nhello");
     const quiet = await base.assembleTurnAction({ trimmedPrompt: "", options: { messageId: "m9" }, compactionEpoch: () => 1 });
-    assert.equal(quiet.action.action.value.userMessage.text, "[m9]");
+    assert.equal(quiet.action.payload.message?.text, "[m9]");
     // The reply reminder is added only to a turn that asks for it and is not hidden.
     const reminded = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { appendReplyReminder: true }, compactionEpoch: () => 1 });
-    assert.equal(reminded.action.action.value.userMessage.text, appendUserReplyReminder("hello"));
+    assert.equal(reminded.action.payload.message?.text, appendUserReplyReminder("hello"));
     const hiddenReminder = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { appendReplyReminder: true, hidden: true }, compactionEpoch: () => 1 });
-    assert.equal(hiddenReminder.action.action.value.userMessage.text, SLATE_HIDDEN_PROMPT_MARKER + "hello");
+    assert.equal(hiddenReminder.action.payload.message?.text, SLATE_HIDDEN_PROMPT_MARKER + "hello");
     // A hidden turn is marked hidden, and says when a trusted automation woke it.
     const hiddenTrusted = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { hidden: true, automationWake: { id: "a1", containsUntrustedEventText: false } }, compactionEpoch: () => 1 });
-    assert.equal(hiddenTrusted.action.action.value.userMessage.text, SLATE_HIDDEN_PROMPT_MARKER + SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER + "hello");
+    assert.equal(hiddenTrusted.action.payload.message?.text, SLATE_HIDDEN_PROMPT_MARKER + SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER + "hello");
     const hiddenUntrusted = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { hidden: true, automationWake: { id: "a1", containsUntrustedEventText: true } }, compactionEpoch: () => 1 });
-    assert.equal(hiddenUntrusted.action.action.value.userMessage.text, SLATE_HIDDEN_PROMPT_MARKER + "hello");
+    assert.equal(hiddenUntrusted.action.payload.message?.text, SLATE_HIDDEN_PROMPT_MARKER + "hello");
     // The routine status goes above the words when silence is allowed, below them otherwise.
     const routineGlue = createPromptCollectorGlue(host({ getAutomationStatusReminder: () => "<routine>" }));
     const below = await routineGlue.assembleTurnAction({ trimmedPrompt: "hello", options: {}, compactionEpoch: () => 1 });
-    assert.equal(below.action.action.value.userMessage.text, "hello\n\n<routine>");
+    assert.equal(below.action.payload.message?.text, "hello\n\n<routine>");
     assert.equal(below.automationStatusReminder, "<routine>");
     const above = await routineGlue.assembleTurnAction({ trimmedPrompt: "hello", options: { isSilenceAllowed: true }, compactionEpoch: () => 1 });
-    assert.equal(above.action.action.value.userMessage.text, "<routine>\n\nhello");
+    assert.equal(above.action.payload.message?.text, "<routine>\n\nhello");
     const only = await routineGlue.assembleTurnAction({ trimmedPrompt: "", options: { isSilenceAllowed: true }, compactionEpoch: () => 1 });
-    assert.equal(only.action.action.value.userMessage.text, "<routine>");
+    assert.equal(only.action.payload.message?.text, "<routine>");
     // Rich text travels trimmed.
     const richOlder = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { richText: "  hi  " }, compactionEpoch: () => 1 });
-    assert.equal(richOlder.action.action.value.userMessage.richText, "hi");
+    assert.equal(richOlder.action.payload.message?.richText, "hi");
     // A profile update is placed the same way.
     const profile = await base.assembleTurnAction({ trimmedPrompt: "hello", options: {}, profileUpdateForTurn: { text: "PROFILE" }, compactionEpoch: () => 1 });
-    assert.equal(profile.action.action.value.userMessage.text, "hello\n\nPROFILE");
+    assert.equal(profile.action.payload.message?.text, "hello\n\nPROFILE");
     // The questions the user left unanswered travel ahead of the message.
     const questions = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { skippedQuestionPrompts: ["one", "two"], dismissedQuestionPrompts: ["two", "three"] }, compactionEpoch: () => 1 });
-    assert.deepEqual(questions.action.action.value.prependUserMessages, [{ text: "Unanswered questions:\n- one\n- two\n- two\n- three" }]);
+    assert.deepEqual(questions.action.payload.earlierMessages.map(message => message.text), ["Unanswered questions:\n- one\n- two\n- two\n- three"]);
     // Images and videos the turn carries become its selected context.
     const media = await base.assembleTurnAction({ trimmedPrompt: "hello", options: { selectedImages: [{ data: new Uint8Array([1]), path: "p", mimeType: "image/png" }], selectedVideos: [{ path: "/w/v.mp4", data: new Uint8Array([2]) }] }, compactionEpoch: () => 1 });
-    assert.equal(media.action.action.value.userMessage.selectedContext?.selectedImages.length, 1);
-    assert.equal(media.action.action.value.userMessage.selectedContext?.selectedVideos.length, 1);
+    assert.equal(media.action.payload.message?.selectedContext?.media.images.length, 1);
+    assert.equal(media.action.payload.message?.selectedContext?.media.videos.length, 1);
     // Files are staged into the box when it can take them, and the note says where they went.
     const staging = createPromptCollectorGlue(host({ uploadAttachmentsIntoBox: async (paths: readonly string[]) => new Map(paths.map((filePath) => [filePath, "/workspace/uploads/" + filePath.split("/").pop()])), getRemoteBoxAvailable: () => true }));
     const staged = await staging.assembleTurnAction({ trimmedPrompt: "hello", options: { attachedFilePaths: ["/host/a.txt"], attachedFileSizes: new Map([["/host/a.txt", 12]]) }, compactionEpoch: () => 1 });
-    assert.equal(staged.action.action.value.userMessage.text, "hello\n\n" + buildAttachedFilesNote(["/host/a.txt"], new Map([["/host/a.txt", "/workspace/uploads/a.txt"]]), new Map([["/host/a.txt", 12]])));
+    assert.equal(staged.action.payload.message?.text, "hello\n\n" + buildAttachedFilesNote(["/host/a.txt"], new Map([["/host/a.txt", "/workspace/uploads/a.txt"]]), new Map([["/host/a.txt", 12]])));
     // A staging failure leaves the files on the user's computer only.
     const failingStage = createPromptCollectorGlue(host({ uploadAttachmentsIntoBox: async () => { throw new Error("no box"); }, getRemoteBoxAvailable: () => true }));
     const unstaged = await failingStage.assembleTurnAction({ trimmedPrompt: "hello", options: { attachedFilePaths: ["/host/a.txt"] }, compactionEpoch: () => 1 });
-    assert.equal(unstaged.action.action.value.userMessage.text.includes("on the user's computer"), true);
+    assert.equal(unstaged.action.payload.message?.text.includes("on the user's computer"), true);
   });
 
-  it("assembles the generated turn action with generated messages", async () => {
+  it("assembles the Slate turn action with Slate message values", async () => {
     const base = createPromptCollectorGlue(host({}));
-    const plain = await base.assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 7 });
-    const plainValue = plain.action.action.value as never as { userMessage: UserMessage; prependUserMessages: readonly UserMessage[] };
-    assert.equal(plainValue.userMessage.text, "hello");
-    assert.equal(plainValue.userMessage.messageId, "");
-    assert.equal(plainValue.userMessage.selectedContext, undefined);
-    assert.equal(plainValue.prependUserMessages.length, 0);
+    const plain = await base.assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 7 });
+    const plainValue = plain.action.payload;
+    assert.equal(plainValue.message?.text, "hello");
+    assert.equal(plainValue.message?.messageId, "");
+    assert.equal(plainValue.message?.selectedContext, undefined);
+    assert.equal(plainValue.earlierMessages.length, 0);
     assert.equal(plain.automationStatusCompactionEpoch, 7);
-    // Rich text travels trimmed, images become generated messages, and unanswered questions are added as one.
-    const rich = await base.assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { richText: "  hi  ", selectedImages: [{ data: new Uint8Array([1]), path: "p", mimeType: "image/png" }], dismissedQuestionPrompts: ["q"] }, compactionEpoch: () => 1 });
-    const richValue = rich.action.action.value as never as { userMessage: UserMessage; prependUserMessages: readonly UserMessage[] };
-    assert.equal(richValue.userMessage.richText, "hi");
-    assert.equal(richValue.userMessage.selectedContext?.selectedImages.length, 1);
-    assert.equal(richValue.userMessage.selectedContext?.selectedImages[0]?.path, "p");
-    assert.equal(richValue.userMessage.selectedContext?.selectedImages[0]?.mimeType, "image/png");
-    assert.equal(richValue.prependUserMessages.at(-1)?.text, "Unanswered questions:\n- q");
-    const bare = await base.assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "", options: { selectedImages: [{ data: new Uint8Array([1]) }] }, compactionEpoch: () => 1 });
-    const bareValue = bare.action.action.value as never as { userMessage: UserMessage };
-    assert.equal(bareValue.userMessage.selectedContext?.selectedImages[0]?.path, "");
-    assert.equal(bareValue.userMessage.selectedContext?.selectedImages[0]?.mimeType, "");
+    // Rich text travels trimmed, images use the Slate selected-context state, and unanswered questions are added as one.
+    const rich = await base.assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { richText: "  hi  ", selectedImages: [{ data: new Uint8Array([1]), path: "p", mimeType: "image/png" }], dismissedQuestionPrompts: ["q"] }, compactionEpoch: () => 1 });
+    const richValue = rich.action.payload;
+    assert.equal(richValue.message?.richText, "hi");
+    assert.equal(richValue.message?.selectedContext?.media.images.length, 1);
+    assert.equal(richValue.message?.selectedContext?.media.images[0]?.path, "p");
+    assert.equal(richValue.message?.selectedContext?.media.images[0]?.mediaType, "image/png");
+    assert.equal(richValue.earlierMessages.at(-1)?.text, "Unanswered questions:\n- q");
+    const bare = await base.assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "", options: { selectedImages: [{ data: new Uint8Array([1]) }] }, compactionEpoch: () => 1 });
+    const bareValue = bare.action.payload;
+    assert.equal(bareValue.message?.selectedContext?.media.images[0]?.path, "");
+    assert.equal(bareValue.message?.selectedContext?.media.images[0]?.mediaType, "");
     // The host's own collector is used, and the tracing phase names the collection.
     const phases: string[] = [];
     const collecting = createPromptCollectorGlue(host({ collectGeneratedPrependUserMessages: async () => [new UserMessage({ text: "earlier", messageId: "m1" })], traceSendPhase: async (ctx: unknown, name: string, operation: () => Promise<UserMessage[]>) => { phases.push(name); return operation(); } }));
-    const collected = await collecting.assembleGeneratedTurnAction({ runCtx: { ok: true }, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 1 });
-    const collectedValue = collected.action.action.value as never as { prependUserMessages: readonly UserMessage[] };
-    assert.equal(collectedValue.prependUserMessages.length, 1);
-    assert.equal(collectedValue.prependUserMessages[0]?.text, "earlier");
+    const collected = await collecting.assembleSlateTurnAction({ runCtx: { ok: true }, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 1 });
+    const collectedValue = collected.action.payload;
+    assert.equal(collectedValue.earlierMessages.length, 1);
+    assert.equal(collectedValue.earlierMessages[0]?.text, "earlier");
     assert.deepEqual(phases, ["collectPrependUserMessages"]);
     // A shell-watch host is asked instead of the collector, even with no recent messages to read.
     let collectorCalled = false;
     const watching = createPromptCollectorGlue(host({ shellWatchHost: () => ({}), collectGeneratedPrependUserMessages: async () => { collectorCalled = true; return [new UserMessage({ text: "no" })]; } }));
-    const watched = await watching.assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 1 });
-    assert.equal((watched.action.action.value as never as { prependUserMessages: readonly UserMessage[] }).prependUserMessages.length, 0);
+    const watched = await watching.assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: {}, compactionEpoch: () => 1 });
+    assert.equal(watched.action.payload.earlierMessages.length, 0);
     assert.equal(collectorCalled, false);
     // A video with no bytes and no way to read them says which attachment failed.
     const missingVideo = createPromptCollectorGlue(host({ isSubagentRunner: true }));
-    await assert.rejects(() => missingVideo.assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { selectedVideos: [new GeneratedSelectedVideo({ uuid: "u1", path: " /workspace/v.mp4 ", filename: "" })] }, compactionEpoch: () => 1 }), (error: unknown) => error instanceof SlateVideoAttachmentError && error.message === "Cannot read video attachment for review: /workspace/v.mp4.");
+    await assert.rejects(() => missingVideo.assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { selectedVideos: [new GeneratedSelectedVideo({ uuid: "u1", path: " /workspace/v.mp4 ", filename: "" })] }, compactionEpoch: () => 1 }), (error: unknown) => error instanceof SlateVideoAttachmentError && error.message === "Cannot read video attachment for review: /workspace/v.mp4.");
     // A video that already has bytes travels as it is.
-    const ready = await createPromptCollectorGlue(host({ isSubagentRunner: true })).assembleGeneratedTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { selectedVideos: [new GeneratedSelectedVideo({ uuid: "u1", path: "/workspace/v.mp4", dataOrBlobId: { case: "data", value: new Uint8Array([1]) } })] }, compactionEpoch: () => 1 });
-    assert.equal((ready.action.action.value as never as { userMessage: UserMessage }).userMessage.selectedContext?.selectedVideos.length, 1);
+    const ready = await createPromptCollectorGlue(host({ isSubagentRunner: true })).assembleSlateTurnAction({ runCtx: {}, trimmedPrompt: "hello", options: { selectedVideos: [new GeneratedSelectedVideo({ uuid: "u1", path: "/workspace/v.mp4", dataOrBlobId: { case: "data", value: new Uint8Array([1]) } })] }, compactionEpoch: () => 1 });
+    assert.equal(ready.action.payload.message?.selectedContext?.media.videos.length, 1);
   });
 });
 

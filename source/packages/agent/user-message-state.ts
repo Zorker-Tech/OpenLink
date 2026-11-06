@@ -1,7 +1,7 @@
 /** Slate's product record for a user message while it is becoming a conversation turn. */
 import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
-import type { SlateMode } from "./mode-processing.ts"
+import { SlateMode } from "./mode-processing.ts"
 import {
   cloneSlateSelectedContextState,
   type SlateSelectedContextState,
@@ -117,6 +117,15 @@ export interface SlateUserMessage {
   compatibility?: SlateUserMessageCompatibility
 }
 
+/** Product input accepted at the Agent turn boundary before turn-owned defaults are applied. */
+export type SlateUserMessageInput = Pick<SlateUserMessage, "text"> &
+  Partial<Omit<SlateUserMessage, "text" | "messageId" | "mode" | "conversationStateBlobId" | "hookContexts">> & {
+    messageId?: string
+    mode?: SlateMode
+    conversationStateBlobId?: Uint8Array
+    hookContexts?: readonly SlateUserMessageHookContext[]
+  }
+
 function cloneBytes(bytes: Uint8Array): Uint8Array {
   return new Uint8Array(bytes)
 }
@@ -198,4 +207,15 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
     ...(projectDetails === undefined ? {} : { projectDetails }),
     ...(compatibility === undefined ? {} : { compatibility }),
   }
+}
+
+/** Applies the defaults that the turn boundary owns, then copies all mutable state. */
+export function createSlateUserMessageInput(input: SlateUserMessageInput): SlateUserMessage {
+  return cloneSlateUserMessage({
+    ...input,
+    messageId: input.messageId ?? "",
+    mode: input.mode ?? SlateMode.UNSPECIFIED,
+    conversationStateBlobId: new Uint8Array(input.conversationStateBlobId ?? []),
+    hookContexts: input.hookContexts ?? [],
+  })
 }

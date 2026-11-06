@@ -1,5 +1,5 @@
-/** Builds the counterpart conversation action used when a host turn resumes from a checkpoint. */
+/** Compatibility export for the Slate-owned retry action factory. */
 
-import { ConversationAction, ResumeAction } from "../proto/generated/agent/v1/agent_pb.ts"
+import { createSlateResumeAgentAction } from "../../../packages/agent/agent-action-state.ts"
 
-export const RESUME_TURN_ACTION = new ConversationAction({ action: { case: "resumeAction", value: new ResumeAction() } })
+export const RESUME_TURN_ACTION = createSlateResumeAgentAction()

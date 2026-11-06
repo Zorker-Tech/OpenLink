@@ -1,8 +1,15 @@
-# External wire contracts
+# External wire contracts and migration bridges
 
-This directory holds the external protobuf schemas and generated bindings that Slate still needs
-to communicate with counterpart services. They are not the schema for Slate's Work HTTP/SSE API,
-host persistence, or application domain types.
+This directory is a quarantined transition boundary. It currently contains two different kinds of
+legacy material, and file placement alone does not make either one a Slate product contract:
+
+- exact external protobuf schemas and generated bindings still required by deployed services;
+- historical protobuf decoders and adapters that exist only to recover data or finish a migration.
+
+Only the first category may remain as an ongoing interoperability dependency. Neither category is
+the schema for Slate's Work HTTP/SSE API, host persistence, internal action flow, or application
+domain types. Internal producers and consumers must use Slate-owned contracts; historical readers
+must be read-only and removed when their supported recovery window ends.
 
 Service-specific clients and transport mappings, including the inference and image service adapters,
 also live under this boundary.
@@ -36,3 +43,9 @@ The direct consumers outside this adapter directory are recorded in
 apps/work-host/scripts/interop-proto-consumers.txt. The interop:check command rejects new direct consumers and
 stale entries, so each migration to a Slate-owned adapter removes one dependency from that list.
 The Work API contract lives in packages/work-protocol.
+
+In particular, the prompt collector → turn runner → AgentRoot action flow is internal to Slate. Its
+old oneof form is migration input, not an external compatibility obligation. Cloud-agent launch and
+follow-up requests are separate network calls and do require their provider-specific wire shape;
+constructing that shape from Slate-owned request values is an adapter-boundary requirement. The
+current construction in `host/cloud-agents` is still part of that migration debt.

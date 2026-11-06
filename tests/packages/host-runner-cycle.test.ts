@@ -11,7 +11,7 @@ import type { SlateConversationState } from "../../source/packages/agent/convers
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { ConversationAction, ConversationStateStructure, ResumeAction, UserMessage, UserMessageAction } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { SlateEmptyPromptError, createTurnRunShell, createTurnAgentRunContext } from "../../source/host/runner/turn-run-shell.ts";
-import { RESUME_TURN_ACTION } from "../../source/adapters/interop/agent/turn-resume-action-adapter.ts";
+import { createSlateResumeAgentAction } from "../../source/packages/agent/agent-action-state.ts";
 import { createTurnAgentRunInputProjection, createTurnAgentRunStreamInput, createTurnAgentStreamStart, createTurnToolSession } from "../../source/host/runner/turn-agent-composition.ts";
 import { cloneTurnState } from "../../source/host/runner/production-turn-agent-owner.ts";
 import { projectInteropTurnRun } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts";
@@ -70,13 +70,13 @@ describe("the state and action a stream starts from", () => {
     const action = new ConversationAction({
       action: { case: "userMessageAction", value: new UserMessageAction({ userMessage: new UserMessage({ text: "hi", messageId: "m1" }), prependUserMessages: [] }) },
     });
-    const fresh = projectInteropTurnRun({ baseState, action, resumeAction: RESUME_TURN_ACTION, privacyMode: PrivacyMode.UNSPECIFIED });
+    const fresh = projectInteropTurnRun({ baseState, action, resumeAction: createSlateResumeAgentAction(), privacyMode: PrivacyMode.UNSPECIFIED });
     assert.equal(fresh.isResume, false);
-    assert.equal(fresh.action.action.case, "userMessageAction");
+    assert.equal(fresh.action.kind, "user-message");
     // A retry resumes from the accepted checkpoint and sends the empty resume action, not the original request again.
-    const resumed = projectInteropTurnRun({ baseState, action, resumeFrom: stateWith(2), resumeAction: RESUME_TURN_ACTION, privacyMode: PrivacyMode.UNSPECIFIED });
+    const resumed = projectInteropTurnRun({ baseState, action, resumeFrom: stateWith(2), resumeAction: createSlateResumeAgentAction(), privacyMode: PrivacyMode.UNSPECIFIED });
     assert.equal(resumed.isResume, true);
-    assert.equal(resumed.action.action.case, RESUME_TURN_ACTION.action.case);
+    assert.equal(resumed.action.kind, "resume");
   });
 
   it("produces the action first, then the tools, then a cloned state; a discovery failure is reported, not thrown", async () => {
@@ -131,7 +131,7 @@ describe("the state and action a stream starts from", () => {
     assert.equal((state as { turns: unknown[] }).turns.length, 1);
     assert.equal((state as SlateConversationState).privacyMode, PrivacyMode.UNSPECIFIED);
     assert.equal("_privacyMode" in (state as object), false);
-    assert.equal((action as { action: { case: string } }).action.case, "resumeAction");
+    assert.equal((action as { kind: string }).kind, "resume");
     assert.deepEqual(tools, [{ name: "tool" }]);
     assert.equal(persisted, persistCheckpoint);
   });
