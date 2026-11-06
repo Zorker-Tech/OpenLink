@@ -31,6 +31,12 @@ import {
   redactSlateShellCommandActionPayload,
 } from "../../../packages/agent/actions/shell-command-action-contracts.ts"
 import {
+  createSlateBackgroundShellActionPayload,
+  createSlateBackgroundSubagentActionPayload,
+  isSlateBackgroundShellActionPayload,
+  isSlateBackgroundSubagentActionPayload,
+} from "../../../packages/agent/actions/background-side-channel-contracts.ts"
+import {
   createSlateGoalContinuationActionPayload,
   isSlateGoalContinuationActionPayload,
 } from "../../../packages/agent/actions/goal-continuation-contracts.ts"
@@ -213,6 +219,18 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
         : createSlateShellCommandActionPayload({ privacyMode }),
     }
   }
+  if (action.kind === SlateAgentActionKind.BACKGROUND_SHELL) {
+    if (!isSlateBackgroundShellActionPayload(action.payload)) {
+      throw new TypeError("Background shell action must use the Slate v1 contract")
+    }
+    return { ...action, context, payload: action.payload }
+  }
+  if (action.kind === SlateAgentActionKind.BACKGROUND_SUBAGENT) {
+    if (!isSlateBackgroundSubagentActionPayload(action.payload)) {
+      throw new TypeError("Background subagent action must use the Slate v1 contract")
+    }
+    return { ...action, context, payload: action.payload }
+  }
   if (action.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return {
       ...action,
@@ -341,6 +359,26 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       payload: slateShellCommandActionPayloadFromRedacted(action.action.value, action._privacyMode),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.BACKGROUND_SHELL) {
+    const value = action.action.value
+    return {
+      ...slateAction,
+      payload: createSlateBackgroundShellActionPayload(
+        typeof value?.toolCallId === "string" ? value.toolCallId : "",
+        value,
+      ),
+    }
+  }
+  if (slateAction.kind === SlateAgentActionKind.BACKGROUND_SUBAGENT) {
+    const value = action.action.value
+    return {
+      ...slateAction,
+      payload: createSlateBackgroundSubagentActionPayload(
+        typeof value?.toolCallId === "string" ? value.toolCallId : "",
+        value,
+      ),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return { ...slateAction, payload: createSlateGoalContinuationActionPayload() }
   }
@@ -403,6 +441,14 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "shellCommandAction") {
     const wrapped = new ConversationAction({ action: { case: "shellCommandAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "backgroundShellAction") {
+    const wrapped = new ConversationAction({ action: { case: "backgroundShellAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "backgroundSubagentAction") {
+    const wrapped = new ConversationAction({ action: { case: "backgroundSubagentAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "goalContinuationAction") {
