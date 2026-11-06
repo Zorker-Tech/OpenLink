@@ -8,6 +8,14 @@ import {
   SLATE_HIDDEN_PROMPT_MARKER,
   SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER,
 } from "./slate-prompt-markers.ts";
+import { PrivacyCapability } from "../../packages/redaction/classification.ts";
+import { RedactedString } from "../../packages/redaction/redacted-values.ts";
+import type {
+  SlateHydratedAgentTurn,
+  SlateHydratedConversation,
+  SlateHydratedConversationTurn,
+} from "../../packages/agent/conversation-transcript-state.ts";
+import type { SlateConversationStep } from "../../packages/agent/conversation-step-state.ts";
 
 /** The tool-call name a send-message call is outlined under. */
 export const SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME = "sendMessageToolCall";
@@ -346,4 +354,74 @@ export function deriveOutlineTurnsFromConversationState(conversation: Conversati
 /** Everything a reader can jump to in a conversation, in order. */
 export function deriveOutlineFromConversationState(conversation: ConversationState): OutlineItem[] {
   return deriveOutlineTurnsFromConversationState(conversation).flatMap((turn) => turn.items);
+}
+
+function outlineText(value: string | RedactedString | undefined): string {
+  if (typeof value === "string") return value
+  return value instanceof RedactedString ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : ""
+}
+
+function slateStepToOutlineItem(step: SlateConversationStep, id: string): OutlineItem | null {
+  switch (step.kind) {
+    case "assistant-message": {
+      const text = outlineText(step.text)
+      return text.length === 0 ? null : { kind: "assistant-text", id, text }
+    }
+    case "thinking-message": {
+      const text = outlineText(step.text)
+      return text.length === 0
+        ? null
+        : { kind: "thinking", id, text, durationMs: step.durationMs > 0 ? step.durationMs : undefined }
+    }
+    case "tool-call":
+      return toolCallItem({
+        tool: {
+          ...(step.tool.case === undefined ? {} : { case: step.tool.case }),
+          ...(step.tool.value === undefined
+            ? {}
+            : { value: step.tool.value as Exclude<OutlineToolCall["tool"]["value"], undefined> }),
+        },
+      }, id)
+    case "unsupported":
+      return null
+  }
+}
+
+function slateAgentTurnOutline(turn: SlateHydratedAgentTurn, turnIndex: number): OutlineTurn {
+  const rawUserText = outlineText(turn.userMessage.text)
+  const items: OutlineItem[] = []
+  const user = userItem(rawUserText, turnIndex)
+  if (user !== null) items.push(user)
+  turn.steps.forEach((step, stepIndex) => {
+    const item = slateStepToOutlineItem(step, `outline-${turnIndex}-${stepIndex}`)
+    if (item !== null) items.push(item)
+  })
+  return { rawUserText, userMessageId: turn.userMessage.messageId, items }
+}
+
+function slateShellTurnOutline(turn: Extract<SlateHydratedConversationTurn, { readonly kind: "shell" }>, turnIndex: number): OutlineTurn {
+  const command = outlineText(turn.invocation.commandText)
+  return {
+    rawUserText: "",
+    userMessageId: "",
+    items: [{
+      kind: "tool-call",
+      id: `outline-shell-${turnIndex}`,
+      name: "shellToolCall",
+      status: "done",
+      summary: command.length > 0 ? command : undefined,
+    }],
+  }
+}
+
+/** The turns of Slate's hydrated conversation, projected to the existing session-outline contract. */
+export function deriveOutlineTurnsFromSlateConversation(conversation: SlateHydratedConversation): OutlineTurn[] {
+  return conversation.turns.map((turn, turnIndex) => turn.kind === "agent"
+    ? slateAgentTurnOutline(turn, turnIndex)
+    : slateShellTurnOutline(turn, turnIndex))
+}
+
+/** Everything a reader can jump to in a Slate-hydrated conversation, in order. */
+export function deriveOutlineFromSlateConversation(conversation: SlateHydratedConversation): OutlineItem[] {
+  return deriveOutlineTurnsFromSlateConversation(conversation).flatMap(turn => turn.items)
 }

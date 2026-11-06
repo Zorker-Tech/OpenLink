@@ -703,9 +703,9 @@
     },
     "host/extensions/session/session-maintenance.ts": {
       "claim": "rewritten",
-      "overlap": 0.724202626641651,
-      "refreshReason": "Session maintenance now reads the Slate V2 checkpoint's turnBlobIds; root reference validation accepts the versioned Slate checkpoint directly.",
-      "evidence": "Focused checkpoint codec/store, session recovery/maintenance, runner projection and blob reachability tests pass 180/180 across 24 suites. The full Work-host suite passes 9980/9980 across 1427 suites under Node 24.14 with concurrency 1. Extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals) and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Existing maintenance contracts continue to pin transcript backfill, stale-root stability, durable-root recovery, hidden-entry repair and legacy-blob retirement."
+      "overlap": 0.7110694183864915,
+      "refreshReason": "Session maintenance now consumes Slate-hydrated conversation results for outline repair and the Slate V2 checkpoint's turnBlobIds for root validation.",
+      "evidence": "The full Work-host suite passes 9982/9982 across 1427 suites under Node 24.14 with concurrency 1. This covers Slate hydrated conversation outline/session recovery, V2 checkpoint compatibility, runner projections, transcript backfill, stale-root stability, hidden-entry repair and legacy-blob retirement. Typecheck, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals) and interop (321 imports across 223 files, zero direct proto consumers) gates pass."
     },
     "host/boxes/box-store-sync/box-store-pack.ts": {
       "claim": "rewritten",
@@ -1570,9 +1570,9 @@
     },
     "host/extensions/session/session-conversation-state.ts": {
       "claim": "rewritten",
-      "overlap": 0.5273775216138329,
-      "refreshReason": "Session conversation-state recovery now consumes SlateConversationCheckpointV2 references while legacy outline hydration is projected at the session adapter.",
-      "evidence": "Focused checkpoint codec/store, session recovery/maintenance, runner projection and blob reachability tests pass 180/180 across 24 suites. Session ConversationStatePort now consumes Slate V2 roots and retains its blob resolution/cache, outline, cleanup and fallback behavior. The full Work-host suite passes 9980/9980 across 1427 suites under Node 24.14 with concurrency 1; extension-id, rewrite and interop gates pass."
+      "overlap": 0.5014409221902018,
+      "refreshReason": "Session conversation-state now returns SlateHydratedConversation and accepts Slate V2 roots; legacy Proto conversation hydration is removed from this product API.",
+      "evidence": "Session ConversationStatePort now returns Slate hydrated turns, steps, todos and summary values; the outline tests pin marker removal, turn order, task/send-message tool rows and shell summaries. The full Work-host suite passes 9982/9982 across 1427 suites under Node 24.14 with concurrency 1. Typecheck, extension-id, rewrite and interop gates pass."
     },
     "host/automations/listener-integrations.automations.ts": {
       "claim": "rewritten",
@@ -2731,8 +2731,9 @@
     },
     "host/extensions/session/production.ts": {
       "claim": "rewritten",
-      "overlap": 0.5352517985611511,
-      "evidence": "Production store, handoff, maintenance and screenshot adapter contracts plus existing session suites pass 69/69; the full Work-host suite passes 9126/9126 under Node 24. Typecheck, interop boundary (159 direct consumers) and rewrite gate pass. Slate session-store assembly, maintenance projection and handoff event wiring have separate owners; the generated computer-use request stays at the interop edge."
+      "overlap": 0.5151079136690647,
+      "refreshReason": "The session production store now hydrates SlateHydratedConversation directly and projects only to the existing outline view.",
+      "evidence": "Slate session-store assembly hydrates first-party conversation values and projects the existing maintenance outline at its boundary. The full Work-host suite passes 9982/9982 across 1427 suites under Node 24.14 with concurrency 1; typecheck, extension-id, rewrite and interop gates pass."
     },
     "packages/agent-core/interaction-queries.ts": {
       "claim": "rewritten",

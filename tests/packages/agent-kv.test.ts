@@ -50,7 +50,7 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { TodoItem } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
-import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
 import { createSlateTodoItemSerde } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
@@ -375,7 +375,7 @@ test("checkpointing writes the structure and reloading finds it again", async ()
 
   const full = await conversation.getFullConversation(ctx)
   assert.equal(full.turns.length, 1)
-  assert.equal(full.turns[0]?.turn.case, "agentConversationTurn")
+  assert.equal(full.turns[0]?.kind, "agent")
 
   const reloaded = new AgentConversationStore(store, metadata, { codec: createSlateAgentConversationCodec<unknown>() })
   assert.equal(await reloaded.tryResetFromDb(ctx), true)
@@ -436,16 +436,19 @@ test("full conversation hydration reads Slate user-message and step blobs throug
   })))
 
   const full = await conversation.getFullConversation(ctx)
-  assert.equal(full.todos[0]?.content, "restored todo")
-  assert.equal(full.summary?.summary, "restored summary")
-  const loadedTurn = full.turns[0]?.turn
-  assert.equal(loadedTurn?.case, "agentConversationTurn")
-  if (loadedTurn?.case !== "agentConversationTurn") assert.fail("expected the stored agent turn")
-  assert.equal(loadedTurn.value.userMessage?.text, "hello")
-  const loadedStep = loadedTurn.value.steps[0]
-  assert.equal(loadedStep?.message.case, "assistantMessage")
-  if (loadedStep?.message.case !== "assistantMessage") assert.fail("expected the stored assistant step")
-  assert.equal(loadedStep.message.value.text, "Slate step restored")
+  const todoContent = full.todos[0]?.content
+  assert.equal(typeof todoContent === "string" ? todoContent : todoContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "restored todo")
+  const summaryContent = full.summary?.content
+  assert.equal(typeof summaryContent === "string" ? summaryContent : summaryContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "restored summary")
+  const loadedTurn = full.turns[0]
+  assert.equal(loadedTurn?.kind, "agent")
+  if (loadedTurn?.kind !== "agent") assert.fail("expected the stored Slate agent turn")
+  const userText = loadedTurn.userMessage.text
+  assert.equal(typeof userText === "string" ? userText : userText.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "hello")
+  const loadedStep = loadedTurn.steps[0]
+  assert.equal(loadedStep?.kind, "assistant-message")
+  if (loadedStep?.kind !== "assistant-message") assert.fail("expected the stored Slate assistant step")
+  assert.equal(loadedStep.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Slate step restored")
 })
 
 test("checkpoint roots use Slate's versioned envelope and preserve the complete runtime snapshot", async () => {

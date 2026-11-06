@@ -26,12 +26,13 @@ import { NO_SESSION_MEMORY } from "./session-store-factories.ts";
 import { publishTranscriptMutation } from "../../transcript/transcript-mutation-events.ts";
 import { reportSessionDiagnostic } from "./session-diagnostics.ts";
 import { seedActivityFromMtime } from "./session-projection.ts";
+import type { SlateHydratedConversation } from "../../../packages/agent/conversation-transcript-state.ts";
 
 export interface OpenAgentSession {
   id: string;
   dbPath: string;
   db: SlateAgentDb;
-  agentStore: { getFullConversation?(ctx: unknown): Promise<unknown>; dispose(): Promise<void> };
+  agentStore: { getFullConversation?(ctx: unknown): Promise<SlateHydratedConversation>; dispose(): Promise<void> };
 }
 export interface SessionMemoryProvider {
   agentHasContent(agentDir: string): boolean;

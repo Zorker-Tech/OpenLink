@@ -17,8 +17,14 @@ import {
   deserializeSlateShellResultInterop,
   deserializeSlateUserMessageInterop,
   deserializeSlateTodoItemInterop,
+  createSlateConversationStepSerde,
+  createSlateUserMessageSerde,
 } from "./agent-state-message-serdes-adapter.ts"
-import { deserializeSlateConversationSummaryInterop } from "./conversation-summary-storage-adapter.ts"
+import { createSlateConversationSummarySerde, deserializeSlateConversationSummaryInterop } from "./conversation-summary-storage-adapter.ts"
+import { createSlateTodoItemSerde } from "./todo-schema-adapter.ts"
+import { createSlateShellInvocationSerde, createSlateShellResultSerde } from "../../storage/agent/shell-state-storage-adapter.ts"
+import { importLegacyShellInvocation, importLegacyShellResult } from "./legacy-shell-state-adapter.ts"
+import { PrivacyMode as PrivacyModes } from "../../../packages/redaction/privacy-mode.ts"
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
@@ -41,6 +47,7 @@ import {
   interopConversationCheckpointFromSlate,
   slateConversationCheckpointFromInterop,
 } from "./slate-agent-checkpoint-interop-adapter.ts"
+import type { SlateHydratedConversation, SlateHydratedConversationTurn } from "../../../packages/agent/conversation-transcript-state.ts"
 
 const checkpointSerde = new ProtobufBlobSerde(ConversationStateStructure)
 const PRESERVED_UNKNOWN_FIELDS_KEY = "$slateInteropUnknownFields"
@@ -295,6 +302,72 @@ export function interopAgentConversationCheckpointFromSlate(
   return interop
 }
 
+/** Hydrates Slate's versioned references directly into Slate conversation-domain values. */
+export async function deriveSlateConversationFromCheckpoint<Context>(
+  ctx: Context,
+  checkpoint: SlateConversationCheckpointV2,
+  blobStore: ConversationBlobReader<Context>,
+): Promise<SlateHydratedConversation> {
+  if (!isSlateConversationCheckpointV2(checkpoint)) {
+    throw new TypeError("Slate conversation checkpoint state is invalid")
+  }
+  const userMessageSerde = createSlateUserMessageSerde(PrivacyModes.UNSPECIFIED)
+  const stepSerde = createSlateConversationStepSerde(PrivacyModes.UNSPECIFIED)
+  const shellInvocationSerde = createSlateShellInvocationSerde(PrivacyModes.UNSPECIFIED, importLegacyShellInvocation)
+  const shellResultSerde = createSlateShellResultSerde(PrivacyModes.UNSPECIFIED, importLegacyShellResult)
+  const todoSerde = createSlateTodoItemSerde(PrivacyModes.UNSPECIFIED)
+  const summarySerde = createSlateConversationSummarySerde(PrivacyModes.UNSPECIFIED)
+  const turns: SlateHydratedConversationTurn[] = []
+
+  for (const turnHex of checkpoint.turnBlobIds) {
+    const turnBytes = await blobStore.getBlob(ctx, fromHex(turnHex))
+    if (turnBytes === undefined) continue
+    const turn = turnValueOrUndefined(turnBytes)
+    if (turn === undefined) continue
+
+    if (turn.kind === "agent") {
+      const userMessageBytes = await blobStore.getBlob(ctx, turn.userMessageBlobId)
+      if (userMessageBytes === undefined) continue
+      const steps: ReturnType<typeof stepSerde.deserialize>[] = []
+      for (const stepBlobId of turn.stepBlobIds) {
+        const stepBytes = await blobStore.getBlob(ctx, stepBlobId)
+        if (stepBytes !== undefined) steps.push(stepSerde.deserialize(stepBytes))
+      }
+      turns.push({
+        kind: "agent",
+        userMessage: userMessageSerde.deserialize(userMessageBytes),
+        steps,
+      })
+      continue
+    }
+
+    const invocationBytes = await blobStore.getBlob(ctx, turn.invocationBlobId)
+    if (invocationBytes === undefined) continue
+    const resultBytes = await blobStore.getBlob(ctx, turn.resultBlobId)
+    if (resultBytes === undefined) continue
+    turns.push({
+      kind: "shell",
+      invocation: shellInvocationSerde.deserialize(invocationBytes),
+      result: shellResultSerde.deserialize(resultBytes),
+    })
+  }
+
+  const todos: ReturnType<typeof todoSerde.deserialize>[] = []
+  for (const todoHex of checkpoint.todoBlobIds) {
+    const todoBytes = await blobStore.getBlob(ctx, fromHex(todoHex))
+    if (todoBytes !== undefined) todos.push(todoSerde.deserialize(todoBytes))
+  }
+
+  const summaryBytes = checkpoint.summaryBlobId === undefined
+    ? undefined
+    : await blobStore.getBlob(ctx, fromHex(checkpoint.summaryBlobId))
+  return {
+    turns,
+    todos,
+    ...(summaryBytes === undefined ? {} : { summary: summarySerde.deserialize(summaryBytes) }),
+  }
+}
+
 function restoreUnknownFields(checkpoint: ConversationStateStructure, raw: unknown): void {
   if (raw === undefined) return
   if (!Array.isArray(raw)) throw new TypeError("Slate checkpoint unknown fields are invalid")
@@ -313,7 +386,7 @@ function restoreUnknownFields(checkpoint: ConversationStateStructure, raw: unkno
 export function createSlateAgentConversationCodec<Context>(): AgentConversationCodec<
   Context,
   SlateConversationCheckpointV2,
-  ConversationStateMessage
+  SlateHydratedConversation
 > {
   return {
     createEmptyCheckpoint: createEmptySlateConversationCheckpointV2,
@@ -338,13 +411,7 @@ export function createSlateAgentConversationCodec<Context>(): AgentConversationC
       }
       return null
     },
-    async hydrateConversation(ctx, checkpoint, blobStore) {
-      return deriveInteropConversationStateFromStructure(
-        ctx,
-        interopAgentConversationCheckpointFromSlate(checkpoint),
-        blobStore,
-      )
-    },
+    hydrateConversation: deriveSlateConversationFromCheckpoint,
     async resolveSubconversations(ctx, checkpoint, blobStore) {
       const interopCheckpoint = interopAgentConversationCheckpointFromSlate(checkpoint)
       const states = await resolveSubagentPersistedStates(

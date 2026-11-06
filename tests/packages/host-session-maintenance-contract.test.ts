@@ -27,6 +27,7 @@ import {
 } from "../../source/host/extensions/session/session-maintenance.ts";
 import { ConversationRecoveryScanError } from "../../source/host/extensions/session/session-recovery.ts";
 import { createEmptySlateConversationCheckpointV2 } from "../../source/packages/agent/conversation-checkpoint-state.ts";
+import type { SlateHydratedConversation } from "../../source/packages/agent/conversation-transcript-state.ts";
 import {
   MAX_ROOT_BLOB_BYTES,
   REBUILT_ENTRY_ID_PREFIX,
@@ -105,7 +106,21 @@ function harness(options: {
   };
 
   const structure = { ...createEmptySlateConversationCheckpointV2(), turnBlobIds: ["01"] };
-  const state = options.state === undefined ? { turns: [{ items: [{ kind: "user", id: "turn-1", text: "recovered" } as OutlineItem] }] } : options.state;
+  const outlineState = options.state === undefined ? { turns: [{ items: [{ kind: "user", id: "turn-1", text: "recovered" } as OutlineItem] }] } : options.state;
+  const hydratedState: SlateHydratedConversation = {
+    turns: [{
+      kind: "agent",
+      userMessage: {
+        text: "recovered",
+        messageId: "turn-1",
+        mode: "unspecified",
+        conversationStateBlobId: new Uint8Array(),
+        hookContexts: [],
+      },
+      steps: [],
+    }],
+    todos: [],
+  };
   const worker = {
     async clearStaleCheckpointRoots(agentId: string, blobDbPath: string, rootHex: string, dbPath: string) {
       calls.worker.push({ name: "clearStaleCheckpointRoots", args: { agentId, blobDbPath, rootHex, dbPath } });
@@ -123,7 +138,7 @@ function harness(options: {
   const store: MaintenanceStore = {
     getConversationStateStructure: () => structure,
     getBlobStore: () => ({ async getBlob() { return options.blob ?? new Uint8Array([1]); } }),
-    async getFullConversation() { return { turns: state?.turns ?? [] }; },
+    async getFullConversation() { return hydratedState; },
     async resetFromDb() { calls.resets += 1; },
   };
   const dbPath = options.dbPath ?? "/agents/agent-1/conversation.db";
@@ -132,7 +147,7 @@ function harness(options: {
     ctx: {},
     liveHandleCount: () => liveHandles,
     writeGeneration: () => generation,
-    async resolveConversationState() { return state; },
+    async resolveConversationState() { return outlineState; },
     deriveOutline: () => options.outline ?? [{ kind: "user", id: "turn-1", text: "recovered", hidden: true }],
     report: event => calls.reports.push(event),
     requireWorkerPool: () => worker,

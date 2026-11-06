@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import * as outline from "../../source/host/runner/conversation-outline.ts";
+import { DataClassification } from "../../source/packages/redaction/classification.ts";
+import { createRedactedString } from "../../source/packages/redaction/create.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
+import {
+  createSlateAssistantMessageStep,
+  createSlateThinkingMessageStep,
+  createSlateToolCallStep,
+} from "../../source/packages/agent/conversation-step-state.ts";
 import {
   SLATE_HIDDEN_PROMPT_MARKER,
   SLATE_TRUSTED_AUTOMATION_PROMPT_MARKER,
@@ -17,7 +25,9 @@ describe("the conversation outline", () => {
       "MCP_TOOL_CALL_OUTLINE_NAME",
       "SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME",
       "deriveOutlineFromConversationState",
+      "deriveOutlineFromSlateConversation",
       "deriveOutlineTurnsFromConversationState",
+      "deriveOutlineTurnsFromSlateConversation",
       "getOutlineToolCallName",
       "getOutlineToolCallStatus",
       "getOutlineToolCallSummary",
@@ -124,5 +134,56 @@ describe("the conversation outline", () => {
     assert.deepEqual(turns[4]!.items[0], { kind: "tool-call", id: "outline-shell-4", name: "shellToolCall", status: "done", summary: undefined });
     const flattened = outline.deriveOutlineFromConversationState(conversation as never);
     assert.deepEqual(flattened, turns.flatMap((turn) => turn.items));
+  });
+
+  it("projects a hydrated Slate conversation with the same visible outline semantics", () => {
+    const text = (value: string) => createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE);
+    const conversation = {
+      turns: [
+        {
+          kind: "agent",
+          userMessage: {
+            text: text(SLATE_HIDDEN_PROMPT_MARKER + "hidden question"),
+            messageId: "m-slate",
+            mode: "chat",
+            conversationStateBlobId: new Uint8Array(),
+            hookContexts: [],
+          },
+          steps: [
+            createSlateAssistantMessageStep(text("answer")),
+            createSlateThinkingMessageStep({ text: text("reasoning"), durationMs: 7 }),
+            createSlateToolCallStep({ tool: {
+              case: "sendMessageToolCall",
+              value: { args: { message: { case: "text", value: { content: "sent" } } } },
+            } }),
+            createSlateToolCallStep({ tool: {
+              case: "taskToolCall",
+              value: { args: { description: " inspect task " } },
+            } }),
+          ],
+        },
+        { kind: "shell", invocation: { commandText: text("ls -la") }, result: { standardOutput: "", standardError: "", exitCode: 0 } },
+      ],
+      todos: [],
+    };
+
+    assert.deepEqual(outline.deriveOutlineTurnsFromSlateConversation(conversation as never), [
+      {
+        rawUserText: SLATE_HIDDEN_PROMPT_MARKER + "hidden question",
+        userMessageId: "m-slate",
+        items: [
+          { kind: "user", id: "outline-user-0", text: "hidden question", hidden: true },
+          { kind: "assistant-text", id: "outline-0-0", text: "answer" },
+          { kind: "thinking", id: "outline-0-1", text: "reasoning", durationMs: 7 },
+          { kind: "send-message", id: "outline-0-2", message: { type: "text", content: "sent" } },
+          { kind: "tool-call", id: "outline-0-3", name: "Task", status: "done", summary: "inspect task" },
+        ],
+      },
+      {
+        rawUserText: "",
+        userMessageId: "",
+        items: [{ kind: "tool-call", id: "outline-shell-1", name: "shellToolCall", status: "done", summary: "ls -la" }],
+      },
+    ]);
   });
 });
