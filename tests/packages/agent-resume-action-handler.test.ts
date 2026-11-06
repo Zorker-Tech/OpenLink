@@ -13,7 +13,7 @@ import { RequestContext, RequestContextResult, RequestContextSuccess } from "../
 
 function stateHandler(options: Record<string, unknown> = {}) {
   return {
-    getRawPendingMessages: () => options.messages ?? [],
+    getPendingToolCalls: () => options.messages ?? [],
     turns: options.turns ?? [],
     getPrivacyMode: () => "NO_STORAGE",
     getBlobStore: () => ({}),
@@ -37,13 +37,13 @@ const action = () => ({ requestContext: undefined });
 test("nothing pending or no turns means nothing to execute", async () => {
   const ctx = createContext();
   assert.equal(await instance().executePendingToolCalls(ctx, stateHandler(), {}, {}, "inv"), false);
-  assert.equal(await instance().executePendingToolCalls(ctx, stateHandler({ messages: [{ unwrap: () => "{}" }], turns: [] }), {}, {}, "inv"), false);
+  assert.equal(await instance().executePendingToolCalls(ctx, stateHandler({ messages: ["{}"], turns: [] }), {}, {}, "inv"), false);
 });
 
 test("a last turn that is not an agent turn is refused", async () => {
   const ctx = createContext();
   await assert.rejects(
-    () => instance().executePendingToolCalls(ctx, stateHandler({ messages: [{ unwrap: () => "{}" }], turns: [{ get: async () => ({}) }] }), {}, {}, "inv"),
+    () => instance().executePendingToolCalls(ctx, stateHandler({ messages: ["{}"], turns: [{ get: async () => ({}) }] }), {}, {}, "inv"),
     /Expected last turn to be an agent turn/,
   );
 });
@@ -51,7 +51,7 @@ test("a last turn that is not an agent turn is refused", async () => {
 test("a pending message that is not an assistant message is refused", async () => {
   const ctx = createContext();
   await assert.rejects(
-    () => instance().executePendingToolCalls(ctx, stateHandler({ messages: [{ unwrap: () => JSON.stringify({ role: "user", content: [] }) }], turns: [{ get: async () => turnHandle() }] }), {}, {}, "inv"),
+    () => instance().executePendingToolCalls(ctx, stateHandler({ messages: [JSON.stringify({ role: "user", content: [] })], turns: [{ get: async () => turnHandle() }] }), {}, {}, "inv"),
     /No assistant message to resume from/,
   );
 });
@@ -77,7 +77,7 @@ function realTurn(append: unknown[], mode: unknown = "user-message"): unknown {
 }
 function resumeInput(content: unknown, contracts?: Record<string, unknown>) {
   const assistant = { role: "assistant", content, ...(contracts === undefined ? {} : { providerOptions: { cursor: { pendingToolExecutionContracts: contracts } } }) };
-  return { unwrap: () => JSON.stringify(assistant) };
+  return JSON.stringify(assistant);
 }
 const tool = { name: "outer", toolIdentifier: "outer", execute: async () => ({ content: [] }) };
 

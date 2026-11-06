@@ -99,7 +99,7 @@ function createStateHandler(overrides: Record<string, unknown> = {}) {
     hasAgentTypeChangedFromPersistedState: () => false,
     getSubagentThreadId: () => undefined,
     markAskQuestionCompleted: () => {},
-    getRawPendingMessages: () => [],
+    getPendingToolCalls: () => [],
     createAgentTurn: async () => ({ created: true }),
     ...overrides,
   }

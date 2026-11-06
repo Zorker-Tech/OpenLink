@@ -69,7 +69,7 @@ export interface SlateFileStateBlobs {
 }
 
 export interface SlateTrackedGitRepository {
-  readonly repoPath: SlateRedactedValue<string>
+  readonly repoPath: string
   readonly branchName: string
 }
 
@@ -78,11 +78,11 @@ export interface SlateConversationState {
   readonly rootPromptMessagesJson: readonly Uint8Array[]
   readonly turns: readonly Uint8Array[]
   readonly todos: readonly Uint8Array[]
-  readonly pendingToolCalls?: readonly SlateRedactedValue<string>[]
+  readonly pendingToolCalls?: readonly string[]
   readonly tokenDetails?: SlateConversationTokenDetails
   readonly summary?: Uint8Array
   readonly plan?: Uint8Array
-  readonly previousWorkspaceUris: readonly SlateRedactedValue<string>[]
+  readonly previousWorkspaceUris: readonly string[]
   mode?: SlateMode
   /** Unknown persisted mode retained for lossless checkpoint write-back. */
   unknownModeCode?: number

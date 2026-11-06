@@ -16,6 +16,7 @@ import {
   SubagentExecutionEnvironment,
   SubagentRunState,
   SubagentRunStatus,
+  TrackedGitRepo,
   ThinkingMessage,
   ToolCall,
   UserMessage,
@@ -36,6 +37,7 @@ import {
   fromRedactedPlanRegistryEntry,
   fromRedactedSubagentRunState,
   fromRedactedSubagentPersistedState,
+  fromRedactedTrackedGitRepo,
   fromRedactedUserMessage,
   toRedactedConversationPlan,
   toRedactedConversationStep,
@@ -47,6 +49,7 @@ import {
   toRedactedCommunicateUpdateTurnState,
   toRedactedSubagentPersistedState,
   toRedactedSubagentRunState,
+  toRedactedTrackedGitRepo,
   toRedactedGoalState,
   toRedactedPlanRegistryEntry,
   toRedactedUserMessage,
@@ -476,6 +479,9 @@ export function fromInteropConversationState(
     plans,
     goalState,
     subagentThreads,
+    pendingToolCalls,
+    previousWorkspaceUris,
+    trackedGitRepoBranches,
     communicateUpdateHistory,
     communicateUpdateFinalSummary,
     communicateUpdateCompletedSubtitle,
@@ -565,6 +571,23 @@ export function fromInteropConversationState(
         value,
       ]),
     ),
+    pendingToolCalls: (pendingToolCalls ?? []).map((message: RedactedString) =>
+      message.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    ),
+    previousWorkspaceUris: previousWorkspaceUris.map((uri: RedactedString) =>
+      uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    ),
+    trackedGitRepoBranches: (trackedGitRepoBranches ?? []).map((repository: {
+      readonly repoPath: SlateRedactedValue<string>
+      readonly branchName: string
+    }) => {
+      const value = fromRedactedTrackedGitRepo(
+        repository,
+        PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+        undefined,
+      )
+      return { repoPath: value.repoPath, branchName: value.branchName }
+    }),
     communicationHistory: (communicateUpdateHistory ?? []).map((entry: Parameters<typeof fromRedactedCommunicateUpdateHistoryEntry>[0]) => {
       const value = fromRedactedCommunicateUpdateHistoryEntry(
         entry,
@@ -624,6 +647,9 @@ export function toInteropConversationState(
     communicationCompletedSubtitle,
     communicationTurnsByCallId,
     tokenDetails,
+    pendingToolCalls,
+    previousWorkspaceUris,
+    trackedGitRepoBranches,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
@@ -632,7 +658,12 @@ export function toInteropConversationState(
     ...(tokenDetails === undefined
       ? {}
       : { tokenDetails: conversationTokenDetailsToInterop(tokenDetails, privacyMode) }),
-    pendingToolCalls: fields.pendingToolCalls ?? [],
+    pendingToolCalls: (pendingToolCalls ?? []).map(message => createRedactedString(
+      message,
+      DataClassification.CODE,
+      "pending_tool_calls",
+      privacyMode,
+    )),
     fileStates: optionalFields.fileStates ?? new Map(),
     turnTimings: optionalFields.turnTimings ?? [],
     fileStatesV2: new Map(
@@ -673,7 +704,10 @@ export function toInteropConversationState(
     ...(goalState === undefined
       ? {}
       : { goalState: toRedactedGoalState(toInteropGoalState(goalState), privacyMode) }),
-    trackedGitRepoBranches: fields.trackedGitRepoBranches ?? [],
+    trackedGitRepoBranches: (trackedGitRepoBranches ?? []).map(repository => toRedactedTrackedGitRepo(
+      new TrackedGitRepo({ repoPath: repository.repoPath, branchName: repository.branchName }),
+      privacyMode,
+    )),
     communicateUpdateHistory: (communicationHistory ?? []).map((entry) => toRedactedCommunicateUpdateHistoryEntry(
       new CommunicateUpdateHistoryEntry({ step: entry.step, messageIndex: entry.messageIndex }),
       privacyMode,
@@ -700,6 +734,12 @@ export function toInteropConversationState(
       : { communicateUpdateCompletedSubtitle: createRedactedString(communicationCompletedSubtitle, DataClassification.CODE, "communicate_update_completed_subtitle", privacyMode) }),
     subagentStateRefs: fields.subagentStateRefs ?? new Map(),
     completedAskQuestionToolCallIds: fields.completedAskQuestionToolCallIds ?? [],
+    previousWorkspaceUris: previousWorkspaceUris.map(uri => createRedactedString(
+      uri,
+      DataClassification.PATH,
+      "previous_workspace_uris",
+      privacyMode,
+    )),
     readPaths: readPaths.map(path => createRedactedString(
       path,
       DataClassification.PATH,

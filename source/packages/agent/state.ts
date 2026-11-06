@@ -770,7 +770,7 @@ function workspaceUrisFrom(_ctx: unknown, requestContext: WorkspaceRequestShape)
     }
   }
   const sortedUris = uris.slice().sort((a, b) => a.localeCompare(b));
-  return sortedUris.map(uri => createRedactedString(uri, DataClassification.PATH, "workspaceUri", PrivacyModes.UNSPECIFIED));
+  return sortedUris;
 }
 
 function trimmedString(value: string | null | undefined): string | undefined {
@@ -1203,10 +1203,6 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
   }
 }
 
-type RedactedField<T> = {
-  unwrap(purpose: PrivacyCapability, options?: object): T;
-};
-
 type MessageBlobTarget = {
   text: SlateUserMessageText;
   textBlobId?: Uint8Array;
@@ -1333,7 +1329,7 @@ export class ConversationStateHandle {
   serdes: CodecSet;
   serializeSubagentStatesAsBlobRefs: boolean;
   fetchConcurrency: number;
-  previousWorkspaceUris: RedactedField<string>[] | undefined;
+  previousWorkspaceUris: string[] | undefined;
   /** Slate's mode is the in-memory policy value; the persisted state keeps its legacy wire encoding. */
   slateMode: SlateModeValue | undefined;
   agentType: ReturnType<typeof resolveAgentType>;
@@ -1367,8 +1363,8 @@ export class ConversationStateHandle {
     };
   }
 
-  getRawPendingMessages(): readonly RedactedField<string>[] | undefined {
-    return this.conversationStateStructure.pendingToolCalls;
+  getPendingToolCalls(): readonly string[] {
+    return this.conversationStateStructure.pendingToolCalls ?? [];
   }
 
   assertRootPromptBlobsLoadedForFullPromptRead(): void {
@@ -1602,9 +1598,11 @@ export class ConversationStateHandle {
     this.serdes = createSerdes(this.privacyMode);
     this.serializeSubagentStatesAsBlobRefs = restoreOptions?.serializeSubagentStatesAsBlobRefs === true;
     this.fetchConcurrency = restoreOptions?.restoreBlobFetchConcurrency ?? RESTORE_FETCH_CONCURRENCY;
-    this.previousWorkspaceUris = this.conversationStateStructure.previousWorkspaceUris.length > 0 ? [...this.conversationStateStructure.previousWorkspaceUris] : undefined;
+    this.previousWorkspaceUris = this.conversationStateStructure.previousWorkspaceUris.length > 0
+      ? [...this.conversationStateStructure.previousWorkspaceUris]
+      : undefined;
     this.trackedGitRepoBranches = (this.conversationStateStructure.trackedGitRepoBranches ?? []).map((repo) => ({
-      repoPath: repo.repoPath.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+      repoPath: repo.repoPath,
       branchName: repo.branchName,
     }));
     this.slateMode = this.conversationStateStructure.mode;
@@ -1800,8 +1798,8 @@ These images can be copied for use in other locations.
       const workspaceValues = workspaceUrisFrom(parentContext, hostContext);
       const workspaceReminder = processWorkspaceChangeReminder(
         parentContext,
-        workspaceValues.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
-        this.previousWorkspaceUris?.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+        workspaceValues,
+        this.previousWorkspaceUris,
         this.agentType,
         priorAgentType,
       );
@@ -2638,7 +2636,7 @@ These images can be copied for use in other locations.
         summary: (await newSummaryPromise)!,
         plan: (await planBlobPromise)!,
         summaryArchives: (await newSummaryArchivesPromise)!,
-        previousWorkspaceUris: this.previousWorkspaceUris?.map((uri) => uri.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)) ?? [],
+        previousWorkspaceUris: this.previousWorkspaceUris ?? [],
         trackedGitRepoBranches: this.trackedGitRepoBranches.map((repo) => ({
           repoPath: repo.repoPath,
           branchName: repo.branchName,

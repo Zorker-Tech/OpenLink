@@ -17,7 +17,6 @@
  * restored much later still says how long the call had run rather than how long ago it was made.
  */
 
-import { PrivacyCapability } from "../../../redaction/classification.ts"
 import { toRedactedCoreMessages } from "../../../redaction/message-redaction.ts"
 import { getExecutableTools } from "../../tools/tool-execution.ts"
 import { formatShellPartialOutputSection } from "../../tools/core/shell/formatters.ts"
@@ -25,12 +24,8 @@ import { indexInterruptedToolResolutions, renderInterruptedToolResolution } from
 import { getInterruptedShellOutputSnapshot, clearInterruptedShellOutputSnapshot } from "../../tools/core/shell/interrupted-shell-output.ts"
 import type { PrivacyMode } from "../../../redaction/privacy-mode.ts"
 
-interface RedactedPendingMessage {
-  unwrap(purpose: PrivacyCapability): string
-}
-
 interface InterruptedToolStateHandler {
-  getRawPendingMessages(): readonly RedactedPendingMessage[] | undefined
+  getPendingToolCalls(): readonly string[]
   getPrivacyMode(): PrivacyMode
 }
 
@@ -108,7 +103,7 @@ export function buildInterruptedPendingToolCallMessages(
   hostResolutions: unknown,
   terminalsFolder: string | undefined,
 ) {
-  const rawPending = stateHandler.getRawPendingMessages() ?? []
+  const rawPending = stateHandler.getPendingToolCalls()
   if (rawPending.length === 0) return []
   const appendedMessages: ParsedPendingMessage[] = []
   const toolsByName: Record<string, ToolLike> = Object.fromEntries(executableTools.map(tool => [tool.name, tool]))
@@ -116,7 +111,7 @@ export function buildInterruptedPendingToolCallMessages(
   for (const pendingMessage of rawPending) {
     let parsedPending: ParsedPendingMessage
     try {
-      parsedPending = JSON.parse(pendingMessage.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)) as ParsedPendingMessage
+      parsedPending = JSON.parse(pendingMessage) as ParsedPendingMessage
     } catch {
       // A pending message that cannot be read back is left out rather than guessed at.
       continue

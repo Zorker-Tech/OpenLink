@@ -20,10 +20,6 @@ import { toRedactedInterruptedPendingToolCallResolution } from "../../source/ada
 // the harness
 // ---------------------------------------------------------------------------------------------
 
-interface PendingMessageLike {
-  unwrap(): string
-}
-
 const TOOLS = getExecutableTools({
   modelVisibleTools: [{ name: "Shell", toolIdentifier: "SHELL" }, { name: "Await", toolIdentifier: "AWAIT" }, { name: "Read", toolIdentifier: "READ" }] as never,
   additionalExecutableTools: [],
@@ -41,11 +37,9 @@ function harness(messages: Array<string | unknown>, options: {
   resolutions?: InterruptedPendingToolCallResolutions
   terminalsFolder?: string
 } = {}) {
-  const raw: PendingMessageLike[] = messages.map(message => ({
-    unwrap: () => (typeof message === "string" ? message : JSON.stringify(message)),
-  }))
+  const raw = messages.map(message => typeof message === "string" ? message : JSON.stringify(message))
   return buildInterruptedPendingToolCallMessages(
-    { getRawPendingMessages: () => raw, getPrivacyMode: () => PrivacyMode.NO_STORAGE },
+    { getPendingToolCalls: () => raw, getPrivacyMode: () => PrivacyMode.NO_STORAGE },
     TOOLS,
     options.resolutions,
     options.terminalsFolder ?? "/repo/.slate/projects/workspace-1/terminals",

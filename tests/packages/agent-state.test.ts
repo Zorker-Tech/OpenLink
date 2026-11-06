@@ -26,6 +26,7 @@ import {
   SubagentRunStatus,
   SubagentPersistedState,
   SubagentExecutionEnvironment,
+  TrackedGitRepo,
   NewCloudVmTarget,
   TargetMachine,
   UserMessage,
@@ -157,6 +158,19 @@ test("a handle reports the session it was built for", () => {
   assert.equal(harnessed.handle.getPrivacyMode(), PrivacyMode.NO_STORAGE)
   assert.equal(harnessed.handle.getBlobStore(), (harnessed.handle as unknown as { blobStore: unknown }).blobStore)
   assert.equal(harnessed.handle.usesLargeContextTreatment(), false)
+})
+
+test("pending calls and workspace snapshots are Slate strings in the state handle", () => {
+  const pendingMessage = JSON.stringify({ role: "assistant", content: [] })
+  const harnessed = harness(new ConversationStateStructure({
+    pendingToolCalls: [pendingMessage],
+    previousWorkspaceUris: ["file:///workspace"],
+    trackedGitRepoBranches: [new TrackedGitRepo({ repoPath: "/repo", branchName: "feature" })],
+  }))
+
+  assert.deepEqual(harnessed.handle.getPendingToolCalls(), [pendingMessage])
+  assert.deepEqual(harnessed.handle.previousWorkspaceUris, ["file:///workspace"])
+  assert.deepEqual(harnessed.handle.trackedGitRepoBranches, [{ repoPath: "/repo", branchName: "feature" }])
 })
 
 test("the paths read in a turn are remembered, deduplicated and checkpointed", async () => {

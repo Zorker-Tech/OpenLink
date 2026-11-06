@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.660700808625337,
-      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication and token-detail values. Token counts, breakdowns and usage trees use Slate fields in the state handle; generated redaction and snapshot conversion remain in the interop adapter. Snapshot computation declares its redacted interop output accurately.",
-      "evidence": "agent-state.test.ts, slate-conversation-state.test.ts, prompt-token-details.test.ts, interop-prompt-token-details-adapter.test.ts and subagent-state storage recovery tests pass 215/215. The full Work-host suite passes 9969/9969 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. State handles store communication and token details as Slate values; legacy generated conversion stays at the interop adapter. Measured overlap is 0.660700808625337 against 9275 baseline pairs."
+      "overlap": 0.6561725067385444,
+      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication, token-detail, pending-call, workspace-URI and tracked-repository values. Redaction and generated snapshot conversion remain in the interop adapter.",
+      "evidence": "agent-state.test.ts, slate-conversation-state.test.ts, prompt-token-details.test.ts, interop-prompt-token-details-adapter.test.ts and subagent-state storage recovery tests pass 215/215. The full Work-host suite passes 9970/9970 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. State handles store communication, token details, pending calls, workspace URIs and tracked repositories as Slate values; redaction and generated conversion stay at interop. Measured overlap is 0.6561725067385444 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
@@ -4410,9 +4410,9 @@
     },
     "packages/agent/actions/user-message-action/resume-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.6895306859205776,
-      "refreshReason": "Delegated redacted resume-context decoding to the request-context interop adapter while keeping pending-tool and Slate-mode resume policy in the core.",
-      "evidence": "agent-resume-action-handler.test.ts passes 10/10 and the complete Work-host suite passes 9872/9872. The suite verifies that a persisted plan-mode user message gives the resumed tools SlateMode.PLAN, and mutating the read back to the former non-existent userMode field is caught. interop-user-message-action-input-adapter.test.ts passes 3/3. Work-host typecheck passes and the interop boundary reports no new direct imports. Measured overlap is 0.6895306859205776 against 831 baseline pairs."
+      "overlap": 0.6799037304452467,
+      "refreshReason": "Resume now consumes Slate-owned pending message strings from the conversation handle; the legacy redacted message wrapper stays at persistence boundaries.",
+      "evidence": "agent-resume-action-handler.test.ts and the full Work-host suite pass; recovery covers plain pending-message parsing, no-turn behavior, and Slate mode propagation. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.6799037304452467 against 831 baseline pairs."
     },
     "host/runner/computer-use.ts": {
       "claim": "rewritten",
@@ -4422,9 +4422,9 @@
     },
     "packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts": {
       "claim": "rewritten",
-      "overlap": 0.4965635738831615,
-      "refreshReason": "Moved redacted interrupted-resolution decoding and shell/task wire-result projection into interop; recovery policy consumes a Slate outcome map.",
-      "evidence": "agent-interrupted-tool-reconstruction.test.ts and agent-pending-tool-call-contract-replay.test.ts pass 28/28 as an esbuild bundle. Work-host typecheck/build pass. Contracts cover call matching, elapsed time, shell/task outcomes, fallback text and redaction. Interop boundary reports 42 direct consumers. Measured overlap is 0.4965635738831615 against 582 baseline pairs."
+      "overlap": 0.4639175257731959,
+      "refreshReason": "Interrupted-call recovery now reads Slate pending-message strings; generated redacted resolution decoding remains isolated in the interop adapter.",
+      "evidence": "agent-interrupted-tool-reconstruction.test.ts and the full Work-host suite pass; recovery covers malformed messages, call matching, elapsed time, shell outcomes, fallback text and storage redaction from Slate strings. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.4639175257731959 against 582 baseline pairs."
     },
     "packages/agent/tools/core/create-plan/backend-plan-utils.ts": {
       "claim": "rewritten",
