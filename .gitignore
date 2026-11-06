@@ -8,6 +8,7 @@
 /out/
 /desktop/out/
 /desktop/dist-renderer/
+/video/
 
 # production
 /build
