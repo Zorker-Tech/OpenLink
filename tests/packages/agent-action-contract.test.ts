@@ -10,8 +10,11 @@ import { createSlateUserMessageInput } from "../../source/packages/agent/user-me
 import { isSlateExecutePlanActionPayload } from "../../source/packages/agent/actions/execute-plan-contracts.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
+import type { AskQuestionCompletionAction } from "../../source/packages/agent/actions/ask-question-completion.ts"
 
-test("every supported runner route maps to a Slate kind and retains unconverted payloads during migration", () => {
+test("every supported runner route maps to a Slate kind and first-party payload contract", () => {
   const routes = [
     ["userMessageAction", SlateAgentActionKind.USER_MESSAGE],
     ["resumeAction", SlateAgentActionKind.RESUME],
@@ -42,12 +45,58 @@ test("every supported runner route maps to a Slate kind and retains unconverted 
       assert.ok((action.payload as { compatibility?: { legacyPayload?: unknown } }).compatibility?.legacyPayload)
     } else if (sourceCase === "executePlanAction") {
       assert.equal(isSlateExecutePlanActionPayload(action.payload), true)
+    } else if (sourceCase === "asyncAskQuestionCompletionAction") {
+      const payload = action.payload as AskQuestionCompletionAction
+      assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
+      assert.equal(payload.version, 1)
+      assert.equal(payload.originalToolCallId, "")
+      assert.ok(payload.compatibility?.legacyPayload)
     } else {
       assert.equal(action.payload, payload, sourceCase)
     }
     assert.equal(action.context.privacyMode, PrivacyMode.NO_STORAGE, sourceCase)
     assert.equal(action.context.telemetryName, sourceCase, sourceCase)
   }
+})
+
+test("ask-question completion uses Slate fields and preserves the historical payload for recovery", () => {
+  const legacyPayload = {
+    originalToolCallId: "call-17",
+    originalArgs: {
+      title: "Choose a store",
+      questions: [{
+        id: "q1",
+        prompt: "Which database?",
+        allowMultiple: false,
+        options: [{ id: "opt-1", label: "PostgreSQL" }],
+      }],
+    },
+    result: {
+      result: {
+        case: "success",
+        value: { answers: [{ questionId: "q1", selectedOptionIds: ["opt-1"], freeformText: "" }] },
+      },
+    },
+  }
+  const action = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "asyncAskQuestionCompletionAction", value: legacyPayload },
+  } as never)
+  const payload = action.payload as AskQuestionCompletionAction
+
+  assert.equal(action.kind, SlateAgentActionKind.ASK_QUESTION_COMPLETION)
+  assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
+  assert.equal(payload.version, 1)
+  assert.equal(payload.originalToolCallId, "call-17")
+  const title = payload.originalArgs?.title
+  const questionPrompt = payload.originalArgs?.questions[0]?.prompt
+  assert.ok(title !== undefined && isRedactedString(title))
+  assert.ok(questionPrompt !== undefined && isRedactedString(questionPrompt))
+  assert.equal(title.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Choose a store")
+  assert.equal(questionPrompt.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Which database?")
+  assert.equal(payload.result?.kind, "answered")
+  assert.equal(payload.compatibility?.legacyResult, legacyPayload.result)
+  assert.equal(payload.compatibility?.legacyPayload, legacyPayload)
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {

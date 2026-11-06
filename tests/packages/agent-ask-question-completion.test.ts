@@ -13,6 +13,7 @@ import { DataClassification, PrivacyCapability } from "../../source/packages/red
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { fromRedactedCoreMessages } from "../../source/packages/redaction/message-redaction.ts"
 import { ASK_QUESTION_AUTO_ANSWER_REASON_BODY } from "../../source/packages/constants/ask-question.ts"
+import { fromRedactedAskQuestionResult } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a completion, and the three places it is written to
@@ -34,21 +35,19 @@ const questionArgs = (): NonNullable<AskQuestionCompletionAction["originalArgs"]
 })
 
 const successResult = (): NonNullable<AskQuestionCompletionAction["result"]> => ({
-  result: {
-    case: "success",
-    value: {
-      answers: [{
-        questionId: "q1",
-        selectedOptionIds: ["opt-postgres"],
-        freeformText: redacted("or maybe a managed service", "freeform"),
-      }],
-    },
-  },
+  kind: "answered",
+  answers: [{
+    questionId: "q1",
+    selectedOptionIds: ["opt-postgres"],
+    freeformText: redacted("or maybe a managed service", "freeform"),
+  }],
 })
 
 function action(overrides: Partial<AskQuestionCompletionAction> = {}): AskQuestionCompletionAction {
   return {
-    _privacyMode: PrivacyMode.NO_STORAGE,
+    schema: "slate.agent-action.ask-question-completion",
+    version: 1,
+    privacyMode: PrivacyMode.NO_STORAGE,
     originalToolCallId: "tool-call-1",
     originalArgs: questionArgs(),
     result: successResult(),
@@ -113,14 +112,14 @@ const plainMessages = (messages: unknown[]): Array<{ role: string; content: Arra
 
 test("a completion names the question and says what came of it", () => {
   assert.equal(isValidAskQuestionCompletion(action()), true)
-  assert.equal(isValidAskQuestionCompletion(action({ result: { result: { case: "rejected", value: { reason: redacted("no", "reason") } } } })), true)
-  assert.equal(isValidAskQuestionCompletion(action({ result: { result: { case: "error", value: { errorMessage: redacted("broken", "error") } } } })), true)
+  assert.equal(isValidAskQuestionCompletion(action({ result: { kind: "rejected", reason: redacted("no", "reason") } })), true)
+  assert.equal(isValidAskQuestionCompletion(action({ result: { kind: "error", message: redacted("broken", "error"), askWasTooEarly: false } })), true)
 })
 
 test("a completion with no question to attach to, or with nothing that happened, is not one", () => {
   assert.equal(isValidAskQuestionCompletion(action({ originalToolCallId: "" })), false)
   assert.equal(isValidAskQuestionCompletion(action({ result: undefined })), false)
-  assert.equal(isValidAskQuestionCompletion(action({ result: { result: { case: "async", value: {} } } })), false)
+  assert.equal(isValidAskQuestionCompletion(action({ result: { kind: "async" } })), false)
 })
 
 test("a question that was already answered is not answered again", () => {
@@ -184,16 +183,39 @@ test("the answer is written the way the session's tool reads results", async () 
   })
 })
 
+test("the Slate outcome is authoritative over a stale compatibility result", async () => {
+  const harnessed = harness()
+  const applied = await apply(harnessed, action({
+    compatibility: { legacyResult: { stale: true }, legacyPayload: { stale: true } },
+  }))
+
+  assert.equal(applied.outcome, "applied")
+  const storedToolCall = harnessed.upserted[0]?.tool as {
+    tool?: { case?: string; value?: { result?: unknown } }
+  }
+  assert.equal(storedToolCall.tool?.case, "askQuestionToolCall")
+  const result = fromRedactedAskQuestionResult(
+    storedToolCall.tool?.value?.result as never,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.equal(result.result.case, "success")
+  if (result.result.case === "success") {
+    assert.equal(result.result.value.answers[0]?.questionId, "q1")
+    assert.deepEqual(result.result.value.answers[0]?.selectedOptionIds, ["opt-postgres"])
+  }
+})
+
 test("a refusal and a failure are written in the shape the caller asked for", async () => {
   const rejected = harness()
-  await apply(rejected, action({ result: { result: { case: "rejected", value: { reason: redacted("the user closed it", "reason") } } } }), "structured")
+  await apply(rejected, action({ result: { kind: "rejected", reason: redacted("the user closed it", "reason") } }), "structured")
   assert.deepEqual(
     plainMessages(rejected.appended.flat())[1]?.content[0]?.result,
     { rejected: { reason: "the user closed it" } },
   )
 
   const errored = harness()
-  await apply(errored, action({ result: { result: { case: "error", value: { errorMessage: redacted("the client went away", "error") } } } }), "structured")
+  await apply(errored, action({ result: { kind: "error", message: redacted("the client went away", "error"), askWasTooEarly: false } }), "structured")
   assert.deepEqual(
     plainMessages(errored.appended.flat())[1]?.content[0]?.result,
     { error: { error_message: "the client went away" } },
@@ -236,7 +258,7 @@ test("an answer nobody gave leaves the question open", async () => {
   // the model has to know the turn moved on — but it is not receipted, so a real answer can still arrive.
   const harnessed = harness()
   const applied = await apply(harnessed, action({
-    result: { result: { case: "rejected", value: { reason: redacted(ASK_QUESTION_AUTO_ANSWER_REASON_BODY, "reason") } } },
+    result: { kind: "rejected", reason: redacted(ASK_QUESTION_AUTO_ANSWER_REASON_BODY, "reason") },
   }))
   assert.equal(applied.outcome, "applied")
   assert.deepEqual(harnessed.completed, [])

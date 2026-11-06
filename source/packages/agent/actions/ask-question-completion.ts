@@ -26,57 +26,59 @@ import { createLogger } from "../../context/index.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts"
-import type { RedactedString } from "../../redaction/redacted-values.ts"
+import { isRedactedString, type RedactedString } from "../../redaction/redacted-values.ts"
+import { isAskQuestionAutoAnswerReason } from "../../constants/ask-question.ts"
 import {
   createAskQuestionCompletionToolCall,
-  formatRedactedAskQuestionResultAsString,
-  shouldReceiptRedactedAskQuestionResult,
   type InteropRedactedToolCall,
 } from "../../../adapters/interop/agent/ask-question-result-adapter.ts"
+import { formatAskQuestionOutcomeAsString } from "../../agent/tools/core/ask-question/outcome-format.ts"
 
-/** The redacted question, as the action carries it. */
-interface RedactedAskQuestionOption {
+export type SlateAskQuestionText = string | RedactedString
+
+export interface SlateAskQuestionOption {
   readonly id: string
-  readonly label: RedactedString
+  readonly label: SlateAskQuestionText
 }
 
-/** One question of a redacted ask, with what it offers. */
-interface RedactedAskQuestionQuestion {
+export interface SlateAskQuestionQuestion {
   readonly id: string
-  readonly prompt: RedactedString
+  readonly prompt: SlateAskQuestionText
   readonly allowMultiple: boolean
-  readonly options: readonly RedactedAskQuestionOption[]
+  readonly options: readonly SlateAskQuestionOption[]
 }
 
-/** The arguments an ask action carries. */
-interface RedactedAskQuestionArgs {
-  readonly title: RedactedString
-  readonly questions: readonly RedactedAskQuestionQuestion[]
+export interface SlateAskQuestionArguments {
+  readonly title: SlateAskQuestionText
+  readonly questions: readonly SlateAskQuestionQuestion[]
 }
 
-/** One answer a completed ask carries. */
-interface RedactedAskQuestionSuccessAnswer {
+export interface SlateAskQuestionAnswer {
   readonly questionId: string
   readonly selectedOptionIds: readonly string[]
-  readonly freeformText: RedactedString
+  readonly freeformText: SlateAskQuestionText
 }
 
-/** What came of an ask, in the redacted shape the action carries it. */
-type RedactedAskQuestionResult = {
-  readonly result:
-    | { readonly case: "success"; readonly value: { readonly answers: readonly RedactedAskQuestionSuccessAnswer[] } }
-    | { readonly case: "error"; readonly value: { readonly errorMessage: RedactedString } }
-    | { readonly case: "rejected"; readonly value: { readonly reason: RedactedString } }
-    | { readonly case: "async"; readonly value: unknown }
-    | { readonly case: undefined; readonly value?: undefined }
-}
+/** Slate outcome union, kept redaction-aware until text is written to a prompt or wire message. */
+export type SlateAskQuestionCompletionResult =
+  | { readonly kind: "answered"; readonly answers: readonly SlateAskQuestionAnswer[] }
+  | { readonly kind: "error"; readonly message: SlateAskQuestionText; readonly askWasTooEarly: boolean }
+  | { readonly kind: "rejected"; readonly reason: SlateAskQuestionText }
+  | { readonly kind: "async" }
+  | { readonly kind: "unknown" }
 
-/** The completion of an asynchronous ask: which question, what was asked, and what came back. */
+/** Slate's versioned completion contract for an asynchronous question. */
 export interface AskQuestionCompletionAction {
-  readonly _privacyMode: PrivacyMode
+  readonly schema: "slate.agent-action.ask-question-completion"
+  readonly version: 1
+  readonly privacyMode: PrivacyMode
   readonly originalToolCallId: string
-  readonly originalArgs?: RedactedAskQuestionArgs | undefined
-  readonly result?: RedactedAskQuestionResult | undefined
+  readonly originalArgs?: SlateAskQuestionArguments | undefined
+  readonly result?: SlateAskQuestionCompletionResult | undefined
+  readonly compatibility?: {
+    readonly legacyResult?: unknown
+    readonly legacyPayload?: Readonly<Record<string, unknown>>
+  }
 }
 
 /** What the session remembers about completions it has applied. */
@@ -128,11 +130,15 @@ function displayText(value: RedactedString): string {
   return value.unwrap(UNSAFE_CAPABILITY)
 }
 
+function textValue(value: SlateAskQuestionText): string {
+  return isRedactedString(value) ? displayText(value) : value
+}
+
 /** A completion is only a completion when it names the question and says what came of it. */
 export function isValidAskQuestionCompletion(completion: AskQuestionCompletionAction): boolean {
-  const resultCase = completion.result?.result.case
+  const resultKind = completion.result?.kind
   return completion.originalToolCallId.length > 0 &&
-    (resultCase === "success" || resultCase === "rejected" || resultCase === "error")
+    (resultKind === "answered" || resultKind === "rejected" || resultKind === "error")
 }
 
 /** Whether this completion has already been written into the conversation. */
@@ -146,12 +152,12 @@ export function hasAppliedAskQuestionCompletion(
 /** The arguments of the synthetic call, as the prompt's own tool would spell them. */
 function plainAskArgs(completion: AskQuestionCompletionAction, originalToolCallId: string): Record<string, unknown> {
   return {
-    title: completion.originalArgs?.title ? displayText(completion.originalArgs.title) : "",
+    title: completion.originalArgs?.title ? textValue(completion.originalArgs.title) : "",
     questions: completion.originalArgs?.questions.map(question => ({
       id: question.id,
-      prompt: displayText(question.prompt),
+      prompt: textValue(question.prompt),
       allow_multiple: question.allowMultiple,
-      options: question.options.map(option => ({ id: option.id, label: displayText(option.label) })),
+      options: question.options.map(option => ({ id: option.id, label: textValue(option.label) })),
     })) ?? [],
     async_original_tool_call_id: originalToolCallId,
   }
@@ -196,7 +202,7 @@ export async function applyAskQuestionCompletion(
   if (!isValidAskQuestionCompletion(completion)) {
     logger.warn(ctx, "Dropping invalid ask_question completion", {
       originalToolCallId,
-      resultCase: completion.result?.result.case,
+      resultKind: completion.result?.kind,
     })
     return { outcome: "invalid" }
   }
@@ -207,12 +213,7 @@ export async function applyAskQuestionCompletion(
   }
   const recordedToolCallId = originalToolCallId.length > 0 ? originalToolCallId : randomUUID()
   const promptToolCallId = randomUUID()
-  const toolCall = createAskQuestionCompletionToolCall({
-    privacyMode: completion._privacyMode,
-    originalToolCallId: recordedToolCallId,
-    originalArgs: completion.originalArgs,
-    result: completion.result,
-  })
+  const toolCall = createAskQuestionCompletionToolCall({ action: completion, originalToolCallId: recordedToolCallId })
   const promptMessages = promptMessagesOf(
     completion,
     originalToolCallId,
@@ -223,49 +224,58 @@ export async function applyAskQuestionCompletion(
   await turn.upsertToolCall(ctx, toolCall, recordedToolCallId)
   rootPromptExecutor.appendMessages(promptMessages)
   // An acknowledgement is not an answer, so the question stays open for the answer that follows.
-  if (originalToolCallId.length > 0 && shouldReceiptRedactedAskQuestionResult(completion.result)) {
+  if (originalToolCallId.length > 0 && shouldReceiptAskQuestionCompletionResult(completion.result)) {
     stateHandler.markAskQuestionCompleted(originalToolCallId)
   }
   return { outcome: "applied", recordedToolCallId, toolCall, promptMessages }
 }
 
 /** A success result as the tool's arguments spell it. */
-function successResultShape(completion: AskQuestionCompletionAction & { readonly result: { readonly result: { readonly case: "success"; readonly value: { readonly answers: readonly RedactedAskQuestionSuccessAnswer[] } } } }): Record<string, unknown> {
+function successResultShape(result: Extract<SlateAskQuestionCompletionResult, { readonly kind: "answered" }>): Record<string, unknown> {
   return {
     success: {
-      answers: completion.result.result.value.answers.map(answer => ({
+      answers: result.answers.map(answer => ({
         question_id: answer.questionId,
         selected_option_ids: answer.selectedOptionIds,
-        freeform_text: displayText(answer.freeformText),
+        freeform_text: textValue(answer.freeformText),
       })),
     },
   }
 }
 
 /** A rejected result as the tool's arguments spell it. */
-function rejectedResultShape(completion: AskQuestionCompletionAction & { readonly result: { readonly result: { readonly case: "rejected"; readonly value: { readonly reason: RedactedString } } } }): Record<string, unknown> {
-  return { rejected: { reason: displayText(completion.result.result.value.reason) } }
+function rejectedResultShape(result: Extract<SlateAskQuestionCompletionResult, { readonly kind: "rejected" }>): Record<string, unknown> {
+  return { rejected: { reason: textValue(result.reason) } }
 }
 
 /** An error result as the tool's arguments spell it. */
-function errorResultShape(completion: AskQuestionCompletionAction & { readonly result: { readonly result: { readonly case: "error"; readonly value: { readonly errorMessage: RedactedString } } } }): Record<string, unknown> {
-  return { error: { error_message: displayText(completion.result.result.value.errorMessage) } }
+function errorResultShape(result: Extract<SlateAskQuestionCompletionResult, { readonly kind: "error" }>): Record<string, unknown> {
+  return { error: { error_message: textValue(result.message) } }
 }
 
 /** The answer as the session's tool expects it: a sentence, or the structured object. */
 function formatCompletionResult(completion: AskQuestionCompletionAction, resultFormat: string): string {
-  if (resultFormat === "formatted-string") {
-    return completion.result ? formatRedactedAskQuestionResultAsString(completion.result) : "Unknown error"
-  }
+  const result = completion.result ?? { kind: "unknown" as const }
+  if (resultFormat === "formatted-string") return formatAskQuestionOutcomeAsString(result)
   // The structured shape is written the way the tool's own arguments are spelled.
-  switch (completion.result?.result.case) {
-    case "success":
-      return JSON.stringify(successResultShape(completion as never))
+  switch (result.kind) {
+    case "answered":
+      return JSON.stringify(successResultShape(result))
     case "rejected":
-      return JSON.stringify(rejectedResultShape(completion as never))
+      return JSON.stringify(rejectedResultShape(result))
     case "error":
-      return JSON.stringify(errorResultShape(completion as never))
+      return JSON.stringify(errorResultShape(result))
     default:
       return JSON.stringify({})
+  }
+}
+
+function shouldReceiptAskQuestionCompletionResult(result: SlateAskQuestionCompletionResult | undefined): boolean {
+  if (result === undefined) return false
+  switch (result.kind) {
+    case "answered":
+    case "error": return true
+    case "rejected": return !isAskQuestionAutoAnswerReason(textValue(result.reason))
+    default: return false
   }
 }
