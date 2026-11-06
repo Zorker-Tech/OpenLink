@@ -25,13 +25,11 @@ import {
   createTaskToolCallInterop,
   serializeTaskErrorInterop,
   fromInteropTaskResultInterop,
-  fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
   normalizePreparedTaskConversationStateInterop,
   slateTaskRequestFromModelArgumentsInterop,
   toInteropTaskResultInterop,
   toRedactedConversationActionInterop,
-  toRedactedConversationStateStructureInterop,
   type TaskResultInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
@@ -409,7 +407,7 @@ async function runServerTaskSubagent(args: {
             subagentCtx.with(requestModelNameKey, resolved.resolvedModelId),
             resolved.parentRequestId,
           ),
-          toRedactedConversationStateStructureInterop(state, stateHandler.getPrivacyMode()),
+          state,
           toRedactedConversationActionInterop(
             createTaskUserMessageActionInterop({ message }),
             stateHandler.getPrivacyMode(),
@@ -417,7 +415,7 @@ async function runServerTaskSubagent(args: {
           [],
           async () => {},
         );
-        state = fromInteropTaskConversationState(updatedState, stateHandler.getPrivacyMode());
+        state = updatedState;
         iterState.runStreamCompleted = true;
       } catch (error) {
         await handleSubagentRunStreamError(error, state!, iterState, completionCtx, completionDeps, subagentCtx.canceled, registry.lastAbortOptions);

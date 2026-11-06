@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { Context } from "../../source/packages/context/context.ts";
+import type { SlateConversationState } from "../../source/packages/agent/conversation-state.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { ConversationAction, ConversationStateStructure, ResumeAction, UserMessage, UserMessageAction } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { SlateEmptyPromptError, createTurnRunShell, createTurnAgentRunContext } from "../../source/host/runner/turn-run-shell.ts";
@@ -30,6 +31,19 @@ function fakeContext(overrides: Record<string, unknown> = {}): Context {
 
 function stateWith(turns: number): ConversationStateStructure {
   return new ConversationStateStructure({ turns: Array.from({ length: turns }, () => new Uint8Array()) });
+}
+
+function slateStateWith(turns: number): SlateConversationState {
+  return {
+    privacyMode: PrivacyMode.UNSPECIFIED,
+    rootPromptMessagesJson: [],
+    turns: Array.from({ length: turns }, () => new Uint8Array()),
+    todos: [],
+    previousWorkspaceUris: [],
+    summaryArchives: [],
+    fileStatesV2: new Map(),
+    readPaths: [],
+  };
 }
 
 /** Waits (bounded) until the predicate holds, so a test never hangs on a step the host has not reached yet. */
@@ -105,7 +119,7 @@ describe("the state and action a stream starts from", () => {
     const calls: unknown[][] = [];
     const persistCheckpoint = async () => {};
     const start = createTurnAgentStreamStart({
-      agent: { agent: { runStream: async (...args: unknown[]) => (calls.push(args), stateWith(0)) } as never },
+      agent: { agent: { runStream: async (...args: unknown[]) => (calls.push(args), slateStateWith(0)) } as never },
       baseState: stateWith(1),
       action: { action: { case: "resumeAction", value: new ResumeAction() } } as never,
       privacyMode: PrivacyMode.UNSPECIFIED,
@@ -115,6 +129,8 @@ describe("the state and action a stream starts from", () => {
     assert.equal(result.turns.length, 0);
     const [, state, action, tools, persisted] = calls[0]!;
     assert.equal((state as { turns: unknown[] }).turns.length, 1);
+    assert.equal((state as SlateConversationState).privacyMode, PrivacyMode.UNSPECIFIED);
+    assert.equal("_privacyMode" in (state as object), false);
     assert.equal((action as { action: { case: string } }).action.case, "resumeAction");
     assert.deepEqual(tools, [{ name: "tool" }]);
     assert.equal(persisted, persistCheckpoint);

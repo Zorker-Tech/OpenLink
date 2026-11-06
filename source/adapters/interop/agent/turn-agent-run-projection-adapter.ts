@@ -6,6 +6,11 @@ import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { toRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
 
+export {
+  restoreAgentConversationState,
+  restoreSlateConversationState,
+} from "./redacted-conversation-state-adapter.ts"
+
 export type InteropConversationAction = ConversationAction
 export type InteropConversationState = ConversationStateStructure
 

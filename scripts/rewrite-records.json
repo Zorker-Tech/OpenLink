@@ -2687,9 +2687,9 @@
     },
     "host/runner/turn-agent-composition.ts": {
       "claim": "rewritten",
-      "overlap": 0.740280777537797,
-      "refreshReason": "Generated executor type imports were removed from this composition module; opaque resource ports and the interop MCP-call projection now own those boundaries, so the source was remeasured.",
-      "evidence": "Turn-agent MCP and shell-boundary, subagent-config, and runner-cycle contracts pass 29/29; full work-host suite passes 9,754/9,754; typecheck/build pass. Turn composition uses opaque executor ports and projects MCP call identity through an interop adapter. Agent state/action redaction remains isolated in an interop adapter; subagent policy and run catalogue ownership remain host responsibilities."
+      "overlap": 0.7381209503239741,
+      "refreshReason": "The Agent and task subagent now use SlateConversationState; the runner projection adapter decodes old checkpoints before the call and encodes the returned Slate state at the runner edge.",
+      "evidence": "Focused host-runner-cycle, AgentRoot and task tests pass 35/35. The full Work-host suite passes 9972/9972 across 1427 suites under Node 24.14 with concurrency 1. Typecheck, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals) and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Turn composition carries SlateConversationState through AgentRoot while the runner adapter preserves the existing checkpoint format and callback behavior. Measured overlap is 0.7381209503239741 against 3704 baseline pairs."
     },
     "host/runner/slate-agent-runner.ts": {
       "claim": "rewritten",
