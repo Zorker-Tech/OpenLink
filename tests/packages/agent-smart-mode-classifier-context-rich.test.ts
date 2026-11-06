@@ -17,8 +17,18 @@ import {
   ConversationStep,
   ConversationTurnStructure,
   SimulatedMsgReason,
+  ToolCall,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import {
+  AskQuestionArgs,
+  AskQuestionArgs_Option,
+  AskQuestionArgs_Question,
+  AskQuestionResult,
+  AskQuestionSuccess,
+  AskQuestionSuccess_Answer,
+  AskQuestionToolCall,
+} from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts";
 import { SelectedContext, SelectedCursorCommand } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
 import { AgentSkill } from "../../source/adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts";
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts";
@@ -32,6 +42,7 @@ interface TurnSpec {
   userText?: string;
   userMessage?: UserMessage;
   assistantMessages?: readonly string[];
+  conversationSteps?: readonly ConversationStep[];
   notAnAgentTurn?: boolean;
 }
 
@@ -69,6 +80,9 @@ async function conversation(options: { turns: readonly TurnSpec[]; rootPromptTex
       steps.push(await store(stepSerde.serialize(new ConversationStep({
         message: { case: "assistantMessage", value: new AssistantMessage({ text }) },
       }))));
+    }
+    for (const step of turnSpec.conversationSteps ?? []) {
+      steps.push(await store(stepSerde.serialize(step)));
     }
     const userMessage = turnSpec.userMessage ?? new UserMessage({ text: turnSpec.userText ?? "", messageId: "message-" + turnHandles.length });
     const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(userMessage)));
@@ -123,6 +137,49 @@ describe("the classifier context beyond the basic slice", () => {
     });
     assert.deepEqual(slice.map(message => [message.role, message.content]), [["assistant", "a1"], ["assistant", "a3"], ["user", "first"], ["user", "third"]]);
   });
+
+  it("reads answered questions from the Slate step operation with labels and freeform text", async () => {
+    const questionStep = new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          tool: {
+            case: "askQuestionToolCall",
+            value: new AskQuestionToolCall({
+              args: new AskQuestionArgs({
+                title: "Choose a direction",
+                questions: [new AskQuestionArgs_Question({
+                  id: "q-1",
+                  prompt: "Which path?",
+                  options: [new AskQuestionArgs_Option({ id: "left", label: "Left" })],
+                })],
+                runAsync: true,
+                asyncOriginalToolCallId: "call-1",
+              }),
+              result: new AskQuestionResult({
+                result: {
+                  case: "success",
+                  value: new AskQuestionSuccess({ answers: [new AskQuestionSuccess_Answer({
+                    questionId: "q-1",
+                    selectedOptionIds: ["left", "unknown-option"],
+                    freeformText: "check the adjacent file",
+                  })] }),
+                },
+              }),
+            }),
+          },
+        }),
+      },
+    })
+    const slice = await autoSlice({
+      turns: [{ userText: "review this choice", conversationSteps: [questionStep] }],
+    })
+
+    assert.ok(slice.some(message =>
+      message.role === "user_answer" &&
+      message.content === "Q: Which path?\nA: Left, unknown-option, check the adjacent file",
+    ))
+  })
 
   it("skips a message the platform wrote, and trusts the ones it is told to trust", async () => {
     const options = { excludedUserMessageTextPrefixes: ["[wake]"], trustedUserMessageTextPrefixes: ["[trusted]"] };

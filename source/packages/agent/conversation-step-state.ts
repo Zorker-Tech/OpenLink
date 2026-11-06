@@ -1,5 +1,10 @@
 /** Slate's product shape for one persisted conversation step. */
 import { isRedactedString, type RedactedString } from "../redaction/redacted-values.ts"
+import type {
+  SlateAskQuestionAnswer,
+  SlateAskQuestionArguments,
+  SlateAskQuestionText,
+} from "./actions/ask-question-completion.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 
 export interface SlateConversationStepCompatibility {
@@ -61,7 +66,30 @@ export interface SlateLegacyToolCallValue {
   readonly value?: unknown
 }
 
-export type SlateToolCallValue = SlateLegacyToolCallValue | SlateConversationSummaryToolCall
+export interface SlateAskQuestionToolArguments extends SlateAskQuestionArguments {
+  readonly responseMode: "blocking" | "deferred"
+  readonly originalCallId: string
+}
+
+export type SlateAskQuestionToolOutcome =
+  | { readonly kind: "answered"; readonly answers: readonly SlateAskQuestionAnswer[] }
+  | { readonly kind: "error"; readonly message: SlateAskQuestionText }
+  | { readonly kind: "rejected"; readonly reason: SlateAskQuestionText }
+  | { readonly kind: "async" }
+  | { readonly kind: "unknown" }
+
+export interface SlateAskQuestionToolCall {
+  readonly kind: "ask-question"
+  readonly args?: SlateAskQuestionToolArguments
+  readonly result?: SlateAskQuestionToolOutcome
+  readonly case?: undefined
+  readonly value?: undefined
+}
+
+export type SlateToolCallValue =
+  | SlateLegacyToolCallValue
+  | SlateConversationSummaryToolCall
+  | SlateAskQuestionToolCall
 
 export interface SlateStepHookContextEntry {
   readonly event: string
@@ -200,6 +228,91 @@ export function isSlateConversationSummaryToolCall(value: unknown): value is Sla
   return Object.keys(result).every(key => key === "kind" || key === "currentStep" || key === "messageIndex") &&
     isToolCallText(result.currentStep) && Number.isInteger(result.messageIndex) &&
     (result.messageIndex as number) >= 0 && (result.messageIndex as number) <= 0xffff_ffff
+}
+
+export function createSlateAskQuestionToolCall(input: {
+  readonly args?: SlateAskQuestionToolArguments
+  readonly result?: SlateAskQuestionToolOutcome
+}): SlateAskQuestionToolCall {
+  const args = input.args === undefined
+    ? undefined
+    : {
+        ...input.args,
+        questions: input.args.questions.map(question => ({
+          ...question,
+          options: question.options.map(option => ({ ...option })),
+        })),
+      }
+  const result = input.result === undefined
+    ? undefined
+    : input.result.kind === "answered"
+      ? { ...input.result, answers: input.result.answers.map(answer => ({
+          ...answer,
+          selectedOptionIds: [...answer.selectedOptionIds],
+        })) }
+      : { ...input.result }
+  const operation: SlateAskQuestionToolCall = {
+    kind: "ask-question",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  }
+  if (!isSlateAskQuestionToolCall(operation)) throw new TypeError("Slate ask-question operation is invalid")
+  return operation
+}
+
+export function isSlateAskQuestionToolCall(value: unknown): value is SlateAskQuestionToolCall {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = value as Record<string, unknown>
+  if (tool.kind !== "ask-question" || !hasOnlyOwnKeys(tool, ["kind", "args", "result"])) return false
+  if (tool.args !== undefined) {
+    if (tool.args === null || typeof tool.args !== "object" || Array.isArray(tool.args)) return false
+    const args = tool.args as Record<string, unknown>
+    if (!hasOnlyOwnKeys(args, ["title", "questions", "responseMode", "originalCallId"]) ||
+        !isToolCallText(args.title) || !Array.isArray(args.questions) ||
+        (args.responseMode !== "blocking" && args.responseMode !== "deferred") ||
+        typeof args.originalCallId !== "string") return false
+    for (const candidate of args.questions) {
+      if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return false
+      const question = candidate as Record<string, unknown>
+      if (!hasOnlyOwnKeys(question, ["id", "prompt", "allowMultiple", "options"]) ||
+          typeof question.id !== "string" || !isToolCallText(question.prompt) ||
+          typeof question.allowMultiple !== "boolean" || !Array.isArray(question.options)) return false
+      for (const optionValue of question.options) {
+        if (optionValue === null || typeof optionValue !== "object" || Array.isArray(optionValue)) return false
+        const option = optionValue as Record<string, unknown>
+        if (!hasOnlyOwnKeys(option, ["id", "label"]) ||
+            typeof option.id !== "string" || !isToolCallText(option.label)) return false
+      }
+    }
+  }
+  if (tool.result === undefined) return true
+  if (tool.result === null || typeof tool.result !== "object" || Array.isArray(tool.result)) return false
+  const result = tool.result as Record<string, unknown>
+  switch (result.kind) {
+    case "unknown":
+    case "async":
+      return hasOnlyOwnKeys(result, ["kind"])
+    case "rejected":
+      return hasOnlyOwnKeys(result, ["kind", "reason"]) && isToolCallText(result.reason)
+    case "error":
+      return hasOnlyOwnKeys(result, ["kind", "message"]) && isToolCallText(result.message)
+    case "answered":
+      if (!hasOnlyOwnKeys(result, ["kind", "answers"]) || !Array.isArray(result.answers)) return false
+      return result.answers.every(answerValue => {
+        if (answerValue === null || typeof answerValue !== "object" || Array.isArray(answerValue)) return false
+        const answer = answerValue as Record<string, unknown>
+        return hasOnlyOwnKeys(answer, ["questionId", "selectedOptionIds", "freeformText"]) &&
+          typeof answer.questionId === "string" && Array.isArray(answer.selectedOptionIds) &&
+          answer.selectedOptionIds.every((id: unknown) => typeof id === "string") &&
+          isToolCallText(answer.freeformText)
+      })
+    default:
+      return false
+  }
+}
+
+function hasOnlyOwnKeys(value: Readonly<Record<string, unknown>>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every(key => allowed.includes(key))
 }
 
 function isToolCallText(value: unknown): value is SlateToolCallText {

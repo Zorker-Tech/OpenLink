@@ -9,6 +9,7 @@ import {
   fromRedactedMcpToolDefinitionInterop,
   fromRedactedRequestContextInterop,
   fromRedactedToolCallInterop,
+  isAskQuestionToolCallInterop,
   toRedactedInteractionUpdateInterop,
   toRedactedToolCallInterop,
   type RequestContextInterop,
@@ -1418,8 +1419,7 @@ async function applyConversationStateOp(
       turnState.appendCommunicateUpdateHistoryEntry(stateOperation.entry);
       break;
     case "recordToolCall":
-      const pendingCall = stateOperation.toolCall as { readonly tool?: { readonly case?: string } };
-      if (pendingCall.tool?.case === "askQuestionToolCall" && stateOperation.toolCallId !== undefined) {
+      if (isAskQuestionToolCallInterop(stateOperation.toolCall) && stateOperation.toolCallId !== undefined) {
         await toolCallRecorder.upsertToolCall(runContext, toRedactedToolCallInterop(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);
       } else {
         toolCallRecorder.recordToolCall(toRedactedToolCallInterop(stateOperation.toolCall, turnState.getPrivacyMode()), stateOperation.toolCallId);

@@ -26,6 +26,18 @@ import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
+  AskQuestionArgs,
+  AskQuestionArgs_Option,
+  AskQuestionArgs_Question,
+  AskQuestionAsync,
+  AskQuestionError,
+  AskQuestionRejected,
+  AskQuestionResult,
+  AskQuestionSuccess,
+  AskQuestionSuccess_Answer,
+  AskQuestionToolCall,
+} from "../proto/generated/agent/v1/ask_question_tool_pb.ts"
+import {
   CommunicateUpdateArgs,
   CommunicateUpdateError,
   CommunicateUpdateResult,
@@ -103,18 +115,23 @@ export { redactSlateTodoItem } from "./todo-schema-adapter.ts"
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
 import {
   createSlateConversationSummaryToolCall,
+  createSlateAskQuestionToolCall,
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
   createSlateUnsupportedConversationStep,
   isSlateConversationSummaryToolCall,
+  isSlateAskQuestionToolCall,
   type SlateConversationStepCompatibility,
   type SlateConversationStep,
   type SlateConversationSummaryResult,
+  type SlateAskQuestionToolArguments,
+  type SlateAskQuestionToolOutcome,
   type SlateProgressUpdateResult,
   type SlateToolCallText,
   type SlateToolCallValue,
 } from "../../../packages/agent/conversation-step-state.ts"
+import type { SlateAskQuestionAnswer } from "../../../packages/agent/actions/ask-question-completion.ts"
 import type {
   SlateConversationState,
   SlateRedactedValue,
@@ -1283,6 +1300,153 @@ function slateToolCallTextFromInterop(value: unknown): SlateToolCallText | undef
   return undefined
 }
 
+function slateAskQuestionToolFromInterop(value: unknown): SlateToolCallValue | undefined {
+  if (!isRecordValue(value)) return undefined
+  const args = value.args === undefined ? undefined : isRecordValue(value.args) ? value.args : null
+  const result = value.result === undefined ? undefined : isRecordValue(value.result) ? value.result : null
+  if (args === null || result === null) return undefined
+
+  let slateArgs: SlateAskQuestionToolArguments | undefined
+  if (args !== undefined) {
+    const title = args.title === undefined ? "" : slateToolCallTextFromInterop(args.title)
+    const questions = args.questions === undefined ? [] : args.questions
+    if (title === undefined || !Array.isArray(questions) ||
+        (args.runAsync !== undefined && typeof args.runAsync !== "boolean") ||
+        (args.asyncOriginalToolCallId !== undefined && typeof args.asyncOriginalToolCallId !== "string")) return undefined
+    const mappedQuestions: SlateAskQuestionToolArguments["questions"][number][] = []
+    for (const questionValue of questions) {
+      if (!isRecordValue(questionValue)) return undefined
+      const prompt = questionValue.prompt === undefined ? "" : slateToolCallTextFromInterop(questionValue.prompt)
+      const options = questionValue.options === undefined ? [] : questionValue.options
+      if (typeof questionValue.id !== "string" || prompt === undefined ||
+          (questionValue.allowMultiple !== undefined && typeof questionValue.allowMultiple !== "boolean") ||
+          !Array.isArray(options)) return undefined
+      const mappedOptions: SlateAskQuestionToolArguments["questions"][number]["options"][number][] = []
+      for (const optionValue of options) {
+        if (!isRecordValue(optionValue)) return undefined
+        const label = optionValue.label === undefined ? "" : slateToolCallTextFromInterop(optionValue.label)
+        if (typeof optionValue.id !== "string" || label === undefined) return undefined
+        mappedOptions.push({ id: optionValue.id, label })
+      }
+      mappedQuestions.push({
+        id: questionValue.id,
+        prompt,
+        allowMultiple: questionValue.allowMultiple === true,
+        options: mappedOptions,
+      })
+    }
+    slateArgs = {
+      title,
+      questions: mappedQuestions,
+      responseMode: args.runAsync === true ? "deferred" : "blocking",
+      originalCallId: typeof args.asyncOriginalToolCallId === "string" ? args.asyncOriginalToolCallId : "",
+    }
+  }
+
+  let slateResult: SlateAskQuestionToolOutcome | undefined
+  if (result !== undefined) {
+    const selected = isRecordValue(result.result) ? result.result : undefined
+    const selectedValue = isRecordValue(selected?.value) ? selected.value : undefined
+    switch (selected?.case) {
+      case "success": {
+        const rawAnswers = selectedValue?.answers === undefined ? [] : selectedValue.answers
+        if (!Array.isArray(rawAnswers)) return undefined
+        const answers: SlateAskQuestionAnswer[] = []
+        for (const answerValue of rawAnswers) {
+          if (!isRecordValue(answerValue) || typeof answerValue.questionId !== "string") return undefined
+          const selectedOptionIds = answerValue.selectedOptionIds === undefined ? [] : answerValue.selectedOptionIds
+          const freeformText = answerValue.freeformText === undefined ? "" : slateToolCallTextFromInterop(answerValue.freeformText)
+          if (!Array.isArray(selectedOptionIds) ||
+              !selectedOptionIds.every((id: unknown) => typeof id === "string") ||
+              freeformText === undefined) return undefined
+          answers.push({
+            questionId: answerValue.questionId,
+            selectedOptionIds: [...selectedOptionIds],
+            freeformText,
+          })
+        }
+        slateResult = { kind: "answered", answers }
+        break
+      }
+      case "error": {
+        const message = selectedValue?.errorMessage === undefined
+          ? ""
+          : slateToolCallTextFromInterop(selectedValue.errorMessage)
+        if (message === undefined) return undefined
+        slateResult = { kind: "error", message }
+        break
+      }
+      case "rejected": {
+        const reason = selectedValue?.reason === undefined ? "" : slateToolCallTextFromInterop(selectedValue.reason)
+        if (reason === undefined) return undefined
+        slateResult = { kind: "rejected", reason }
+        break
+      }
+      case "async":
+        slateResult = { kind: "async" }
+        break
+      default:
+        slateResult = { kind: "unknown" }
+    }
+  }
+
+  return createSlateAskQuestionToolCall({
+    ...(slateArgs === undefined ? {} : { args: slateArgs }),
+    ...(slateResult === undefined ? {} : { result: slateResult }),
+  })
+}
+
+function interopAskQuestionToolFromSlate(
+  tool: Extract<SlateToolCallValue, { readonly kind: "ask-question" }>,
+  plain: boolean,
+): AskQuestionToolCall {
+  const text = (value: SlateToolCallText): string | RedactedString =>
+    isRedactedString(value) && plain
+      ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      : value
+  const args = tool.args === undefined
+    ? undefined
+    : new AskQuestionArgs({
+        title: text(tool.args.title) as never,
+        questions: tool.args.questions.map(question => ({
+          id: question.id,
+          prompt: text(question.prompt) as never,
+          allowMultiple: question.allowMultiple,
+          options: question.options.map(option => ({ id: option.id, label: text(option.label) as never })) as never,
+        })) as never,
+        runAsync: tool.args.responseMode === "deferred",
+        asyncOriginalToolCallId: tool.args.originalCallId,
+      })
+  const result = tool.result === undefined
+    ? undefined
+    : tool.result.kind === "answered"
+      ? new AskQuestionResult({ result: {
+          case: "success",
+          value: new AskQuestionSuccess({ answers: tool.result.answers.map(answer => new AskQuestionSuccess_Answer({
+            questionId: answer.questionId,
+            selectedOptionIds: [...answer.selectedOptionIds],
+            freeformText: text(answer.freeformText) as never,
+          })) }),
+        } })
+      : tool.result.kind === "error"
+        ? new AskQuestionResult({ result: {
+            case: "error",
+            value: new AskQuestionError({ errorMessage: text(tool.result.message) as never }),
+          } })
+        : tool.result.kind === "rejected"
+          ? new AskQuestionResult({ result: {
+              case: "rejected",
+              value: new AskQuestionRejected({ reason: text(tool.result.reason) as never }),
+            } })
+          : tool.result.kind === "async"
+            ? new AskQuestionResult({ result: { case: "async", value: new AskQuestionAsync() } })
+            : new AskQuestionResult()
+  return new AskQuestionToolCall({
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  })
+}
+
 function slateSummaryToolCallFromInterop(
   operation: string | undefined,
   value: unknown,
@@ -1383,6 +1547,10 @@ function slateSummaryToolCallFromInterop(
 }
 
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "askQuestionToolCall") {
+    const askQuestion = slateAskQuestionToolFromInterop(value)
+    if (askQuestion !== undefined) return askQuestion
+  }
   return slateSummaryToolCallFromInterop(operation, value) ?? {
     ...(operation === undefined ? {} : { case: operation }),
     ...(value === undefined ? {} : { value }),
@@ -1393,6 +1561,10 @@ function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (tool.kind === "ask-question") {
+    if (!isSlateAskQuestionToolCall(tool)) throw new TypeError("Slate ask-question operation is invalid")
+    return { case: "askQuestionToolCall", value: interopAskQuestionToolFromSlate(tool, plain) }
+  }
   if (isSlateConversationSummaryToolCall(tool)) {
     const text = (value: SlateToolCallText): string | RedactedString =>
       isRedactedString(value) && plain
@@ -2071,7 +2243,8 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       const tool = step.tool as Record<string, unknown>
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
-          (envelope.version === 1 && tool.operation === "conversation-summary") ||
+          (envelope.version === 1 &&
+            (tool.operation === "conversation-summary" || tool.operation === "ask-question")) ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -2137,7 +2310,11 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "conversation-summary" && !isSlateConversationSummaryToolCall(step.tool)) {
         throw new TypeError("Slate conversation summary operation is invalid")
       }
-      if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" && step.tool.kind !== "legacy") {
+      if (step.tool.kind === "ask-question" && !isSlateAskQuestionToolCall(step.tool)) {
+        throw new TypeError("Slate ask-question operation is invalid")
+      }
+      if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" &&
+          step.tool.kind !== "ask-question" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
       }
       storedStep = {
@@ -2153,14 +2330,16 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlateConversationSummaryToolCall(step.tool)
-          ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
-          : {
+        tool: isSlateAskQuestionToolCall(step.tool)
+          ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
+          : isSlateConversationSummaryToolCall(step.tool)
+            ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
+            : {
               ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
               ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
                 ? { payload: encodeSlateValue(step.tool.value) }
                 : {}),
-            },
+              },
       }
       break
     case "unsupported":
@@ -2211,6 +2390,10 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
         ? isSlateConversationSummaryToolCall(storedPayload)
           ? storedPayload
           : (() => { throw new TypeError("Stored Slate conversation summary tool call is invalid") })()
+        : storedOperation === "ask-question"
+          ? isSlateAskQuestionToolCall(storedPayload)
+            ? storedPayload
+            : (() => { throw new TypeError("Stored Slate ask-question operation is invalid") })()
         : slateToolCallValueFromInterop(storedOperation, storedPayload)
       return createSlateToolCallStep({
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
