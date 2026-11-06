@@ -39,7 +39,7 @@ function createHost(rootDir: string, options: Partial<MaterializationHost> = {})
       databases.push(db);
       return {
         resetFromDb: async (ctx: unknown) => { calls.push(["reset-from-db", ctx]); },
-        getFullConversation: async () => ({ agentId }),
+        getFullConversation: async () => ({ turns: [], todos: [] }),
         dispose: async () => { calls.push(["dispose-agent-store", agentId]); },
       };
     },

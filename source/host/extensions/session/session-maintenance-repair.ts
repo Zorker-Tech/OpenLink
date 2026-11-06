@@ -1,6 +1,7 @@
 /** One-time hidden-entry repair and legacy conversation-blob retirement. */
 import { basename, dirname, join } from "node:path";
 import { conversationStructureFullyResolves, selectHiddenArtifactEntryIds } from "./conversation-recovery.ts";
+import { slateMaintenanceOutline } from "./session-maintenance-outline.ts";
 import { CONVERSATION_BLOBS_FILENAME } from "./session-paths.ts";
 import {
   HIDDEN_ENTRY_REPAIR_VERSION,
@@ -37,7 +38,7 @@ export async function repairHiddenTranscriptEntriesOnce(
     if (state.turns.length === 0 || state.turns.length < structure.turnBlobIds.length) return 0;
     if (!await conversationStructureFullyResolves(host.ctx, structure, store.getBlobStore())) return 0;
 
-    const outline = host.deriveOutline?.(state) ?? state.turns.flatMap(turn => turn.items);
+    const outline = host.deriveOutline?.(state) ?? slateMaintenanceOutline(state);
     const hiddenIds = selectHiddenArtifactEntryIds(transcript, outline);
     for (const id of hiddenIds) if (!database.deleteTranscriptEntry(id)) return 0;
     database.setHiddenEntryRepairVersion(HIDDEN_ENTRY_REPAIR_VERSION);

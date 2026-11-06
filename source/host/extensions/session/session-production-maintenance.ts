@@ -1,5 +1,4 @@
 import type { Context } from "../../../packages/context/context.ts";
-import { deriveOutlineFromConversationState, type ConversationState } from "../../runner/conversation-outline.ts";
 import { getSlateAgentDbWriteGeneration, liveDbHandleCount } from "../../storage/store-db.ts";
 import {
   clearStaleCheckpointRootsOnce,
@@ -11,7 +10,7 @@ import {
   type MaintenanceStore,
   type MaintenanceWorkerPool,
 } from "./session-maintenance.ts";
-import type { OutlineItem as MaintenanceOutlineItem } from "./conversation-recovery.ts";
+import { slateMaintenanceOutline, slateMaintenanceOutlineTurns } from "./session-maintenance-outline.ts";
 import { scheduleConversationSizeMaintenance, type ConversationGcVerdict } from "./conversation-size-limits.ts";
 import type { SlateSessionConversationState } from "./session-conversation-state.ts";
 import type { SlateSessionMaterialization } from "./session-materialization.ts";
@@ -42,38 +41,6 @@ function maintenanceDatabaseFor(session: MaterializedSession): MaintenanceDb {
   return session.db as unknown as MaintenanceDb;
 }
 
-function outlineForMaintenance(state: unknown): readonly MaintenanceOutlineItem[] {
-  const sessionItems = deriveOutlineFromConversationState(state as ConversationState);
-  const maintenanceItems: MaintenanceOutlineItem[] = [];
-  for (const item of sessionItems) {
-    switch (item.kind) {
-      case "user":
-        maintenanceItems.push({
-          kind: "user",
-          id: item.id,
-          text: item.text,
-          ...(item.hidden === true ? { hidden: true } : {}),
-        });
-        break;
-      case "send-message":
-        maintenanceItems.push({ kind: "send-message", id: item.id, message: item.message });
-        break;
-      case "tool-call":
-        maintenanceItems.push({
-          kind: "tool-call",
-          id: item.id,
-          name: item.name,
-          status: item.status,
-          ...(item.summary === undefined ? {} : { summary: item.summary }),
-        });
-        break;
-      default:
-        break;
-    }
-  }
-  return maintenanceItems;
-}
-
 export function createSessionMaintenanceHost(input: {
   readonly rootDir: string;
   readonly context: Context;
@@ -87,12 +54,14 @@ export function createSessionMaintenanceHost(input: {
     liveHandleCount: liveDbHandleCount,
     writeGeneration: getSlateAgentDbWriteGeneration,
     requireWorkerPool: () => createSessionMaintenanceWorkerPort(input.worker),
-    resolveConversationState: async (structure, blobStore) =>
-      await input.conversationState.resolveConversationState(
+    resolveConversationState: async (structure, blobStore) => {
+      const conversation = await input.conversationState.resolveConversationState(
         structure as Parameters<typeof input.conversationState.resolveConversationState>[0],
         blobStore as Parameters<typeof input.conversationState.resolveConversationState>[1],
-      ) as Awaited<ReturnType<MaintenanceHost["resolveConversationState"]>>,
-    deriveOutline: outlineForMaintenance,
+      )
+      return conversation === null ? null : { turns: slateMaintenanceOutlineTurns(conversation) }
+    },
+    deriveOutline: slateMaintenanceOutline,
     ...(input.report === undefined ? {} : { report: input.report }),
   };
 }

@@ -9,6 +9,7 @@ import type {
   SessionConversationStateHost,
 } from "./session-conversation-state-contracts.ts"
 import type { TranscriptEntry } from "./agent-db.ts"
+import type { SlateHydratedConversation } from "../../../packages/agent/conversation-transcript-state.ts"
 
 export class SlateSessionConversationState {
   constructor(readonly host: SessionConversationStateHost) {}
@@ -16,7 +17,7 @@ export class SlateSessionConversationState {
   async resolveConversationState(
     structure: ConversationStateShape,
     blobStore: ConversationBlobStore,
-  ): Promise<{ readonly turns: readonly unknown[] } | null> {
+  ): Promise<SlateHydratedConversation | null> {
     const cachedBlobs = memoizeConversationBlobs(blobStore)
     if (!await conversationStructureFullyResolves(this.host.ctx, structure, cachedBlobs)) return null
 

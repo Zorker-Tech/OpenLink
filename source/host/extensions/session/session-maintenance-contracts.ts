@@ -1,5 +1,6 @@
 /** Version markers and ports shared by session maintenance passes. */
 import type { OutlineItem } from "./conversation-recovery.ts";
+import type { SlateHydratedConversation } from "../../../packages/agent/conversation-transcript-state.ts";
 import type { SlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts";
 
 export const LEGACY_BLOB_RETIREMENT_VERSION = 1;
@@ -47,7 +48,7 @@ export interface MaintenanceDb {
 export interface MaintenanceStore {
   getConversationStateStructure(): SlateConversationCheckpointV2;
   getBlobStore(): { getBlob(ctx: unknown, id: Uint8Array): Promise<Uint8Array | null> };
-  getFullConversation(ctx: unknown): Promise<{ turns: readonly { items: readonly OutlineItem[] }[] }>;
+  getFullConversation(ctx: unknown): Promise<SlateHydratedConversation>;
   resetFromDb(ctx: unknown): Promise<void>;
 }
 
@@ -68,7 +69,7 @@ export interface MaintenanceHost {
   liveHandleCount?(path: string): number;
   writeGeneration?(path: string): number;
   resolveConversationState(structure: unknown, blobStore: unknown): Promise<{ turns: readonly { items: readonly OutlineItem[] }[] } | null>;
-  deriveOutline?(state: unknown): readonly OutlineItem[];
+  deriveOutline?(state: SlateHydratedConversation): readonly OutlineItem[];
   report?(event: Record<string, unknown>): void;
   requireWorkerPool(): MaintenanceWorkerPool;
 }

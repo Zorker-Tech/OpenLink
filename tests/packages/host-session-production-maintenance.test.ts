@@ -2,6 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { createContext } from "../../source/packages/context/context.ts";
+import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts";
+import { DataClassification } from "../../source/packages/redaction/classification.ts";
+import { createRedactedString } from "../../source/packages/redaction/create.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import {
   createSessionMaintenanceHost,
   createSessionMaintenanceWorkerPort,
@@ -26,14 +30,22 @@ test("the production maintenance host projects worker and conversation ports", a
         assert.equal(blobStore, "blobs");
         return {
           turns: [{
-            turn: {
-              case: "agentConversationTurn",
-              value: {
-                userMessage: { text: "hello", messageId: "message-1" },
-                steps: [{ message: { case: "assistantMessage", value: { text: "answer" } } }],
-              },
+            kind: "agent",
+            userMessage: {
+              text: "hello",
+              messageId: "message-1",
+              mode: "unspecified",
+              conversationStateBlobId: new Uint8Array(),
+              hookContexts: [],
             },
+            steps: [createSlateAssistantMessageStep(createRedactedString(
+              "answer",
+              DataClassification.CODE,
+              "text",
+              PrivacyMode.NO_STORAGE,
+            ))],
           }],
+          todos: [],
         } as never;
       },
     },
@@ -44,27 +56,27 @@ test("the production maintenance host projects worker and conversation ports", a
   assert.deepEqual(
     await host.resolveConversationState("checkpoint", "blobs"),
     {
-      turns: [{
-        turn: {
-          case: "agentConversationTurn",
-          value: {
-            userMessage: { text: "hello", messageId: "message-1" },
-            steps: [{ message: { case: "assistantMessage", value: { text: "answer" } } }],
-          },
-        },
-      }],
+      turns: [{ items: [{ kind: "user", id: "outline-user-0", text: "hello" }] }],
     },
   );
   assert.deepEqual(host.deriveOutline?.({
     turns: [{
-      turn: {
-        case: "agentConversationTurn",
-        value: {
-          userMessage: { text: "hello", messageId: "message-1" },
-          steps: [{ message: { case: "assistantMessage", value: { text: "answer" } } }],
-        },
+      kind: "agent",
+      userMessage: {
+        text: "hello",
+        messageId: "message-1",
+        mode: "unspecified",
+        conversationStateBlobId: new Uint8Array(),
+        hookContexts: [],
       },
+      steps: [createSlateAssistantMessageStep(createRedactedString(
+        "answer",
+        DataClassification.CODE,
+        "text",
+        PrivacyMode.NO_STORAGE,
+      ))],
     }],
+    todos: [],
   } as never), [{ kind: "user", id: "outline-user-0", text: "hello" }]);
 
   const workerPort = createSessionMaintenanceWorkerPort(worker as never);

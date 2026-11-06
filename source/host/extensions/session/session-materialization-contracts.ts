@@ -1,6 +1,7 @@
 import type { AgentWorkerPool } from "../../agents/isolation/agent-worker-pool.ts";
 import type { SlateAgentProfile } from "../../agents/agent-profile.ts";
 import type { SlateAgentDb } from "./agent-db.ts";
+import type { SlateHydratedConversation } from "../../../packages/agent/conversation-transcript-state.ts";
 import type {
   automationStoreForDbPath,
   channelStoreForDbPath,
@@ -34,7 +35,7 @@ export interface MaterializedSession {
   db: SlateAgentDb;
   agentStore: {
     resetFromDb?(ctx: unknown): Promise<void>;
-    getFullConversation(ctx: unknown): Promise<unknown>;
+    getFullConversation(ctx: unknown): Promise<SlateHydratedConversation>;
     dispose(): Promise<void>;
   };
   memory: unknown;

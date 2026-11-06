@@ -2,13 +2,13 @@ import { dirname, join } from "node:path";
 import { AgentConversationStore } from "../../../packages/agent-kv/agent-conversation-store.ts";
 import {
   createSlateAgentConversationCodec,
-  deriveInteropConversationStateFromStructure,
-  interopAgentConversationCheckpointFromSlate,
+  deriveSlateConversationFromCheckpoint,
 } from "../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 import type { Context } from "../../../packages/context/context.ts";
 import { AgentWorkerPool } from "../../agents/isolation/agent-worker-pool.ts";
 import { WorkerBlobStore } from "../../agents/isolation/worker-blob-store.ts";
-import { deriveOutlineFromConversationState, type ConversationState } from "../../runner/conversation-outline.ts";
+import { deriveOutlineFromSlateConversation } from "../../runner/conversation-outline.ts";
+import type { SlateHydratedConversation } from "../../../packages/agent/conversation-transcript-state.ts";
 import { SlateAgentSessionStore, type ConversationStatePort } from "./agent-session.ts";
 import { maintainProductionSession } from "./session-production-maintenance.ts";
 import { SlateSessionConversationState } from "./session-conversation-state.ts";
@@ -24,12 +24,8 @@ export function createSessionConversationState(
     rootDir: store.rootDir,
     ctx: context,
     openSession: agentId => store.openSession(agentId) as never,
-    deriveState: (structure, blobStore) => deriveInteropConversationStateFromStructure(
-      context,
-      interopAgentConversationCheckpointFromSlate(structure),
-      blobStore as never,
-    ),
-    deriveOutline: state => deriveOutlineFromConversationState(state as ConversationState),
+    deriveState: (structure, blobStore) => deriveSlateConversationFromCheckpoint(context, structure, blobStore as never),
+    deriveOutline: state => deriveOutlineFromSlateConversation(state as SlateHydratedConversation),
   });
 }
 

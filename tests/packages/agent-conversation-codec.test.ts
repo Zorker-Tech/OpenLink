@@ -11,6 +11,7 @@ import { slateCheckpointSubagentFromInterop } from "../../source/adapters/intero
 import { runnerConversationStateFromStoreCheckpoint } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { toHex } from "../../source/packages/agent-kv/serde.ts"
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
   AgentConversationStore,
@@ -23,7 +24,20 @@ import {
   createEmptySlateConversationCheckpointV2,
   isSlateConversationCheckpointV2,
 } from "../../source/packages/agent/conversation-checkpoint-state.ts"
-import { createEmptySlateSubagentConversationSnapshot, createSlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
+import {
+  createEmptySlateSubagentConversationSnapshot,
+  createSlateSubagentPersistedState,
+} from "../../source/packages/agent/subagent-persisted-state.ts"
+import {
+  createSlateShellInvocation,
+  createSlateShellResult,
+  storeSlateShellInvocation,
+  storeSlateShellResult,
+} from "../../source/packages/agent/shell-state.ts"
+import { createSlateShellConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
+import { createSlateShellInvocationSerde, createSlateShellResultSerde } from "../../source/adapters/storage/agent/shell-state-storage-adapter.ts"
+import { importLegacyShellInvocation, importLegacyShellResult } from "../../source/adapters/interop/agent/legacy-shell-state-adapter.ts"
 
 const codec = createSlateAgentConversationCodec<unknown>()
 
@@ -192,4 +206,45 @@ test("unknown fields in referenced subagent records survive the Slate V2 project
     ConversationStateStructure.runtime.bin.listUnknownFields(restored.conversationState!),
     nestedUnknown,
   )
+})
+
+test("full conversation hydration returns Slate shell values from stored shell blobs", async () => {
+  const invocationSerde = createSlateShellInvocationSerde(PrivacyMode.NO_STORAGE, importLegacyShellInvocation)
+  const resultSerde = createSlateShellResultSerde(PrivacyMode.NO_STORAGE, importLegacyShellResult)
+  const invocationBytes = invocationSerde.serialize(storeSlateShellInvocation(
+    createSlateShellInvocation("echo slate"),
+    PrivacyMode.NO_STORAGE,
+  ))
+  const resultBytes = resultSerde.serialize(storeSlateShellResult(createSlateShellResult({
+    standardOutput: "result",
+    standardError: "",
+    exitCode: 7,
+  }), PrivacyMode.NO_STORAGE))
+  const invocationBlobId = await getBlobId(invocationBytes)
+  const resultBlobId = await getBlobId(resultBytes)
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateShellConversationTurn({
+    invocationBlobId,
+    resultBlobId,
+  }))
+  const turnBlobId = await getBlobId(turnBytes)
+  const blobs = new Map<string, Uint8Array>([
+    [toHex(invocationBlobId), invocationBytes],
+    [toHex(resultBlobId), resultBytes],
+    [toHex(turnBlobId), turnBytes],
+  ])
+  const conversation = await codec.hydrateConversation(undefined, {
+    ...createEmptySlateConversationCheckpointV2(),
+    turnBlobIds: [toHex(turnBlobId)],
+  }, {
+    async getBlob(_context: unknown, id: Uint8Array) { return blobs.get(toHex(id)) },
+  })
+
+  const turn = conversation.turns[0]
+  assert.equal(turn?.kind, "shell")
+  if (turn?.kind !== "shell") assert.fail("expected a Slate shell turn")
+  const command = turn.invocation.commandText
+  const stdout = turn.result.standardOutput
+  assert.equal(typeof command === "string" ? command : command.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "echo slate")
+  assert.equal(typeof stdout === "string" ? stdout : stdout.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "result")
+  assert.equal(turn.result.exitCode, 7)
 })
