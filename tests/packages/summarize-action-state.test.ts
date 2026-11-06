@@ -6,17 +6,28 @@ import { createContext } from "../../source/packages/context/context.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import type { SlateConversationState } from "../../source/packages/agent/conversation-state.ts"
 
 test("summary action stores Slate text and emits the same privacy-aware summary update", async () => {
   const context = createContext()
   const stored: unknown[] = []
   const updates: unknown[] = []
   const summary = createRedactedString("compressed text", DataClassification.CODE, "summary", PrivacyMode.NO_STORAGE)
+  const nextState: SlateConversationState = {
+    privacyMode: PrivacyMode.NO_STORAGE,
+    rootPromptMessagesJson: [],
+    turns: [],
+    todos: [],
+    previousWorkspaceUris: [],
+    summaryArchives: [],
+    fileStatesV2: new Map(),
+    readPaths: [],
+  }
   const state = {
     tokenDetails: { usedTokens: 0, maximumTokens: 100 },
     getBlobStore: () => undefined,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
-    computeNewStructure: async () => ({}),
+    computeNewStructure: async () => nextState,
     setSummary: (value: unknown) => stored.push(value),
     clearTurns: async () => {},
     setTokenDetails: () => {},

@@ -5,17 +5,19 @@ import {
   isPausedGoalState,
 } from "../../goal-state.ts";
 import type { Context } from "../../../context/context.ts"
+import type { SlateConversationState } from "../../conversation-state.ts"
+import type { SlateGoalState } from "../../goal-state.ts"
 
 type StateHandlerLike = {
-  readonly goalState: unknown
-  setGoalState(goalState: unknown): void
-  computeNewStructure(ctx: Context): Promise<unknown>
+  readonly goalState: SlateGoalState | undefined
+  setGoalState(goalState: SlateGoalState): void
+  computeNewStructure(ctx: Context): Promise<SlateConversationState>
 }
 
 export async function reactivatePausedGoalOnUserMessage(
   ctx: Context,
   stateHandler: StateHandlerLike,
-  onStateUpdate: (ctx: Context, state: unknown) => Promise<void>,
+  onStateUpdate: (ctx: Context, state: SlateConversationState) => Promise<void>,
 ): Promise<void> {
   const current = stateHandler.goalState
   if (!isPausedGoalState(current)) return

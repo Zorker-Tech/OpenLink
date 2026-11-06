@@ -38,7 +38,6 @@ import {
   type AgentStateGitRepoInfoInterop,
   type AgentStateRequestContextInterop,
   type RedactedAgentConversationStateInterop,
-  encodeSlateConversationStateSnapshotInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
@@ -136,7 +135,6 @@ import {
   type AgentModeInterop,
   fromInteropAgentMode,
   processModeSystemReminderWithInteropConfig,
-  toInteropAgentMode,
   type InteropModeProcessingConfig,
 } from "../../adapters/interop/agent/mode-processing-adapter.ts"
 import {
@@ -1216,8 +1214,6 @@ type BranchRef = {
   readonly branchName: string;
 };
 
-type ConversationStateBlobs = SlateConversationState;
-
 type RestoreSettings = {
   readonly shouldTrackAgentTypeChange?: boolean;
   readonly loadRootPromptBlobs?: boolean;
@@ -1286,7 +1282,7 @@ type FileStateReferencesByPath<Context extends OperationContext> = {
 
 export class ConversationStateHandle {
   blobStore: BlobStore<OperationContext>;
-  conversationStateStructure: ConversationStateBlobs;
+  conversationStateStructure: SlateConversationState;
   rootPromptBuilder: RestorePromptBuilder;
   formattingOptions: unknown;
   modelId: string | undefined;
@@ -1321,7 +1317,7 @@ export class ConversationStateHandle {
     cacheWriteTokens: number;
     reasoningTokens: number;
   };
-  pendingComputeStructure: Promise<RedactedAgentConversationStateInterop> | null;
+  pendingComputeStructure: Promise<SlateConversationState> | null;
   skippedRootPromptBlobs: boolean;
   originalRootPromptMessagesJson: Uint8Array[];
   rootPromptPrefixInvalidated: boolean;
@@ -1735,7 +1731,7 @@ export class ConversationStateHandle {
         ? Promise.resolve(undefined)
         : (async (): Promise<Uint8Array> => {
           const snapshotValue = await this.computeNewStructure(ctx);
-          const snapshotBytes = serializeRedactedConversationStateInterop(snapshotValue);
+          const snapshotBytes = serializeRedactedConversationStateInterop(toInteropConversationState(snapshotValue));
           const snapshotBlobId = await getBlobId(snapshotBytes);
           snapshotFinishedAt = performance.now();
           stateSnapshotHistogram.histogram(ctx, snapshotFinishedAt - snapshotStartedAt, {
@@ -2473,9 +2469,9 @@ These images can be copied for use in other locations.
     );
   }
 
-  async computeNewStructure(parentContext: OperationContext): Promise<RedactedAgentConversationStateInterop> {
+  async computeNewStructure(parentContext: OperationContext): Promise<SlateConversationState> {
     const previousPending = this.pendingComputeStructure;
-    const computation = (async (): Promise<RedactedAgentConversationStateInterop> => {
+    const computation = (async (): Promise<SlateConversationState> => {
       if (previousPending) {
         await previousPending.catch(() => undefined);
       }
@@ -2485,7 +2481,7 @@ These images can be copied for use in other locations.
     return computation;
   }
 
-  private async doComputeNewStructure(parentContext: OperationContext): Promise<RedactedAgentConversationStateInterop> {
+  private async doComputeNewStructure(parentContext: OperationContext): Promise<SlateConversationState> {
     const env_2: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
       const span = createSpan(parentContext.withName("computeNewStructure"));
@@ -2630,10 +2626,6 @@ These images can be copied for use in other locations.
       for (const [subagentId, threadId] of this.subagentThreads) {
         subagentThreadsRecord[subagentId] = threadId;
       }
-      const communicationTurnsRecord: Record<string, SlateCommunicationTurnState> = {};
-      for (const [parentToolCallId, state] of this.communicationTurnsByCallId) {
-        communicationTurnsRecord[parentToolCallId] = communicateState(state);
-      }
       const plansRecord: Record<string, SlatePlanRegistryEntry> = {};
       for (const [planId, entry] of this.plans) {
         plansRecord[planId] = { id: entry.id, path: entry.path };
@@ -2668,51 +2660,69 @@ These images can be copied for use in other locations.
           ? {}
           : { usageSnapshotBlobId: new Uint8Array(promptContextUsageSnapshotBlobId) }),
       };
-      const stateInit = {
+      const nextSlateState: SlateConversationState = {
+        privacyMode: this.privacyMode,
         rootPromptMessagesJson,
         turns: await newTurnsPromise,
         todos: await newTodosPromise,
+        pendingToolCalls: [],
         tokenDetails,
-        summary: (await newSummaryPromise)!,
-        plan: (await planBlobPromise)!,
-        summaryArchiveBlobId: this.summaryArchiveBlobId,
-        summaryArchives: (await newSummaryArchivesPromise)!,
-        turnTimings: this.turnTimings.map(timing => ({
-          durationMs: timing.durationMs,
-          timestampMs: timing.timestampMs,
-        })),
+        ...(newSummaryPromise === undefined ? {} : { summary: await newSummaryPromise }),
+        ...(planBlobPromise === undefined ? {} : { plan: await planBlobPromise }),
+        ...(this.summaryArchiveBlobId === undefined
+          ? {}
+          : { summaryArchiveBlobId: new Uint8Array(this.summaryArchiveBlobId) }),
+        summaryArchives: newSummaryArchivesPromise === undefined ? [] : await newSummaryArchivesPromise,
+        turnTimings: [...this.turnTimings],
         previousWorkspaceUris: this.previousWorkspaceUris ?? [],
-        legacyFileContentBlobIds: legacyFileStatesRecord,
-        trackedGitRepoBranches: this.trackedGitRepoBranches.map((repo) => ({
-          repoPath: repo.repoPath,
-          branchName: repo.branchName,
-        })),
-        mode: this.slateMode === undefined ? undefined : toInteropAgentMode(this.slateMode),
-        agentType: this.agentType!,
-        activeBranchName: this.activeBranchName!,
-        isRootProjectConversation: (this.isRootProjectConversation || undefined)!,
-        conversationStartedTimestampMs: this.conversationStartedTimestampMs!,
-        conversationStartedTimeZone: this.conversationStartedTimeZone!,
-        fileStatesV2: Object.fromEntries(fileStateEntries),
-        subagentStates: subagentStatesRecord,
-        subagentStateRefs: subagentRefsRecord,
-        subagentRunsByParentToolCallId: subagentRunsRecord,
-        subagentThreads: subagentThreadsRecord,
+        legacyFileContentBlobIds: new Map(Object.entries(legacyFileStatesRecord)),
+        fileStatesV2: new Map(fileStateEntries),
         selfSummaryCount: this.selfSummaryCount,
         readPaths: Array.from(this.readPaths),
         completedAskQuestionToolCallIds: Array.from(this.completedAskQuestionToolCallIds),
-        plans: plansRecord,
-        goalState: this.goalState,
-        communicationHistory: this.communicationHistory.map((entry) => ({
-          step: entry.step,
-          messageIndex: entry.messageIndex,
+        plans: new Map(Object.entries(plansRecord)),
+        trackedGitRepoBranches: this.trackedGitRepoBranches.map(repo => ({
+          repoPath: repo.repoPath,
+          branchName: repo.branchName,
         })),
-        communicationFinalSummary: this.communicationFinalSummary,
-        communicationCompletedSubtitle: this.communicationCompletedSubtitle,
-        communicationTurnsByCallId: communicationTurnsRecord,
-      };
-      const { redactedState: nextRedactedState, stats: nextStateStats } =
-        encodeSlateConversationStateSnapshotInterop(stateInit, this.conversationStateStructure.privacyMode);
+        ...(this.slateMode === undefined ? {} : { mode: this.slateMode }),
+        ...(this.conversationStateStructure.unknownModeCode === undefined
+          ? {}
+          : { unknownModeCode: this.conversationStateStructure.unknownModeCode }),
+        ...(this.agentType === undefined ? {} : { agentType: this.agentType }),
+        ...(this.activeBranchName === undefined ? {} : { activeBranchName: this.activeBranchName }),
+        ...(this.goalState === undefined ? {} : { goalState: this.goalState }),
+        ...(this.conversationStartedTimestampMs === undefined
+          ? {}
+          : { conversationStartedTimestampMs: this.conversationStartedTimestampMs }),
+        ...(this.conversationStartedTimeZone === undefined
+          ? {}
+          : { conversationStartedTimeZone: this.conversationStartedTimeZone }),
+        ...(this.isRootProjectConversation ? { isRootProjectConversation: true } : {}),
+        subagentStates: new Map(Object.entries(subagentStatesRecord)),
+        subagentStateRefs: new Map(Object.entries(subagentRefsRecord)),
+        subagentRunsByParentToolCallId: new Map(Object.entries(subagentRunsRecord)),
+        subagentThreads: new Map(Object.entries(subagentThreadsRecord)),
+        communicationHistory: this.communicationHistory.map(entry => ({ ...entry })),
+        ...(this.communicationFinalSummary === undefined
+          ? {}
+          : { communicationFinalSummary: this.communicationFinalSummary }),
+        ...(this.communicationCompletedSubtitle === undefined
+          ? {}
+          : { communicationCompletedSubtitle: this.communicationCompletedSubtitle }),
+        communicationTurnsByCallId: new Map([...this.communicationTurnsByCallId].map(([callId, state]) => [
+          callId,
+          communicateState(state),
+        ])),
+      }
+      const nextStateStats = {
+        rootPromptMessageCount: nextSlateState.rootPromptMessagesJson.length,
+        turnCount: nextSlateState.turns.length,
+        todoCount: nextSlateState.todos.length,
+        fileStateCount: nextSlateState.fileStatesV2.size,
+        hasSummary: nextSlateState.summary !== undefined,
+        summaryArchiveCount: nextSlateState.summaryArchives.length,
+      }
       const serializeMs = performance.now() - serializeStartedAt;
       span.span.setAttribute("setBlobCount", blobWriteCount);
       span.span.setAttribute("serializeDurationMs", serializeMs);
@@ -2728,9 +2738,9 @@ These images can be copied for use in other locations.
           summaryArchiveCount: nextStateStats.summaryArchiveCount,
         });
       }
-      this.conversationStateStructure = fromInteropConversationState(nextRedactedState);
+      this.conversationStateStructure = nextSlateState;
       this.legacyFileContentBlobIds = new Map(Object.entries(legacyFileStatesRecord));
-      return nextRedactedState;
+      return nextSlateState;
     } catch (e_2) {
       env_2.error = e_2;
       env_2.hasError = true;

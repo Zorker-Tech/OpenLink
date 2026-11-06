@@ -16,7 +16,7 @@ interface CacheTokenCounts {
 export type RunStepTurnUsage = TurnTokenCounts & CacheTokenCounts
 
 export interface RunStepCheckpointState {
-  pendingToolCalls: unknown[]
+  readonly pendingToolCalls?: readonly string[]
 }
 
 interface RunStepUsageReporter<TokenDetails> {
