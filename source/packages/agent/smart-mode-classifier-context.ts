@@ -17,11 +17,9 @@
  * cannot be read yields no context rather than failing the call the classifier was asked to judge.
  */
 import { AgentConversationTurnHandle, type ConversationStateHandle } from "./state.ts"
-import type { SlateConversationStep } from "./conversation-step-state.ts"
+import type { SlateAskQuestionToolCall, SlateConversationStep } from "./conversation-step-state.ts"
 import {
   isAutomaticClassifierContextMessageInterop,
-  readClassifierAskQuestionArgsInterop,
-  readClassifierAskQuestionResultInterop,
   readClassifierComputerUseCallInterop,
   readClassifierUserMessageInterop,
   selectedWorkflowPathsForClassifierInterop,
@@ -29,6 +27,8 @@ import {
 } from "../../adapters/interop/agent/smart-mode-classifier-context-adapter.ts"
 import { fromRedactedCoreMessage } from "../redaction/message-redaction.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
+import { isRedactedString } from "../redaction/redacted-values.ts"
+import type { SlateAskQuestionText } from "./actions/ask-question-completion.ts"
 import type { Context as OperationContext } from "../context/context.ts"
 
 export interface SlateClassifierConversationMessage {
@@ -274,18 +274,22 @@ async function recentUserTexts(ctx: OperationContext, stateHandler: ClassifierSt
 }
 
 /** One ask-question step's answer as classifier context, or undefined when it has no usable answer. */
-function askQuestionAnswer(args: any, result: any): string | undefined {
-  if (result?.result.case !== "success") return undefined
-  const questionsById = new Map((args?.questions ?? []).map((question: any) => [question.id, question]))
+function askQuestionAnswer(tool: SlateAskQuestionToolCall): string | undefined {
+  const result = tool.result
+  if (result?.kind !== "answered") return undefined
+  const questionsById = new Map((tool.args?.questions ?? []).map(question => [question.id, question]))
+  const plainText = (value: SlateAskQuestionText): string => isRedactedString(value)
+    ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : value
   const renderedAnswers: string[] = []
-  for (const answer of result.result.value.answers) {
-    const question = questionsById.get(answer.questionId) as any
-    const optionLabelsById = new Map((question?.options ?? []).map((option: any) => [option.id, option.label]))
-    const answerParts = answer.selectedOptionIds.map((optionId: string) => optionLabelsById.get(optionId) ?? optionId)
-    const freeformText = answer.freeformText?.trim()
+  for (const answer of result.answers) {
+    const question = questionsById.get(answer.questionId)
+    const optionLabelsById = new Map((question?.options ?? []).map(option => [option.id, plainText(option.label)]))
+    const answerParts = answer.selectedOptionIds.map(optionId => optionLabelsById.get(optionId) ?? optionId)
+    const freeformText = plainText(answer.freeformText).trim()
     if (freeformText !== undefined && freeformText.length > 0) answerParts.push(freeformText)
     if (answerParts.length === 0) continue
-    const prompt = question?.prompt.trim()
+    const prompt = question === undefined ? undefined : plainText(question.prompt).trim()
     const answerText = answerParts.join(", ")
     renderedAnswers.push(prompt !== undefined && prompt.length > 0 ? `Q: ${prompt}\nA: ${answerText}` : `A: ${answerText}`)
   }
@@ -304,13 +308,9 @@ async function recentAskAnswers(ctx: OperationContext, stateHandler: ClassifierS
   for (let stepIndex = steps.length - 1; stepIndex >= 0 && stepsScanned < maxSteps && newestFirst.length < maxResults; stepIndex--) {
     stepsScanned++
     const step = await steps[stepIndex].get(ctx) as SlateConversationStep
-    const isAskQuestionCall = step.kind === "tool-call" && step.tool.case === "askQuestionToolCall"
-    if (!isAskQuestionCall) continue
-    const askQuestion = step.tool.value as { args?: unknown; result?: unknown } | undefined
+    const askQuestion = step.kind === "tool-call" && step.tool.kind === "ask-question" ? step.tool : undefined
     if (askQuestion === undefined) continue
-    const args = askQuestion.args !== undefined ? readClassifierAskQuestionArgsInterop(askQuestion.args, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
-    const result = askQuestion.result !== undefined ? readClassifierAskQuestionResultInterop(askQuestion.result, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : undefined
-    const rendered = askQuestionAnswer(args, result)
+    const rendered = askQuestionAnswer(askQuestion)
     if (rendered !== undefined) newestFirst.push(rendered)
   }
   return newestFirst.toReversed()

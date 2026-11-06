@@ -73,6 +73,14 @@ export const toRedactedTodoItemInterop = toRedactedTodoItem
 export const fromRedactedMcpToolDefinitionInterop = fromRedactedMcpToolDefinition
 export const fromRedactedRequestContextInterop = fromRedactedRequestContext
 
+/** Identifies the pending question call before its redacted runner projection is written to the transcript. */
+export function isAskQuestionToolCallInterop(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = (value as { readonly tool?: unknown }).tool
+  return tool !== null && typeof tool === "object" && !Array.isArray(tool) &&
+    (tool as { readonly case?: unknown }).case === "askQuestionToolCall"
+}
+
 export function createSyntheticUserMessageInterop(input: {
   readonly text: string
   readonly messageId: string

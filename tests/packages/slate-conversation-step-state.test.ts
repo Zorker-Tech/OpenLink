@@ -8,6 +8,7 @@ import {
   isSlateConversationSummaryToolCall,
 } from "../../source/packages/agent/conversation-step-state.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
@@ -21,6 +22,18 @@ import {
   ConversationStep,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import {
+  AskQuestionArgs,
+  AskQuestionArgs_Option,
+  AskQuestionArgs_Question,
+  AskQuestionAsync,
+  AskQuestionError,
+  AskQuestionRejected,
+  AskQuestionResult,
+  AskQuestionSuccess,
+  AskQuestionSuccess_Answer,
+  AskQuestionToolCall,
+} from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
 import {
   CommunicateUpdateArgs,
   CommunicateUpdateResult,
@@ -251,6 +264,177 @@ test("invalid Slate summary operation data is rejected before it can be stored",
     () => createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(step),
     /Slate conversation summary operation is invalid/,
   )
+})
+
+test("ask-question tool calls use Slate arguments and outcome values and rebuild at the boundary", () => {
+  const sources = [
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+        args: new AskQuestionArgs({
+          title: "Choose a direction",
+          questions: [new AskQuestionArgs_Question({
+            id: "q-1",
+            prompt: "Which path?",
+            allowMultiple: true,
+            options: [new AskQuestionArgs_Option({ id: "left", label: "Left" })],
+          })],
+          runAsync: true,
+          asyncOriginalToolCallId: "call-1",
+        }),
+        result: new AskQuestionResult({
+          result: { case: "success", value: new AskQuestionSuccess({ answers: [
+            new AskQuestionSuccess_Answer({
+              questionId: "q-1",
+              selectedOptionIds: ["left", "unlisted"],
+              freeformText: "additional detail",
+            }),
+          ] }) },
+        }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+        args: new AskQuestionArgs({ title: "Confirm", runAsync: false }),
+        result: new AskQuestionResult({ result: { case: "async", value: new AskQuestionAsync() } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+        args: new AskQuestionArgs({ title: "Confirm" }),
+        result: new AskQuestionResult({ result: { case: "rejected", value: new AskQuestionRejected({ reason: "not now" }) } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+        result: new AskQuestionResult({ result: { case: "error", value: new AskQuestionError({ errorMessage: "Tool call failed" }) } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({ result: new AskQuestionResult() }) },
+    }) } }),
+  ]
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+
+  for (const source of sources) {
+    const projected = fromInteropConversationStep(source)
+    assert.equal(projected.kind, "tool-call")
+    if (projected.kind !== "tool-call") assert.fail("expected a tool call")
+    assert.equal(projected.tool.kind, "ask-question")
+    assert.equal(projected.tool.case, undefined)
+    const stored = new TextDecoder().decode(serde.serialize(projected))
+    assert.match(stored, /"operation":"ask-question"/)
+    const restored = serde.deserialize(serde.serialize(projected))
+    assert.equal(restored.kind, "tool-call")
+    if (restored.kind !== "tool-call") assert.fail("expected a stored tool call")
+    assert.equal(restored.tool.kind, "ask-question")
+    assert.deepEqual(toInteropConversationStep(restored).toJson(), source.toJson())
+  }
+
+  const first = fromInteropConversationStep(sources[0]!)
+  assert.equal(first.kind, "tool-call")
+  if (first.kind !== "tool-call" || first.tool.kind !== "ask-question") assert.fail("expected Slate question data")
+  assert.equal(first.tool.args?.responseMode, "deferred")
+  assert.equal(first.tool.args?.originalCallId, "call-1")
+  assert.deepEqual(first.tool.result, {
+    kind: "answered",
+    answers: [{ questionId: "q-1", selectedOptionIds: ["left", "unlisted"], freeformText: "additional detail" }],
+  })
+})
+
+test("previous Slate ask-question operation names migrate to the owned operation on rewrite", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const previous = createSlateToolCallStep({
+    tool: {
+      case: "askQuestionToolCall",
+      value: {
+        args: {
+          title: "Choose",
+          questions: [{ id: "q-1", prompt: "Which?", allowMultiple: false, options: [{ id: "left", label: "Left" }] }],
+          runAsync: true,
+          asyncOriginalToolCallId: "call-1",
+        },
+        result: {
+          result: {
+            case: "success",
+            value: { answers: [{ questionId: "q-1", selectedOptionIds: ["left"], freeformText: "" }] },
+          },
+        },
+      },
+    },
+  })
+  const envelope = JSON.parse(
+    new TextDecoder().decode(serde.serialize(previous)).slice("SLATE-AGENT-STEP\n".length),
+  ) as { version: number; step: unknown; compatibility?: unknown }
+  envelope.version = 1
+  const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`))
+  assert.equal(migrated.kind, "tool-call")
+  if (migrated.kind !== "tool-call" || migrated.tool.kind !== "ask-question") {
+    assert.fail("expected the Slate ask-question operation")
+  }
+  assert.equal(migrated.tool.args?.responseMode, "deferred")
+  assert.equal(migrated.tool.args?.originalCallId, "call-1")
+  const rewritten = new TextDecoder().decode(serde.serialize(migrated))
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.match(rewritten, /"operation":"ask-question"/)
+  assert.doesNotMatch(rewritten, /askQuestionToolCall/)
+})
+
+test("ask-question args preserve redaction and nested unknown fields through migration", () => {
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const option = AskQuestionArgs_Option.fromBinary(appendUnknownVarint(
+    new AskQuestionArgs_Option({ id: "left", label: "Left" }).toBinary(),
+  ))
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+      args: new AskQuestionArgs({
+        title: "Choose",
+        questions: [new AskQuestionArgs_Question({ id: "q-1", prompt: "Which?", options: [option] })],
+      }),
+    }) },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const decoded = serde.deserialize(source.toBinary())
+  const restored = toInteropConversationStep(decoded)
+
+  assert.equal(decoded.kind, "tool-call")
+  if (decoded.kind !== "tool-call" || decoded.tool.kind !== "ask-question") assert.fail("expected a Slate question operation")
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "askQuestionToolCall") {
+    assert.fail("expected a restored question call")
+  }
+  const restoredArgs = restored.message.value.tool.value.args!
+  const restoredOption = restoredArgs.questions[0]!.options[0]!
+  assert.deepEqual(
+    AskQuestionArgs_Option.runtime.bin.listUnknownFields(restoredOption),
+    AskQuestionArgs_Option.runtime.bin.listUnknownFields(option),
+  )
+
+  const redactedCall = new ToolCall({
+    tool: { case: "askQuestionToolCall", value: new AskQuestionToolCall({
+      args: new AskQuestionArgs({
+        title: "Choose",
+        questions: [new AskQuestionArgs_Question({
+          id: "q-1",
+          prompt: "Which?",
+          options: [new AskQuestionArgs_Option({ id: "left", label: "Left" })],
+        })],
+      }),
+    }) },
+  })
+  const redactedStep = fromInteropToolCallStep(
+    toRedactedToolCallInterop(redactedCall, PrivacyMode.NO_STORAGE),
+  )
+  const redactedDecoded = serde.deserialize(serde.serialize(redactedStep))
+  assert.equal(redactedDecoded.kind, "tool-call")
+  if (redactedDecoded.kind !== "tool-call" || redactedDecoded.tool.kind !== "ask-question") {
+    assert.fail("expected a redacted Slate question operation")
+  }
+  const title = redactedDecoded.tool.args?.title
+  assert.equal(isRedactedString(title) ? title.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : title, "Choose")
 })
 
 test("unknown nested summary fields survive the Slate operation projection", () => {

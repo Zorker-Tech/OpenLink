@@ -2,10 +2,6 @@ import { SimulatedMsgReason } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import { SmartModeClassifierConversationMessage } from "../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
 import { fromRedactedUserMessage } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
-import {
-  fromRedactedAskQuestionArgs,
-  fromRedactedAskQuestionResult,
-} from "../redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
 import { fromRedactedComputerUseToolCall } from "../redacted-protos/generated/agent/v1/computer_use_tool_redacted.ts"
 import {
   SlateSimulatedMessageReason,
@@ -97,14 +93,6 @@ export function selectedWorkflowPathsForClassifierInterop(value: unknown): {
       return path === undefined ? [] : [path]
     }),
   }
-}
-
-export function readClassifierAskQuestionArgsInterop(value: unknown, capability: PrivacyCapability): unknown {
-  return fromRedactedAskQuestionArgs(value as never, capability, {})
-}
-
-export function readClassifierAskQuestionResultInterop(value: unknown, capability: PrivacyCapability): unknown {
-  return fromRedactedAskQuestionResult(value as never, capability, {})
 }
 
 export function readClassifierComputerUseCallInterop(value: unknown, capability: PrivacyCapability): unknown {
