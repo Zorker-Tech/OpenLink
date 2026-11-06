@@ -1,4 +1,3 @@
-import { AgentMode } from "../proto/generated/agent/v1/agent_pb.ts";
 import {
   createRedactedShellArgs,
   createRedactedShellCommandParsingResult,
@@ -11,11 +10,15 @@ import {
 } from "../redacted-protos/generated/agent/v1/shell_exec_redacted.ts";
 import { RedactedUpdates } from "../../../packages/agent-core/redacted-interaction-updates.ts";
 import { shellStreamExecutorResource } from "../../../packages/agent-exec/shell-stream-operation.ts";
-import { PrivacyCapability } from "../../../packages/redaction/classification.ts";
+import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts";
+import { createRedactedString } from "../../../packages/redaction/create.ts";
+import { isRedactedString } from "../../../packages/redaction/redacted-values.ts";
 import { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
 import type { Context } from "../../../packages/context/context.ts";
 import { formatShellResult, formatShellResultForVersion } from "../../../packages/agent/tools/core/shell/formatters.ts";
 import { renderInteropUserInfo, type InteropUserInfoInput } from "./user-info-input-adapter.ts";
+import { buildUserInfoAgentNotesProps } from "./meta-agent-notes-adapter.ts";
+import { toInteropAgentMode } from "./mode-processing-adapter.ts";
 import {
   createSlateShellInvocation,
   createSlateShellResult,
@@ -23,6 +26,12 @@ import {
   storeSlateShellResult,
   type SlateStoredShellResult,
 } from "../../../packages/agent/shell-state.ts";
+import {
+  createSlateShellCommandActionPayload,
+  isSlateShellCommandActionPayload,
+  type SlateShellCommandActionPayload,
+} from "../../../packages/agent/actions/shell-command-action-contracts.ts";
+import { SlateMode, type SlateMode as SlateModeValue } from "../../../packages/agent/mode-processing.ts";
 
 type Any = any;
 
@@ -38,7 +47,7 @@ export interface ShellCommandActionInteropHandle {
   readonly commandText: string;
   readonly execId?: string;
   readonly privacyMode: PrivacyMode;
-  promptMode(stateHandler: Any): AgentMode;
+  promptMode(stateHandler: Any): SlateModeValue;
   isLargeContextMode(stateHandler: Any): boolean;
   transcriptView(input: { readonly command: string; readonly output: string; readonly exitCode: number; readonly largeContextMode: boolean }): {
     readonly promptText: string;
@@ -51,6 +60,11 @@ export interface ShellCommandActionInteropHandle {
   createStoredOutput(stdout: string, stderr: string, exitCode: number): SlateStoredShellResult;
 }
 
+type ShellActionUserInfoInput = Omit<InteropUserInfoInput, "cursorRules" | "mode"> & {
+  readonly rules?: InteropUserInfoInput["cursorRules"]
+  readonly mode: SlateModeValue
+}
+
 /** Maps Slate prompt inputs to the generated field names expected by the installed prompt builder. */
 export function toShellSystemPromptOptions(input: {
   readonly requestContext: unknown;
@@ -58,7 +72,7 @@ export function toShellSystemPromptOptions(input: {
   readonly env: unknown;
   readonly browserTools: readonly string[];
   readonly cloudRule: unknown;
-  readonly mode: unknown;
+  readonly mode: SlateModeValue;
 }) {
   return {
     requestContext: input.requestContext,
@@ -66,16 +80,25 @@ export function toShellSystemPromptOptions(input: {
     env: input.env,
     browserTools: input.browserTools,
     cloudRule: input.cloudRule,
-    mode: input.mode,
+    mode: toInteropAgentMode(input.mode),
   };
 }
 
 /** Projects Slate rule inputs through the user-info interop boundary. */
 export function renderShellActionUserInfo(
-  input: Omit<InteropUserInfoInput, "cursorRules"> & { readonly rules?: InteropUserInfoInput["cursorRules"] },
+  input: ShellActionUserInfoInput,
 ): string {
-  const { rules, ...rest } = input;
-  return renderInteropUserInfo({ ...rest, cursorRules: rules });
+  const { rules, mode, ...rest } = input;
+  return renderInteropUserInfo({ ...rest, cursorRules: rules, mode: toInteropAgentMode(mode) });
+}
+
+/** Projects Slate mode before reading the model-visible notes settings. */
+export function buildShellActionUserInfoAgentNotesProps(
+  config: Parameters<typeof buildUserInfoAgentNotesProps>[0],
+  mode: SlateModeValue,
+  env: Parameters<typeof buildUserInfoAgentNotesProps>[2],
+): ReturnType<typeof buildUserInfoAgentNotesProps> {
+  return buildUserInfoAgentNotesProps(config, toInteropAgentMode(mode), env);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -147,25 +170,57 @@ function streamEvents(
   })();
 }
 
-/** Decodes one action invocation and keeps its generated message details behind closures. */
-export function adaptShellCommandAction(action: unknown): ShellCommandActionInteropHandle | undefined {
-  if (!isRecord(action) || !isRecord(action.shellCommand)) return undefined;
-  const redactedCommand = (action.shellCommand as Record<string, unknown>).command as {
-    unwrap(capability: PrivacyCapability): string;
-  } | undefined;
-  if (redactedCommand == null || typeof redactedCommand.unwrap !== "function") return undefined;
-  const privacyMode = action._privacyMode as PrivacyMode;
+/** Projects a historical shell route into the versioned Slate command action. */
+export function slateShellCommandActionPayloadFromRedacted(
+  value: Readonly<Record<string, unknown>> | undefined,
+  privacyMode: PrivacyMode,
+): SlateShellCommandActionPayload {
+  const shellCommand = isRecord(value?.shellCommand) ? value.shellCommand : undefined;
+  const commandValue = shellCommand?.command;
+  const commandText = shellCommand === undefined
+    ? undefined
+    : isRedactedString(commandValue)
+      ? commandValue
+      : createRedactedString(
+          typeof commandValue === "string" ? commandValue : "",
+          DataClassification.CODE,
+          "command",
+          privacyMode,
+        );
+  const compatibility = value === undefined ? undefined : { legacyPayload: value };
+  return createSlateShellCommandActionPayload({
+    privacyMode,
+    ...(commandText === undefined ? {} : { commandText }),
+    ...(typeof value?.execId === "string" ? { resumeExecutionId: value.execId } : {}),
+    ...(compatibility === undefined ? {} : { compatibility }),
+  });
+}
+
+/** Projects the Slate command into the interop operations used to run and record the shell turn. */
+export function adaptShellCommandAction(action: SlateShellCommandActionPayload): ShellCommandActionInteropHandle | undefined {
+  if (!isSlateShellCommandActionPayload(action) || action.commandText === undefined) return undefined;
+  const sourceCommand = action.commandText;
+  const commandText = isRedactedString(sourceCommand)
+    ? sourceCommand.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : sourceCommand;
+  const redactedCommand = createRedactedString(
+    commandText,
+    isRedactedString(sourceCommand) ? sourceCommand.__classification : DataClassification.CODE,
+    isRedactedString(sourceCommand) ? sourceCommand.__fieldName : "command",
+    action.privacyMode,
+  );
+  const privacyMode = action.privacyMode;
   const shellInvocation = storeSlateShellInvocation(
-    createSlateShellInvocation(redactedCommand.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+    createSlateShellInvocation(commandText),
     privacyMode,
   );
-  const execId = typeof action.execId === "string" ? action.execId : undefined;
+  const execId = action.resumeExecutionId;
 
   return {
-    commandText: redactedCommand.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    commandText,
     ...(execId === undefined ? {} : { execId }),
     privacyMode,
-    promptMode: (stateHandler) => stateHandler.mode ?? AgentMode.AGENT,
+    promptMode: (stateHandler) => stateHandler.mode ?? SlateMode.AGENT,
     isLargeContextMode: (stateHandler) => stateHandler.usesLargeContextTreatment(),
     transcriptView({ command, output, exitCode, largeContextMode }) {
       const basePrompt = `Run the following command: ${command}`;

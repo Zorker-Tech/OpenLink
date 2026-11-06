@@ -2884,9 +2884,9 @@
     },
     "packages/agent/actions/shell-command-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5714285714285714,
-      "refreshReason": "Moved shell action decoding, generated stream and output projections, and provider-specific transcript values behind a dedicated interop adapter; remeasured the split source group.",
-      "evidence": "agent-shell-command-action.test.ts passes 10/10, pinning approval bypass, streamed output, resumed updates, partial failure output, transcript role/tool IDs, large-context formatting and prompt seeding. Work-host typecheck and the full Work-host suite pass under Node 24; generated shell messages are no longer imported by the action handler."
+      "overlap": 0.5763546798029556,
+      "refreshReason": "Moved the run request to SlateShellCommandActionPayload while keeping generated shell executor messages and transcript-only fields at the execution adapter.",
+      "evidence": "Shell action contract and execution suites pass 127/127; the full Work-host suite passes 10006/10006 under Node 24. Work-host typecheck and rewrite/interop gates pass; core interop imports are 316 across 221 files. Contracts pin historical command projection, resume execution id, approval bypass, streamed output, resumed update suppression, partial failure output, transcript roles/tool ids, large-context formatting and first-turn prompt seeding. Measured overlap is 0.5763546798029556 against 812 baseline pairs."
     },
     "host/automations/extension.ts": {
       "claim": "rewritten",

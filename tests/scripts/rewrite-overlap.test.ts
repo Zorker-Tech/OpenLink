@@ -1501,6 +1501,17 @@ describe("rewrite overlap gate inputs", () => {
     assert.equal(exemptSourceReason("adapters/interop/agent/subscription-notification-action-adapter.ts"), undefined);
   });
 
+  it("scores shell command request data alongside the Slate action contract", () => {
+    assert.deepEqual(sourcePathsOf({
+      port: "packages/agent/actions/shell-command-action-handler.ts",
+      rewritten: "source/packages/agent/actions/shell-command-action-handler.ts",
+    }), [
+      "packages/agent/actions/shell-command-action-handler.ts",
+      "packages/agent/actions/shell-command-action-contracts.ts",
+      "adapters/interop/agent/shell-command-action-adapter.ts",
+    ]);
+  });
+
   it("scores background completion handling together with its Slate action contract", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/actions/background-task-completion-action-handler.ts",

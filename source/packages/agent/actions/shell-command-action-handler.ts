@@ -24,11 +24,15 @@ import { randomUUID } from "node:crypto"
 import { createLogger } from "../../context/index.ts"
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts"
 import { projectBackgroundAgentSource } from "../../../adapters/interop/agent/background-agent-source-adapter.ts"
-import { adaptShellCommandAction, renderShellActionUserInfo, toShellSystemPromptOptions } from "../../../adapters/interop/agent/shell-command-action-adapter.ts"
+import {
+  adaptShellCommandAction,
+  buildShellActionUserInfoAgentNotesProps,
+  renderShellActionUserInfo,
+  toShellSystemPromptOptions,
+} from "../../../adapters/interop/agent/shell-command-action-adapter.ts"
 import { getBrowserToolNames } from "../browser-tools.ts"
 import { getAllRules } from "./common.ts"
 import { buildRequestContextOptions } from "./meta-agent-notes.ts"
-import { buildUserInfoAgentNotesProps } from "../../../adapters/interop/agent/meta-agent-notes-adapter.ts"
 import { adaptInteropCloudTestingModelProfile } from "../../../adapters/interop/agent/testing-prompt-profile-adapter.ts"
 import { isProjectWorkspaceConversation } from "../configs/project-workspace-mcp-tools.ts"
 import { getRequestContext } from "../utils/request-context.ts"
@@ -37,6 +41,7 @@ import { extractToolInfo } from "../prompts/tool-info.ts"
 import { withToolSetMcpSnapshot } from "../utils/mcp-meta-tool-options.ts"
 import { getMcpMetaToolOptionsWithUserDefinedTools } from "../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts"
 import { FileOperationLockManager } from "../tools/core/file-operation-locks.ts"
+import type { SlateShellCommandActionPayload } from "./shell-command-action-contracts.ts"
 
 type Any = any
 
@@ -53,7 +58,7 @@ export class ShellCommandActionHandler {
 
   async handle(
     ctx: Any,
-    action: Any,
+    action: SlateShellCommandActionPayload,
     rootPromptExecutor: Any,
     stateHandler: Any,
     mcpTools: Any,
@@ -193,7 +198,7 @@ export class ShellCommandActionHandler {
             hooksAdditionalContext: requestContext.hooksAdditionalContext,
             automationInstructions: this.config.automationInstructions,
             ...(this.config.enableTerminalFiles !== false && { terminalsFolder: requestContext.env?.terminalsFolder }),
-            ...buildUserInfoAgentNotesProps(this.config, modeForPrompt, requestContext.env),
+            ...buildShellActionUserInfoAgentNotesProps(this.config, modeForPrompt, requestContext.env),
             designatedBranches: this.config.designatedBranches,
             branchPrefix: this.config.branchPrefix,
             branchSuffix: this.config.branchSuffix,
