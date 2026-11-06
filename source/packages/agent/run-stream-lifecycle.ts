@@ -1,6 +1,7 @@
 /** Restore controls and best-effort checkpoint publication for an agent run. */
 
 import type { Context } from "../context/context.ts"
+import { SlateAgentActionKind, type SlateAgentActionKind as SlateAgentActionKindValue } from "./agent-action-state.ts"
 import { createSpan } from "../context/telemetry.ts"
 import type { SlateConversationState } from "./conversation-state.ts"
 import {
@@ -9,15 +10,15 @@ import {
 } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts"
 
 const RUN_KIND_CHANGING_ACTIONS = [
-  "userMessageAction",
-  "subscriptionNotificationAction",
-  "goalContinuationAction",
-  "resumeAction",
-  "executePlanAction",
+  SlateAgentActionKind.USER_MESSAGE,
+  SlateAgentActionKind.SUBSCRIPTION_NOTIFICATION,
+  SlateAgentActionKind.GOAL_CONTINUATION,
+  SlateAgentActionKind.RESUME,
+  SlateAgentActionKind.EXECUTE_PLAN,
 ] as const
 
-export function shouldTrackAgentTypeChange(actionCase: string | undefined): boolean {
-  return actionCase !== undefined && RUN_KIND_CHANGING_ACTIONS.includes(actionCase as typeof RUN_KIND_CHANGING_ACTIONS[number])
+export function shouldTrackAgentTypeChange(actionKind: SlateAgentActionKindValue | undefined): boolean {
+  return actionKind !== undefined && RUN_KIND_CHANGING_ACTIONS.includes(actionKind as typeof RUN_KIND_CHANGING_ACTIONS[number])
 }
 
 export interface RunStreamStateHandleOptions {

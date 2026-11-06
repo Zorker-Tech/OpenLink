@@ -28,11 +28,12 @@ import {
   fromRedactedTaskConversationState,
   normalizePreparedTaskConversationStateInterop,
   slateTaskRequestFromModelArgumentsInterop,
+  slateAgentActionFromInterop,
   toInteropTaskResultInterop,
-  toRedactedConversationActionInterop,
   type TaskResultInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
+import type { SlateAgentAction } from "../agent-action-state.ts";
 import type { SlatePreparedTask } from "./task-prepared-state.ts";
 import { buildSlatePreparedTaskHookInput } from "./task-prepared-state.ts";
 import { createSlateTaskErrorResult, type SlateTaskResult } from "./task-result-state.ts";
@@ -360,7 +361,7 @@ async function runServerTaskSubagent(args: {
       : resourceAccessor,
     stateHandler.getBlobStore(),
     taskToolConfig.summarizationHandler,
-    new NoopConversationActionReceiver(),
+    new NoopConversationActionReceiver<SlateAgentAction>(),
   );
   const completionCtx = createCompletionContext({
     meta,
@@ -408,7 +409,7 @@ async function runServerTaskSubagent(args: {
             resolved.parentRequestId,
           ),
           state,
-          toRedactedConversationActionInterop(
+          slateAgentActionFromInterop(
             createTaskUserMessageActionInterop({ message }),
             stateHandler.getPrivacyMode(),
           ),

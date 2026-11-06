@@ -105,7 +105,6 @@ source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/local-
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/subagent-exec-adapter.ts
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/turn-agent-run-projection-adapter.ts
-source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/turn-resume-action-adapter.ts
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/chat-inference-proto/client.ts
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/mcp/turn-mcp-executor-adapter.ts
 source/host/runner/turn-agent-stream.ts	../../adapters/interop/agent/agent-turn-stream-contract-adapter.ts
@@ -206,7 +205,6 @@ source/packages/agent/actions/user-message-action/user-message-action-handler.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/meta-agent-notes-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/mode-processing-adapter.ts
-source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/project-conversation-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/testing-prompt-profile-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/user-info-input-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/user-message-action-input-adapter.ts

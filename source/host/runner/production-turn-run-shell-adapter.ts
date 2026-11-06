@@ -27,7 +27,7 @@ import {
 import { createTurnAgentStreamStart, type TurnAgentMcpTurnProvider } from "./turn-agent-composition.ts";
 import { createTurnRunShell, type PreparedTurn, type TurnRunContext, type TurnRunOptions, type TurnRunShellHost, type TurnStreamCallbacks } from "./turn-run-shell.ts";
 import type { TurnCheckpoint, TurnSession, TurnSettleHost } from "./turn-settle.ts";
-import type { InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import type { ForwardedUpdate } from "./agent-adapters.ts";
 import { presentOptions } from "./optional-options.ts";
 import { ProductionTurnRunLease } from "./production-turn-run-lease.ts";
@@ -60,9 +60,9 @@ export interface ProductionTurnRunShellAdapterInput {
     readonly owner: ProductionTurnAgentOwner;
     readonly runContext: Context;
     readonly prompt: string;
-    readonly options: GeneratedTurnPromptOptions;
+    readonly options: InteropTurnPromptOptions;
   }) => Promise<Awaited<ReturnType<typeof createProductionTurnAgentRunInput>>>;
-  readonly promptOptions: (prompt: string, options: TurnRunOptions) => GeneratedTurnPromptOptions;
+  readonly promptOptions: (prompt: string, options: TurnRunOptions) => InteropTurnPromptOptions;
   readonly createSession: (owner: ProductionTurnAgentOwner) => TurnSession;
   readonly context: () => Context;
   readonly createSettleHost: () => TurnSettleHost;
@@ -96,8 +96,8 @@ export interface ProductionTurnRunShellHostInput extends Omit<ProductionTurnRunS
     readonly cancelThisRun: ProductionTurnAgentOwnerInput["cancelThisRun"];
     readonly emitUpdate: ProductionTurnAgentOwnerInput["emitUpdate"];
   }) => ProductionTurnAgentOwnerInput;
-  readonly promptOptions: (prompt: string, options: TurnRunOptions) => GeneratedTurnPromptOptions;
-  readonly assembleGeneratedTurnAction: ProductionTurnAgentRunInput["assembleGeneratedTurnAction"];
+  readonly promptOptions: (prompt: string, options: TurnRunOptions) => InteropTurnPromptOptions;
+  readonly assembleSlateTurnAction: ProductionTurnAgentRunInput["assembleSlateTurnAction"];
   readonly compactionEpoch: ProductionTurnAgentRunInput["compactionEpoch"];
   readonly getConversationState: ProductionTurnAgentRunInput["getConversationState"];
   readonly mcp?: TurnAgentMcpTurnProvider;
@@ -106,7 +106,7 @@ export interface ProductionTurnRunShellHostInput extends Omit<ProductionTurnRunS
 
 /** Builds the two adapters the shell needs — one turn's owner, and one run's projection — from the real inputs. */
 export function createProductionTurnRunShellHostInput(input: ProductionTurnRunShellHostInput): ProductionTurnRunShellAdapterInput {
-  const { createAgentOwnerInput, assembleGeneratedTurnAction, compactionEpoch, getConversationState, mcp, onMcpDiscoveryFailed, promptOptions, ...lifecycle } = input;
+  const { createAgentOwnerInput, assembleSlateTurnAction, compactionEpoch, getConversationState, mcp, onMcpDiscoveryFailed, promptOptions, ...lifecycle } = input;
   return {
     ...lifecycle,
     promptOptions,
@@ -123,7 +123,7 @@ export function createProductionTurnRunShellHostInput(input: ProductionTurnRunSh
         runCtx: runContext,
         trimmedPrompt: prompt.trim(),
         promptOptions: options,
-        assembleGeneratedTurnAction,
+        assembleSlateTurnAction,
         compactionEpoch,
         getConversationState,
         ...presentOptions({

@@ -22,6 +22,7 @@ import type { Context } from "../../../context/context.ts";
 import { getInvocationId } from "../../utils/invocation-id.ts";
 import { getRequestContext, resolveRequestContext } from "../../utils/request-context.ts";
 import { SlateMode } from "../../mode-processing.ts";
+import { isSlateResumeActionPayload, type SlateResumeActionPayload } from "../../agent-action-state.ts";
 import { buildRequestContextOptions } from "../meta-agent-notes.ts";
 import {
   collectPendingToolAdmission,
@@ -36,6 +37,17 @@ import {
 } from "./abstract-user-message-action-handler.ts";
 
 type Any = any;
+
+function resumeActionPayloadFromInput(value: unknown): SlateResumeActionPayload {
+  if (isSlateResumeActionPayload(value)) return value
+  const source = value !== null && typeof value === "object" ? value as Record<string, unknown> : {}
+  const requestContext = source.requestContext
+  return {
+    schema: "slate.agent-action.resume",
+    version: 1,
+    ...(requestContext === undefined ? {} : { compatibility: { requestContext, legacyPayload: source } }),
+  }
+}
 
 export class ResumeActionHandler extends AbstractUserMessageActionHandler {
   async executePendingToolCalls(ctx: Context, stateHandler: Any, mergedTools: Any, requestContext: Any, invocationId: string): Promise<boolean> {
@@ -124,7 +136,9 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
     const ctx = executionSpan.ctx;
     const invocationId = getInvocationId(ctx);
     executionSpan.span.setAttribute("invocationId", invocationId);
-    const requestContext = await getRequestContext(ctx, action.requestContext ? decodeIncomingRequestContext(action.requestContext) : undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
+    const resumeAction = resumeActionPayloadFromInput(action)
+    const legacyRequestContext = resumeAction.compatibility?.requestContext
+    const requestContext = await getRequestContext(ctx, legacyRequestContext ? decodeIncomingRequestContext(legacyRequestContext) : undefined, this.resourceAccessor, buildRequestContextOptions(this.config));
     const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
     await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);
     if (stateHandler.turns.length === 0) return await stateHandler.computeNewStructure(ctx);
@@ -138,11 +152,13 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
 
   async setupResumeStep(ctx: Context, action: Any, stateHandler: Any, mcpTools: Any): Promise<Any> {
     const invocationId = getInvocationId(ctx);
+    const resumeAction = resumeActionPayloadFromInput(action)
+    const legacyRequestContext = resumeAction.compatibility?.requestContext
     const { requestContext, provenance: requestContextProvenance } = await resolveRequestContext({
       parentCtx: ctx,
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(this.config),
-      ...(action.requestContext ? { maybeRequestContext: decodeIncomingRequestContext(action.requestContext) } : {}),
+      ...(legacyRequestContext ? { maybeRequestContext: decodeIncomingRequestContext(legacyRequestContext) } : {}),
     });
     const mergedTools = this.mergeRequestContextTools(mcpTools, requestContext.tools);
     await this.executePendingToolCalls(ctx, stateHandler, mergedTools, requestContext, invocationId);

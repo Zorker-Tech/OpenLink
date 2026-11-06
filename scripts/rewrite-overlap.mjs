@@ -191,7 +191,6 @@ const EXEMPT = [
   ["adapters/interop/agent/git-workflow-model-capability-adapter.ts", "interop adapter: maps counterpart model and prompt-version flags to Slate's Git-guidance capability"],
   ["adapters/interop/agent/skill-path-layout-adapter.ts", "interop adapter: recognizes skill-file locations used by supported external workspace layouts"],
   ["adapters/interop/automation/platform-communication-tool-policy-adapter.ts", "interop adapter: keeps provider tool names and external server identifiers at the communication boundary"],
-  ["adapters/interop/agent/turn-resume-action-adapter.ts", "interop adapter: constructs the counterpart resume action for a resumed turn"],
   ["adapters/interop/agent/user-rule-profile-adapter.ts", "interop adapter: maps counterpart model and experiment tags to Slate-owned user-rule profiles"],
   ["adapters/interop/agent/box-store-service-adapter.ts", "interop adapter: translates counterpart box-store presign, multipart and listing messages to the Slate object-store port"],
   ["adapters/interop/agent/testing-prompt-profile-adapter.ts", "interop adapter: maps external model and tool catalog fields to the Slate testing prompt profile"],
@@ -1278,9 +1277,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ]],
   ["host/runner/large-output-spill.ts", [
     "host/runner/large-output-spill-policy.ts",
-  ]],
-  ["host/runner/turn-run-shell.ts", [
-    "adapters/interop/agent/turn-resume-action-adapter.ts",
   ]],
   ["host/boxes/box-store-sync/slate-box-store-files.ts", [
     "adapters/interop/agent/box-store-service-adapter.ts",

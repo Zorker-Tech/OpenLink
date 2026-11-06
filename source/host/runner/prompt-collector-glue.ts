@@ -5,6 +5,7 @@
  * carries. It is assembled here and bounded, so every caller builds the same prompt out of the same parts. */
 import path from "node:path";
 import { SLATE_BOX_READ_TOOL_NAME, SLATE_BOX_SHELL_TOOL_NAME } from "../slate-activity.ts";
+import type { SlateUserMessageAction } from "../../packages/agent/agent-action-state.ts";
 import { buildMcpCustomInstructionsSystemPromptSection } from "../../shared/mcp-custom-instructions.ts";
 import {
   agentProfileIdentitiesEqual,
@@ -19,8 +20,8 @@ import { appendUserReplyReminder, buildAttachedFilesNote, buildReplyContextNote,
 import { bytesLookLikeVideoContainer } from "./video-container.ts";
 import type { ShellTerminalWatchHost } from "./shell-terminal-watch.ts";
 import { collectPrependUserMessages } from "../../adapters/interop/agent/shell-terminal-watch-adapter.ts";
-import { generatedTurnActionFromSlate, hydrateInteropSelectedVideos } from "../../adapters/interop/agent/prompt-action-adapter.ts";
-import type { InteropTurnActionAssembly as GeneratedTurnActionAssembly, InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../../adapters/interop/agent/prompt-action-adapter.ts";
+import { slateTurnActionFromPrompt, hydrateInteropSelectedVideos } from "../../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnPromptOptions, SlateTurnActionAssembly } from "../../adapters/interop/agent/prompt-action-adapter.ts";
 import { SLATE_BOX_WORKSPACE_ROOT } from "../cloud-agents/cloud-agent-images.ts";
 import { downloadBoxFiles, type TransferBox } from "../boxes/box-transfer.ts";
 import {
@@ -30,7 +31,7 @@ import {
 } from "../automations/automation.ts";
 import type { AutomationStatusSource, AutomationTimeZoneResolver } from "../automations/automation-status-reminder.ts";
 
-export type { GeneratedTurnActionAssembly, GeneratedTurnPromptOptions };
+export type { InteropTurnPromptOptions, SlateTurnActionAssembly };
 
 export class SlateVideoAttachmentError extends Error {}
 
@@ -103,20 +104,9 @@ export interface PromptCollectorHost<Context = unknown> {
   isSpotlightEnabled?: (() => boolean) | undefined;
 }
 
-/** A turn's user-message action, as the older assembly hands it back: plain objects around the generated action. */
+/** A prompt assembly that hands its Slate user-message action to the turn runner. */
 export interface TurnActionAssembly {
-  readonly action: {
-    readonly action: {
-      readonly case: "userMessageAction";
-      readonly value: {
-        readonly userMessage: {
-          readonly text: string; readonly messageId: string; readonly richText?: string;
-          readonly selectedContext?: { readonly selectedImages: readonly unknown[]; readonly selectedVideos: readonly SelectedVideo[] };
-        };
-        readonly prependUserMessages: readonly unknown[];
-      };
-    };
-  };
+  readonly action: SlateUserMessageAction;
   readonly automationStatusReminder: string | null;
   readonly automationStatusCompactionEpoch: number;
 }
@@ -379,7 +369,7 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
   /** The words of a turn: its notes, prompt and attachments, with the routine status and profile update around them. */
   async function composeTurnText(args: {
     readonly trimmedPrompt: string;
-    readonly options: TurnPromptOptions | GeneratedTurnPromptOptions;
+    readonly options: TurnPromptOptions | InteropTurnPromptOptions;
     readonly profileUpdateForTurn?: { readonly text: string };
     readonly compactionEpoch: () => number;
   }): Promise<{ text: string; routineStatus: string | null; compactionEpoch: number }> {
@@ -411,11 +401,11 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
   }
 
   /** Every question the turn carries that the user did not answer. */
-  function unansweredQuestions(options: TurnPromptOptions | GeneratedTurnPromptOptions): string[] {
+  function unansweredQuestions(options: TurnPromptOptions | InteropTurnPromptOptions): string[] {
     return [...(options.skippedQuestionPrompts ?? []), ...(options.dismissedQuestionPrompts ?? [])];
   }
 
-  /** The older assembly: plain objects around a user-message action. */
+  /** The prompt path used by the Slate turn runner. */
   async function assembleTurnAction(args: {
     readonly trimmedPrompt: string; readonly options: TurnPromptOptions;
     readonly profileUpdateForTurn?: { readonly text: string }; readonly compactionEpoch: () => number;
@@ -427,23 +417,26 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
     const richText = options.richText?.trim();
     const prepended = [...(await host.collectPrependUserMessages?.(options.recentUserMessages ?? [], options.messageId) ?? [])];
     const unanswered = unansweredQuestions(options);
-    if (unanswered.length > 0) prepended.push({ text: unansweredQuestionsNote(unanswered) });
-    const selectedContext = images.length === 0 && videos.length === 0 ? undefined : { selectedImages: images, selectedVideos: videos };
-    const userMessage = {
+    const action = slateTurnActionFromPrompt({
       text,
       messageId: options.messageId ?? "",
       ...(richText == null || richText.length === 0 ? {} : { richText }),
-      ...(selectedContext == null ? {} : { selectedContext }),
-    };
+      selectedImages: images,
+      selectedVideos: videos,
+      prependUserMessages: prepended,
+      ...(unanswered.length > 0 ? { unansweredQuestionsNote: unansweredQuestionsNote(unanswered) } : {}),
+      automationStatusReminder: routineStatus,
+      automationStatusCompactionEpoch: compactionEpoch,
+    }).action;
     return {
-      action: { action: { case: "userMessageAction", value: { userMessage, prependUserMessages: prepended } } },
+      action,
       automationStatusReminder: routineStatus,
       automationStatusCompactionEpoch: compactionEpoch,
     };
   }
 
   /** The earlier user messages a generated turn carries, from the shell watch or the host's own collector. */
-  async function collectPrependMessages(runCtx: unknown, options: GeneratedTurnPromptOptions): Promise<readonly unknown[]> {
+  async function collectPrependMessages(runCtx: unknown, options: InteropTurnPromptOptions): Promise<readonly unknown[]> {
     const collect = async () => host.shellWatchHost != null
       ? await collectPrependUserMessages(host.shellWatchHost(), options.recentUserMessages, options.messageId)
       : [...(await host.collectGeneratedPrependUserMessages?.(options.recentUserMessages ?? [], options.messageId) ?? [])];
@@ -451,14 +444,14 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
     return host.traceSendPhase(runCtx, "collectPrependUserMessages", collect);
   }
 
-  /** The generated assembly: the generated action, with the same words and earlier messages as the older one. */
-  async function assembleGeneratedTurnAction(args: {
+  /** The Slate assembly, with the same prompt facts and media behavior as the existing path. */
+  async function assembleSlateTurnAction(args: {
     readonly runCtx: unknown;
     readonly trimmedPrompt: string;
-    readonly options: GeneratedTurnPromptOptions;
+    readonly options: InteropTurnPromptOptions;
     readonly profileUpdateForTurn?: { readonly text: string };
     readonly compactionEpoch: () => number;
-  }): Promise<GeneratedTurnActionAssembly> {
+  }): Promise<SlateTurnActionAssembly> {
     const { options } = args;
     const { text, routineStatus, compactionEpoch } = await composeTurnText(args);
     const selectedVideos = await hydrateInteropSelectedVideos({
@@ -470,7 +463,7 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
     const richText = options.richText?.trim();
     const prepended = await collectPrependMessages(args.runCtx, options);
     const unanswered = unansweredQuestions(options);
-    return generatedTurnActionFromSlate({
+    return slateTurnActionFromPrompt({
       text,
       ...(options.messageId === undefined ? {} : { messageId: options.messageId }),
       ...(richText != null && richText.length > 0 ? { richText } : {}),
@@ -497,7 +490,7 @@ export function createPromptCollectorGlue<Context = unknown>(host: PromptCollect
     spotlightEnabled: () => host.isSpotlightEnabled?.() !== false,
     readBoxVideoBytes: videoBytesFromBox,
     resolveSelectedVideosForTurn: resolveSelectedVideos,
-    assembleGeneratedTurnAction,
+    assembleSlateTurnAction,
     noteAutomationStatusReminder(reminder: string, compactionEpoch: number) { lastAutomationStatusReminder = reminder; lastAutomationStatusCompactionEpoch = compactionEpoch; },
     resetAutomationStatusReminder() { lastAutomationStatusReminder = undefined; lastAutomationStatusCompactionEpoch = undefined; },
     assembleTurnAction,

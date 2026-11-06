@@ -29,12 +29,9 @@ import { TodoStatus } from "../../source/adapters/interop/proto/generated/agent/
 
 test("a plan action projects its mode vocabulary into Slate's conversation modes", () => {
   assert.equal(slateModeForPlanExecutionMode("agent"), SlateMode.AGENT)
-  assert.equal(slateModeForPlanExecutionMode("ask"), SlateMode.CHAT)
+  assert.equal(slateModeForPlanExecutionMode("chat"), SlateMode.CHAT)
   assert.equal(slateModeForPlanExecutionMode("multitask"), SlateMode.MULTITASK)
-  assert.equal(
-    slateModeForPlanExecutionMode({ kind: "unrecognized", value: 987654 }),
-    SlateMode.UNSPECIFIED,
-  )
+  assert.equal(slateModeForPlanExecutionMode("unspecified"), SlateMode.UNSPECIFIED)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -227,7 +224,8 @@ test("the plan boundary turns omitted and explicit modes into host-owned choices
   })
 
   assert.equal(missingMode.mode, "agent")
-  assert.equal(askMode.mode, "ask")
+  assert.equal(askMode.mode, "chat")
+  assert.equal(askMode.schema, "slate.agent-action.execute-plan")
   assert.equal(askMode.planText, "# Plan")
   assert.equal(askMode.path, "/workspace/plan.md")
   assert.equal(askMode.sourceUri, "cursor-plan://plan.md")
@@ -242,7 +240,7 @@ test("a plan becomes a simulated turn with its content and context attached", ()
     planContent: "# Plan\n\nFirst step",
     planPath: "/workspace/plan.md",
     planTitle: "Plan",
-    executionMode: "ask",
+    executionMode: "chat",
     rootProject: true,
     planId: "plan-42",
     listenerPrivacyMode: PrivacyMode.NO_STORAGE,

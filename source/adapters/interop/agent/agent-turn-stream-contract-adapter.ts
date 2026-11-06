@@ -1,4 +1,4 @@
-/** Names for the generated state and action types used at the Agent stream boundary. */
+/** Historical serialized state/action types accepted by the Agent stream migration boundary. */
 
 import type {
   ConversationAction,

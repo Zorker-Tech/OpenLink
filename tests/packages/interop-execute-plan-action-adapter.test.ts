@@ -6,6 +6,7 @@ import { TodoStatus } from "../../source/adapters/interop/proto/generated/agent/
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import {
@@ -32,6 +33,7 @@ test("the action boundary decodes plan fields and maps known modes into host mod
   const planFileContent = createRedactedString("# Plan", DataClassification.CODE, "plan", PrivacyMode.UNSPECIFIED)
   const planFilePath = createRedactedString("/repo/plan.md", DataClassification.PATH, "path", PrivacyMode.UNSPECIFIED)
   const planFileUri = createRedactedString("plan://source", DataClassification.PATH, "path", PrivacyMode.UNSPECIFIED)
+  const requestContext = { env: { timeZone: "UTC" } }
   const decoded = decodeExecutePlanAction({
     planFileContent,
     planFilePath,
@@ -39,6 +41,7 @@ test("the action boundary decodes plan fields and maps known modes into host mod
     planId: "plan-1",
     kickoffMessageId: "message-1",
     executionMode: AgentMode.ASK,
+    requestContext,
     _privacyMode: PrivacyMode.NO_STORAGE,
   })
 
@@ -47,10 +50,17 @@ test("the action boundary decodes plan fields and maps known modes into host mod
   assert.equal(decoded.sourceUri, "plan://source")
   assert.equal(decoded.id, "plan-1")
   assert.equal(decoded.messageId, "message-1")
-  assert.equal(decoded.mode, "ask")
+  assert.equal(decoded.schema, "slate.agent-action.execute-plan")
+  assert.equal(decoded.mode, "chat")
   assert.equal(decoded.privacyMode, PrivacyMode.NO_STORAGE)
-  assert.equal(toInteropAgentMode("ask"), AgentMode.ASK)
+  assert.equal(decoded.compatibility?.requestContext, requestContext)
+  assert.ok(decoded.compatibility?.legacyPayload)
+  assert.equal(toInteropAgentMode("chat"), AgentMode.ASK)
   assert.equal(decodeExecutePlanAction({ executionMode: AgentMode.UNSPECIFIED }).mode, "agent")
+  const unknownMode = decodeExecutePlanAction({ executionMode: 987654 })
+  assert.equal(unknownMode.mode, "unspecified")
+  assert.equal(unknownMode.compatibility?.legacyModeCode, 987654)
+  assert.equal(toInteropAgentMode(unknownMode.mode, unknownMode.compatibility?.legacyModeCode), 987654)
 })
 
 test("the plan message carries its source selection and a matching redacted update", () => {
@@ -80,6 +90,24 @@ test("the plan message carries its source selection and a matching redacted upda
   assert.equal(selection?.range?.start?.line, 1)
   assert.equal(selection?.range?.end?.line, 3)
   assert.equal(result.listenerUpdate.message.case, "userMessageAppended")
+})
+
+test("a future plan mode is policy-safe and round-trips through the stored user message", () => {
+  const result = createPlanExecutionMessage({
+    text: "Continue with the plan",
+    messageId: "kickoff-unknown-mode",
+    planContent: "# Plan",
+    planPath: "/repo/plan.md",
+    planTitle: "Plan",
+    executionMode: "unspecified",
+    legacyModeCode: 987654,
+    rootProject: false,
+    planId: "plan-1",
+    listenerPrivacyMode: PrivacyMode.NO_STORAGE,
+  })
+  assert.equal(result.userMessage.mode, 987654)
+  assert.equal(result.slateUserMessage.mode, SlateMode.UNSPECIFIED)
+  assert.equal(result.slateUserMessage.compatibility?.legacyModeCode, 987654)
 })
 
 test("plan todos cross the boundary as redacted entries and unknown statuses default to pending", () => {

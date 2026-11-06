@@ -1,7 +1,5 @@
 import {
-  ConversationAction,
   UserMessage,
-  UserMessageAction,
 } from "../proto/generated/agent/v1/agent_pb.ts";
 import {
   SelectedContext,
@@ -11,7 +9,17 @@ import {
 import type { SlateImageAttachment } from "../../../packages/agent/context/image-attachment-contracts.ts"
 import type { SlateVideoAttachment } from "../../../packages/agent/context/video-attachment-contracts.ts"
 import { toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
-import { toInteropSelectedVideo } from "./video-attachment-adapter.ts"
+import { fromInteropSelectedVideo, toInteropSelectedVideo } from "./video-attachment-adapter.ts"
+import { fromInteropSelectedContextState } from "./selected-context-state-adapter.ts"
+import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
+import { SlateAgentActionKind, type SlateUserMessageAction } from "../../../packages/agent/agent-action-state.ts"
+import {
+  createSlateUserMessageInput,
+  type SlateUserMessage,
+  type SlateUserMessageInput,
+} from "../../../packages/agent/user-message-state.ts"
+import { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
+import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
 
 export interface InteropTurnPromptOptions {
   readonly attachedFilePaths?: readonly string[];
@@ -30,8 +38,8 @@ export interface InteropTurnPromptOptions {
   readonly recentUserMessages?: readonly { readonly id: string; readonly text: string; readonly richText?: string }[];
 }
 
-export interface InteropTurnActionAssembly {
-  readonly action: ConversationAction;
+export interface SlateTurnActionAssembly {
+  readonly action: SlateUserMessageAction;
   readonly automationStatusReminder: string | null;
   readonly automationStatusCompactionEpoch: number;
 }
@@ -49,6 +57,13 @@ export interface RunnerTurnPromptOptionsInput {
   readonly appendReplyReminder?: boolean;
   readonly hidden?: boolean;
   readonly recentUserMessages?: readonly { readonly id: string; readonly text: string }[];
+}
+
+export type SlateTurnVideoInput = SelectedVideo | SlateVideoAttachment | {
+  readonly path: string
+  readonly filename?: string
+  readonly data?: Uint8Array
+  readonly blobId?: string
 }
 
 /** Narrows the selected-video message only at the prompt interop boundary. */
@@ -98,6 +113,18 @@ function selectedImageFromRunner(value: unknown): SelectedImage | undefined {
 function selectedVideoFromRunner(value: unknown): SelectedVideo | undefined {
   if (isSlateVideo(value)) return toInteropSelectedVideo(value)
   return isInteropSelectedVideo(value) ? value : undefined
+}
+
+function slateVideoFromPrompt(value: SlateTurnVideoInput): SlateVideoAttachment {
+  if (isSlateVideo(value)) return value
+  if (isInteropSelectedVideo(value)) return fromInteropSelectedVideo(value)
+  return {
+    sourcePath: value.path,
+    displayName: value.filename ?? "",
+    mediaType: "",
+    writeToWorkspace: false,
+    content: value.data === undefined ? { kind: "empty" } : { kind: "bytes", bytes: new Uint8Array(value.data) },
+  }
 }
 
 /** Projects runner inputs into the generated prompt boundary while filtering malformed image/video attachments. */
@@ -156,18 +183,29 @@ export async function hydrateInteropSelectedVideos(args: {
   return resolved;
 }
 
-/** Encodes Slate prompt facts into the generated Agent action at the executor boundary. */
-export function generatedTurnActionFromSlate(args: {
+function slateMessageFromRunner(value: unknown): SlateUserMessage {
+  if (value !== null && typeof value === "object" && !("toBinary" in value) && "text" in value) {
+    const record = value as Partial<SlateUserMessageInput>
+    if (typeof record.text === "string" || isRedactedString(record.text)) {
+      return createSlateUserMessageInput(record as SlateUserMessageInput)
+    }
+  }
+  const message = value instanceof UserMessage ? value : new UserMessage(value as never)
+  return fromInteropUserMessage(message)
+}
+
+/** Builds Slate's first-party user-message action from prompt and attachment facts. */
+export function slateTurnActionFromPrompt(args: {
   readonly text: string;
   readonly messageId?: string;
   readonly richText?: string;
   readonly selectedImages: readonly (SelectedImage | SlateImageAttachment | { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string })[];
-  readonly selectedVideos: readonly SelectedVideo[];
+  readonly selectedVideos: readonly SlateTurnVideoInput[];
   readonly prependUserMessages: readonly unknown[];
   readonly unansweredQuestionsNote?: string;
   readonly automationStatusReminder: string | null;
   readonly automationStatusCompactionEpoch: number;
-}): InteropTurnActionAssembly {
+}): SlateTurnActionAssembly {
   const selectedImages = args.selectedImages.map((image) => {
     if (image instanceof SelectedImage) return image
     if ("sourcePath" in image) return toInteropSelectedImage(image)
@@ -177,19 +215,34 @@ export function generatedTurnActionFromSlate(args: {
       mimeType: image.mimeType ?? "",
     })
   });
-  const selectedContext = selectedImages.length > 0 || args.selectedVideos.length > 0
-    ? new SelectedContext({ selectedImages, selectedVideos: [...args.selectedVideos] })
+  const selectedVideos = args.selectedVideos.map(video => toInteropSelectedVideo(slateVideoFromPrompt(video)))
+  const selectedContextInterop = selectedImages.length > 0 || selectedVideos.length > 0
+    ? new SelectedContext({ selectedImages, selectedVideos })
     : undefined;
-  const prependUserMessages = [...args.prependUserMessages] as UserMessage[];
-  if (args.unansweredQuestionsNote !== undefined) prependUserMessages.push(new UserMessage({ text: args.unansweredQuestionsNote }));
-  const userMessage = new UserMessage({
-    text: args.text,
-    messageId: args.messageId ?? "",
-    ...(args.richText === undefined ? {} : { richText: args.richText }),
-    ...(selectedContext === undefined ? {} : { selectedContext }),
-  });
+  const selectedContext = selectedContextInterop === undefined
+    ? undefined
+    : fromInteropSelectedContextState(selectedContextInterop)
+  const earlierMessages = args.prependUserMessages.map(slateMessageFromRunner)
+  if (args.unansweredQuestionsNote !== undefined) {
+    earlierMessages.push(createSlateUserMessageInput({ text: args.unansweredQuestionsNote }))
+  }
   return {
-    action: new ConversationAction({ action: { case: "userMessageAction", value: new UserMessageAction({ userMessage, prependUserMessages }) } }),
+    action: {
+      kind: SlateAgentActionKind.USER_MESSAGE,
+      payload: {
+        schema: "slate.agent-action.user-message",
+        version: 1,
+        message: createSlateUserMessageInput({
+          text: args.text,
+          messageId: args.messageId ?? "",
+          ...(args.richText === undefined ? {} : { richText: args.richText }),
+          ...(selectedContext === undefined ? {} : { selectedContext }),
+        }),
+        earlierMessages,
+        notifyUser: false,
+      },
+      context: { privacyMode: PrivacyMode.UNSPECIFIED },
+    },
     automationStatusReminder: args.automationStatusReminder,
     automationStatusCompactionEpoch: args.automationStatusCompactionEpoch,
   };

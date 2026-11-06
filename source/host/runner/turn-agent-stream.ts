@@ -1,9 +1,9 @@
 /**
- * One turn's stream, from the generated action to the checkpoints around it.
+ * One turn's stream, from its Slate action to the checkpoints around it.
  *
  * There are two callers with different lifetimes, so this file owns the difference:
  *
- * - a **path** is built once and reused: the generated action is assembled, the Agent stream is started, and both are
+ * - a **path** is built once and reused: the Slate action is assembled, the Agent stream is started, and both are
  *   remembered, so asking it for the same run twice does not project or start again;
  * - a **lifecycle** runs once: every run projects the action and starts the stream for itself, because the projection
  *   carries per-turn identity (action, MCP discovery, state clone, redaction, generation guards) that must not be
@@ -13,6 +13,7 @@
  * attempt that owns checkpointing — so it is written once here and given to either caller.
  */
 import type { Context } from "../../packages/context/context.ts";
+import type { SlateAgentAction } from "../../packages/agent/agent-action-state.ts";
 import type { PrivacyMode } from "../../packages/redaction/privacy-mode.ts";
 import {
   createTurnAgentRunInputProjection,
@@ -41,7 +42,7 @@ export interface TurnStreamStartInput {
 /** What a reused path is built from: the Agent, how its action is made, its state, redaction and MCP tools. */
 export interface TurnStreamPathInput {
   readonly builtAgent: Pick<BuiltTurnAgentForRun, "agent">;
-  readonly assembleGeneratedTurnAction: (runCtx: Context) => Promise<AgentConversationAction>;
+  readonly assembleSlateTurnAction: (runCtx: Context) => Promise<AgentConversationAction | SlateAgentAction>;
   readonly getConversationState: () => AgentConversationState;
   readonly privacyMode: PrivacyMode;
   readonly mcp?: TurnAgentMcpTurnProvider;
@@ -76,7 +77,7 @@ export interface TurnStreamLifecycle {
 async function turnStreamStartFor(input: TurnStreamPathInput, runCtx: Context): Promise<TurnStreamStart> {
   const projected = await createTurnAgentRunInputProjection({
     runCtx,
-    createAction: input.assembleGeneratedTurnAction,
+    createAction: input.assembleSlateTurnAction,
     ...(input.mcp === undefined ? {} : { mcp: input.mcp }),
     ...(input.onMcpDiscoveryFailed === undefined ? {} : { onMcpDiscoveryFailed: input.onMcpDiscoveryFailed }),
     getConversationState: input.getConversationState,

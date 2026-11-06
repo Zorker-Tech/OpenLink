@@ -38,6 +38,7 @@ import {
 import type { Context } from "../../packages/context/context.ts";
 import { requestIdKey } from "../../adapters/interop/chat-inference-proto/client.ts";
 import { AgentRoot } from "../../packages/agent/index.ts";
+import { createSlateResumeAgentAction, type SlateAgentAction } from "../../packages/agent/agent-action-state.ts";
 import type { SlateConversationState } from "../../packages/agent/conversation-state.ts";
 import { SimplePromptToolExecutor } from "../../packages/agent/tool-stream-executor.ts";
 import { NoopConversationActionReceiver } from "../../packages/agent-core/conversation-actions/remote-receiver.ts";
@@ -51,9 +52,7 @@ import {
   restoreSlateConversationState,
   type InteropConversationAction,
   type InteropConversationState,
-  type RedactedAgentAction,
 } from "../../adapters/interop/agent/turn-agent-run-projection-adapter.ts";
-import { RESUME_TURN_ACTION } from "../../adapters/interop/agent/turn-resume-action-adapter.ts";
 import { SLATE_BOX_SHELL_TOOL_NAME, SLATE_EXTERNAL_SHELL_TOOL_NAME } from "../slate-activity.ts";
 import type { SummarizationPromptSession } from "../../packages/agent-summarization/summarization-handler.ts";
 import type { CloudAgentToolDeps } from "../cloud-agents/cloud-agent-tool.ts";
@@ -423,7 +422,7 @@ export interface BuiltTurnAgentForRun {
 export interface TurnAgentRunStreamInput {
   readonly attemptCtx: Context;
   readonly state: SlateConversationState;
-  readonly action: RedactedAgentAction;
+  readonly action: SlateAgentAction;
   readonly mcpTools: readonly unknown[];
   readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: InteropConversationState) => Promise<void> | void;
 }
@@ -431,7 +430,7 @@ export interface TurnAgentRunStreamInput {
 export interface TurnAgentStreamStartInput {
   readonly agent: Pick<BuiltTurnAgentForRun, "agent">;
   readonly baseState: InteropConversationState;
-  readonly action: InteropConversationAction;
+  readonly action: InteropConversationAction | SlateAgentAction;
   readonly privacyMode: PrivacyMode;
   readonly mcpTools: readonly unknown[];
 }
@@ -482,14 +481,14 @@ export interface TurnAgentMcpTurnProvider {
 
 export interface TurnAgentRunInputProjectionFactoryInput {
   readonly runCtx: Context;
-  readonly createAction: (runCtx: Context) => Promise<InteropConversationAction>;
+  readonly createAction: (runCtx: Context) => Promise<InteropConversationAction | SlateAgentAction>;
   readonly mcp?: TurnAgentMcpTurnProvider;
   readonly onMcpDiscoveryFailed?: (error: unknown) => void;
   readonly getConversationState: () => InteropConversationState;
 }
 
 export interface TurnAgentRunInputProjection {
-  readonly action: InteropConversationAction;
+  readonly action: InteropConversationAction | SlateAgentAction;
   readonly baseState: InteropConversationState;
   readonly mcpTools: readonly unknown[];
 }
@@ -520,7 +519,7 @@ export async function createTurnAgentRunInputProjection(input: TurnAgentRunInput
 export function createTurnAgentRunStreamInput(input: {
   readonly attemptCtx: Context;
   readonly baseState: InteropConversationState;
-  readonly action: InteropConversationAction;
+  readonly action: InteropConversationAction | SlateAgentAction;
   readonly resumeFrom?: InteropConversationState;
   readonly privacyMode: PrivacyMode;
   readonly mcpTools: readonly unknown[];
@@ -530,7 +529,7 @@ export function createTurnAgentRunStreamInput(input: {
     baseState: input.baseState,
     action: input.action,
     ...presentOptions({ resumeFrom: input.resumeFrom }),
-    resumeAction: RESUME_TURN_ACTION,
+    resumeAction: createSlateResumeAgentAction(),
     privacyMode: input.privacyMode,
   });
   return {
@@ -634,7 +633,7 @@ export interface TurnAgentConstructionInputs {
 export function createTurnAgentForRun(input: TurnAgentConstructionInputs): AgentRoot {
   const interactionListener = toRedactedInteractionListener(new ForwardingInteractionListener(input.emitUpdate, input.interactionObservers), input.privacyMode);
   const summarizationHandler = createSlateSummarizationHandler(input.summarizationSession, { preserveLatestImage: input.preserveLatestImage ?? false });
-  return new AgentRoot(input.config, input.toolSession, interactionListener, input.resourceAccessor, input.blobStore, summarizationHandler, new NoopConversationActionReceiver());
+  return new AgentRoot(input.config, input.toolSession, interactionListener, input.resourceAccessor, input.blobStore, summarizationHandler, new NoopConversationActionReceiver<SlateAgentAction>());
 }
 
 /** What the prompt builder is told about the model: the name, and that it is none of the special cases. */

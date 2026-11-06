@@ -499,9 +499,9 @@ test("no history at all is no messages", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("only the actions that change the kind of run keep that marker", () => {
-  assert.equal(shouldTrackAgentTypeChange("userMessageAction"), true)
-  assert.equal(shouldTrackAgentTypeChange("executePlanAction"), true)
-  assert.equal(shouldTrackAgentTypeChange("someOtherAction"), false)
+  assert.equal(shouldTrackAgentTypeChange("user-message"), true)
+  assert.equal(shouldTrackAgentTypeChange("execute-plan"), true)
+  assert.equal(shouldTrackAgentTypeChange("unsupported"), false)
   assert.equal(shouldTrackAgentTypeChange(undefined), false)
 })
 

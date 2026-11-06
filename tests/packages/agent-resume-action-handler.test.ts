@@ -9,6 +9,7 @@ import { createContext } from "../../source/packages/context/context.ts";
 import { AgentConversationTurnHandle } from "../../source/packages/agent/state.ts";
 import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts";
+import { createSlateResumeAgentAction } from "../../source/packages/agent/agent-action-state.ts";
 import { RequestContext, RequestContextResult, RequestContextSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts";
 
 function stateHandler(options: Record<string, unknown> = {}) {
@@ -172,3 +173,12 @@ test("the no-turn entries answer without touching the loop", async () => {
   assert.deepEqual(model.toolCallDescriptors, []);
   assert.deepEqual(calls, []);
 });
+
+test("the canonical Slate resume payload reaches the same no-turn setup path", async () => {
+  const ctx = createContext();
+  const handler = instance();
+  assert.deepEqual(
+    await handler.setupResumeStep(ctx, createSlateResumeAgentAction().payload, stateHandler(), {}),
+    { noTurns: true },
+  );
+})

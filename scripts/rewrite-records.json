@@ -265,8 +265,9 @@
     },
     "host/runner/inactive-turn-agent-stream.ts": {
       "claim": "rewritten",
-      "overlap": 0.5299145299145299,
-      "evidence": "Generated action/state types now enter the stream through a named Agent boundary contract adapter. host-runner-cycle.test.ts passes 19/19 across projection, lifecycle and runner contracts; work-host typecheck passes and interop tracking reports 73 direct consumers."
+      "overlap": 0.519,
+      "refreshReason": "Turn-stream assembly now accepts SlateAgentAction directly while retaining historical generated actions only as migration ingress.",
+      "evidence": "Turn-stream assembly accepts SlateAgentAction from first-party prompt assembly; retries and plan execution use canonical Slate payloads while historical actions pass through the migration adapter. Runner-cycle and action projection contracts pass; Work-host typecheck and the full Node 24 suite pass 9991/9991. Interop tracking reports 319 core imports across 223 files."
     },
     "host/extensions/action-audit/action-audit-backend.ts": {
       "claim": "rewritten",
@@ -2390,8 +2391,9 @@
     },
     "host/runner/production-turn-agent-owner.ts": {
       "claim": "rewritten",
-      "overlap": 0.7504051863857374,
-      "evidence": "Host runner-cycle and production run-shell contracts pass 21/21. The turn-state clone mutation is caught by a copy-isolation assertion. ConversationStateStructure type and clone now enter through the interop projection adapter; interop:check tracks 55 direct consumers, down from 56, with no new imports."
+      "overlap": 0.737,
+      "refreshReason": "Production prompt assembly now returns a typed Slate user-message action instead of a generated ConversationAction.",
+      "evidence": "The production owner now receives SlateTurnActionAssembly with typed user-message, resume and execute-plan payloads; historical checkpoint projection and clone isolation remain unchanged. Runner-cycle, Slate prompt assembly and action privacy projection contracts pass; Work-host typecheck and the full Node 24 suite pass 9991/9991. Interop tracking reports 319 core imports across 223 files."
     },
     "host/host-production-extensions.ts": {
       "claim": "rewritten",
@@ -2690,8 +2692,8 @@
     "host/runner/turn-agent-composition.ts": {
       "claim": "rewritten",
       "overlap": 0.7381209503239741,
-      "refreshReason": "The Agent and task subagent now use SlateConversationState; the runner projection adapter decodes old checkpoints before the call and encodes the returned Slate state at the runner edge.",
-      "evidence": "Focused host-runner-cycle, AgentRoot and task tests pass 35/35. The full Work-host suite passes 9972/9972 across 1427 suites under Node 24.14 with concurrency 1. Typecheck, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals) and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Turn composition carries SlateConversationState through AgentRoot while the runner adapter preserves the existing checkpoint format and callback behavior. Measured overlap is 0.7381209503239741 against 3704 baseline pairs."
+      "refreshReason": "Agent and task turn calls now use SlateConversationState and typed Slate user-message/resume/execute-plan payloads; historical actions and checkpoints are projected at the runner boundary.",
+      "evidence": "Runner-cycle, prompt assembly, action projection, resume handler and plan action suites pass; Work-host typecheck and the full Node 24 suite pass 9991/9991. Rewrite gate passes with 1204 claims below 0.8, zero floors and 40 removals; interop check reports 319 core imports across 223 files and zero direct proto consumers. Measured overlap is 0.7381209503239741 against 3704 baseline pairs."
     },
     "host/runner/slate-agent-runner.ts": {
       "claim": "rewritten",
@@ -2835,9 +2837,9 @@
     },
     "packages/agent/actions/user-message-action/user-message-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.7643818849449204,
-      "refreshReason": "The user-info refresh caller now uses the Slate-owned pull-request rule helper names; its split source group was remeasured after that API rename.",
-      "evidence": "agent-prepended-user-turns.test.ts and agent-user-info-refresh-plan.test.ts pin message bounds, duplicate suppression, block reuse, context refresh and reminder placement. utils.test.ts passes 22/22 and agent-user-info-refresh-plan.test.ts passes 7/7 for the helper rename; package typecheck passes."
+      "overlap": 0.75,
+      "refreshReason": "The main user-message path now consumes versioned SlateUserMessageActionPayload and SlateUserMessage values; only request context, pending-tool resolutions and imported history remain in a compatibility sidecar.",
+      "evidence": "The main handler consumes SlateUserMessageActionPayload and SlateUserMessage directly. agent-action-handlers.test.ts passes 16/16, including ordered earlier turns and privacy-tagged listener updates; prompt projection verifies text and selected-media redaction. Existing prepended-message bounds, duplicate suppression, user-info refresh and reminder suites remain covered. Work-host typecheck and the full Node 24 suite pass 9991/9991."
     },
     "host/cloud-agents/cloud-agent-tool.ts": {
       "claim": "rewritten",
@@ -2847,8 +2849,8 @@
     "packages/agent/actions/execute-plan-action-handler.ts": {
       "claim": "rewritten",
       "overlap": 0.7828947368421053,
-      "refreshReason": "The execution path now reads Slate's active plan record directly; generated plan actions and the virtual plan URI remain at the interop boundary.",
-      "evidence": "Agent-action-handler and plan adapter suites pass; the complete Work-host suite passes 9872/9872. Persisted plan text is exercised without planFileContent, and Slate chat mode, prompt generation, stored message projection and plan clearing remain unchanged. Generated plan actions and the virtual plan URI remain in interop adapters. Measured overlap is 0.7828947368421053 against 1520 baseline pairs."
+      "refreshReason": "The handler now consumes the versioned SlateExecutePlanActionPayload and Slate plan-mode vocabulary; only historical request context and unknown mode codes remain in the compatibility sidecar.",
+      "evidence": "Plan action adapter, handler, plan-file restoration, todo, simulated-turn, mode and unknown-code round-trip tests pass. The handler validates the Slate payload, decodes request context through its boundary adapter, preserves unknown numeric modes on the stored message, and retains saved-plan fallback and file restoration. Work-host typecheck and the full Node 24 suite pass 9991/9991. Measured overlap is 0.7828947368421053 against 1520 baseline pairs."
     },
     "packages/agent-summarization/durable-blocks.ts": {
       "claim": "rewritten",
@@ -2898,9 +2900,9 @@
     },
     "host/runner/production-turn-run-shell-adapter.ts": {
       "claim": "rewritten",
-      "overlap": 0.7804232804232805,
-      "refreshReason": "Moved checkpoint cloning to the Agent interop adapter and separated active-turn ownership into a Slate lease registry; the split source group includes both behaviors in its measurement.",
-      "evidence": "Production run-shell, lease-registry, runner-cycle and stream-attempt contracts pass 71/71; Work-host typecheck and the full Work-host suite pass under Node 24. Contracts pin cleanup after projection failure, active-turn-only update relay, generation/cancellation handling and commit of the disk-pressure reminder only after streaming completes."
+      "overlap": 0.77,
+      "refreshReason": "The production shell now passes assembleSlateTurnAction through the runner instead of the generated-action callback name.",
+      "evidence": "Production run-shell, lease-registry, runner-cycle and stream-attempt contracts pass; the shell now carries SlateTurnActionAssembly and Slate retry actions through its owner and stream path. Contracts pin cleanup after projection failure, active-turn-only update relay, generation/cancellation handling and commit of the disk-pressure reminder only after streaming completes. Work-host typecheck and the full Node 24 suite pass 9991/9991."
     },
     "packages/agent/utils/request-id.ts": {
       "claim": "rewritten",
@@ -3490,9 +3492,9 @@
     },
     "packages/agent/run-stream-lifecycle.ts": {
       "claim": "rewritten",
-      "overlap": 0.7083333333333334,
-      "refreshReason": "The lifecycle port accepts SlateConversationState and its typed runner checkpoint adapter projects into the legacy message at the host edge.",
-      "evidence": "agent-run.test.ts passes with Slate checkpoint inputs and typed runner output, covering flush-before-adapt ordering and failures that must not replace the action result. The full Work-host suite passes 9972/9972; TypeScript and interop gates pass. Measured overlap is 0.7083333333333334 against 144 baseline pairs."
+      "overlap": 0.6458333333333334,
+      "refreshReason": "Run lifecycle action policy now receives SlateAgentActionKind rather than counterpart oneof case strings.",
+      "evidence": "AgentRoot routing, queued-action checks, split-step metadata and lifecycle classification use Slate action kinds. Prompt-created user-message, canonical retry and execute-plan actions use versioned Slate payloads; other action families remain migration work. Action routing and runner regression suites pass, full Node 24 Work-host suite passes 9991/9991, and typecheck, rewrite-overlap and interop gates pass. Measured overlap is 0.6458333333333334 against 144 baseline pairs."
     },
     "packages/git-core/git-exec.ts": {
       "claim": "rewritten",

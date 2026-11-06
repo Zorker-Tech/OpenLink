@@ -11,7 +11,6 @@
 import {
   decodeIncomingRequestContext,
   decodeIncomingSlateUserMessage,
-  decodeIncomingUserMessage,
   shouldHideMcpMetaToolSnapshot,
 } from "../../../../adapters/interop/agent/user-message-action-input-adapter.ts";
 import { projectBackgroundAgentSource } from "../../../../adapters/interop/agent/background-agent-source-adapter.ts";
@@ -23,12 +22,12 @@ import { RedactedUpdates } from "../../../agent-core/redacted-interaction-update
 import { FileOperationLockManager } from "../../tools/core/file-operation-locks.ts";
 import { extractToolInfo } from "../../prompts/tool-info.ts";
 import { getBrowserToolNames } from "../../browser-tools.ts";
-import { fromInteropAgentMode, toInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
-import {
-  isRootProjectUserMessageFromInterop,
-} from "../../../../adapters/interop/agent/project-conversation-adapter.ts";
-import { shouldOmitCloudWorkerProcedure } from "../../utils/project-conversation.ts";
+import { toInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
+import { ProjectConversationBoundary } from "../../../constants/project-conversation.ts";
+import { isRootProjectUserMessage, shouldOmitCloudWorkerProcedure } from "../../utils/project-conversation.ts";
 import { resolveCurrentTurnMode, SlateMode } from "../../mode-processing.ts";
+import { isSlateUserMessageActionPayload, type SlateUserMessageActionPayload } from "../../agent-action-state.ts";
+import type { SlateUserMessage } from "../../user-message-state.ts";
 import {
   getNamedAgentSessionPromptContext,
   isNamedAgentHomePromptSession,
@@ -87,6 +86,47 @@ const postTurnStateDuration = createHistogram("agent.ttft.postTurnStateMs", {
   description: "Time for optional computeNewStructure + onStateUpdate after turn creation",
 });
 
+function userMessageActionPayloadFromInput(value: unknown): SlateUserMessageActionPayload {
+  if (isSlateUserMessageActionPayload(value)) return value
+  if (value === null || typeof value !== "object") {
+    return { schema: "slate.agent-action.user-message", version: 1, earlierMessages: [], notifyUser: false }
+  }
+  const action = value as Record<string, unknown>
+  const message = action.userMessage === undefined ? undefined : decodeIncomingSlateUserMessage(action.userMessage)
+  const earlierMessages = Array.isArray(action.prependUserMessages)
+    ? action.prependUserMessages.map(decodeIncomingSlateUserMessage)
+    : []
+  const requestContext = action.requestContext
+  const interruptedToolResolutions = action.interruptedPendingToolCallResolutions
+  const conversationHistory = action.conversationHistory
+  const compatibility = requestContext == null && interruptedToolResolutions == null && conversationHistory == null
+    ? undefined
+    : {
+        ...(requestContext == null ? {} : { requestContext }),
+        ...(interruptedToolResolutions == null ? {} : { interruptedToolResolutions }),
+        ...(conversationHistory == null ? {} : { conversationHistory }),
+      }
+  return {
+    schema: "slate.agent-action.user-message",
+    version: 1,
+    ...(message === undefined ? {} : { message }),
+    earlierMessages,
+    notifyUser: action.sendToInteractionListener === true,
+    ...(compatibility === undefined ? {} : { compatibility }),
+  }
+}
+
+function isRootSlateProjectMessage(message: SlateUserMessage): boolean {
+  const hasBoundary = message.projectDetails !== undefined || message.bestOfNGroupId !== undefined
+  const isRoot = message.bestOfNGroupId === undefined && message.projectDetails !== undefined &&
+    message.projectDetails.subagent === undefined && message.projectDetails.sideChat === undefined
+  return isRootProjectUserMessage({
+    ...(hasBoundary ? { projectBoundary: isRoot ? ProjectConversationBoundary.ROOT : ProjectConversationBoundary.RELATED } : {}),
+    mode: message.mode,
+    isSimulated: message.isSimulatedMsg === true,
+  })
+}
+
 function userInfoHasMultitaskEnterReminder(content: string): boolean {
   return userInfoHasMultitaskModeEnterReminder(content);
 }
@@ -104,12 +144,13 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     const configAny: Any = this.config;
     const promptBackgroundAgentSource = projectBackgroundAgentSource(configAny.backgroundAgentSource);
     const namedAgentSessionProps = { ...configAny, backgroundAgentSource: promptBackgroundAgentSource };
-    const { action, rootPromptExecutor, stateHandler, mcpTools, maxPrependedUserMessages, forcePrependedUserMessages, onStateUpdate } = params;
-    if (!action.userMessage) throw new Error("User message is required");
-    const userMessage = action.userMessage;
-    const resolvedTurnMode = resolveCurrentTurnMode(stateHandler.mode, fromInteropAgentMode(userMessage.mode));
+    const { action: actionInput, rootPromptExecutor, stateHandler, mcpTools, maxPrependedUserMessages, forcePrependedUserMessages, onStateUpdate } = params;
+    const action = userMessageActionPayloadFromInput(actionInput);
+    if (!action.message) throw new Error("User message is required");
+    const userMessage = action.message;
+    const resolvedTurnMode = resolveCurrentTurnMode(stateHandler.mode, userMessage.mode);
     const interopTurnMode = toInteropAgentMode(resolvedTurnMode);
-    const isRootProject = isRootProjectUserMessageFromInterop(userMessage);
+    const isRootProject = isRootSlateProjectMessage(userMessage);
     const omitCloudWorkerProcedure = shouldOmitCloudWorkerProcedure({
       gateEnabled: configAny.featureFlags?.projectRootCoordinatorPrompt === true,
       agentType: configAny.agentType,
@@ -119,12 +160,13 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
       isRootProject,
     });
     if (isRootProject) stateHandler.isRootProjectConversation = true;
-    const sendToInteractionListener = action.sendToInteractionListener === true;
+    const sendToInteractionListener = action.notifyUser;
     const hasExistingNonSystemMessages = rootPromptExecutor.getMessages().some((message: Any) => message.role !== "system");
     const getRequestContextStart = performance.now();
+    const maybeRequestContext = action.compatibility?.requestContext;
     const { requestContext, provenance: requestContextProvenance } = await resolveRequestContext({
       parentCtx: ctx,
-      ...(action.requestContext ? { maybeRequestContext: decodeIncomingRequestContext(action.requestContext) } : {}),
+      ...(maybeRequestContext ? { maybeRequestContext: decodeIncomingRequestContext(maybeRequestContext) } : {}),
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(configAny),
     });
@@ -158,7 +200,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     };
     const isProjectKickoffBeforePrepends = userMessage.projectDetails !== undefined && userMessage.projectDetails.sideChat === undefined && stateHandler.turns.length === 0;
     const prependedMessagesStart = performance.now();
-    const prependedSelection = action.prependUserMessages ?? [];
+    const prependedSelection = action.earlierMessages;
     const prependedEnabled = configAny.enablePrependedUserActions || forcePrependedUserMessages;
     const selectedPrepends = selectRecentPrependedMessages(prependedSelection, maxPrependedUserMessages).retained;
     const prependedNamedAgentUserTurnReminder = !prependedEnabled || selectedPrepends.length === 0
@@ -179,15 +221,15 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         warn: (event, fields) => logger70.warn(ctx, event, fields),
         info: (event, fields) => logger70.info(ctx, event, fields),
       },
-      decode: decodeIncomingUserMessage,
+      decode: (message) => message,
       messageIdOf: (message) => message.messageId,
       existingMessageIds: (context) => stateHandler.getUserTurnMessageIdsIndex(context),
       ...(sendToInteractionListener
-        ? { publish: async (context: Any, message: Any) => this.interactionListener.sendUpdate(context, RedactedUpdates.userMessageAppended(message)) }
+        ? { publish: async (context: Any, message: SlateUserMessage) => this.interactionListener.sendUpdate(context, RedactedUpdates.slateUserMessageAppended(message, stateHandler.getPrivacyMode())) }
         : {}),
       createTurn: (context, message, turnOptions) => stateHandler.createAgentTurn(
         context,
-        decodeIncomingSlateUserMessage(message),
+        message,
         requestContext,
         configAny,
         this.resourceAccessor,
@@ -253,7 +295,8 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
       firstUserInfoContent,
       userInfoAlreadyHasMultitaskEnterReminder,
     });
-    const shouldReplaceUserInfoWithImportedHistory = action.conversationHistory?.replaceUserInfo === true && action.conversationHistory.messages.length > 0;
+    const legacyConversationHistory = action.compatibility?.conversationHistory as Any;
+    const shouldReplaceUserInfoWithImportedHistory = legacyConversationHistory?.replaceUserInfo === true && legacyConversationHistory.messages.length > 0;
     const userInfoPlan = evaluateUserInfoRefresh({
       priorMessages,
       hasExistingNonSystemMessages,
@@ -344,15 +387,28 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
       newMessages.push({ role: "user", content: userInfoContent, providerOptions: { cursor: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { composer2CloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } } });
     }
     const effectivePriorMessages = didReplaceUserInfo ? priorMessages.slice(1) : priorMessages;
-    const conversationHistoryMessages = deserializeConversationHistoryMessages(action, stateHandler.getPrivacyMode());
-    const interruptedPendingToolCallMessages = buildInterruptedPendingToolCallMessages(stateHandler, getExecutableTools(toolSetHandle.getToolExecutionSet()), action.interruptedPendingToolCallResolutions, requestContext.env?.terminalsFolder);
+    const conversationHistoryMessages = deserializeConversationHistoryMessages(
+      legacyConversationHistory === undefined ? {} : { conversationHistory: legacyConversationHistory },
+      stateHandler.getPrivacyMode(),
+    );
+    const interruptedPendingToolCallMessages = buildInterruptedPendingToolCallMessages(
+      stateHandler,
+      getExecutableTools(toolSetHandle.getToolExecutionSet()),
+      action.compatibility?.interruptedToolResolutions,
+      requestContext.env?.terminalsFolder,
+    );
     rootPromptExecutor.clearMessages();
     rootPromptExecutor.appendMessages(toRedactedCoreMessages(newMessages, stateHandler.getPrivacyMode()));
     rootPromptExecutor.appendMessages([...conversationHistoryMessages, ...effectivePriorMessages, ...interruptedPendingToolCallMessages]);
     systemPromptGenerationDuration.histogram(ctx, performance.now() - systemPromptStart);
-    if (sendToInteractionListener) await this.interactionListener.sendUpdate(ctx, RedactedUpdates.userMessageAppended(userMessage));
+    if (sendToInteractionListener) {
+      await this.interactionListener.sendUpdate(
+        ctx,
+        RedactedUpdates.slateUserMessageAppended(userMessage, stateHandler.getPrivacyMode()),
+      );
+    }
     const createMainTurnStart = performance.now();
-    const turn = await stateHandler.createAgentTurn(ctx, decodeIncomingSlateUserMessage(userMessage), requestContext, configAny, this.resourceAccessor, {
+    const turn = await stateHandler.createAgentTurn(ctx, userMessage, requestContext, configAny, this.resourceAccessor, {
       additionalUserTurnSystemReminder: namedAgentUserTurnReminder,
       ...(isProjectKickoffBeforePrepends ? { isProjectKickoff: true } : {}),
       ...dynamicToolTurnOptions,

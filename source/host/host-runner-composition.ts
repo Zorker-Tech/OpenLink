@@ -84,7 +84,7 @@ import { createProductionTurnAgentOwner, createProductionTurnAgentRunInput, type
 import { createProductionTurnRunShellHostInput } from "./runner/production-turn-run-shell-adapter.ts";
 import { createPromptCollectorGlue, type PromptCollectorHost } from "./runner/prompt-collector-glue.ts";
 import { interopTurnPromptOptionsFromRunner } from "../adapters/interop/agent/prompt-action-adapter.ts";
-import type { InteropTurnPromptOptions as GeneratedTurnPromptOptions } from "../adapters/interop/agent/prompt-action-adapter.ts";
+import type { InteropTurnPromptOptions } from "../adapters/interop/agent/prompt-action-adapter.ts";
 import type { ShellTerminalWatchHost } from "./runner/shell-terminal-watch.ts";
 import { createShellWatchGeneratedStateProjection, createShellWatchReadAccessor } from "../adapters/interop/agent/shell-terminal-watch-adapter.ts";
 import { DEFAULT_SLATE_SYSTEM_PROMPT } from "./runner/system-prompt.ts";
@@ -1625,7 +1625,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
           } satisfies ProductionTurnAgentOwnerInput;
         },
         promptOptions: (_prompt, options) => interopTurnPromptOptionsFromRunner(options),
-        assembleGeneratedTurnAction: productionPromptGlue.assembleGeneratedTurnAction,
+        assembleSlateTurnAction: productionPromptGlue.assembleSlateTurnAction,
         compactionEpoch: () => 0,
         getConversationState: getProductionConversationState,
         createSession: (owner) => ({

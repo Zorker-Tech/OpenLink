@@ -429,6 +429,17 @@ export function redactSlateUserMessage(
   })
 }
 
+/** Builds the legacy interaction update carrier at the listener edge from Slate-owned message data. */
+export function slateUserMessageUpdateCarrier(
+  message: SlateUserMessage,
+  privacyMode: import("../../../packages/redaction/privacy-mode.ts").PrivacyMode,
+): Readonly<Record<string, unknown>> & { readonly _privacyMode: import("../../../packages/redaction/privacy-mode.ts").PrivacyMode } {
+  const redacted = redactSlateUserMessage(message, privacyMode)
+  return Object.assign({ _privacyMode: privacyMode }, toInteropUserMessage(redacted)) as unknown as Readonly<Record<string, unknown>> & {
+    readonly _privacyMode: import("../../../packages/redaction/privacy-mode.ts").PrivacyMode
+  }
+}
+
 export function createEmptyRequestContextInterop(): RequestContextInterop {
   return new RequestContext()
 }

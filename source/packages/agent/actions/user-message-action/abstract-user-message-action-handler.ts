@@ -9,11 +9,11 @@ import {
   fromRedactedMcpToolDefinitionInterop,
   fromRedactedRequestContextInterop,
   fromRedactedToolCallInterop,
-  fromRedactedUserMessageInterop,
   toRedactedInteractionUpdateInterop,
   toRedactedToolCallInterop,
   type RequestContextInterop,
 } from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
+import { isSlateUserMessageActionPayload } from "../../agent-action-state.ts";
 import type { Context } from "../../../context/context.ts";
 import type { SlateConversationStep } from "../../conversation-step-state.ts";
 import {
@@ -67,6 +67,7 @@ import { mcpInputSchemaToJson, type McpInputSchemaLike } from "../../../agent-ex
 import { getInvocationId } from "../../utils/invocation-id.ts";
 import { computeNextPromptContextDetails } from "../../utils/next-redacted-prompt-context-details.ts";
 import type { SlateConversationState, SlateConversationTokenDetails } from "../../conversation-state.ts";
+import type { SlateAgentAction } from "../../agent-action-state.ts";
 import type { PromptTokenBreakdownParams } from "../../utils/prompt-token-breakdown.ts";
 import {
   resolveCurrentStepMode,
@@ -930,28 +931,8 @@ interface UserMessageActionHandlerConfigLike {
 
 type UserMessageActionHandlerConfig = UserMessageActionHandlerConfigLike & AgentConfigTooling;
 
-interface RedactedActionCarrier {
-  readonly _privacyMode: PrivacyMode;
-  readonly [key: string]: unknown;
-}
-
-interface RedactedUserMessageActionValue extends RedactedActionCarrier {
-  readonly userMessage?: Parameters<typeof fromRedactedUserMessageInterop>[0];
-  readonly requestContext?: {
-    readonly tools?: readonly Parameters<typeof fromRedactedMcpToolDefinitionInterop>[0][];
-  };
-}
-
-type RedactedConversationActionOneof =
-  | { readonly case: "asyncAskQuestionCompletionAction"; readonly value: AskQuestionCompletionAction }
-  | { readonly case: "userMessageAction"; readonly value: RedactedUserMessageActionValue }
-  | { readonly case: "resumeAction" | "cancelAction" | "summarizeAction" | "shellCommandAction" | "startPlanAction" | "executePlanAction" | "cancelSubagentAction" | "backgroundTaskCompletionAction" | "backgroundShellAction" | "backgroundSubagentAction" | "subscriptionNotificationAction" | "goalContinuationAction" | "injectContextAction"; readonly value: RedactedActionCarrier }
-  | { readonly case: undefined; readonly value?: undefined };
-
-type RedactedConversationAction = { readonly action: RedactedConversationActionOneof };
-
 interface ConversationActionReceiverLike {
-  peek(runContext: Context): Promise<{ readonly action: RedactedConversationAction["action"] } | undefined>;
+  peek(runContext: Context): Promise<{ readonly action: SlateAgentAction } | undefined>;
   pop(runContext: Context): Promise<undefined>;
   peekIsClaimedInjection?(): boolean;
   failConsumedInjectionDelivery?(): void;
@@ -2647,12 +2628,12 @@ export class AbstractUserMessageActionHandler {
           let hasQueuedUserTurn = false;
           let updatedMcpTools = currentMcpTools;
           const queuedAction = await this.conversationActionReceiver.peek(runContext);
-          if (queuedAction?.action.case === "asyncAskQuestionCompletionAction") {
+          if (queuedAction?.action.kind === "ask-question-completion") {
             agentLogger.info(runContext, "Found queued AsyncAskQuestionCompletionAction - processing immediately", {
-              originalToolCallId: queuedAction.action.value.originalToolCallId,
+              originalToolCallId: (queuedAction.action.payload as AskQuestionCompletionAction).originalToolCallId,
             });
             await this.conversationActionReceiver.pop(runContext);
-            const completionAction = queuedAction.action.value;
+            const completionAction = queuedAction.action.payload as AskQuestionCompletionAction;
             const application = await applyAskQuestionCompletion(runContext, {
               action: completionAction,
               stateHandler: turnState,
@@ -2998,12 +2979,17 @@ export class AbstractUserMessageActionHandler {
     let mcpToolSet = [...currentMcpTools];
     while (true) {
       const queuedAction = await this.conversationActionReceiver.peek(runContext);
-      if (queuedAction?.action.case === "asyncAskQuestionCompletionAction") {
-        agentLogger.warn(runContext, "Found AsyncAskQuestionCompletionAction in queue handler - should have been handled by inline handler", { originalToolCallId: queuedAction.action.value.originalToolCallId });
+      if (queuedAction?.action.kind === "ask-question-completion") {
+        agentLogger.warn(runContext, "Found AsyncAskQuestionCompletionAction in queue handler - should have been handled by inline handler", { originalToolCallId: (queuedAction.action.payload as AskQuestionCompletionAction).originalToolCallId });
         break;
       }
-      if (queuedAction?.action.case !== "userMessageAction") break;
-      const { userMessage: queuedMsg, requestContext: queuedReqContext } = queuedAction.action.value;
+      if (queuedAction?.action.kind !== "user-message") break;
+      if (!isSlateUserMessageActionPayload(queuedAction.action.payload)) throw new Error("User message is required");
+      const queuedUserMessageAction = queuedAction.action.payload;
+      const queuedMsg = queuedUserMessageAction.message;
+      const queuedReqContext = queuedUserMessageAction.compatibility?.requestContext as {
+        readonly tools?: readonly unknown[]
+      } | undefined;
       if (queuedMsg === undefined) throw new Error("User message is required");
       let consumedClaimedInjection = false;
       if (this.conversationActionReceiver.peekIsClaimedInjection?.() === true) {
@@ -3017,8 +3003,17 @@ export class AbstractUserMessageActionHandler {
       }
       if (shouldCreateNewTurn) {
         try {
-          await this.interactionListener.sendUpdate(runContext, RedactedUpdates.userMessageAppended(queuedMsg));
-          conversationTurn = await turnState.createAgentTurn(runContext, fromInteropUserMessage(fromRedactedUserMessageInterop(queuedMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)), queuedReqContext === undefined ? createEmptyRequestContextInterop() : fromRedactedRequestContextInterop(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined), this.config, this.resourceAccessor);
+          await this.interactionListener.sendUpdate(
+            runContext,
+            RedactedUpdates.slateUserMessageAppended(queuedMsg, queuedAction.action.context.privacyMode),
+          );
+          conversationTurn = await turnState.createAgentTurn(
+            runContext,
+            queuedMsg,
+            queuedReqContext === undefined ? createEmptyRequestContextInterop() : fromRedactedRequestContextInterop(queuedReqContext, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined),
+            this.config,
+            this.resourceAccessor,
+          );
         } catch (error) {
           if (consumedClaimedInjection) this.conversationActionReceiver.failConsumedInjectionDelivery?.();
           throw error;

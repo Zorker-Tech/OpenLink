@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  ConversationAction,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import {
@@ -12,7 +11,7 @@ import {
 import type { SlateImageAttachment } from "../../source/packages/agent/context/image-attachment-contracts.ts"
 import type { SlateVideoAttachment } from "../../source/packages/agent/context/video-attachment-contracts.ts"
 import {
-  generatedTurnActionFromSlate,
+  slateTurnActionFromPrompt,
   hydrateInteropSelectedVideos,
   interopTurnPromptOptionsFromRunner,
 } from "../../source/adapters/interop/agent/prompt-action-adapter.ts";
@@ -78,7 +77,7 @@ describe("prompt action interop adapter", () => {
 
   it("encodes the Slate message, selected context and follow-up messages once at the boundary", () => {
     const prepended = new UserMessage({ text: "prior message" });
-    const result = generatedTurnActionFromSlate({
+    const result = slateTurnActionFromPrompt({
       text: "hello",
       messageId: "message-2",
       richText: "<p>hello</p>",
@@ -89,15 +88,16 @@ describe("prompt action interop adapter", () => {
       automationStatusReminder: null,
       automationStatusCompactionEpoch: 4,
     });
-    assert.ok(result.action instanceof ConversationAction);
-    assert.equal(result.action.action.case, "userMessageAction");
-    if (result.action.action.case === "userMessageAction") {
-      const { userMessage, prependUserMessages } = result.action.action.value;
-      assert.ok(userMessage);
-      assert.deepEqual([userMessage.text, userMessage.messageId, userMessage.richText], ["hello", "message-2", "<p>hello</p>"]);
-      assert.equal(userMessage.selectedContext?.selectedImages.length, 1);
-      assert.equal(prependUserMessages[0], prepended);
-      assert.equal(prependUserMessages[1]?.text, "Unanswered questions:\n- where?");
-    }
+    assert.equal(result.action.kind, "user-message");
+    assert.equal(result.action.payload.schema, "slate.agent-action.user-message");
+    assert.equal(result.action.payload.version, 1);
+    assert.deepEqual([
+      result.action.payload.message?.text,
+      result.action.payload.message?.messageId,
+      result.action.payload.message?.richText,
+    ], ["hello", "message-2", "<p>hello</p>"]);
+    assert.equal(result.action.payload.message?.selectedContext?.media.images.length, 1);
+    assert.equal(result.action.payload.earlierMessages[0]?.text, "prior message");
+    assert.equal(result.action.payload.earlierMessages[1]?.text, "Unanswered questions:\n- where?");
   });
 });

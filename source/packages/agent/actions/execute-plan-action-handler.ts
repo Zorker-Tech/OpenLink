@@ -15,7 +15,7 @@ import {
   createExecutePlanPlanFileIO,
   createPlanExecutionMessage,
   createPlanRegistryEntry,
-  decodeExecutePlanAction,
+  decodePlanRequestContext,
   toInteropAgentMode,
   toSlatePlanTodos,
 } from "../../../adapters/interop/agent/execute-plan-action-adapter.ts";
@@ -25,7 +25,7 @@ import type {
   PlanExecutionMode,
   PlanExecutionRequest,
 } from "./execute-plan-contracts.ts";
-import { slateModeForPlanExecutionMode } from "./execute-plan-contracts.ts";
+import { isSlateExecutePlanActionPayload, slateModeForPlanExecutionMode } from "./execute-plan-contracts.ts";
 import { collectPlanTodoDrafts } from "./execute-plan-frontmatter.ts";
 import { fromRedactedCoreMessage, toRedactedCoreMessages } from "../../redaction/message-redaction.ts";
 import { createRedactedString } from "../../redaction/create.ts";
@@ -119,13 +119,15 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     const configAny: Any = this.config;
     const promptBackgroundAgentSource = projectBackgroundAgentSource(configAny.backgroundAgentSource);
     const namedAgentSessionProps = { ...configAny, backgroundAgentSource: promptBackgroundAgentSource };
-    const planAction = decodeExecutePlanAction(action);
+    if (!isSlateExecutePlanActionPayload(action)) throw new TypeError("Slate execute-plan action payload is invalid");
+    const planAction: PlanExecutionRequest = action;
     const executionMode: PlanExecutionMode = planAction.mode;
-    const interopMode = toInteropAgentMode(executionMode);
+    const legacyRequestContext = planAction.compatibility?.requestContext;
+    const interopMode = toInteropAgentMode(executionMode, planAction.compatibility?.legacyModeCode);
     const slateMode = slateModeForPlanExecutionMode(executionMode);
     const { requestContext, provenance: requestContextProvenance } = await resolveRequestContext({
       parentCtx: ctx,
-      ...(planAction.requestContext !== undefined ? { maybeRequestContext: planAction.requestContext as Any } : {}),
+      ...(legacyRequestContext !== undefined ? { maybeRequestContext: decodePlanRequestContext(legacyRequestContext) } : {}),
       resources: this.resourceAccessor,
       options: buildRequestContextOptions(configAny),
     });
@@ -281,6 +283,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
       planPath: selectedPlanPath,
       planTitle: planTitle.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
       executionMode,
+      ...(planAction.compatibility?.legacyModeCode === undefined ? {} : { legacyModeCode: planAction.compatibility.legacyModeCode }),
       rootProject: isRootProject,
       planId: planAction.id,
       listenerPrivacyMode: stateHandler.getPrivacyMode(),
