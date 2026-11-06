@@ -4403,9 +4403,9 @@
     },
     "packages/agent/actions/goal-continuation-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.6357615894039735,
-      "refreshReason": "Goal lifecycle status and active-time state now use Slate records; only wakeup-message envelope construction remains in interop.",
-      "evidence": "agent-goal-continuation-handler.test.ts and agent-plan-and-goal-actions.test.ts pass 32/32; the complete Work-host suite passes 9872/9872. Tests cover ownership, pauses, synthetic wakeups, active-time accrual, streak clearing and all turn entry points. Interop debt is 347 imports across 227 files. Measured overlap is 0.6357615894039735 against 604 baseline pairs."
+      "overlap": 0.6192052980132451,
+      "refreshReason": "Replaced the internal generated wake action with a Slate user-message payload and a versioned goal-continuation trigger; the wakeup constructor and route contract now live with the Slate handler.",
+      "evidence": "Goal-continuation route and turn-entry suites pass 146/146; the full Work-host suite passes 10002/10002 under Node 24. Work-host typecheck, rewrite and interop gates pass. Slate constructs the synthetic user-message action directly, and the obsolete generated-message adapter was removed. Core interop imports are 318 across 222 files. Measured overlap is 0.6192052980132451 against 604 baseline pairs."
     },
     "packages/agent/tools/mcp/builtin-tools.ts": {
       "claim": "rewritten",

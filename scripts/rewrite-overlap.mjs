@@ -149,7 +149,6 @@ const EXEMPT = [
   ["adapters/interop/agent/read-tool-protocol-adapter.ts", "interop adapter: converts Slate read contracts to and from counterpart executor and transcript messages"],
   ["adapters/interop/agent/read-exec-operation-adapter.ts", "interop adapter: binds ordinary and privacy-filtered read operations to the counterpart executor message cases"],
   ["adapters/interop/agent/send-message-tool-protocol-adapter.ts", "interop adapter: constructs generated message payloads and tool-call envelopes for the send operation"],
-  ["adapters/interop/agent/goal-continuation-message-adapter.ts", "interop adapter: encodes Slate goal wakeups as the generated user-message and redacted action envelopes"],
   ["adapters/interop/agent/interrupted-tool-resolution-adapter.ts", "interop adapter: decodes generated redacted interrupted-call resolutions and projects their results"],
   ["adapters/interop/agent/plan-file-read-adapter.ts", "interop adapter: encodes plan-file reads as generated executor requests and projects text results"],
   ["adapters/interop/agent/background-shell-operation-adapter.ts", "interop adapter: binds background-shell start and input operations to their generated executor message cases"],
@@ -1001,7 +1000,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
     "adapters/interop/agent/async-ask-question-completion-adapter.ts",
   ]],
   ["packages/agent/actions/goal-continuation-action-handler.ts", [
-    "adapters/interop/agent/goal-continuation-message-adapter.ts",
+    "packages/agent/actions/goal-continuation-contracts.ts",
   ]],
   ["packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts", [
     "adapters/interop/agent/interrupted-tool-resolution-adapter.ts",

@@ -14,6 +14,10 @@ import {
   type SlateCancelActionPayload,
 } from "../../source/packages/agent/actions/cancel-action-contracts.ts"
 import {
+  createSlateGoalContinuationActionPayload,
+  isSlateGoalContinuationActionPayload,
+} from "../../source/packages/agent/actions/goal-continuation-contracts.ts"
+import {
   isSlateBackgroundTaskCompletionActionPayload,
   type SlateBackgroundTaskCompletionActionPayload,
 } from "../../source/packages/agent/actions/background-task-completion-contracts.ts"
@@ -74,6 +78,8 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.equal(isSlateBackgroundTaskCompletionActionPayload(payload), true)
       assert.deepEqual(payload.completions, [])
       assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "goalContinuationAction") {
+      assert.equal(isSlateGoalContinuationActionPayload(action.payload), true)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
@@ -256,4 +262,11 @@ test("summarize actions use Slate's versioned empty request", () => {
   assert.deepEqual(payload, { schema: "slate.agent-action.summarize", version: 1 })
   assert.equal(isSlateSummarizeActionPayload(payload), true)
   assert.equal(isSlateSummarizeActionPayload({ ...payload, version: 2 }), false)
+})
+
+test("goal continuation routes use Slate's versioned wake trigger", () => {
+  const payload = createSlateGoalContinuationActionPayload()
+  assert.deepEqual(payload, { schema: "slate.agent-action.goal-continuation", version: 1 })
+  assert.equal(isSlateGoalContinuationActionPayload(payload), true)
+  assert.equal(isSlateGoalContinuationActionPayload({ ...payload, version: 2 }), false)
 })

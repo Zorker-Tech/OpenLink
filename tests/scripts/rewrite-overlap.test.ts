@@ -1479,15 +1479,15 @@ describe("rewrite overlap gate inputs", () => {
     assert.equal(exemptSourceReason("adapters/interop/agent/paused-goal-state-adapter.ts"), undefined);
   });
 
-  it("keeps goal continuation message envelopes in interop", () => {
+  it("scores goal continuation wakeups as a Slate-owned user-message action", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/actions/goal-continuation-action-handler.ts",
       rewritten: "source/packages/agent/actions/goal-continuation-action-handler.ts",
     }), [
       "packages/agent/actions/goal-continuation-action-handler.ts",
-      "adapters/interop/agent/goal-continuation-message-adapter.ts",
+      "packages/agent/actions/goal-continuation-contracts.ts",
     ]);
-    assert.match(exemptSourceReason("adapters/interop/agent/goal-continuation-message-adapter.ts") ?? "", /interop adapter/);
+    assert.equal(exemptSourceReason("adapters/interop/agent/goal-continuation-message-adapter.ts"), undefined);
   });
 
   it("keeps background-shell executor cases in the interop adapter", () => {

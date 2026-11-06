@@ -20,8 +20,13 @@
 
 import * as crypto from "node:crypto"
 
-import { createGoalContinuationWakeAction } from "../../../adapters/interop/agent/goal-continuation-message-adapter.ts"
 import { pauseGoalState } from "../goal-state.ts"
+import {
+  createSlateGoalContinuationActionPayload,
+  createSlateGoalContinuationWakeUserMessageAction,
+  isSlateGoalContinuationActionPayload,
+  type SlateGoalContinuationActionPayload,
+} from "./goal-continuation-contracts.ts"
 import { SYSTEM_NOTIFICATION_TAG } from "../../constants/system-notification.ts"
 import { goalClockOnDeactivation, isGoalStateShapeValid } from "../../agent-core/goal-continuation.ts"
 import { buildGoalPursuitGuidelines } from "../../agent-core/goal-guidelines.ts"
@@ -139,7 +144,7 @@ export class GoalContinuationActionHandler {
     stateHandler.setGoalState(continuedGoal)
     recordGoalContinuationStarted(callContext)
     await onStateUpdate(callContext, await stateHandler.computeNewStructure(callContext))
-    return createGoalContinuationWakeAction({
+    return createSlateGoalContinuationWakeUserMessageAction({
       text: buildGoalContinuationPrompt({
         goalState,
         ...currentToolNames,
@@ -147,12 +152,14 @@ export class GoalContinuationActionHandler {
       messageId: (0, crypto.randomUUID)(),
       // Continue in whatever mode the conversation is in; goals are not agent-mode-only.
       mode: stateHandler.mode,
-      getActionPrivacyMode: () => stateHandler.getPrivacyMode(),
-      getMessagePrivacyMode: () => stateHandler.getPrivacyMode(),
+      privacyMode: stateHandler.getPrivacyMode(),
     })
   }
 
-  async handle(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+  async handle(callContext: Any, action: SlateGoalContinuationActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    if (!isSlateGoalContinuationActionPayload(action)) {
+      throw new TypeError("Goal continuation action must use the Slate v1 contract")
+    }
     const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
       return stateHandler.computeNewStructure(callContext)
@@ -184,7 +191,10 @@ export class GoalContinuationActionHandler {
     return nextStructure
   }
 
-  async handleSingleStep(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+  async handleSingleStep(callContext: Any, action: SlateGoalContinuationActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    if (!isSlateGoalContinuationActionPayload(action)) {
+      throw new TypeError("Goal continuation action must use the Slate v1 contract")
+    }
     const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
       return {
@@ -203,7 +213,10 @@ export class GoalContinuationActionHandler {
     }
   }
 
-  async handleModelStep(callContext: Any, _action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+  async handleModelStep(callContext: Any, action: SlateGoalContinuationActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+    if (!isSlateGoalContinuationActionPayload(action)) {
+      throw new TypeError("Goal continuation action must use the Slate v1 contract")
+    }
     const adapted = await this.adaptAction(callContext, stateHandler, mcpTools, onStateUpdate)
     if (adapted === undefined) {
       return {
