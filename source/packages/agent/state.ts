@@ -33,11 +33,9 @@ import {
   redactSlateConversationSummary,
   redactSlateConversationSummaryArchive,
   fromInteropToolCallStep,
-  fromInteropConversationState,
   attachProcessedSelectedMediaToSlateContext,
   type AgentStateGitRepoInfoInterop,
   type AgentStateRequestContextInterop,
-  type RedactedAgentConversationStateInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
@@ -1378,17 +1376,17 @@ export class ConversationStateHandle {
     }
   }
 
-  static async fromConversationStateStructure(
+  static async fromSlateConversationState(
     ctx: OperationContext,
     blobStore: BlobStore<OperationContext>,
-    conversationStateInterop: RedactedAgentConversationStateInterop,
+    conversationState: SlateConversationState,
     rootPromptBuilder: RestorePromptBuilder,
     formattingOptions: unknown,
     modelId: string | undefined,
     runtimeAgentType: ReturnType<typeof resolveAgentType>,
     restoreOptions?: RestoreSettings,
   ): Promise<ConversationStateHandle> {
-    const conversationStateStructure = fromInteropConversationState(conversationStateInterop)
+    const conversationStateStructure = conversationState
     const restoreEnv: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
       const span = createSpan(ctx.withName("fromConversationStateStructure"));
@@ -1470,7 +1468,7 @@ export class ConversationStateHandle {
       const promptPhaseMs = performance.now() - promptPhaseStart;
       const fileSpan = createSpan(span.ctx.withName("loadFileStates"));
       const quietFileCtx = withSuppressedChildSpans(fileSpan.ctx);
-      const state = new ConversationStateHandle(blobStore, conversationStateInterop, rootPromptBuilder, formattingOptions, modelId, restoreOptions);
+      const state = new ConversationStateHandle(blobStore, conversationState, rootPromptBuilder, formattingOptions, modelId, restoreOptions);
       const subagentPhaseStart = performance.now();
       await state.loadSubagentStateRefs(quietFileCtx);
       const subagentPhaseMs = performance.now() - subagentPhaseStart;
@@ -1564,14 +1562,14 @@ export class ConversationStateHandle {
 
   constructor(
     blobStore: BlobStore<OperationContext>,
-    conversationStateInterop: RedactedAgentConversationStateInterop,
+    conversationState: SlateConversationState,
     rootPromptBuilder: RestorePromptBuilder,
     formattingOptions: unknown,
     modelId: string | undefined,
     restoreOptions?: RestoreSettings,
   ) {
     this.blobStore = blobStore;
-    this.conversationStateStructure = fromInteropConversationState(conversationStateInterop);
+    this.conversationStateStructure = conversationState;
     this.rootPromptBuilder = rootPromptBuilder;
     this.formattingOptions = formattingOptions;
     this.modelId = modelId;

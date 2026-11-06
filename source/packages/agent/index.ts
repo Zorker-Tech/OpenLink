@@ -21,7 +21,7 @@ import { withLogAttributes, createSpan } from "../context/index.ts";
 import { createHistogram } from "../metrics/index.ts";
 import { PrivacyMode } from "../redaction/privacy-mode.ts";
 import {
-  redactAgentConversationState,
+  restoreSlateConversationState,
   restoreAgentConversationState,
 } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
 import { redactInteractionUpdate } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
@@ -127,9 +127,10 @@ export class AgentRoot {
     if (this.config.conversationId !== undefined) ctx = ctx.with(conversationIdKey, this.config.conversationId);
     if (this.config.isBackground === true) ctx = ctx.with(bubbleRetryableTaskErrorsKey, true);
     const baseExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
+    const slateState = restoreSlateConversationState(state);
     let rootPromptImagePresence: Any;
     const restoreStartedAt = performance.now();
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(action.action?.case), loadRootPromptBlobs: true, ...(options?.onRootPromptImagePresence === undefined ? {} : { onRootPromptImagePresence: (value: Any) => { rootPromptImagePresence = value; } }) }));
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, slateState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(action.action?.case), loadRootPromptBlobs: true, ...(options?.onRootPromptImagePresence === undefined ? {} : { onRootPromptImagePresence: (value: Any) => { rootPromptImagePresence = value; } }) }));
     const stateRestoreMs = performance.now() - restoreStartedAt;
     restoreHistogram.histogram(ctx, stateRestoreMs);
     options?.onStateDeserialized?.(stateRestoreMs);
@@ -140,7 +141,7 @@ export class AgentRoot {
     if (handler === undefined) throw new Error(`Unsupported action type: ${action.action.case}`);
     const writeStateUpdate = createRunStreamStateUpdateWithFlush({ blobStore: this.blobStore, onStateUpdate: onStateWrite });
     let pendingWrites = Promise.resolve();
-    let liveState = state;
+    let liveState = slateState;
     const usage: Record<string, number> = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
     const runAction = async (currentHandler: Any, currentAction: Any, currentStateHandler: Any): Promise<void> => {
       const handlerStartedAt = performance.now();
@@ -162,7 +163,7 @@ export class AgentRoot {
         await this.conversationActionReceiver.pop(ctx);
         if (queuedActionHandler === undefined) continue;
         baseExecutor.clearMessages();
-        const queuedStateKeeper = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, redactAgentConversationState(liveState), baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(nextQueued.action.case), loadRootPromptBlobs: true }));
+        const queuedStateKeeper = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, liveState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(nextQueued.action.case), loadRootPromptBlobs: true }));
         await runAction(queuedActionHandler, nextQueued.action.value, queuedStateKeeper);
       }
       if (!options?.skipTurnEndedUpdate) {
@@ -184,7 +185,8 @@ export class AgentRoot {
     using executionSpan = createSpan(parentCtx.withName("setupSingleStep"));
     const ctx = executionSpan.ctx;
     const baseExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(action.action?.case), loadRootPromptBlobs: true }));
+    const slateState = restoreSlateConversationState(state);
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, slateState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(action.action?.case), loadRootPromptBlobs: true }));
     if (action.action?.case === undefined) throw new Error("Action is required");
     const handler = this.actionHandlers.get(action.action.case);
     if (handler === undefined) throw new Error(`Unsupported action type: ${action.action.case}`);
@@ -217,7 +219,8 @@ export class AgentRoot {
   async executeToolCall(parentCtx: Any, state: Any, descriptor: Any, mcpTools: Any, splitStepData: Any, fileOperationLockManager: Any, onStateWrite?: Any): Promise<Any> {
     const ctx = parentCtx;
     const baseExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: false }));
+    const slateState = restoreSlateConversationState(state);
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, slateState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: false }));
     const handler = this.getSplitStepHandler(splitStepData.actionCase);
     try { return await handler.executeToolCall(ctx, descriptor, stateHandler, mcpTools, splitStepData, splitStepData.requestContext ?? {}, fileOperationLockManager); }
     catch (error) { if (error instanceof DeferredInteractionResponseError && onStateWrite !== undefined) await onStateWrite(ctx, restoreAgentConversationState(await stateHandler.computeNewStructure(ctx))); throw error; }
@@ -226,14 +229,16 @@ export class AgentRoot {
   async prepareSubagent(parentCtx: Any, state: Any, descriptor: Any, mcpTools: Any, splitStepData: Any, fileOperationLockManager: Any): Promise<Any> {
     const ctx = parentCtx;
     const baseExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: true }));
+    const slateState = restoreSlateConversationState(state);
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, slateState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: true }));
     return this.getSplitStepHandler(splitStepData.actionCase).prepareSubagent(ctx, descriptor, stateHandler, mcpTools, splitStepData, splitStepData.requestContext ?? {}, fileOperationLockManager);
   }
 
   async finalizeStep(parentCtx: Any, state: Any, splitStepData: Any, toolCallResults: Any, mcpTools: Any, onStateWrite?: Any): Promise<Any> {
     const ctx = parentCtx;
     const baseExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, state, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: true }));
+    const slateState = restoreSlateConversationState(state);
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(ctx, this.blobStore, slateState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(splitStepData.actionCase), loadRootPromptBlobs: true }));
     const update = createRunStreamStateUpdateWithFlush({ blobStore: this.blobStore, onStateUpdate: onStateWrite });
     const result = await this.getSplitStepHandler(splitStepData.actionCase).finalizeStep(ctx, splitStepData, toolCallResults, baseExecutor, stateHandler, mcpTools, splitStepData.requestContext ?? {}, update);
     await update(ctx, result.state);
@@ -245,7 +250,8 @@ export class AgentRoot {
   async computeSummarizedConversationState(parentCtx: Any, state: Any, requestContext: Any): Promise<Any> {
     using executionSpan = createSpan(parentCtx.withName("computeSummarizedConversationState"));
     const promptExecutor = new RedactedPromptToolExecutor(this.promptSession.getExecutor(), PrivacyMode.UNSPECIFIED);
-    const stateHandler = await ConversationStateHandle.fromConversationStateStructure(executionSpan.ctx, this.blobStore, state, promptExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, { shouldTrackAgentTypeChange: false });
+    const slateState = restoreSlateConversationState(state);
+    const stateHandler = await ConversationStateHandle.fromSlateConversationState(executionSpan.ctx, this.blobStore, slateState, promptExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, { shouldTrackAgentTypeChange: false });
     const silentListener = { sendUpdate: async () => {}, query: async () => { throw new Error("Interaction queries are not supported during summarization"); } };
     const summarizedState = await this.orchestrator.handleSummarization(executionSpan.ctx, stateHandler, promptExecutor, silentListener, this.config, requestContext, { backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion, triggerReason: "approaching_token_limit", resourceAccessor: this.resourceAccessor, forceExternalModel: true, currentInvocationId: (stateHandler as Any).lastStepInvocationId });
     if (summarizedState === undefined) return undefined;

@@ -15,6 +15,7 @@ import { DataClassification, PrivacyCapability } from "../../source/packages/red
 import {
   toRedactedConversationStateStructure,
 } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { restoreSlateConversationState } from "../../source/adapters/interop/agent/redacted-conversation-state-adapter.ts"
 import {
   AgentMode,
   CloudSubagentReference,
@@ -102,7 +103,7 @@ function harness(
     builder,
     handle: new ConversationStateHandle(
       blobStore as never,
-      toRedactedConversationStateStructure(state, PrivacyMode.NO_STORAGE),
+      restoreSlateConversationState(toRedactedConversationStateStructure(state, PrivacyMode.NO_STORAGE)),
       builder as never,
       {},
       "composer-2",
@@ -698,10 +699,10 @@ async function restored(
     getState: () => appended,
     clearMessages() { appended.length = 0 },
   }
-  const handle = await ConversationStateHandle.fromConversationStateStructure(
+  const handle = await ConversationStateHandle.fromSlateConversationState(
     createContext(),
     blobStore as never,
-    toRedactedConversationStateStructure(state, PrivacyMode.NO_STORAGE),
+    restoreSlateConversationState(toRedactedConversationStateStructure(state, PrivacyMode.NO_STORAGE)),
     builder as never,
     {},
     "composer-2",
