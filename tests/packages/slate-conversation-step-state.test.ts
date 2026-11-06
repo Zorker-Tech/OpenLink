@@ -5,6 +5,7 @@ import {
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
+  isSlateConversationSummaryToolCall,
 } from "../../source/packages/agent/conversation-step-state.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
@@ -20,6 +21,19 @@ import {
   ConversationStep,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import {
+  CommunicateUpdateArgs,
+  CommunicateUpdateResult,
+  CommunicateUpdateSuccess,
+  CommunicateUpdateToolCall,
+} from "../../source/adapters/interop/proto/generated/agent/v1/communicate_update_tool_pb.ts"
+import {
+  SendFinalSummaryArgs,
+  SendFinalSummaryError,
+  SendFinalSummaryResult,
+  SendFinalSummarySuccess,
+  SendFinalSummaryToolCall,
+} from "../../source/adapters/interop/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
 
 const text = (value: string) =>
   createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)
@@ -122,6 +136,148 @@ test("a persisted tool-call case survives the complete redaction serde", () => {
     assert.equal(content?.__classification, DataClassification.CODE)
     assert.equal(content?.__privacyMode, PrivacyMode.NO_STORAGE)
   }
+})
+
+test("task summary and progress operations use Slate values and rebuild their runner messages", () => {
+  const sources = [
+    new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          tool: {
+            case: "sendFinalSummaryToolCall",
+            value: new SendFinalSummaryToolCall({
+              args: new SendFinalSummaryArgs({ finalSummary: "final summary" }),
+              result: new SendFinalSummaryResult({
+                result: { case: "success", value: new SendFinalSummarySuccess({ finalSummary: "delivered" }) },
+              }),
+            }),
+          },
+        }),
+      },
+    }),
+    new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          tool: {
+            case: "communicateUpdateToolCall",
+            value: new CommunicateUpdateToolCall({
+              args: new CommunicateUpdateArgs({
+                currentStep: "checking files",
+                finalSummary: "partial summary",
+                completedSubtitle: "reviewing",
+              }),
+              result: new CommunicateUpdateResult({
+                result: {
+                  case: "success",
+                  value: new CommunicateUpdateSuccess({ currentStep: "checking files", messageIndex: 7 }),
+                },
+              }),
+            }),
+          },
+        }),
+      },
+    }),
+    new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          tool: {
+            case: "sendFinalSummaryToolCall",
+            value: new SendFinalSummaryToolCall({
+              args: new SendFinalSummaryArgs({ finalSummary: "failed summary" }),
+              result: new SendFinalSummaryResult({
+                result: { case: "error", value: new SendFinalSummaryError({ error: "summary rejected" }) },
+              }),
+            }),
+          },
+        }),
+      },
+    }),
+  ]
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+
+  for (const source of sources) {
+    const projected = fromInteropConversationStep(source)
+    assert.equal(projected.kind, "tool-call")
+    if (projected.kind !== "tool-call") assert.fail("expected a tool call")
+    assert.equal(projected.tool.kind, "conversation-summary")
+    assert.equal(projected.tool.case, undefined)
+    const storedText = new TextDecoder().decode(serde.serialize(projected))
+    assert.equal(JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+    assert.match(storedText, /"operation":"conversation-summary"/)
+    const restored = serde.deserialize(serde.serialize(projected))
+    assert.equal(restored.kind, "tool-call")
+    if (restored.kind !== "tool-call") assert.fail("expected a stored tool call")
+    assert.equal(restored.tool.kind, "conversation-summary")
+    assert.deepEqual(toInteropConversationStep(restored).toJson(), source.toJson())
+  }
+})
+
+test("previous Slate step operation names migrate to the owned summary operation on rewrite", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const previous = createSlateToolCallStep({
+    tool: { case: "sendFinalSummaryToolCall", value: { args: { finalSummary: "saved summary" } } },
+  })
+  const previousEnvelope = JSON.parse(
+    new TextDecoder().decode(serde.serialize(previous)).slice("SLATE-AGENT-STEP\n".length),
+  ) as { version: number; step: unknown; compatibility?: unknown }
+  previousEnvelope.version = 1
+  const previousV1 = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(previousEnvelope)}`)
+  const imported = serde.deserialize(previousV1)
+  assert.equal(imported.kind, "tool-call")
+  if (imported.kind !== "tool-call") assert.fail("expected a summary tool call")
+  assert.equal(imported.tool.kind, "conversation-summary")
+  if (imported.tool.kind !== "conversation-summary" || imported.tool.source !== "final") {
+    assert.fail("expected the Slate final-summary operation")
+  }
+  assert.equal(imported.tool.args?.finalSummary, "saved summary")
+  const rewritten = new TextDecoder().decode(serde.serialize(imported))
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.match(rewritten, /"operation":"conversation-summary"/)
+  assert.doesNotMatch(rewritten, /sendFinalSummaryToolCall/)
+})
+
+test("invalid Slate summary operation data is rejected before it can be stored", () => {
+  const invalid = {
+    kind: "conversation-summary",
+    source: "progress",
+    result: { kind: "success", currentStep: "too far", messageIndex: 0x1_0000_0000 },
+  }
+  assert.equal(isSlateConversationSummaryToolCall(invalid), false)
+  const step = createSlateToolCallStep({ tool: invalid as never })
+  assert.throws(
+    () => createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(step),
+    /Slate conversation summary operation is invalid/,
+  )
+})
+
+test("unknown nested summary fields survive the Slate operation projection", () => {
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const args = SendFinalSummaryArgs.fromBinary(appendUnknownVarint(
+    new SendFinalSummaryArgs({ finalSummary: "summary" }).toBinary(),
+  ))
+  const tool = new SendFinalSummaryToolCall({ args })
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "sendFinalSummaryToolCall", value: tool },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const projected = serde.deserialize(source.toBinary())
+  const restored = toInteropConversationStep(serde.deserialize(serde.serialize(projected)))
+
+  if (restored.message.case !== "toolCall") assert.fail("expected a tool call")
+  const restoredTool = restored.message.value.tool
+  if (restoredTool.case !== "sendFinalSummaryToolCall") assert.fail("expected a summary operation")
+  assert.deepEqual(
+    SendFinalSummaryArgs.runtime.bin.listUnknownFields(restoredTool.value.args!),
+    SendFinalSummaryArgs.runtime.bin.listUnknownFields(args),
+  )
 })
 
 test("step redaction records preserve raw text without relying on implicit JSON conversion", () => {

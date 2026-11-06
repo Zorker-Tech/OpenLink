@@ -4,6 +4,7 @@ import { DataClassification } from "../../redaction/classification.ts"
 import { createRedactedString } from "../../redaction/create.ts"
 import { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import {
+  createSlateConversationSummaryToolCall,
   createSlateAssistantMessageStep,
   createSlateToolCallStep,
   type SlateConversationStep,
@@ -71,10 +72,10 @@ export function createSlateTaskAssistantStep(text: string): SlateConversationSte
 /** Creates the summary step shape read from a subagent's final-summary tool call. */
 export function createSlateTaskSummaryStep(finalSummary: string): SlateConversationStep {
   return createSlateToolCallStep({
-    tool: {
-      case: "sendFinalSummaryToolCall",
-      value: { args: { finalSummary } },
-    },
+    tool: createSlateConversationSummaryToolCall({
+      source: "final",
+      args: { finalSummary },
+    }),
   })
 }
 
@@ -120,11 +121,7 @@ function unredactedText(value: unknown): string | undefined {
 
 function finalSummaryFromStep(step: SlateConversationStep): string | undefined {
   if (step.kind !== "tool-call") return undefined
-  if (step.tool.case !== "sendFinalSummaryToolCall" && step.tool.case !== "communicateUpdateToolCall") return undefined
-  const toolValue = step.tool.value
-  if (toolValue === null || typeof toolValue !== "object" || Array.isArray(toolValue)) return undefined
-  const args = (toolValue as { readonly args?: unknown }).args
-  if (args === null || typeof args !== "object" || Array.isArray(args)) return undefined
-  const summary = (args as { readonly finalSummary?: unknown }).finalSummary
+  if (step.tool.kind !== "conversation-summary") return undefined
+  const summary = step.tool.args?.finalSummary
   return typeof summary === "string" ? summary.trim() : undefined
 }
