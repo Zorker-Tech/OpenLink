@@ -37,6 +37,10 @@ import {
   isSlateBackgroundSubagentActionPayload,
 } from "../../../packages/agent/actions/background-side-channel-contracts.ts"
 import {
+  createSlateCancelSubagentActionPayload,
+  isSlateCancelSubagentActionPayload,
+} from "../../../packages/agent/actions/cancel-subagent-action-contracts.ts"
+import {
   createSlateGoalContinuationActionPayload,
   isSlateGoalContinuationActionPayload,
 } from "../../../packages/agent/actions/goal-continuation-contracts.ts"
@@ -231,6 +235,12 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
     }
     return { ...action, context, payload: action.payload }
   }
+  if (action.kind === SlateAgentActionKind.CANCEL_SUBAGENT) {
+    if (!isSlateCancelSubagentActionPayload(action.payload)) {
+      throw new TypeError("Cancel subagent action must use the Slate v1 contract")
+    }
+    return { ...action, context, payload: action.payload }
+  }
   if (action.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return {
       ...action,
@@ -379,6 +389,16 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       ),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.CANCEL_SUBAGENT) {
+    const value = action.action.value
+    return {
+      ...slateAction,
+      payload: createSlateCancelSubagentActionPayload(
+        typeof value?.subagentId === "string" ? value.subagentId : "",
+        value,
+      ),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return { ...slateAction, payload: createSlateGoalContinuationActionPayload() }
   }
@@ -449,6 +469,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "backgroundSubagentAction") {
     const wrapped = new ConversationAction({ action: { case: "backgroundSubagentAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "cancelSubagentAction") {
+    const wrapped = new ConversationAction({ action: { case: "cancelSubagentAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "goalContinuationAction") {
