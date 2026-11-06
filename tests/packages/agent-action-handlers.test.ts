@@ -2,6 +2,8 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { AsyncAskQuestionCompletionActionHandler } from "../../source/packages/agent/actions/async-ask-question-completion-action-handler.ts"
+import { CancelActionHandler } from "../../source/packages/agent/actions/cancel-action-handler.ts"
+import { createSlateCancelActionPayload } from "../../source/packages/agent/actions/cancel-action-contracts.ts"
 import { BackgroundTaskCompletionActionHandler } from "../../source/packages/agent/actions/background-task-completion-action-handler.ts"
 import { ExecutePlanActionHandler } from "../../source/packages/agent/actions/execute-plan-action-handler.ts"
 import { ResumeActionHandler } from "../../source/packages/agent/actions/user-message-action/resume-action-handler.ts"
@@ -114,6 +116,14 @@ function createStateHandler(overrides: Record<string, unknown> = {}) {
 }
 
 const USER_MESSAGE = { text: "hello", messageId: "m1" }
+
+test("a cancel action routed into the turn still fails with the established error", async () => {
+  const handler = new CancelActionHandler(undefined, undefined, undefined, undefined, undefined)
+  await assert.rejects(
+    () => handler.handle(createContext(), createSlateCancelActionPayload("stop"), {}, {}, [], undefined),
+    { message: "Cancel Conversation action should never be routed directly to runStream!" },
+  )
+})
 
 /** A conversation state over a blob store, so the turns a handler reads are real turns. */
 function createConversationState(structure = new ConversationStateStructure({})) {

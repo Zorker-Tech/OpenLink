@@ -58,6 +58,17 @@ describe("Slate directory traversal", () => {
     assert.equal(await traversal.resolveForIgnore(join(root, "outside-link.txt")), null);
   });
 
+  it("resolves a workspace that appears after the traversal is constructed", async () => {
+    const root = workspace();
+    rmSync(root, { recursive: true, force: true });
+    const traversal = new LocalDirectoryTraversal(root);
+    mkdirSync(root);
+    const file = join(root, "created-later.txt");
+    writeFileSync(file, "");
+
+    assert.equal(await traversal.resolveForIgnore(file), await realpath(file));
+  });
+
   it("finishes promptly when its context is cancelled", async () => {
     const root = workspace();
     mkdirSync(join(root, "src"));

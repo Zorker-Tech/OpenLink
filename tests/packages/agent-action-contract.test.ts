@@ -9,6 +9,11 @@ import { createSlateResumeAgentAction, isSlateResumeActionPayload, SlateAgentAct
 import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
 import { isSlateExecutePlanActionPayload } from "../../source/packages/agent/actions/execute-plan-contracts.ts"
 import {
+  isSlateCancelActionPayload,
+  redactSlateCancelActionPayload,
+  type SlateCancelActionPayload,
+} from "../../source/packages/agent/actions/cancel-action-contracts.ts"
+import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
 } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
@@ -51,6 +56,8 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.equal(isSlateExecutePlanActionPayload(action.payload), true)
     } else if (sourceCase === "summarizeAction") {
       assert.equal(isSlateSummarizeActionPayload(action.payload), true)
+    } else if (sourceCase === "cancelAction") {
+      assert.equal(isSlateCancelActionPayload(action.payload), true)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
@@ -102,6 +109,33 @@ test("ask-question completion uses Slate fields and preserves the historical pay
   assert.equal(questionPrompt.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Which database?")
   assert.equal(payload.result?.kind, "answered")
   assert.equal(payload.compatibility?.legacyResult, legacyPayload.result)
+  assert.equal(payload.compatibility?.legacyPayload, legacyPayload)
+})
+
+test("cancel actions carry a Slate reason and preserve historical resolution data", () => {
+  const legacyPayload = {
+    reason: "user stopped the turn",
+    interruptedPendingToolCallResolutions: { resolutions: [{ toolCallId: "call-3" }] },
+  }
+  const action = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "cancelAction", value: legacyPayload },
+  } as never)
+  const payload = action.payload as SlateCancelActionPayload
+
+  assert.equal(action.kind, SlateAgentActionKind.CANCEL)
+  assert.equal(isSlateCancelActionPayload(payload), true)
+  assert.ok(typeof payload.reason !== "string")
+  if (typeof payload.reason !== "string") {
+    assert.equal(payload.reason.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "user stopped the turn")
+  }
+  const rebound = redactSlateCancelActionPayload(payload, PrivacyMode.UNSPECIFIED)
+  assert.ok(typeof rebound.reason !== "string")
+  if (typeof rebound.reason !== "string") {
+    assert.equal(rebound.reason.getPrivacyContext().privacyMode, PrivacyMode.UNSPECIFIED)
+    assert.equal(rebound.reason.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "user stopped the turn")
+  }
+  assert.deepEqual(payload.compatibility?.interruptedToolResolutions, legacyPayload.interruptedPendingToolCallResolutions)
   assert.equal(payload.compatibility?.legacyPayload, legacyPayload)
 })
 

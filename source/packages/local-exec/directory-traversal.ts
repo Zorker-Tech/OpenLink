@@ -22,11 +22,10 @@ function excluded(relativePath: string, patterns: readonly string[]): boolean {
 
 export class LocalDirectoryTraversal implements LsTraversalRuntime {
   readonly #root: string;
-  readonly #resolvedRoot: Promise<string>;
+  #resolvedRoot: Promise<string> | undefined;
 
   constructor(root: string) {
     this.#root = path.resolve(root);
-    this.#resolvedRoot = realpath(this.#root);
   }
 
   walk(
@@ -54,9 +53,20 @@ export class LocalDirectoryTraversal implements LsTraversalRuntime {
   async resolveForIgnore(filePath: string): Promise<string | null> {
     try {
       const resolved = await realpath(filePath);
-      return isWithin(await this.#resolvedRoot, resolved) ? resolved : null;
+      const resolvedRoot = await this.#resolveRoot();
+      return isWithin(resolvedRoot, resolved) ? resolved : null;
     } catch {
       return null;
+    }
+  }
+
+  async #resolveRoot(): Promise<string> {
+    const pending = this.#resolvedRoot ?? (this.#resolvedRoot = realpath(this.#root));
+    try {
+      return await pending;
+    } catch (error) {
+      if (this.#resolvedRoot === pending) this.#resolvedRoot = undefined;
+      throw error;
     }
   }
 
