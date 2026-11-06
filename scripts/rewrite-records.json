@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6713746630727763,
-      "refreshReason": "The conversation snapshot now types plan registry entries as SlatePlanRegistryEntry and goals as SlateGoalState; redacted generated plan/goal values are decoded and encoded only at the state-message adapter.",
-      "evidence": "tests/packages/agent-state.test.ts, slate-conversation-state.test.ts, slate-subagent-state-storage.test.ts and the subagent-run adapter/state suites pass 68/68, including unknown goal and run enum preservation, typed subagent-state recovery, compatibility projection and plan/goal round-trip. The full Work-host suite passes 9966/9966 under Node 24.14. Work-host typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (323 imports across 223 files, zero direct proto consumers), and TypeScript checks. State handles now store plan, goal, subagent and subagent-run values as Slate types; generated forms remain in state-message adapters. Measured overlap is 0.6713746630727763 against 9275 baseline pairs."
+      "overlap": 0.662533692722372,
+      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run and communication values. Communication history, per-call turns and summaries use Slate names and plain values in the state handle; privacy wrapping and legacy shape conversion happen only at the interop adapter. Snapshot computation now declares its redacted interop result accurately.",
+      "evidence": "agent-state.test.ts and slate-conversation-state.test.ts pass 50/50, including communication ordering, message indexes, summaries, subtitles, per-call history and privacy classification across the legacy boundary. The full Work-host suite passes 9967/9967 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop gates (323 imports across 223 files, zero direct proto consumers) pass. State handles store plan, goal, subagent, run and communication values as Slate types; generated communication messages remain only in the adapter. Measured overlap is 0.662533692722372 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
