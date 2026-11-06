@@ -11,7 +11,11 @@
  * through the same adaptation so the three entry points cannot disagree.
  */
 
-import { adaptSubscriptionWakeup } from "../../../adapters/interop/agent/subscription-notification-action-adapter.ts"
+import {
+  isSlateSubscriptionNotificationActionPayload,
+  subscriptionNotificationAsUserMessageAction,
+  type SlateSubscriptionNotificationActionPayload,
+} from "./subscription-notification-contracts.ts"
 
 interface UserMessageActionHandler {
   handle(...args: unknown[]): Promise<unknown> | unknown
@@ -28,7 +32,7 @@ export class SubscriptionWakeupActionHandler {
 
   async handle(
     ctx: unknown,
-    action: unknown,
+    action: SlateSubscriptionNotificationActionPayload,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
@@ -47,7 +51,7 @@ export class SubscriptionWakeupActionHandler {
 
   async handleSingleStep(
     ctx: unknown,
-    action: unknown,
+    action: SlateSubscriptionNotificationActionPayload,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
@@ -66,7 +70,7 @@ export class SubscriptionWakeupActionHandler {
 
   async handleModelStep(
     ctx: unknown,
-    action: unknown,
+    action: SlateSubscriptionNotificationActionPayload,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
@@ -86,13 +90,19 @@ export class SubscriptionWakeupActionHandler {
   private async forward(
     method: "handle" | "handleSingleStep" | "handleModelStep",
     ctx: unknown,
-    action: unknown,
+    action: SlateSubscriptionNotificationActionPayload,
     rootPromptExecutor: unknown,
     stateHandler: unknown,
     mcpTools: unknown,
     onStateUpdate: unknown,
   ): Promise<unknown> {
-    const adapted = adaptSubscriptionWakeup(action);
+    if (!isSlateSubscriptionNotificationActionPayload(action)) {
+      throw new TypeError("Subscription notification action must use the Slate v1 contract")
+    }
+    const adapted = {
+      userMessageAction: subscriptionNotificationAsUserMessageAction(action),
+      notificationCount: action.notifications.length,
+    }
     return await this.userMessageActionHandler[method](
       ctx,
       adapted.userMessageAction,

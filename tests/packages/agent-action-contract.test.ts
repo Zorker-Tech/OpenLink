@@ -17,6 +17,7 @@ import {
   createSlateGoalContinuationActionPayload,
   isSlateGoalContinuationActionPayload,
 } from "../../source/packages/agent/actions/goal-continuation-contracts.ts"
+import { isSlateSubscriptionNotificationActionPayload } from "../../source/packages/agent/actions/subscription-notification-contracts.ts"
 import {
   isSlateBackgroundTaskCompletionActionPayload,
   type SlateBackgroundTaskCompletionActionPayload,
@@ -80,6 +81,8 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "goalContinuationAction") {
       assert.equal(isSlateGoalContinuationActionPayload(action.payload), true)
+    } else if (sourceCase === "subscriptionNotificationAction") {
+      assert.equal(isSlateSubscriptionNotificationActionPayload(action.payload), true)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")

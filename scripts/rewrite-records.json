@@ -1283,8 +1283,9 @@
     },
     "packages/agent/actions/subscription-notification-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5026737967914439,
-      "evidence": "The agent-run and interop adapter suites pass 47/47, pinning latest-notification selection, earlier-message ordering, synthetic-wakeup limits, context/listener preservation and empty-event refusal. Work-host typecheck passes. Generated redacted action conversion is isolated under adapters/interop; the handler only delegates a first-party wakeup."
+      "overlap": 0.6096256684491979,
+      "refreshReason": "Replaced the generated wake-action adapter with a Slate notification batch and direct conversion to SlateUserMessageActionPayload; historical request context remains in migration metadata.",
+      "evidence": "Subscription action-contract, agent-run, adapter-projection and rewrite-overlap suites pass 163/163; the full Work-host suite passes 10004/10004 under Node 24. Work-host typecheck and rewrite/interop gates pass. Tests pin message order, request-context carry-forward, listener notification, all three turn entries and empty-batch refusal. The handler consumes SlateSubscriptionNotificationActionPayload and the core interop baseline drops to 317 imports across 221 files. Measured overlap is 0.6096256684491979 against 187 baseline pairs."
     },
     "host/extensions/auto-review/slate-auto-review-awaiting.ts": {
       "claim": "rewritten",
