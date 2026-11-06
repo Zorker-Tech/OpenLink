@@ -12,9 +12,12 @@
 import { randomUUID } from "node:crypto";
 import {
   createBackgroundCompletionUserMessage,
-  decodeStoredBackgroundTaskCompletionAction,
   projectBackgroundCompletionRequestContext,
 } from "../../../adapters/interop/agent/background-task-completion-adapter.ts";
+import {
+  isSlateBackgroundTaskCompletionActionPayload,
+  type SlateBackgroundTaskCompletionActionPayload,
+} from "./background-task-completion-contracts.ts";
 import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts";
 import { createSpan } from "../../context/telemetry.ts";
 import { createLogger } from "../../context/logging.ts";
@@ -44,19 +47,22 @@ function logBackgroundTaskCompletionOutcome(ctx: Any, outcome: string, summary: 
 }
 
 export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageActionHandler {
-  async prepareFollowupTurn(ctx: Any, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any): Promise<Any> {
-    const decodedCompletion = decodeStoredBackgroundTaskCompletionAction(action);
-    for (const completion of decodedCompletion.completions) stateHandler.recordSubagentRunCompletion(completion);
+  async prepareFollowupTurn(ctx: Any, action: SlateBackgroundTaskCompletionActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any): Promise<Any> {
+    if (!isSlateBackgroundTaskCompletionActionPayload(action)) {
+      throw new TypeError("Background task completion action must use the Slate v1 contract");
+    }
+    const completions = action.completions;
+    for (const completion of completions) stateHandler.recordSubagentRunCompletion(completion);
     const isMetaParentAgent = this.config.featureFlags?.glassMetaParentAgent === true;
     if (this.config.featureFlags?.disableBackgroundTaskFollowUp && !isMetaParentAgent) {
-      logBackgroundTaskCompletionOutcome(ctx, "skipped_disabled", summarizeBackgroundTaskCompletions(decodedCompletion.completions), { is_meta_parent: isMetaParentAgent });
+      logBackgroundTaskCompletionOutcome(ctx, "skipped_disabled", summarizeBackgroundTaskCompletions(completions), { is_meta_parent: isMetaParentAgent });
       return { kind: "skip", ctx, state: await stateHandler.computeNewStructure(ctx) };
     }
-    const completions = this.config.featureFlags?.enableBackgroundTaskProgress
-      ? decodedCompletion.completions
-      : decodedCompletion.completions.filter(completion => !isShellOutputCompletion(completion));
-    const summary = summarizeBackgroundTaskCompletions(completions);
-    if (completions.length === 0) {
+    const followupCompletions = this.config.featureFlags?.enableBackgroundTaskProgress
+      ? completions
+      : completions.filter(completion => !isShellOutputCompletion(completion));
+    const summary = summarizeBackgroundTaskCompletions(followupCompletions);
+    if (followupCompletions.length === 0) {
       logBackgroundTaskCompletionOutcome(ctx, "skipped_empty", summary, { is_meta_parent: isMetaParentAgent });
       return { kind: "skip", ctx, state: await stateHandler.computeNewStructure(ctx) };
     }
@@ -80,7 +86,7 @@ export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageAc
     };
     if (!stateHandler.isRootProjectConversation) stateHandler.isRootProjectConversation = (await resolveProjectConversationContextFromInterop(ctx, stateHandler)).isRootProject;
     const sendMessageEnabled = canRootConversationSendToProject(stateHandler);
-    const perCompletionMessages = completions.map((completion: Any) => {
+    const perCompletionMessages = followupCompletions.map((completion: Any) => {
       const completionMessage = isMetaParentAgent ? formatMetaParentBackgroundCompletions([completion], formatOpts) : formatBackgroundCompletions([completion], formatOpts);
       const messageId = randomUUID();
       const incomingMessageIdTag = sendMessageEnabled ? renderIncomingMessageIdTag(messageId) : undefined;
@@ -112,18 +118,18 @@ export class BackgroundTaskCompletionActionHandler extends AbstractUserMessageAc
     return { kind: "ready", ctx, latestTurn, mergedMcpTools, repositoryInfos, requestContext: contextProjection.promptContext };
   }
 
-  async handle(parentCtx: Any, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+  async handle(parentCtx: Any, action: SlateBackgroundTaskCompletionActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
     using span = createSpan(parentCtx.withName("handleBackgroundTaskCompletionAction"));
     const followup = await this.prepareFollowupTurn(span.ctx, action, rootPromptExecutor, stateHandler, mcpTools);
     if (followup.kind === "ready") await this.runTurnLoop(followup.ctx, rootPromptExecutor, stateHandler, followup.latestTurn, this.config.toolsGenerator, followup.mergedMcpTools, followup.repositoryInfos, followup.requestContext, onStateUpdate);
     return await stateHandler.computeNewStructure(followup.ctx);
   }
 
-  async handleSingleStep(ctx: Any, _action: Any, _rootPromptExecutor: Any, stateHandler: Any, _mcpTools: Any, _onStateUpdate: Any): Promise<Any> {
+  async handleSingleStep(ctx: Any, _action: SlateBackgroundTaskCompletionActionPayload, _rootPromptExecutor: Any, stateHandler: Any, _mcpTools: Any, _onStateUpdate: Any): Promise<Any> {
     return { state: await stateHandler.computeNewStructure(ctx), hasToolCall: false };
   }
 
-  async handleModelStep(parentCtx: Any, action: Any, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
+  async handleModelStep(parentCtx: Any, action: SlateBackgroundTaskCompletionActionPayload, rootPromptExecutor: Any, stateHandler: Any, mcpTools: Any, onStateUpdate: Any): Promise<Any> {
     using span = createSpan(parentCtx.withName("handleBackgroundTaskCompletionModelStep"));
     const followup = await this.prepareFollowupTurn(span.ctx, action, rootPromptExecutor, stateHandler, mcpTools);
     if (followup.kind === "skip") return { state: followup.state, toolCallDescriptors: [], splitStepData: { modelResponseMessages: [] } };

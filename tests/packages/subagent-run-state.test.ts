@@ -147,3 +147,21 @@ test("an unknown persisted enum survives progress and retires on explicit Slate 
   assert.equal(updated.environment, "cloud")
   assert.equal(updated.completionReason, "task-progress")
 })
+
+test("unknown completion enum codes carry into durable run migration metadata", () => {
+  const updated = updateSlateSubagentRun({
+    completion: completion({
+      status: "unknown",
+      reason: undefined,
+      compatibility: { legacyStatusCode: 52, legacyReasonCode: 57 },
+    }),
+    parentToolCallId: "call-1",
+    completedTimestampMs: 47n,
+  })
+
+  assert.equal(updated.status, "unspecified")
+  assert.deepEqual(updated.compatibility, {
+    legacyStatusCode: 52,
+    legacyCompletionReasonCode: 57,
+  })
+})

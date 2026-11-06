@@ -78,18 +78,20 @@ export function updateSlateSubagentRun(
   const transcriptPath = trimmed(input.transcriptPath) ?? existingRun?.transcriptPath
   const outputPath = trimmed(completion.outputPath) ?? existingRun?.outputPath
   const completionReason = completion.reason ?? existingRun?.completionReason
+  const legacyStatusCode = completion.status === "unknown"
+    ? completion.compatibility?.legacyStatusCode ?? existingRun?.compatibility?.legacyStatusCode
+    : undefined
+  const legacyCompletionReasonCode = completion.reason === undefined
+    ? completion.compatibility?.legacyReasonCode ?? existingRun?.compatibility?.legacyCompletionReasonCode
+    : undefined
   const compatibility = {
     ...(input.environment === undefined || input.environment === "unspecified"
       ? existingRun?.compatibility?.legacyEnvironmentCode === undefined
         ? {}
         : { legacyEnvironmentCode: existingRun.compatibility.legacyEnvironmentCode }
       : {}),
-    ...(completion.status !== "unknown" || existingRun?.compatibility?.legacyStatusCode === undefined
-      ? {}
-      : { legacyStatusCode: existingRun.compatibility.legacyStatusCode }),
-    ...(completion.reason !== undefined || existingRun?.compatibility?.legacyCompletionReasonCode === undefined
-      ? {}
-      : { legacyCompletionReasonCode: existingRun.compatibility.legacyCompletionReasonCode }),
+    ...(legacyStatusCode === undefined ? {} : { legacyStatusCode }),
+    ...(legacyCompletionReasonCode === undefined ? {} : { legacyCompletionReasonCode }),
   }
 
   return {

@@ -22,10 +22,13 @@ import { Updates } from "../../../packages/agent-core/interaction-updates.ts";
 import { PrivacyCapability as RuntimePrivacyCapability } from "../../../packages/redaction/classification.ts";
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
 import type {
+  SlateBackgroundTaskCompletionActionPayload,
   SlateBackgroundTaskCompletion,
+  SlateBackgroundTaskCompletionCompatibility,
   SlateBackgroundTaskKind,
   SlateBackgroundTaskStatus,
 } from "../../../packages/agent/actions/background-task-completion-contracts.ts";
+import { createSlateBackgroundTaskCompletionActionPayload } from "../../../packages/agent/actions/background-task-completion-contracts.ts";
 import type { SlateMode } from "../../../packages/agent/mode-processing.ts";
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts";
 import { toInteropAgentMode } from "./mode-processing-adapter.ts";
@@ -33,44 +36,77 @@ import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.t
 
 export type StoredBackgroundCompletionAction = Parameters<typeof fromRedactedBackgroundTaskCompletionAction>[0];
 
-function taskKind(kind: BackgroundTaskKind): SlateBackgroundTaskKind {
+function taskKind(kind: BackgroundTaskKind): { readonly value: SlateBackgroundTaskKind; readonly legacyCode?: number } {
   switch (kind) {
-    case BackgroundTaskKind.SHELL: return "shell";
-    case BackgroundTaskKind.SUBAGENT: return "subagent";
-    default: return "unknown";
+    case BackgroundTaskKind.UNSPECIFIED: return { value: "unknown" };
+    case BackgroundTaskKind.SHELL: return { value: "shell" };
+    case BackgroundTaskKind.SUBAGENT: return { value: "subagent" };
+    default: return { value: "unknown", legacyCode: kind };
   }
 }
 
-function taskStatus(status: BackgroundTaskStatus): SlateBackgroundTaskStatus {
+function taskStatus(status: BackgroundTaskStatus): { readonly value: SlateBackgroundTaskStatus; readonly legacyCode?: number } {
   switch (status) {
-    case BackgroundTaskStatus.SUCCESS: return "success";
-    case BackgroundTaskStatus.ERROR: return "error";
-    case BackgroundTaskStatus.ABORTED: return "aborted";
-    default: return "unknown";
+    case BackgroundTaskStatus.UNSPECIFIED: return { value: "unknown" };
+    case BackgroundTaskStatus.SUCCESS: return { value: "success" };
+    case BackgroundTaskStatus.ERROR: return { value: "error" };
+    case BackgroundTaskStatus.ABORTED: return { value: "aborted" };
+    default: return { value: "unknown", legacyCode: status };
+  }
+}
+
+function completionReason(reason: BackgroundTaskCompletionReason): {
+  readonly value?: SlateBackgroundTaskCompletion["reason"];
+  readonly legacyCode?: number;
+} {
+  switch (reason) {
+    case BackgroundTaskCompletionReason.TASK_PROGRESS: return { value: "task-progress" };
+    case BackgroundTaskCompletionReason.WORKER_REPARENTED: return { value: "worker-reparented" };
+    case BackgroundTaskCompletionReason.UNSPECIFIED: return {};
+    default: return { legacyCode: reason };
+  }
+}
+
+function notificationContext(context: BackgroundTaskNotificationContext): {
+  readonly value: NonNullable<SlateBackgroundTaskCompletion["notificationContext"]>;
+  readonly legacyCode?: number;
+} {
+  switch (context) {
+    case BackgroundTaskNotificationContext.UNSPECIFIED: return { value: "other" };
+    case BackgroundTaskNotificationContext.USER_DRIVEN_INTERACTIVE_CHILD:
+      return { value: "user-driven-interactive-child" };
+    default: return { value: "other", legacyCode: context };
   }
 }
 
 export function fromInteropBackgroundTaskCompletion(
   completion: BackgroundTaskCompletion,
 ): SlateBackgroundTaskCompletion {
+  const projectedKind = taskKind(completion.kind);
+  const projectedStatus = taskStatus(completion.status);
+  const projectedReason = completionReason(completion.reason);
+  const projectedNotificationContext = notificationContext(completion.notificationContext);
+  const compatibility: SlateBackgroundTaskCompletionCompatibility = {
+    ...(projectedKind.legacyCode === undefined ? {} : { legacyKindCode: projectedKind.legacyCode }),
+    ...(projectedStatus.legacyCode === undefined ? {} : { legacyStatusCode: projectedStatus.legacyCode }),
+    ...(projectedReason.legacyCode === undefined ? {} : { legacyReasonCode: projectedReason.legacyCode }),
+    ...(projectedNotificationContext.legacyCode === undefined
+      ? {}
+      : { legacyNotificationContextCode: projectedNotificationContext.legacyCode }),
+  };
   return {
-    kind: taskKind(completion.kind),
-    status: taskStatus(completion.status),
+    kind: projectedKind.value,
+    status: projectedStatus.value,
     taskId: completion.taskId,
     title: completion.title,
     ...(completion.toolCallId === undefined || completion.toolCallId.length === 0 ? {} : { toolCallId: completion.toolCallId }),
     ...(completion.subagentId === undefined || completion.subagentId.length === 0 ? {} : { subagentId: completion.subagentId }),
     ...(completion.detail === undefined || completion.detail.length === 0 ? {} : { detail: completion.detail }),
     ...(completion.outputPath === undefined || completion.outputPath.length === 0 ? {} : { outputPath: completion.outputPath }),
-    ...(completion.reason === BackgroundTaskCompletionReason.TASK_PROGRESS
-      ? { reason: "task-progress" as const }
-      : completion.reason === BackgroundTaskCompletionReason.WORKER_REPARENTED
-        ? { reason: "worker-reparented" as const }
-        : {}),
+    ...(projectedReason.value === undefined ? {} : { reason: projectedReason.value }),
     ...(completion.threadId === undefined || completion.threadId.length === 0 ? {} : { threadId: completion.threadId }),
-    ...(completion.notificationContext === BackgroundTaskNotificationContext.USER_DRIVEN_INTERACTIVE_CHILD
-      ? { notificationContext: "user-driven-interactive-child" as const }
-      : { notificationContext: "other" as const }),
+    notificationContext: projectedNotificationContext.value,
+    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
   };
 }
 
@@ -89,6 +125,16 @@ export function decodeStoredBackgroundTaskCompletionAction(
     storedCompletions: decoded.completions,
     completions: decoded.completions.map(fromInteropBackgroundTaskCompletion),
   };
+}
+
+/** Converts a historical action into the Slate route contract while retaining its recovery payload. */
+export function slateBackgroundTaskCompletionActionFromRedacted(
+  action: StoredBackgroundCompletionAction,
+): SlateBackgroundTaskCompletionActionPayload {
+  const decoded = decodeStoredBackgroundTaskCompletionAction(action);
+  return createSlateBackgroundTaskCompletionActionPayload(decoded.completions, {
+    legacyPayload: action as Readonly<Record<string, unknown>>,
+  });
 }
 
 export interface BackgroundCompletionRequestContextView {

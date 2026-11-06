@@ -14,6 +14,10 @@ import {
   type SlateCancelActionPayload,
 } from "../../source/packages/agent/actions/cancel-action-contracts.ts"
 import {
+  isSlateBackgroundTaskCompletionActionPayload,
+  type SlateBackgroundTaskCompletionActionPayload,
+} from "../../source/packages/agent/actions/background-task-completion-contracts.ts"
+import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
 } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
@@ -22,6 +26,13 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import type { AskQuestionCompletionAction } from "../../source/packages/agent/actions/ask-question-completion.ts"
+import {
+  BackgroundTaskCompletion,
+  BackgroundTaskCompletionAction,
+  BackgroundTaskCompletionReason,
+  BackgroundTaskKind,
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { toRedactedBackgroundTaskCompletionAction } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 
 test("every supported runner route maps to a Slate kind and first-party payload contract", () => {
   const routes = [
@@ -58,6 +69,11 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.equal(isSlateSummarizeActionPayload(action.payload), true)
     } else if (sourceCase === "cancelAction") {
       assert.equal(isSlateCancelActionPayload(action.payload), true)
+    } else if (sourceCase === "backgroundTaskCompletionAction") {
+      const payload = action.payload as SlateBackgroundTaskCompletionActionPayload
+      assert.equal(isSlateBackgroundTaskCompletionActionPayload(payload), true)
+      assert.deepEqual(payload.completions, [])
+      assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
@@ -137,6 +153,50 @@ test("cancel actions carry a Slate reason and preserve historical resolution dat
   }
   assert.deepEqual(payload.compatibility?.interruptedToolResolutions, legacyPayload.interruptedPendingToolCallResolutions)
   assert.equal(payload.compatibility?.legacyPayload, legacyPayload)
+})
+
+test("background-task completion routes use a Slate batch with a historical recovery sidecar", () => {
+  const payload = slateAgentActionFromQueuedInterop({
+    case: "backgroundTaskCompletionAction",
+    value: { completions: [] },
+  }, PrivacyMode.NO_STORAGE).payload as SlateBackgroundTaskCompletionActionPayload
+
+  assert.equal(isSlateBackgroundTaskCompletionActionPayload(payload), true)
+  assert.equal(payload.schema, "slate.agent-action.background-task-completion")
+  assert.equal(payload.version, 1)
+  assert.deepEqual(payload.completions, [])
+  assert.ok(payload.compatibility?.legacyPayload)
+})
+
+test("background-task completion projections preserve unsupported enum codes", () => {
+  const historicalAction = toRedactedBackgroundTaskCompletionAction(
+    new BackgroundTaskCompletionAction({
+      completions: [new BackgroundTaskCompletion({
+        taskId: "task-future",
+        kind: BackgroundTaskKind.SUBAGENT,
+        status: 97 as never,
+        title: "future status",
+        reason: BackgroundTaskCompletionReason.TASK_FINISHED,
+        notificationContext: 98 as never,
+      })],
+    }),
+    PrivacyMode.NO_STORAGE,
+  )
+  const action = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "backgroundTaskCompletionAction", value: historicalAction as never },
+  } as never)
+  const payload = action.payload as SlateBackgroundTaskCompletionActionPayload
+
+  assert.equal(action.kind, SlateAgentActionKind.BACKGROUND_TASK_COMPLETION)
+  assert.equal(payload.completions[0]?.kind, "subagent")
+  assert.equal(payload.completions[0]?.status, "unknown")
+  assert.deepEqual(payload.completions[0]?.compatibility, {
+    legacyStatusCode: 97,
+    legacyReasonCode: BackgroundTaskCompletionReason.TASK_FINISHED,
+    legacyNotificationContextCode: 98,
+  })
+  assert.equal(payload.compatibility?.legacyPayload, historicalAction)
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {
