@@ -50,7 +50,10 @@ test('sealed installer performs signed archive install and protected configurati
   const targetArchitecture = process.platform === 'linux' && process.arch === 'x64' ? 'amd64' : process.arch
   const diskFormat = process.platform === 'darwin' ? 'raw' : 'qcow2'
   const required = [
-    'runtime/node/bin/node', 'app/web/server.js', 'services/agent-host/dist/src/main.js', 'services/agent-host/dist/src/project-container-main.js',
+    'runtime/node/bin/node', 'app/web/server.js', 'services/agent-host/dist/src/main.js',
+    'services/agent-host/civilization-host.py', 'services/civilization/LICENSE', 'services/civilization/pyproject.toml',
+    'services/civilization/src/civilization/engine/stages/stage74_orion_memory_service.py',
+    'services/agent-host/dist/src/project-container-main.js',
     'services/agent-host/project-supabase-runtime.mjs', 'scripts/lib/project-supabase-bundle.mjs',
     'services/browser-host/dist/src/main.js', 'services/knowledge-service/dist/src/main.js',
     'orchestration/backend/docker/docker-compose.yml', 'orchestration/backend/docker/.env.example',

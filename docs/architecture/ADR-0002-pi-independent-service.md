@@ -26,6 +26,7 @@ its complete history while keeping it outside the root package workspace:
 - `services/opensandbox` — remote sandbox platform.
 - `services/sandbox-runtime` — local desktop OS sandbox.
 - `services/code-server` — project-scoped VS Code web runtime.
+- `services/civilization` — durable Orion memory service for Agent Host modes.
 
 Keep each upstream workspace, lockfile, scripts, and runtime requirements inside
 its directory. Exclude `services/**` from the OpenLink TypeScript project so the
@@ -42,6 +43,7 @@ such as RPC/JSONL or an internal transport.
 services/
 ├── README.md
 ├── agent-host/             # OpenLink-owned adapter/supervisor contracts
+├── civilization/           # subtree-imported upstream memory service
 ├── pi/                     # subtree-imported agent runtime source
 ├── opensandbox/            # subtree-imported remote sandbox source
 ├── sandbox-runtime/        # subtree-imported desktop sandbox source

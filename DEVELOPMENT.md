@@ -70,25 +70,34 @@ closed rather than switching modes silently. Architecture and recovery details:
 - [`docs/architecture/ADR-0030-t2-orion-wayland-preview.md`](./docs/architecture/ADR-0030-t2-orion-wayland-preview.md)
 - [`docs/architecture/standards/08-release-versioning.md`](./docs/architecture/standards/08-release-versioning.md)
 
-### Electron desktop shell
+### Electron desktop host
 
-The desktop shell uses Electron and its own Vite build while loading the same
-OpenLink Web/BFF page used by the browser. Product screens and components stay
-in the existing application; `desktop/src/renderer` only forwards Electron to
-the configured application URL. Start the full local stack first, then run the
-desktop shell in a second terminal:
+The desktop host uses Electron with a Vite renderer that shares the product UI
+with the web application. It is a client for two server kinds: the vendor Cloud
+instance and a self-hosted instance (including one running on `localhost`). It
+does not install or supervise a server runtime; a local server is started by
+the normal self-hosted lifecycle and added as a remote profile. The Next.js web
+application remains the only BFF; the desktop API is additive under
+`/api/desktop/v1`. See [`desktop/README.md`](./desktop/README.md) and
+[ADR-0031](./docs/architecture/ADR-0031-desktop-vite-host.md).
+
+Start the web/runtime stack separately, then run the desktop shell in a second
+terminal:
 
 ```bash
-pnpm --dir desktop install --frozen-lockfile
+pnpm --dir desktop install
 pnpm dev:local
 # In another terminal:
-pnpm desktop:dev
+OPENLINK_DESKTOP_URL=http://127.0.0.1:3000 pnpm desktop:dev
 ```
 
-`OPENLINK_DESKTOP_URL` selects the page to load and defaults to
-`http://127.0.0.1:3000`. `pnpm desktop:build` builds the Electron/Vite shell;
-the OpenLink application server and its services remain managed by the normal
-product lifecycle.
+`OPENLINK_DESKTOP_URL` selects the default self-hosted profile (use
+`OPENLINK_DESKTOP_CLOUD_URL` for Cloud). The packaged shell starts a loopback
+gateway for the active profile. The desktop root resolves the app entry
+(login/onboarding/workspace); it does not render the marketing home page.
+`pnpm desktop:build` builds the Vite renderer; `pnpm desktop:test`,
+`pnpm desktop:typecheck`, and `pnpm desktop:e2e` run the desktop verification
+suite.
 
 ### Native desktop host setup
 

@@ -16,7 +16,6 @@ from .stage51_runtime_management import (
     Stage51RuntimeDescriptor,
     Stage51VersionedFakeRuntime,
 )
-from .stage52_real_runtime_reload_stress import build_stage52_real_managed_service
 from civilization.engine.model_paths import DEFAULT_MODEL_PATH
 
 
@@ -253,6 +252,10 @@ def build_stage59_real_service(
     preferred_device: str = "cuda",
     max_length: int = 384,
 ) -> Stage59AccessControlledService:
+    # Stage52 is the optional real-model reload stress path; importing it at
+    # module load also imports the research/model dependency stack.
+    from .stage52_real_runtime_reload_stress import build_stage52_real_managed_service
+
     base = build_stage52_real_managed_service(
         package_manifest=package_manifest,
         centroid_bundle=centroid_bundle,

@@ -50,6 +50,22 @@
       "version": "1.0.2",
       "license": "Apache-2.0",
       "openlinkPackaging": "Pinned Linux x86_64 release archive installed in the T2 Project VM base image."
+    },
+    "civilization": {
+      "path": "services/civilization",
+      "upstream": "https://github.com/Vtslx/Civilization.git",
+      "tag": "v1.0.0",
+      "sourceCommit": "2594df21847bf0689fb3c362c6823a0a352afaa8",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "openlinkPatches": [
+        "Load Stage45's PyTorch checkpoint reader only when a model checkpoint is inspected.",
+        "Load Stage46/Stage47 model inference only when build_stage48_runtime is invoked.",
+        "Resolve Stage49's model path without importing the model benchmark and its PyTorch stack.",
+        "Load Stage52 real-model stress code only when the Stage59 real-inference builder is used.",
+        "Load PyTorch inside Stage75 adapter encoding so Stage74 memory service startup works without the optional inference extra."
+      ],
+      "openlinkRuntime": "Agent Host launches the upstream Stage74OrionMemoryService with durable Orion persistence, loopback binding, and an internal bearer token. Decision inference remains disabled because OpenLink delegates model inference to its agent runtime."
     }
   }
 }

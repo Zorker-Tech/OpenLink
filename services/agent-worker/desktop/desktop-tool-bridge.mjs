@@ -23,15 +23,79 @@ const allowedCommands = new Set([
   'launch', 'close-app', 'list-apps', 'list-windows', 'list-displays', 'focus-window', 'resize-window', 'move-window', 'minimize', 'maximize', 'restore', 'open-system-surface',
   'list-notifications', 'dismiss-notification', 'dismiss-all-notifications', 'notification-action',
   'clipboard-get', 'clipboard-set', 'clipboard-clear',
-  'wait', 'trace', 'cursor-overlay', 'status', 'permissions', 'version', 'batch', 'skills',
+  'wait', 'trace', 'status', 'permissions', 'version', 'batch', 'skills',
 ])
-const blockedCommands = new Set(['session', 'key-down', 'key-up', 'mouse-down', 'mouse-up'])
+const blockedCommands = new Set(['session', 'cursor-overlay', 'key-down', 'key-up', 'mouse-down', 'mouse-up'])
+const globalOptionsWithValues = new Set([
+  '--session', '--agent-id', '--trace', '--screenshot', '--wait-for', '--wait-for-gone', '--wait-timeout', '-w',
+])
 let queue = Promise.resolve()
 
 function json(res, status, value) {
   const body = `${JSON.stringify(value)}\n`
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body) })
   res.end(body)
+}
+
+function commandPosition(argv) {
+  for (let index = 0; index < argv.length;) {
+    const argument = argv[index]
+    if (globalOptionsWithValues.has(argument)) {
+      index += 2
+      continue
+    }
+    if (argument.startsWith('-')) {
+      index += 1
+      continue
+    }
+    return { command: argument, index }
+  }
+  return undefined
+}
+
+function bindSession(argv) {
+  if (!activeSessionId) throw new Error('desktop session is not ready')
+  const normalized = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === '--session') {
+      const requested = argv[index + 1]
+      if (!requested) throw new Error('--session requires a value')
+      if (requested !== activeSessionId) throw new Error('desktop bridge requests must use the shared session')
+      index += 1
+      continue
+    }
+    if (argument.startsWith('--session=')) {
+      if (argument.slice('--session='.length) !== activeSessionId) {
+        throw new Error('desktop bridge requests must use the shared session')
+      }
+      continue
+    }
+    normalized.push(argument)
+  }
+  return ['--session', activeSessionId, ...normalized]
+}
+
+function validateBatch(argv, commandIndex) {
+  const json = argv.slice(commandIndex + 1).find((argument) => argument.trimStart().startsWith('['))
+  if (json === undefined) throw new Error('batch requires a JSON array')
+  let entries
+  try {
+    entries = JSON.parse(json)
+  } catch {
+    throw new Error('batch JSON is invalid')
+  }
+  if (!Array.isArray(entries)) throw new Error('batch JSON must be an array')
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('batch entries must be objects')
+    if (typeof entry.command !== 'string') throw new Error('batch entries must include a command')
+    if (blockedCommands.has(entry.command) || entry.command === 'session') {
+      throw new Error(`agent-desktop batch command is not allowed: ${entry.command}`)
+    }
+    if (entry.session !== undefined && entry.session !== activeSessionId) {
+      throw new Error('desktop bridge batch entries must use the shared session')
+    }
+  }
 }
 
 function validateRequest(value) {
@@ -43,11 +107,14 @@ function validateRequest(value) {
     bytes += Buffer.byteLength(argument)
   }
   if (bytes > maxRequestBytes) throw new Error('argv is too large')
-  const command = value.argv[0]
-  if (blockedCommands.has(command) || (!allowedCommands.has(command) && !command.startsWith('--'))) {
+  const argv = bindSession(value.argv)
+  const position = commandPosition(argv)
+  const command = position?.command
+  if (!command || blockedCommands.has(command) || !allowedCommands.has(command)) {
     throw new Error(`agent-desktop command is not allowed: ${command}`)
   }
-  return value.argv
+  if (command === 'batch') validateBatch(argv, position.index)
+  return argv
 }
 
 function run(argv) {
@@ -83,6 +150,48 @@ function run(argv) {
   })
 }
 
+let activeSessionId
+
+async function startDesktopSession() {
+  const started = await run(['session', 'start', '--no-trace', '--cursor'])
+  let envelope
+  try {
+    envelope = JSON.parse(started.stdout)
+  } catch {
+    throw new Error(`Could not parse agent-desktop session startup output: ${started.stderr || started.stdout}`)
+  }
+  const sessionId = envelope?.data?.session_id
+  if (typeof sessionId === 'string') {
+    activeSessionId = sessionId
+    process.env.AGENT_DESKTOP_SESSION = sessionId
+  }
+  if (started.exitCode !== 0 || envelope?.ok !== true || typeof sessionId !== 'string') {
+    await endDesktopSession()
+    throw new Error(`Could not start the agent-desktop session: ${started.stderr || started.stdout}`)
+  }
+
+  if (envelope.data.rendered === true) {
+    process.stdout.write(`[openlink-desktop-tool] cursor overlay enabled for ${sessionId}\n`)
+    return
+  }
+
+  const disabled = await run(['--session', sessionId, 'cursor-overlay', 'disable'])
+  if (disabled.exitCode !== 0) {
+    await endDesktopSession()
+    throw new Error(`Could not disable unsupported cursor overlay: ${disabled.stderr || disabled.stdout}`)
+  }
+  process.stdout.write(`[openlink-desktop-tool] cursor overlay unavailable; session ${sessionId} will run without it\n`)
+}
+
+async function endDesktopSession() {
+  if (!activeSessionId) return
+  const ended = await run(['--session', activeSessionId, 'session', 'end'])
+  if (ended.exitCode !== 0) {
+    process.stderr.write(`[openlink-desktop-tool] session cleanup failed: ${ended.stderr || ended.stdout}\n`)
+  }
+  activeSessionId = undefined
+}
+
 await rm(socketPath, { force: true })
 const server = createServer((req, res) => {
   if (req.method !== 'POST' || req.url !== '/run') {
@@ -116,11 +225,32 @@ const server = createServer((req, res) => {
   })
 })
 
+try {
+  await startDesktopSession()
+} catch (error) {
+  process.stderr.write(`[openlink-desktop-tool] cursor overlay startup failed: ${error instanceof Error ? error.message : String(error)}\n`)
+  await endDesktopSession()
+  process.exit(1)
+}
+
 server.listen(socketPath, async () => {
   await chmod(socketPath, 0o660)
   process.stdout.write(`[openlink-desktop-tool] listening on ${socketPath}\n`)
 })
 server.on('error', (error) => {
   process.stderr.write(`[openlink-desktop-tool] ${error.message}\n`)
-  process.exit(1)
+  void endDesktopSession().finally(() => process.exit(1))
 })
+
+let shuttingDown = false
+async function shutdown() {
+  if (shuttingDown) return
+  shuttingDown = true
+  await new Promise((resolve) => server.close(resolve))
+  await queue.catch(() => undefined)
+  await endDesktopSession()
+  process.exit(0)
+}
+
+process.on('SIGINT', () => { void shutdown() })
+process.on('SIGTERM', () => { void shutdown() })

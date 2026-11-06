@@ -5,6 +5,7 @@ import type { Duplex } from 'node:stream'
 import type { Socket } from 'node:net'
 import { WebSocket, WebSocketServer } from 'ws'
 import { AgentHostError } from './errors.js'
+import { isAllowedOrigin, originSourcesForCsp } from './origin-allowlist.js'
 
 const MAX_SOCKET_BUFFER_BYTES = 8 * 1024 * 1024
 const COOKIE_PREFIX = 'openlink_code_server_gateway_'
@@ -210,7 +211,7 @@ export class CodeServerGateway {
 
   private assertOrigin(request: IncomingMessage): void {
     const origin = request.headers.origin
-    if (origin && !this.allowedOrigins.has(origin)) throw new AgentHostError('AUTH_DENIED', 'Code-server gateway origin is not allowed')
+    if (origin && !isAllowedOrigin(origin, this.allowedOrigins)) throw new AgentHostError('AUTH_DENIED', 'Code-server gateway origin is not allowed')
   }
 
   private authorize(queryToken: string | null | undefined, cookieHeader: string | undefined, binding: CodeServerBinding): void {
@@ -241,7 +242,7 @@ export class CodeServerGateway {
         delete responseHeaders['content-encoding']
         delete responseHeaders['transfer-encoding']
         delete responseHeaders['x-frame-options']
-        const frameAncestors = [...this.allowedOrigins].join(' ')
+        const frameAncestors = originSourcesForCsp(this.allowedOrigins).join(' ')
         // code-server commonly sends `frame-ancestors 'self'`; appending a
         // second directive does not override it. Replace the upstream rule so
         // the explicitly configured OpenLink application origins can embed

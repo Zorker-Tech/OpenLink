@@ -29,22 +29,44 @@ export interface BrowserSessionConnectionDescriptor {
   previewTarget?: BrowserPreviewTarget
 }
 
-// The gateway cookie is SameSite=Strict and scoped to the gateway origin.
-// A page opened through a different host alias (for example the user opens
-// 127.0.0.1 while the public gateway advertises the LAN IP) is cross-site,
-// so the browser drops that cookie and the preview shows an auth error. Keep
-// literal gateway hosts on the page's own hostname; DNS/HTTPS gateway origins
-// are left untouched.
+// Local capability gateways are served through Next.js on the same origin as
+// the page. This keeps WebSocket upgrades and SameSite cookies working whether
+// the user opened OpenLink through localhost or a LAN address.
 const REWRITABLE_GATEWAY_HOST = /^(?:localhost|\[::1\]|\d{1,3}(?:\.\d{1,3}){3})$/i
 
-/** Route local gateway URLs through the host the user's page actually uses. */
+/**
+ * Desktop hosts inject this marker. A remote/cloud profile talks to a gateway
+ * owned by another machine, so rewriting its IP to the desktop's own hostname
+ * would point the preview at the wrong computer.
+ */
+function desktopProfileKind(): string | null {
+  if (typeof document === 'undefined') return null
+  return (
+    document
+      .querySelector('meta[name="openlink-desktop-profile-kind"]')
+      ?.getAttribute('content')
+      ?.trim() || null
+  )
+}
+
+/** Route local gateway URLs through the current page's same-origin gateway paths. */
 export function browserReachableGatewayUrl(value: string): string {
   if (typeof window === 'undefined') return value
+  const profileKind = desktopProfileKind()
+  if (profileKind && profileKind !== 'local') return value
   try {
     const url = new URL(value)
     if (!REWRITABLE_GATEWAY_HOST.test(url.hostname)) return value
-    if (!url.port) url.port = '43125'
-    url.hostname = window.location.hostname
+    // The Next.js server forwards these paths to the local capability proxy.
+    // Use the page's complete authority so LAN, localhost, and custom ports
+    // all reach the same server that served the app.
+    const isWebSocket = url.protocol === 'ws:' || url.protocol === 'wss:'
+    if (isWebSocket) {
+      url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    } else {
+      url.protocol = window.location.protocol
+    }
+    url.host = window.location.host
     return url.toString()
   } catch {
     return value

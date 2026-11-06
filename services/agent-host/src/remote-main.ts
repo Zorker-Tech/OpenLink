@@ -8,6 +8,8 @@ import { startPromptHttpServer } from './prompt-http-server.js'
 import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { createSupabaseProjectRuntimeProvisioningQueue, ProjectRuntimeProvisioner } from './project-runtime-provisioner.js'
 import { buildRemoteProjectVmBootstrapPlan, SshTransport } from './ssh.js'
+import { mintProjectMemoryMcpToken } from './project-memory-mcp.js'
+import { startEmbeddedCivilizationMemoryService } from './civilization-memory-runtime.js'
 
 interface ReleaseManifest {
   releaseId: string
@@ -203,9 +205,30 @@ const desktopPrewarm = env.OPENLINK_DESKTOP_PREWARM !== '0'
 const desktopPrewarmMax = integer(env.OPENLINK_DESKTOP_PREWARM_MAX, 1, 1, 32)
 const desktopIdleTtlMs = integer(env.OPENLINK_DESKTOP_IDLE_TTL_MS, 5 * 60_000, 60_000, 24 * 60 * 60_000)
 const maxSessions = integer(env.OPENLINK_AGENT_MAX_SESSIONS, 32, 1, 512)
+const remoteApiToken = required(env, 'OPENLINK_REMOTE_AGENT_API_TOKEN')
+const remoteAgentPublicUrlValue = env.OPENLINK_REMOTE_AGENT_PUBLIC_URL?.trim()
+  || env.OPENLINK_AGENT_PUBLIC_URL?.trim()
+let remoteAgentPublicOrigin: string | undefined
+if (remoteAgentPublicUrlValue) {
+  const parsed = new URL(remoteAgentPublicUrlValue)
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== '/' && parsed.pathname !== '')) {
+    throw new Error('OPENLINK_REMOTE_AGENT_PUBLIC_URL must be an HTTP(S) origin')
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname.toLowerCase())
+  if (parsed.protocol === 'http:' && !loopback) throw new Error('OPENLINK_REMOTE_AGENT_PUBLIC_URL must use HTTPS outside loopback')
+  remoteAgentPublicOrigin = parsed.origin
+}
+const openSandboxApiKey = required(env, 'OPEN_SANDBOX_API_KEY')
+const remoteStorageRoot = resolvePath(env.OPENLINK_REMOTE_AGENT_STORAGE_ROOT || '.agent-data/remote-host')
+const civilizationMemoryRuntime = await startEmbeddedCivilizationMemoryService({
+  stateRoot: resolvePath(remoteStorageRoot, 'civilization-memory'),
+})
+if (!remoteAgentPublicOrigin) {
+  console.warn('Project memory is unavailable to remote Project VMs until OPENLINK_REMOTE_AGENT_PUBLIC_URL points to this Agent Host')
+}
 const backend = new RemoteOpenSandboxRpcBackend({
   domain: '127.0.0.1:43122',
-  apiKey: required(env, 'OPEN_SANDBOX_API_KEY'),
+  apiKey: openSandboxApiKey,
   image: manifest.images.rpcImage,
   workspaceRoot: safeRemotePath(env.OPENLINK_REMOTE_WORKSPACE_ROOT || '/home/openlink/projects', 'OPENLINK_REMOTE_WORKSPACE_ROOT'),
   storageRoot: remoteRoot + '/sessions',
@@ -214,12 +237,20 @@ const backend = new RemoteOpenSandboxRpcBackend({
   sessionTtlSeconds: null,
   networkDefaultAction: networkDefaultAction(env.OPENLINK_AGENT_NETWORK_DEFAULT_ACTION),
   desktopMode,
+  ...(remoteAgentPublicOrigin ? {
+    projectMemoryMcp: {
+      mode: 'code' as const,
+      extensionPath: '/opt/openlink/agent-rpc-worker/extensions/openlink-memory.ts',
+      urlFor: (projectId: string, mode: 'code') => `${remoteAgentPublicOrigin}/v1/projects/${projectId}/memory/${mode}/mcp`,
+      tokenFor: (projectId: string, mode: 'code') => mintProjectMemoryMcpToken(remoteApiToken, projectId, mode),
+    },
+  } : {}),
 })
 const runtime = await startPromptHttpServer({
   host: env.OPENLINK_REMOTE_AGENT_HOST || '127.0.0.1',
   port: integer(env.OPENLINK_REMOTE_AGENT_PORT, 43124, 1, 65_535),
-  apiToken: required(env, 'OPENLINK_REMOTE_AGENT_API_TOKEN'),
-  storageRoot: resolvePath(env.OPENLINK_REMOTE_AGENT_STORAGE_ROOT || '.agent-data/remote-host'),
+  apiToken: remoteApiToken,
+  storageRoot: remoteStorageRoot,
   transport: 'ssh-project-vm-opensandbox-pi-cli-rpc',
   sessionIdleTtlMs,
   desktopPrewarm,
@@ -227,6 +258,7 @@ const runtime = await startPromptHttpServer({
   desktopIdleTtlMs,
   maxSessions,
   projectRuntimeManager,
+  civilizationMemoryService: civilizationMemoryRuntime.config,
   requireProjectRuntime: true,
   browserGatewayPublicUrl: env.OPENLINK_BROWSER_GATEWAY_PUBLIC_URL?.trim() || env.OPENLINK_AGENT_PUBLIC_URL?.trim() || `http://${env.OPENLINK_REMOTE_AGENT_HOST || '127.0.0.1'}:${integer(env.OPENLINK_REMOTE_AGENT_PORT, 43124, 1, 65_535)}`,
   browserGatewayAllowedOrigins: origins(env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || env.OPENLINK_BROWSER_ALLOWED_ORIGINS),
@@ -242,7 +274,11 @@ const runtime = await startPromptHttpServer({
   close: async () => {
     await projectRuntimeManager.close()
     await backend.close()
+    await civilizationMemoryRuntime.close()
   },
+}).catch(async (error) => {
+  await civilizationMemoryRuntime.close()
+  throw error
 })
 projectRuntimeProvisioner?.start()
 

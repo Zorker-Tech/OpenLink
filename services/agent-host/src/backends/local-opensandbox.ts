@@ -19,6 +19,7 @@ import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-
 import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
+import type { ProjectMemoryMcpBinding } from '../project-memory-mcp.js'
 import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
 import { agentToolsAvailable, agentToolRegistryEnvironment, agentToolRegistryVolume, agentToolsSkillDirectories, agentToolsSkillFiles } from '../agent-tools.js'
 import { runtimePolicyEnvironment } from '../runtime-policy.js'
@@ -47,6 +48,10 @@ export interface LocalOpenSandboxConfig {
     urlFor: (projectId: string) => string
     tokenFor: (projectId: string) => string
   }
+  /** Explicit Code-mode project memory capability, scoped by Agent Host. */
+  projectMemoryMcp?: ProjectMemoryMcpBinding
+  /** Stop host-owned sidecars after the OpenSandbox transport closes. */
+  closeAdditionalResources?: () => Promise<void>
   /** Produces the host Codex installation snapshot copied into each isolated
    * Codex session before its App Server starts. Pi sessions never receive it. */
   codexPluginSnapshot?: () => Promise<CodexPluginSnapshot>
@@ -82,13 +87,17 @@ function workerUrl(config: ConnectionConfig, endpoint: Endpoint): string {
   return `${config.protocol}://${endpoint.endpoint}`
 }
 
-/** Project sandboxes reach VM-published services through Podman's host gateway. */
+/** Project sandboxes reach host services through the gateway exposed by their VM. */
 export function projectContainerReachableUrl(rawUrl: string, projectRuntime?: ProjectRuntimeDescriptor): string {
   if (!projectRuntime) return rawUrl
   const url = new URL(rawUrl)
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
-    url.hostname = 'host.containers.internal'
+    // QEMU user networking exposes the outer Agent Host at 10.0.2.2 inside
+    // the guest. `host.containers.internal` only resolves inside the Project
+    // VM's Podman network and cannot route back to the outer host from a worker
+    // container. Podman Machine runtimes still use their own host gateway.
+    url.hostname = projectRuntime.backend === 'qemu-kvm' ? '10.0.2.2' : 'host.containers.internal'
   }
   return url.toString().replace(/\/$/, '')
 }
@@ -621,6 +630,9 @@ export class LocalOpenSandboxBackend {
     const supabaseMcpUrl = projectId && this.config.supabaseMcp
       ? projectContainerReachableUrl(this.config.supabaseMcp.urlFor(projectId), projectRuntime)
       : undefined
+    const projectMemoryMcpUrl = projectId && this.config.projectMemoryMcp
+      ? projectContainerReachableUrl(this.config.projectMemoryMcp.urlFor(projectId, this.config.projectMemoryMcp.mode), projectRuntime)
+      : undefined
     const projectSupabaseUrl = projectRuntime?.supabase
       ? projectContainerReachableUrl(projectRuntime.supabase.url, projectRuntime)
       : undefined
@@ -652,7 +664,7 @@ export class LocalOpenSandboxBackend {
         OPENLINK_DESKTOP_MODE: desktopMode,
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
         ...(agentTools ? agentToolRegistryEnvironment() : {}),
-        ...(projectRuntime ? runtimePolicyEnvironment(projectRuntime) : {}),
+        ...runtimePolicyEnvironment(projectRuntime, { projectMemory: Boolean(projectId && this.config.projectMemoryMcp) }),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
@@ -674,6 +686,11 @@ export class LocalOpenSandboxBackend {
           OPENLINK_SUPABASE_MCP_URL: supabaseMcpUrl,
           OPENLINK_SUPABASE_MCP_TOKEN: this.config.supabaseMcp.tokenFor(projectId),
           OPENLINK_SUPABASE_MCP_SESSION_ID: sessionId,
+        } : {}),
+        ...(projectId && this.config.projectMemoryMcp && projectMemoryMcpUrl ? {
+          OPENLINK_PROJECT_MEMORY_EXTENSION_PATH: this.config.projectMemoryMcp.extensionPath,
+          OPENLINK_PROJECT_MEMORY_MCP_URL: projectMemoryMcpUrl,
+          OPENLINK_PROJECT_MEMORY_MCP_TOKEN: this.config.projectMemoryMcp.tokenFor(projectId, this.config.projectMemoryMcp.mode),
         } : {}),
         // Project-local Supabase backend: publishable connection material only.
         // The service-role key / DB password stay inside the Project VM and are
@@ -811,6 +828,10 @@ export class LocalOpenSandboxBackend {
   }
 
   async close(): Promise<void> {
-    await this.connection.closeTransport()
+    try {
+      await this.connection.closeTransport()
+    } finally {
+      await this.config.closeAdditionalResources?.()
+    }
   }
 }
