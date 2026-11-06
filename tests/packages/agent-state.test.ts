@@ -38,6 +38,7 @@ import { toRedactedTodoItem } from "../../source/adapters/interop/redacted-proto
 import { SubagentType, SubagentTypeUnspecified } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import type { SlateCommunicationTurnState } from "../../source/packages/agent/conversation-state.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
@@ -161,7 +162,7 @@ test("a handle reports the session it was built for", () => {
   assert.equal(harnessed.handle.usesLargeContextTreatment(), false)
 })
 
-test("pending calls and workspace snapshots are Slate strings in the state handle", () => {
+test("pending calls and workspace snapshots are Slate strings in the state handle", async () => {
   const pendingMessage = JSON.stringify({ role: "assistant", content: [] })
   const harnessed = harness(new ConversationStateStructure({
     pendingToolCalls: [pendingMessage],
@@ -172,6 +173,9 @@ test("pending calls and workspace snapshots are Slate strings in the state handl
   assert.deepEqual(harnessed.handle.getPendingToolCalls(), [pendingMessage])
   assert.deepEqual(harnessed.handle.previousWorkspaceUris, ["file:///workspace"])
   assert.deepEqual(harnessed.handle.trackedGitRepoBranches, [{ repoPath: "/repo", branchName: "feature" }])
+
+  const nextState = await harnessed.handle.computeNewStructure(createContext())
+  assert.deepEqual(nextState.pendingToolCalls, [], "a fresh computed turn clears queued messages unless its action reattaches them")
 })
 
 test("a recomputed snapshot preserves the single archive reference and turn timings", async () => {
@@ -203,11 +207,8 @@ test("the paths read in a turn are remembered, deduplicated and checkpointed", a
   assert.deepEqual([...harnessed.handle.readPaths], ["/repo/a.ts", exactPath])
   assert.equal(harnessed.handle.hasReadPath("/repo/b.ts"), false)
   const checkpoint = await harnessed.handle.computeNewStructure(createContext())
-  const redactedCheckpoint = checkpoint as unknown as {
-    readonly readPaths: readonly { unwrap(purpose: PrivacyCapability): string }[]
-  }
   assert.deepEqual(
-    redactedCheckpoint.readPaths.map(path => path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+    checkpoint.readPaths,
     ["/repo/a.ts", exactPath],
   )
 })
@@ -258,7 +259,9 @@ test("setting a new Slate mode clears an unknown persisted mode code", async () 
 
   assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.CHAT)
   assert.equal(harnessed.handle.conversationStateStructure.unknownModeCode, undefined)
-  assert.equal((await harnessed.handle.computeNewStructure(createContext())).mode, AgentMode.ASK)
+  const snapshot = await harnessed.handle.computeNewStructure(createContext())
+  assert.equal(snapshot.mode, SlateMode.CHAT)
+  assert.equal(toInteropConversationState(snapshot).mode, AgentMode.ASK)
 })
 
 test("a new persisted snapshot encodes the Slate mode instead of dropping it", async () => {
@@ -267,7 +270,7 @@ test("a new persisted snapshot encodes the Slate mode instead of dropping it", a
 
   const snapshot = await harnessed.handle.computeNewStructure(createContext())
 
-  assert.equal(snapshot.mode, AgentMode.PLAN)
+  assert.equal(snapshot.mode, SlateMode.PLAN)
 })
 
 test("a plan is stored, replaced and cleared", async () => {
@@ -758,13 +761,16 @@ test("Slate communication updates remain available in memory and in persisted co
   assert.equal(state?.completedSubtitle, "subtitle")
 
   const persisted = await harnessed.handle.computeNewStructure(createContext())
-  assert.equal(persisted.communicateUpdateHistory[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "one")
-  assert.equal(persisted.communicateUpdateFinalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "done")
-  const persistedTurn = persisted.communicateUpdateStatesByParentToolCallId.get("call-1")
-  assert.equal(persistedTurn?.history[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "two")
-  assert.equal(persistedTurn?.history[1]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "three")
-  assert.equal(persistedTurn?.finalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "call summary")
-  assert.equal(persistedTurn?.completedSubtitle?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "subtitle")
+  assert.deepEqual(persisted.communicationHistory, [{ step: "one", messageIndex: 1 }])
+  assert.equal(persisted.communicationFinalSummary, "done")
+  const persistedTurn = (persisted.communicationTurnsByCallId as ReadonlyMap<string, SlateCommunicationTurnState> | undefined)
+    ?.get("call-1")
+  assert.deepEqual(persistedTurn?.history.map(entry => [entry.step, entry.messageIndex]), [["two", 2], ["three", 3]])
+  assert.equal(persistedTurn?.finalSummary, "call summary")
+  assert.equal(persistedTurn?.completedSubtitle, "subtitle")
+  const persistedInterop = toInteropConversationState(persisted)
+  assert.equal(persistedInterop.communicateUpdateHistory[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "one")
+  assert.equal(persistedInterop.communicateUpdateFinalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "done")
 })
 
 test("Slate token details are stored as the values they contain", () => {

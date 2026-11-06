@@ -2,7 +2,11 @@
 
 import type { Context } from "../context/context.ts"
 import { createSpan } from "../context/telemetry.ts"
-import { restoreAgentConversationState } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts"
+import type { SlateConversationState } from "./conversation-state.ts"
+import {
+  restoreAgentConversationState,
+  type RunnerConversationState,
+} from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts"
 
 const RUN_KIND_CHANGING_ACTIONS = [
   "userMessageAction",
@@ -42,19 +46,19 @@ export function buildRunStreamStateHandleOptions(
 
 export interface RunStreamStateUpdateHost {
   readonly blobStore: { flush(ctx: Context): Promise<unknown> }
-  readonly onStateUpdate?: ((ctx: Context, state: unknown) => Promise<void> | void) | undefined
+  readonly onStateUpdate?: ((ctx: Context, state: RunnerConversationState) => Promise<void> | void) | undefined
 }
 
 async function publishCheckpoint(
   host: RunStreamStateUpdateHost,
   context: Context,
-  redactedState: unknown,
+  state: SlateConversationState,
 ): Promise<void> {
   using span = createSpan(context.withName("onStateUpdateWithFlush"))
   try {
     await host.blobStore.flush(span.ctx)
-    const state = restoreAgentConversationState(redactedState)
-    await host.onStateUpdate?.(span.ctx, state)
+    const interopState = restoreAgentConversationState(state)
+    await host.onStateUpdate?.(span.ctx, interopState)
   } catch {
     // Preserve the action result when checkpoint persistence fails.
   }
@@ -62,6 +66,6 @@ async function publishCheckpoint(
 
 export function createRunStreamStateUpdateWithFlush(
   host: RunStreamStateUpdateHost,
-): (ctx: Context, state: unknown) => Promise<void> {
+): (ctx: Context, state: SlateConversationState) => Promise<void> {
   return (context, state) => publishCheckpoint(host, context, state)
 }

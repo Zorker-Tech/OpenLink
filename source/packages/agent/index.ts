@@ -20,7 +20,10 @@ import { BackgroundSummarizationMode, DISABLED_BACKGROUND_SUMMARIZATION_PROPS } 
 import { withLogAttributes, createSpan } from "../context/index.ts";
 import { createHistogram } from "../metrics/index.ts";
 import { PrivacyMode } from "../redaction/privacy-mode.ts";
-import { restoreAgentConversationState } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
+import {
+  redactAgentConversationState,
+  restoreAgentConversationState,
+} from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
 import { redactInteractionUpdate } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 // the session and its state
 import { drainPendingWritesOnRunStreamError } from "./abort-drain.ts";
@@ -159,7 +162,7 @@ export class AgentRoot {
         await this.conversationActionReceiver.pop(ctx);
         if (queuedActionHandler === undefined) continue;
         baseExecutor.clearMessages();
-        const queuedStateKeeper = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, liveState, baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(nextQueued.action.case), loadRootPromptBlobs: true }));
+        const queuedStateKeeper = await ConversationStateHandle.fromConversationStateStructure(ctx, this.blobStore, redactAgentConversationState(liveState), baseExecutor as Any, this.config.formattingOptions, this.config.modelId, this.config.agentType, this.stateHandleOptions({ shouldTrackAgentTypeChange: this.shouldTrackAgentTypeChange(nextQueued.action.case), loadRootPromptBlobs: true }));
         await runAction(queuedActionHandler, nextQueued.action.value, queuedStateKeeper);
       }
       if (!options?.skipTurnEndedUpdate) {

@@ -2,7 +2,7 @@ import type { Context } from "../../context/context.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import type { SlateMode as SlateModeValue } from "../mode-processing.ts"
 import type { SlateConversationSummary } from "../conversation-summary-state.ts"
-import type { SlateConversationTokenDetails } from "../conversation-state.ts"
+import type { SlateConversationState, SlateConversationTokenDetails } from "../conversation-state.ts"
 
 export type SummarizeLooseValue = any
 
@@ -21,7 +21,7 @@ export interface SummarizeStateHandler {
   readonly tokenDetails: SlateConversationTokenDetails
   getBlobStore(): unknown
   getPrivacyMode(): PrivacyMode
-  computeNewStructure(ctx: Context): Promise<unknown>
+  computeNewStructure(ctx: Context): Promise<SlateConversationState>
   setSummary(summary: SlateConversationSummary): void
   clearTurns(): Promise<void>
   setTokenDetails(tokenDetails: SlateConversationTokenDetails): void

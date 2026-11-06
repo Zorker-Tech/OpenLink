@@ -66,7 +66,7 @@ import { extractAutomationTriggerContext, getAllRules } from "../common.ts";
 import { mcpInputSchemaToJson, type McpInputSchemaLike } from "../../../agent-exec/mcp-operations.ts";
 import { getInvocationId } from "../../utils/invocation-id.ts";
 import { computeNextPromptContextDetails } from "../../utils/next-redacted-prompt-context-details.ts";
-import type { SlateConversationTokenDetails } from "../../conversation-state.ts";
+import type { SlateConversationState, SlateConversationTokenDetails } from "../../conversation-state.ts";
 import type { PromptTokenBreakdownParams } from "../../utils/prompt-token-breakdown.ts";
 import {
   resolveCurrentStepMode,
@@ -85,6 +85,7 @@ import { warnIfLongTrailingUserMessageRun } from "./user-message-run-warning.ts"
 import type { AgentType } from "../../utils/agent-config.ts";
 
 type PromptTokenTrackingParamsLike = Parameters<typeof trackPromptTokenUsage>[0];
+type PublishStateUpdate = (runContext: Context, state: SlateConversationState) => Promise<void>;
 
 export function slateModeFromUserMessage(
   mode: AgentModeInterop | SlateModeValue | undefined,
@@ -1049,7 +1050,7 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
   getPrivacyMode(): PrivacyMode;
   assertRootPromptBlobsLoadedForFullPromptRead(): void;
   invalidateRootPromptPrefix(): void;
-  computeNewStructure(runContext: Context): Promise<{ pendingToolCalls: unknown[] }>;
+  computeNewStructure(runContext: Context): Promise<SlateConversationState>;
   setTokenDetails(tokenUsageDetails: SlateConversationTokenDetails): void;
   addTurnUsage(tokenUsage: {
     readonly inputTokens: number;
@@ -1883,7 +1884,7 @@ export class AbstractUserMessageActionHandler {
     repositoryInfos: readonly unknown[],
     requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
-    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    publishStateUpdate: PublishStateUpdate | undefined,
     previousQueuedMessageSource: unknown,
     maxOutputTokenRetryDebug: MaxOutputTokenRetryDebugLike | undefined,
   ): Promise<{ readonly hasToolCall: boolean; readonly responseMessages: readonly CoreMessageLike[] }> {
@@ -2007,25 +2008,21 @@ export class AbstractUserMessageActionHandler {
               }));
               if (this.config.fireAndForgetCheckpoints) {
                 void turnState.computeNewStructure(runContext).then(async current => {
-                  current.pendingToolCalls = pendingWithContracts.map(pendingToolCall => createRedactedString(
-                    pendingToolCall,
-                    DataClassification.CODE,
-                    "pendingToolCalls",
-                    PrivacyMode.UNSPECIFIED,
-                  ));
-                  if (publishStateUpdate) await publishStateUpdate(runContext, current);
+                  const checkpoint: SlateConversationState = {
+                    ...current,
+                    pendingToolCalls: pendingWithContracts,
+                  };
+                  if (publishStateUpdate) await publishStateUpdate(runContext, checkpoint);
                 }).catch(error => {
                   agentLogger.error(runContext, "Failed to persist checkpoint with pending tool calls", { error });
                 });
               } else {
                 const current = await turnState.computeNewStructure(runContext);
-                current.pendingToolCalls = pendingWithContracts.map(pendingToolCall => createRedactedString(
-                  pendingToolCall,
-                  DataClassification.CODE,
-                  "pendingToolCalls",
-                  PrivacyMode.UNSPECIFIED,
-                ));
-                if (publishStateUpdate) await publishStateUpdate(runContext, current);
+                const checkpoint: SlateConversationState = {
+                  ...current,
+                  pendingToolCalls: pendingWithContracts,
+                };
+                if (publishStateUpdate) await publishStateUpdate(runContext, checkpoint);
               }
             },
         );
@@ -2561,7 +2558,7 @@ export class AbstractUserMessageActionHandler {
     mcpToolSet: readonly MergedRequestContextToolLike[],
     repositoryDetails: readonly unknown[],
     requestState: RequestContextInterop,
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: PublishStateUpdate,
   ): Promise<void> {
     using spanContext = createSpan(parentCtx.withName("runTurnLoop"));
     const runContext = spanContext.ctx;
@@ -2969,7 +2966,7 @@ export class AbstractUserMessageActionHandler {
     _turn: RunStepTurnLike,
     reminderText: string,
     requestState: RequestContextInterop,
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: PublishStateUpdate,
   ): Promise<RunStepTurnLike> {
     const syntheticUserMessage = createSyntheticUserMessageInterop({
       text: reminderText,
@@ -2994,7 +2991,7 @@ export class AbstractUserMessageActionHandler {
     turnState: RunStepStateHandlerLike,
     currentTurn: RunStepTurnLike,
     currentMcpTools: readonly MergedRequestContextToolLike[],
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: PublishStateUpdate,
   ): Promise<{ readonly turn: RunStepTurnLike; readonly hasQueuedMessages: boolean; readonly mcpTools: MergedRequestContextToolLike[] }> {
     let conversationTurn = currentTurn;
     let hasQueuedMessages = false;
@@ -3189,7 +3186,7 @@ export class AbstractUserMessageActionHandler {
     repositoryDetails: readonly unknown[],
     requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
-    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    publishStateUpdate: PublishStateUpdate | undefined,
     previousQueuedMessageSource?: unknown,
     emptyResponseRetryTurnBudget?: EmptyResponseRetryTurnBudgetLike,
   ): Promise<StepResultLike & {
@@ -3376,7 +3373,7 @@ export class AbstractUserMessageActionHandler {
     turnState: RunStepStateHandlerLike,
     madeToolCall: boolean,
     modelMessages: CoreMessageLike[],
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: PublishStateUpdate,
     grindRebuildParams: {
       readonly requestContext: RequestContextInterop;
       readonly toolsGenerator: AgentToolsGenerator;
@@ -3485,7 +3482,7 @@ export class AbstractUserMessageActionHandler {
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryDetails: readonly unknown[],
     requestState: RequestContextInterop,
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
+    publishStateUpdate: PublishStateUpdate,
   ): Promise<{ readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("runSingleStep"));
     const runContext = span.ctx;
@@ -3669,7 +3666,7 @@ export class AbstractUserMessageActionHandler {
     mcpToolSet: PromptTokenTrackingParamsLike["mcpTools"],
     repositoryDetails: readonly unknown[],
     requestState: RequestContextInterop,
-    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    publishStateUpdate: PublishStateUpdate | undefined,
   ): Promise<{
     readonly toolCallDescriptors: readonly unknown[];
     readonly splitStepData: {
@@ -3800,8 +3797,8 @@ export class AbstractUserMessageActionHandler {
     turnState: RunStepStateHandlerLike & SplitStepStateMutationTarget,
     mcpToolSet: readonly MergedRequestContextToolLike[],
     requestState: RequestContextInterop,
-    publishStateUpdate: (runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>,
-  ): Promise<{ readonly state: { pendingToolCalls: unknown[] }; readonly hasToolCall: boolean }> {
+    publishStateUpdate: PublishStateUpdate,
+  ): Promise<{ readonly state: SlateConversationState; readonly hasToolCall: boolean }> {
     using span = createSpan(parentCtx.withName("finalizeStep"));
     const runContext = span.ctx;
     const lastTurnRef = turnState.turns[turnState.turns.length - 1];
@@ -3859,7 +3856,7 @@ export class AbstractUserMessageActionHandler {
     repositoryDetails: readonly unknown[],
     requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
-    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    publishStateUpdate: PublishStateUpdate | undefined,
   ): Promise<ModelOnlyStepResultLike & { readonly availableToolNames: readonly string[] }> {
     const { result: stepResult, tools: executableTools } = await this.executeStepWithCommonMetrics(
       runContext,
@@ -3901,7 +3898,7 @@ export class AbstractUserMessageActionHandler {
     repositoryInfos: readonly unknown[],
     requestState: RequestContextInterop,
     fileLockManager: FileOperationLockManager,
-    publishStateUpdate: ((runContext: Context, turnStatus: { pendingToolCalls: unknown[] }) => Promise<void>) | undefined,
+    publishStateUpdate: PublishStateUpdate | undefined,
   ): Promise<ModelOnlyStepResultLike> {
     using spanCtxt = createSpan(parentCtx.withName("runModelOnlyStep"));
     const runContext = spanCtxt.ctx;

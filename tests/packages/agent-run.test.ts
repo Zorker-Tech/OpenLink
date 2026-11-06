@@ -41,6 +41,7 @@ import {
 } from "../../source/packages/agent/tools/core/todo/common.ts"
 import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { fromInteropConversationState } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { createContext as makeContext } from "../../source/packages/context/context.ts"
 
 const ctx = () => createContext()
@@ -525,11 +526,11 @@ test("the checkpoint flushes the blobs first and hands the state on unredacted",
     },
     onStateUpdate: async (_ctx, state) => {
       order.push("state")
-      assert.notEqual(state, undefined)
+      assert.ok(state instanceof ConversationStateStructure)
     },
   })
-  // A real redacted state, so the decode the checkpoint performs is exercised rather than skipped.
-  await update(ctx(), toRedactedConversationStateStructure(new ConversationStateStructure(), PrivacyMode.UNSPECIFIED))
+  const redactedState = toRedactedConversationStateStructure(new ConversationStateStructure(), PrivacyMode.UNSPECIFIED)
+  await update(ctx(), fromInteropConversationState(redactedState))
   assert.deepEqual(order, ["flush", "state"])
 })
 
@@ -544,7 +545,8 @@ test("a checkpoint that fails is not the action's failure", async () => {
       throw new Error("and this too")
     },
   })
-  await update(ctx(), toRedactedConversationStateStructure(new ConversationStateStructure(), PrivacyMode.UNSPECIFIED))
+  const redactedState = toRedactedConversationStateStructure(new ConversationStateStructure(), PrivacyMode.UNSPECIFIED)
+  await update(ctx(), fromInteropConversationState(redactedState))
 })
 
 // ---------------------------------------------------------------------------------------------

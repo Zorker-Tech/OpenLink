@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts";
+import type { SlateConversationState } from "../../source/packages/agent/conversation-state.ts";
 import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { reactivatePausedGoalOnUserMessage } from "../../source/packages/agent/actions/user-message-action/reactivate-paused-goal.ts";
@@ -9,10 +10,20 @@ import { reactivatePausedGoalOnUserMessage } from "../../source/packages/agent/a
 function buildStateHandler(goalState: SlateGoalState | undefined) {
   const events: unknown[] = [];
   let current = goalState;
-  const structure = { revision: 7 };
+  const base: Omit<SlateConversationState, "goalState"> = {
+    privacyMode: "no-storage",
+    rootPromptMessagesJson: [],
+    turns: [],
+    todos: [],
+    previousWorkspaceUris: [],
+    summaryArchives: [],
+    fileStatesV2: new Map(),
+    readPaths: [],
+  };
+  let structure: SlateConversationState | undefined;
   return {
     events,
-    structure,
+    get structure() { return structure; },
     get goalState() { return current; },
     setGoalState(next: SlateGoalState) {
       events.push(["set", next]);
@@ -20,6 +31,7 @@ function buildStateHandler(goalState: SlateGoalState | undefined) {
     },
     async computeNewStructure() {
       events.push(["compute"]);
+      structure = { ...base, ...(current === undefined ? {} : { goalState: current }) };
       return structure;
     },
   };

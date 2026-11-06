@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.6563881401617251,
-      "refreshReason": "The conversation snapshot now uses Slate-owned plan, goal, subagent, run, communication, token-detail, pending-call, workspace-URI, tracked-repository, legacy-file-state, timing and archive-reference values. Old file blob IDs load lazily and migrate to the versioned file map after a successful write; redaction and generated snapshot conversion remain in interop.",
-      "evidence": "Communication and token-detail state/adapter suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, timing/archive round-trip, root checkpoint, GC and subagent recovery suites pass 115/115. The full Work-host suite passes 9972/9972 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. Measured overlap is 0.6563881401617251 against 9275 baseline pairs."
+      "overlap": 0.655633423180593,
+      "refreshReason": "ConversationStateHandle now computes and returns SlateConversationState directly; runner and generated snapshot conversion happen in adapters. The snapshot carries typed communication, token, pending-call, workspace, file-state, timing and archive values.",
+      "evidence": "Communication and token-detail state/adapter suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, timing/archive round-trip, root checkpoint, GC and subagent recovery suites pass 115/115. The full Work-host suite passes 9972/9972 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. computeNewStructure returns SlateConversationState; the runner message conversion remains in its adapter. Measured overlap is 0.655633423180593 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
@@ -539,9 +539,9 @@
     },
     "packages/agent/actions/user-message-action/reactivate-paused-goal.ts": {
       "claim": "rewritten",
-      "overlap": 0.5280898876404494,
-      "refreshReason": "Paused-goal reactivation now operates directly on Slate goal state; the former interop path is only a compatibility re-export.",
-      "evidence": "tests/packages/agent-reactivate-paused-goal-contract.test.ts pins paused-only activation, original-state preservation, idle-counter reset, accrued-time retention, clock anchoring, and set/compute/publish order. The complete Work-host suite passes 9872/9872 and interop:check drops two core schema consumers."
+      "overlap": 0.5056179775280899,
+      "refreshReason": "Paused-goal reactivation now publishes a SlateConversationState snapshot; the runner interop adapter converts it only at the host boundary.",
+      "evidence": "agent-reactivate-paused-goal-contract.test.ts pins paused-only activation, original-state preservation, idle-counter reset, accrued-time retention, clock anchoring, and set/compute/publish order using a Slate state value. Work-host typecheck passes. Measured overlap is 0.5056179775280899 against 89 baseline pairs."
     },
     "packages/agent/tools/mcp/smart-mode-approval-store.ts": {
       "claim": "rewritten",
@@ -2275,9 +2275,9 @@
     },
     "packages/agent/utils/run-step-state-contract.ts": {
       "claim": "rewritten",
-      "overlap": 0.7384615384615385,
-      "refreshReason": "Run-step token details now reuse SlateConversationTokenDetails, including maximumTokens, contextTree and typed usage breakdowns.",
-      "evidence": "agent-run-step-contract.test.ts passes 1/1 and Work-host typecheck passes. The contract pins checkpoint state, generic step state calculation, Slate token-detail fields, usage reporting and checkpoint controls. Generated redacted token-detail types are not part of the run-step contract. Measured overlap is 0.7384615384615385 against 65 baseline pairs."
+      "overlap": 0.7076923076923077,
+      "refreshReason": "Run-step checkpoint state now uses the Slate pending-message type and returns SlateConversationState values.",
+      "evidence": "agent-run-step-contract.test.ts passes 1/1 and Work-host typecheck passes. The contract pins Slate pending-call strings, generic step state calculation, Slate token-detail fields, usage reporting and checkpoint controls. Generated redacted token-detail types are not part of the run-step contract. Measured overlap is 0.7076923076923077 against 65 baseline pairs."
     },
     "packages/agent/tools/lenient-enum.ts": {
       "claim": "rewritten",
@@ -3487,9 +3487,9 @@
     },
     "packages/agent/run-stream-lifecycle.ts": {
       "claim": "rewritten",
-      "overlap": 0.7361111111111112,
-      "refreshReason": "Redacted Agent state restoration moved into a named interop adapter; the lifecycle module now orchestrates flush and update without importing generated decode functions.",
-      "evidence": "agent-run.test.ts passes 45/45, covering run lifecycle, checkpoint flush/decode/update sequencing and failures that must not replace the action result. Work-host typecheck passes and the interop boundary reports 73 direct consumers."
+      "overlap": 0.7083333333333334,
+      "refreshReason": "The lifecycle port accepts SlateConversationState and its typed runner checkpoint adapter projects into the legacy message at the host edge.",
+      "evidence": "agent-run.test.ts passes with Slate checkpoint inputs and typed runner output, covering flush-before-adapt ordering and failures that must not replace the action result. The full Work-host suite passes 9972/9972; TypeScript and interop gates pass. Measured overlap is 0.7083333333333334 against 144 baseline pairs."
     },
     "packages/git-core/git-exec.ts": {
       "claim": "rewritten",
