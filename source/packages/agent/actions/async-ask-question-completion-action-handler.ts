@@ -31,13 +31,13 @@ export class AsyncAskQuestionCompletionActionHandler extends AbstractUserMessage
     try {
       logger.info(ctx, "Handling async ask-question completion", {
         originalToolCallId: action.originalToolCallId,
-        resultCase: action.result?.result.case,
+        resultKind: action.result?.kind,
         questionsCount: action.originalArgs?.questions.length ?? 0,
       })
       if (!isValidAskQuestionCompletion(action)) {
         logger.warn(ctx, "Skipping invalid async ask-question completion", {
           originalToolCallId: action.originalToolCallId,
-          resultCase: action.result?.result.case,
+          resultKind: action.result?.kind,
         })
         return await stateHandler.computeNewStructure(ctx)
       }

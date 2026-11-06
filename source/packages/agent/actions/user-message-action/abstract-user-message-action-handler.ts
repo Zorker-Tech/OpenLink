@@ -2629,7 +2629,7 @@ export class AbstractUserMessageActionHandler {
           let updatedMcpTools = currentMcpTools;
           const queuedAction = await this.conversationActionReceiver.peek(runContext);
           if (queuedAction?.action.kind === "ask-question-completion") {
-            agentLogger.info(runContext, "Found queued AsyncAskQuestionCompletionAction - processing immediately", {
+            agentLogger.info(runContext, "Found queued Slate ask-question completion - processing immediately", {
               originalToolCallId: (queuedAction.action.payload as AskQuestionCompletionAction).originalToolCallId,
             });
             await this.conversationActionReceiver.pop(runContext);
@@ -2647,7 +2647,7 @@ export class AbstractUserMessageActionHandler {
               await this.interactionListener.sendUpdate(runContext, RedactedUpdates.toolCallCompleted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
               agentLogger.info(runContext, "Injected async completion into current turn", {
                 originalToolCallId: completionAction.originalToolCallId,
-                resultCase: completionAction.result?.result.case,
+                resultKind: completionAction.result?.kind,
               });
               totalToolCallsInTurn += 1;
               hasQueuedMessages = true;
@@ -2980,7 +2980,7 @@ export class AbstractUserMessageActionHandler {
     while (true) {
       const queuedAction = await this.conversationActionReceiver.peek(runContext);
       if (queuedAction?.action.kind === "ask-question-completion") {
-        agentLogger.warn(runContext, "Found AsyncAskQuestionCompletionAction in queue handler - should have been handled by inline handler", { originalToolCallId: (queuedAction.action.payload as AskQuestionCompletionAction).originalToolCallId });
+        agentLogger.warn(runContext, "Found Slate ask-question completion in queue handler - should have been handled by inline handler", { originalToolCallId: (queuedAction.action.payload as AskQuestionCompletionAction).originalToolCallId });
         break;
       }
       if (queuedAction?.action.kind !== "user-message") break;

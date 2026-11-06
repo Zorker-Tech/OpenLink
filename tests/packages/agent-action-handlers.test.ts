@@ -33,6 +33,8 @@ import { AgentType } from "../../source/packages/agent/utils/agent-config.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
 import type { SlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
+import { slateAgentActionFromRedactedInterop } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts"
+import type { AskQuestionCompletionAction } from "../../source/packages/agent/actions/ask-question-completion.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
 import { createSlateShellInvocation, storeSlateShellInvocation } from "../../source/packages/agent/shell-state.ts"
@@ -286,14 +288,18 @@ test("plan execution uses Slate chat mode across policy and encodes only the sto
 // An answer to a question that was asked asynchronously
 // ---------------------------------------------------------------------------------------------
 
-function askQuestionCompletion(overrides: Record<string, unknown> = {}) {
+function askQuestionCompletion(overrides: Record<string, unknown> = {}): AskQuestionCompletionAction {
   const action = new AsyncAskQuestionCompletionAction({
     originalToolCallId: "call-1",
     originalArgs: new AskQuestionArgs({ title: "A follow-up" }),
     result: new AskQuestionResult({ result: { case: "success", value: new AskQuestionSuccess() } }),
     ...overrides,
   })
-  return toRedactedAsyncAskQuestionCompletionAction(action, PrivacyMode.UNSPECIFIED)
+  const redacted = toRedactedAsyncAskQuestionCompletionAction(action, PrivacyMode.UNSPECIFIED)
+  return slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.UNSPECIFIED,
+    action: { case: "asyncAskQuestionCompletionAction", value: redacted as never },
+  } as never).payload as AskQuestionCompletionAction
 }
 
 test("an answer that is not an answer is left alone", async () => {

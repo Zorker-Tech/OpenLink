@@ -3005,8 +3005,8 @@
     },
     "packages/agent/actions/async-ask-question-completion-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5085106382978724,
-      "evidence": "Async ask-question handler and completion contracts pass 27/27; Work-host typecheck and the full suite pass 9145/9145 under Node 24. The handler selects the existing or next turn, while generated message and request-context projection is isolated in the interop adapter."
+      "overlap": 0.48723404255319147,
+      "evidence": "Focused ask-question completion, action-handler and route-contract suites pass 36/36; the full Work-host suite passes 9993/9993 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler selects the existing or next turn using Slate's versioned completion payload; historical action and request-context projection stays at the migration boundary."
     },
     "packages/agent-exec/mcp.ts": {
       "claim": "rewritten",
@@ -4445,9 +4445,9 @@
     },
     "packages/agent/actions/ask-question-completion.ts": {
       "claim": "rewritten",
-      "overlap": 0.652542372881356,
-      "refreshReason": "Kept async completion validity, idempotency, receipts and prompt history in Slate core while moving redacted message construction and protocol-result projection to interop.",
-      "evidence": "agent-ask-question-completion.test.ts passes 13/13. Work-host typecheck/build pass. The adapter now owns generated ask-result decoding and redacted call envelopes; interop boundary reports 38 direct consumers. Measured overlap is 0.652542372881356 against 590 baseline pairs."
+      "overlap": 0.5050847457627119,
+      "refreshReason": "Defined a versioned Slate completion event and result union; retained completion policy and prompt history in Slate core, with historical action decoding and stored-call encoding at the interop boundary.",
+      "evidence": "Focused ask-question completion, action-handler and route-contract suites pass 36/36; the full Work-host suite passes 9993/9993 under Node 24. Work-host typecheck and rewrite/interop gates pass. Contracts cover the Slate action projection, preservation of historical values, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. The Slate result is authoritative when known. Measured overlap is 0.5050847457627119 against 590 baseline pairs."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",

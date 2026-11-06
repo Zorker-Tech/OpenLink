@@ -17,6 +17,7 @@ import { isSlateConversationCheckpointV2, type SlateConversationCheckpointV2 } f
 import { decodeIncomingSlateUserMessage } from "./user-message-action-input-adapter.ts"
 import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
+import { slateAskQuestionCompletionFromRedacted } from "./ask-question-result-adapter.ts"
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
 import { interopAgentConversationCheckpointFromSlate } from "./agent-conversation-protobuf-adapter.ts"
 import { toRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
@@ -198,6 +199,12 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
   if (slateAction.kind === SlateAgentActionKind.EXECUTE_PLAN) {
     return { ...slateAction, payload: decodeExecutePlanAction(action.action.value) }
   }
+  if (slateAction.kind === SlateAgentActionKind.ASK_QUESTION_COMPLETION) {
+    return {
+      ...slateAction,
+      payload: slateAskQuestionCompletionFromRedacted(action.action.value, action._privacyMode),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.USER_MESSAGE) {
     return { ...slateAction, payload: slateUserMessageActionPayloadFromRedacted(action.action.value) }
   }
@@ -227,6 +234,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "executePlanAction") {
     const wrapped = new ConversationAction({ action: { case: "executePlanAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "asyncAskQuestionCompletionAction") {
+    const wrapped = new ConversationAction({ action: { case: "asyncAskQuestionCompletionAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   const value = action.value
