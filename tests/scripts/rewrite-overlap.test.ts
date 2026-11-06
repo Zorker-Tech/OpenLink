@@ -1490,6 +1490,27 @@ describe("rewrite overlap gate inputs", () => {
     assert.equal(exemptSourceReason("adapters/interop/agent/goal-continuation-message-adapter.ts"), undefined);
   });
 
+  it("scores subscription notification batches as Slate-owned message data", () => {
+    assert.deepEqual(sourcePathsOf({
+      port: "packages/agent/actions/subscription-notification-action-handler.ts",
+      rewritten: "source/packages/agent/actions/subscription-notification-action-handler.ts",
+    }), [
+      "packages/agent/actions/subscription-notification-action-handler.ts",
+      "packages/agent/actions/subscription-notification-contracts.ts",
+    ]);
+    assert.equal(exemptSourceReason("adapters/interop/agent/subscription-notification-action-adapter.ts"), undefined);
+  });
+
+  it("scores background completion handling together with its Slate action contract", () => {
+    assert.deepEqual(sourcePathsOf({
+      port: "packages/agent/actions/background-task-completion-action-handler.ts",
+      rewritten: "source/packages/agent/actions/background-task-completion-action-handler.ts",
+    }), [
+      "packages/agent/actions/background-task-completion-action-handler.ts",
+      "packages/agent/actions/background-task-completion-contracts.ts",
+    ]);
+  });
+
   it("keeps background-shell executor cases in the interop adapter", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent-exec/background-shell.ts",

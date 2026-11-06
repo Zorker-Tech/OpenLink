@@ -22,6 +22,9 @@ import {
   shouldTrackAgentTypeChange,
 } from "../../source/packages/agent/run-stream-lifecycle.ts"
 import { SubscriptionWakeupActionHandler } from "../../source/packages/agent/actions/subscription-notification-action-handler.ts"
+import { createSlateSubscriptionNotificationActionPayload } from "../../source/packages/agent/actions/subscription-notification-contracts.ts"
+import type { SlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
+import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
 import {
   DETAILED_COMPACTION_PROMPT,
   MAX_SELF_SUMMARY_RETRIES,
@@ -569,10 +572,18 @@ test("a notification becomes a user message with the earlier ones prepended", as
       return "model"
     },
   })
-  const action = { _privacyMode: PrivacyMode.UNSPECIFIED, notifications: [{ n: 1 }, { n: 2 }] }
-  assert.equal(await handler.handle(ctx(), action as never, {}, {}, {}, {}), "handled")
-  assert.equal(await handler.handleSingleStep(ctx(), action as never, {}, {}, {}, {}), "single")
-  assert.equal(await handler.handleModelStep(ctx(), action as never, {}, {}, {}, {}), "model")
+  const requestContext = { source: "timer" }
+  const action = createSlateSubscriptionNotificationActionPayload({
+    notifications: [
+      createSlateUserMessageInput({ text: "first notification", messageId: "notification-1" }),
+      createSlateUserMessageInput({ text: "latest notification", messageId: "notification-2" }),
+    ],
+    notifyUser: true,
+    compatibility: { requestContext, legacyPayload: { source: "subscription" } },
+  })
+  assert.equal(await handler.handle(ctx(), action, {}, {}, {}, {}), "handled")
+  assert.equal(await handler.handleSingleStep(ctx(), action, {}, {}, {}, {}), "single")
+  assert.equal(await handler.handleModelStep(ctx(), action, {}, {}, {}, {}), "model")
   assert.equal(calls.length, 3)
   const options = calls[0]![6] as { forcePrependedUserMessages: boolean; maxPrependedUserMessages: number; isSyntheticWakeup: boolean }
   assert.deepEqual(options, {
@@ -580,6 +591,12 @@ test("a notification becomes a user message with the earlier ones prepended", as
     maxPrependedUserMessages: 2,
     isSyntheticWakeup: true,
   })
+  const userMessageAction = calls[0]![1] as SlateUserMessageActionPayload
+  assert.equal(userMessageAction.schema, "slate.agent-action.user-message")
+  assert.equal(userMessageAction.message?.messageId, "notification-2")
+  assert.deepEqual(userMessageAction.earlierMessages.map(message => message.messageId), ["notification-1"])
+  assert.equal(userMessageAction.notifyUser, true)
+  assert.equal(userMessageAction.compatibility?.requestContext, requestContext)
   assert.equal(handler.getUserMessageActionHandler().handle !== undefined, true)
 })
 
@@ -590,7 +607,7 @@ test("a notification action with nothing in it is refused", async () => {
     handleModelStep: async () => "model",
   })
   await assert.rejects(
-    handler.handle(ctx(), { _privacyMode: PrivacyMode.UNSPECIFIED, notifications: [] } as never, {}, {}, {}, {}),
+    handler.handle(ctx(), createSlateSubscriptionNotificationActionPayload({ notifications: [], notifyUser: false }), {}, {}, {}, {}),
     /requires at least one notification/,
   )
 })

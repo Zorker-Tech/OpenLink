@@ -1,33 +1,61 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { ConversationAction, SubscriptionNotificationAction, UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { RequestContext } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
-import { adaptSubscriptionWakeup } from "../../source/adapters/interop/agent/subscription-notification-action-adapter.ts";
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts";
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts";
+import { SlateAgentActionKind } from "../../source/packages/agent/agent-action-state.ts";
+import {
+  createSlateSubscriptionNotificationActionPayload,
+  isSlateSubscriptionNotificationActionPayload,
+  subscriptionNotificationAsUserMessageAction,
+} from "../../source/packages/agent/actions/subscription-notification-contracts.ts";
+import { slateAgentActionFromInterop } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts";
 
-test("subscription wakeups preserve message order and adjacent request context", () => {
-  const requestContext = { source: "timer" };
-  const listener = { send() {} };
-  const adapted = adaptSubscriptionWakeup({
-    _privacyMode: PrivacyMode.UNSPECIFIED,
-    notifications: [{ index: 1 }, { index: 2 }, { index: 3 }],
-    requestContext,
-    sendToInteractionListener: listener,
+test("subscription notifications project into an ordered Slate batch and user-message action", () => {
+  const historicalAction = new ConversationAction({
+    action: {
+      case: "subscriptionNotificationAction",
+      value: new SubscriptionNotificationAction({
+        notifications: [
+          new UserMessage({ text: "first", messageId: "notice-1" }),
+          new UserMessage({ text: "second", messageId: "notice-2" }),
+          new UserMessage({ text: "latest", messageId: "notice-3" }),
+        ],
+        requestContext: new RequestContext({}),
+        sendToInteractionListener: true,
+      }),
+    },
   });
-  const action = adapted.userMessageAction as {
-    readonly userMessage: unknown;
-    readonly prependUserMessages: readonly unknown[];
-    readonly requestContext: unknown;
-    readonly sendToInteractionListener: unknown;
-    readonly _privacyMode: unknown;
-  };
-  assert.equal(adapted.notificationCount, 3);
-  assert.deepEqual(action.userMessage, { index: 3 });
-  assert.deepEqual(action.prependUserMessages, [{ index: 1 }, { index: 2 }]);
-  assert.equal(action.requestContext, requestContext);
-  assert.equal(action.sendToInteractionListener, listener);
-  assert.equal(action._privacyMode, PrivacyMode.UNSPECIFIED);
+  const action = slateAgentActionFromInterop(historicalAction, PrivacyMode.UNSPECIFIED);
+  const payload = action.payload as ReturnType<typeof createSlateSubscriptionNotificationActionPayload>;
+
+  assert.equal(action.kind, SlateAgentActionKind.SUBSCRIPTION_NOTIFICATION);
+  assert.equal(isSlateSubscriptionNotificationActionPayload(payload), true);
+  assert.equal(payload.schema, "slate.agent-action.subscription-notification");
+  assert.equal(payload.version, 1);
+  assert.deepEqual(payload.notifications.map(message => message.messageId), ["notice-1", "notice-2", "notice-3"]);
+  assert.equal(payload.notifyUser, true);
+  assert.ok(payload.compatibility?.requestContext);
+  assert.ok(payload.compatibility?.legacyPayload);
+
+  const userMessageAction = subscriptionNotificationAsUserMessageAction(payload);
+  assert.equal(userMessageAction.schema, "slate.agent-action.user-message");
+  assert.equal(userMessageAction.message?.messageId, "notice-3");
+  assert.deepEqual(userMessageAction.earlierMessages.map(message => message.messageId), ["notice-1", "notice-2"]);
+  assert.equal(userMessageAction.notifyUser, true);
+  assert.equal(userMessageAction.compatibility?.requestContext, payload.compatibility?.requestContext);
+  const latestText = userMessageAction.message?.text;
+  assert.ok(latestText !== undefined);
+  assert.equal(
+    isRedactedString(latestText) ? latestText.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : latestText,
+    "latest",
+  );
 });
 
-test("an empty subscription event has no user-message conversion", () => {
-  assert.throws(() => adaptSubscriptionWakeup({ _privacyMode: PrivacyMode.UNSPECIFIED, notifications: [] }), /requires at least one notification/);
+test("an empty subscription event is refused before starting a user turn", () => {
+  const payload = createSlateSubscriptionNotificationActionPayload({ notifications: [], notifyUser: false });
+  assert.throws(() => subscriptionNotificationAsUserMessageAction(payload), /requires at least one notification/);
 });

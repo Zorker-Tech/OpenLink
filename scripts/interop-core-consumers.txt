@@ -187,7 +187,6 @@ source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/meta-agent-notes-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/shell-command-action-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/testing-prompt-profile-adapter.ts
-source/packages/agent/actions/subscription-notification-action-handler.ts	../../../adapters/interop/agent/subscription-notification-action-adapter.ts
 source/packages/agent/actions/summarize-action-state.ts	../../../adapters/interop/agent/summarize-action-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/agent-loop-presentation-adapter.ts
 source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts	../../../../adapters/interop/agent/mode-processing-adapter.ts

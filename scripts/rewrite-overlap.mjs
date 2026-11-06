@@ -339,7 +339,6 @@ const EXEMPT = [
   ["packages/agent/tools/mcp/mcp-error-classification.ts", "interop adapter: maps counterpart MCP transport errors to host tool categories"],
   ["adapters/interop/agent/mcp-error-classification-adapter.ts", "interop adapter: maps counterpart MCP transport errors to host tool categories"],
   ["adapters/interop/agent/agent-conversation-state-serdes-adapter.ts", "interop adapter: binds generated conversation-state message codecs to blob storage"],
-  ["adapters/interop/agent/subscription-notification-action-adapter.ts", "interop adapter: converts counterpart subscription actions to the host user-message action"],
   ["host/local-exec/sentry.ts", "interop adapter: binds the daemon crash reporter behind the host privacy gate"],
   ["adapters/interop/telemetry/local-exec-crash-reporter-adapter.ts", "interop adapter: binds the daemon crash reporter behind the host privacy gate"],
 ];
@@ -999,8 +998,14 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ["packages/agent/actions/async-ask-question-completion-action-handler.ts", [
     "adapters/interop/agent/async-ask-question-completion-adapter.ts",
   ]],
+  ["packages/agent/actions/background-task-completion-action-handler.ts", [
+    "packages/agent/actions/background-task-completion-contracts.ts",
+  ]],
   ["packages/agent/actions/goal-continuation-action-handler.ts", [
     "packages/agent/actions/goal-continuation-contracts.ts",
+  ]],
+  ["packages/agent/actions/subscription-notification-action-handler.ts", [
+    "packages/agent/actions/subscription-notification-contracts.ts",
   ]],
   ["packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts", [
     "adapters/interop/agent/interrupted-tool-resolution-adapter.ts",
@@ -1453,9 +1458,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
     "host/extensions/extension-startup-order.ts",
     "host/extensions/extension-registry-assembly.ts",
     "host/extensions/extension-registry-startup.ts",
-  ]],
-  ["packages/agent/actions/subscription-notification-action-handler.ts", [
-    "adapters/interop/agent/subscription-notification-action-adapter.ts",
   ]],
   ["packages/agent/utils/overridable-config.ts", [
     "packages/agent/utils/config-override-reader.ts",

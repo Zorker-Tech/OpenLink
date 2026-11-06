@@ -29,6 +29,10 @@ import {
   isSlateGoalContinuationActionPayload,
 } from "../../../packages/agent/actions/goal-continuation-contracts.ts"
 import {
+  createSlateSubscriptionNotificationActionPayload,
+  isSlateSubscriptionNotificationActionPayload,
+} from "../../../packages/agent/actions/subscription-notification-contracts.ts"
+import {
   createSlateCancelActionPayload,
   isSlateCancelActionPayload,
   redactSlateCancelActionPayload,
@@ -141,6 +145,25 @@ function slateCancelActionPayloadFromRedacted(
   return createSlateCancelActionPayload(reason, compatibility)
 }
 
+function slateSubscriptionNotificationPayloadFromRedacted(
+  value: Readonly<Record<string, unknown>> | undefined,
+): ReturnType<typeof createSlateSubscriptionNotificationActionPayload> {
+  const notifications = Array.isArray(value?.notifications)
+    ? value.notifications.map(decodeIncomingSlateUserMessage)
+    : []
+  const compatibility = value === undefined
+    ? undefined
+    : {
+        ...(value.requestContext === undefined ? {} : { requestContext: value.requestContext }),
+        legacyPayload: value,
+      }
+  return createSlateSubscriptionNotificationActionPayload({
+    notifications,
+    notifyUser: value?.sendToInteractionListener === true,
+    ...(compatibility === undefined ? {} : { compatibility }),
+  })
+}
+
 function isSlateAgentAction(value: InteropConversationAction | SlateAgentAction): value is SlateAgentAction {
   if (value === null || typeof value !== "object" || !("kind" in value) || !("context" in value)) return false
   return typeof value.kind === "string" && typeof value.context === "object" && value.context !== null
@@ -182,6 +205,19 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
       payload: isSlateGoalContinuationActionPayload(action.payload)
         ? action.payload
         : createSlateGoalContinuationActionPayload(),
+    }
+  }
+  if (action.kind === SlateAgentActionKind.SUBSCRIPTION_NOTIFICATION) {
+    if (!isSlateSubscriptionNotificationActionPayload(action.payload)) {
+      throw new TypeError("Subscription notification action must use the Slate v1 contract")
+    }
+    return {
+      ...action,
+      context,
+      payload: {
+        ...action.payload,
+        notifications: action.payload.notifications.map(message => redactSlateUserMessage(message, privacyMode)),
+      },
     }
   }
   if (action.kind === SlateAgentActionKind.RESUME) {
@@ -287,6 +323,12 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
   if (slateAction.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return { ...slateAction, payload: createSlateGoalContinuationActionPayload() }
   }
+  if (slateAction.kind === SlateAgentActionKind.SUBSCRIPTION_NOTIFICATION) {
+    return {
+      ...slateAction,
+      payload: slateSubscriptionNotificationPayloadFromRedacted(action.action.value),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.SUMMARIZE) {
     return { ...slateAction, payload: createSlateSummarizeActionPayload() }
   }
@@ -340,6 +382,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "goalContinuationAction") {
     const wrapped = new ConversationAction({ action: { case: "goalContinuationAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "subscriptionNotificationAction") {
+    const wrapped = new ConversationAction({ action: { case: "subscriptionNotificationAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "executePlanAction") {
