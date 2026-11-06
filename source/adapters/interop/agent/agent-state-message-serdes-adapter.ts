@@ -308,7 +308,14 @@ export function fromInteropConversationState(
     subagentStates: new Map(
       entriesOfUnknownStringMap(subagentStates).map(([key, value]) => [
         slateStringMapKey(key, "subagentStates"),
-        value,
+        fromInteropSubagentPersistedState(
+          fromRedactedSubagentPersistedStateInterop(
+            value as never,
+            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+            undefined,
+          ),
+          _privacyMode,
+        ),
       ]),
     ),
     plans: new Map(
@@ -357,6 +364,7 @@ export function toInteropConversationState(
     readPaths,
     plans,
     goalState,
+    subagentStates,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
@@ -382,7 +390,12 @@ export function toInteropConversationState(
         },
       ]),
     ),
-    subagentStates: fields.subagentStates ?? new Map(),
+    subagentStates: new Map(
+      [...(subagentStates ?? new Map())].map(([id, value]) => [
+        id,
+        toRedactedSubagentPersistedState(toInteropSubagentPersistedState(value), privacyMode),
+      ]),
+    ),
     plans: new Map(
       [...(plans ?? new Map())].map(([planId, entry]) => [
         planId,
@@ -648,6 +661,7 @@ export function encodeSlateConversationStateSnapshotInterop(
   const {
     plans: slatePlanRegistry,
     goalState: slateGoal,
+    subagentStates: slateSubagentStates,
     ...stateFields
   } = snapshot
   const plans = Object.fromEntries(
@@ -659,6 +673,12 @@ export function encodeSlateConversationStateSnapshotInterop(
   const goalState = slateGoal === undefined
     ? undefined
     : toInteropGoalState(slateGoal as SlateGoalState)
+  const subagentStates = Object.fromEntries(
+    entriesOfUnknownStringMap(slateSubagentStates).map(([id, state]) => [
+      id,
+      toInteropSubagentPersistedState(state as SlateSubagentPersistedState),
+    ]),
+  )
   const fileStatesV2 = Object.fromEntries(
     Object.entries((snapshot.fileStatesV2 as Record<string, {
       readonly contentBlobId?: Uint8Array
@@ -677,6 +697,7 @@ export function encodeSlateConversationStateSnapshotInterop(
     ...stateFields,
     plans,
     ...(goalState === undefined ? {} : { goalState }),
+    subagentStates,
     fileStatesV2,
   } as never)
   return {

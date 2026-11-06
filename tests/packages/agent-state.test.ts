@@ -39,10 +39,14 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
-import { deserializeSlateConversationPlan } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import {
+  deserializeSlateConversationPlan,
+  fromRedactedSubagentPersistedStateInterop,
+  toInteropConversationState,
+} from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
-import { fromRedactedSubagentPersistedStateInterop } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { toInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
 import {
   createSlateShellInvocation,
   createSlateShellResult,
@@ -369,29 +373,41 @@ test("a legacy persisted subagent is restored into Slate state and written back 
   assert.equal(restored?.cloudAgent?.agentId, "worker-1")
   assert.deepEqual(restored?.targetMachine, { kind: "cloud-machine", baseBranch: "main" })
 
-  const snapshot = await harnessed.handle.computeNewStructure(createContext())
-  const persistedRedacted = snapshot.subagentStates?.get("subagent-1")
-  const persisted = persistedRedacted === undefined
+  await harnessed.handle.computeNewStructure(createContext())
+  const persisted = harnessed.handle.conversationStateStructure.subagentStates?.get("subagent-1")
+  assert.equal(persisted?.conversationSnapshot?.turns.length, 1)
+  assert.equal(persisted?.conversationSnapshot?.mode, SlateMode.PLAN)
+  assert.equal(persisted?.conversationSnapshot?.activeBranchName, "feature/subagent")
+  assert.deepEqual(persisted?.conversationSnapshot?.readPaths, ["/repo/subagent-read.ts"])
+  assert.deepEqual(persisted?.conversationSnapshot?.fileStatesV2.get("/repo/subagent-file.ts"), { contentBlobId: new Uint8Array([8]) })
+  assert.equal(persisted?.conversationSnapshot?.selfSummaryCount, 2)
+  const persistedRedacted = toInteropConversationState(harnessed.handle.conversationStateStructure)
+    .subagentStates?.get("subagent-1")
+  const persistedInterop = persistedRedacted === undefined
     ? undefined
     : fromRedactedSubagentPersistedStateInterop(
         persistedRedacted,
         PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
         undefined,
       )
-  assert.equal(persisted?.conversationState?.turns.length, 1)
-  assert.equal(persisted?.conversationState?.mode, AgentMode.PLAN)
-  assert.equal(persisted?.conversationState?.activeBranchName, "feature/subagent")
-  assert.deepEqual(persisted?.conversationState?.readPaths, ["/repo/subagent-read.ts"])
-  assert.deepEqual(persisted?.conversationState?.fileStatesV2["/repo/subagent-file.ts"]?.content, new Uint8Array([8]))
-  assert.equal(persisted?.conversationState?.selfSummaryCount, 2)
+  const interopConversation = persisted?.conversationSnapshot === undefined
+    ? undefined
+    : toInteropTaskConversationState(persisted.conversationSnapshot)
   assert.equal(
-    persisted?.conversationState?.communicateUpdateStatesByParentToolCallId["nested-call"]?.history[0]?.step,
+    interopConversation?.communicateUpdateStatesByParentToolCallId["nested-call"]?.history[0]?.step,
     "nested",
   )
-  assert.equal(persisted?.createdTimestampMs, BigInt(10))
+  assert.equal(persisted?.createdAtMs, BigInt(10))
+  assert.equal(persisted?.lastUsedAtMs, BigInt(20))
   assert.equal(persisted?.modelId, "model-1")
-  assert.equal(persisted?.environment, SubagentExecutionEnvironment.CLOUD)
-  assert.equal(persisted?.cloudSubagent?.bcId, "worker-1")
+  assert.equal(persisted?.executionEnvironment, "cloud")
+  assert.equal(persisted?.cloudAgent?.agentId, "worker-1")
+  assert.deepEqual(persisted?.targetMachine, { kind: "cloud-machine", baseBranch: "main" })
+  assert.equal(persistedInterop?.conversationState?.turns.length, 1)
+  assert.equal(persistedInterop?.createdTimestampMs, BigInt(10))
+  assert.equal(persistedInterop?.modelId, "model-1")
+  assert.equal(persistedInterop?.environment, SubagentExecutionEnvironment.CLOUD)
+  assert.equal(persistedInterop?.cloudSubagent?.bcId, "worker-1")
 })
 
 test("out-of-line subagent state writes and restores the Slate schema", async () => {
