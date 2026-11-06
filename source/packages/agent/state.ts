@@ -47,7 +47,6 @@ import {
   fromRedactedCommunicateUpdateHistoryEntryInterop,
   fromRedactedCommunicateUpdateTurnStateInterop,
   fromRedactedConversationTokenDetailsInterop,
-  fromRedactedSubagentRunStateInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
@@ -100,10 +99,6 @@ import {
   type SlateUserMessageText,
 } from "./user-message-state.ts"
 import type { SlateStoredTodoItem, SlateTodoItem } from "./tools/core/todo/contracts.ts"
-import {
-  fromInteropSubagentRunState,
-  toInteropSubagentRunState,
-} from "../../adapters/interop/agent/subagent-run-state-adapter.ts"
 import { DataClassification, PrivacyCapability } from "../redaction/classification.ts"
 import { createRedactedString } from "../redaction/create.ts"
 import { fromRedactedCoreMessage, toRedactedCoreMessage } from "../redaction/message-redaction.ts"
@@ -1642,13 +1637,8 @@ export class ConversationStateHandle {
       }
     }
     if (this.conversationStateStructure.subagentRunsByParentToolCallId !== undefined) {
-      for (const [parentToolCallId, redactedState] of this.conversationStateStructure.subagentRunsByParentToolCallId) {
-        const persistedState = fromRedactedSubagentRunStateInterop(
-          redactedState,
-          PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-          undefined,
-        );
-        this.subagentRunsByParentToolCallId.set(parentToolCallId, fromInteropSubagentRunState(persistedState));
+      for (const [parentToolCallId, state] of this.conversationStateStructure.subagentRunsByParentToolCallId) {
+        this.subagentRunsByParentToolCallId.set(parentToolCallId, state);
       }
     }
     const persistedSubagentThreads = this.conversationStateStructure.subagentThreads;
@@ -2607,9 +2597,9 @@ These images can be copied for use in other locations.
           subagentStatesRecord[subagentId] = state;
         }
       }
-      const subagentRunsRecord: Record<string, ReturnType<typeof toInteropSubagentRunState>> = {};
+      const subagentRunsRecord: Record<string, SlateSubagentRunState> = {};
       for (const [parentToolCallId, state] of this.subagentRunsByParentToolCallId) {
-        subagentRunsRecord[parentToolCallId] = toInteropSubagentRunState(state);
+        subagentRunsRecord[parentToolCallId] = state;
       }
       const subagentThreadsRecord: Record<string, string> = {};
       for (const [subagentId, threadId] of this.subagentThreads) {

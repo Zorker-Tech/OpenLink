@@ -18,6 +18,9 @@ import {
   PlanRegistryEntry,
   SubagentPersistedState,
   SubagentExecutionEnvironment,
+  SubagentRunState,
+  SubagentRunStatus,
+  BackgroundTaskCompletionReason,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -186,4 +189,43 @@ test("subagent state values are typed Slate records and preserve unknown environ
   )
   assert.equal(restored.subagentStates["subagent-1"]?.environment, unknownEnvironment)
   assert.equal(restored.subagentStates["subagent-1"]?.modelId, "model-1")
+})
+
+test("subagent run records are Slate values and preserve unknown enum codes", () => {
+  const unknownEnvironment = 4_097 as SubagentExecutionEnvironment
+  const unknownStatus = 4_098 as SubagentRunStatus
+  const unknownReason = 4_099 as BackgroundTaskCompletionReason
+  const redacted = toRedactedConversationStateStructure(
+    new ConversationStateStructure({
+      subagentRunsByParentToolCallId: {
+        "call-1": new SubagentRunState({
+          parentToolCallId: "call-1",
+          environment: unknownEnvironment,
+          status: unknownStatus,
+          completionReason: unknownReason,
+        }),
+      },
+    }),
+    PrivacyMode.NO_STORAGE,
+  )
+  const slate = fromInteropConversationState(redacted)
+  const run = slate.subagentRunsByParentToolCallId?.get("call-1")
+
+  assert.equal(run?.environment, "unspecified")
+  assert.equal(run?.status, "unspecified")
+  assert.deepEqual(run?.compatibility, {
+    legacyEnvironmentCode: unknownEnvironment,
+    legacyStatusCode: unknownStatus,
+    legacyCompletionReasonCode: unknownReason,
+  })
+
+  const restored = fromRedactedConversationStateStructureInterop(
+    toInteropConversationState(slate),
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  const interopRun = restored.subagentRunsByParentToolCallId["call-1"]
+  assert.equal(interopRun?.environment, unknownEnvironment)
+  assert.equal(interopRun?.status, unknownStatus)
+  assert.equal(interopRun?.completionReason, unknownReason)
 })

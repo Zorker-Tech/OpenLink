@@ -114,3 +114,36 @@ test("a blank first completion still leaves a bounded, explicit run record", () 
     completedTimestampMs: BigInt(44),
   })
 })
+
+test("an unknown persisted enum survives progress and retires on explicit Slate updates", () => {
+  const existingRun = {
+    parentToolCallId: "call-1",
+    environment: "unspecified" as const,
+    status: "unspecified" as const,
+    compatibility: {
+      legacyEnvironmentCode: 41,
+      legacyStatusCode: 42,
+      legacyCompletionReasonCode: 43,
+    },
+  }
+  const progress = updateSlateSubagentRun({
+    completion: completion({ status: "unknown", reason: undefined }),
+    parentToolCallId: "call-1",
+    environment: "unspecified",
+    existingRun,
+    completedTimestampMs: 45n,
+  })
+  assert.deepEqual(progress.compatibility, existingRun.compatibility)
+
+  const updated = updateSlateSubagentRun({
+    completion: completion({ status: "success", reason: "task-progress" }),
+    parentToolCallId: "call-1",
+    environment: "cloud",
+    existingRun,
+    completedTimestampMs: 46n,
+  })
+  assert.equal(updated.compatibility, undefined)
+  assert.equal(updated.status, "success")
+  assert.equal(updated.environment, "cloud")
+  assert.equal(updated.completionReason, "task-progress")
+})

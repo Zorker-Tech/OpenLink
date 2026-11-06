@@ -69,3 +69,22 @@ test("unknown environment values fail closed while unspecified stays absent for 
   assert.equal(slateSubagentEnvironmentFromInterop(SubagentExecutionEnvironment.LOCAL), "local")
   assert.equal(slateSubagentEnvironmentFromInterop(SubagentExecutionEnvironment.CLOUD), "cloud")
 })
+
+test("unknown run enum values stay in migration metadata and round-trip unchanged", () => {
+  const wire = new SubagentRunState({
+    parentToolCallId: "call-unknown",
+    environment: 4_097 as SubagentExecutionEnvironment,
+    status: 4_098 as SubagentRunStatus,
+    completionReason: 4_099 as BackgroundTaskCompletionReason,
+  })
+  const slate = fromInteropSubagentRunState(wire)
+
+  assert.equal(slate.environment, "unspecified")
+  assert.equal(slate.status, "unspecified")
+  assert.deepEqual(slate.compatibility, {
+    legacyEnvironmentCode: 4_097,
+    legacyStatusCode: 4_098,
+    legacyCompletionReasonCode: 4_099,
+  })
+  assert.deepEqual(toInteropSubagentRunState(slate), wire)
+})
