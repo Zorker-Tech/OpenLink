@@ -34,6 +34,10 @@ import {
   type SlateBackgroundSubagentActionPayload,
 } from "../../source/packages/agent/actions/background-side-channel-contracts.ts"
 import {
+  isSlateContextInjectionActionPayload,
+  type SlateContextInjectionActionPayload,
+} from "../../source/packages/agent/actions/context-injection-action-contracts.ts"
+import {
   isSlateCancelSubagentActionPayload,
   type SlateCancelSubagentActionPayload,
 } from "../../source/packages/agent/actions/cancel-subagent-action-contracts.ts"
@@ -120,6 +124,11 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       const payload = action.payload as SlateCancelSubagentActionPayload
       assert.equal(isSlateCancelSubagentActionPayload(payload), true)
       assert.equal(payload.subagentId, "")
+      assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "injectContextAction") {
+      const payload = action.payload as SlateContextInjectionActionPayload
+      assert.equal(isSlateContextInjectionActionPayload(payload), true)
+      assert.equal(payload.context.kind, "missing")
       assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
@@ -304,6 +313,51 @@ test("cancel-subagent route preserves the target id in a Slate action payload", 
   assert.equal(payload.schema, "slate.agent-action.cancel-subagent")
   assert.equal(payload.subagentId, "agent-42")
   assert.deepEqual(payload.compatibility?.legacyPayload, { subagentId: "agent-42" })
+})
+
+test("context injection has Slate user and system context variants", () => {
+  const system = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: {
+      case: "injectContextAction",
+      value: {
+        injectionId: "inject-1",
+        expectedRunId: "run-4",
+        payload: { case: "systemContext", value: { producer: "scheduler", content: "scheduled context" } },
+      },
+    },
+  } as never)
+  const systemPayload = system.payload as SlateContextInjectionActionPayload
+  assert.equal(system.kind, SlateAgentActionKind.CONTEXT_INJECTION)
+  assert.equal(isSlateContextInjectionActionPayload(systemPayload), true)
+  assert.equal(systemPayload.injectionId, "inject-1")
+  assert.deepEqual(systemPayload.context.kind, "system")
+  if (systemPayload.context.kind === "system") {
+    assert.equal(systemPayload.context.producer, "scheduler")
+    const text = systemPayload.context.content
+    assert.equal(isRedactedString(text) ? text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : text, "scheduled context")
+  }
+
+  const user = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: {
+      case: "injectContextAction",
+      value: {
+        injectionId: "inject-2",
+        expectedRunId: "run-5",
+        payload: {
+          case: "userContext",
+          value: { userMessage: { text: "user context", messageId: "message-7" }, requestContext: { source: "legacy" } },
+        },
+      },
+    },
+  } as never)
+  const userPayload = user.payload as SlateContextInjectionActionPayload
+  assert.equal(userPayload.context.kind, "user")
+  if (userPayload.context.kind === "user") {
+    assert.equal(userPayload.context.message?.messageId, "message-7")
+    assert.deepEqual(userPayload.compatibility?.legacyRequestContext, { source: "legacy" })
+  }
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {

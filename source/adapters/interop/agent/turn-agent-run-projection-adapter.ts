@@ -3,7 +3,7 @@
 import { toRedactedConversationAction } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { ConversationAction, ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
-import { DataClassification } from "../../../packages/redaction/classification.ts"
+import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import { createRedactedString } from "../../../packages/redaction/create.ts"
 import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
@@ -36,6 +36,10 @@ import {
   isSlateBackgroundShellActionPayload,
   isSlateBackgroundSubagentActionPayload,
 } from "../../../packages/agent/actions/background-side-channel-contracts.ts"
+import {
+  createSlateContextInjectionActionPayload,
+  isSlateContextInjectionActionPayload,
+} from "../../../packages/agent/actions/context-injection-action-contracts.ts"
 import {
   createSlateCancelSubagentActionPayload,
   isSlateCancelSubagentActionPayload,
@@ -180,6 +184,66 @@ function slateSubscriptionNotificationPayloadFromRedacted(
   })
 }
 
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function slateContextInjectionPayloadFromRedacted(
+  value: Readonly<Record<string, unknown>> | undefined,
+  privacyMode: PrivacyMode,
+) {
+  const oneof = record(value?.payload)
+  const payload = record(oneof?.value)
+  let context: ReturnType<typeof createSlateContextInjectionActionPayload>["context"]
+  let legacyRequestContext: unknown
+  switch (oneof?.case) {
+    case "userContext": {
+      legacyRequestContext = payload?.requestContext
+      const userMessage = payload?.userMessage === undefined
+        ? undefined
+        : decodeIncomingSlateUserMessage(payload.userMessage)
+      context = { kind: "user", ...(userMessage === undefined ? {} : { message: userMessage }) }
+      break
+    }
+    case "systemContext": {
+      const contentValue = payload?.content
+      const content = isRedactedString(contentValue)
+        ? contentValue
+        : createRedactedString(
+            typeof contentValue === "string" ? contentValue : "",
+            DataClassification.CODE,
+            "content",
+            privacyMode,
+          )
+      context = {
+        kind: "system",
+        producer: typeof payload?.producer === "string" ? payload.producer : "",
+        content,
+      }
+      break
+    }
+    case undefined:
+      context = { kind: "missing" }
+      break
+    default:
+      context = { kind: "unsupported", sourceCase: String(oneof?.case) }
+  }
+  const compatibility = value === undefined
+    ? undefined
+    : {
+        ...(legacyRequestContext === undefined ? {} : { legacyRequestContext }),
+        legacyPayload: value,
+      }
+  return createSlateContextInjectionActionPayload({
+    injectionId: typeof value?.injectionId === "string" ? value.injectionId : "",
+    expectedRunId: typeof value?.expectedRunId === "string" ? value.expectedRunId : "",
+    context,
+    ...(compatibility === undefined ? {} : { compatibility }),
+  })
+}
+
 function isSlateAgentAction(value: InteropConversationAction | SlateAgentAction): value is SlateAgentAction {
   if (value === null || typeof value !== "object" || !("kind" in value) || !("context" in value)) return false
   return typeof value.kind === "string" && typeof value.context === "object" && value.context !== null
@@ -234,6 +298,35 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
       throw new TypeError("Background subagent action must use the Slate v1 contract")
     }
     return { ...action, context, payload: action.payload }
+  }
+  if (action.kind === SlateAgentActionKind.CONTEXT_INJECTION) {
+    if (!isSlateContextInjectionActionPayload(action.payload)) {
+      throw new TypeError("Context injection action must use the Slate v1 contract")
+    }
+    const injected = action.payload.context
+    const contextValue = injected.kind === "user"
+      ? {
+          ...injected,
+          ...(injected.message === undefined ? {} : { message: redactSlateUserMessage(injected.message, privacyMode) }),
+        }
+      : injected.kind === "system"
+        ? {
+            ...injected,
+            content: createRedactedString(
+              isRedactedString(injected.content)
+                ? injected.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+                : injected.content,
+              isRedactedString(injected.content) ? injected.content.__classification : DataClassification.CODE,
+              isRedactedString(injected.content) ? injected.content.__fieldName : "content",
+              privacyMode,
+            ),
+          }
+        : injected
+    return {
+      ...action,
+      context,
+      payload: { ...action.payload, context: contextValue },
+    }
   }
   if (action.kind === SlateAgentActionKind.CANCEL_SUBAGENT) {
     if (!isSlateCancelSubagentActionPayload(action.payload)) {
@@ -389,6 +482,12 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       ),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.CONTEXT_INJECTION) {
+    return {
+      ...slateAction,
+      payload: slateContextInjectionPayloadFromRedacted(action.action.value, action._privacyMode),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.CANCEL_SUBAGENT) {
     const value = action.action.value
     return {
@@ -469,6 +568,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "backgroundSubagentAction") {
     const wrapped = new ConversationAction({ action: { case: "backgroundSubagentAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "injectContextAction") {
+    const wrapped = new ConversationAction({ action: { case: "injectContextAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "cancelSubagentAction") {
