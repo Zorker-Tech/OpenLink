@@ -472,6 +472,7 @@ export function fromInteropConversationState(
   const {
     _privacyMode,
     mode,
+    fileStates,
     fileStatesV2,
     readPaths,
     subagentStates,
@@ -511,6 +512,12 @@ export function fromInteropConversationState(
                 initialContentBlobId: fileBytes(fileState.initialContent),
               }),
         },
+      ]),
+    ),
+    legacyFileContentBlobIds: new Map(
+      entriesOfUnknownStringMap(fileStates).map(([path, blobId]) => [
+        slateStringMapKey(path, "fileStates"),
+        fileBytes(blobId as Uint8Array),
       ]),
     ),
     readPaths: readPaths.map(
@@ -636,6 +643,7 @@ export function toInteropConversationState(
     privacyMode,
     mode,
     unknownModeCode,
+    legacyFileContentBlobIds,
     fileStatesV2,
     readPaths,
     plans,
@@ -664,7 +672,12 @@ export function toInteropConversationState(
       "pending_tool_calls",
       privacyMode,
     )),
-    fileStates: optionalFields.fileStates ?? new Map(),
+    fileStates: new Map(
+      entriesOfUnknownStringMap(legacyFileContentBlobIds).map(([path, blobId]) => [
+        createRedactedString(slateStringMapKey(path, "legacyFileContentBlobIds"), DataClassification.PATH, "file_states", privacyMode),
+        new Uint8Array(blobId as Uint8Array),
+      ]),
+    ),
     turnTimings: optionalFields.turnTimings ?? [],
     fileStatesV2: new Map(
       [...fileStatesV2].map(([path, fileState]) => [
@@ -973,6 +986,7 @@ export function encodeSlateConversationStateSnapshotInterop(
     subagentStates: slateSubagentStates,
     subagentRunsByParentToolCallId: slateSubagentRuns,
     tokenDetails: slateTokenDetails,
+    legacyFileContentBlobIds: slateLegacyFileStates,
     communicationHistory: slateCommunicationHistory,
     communicationFinalSummary: slateCommunicationFinalSummary,
     communicationCompletedSubtitle: slateCommunicationCompletedSubtitle,
@@ -1035,8 +1049,15 @@ export function encodeSlateConversationStateSnapshotInterop(
       }),
     ]),
   )
+  const legacyFileStates = Object.fromEntries(
+    entriesOfUnknownStringMap(slateLegacyFileStates).map(([path, blobId]) => [
+      path,
+      new Uint8Array(blobId as Uint8Array),
+    ]),
+  )
   const state = new ConversationStateStructure({
     ...stateFields,
+    fileStates: legacyFileStates,
     plans,
     ...(goalState === undefined ? {} : { goalState }),
     subagentStates,
@@ -2696,7 +2717,12 @@ function isSlateSubagentConversationSnapshot(value: unknown): value is SlateSuba
       !Array.isArray(value.previousWorkspaceUris) || !Array.isArray(value.summaryArchives) ||
       !value.summaryArchives.every(entry => entry instanceof Uint8Array) ||
       !(value.fileStatesV2 instanceof Map) || !Array.isArray(value.readPaths)) return false
-  return true
+  const legacyFileStates = value.legacyFileContentBlobIds
+  return legacyFileStates === undefined || (legacyFileStates instanceof Map
+    ? [...legacyFileStates.entries()].every(([path, blobId]) => typeof path === "string" && blobId instanceof Uint8Array)
+    : isRecordValue(legacyFileStates) && Object.entries(legacyFileStates).every(([path, blobId]) =>
+        typeof path === "string" && blobId instanceof Uint8Array,
+      ))
 }
 
 /** Writes new durable subagent references with Slate fields and imports old generated blobs on read. */

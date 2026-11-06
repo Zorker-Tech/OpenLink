@@ -1293,6 +1293,7 @@ export class ConversationStateHandle {
   isRootProjectConversation: boolean;
   plans: Map<string, SlatePlanRegistryEntry>;
   fileStates: Map<string, FileStateReferencesByPath<OperationContext>>;
+  legacyFileContentBlobIds: Map<string, Uint8Array>;
   readPaths: Set<string>;
   completedAskQuestionToolCallIds: Set<string>;
   communicationHistory: SlateCommunicationHistoryEntry[];
@@ -1481,9 +1482,9 @@ export class ConversationStateHandle {
         state.agentTypeChangedFromPersistedState = trackAgentTypeChange && savedAgentType !== undefined && savedAgentType !== runtimeAgentType;
         state.agentType = runtimeAgentType;
       }
-      const fileEntries = Array.from(conversationStateStructure.fileStatesV2.entries());
+      const fileEntriesFromV2 = Array.from(conversationStateStructure.fileStatesV2.entries());
       const fileLoadStart = performance.now();
-      for (const [pathValue, fileState] of fileEntries) {
+      for (const [pathValue, fileState] of fileEntriesFromV2) {
         state.fileStates.set(pathValue, {
           content: fileState.contentBlobId !== undefined
             ? new LazyReference(utf8Serde, blobStore, fileState.contentBlobId)
@@ -1493,6 +1494,21 @@ export class ConversationStateHandle {
             : undefined,
         });
       }
+      const legacyFileStates = conversationStateStructure.legacyFileContentBlobIds;
+      const legacyFileEntries = legacyFileStates instanceof Map
+        ? [...legacyFileStates.entries()]
+        : legacyFileStates === undefined
+          ? []
+          : Object.entries(legacyFileStates);
+      for (const [pathValue, blobId] of legacyFileEntries) {
+        const existing = state.fileStates.get(pathValue);
+        if (blobId.length === 0 || existing?.content !== undefined) continue;
+        state.fileStates.set(pathValue, {
+          content: new LazyReference(utf8Serde, blobStore, blobId),
+          initialContent: existing?.initialContent,
+        });
+      }
+      const fileEntries = Array.from(state.fileStates.entries());
       fileSpan.span.setAttribute("fileStatePathCount", fileEntries.length);
       fileSpan.span.end();
       const filePhaseMs = performance.now() - fileLoadStart;
@@ -1564,6 +1580,7 @@ export class ConversationStateHandle {
     this.isRootProjectConversation = false;
     this.plans = new Map();
     this.fileStates = new Map();
+    this.legacyFileContentBlobIds = new Map();
     this.readPaths = new Set();
     this.completedAskQuestionToolCallIds = new Set();
     this.communicationHistory = [];
@@ -1601,6 +1618,12 @@ export class ConversationStateHandle {
     this.previousWorkspaceUris = this.conversationStateStructure.previousWorkspaceUris.length > 0
       ? [...this.conversationStateStructure.previousWorkspaceUris]
       : undefined;
+    const legacyFileStates = this.conversationStateStructure.legacyFileContentBlobIds;
+    if (legacyFileStates instanceof Map) {
+      for (const [path, blobId] of legacyFileStates) this.legacyFileContentBlobIds.set(path, new Uint8Array(blobId));
+    } else if (legacyFileStates !== undefined) {
+      for (const [path, blobId] of Object.entries(legacyFileStates)) this.legacyFileContentBlobIds.set(path, new Uint8Array(blobId));
+    }
     this.trackedGitRepoBranches = (this.conversationStateStructure.trackedGitRepoBranches ?? []).map((repo) => ({
       repoPath: repo.repoPath,
       branchName: repo.branchName,
@@ -2609,7 +2632,17 @@ These images can be copied for use in other locations.
         plansRecord[planId] = { id: entry.id, path: entry.path };
       }
       await subagentRefsPromise;
-      const rootPromptMessagesJson = await newRootPromptMessagesJsonPromise;
+      const [rootPromptMessagesJson, fileStateEntries] = await Promise.all([
+        newRootPromptMessagesJsonPromise,
+        fileStateEntriesPromise,
+      ]);
+      const versionedFileStatesByPath = new Map(fileStateEntries);
+      const legacyFileStatesRecord: Record<string, Uint8Array> = {};
+      for (const [path, legacyBlobId] of this.legacyFileContentBlobIds) {
+        const versionedBlobId = versionedFileStatesByPath.get(path)?.contentBlobId;
+        if (versionedBlobId !== undefined && toHex(versionedBlobId) === toHex(legacyBlobId)) continue;
+        legacyFileStatesRecord[path] = new Uint8Array(legacyBlobId);
+      }
       const usageTree = this.tokenDetails.contextTree;
       const promptContextUsageSnapshotBlobId = await persistPromptContextUsageSnapshot({
         ctx: quietContext,
@@ -2637,6 +2670,7 @@ These images can be copied for use in other locations.
         plan: (await planBlobPromise)!,
         summaryArchives: (await newSummaryArchivesPromise)!,
         previousWorkspaceUris: this.previousWorkspaceUris ?? [],
+        legacyFileContentBlobIds: legacyFileStatesRecord,
         trackedGitRepoBranches: this.trackedGitRepoBranches.map((repo) => ({
           repoPath: repo.repoPath,
           branchName: repo.branchName,
@@ -2647,7 +2681,7 @@ These images can be copied for use in other locations.
         isRootProjectConversation: (this.isRootProjectConversation || undefined)!,
         conversationStartedTimestampMs: this.conversationStartedTimestampMs!,
         conversationStartedTimeZone: this.conversationStartedTimeZone!,
-        fileStatesV2: Object.fromEntries(await fileStateEntriesPromise),
+        fileStatesV2: Object.fromEntries(fileStateEntries),
         subagentStates: subagentStatesRecord,
         subagentStateRefs: subagentRefsRecord,
         subagentRunsByParentToolCallId: subagentRunsRecord,
@@ -2683,6 +2717,7 @@ These images can be copied for use in other locations.
         });
       }
       this.conversationStateStructure = fromInteropConversationState(nextRedactedState);
+      this.legacyFileContentBlobIds = new Map(Object.entries(legacyFileStatesRecord));
       return nextRedactedState;
     } catch (e_2) {
       env_2.error = e_2;
