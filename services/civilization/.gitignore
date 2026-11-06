@@ -1,0 +1,22 @@
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+
+# Service and stage outputs: regenerated on demand, never committed
+artifacts/
+var/
+
+# Local model checkpoints are not distributed with this repository
+Models/
+
+# TypeScript SDK build products
+sdk/civilization-transformer/node_modules/
+sdk/civilization-transformer/dist/
+sdk/civilization-transformer/*.tgz
