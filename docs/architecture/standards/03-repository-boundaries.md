@@ -38,6 +38,14 @@ Vendored source is part of the root repository for reproducible releases, but
 remains independently buildable. It must not retain nested Git metadata or be
 represented as a Git submodule.
 
+Import and update vendored projects with `git subtree --squash`. Do not merge an
+upstream branch directly into an OpenLink branch: any such merge makes that
+upstream commit graph reachable and adds its authors to OpenLink's GitHub
+contributors. Keep the upstream URL, exact source revision, licenses, notices,
+and required attribution in the component's source records and files. When a
+vendored directory moves, record and use an explicit subtree-prefix migration
+or rebaseline plan.
+
 For an upstream update:
 
 1. Record the current and target revisions.

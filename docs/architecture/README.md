@@ -85,6 +85,9 @@ The current ADR set covers these areas:
 - built-in Project Code memory through the Agent Host gateway and the
   subtree-imported Civilization 1.0.0 Stage74 Orion service
   ([ADR-0032](./ADR-0032-project-memory-civilization.md)).
+- keep complete vendored source trees and license attribution while excluding
+  upstream commit ancestry from OpenLink's contributor graph
+  ([ADR-0033](./ADR-0033-vendored-history-and-contributor-attribution.md)).
 
 New decisions use the format below and the next unused ADR number:
 
