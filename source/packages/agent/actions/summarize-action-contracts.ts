@@ -6,6 +6,22 @@ import type { SlateConversationState, SlateConversationTokenDetails } from "../c
 
 export type SummarizeLooseValue = any
 
+/** The versioned internal request to summarize the current conversation. */
+export interface SlateSummarizeActionPayload {
+  readonly schema: "slate.agent-action.summarize"
+  readonly version: 1
+}
+
+export function createSlateSummarizeActionPayload(): SlateSummarizeActionPayload {
+  return { schema: "slate.agent-action.summarize", version: 1 }
+}
+
+export function isSlateSummarizeActionPayload(value: unknown): value is SlateSummarizeActionPayload {
+  if (value === null || typeof value !== "object") return false
+  const payload = value as Record<string, unknown>
+  return payload.schema === "slate.agent-action.summarize" && payload.version === 1
+}
+
 export interface SummarizeConfig {
   readonly toolsGenerator: (options: SummarizeLooseValue) => SummarizeLooseValue
   readonly systemPromptGenerator: (options: SummarizeLooseValue, toolSetHandle: SummarizeLooseValue) => SummarizeLooseValue

@@ -7,6 +7,7 @@ import {
   type SelfSummaryMessage,
 } from "../../source/packages/agent/self-summary/self-summary.ts"
 import { SummarizeActionHandler } from "../../source/packages/agent/actions/summarize-action-handler.ts"
+import { createSlateSummarizeActionPayload } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
 import {
   SELF_SUMMARY_CONTEXT_WINDOW_FRACTION,
   SELF_SUMMARY_NUM_TURNS,
@@ -217,7 +218,7 @@ function summarizeHarness(options: {
 async function runSummarize(harnessed: SummarizeHarness, onStateUpdate?: (ctx: Context, checkpoint: unknown) => Promise<void>) {
   return await harnessed.handler.handle(
     harnessed.ctx,
-    {},
+    createSlateSummarizeActionPayload(),
     harnessed.rootPromptExecutor as never,
     harnessed.stateHandler as never,
     [],
@@ -229,7 +230,7 @@ test("a prompt with nothing in it has nothing to summarize", async () => {
   const harnessed = summarizeHarness({ messages: [] })
   const result = await harnessed.handler.handle(
     harnessed.ctx,
-    {},
+    createSlateSummarizeActionPayload(),
     { getMessages: () => [], appendMessages() {} } as never,
     {
       mode: SlateMode.AGENT,
@@ -317,7 +318,7 @@ test("the token details are recomputed from what is left after the summary", asy
   }
   await harnessed.handler.handle(
     harnessed.ctx,
-    {},
+    createSlateSummarizeActionPayload(),
     { getMessages: () => [{ role: "user", content: "x".repeat(100) }], appendMessages() {} } as never,
     stateHandler as never,
     [],

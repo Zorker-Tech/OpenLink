@@ -8,6 +8,10 @@ import {
 import { createSlateResumeAgentAction, isSlateResumeActionPayload, SlateAgentActionKind, isSlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
 import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
 import { isSlateExecutePlanActionPayload } from "../../source/packages/agent/actions/execute-plan-contracts.ts"
+import {
+  createSlateSummarizeActionPayload,
+  isSlateSummarizeActionPayload,
+} from "../../source/packages/agent/actions/summarize-action-contracts.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
@@ -45,6 +49,8 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.ok((action.payload as { compatibility?: { legacyPayload?: unknown } }).compatibility?.legacyPayload)
     } else if (sourceCase === "executePlanAction") {
       assert.equal(isSlateExecutePlanActionPayload(action.payload), true)
+    } else if (sourceCase === "summarizeAction") {
+      assert.equal(isSlateSummarizeActionPayload(action.payload), true)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
@@ -149,4 +155,11 @@ test("a canonical retry uses the empty Slate resume payload", () => {
   assert.equal(action.context.privacyMode, PrivacyMode.NO_STORAGE)
   assert.equal(isSlateResumeActionPayload(action.payload), true)
   assert.deepEqual(action.payload.compatibility, undefined)
+})
+
+test("summarize actions use Slate's versioned empty request", () => {
+  const payload = createSlateSummarizeActionPayload()
+  assert.deepEqual(payload, { schema: "slate.agent-action.summarize", version: 1 })
+  assert.equal(isSlateSummarizeActionPayload(payload), true)
+  assert.equal(isSlateSummarizeActionPayload({ ...payload, version: 2 }), false)
 })

@@ -2990,8 +2990,9 @@
     },
     "packages/agent/actions/summarize-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5665322580645161,
-      "evidence": "Summary action and marker-adapter contracts pass 21/21; Work-host typecheck and the full suite pass 9143/9143 under Node 24. System prompt preparation and summary-state updates have separate Slate owners; mode and redaction mappings stay in interop adapters."
+      "overlap": 0.5584677419354839,
+      "refreshReason": "Changed the handler input from an untyped empty historical message to Slate's versioned summarize request; summary execution policy remains in its existing Slate modules.",
+      "evidence": "Agent action-contract and self-summary suites pass 28/28; the full Work-host suite passes 9994/9994 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler accepts SlateSummarizeActionPayload; historical empty-message conversion stays at the action boundary. Measured overlap is 0.5584677419354839 against 496 baseline pairs."
     },
     "host/telemetry/lifecycle-telemetry.ts": {
       "claim": "rewritten",
