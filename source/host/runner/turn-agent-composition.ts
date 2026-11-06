@@ -38,6 +38,7 @@ import {
 import type { Context } from "../../packages/context/context.ts";
 import { requestIdKey } from "../../adapters/interop/chat-inference-proto/client.ts";
 import { AgentRoot } from "../../packages/agent/index.ts";
+import type { SlateConversationState } from "../../packages/agent/conversation-state.ts";
 import { SimplePromptToolExecutor } from "../../packages/agent/tool-stream-executor.ts";
 import { NoopConversationActionReceiver } from "../../packages/agent-core/conversation-actions/remote-receiver.ts";
 import { toRedactedInteractionListener } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
@@ -45,10 +46,11 @@ import type { PrivacyMode } from "../../packages/redaction/privacy-mode.ts";
 import {
   cloneInteropConversationState,
   projectInteropTurnRun,
+  restoreAgentConversationState,
+  restoreSlateConversationState,
   type InteropConversationAction,
   type InteropConversationState,
   type RedactedAgentAction,
-  type RedactedAgentConversationState,
 } from "../../adapters/interop/agent/turn-agent-run-projection-adapter.ts";
 import { RESUME_TURN_ACTION } from "../../adapters/interop/agent/turn-resume-action-adapter.ts";
 import { SLATE_BOX_SHELL_TOOL_NAME, SLATE_EXTERNAL_SHELL_TOOL_NAME } from "../slate-activity.ts";
@@ -418,7 +420,7 @@ export interface BuiltTurnAgentForRun {
 
 export interface TurnAgentRunStreamInput {
   readonly attemptCtx: Context;
-  readonly state: RedactedAgentConversationState;
+  readonly state: SlateConversationState;
   readonly action: RedactedAgentAction;
   readonly mcpTools: readonly unknown[];
   readonly persistCheckpoint: (checkpointCtx: Context, checkpoint: InteropConversationState) => Promise<void> | void;
@@ -436,9 +438,23 @@ export interface TurnAgentStreamStart {
   startStream(attemptCtx: Context, resumeFrom: InteropConversationState | undefined, persistCheckpoint: TurnAgentRunStreamInput["persistCheckpoint"]): Promise<InteropConversationState>;
 }
 
+async function runAgentStreamAtInteropBoundary(
+  agent: Pick<AgentRoot, "runStream">,
+  streamInput: TurnAgentRunStreamInput,
+): Promise<InteropConversationState> {
+  const slateState = await agent.runStream(
+    streamInput.attemptCtx,
+    streamInput.state,
+    streamInput.action,
+    streamInput.mcpTools,
+    streamInput.persistCheckpoint,
+  );
+  return restoreAgentConversationState(slateState);
+}
+
 /**
- * The one callback the attempt layer calls: it projects the generated values into their redacted forms and hands the
- * checkpoint callback back untouched, so accepted-checkpoint capture and retry state stay with the attempt.
+ * The one callback the attempt layer calls: it gives the Agent a Slate state and redacted action, adapts the returned
+ * state to the runner's historical checkpoint shape, and hands checkpoint persistence back untouched.
  */
 export function createTurnAgentStreamStart(input: TurnAgentStreamStartInput): TurnAgentStreamStart {
   return {
@@ -452,7 +468,7 @@ export function createTurnAgentStreamStart(input: TurnAgentStreamStartInput): Tu
         persistCheckpoint,
         ...presentOptions({ resumeFrom }),
       });
-      return input.agent.agent.runStream(streamInput.attemptCtx, streamInput.state, streamInput.action, streamInput.mcpTools, streamInput.persistCheckpoint);
+      return runAgentStreamAtInteropBoundary(input.agent.agent, streamInput);
     },
   };
 }
@@ -517,7 +533,7 @@ export function createTurnAgentRunStreamInput(input: {
   });
   return {
     attemptCtx: input.attemptCtx,
-    state: projection.state,
+    state: restoreSlateConversationState(projection.state),
     action: projection.action,
     mcpTools: input.mcpTools,
     persistCheckpoint: input.persistCheckpoint,
@@ -546,7 +562,7 @@ export function buildAgentForRun(input: TurnAgentBuildForRunInput): BuiltTurnAge
     preserveLatestImage: input.preserveLatestImage ?? input.staticConfig.isBoxScopedSubagent,
   });
   const runStream = async (streamInput: TurnAgentRunStreamInput): Promise<InteropConversationState> =>
-    agent.runStream(streamInput.attemptCtx, streamInput.state, streamInput.action, streamInput.mcpTools, streamInput.persistCheckpoint);
+    runAgentStreamAtInteropBoundary(agent, streamInput);
   return {
     agent,
     config,
