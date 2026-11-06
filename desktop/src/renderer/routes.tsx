@@ -1,10 +1,10 @@
 import type { ComponentProps, ReactNode } from 'react'
+import { useMemo } from 'react'
 
 import { AppWorkspace } from '@/components/app-workspace'
 import { AuthPage } from '@/components/auth-page'
 import { ChatWorkspace } from '@/components/chat-workspace'
 import { KnowledgeWorkspace } from '@/components/knowledge-workspace'
-import { OpenLinkHome } from '@/components/openlink-home'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
 import { ProjectsWorkspace } from '@/components/projects-workspace'
 import { AiProvidersOverview } from '@/components/settings/ai-providers-overview'
@@ -21,7 +21,9 @@ import { OnboardingForm } from '@/app/app/onboarding/onboarding-form'
 import { useT } from '@/lib/i18n/client'
 
 import { desktopBootstrap, type DesktopCapabilities } from './platform/api'
-import type { DesktopRoute, DesktopRouteContext } from './router'
+import { desktopBridge } from './platform/desktop-bridge'
+import { exchangeHyditeSession, performHyditeLogin } from './platform/hydite'
+import { useDesktopRouter, type DesktopRoute, type DesktopRouteContext } from './router'
 
 type Json = Record<string, unknown>
 
@@ -100,30 +102,61 @@ function OnboardingPage({ data }: { data: Json }) {
   )
 }
 
+function DesktopAuthRoute({
+  capabilities,
+  mode,
+}: {
+  capabilities: DesktopCapabilities
+  mode: 'login' | 'register'
+}) {
+  const router = useDesktopRouter()
+  const bridge = useMemo(() => desktopBridge(), [])
+  const hydite = capabilities.publicConfig.hydite
+
+  const onPlatformLogin = useMemo(() => {
+    if (!hydite || !bridge) return undefined
+    return async ({ nextPath }: { nextPath: string }) => {
+      const tokens = await performHyditeLogin(hydite, bridge)
+      await exchangeHyditeSession(tokens)
+      router.replace(nextPath)
+      router.refresh()
+    }
+  }, [bridge, hydite, router])
+
+  return (
+    <AuthPage
+      localRuntime={capabilities.runtimeMode === 'local'}
+      mode={mode}
+      onPlatformLogin={onPlatformLogin}
+    />
+  )
+}
+
 function navigateOnMount(path: string) {
   if (typeof window !== 'undefined') window.location.replace(path)
 }
 
 export function createDesktopRoutes(capabilities: DesktopCapabilities): DesktopRoute[] {
-  const localRuntime = capabilities.runtimeMode === 'local'
-
   return [
     {
       pattern: '/',
-      load: () => desktopBootstrap('home'),
-      render: (data) => <OpenLinkHome {...props<ComponentProps<typeof OpenLinkHome>>(data)} />,
+      // The desktop client has no marketing home. `/` resolves the app entry:
+      // anonymous users go to login, new users to onboarding, and existing
+      // users to their workspace.
+      load: ({ search }) => desktopBootstrap('app-entry', search),
+      render: () => null,
     },
     {
       pattern: '/login',
-      render: () => <AuthPage localRuntime={localRuntime} mode="login" />,
+      render: () => <DesktopAuthRoute capabilities={capabilities} mode="login" />,
     },
     {
       pattern: '/register',
-      render: () => <AuthPage localRuntime={localRuntime} mode="register" />,
+      render: () => <DesktopAuthRoute capabilities={capabilities} mode="register" />,
     },
     {
       pattern: '/app',
-      load: () => desktopBootstrap('app-entry'),
+      load: ({ search }) => desktopBootstrap('app-entry', search),
       render: () => null,
     },
     {

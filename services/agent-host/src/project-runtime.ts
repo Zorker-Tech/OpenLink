@@ -2069,7 +2069,12 @@ export class ProjectRuntimeManager {
   }
 
   private async areHostPortsAvailable(ports: ProjectRuntimeServicePorts): Promise<boolean> {
-    for (const candidate of Object.values(ports)) {
+    // The Project VM also publishes SSH on `browserHost + 101`. A block whose
+    // service ports are free can still fail at VM start when that derived port
+    // belongs to another process or a host-reserved range, so the allocator
+    // must probe it too.
+    const candidates = [...new Set([...Object.values(ports), ports.browserHost + 101])]
+    for (const candidate of candidates) {
       if (!await this.hostPortAvailable(candidate)) return false
     }
     return true

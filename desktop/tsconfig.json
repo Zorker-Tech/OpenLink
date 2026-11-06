@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./../*"]
+    },
+    "plugins": [],
+    "types": ["node"],
+    "incremental": false,
+    "noEmit": true
+  },
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx",
+    "../lib/desktop-api/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist-renderer"
+  ]
+}

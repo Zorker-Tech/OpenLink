@@ -37,7 +37,10 @@ export async function saveAiProviderConfigurationAction(
   | { ok: true; configuration: AiProviderConfigurationSummary }
   | { ok: false; error: string }
 > {
-  return callDesktopAction('settings.saveProvider', input)
+  return callDesktopAction<
+    | { ok: true; configuration: AiProviderConfigurationSummary }
+    | { ok: false; error: string }
+  >('settings.saveProvider', input)
 }
 
 export async function saveEmbeddingProviderConfigurationAction(
@@ -46,7 +49,10 @@ export async function saveEmbeddingProviderConfigurationAction(
   | { ok: true; configuration: EmbeddingProviderConfigurationSummary }
   | { ok: false; error: string }
 > {
-  return callDesktopAction('settings.saveEmbeddingProvider', input)
+  return callDesktopAction<
+    | { ok: true; configuration: EmbeddingProviderConfigurationSummary }
+    | { ok: false; error: string }
+  >('settings.saveEmbeddingProvider', input)
 }
 
 export async function toggleAiProviderEnabledAction(
@@ -56,14 +62,17 @@ export async function toggleAiProviderEnabledAction(
   | { ok: true; configuration: AiProviderConfigurationSummary }
   | { ok: false; error: string }
 > {
-  return callDesktopAction('settings.toggleProvider', { providerId, enabled })
+  return callDesktopAction<
+    | { ok: true; configuration: AiProviderConfigurationSummary }
+    | { ok: false; error: string }
+  >('settings.toggleProvider', { providerId, enabled })
 }
 
 export async function checkAiProviderConfigurationAction(
   providerId: string,
   modelId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  return callDesktopAction('settings.checkProvider', { providerId, modelId })
+  return callDesktopAction<{ ok: true } | { ok: false; error: string }>('settings.checkProvider', { providerId, modelId })
 }
 
 export async function fetchProviderModelsAction(

@@ -72,8 +72,9 @@ compatibility mode. Per-mode architecture and operations are indexed in
 ## Repository boundaries
 
 - Product Web/BFF: `app/`, `components/`, `lib/`, `utils/`.
-- Desktop UI shell: `desktop/`; it loads the existing Web/BFF and does not
-  own product screens or backend credentials.
+- Desktop host: `desktop/`; it renders the shared product UI through Vite,
+  owns a loopback gateway and Cloud/self-hosted connection profiles, and never
+  embeds backend credentials, a second BFF, or a managed local runtime.
 - Owned privileged services: `services/agent-*`, `services/browser-host`,
   `services/knowledge-service`.
 - Vendored runtime source: `services/pi`, `opensandbox`, `sandbox-runtime`,

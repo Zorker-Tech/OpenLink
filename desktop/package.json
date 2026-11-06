@@ -7,9 +7,14 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "vite build --config vite.config.mjs",
-    "start": "electron ."
+    "build:renderer": "vite build --config vite.config.mjs",
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "test:electron": "node test/e2e-electron.mjs",
+    "test:electron-setup": "node test/e2e-electron-setup.mjs"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
     "electron": "44.9.0",
     "vite": "8.3.4"
   }

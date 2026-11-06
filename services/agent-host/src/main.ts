@@ -9,6 +9,8 @@ import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-stat
 import { createSupabaseProjectRuntimeProvisioningQueue, createSupabaseSshProjectRuntimeProvisioningQueue, ProjectRuntimeProvisioner } from './project-runtime-provisioner.js'
 import { ProjectRuntimeRouter, RemoteProjectRuntimeFactory, SupabaseProjectExecutionTargetProvider, type ProjectRuntimeController } from './project-runtime-router.js'
 import { mintSupabaseMcpToken } from './supabase-mcp.js'
+import { mintProjectMemoryMcpToken } from './project-memory-mcp.js'
+import { startEmbeddedCivilizationMemoryService } from './civilization-memory-runtime.js'
 import { createAccessModeResolver } from './access-mode-resolver.js'
 import { createCodexPluginSnapshotProvider } from './codex-plugin-snapshot.js'
 
@@ -233,9 +235,13 @@ const sshProjectRuntimeProvisioner = sshProvisioningQueue
       ...(provisionerId ? { workerId: `${provisionerId}-ssh` } : {}),
     })
   : undefined
+const openSandboxApiKey = required(env, 'OPEN_SANDBOX_API_KEY')
+const civilizationMemoryRuntime = await startEmbeddedCivilizationMemoryService({
+  stateRoot: resolve(storageRoot, 'civilization-memory'),
+})
 const backend = new LocalOpenSandboxBackend({
   domain: env.OPEN_SANDBOX_DOMAIN || '127.0.0.1:43122',
-  apiKey: required(env, 'OPEN_SANDBOX_API_KEY'),
+  apiKey: openSandboxApiKey,
   image: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev',
   desktopMode,
   workspaceRoot,
@@ -247,11 +253,18 @@ const backend = new LocalOpenSandboxBackend({
   sessionTtlSeconds: null,
   networkDefaultAction: networkDefaultAction(env.OPENLINK_AGENT_NETWORK_DEFAULT_ACTION),
   allowUnsafeRootlessCredentials: env.OPENLINK_ALLOW_UNSAFE_ROOTLESS_PROVIDER_CREDENTIALS === '1',
+  closeAdditionalResources: () => civilizationMemoryRuntime.close(),
   codexPluginSnapshot,
   supabaseMcp: {
     extensionPath: '/opt/openlink/agent-worker/extensions/openlink-supabase.ts',
     urlFor: (projectId) => `http://127.0.0.1:${port}/v1/projects/${projectId}/supabase/mcp`,
     tokenFor: (projectId) => mintSupabaseMcpToken(apiToken, projectId),
+  },
+  projectMemoryMcp: {
+    mode: 'code',
+    extensionPath: '/opt/openlink/agent-worker/extensions/openlink-memory.ts',
+    urlFor: (projectId, mode) => `http://127.0.0.1:${port}/v1/projects/${projectId}/memory/${mode}/mcp`,
+    tokenFor: (projectId, mode) => mintProjectMemoryMcpToken(apiToken, projectId, mode),
   },
 })
 const runtime = await startPromptHttpServer({
@@ -267,6 +280,7 @@ const runtime = await startPromptHttpServer({
   maxSessions,
   ...(projectVmManager ? { projectVmManager } : {}),
   projectRuntimeManager: sshRuntimeRouter,
+  civilizationMemoryService: civilizationMemoryRuntime.config,
   resolveSupabaseAccessMode: (sessionId) => supabaseAccessResolver?.resolveAccessMode(sessionId) ?? Promise.resolve('restricted'),
   requireProjectRuntime: true,
   preserveSessionsOnShutdown: true,
@@ -274,7 +288,10 @@ const runtime = await startPromptHttpServer({
   browserGatewayPublicUrl,
   browserGatewayAllowedOrigins: origins(env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || env.OPENLINK_BROWSER_ALLOWED_ORIGINS),
   browserGatewayUpstreamOrigin: env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN?.trim() || 'http://localhost:3000',
-}, backend)
+}, backend).catch(async (error) => {
+  await civilizationMemoryRuntime.close()
+  throw error
+})
 // Project VMs are application-scoped resources, not chat-session resources.
 // Start the Agent Host first so the web application can report useful health
 // immediately, then reattach persisted local VMs in the background. Each

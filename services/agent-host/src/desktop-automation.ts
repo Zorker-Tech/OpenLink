@@ -61,6 +61,9 @@ Rules:
   coordinate mouse input.
 - The desktop is project-scoped and shared by every chat. Do not close or stop
   the desktop session itself.
+- The cursor overlay starts automatically when this desktop supports rendering
+  it. Leave the shared overlay enabled. Wayland desktops such as T2 remain
+  without an overlay until their renderer supports it.
 - This tool is available for T1/T2 project desktops. Do not look for X11-only
   tools; T2 is a Wayland session and the CLI already uses the right backend.
 `

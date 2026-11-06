@@ -103,6 +103,14 @@ Docker Compose is not used by the remote Project=VM profile.
 
 ## Local development
 
+The Code-mode Agent Host starts the upstream Civilization `v1.0.0` Stage74
+Orion memory service from `services/civilization` automatically. The complete
+upstream project is subtree-imported there; this package contains only the
+OpenLink launcher and Agent Host adapter. The service binds to loopback, stores
+durable journals beneath the configured Agent Host storage root in
+`civilization-memory/`, and needs Python 3.10 or newer. No Civilization URL,
+token, model, or provider configuration is required.
+
 ```bash
 cd services/agent-host
 npm run check

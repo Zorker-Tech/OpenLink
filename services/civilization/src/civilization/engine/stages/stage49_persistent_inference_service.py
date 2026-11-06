@@ -11,7 +11,7 @@ from typing import Any, Callable, Protocol
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from .adapter_benchmark import DEFAULT_MODEL_PATH
+from civilization.engine.model_paths import DEFAULT_MODEL_PATH
 from .stage45_adapter_package import Stage45InferenceRequest, Stage45InferenceResponse
 from .stage48_production_jsonl_inference import (
     Stage48Limits,

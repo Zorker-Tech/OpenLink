@@ -13,6 +13,7 @@ import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './li
 import { assertUbuntuProjectVmArtifactManifest, UBUNTU_PROJECT_VM_ARCHITECTURE } from './lib/ubuntu-project-vm-artifact.mjs'
 import { hardenUserOnlySecret } from './lib/windows-security.mjs'
 import { assertWindowsHyperVHostReady } from './lib/windows-hyperv.mjs'
+import { assertCivilizationSource } from './lib/civilization-source.mjs'
 
 const root = new URL('../', import.meta.url)
 const browserHostDirectory = new URL('../services/browser-host/', import.meta.url)
@@ -557,6 +558,7 @@ async function ensureSandboxRuntimeReady() {
 }
 
 async function ensureHostServicesReady() {
+  await assertCivilizationSource(rootPath)
   // File dependencies are packed by npm at install time. Build the exact
   // repository-owned packages first so a clean Windows or macOS checkout
   // never installs a link whose published `files` set lacks dist output.

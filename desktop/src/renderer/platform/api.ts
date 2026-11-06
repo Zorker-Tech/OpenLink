@@ -1,8 +1,16 @@
+export interface DesktopHyditeConfig {
+  issuer: string
+  clientId: string | null
+  scopes: string[]
+  redirectUri: string
+}
+
 export interface DesktopPublicConfig {
   runtimeMode: 'local' | 'cloud'
   supabaseUrl: string
   supabasePublishableKey: string
   zorkerAppUrl: string | null
+  hydite: DesktopHyditeConfig | null
 }
 
 export interface DesktopCapabilities {

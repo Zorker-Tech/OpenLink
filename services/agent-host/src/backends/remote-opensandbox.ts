@@ -6,6 +6,7 @@ import type { BrowserAgentSession } from '../browser-client.js'
 import { browserAgentBinding, browserHostNetworkTarget, REMOTE_BROWSER_EXTENSION_PATH } from '../browser-binding.js'
 import { AgentHostError } from '../errors.js'
 import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
+import type { ProjectMemoryMcpBinding } from '../project-memory-mcp.js'
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
@@ -25,6 +26,8 @@ export interface RemoteOpenSandboxRpcConfig {
   desktopMode?: 'ubuntu-container' | 'ubuntu-iso' | 'wayland-rdp'
   /** Outbound policy selected by the remote approval controller. */
   networkDefaultAction?: 'allow' | 'deny'
+  /** Explicit Code-mode project memory capability, scoped by Agent Host. */
+  projectMemoryMcp?: ProjectMemoryMcpBinding
 }
 
 export interface RemoteRpcPromptSession {
@@ -162,7 +165,7 @@ export class RemoteOpenSandboxRpcBackend {
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
         ...(desktopAutomation ? { OPENLINK_DESKTOP_EXTENSION_PATH: '/opt/openlink/agent-rpc-worker/extensions/openlink-desktop.ts' } : {}),
         ...(agentTools ? agentToolRegistryEnvironment() : {}),
-        ...(projectRuntime ? runtimePolicyEnvironment(projectRuntime) : {}),
+        ...runtimePolicyEnvironment(projectRuntime, { projectMemory: Boolean(projectId && this.config.projectMemoryMcp) }),
         ...(desktopMode === 'ubuntu-iso' ? {
           OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso',
           OPENLINK_DESKTOP_CACHE_ROOT: '/opt/openlink/desktop-cache',
@@ -179,6 +182,11 @@ export class RemoteOpenSandboxRpcBackend {
           OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
           OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
           OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
+        } : {}),
+        ...(projectId && this.config.projectMemoryMcp ? {
+          OPENLINK_PROJECT_MEMORY_EXTENSION_PATH: this.config.projectMemoryMcp.extensionPath,
+          OPENLINK_PROJECT_MEMORY_MCP_URL: this.config.projectMemoryMcp.urlFor(projectId, this.config.projectMemoryMcp.mode),
+          OPENLINK_PROJECT_MEMORY_MCP_TOKEN: this.config.projectMemoryMcp.tokenFor(projectId, this.config.projectMemoryMcp.mode),
         } : {}),
         // Project-local Supabase backend: inject only the safe, publishable
         // connection material so the generated app and the Agent worker can

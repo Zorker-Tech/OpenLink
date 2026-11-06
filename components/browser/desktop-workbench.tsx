@@ -48,12 +48,20 @@ function DesktopCanvas({
     let rfb: import('@novnc/novnc').default | undefined
     let reconnectTimer: number | undefined
     let reconnectAttempts = 0
+    const stoppedConnections = new WeakSet<import('@novnc/novnc').default>()
+
+    const stopConnection = (connection: import('@novnc/novnc').default) => {
+      if (stoppedConnections.has(connection)) return
+      stoppedConnections.add(connection)
+      connection.disconnect()
+    }
 
     const fail = (message?: string) => {
       if (!disposed) onStatusChange('failed', message || t('桌面环境未就绪'))
     }
 
     const handleDisconnect = (connection: import('@novnc/novnc').default, event: Event) => {
+      stoppedConnections.add(connection)
       if (rfb !== connection) return
       const detail = (event as CustomEvent<{ clean?: boolean }>).detail
       if (disposed || detail?.clean) return
@@ -93,7 +101,7 @@ function DesktopCanvas({
 
         const previous = rfb
         rfb = undefined
-        previous?.disconnect()
+        if (previous) stopConnection(previous)
         target.replaceChildren()
 
         const connection = new RFB(target, desktopWebSocketUrl(desktopUrl), { shared: true })
@@ -126,7 +134,7 @@ function DesktopCanvas({
     return () => {
       disposed = true
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer)
-      rfb?.disconnect()
+      if (rfb) stopConnection(rfb)
     }
   }, [desktopUrl, onStatusChange, t])
 

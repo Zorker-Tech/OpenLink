@@ -2513,7 +2513,7 @@ export function ChatWorkspace({
                         }}
                       >
                         <ChatTopbar {...chatTopbarProps} side="chat" />
-                        <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+                        <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text, options) => { await submitAgentMessage(text, null, { editMessageId: id, onAccepted: options?.onAccepted }) }} />
                         <div className="px-2 pb-2">
                           <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                           <AccessWritesBanner sessionId={sessionId} />
@@ -2543,7 +2543,7 @@ export function ChatWorkspace({
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <ChatTopbar {...chatTopbarProps} chatCollapsed={false} side="chat" showWorkspaceLauncher />
-                  <ChatTimeline contentClassName="mx-auto w-full max-w-3xl" events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+                  <ChatTimeline contentClassName="mx-auto w-full max-w-3xl" events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text, options) => { await submitAgentMessage(text, null, { editMessageId: id, onAccepted: options?.onAccepted }) }} />
                   <div className="flex w-full max-w-3xl shrink-0 flex-col px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <AccessWritesBanner sessionId={sessionId} />
@@ -2556,7 +2556,7 @@ export function ChatWorkspace({
           <div className="flex min-h-0 flex-1 xl:hidden">
             <section className="flex size-full min-w-0 flex-col bg-[var(--app-background)]">
               <ChatTopbar {...chatTopbarProps} chatCollapsed={false} side="chat" />
-              <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text) => { await submitAgentMessage(text, null, { editMessageId: id }) }} />
+              <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text, options) => { await submitAgentMessage(text, null, { editMessageId: id, onAccepted: options?.onAccepted }) }} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                 <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />

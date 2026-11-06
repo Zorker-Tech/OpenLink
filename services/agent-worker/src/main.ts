@@ -55,6 +55,7 @@ interface WorkerConfig {
   desktopExtensionPath?: string
   desktopToolSocket?: string
   supabaseExtensionPath?: string
+  projectMemoryExtensionPath?: string
   agent: 'pi' | 'codex'
   codexBin: string
   codexHome: string
@@ -107,6 +108,7 @@ function config(): WorkerConfig {
     desktopExtensionPath: process.env.OPENLINK_DESKTOP_EXTENSION_PATH,
     desktopToolSocket: process.env.OPENLINK_DESKTOP_TOOL_SOCKET,
     supabaseExtensionPath: process.env.OPENLINK_SUPABASE_EXTENSION_PATH,
+    projectMemoryExtensionPath: process.env.OPENLINK_PROJECT_MEMORY_EXTENSION_PATH,
     agent: process.env.OPENLINK_AGENT_KIND === 'codex' ? 'codex' : 'pi',
     codexBin: process.env.OPENLINK_CODEX_BIN || 'codex',
     codexHome: resolve(process.env.OPENLINK_CODEX_HOME || '/openlink/session/codex-home'),
@@ -436,6 +438,7 @@ class SdkAgentRuntime {
     const extensions = await availableExtensionPaths([
       this.worker.browserExtensionPath,
       this.worker.supabaseExtensionPath,
+      this.worker.projectMemoryExtensionPath,
       this.worker.desktopExtensionPath,
     ])
     const resourceLoader = new DefaultResourceLoader({
@@ -477,6 +480,9 @@ class SdkAgentRuntime {
       mcpServers: [
         ...(this.worker.supabaseExtensionPath && extensions.includes(this.worker.supabaseExtensionPath)
           ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 3 }]
+          : []),
+        ...(this.worker.projectMemoryExtensionPath && extensions.includes(this.worker.projectMemoryExtensionPath)
+          ? [{ id: 'openlink_project_memory', name: 'OpenLink Project Memory', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 2 }]
           : []),
         ...(this.worker.browserExtensionPath && extensions.includes(this.worker.browserExtensionPath)
           ? [{ id: 'openlink_browser', name: 'OpenLink Browser', status: 'connected' as const, auth: 'authenticated' as const, toolCount: 15 }]
@@ -784,6 +790,7 @@ class SdkAgentRuntime {
       additionalExtensionPaths: await availableExtensionPaths([
         this.worker.browserExtensionPath,
         this.worker.supabaseExtensionPath,
+        this.worker.projectMemoryExtensionPath,
         this.worker.desktopExtensionPath,
       ]),
       ...(this.worker.runtimePolicy ? { appendSystemPrompt: [this.worker.runtimePolicy] } : {}),
@@ -833,6 +840,8 @@ const runtime = worker.agent === 'codex'
     apiKey: worker.providerApiKey,
     supabaseMcpUrl: process.env.OPENLINK_SUPABASE_MCP_URL,
     supabaseMcpToken: process.env.OPENLINK_SUPABASE_MCP_TOKEN,
+    projectMemoryMcpUrl: process.env.OPENLINK_PROJECT_MEMORY_MCP_URL,
+    projectMemoryMcpToken: process.env.OPENLINK_PROJECT_MEMORY_MCP_TOKEN,
     browserMcpUrl: worker.browserCapabilityFile ? `http://127.0.0.1:${worker.port}/v1/browser-mcp` : undefined,
     desktopMcpUrl: worker.desktopExtensionPath ? `http://127.0.0.1:${worker.port}/v1/desktop-mcp` : undefined,
     developerInstructions: worker.runtimePolicy,

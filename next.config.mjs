@@ -4,6 +4,8 @@ import { networkInterfaces } from 'node:os'
 const localZokerbaseUrl = (
   process.env.OPENLINK_LOCAL_ZOKERBASE_URL || process.env.OPENLINK_LOCAL_SUPABASE_URL
 )?.replace(/\/+$/, '')
+const localGatewayProxyPort = process.env.OPENLINK_DESKTOP_GATEWAY_PROXY_PORT?.trim() || '43125'
+const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE || 'local').trim().toLowerCase()
 const localInterfaceOrigins = Object.values(networkInterfaces())
   .flatMap((addresses) => addresses ?? [])
   .filter((address) => address.family === 'IPv4' && !address.internal)
@@ -12,14 +14,25 @@ const localInterfaceOrigins = Object.values(networkInterfaces())
 const nextConfig = {
   distDir: process.env.OPENLINK_NEXT_DIST_DIR || '.next',
   async rewrites() {
-    if (!localZokerbaseUrl) return []
+    const beforeFiles = []
+    if (localZokerbaseUrl) {
+      beforeFiles.push({
+        source: '/api/openlink-zokerbase/:path*',
+        destination: `${localZokerbaseUrl}/:path*`,
+      })
+    }
+    if (runtimeMode === 'local') {
+      const gatewayProxyOrigin = `http://127.0.0.1:${localGatewayProxyPort}`
+      for (const gateway of ['desktop', 'browser', 'code-server']) {
+        beforeFiles.push({
+          source: `/v1/${gateway}/gateway/:path*`,
+          destination: `${gatewayProxyOrigin}/v1/${gateway}/gateway/:path*`,
+        })
+      }
+    }
+    if (beforeFiles.length === 0) return []
     return {
-      beforeFiles: [
-        {
-          source: '/api/openlink-zokerbase/:path*',
-          destination: `${localZokerbaseUrl}/:path*`,
-        },
-      ],
+      beforeFiles,
     }
   },
   // Customer self-hosted releases run the prebuilt standalone server. Source

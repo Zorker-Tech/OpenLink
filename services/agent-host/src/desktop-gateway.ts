@@ -5,6 +5,7 @@ import type { Duplex } from 'node:stream'
 import type { Socket } from 'node:net'
 import { WebSocket, WebSocketServer } from 'ws'
 import { AgentHostError } from './errors.js'
+import { isAllowedOrigin } from './origin-allowlist.js'
 
 const DESKTOP_SESSION_TTL_MS = 8 * 60 * 60 * 1_000
 const MAX_SOCKET_BUFFER_BYTES = 64 * 1024 * 1024
@@ -248,7 +249,7 @@ export class DesktopGateway {
 
   private assertOrigin(request: IncomingMessage, required: boolean): void {
     const origin = request.headers.origin
-    if (origin && !this.allowedOrigins.has(origin)) throw new AgentHostError('AUTH_DENIED', 'Desktop gateway origin is not allowed')
+    if (origin && !isAllowedOrigin(origin, this.allowedOrigins)) throw new AgentHostError('AUTH_DENIED', 'Desktop gateway origin is not allowed')
     if (required && !origin) throw new AgentHostError('AUTH_DENIED', 'Desktop gateway origin is required')
   }
 

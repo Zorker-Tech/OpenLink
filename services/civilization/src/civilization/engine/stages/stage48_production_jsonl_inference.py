@@ -12,8 +12,6 @@ from .stage45_adapter_package import (
     Stage45InferenceResponse,
     load_stage45_package_manifest,
 )
-from .stage46_runtime_inference import Stage46QwenRuntimeBackend
-from .stage47_centroid_batch_inference import Stage47CentroidProvider
 
 
 DEFAULT_OUTPUT_DIR = Path("artifacts/civilization/stage48_jsonl_inference")
@@ -208,6 +206,11 @@ def build_stage48_runtime(
     preferred_device: str,
     max_length: int,
 ) -> Stage46QwenRuntimeBackend:
+    # Load the optional model stack only when decision inference is requested;
+    # importing the Stage74 memory service itself remains dependency-light.
+    from .stage46_runtime_inference import Stage46QwenRuntimeBackend
+    from .stage47_centroid_batch_inference import Stage47CentroidProvider
+
     manifest = load_stage45_package_manifest(package_manifest)
     provider = Stage47CentroidProvider(centroid_bundle)
     return Stage46QwenRuntimeBackend(

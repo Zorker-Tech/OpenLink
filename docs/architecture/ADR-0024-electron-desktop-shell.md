@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0031](./ADR-0031-desktop-vite-host.md).
 
 ## Context
 

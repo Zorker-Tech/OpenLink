@@ -28,6 +28,7 @@ before every operation.
 | browser profiles/downloads | Browser Host runtime storage | Isolated per session/user |
 | knowledge source, chunks, jobs | ZOKERBASE PostgreSQL | Auditable source of truth |
 | vector entities/indexes | Zero | Rebuildable projection |
+| Project Code memory | Civilization 1.0.0 Stage74 service at `services/civilization`, supervised by Agent Host | Stable Project-and-mode session; durable Orion journal under the Agent Host storage root |
 | image archives and VM bases | release/runtime artifact store | Immutable, versioned inputs |
 
 ## Secrets
@@ -37,6 +38,7 @@ be returned in list/detail APIs. At minimum this includes:
 
 - ZOKERBASE service-role and JWT signing material;
 - Agent Host, Browser Host, and Knowledge Service bearer tokens;
+- Agent Host-generated Civilization loopback bearer token;
 - provider API keys and embedding-provider tokens;
 - Zero credentials;
 - SSH private keys and known-host policy;
