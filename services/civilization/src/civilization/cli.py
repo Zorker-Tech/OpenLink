@@ -1,0 +1,1036 @@
+"""Command line entry point: ``civilization``.
+
+Four commands cover the whole path from "just downloaded the repository" to a
+running service:
+
+    civilization demo       run a complete decision + memory cycle with no
+                            configuration, no model, and no network
+    civilization doctor     report what this machine can run
+    civilization serve      host the service (provider, local model, or adapter)
+    civilization predict    send one decision to a running service
+
+The client commands never need the engine extras; hosting a service does.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import asdict
+import json
+import os
+from pathlib import Path
+import platform
+import signal
+import sys
+import threading
+from typing import Any, Sequence
+
+from . import __version__
+from .client import CivilizationClient
+from .models import CivilizationRequest, MemorySystem
+from .runtimes import (
+    capabilities_for,
+    runtime_kinds,
+)
+
+PROGRAM = "civilization"
+DEFAULT_BASE_URL = os.environ.get("CIVILIZATION_BASE_URL", "http://127.0.0.1:8765")
+
+
+# --------------------------------------------------------------------------- #
+# helpers
+# --------------------------------------------------------------------------- #
+def _print(payload: Any, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(payload)
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _parse_header(value: str) -> tuple[str, str]:
+    name, separator, header_value = value.partition("=")
+    if not separator or not name.strip():
+        raise argparse.ArgumentTypeError(f"expected NAME=VALUE, got {value!r}")
+    return name.strip(), header_value
+
+
+def _add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--runtime",
+        default=os.environ.get("CIVILIZATION_RUNTIME", "provider"),
+        choices=list(runtime_kinds()),
+        help="decision backend to host (default: provider)",
+    )
+    parser.add_argument(
+        "--provider-base-url",
+        default=os.environ.get("CIVILIZATION_PROVIDER_BASE_URL", ""),
+        help="OpenAI-compatible base URL, for example https://provider.example.com/v1",
+    )
+    parser.add_argument(
+        "--provider-model",
+        default=os.environ.get("CIVILIZATION_PROVIDER_MODEL", ""),
+        help="model name passed to the provider",
+    )
+    parser.add_argument(
+        "--api-key-env",
+        default=os.environ.get("CIVILIZATION_API_KEY_ENV", "OPENAI_API_KEY"),
+        help="environment variable holding the provider API key (default: OPENAI_API_KEY)",
+    )
+    parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        type=_parse_header,
+        metavar="NAME=VALUE",
+        help="extra provider header, repeatable",
+    )
+    parser.add_argument(
+        "--local-model-path",
+        default=os.environ.get("CIVILIZATION_MODEL_PATH", ""),
+        help="local model directory, for the local_transformers / local_adapter runtimes",
+    )
+    parser.add_argument(
+        "--allow-insecure-http",
+        action="store_true",
+        help="allow a plain-HTTP provider endpoint (loopback is always allowed)",
+    )
+
+
+def _embedded_config(args: argparse.Namespace) -> Any:
+    """Build an EmbeddedConfig from CLI arguments, with actionable errors."""
+
+    from .embedded import EmbeddedConfig
+
+    runtime = args.runtime
+    if runtime == "provider":
+        if not args.provider_base_url:
+            raise SystemExit(
+                "a provider runtime needs --provider-base-url (or CIVILIZATION_PROVIDER_BASE_URL).\n"
+                "Try `civilization demo` first: it runs the full path with no configuration."
+            )
+        if not args.provider_model:
+            raise SystemExit("a provider runtime needs --provider-model (or CIVILIZATION_PROVIDER_MODEL).")
+    if runtime in {"local_transformers", "local_adapter"} and not args.local_model_path:
+        raise SystemExit(
+            f"the {runtime} runtime needs --local-model-path (or CIVILIZATION_MODEL_PATH) "
+            "pointing at a local model directory."
+        )
+
+    return EmbeddedConfig(
+        runtime=runtime,
+        provider_base_url=args.provider_base_url,
+        provider_model=args.provider_model,
+        provider_api_key_env=args.api_key_env,
+        provider_headers=dict(args.header or []),
+        allow_insecure_http=getattr(args, "allow_insecure_http", False),
+        local_model_path=args.local_model_path,
+        host=getattr(args, "host", "127.0.0.1"),
+        port=getattr(args, "port", 0),
+        state_dir=getattr(args, "state_dir", "var/state"),
+        bearer_token_env=getattr(args, "token_env", "CIVILIZATION_API_TOKEN"),
+        provider_timeout_seconds=getattr(args, "timeout", 120.0),
+        max_tokens=getattr(args, "max_tokens", 512),
+        persist_sessions=getattr(args, "persist_sessions", True),
+        persistence_mode=getattr(args, "persistence_mode", "in_process"),
+        fsync_policy=getattr(args, "fsync", "interval"),
+        fsync_interval_seconds=getattr(args, "fsync_interval", 0.25),
+        snapshot_every_records=getattr(args, "snapshot_every", 512),
+        sidecar_socket=getattr(args, "sidecar_socket", None),
+        persist_traces=getattr(args, "persist_traces", False),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# demo
+# --------------------------------------------------------------------------- #
+class _OfflineDemoRuntime:
+    """Deterministic offline runtime used by ``civilization demo``.
+
+    It is not a model. It answers the decision protocol with a fixed choice and
+    reports the same trace shape a real runtime reports, so the demo exercises
+    the full service path — validation, memory retrieval, injection, jobs,
+    metrics — without a provider, a key, or network access.
+    """
+
+    def __init__(self) -> None:
+        self.request_count = 0
+
+    def predict(self, request: Any) -> Any:
+        from .engine.stages.stage45_adapter_package import Stage45InferenceResponse
+
+        self.request_count += 1
+        scores = [0.0] * len(request.answer_options)
+        scores[0] = 1.0
+        return Stage45InferenceResponse(
+            status="ok",
+            task_name=request.task_name,
+            seed=request.seed,
+            predicted_option_id=0,
+            scores={"api_choice": scores},
+            trace={
+                "runtime": "offline_demo",
+                "production_full_mode": True,
+                "note": "deterministic offline runtime: no model was queried",
+                "memory_item_count": len(request.memory_items),
+                "rule_item_count": len(request.rule_items),
+                "adapter_execution": False,
+                "hidden_states_available": False,
+                "ablation_controls_executed": False,
+            },
+        )
+
+
+ENGINE_MISSING_HINT = (
+    "hosting the service needs the engine extra:\n"
+    "    pip install 'astreusn-civilization-v1[embedded]'\n"
+    "from a checkout:  pip install -e '.[embedded]'"
+)
+
+
+def _require_engine() -> None:
+    """Fail with an instruction, not a traceback, when the engine is absent."""
+
+    try:
+        import numpy  # noqa: F401  (first dependency the service chain imports)
+        import torch  # noqa: F401
+    except ImportError as error:
+        raise SystemExit(f"the service engine is not installed ({error.name}).\n{ENGINE_MISSING_HINT}") from error
+
+
+def _command_demo(args: argparse.Namespace) -> int:
+    _require_engine()
+    from .embedded import EmbeddedCivilization, EmbeddedConfig
+    from .runtimes import RuntimeCapabilities
+
+    state_dir = Path(args.state_dir).expanduser()
+    config = EmbeddedConfig(
+        runtime="provider",
+        provider_base_url="https://offline.demo.invalid/v1",
+        provider_model="offline-demo",
+        bearer_token_env=None,
+        state_dir=str(state_dir),
+        replay_after_request=False,
+    )
+    demo_capabilities = RuntimeCapabilities(
+        kind="provider",
+        label="offline-demo",
+        provider_agnostic=False,
+        local_weights=False,
+        chat_completions=False,
+        hidden_states=False,
+        adapter_execution=False,
+        notes=(
+            "deterministic offline runtime used by `civilization demo`",
+            "no model is queried and no network access is used",
+        ),
+    )
+    print(f"{PROGRAM} {__version__} — offline demo (no model, no network, no configuration)\n")
+
+    with EmbeddedCivilization(config, runtime_factory=_OfflineDemoRuntime, capabilities=demo_capabilities) as runtime:
+        client = runtime.start()
+        ready = client.ready()
+        declared = client.capabilities()
+        print(f"service ready:      {bool(ready.get('ready'))}")
+        print(f"declared runtime:   {declared.get('label')}")
+        print(f"capability flags:   {json.dumps(declared, ensure_ascii=False)}")
+        print(f"state directory:    {state_dir}\n")
+
+        session = "demo-session"
+        cell = client.write_memory(
+            session_id=session,
+            memory_system=MemorySystem.EPISODIC,
+            content="The deployment signature and health checks are valid.",
+            summary="deployment verification evidence",
+        )
+        print(f"memory written:     {cell.get('cell_id')} (episodic)")
+
+        prediction = client.predict(
+            CivilizationRequest(
+                text="The deployment signature and health checks are valid. Choose the supported operation.",
+                answer_options=("approve", "reject"),
+                session_id=session,
+                task_name="demo_decision",
+                memory_items=("The deployment signature and health checks are valid.",),
+                rule_items=("Reject only when a critical verification is unresolved.",),
+                state_values=(0.9, 0.1, 0.8),
+            )
+        )
+        print(f"decision:           option {prediction.option_id} = {prediction.option_text!r}")
+        print(f"runtime used:       {prediction.trace.get('runtime')}")
+        print(f"memory trace:       {json.dumps(dict(prediction.memory_trace), ensure_ascii=False)}")
+
+        retrieved = client.read_memory(session_id=session, query="deployment verification evidence")
+        print(f"memory read back:   {len(retrieved)} cell(s)")
+
+    print(
+        "\nWhat just happened: the service validated a request, retrieved a memory cell, "
+        "injected it into the decision context, and returned an auditable trace.\n"
+        "Next steps:\n"
+        "  civilization doctor                                  # what can this machine run\n"
+        "  civilization serve --provider-base-url <url> \\\n"
+        "      --provider-model <model>                         # host with a real backend\n"
+        "  civilization predict --text 'Choose.' --options approve,reject"
+    )
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# doctor
+# --------------------------------------------------------------------------- #
+def _command_doctor(args: argparse.Namespace) -> int:
+    from .engine import model_paths
+
+    report: dict[str, Any] = {
+        "civilization_version": __version__,
+        "python": sys.version.split()[0],
+        "platform": f"{platform.system()} {platform.machine()}",
+        "requested_runtime": args.runtime,
+        "client_dependencies": "standard library only",
+    }
+
+    optional = {}
+    for name in ("torch", "transformers", "numpy", "psutil"):
+        try:
+            module = __import__(name)
+            optional[name] = getattr(module, "__version__", "installed")
+        except ImportError:
+            optional[name] = None
+    report["engine_dependencies"] = optional
+
+    report["local_checkpoint"] = {
+        "environment_variable": model_paths.MODEL_PATH_ENV,
+        "resolved_path": str(model_paths.DEFAULT_MODEL_PATH),
+        "available": model_paths.model_available(),
+        "note": "only needed by the local_transformers and local_adapter runtimes",
+    }
+
+    if args.runtime == "provider":
+        key_present = bool(os.environ.get(args.api_key_env))
+        report["provider"] = {
+            "base_url": args.provider_base_url or None,
+            "model": args.provider_model or None,
+            "api_key_env": args.api_key_env,
+            "api_key_present": key_present,
+        }
+
+    report["declared_capabilities"] = capabilities_for(args.runtime).to_dict()
+
+    ready = True
+    notes: list[str] = []
+    if args.runtime == "provider":
+        if not args.provider_base_url or not args.provider_model:
+            ready = False
+            notes.append("provider runtime selected but --provider-base-url/--provider-model are not set")
+        elif not os.environ.get(args.api_key_env):
+            notes.append(f"{args.api_key_env} is not set in this shell")
+    if args.runtime in {"local_transformers", "local_adapter"} and not model_paths.model_available():
+        ready = False
+        notes.append(
+            f"local checkpoint not found at {model_paths.DEFAULT_MODEL_PATH}; "
+            f"place it there or set {model_paths.MODEL_PATH_ENV}"
+        )
+    if optional["torch"] is None:
+        notes.append("torch is not installed: `pip install -e '.[embedded]'` enables hosting")
+
+    report["verdict"] = {"can_serve": ready, "notes": notes}
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"{PROGRAM} {report['civilization_version']} | python {report['python']} | {report['platform']}")
+        print(f"client dependencies: {report['client_dependencies']}")
+        engine_deps = ", ".join(f"{k}={v}" for k, v in optional.items() if v) or "none installed"
+        print(f"engine dependencies: {engine_deps}")
+        for name, value in optional.items():
+            if value is None:
+                print(f"  missing: {name}")
+        checkpoint = report["local_checkpoint"]
+        state = "found" if checkpoint["available"] else "not found"
+        print(f"local checkpoint:    {state} at {checkpoint['resolved_path']} ({checkpoint['environment_variable']})")
+        if args.runtime == "provider":
+            provider = report["provider"]
+            key = "present" if provider["api_key_present"] else "missing"
+            print(f"provider:            {provider['base_url'] or '<unset>'} model={provider['model'] or '<unset>'}")
+            print(f"provider API key:    {provider['api_key_env']} ({key})")
+        print(f"runtime:             {args.runtime}")
+        print(f"declared capabilities: {json.dumps(report['declared_capabilities'], ensure_ascii=False)}")
+        print(f"can serve now:       {report['verdict']['can_serve']}")
+        for note in notes:
+            print(f"  note: {note}")
+    return 0 if not args.strict or report["verdict"]["can_serve"] else 1
+
+
+# --------------------------------------------------------------------------- #
+# serve
+# --------------------------------------------------------------------------- #
+def _command_serve(args: argparse.Namespace) -> int:
+    _require_engine()
+    from .embedded import EmbeddedCivilization
+
+    config = _embedded_config(args)
+    service = EmbeddedCivilization(config)
+    client = service.start()
+    base_url = client.base_url
+    (Path(config.state_dir).expanduser()).mkdir(parents=True, exist_ok=True)
+    (Path(config.state_dir).expanduser() / "base_url.txt").write_text(base_url + "\n", encoding="utf-8")
+
+    capabilities = capabilities_for(config.runtime).to_dict()
+    print(f"{PROGRAM} {__version__} serving on {base_url}")
+    print(f"runtime:    {capabilities['kind']} ({capabilities['label']})")
+    print(f"state dir:  {config.state_dir}")
+    print(f"capabilities: {json.dumps(capabilities, ensure_ascii=False)}")
+    print("endpoints:  /health /ready /metrics /v1/capabilities /v1/predict /v1/batch /v1/jobs ...")
+    print("press Ctrl-C to stop")
+
+    stop = threading.Event()
+
+    def _handle_signal(*_: Any) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+    try:
+        while not stop.wait(1.0):
+            pass
+    finally:
+        service.shutdown()
+    print("\nstopped")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# prune
+# --------------------------------------------------------------------------- #
+def _command_prune(args: argparse.Namespace) -> int:
+    older_than_seconds = args.older_than_days * 86400 if args.older_than_days is not None else None
+
+    if args.base_url:
+        # Live path: the service protects the sessions it is currently serving.
+        client = CivilizationClient(
+            args.base_url,
+            token_env=args.token_env if os.environ.get(args.token_env) else None,
+            timeout=120.0,
+        )
+        payload: dict[str, Any] = {"dry_run": args.dry_run}
+        if args.older_than_days is not None:
+            payload["older_than_days"] = args.older_than_days
+        if args.keep is not None:
+            payload["keep"] = args.keep
+        if args.compact_over is not None:
+            payload["compact_over_records"] = args.compact_over
+        response = client._request("POST", "/admin/orion/memory/retention", payload)  # noqa: SLF001 - admin endpoint
+        report = response.get("retention", {})
+        _print(
+            json.dumps(report, ensure_ascii=False, indent=2)
+            if args.json
+            else _format_retention(report, prefix=f"{args.base_url} "),
+            as_json=False,
+        )
+        return 0
+
+    # Offline path: operate on the files directly, so the service must be stopped.
+    _require_engine()
+    from .engine.persistence import PersistenceConfig, SessionPersistence
+
+    persistence = SessionPersistence(
+        PersistenceConfig(mode="in_process", state_dir=args.state_dir, fsync="never")
+    )
+    try:
+        report = persistence.retention_sweep(
+            older_than_seconds=older_than_seconds,
+            keep_sessions=args.keep,
+            compact_over_records=args.compact_over,
+            dry_run=args.dry_run,
+        )
+    finally:
+        persistence.close()
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(_format_retention(report))
+    if not args.dry_run and report["pruned"]:
+        print("run with --base-url against a live service to have it protect active sessions")
+    return 0
+
+
+def _format_retention(report: dict[str, Any], *, prefix: str = "") -> str:
+    lines = [
+        f"{prefix}sessions: {report.get('sessions_before')} -> {report.get('sessions_after')}",
+        f"compacted: {len(report.get('compacted', []))}",
+        f"pruned:    {len(report.get('pruned', []))} ({report.get('bytes_freed', 0)} bytes freed)",
+    ]
+    if report.get("dry_run"):
+        lines.append("dry run: nothing was changed")
+    for item in report.get("compacted", [])[:10]:
+        lines.append(f"  compacted {item.get('session')}: {item.get('records', item.get('cells'))}")
+    for item in report.get("pruned", [])[:10]:
+        lines.append(f"  pruned    {item.get('session')} ({item.get('bytes')} bytes)")
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# memory backup / restore
+# --------------------------------------------------------------------------- #
+def _command_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import create_memory_backup
+
+    passphrase = os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE")
+    if not passphrase:
+        raise SystemExit("memory backup failed: set CIVILIZATION_BACKUP_PASSPHRASE in the process environment")
+    try:
+        report = create_memory_backup(args.state_dir, args.output, passphrase=passphrase)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"memory backup failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"encrypted memory backup verified: {Path(args.output).expanduser().resolve()}")
+        print(f"encrypted: {report['encrypted']}")
+        print(f"sessions: {report['session_count']}; entries: {report['entry_count']}; bytes: {report['total_bytes']}")
+    return 0
+
+
+def _command_verify_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import verify_memory_backup
+
+    try:
+        report = verify_memory_backup(args.backup, passphrase=os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE"))
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"memory backup verification failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"backup verified: {Path(args.backup).expanduser().resolve()}")
+        print(f"encrypted: {report['encrypted']}")
+        print(f"sessions: {report['session_count']}; entries: {report['entry_count']}; bytes: {report['total_bytes']}")
+    return 0
+
+
+def _command_replicate_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import replicate_memory_backup
+
+    passphrase = os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE")
+    if not passphrase:
+        raise SystemExit("backup replication failed: set CIVILIZATION_BACKUP_PASSPHRASE in the process environment")
+    try:
+        report = replicate_memory_backup(
+            args.backup,
+            args.destination_dir,
+            passphrase=passphrase,
+        )
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"backup replication failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"encrypted backup replica verified on a distinct filesystem: {report['replica']}")
+        print(f"bytes: {report['total_bytes']}; sha256: {report['sha256']}")
+    return 0
+
+
+def _command_replicate_s3_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import create_s3_client, replicate_encrypted_backup_to_s3
+
+    passphrase = os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE")
+    if not passphrase:
+        raise SystemExit("S3 backup replication failed: set CIVILIZATION_BACKUP_PASSPHRASE in the process environment")
+    try:
+        client = create_s3_client(
+            endpoint_url=args.endpoint_url,
+            region_name=args.region,
+            allow_insecure_http=args.allow_insecure_http,
+        )
+        report = replicate_encrypted_backup_to_s3(
+            args.backup,
+            client=client,
+            bucket=args.bucket,
+            key_prefix=args.key_prefix,
+            checkpoint_directory=args.checkpoint_dir,
+            endpoint_identity=args.endpoint_url or f"aws:{args.region}",
+            passphrase=passphrase,
+            part_size_bytes=args.part_size_mib * 1024 * 1024,
+            object_lock_mode=args.object_lock_mode,
+            retention_days=args.retention_days,
+        )
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"S3 backup replication failed: {error}") from error
+    except Exception as error:
+        raise SystemExit(f"S3 backup replication failed: {type(error).__name__}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"encrypted S3 backup verified: s3://{report['bucket']}/{report['key']}")
+        print(f"version: {report['version_id']}; bytes: {report['total_bytes']}; sha256: {report['source_sha256']}")
+    return 0
+
+
+def _command_s3_backup_retention(args: argparse.Namespace) -> int:
+    from .engine.persistence import apply_s3_backup_retention, create_s3_client, plan_s3_backup_retention
+
+    try:
+        client = create_s3_client(
+            endpoint_url=args.endpoint_url,
+            region_name=args.region,
+            allow_insecure_http=args.allow_insecure_http,
+        )
+        plan = plan_s3_backup_retention(
+            client,
+            bucket=args.bucket,
+            prefix=args.prefix,
+            keep_latest=args.keep_latest,
+            older_than_days=args.older_than_days,
+        )
+        report = apply_s3_backup_retention(client, plan, apply=args.apply)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"S3 backup retention failed: {error}") from error
+    except Exception as error:
+        raise SystemExit(f"S3 backup retention failed: {type(error).__name__}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        action = "deleted" if args.apply else "would delete"
+        candidates = report.get("deleted_versions", report.get("candidate_versions", []))
+        preserved = report.get("preserved_versions", plan.get("preserved_versions", []))
+        print(f"S3 backup retention plan: {action} {len(candidates)} version(s)")
+        print(f"preserved: {len(preserved)} version(s)")
+    return 0
+
+
+def _command_replicate_s3_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import create_s3_client, replicate_encrypted_backup_to_s3
+
+    passphrase = os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE")
+    if not passphrase:
+        raise SystemExit("S3 backup replication failed: set CIVILIZATION_BACKUP_PASSPHRASE in the process environment")
+    try:
+        client = create_s3_client(
+            endpoint_url=args.endpoint_url,
+            region_name=args.region,
+            allow_insecure_http=args.allow_insecure_http,
+        )
+        report = replicate_encrypted_backup_to_s3(
+            args.backup,
+            client=client,
+            bucket=args.bucket,
+            key_prefix=args.key_prefix,
+            checkpoint_directory=args.checkpoint_dir,
+            endpoint_identity=args.endpoint_url or f"aws:{args.region}",
+            passphrase=passphrase,
+            part_size_bytes=args.part_size_mib * 1024 * 1024,
+            object_lock_mode=args.object_lock_mode,
+            retention_days=args.retention_days,
+        )
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"S3 backup replication failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"encrypted S3 backup verified: s3://{report['bucket']}/{report['key']}")
+        print(f"version: {report['version_id']}; bytes: {report['total_bytes']}; sha256: {report['source_sha256']}")
+    return 0
+
+
+def _command_s3_backup_retention(args: argparse.Namespace) -> int:
+    from .engine.persistence import apply_s3_backup_retention, create_s3_client, plan_s3_backup_retention
+
+    try:
+        client = create_s3_client(
+            endpoint_url=args.endpoint_url,
+            region_name=args.region,
+            allow_insecure_http=args.allow_insecure_http,
+        )
+        plan = plan_s3_backup_retention(
+            client,
+            bucket=args.bucket,
+            prefix=args.prefix,
+            keep_latest=args.keep_latest,
+            older_than_days=args.older_than_days,
+        )
+        report = apply_s3_backup_retention(client, plan, apply=args.apply)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"S3 backup retention failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        action = "deleted" if args.apply else "would delete"
+        print(f"S3 backup retention plan: {action} {len(report.get('deleted_versions', report.get('candidate_versions', [])))} version(s)")
+        print(f"preserved: {len(report.get('preserved_versions', plan.get('preserved_versions', [])))} version(s)")
+    return 0
+
+
+def _command_restore_backup(args: argparse.Namespace) -> int:
+    from .engine.persistence import restore_memory_backup
+
+    try:
+        report = restore_memory_backup(
+            args.backup,
+            args.destination,
+            passphrase=os.environ.get("CIVILIZATION_BACKUP_PASSPHRASE"),
+        )
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"memory backup restore failed: {error}") from error
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"memory restored and verified: {report['restored_to']}")
+        print(f"encrypted: {report['encrypted']}")
+        if report["global_store_path"]:
+            print(f"global memory snapshot: {report['global_store_path']}")
+        print(f"sessions: {report['session_count']}; entries: {report['entry_count']}; bytes: {report['total_bytes']}")
+    return 0
+
+
+def _command_scorecard(args: argparse.Namespace) -> int:
+    from .engine.stages.stage162_orion_accuracy_scorecard import build_longmemeval_scorecard, write_scorecard
+
+    try:
+        report = build_longmemeval_scorecard(
+            args.results,
+            baseline_file=args.baseline,
+            dataset_file=args.dataset_file,
+            expected_questions=args.expected_questions,
+            cutoff=args.cutoff,
+            target_accuracy=args.target_accuracy,
+        )
+        if args.output:
+            output = write_scorecard(report, args.output)
+        else:
+            output = None
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"LongMemEval scorecard failed: {error}") from error
+    if output is not None:
+        print(f"scorecard saved: {output.resolve()}")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# persist-sidecar
+# --------------------------------------------------------------------------- #
+def _command_persist_sidecar(args: argparse.Namespace) -> int:
+    _require_engine()
+    from .engine.persistence import PersistenceConfig, SidecarServer
+
+    config = PersistenceConfig(
+        mode="in_process",
+        state_dir=args.state_dir,
+        fsync=args.fsync,
+        fsync_interval_seconds=args.fsync_interval,
+        snapshot_every_records=args.snapshot_every,
+        # The server needs the socket path it should listen on; it is the same
+        # path the service passes as --sidecar-socket.
+        sidecar_socket=args.socket,
+    )
+    server = SidecarServer(config)
+    print(f"{PROGRAM} persistence sidecar")
+    print(f"state dir:  {Path(args.state_dir).expanduser().resolve()}")
+    print(f"socket:     {args.socket}")
+    print(f"commit:     {args.fsync} (interval {args.fsync_interval}s)")
+    print("the service survives restarts while this process keeps the durable stream open")
+    print("press Ctrl-C to stop")
+
+    stop = threading.Event()
+
+    def _handle_signal(*_: Any) -> None:
+        stop.set()
+        server.stop()
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+    try:
+        server.serve_forever(on_ready=lambda path: print(f"listening on {path}", flush=True))
+    finally:
+        stop.set()
+    print(f"\nstopped (connections served: {server.connections}, records received: {server.received_records})")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# predict
+# --------------------------------------------------------------------------- #
+def _command_predict(args: argparse.Namespace) -> int:
+    options = _split_csv(args.options)
+    if len(options) < 2:
+        raise SystemExit("--options needs at least two comma-separated choices, for example --options approve,reject")
+
+    state_values: Sequence[float] | None = None
+    if args.state_values:
+        try:
+            state_values = tuple(float(value) for value in _split_csv(args.state_values))
+        except ValueError as error:
+            raise SystemExit(f"--state-values must be numeric: {error}") from error
+
+    client = CivilizationClient(
+        args.base_url,
+        token_env=args.token_env if os.environ.get(args.token_env) else None,
+        timeout=args.timeout,
+        allow_insecure_http=args.allow_insecure_http,
+    )
+    request_kwargs: dict[str, Any] = {
+        "text": args.text,
+        "answer_options": options,
+        "session_id": args.session_id,
+        "task_name": args.task_name,
+        "memory_items": args.memory or (),
+        "rule_items": args.rule or (),
+        "read_memory": not args.no_memory,
+    }
+    if state_values is not None:
+        request_kwargs["state_values"] = state_values
+    request = CivilizationRequest(**request_kwargs)
+
+    prediction = client.predict(request)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "request_id": prediction.request_id,
+                    "option_id": prediction.option_id,
+                    "option_text": prediction.option_text,
+                    "scores": {name: list(values) for name, values in prediction.scores.items()},
+                    "trace": dict(prediction.trace),
+                    "memory_trace": dict(prediction.memory_trace),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(f"{prediction.option_id}: {prediction.option_text}")
+        runtime = prediction.trace.get("runtime")
+        if runtime:
+            print(f"runtime: {runtime}")
+        if prediction.memory_trace:
+            print(f"memory:  {json.dumps(dict(prediction.memory_trace), ensure_ascii=False)}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# parser
+# --------------------------------------------------------------------------- #
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM,
+        description="AstreusN Civilization — decision, memory, job, and export service.",
+        epilog="Run `civilization demo` for a complete cycle with no configuration.",
+    )
+    parser.add_argument("--version", action="version", version=f"{PROGRAM} {__version__}")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    demo = subparsers.add_parser("demo", help="run a full decision and memory cycle offline")
+    demo.add_argument("--state-dir", default="var/demo-state", help="where the demo service keeps its state")
+    demo.set_defaults(func=_command_demo)
+
+    doctor = subparsers.add_parser("doctor", help="report what this machine can run")
+    _add_runtime_arguments(doctor)
+    doctor.add_argument("--json", action="store_true", help="machine-readable output")
+    doctor.add_argument("--strict", action="store_true", help="exit non-zero when the runtime is not ready")
+    doctor.set_defaults(func=_command_doctor)
+
+    serve = subparsers.add_parser("serve", help="host the service")
+    _add_runtime_arguments(serve)
+    serve.add_argument("--host", default="127.0.0.1", help="bind address (loopback only)")
+    serve.add_argument("--port", type=int, default=8765, help="bind port (0 picks a free port)")
+    serve.add_argument("--state-dir", default="var/state", help="where the service keeps jobs, exports, and memory")
+    serve.add_argument("--token-env", default="CIVILIZATION_API_TOKEN", help="environment variable holding the bearer token")
+    serve.add_argument("--timeout", type=float, default=120.0, help="provider request timeout in seconds")
+    serve.add_argument("--max-tokens", type=int, default=512, help="provider completion budget")
+    serve.add_argument(
+        "--persist-sessions",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="journal session memory to state_dir and replay it on restart (default: on)",
+    )
+    serve.add_argument(
+        "--persistence-mode",
+        choices=["in_process", "sidecar"],
+        default="in_process",
+        help="where the journal is written and committed (default: in_process)",
+    )
+    serve.add_argument(
+        "--fsync",
+        choices=["every_write", "interval", "never"],
+        default="interval",
+        help="commit policy: every_write is safest, interval bounds the loss window, never is fastest",
+    )
+    serve.add_argument("--fsync-interval", type=float, default=0.25, help="commit interval in seconds")
+    serve.add_argument("--snapshot-every", type=int, default=512, help="compact the journal into a snapshot every N records")
+    serve.add_argument("--sidecar-socket", default=None, help="unix socket of `civilization persist-sidecar`")
+    serve.add_argument("--persist-traces", action="store_true", help="also journal memory trace events")
+    serve.set_defaults(func=_command_serve)
+
+    prune = subparsers.add_parser(
+        "prune",
+        help="compact large session journals and drop expired sessions",
+    )
+    prune.add_argument("--state-dir", default="var/state", help="directory holding session journals")
+    prune.add_argument(
+        "--older-than-days",
+        type=float,
+        default=None,
+        help="drop sessions whose last write is older than this many days",
+    )
+    prune.add_argument("--keep", type=int, default=None, help="always keep the N most recently active sessions")
+    prune.add_argument(
+        "--compact-over",
+        type=int,
+        default=None,
+        help="compact any session whose journal holds at least this many records",
+    )
+    prune.add_argument("--dry-run", action="store_true", help="report what would happen and change nothing")
+    prune.add_argument(
+        "--base-url",
+        default=None,
+        help="ask a running service to run the sweep instead of touching files directly",
+    )
+    prune.add_argument("--token-env", default="CIVILIZATION_API_TOKEN", help="bearer token environment variable")
+    prune.add_argument("--json", action="store_true", help="machine-readable output")
+    prune.set_defaults(func=_command_prune)
+
+    backup = subparsers.add_parser(
+        "backup",
+        help="create and verify an encrypted offline Orion memory backup (stop service and sidecar first)",
+    )
+    backup.add_argument("--state-dir", default="var/state", help="memory state directory")
+    backup.add_argument("--output", required=True, help="new encrypted backup bundle, outside state-dir")
+    backup.add_argument("--json", action="store_true", help="machine-readable output")
+    backup.set_defaults(func=_command_backup)
+
+    verify_backup = subparsers.add_parser("verify-backup", help="verify an encrypted or legacy memory backup")
+    verify_backup.add_argument("--backup", required=True, help="backup bundle")
+    verify_backup.add_argument("--json", action="store_true", help="machine-readable output")
+    verify_backup.set_defaults(func=_command_verify_backup)
+
+    replicate_backup = subparsers.add_parser(
+        "replicate-backup",
+        help="copy an encrypted backup to an existing directory on a distinct filesystem",
+    )
+    replicate_backup.add_argument("--backup", required=True, help="encrypted v2 backup bundle")
+    replicate_backup.add_argument("--destination-dir", required=True, help="existing directory on a distinct filesystem")
+    replicate_backup.add_argument("--json", action="store_true", help="machine-readable output")
+    replicate_backup.set_defaults(func=_command_replicate_backup)
+
+    s3_backup = subparsers.add_parser(
+        "replicate-s3-backup",
+        help="resume, upload, and remotely verify an encrypted backup in a versioned S3-compatible bucket",
+    )
+    s3_backup.add_argument("--backup", required=True, help="encrypted v2 backup bundle")
+    s3_backup.add_argument("--bucket", required=True, help="versioned S3-compatible bucket")
+    s3_backup.add_argument("--key-prefix", required=True, help="object key prefix for content-addressed backups")
+    s3_backup.add_argument("--checkpoint-dir", required=True, help="private durable local multipart checkpoint directory")
+    s3_backup.add_argument(
+        "--endpoint-url",
+        default=os.getenv("CIVILIZATION_BACKUP_S3_ENDPOINT_URL"),
+        help="S3-compatible endpoint (omit for AWS S3; credentials use the SDK provider chain)",
+    )
+    s3_backup.add_argument(
+        "--region",
+        default=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1",
+        help="S3 signing region",
+    )
+    s3_backup.add_argument("--part-size-mib", type=int, default=8, help="multipart size in MiB (minimum 5)")
+    s3_backup.add_argument("--object-lock-mode", choices=["GOVERNANCE", "COMPLIANCE"], default=None)
+    s3_backup.add_argument("--retention-days", type=int, default=None)
+    s3_backup.add_argument("--allow-insecure-http", action="store_true", help="allow a non-TLS HTTP endpoint explicitly")
+    s3_backup.add_argument("--json", action="store_true", help="machine-readable output")
+    s3_backup.set_defaults(func=_command_replicate_s3_backup)
+
+    s3_retention = subparsers.add_parser(
+        "s3-backup-retention",
+        help="plan or explicitly apply version-aware retention for encrypted S3 backups",
+    )
+    s3_retention.add_argument("--bucket", required=True)
+    s3_retention.add_argument("--prefix", required=True)
+    s3_retention.add_argument("--keep-latest", type=int, required=True)
+    s3_retention.add_argument("--older-than-days", type=int, required=True)
+    s3_retention.add_argument("--endpoint-url", default=os.getenv("CIVILIZATION_BACKUP_S3_ENDPOINT_URL"))
+    s3_retention.add_argument(
+        "--region",
+        default=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1",
+    )
+    s3_retention.add_argument("--allow-insecure-http", action="store_true")
+    s3_retention.add_argument("--apply", action="store_true", help="delete only the reviewed candidate version IDs")
+    s3_retention.add_argument("--json", action="store_true", help="machine-readable output")
+    s3_retention.set_defaults(func=_command_s3_backup_retention)
+
+    restore_backup = subparsers.add_parser(
+        "restore",
+        help="restore an encrypted or legacy memory backup into a new state directory",
+    )
+    restore_backup.add_argument("--backup", required=True, help="backup bundle")
+    restore_backup.add_argument("--destination", required=True, help="new state directory; must not already exist")
+    restore_backup.add_argument("--json", action="store_true", help="machine-readable output")
+    restore_backup.set_defaults(func=_command_restore_backup)
+
+    scorecard = subparsers.add_parser(
+        "scorecard",
+        help="validate and summarize a full LongMemEval answerer result",
+    )
+    scorecard.add_argument("--results", required=True, help="LongMemEval benchmark result JSON")
+    scorecard.add_argument("--baseline", default=None, help="optional result JSON for a paired comparison")
+    scorecard.add_argument("--dataset-file", default=None, help="the exact LongMemEval dataset JSON used for the run")
+    scorecard.add_argument("--expected-questions", type=int, default=500, help="required complete question count")
+    scorecard.add_argument(
+        "--cutoff",
+        choices=["top_20", "top_200"],
+        default="top_20",
+        help="top_20 is the release gate; top_200 is diagnostic only",
+    )
+    scorecard.add_argument("--target-accuracy", type=float, default=0.97, help="release target in [0, 1]")
+    scorecard.add_argument("--output", default=None, help="optional JSON scorecard output path")
+    scorecard.set_defaults(func=_command_scorecard)
+
+    sidecar = subparsers.add_parser(
+        "persist-sidecar",
+        help="run the persistence process that owns the session journals",
+    )
+    sidecar.add_argument("--state-dir", default="var/state", help="directory holding session journals")
+    sidecar.add_argument("--socket", required=True, help="unix socket the service connects to")
+    sidecar.add_argument(
+        "--fsync",
+        choices=["every_write", "interval", "never"],
+        default="interval",
+        help="commit policy for the journals this process owns",
+    )
+    sidecar.add_argument("--fsync-interval", type=float, default=0.25, help="commit interval in seconds")
+    sidecar.add_argument("--snapshot-every", type=int, default=512, help="compact every N records")
+    sidecar.set_defaults(func=_command_persist_sidecar)
+
+    predict = subparsers.add_parser("predict", help="send one decision to a running service")
+    predict.add_argument("--text", required=True, help="the decision question")
+    predict.add_argument("--options", required=True, help="comma-separated answer options")
+    predict.add_argument("--base-url", default=DEFAULT_BASE_URL, help="service base URL")
+    predict.add_argument("--session-id", default="default", help="memory session")
+    predict.add_argument("--task-name", default="cli", help="task label recorded in the trace")
+    predict.add_argument("--memory", action="append", default=[], help="memory evidence item, repeatable")
+    predict.add_argument("--rule", action="append", default=[], help="rule item, repeatable")
+    predict.add_argument("--state-values", default=None, help="three comma-separated numbers")
+    predict.add_argument("--no-memory", action="store_true", help="do not read session memory for this request")
+    predict.add_argument("--token-env", default="CIVILIZATION_API_TOKEN", help="environment variable holding the bearer token")
+    predict.add_argument("--timeout", type=float, default=120.0, help="request timeout in seconds")
+    predict.add_argument("--allow-insecure-http", action="store_true", help="allow plain HTTP to a non-loopback host")
+    predict.add_argument("--json", action="store_true", help="machine-readable output")
+    predict.set_defaults(func=_command_predict)
+
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args))
+    except KeyboardInterrupt:
+        print("\ninterrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
