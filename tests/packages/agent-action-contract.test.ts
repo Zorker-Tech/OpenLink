@@ -34,6 +34,10 @@ import {
   type SlateBackgroundSubagentActionPayload,
 } from "../../source/packages/agent/actions/background-side-channel-contracts.ts"
 import {
+  isSlateCancelSubagentActionPayload,
+  type SlateCancelSubagentActionPayload,
+} from "../../source/packages/agent/actions/cancel-subagent-action-contracts.ts"
+import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
 } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
@@ -111,6 +115,11 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       const payload = action.payload as SlateBackgroundSubagentActionPayload
       assert.equal(isSlateBackgroundSubagentActionPayload(payload), true)
       assert.equal(payload.toolCallId, "")
+      assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "cancelSubagentAction") {
+      const payload = action.payload as SlateCancelSubagentActionPayload
+      assert.equal(isSlateCancelSubagentActionPayload(payload), true)
+      assert.equal(payload.subagentId, "")
       assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
@@ -281,6 +290,20 @@ test("background side-channel actions preserve their Slate call identifiers", ()
   assert.equal(subagent.kind, SlateAgentActionKind.BACKGROUND_SUBAGENT)
   assert.equal(isSlateBackgroundSubagentActionPayload(subagentPayload), true)
   assert.equal(subagentPayload.toolCallId, "subagent-call-4")
+})
+
+test("cancel-subagent route preserves the target id in a Slate action payload", () => {
+  const action = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "cancelSubagentAction", value: { subagentId: "agent-42" } },
+  } as never)
+  const payload = action.payload as SlateCancelSubagentActionPayload
+
+  assert.equal(action.kind, SlateAgentActionKind.CANCEL_SUBAGENT)
+  assert.equal(isSlateCancelSubagentActionPayload(payload), true)
+  assert.equal(payload.schema, "slate.agent-action.cancel-subagent")
+  assert.equal(payload.subagentId, "agent-42")
+  assert.deepEqual(payload.compatibility?.legacyPayload, { subagentId: "agent-42" })
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {
