@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import { AsyncAskQuestionCompletionActionHandler } from "../../source/packages/agent/actions/async-ask-question-completion-action-handler.ts"
 import { CancelActionHandler } from "../../source/packages/agent/actions/cancel-action-handler.ts"
 import { createSlateCancelActionPayload } from "../../source/packages/agent/actions/cancel-action-contracts.ts"
+import type { SlateBackgroundTaskCompletionActionPayload } from "../../source/packages/agent/actions/background-task-completion-contracts.ts"
 import { BackgroundTaskCompletionActionHandler } from "../../source/packages/agent/actions/background-task-completion-action-handler.ts"
 import { ExecutePlanActionHandler } from "../../source/packages/agent/actions/execute-plan-action-handler.ts"
 import { ResumeActionHandler } from "../../source/packages/agent/actions/user-message-action/resume-action-handler.ts"
@@ -447,10 +448,14 @@ function completion(overrides: Record<string, unknown> = {}) {
 }
 
 function completionAction(completions: readonly BackgroundTaskCompletion[]) {
-  return toRedactedBackgroundTaskCompletionAction(
+  const redacted = toRedactedBackgroundTaskCompletionAction(
     new BackgroundTaskCompletionAction({ completions: [...completions] }),
     PrivacyMode.UNSPECIFIED,
   )
+  return slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.UNSPECIFIED,
+    action: { case: "backgroundTaskCompletionAction", value: redacted as never },
+  } as never).payload as SlateBackgroundTaskCompletionActionPayload
 }
 
 test("a follow-up that was turned off is skipped, and the completion is still recorded", async () => {

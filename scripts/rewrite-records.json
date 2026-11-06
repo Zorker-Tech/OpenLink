@@ -2754,9 +2754,9 @@
     },
     "packages/agent/actions/background-task-completion-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.751131221719457,
-      "refreshReason": "The project-message check now names root-channel ownership directly and the completion handler uses that Slate predicate; the aggregate source was remeasured.",
-      "evidence": "The prior completion-handler and interop contract run was recorded as 38/38. This turn's ownership behavior cases pass in constants.test.ts 13/13, work-host typecheck passes, and the interop boundary reports 80 tracked consumers. The Node 22 aggregate suite was not rerun because source using declarations are unsupported by the runtime harness."
+      "overlap": 0.7285067873303167,
+      "refreshReason": "The handler now consumes a versioned Slate completion batch directly; historical completion decoding and enum projection moved into the action-boundary adapter.",
+      "evidence": "Agent action-contract, action-handler, background-completion adapter/formatter and subagent-run-state suites pass 60/60; the full Work-host suite passes 10001/10001 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler consumes SlateBackgroundTaskCompletionActionPayload; unknown completion enum codes are preserved through durable run metadata. Measured overlap is 0.7285067873303167 against 663 baseline pairs."
     },
     "packages/agent/actions/background-task-completion.ts": {
       "claim": "rewritten",

@@ -21,7 +21,9 @@ import { decodeIncomingSlateUserMessage } from "./user-message-action-input-adap
 import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
 import { slateAskQuestionCompletionFromRedacted } from "./ask-question-result-adapter.ts"
+import { slateBackgroundTaskCompletionActionFromRedacted } from "./background-task-completion-adapter.ts"
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
+import { isSlateBackgroundTaskCompletionActionPayload } from "../../../packages/agent/actions/background-task-completion-contracts.ts"
 import {
   createSlateCancelActionPayload,
   isSlateCancelActionPayload,
@@ -163,6 +165,12 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
         : slateCancelActionPayloadFromRedacted(undefined, privacyMode),
     }
   }
+  if (action.kind === SlateAgentActionKind.BACKGROUND_TASK_COMPLETION) {
+    if (!isSlateBackgroundTaskCompletionActionPayload(action.payload)) {
+      throw new TypeError("Background task completion action must use the Slate v1 contract")
+    }
+    return { ...action, context, payload: action.payload }
+  }
   if (action.kind === SlateAgentActionKind.RESUME) {
     return {
       ...action,
@@ -255,6 +263,14 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       payload: slateCancelActionPayloadFromRedacted(action.action.value, action._privacyMode),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.BACKGROUND_TASK_COMPLETION) {
+    return {
+      ...slateAction,
+      payload: slateBackgroundTaskCompletionActionFromRedacted(
+        (action.action.value ?? { completions: [] }) as never,
+      ),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.SUMMARIZE) {
     return { ...slateAction, payload: createSlateSummarizeActionPayload() }
   }
@@ -300,6 +316,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "cancelAction") {
     const wrapped = new ConversationAction({ action: { case: "cancelAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "backgroundTaskCompletionAction") {
+    const wrapped = new ConversationAction({ action: { case: "backgroundTaskCompletionAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "executePlanAction") {

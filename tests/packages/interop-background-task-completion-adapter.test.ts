@@ -46,6 +46,30 @@ test("a stored completion becomes a Slate task record with normalized values", (
   });
 });
 
+test("completion enum values outside Slate's vocabulary remain recoverable", () => {
+  const slate = fromInteropBackgroundTaskCompletion(new BackgroundTaskCompletion({
+    kind: 91 as never,
+    status: 92 as never,
+    title: "future task",
+    reason: BackgroundTaskCompletionReason.TASK_FINISHED,
+    notificationContext: 93 as never,
+  }));
+
+  assert.deepEqual(slate, {
+    kind: "unknown",
+    status: "unknown",
+    taskId: "",
+    title: "future task",
+    notificationContext: "other",
+    compatibility: {
+      legacyKindCode: 91,
+      legacyStatusCode: 92,
+      legacyReasonCode: BackgroundTaskCompletionReason.TASK_FINISHED,
+      legacyNotificationContextCode: 93,
+    },
+  });
+});
+
 test("a redacted action keeps its stored completion for session recording and projects policy data", () => {
   const stored = new BackgroundTaskCompletion({
     kind: BackgroundTaskKind.SUBAGENT,
