@@ -68,6 +68,7 @@ import type {
   SlateCommunicationHistoryEntry,
   SlateCommunicationTurnState,
   SlateConversationState,
+  SlateConversationTurnTiming,
   SlateConversationTokenDetails,
 } from "./conversation-state.ts"
 import {
@@ -1342,6 +1343,8 @@ export class ConversationStateHandle {
   tokenDetails: TokenDetails;
   summary: SummaryRef<OperationContext> | undefined;
   plan: ValueRef<OperationContext> | undefined;
+  summaryArchiveBlobId: Uint8Array | undefined;
+  turnTimings: SlateConversationTurnTiming[];
   communicationFinalSummary: string | undefined;
   communicationCompletedSubtitle: string | undefined;
   goalState: SlateGoalState | undefined;
@@ -1638,6 +1641,10 @@ export class ConversationStateHandle {
     this.turns = this.conversationStateStructure.turns.map((blobId) => new LazyReference(conversationTurnHandleSerde, this.blobStore, blobId));
     this.todos = this.conversationStateStructure.todos.map((blobId) => new LazyReference(this.serdes.todoItem, this.blobStore, blobId));
     this.tokenDetails = this.conversationStateStructure.tokenDetails ?? { usedTokens: 0, maximumTokens: 0 };
+    this.summaryArchiveBlobId = this.conversationStateStructure.summaryArchiveBlobId === undefined
+      ? undefined
+      : new Uint8Array(this.conversationStateStructure.summaryArchiveBlobId);
+    this.turnTimings = [...(this.conversationStateStructure.turnTimings ?? [])];
     if (this.conversationStateStructure.summary !== undefined) {
       this.summary = new LazyReference(this.serdes.conversationSummary, this.blobStore, this.conversationStateStructure.summary);
     }
@@ -2668,7 +2675,12 @@ These images can be copied for use in other locations.
         tokenDetails,
         summary: (await newSummaryPromise)!,
         plan: (await planBlobPromise)!,
+        summaryArchiveBlobId: this.summaryArchiveBlobId,
         summaryArchives: (await newSummaryArchivesPromise)!,
+        turnTimings: this.turnTimings.map(timing => ({
+          durationMs: timing.durationMs,
+          timestampMs: timing.timestampMs,
+        })),
         previousWorkspaceUris: this.previousWorkspaceUris ?? [],
         legacyFileContentBlobIds: legacyFileStatesRecord,
         trackedGitRepoBranches: this.trackedGitRepoBranches.map((repo) => ({

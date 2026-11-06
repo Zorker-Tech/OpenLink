@@ -30,6 +30,7 @@ import {
   PromptContextUsageTree,
   PromptTokenBreakdownCategory,
   PromptTokenBreakdownSnapshot,
+  StepTiming,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -50,6 +51,8 @@ test("conversation state projects its persisted mode and fields into Slate", () 
     rootPromptMessagesJson: [new Uint8Array([3])],
     mode: AgentMode.PLAN,
     activeBranchName: "feature",
+    summaryArchive: new Uint8Array([4]),
+    turnTimings: [new StepTiming({ durationMs: BigInt(3), timestampMs: BigInt(7) })],
     conversationStartedTimestampMs: BigInt(10),
     pendingToolCalls: ["{\"role\":\"assistant\"}"],
     previousWorkspaceUris: ["file:///workspace"],
@@ -63,6 +66,8 @@ test("conversation state projects its persisted mode and fields into Slate", () 
   assert.deepEqual(slate.turns, source.turns)
   assert.deepEqual(slate.rootPromptMessagesJson, source.rootPromptMessagesJson)
   assert.equal(slate.activeBranchName, "feature")
+  assert.deepEqual(slate.summaryArchiveBlobId, new Uint8Array([4]))
+  assert.deepEqual(slate.turnTimings, [{ durationMs: BigInt(3), timestampMs: BigInt(7) }])
   assert.equal(slate.conversationStartedTimestampMs, BigInt(10))
   assert.deepEqual(slate.pendingToolCalls, ["{\"role\":\"assistant\"}"])
   assert.deepEqual(slate.previousWorkspaceUris, ["file:///workspace"])
@@ -71,6 +76,8 @@ test("conversation state projects its persisted mode and fields into Slate", () 
   const roundTripped = toInteropConversationState(slate)
   assert.equal(roundTripped.mode, AgentMode.PLAN)
   assert.equal(roundTripped._privacyMode, PrivacyMode.NO_STORAGE)
+  assert.deepEqual(roundTripped.summaryArchive, new Uint8Array([4]))
+  assert.deepEqual(roundTripped.turnTimings.map((timing: StepTiming) => [timing.durationMs, timing.timestampMs]), [[BigInt(3), BigInt(7)]])
   assert.ok(roundTripped.pendingToolCalls[0] instanceof RedactedString)
   assert.equal(roundTripped.pendingToolCalls[0]?.__classification, DataClassification.CODE)
   assert.ok(roundTripped.previousWorkspaceUris[0] instanceof RedactedString)

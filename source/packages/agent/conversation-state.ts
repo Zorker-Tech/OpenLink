@@ -68,6 +68,11 @@ export interface SlateFileStateBlobs {
   readonly initialContentBlobId?: Uint8Array
 }
 
+export interface SlateConversationTurnTiming {
+  readonly durationMs: bigint
+  readonly timestampMs: bigint
+}
+
 export interface SlateTrackedGitRepository {
   readonly repoPath: string
   readonly branchName: string
@@ -82,11 +87,13 @@ export interface SlateConversationState {
   readonly tokenDetails?: SlateConversationTokenDetails
   readonly summary?: Uint8Array
   readonly plan?: Uint8Array
+  readonly summaryArchiveBlobId?: Uint8Array
   readonly previousWorkspaceUris: readonly string[]
   mode?: SlateMode
   /** Unknown persisted mode retained for lossless checkpoint write-back. */
   unknownModeCode?: number
   readonly summaryArchives: readonly Uint8Array[]
+  readonly turnTimings?: readonly SlateConversationTurnTiming[]
   readonly legacyFileContentBlobIds?: ReadonlyMap<string, Uint8Array> | Record<string, Uint8Array>
   readonly fileStatesV2: ReadonlyMap<string, SlateFileStateBlobs>
   readonly selfSummaryCount?: number
