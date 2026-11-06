@@ -26,6 +26,15 @@ import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
+  CreatePlanArgs,
+  CreatePlanError,
+  CreatePlanResult,
+  CreatePlanSuccess,
+  CreatePlanToolCall,
+  Phase as CreatePlanPhase,
+} from "../proto/generated/agent/v1/create_plan_tool_pb.ts"
+import { TodoItem as InteropTodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
+import {
   AskQuestionArgs,
   AskQuestionArgs_Option,
   AskQuestionArgs_Question,
@@ -99,7 +108,12 @@ import {
   createSlateShellResultSerde,
 } from "../../storage/agent/shell-state-storage-adapter.ts"
 import { conversationStateStructureSerde } from "./agent-conversation-state-serdes-adapter.ts"
-import { createSlateTodoItemSerde, redactSlateTodoItem } from "./todo-schema-adapter.ts"
+import {
+  createSlateTodoItemSerde,
+  fromInteropTodoItem,
+  redactSlateTodoItem,
+  toInteropTodoItem,
+} from "./todo-schema-adapter.ts"
 import {
   createSlateConversationSummarySerde,
   createSlateConversationSummaryArchiveSerde,
@@ -116,17 +130,23 @@ import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
 import {
   createSlateConversationSummaryToolCall,
   createSlateAskQuestionToolCall,
+  createSlatePlanDraftToolCall,
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
   createSlateUnsupportedConversationStep,
   isSlateConversationSummaryToolCall,
   isSlateAskQuestionToolCall,
+  isSlatePlanDraftToolCall,
   type SlateConversationStepCompatibility,
   type SlateConversationStep,
   type SlateConversationSummaryResult,
   type SlateAskQuestionToolArguments,
   type SlateAskQuestionToolOutcome,
+  type SlatePlanDraftToolArguments,
+  type SlatePlanDraftPhase,
+  type SlatePlanDraftToolOutcome,
+  type SlatePlanDraftTodo,
   type SlateProgressUpdateResult,
   type SlateToolCallText,
   type SlateToolCallValue,
@@ -1447,6 +1467,143 @@ function interopAskQuestionToolFromSlate(
   })
 }
 
+function slatePlanDraftTodoFromInterop(value: unknown): SlatePlanDraftTodo | undefined {
+  if (!isRecordValue(value)) return undefined
+  const item = isMessage(value) ? value as InteropTodoItem : new InteropTodoItem(value as never)
+  const projected = fromInteropTodoItem(item)
+  const content = slateToolCallTextFromInterop((value as Record<string, unknown>).content) ?? projected.content
+  const legacyStatusCode = projected.compatibility?.legacyStatusCode
+  return {
+    id: projected.id,
+    content,
+    status: projected.status,
+    createdAt: projected.createdAt,
+    updatedAt: projected.updatedAt,
+    ...(projected.dependencies === undefined ? {} : { dependencies: [...projected.dependencies] }),
+    ...(legacyStatusCode === undefined ? {} : { compatibility: { legacyStatusCode } }),
+  }
+}
+
+function slatePlanDraftToolFromInterop(value: unknown): SlateToolCallValue | undefined {
+  if (!isRecordValue(value)) return undefined
+  const args = value.args === undefined ? undefined : isRecordValue(value.args) ? value.args : null
+  const result = value.result === undefined ? undefined : isRecordValue(value.result) ? value.result : null
+  if (args === null || result === null) return undefined
+
+  let slateArgs: SlatePlanDraftToolArguments | undefined
+  if (args !== undefined) {
+    const content = args.plan === undefined ? "" : slateToolCallTextFromInterop(args.plan)
+    const overview = args.overview === undefined ? "" : slateToolCallTextFromInterop(args.overview)
+    const title = args.name === undefined ? "" : slateToolCallTextFromInterop(args.name)
+    const todoValues = args.todos === undefined ? [] : args.todos
+    const phaseValues = args.phases === undefined ? [] : args.phases
+    if (content === undefined || overview === undefined || title === undefined ||
+        (args.isProject !== undefined && typeof args.isProject !== "boolean") ||
+        !Array.isArray(todoValues) || !Array.isArray(phaseValues)) return undefined
+    const todos: SlatePlanDraftTodo[] = []
+    for (const todo of todoValues) {
+      const projected = slatePlanDraftTodoFromInterop(todo)
+      if (projected === undefined) return undefined
+      todos.push(projected)
+    }
+    const phases: SlatePlanDraftPhase[] = []
+    for (const phaseValue of phaseValues) {
+      if (!isRecordValue(phaseValue)) return undefined
+      const name = phaseValue.name === undefined ? "" : slateToolCallTextFromInterop(phaseValue.name)
+      const phaseTodos = phaseValue.todos === undefined ? [] : phaseValue.todos
+      if (name === undefined || !Array.isArray(phaseTodos)) return undefined
+      const phaseItems: SlatePlanDraftTodo[] = []
+      for (const todo of phaseTodos) {
+        const projected = slatePlanDraftTodoFromInterop(todo)
+        if (projected === undefined) return undefined
+        phaseItems.push(projected)
+      }
+      phases.push({ name, todos: phaseItems })
+    }
+    slateArgs = {
+      content,
+      todos,
+      overview,
+      title,
+      isProjectPlan: args.isProject === true,
+      phases,
+    }
+  }
+
+  let slateResult: SlatePlanDraftToolOutcome | undefined
+  if (result !== undefined) {
+    const resultCase = isRecordValue(result.result) ? result.result : undefined
+    const resultValue = isRecordValue(resultCase?.value) ? resultCase.value : undefined
+    const planUri = result.planUri === undefined ? "" : slateToolCallTextFromInterop(result.planUri)
+    if (planUri === undefined) return undefined
+    switch (resultCase?.case) {
+      case "success":
+        slateResult = { kind: "created", planUri }
+        break
+      case "error": {
+        const message = resultValue?.error === undefined ? "" : slateToolCallTextFromInterop(resultValue.error)
+        if (message === undefined) return undefined
+        slateResult = { kind: "error", message, planUri }
+        break
+      }
+      default:
+        slateResult = { kind: "unknown", planUri }
+    }
+  }
+  return createSlatePlanDraftToolCall({
+    ...(slateArgs === undefined ? {} : { args: slateArgs }),
+    ...(slateResult === undefined ? {} : { result: slateResult }),
+  })
+}
+
+function interopPlanDraftTodoFromSlate(todo: SlatePlanDraftTodo, plain: boolean): InteropTodoItem {
+  const item = toInteropTodoItem(todo)
+  item.content = isRedactedString(todo.content) && plain
+    ? todo.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : todo.content as never
+  return item
+}
+
+function interopPlanDraftToolFromSlate(
+  tool: Extract<SlateToolCallValue, { readonly kind: "plan-draft" }>,
+  plain: boolean,
+): CreatePlanToolCall {
+  const text = (value: SlateToolCallText): string | RedactedString =>
+    isRedactedString(value) && plain
+      ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      : value
+  const args = tool.args === undefined
+    ? undefined
+    : new CreatePlanArgs({
+        plan: text(tool.args.content) as never,
+        todos: tool.args.todos.map(todo => interopPlanDraftTodoFromSlate(todo, plain)),
+        overview: text(tool.args.overview) as never,
+        name: text(tool.args.title) as never,
+        isProject: tool.args.isProjectPlan,
+        phases: tool.args.phases.map(phase => new CreatePlanPhase({
+          name: text(phase.name) as never,
+          todos: phase.todos.map(todo => interopPlanDraftTodoFromSlate(todo, plain)),
+        })),
+      })
+  const result = tool.result === undefined
+    ? undefined
+    : tool.result.kind === "created"
+      ? new CreatePlanResult({
+          planUri: text(tool.result.planUri) as never,
+          result: { case: "success", value: new CreatePlanSuccess() },
+        })
+      : tool.result.kind === "error"
+        ? new CreatePlanResult({
+            planUri: text(tool.result.planUri) as never,
+            result: { case: "error", value: new CreatePlanError({ error: text(tool.result.message) as never }) },
+          })
+        : new CreatePlanResult({ planUri: text(tool.result.planUri) as never })
+  return new CreatePlanToolCall({
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  })
+}
+
 function slateSummaryToolCallFromInterop(
   operation: string | undefined,
   value: unknown,
@@ -1547,6 +1704,10 @@ function slateSummaryToolCallFromInterop(
 }
 
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "createPlanToolCall") {
+    const planDraft = slatePlanDraftToolFromInterop(value)
+    if (planDraft !== undefined) return planDraft
+  }
   if (operation === "askQuestionToolCall") {
     const askQuestion = slateAskQuestionToolFromInterop(value)
     if (askQuestion !== undefined) return askQuestion
@@ -1561,6 +1722,10 @@ function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (tool.kind === "plan-draft") {
+    if (!isSlatePlanDraftToolCall(tool)) throw new TypeError("Slate plan-draft operation is invalid")
+    return { case: "createPlanToolCall", value: interopPlanDraftToolFromSlate(tool, plain) }
+  }
   if (tool.kind === "ask-question") {
     if (!isSlateAskQuestionToolCall(tool)) throw new TypeError("Slate ask-question operation is invalid")
     return { case: "askQuestionToolCall", value: interopAskQuestionToolFromSlate(tool, plain) }
@@ -2244,7 +2409,8 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
           (envelope.version === 1 &&
-            (tool.operation === "conversation-summary" || tool.operation === "ask-question")) ||
+            (tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
+              tool.operation === "plan-draft")) ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -2313,8 +2479,11 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "ask-question" && !isSlateAskQuestionToolCall(step.tool)) {
         throw new TypeError("Slate ask-question operation is invalid")
       }
+      if (step.tool.kind === "plan-draft" && !isSlatePlanDraftToolCall(step.tool)) {
+        throw new TypeError("Slate plan-draft operation is invalid")
+      }
       if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" &&
-          step.tool.kind !== "ask-question" && step.tool.kind !== "legacy") {
+          step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
       }
       storedStep = {
@@ -2330,16 +2499,18 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlateAskQuestionToolCall(step.tool)
-          ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
-          : isSlateConversationSummaryToolCall(step.tool)
-            ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
-            : {
+        tool: isSlatePlanDraftToolCall(step.tool)
+          ? { operation: "plan-draft", payload: encodeSlateValue(step.tool) }
+          : isSlateAskQuestionToolCall(step.tool)
+            ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
+            : isSlateConversationSummaryToolCall(step.tool)
+              ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
+              : {
               ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
               ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
                 ? { payload: encodeSlateValue(step.tool.value) }
                 : {}),
-              },
+                },
       }
       break
     case "unsupported":
@@ -2394,7 +2565,11 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
           ? isSlateAskQuestionToolCall(storedPayload)
             ? storedPayload
             : (() => { throw new TypeError("Stored Slate ask-question operation is invalid") })()
-        : slateToolCallValueFromInterop(storedOperation, storedPayload)
+          : storedOperation === "plan-draft"
+            ? isSlatePlanDraftToolCall(storedPayload)
+              ? storedPayload
+              : (() => { throw new TypeError("Stored Slate plan-draft operation is invalid") })()
+            : slateToolCallValueFromInterop(storedOperation, storedPayload)
       return createSlateToolCallStep({
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
         ...(step.startedAtMs === undefined ? {} : { startedAtMs: BigInt(step.startedAtMs as string) }),

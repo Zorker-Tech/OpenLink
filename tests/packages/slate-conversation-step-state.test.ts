@@ -35,6 +35,15 @@ import {
   AskQuestionToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts"
 import {
+  CreatePlanArgs,
+  CreatePlanError,
+  CreatePlanResult,
+  CreatePlanSuccess,
+  CreatePlanToolCall,
+  Phase as CreatePlanPhase,
+} from "../../source/adapters/interop/proto/generated/agent/v1/create_plan_tool_pb.ts"
+import { TodoItem, TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
+import {
   CommunicateUpdateArgs,
   CommunicateUpdateResult,
   CommunicateUpdateSuccess,
@@ -264,6 +273,125 @@ test("invalid Slate summary operation data is rejected before it can be stored",
     () => createSlateConversationStepSerde(PrivacyMode.NO_STORAGE).serialize(step),
     /Slate conversation summary operation is invalid/,
   )
+})
+
+test("plan-draft tool calls use Slate plan, phase, todo, and result values", () => {
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const todos = [
+    TodoItem.fromBinary(appendUnknownVarint(new TodoItem({
+      id: "todo-1",
+      content: "Read files",
+      status: TodoStatus.PENDING,
+      createdAt: 12n,
+      updatedAt: 14n,
+    }).toBinary())),
+    new TodoItem({ id: "todo-2", content: "Unknown state", status: 99 as TodoStatus, createdAt: 13n, updatedAt: 15n }),
+  ]
+  const args = new CreatePlanArgs({
+    plan: "# Release plan",
+    todos,
+    overview: "Ship the next release",
+    name: "Release",
+    isProject: true,
+    phases: [new CreatePlanPhase({ name: "Prepare", todos: [todos[0]!] })],
+  })
+  const sources = [
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({
+        args,
+        result: new CreatePlanResult({ planUri: "slate-plan://release", result: { case: "success", value: new CreatePlanSuccess() } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({
+        args,
+        result: new CreatePlanResult({ planUri: "slate-plan://release", result: { case: "error", value: new CreatePlanError({ error: "could not save" }) } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({ args }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({ result: new CreatePlanResult() }) },
+    }) } }),
+  ]
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+
+  for (const source of sources) {
+    const projected = fromInteropConversationStep(source)
+    assert.equal(projected.kind, "tool-call")
+    if (projected.kind !== "tool-call") assert.fail("expected a tool call")
+    assert.equal(projected.tool.kind, "plan-draft")
+    assert.equal(projected.tool.case, undefined)
+    const stored = new TextDecoder().decode(serde.serialize(projected))
+    assert.match(stored, /"operation":"plan-draft"/)
+    const restored = serde.deserialize(serde.serialize(projected))
+    assert.equal(restored.kind, "tool-call")
+    if (restored.kind !== "tool-call") assert.fail("expected a stored tool call")
+    assert.deepEqual(toInteropConversationStep(restored).toJson(), source.toJson())
+  }
+
+  const plan = fromInteropConversationStep(sources[0]!)
+  assert.equal(plan.kind, "tool-call")
+  if (plan.kind !== "tool-call" || plan.tool.kind !== "plan-draft") assert.fail("expected the Slate plan-draft operation")
+  assert.equal(plan.tool.args?.content, "# Release plan")
+  assert.equal(plan.tool.args?.isProjectPlan, true)
+  assert.equal(plan.tool.args?.phases[0]?.name, "Prepare")
+  assert.equal(plan.tool.args?.todos[1]?.status, "unspecified")
+  assert.equal(plan.tool.args?.todos[1]?.compatibility?.legacyStatusCode, 99)
+  assert.deepEqual(plan.tool.result, { kind: "created", planUri: "slate-plan://release" })
+  const roundTrip = toInteropConversationStep(serde.deserialize(serde.serialize(plan)))
+  if (roundTrip.message.case !== "toolCall" || roundTrip.message.value.tool.case !== "createPlanToolCall") {
+    assert.fail("expected a reconstructed plan-draft call")
+  }
+  assert.deepEqual(
+    TodoItem.runtime.bin.listUnknownFields(roundTrip.message.value.tool.value.args!.todos[0]!),
+    TodoItem.runtime.bin.listUnknownFields(todos[0]!),
+  )
+
+  const redactedStep = fromInteropToolCallStep(toRedactedToolCallInterop(new ToolCall({
+    tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({ args }) },
+  }), PrivacyMode.NO_STORAGE))
+  const redactedPlan = serde.deserialize(serde.serialize(redactedStep))
+  assert.equal(redactedPlan.kind, "tool-call")
+  if (redactedPlan.kind !== "tool-call" || redactedPlan.tool.kind !== "plan-draft") {
+    assert.fail("expected a redacted plan-draft operation")
+  }
+  assert.equal(isRedactedString(redactedPlan.tool.args?.content), true)
+  assert.equal(isRedactedString(redactedPlan.tool.args?.todos[0]?.content), true)
+})
+
+test("previous Slate plan tool-call envelopes migrate to the owned plan-draft operation", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const previous = createSlateToolCallStep({
+    tool: {
+      case: "createPlanToolCall",
+      value: {
+        args: { plan: "plan text", overview: "overview", name: "name", isProject: false, todos: [], phases: [] },
+        result: { planUri: "slate-plan://plan", result: { case: "success", value: {} } },
+      },
+    },
+  })
+  const envelope = JSON.parse(
+    new TextDecoder().decode(serde.serialize(previous)).slice("SLATE-AGENT-STEP\n".length),
+  ) as { version: number; step: unknown; compatibility?: unknown }
+  envelope.version = 1
+  const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`))
+  assert.equal(migrated.kind, "tool-call")
+  if (migrated.kind !== "tool-call" || migrated.tool.kind !== "plan-draft") {
+    assert.fail("expected the Slate plan-draft operation")
+  }
+  assert.equal(migrated.tool.args?.content, "plan text")
+  assert.deepEqual(migrated.tool.result, { kind: "created", planUri: "slate-plan://plan" })
+  const rewritten = new TextDecoder().decode(serde.serialize(migrated))
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.match(rewritten, /"operation":"plan-draft"/)
+  assert.doesNotMatch(rewritten, /createPlanToolCall/)
 })
 
 test("ask-question tool calls use Slate arguments and outcome values and rebuild at the boundary", () => {

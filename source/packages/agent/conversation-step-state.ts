@@ -5,6 +5,7 @@ import type {
   SlateAskQuestionArguments,
   SlateAskQuestionText,
 } from "./actions/ask-question-completion.ts"
+import type { SlateTodoStatus } from "./tools/core/todo/contracts.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 
 export interface SlateConversationStepCompatibility {
@@ -86,10 +87,48 @@ export interface SlateAskQuestionToolCall {
   readonly value?: undefined
 }
 
+export interface SlatePlanDraftTodo {
+  readonly id: string
+  readonly content: SlateToolCallText
+  readonly status: SlateTodoStatus
+  readonly createdAt: bigint
+  readonly updatedAt: bigint
+  readonly dependencies?: readonly string[]
+  readonly compatibility?: { readonly legacyStatusCode?: number }
+}
+
+export interface SlatePlanDraftPhase {
+  readonly name: SlateToolCallText
+  readonly todos: readonly SlatePlanDraftTodo[]
+}
+
+export interface SlatePlanDraftToolArguments {
+  readonly content: SlateToolCallText
+  readonly todos: readonly SlatePlanDraftTodo[]
+  readonly overview: SlateToolCallText
+  readonly title: SlateToolCallText
+  readonly isProjectPlan: boolean
+  readonly phases: readonly SlatePlanDraftPhase[]
+}
+
+export type SlatePlanDraftToolOutcome =
+  | { readonly kind: "created"; readonly planUri: SlateToolCallText }
+  | { readonly kind: "error"; readonly message: SlateToolCallText; readonly planUri: SlateToolCallText }
+  | { readonly kind: "unknown"; readonly planUri: SlateToolCallText }
+
+export interface SlatePlanDraftToolCall {
+  readonly kind: "plan-draft"
+  readonly args?: SlatePlanDraftToolArguments
+  readonly result?: SlatePlanDraftToolOutcome
+  readonly case?: undefined
+  readonly value?: undefined
+}
+
 export type SlateToolCallValue =
   | SlateLegacyToolCallValue
   | SlateConversationSummaryToolCall
   | SlateAskQuestionToolCall
+  | SlatePlanDraftToolCall
 
 export interface SlateStepHookContextEntry {
   readonly event: string
@@ -309,6 +348,87 @@ export function isSlateAskQuestionToolCall(value: unknown): value is SlateAskQue
     default:
       return false
   }
+}
+
+export function createSlatePlanDraftToolCall(input: {
+  readonly args?: SlatePlanDraftToolArguments
+  readonly result?: SlatePlanDraftToolOutcome
+}): SlatePlanDraftToolCall {
+  const cloneTodo = (todo: SlatePlanDraftTodo): SlatePlanDraftTodo => ({
+    ...todo,
+    ...(todo.dependencies === undefined ? {} : { dependencies: [...todo.dependencies] }),
+    ...(todo.compatibility === undefined ? {} : { compatibility: { ...todo.compatibility } }),
+  })
+  const args = input.args === undefined
+    ? undefined
+    : {
+        ...input.args,
+        todos: input.args.todos.map(cloneTodo),
+        phases: input.args.phases.map(phase => ({
+          ...phase,
+          todos: phase.todos.map(cloneTodo),
+        })),
+      }
+  const result = input.result === undefined ? undefined : { ...input.result }
+  const operation: SlatePlanDraftToolCall = {
+    kind: "plan-draft",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  }
+  if (!isSlatePlanDraftToolCall(operation)) throw new TypeError("Slate plan-draft operation is invalid")
+  return operation
+}
+
+export function isSlatePlanDraftToolCall(value: unknown): value is SlatePlanDraftToolCall {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = value as Record<string, unknown>
+  if (tool.kind !== "plan-draft" || !hasOnlyOwnKeys(tool, ["kind", "args", "result"])) return false
+  if (tool.args !== undefined) {
+    if (tool.args === null || typeof tool.args !== "object" || Array.isArray(tool.args)) return false
+    const args = tool.args as Record<string, unknown>
+    if (!hasOnlyOwnKeys(args, ["content", "todos", "overview", "title", "isProjectPlan", "phases"]) ||
+        !isToolCallText(args.content) || !isToolCallText(args.overview) || !isToolCallText(args.title) ||
+        typeof args.isProjectPlan !== "boolean" || !Array.isArray(args.todos) || !Array.isArray(args.phases) ||
+        !args.todos.every(isPlanDraftTodo)) return false
+    for (const phaseValue of args.phases) {
+      if (phaseValue === null || typeof phaseValue !== "object" || Array.isArray(phaseValue)) return false
+      const phase = phaseValue as Record<string, unknown>
+      if (!hasOnlyOwnKeys(phase, ["name", "todos"]) || !isToolCallText(phase.name) ||
+          !Array.isArray(phase.todos) || !phase.todos.every(isPlanDraftTodo)) return false
+    }
+  }
+  if (tool.result === undefined) return true
+  if (tool.result === null || typeof tool.result !== "object" || Array.isArray(tool.result)) return false
+  const result = tool.result as Record<string, unknown>
+  switch (result.kind) {
+    case "created":
+    case "unknown":
+      return hasOnlyOwnKeys(result, ["kind", "planUri"]) && isToolCallText(result.planUri)
+    case "error":
+      return hasOnlyOwnKeys(result, ["kind", "message", "planUri"]) &&
+        isToolCallText(result.message) && isToolCallText(result.planUri)
+    default:
+      return false
+  }
+}
+
+function isPlanDraftTodo(value: unknown): value is SlatePlanDraftTodo {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const todo = value as Record<string, unknown>
+  if (!hasOnlyOwnKeys(todo, ["id", "content", "status", "createdAt", "updatedAt", "dependencies", "compatibility"]) ||
+      typeof todo.id !== "string" || !isToolCallText(todo.content) ||
+      !["pending", "in_progress", "completed", "cancelled", "unspecified"].includes(todo.status as string) ||
+      typeof todo.createdAt !== "bigint" || typeof todo.updatedAt !== "bigint" ||
+      (todo.dependencies !== undefined &&
+        (!Array.isArray(todo.dependencies) || !todo.dependencies.every((dependency: unknown) => typeof dependency === "string")))) return false
+  if (todo.compatibility === undefined) return true
+  if (todo.compatibility === null || typeof todo.compatibility !== "object" || Array.isArray(todo.compatibility)) return false
+  const compatibility = todo.compatibility as Record<string, unknown>
+  return hasOnlyOwnKeys(compatibility, ["legacyStatusCode"]) &&
+    (compatibility.legacyStatusCode === undefined ||
+      (Number.isInteger(compatibility.legacyStatusCode) &&
+        (compatibility.legacyStatusCode as number) >= -2_147_483_648 &&
+        (compatibility.legacyStatusCode as number) <= 2_147_483_647))
 }
 
 function hasOnlyOwnKeys(value: Readonly<Record<string, unknown>>, allowed: readonly string[]): boolean {
