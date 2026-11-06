@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client'
 
 import './styles.css'
 
-import { DesktopApp, DesktopError } from './app'
+import { DesktopApp } from './app'
 import { fetchCapabilities, installRuntimeMeta } from './platform/api'
 import { loadInitialMessages } from './providers'
+import { DesktopStartupError } from './startup-error'
 
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!)
@@ -23,10 +24,7 @@ async function bootstrap() {
   } catch (error) {
     root.render(
       <StrictMode>
-        <DesktopError
-          detail={error instanceof Error ? error.message : undefined}
-          title="This OpenLink instance is not compatible with the desktop client"
-        />
+        <DesktopStartupError error={error} />
       </StrictMode>,
     )
   }

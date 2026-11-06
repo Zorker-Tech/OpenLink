@@ -18,6 +18,7 @@ import {
   normalizeTarget,
   signReleaseManifest,
 } from '../deploy/self-hosted/runtime/release-contract.mjs'
+import { assertCivilizationSource } from './lib/civilization-source.mjs'
 
 const execFile = promisify(execFileCallback)
 
@@ -27,6 +28,10 @@ function requiredPayloadPaths(target) {
     'runtime/node/bin/node',
     'app/web/server.js',
     'services/agent-host/dist/src/main.js',
+    'services/agent-host/civilization-host.py',
+    'services/civilization/LICENSE',
+    'services/civilization/pyproject.toml',
+    'services/civilization/src/civilization/engine/stages/stage74_orion_memory_service.py',
     'services/agent-host/dist/src/project-container-main.js',
     'services/agent-host/project-supabase-runtime.mjs',
     'scripts/lib/project-supabase-bundle.mjs',
@@ -162,6 +167,7 @@ export async function dockerArchiveImageId(archive) {
 
 export async function stageNativeSelfHostedPayload(options = {}) {
   const sourceRoot = resolve(options.sourceRoot)
+  await assertCivilizationSource(sourceRoot)
   const runtimeRoot = resolve(options.runtimeRoot ?? join(sourceRoot, '.openlink-runtime'))
   const target = normalizeTarget(options.target ?? { platform: process.platform, architecture: process.arch })
   const outputRoot = resolve(options.outputRoot)
@@ -188,6 +194,8 @@ export async function stageNativeSelfHostedPayload(options = {}) {
     })
     await copyRequired(join(source, 'package.json'), join(destination, 'package.json'))
   }
+  await copyRequired(join(sourceRoot, 'services/agent-host/civilization-host.py'), join(outputRoot, 'services/agent-host/civilization-host.py'))
+  await copyRequired(join(sourceRoot, 'services/civilization'), join(outputRoot, 'services/civilization'))
   await copyRequired(join(sourceRoot, 'services/agent-host/project-supabase-runtime.mjs'), join(outputRoot, 'services/agent-host/project-supabase-runtime.mjs'))
   await copyRequired(join(sourceRoot, 'scripts/lib/project-supabase-bundle.mjs'), join(outputRoot, 'scripts/lib/project-supabase-bundle.mjs'))
 

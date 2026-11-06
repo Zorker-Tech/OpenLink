@@ -82,6 +82,9 @@ The current ADR set covers these areas:
 - a shared product version with per-architecture release identities
   (`T1-Crab-0.0.1`, `T2-Orion-0.0.1`)
   ([standard 08](./standards/08-release-versioning.md)).
+- built-in Project Code memory through the Agent Host gateway and the
+  subtree-imported Civilization 1.0.0 Stage74 Orion service
+  ([ADR-0032](./ADR-0032-project-memory-civilization.md)).
 
 New decisions use the format below and the next unused ADR number:
 
@@ -92,6 +95,13 @@ the existing Local/Cloud identity or runtime contracts.
 Local development can run the Next.js Web/BFF from a separate Linux source
 checkout while the existing checkout supervises services and runtime artifacts
 ([ADR-0025](./ADR-0025-split-web-source-local-development.md)).
+
+The desktop host uses a Vite renderer over the shared product UI, a loopback
+same-origin gateway, and connection profiles for Cloud and self-hosted
+instances. It supersedes the thin-shell decision in
+[ADR-0024](./ADR-0024-electron-desktop-shell.md) with
+[ADR-0031](./ADR-0031-desktop-vite-host.md). The desktop is a client only; a
+single-machine local-first product is a separate architecture.
 
 ```text
 # ADR-NNNN: Decision title

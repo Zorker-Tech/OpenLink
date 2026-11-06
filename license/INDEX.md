@@ -4,12 +4,13 @@ This directory groups tracked LICENSE, COPYING, and NOTICE files by the upstream
 
 This directory covers third-party and separately licensed components only. Zorker Openlink original code is licensed under the `LICENSE` file in the repository root.
 
-Total source files: 296
+Total source files: 298
 
 ## Groups
 
 - `AWS`: 1
 - `Anthropic-Sandbox-Runtime`: 1
+- `Civilization`: 2
 - `Code-Server`: 1
 - `Go-Ecosystem`: 23
 - `Kubernetes`: 3
@@ -134,6 +135,8 @@ Total source files: 296
 |---|---|---|
 | `AWS` | `services/sandbox-runtime/test/fixtures/aws-sigv4-suite/NOTICE` | `license/AWS/services/sandbox-runtime/test/fixtures/aws-sigv4-suite/NOTICE` |
 | `Anthropic-Sandbox-Runtime` | `services/sandbox-runtime/LICENSE` | `license/Anthropic-Sandbox-Runtime/services/sandbox-runtime/LICENSE` |
+| `Civilization` | `services/civilization/LICENSE` | `license/Civilization/services/civilization/LICENSE` |
+| `Civilization` | `services/civilization/NOTICE` | `license/Civilization/services/civilization/NOTICE` |
 | `Code-Server` | `services/code-server/LICENSE` | `license/Code-Server/services/code-server/LICENSE` |
 | `Go-Ecosystem` | `services/linux/test/tools/vendor/golang.org/x/crypto/LICENSE` | `license/Go-Ecosystem/services/linux/test/tools/vendor/golang.org/x/crypto/LICENSE` |
 | `Go-Ecosystem` | `services/linux/test/tools/vendor/golang.org/x/mod/LICENSE` | `license/Go-Ecosystem/services/linux/test/tools/vendor/golang.org/x/mod/LICENSE` |

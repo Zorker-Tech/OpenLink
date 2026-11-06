@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, Sequence
 
-import torch
-
 from .stage73_orion_memory_kernel import MemoryReadResult
 
 
@@ -84,6 +82,10 @@ class OrionAdapterContextBridge:
         return tuple(items)
 
     def encode(self, encoder: TextGroupEncoder, items: Sequence[OrionAdapterMemoryItem]) -> OrionEncodedAdapterMemory:
+        # Adapter encoding belongs to the optional inference path and should
+        # not prevent the Stage74 persistence service from starting.
+        import torch
+
         vectors, mask = encoder.encode_text_groups([[item.text for item in items]])
         if vectors.ndim != 3 or vectors.shape[0] != 1 or vectors.shape[1] != len(items):
             raise ValueError("adapter memory vectors must have shape [1, item_count, hidden_size]")

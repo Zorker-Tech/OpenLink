@@ -90,6 +90,10 @@ export async function runPreflight(options = {}) {
     ['runtime/node/bin/node', true],
     ['app/web/server.js', false],
     ['services/agent-host/dist/src/main.js', false],
+    ['services/agent-host/civilization-host.py', false],
+    ['services/civilization/pyproject.toml', false],
+    ['services/civilization/LICENSE', false],
+    ['services/civilization/src/civilization/engine/stages/stage74_orion_memory_service.py', false],
     ['services/agent-host/dist/src/project-container-main.js', false],
     ['services/agent-host/project-supabase-runtime.mjs', false],
     ['scripts/lib/project-supabase-bundle.mjs', false],
@@ -149,6 +153,13 @@ export async function runPreflight(options = {}) {
   checks.push({ name: 'memory-capacity', status: 'pass', memoryBytes })
 
   if (options.hostChecks !== false) {
+    const python = options.pythonCommand ?? environment.PYTHON ?? process.env.PYTHON ?? (target.platform === 'win32' ? 'python' : 'python3')
+    const pythonVersion = (await command(python, ['-c', 'import sys; print("{}.{}".format(sys.version_info.major, sys.version_info.minor))'], { ...options, label: 'Civilization memory Python runtime' })).trim()
+    const [pythonMajor, pythonMinor] = pythonVersion.split('.').map(Number)
+    if (pythonMajor !== 3 || !Number.isInteger(pythonMinor) || pythonMinor < 10) {
+      throw new Error(`Civilization memory requires Python 3.10 or newer; found ${pythonVersion || 'unknown'}`)
+    }
+    checks.push({ name: 'civilization-memory-runtime', status: 'pass', pythonVersion })
     const docker = options.dockerCommand ?? 'docker'
     if (options.containerBrokerSocket) await requestContainerBroker(options.containerBrokerSocket, 'status', { timeoutMs: 30_000 })
     else {

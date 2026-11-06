@@ -39,6 +39,7 @@ RUN npm ci --omit=dev --ignore-scripts=false
 COPY services/agent-rpc-worker/dist ./dist
 COPY services/agent-browser-extension/openlink-browser.ts ./extensions/openlink-browser.ts
 COPY services/agent-supabase-extension/openlink-supabase.ts ./extensions/openlink-supabase.ts
+COPY services/agent-memory-extension/openlink-memory.ts ./extensions/openlink-memory.ts
 COPY services/agent-desktop-extension/openlink-desktop.ts ./extensions/openlink-desktop.ts
 COPY services/agent-worker/desktop/start.sh /opt/openlink/desktop/start.sh
 COPY services/agent-worker/desktop/run-ubuntu-vm.sh /opt/openlink/desktop/run-ubuntu-vm.sh

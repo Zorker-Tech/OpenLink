@@ -43,11 +43,27 @@ export const DESKTOP_FEATURES = [
 
 export type DesktopFeature = (typeof DESKTOP_FEATURES)[number]
 
+export interface DesktopHyditeConfig {
+  issuer: string
+  clientId: string | null
+  scopes: string[]
+  redirectUri: string
+}
+
 export interface DesktopPublicConfig {
   runtimeMode: 'local' | 'cloud'
   supabaseUrl: string
   supabasePublishableKey: string
   zorkerAppUrl: string | null
+  hydite: DesktopHyditeConfig | null
+}
+
+const HYDITE_ISSUER = 'https://auth.hydite.com'
+const HYDITE_SCOPES = ['openid', 'profile', 'email']
+
+export function desktopHyditeRedirectUri() {
+  const port = Number(process.env.OPENLINK_DESKTOP_AUTH_PORT || 43127)
+  return `http://127.0.0.1:${Number.isInteger(port) && port > 0 ? port : 43127}/auth/hydite/callback`
 }
 
 function publicSupabaseConfig(): Pick<DesktopPublicConfig, 'supabaseUrl' | 'supabasePublishableKey'> {
@@ -80,6 +96,18 @@ export function desktopPublicConfig(): DesktopPublicConfig {
     runtimeMode,
     ...publicSupabaseConfig(),
     zorkerAppUrl: process.env.NEXT_PUBLIC_ZORKER_APP_URL?.trim() || null,
+    // Cloud identity is a public OAuth client. The desktop may register its
+    // loopback redirect dynamically; a configured client id is the fallback
+    // for issuers that do not expose dynamic registration.
+    hydite:
+      runtimeMode === 'cloud'
+        ? {
+            issuer: HYDITE_ISSUER,
+            clientId: process.env.OPENLINK_CLOUD_OAUTH_CLIENT_ID?.trim() || null,
+            scopes: [...HYDITE_SCOPES],
+            redirectUri: desktopHyditeRedirectUri(),
+          }
+        : null,
   }
 }
 

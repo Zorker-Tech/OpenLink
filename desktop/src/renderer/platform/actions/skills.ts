@@ -8,19 +8,22 @@ export async function createUserSkillAction(
   | { ok: true; skill: UserSkill; path: string }
   | { ok: false; error: string }
 > {
-  return callDesktopAction('skills.create', input)
+  return callDesktopAction<
+    | { ok: true; skill: UserSkill; path: string }
+    | { ok: false; error: string }
+  >('skills.create', input)
 }
 
 export async function saveUserSkillAction(
   input: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  return callDesktopAction('skills.save', input)
+  return callDesktopAction<{ ok: true } | { ok: false; error: string }>('skills.save', input)
 }
 
 export async function deleteUserSkillAction(
   input: unknown,
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
-  return callDesktopAction('skills.delete', input)
+  return callDesktopAction<{ ok: true; path: string } | { ok: false; error: string }>('skills.delete', input)
 }
 
 export type { UserSkill, UserSkillSummary }

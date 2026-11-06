@@ -7,6 +7,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import type { RawData } from 'ws'
 import type { BrowserAgentSession } from './browser-client.js'
 import { AgentHostError } from './errors.js'
+import { isAllowedOrigin } from './origin-allowlist.js'
 
 const MAX_HTML_BYTES = 20 * 1024 * 1024
 const MAX_SOCKET_BUFFER_BYTES = 8 * 1024 * 1024
@@ -61,10 +62,6 @@ function parseCookies(header: string | undefined): Map<string, string> {
     try { cookies.set(name, decodeURIComponent(raw)) } catch { cookies.set(name, raw) }
   }
   return cookies
-}
-
-function isAllowedOrigin(origin: string | undefined, allowed: string[]): boolean {
-  return !!origin && allowed.includes(origin)
 }
 
 function safeTokenEquals(left: string | undefined, right: string): boolean {

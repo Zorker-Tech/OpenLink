@@ -22,6 +22,7 @@ interface Config {
   browserControlToken?: string
   browserExtensionPath?: string
   desktopExtensionPath?: string
+  projectMemoryExtensionPath?: string
   runtimePolicy?: string
 }
 
@@ -57,6 +58,7 @@ function loadConfig(): Config {
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
     desktopExtensionPath: process.env.OPENLINK_DESKTOP_EXTENSION_PATH,
+    projectMemoryExtensionPath: process.env.OPENLINK_PROJECT_MEMORY_EXTENSION_PATH,
     runtimePolicy: process.env.OPENLINK_AGENT_RUNTIME_POLICY?.trim() || undefined,
   }
 }
@@ -256,6 +258,7 @@ class RpcRuntime {
     }
     if (this.config.browserExtensionPath) args.push('--extension', this.config.browserExtensionPath)
     if (this.config.desktopExtensionPath) args.push('--extension', this.config.desktopExtensionPath)
+    if (this.config.projectMemoryExtensionPath) args.push('--extension', this.config.projectMemoryExtensionPath)
     if (this.config.runtimePolicy) args.push('--append-system-prompt', this.config.runtimePolicy)
     const child = spawn(process.execPath, args, {
       cwd: this.config.workspaceRoot,

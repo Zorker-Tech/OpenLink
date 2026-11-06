@@ -19,6 +19,7 @@ import {
 } from '@/lib/embedding-provider-configurations.server'
 import { getEmbeddingProvider } from '@/lib/embedding-providers'
 import { listOrganizations } from '@/lib/organizations'
+import type { OrganizationSummary } from '@/lib/organizations'
 import {
   getCloudConnection,
   listCloudConnections,
@@ -141,6 +142,19 @@ async function settingsShell(supabase: SupabaseClient, user: NonNullable<Awaited
 }
 
 async function loadHome(search: URLSearchParams): Promise<DesktopBootstrapResult> {
+  // Static UI previews intentionally run without a backend. The web home page
+  // has the same escape hatch; the desktop bootstrap must not call Supabase.
+  if (process.env.OPENLINK_STATIC_UI === '1') {
+    return {
+      ok: true,
+      data: {
+        user: null,
+        composerContext: null,
+        runtimeMode: getRuntimeMode(),
+        prompt: search.get('prompt') ?? '',
+      },
+    }
+  }
   const { supabase, user } = await session()
   const composerContext = user ? await loadComposerContext(supabase, user.id) : null
   return {
@@ -183,10 +197,13 @@ async function hasAccessibleCloudProject(
 }
 
 async function loadAppEntry(search: URLSearchParams): Promise<DesktopBootstrapResult> {
-  const { supabase, user } = await session()
   const prompt = search.get('prompt') ?? ''
   const withPrompt = (path: string) =>
     prompt ? `${path}?prompt=${encodeURIComponent(prompt)}` : path
+
+  if (process.env.OPENLINK_STATIC_UI === '1') return redirectTo(withPrompt('/login?next=%2Fapp'))
+
+  const { supabase, user } = await session()
 
   if (!user) return unauthorized(withPrompt('/app'))
 
@@ -288,7 +305,9 @@ async function loadProjects(
   ])
   const nickname = (profile as { nickname?: string } | null)?.nickname ?? workspace.name
   const organizationRole = workspace.organization_id
-    ? organizations.find((organization) => organization.id === workspace.organization_id)?.role
+    ? (organizations as OrganizationSummary[]).find(
+        (organization) => organization.id === workspace.organization_id,
+      )?.role
     : null
   const canManageProjects =
     workspace.scope_type === 'personal' ||
@@ -417,7 +436,7 @@ async function loadChat(
       chatSessions,
       email: user.email ?? nickname,
       autoStart: shouldAutoStartInitialPrompt(
-        search.get('run'),
+        search.get('run') ?? undefined,
         chat.initial_prompt,
         initialEvents,
       ),
@@ -639,11 +658,18 @@ export async function loadDesktopBootstrap(
   path: string[],
   search: URLSearchParams,
 ): Promise<DesktopBootstrapResult> {
-  const { supabase, user } = await session()
   const [head, second, third, fourth] = path
 
+  // Home and the app entry resolver own their session lookup so a static UI
+  // preview never constructs a Supabase client.
   if (head === 'home') return loadHome(search)
   if (head === 'app-entry') return loadAppEntry(search)
+
+  if (process.env.OPENLINK_STATIC_UI === '1') {
+    return unauthorized(`/${path.join('/')}`)
+  }
+
+  const { supabase, user } = await session()
 
   if (!user) {
     const next = path.join('/')

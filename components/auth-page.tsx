@@ -15,6 +15,12 @@ type AuthMode = 'login' | 'register'
 interface AuthPageProps {
   mode: AuthMode
   localRuntime?: boolean
+  /**
+   * Desktop hosts replace the browser redirect with a native PKCE flow that
+   * returns the session to the same origin. Web leaves this undefined and
+   * keeps the server-side `/auth/platform/login` redirect.
+   */
+  onPlatformLogin?: (input: { nextPath: string }) => Promise<void>
 }
 
 function safeNextPath(value: string | null, fallback = '/') {
@@ -34,7 +40,7 @@ function authenticationErrorMessage(error: unknown, fallback: string) {
   return message && message !== '{}' && message !== '[object Object]' ? message : fallback
 }
 
-export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
+export function AuthPage({ mode, localRuntime = false, onPlatformLogin }: AuthPageProps) {
   const t = useT()
   const isRegister = mode === 'register'
   const isLocalRuntime = localRuntime
@@ -139,6 +145,17 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
     setErrorMessage(null)
     setStatusMessage(null)
     setIsSubmitting(true)
+    if (onPlatformLogin) {
+      void onPlatformLogin({ nextPath })
+        .catch((error) => {
+          setErrorMessage(authenticationErrorMessage(
+            error,
+            t('We could not complete sign in. Please try again.'),
+          ))
+        })
+        .finally(() => setIsSubmitting(false))
+      return
+    }
     const login = new URL('/auth/platform/login', window.location.origin)
     login.searchParams.set('next', nextPath)
     login.searchParams.set('share', '1')
