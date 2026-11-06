@@ -6,6 +6,10 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import {
+  createSlateShellCommandActionPayload,
+  type SlateShellCommandActionPayload,
+} from "../../source/packages/agent/actions/shell-command-action-contracts.ts"
 import { fromRedactedCoreMessages } from "../../source/packages/redaction/message-redaction.ts"
 import { shellStreamExecutorResource } from "../../source/packages/agent-exec/shell-stream-operation.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
@@ -134,13 +138,12 @@ function plainMessages(messages: unknown[]): Array<{ role: string; content: Arra
   return fromRedactedCoreMessages(messages as never, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) as never
 }
 
-const shellAction = (command: string, execId?: string): unknown => ({
-  _privacyMode: PrivacyMode.NO_STORAGE,
-  shellCommand: {
-    command: createRedactedString(command, DataClassification.CODE, "command", PrivacyMode.NO_STORAGE),
-  },
-  ...(execId === undefined ? {} : { execId }),
-})
+const shellAction = (command: string, execId?: string): SlateShellCommandActionPayload =>
+  createSlateShellCommandActionPayload({
+    privacyMode: PrivacyMode.NO_STORAGE,
+    commandText: createRedactedString(command, DataClassification.CODE, "command", PrivacyMode.NO_STORAGE),
+    ...(execId === undefined ? {} : { resumeExecutionId: execId }),
+  })
 
 function handlerWith(options: {
   events: Array<Record<string, unknown>>
@@ -250,7 +253,7 @@ test("a stream that breaks still leaves the output that arrived", async () => {
 test("a command with no shell command at all is refused", async () => {
   const { handler } = handlerWith({ events: [] })
   await assert.rejects(
-    () => handler.handle(createContext(), { _privacyMode: PrivacyMode.NO_STORAGE }, executorHarness().executor, stateHandler().handler, [], () => {}),
+    () => handler.handle(createContext(), createSlateShellCommandActionPayload({ privacyMode: PrivacyMode.NO_STORAGE }), executorHarness().executor, stateHandler().handler, [], () => {}),
     /Shell command is required/,
   )
 })

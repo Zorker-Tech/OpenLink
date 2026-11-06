@@ -4,6 +4,7 @@ import { test } from "node:test"
 import {
   slateAgentActionFromQueuedInterop,
   slateAgentActionFromRedactedInterop,
+  slateAgentActionFromInterop,
 } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts"
 import { createSlateResumeAgentAction, isSlateResumeActionPayload, SlateAgentActionKind, isSlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
 import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
@@ -23,6 +24,10 @@ import {
   type SlateBackgroundTaskCompletionActionPayload,
 } from "../../source/packages/agent/actions/background-task-completion-contracts.ts"
 import {
+  isSlateShellCommandActionPayload,
+  type SlateShellCommandActionPayload,
+} from "../../source/packages/agent/actions/shell-command-action-contracts.ts"
+import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
 } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
@@ -36,6 +41,9 @@ import {
   BackgroundTaskCompletionAction,
   BackgroundTaskCompletionReason,
   BackgroundTaskKind,
+  ConversationAction,
+  ShellCommand,
+  ShellCommandAction,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { toRedactedBackgroundTaskCompletionAction } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 
@@ -83,6 +91,11 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.equal(isSlateGoalContinuationActionPayload(action.payload), true)
     } else if (sourceCase === "subscriptionNotificationAction") {
       assert.equal(isSlateSubscriptionNotificationActionPayload(action.payload), true)
+    } else if (sourceCase === "shellCommandAction") {
+      const payload = action.payload as SlateShellCommandActionPayload
+      assert.equal(isSlateShellCommandActionPayload(payload), true)
+      assert.equal(payload.privacyMode, PrivacyMode.NO_STORAGE)
+      assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
       assert.equal(payload.schema, "slate.agent-action.ask-question-completion")
@@ -206,6 +219,32 @@ test("background-task completion projections preserve unsupported enum codes", (
     legacyNotificationContextCode: 98,
   })
   assert.equal(payload.compatibility?.legacyPayload, historicalAction)
+})
+
+test("shell command projections preserve the typed command and resume execution id", () => {
+  const legacyAction = new ConversationAction({
+    action: {
+      case: "shellCommandAction",
+      value: new ShellCommandAction({
+        shellCommand: new ShellCommand({ command: "echo slate" }),
+        execId: "resume-7",
+      }),
+    },
+  })
+  const action = slateAgentActionFromInterop(legacyAction, PrivacyMode.NO_STORAGE)
+  const payload = action.payload as SlateShellCommandActionPayload
+  const commandText = payload.commandText
+
+  assert.equal(action.kind, SlateAgentActionKind.SHELL_COMMAND)
+  assert.equal(isSlateShellCommandActionPayload(payload), true)
+  assert.equal(payload.schema, "slate.agent-action.shell-command")
+  assert.equal(payload.resumeExecutionId, "resume-7")
+  assert.ok(commandText !== undefined)
+  assert.equal(
+    typeof commandText === "string" ? commandText : commandText.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    "echo slate",
+  )
+  assert.ok(payload.compatibility?.legacyPayload)
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {

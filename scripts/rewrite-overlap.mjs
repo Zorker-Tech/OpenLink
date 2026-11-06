@@ -1244,6 +1244,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
     "host/automations/automation-extension-policies.ts",
   ]],
   ["packages/agent/actions/shell-command-action-handler.ts", [
+    "packages/agent/actions/shell-command-action-contracts.ts",
     "adapters/interop/agent/shell-command-action-adapter.ts",
   ]],
   ["packages/agent/utils/smart-mode-classifier-measurement.ts", [

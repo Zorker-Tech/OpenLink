@@ -22,8 +22,14 @@ import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.t
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
 import { slateAskQuestionCompletionFromRedacted } from "./ask-question-result-adapter.ts"
 import { slateBackgroundTaskCompletionActionFromRedacted } from "./background-task-completion-adapter.ts"
+import { slateShellCommandActionPayloadFromRedacted } from "./shell-command-action-adapter.ts"
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
 import { isSlateBackgroundTaskCompletionActionPayload } from "../../../packages/agent/actions/background-task-completion-contracts.ts"
+import {
+  createSlateShellCommandActionPayload,
+  isSlateShellCommandActionPayload,
+  redactSlateShellCommandActionPayload,
+} from "../../../packages/agent/actions/shell-command-action-contracts.ts"
 import {
   createSlateGoalContinuationActionPayload,
   isSlateGoalContinuationActionPayload,
@@ -198,6 +204,15 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
     }
     return { ...action, context, payload: action.payload }
   }
+  if (action.kind === SlateAgentActionKind.SHELL_COMMAND) {
+    return {
+      ...action,
+      context,
+      payload: isSlateShellCommandActionPayload(action.payload)
+        ? redactSlateShellCommandActionPayload(action.payload, privacyMode)
+        : createSlateShellCommandActionPayload({ privacyMode }),
+    }
+  }
   if (action.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return {
       ...action,
@@ -320,6 +335,12 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       ),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.SHELL_COMMAND) {
+    return {
+      ...slateAction,
+      payload: slateShellCommandActionPayloadFromRedacted(action.action.value, action._privacyMode),
+    }
+  }
   if (slateAction.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
     return { ...slateAction, payload: createSlateGoalContinuationActionPayload() }
   }
@@ -378,6 +399,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "backgroundTaskCompletionAction") {
     const wrapped = new ConversationAction({ action: { case: "backgroundTaskCompletionAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "shellCommandAction") {
+    const wrapped = new ConversationAction({ action: { case: "shellCommandAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "goalContinuationAction") {
