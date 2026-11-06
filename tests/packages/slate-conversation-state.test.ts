@@ -12,6 +12,8 @@ import {
 } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import {
   AgentMode,
+  CommunicateUpdateHistoryEntry,
+  CommunicateUpdateTurnState,
   ConversationStateStructure,
   FileStateStructure,
   GoalState,
@@ -28,7 +30,10 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { SlateGoalStatus } from "../../source/packages/agent-core/goal-continuation.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
-import type { SlateRedactedValue } from "../../source/packages/agent/conversation-state.ts"
+import type {
+  SlateCommunicationTurnState,
+  SlateRedactedValue,
+} from "../../source/packages/agent/conversation-state.ts"
 import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 
 test("conversation state projects its persisted mode and fields into Slate", () => {
@@ -65,6 +70,59 @@ test("an unknown conversation mode uses Slate's fallback without losing its sour
   assert.equal(slate.mode, SlateMode.UNSPECIFIED)
   assert.equal(slate.unknownModeCode, 987654)
   assert.equal(roundTripped.mode, 987654)
+})
+
+test("communication update contracts are Slate-owned and redact only at the interop boundary", () => {
+  const redacted = toRedactedConversationStateStructure(
+    new ConversationStateStructure({
+      communicateUpdateHistory: [new CommunicateUpdateHistoryEntry({ step: "global step", messageIndex: 2 })],
+      communicateUpdateFinalSummary: "global summary",
+      communicateUpdateCompletedSubtitle: "global subtitle",
+      communicateUpdateStatesByParentToolCallId: {
+        "call-1": new CommunicateUpdateTurnState({
+          history: [new CommunicateUpdateHistoryEntry({ step: "call step", messageIndex: 3 })],
+          finalSummary: "call summary",
+          completedSubtitle: "call subtitle",
+        }),
+      },
+    }),
+    PrivacyMode.NO_STORAGE,
+  )
+  const slate = fromInteropConversationState(redacted)
+
+  assert.deepEqual(slate.communicationHistory, [{ step: "global step", messageIndex: 2 }])
+  assert.equal(slate.communicationFinalSummary, "global summary")
+  assert.equal(slate.communicationCompletedSubtitle, "global subtitle")
+  const callTurn = (slate.communicationTurnsByCallId as ReadonlyMap<string, SlateCommunicationTurnState> | undefined)
+    ?.get("call-1")
+  assert.deepEqual(callTurn, {
+    history: [{ step: "call step", messageIndex: 3 }],
+    finalSummary: "call summary",
+    completedSubtitle: "call subtitle",
+  })
+
+  const interop = toInteropConversationState(slate)
+  assert.ok(interop.communicateUpdateHistory[0]?.step instanceof RedactedString)
+  assert.equal(interop.communicateUpdateHistory[0]?.step.__classification, DataClassification.CODE)
+  assert.equal(
+    interop.communicateUpdateHistory[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    "global step",
+  )
+  assert.ok(interop.communicateUpdateFinalSummary instanceof RedactedString)
+  assert.equal(interop.communicateUpdateFinalSummary.__fieldName, "communicate_update_final_summary")
+
+  const persisted = fromRedactedConversationStateStructureInterop(
+    interop,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  const persistedTurn = persisted.communicateUpdateStatesByParentToolCallId["call-1"]
+  assert.equal(persisted.communicateUpdateHistory[0]?.step, "global step")
+  assert.equal(persisted.communicateUpdateFinalSummary, "global summary")
+  assert.equal(persisted.communicateUpdateCompletedSubtitle, "global subtitle")
+  assert.equal(persistedTurn?.history[0]?.step, "call step")
+  assert.equal(persistedTurn?.finalSummary, "call summary")
+  assert.equal(persistedTurn?.completedSubtitle, "call subtitle")
 })
 
 test("file state paths and blob references become plain Slate values", () => {

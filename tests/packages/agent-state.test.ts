@@ -675,8 +675,8 @@ test("a large-context model enables the handle's large-context treatment", () =>
   const small = harness()
   assert.equal(small.handle.usesLargeContextTreatment(), false)
   const large = new ConversationStateHandle(
-    (small.handle as unknown as { blobStore: unknown }).blobStore as never,
-    (small.handle as unknown as { conversationStateStructure: unknown }).conversationStateStructure as never,
+    small.handle.blobStore,
+    toInteropConversationState(small.handle.conversationStateStructure),
     small.builder as never,
     {},
     "dsv3-composer",
@@ -692,17 +692,26 @@ test("the active branch name is kept", () => {
   assert.equal(harnessed.handle.activeBranchName, undefined)
 })
 
-test("communicated updates are kept in their history and inside their call state", () => {
+test("Slate communication updates remain available in memory and in persisted conversation state", async () => {
   const harnessed = harness()
   harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "one", messageIndex: 1, finalSummary: "done" })
   harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "two", messageIndex: 2, parentToolCallId: "call-1", finalSummary: "call summary" })
   harnessed.handle.appendCommunicateUpdateHistoryEntry({ step: "three", messageIndex: 3, parentToolCallId: "call-1", completedSubtitle: "subtitle" })
-  assert.deepEqual(harnessed.handle.communicateUpdateHistory.map((entry) => [entry.step, entry.messageIndex]), [["one", 1]])
-  assert.equal(harnessed.handle.communicateUpdateFinalSummary, "done")
-  const state = harnessed.handle.communicateUpdateStatesByParentToolCallId.get("call-1")
+  assert.deepEqual(harnessed.handle.communicationHistory.map((entry) => [entry.step, entry.messageIndex]), [["one", 1]])
+  assert.equal(harnessed.handle.communicationFinalSummary, "done")
+  const state = harnessed.handle.communicationTurnsByCallId.get("call-1")
   assert.equal(state?.history.length, 2)
   assert.equal(state?.finalSummary, "call summary")
   assert.equal(state?.completedSubtitle, "subtitle")
+
+  const persisted = await harnessed.handle.computeNewStructure(createContext())
+  assert.equal(persisted.communicateUpdateHistory[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "one")
+  assert.equal(persisted.communicateUpdateFinalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "done")
+  const persistedTurn = persisted.communicateUpdateStatesByParentToolCallId.get("call-1")
+  assert.equal(persistedTurn?.history[0]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "two")
+  assert.equal(persistedTurn?.history[1]?.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "three")
+  assert.equal(persistedTurn?.finalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "call summary")
+  assert.equal(persistedTurn?.completedSubtitle?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "subtitle")
 })
 
 test("token details are stored as they were given", () => {

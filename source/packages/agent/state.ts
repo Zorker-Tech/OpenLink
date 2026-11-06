@@ -28,8 +28,6 @@ import { metadataObserverForStore } from "../agent-kv/typed-blob-store.ts"
 import { createRedactedCoreMessageSerde } from "./serde.ts"
 import {
   createAgentStateMessageSerdesInterop,
-  createAgentStateCommunicateHistoryEntryInterop,
-  createAgentStateCommunicateTurnStateInterop,
   createSlateConversationStepSerde,
   redactSlateTodoItem,
   redactSlateConversationSummary,
@@ -39,13 +37,9 @@ import {
   attachProcessedSelectedMediaToSlateContext,
   createRedactedConversationTokenDetailsInterop,
   type AgentStateGitRepoInfoInterop,
-  type AgentStateCommunicateHistoryEntryInterop,
-  type AgentStateCommunicateTurnStateInterop,
   type AgentStateRequestContextInterop,
   type RedactedAgentConversationStateInterop,
   encodeSlateConversationStateSnapshotInterop,
-  fromRedactedCommunicateUpdateHistoryEntryInterop,
-  fromRedactedCommunicateUpdateTurnStateInterop,
   fromRedactedConversationTokenDetailsInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
@@ -72,7 +66,11 @@ import {
   type SlateConversationStep,
   type SlateToolCallStep,
 } from "./conversation-step-state.ts"
-import type { SlateConversationState } from "./conversation-state.ts"
+import type {
+  SlateCommunicationHistoryEntry,
+  SlateCommunicationTurnState,
+  SlateConversationState,
+} from "./conversation-state.ts"
 import {
   slateConversationPlanFromValue,
   type SlateConversationPlanState,
@@ -826,15 +824,17 @@ type CommunicateStateLike = {
   readonly completedSubtitle?: MaybeRedactedCodeString;
 };
 
-function communicateState(state: CommunicateStateLike): AgentStateCommunicateTurnStateInterop {
-  return createAgentStateCommunicateTurnStateInterop({
-    history: (state.history ?? []).map((entry) => createAgentStateCommunicateHistoryEntryInterop({
+function communicateState(state: CommunicateStateLike): SlateCommunicationTurnState {
+  const finalSummary = trimmedString(unwrapCodeString(state.finalSummary))
+  const completedSubtitle = trimmedString(unwrapCodeString(state.completedSubtitle))
+  return {
+    history: (state.history ?? []).map((entry): SlateCommunicationHistoryEntry => ({
       step: unwrapCodeString(entry.step) ?? "",
       messageIndex: entry.messageIndex,
     })),
-    finalSummary: trimmedString(unwrapCodeString(state.finalSummary))!,
-    completedSubtitle: trimmedString(unwrapCodeString(state.completedSubtitle))!,
-  });
+    ...(finalSummary === undefined ? {} : { finalSummary }),
+    ...(completedSubtitle === undefined ? {} : { completedSubtitle }),
+  }
 }
 
 type SubagentTracking = {
@@ -1303,8 +1303,8 @@ export class ConversationStateHandle {
   fileStates: Map<string, FileStateReferencesByPath<OperationContext>>;
   readPaths: Set<string>;
   completedAskQuestionToolCallIds: Set<string>;
-  communicateUpdateHistory: AgentStateCommunicateHistoryEntryInterop[];
-  communicateUpdateStatesByParentToolCallId: Map<string, AgentStateCommunicateTurnStateInterop>;
+  communicationHistory: SlateCommunicationHistoryEntry[];
+  communicationTurnsByCallId: Map<string, SlateCommunicationTurnState>;
   backgroundSummarizationPromiseInfo: unknown;
   messagesUndergoingSummarization: unknown;
   backgroundSummarizationHasCompleted: boolean;
@@ -1327,7 +1327,7 @@ export class ConversationStateHandle {
     cacheWriteTokens: number;
     reasoningTokens: number;
   };
-  pendingComputeStructure: Promise<ConversationStateBlobs> | null;
+  pendingComputeStructure: Promise<RedactedAgentConversationStateInterop> | null;
   skippedRootPromptBlobs: boolean;
   originalRootPromptMessagesJson: Uint8Array[];
   rootPromptPrefixInvalidated: boolean;
@@ -1349,8 +1349,8 @@ export class ConversationStateHandle {
   tokenDetails: TokenDetails;
   summary: SummaryRef<OperationContext> | undefined;
   plan: ValueRef<OperationContext> | undefined;
-  communicateUpdateFinalSummary: string | undefined;
-  communicateUpdateCompletedSubtitle: string | undefined;
+  communicationFinalSummary: string | undefined;
+  communicationCompletedSubtitle: string | undefined;
   goalState: SlateGoalState | undefined;
 
   createConversationTurnHandleSerde(): Serde<TurnUnion> {
@@ -1574,8 +1574,8 @@ export class ConversationStateHandle {
     this.fileStates = new Map();
     this.readPaths = new Set();
     this.completedAskQuestionToolCallIds = new Set();
-    this.communicateUpdateHistory = [];
-    this.communicateUpdateStatesByParentToolCallId = new Map();
+    this.communicationHistory = [];
+    this.communicationTurnsByCallId = new Map();
     this.backgroundSummarizationPromiseInfo = null;
     this.messagesUndergoingSummarization = null;
     this.backgroundSummarizationHasCompleted = false;
@@ -1653,21 +1653,20 @@ export class ConversationStateHandle {
         if (normalizedThreadId !== undefined) this.subagentThreads.set(subagentId, normalizedThreadId);
       }
     }
-    const legacyCommunicateUpdateHistory = (this.conversationStateStructure.communicateUpdateHistory ?? []).map((entry) => createAgentStateCommunicateHistoryEntryInterop({
-      step: entry.step.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    this.communicationHistory = (this.conversationStateStructure.communicationHistory ?? []).map((entry) => ({
+      step: entry.step,
       messageIndex: entry.messageIndex,
     }));
-    this.communicateUpdateFinalSummary = this.conversationStateStructure.communicateUpdateFinalSummary?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-    this.communicateUpdateCompletedSubtitle = this.conversationStateStructure.communicateUpdateCompletedSubtitle?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
-    this.communicateUpdateHistory = legacyCommunicateUpdateHistory;
-    const persistedCommunicateUpdateStatesByParentToolCallId = this.conversationStateStructure.communicateUpdateStatesByParentToolCallId;
-    if (persistedCommunicateUpdateStatesByParentToolCallId instanceof Map) {
-      for (const [parentToolCallId, state] of persistedCommunicateUpdateStatesByParentToolCallId) {
-        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, createAgentStateCommunicateTurnStateInterop({ ...communicateState(state) }));
+    this.communicationFinalSummary = this.conversationStateStructure.communicationFinalSummary;
+    this.communicationCompletedSubtitle = this.conversationStateStructure.communicationCompletedSubtitle;
+    const persistedCommunicationTurns = this.conversationStateStructure.communicationTurnsByCallId;
+    if (persistedCommunicationTurns instanceof Map) {
+      for (const [parentToolCallId, state] of persistedCommunicationTurns) {
+        this.communicationTurnsByCallId.set(parentToolCallId, communicateState(state));
       }
-    } else if (persistedCommunicateUpdateStatesByParentToolCallId !== undefined) {
-      for (const [parentToolCallId, state] of Object.entries(persistedCommunicateUpdateStatesByParentToolCallId)) {
-        this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, createAgentStateCommunicateTurnStateInterop({ ...communicateState(state) }));
+    } else if (persistedCommunicationTurns !== undefined) {
+      for (const [parentToolCallId, state] of Object.entries(persistedCommunicationTurns)) {
+        this.communicationTurnsByCallId.set(parentToolCallId, communicateState(state));
       }
     }
     this.computeSubagentTrackingFromTimestamps();
@@ -2405,24 +2404,26 @@ These images can be copied for use in other locations.
     readonly finalSummary?: string;
     readonly completedSubtitle?: string;
   }): void {
-    const loggedEntry = createAgentStateCommunicateHistoryEntryInterop({
+    const loggedEntry: SlateCommunicationHistoryEntry = {
       step: entry.step,
       messageIndex: entry.messageIndex,
-    });
+    };
     const parentToolCallId = trimmedString(entry.parentToolCallId);
     if (parentToolCallId !== undefined) {
-      const knownState = this.communicateUpdateStatesByParentToolCallId.get(parentToolCallId);
+      const knownState = this.communicationTurnsByCallId.get(parentToolCallId);
       const followingHistory = [...knownState?.history ?? [], loggedEntry];
-      this.communicateUpdateStatesByParentToolCallId.set(parentToolCallId, createAgentStateCommunicateTurnStateInterop({
+      const finalSummary = entry.finalSummary ?? knownState?.finalSummary
+      const completedSubtitle = entry.completedSubtitle ?? knownState?.completedSubtitle
+      this.communicationTurnsByCallId.set(parentToolCallId, {
         history: followingHistory,
-        finalSummary: (entry.finalSummary ?? knownState?.finalSummary)!,
-        completedSubtitle: (entry.completedSubtitle ?? knownState?.completedSubtitle)!,
-      }));
+        ...(finalSummary === undefined ? {} : { finalSummary }),
+        ...(completedSubtitle === undefined ? {} : { completedSubtitle }),
+      });
       return;
     }
-    this.communicateUpdateHistory.push(loggedEntry);
-    if (entry.finalSummary !== undefined) this.communicateUpdateFinalSummary = entry.finalSummary;
-    if (entry.completedSubtitle !== undefined) this.communicateUpdateCompletedSubtitle = entry.completedSubtitle;
+    this.communicationHistory.push(loggedEntry);
+    if (entry.finalSummary !== undefined) this.communicationFinalSummary = entry.finalSummary;
+    if (entry.completedSubtitle !== undefined) this.communicationCompletedSubtitle = entry.completedSubtitle;
   }
 
   getNextMessageIndex(): number {
@@ -2448,9 +2449,9 @@ These images can be copied for use in other locations.
     );
   }
 
-  async computeNewStructure(parentContext: OperationContext): Promise<ConversationStateBlobs> {
+  async computeNewStructure(parentContext: OperationContext): Promise<RedactedAgentConversationStateInterop> {
     const previousPending = this.pendingComputeStructure;
-    const computation = (async (): Promise<ConversationStateBlobs> => {
+    const computation = (async (): Promise<RedactedAgentConversationStateInterop> => {
       if (previousPending) {
         await previousPending.catch(() => undefined);
       }
@@ -2460,7 +2461,7 @@ These images can be copied for use in other locations.
     return computation;
   }
 
-  private async doComputeNewStructure(parentContext: OperationContext): Promise<ConversationStateBlobs> {
+  private async doComputeNewStructure(parentContext: OperationContext): Promise<RedactedAgentConversationStateInterop> {
     const env_2: DisposableEnvironmentEntry = { stack: [], error: undefined, hasError: false };
     try {
       const span = createSpan(parentContext.withName("computeNewStructure"));
@@ -2605,9 +2606,9 @@ These images can be copied for use in other locations.
       for (const [subagentId, threadId] of this.subagentThreads) {
         subagentThreadsRecord[subagentId] = threadId;
       }
-      const communicateStatesRecord: Record<string, AgentStateCommunicateTurnStateInterop> = {};
-      for (const [parentToolCallId, state] of this.communicateUpdateStatesByParentToolCallId) {
-        communicateStatesRecord[parentToolCallId] = createAgentStateCommunicateTurnStateInterop({ ...communicateState(state) });
+      const communicationTurnsRecord: Record<string, SlateCommunicationTurnState> = {};
+      for (const [parentToolCallId, state] of this.communicationTurnsByCallId) {
+        communicationTurnsRecord[parentToolCallId] = communicateState(state);
       }
       const plansRecord: Record<string, SlatePlanRegistryEntry> = {};
       for (const [planId, entry] of this.plans) {
@@ -2654,13 +2655,13 @@ These images can be copied for use in other locations.
         completedAskQuestionToolCallIds: Array.from(this.completedAskQuestionToolCallIds),
         plans: plansRecord,
         goalState: this.goalState,
-        communicateUpdateHistory: this.communicateUpdateHistory.map((entry) => createAgentStateCommunicateHistoryEntryInterop({
+        communicationHistory: this.communicationHistory.map((entry) => ({
           step: entry.step,
           messageIndex: entry.messageIndex,
         })),
-        communicateUpdateFinalSummary: this.communicateUpdateFinalSummary!,
-        communicateUpdateCompletedSubtitle: this.communicateUpdateCompletedSubtitle!,
-        communicateUpdateStatesByParentToolCallId: communicateStatesRecord,
+        communicationFinalSummary: this.communicationFinalSummary,
+        communicationCompletedSubtitle: this.communicationCompletedSubtitle,
+        communicationTurnsByCallId: communicationTurnsRecord,
       };
       const { redactedState: nextRedactedState, stats: nextStateStats } =
         encodeSlateConversationStateSnapshotInterop(stateInit, this.conversationStateStructure.privacyMode);

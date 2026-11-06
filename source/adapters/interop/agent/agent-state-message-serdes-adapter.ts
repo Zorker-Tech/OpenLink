@@ -42,6 +42,8 @@ import {
   toRedactedConversationSummary,
   toRedactedConversationSummaryArchive,
   toRedactedConversationStateStructure,
+  toRedactedCommunicateUpdateHistoryEntry,
+  toRedactedCommunicateUpdateTurnState,
   toRedactedSubagentPersistedState,
   toRedactedSubagentRunState,
   toRedactedGoalState,
@@ -91,6 +93,8 @@ import {
 import type {
   SlateConversationState,
   SlateRedactedValue,
+  SlateCommunicationHistoryEntry,
+  SlateCommunicationTurnState,
 } from "../../../packages/agent/conversation-state.ts"
 import type {
   SlateSubagentPersistedState,
@@ -162,8 +166,6 @@ export type RedactedAgentConversationStateInterop = ReturnType<typeof toRedacted
 export type AgentStateSelectedContextInterop = SelectedContext
 export type AgentStateRequestContextInterop = RequestContext
 export type AgentStateGitRepoInfoInterop = GitRepoInfo
-export type AgentStateCommunicateHistoryEntryInterop = CommunicateUpdateHistoryEntry
-export type AgentStateCommunicateTurnStateInterop = CommunicateUpdateTurnState
 export type AgentGoalStateInterop = GoalState
 export type AgentPlanRegistryEntryInterop = PlanRegistryEntry
 export type AgentSubagentPersistedStateInterop = SubagentPersistedState
@@ -282,6 +284,10 @@ export function fromInteropConversationState(
     plans,
     goalState,
     subagentThreads,
+    communicateUpdateHistory,
+    communicateUpdateFinalSummary,
+    communicateUpdateCompletedSubtitle,
+    communicateUpdateStatesByParentToolCallId,
     ...fields
   } = state
   const slateMode = fromInteropAgentMode(mode) ?? SlateMode.UNSPECIFIED
@@ -366,6 +372,38 @@ export function fromInteropConversationState(
         value,
       ]),
     ),
+    communicationHistory: (communicateUpdateHistory ?? []).map((entry: Parameters<typeof fromRedactedCommunicateUpdateHistoryEntry>[0]) => {
+      const value = fromRedactedCommunicateUpdateHistoryEntry(
+        entry,
+        PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+        undefined,
+      )
+      return { step: value.step, messageIndex: value.messageIndex }
+    }),
+    ...(communicateUpdateFinalSummary === undefined
+      ? {}
+      : { communicationFinalSummary: communicateUpdateFinalSummary.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }),
+    ...(communicateUpdateCompletedSubtitle === undefined
+      ? {}
+      : { communicationCompletedSubtitle: communicateUpdateCompletedSubtitle.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }),
+    communicationTurnsByCallId: new Map(
+      entriesOfUnknownStringMap(communicateUpdateStatesByParentToolCallId ?? new Map()).map(([key, value]) => {
+        const turn = fromRedactedCommunicateUpdateTurnState(
+          value as never,
+          PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+          undefined,
+        )
+        const communicationTurn: SlateCommunicationTurnState = {
+          history: turn.history.map((entry): SlateCommunicationHistoryEntry => ({
+            step: entry.step,
+            messageIndex: entry.messageIndex,
+          })),
+          ...(turn.finalSummary === undefined ? {} : { finalSummary: turn.finalSummary }),
+          ...(turn.completedSubtitle === undefined ? {} : { completedSubtitle: turn.completedSubtitle }),
+        }
+        return [slateStringMapKey(key, "communicateUpdateStatesByParentToolCallId"), communicationTurn] as const
+      }),
+    ),
     privacyMode: _privacyMode,
     mode: slateMode,
     ...(toInteropAgentMode(slateMode) === mode ? {} : { unknownModeCode: mode }),
@@ -385,6 +423,10 @@ export function toInteropConversationState(
     goalState,
     subagentStates,
     subagentRunsByParentToolCallId,
+    communicationHistory,
+    communicationFinalSummary,
+    communicationCompletedSubtitle,
+    communicationTurnsByCallId,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
@@ -432,9 +474,30 @@ export function toInteropConversationState(
       ? {}
       : { goalState: toRedactedGoalState(toInteropGoalState(goalState), privacyMode) }),
     trackedGitRepoBranches: fields.trackedGitRepoBranches ?? [],
-    communicateUpdateHistory: fields.communicateUpdateHistory ?? [],
+    communicateUpdateHistory: (communicationHistory ?? []).map((entry) => toRedactedCommunicateUpdateHistoryEntry(
+      new CommunicateUpdateHistoryEntry({ step: entry.step, messageIndex: entry.messageIndex }),
+      privacyMode,
+    )),
     subagentThreads: fields.subagentThreads ?? new Map(),
-    communicateUpdateStatesByParentToolCallId: fields.communicateUpdateStatesByParentToolCallId ?? new Map(),
+    communicateUpdateStatesByParentToolCallId: new Map(
+      entriesOfUnknownStringMap(communicationTurnsByCallId).map(([key, value]) => {
+        const turn = value as SlateCommunicationTurnState
+        return [key, toRedactedCommunicateUpdateTurnState(new CommunicateUpdateTurnState({
+          history: turn.history.map((entry) => new CommunicateUpdateHistoryEntry({
+            step: entry.step,
+            messageIndex: entry.messageIndex,
+          })),
+          ...(turn.finalSummary === undefined ? {} : { finalSummary: turn.finalSummary }),
+          ...(turn.completedSubtitle === undefined ? {} : { completedSubtitle: turn.completedSubtitle }),
+        }), privacyMode)] as const
+      }),
+    ),
+    ...(communicationFinalSummary === undefined
+      ? {}
+      : { communicateUpdateFinalSummary: createRedactedString(communicationFinalSummary, DataClassification.CODE, "communicate_update_final_summary", privacyMode) }),
+    ...(communicationCompletedSubtitle === undefined
+      ? {}
+      : { communicateUpdateCompletedSubtitle: createRedactedString(communicationCompletedSubtitle, DataClassification.CODE, "communicate_update_completed_subtitle", privacyMode) }),
     subagentStateRefs: fields.subagentStateRefs ?? new Map(),
     completedAskQuestionToolCallIds: fields.completedAskQuestionToolCallIds ?? [],
     readPaths: readPaths.map(path => createRedactedString(
@@ -616,25 +679,6 @@ export function createAgentSubagentRunStateInterop(
   return new SubagentRunState(input)
 }
 
-export function createAgentStateCommunicateHistoryEntryInterop(input: {
-  readonly step: string
-  readonly messageIndex: number
-}): AgentStateCommunicateHistoryEntryInterop {
-  return new CommunicateUpdateHistoryEntry(input)
-}
-
-export function createAgentStateCommunicateTurnStateInterop(input: {
-  readonly history?: readonly AgentStateCommunicateHistoryEntryInterop[]
-  readonly finalSummary?: string
-  readonly completedSubtitle?: string
-}): AgentStateCommunicateTurnStateInterop {
-  return new CommunicateUpdateTurnState({
-    ...(input.history === undefined ? {} : { history: [...input.history] }),
-    ...(input.finalSummary === undefined ? {} : { finalSummary: input.finalSummary }),
-    ...(input.completedSubtitle === undefined ? {} : { completedSubtitle: input.completedSubtitle }),
-  })
-}
-
 export function emptyAgentSelectedContextInterop(): AgentStateSelectedContextInterop {
   return new SelectedContext()
 }
@@ -688,6 +732,10 @@ export function encodeSlateConversationStateSnapshotInterop(
     goalState: slateGoal,
     subagentStates: slateSubagentStates,
     subagentRunsByParentToolCallId: slateSubagentRuns,
+    communicationHistory: slateCommunicationHistory,
+    communicationFinalSummary: slateCommunicationFinalSummary,
+    communicationCompletedSubtitle: slateCommunicationCompletedSubtitle,
+    communicationTurnsByCallId: slateCommunicationTurns,
     ...stateFields
   } = snapshot
   const plans = Object.fromEntries(
@@ -711,6 +759,22 @@ export function encodeSlateConversationStateSnapshotInterop(
       toInteropSubagentRunState(run as SlateSubagentRunState),
     ]),
   )
+  const communicateUpdateHistory = ((slateCommunicationHistory as readonly SlateCommunicationHistoryEntry[] | undefined) ?? []).map((value) => {
+    return new CommunicateUpdateHistoryEntry({ step: value.step, messageIndex: value.messageIndex })
+  })
+  const communicateUpdateStatesByParentToolCallId = Object.fromEntries(
+    entriesOfUnknownStringMap(slateCommunicationTurns).map(([callId, value]) => {
+      const turn = value as SlateCommunicationTurnState
+      return [callId, new CommunicateUpdateTurnState({
+        history: turn.history.map((entry) => new CommunicateUpdateHistoryEntry({
+          step: entry.step,
+          messageIndex: entry.messageIndex,
+        })),
+        ...(turn.finalSummary === undefined ? {} : { finalSummary: turn.finalSummary }),
+        ...(turn.completedSubtitle === undefined ? {} : { completedSubtitle: turn.completedSubtitle }),
+      })] as const
+    }),
+  )
   const fileStatesV2 = Object.fromEntries(
     Object.entries((snapshot.fileStatesV2 as Record<string, {
       readonly contentBlobId?: Uint8Array
@@ -731,6 +795,14 @@ export function encodeSlateConversationStateSnapshotInterop(
     ...(goalState === undefined ? {} : { goalState }),
     subagentStates,
     subagentRunsByParentToolCallId,
+    communicateUpdateHistory,
+    ...(slateCommunicationFinalSummary === undefined
+      ? {}
+      : { communicateUpdateFinalSummary: slateCommunicationFinalSummary }),
+    ...(slateCommunicationCompletedSubtitle === undefined
+      ? {}
+      : { communicateUpdateCompletedSubtitle: slateCommunicationCompletedSubtitle }),
+    communicateUpdateStatesByParentToolCallId,
     fileStatesV2,
   } as never)
   return {

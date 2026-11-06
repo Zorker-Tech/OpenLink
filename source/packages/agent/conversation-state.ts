@@ -14,6 +14,17 @@ export interface SlateConversationTokenDetails {
   readonly [key: string]: unknown
 }
 
+export interface SlateCommunicationHistoryEntry {
+  readonly step: string
+  readonly messageIndex: number
+}
+
+export interface SlateCommunicationTurnState {
+  readonly history: readonly SlateCommunicationHistoryEntry[]
+  readonly finalSummary?: string
+  readonly completedSubtitle?: string
+}
+
 export interface SlateFileStateBlobs {
   readonly contentBlobId?: Uint8Array
   readonly initialContentBlobId?: Uint8Array
@@ -45,14 +56,11 @@ export interface SlateConversationState {
   readonly plans?: ReadonlyMap<string, SlatePlanRegistryEntry>
   readonly trackedGitRepoBranches?: readonly SlateTrackedGitRepository[]
   readonly agentType?: string
-  readonly communicateUpdateHistory?: readonly {
-    readonly step: SlateRedactedValue<string>
-    readonly messageIndex: number
-  }[]
+  readonly communicationHistory?: readonly SlateCommunicationHistoryEntry[]
   readonly subagentThreads?: ReadonlyMap<string, string> | Record<string, string>
-  readonly communicateUpdateFinalSummary?: SlateRedactedValue<string>
-  readonly communicateUpdateCompletedSubtitle?: SlateRedactedValue<string>
-  readonly communicateUpdateStatesByParentToolCallId?: ReadonlyMap<string, unknown> | Record<string, unknown>
+  readonly communicationFinalSummary?: string
+  readonly communicationCompletedSubtitle?: string
+  readonly communicationTurnsByCallId?: ReadonlyMap<string, SlateCommunicationTurnState> | Record<string, SlateCommunicationTurnState>
   readonly subagentStates?: ReadonlyMap<string, SlateSubagentPersistedState>
   readonly subagentRunsByParentToolCallId?: ReadonlyMap<string, SlateSubagentRunState>
   readonly conversationStartedTimestampMs?: bigint
