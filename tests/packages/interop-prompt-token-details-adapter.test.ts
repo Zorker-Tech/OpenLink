@@ -9,15 +9,12 @@ import {
   PromptTokenBreakdownSnapshot,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import {
+  promptContextUsageTreeFromProto,
   promptContextUsageTreeToProto,
   promptTokenBreakdownFromProto,
   promptTokenBreakdownToProto,
   redactedPromptTokenDetailsCodec,
 } from "../../source/adapters/interop/agent/redacted-prompt-token-details-adapter.ts";
-import {
-  decodeInteropPromptTokenBreakdown,
-  encodeInteropPromptTokenBreakdown,
-} from "../../source/adapters/interop/agent/summarize-action-adapter.ts";
 import type {
   PromptContextUsageTreeValue,
   PromptTokenBreakdownSnapshotValue,
@@ -42,10 +39,6 @@ describe("prompt usage wire adapter", () => {
     assert.deepEqual(redactedPromptTokenDetailsCodec.decodeBreakdown(
       redactedPromptTokenDetailsCodec.encodeBreakdown(value, PrivacyMode.NO_STORAGE),
     ), value);
-    assert.deepEqual(
-      decodeInteropPromptTokenBreakdown(encodeInteropPromptTokenBreakdown(value, PrivacyMode.NO_STORAGE)),
-      value,
-    );
   });
 
   it("maps Slate usage-tree values into generated nodes and source references", () => {
@@ -75,6 +68,7 @@ describe("prompt usage wire adapter", () => {
       wire.nodes[0]?.source?.startOffset,
       wire.nodes[0]?.source?.endOffset,
     ], [1, "message:0:root:0", "category:conversation", 0, 12]);
+    assert.deepEqual(promptContextUsageTreeFromProto(wire), value);
 
     const redacted = redactedPromptTokenDetailsCodec.encodeUsageTree(value, PrivacyMode.NO_STORAGE);
     assert.equal(redacted._privacyMode, PrivacyMode.NO_STORAGE);

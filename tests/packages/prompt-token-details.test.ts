@@ -2,16 +2,20 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import type { PromptTokenBreakdownSnapshotValue } from "../../source/packages/agent/utils/prompt-usage-contracts.ts"
+import type {
+  PromptContextUsageTreeValue,
+  PromptTokenBreakdownSnapshotValue,
+} from "../../source/packages/agent/utils/prompt-usage-contracts.ts"
 import {
   PROMPT_TOKEN_CATEGORIES,
   buildPromptTokenBreakdownSnapshot,
   buildSummarizeRefreshSnapshot,
 } from "../../source/packages/agent/utils/prompt-token-breakdown.ts"
 import { buildPromptContextUsageTree } from "../../source/packages/agent/utils/prompt-context-usage-tree.ts"
-import { computeNextRedactedPromptContextDetails } from "../../source/packages/agent/utils/next-redacted-prompt-context-details.ts"
-import { redactedPromptTokenDetailsCodec } from "../../source/adapters/interop/agent/redacted-prompt-token-details-adapter.ts"
+import {
+  computeNextPromptContextDetails,
+  type PromptTokenDetailsState,
+} from "../../source/packages/agent/utils/next-redacted-prompt-context-details.ts"
 import type { PromptMessageLike, PromptToolLike } from "../../source/packages/agent/utils/prompt-shapes.ts"
 
 const ctx = () => createContext()
@@ -569,65 +573,54 @@ test("a value that cannot be serialized is left out rather than breaking the tre
 // next-redacted-prompt-context-details: the details a reader may see
 // ---------------------------------------------------------------------------------------------
 
-function detailsState(overrides: Record<string, unknown> = {}) {
-  return {
-    tokenDetails: {},
-    getPrivacyMode: () => PrivacyMode.UNSPECIFIED,
-    ...overrides,
-  } as unknown as Parameters<typeof computeNextRedactedPromptContextDetails>[2]
+function detailsState(overrides: { readonly tokenDetails?: PromptTokenDetailsState["tokenDetails"] } = {}): PromptTokenDetailsState {
+  return { tokenDetails: overrides.tokenDetails ?? {} }
 }
 
-test("the details are computed and converted, and the raw prompt does not travel with them", () => {
-  const details = computeNextRedactedPromptContextDetails(
+test("Slate token details are computed without retaining prompt text", () => {
+  const details = computeNextPromptContextDetails(
     ctx(),
     {},
     detailsState(),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
-    redactedPromptTokenDetailsCodec,
   )
-  assert.ok(details.breakdown)
-  assert.equal((details.breakdown as { totalUsedTokens?: number }).totalUsedTokens, 500)
+  assert.equal(details.breakdown.totalUsedTokens, 500)
   assert.equal(JSON.stringify(details.breakdown).includes("the summary of everything so far"), false)
 })
 
-test("the tree is carried over untouched when the feature is off", () => {
-  const previousTree = { _privacyMode: PrivacyMode.UNSPECIFIED, schemaVersion: 1, nodes: [] }
-  const details = computeNextRedactedPromptContextDetails(
+test("the previous Slate context tree is carried over untouched when the feature is off", () => {
+  const previousTree: PromptContextUsageTreeValue = { schemaVersion: 1, nodes: [] }
+  const details = computeNextPromptContextDetails(
     ctx(),
     { featureFlags: { promptContextUsageTree: false } },
-    detailsState({ tokenDetails: { promptContextUsageTree: previousTree } }),
+    detailsState({ tokenDetails: { contextTree: previousTree } }),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
-    redactedPromptTokenDetailsCodec,
   )
-  assert.equal(details.promptContextUsageTree, previousTree)
+  assert.equal(details.contextTree, previousTree)
 })
 
-test("the tree is rebuilt when the feature is on, replacing the previous one", () => {
-  const previousTree = { _privacyMode: PrivacyMode.UNSPECIFIED, schemaVersion: 1, nodes: [] }
-  const details = computeNextRedactedPromptContextDetails(
+test("the Slate context tree is rebuilt when the feature is on, replacing the previous one", () => {
+  const previousTree: PromptContextUsageTreeValue = { schemaVersion: 1, nodes: [] }
+  const details = computeNextPromptContextDetails(
     ctx(),
     { featureFlags: { promptContextUsageTree: true } },
-    detailsState({ tokenDetails: { promptContextUsageTree: previousTree } }),
+    detailsState({ tokenDetails: { contextTree: previousTree } }),
     { messages: samplePrompt() as never, tools: simpleTools as never, totalUsedTokens: 500, maxTokens: 8_000 },
-    redactedPromptTokenDetailsCodec,
   )
-  assert.notEqual(details.promptContextUsageTree, previousTree)
-  const tree = details.promptContextUsageTree as { schemaVersion?: number; nodes?: unknown[] }
-  assert.equal(tree.schemaVersion, 1)
-  assert.ok((tree.nodes?.length ?? 0) > 0)
+  assert.notEqual(details.contextTree, previousTree)
+  assert.equal(details.contextTree?.schemaVersion, 1)
+  assert.ok((details.contextTree?.nodes.length ?? 0) > 0)
 })
 
 test("the previous breakdown is fed back in, so the categories stay stable across turns", () => {
   const params = { messages: samplePrompt() as never, tools: simpleTools as never, maxTokens: 8_000 }
-  const first = computeNextRedactedPromptContextDetails(ctx(), {}, detailsState(), { ...params, totalUsedTokens: 1_000 }, redactedPromptTokenDetailsCodec)
-  const second = computeNextRedactedPromptContextDetails(
+  const first = computeNextPromptContextDetails(ctx(), {}, detailsState(), { ...params, totalUsedTokens: 1_000 })
+  const second = computeNextPromptContextDetails(
     ctx(),
     {},
     detailsState({ tokenDetails: { breakdown: first.breakdown } }),
     { ...params, totalUsedTokens: 1_000 },
-    redactedPromptTokenDetailsCodec,
   )
-  const categoriesOfDetails = (details: { breakdown?: unknown }) =>
-    (details.breakdown as { categories: Array<{ id: string; estimatedTokens: number }> }).categories
+  const categoriesOfDetails = (details: { breakdown: PromptTokenBreakdownSnapshotValue }) => details.breakdown.categories
   assert.deepEqual(categoriesOfDetails(second), categoriesOfDetails(first))
 })

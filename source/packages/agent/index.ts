@@ -22,7 +22,6 @@ import { createHistogram } from "../metrics/index.ts";
 import { PrivacyMode } from "../redaction/privacy-mode.ts";
 import { restoreAgentConversationState } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
 import { redactInteractionUpdate } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
-import { createInteropConversationTokenDetails } from "../../adapters/interop/agent/summarize-action-adapter.ts";
 // the session and its state
 import { drainPendingWritesOnRunStreamError } from "./abort-drain.ts";
 import { normalizeAgentConfig } from "./agent-config-runtime.ts";
@@ -247,7 +246,10 @@ export class AgentRoot {
     const silentListener = { sendUpdate: async () => {}, query: async () => { throw new Error("Interaction queries are not supported during summarization"); } };
     const summarizedState = await this.orchestrator.handleSummarization(executionSpan.ctx, stateHandler, promptExecutor, silentListener, this.config, requestContext, { backgroundSummarizationMode: BackgroundSummarizationMode.WaitForCompletion, triggerReason: "approaching_token_limit", resourceAccessor: this.resourceAccessor, forceExternalModel: true, currentInvocationId: (stateHandler as Any).lastStepInvocationId });
     if (summarizedState === undefined) return undefined;
-    stateHandler.setTokenDetails(createInteropConversationTokenDetails(stateHandler.getPrivacyMode(), { usedTokens: estimateTokenCount(promptExecutor.getMessages() as Any), maxTokens: stateHandler.tokenDetails.maxTokens, breakdown: undefined, promptContextUsageTree: undefined }));
+    stateHandler.setTokenDetails({
+      usedTokens: estimateTokenCount(promptExecutor.getMessages() as Any),
+      maximumTokens: stateHandler.tokenDetails.maximumTokens,
+    });
     return restoreAgentConversationState(await stateHandler.computeNewStructure(executionSpan.ctx));
   }
 

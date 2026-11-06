@@ -35,12 +35,10 @@ import {
   fromInteropToolCallStep,
   fromInteropConversationState,
   attachProcessedSelectedMediaToSlateContext,
-  createRedactedConversationTokenDetailsInterop,
   type AgentStateGitRepoInfoInterop,
   type AgentStateRequestContextInterop,
   type RedactedAgentConversationStateInterop,
   encodeSlateConversationStateSnapshotInterop,
-  fromRedactedConversationTokenDetailsInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
@@ -70,6 +68,7 @@ import type {
   SlateCommunicationHistoryEntry,
   SlateCommunicationTurnState,
   SlateConversationState,
+  SlateConversationTokenDetails,
 } from "./conversation-state.ts"
 import {
   slateConversationPlanFromValue,
@@ -918,10 +917,7 @@ type SerializeMessage = {
   readonly [key: string]: unknown;
 };
 
-type TokenDetails = {
-  readonly promptContextUsageTree?: Parameters<typeof persistPromptContextUsageSnapshot>[0]["usageTree"];
-  readonly [key: string]: unknown;
-};
+type TokenDetails = SlateConversationTokenDetails;
 
 type PromptBuilder = {
   appendMessages(messages: unknown | readonly unknown[]): void;
@@ -1620,7 +1616,7 @@ export class ConversationStateHandle {
     const conversationTurnHandleSerde = this.createConversationTurnHandleSerde();
     this.turns = this.conversationStateStructure.turns.map((blobId) => new LazyReference(conversationTurnHandleSerde, this.blobStore, blobId));
     this.todos = this.conversationStateStructure.todos.map((blobId) => new LazyReference(this.serdes.todoItem, this.blobStore, blobId));
-    this.tokenDetails = this.conversationStateStructure.tokenDetails ?? createRedactedConversationTokenDetailsInterop(this.conversationStateStructure.privacyMode, {});
+    this.tokenDetails = this.conversationStateStructure.tokenDetails ?? { usedTokens: 0, maximumTokens: 0 };
     if (this.conversationStateStructure.summary !== undefined) {
       this.summary = new LazyReference(this.serdes.conversationSummary, this.blobStore, this.conversationStateStructure.summary);
     }
@@ -2616,7 +2612,7 @@ These images can be copied for use in other locations.
       }
       await subagentRefsPromise;
       const rootPromptMessagesJson = await newRootPromptMessagesJsonPromise;
-      const usageTree = this.tokenDetails.promptContextUsageTree;
+      const usageTree = this.tokenDetails.contextTree;
       const promptContextUsageSnapshotBlobId = await persistPromptContextUsageSnapshot({
         ctx: quietContext,
         blobStore: this.blobStore,
@@ -2624,8 +2620,16 @@ These images can be copied for use in other locations.
         usageTree,
         rootPromptMessagesJson,
       });
-      const tokenDetails = fromRedactedConversationTokenDetailsInterop(this.tokenDetails, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined);
-      tokenDetails.promptContextUsageSnapshotBlobId = promptContextUsageSnapshotBlobId!;
+      const tokenDetails: SlateConversationTokenDetails = {
+        usedTokens: this.tokenDetails.usedTokens,
+        maximumTokens: this.tokenDetails.maximumTokens,
+        ...(this.tokenDetails.breakdown === undefined ? {} : { breakdown: this.tokenDetails.breakdown }),
+        ...(this.tokenDetails.contextTree === undefined ? {} : { contextTree: this.tokenDetails.contextTree }),
+        ...(this.tokenDetails.compatibility === undefined ? {} : { compatibility: this.tokenDetails.compatibility }),
+        ...(promptContextUsageSnapshotBlobId === undefined
+          ? {}
+          : { usageSnapshotBlobId: new Uint8Array(promptContextUsageSnapshotBlobId) }),
+      };
       const stateInit = {
         rootPromptMessagesJson,
         turns: await newTurnsPromise,

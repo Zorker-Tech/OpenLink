@@ -63,12 +63,12 @@ test("file, line and context helpers answer the questions the prompt assembly as
   assert.equal(getFilenameWithoutExtension("C:\\a\\b\\rule.mdc"), "rule")
   assert.equal(getFirstNonEmptyLine("\n\n  title  \nbody"), "  title  ")
   assert.equal(getFirstNonEmptyLine(""), "")
-  assert.deepEqual(getContextUsageInfo({ maxTokens: 200, usedTokens: 50 }), {
+  assert.deepEqual(getContextUsageInfo({ maximumTokens: 200, usedTokens: 50 }), {
     contextWindowSize: 200,
     contextTokens: 50,
     contextUsagePercent: 25,
   })
-  assert.equal(getContextUsageInfo({ maxTokens: 0, usedTokens: 10 }).contextUsagePercent, 0)
+  assert.equal(getContextUsageInfo({ maximumTokens: 0, usedTokens: 10 }).contextUsagePercent, 0)
   assert.equal(isHookStepConfigured(["pre"], "pre"), true)
   assert.equal(isHookStepConfigured(undefined, "pre"), false)
 })
@@ -293,7 +293,7 @@ test("event reporting goes to the tracker the context carries, and nowhere by de
 test("a usage snapshot is written once per prompt, and not at all without storage", async () => {
   const blobStore = new InMemoryBlobStore()
   const ctx = createContext()
-  const tree = { _privacyMode: PrivacyMode.USAGE_DATA_TRAINING_ALLOWED, schemaVersion: 1, nodes: [] }
+  const tree = { schemaVersion: 1, nodes: [] }
   const messages = [new Uint8Array([1, 2, 3])]
 
   const first = await persistPromptContextUsageSnapshot({

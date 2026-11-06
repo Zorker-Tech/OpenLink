@@ -4,7 +4,6 @@ import { RE2JS } from "re2js";
 import {
   AgentModeInterop,
   createEmptyRequestContextInterop,
-  createRedactedConversationTokenDetailsInterop,
   createSyntheticUserMessageInterop,
   fromInteropUserMessage,
   fromRedactedMcpToolDefinitionInterop,
@@ -65,9 +64,9 @@ import { agentStoreConflictNoticeExecutorResource, conflictNoticeAck, conflictNo
 import { sanitizeSystemReminderContent } from "../../../hooks/system-reminder-sanitizing.ts";
 import { extractAutomationTriggerContext, getAllRules } from "../common.ts";
 import { mcpInputSchemaToJson, type McpInputSchemaLike } from "../../../agent-exec/mcp-operations.ts";
-import { redactedPromptTokenDetailsCodec } from "../../../../adapters/interop/agent/redacted-prompt-token-details-adapter.ts";
 import { getInvocationId } from "../../utils/invocation-id.ts";
-import { computeNextRedactedPromptContextDetails } from "../../utils/next-redacted-prompt-context-details.ts";
+import { computeNextPromptContextDetails } from "../../utils/next-redacted-prompt-context-details.ts";
+import type { SlateConversationTokenDetails } from "../../conversation-state.ts";
 import type { PromptTokenBreakdownParams } from "../../utils/prompt-token-breakdown.ts";
 import {
   resolveCurrentStepMode,
@@ -1051,7 +1050,7 @@ interface RunStepStateHandlerLike extends RetryStateHandlerLike, SummarizationSt
   assertRootPromptBlobsLoadedForFullPromptRead(): void;
   invalidateRootPromptPrefix(): void;
   computeNewStructure(runContext: Context): Promise<{ pendingToolCalls: unknown[] }>;
-  setTokenDetails(tokenUsageDetails: ReturnType<typeof createRedactedConversationTokenDetailsInterop>): void;
+  setTokenDetails(tokenUsageDetails: SlateConversationTokenDetails): void;
   addTurnUsage(tokenUsage: {
     readonly inputTokens: number;
     readonly outputTokens: number;
@@ -2048,7 +2047,7 @@ export class AbstractUserMessageActionHandler {
       if (shouldStartBg) {
         agentLogger.info(runContext, "[summarization-trigger] Triggering background summarization since we are below free token threshold", {
           usedTokens: tokenUsageDetails.usedTokens,
-          maxTokens: tokenUsageDetails.maxTokens,
+          maxTokens: tokenUsageDetails.maximumTokens,
           backgroundSummarizationConfig: this.config.backgroundSummarizationProps,
         });
         await this.orchestrator.handleSummarization(
@@ -2115,19 +2114,18 @@ export class AbstractUserMessageActionHandler {
         cacheReadTokens: usageDetails.cacheReadTokens,
         cacheWriteTokens: usageDetails.cacheWriteTokens,
       });
-      const promptContextDetails = computeNextRedactedPromptContextDetails(runContext, this.config, turnState, {
+      const promptContextDetails = computeNextPromptContextDetails(runContext, this.config, turnState, {
         messages: initialMessages as unknown as PromptTokenBreakdownParams["messages"],
         tools: toolSetLease.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
         descriptionProps: toolSetLease.getDescriptionProps(),
         totalUsedTokens: tokenUsage.totalTokens,
         maxTokens: usageDetails.maxTokens,
-      }, redactedPromptTokenDetailsCodec);
-      turnState.setTokenDetails(createRedactedConversationTokenDetailsInterop(turnState.getPrivacyMode(), {
+      });
+      turnState.setTokenDetails({
         usedTokens: tokenUsage.totalTokens,
-        maxTokens: usageDetails.maxTokens,
-        breakdown: promptContextDetails!.breakdown,
-        promptContextUsageTree: promptContextDetails!.promptContextUsageTree,
-      }));
+        maximumTokens: usageDetails.maxTokens,
+        ...promptContextDetails,
+      });
       if (modelResponse.error || runContext.signal.aborted) {
         await this.cancelPendingAgentResponseComparison();
         if (this.config.skipErrorStateCheckpoint !== true) {
@@ -2419,12 +2417,12 @@ export class AbstractUserMessageActionHandler {
           const midLoopTokenDetails = turnState.tokenDetails;
           const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(
             midLoopTokenDetails.usedTokens,
-            midLoopTokenDetails.maxTokens,
+            midLoopTokenDetails.maximumTokens,
             this.config.backgroundSummarizationProps,
           );
           const wouldMeetTriggerThreshold = shouldStartBackgroundSummarization(
             midLoopTokenDetails.usedTokens,
-            midLoopTokenDetails.maxTokens,
+            midLoopTokenDetails.maximumTokens,
             this.config.backgroundSummarizationProps,
           );
           const requireTriggerThreshold = this.config.backgroundSummarizationProps.requireTriggerThresholdForMidLoopPersist === true;
@@ -2435,8 +2433,8 @@ export class AbstractUserMessageActionHandler {
           const shouldPersistMidLoop = shouldPersistForImageThresholdMidLoop || !requireTriggerThreshold || wouldMeetTriggerThreshold;
           agentLogger.info(runContext, "[summarization-persist] Mid-loop background summarization persistence: checking persist threshold", {
             usedTokens: midLoopTokenDetails.usedTokens,
-            maxTokens: midLoopTokenDetails.maxTokens,
-            unusedTokens: midLoopTokenDetails.maxTokens - midLoopTokenDetails.usedTokens,
+            maxTokens: midLoopTokenDetails.maximumTokens,
+            unusedTokens: midLoopTokenDetails.maximumTokens - midLoopTokenDetails.usedTokens,
             wouldMeetPersistThreshold,
             wouldMeetTriggerThreshold,
             requireTriggerThreshold,
@@ -2444,7 +2442,7 @@ export class AbstractUserMessageActionHandler {
             imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
             shouldPersistForImageThresholdMidLoop,
             shouldPersistMidLoop,
-            triggerThreshold: getBackgroundSummarizationTriggerThreshold(midLoopTokenDetails.maxTokens, this.config.backgroundSummarizationProps),
+            triggerThreshold: getBackgroundSummarizationTriggerThreshold(midLoopTokenDetails.maximumTokens, this.config.backgroundSummarizationProps),
             persistConfig: {
               unusedTokensThreshold: this.config.backgroundSummarizationProps.unusedTokensThresholdToPersistBackgroundSummarization,
               unusedPercentTokensThreshold: this.config.backgroundSummarizationProps.unusedPercentTokensThresholdToPersistBackgroundSummarization,
@@ -2465,11 +2463,11 @@ export class AbstractUserMessageActionHandler {
         }
         if (turnState.backgroundSummarizationPromiseInfo !== null && !turnState.backgroundSummarizationHasCompleted) {
           const currentTokenDetails = turnState.tokenDetails;
-          const overageThreshold = Math.min(0.25 * currentTokenDetails.maxTokens, 5e4);
-          if (currentTokenDetails.maxTokens > 0 && currentTokenDetails.usedTokens > currentTokenDetails.maxTokens + overageThreshold) {
+          const overageThreshold = Math.min(0.25 * currentTokenDetails.maximumTokens, 5e4);
+          if (currentTokenDetails.maximumTokens > 0 && currentTokenDetails.usedTokens > currentTokenDetails.maximumTokens + overageThreshold) {
             agentLogger.info(runContext, "[summarization-persist] Blocking on background summarization because token usage significantly exceeds max tokens", {
               usedTokens: currentTokenDetails.usedTokens,
-              maxTokens: currentTokenDetails.maxTokens,
+              maxTokens: currentTokenDetails.maximumTokens,
               overageThreshold,
             });
             await this.orchestrator.handleSummarization(runContext, turnState, promptExecutor, this.interactionListener, this.config, requestState, {
@@ -2504,11 +2502,11 @@ export class AbstractUserMessageActionHandler {
         }
         if (this.config.maxSteps === 1 && this.config.featureFlags?.cloudAgentProactiveTokenLimitError === true && !turnState.tokenDetailsStaleAfterSummarization) {
           const tokenUsageDetails = turnState.tokenDetails;
-          if (shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps)) {
+          if (shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maximumTokens, this.config.backgroundSummarizationProps)) {
             const useProactiveSelfSummarization = this.config.featureFlags?.cloudAgentProactiveSelfSummarization === true;
             agentLogger.info(runContext, useProactiveSelfSummarization ? "[cloud-summarization] Token usage hit configured threshold, throwing ProactiveSummarizationThresholdError to trigger compaction" : "[cloud-summarization] Token usage hit configured threshold, throwing InputTokenLimitError to trigger external compaction", {
               usedTokens: tokenUsageDetails.usedTokens,
-              maxTokens: tokenUsageDetails.maxTokens,
+              maxTokens: tokenUsageDetails.maximumTokens,
               useProactiveSelfSummarization,
             });
             throw useProactiveSelfSummarization ? new ProactiveSummarizationThresholdError() : new InputTokenLimitError();
@@ -2741,7 +2739,7 @@ export class AbstractUserMessageActionHandler {
             const backgroundSummarizationPromiseInfo = turnState.backgroundSummarizationPromiseInfo;
             const tokenUsageDetails = turnState.tokenDetails;
             const isSelfSummary = backgroundSummarizationPromiseInfo.summarizerType === "self";
-            const shouldPersistForTokenThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+            const shouldPersistForTokenThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maximumTokens, this.config.backgroundSummarizationProps);
             const endOfTurnMessages = fromRedactedCoreMessages(promptExecutor.getMessages(), PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
             const imageCountAtTurnEnd = countImagePartsInMessages(endOfTurnMessages);
             const shouldPersistForImageThreshold = imageCountAtTurnEnd >= IMAGE_SUMMARIZATION_TRIGGER_COUNT;
@@ -2760,7 +2758,7 @@ export class AbstractUserMessageActionHandler {
                 } else {
                   agentLogger.info(runContext, "[summarization-persist] At end of turn, background summarization has completed and persistence threshold has been hit. Persisting summarization.", {
                     usedTokens: tokenUsageDetails.usedTokens,
-                    maxTokens: tokenUsageDetails.maxTokens,
+                    maxTokens: tokenUsageDetails.maximumTokens,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     shouldPersistForImageThreshold,
@@ -2774,13 +2772,13 @@ export class AbstractUserMessageActionHandler {
                   });
                 }
               } else {
-                const overageThreshold = Math.min(0.25 * tokenUsageDetails.maxTokens, 5e4);
-                const shouldBlockForTokenOverage = tokenUsageDetails.maxTokens > 0 && tokenUsageDetails.usedTokens > tokenUsageDetails.maxTokens + overageThreshold;
+                const overageThreshold = Math.min(0.25 * tokenUsageDetails.maximumTokens, 5e4);
+                const shouldBlockForTokenOverage = tokenUsageDetails.maximumTokens > 0 && tokenUsageDetails.usedTokens > tokenUsageDetails.maximumTokens + overageThreshold;
                 const shouldBlockForImageThreshold = shouldPersistForImageThreshold;
                 if (shouldBlockForTokenOverage || shouldBlockForImageThreshold) {
                   agentLogger.info(runContext, shouldBlockForImageThreshold ? "[summarization-persist] At end of turn, blocking on background summarization before persistence because image count reached threshold" : "[summarization-persist] At end of turn, blocking on background summarization because token usage significantly exceeds max tokens", {
                     usedTokens: tokenUsageDetails.usedTokens,
-                    maxTokens: tokenUsageDetails.maxTokens,
+                    maxTokens: tokenUsageDetails.maximumTokens,
                     overageThreshold,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
@@ -2797,7 +2795,7 @@ export class AbstractUserMessageActionHandler {
                 } else {
                   agentLogger.info(runContext, "[summarization-discard] At end of turn, persistence threshold is met, but we are discarding background summarization as it has not completed", {
                     usedTokens: tokenUsageDetails.usedTokens,
-                    maxTokens: tokenUsageDetails.maxTokens,
+                    maxTokens: tokenUsageDetails.maximumTokens,
                     imageCountAtTurnEnd,
                     imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                     shouldPersistForImageThreshold,
@@ -2808,7 +2806,7 @@ export class AbstractUserMessageActionHandler {
             } else if (isSelfSummary) {
               agentLogger.info(runContext, "[summarization-discard] At end of turn, discarding self-summary as persistence threshold is not met", {
                 usedTokens: tokenUsageDetails.usedTokens,
-                maxTokens: tokenUsageDetails.maxTokens,
+                maxTokens: tokenUsageDetails.maximumTokens,
                 imageCountAtTurnEnd,
                 imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                 shouldPersistForImageThreshold,
@@ -2818,7 +2816,7 @@ export class AbstractUserMessageActionHandler {
             } else {
               agentLogger.info(runContext, "[summarization-discard] At end of turn, we are discarding background summarization as persistence threshold is not met", {
                 usedTokens: tokenUsageDetails.usedTokens,
-                maxTokens: tokenUsageDetails.maxTokens,
+                maxTokens: tokenUsageDetails.maximumTokens,
                 imageCountAtTurnEnd,
                 imageThreshold: IMAGE_SUMMARIZATION_TRIGGER_COUNT,
                 shouldPersistForImageThreshold,
@@ -2826,7 +2824,7 @@ export class AbstractUserMessageActionHandler {
                 backgroundSummarizationHasCompleted: turnState.backgroundSummarizationHasCompleted,
               });
               const completed = turnState.backgroundSummarizationHasCompleted;
-              const triggerThreshold = getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+              const triggerThreshold = getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maximumTokens, this.config.backgroundSummarizationProps);
               let retryReason = completed ? "threshold_not_met_completed" : "threshold_not_met_not_completed";
               if (triggerThreshold !== undefined && tokenUsageDetails.usedTokens < triggerThreshold * 0.6) retryReason = "incorrectly_triggered_summarization";
               backgroundSummarizationDiscarded.increment(runContext, 1, { reason: retryReason, model: backgroundSummarizationPromiseInfo.modelId });
@@ -3992,13 +3990,13 @@ export class AbstractUserMessageActionHandler {
     const shouldSuppressSelfSummaryAfterInputLimitFailure = turnState.shouldSuppressSelfSummaryAfterInputLimitFailure(tokenUsageDetails.usedTokens);
     const shouldStartBg = !isCloudAgentSingleStep && !turnState.tokenDetailsStaleAfterSummarization && !shouldSuppressSelfSummaryAfterInputLimitFailure && this.orchestrator.shouldStartBackgroundSummarization(tokenUsageDetails, promptExecutor.getMessages(), runContext);
     if (shouldStartBg) {
-      const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps);
+      const wouldMeetPersistThreshold = shouldPersistBackgroundSummarization(tokenUsageDetails.usedTokens, tokenUsageDetails.maximumTokens, this.config.backgroundSummarizationProps);
       agentLogger.info(runContext, "Mid-loop background summarization trigger (model-stream-only): checking persist threshold", {
         usedTokens: tokenUsageDetails.usedTokens,
-        maxTokens: tokenUsageDetails.maxTokens,
-        unusedTokens: tokenUsageDetails.maxTokens - tokenUsageDetails.usedTokens,
+        maxTokens: tokenUsageDetails.maximumTokens,
+        unusedTokens: tokenUsageDetails.maximumTokens - tokenUsageDetails.usedTokens,
         wouldMeetPersistThreshold,
-        triggerThreshold: getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maxTokens, this.config.backgroundSummarizationProps),
+        triggerThreshold: getBackgroundSummarizationTriggerThreshold(tokenUsageDetails.maximumTokens, this.config.backgroundSummarizationProps),
         backgroundSummarizationConfig: this.config.backgroundSummarizationProps,
         persistConfig: {
           unusedTokensThreshold: this.config.backgroundSummarizationProps.unusedTokensThresholdToPersistBackgroundSummarization,
@@ -4063,19 +4061,18 @@ export class AbstractUserMessageActionHandler {
       cacheReadTokens: usageDetails.cacheReadTokens,
       cacheWriteTokens: usageDetails.cacheWriteTokens,
     });
-    const promptContextDetails = computeNextRedactedPromptContextDetails(runContext, this.config, turnState, {
+    const promptContextDetails = computeNextPromptContextDetails(runContext, this.config, turnState, {
       messages: initialMessages as unknown as PromptTokenBreakdownParams["messages"],
       tools: toolSetLease.getStaticTools() as unknown as PromptTokenBreakdownParams["tools"],
       descriptionProps: toolSetLease.getDescriptionProps(),
       totalUsedTokens: tokenUsage.totalTokens,
       maxTokens: usageDetails.maxTokens,
-    }, redactedPromptTokenDetailsCodec);
-    turnState.setTokenDetails(createRedactedConversationTokenDetailsInterop(turnState.getPrivacyMode(), {
+    });
+    turnState.setTokenDetails({
       usedTokens: tokenUsage.totalTokens,
-      maxTokens: usageDetails.maxTokens,
-      breakdown: promptContextDetails!.breakdown,
-      promptContextUsageTree: promptContextDetails!.promptContextUsageTree,
-    }));
+      maximumTokens: usageDetails.maxTokens,
+      ...promptContextDetails,
+    });
     if (modelResponse.error || runContext.signal.aborted) {
       await this.cancelPendingAgentResponseComparison();
       if (this.config.skipErrorStateCheckpoint !== true) {

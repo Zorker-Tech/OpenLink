@@ -1,18 +1,13 @@
 import type { BlobStore } from "../../agent-kv/blob-store.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-
-export interface RedactedPromptContextUsageTree {
-  readonly _privacyMode: PrivacyMode
-  readonly schemaVersion: number
-  readonly nodes: readonly unknown[]
-}
+import type { PromptContextUsageTreeValue } from "./prompt-usage-contracts.ts"
 
 export interface PersistPromptContextUsageSnapshotOptions<Context> {
   readonly blobStore: BlobStore<Context>
   readonly ctx: Context
   readonly privacyMode: PrivacyMode
   readonly rootPromptMessagesJson: readonly Uint8Array[]
-  readonly usageTree: RedactedPromptContextUsageTree | undefined
+  readonly usageTree: PromptContextUsageTreeValue | undefined
 }
 
 export interface SerializedUsageSnapshotCacheValue {

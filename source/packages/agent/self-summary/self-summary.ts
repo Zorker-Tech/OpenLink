@@ -34,7 +34,7 @@ export type { SelfSummaryMessage } from "./self-summary-message-window.ts";
 
 export interface SelfSummaryTokenDetails {
   readonly usedTokens?: number | undefined;
-  readonly maxTokens?: number | undefined;
+  readonly maximumTokens?: number | undefined;
 }
 
 const logger = createLogger("@slate/agent");
@@ -65,6 +65,6 @@ export function shouldPerformSelfSummary(
     tokenCount,
     evalOverrideLimit,
     configTokenLimit,
-    maxTokens: tokenDetails?.maxTokens,
+    maxTokens: tokenDetails?.maximumTokens,
   });
 }

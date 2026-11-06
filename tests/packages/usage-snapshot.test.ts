@@ -17,7 +17,6 @@ test("usage snapshots report their wire type through the store metadata port", a
     privacyMode: PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
     rootPromptMessagesJson: [new Uint8Array([1, 2, 3])],
     usageTree: {
-      _privacyMode: PrivacyMode.USAGE_DATA_TRAINING_ALLOWED,
       schemaVersion: 1,
       nodes: [],
     },

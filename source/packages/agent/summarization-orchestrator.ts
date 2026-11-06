@@ -48,6 +48,7 @@ import type {
   SummarizationHookResultInterop,
 } from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
 import type { SlateConversationSummaryArchive } from "./conversation-summary-state.ts"
+import type { SlateConversationTokenDetails } from "./conversation-state.ts"
 import { PrivacyCapability } from "../redaction/classification.ts"
 import {
   fromRedactedCoreMessage,
@@ -98,10 +99,7 @@ type ProjectRootPromptOptions = NonNullable<Parameters<typeof formatProjectCompa
 type SummaryArchive = SlateConversationSummaryArchive
 type SummaryCompletedHookMessage = Parameters<typeof Updates.summaryCompleted>[0]
 
-export interface SummarizationTokenDetails {
-  readonly usedTokens: number
-  readonly maxTokens: number
-}
+export interface SummarizationTokenDetails extends SlateConversationTokenDetails {}
 
 export interface SummarizationResult {
   readonly messagesActuallySummarized: readonly RedactedCoreMessage[]
@@ -146,7 +144,7 @@ export interface BackgroundSummarizationPromiseInfo {
   readonly summarizerType: "external" | "self"
   readonly startInvocationId: string
   readonly startUsedTokens: number
-  readonly startMaxTokens: number
+  readonly startMaximumTokens: number
 }
 
 export interface SummarizationStateHandler extends ProjectConversationState {
@@ -363,7 +361,7 @@ export class SummarizationOrchestrator {
       logger.info(ctx, "[summarization] using eval override for max tokens before summarization", {
         evalMaxTokens,
         usedTokens: tokenUsage.usedTokens,
-        maxTokens: tokenUsage.maxTokens,
+        maxTokens: tokenUsage.maximumTokens,
       })
       return true
     }
@@ -372,7 +370,7 @@ export class SummarizationOrchestrator {
       : undefined
     const backgroundWanted = this.backgroundSummarizationProps && shouldStartBackgroundSummarization(
       tokenUsage.usedTokens,
-      tokenUsage.maxTokens,
+      tokenUsage.maximumTokens,
       this.backgroundSummarizationProps,
     )
     const selfWanted = this.selfSummarizerFactory &&
@@ -381,7 +379,7 @@ export class SummarizationOrchestrator {
         messageList as Parameters<typeof shouldPerformSelfSummary>[0],
         tokenUsage,
         ctx,
-        this.resolveSummaryTokenLimit(tokenUsage.maxTokens, evalLimit),
+        this.resolveSummaryTokenLimit(tokenUsage.maximumTokens, evalLimit),
       )
     return Boolean(backgroundWanted || selfWanted)
   }
@@ -586,7 +584,7 @@ export class SummarizationOrchestrator {
                 ? true
                 : undefined,
             cancellationToken: cancelSignal,
-            contextWindowTokens: agentState.tokenDetails.maxTokens,
+            contextWindowTokens: agentState.tokenDetails.maximumTokens,
           })
           const generationElapsedMs = performance.now() - generationStartMs
           summarizationGenerationTime.histogram(ctx, generationElapsedMs, {
@@ -634,7 +632,7 @@ export class SummarizationOrchestrator {
         summarizerType,
         startInvocationId: settings.currentInvocationId,
         startUsedTokens: agentState.tokenDetails.usedTokens,
-        startMaxTokens: agentState.tokenDetails.maxTokens,
+        startMaximumTokens: agentState.tokenDetails.maximumTokens,
       }, conversationMessages, cancelSignal)
     }
 
@@ -895,7 +893,7 @@ export class SummarizationOrchestrator {
         summarizationStartInvocationId: inFlightInfo.startInvocationId,
         summarizationPersistInvocationId: settings.currentInvocationId,
         triggerTokensUsed: inFlightInfo.startUsedTokens,
-        triggerTokensMax: inFlightInfo.startMaxTokens,
+        triggerTokensMax: inFlightInfo.startMaximumTokens,
         additionalMessagesCount: postSummaryMessages.length,
         additionalUserMessageCount: postSummaryKinds.userMessages,
         additionalSystemMessageCount: postSummaryKinds.systemMessages,

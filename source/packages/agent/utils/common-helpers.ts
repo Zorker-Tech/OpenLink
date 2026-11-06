@@ -18,18 +18,18 @@ export function getFirstNonEmptyLine(content: string): string {
 }
 
 export function getContextUsageInfo(tokenDetails: {
-  maxTokens: number
+  maximumTokens: number
   usedTokens: number
 }): {
   contextWindowSize: number
   contextTokens: number
   contextUsagePercent: number
 } {
-  const { maxTokens, usedTokens } = tokenDetails
+  const { maximumTokens, usedTokens } = tokenDetails
   return {
-    contextWindowSize: maxTokens,
+    contextWindowSize: maximumTokens,
     contextTokens: usedTokens,
-    contextUsagePercent: maxTokens > 0 ? (usedTokens / maxTokens) * 100 : 0,
+    contextUsagePercent: maximumTokens > 0 ? (usedTokens / maximumTokens) * 100 : 0,
   }
 }
 

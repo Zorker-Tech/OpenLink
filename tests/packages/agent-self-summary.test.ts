@@ -53,7 +53,7 @@ test("a summary is not a user message unless the caller wants it to count", () =
 test("a conversation with enough turns is summarized whatever its size", () => {
   const long = turns(SELF_SUMMARY_NUM_TURNS)
   assert.equal(shouldPerformSelfSummary(long, undefined, undefined, undefined), true)
-  assert.equal(shouldPerformSelfSummary(turns(SELF_SUMMARY_NUM_TURNS - 1), { usedTokens: 1, maxTokens: 1_000_000 }, undefined, undefined), false)
+  assert.equal(shouldPerformSelfSummary(turns(SELF_SUMMARY_NUM_TURNS - 1), { usedTokens: 1, maximumTokens: 1_000_000 }, undefined, undefined), false)
 })
 
 test("a summary of an earlier conversation is not a turn", () => {
@@ -69,7 +69,7 @@ test("the turn threshold counts only conversation messages that compaction keeps
     ...turns(SELF_SUMMARY_NUM_TURNS - 1),
     message("assistant", ""),
   ]
-  const tokenDetails = { usedTokens: 1, maxTokens: 1_000_000 }
+  const tokenDetails = { usedTokens: 1, maximumTokens: 1_000_000 }
 
   assert.equal(shouldPerformSelfSummary(conversation, tokenDetails, undefined, undefined), false)
   assert.equal(
@@ -80,43 +80,43 @@ test("the turn threshold counts only conversation messages that compaction keeps
 
 test("a conversation past the session's own limit is summarized", () => {
   const messages = [message("user", "a question")]
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 100, maxTokens: 1_000 }, undefined, 100), true)
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 99, maxTokens: 1_000 }, undefined, 100), false)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 100, maximumTokens: 1_000 }, undefined, 100), true)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 99, maximumTokens: 1_000 }, undefined, 100), false)
 })
 
 test("an override a test harness imposes wins over the session's limit", () => {
   const ctx = createContext().with(slateConfigOverridesKey, { evalServiceEnforcedSelfSummaryTokenLimit: 10 })
   assert.equal(EVAL_ENFORCED_SELF_SUMMARY_TOKEN_LIMIT(ctx), 10)
-  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { usedTokens: 10, maxTokens: 1_000 }, ctx, 1_000_000), true)
+  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { usedTokens: 10, maximumTokens: 1_000 }, ctx, 1_000_000), true)
   // Without the override the session's own limit is what decides.
-  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { usedTokens: 10, maxTokens: 1_000 }, createContext(), 1_000_000), false)
+  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { usedTokens: 10, maximumTokens: 1_000 }, createContext(), 1_000_000), false)
 })
 
 test("with no limit named, the window's own fraction decides", () => {
   const messages = [message("user", "a question")]
-  const maxTokens = 1_000_000
-  const atFraction = Math.floor(maxTokens * SELF_SUMMARY_CONTEXT_WINDOW_FRACTION)
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: atFraction, maxTokens }, undefined, undefined), true)
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: atFraction - 1, maxTokens }, undefined, undefined), false)
+  const maximumTokens = 1_000_000
+  const atFraction = Math.floor(maximumTokens * SELF_SUMMARY_CONTEXT_WINDOW_FRACTION)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: atFraction, maximumTokens }, undefined, undefined), true)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: atFraction - 1, maximumTokens }, undefined, undefined), false)
 })
 
 test("a conversation with nothing to compare against is not summarized", () => {
   assert.equal(shouldPerformSelfSummary([message("user", "a question")], undefined, undefined, undefined), false)
-  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { maxTokens: 0 }, undefined, undefined), false)
+  assert.equal(shouldPerformSelfSummary([message("user", "a question")], { maximumTokens: 0 }, undefined, undefined), false)
 })
 
 test("the size is estimated from the conversation when no count was taken", () => {
   const big = [message("user", "x".repeat(10_000))]
   // A small limit makes the estimate decide, and the estimate counts tool content as well as text.
-  assert.equal(shouldPerformSelfSummary(big, { maxTokens: 1_000_000 }, undefined, 100), true)
-  assert.equal(shouldPerformSelfSummary([message("user", "short")], { maxTokens: 1_000_000 }, undefined, 100), false)
+  assert.equal(shouldPerformSelfSummary(big, { maximumTokens: 1_000_000 }, undefined, 100), true)
+  assert.equal(shouldPerformSelfSummary([message("user", "short")], { maximumTokens: 1_000_000 }, undefined, 100), false)
 })
 
 test("a count that is not a count is ignored rather than trusted", () => {
   const messages = [message("user", "x".repeat(10_000))]
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: Number.NaN, maxTokens: 1_000_000 }, undefined, 100), true)
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 0, maxTokens: 1_000_000 }, undefined, 100), true)
-  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: -5, maxTokens: 1_000_000 }, undefined, 100), true)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: Number.NaN, maximumTokens: 1_000_000 }, undefined, 100), true)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: 0, maximumTokens: 1_000_000 }, undefined, 100), true)
+  assert.equal(shouldPerformSelfSummary(messages, { usedTokens: -5, maximumTokens: 1_000_000 }, undefined, 100), true)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -150,7 +150,7 @@ function summarizeHarness(options: {
   const holder = {
     cleared: 0,
     checkpoints: 0,
-    tokenDetails: { usedTokens: 0, maxTokens: 1_000, breakdown: options.breakdown },
+    tokenDetails: { usedTokens: 0, maximumTokens: 1_000, breakdown: options.breakdown },
   }
   let messages = options.messages ?? [{ role: "user", content: "the question" }]
   const stateHandler = {
@@ -307,7 +307,7 @@ test("the token details are recomputed from what is left after the summary", asy
   const tokenDetails: unknown[] = []
   const stateHandler = {
     mode: SlateMode.AGENT,
-    tokenDetails: { usedTokens: 900, maxTokens: 1_000 },
+    tokenDetails: { usedTokens: 900, maximumTokens: 1_000 },
     getBlobStore: () => undefined,
     getPrivacyMode: () => PrivacyMode.NO_STORAGE,
     async computeNewStructure() { return { turns: [] } },
@@ -323,10 +323,10 @@ test("the token details are recomputed from what is left after the summary", asy
     [],
   )
   assert.equal(tokenDetails.length, 1)
-  const written = tokenDetails[0] as { usedTokens: number; maxTokens: number; breakdown: unknown }
+  const written = tokenDetails[0] as { usedTokens: number; maximumTokens: number; breakdown: unknown }
   // The estimate is of what the prompt holds now, and the window is carried over.
   assert.equal(written.usedTokens > 0, true)
-  assert.equal(written.maxTokens, 1_000)
+  assert.equal(written.maximumTokens, 1_000)
   assert.equal(written.breakdown, undefined)
 })
 

@@ -6,12 +6,7 @@ import { DataClassification, PrivacyCapability } from "../../redaction/classific
 import { RedactedString } from "../../redaction/redacted-values.ts"
 import type { Context } from "../../context/context.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import {
-  createInteropConversationTokenDetails,
-  decodeInteropPromptTokenBreakdown,
-  encodeInteropPromptTokenBreakdown,
-  isInteropSummaryPromptMessage,
-} from "../../../adapters/interop/agent/summarize-action-adapter.ts"
+import { isInteropSummaryPromptMessage } from "../../../adapters/interop/agent/summarize-action-adapter.ts"
 import type { RootPromptExecutor, SummarizeStateHandler, SummarizeLooseValue } from "./summarize-action-contracts.ts"
 
 function summarizedConversationCharCount(messages: readonly SummarizeLooseValue[]): number {
@@ -46,17 +41,16 @@ export async function applySummaryToConversation(options: {
   const previousBreakdown = options.state.tokenDetails.breakdown
   const nextBreakdown = previousBreakdown === undefined
     ? previousBreakdown
-    : encodeInteropPromptTokenBreakdown(buildSummarizeRefreshSnapshot({
-      previousSnapshot: decodeInteropPromptTokenBreakdown(previousBreakdown),
+    : buildSummarizeRefreshSnapshot({
+      previousSnapshot: previousBreakdown,
       newSummarizedConversationCharCount: summarizedConversationCharCount(messages),
       totalUsedTokens: usedTokens,
-      maxTokens: options.state.tokenDetails.maxTokens,
-    }), options.privacyMode)
+      maxTokens: options.state.tokenDetails.maximumTokens,
+    })
 
-  options.state.setTokenDetails(createInteropConversationTokenDetails(options.privacyMode, {
+  options.state.setTokenDetails({
     usedTokens,
-    maxTokens: options.state.tokenDetails.maxTokens,
-    breakdown: nextBreakdown,
-    promptContextUsageTree: undefined,
-  }))
+    maximumTokens: options.state.tokenDetails.maximumTokens,
+    ...(nextBreakdown === undefined ? {} : { breakdown: nextBreakdown }),
+  })
 }

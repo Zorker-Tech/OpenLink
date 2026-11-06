@@ -1,15 +1,6 @@
-interface TokenTotals {
-  readonly usedTokens: number
-  readonly maxTokens: number
-}
+import type { SlateConversationTokenDetails } from "../conversation-state.ts"
 
-interface TokenBreakdown {
-  readonly breakdown: unknown
-  readonly promptContextUsageTree: unknown
-  readonly promptContextUsageSnapshotBlobId: unknown
-}
-
-export type RunStepTokenDetails = TokenTotals & TokenBreakdown
+export type RunStepTokenDetails = SlateConversationTokenDetails
 
 interface TurnTokenCounts {
   readonly inputTokens: number

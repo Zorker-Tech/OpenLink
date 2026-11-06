@@ -9,7 +9,6 @@ import {
 import { TodoStatus } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import { RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
-  createRedactedConversationTokenDetails,
   fromRedactedConversationPlan,
   fromRedactedToolCall,
   fromRedactedUserMessage,
@@ -63,7 +62,6 @@ export const TodoStatusInterop = TodoStatus
 export type RequestContextInterop = RequestContext
 export type UserMessageInterop = UserMessage
 
-export const createRedactedConversationTokenDetailsInterop = createRedactedConversationTokenDetails
 export const fromRedactedConversationPlanInterop = fromRedactedConversationPlan
 export const fromRedactedToolCallInterop = fromRedactedToolCall
 export const fromRedactedUserMessageInterop = fromRedactedUserMessage
