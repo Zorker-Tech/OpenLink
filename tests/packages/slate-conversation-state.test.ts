@@ -245,6 +245,7 @@ test("conversation token details use Slate values and are redacted only at the i
 test("file state paths and blob references become plain Slate values", () => {
   const redacted = toRedactedConversationStateStructure(
     new ConversationStateStructure({
+      fileStates: { "/repo/legacy.ts": new Uint8Array([3]) },
       fileStatesV2: {
         "/repo/a.ts": new FileStateStructure({
           content: new Uint8Array([1]),
@@ -260,9 +261,19 @@ test("file state paths and blob references become plain Slate values", () => {
     contentBlobId: new Uint8Array([1]),
     initialContentBlobId: new Uint8Array([2]),
   })
+  assert.deepEqual(
+    (slate.legacyFileContentBlobIds as ReadonlyMap<string, Uint8Array> | undefined)?.get("/repo/legacy.ts"),
+    new Uint8Array([3]),
+  )
+
+  const slateInterop = toInteropConversationState(slate)
+  const legacyFileEntry = [...slateInterop.fileStates.entries()][0]
+  assert.ok(legacyFileEntry?.[0] instanceof RedactedString)
+  assert.equal(legacyFileEntry?.[0].unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "/repo/legacy.ts")
+  assert.deepEqual(legacyFileEntry?.[1], new Uint8Array([3]))
 
   const plain = fromRedactedConversationStateStructure(
-    toInteropConversationState(slate),
+    slateInterop,
     PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
     undefined,
   )

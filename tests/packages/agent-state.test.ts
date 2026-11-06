@@ -477,6 +477,28 @@ test("a file's state is recorded and read back", async () => {
   assert.equal(await harnessed.handle.getFileState(createContext(), "/repo/a.ts"), "const a = 1")
 })
 
+test("legacy file blobs restore as Slate file state and migrate to the versioned map on write", async () => {
+  const ctx = createContext()
+  const path = "/repo/legacy.ts"
+  const contentBytes = new TextEncoder().encode("legacy content")
+  const blobId = await getBlobId(contentBytes)
+  const blobIdHex = Buffer.from(blobId).toString("hex")
+  const restoredHandle = await restored(
+    new ConversationStateStructure({ fileStates: { [path]: blobId } }),
+    undefined,
+    {},
+    new Map([[blobIdHex, contentBytes]]),
+  )
+
+  assert.equal(await restoredHandle.handle.getFileState(ctx, path), "legacy content")
+  await restoredHandle.handle.computeNewStructure(ctx)
+
+  assert.deepEqual(restoredHandle.handle.conversationStateStructure.fileStatesV2.get(path), {
+    contentBlobId: blobId,
+  })
+  assert.equal(restoredHandle.handle.conversationStateStructure.legacyFileContentBlobIds?.size, 0)
+})
+
 // ---------------------------------------------------------------------------------------------
 // the turns it makes
 // ---------------------------------------------------------------------------------------------
@@ -641,8 +663,9 @@ async function restored(
   state: ConversationStateStructure = new ConversationStateStructure({}),
   runtimeAgentType: ReturnType<typeof import("../../source/packages/agent/state-agent-type.ts").resolveAgentType> = undefined,
   options: Record<string, unknown> = {},
+  initialBlobs: ReadonlyMap<string, Uint8Array> = new Map(),
 ) {
-  const blobs = new Map<string, Uint8Array>()
+  const blobs = new Map(initialBlobs)
   const keyOf = (id: Uint8Array): string => Buffer.from(id).toString("hex")
   const blobStore = {
     async getBlob(_ctx: Context, blobId: Uint8Array) { return blobs.get(keyOf(blobId)) },

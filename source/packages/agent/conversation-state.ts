@@ -87,6 +87,7 @@ export interface SlateConversationState {
   /** Unknown persisted mode retained for lossless checkpoint write-back. */
   unknownModeCode?: number
   readonly summaryArchives: readonly Uint8Array[]
+  readonly legacyFileContentBlobIds?: ReadonlyMap<string, Uint8Array> | Record<string, Uint8Array>
   readonly fileStatesV2: ReadonlyMap<string, SlateFileStateBlobs>
   readonly selfSummaryCount?: number
   readonly readPaths: readonly string[]
