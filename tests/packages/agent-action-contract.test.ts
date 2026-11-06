@@ -28,6 +28,12 @@ import {
   type SlateShellCommandActionPayload,
 } from "../../source/packages/agent/actions/shell-command-action-contracts.ts"
 import {
+  isSlateBackgroundShellActionPayload,
+  isSlateBackgroundSubagentActionPayload,
+  type SlateBackgroundShellActionPayload,
+  type SlateBackgroundSubagentActionPayload,
+} from "../../source/packages/agent/actions/background-side-channel-contracts.ts"
+import {
   createSlateSummarizeActionPayload,
   isSlateSummarizeActionPayload,
 } from "../../source/packages/agent/actions/summarize-action-contracts.ts"
@@ -95,6 +101,16 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       const payload = action.payload as SlateShellCommandActionPayload
       assert.equal(isSlateShellCommandActionPayload(payload), true)
       assert.equal(payload.privacyMode, PrivacyMode.NO_STORAGE)
+      assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "backgroundShellAction") {
+      const payload = action.payload as SlateBackgroundShellActionPayload
+      assert.equal(isSlateBackgroundShellActionPayload(payload), true)
+      assert.equal(payload.toolCallId, "")
+      assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "backgroundSubagentAction") {
+      const payload = action.payload as SlateBackgroundSubagentActionPayload
+      assert.equal(isSlateBackgroundSubagentActionPayload(payload), true)
+      assert.equal(payload.toolCallId, "")
       assert.ok(payload.compatibility?.legacyPayload)
     } else if (sourceCase === "asyncAskQuestionCompletionAction") {
       const payload = action.payload as AskQuestionCompletionAction
@@ -245,6 +261,26 @@ test("shell command projections preserve the typed command and resume execution 
     "echo slate",
   )
   assert.ok(payload.compatibility?.legacyPayload)
+})
+
+test("background side-channel actions preserve their Slate call identifiers", () => {
+  const shell = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "backgroundShellAction", value: { toolCallId: "shell-call-9" } },
+  } as never)
+  const shellPayload = shell.payload as SlateBackgroundShellActionPayload
+  assert.equal(shell.kind, SlateAgentActionKind.BACKGROUND_SHELL)
+  assert.equal(isSlateBackgroundShellActionPayload(shellPayload), true)
+  assert.equal(shellPayload.toolCallId, "shell-call-9")
+
+  const subagent = slateAgentActionFromRedactedInterop({
+    _privacyMode: PrivacyMode.NO_STORAGE,
+    action: { case: "backgroundSubagentAction", value: { toolCallId: "subagent-call-4" } },
+  } as never)
+  const subagentPayload = subagent.payload as SlateBackgroundSubagentActionPayload
+  assert.equal(subagent.kind, SlateAgentActionKind.BACKGROUND_SUBAGENT)
+  assert.equal(isSlateBackgroundSubagentActionPayload(subagentPayload), true)
+  assert.equal(subagentPayload.toolCallId, "subagent-call-4")
 })
 
 test("missing and unknown routes remain distinguishable, and the unknown source name is retained", () => {
