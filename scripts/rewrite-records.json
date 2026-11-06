@@ -104,9 +104,9 @@
     },
     "packages/agent/state.ts": {
       "claim": "rewritten",
-      "overlap": 0.655633423180593,
-      "refreshReason": "ConversationStateHandle now computes and returns SlateConversationState directly; runner and generated snapshot conversion happen in adapters. The snapshot carries typed communication, token, pending-call, workspace, file-state, timing and archive values.",
-      "evidence": "Communication and token-detail state/adapter suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, timing/archive round-trip, root checkpoint, GC and subagent recovery suites pass 115/115. The full Work-host suite passes 9972/9972 under Node 24.14 with concurrency 1. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. computeNewStructure returns SlateConversationState; the runner message conversion remains in its adapter. Measured overlap is 0.655633423180593 against 9275 baseline pairs."
+      "overlap": 0.6554177897574124,
+      "refreshReason": "ConversationStateHandle restores and returns SlateConversationState directly; historical runner checkpoint decoding now happens at the AgentRoot ingress adapter. The snapshot carries typed communication, token, pending-call, workspace, file-state, timing and archive values.",
+      "evidence": "Focused agent-state and runner-lifecycle tests pass 91/91 after moving checkpoint decoding to the ingress adapter. The full Work-host suite passes 9972/9972 across 1427 suites under Node 24.14 with concurrency 1. Communication and token-detail suites pass 215/215; pending-call/workspace recovery passes 123/123; legacy file-state migration, timing/archive round-trip, root checkpoint, GC and subagent recovery suites pass 115/115. TypeScript, extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), and interop (321 imports across 223 files, zero direct proto consumers) gates pass. computeNewStructure returns SlateConversationState and ConversationStateHandle accepts SlateConversationState. Measured overlap is 0.6554177897574124 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
