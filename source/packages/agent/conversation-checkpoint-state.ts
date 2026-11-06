@@ -113,7 +113,10 @@ export interface SlateCheckpointSubagent {
   readonly type?: SlateCheckpointSubagentType
   readonly modelId?: string
   readonly environment: SlateCheckpointEnvironment
-  readonly compatibility?: { readonly legacyEnvironmentCode?: number }
+  readonly compatibility?: {
+    readonly legacyEnvironmentCode?: number
+    readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
+  }
   readonly cloudWorker?: { readonly workerId: string; readonly transcriptPath?: string }
   readonly firstClassCloudRunId?: string
   readonly requestedRuntimeBuildId?: string
@@ -201,6 +204,32 @@ export interface SlateConversationCheckpointV2 {
   readonly compatibility?: {
     readonly legacyModeCode?: number
     readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
+  }
+}
+
+/** Creates the canonical, valid empty root for Slate's durable conversation store. */
+export function createEmptySlateConversationCheckpointV2(): SlateConversationCheckpointV2 {
+  return {
+    promptMessageBlobIds: [],
+    todoBlobIds: [],
+    pendingOperationIds: [],
+    turnBlobIds: [],
+    workspaceUris: [],
+    legacyFileContentBlobIds: {},
+    summaryArchiveBlobIds: [],
+    turnTimings: [],
+    fileContentBlobIds: {},
+    subagents: {},
+    selfSummaryCount: 0,
+    readPaths: [],
+    planRegistry: {},
+    trackedRepositories: [],
+    communicationHistory: [],
+    subagentThreads: {},
+    communicationTurnsByCallId: {},
+    subagentRunsByCallId: {},
+    subagentStateBlobIds: {},
+    completedQuestionCallIds: [],
   }
 }
 
@@ -403,9 +432,11 @@ function isSubagent(value: unknown): value is SlateCheckpointSubagent {
       (value.type !== undefined && !isSubagentType(value.type)) ||
       (value.targetMachine !== undefined && !isTargetMachine(value.targetMachine))) return false
   if (value.compatibility !== undefined &&
-      (!isRecord(value.compatibility) || !hasOnlyKeys(value.compatibility, ["legacyEnvironmentCode"]) ||
+      (!isRecord(value.compatibility) || !hasOnlyKeys(value.compatibility, ["legacyEnvironmentCode", "legacyUnknownFields"]) ||
         (value.compatibility.legacyEnvironmentCode !== undefined &&
-          (!isEnumCode(value.compatibility.legacyEnvironmentCode) || value.environment !== "unspecified")))) return false
+          (!isEnumCode(value.compatibility.legacyEnvironmentCode) || value.environment !== "unspecified")) ||
+        (value.compatibility.legacyUnknownFields !== undefined &&
+          (!Array.isArray(value.compatibility.legacyUnknownFields) || !value.compatibility.legacyUnknownFields.every(isUnknownField))))) return false
   if (value.cloudWorker !== undefined) {
     const worker = value.cloudWorker
     if (!isRecord(worker) || !hasOnlyKeys(worker, ["workerId", "transcriptPath"]) ||

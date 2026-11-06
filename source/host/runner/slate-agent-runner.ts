@@ -38,7 +38,7 @@ import { createComputerUseCoordination } from "./computer-use.ts";
 import { createSlateNavigationProbe } from "./slate-action-audit.ts";
 import type { TurnUsage } from "./turn-usage.ts";
 import { createTurnObservation, type AsyncTask } from "./turn-observation.ts";
-import { SLATE_AGENT_MAX_STEPS } from "./turn-agent-composition.ts";
+import { runnerConversationStateFromStoreCheckpoint, SLATE_AGENT_MAX_STEPS } from "./turn-agent-composition.ts";
 import { createProductionTurnRunShellAdapter, type ProductionTurnRunShellAdapterInput } from "./production-turn-run-shell-adapter.ts";
 import type { ForwardedUpdate } from "./agent-adapters.ts";
 import type { TurnStreamLifecycleInput, TurnStreamPath, TurnStreamStartInput } from "./turn-agent-stream.ts";
@@ -692,7 +692,7 @@ export class SlateAgentRunner<T = unknown> {
     }
     const owner = this.#agentStore as { getConversationStateStructure?: () => unknown } | undefined;
     if (typeof owner?.getConversationStateStructure !== "function") throw new TypeError("the production Agent conversation state is not bound");
-    const snapshot = cloneInteropRunnerConversationState(owner.getConversationStateStructure());
+    const snapshot = cloneInteropRunnerConversationState(runnerConversationStateFromStoreCheckpoint(owner.getConversationStateStructure()));
     if (snapshot === undefined) throw new TypeError("the production Agent conversation state is not bound");
     return snapshot;
   }

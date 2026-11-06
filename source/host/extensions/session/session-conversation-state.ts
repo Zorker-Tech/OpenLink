@@ -21,7 +21,7 @@ export class SlateSessionConversationState {
     if (!await conversationStructureFullyResolves(this.host.ctx, structure, cachedBlobs)) return null
 
     const state = await this.host.deriveState(structure, cachedBlobs)
-    return state.turns.length === 0 || state.turns.length < structure.turns.length ? null : state
+    return state.turns.length === 0 || state.turns.length < structure.turnBlobIds.length ? null : state
   }
 
   async getTranscriptEntries(session: Pick<ConversationSessionHandles, "db">): Promise<TranscriptEntry[]> {

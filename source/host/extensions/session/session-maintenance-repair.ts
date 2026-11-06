@@ -34,7 +34,7 @@ export async function repairHiddenTranscriptEntriesOnce(
 
     const structure = store.getConversationStateStructure();
     const state = await store.getFullConversation(host.ctx);
-    if (state.turns.length === 0 || state.turns.length < structure.turns.length) return 0;
+    if (state.turns.length === 0 || state.turns.length < structure.turnBlobIds.length) return 0;
     if (!await conversationStructureFullyResolves(host.ctx, structure, store.getBlobStore())) return 0;
 
     const outline = host.deriveOutline?.(state) ?? state.turns.flatMap(turn => turn.items);
@@ -60,7 +60,7 @@ export async function retireLegacyStoreBlobsOnce(
     if (!database.hasLegacyConversationBlobs()) return database.retireLegacyConversationBlobs(LEGACY_BLOB_RETIREMENT_VERSION);
     const root = database.get("latestRootBlobId");
     if (!(root instanceof Uint8Array) || root.length === 0) return false;
-    if (store.getConversationStateStructure().turns.length === 0 || openHandles(host, dbPath) > 1) return false;
+    if (store.getConversationStateStructure().turnBlobIds.length === 0 || openHandles(host, dbPath) > 1) return false;
 
     const startingGeneration = generationAt(host, dbPath);
     const result = await host.requireWorkerPool().verifyLegacyBlobRetirement({

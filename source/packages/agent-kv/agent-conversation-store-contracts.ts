@@ -23,6 +23,8 @@ export interface AgentConversationBundle<Conversation> {
 /** The blob-owning class supplies storage mechanics; a codec owns every persisted/wire shape. */
 export interface AgentConversationCodec<Context, Checkpoint, Conversation> {
   createEmptyCheckpoint(): Checkpoint
+  /** Optionally normalizes a legacy host value into the codec's owned checkpoint model. */
+  normalizeCheckpoint?(checkpoint: unknown): Checkpoint
   encodeCheckpoint(checkpoint: Checkpoint): Uint8Array
   decodeCheckpoint(blob: Uint8Array): Checkpoint
   getLastRequestId(

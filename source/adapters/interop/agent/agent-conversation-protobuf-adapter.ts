@@ -22,7 +22,6 @@ import { deserializeSlateConversationSummaryInterop } from "./conversation-summa
 import type {
   AgentConversationCodec,
   ConversationBlobReader,
-  PersistedAgentSubconversation,
 } from "../../../packages/agent-kv/agent-conversation-store-contracts.ts"
 import {
   deserializeSlateAgentCheckpoint,
@@ -32,10 +31,13 @@ import {
 import { fromHex, toHex } from "../../../packages/agent-kv/serde.ts"
 import { resolveSubagentPersistedStates } from "../../../packages/agent-kv/subagent-states.ts"
 import {
+  createEmptySlateConversationCheckpointV2,
   isSlateConversationCheckpointV2,
+  type SlateConversationCheckpointV2,
   type SlateCheckpointUnknownField,
 } from "../../../packages/agent/conversation-checkpoint-state.ts"
 import {
+  slateCheckpointSubagentFromInterop,
   interopConversationCheckpointFromSlate,
   slateConversationCheckpointFromInterop,
 } from "./slate-agent-checkpoint-interop-adapter.ts"
@@ -234,12 +236,7 @@ export function decodeInteropAgentConversationCheckpoint(bytes: Uint8Array): Con
     if (!isSlateConversationCheckpointV2(slateCheckpoint.conversation)) {
       throw new TypeError("Slate conversation checkpoint state is invalid")
     }
-    const checkpoint = interopConversationCheckpointFromSlate(slateCheckpoint.conversation)
-    restoreUnknownFields(
-      checkpoint,
-      slateCheckpoint.conversation.compatibility?.legacyUnknownFields,
-    )
-    return checkpoint
+    return interopAgentConversationCheckpointFromSlate(slateCheckpoint.conversation)
   }
 
   const interopSnapshot = { ...slateCheckpoint.interopSnapshot } as Record<string, unknown>
@@ -261,6 +258,43 @@ export function decodeInteropAgentConversationCheckpoint(bytes: Uint8Array): Con
   return checkpoint
 }
 
+/** Writes a product-owned V2 checkpoint as the canonical durable root. */
+export function encodeSlateAgentConversationCheckpoint(checkpoint: SlateConversationCheckpointV2): Uint8Array {
+  if (!isSlateConversationCheckpointV2(checkpoint)) {
+    throw new TypeError("Slate conversation checkpoint is invalid")
+  }
+  return serializeSlateAgentCheckpointV2(checkpoint as unknown as AgentCheckpointJsonObject)
+}
+
+/** Reads V2 directly and migrates V1 or protobuf roots into the Slate-owned checkpoint model. */
+export function decodeSlateAgentConversationCheckpoint(bytes: Uint8Array): SlateConversationCheckpointV2 {
+  const root = deserializeSlateAgentCheckpoint(bytes)
+  if (root?.version === 2) {
+    if (!isSlateConversationCheckpointV2(root.conversation)) {
+      throw new TypeError("Slate conversation checkpoint state is invalid")
+    }
+    return root.conversation
+  }
+  const legacy = decodeInteropAgentConversationCheckpoint(bytes)
+  const checkpoint = slateConversationCheckpointFromInterop(legacy, collectUnknownFields(legacy))
+  if (!isSlateConversationCheckpointV2(checkpoint)) {
+    throw new TypeError("Legacy conversation checkpoint cannot be represented by Slate's version 2 schema")
+  }
+  return checkpoint
+}
+
+/** Projects V2 to the old runner message only at a named interoperability boundary. */
+export function interopAgentConversationCheckpointFromSlate(
+  checkpoint: SlateConversationCheckpointV2,
+): ConversationStateStructure {
+  if (!isSlateConversationCheckpointV2(checkpoint)) {
+    throw new TypeError("Slate conversation checkpoint state is invalid")
+  }
+  const interop = interopConversationCheckpointFromSlate(checkpoint)
+  restoreUnknownFields(interop, checkpoint.compatibility?.legacyUnknownFields)
+  return interop
+}
+
 function restoreUnknownFields(checkpoint: ConversationStateStructure, raw: unknown): void {
   if (raw === undefined) return
   if (!Array.isArray(raw)) throw new TypeError("Slate checkpoint unknown fields are invalid")
@@ -278,16 +312,23 @@ function restoreUnknownFields(checkpoint: ConversationStateStructure, raw: unkno
 /** Owns Slate checkpoint persistence and adapts restored roots to the current runner view. */
 export function createSlateAgentConversationCodec<Context>(): AgentConversationCodec<
   Context,
-  ConversationStateStructure,
+  SlateConversationCheckpointV2,
   ConversationStateMessage
 > {
   return {
-    createEmptyCheckpoint: () => new ConversationStateStructure(),
-    encodeCheckpoint: encodeInteropAgentConversationCheckpoint,
-    decodeCheckpoint: decodeInteropAgentConversationCheckpoint,
+    createEmptyCheckpoint: createEmptySlateConversationCheckpointV2,
+    normalizeCheckpoint(value) {
+      if (isSlateConversationCheckpointV2(value)) return value
+      if (value instanceof ConversationStateStructure) {
+        return slateConversationCheckpointFromInterop(value, collectUnknownFields(value))
+      }
+      throw new TypeError("Agent conversation checkpoint must be Slate V2 or a legacy runner structure")
+    },
+    encodeCheckpoint: encodeSlateAgentConversationCheckpoint,
+    decodeCheckpoint: decodeSlateAgentConversationCheckpoint,
     async getLastRequestId(ctx, checkpoint, blobStore) {
-      for (let index = checkpoint.turns.length - 1; index >= 0; index -= 1) {
-        const turnBlob = await blobStore.getBlob(ctx, checkpoint.turns[index]!)
+      for (let index = checkpoint.turnBlobIds.length - 1; index >= 0; index -= 1) {
+        const turnBlob = await blobStore.getBlob(ctx, fromHex(checkpoint.turnBlobIds[index]!))
         if (!turnBlob) continue
         const turnStructure = turnValueOrUndefined(turnBlob)
         if (turnStructure === undefined) continue
@@ -297,15 +338,30 @@ export function createSlateAgentConversationCodec<Context>(): AgentConversationC
       }
       return null
     },
-    hydrateConversation: deriveInteropConversationStateFromStructure,
+    async hydrateConversation(ctx, checkpoint, blobStore) {
+      return deriveInteropConversationStateFromStructure(
+        ctx,
+        interopAgentConversationCheckpointFromSlate(checkpoint),
+        blobStore,
+      )
+    },
     async resolveSubconversations(ctx, checkpoint, blobStore) {
+      const interopCheckpoint = interopAgentConversationCheckpointFromSlate(checkpoint)
       const states = await resolveSubagentPersistedStates(
         ctx,
-        checkpoint,
+        interopCheckpoint,
         blobStore,
         deserializeSlateSubagentPersistedStateInterop,
       )
-      return states as Record<string, PersistedAgentSubconversation<ConversationStateStructure>>
+      return Object.fromEntries(Object.entries(states).map(([subagentId, state]) => {
+        const subagent = slateCheckpointSubagentFromInterop(state)
+        return [subagentId, {
+          ...(subagent.conversation === undefined ? {} : { conversationState: subagent.conversation }),
+          createdTimestampMs: BigInt(subagent.createdAtMs),
+          lastUsedTimestampMs: BigInt(subagent.lastUsedAtMs),
+          ...(subagent.type === undefined ? {} : { subagentType: subagent.type }),
+        }] as const
+      }))
     },
   }
 }
