@@ -14,6 +14,13 @@ export type SlateSubagentRunStatus =
 
 export type SlateSubagentCompletionReason = NonNullable<SlateBackgroundTaskCompletion["reason"]>
 
+/** Unrecognized historical enum values stay confined to migration metadata. */
+export interface SlateSubagentRunCompatibility {
+  readonly legacyEnvironmentCode?: number
+  readonly legacyStatusCode?: number
+  readonly legacyCompletionReasonCode?: number
+}
+
 /** A Slate-owned durable record of one subagent run started by a parent tool call. */
 export interface SlateSubagentRunState {
   readonly parentToolCallId: string
@@ -26,6 +33,7 @@ export interface SlateSubagentRunState {
   readonly outputPath?: string | undefined
   readonly completedTimestampMs?: bigint | undefined
   readonly completionReason?: SlateSubagentCompletionReason | undefined
+  readonly compatibility?: SlateSubagentRunCompatibility | undefined
 }
 
 export interface SlateSubagentRunCompletionUpdate {
@@ -70,6 +78,19 @@ export function updateSlateSubagentRun(
   const transcriptPath = trimmed(input.transcriptPath) ?? existingRun?.transcriptPath
   const outputPath = trimmed(completion.outputPath) ?? existingRun?.outputPath
   const completionReason = completion.reason ?? existingRun?.completionReason
+  const compatibility = {
+    ...(input.environment === undefined || input.environment === "unspecified"
+      ? existingRun?.compatibility?.legacyEnvironmentCode === undefined
+        ? {}
+        : { legacyEnvironmentCode: existingRun.compatibility.legacyEnvironmentCode }
+      : {}),
+    ...(completion.status !== "unknown" || existingRun?.compatibility?.legacyStatusCode === undefined
+      ? {}
+      : { legacyStatusCode: existingRun.compatibility.legacyStatusCode }),
+    ...(completion.reason !== undefined || existingRun?.compatibility?.legacyCompletionReasonCode === undefined
+      ? {}
+      : { legacyCompletionReasonCode: existingRun.compatibility.legacyCompletionReasonCode }),
+  }
 
   return {
     parentToolCallId: input.parentToolCallId,
@@ -82,5 +103,6 @@ export function updateSlateSubagentRun(
     ...(outputPath === undefined ? {} : { outputPath }),
     completedTimestampMs: input.completedTimestampMs,
     ...(completionReason === undefined ? {} : { completionReason }),
+    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
   }
 }

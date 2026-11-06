@@ -42,6 +42,7 @@ import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user
 import {
   deserializeSlateConversationPlan,
   fromRedactedSubagentPersistedStateInterop,
+  fromRedactedSubagentRunStateInterop,
   toInteropConversationState,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
@@ -750,19 +751,24 @@ test("a persisted subagent run is restored into Slate state and written back com
     title: "research",
   })
 
-  const snapshot = await harnessed.handle.computeNewStructure(createContext())
-  assert.ok(snapshot.subagentRunsByParentToolCallId instanceof Map)
-  const persisted = snapshot.subagentRunsByParentToolCallId.get("call-1") as SubagentRunState | undefined
-  assert.ok(persisted)
-  assert.equal(persisted.parentToolCallId, "call-1")
-  assert.equal(persisted.subagentId, "agent-1")
-  assert.equal(persisted.status, SubagentRunStatus.BACKGROUNDED)
-  assert.equal(
-    (persisted.title as unknown as { unwrap(purpose: PrivacyCapability): string }).unwrap(
-      PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-    ),
-    "research",
-  )
+  await harnessed.handle.computeNewStructure(createContext())
+  const slateRun = harnessed.handle.conversationStateStructure.subagentRunsByParentToolCallId?.get("call-1")
+  assert.deepEqual(slateRun, {
+    parentToolCallId: "call-1",
+    subagentId: "agent-1",
+    environment: "unspecified",
+    status: "backgrounded",
+    title: "research",
+  })
+  const persistedRedacted = toInteropConversationState(harnessed.handle.conversationStateStructure)
+    .subagentRunsByParentToolCallId?.get("call-1")
+  const persistedInterop = persistedRedacted === undefined
+    ? undefined
+    : fromRedactedSubagentRunStateInterop(persistedRedacted, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED, undefined)
+  assert.equal(persistedInterop?.parentToolCallId, "call-1")
+  assert.equal(persistedInterop?.subagentId, "agent-1")
+  assert.equal(persistedInterop?.status, SubagentRunStatus.BACKGROUNDED)
+  assert.equal(persistedInterop?.title, "research")
 })
 
 test("a finished subagent completion updates Slate's durable run record", () => {

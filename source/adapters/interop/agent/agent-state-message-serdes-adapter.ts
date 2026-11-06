@@ -43,6 +43,7 @@ import {
   toRedactedConversationSummaryArchive,
   toRedactedConversationStateStructure,
   toRedactedSubagentPersistedState,
+  toRedactedSubagentRunState,
   toRedactedGoalState,
   toRedactedPlanRegistryEntry,
   toRedactedUserMessage,
@@ -96,6 +97,7 @@ import type {
   SlateSubagentConversationSnapshot,
   SlateSubagentStateCompatibility,
 } from "../../../packages/agent/subagent-persisted-state.ts"
+import type { SlateSubagentRunState } from "../../../packages/agent/subagent-run-state.ts"
 import { createSlateSubagentPersistedState } from "../../../packages/agent/subagent-persisted-state.ts"
 import type { SlateSubagentType } from "../../../packages/agent/subagent-type.ts"
 import type { TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
@@ -115,6 +117,10 @@ import {
   fromInteropSubagentPersistedState,
   toInteropSubagentPersistedState,
 } from "./subagent-persisted-state-adapter.ts"
+import {
+  fromInteropSubagentRunState,
+  toInteropSubagentRunState,
+} from "./subagent-run-state-adapter.ts"
 import {
   SlateSimulatedMessageReason,
   type SlatePlanExecutionIntent,
@@ -247,10 +253,10 @@ function wrapRedactedConversationMapKeys(
   return {
     ...state,
     subagentStates,
+    subagentRunsByParentToolCallId,
     plans,
     subagentThreads,
     communicateUpdateStatesByParentToolCallId,
-    subagentRunsByParentToolCallId,
     subagentStateRefs,
   } as RedactedAgentConversationStateInterop
 }
@@ -272,6 +278,7 @@ export function fromInteropConversationState(
     fileStatesV2,
     readPaths,
     subagentStates,
+    subagentRunsByParentToolCallId,
     plans,
     goalState,
     subagentThreads,
@@ -315,6 +322,18 @@ export function fromInteropConversationState(
             undefined,
           ),
           _privacyMode,
+        ),
+      ]),
+    ),
+    subagentRunsByParentToolCallId: new Map(
+      entriesOfUnknownStringMap(subagentRunsByParentToolCallId).map(([key, value]) => [
+        slateStringMapKey(key, "subagentRunsByParentToolCallId"),
+        fromInteropSubagentRunState(
+          fromRedactedSubagentRunState(
+            value as never,
+            PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+            undefined,
+          ),
         ),
       ]),
     ),
@@ -365,6 +384,7 @@ export function toInteropConversationState(
     plans,
     goalState,
     subagentStates,
+    subagentRunsByParentToolCallId,
     ...fields
   } = state
   const optionalFields = fields as typeof fields & Readonly<Record<string, unknown>>
@@ -396,6 +416,12 @@ export function toInteropConversationState(
         toRedactedSubagentPersistedState(toInteropSubagentPersistedState(value), privacyMode),
       ]),
     ),
+    subagentRunsByParentToolCallId: new Map(
+      [...(subagentRunsByParentToolCallId ?? new Map())].map(([callId, value]) => [
+        callId,
+        toRedactedSubagentRunState(toInteropSubagentRunState(value), privacyMode),
+      ]),
+    ),
     plans: new Map(
       [...(plans ?? new Map())].map(([planId, entry]) => [
         planId,
@@ -409,7 +435,6 @@ export function toInteropConversationState(
     communicateUpdateHistory: fields.communicateUpdateHistory ?? [],
     subagentThreads: fields.subagentThreads ?? new Map(),
     communicateUpdateStatesByParentToolCallId: fields.communicateUpdateStatesByParentToolCallId ?? new Map(),
-    subagentRunsByParentToolCallId: fields.subagentRunsByParentToolCallId ?? new Map(),
     subagentStateRefs: fields.subagentStateRefs ?? new Map(),
     completedAskQuestionToolCallIds: fields.completedAskQuestionToolCallIds ?? [],
     readPaths: readPaths.map(path => createRedactedString(
@@ -662,6 +687,7 @@ export function encodeSlateConversationStateSnapshotInterop(
     plans: slatePlanRegistry,
     goalState: slateGoal,
     subagentStates: slateSubagentStates,
+    subagentRunsByParentToolCallId: slateSubagentRuns,
     ...stateFields
   } = snapshot
   const plans = Object.fromEntries(
@@ -677,6 +703,12 @@ export function encodeSlateConversationStateSnapshotInterop(
     entriesOfUnknownStringMap(slateSubagentStates).map(([id, state]) => [
       id,
       toInteropSubagentPersistedState(state as SlateSubagentPersistedState),
+    ]),
+  )
+  const subagentRunsByParentToolCallId = Object.fromEntries(
+    entriesOfUnknownStringMap(slateSubagentRuns).map(([callId, run]) => [
+      callId,
+      toInteropSubagentRunState(run as SlateSubagentRunState),
     ]),
   )
   const fileStatesV2 = Object.fromEntries(
@@ -698,6 +730,7 @@ export function encodeSlateConversationStateSnapshotInterop(
     plans,
     ...(goalState === undefined ? {} : { goalState }),
     subagentStates,
+    subagentRunsByParentToolCallId,
     fileStatesV2,
   } as never)
   return {
