@@ -14,7 +14,6 @@ import { FileOperationLockManager } from "../../tools/core/file-operation-locks.
 import { attachToolReferenceHints, shouldExposeToolReferencesInCurrentContext } from "../../tools/tool-call-id-tagging.ts";
 import { extractToolMetadataMap, getDirectDynamicToolNames, getExecutableTools } from "../../tools/tool-execution.ts";
 import { executeDeferredToolCall } from "../../tool-stream-executor.ts";
-import { PrivacyCapability } from "../../../redaction/classification.ts";
 import { toRedactedCoreMessages } from "../../../redaction/message-redaction.ts";
 import { decodeIncomingRequestContext } from "../../../../adapters/interop/agent/user-message-action-input-adapter.ts";
 import { toUnredactedInteractionListener } from "../../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
@@ -40,7 +39,7 @@ type Any = any;
 
 export class ResumeActionHandler extends AbstractUserMessageActionHandler {
   async executePendingToolCalls(ctx: Context, stateHandler: Any, mergedTools: Any, requestContext: Any, invocationId: string): Promise<boolean> {
-    const queuedMessages = stateHandler.getRawPendingMessages();
+    const queuedMessages = stateHandler.getPendingToolCalls();
     if (queuedMessages.length === 0 || stateHandler.turns.length === 0) return false;
     const newestTurnRef = stateHandler.turns[stateHandler.turns.length - 1];
     const loadedTurn: Any = await newestTurnRef.get(ctx);
@@ -72,7 +71,7 @@ export class ResumeActionHandler extends AbstractUserMessageActionHandler {
       smartModeClassifierShadowMode: this.config.smartModeClassifierShadowMode,
       autoRejectFirstAskQuestion: this.config.autoRejectFirstAskQuestion,
     });
-    const messages = queuedMessages.map((message: Any) => JSON.parse(message.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)));
+    const messages = queuedMessages.map((message: Any) => JSON.parse(message));
     const assistantMessage = messages.at(-1);
     if (assistantMessage === undefined || assistantMessage.role !== "assistant") throw new Error("No assistant message to resume from");
     const admittedContracts = readPendingToolExecutionContracts(assistantMessage);

@@ -23,6 +23,7 @@ import {
   SubagentExecutionEnvironment,
   SubagentRunState,
   SubagentRunStatus,
+  TrackedGitRepo,
   BackgroundTaskCompletionReason,
   PromptContextNode,
   PromptContextSourceRef,
@@ -50,6 +51,9 @@ test("conversation state projects its persisted mode and fields into Slate", () 
     mode: AgentMode.PLAN,
     activeBranchName: "feature",
     conversationStartedTimestampMs: BigInt(10),
+    pendingToolCalls: ["{\"role\":\"assistant\"}"],
+    previousWorkspaceUris: ["file:///workspace"],
+    trackedGitRepoBranches: [new TrackedGitRepo({ repoPath: "/repo", branchName: "feature" })],
   })
   const redacted = toRedactedConversationStateStructure(source, PrivacyMode.NO_STORAGE)
   const slate = fromInteropConversationState(redacted)
@@ -60,10 +64,28 @@ test("conversation state projects its persisted mode and fields into Slate", () 
   assert.deepEqual(slate.rootPromptMessagesJson, source.rootPromptMessagesJson)
   assert.equal(slate.activeBranchName, "feature")
   assert.equal(slate.conversationStartedTimestampMs, BigInt(10))
+  assert.deepEqual(slate.pendingToolCalls, ["{\"role\":\"assistant\"}"])
+  assert.deepEqual(slate.previousWorkspaceUris, ["file:///workspace"])
+  assert.deepEqual(slate.trackedGitRepoBranches, [{ repoPath: "/repo", branchName: "feature" }])
 
   const roundTripped = toInteropConversationState(slate)
   assert.equal(roundTripped.mode, AgentMode.PLAN)
   assert.equal(roundTripped._privacyMode, PrivacyMode.NO_STORAGE)
+  assert.ok(roundTripped.pendingToolCalls[0] instanceof RedactedString)
+  assert.equal(roundTripped.pendingToolCalls[0]?.__classification, DataClassification.CODE)
+  assert.ok(roundTripped.previousWorkspaceUris[0] instanceof RedactedString)
+  assert.equal(roundTripped.previousWorkspaceUris[0]?.__classification, DataClassification.PATH)
+  assert.ok(roundTripped.trackedGitRepoBranches[0]?.repoPath instanceof RedactedString)
+  assert.equal(roundTripped.trackedGitRepoBranches[0]?.repoPath.__fieldName, "repo_path")
+
+  const persisted = fromRedactedConversationStateStructureInterop(
+    roundTripped,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.deepEqual(persisted.pendingToolCalls, ["{\"role\":\"assistant\"}"])
+  assert.deepEqual(persisted.previousWorkspaceUris, ["file:///workspace"])
+  assert.equal(persisted.trackedGitRepoBranches[0]?.repoPath, "/repo")
 })
 
 test("an unknown conversation mode uses Slate's fallback without losing its source code", () => {
