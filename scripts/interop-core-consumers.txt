@@ -250,7 +250,6 @@ source/packages/agent/state.ts	../../adapters/interop/agent/agent-conversation-s
 source/packages/agent/state.ts	../../adapters/interop/agent/agent-state-message-serdes-adapter.ts
 source/packages/agent/state.ts	../../adapters/interop/agent/mode-processing-adapter.ts
 source/packages/agent/state.ts	../../adapters/interop/agent/selected-context-processing-adapter.ts
-source/packages/agent/state.ts	../../adapters/interop/agent/subagent-persisted-state-adapter.ts
 source/packages/agent/state.ts	../../adapters/interop/agent/subagent-run-state-adapter.ts
 source/packages/agent/state.ts	../../adapters/interop/agent/user-message-action-protocol-adapter.ts
 source/packages/agent/summarization-orchestrator.ts	../../adapters/interop/agent/mode-processing-adapter.ts

@@ -47,16 +47,11 @@ import {
   fromRedactedCommunicateUpdateHistoryEntryInterop,
   fromRedactedCommunicateUpdateTurnStateInterop,
   fromRedactedConversationTokenDetailsInterop,
-  fromRedactedSubagentPersistedStateInterop,
   fromRedactedSubagentRunStateInterop,
   serializeRedactedConversationStateInterop,
   toInteropConversationState,
 } from "../../adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { projectSelectedContextForProcessing } from "../../adapters/interop/agent/selected-context-processing-adapter.ts"
-import {
-  fromInteropSubagentPersistedState,
-  toInteropSubagentPersistedState,
-} from "../../adapters/interop/agent/subagent-persisted-state-adapter.ts"
 import {
   slateConversationTurnSerde,
 } from "../../adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
@@ -1642,18 +1637,8 @@ export class ConversationStateHandle {
     }
     this.selfSummaryCount = this.conversationStateStructure.selfSummaryCount ?? 0;
     if (this.conversationStateStructure.subagentStates !== undefined) {
-      for (const [subagentId, redactedState] of this.conversationStateStructure.subagentStates) {
-        this.subagentStates.set(
-          subagentId,
-          fromInteropSubagentPersistedState(
-            fromRedactedSubagentPersistedStateInterop(
-              redactedState,
-              PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-              undefined,
-            ),
-            this.privacyMode,
-          ),
-        );
+      for (const [subagentId, state] of this.conversationStateStructure.subagentStates) {
+        this.subagentStates.set(subagentId, state);
       }
     }
     if (this.conversationStateStructure.subagentRunsByParentToolCallId !== undefined) {
@@ -2593,7 +2578,7 @@ These images can be copied for use in other locations.
         };
         return [path29, stateEntry] as const;
       }));
-      const subagentStatesRecord: Record<string, ReturnType<typeof toInteropSubagentPersistedState>> = {};
+      const subagentStatesRecord: Record<string, SlateSubagentPersistedState> = {};
       const subagentRefsRecord: Record<string, Uint8Array> = {};
       let subagentRefsPromise: Promise<void> | undefined;
       if (this.serializeSubagentStatesAsBlobRefs) {
@@ -2619,7 +2604,7 @@ These images can be copied for use in other locations.
         })).then(() => undefined);
       } else {
         for (const [subagentId, state] of this.subagentStates) {
-          subagentStatesRecord[subagentId] = toInteropSubagentPersistedState(state);
+          subagentStatesRecord[subagentId] = state;
         }
       }
       const subagentRunsRecord: Record<string, ReturnType<typeof toInteropSubagentRunState>> = {};

@@ -16,6 +16,8 @@ import {
   FileStateStructure,
   GoalState,
   PlanRegistryEntry,
+  SubagentPersistedState,
+  SubagentExecutionEnvironment,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { GoalStatus } from "../../source/adapters/interop/proto/generated/agent/v1/goal_tool_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -155,4 +157,33 @@ test("plan registry and goal state use Slate types and retain an unknown status 
   )
   assert.equal(Object.values(restored.plans)[0]?.path, "/repo/plan.md")
   assert.equal(restored.goalState?.status, unknownStatus)
+})
+
+test("subagent state values are typed Slate records and preserve unknown environments", () => {
+  const unknownEnvironment = 4_097 as SubagentExecutionEnvironment
+  const redacted = toRedactedConversationStateStructure(
+    new ConversationStateStructure({
+      subagentStates: {
+        "subagent-1": new SubagentPersistedState({
+          modelId: "model-1",
+          environment: unknownEnvironment,
+        }),
+      },
+    }),
+    PrivacyMode.NO_STORAGE,
+  )
+  const slate = fromInteropConversationState(redacted)
+  const subagent = slate.subagentStates?.get("subagent-1")
+
+  assert.equal(subagent?.modelId, "model-1")
+  assert.equal(subagent?.executionEnvironment, "unspecified")
+  assert.equal(subagent?.compatibility?.legacyEnvironmentCode, unknownEnvironment)
+
+  const restored = fromRedactedConversationStateStructureInterop(
+    toInteropConversationState(slate),
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  )
+  assert.equal(restored.subagentStates["subagent-1"]?.environment, unknownEnvironment)
+  assert.equal(restored.subagentStates["subagent-1"]?.modelId, "model-1")
 })

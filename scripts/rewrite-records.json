@@ -106,7 +106,7 @@
       "claim": "rewritten",
       "overlap": 0.6713746630727763,
       "refreshReason": "The conversation snapshot now types plan registry entries as SlatePlanRegistryEntry and goals as SlateGoalState; redacted generated plan/goal values are decoded and encoded only at the state-message adapter.",
-      "evidence": "tests/packages/agent-state.test.ts and slate-conversation-state.test.ts pass 47/47, including unknown goal-status preservation and plan/goal round-trip. The full Work-host suite passes 9962/9962 under Node 24.14. Work-host typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (325 imports across 223 files, zero direct proto consumers), and TypeScript checks. The State handle now reads and writes Slate plan/goal values; runner projections and persisted schema compatibility remain adapter-owned. Measured overlap is 0.6713746630727763 against 9275 baseline pairs."
+      "evidence": "tests/packages/agent-state.test.ts, slate-conversation-state.test.ts and slate-subagent-state-storage.test.ts pass 52/52, including unknown goal status, typed subagent-state recovery, compatibility projection and plan/goal round-trip. The full Work-host suite passes 9963/9963 under Node 24.14. Work-host typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (324 imports across 223 files, zero direct proto consumers), and TypeScript checks. State handles now store plan, goal and subagent-state values as Slate types; generated forms remain in state-message adapters. Measured overlap is 0.6713746630727763 against 9275 baseline pairs."
     },
     "packages/cursor-plugins/types.ts": {
       "claim": "rewritten",
