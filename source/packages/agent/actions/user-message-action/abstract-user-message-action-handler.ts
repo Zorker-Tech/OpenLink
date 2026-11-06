@@ -481,12 +481,8 @@ function hasReflectGeneralToolCall(
 }
 
 function isSuccessfulCreatePlanStep(agentStep: SlateConversationStep | undefined): boolean {
-  if (agentStep?.kind !== "tool-call" || agentStep.tool.case !== "createPlanToolCall") return false;
-  const toolValue = agentStep.tool.value;
-  if (typeof toolValue !== "object" || toolValue === null || !("result" in toolValue)) return false;
-  const stepResult = toolValue.result;
-  if (typeof stepResult !== "object" || stepResult === null || !("result" in stepResult)) return false;
-  return typeof stepResult.result === "object" && stepResult.result !== null && "case" in stepResult.result && stepResult.result.case === "success";
+  if (agentStep?.kind !== "tool-call" || agentStep.tool.kind !== "plan-draft") return false;
+  return agentStep.tool.result?.kind === "created";
 }
 
 interface DeliveryTurnLike {
