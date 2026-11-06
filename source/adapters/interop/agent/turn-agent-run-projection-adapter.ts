@@ -19,6 +19,10 @@ import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.t
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
 import { slateAskQuestionCompletionFromRedacted } from "./ask-question-result-adapter.ts"
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
+import {
+  createSlateSummarizeActionPayload,
+  isSlateSummarizeActionPayload,
+} from "../../../packages/agent/actions/summarize-action-contracts.ts"
 import { interopAgentConversationCheckpointFromSlate } from "./agent-conversation-protobuf-adapter.ts"
 import { toRedactedConversationStateStructureInterop } from "./agent-state-message-serdes-adapter.ts"
 
@@ -110,6 +114,15 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
   if (action.kind === SlateAgentActionKind.EXECUTE_PLAN && isSlateExecutePlanActionPayload(action.payload)) {
     return { ...action, context, payload: { ...action.payload, privacyMode } }
   }
+  if (action.kind === SlateAgentActionKind.SUMMARIZE) {
+    return {
+      ...action,
+      context,
+      payload: isSlateSummarizeActionPayload(action.payload)
+        ? action.payload
+        : createSlateSummarizeActionPayload(),
+    }
+  }
   if (action.kind === SlateAgentActionKind.RESUME) {
     return {
       ...action,
@@ -196,6 +209,9 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
   if (slateAction.kind === SlateAgentActionKind.RESUME) {
     return { ...slateAction, payload: slateResumeActionPayloadFromRedacted(action.action.value) }
   }
+  if (slateAction.kind === SlateAgentActionKind.SUMMARIZE) {
+    return { ...slateAction, payload: createSlateSummarizeActionPayload() }
+  }
   if (slateAction.kind === SlateAgentActionKind.EXECUTE_PLAN) {
     return { ...slateAction, payload: decodeExecutePlanAction(action.action.value) }
   }
@@ -230,6 +246,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "resumeAction") {
     const wrapped = new ConversationAction({ action: { case: "resumeAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "summarizeAction") {
+    const wrapped = new ConversationAction({ action: { case: "summarizeAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "executePlanAction") {

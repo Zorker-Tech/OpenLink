@@ -24,6 +24,7 @@ import { addSummarySystemInstructions } from "./summarize-action-system-prompt.t
 import { applySummaryToConversation } from "./summarize-action-state.ts";
 import type {
   RootPromptExecutor,
+  SlateSummarizeActionPayload,
   SummarizeConfig,
   SummarizeLooseValue,
   SummarizeStateHandler,
@@ -54,7 +55,7 @@ export class SummarizeActionHandler {
 
   async handle(
     ctx: Context,
-    _action: SummarizeLooseValue,
+    _action: SlateSummarizeActionPayload,
     rootPromptExecutor: RootPromptExecutor,
     stateHandler: SummarizeStateHandler,
     _mcpTools: SummarizeLooseValue,
