@@ -182,7 +182,6 @@ source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/i
 source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/interop/agent/project-conversation-adapter.ts
 source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/interop/agent/testing-prompt-profile-adapter.ts
 source/packages/agent/actions/execute-plan-action-handler.ts	../../../adapters/interop/agent/user-info-input-adapter.ts
-source/packages/agent/actions/goal-continuation-action-handler.ts	../../../adapters/interop/agent/goal-continuation-message-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/background-agent-source-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/mcp-user-defined-tools-adapter.ts
 source/packages/agent/actions/shell-command-action-handler.ts	../../../adapters/interop/agent/meta-agent-notes-adapter.ts

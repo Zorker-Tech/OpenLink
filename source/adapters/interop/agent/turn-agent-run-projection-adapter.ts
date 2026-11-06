@@ -25,6 +25,10 @@ import { slateBackgroundTaskCompletionActionFromRedacted } from "./background-ta
 import { isSlateExecutePlanActionPayload } from "../../../packages/agent/actions/execute-plan-contracts.ts"
 import { isSlateBackgroundTaskCompletionActionPayload } from "../../../packages/agent/actions/background-task-completion-contracts.ts"
 import {
+  createSlateGoalContinuationActionPayload,
+  isSlateGoalContinuationActionPayload,
+} from "../../../packages/agent/actions/goal-continuation-contracts.ts"
+import {
   createSlateCancelActionPayload,
   isSlateCancelActionPayload,
   redactSlateCancelActionPayload,
@@ -171,6 +175,15 @@ function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMo
     }
     return { ...action, context, payload: action.payload }
   }
+  if (action.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
+    return {
+      ...action,
+      context,
+      payload: isSlateGoalContinuationActionPayload(action.payload)
+        ? action.payload
+        : createSlateGoalContinuationActionPayload(),
+    }
+  }
   if (action.kind === SlateAgentActionKind.RESUME) {
     return {
       ...action,
@@ -271,6 +284,9 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
       ),
     }
   }
+  if (slateAction.kind === SlateAgentActionKind.GOAL_CONTINUATION) {
+    return { ...slateAction, payload: createSlateGoalContinuationActionPayload() }
+  }
   if (slateAction.kind === SlateAgentActionKind.SUMMARIZE) {
     return { ...slateAction, payload: createSlateSummarizeActionPayload() }
   }
@@ -320,6 +336,10 @@ export function slateAgentActionFromQueuedInterop(
   }
   if (action.case === "backgroundTaskCompletionAction") {
     const wrapped = new ConversationAction({ action: { case: "backgroundTaskCompletionAction", value: action.value as never } })
+    return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
+  }
+  if (action.case === "goalContinuationAction") {
+    const wrapped = new ConversationAction({ action: { case: "goalContinuationAction", value: action.value as never } })
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   if (action.case === "executePlanAction") {

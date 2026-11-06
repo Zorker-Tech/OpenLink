@@ -4,7 +4,10 @@ import { describe, it } from "node:test";
 import { createContext, type Context } from "../../source/packages/context/context.ts";
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts";
 import { GoalContinuationActionHandler } from "../../source/packages/agent/actions/goal-continuation-action-handler.ts";
-import { AgentMode, SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { createSlateGoalContinuationActionPayload } from "../../source/packages/agent/actions/goal-continuation-contracts.ts";
+import type { SlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts";
+import { SlateSimulatedMessageReason } from "../../source/packages/agent/user-message-state.ts";
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts";
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts";
@@ -78,17 +81,24 @@ describe("the goal continuation handler", () => {
     const { instance } = handler();
     const ctx = baseCtx();
     const harness = stateHandler(activeGoal({ activeDurationMs: BigInt(0), lastAccruedAtMs: BigInt(Date.now() - 1_000) }));
-    const action = await instance.adaptAction(ctx, harness.state, undefined, publish);
+    const action = await instance.adaptAction(ctx, harness.state, undefined, publish) as SlateUserMessageActionPayload;
     const written = harness.written[0] as SlateGoalState;
     assert.equal(written.continuationCount, 1);
     assert.equal(written.idleContinuationsWithoutToolCalls, 1);
     assert.equal(written.activeDurationMs! > BigInt(0), true);
     assert.equal(typeof written.lastAccruedAtMs, "bigint");
-    assert.notEqual(action.userMessage, undefined);
-    assert.equal((action.userMessage as any).mode, AgentMode.AGENT);
-    assert.equal((action.userMessage as any).isSimulatedMsg, true);
-    assert.equal((action.userMessage as any).simulatedMsgReason, SimulatedMsgReason.GOAL_CONTINUATION);
-    assert.equal(action.sendToInteractionListener, true);
+    assert.equal(action.schema, "slate.agent-action.user-message");
+    assert.equal(action.message?.mode, SlateMode.AGENT);
+    assert.equal(action.message?.isSimulatedMsg, true);
+    assert.equal(action.message?.simulatedMsgReason, SlateSimulatedMessageReason.GOAL_CONTINUATION);
+    assert.equal(action.notifyUser, true);
+    assert.deepEqual(action.earlierMessages, []);
+    const messageText = action.message?.text;
+    assert.ok(messageText !== undefined);
+    const text = typeof messageText === "string"
+      ? messageText
+      : messageText.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED);
+    assert.match(text, /<objective>\nship the thing\n<\/objective>/);
   });
 
   it("clears the idle streak only when there is one", async () => {
@@ -107,11 +117,11 @@ describe("the goal continuation handler", () => {
   it("returns the new structure when there is nothing to continue", async () => {
     const { instance } = handler();
     const ctx = baseCtx();
-    const result = await instance.handle(ctx, undefined, {} as never, stateHandler(undefined).state, undefined, publish);
+    const result = await instance.handle(ctx, createSlateGoalContinuationActionPayload(), {} as never, stateHandler(undefined).state, undefined, publish);
     assert.equal((result as any).structure, 0);
-    const single = await instance.handleSingleStep(ctx, undefined, {} as never, stateHandler(undefined).state, undefined, publish);
+    const single = await instance.handleSingleStep(ctx, createSlateGoalContinuationActionPayload(), {} as never, stateHandler(undefined).state, undefined, publish);
     assert.equal((single as any).hasToolCall, false);
-    const model = await instance.handleModelStep(ctx, undefined, {} as never, stateHandler(undefined).state, undefined, publish);
+    const model = await instance.handleModelStep(ctx, createSlateGoalContinuationActionPayload(), {} as never, stateHandler(undefined).state, undefined, publish);
     assert.equal((model as any).splitStepData.goalContinuationNoop, true);
   });
 

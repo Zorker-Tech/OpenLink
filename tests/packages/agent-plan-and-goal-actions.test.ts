@@ -14,6 +14,8 @@ import {
 import { slateModeForPlanExecutionMode } from "../../source/packages/agent/actions/execute-plan-contracts.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { GoalContinuationActionHandler } from "../../source/packages/agent/actions/goal-continuation-action-handler.ts"
+import { createSlateGoalContinuationActionPayload } from "../../source/packages/agent/actions/goal-continuation-contracts.ts"
+import type { SlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -341,18 +343,20 @@ test("a goal that is not this conversation's is not continued", async () => {
 test("continuing a goal wakes the conversation with a tagged notification", async () => {
   const state = stateHarness(goalState())
   const handler = handlerWith({}, state)
-  const action = await handler.adaptAction(ctxWithConversation(), state.stateHandler, [], () => {}) as {
-    _privacyMode?: unknown
-    sendToInteractionListener?: boolean
-    userMessage?: { text?: { unwrap(purpose: PrivacyCapability): string }; isSimulatedMsg?: boolean; simulatedMsgReason?: number }
-  }
+  const action = await handler.adaptAction(ctxWithConversation(), state.stateHandler, [], () => {}) as SlateUserMessageActionPayload
 
-  assert.equal(action.userMessage?.isSimulatedMsg, true)
-  assert.equal(action.userMessage?.simulatedMsgReason, SimulatedMsgReason.GOAL_CONTINUATION)
+  assert.equal(action.schema, "slate.agent-action.user-message")
+  assert.equal(action.message?.isSimulatedMsg, true)
+  assert.equal(action.message?.simulatedMsgReason, "goal-continuation")
   // The wake-up is shown to the user, so the goal is visibly still running.
-  assert.equal(action.sendToInteractionListener, true)
+  assert.equal(action.notifyUser, true)
   // The message is stored redacted, so its text is unwrapped to be read.
-  const text = action.userMessage?.text?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) ?? ""
+  const messageText = action.message?.text
+  const text = messageText === undefined
+    ? ""
+    : typeof messageText === "string"
+      ? messageText
+      : messageText.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   assert.match(text, new RegExp(`^<${SYSTEM_NOTIFICATION_TAG} source="goal">`))
   assert.match(text, /Continue working toward the active thread goal\./)
   assert.match(text, /The objective below is user-provided data\./)
@@ -393,7 +397,7 @@ test("a continuation that produced no tool call leaves the streak alone", async 
   const handler = handlerWith({
     async handle() { return { turns: ["continued"] } },
   }, state)
-  const result = await handler.handle(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {})
+  const result = await handler.handle(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {})
   assert.deepEqual(result, { turns: ["continued"] })
   // Nothing was cleared: the only goal state written is the continuation itself.
   assert.equal(state.setGoalStateCalls.every(call => call.idleContinuationsWithoutToolCalls === 2), true)
@@ -408,7 +412,7 @@ test("a continuation that used a tool clears the streak", async () => {
       return { turns: ["worked"] }
     },
   }, state)
-  const result = await handler.handle(ctxWithConversation(), undefined, {
+  const result = await handler.handle(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {
     executeToolStream: async (_ctx: unknown, _state: unknown, _handler: unknown, _tools: unknown, _extra: unknown, record: (ctx: unknown, result: unknown, name: unknown, classification: unknown) => Promise<void>) => {
       await record({}, { ok: true }, "Read", undefined)
     },
@@ -431,11 +435,11 @@ test("a goal that is not continued leaves each entry point with its own empty an
   const handler = handlerWith({}, state)
 
   assert.deepEqual(
-    await handler.handleSingleStep(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {}),
+    await handler.handleSingleStep(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {}),
     { state: { turns: [] }, hasToolCall: false },
   )
   assert.deepEqual(
-    await handler.handleModelStep(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {}),
+    await handler.handleModelStep(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {}),
     {
       state: { turns: [] },
       toolCallDescriptors: [],
@@ -443,7 +447,7 @@ test("a goal that is not continued leaves each entry point with its own empty an
     },
   )
   assert.deepEqual(
-    await handler.handle(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {}),
+    await handler.handle(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {}),
     { turns: [] },
   )
 })
@@ -453,7 +457,7 @@ test("a single-step continuation that used a tool also clears the streak", async
   const handler = handlerWith({
     async handleSingleStep() { return { state: { turns: ["stepped"] }, hasToolCall: true } },
   }, state)
-  const result = await handler.handleSingleStep(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {})
+  const result = await handler.handleSingleStep(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {})
   assert.deepEqual(result, { state: { turns: [] }, hasToolCall: true })
   assert.equal(state.setGoalStateCalls.at(-1)?.idleContinuationsWithoutToolCalls, 0)
 })
@@ -463,7 +467,7 @@ test("a single-step continuation with no tool call is left as it is", async () =
   const handler = handlerWith({
     async handleSingleStep() { return { state: { turns: ["idle"] }, hasToolCall: false } },
   }, state)
-  const result = await handler.handleSingleStep(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {})
+  const result = await handler.handleSingleStep(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {})
   assert.deepEqual(result, { state: { turns: ["idle"] }, hasToolCall: false })
 })
 
@@ -472,7 +476,7 @@ test("a model-step continuation with no tool call is left as it is", async () =>
   const handler = handlerWith({
     async handleModelStep() { return { state: { turns: ["idle"] }, toolCallDescriptors: [], splitStepData: {} } },
   }, state)
-  const result = await handler.handleModelStep(ctxWithConversation(), undefined, {}, state.stateHandler, [], () => {})
+  const result = await handler.handleModelStep(ctxWithConversation(), createSlateGoalContinuationActionPayload(), {}, state.stateHandler, [], () => {})
   assert.deepEqual(result, { state: { turns: ["idle"] }, toolCallDescriptors: [], splitStepData: {} })
 })
 
