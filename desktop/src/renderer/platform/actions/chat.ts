@@ -42,14 +42,14 @@ export async function updateChatSessionAccessModeAction(input: {
 export async function listPendingAccessWritesAction(
   sessionId: string,
 ): Promise<{ confirmations: PendingAccessWrite[]; error: string | null }> {
-  return callDesktopAction('chat.listPendingAccessWrites', { sessionId })
+  return callDesktopAction<{ confirmations: PendingAccessWrite[]; error: string | null }>('chat.listPendingAccessWrites', { sessionId })
 }
 
 export async function approveAccessWriteAction(
   sessionId: string,
   confirmationId: string,
 ): Promise<{ ok: boolean; error: string | null }> {
-  return callDesktopAction('chat.approveAccessWrite', { sessionId, confirmationId })
+  return callDesktopAction<{ ok: boolean; error: string | null }>('chat.approveAccessWrite', { sessionId, confirmationId })
 }
 
 export async function deleteChatSessionAction(

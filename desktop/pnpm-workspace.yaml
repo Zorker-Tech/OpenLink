@@ -1,1 +1,4 @@
 packages: []
+allowBuilds:
+  # Electron's postinstall downloads the platform binary used by `electron .`.
+  electron: true

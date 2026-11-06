@@ -42,15 +42,19 @@ test('terminal Worker initialization error is reported without waiting another m
   } finally { globalThis.fetch = original }
 })
 
-test('rewrites host loopback services for project sandbox containers only', () => {
-  const runtime = { status: 'ready' } as never
+test('rewrites host loopback services through the project VM gateway', () => {
+  const runtime = { status: 'ready', backend: 'qemu-kvm' } as never
   assert.equal(
     projectContainerReachableUrl('http://127.0.0.1:43121/v1/projects/p1/supabase/mcp', runtime),
-    'http://host.containers.internal:43121/v1/projects/p1/supabase/mcp',
+    'http://10.0.2.2:43121/v1/projects/p1/supabase/mcp',
   )
   assert.equal(
     projectContainerReachableUrl('http://localhost:54002', runtime),
-    'http://host.containers.internal:54002',
+    'http://10.0.2.2:54002',
+  )
+  assert.equal(
+    projectContainerReachableUrl('http://127.0.0.1:43121/v1/projects/p1/supabase/mcp', { status: 'ready', backend: 'podman-machine' } as never),
+    'http://host.containers.internal:43121/v1/projects/p1/supabase/mcp',
   )
   assert.equal(
     projectContainerReachableUrl('http://127.0.0.1:43121/path'),

@@ -40,6 +40,10 @@ try {
   for (const relative of [
     'app/web/server.js',
     'services/agent-host/dist/src/main.js',
+    'services/agent-host/civilization-host.py',
+    'services/civilization/LICENSE',
+    'services/civilization/pyproject.toml',
+    'services/civilization/src/civilization/engine/stages/stage74_orion_memory_service.py',
     'services/agent-host/dist/src/project-container-main.js',
     'services/agent-host/project-supabase-runtime.mjs',
     'scripts/lib/project-supabase-bundle.mjs',

@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Protocol
 
-import torch
-
 
 DEFAULT_OUTPUT_DIR = Path("artifacts/civilization/stage45_adapter_package")
 DEFAULT_STAGE44C_SUMMARY = Path("artifacts/civilization/stage44c_real_task_runner/summary.json")
@@ -105,6 +103,10 @@ def _sha256(path: Path) -> str:
 
 
 def checkpoint_contains_qwen_weights(path: Path) -> bool:
+    # Memory-only hosts can import Stage74 without installing the optional
+    # PyTorch inference stack. Load it only when inspecting a model checkpoint.
+    import torch
+
     payload = torch.load(path, map_location="cpu", weights_only=True)
     forbidden_top_level = {"qwen_state_dict", "model_state_dict", "base_model_state_dict"}
     if forbidden_top_level & set(payload):

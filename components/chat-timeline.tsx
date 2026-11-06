@@ -1031,7 +1031,7 @@ function TimelineMessageItem({ item }: { item: Extract<TimelineItem, { kind: 'me
 function EditableUserMessage({ item, disabled, onEditMessage }: {
   item: Extract<TimelineItem, { kind: 'message' }>
   disabled: boolean
-  onEditMessage?: (messageId: string, text: string) => Promise<void>
+  onEditMessage?: (messageId: string, text: string, options?: { onAccepted?: () => void }) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(item.text)
@@ -1051,8 +1051,18 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
     if (pending || disabled || !draft.trim() || !onEditMessage) return
     setPending(true)
     setError(null)
-    try { await onEditMessage(item.id, draft.trim()); setEditing(false) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : t('重发失败，修改内容已保留')) }
+    let accepted = false
+    try {
+      await onEditMessage(item.id, draft.trim(), {
+        onAccepted: () => {
+          accepted = true
+          setEditing(false)
+        },
+      })
+      setEditing(false)
+    } catch (cause) {
+      if (!accepted) setError(cause instanceof Error ? cause.message : t('重发失败，修改内容已保留'))
+    }
     finally { setPending(false) }
   }
   return <div className="relative flex w-full justify-end" data-message-id={item.id}>
@@ -1308,7 +1318,7 @@ export function ChatTimeline({
   isStreaming?: boolean
   showThinkingContent?: boolean
   onFlowStatusChange?: (status: ActiveFlowStatus | null) => void
-  onEditMessage?: (messageId: string, text: string) => Promise<void>
+  onEditMessage?: (messageId: string, text: string, options?: { onAccepted?: () => void }) => Promise<void>
   onRetryInitialPrompt?: () => Promise<void>
 }) {
   const t = useT()

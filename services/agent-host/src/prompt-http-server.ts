@@ -14,6 +14,7 @@ import { DesktopGateway, type DesktopEndpoint } from './desktop-gateway.js'
 import type { DesktopRuntimeStatus, DesktopSuspendResult } from './backends/desktop-runtime.js'
 import { CodeServerGateway } from './code-server-gateway.js'
 import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
+import { handleProjectMemoryMcpRequest, type CivilizationMemoryServiceConfig, type ProjectAgentMode } from './project-memory-mcp.js'
 
 export interface PromptRuntimeSession {
   control?(input: { action: string; text?: string }): Promise<unknown>
@@ -91,6 +92,8 @@ export interface PromptHttpServerConfig {
   requireProjectRuntime?: boolean
   /** Resolves a chat session's authoritative Supabase access mode. */
   resolveSupabaseAccessMode?: (sessionId: string) => Promise<import('./access-firewall.js').AccessMode>
+  /** Host-only Civilization endpoint; never injected into a Project VM. */
+  civilizationMemoryService?: CivilizationMemoryServiceConfig
   /** Public URL used by browser clients; must not be a Project VM loopback URL. */
   browserGatewayPublicUrl?: string
   browserGatewayAllowedOrigins?: string[]
@@ -1623,6 +1626,22 @@ export async function startPromptHttpServer(
             if (!config.resolveSupabaseAccessMode) return 'restricted'
             return config.resolveSupabaseAccessMode(sessionId)
           },
+        })
+        return
+      }
+      const projectMemoryMcpRequest = /^\/v1\/projects\/([^/]+)\/memory\/([^/]+)\/mcp$/.exec(url.pathname)
+      if (projectMemoryMcpRequest && request.method === 'POST') {
+        const projectId = decodeURIComponent(projectMemoryMcpRequest[1]!)
+        const mode = decodeURIComponent(projectMemoryMcpRequest[2]!)
+        if (!isProjectId(projectId) || mode !== 'code') throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
+        if (!config.civilizationMemoryService) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project memory service is not configured')
+        await handleProjectMemoryMcpRequest({
+          request,
+          response,
+          projectId,
+          mode: mode as ProjectAgentMode,
+          apiToken: config.apiToken,
+          service: config.civilizationMemoryService,
         })
         return
       }

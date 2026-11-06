@@ -8,7 +8,7 @@
 | `desktop/` | Electron/Vite shell | Loads the existing Web/BFF; no duplicated product UI or backend credentials |
 | `packages/` | OpenLink shared packages/artifacts | Must have an explicit consumer and stable contract |
 | `services/agent-host`, `agent-worker`, `agent-rpc-worker`, `browser-host`, `knowledge-service` | OpenLink-owned services | Independent package/build boundary; communicate through contracts |
-| `services/pi`, `opensandbox`, `sandbox-runtime`, `code-server`, `linux`, `zero`, `agent-desktop` | Vendored runtime source | No nested `.git`; no casual refactor; update from pinned upstream with review |
+| `services/pi`, `civilization`, `opensandbox`, `sandbox-runtime`, `code-server`, `linux`, `zero`, `agent-desktop` | Vendored runtime source | No nested `.git`; no casual refactor; update from pinned upstream with review |
 | `backend/` | Sparse ZOKERBASE upstream-compatible source snapshot | Keep self-host runtime, Studio, and required workspace packages; product changes belong in overlays/patches where possible |
 | `zorkerbase/migrations/` | Authoritative application schema history | Append-only migrations; Local and Cloud-compatible schema contract |
 | `scripts/` | Root lifecycle and artifact production | Idempotent, non-interactive, explicit build/start distinction |

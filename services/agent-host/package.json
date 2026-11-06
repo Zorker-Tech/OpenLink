@@ -12,7 +12,8 @@
   },
   "files": [
     "dist",
-    "openlink-agent-tool.sh"
+    "openlink-agent-tool.sh",
+    "civilization-host.py"
   ],
   "engines": {
     "node": ">=22.19.0"

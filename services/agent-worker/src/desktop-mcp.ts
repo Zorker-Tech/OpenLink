@@ -388,7 +388,7 @@ export async function handleDesktopMcpRequest(
       protocolVersion: '2025-06-18',
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: 'openlink-desktop', version: '1.0.0' },
-      instructions: 'Native Ubuntu desktop automation for this OpenLink project session. Prefer these tools for GUI work; observe before acting and again after each change.',
+      instructions: 'Native Ubuntu desktop automation for this OpenLink project session. Prefer these tools for GUI work; observe before acting and again after each change. The cursor overlay starts automatically when the display server supports it. It cannot be changed or disabled through the agent tools; unsupported sessions run without it.',
     })
     return
   }

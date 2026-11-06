@@ -1,17 +1,18 @@
 # OpenLink services
 
 OpenLink services are subordinate runtimes of the OpenLink product. They keep
-their own package manager, lockfile, Node runtime, and build boundary so that a
-service cannot accidentally leak dependencies into the Next.js bundle, but
+their own language-specific runtimes, dependency metadata, and build boundaries
+so a service cannot accidentally leak dependencies into the Next.js bundle, but
 their installation, build, startup, health supervision, and shutdown are owned
 by the OpenLink root lifecycle.
 
 Run `pnpm dev` for development or `pnpm start` for production from the
 repository root. The supervisor builds the Podman toolchain from
-`services/linux`, syncs Pi, installs stale or missing service dependencies,
-builds the service artifacts and Project VM images, and starts the Browser
-Host, Web Agent Host, Desktop Agent Host, and web application. Users do not
-enter individual service directories to install or start product services.
+`services/linux`, verifies the pinned Civilization source, syncs Pi, installs
+stale or missing service dependencies, builds the service artifacts and Project
+VM images, and starts the Browser Host, Web Agent Host, Desktop Agent Host, and
+web application. Users do not enter individual service directories to install
+or start product services.
 
 ## Service layout
 
@@ -21,6 +22,7 @@ services/
 ├── agent-worker/        # Pi Node.js SDK worker used by web and desktop
 ├── agent-rpc-worker/    # Pi CLI RPC gateway used by remote OpenSandbox
 ├── browser-host/        # browser sessions, preview proxy, Chromium/CDP runtime
+├── civilization/        # Civilization 1.0.0 upstream service, subtree-imported
 ├── opensandbox/         # remote sandbox platform (subtree-imported source)
 ├── pi/                  # independent agent runtime (subtree-imported source)
 ├── sandbox-runtime/     # desktop OS sandbox (subtree-imported source)
@@ -37,6 +39,13 @@ integration boundaries.
 Its current implementation validates policies, storage paths, Pi RPC frames,
 and remote bootstrap plans while keeping privileged adapters dependency
 injected.
+
+Civilization stays as a separate upstream service at `services/civilization`.
+Agent Host starts its Stage74 Orion memory service through the small
+OpenLink-owned `services/agent-host/civilization-host.py` launcher and exposes
+project-and-mode-scoped memory tools. The root lifecycle verifies the pinned
+`v1.0.0` source before building Agent Host, and self-hosted releases copy the
+complete vendored project.
 
 ## Zero
 

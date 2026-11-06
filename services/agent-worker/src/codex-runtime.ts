@@ -45,6 +45,8 @@ export interface CodexRuntimeConfig {
   apiKey?: string
   supabaseMcpUrl?: string
   supabaseMcpToken?: string
+  projectMemoryMcpUrl?: string
+  projectMemoryMcpToken?: string
   browserMcpUrl?: string
   desktopMcpUrl?: string
   developerInstructions?: string
@@ -376,11 +378,14 @@ export class CodexAppServerRuntime {
         name,
         status: runtimeStatus === 'disabled' ? 'disabled' as const : runtimeStatus === 'failed' || runtimeStatus === 'error' ? 'error' as const : 'connected' as const,
         auth: authStatus === 'notLoggedIn' ? 'required' as const : authStatus === 'bearerToken' || authStatus === 'oAuth' ? 'authenticated' as const : 'unsupported' as const,
-        toolCount: tools.length || (name === 'openlink_browser' ? 18 : name === 'openlink_desktop' ? 11 : name === 'openlink_supabase' ? 3 : 0),
+        toolCount: tools.length || (name === 'openlink_browser' ? 18 : name === 'openlink_desktop' ? 11 : name === 'openlink_supabase' ? 3 : name === 'openlink_project_memory' ? 2 : 0),
       }]
     })
     if (!mcpServers.some((server) => server.id === 'openlink_supabase') && this.config.supabaseMcpUrl && this.config.supabaseMcpToken) {
       mcpServers.push({ id: 'openlink_supabase', name: 'OpenLink Supabase', status: 'connected', auth: 'authenticated', toolCount: 0 })
+    }
+    if (!mcpServers.some((server) => server.id === 'openlink_project_memory') && this.config.projectMemoryMcpUrl && this.config.projectMemoryMcpToken) {
+      mcpServers.push({ id: 'openlink_project_memory', name: 'OpenLink Project Memory', status: 'connected', auth: 'authenticated', toolCount: 2 })
     }
     if (!mcpServers.some((server) => server.id === 'openlink_browser') && this.config.browserMcpUrl) {
       mcpServers.push({ id: 'openlink_browser', name: 'OpenLink Browser', status: 'connected', auth: 'authenticated', toolCount: 18 })
@@ -911,9 +916,20 @@ export class CodexAppServerRuntime {
     }
     if (this.config.supabaseMcpUrl && this.config.supabaseMcpToken) {
       config.mcp_servers = {
+        ...asRecord(config.mcp_servers),
         openlink_supabase: {
           url: this.config.supabaseMcpUrl,
           bearer_token_env_var: 'OPENLINK_SUPABASE_MCP_TOKEN',
+        },
+      }
+    }
+    if (this.config.projectMemoryMcpUrl && this.config.projectMemoryMcpToken) {
+      config.mcp_servers = {
+        ...asRecord(config.mcp_servers),
+        openlink_project_memory: {
+          url: this.config.projectMemoryMcpUrl,
+          bearer_token_env_var: 'OPENLINK_PROJECT_MEMORY_MCP_TOKEN',
+          default_tools_approval_mode: 'approve',
         },
       }
     }
