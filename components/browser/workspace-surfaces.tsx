@@ -77,7 +77,6 @@ function BrowserNavigationBar({
   onSelectPreviewTarget,
   onToggleDeviceView,
   selectedGitRef,
-  sessionId,
   workspaceView,
 }: {
   browserState: BrowserWorkbenchUiState
@@ -89,7 +88,6 @@ function BrowserNavigationBar({
   onSelectPreviewTarget: (targetId: string) => void
   onToggleDeviceView: () => void
   selectedGitRef: string | null
-  sessionId: string
   workspaceView: 'mobile' | 'browser'
 }) {
   const [addressDraft, setAddressDraft] = useState(browserState.address)
@@ -271,7 +269,7 @@ export function WorkspaceSurfaces({
       {browserOpen && (
         <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-surface={view === 'mobile' ? 'mobile' : 'browser'}>
           <div className="flex size-full min-w-0 flex-col">
-            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} sessionId={sessionId} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
+            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
             <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${view === 'browser' ? theme('surface') : theme('editor')}`}>
               <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
                 <div className={`relative ${view === 'browser' ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}`}>
@@ -283,12 +281,12 @@ export function WorkspaceSurfaces({
                     <>
                       {previewOpen && (
                         <div aria-hidden={!previewActive} className={surfaceClass(previewActive)} data-workspace-browser-surface="preview">
-                          <BrowserWorkbench chatSessionId={sessionId} initialPreviewTargetId={initialPreviewTargetId || undefined} initialSurface="native-preview" initialUrl={initialBrowserUrl || undefined} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
+                          <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialPreviewTargetId={initialPreviewTargetId || undefined} initialSurface="native-preview" initialUrl={initialBrowserUrl || undefined} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
                         </div>
                       )}
                       {realtimeOpen && (
                         <div aria-hidden={!realtimeActive} className={surfaceClass(realtimeActive)} data-workspace-browser-surface="realtime">
-                          <BrowserWorkbench chatSessionId={sessionId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
+                          <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
                         </div>
                       )}
                     </>

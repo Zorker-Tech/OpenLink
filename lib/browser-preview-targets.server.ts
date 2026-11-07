@@ -1,5 +1,6 @@
 import { getT } from '@/lib/i18n/server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getProject, type ProjectSummary } from '@/lib/projects'
 import { createClient } from '@/utils/supabase/server'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
@@ -34,24 +35,70 @@ function safeTarget(value: unknown): BrowserPreviewTarget | null {
 }
 
 type ChatSessionRecord = NonNullable<Awaited<ReturnType<typeof getChatSession>>>
+type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
-/** List live Project development servers for one authenticated chat session. */
-export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
-  | { ok: true; targets: BrowserPreviewTarget[]; chat: ChatSessionRecord }
+export interface BrowserPreviewScopeInput {
+  chatSessionId?: string
+  projectId?: string
+}
+
+export type BrowserPreviewScopeResult =
+  | { ok: true; project: ProjectSummary; workspaceId: string; chat?: ChatSessionRecord; preferredSessionId?: string }
   | { ok: false; status: number; error: { code: string; message: string; recoverable?: boolean } }
-> {
+
+const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+type BrowserPreviewDiscoveryResult =
+  | { ok: true; targets: BrowserPreviewTarget[] }
+  | { ok: false; status: number; error: { code: string; message: string; recoverable?: boolean } }
+
+/** Resolve a Preview project from a caller-owned chat or an authorized project id. */
+export async function resolveBrowserPreviewScope(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  input: BrowserPreviewScopeInput,
+): Promise<BrowserPreviewScopeResult> {
+  let chat: ChatSessionRecord | null = null
+  let projectId = input.projectId ?? ''
+
+  if (input.chatSessionId !== undefined) {
+    if (!isChatSessionId(input.chatSessionId)) {
+      return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
+    }
+    chat = await getChatSession(supabase, userId, input.chatSessionId)
+    if (!chat) return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
+    if (projectId && projectId !== chat.project_id) {
+      return { ok: false, status: 404, error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found' } }
+    }
+    projectId = chat.project_id
+  }
+
+  if (!PROJECT_ID_PATTERN.test(projectId)) {
+    return { ok: false, status: 404, error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found' } }
+  }
+
+  const project = await getProject(supabase, projectId)
+  if (!project || (chat && project.workspace_id !== chat.workspace_id)) {
+    return { ok: false, status: 404, error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found' } }
+  }
+  if (project.status === 'archived') {
+    return { ok: false, status: 409, error: { code: 'PROJECT_ARCHIVED', message: 'Archived projects cannot open Preview' } }
+  }
+
+  return {
+    ok: true,
+    project,
+    workspaceId: project.workspace_id,
+    ...(chat ? { chat, preferredSessionId: chat.id } : {}),
+  }
+}
+
+export async function discoverBrowserPreviewTargets(projectId: string, preferredSessionId?: string): Promise<BrowserPreviewDiscoveryResult> {
   const { t } = await getT()
   const config = hostConfig()
   if (!config) return { ok: false, status: 503, error: { code: 'BROWSER_HOST_NOT_CONFIGURED', message: 'Browser Host is not configured', recoverable: true } }
-  if (!isChatSessionId(chatSessionId)) return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false, status: 401, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required' } }
-  const chat = await getChatSession(supabase, user.id, chatSessionId)
-  if (!chat) return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
   try {
-    const url = new URL(`/v1/projects/${encodeURIComponent(chat.project_id)}/preview-targets`, config.baseUrl)
-    url.searchParams.set('sessionId', chatSessionId)
+    const url = new URL(`/v1/projects/${encodeURIComponent(projectId)}/preview-targets`, config.baseUrl)
+    if (preferredSessionId) url.searchParams.set('sessionId', preferredSessionId)
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${config.apiToken}` },
       cache: 'no-store',
@@ -64,7 +111,7 @@ export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
     const targets = Array.isArray(payload?.targets)
       ? payload.targets.flatMap((value) => { const target = safeTarget(value); return target ? [target] : [] })
       : []
-    return { ok: true, targets, chat }
+    return { ok: true, targets }
   } catch (error) {
     return {
       ok: false,
@@ -76,6 +123,21 @@ export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
       },
     }
   }
+}
+
+/** List live development servers for an authenticated Preview project. */
+export async function listBrowserPreviewTargets(input: BrowserPreviewScopeInput): Promise<
+  | (Extract<BrowserPreviewScopeResult, { ok: true }> & { targets: BrowserPreviewTarget[] })
+  | Extract<BrowserPreviewScopeResult, { ok: false }>
+> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, status: 401, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required' } }
+  const scope = await resolveBrowserPreviewScope(supabase, user.id, input)
+  if (!scope.ok) return scope
+  const discovery = await discoverBrowserPreviewTargets(scope.project.id, scope.preferredSessionId)
+  if (!discovery.ok) return discovery
+  return { ...scope, targets: discovery.targets }
 }
 
 export { hostConfig }

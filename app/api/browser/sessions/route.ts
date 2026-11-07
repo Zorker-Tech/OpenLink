@@ -1,7 +1,6 @@
 import { getT } from '@/lib/i18n/server'
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
-import { hostConfig, listBrowserPreviewTargets, type BrowserPreviewTarget } from '@/lib/browser-preview-targets.server'
+import { discoverBrowserPreviewTargets, hostConfig, resolveBrowserPreviewScope, type BrowserPreviewTarget } from '@/lib/browser-preview-targets.server'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
 export const runtime = 'nodejs'
@@ -32,14 +31,13 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required' } }, { status: 401 })
 
-  let body: { chatSessionId?: unknown; surface?: unknown; initialUrl?: unknown; viewport?: unknown; previewTargetId?: unknown }
+  let body: { chatSessionId?: unknown; projectId?: unknown; surface?: unknown; initialUrl?: unknown; viewport?: unknown; previewTargetId?: unknown }
   try { body = await request.json() as typeof body } catch {
     return Response.json({ error: { code: 'INVALID_BODY', message: 'Request body is invalid' } }, { status: 400 })
   }
-  const chatSessionId = typeof body.chatSessionId === 'string' ? body.chatSessionId : ''
-  if (!isChatSessionId(chatSessionId)) return Response.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }, { status: 404 })
-  const chat = await getChatSession(supabase, user.id, chatSessionId)
-  if (!chat) return Response.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }, { status: 404 })
+  const chatSessionId = typeof body.chatSessionId === 'string' ? body.chatSessionId : undefined
+  const projectId = typeof body.projectId === 'string' ? body.projectId : undefined
+  if (!chatSessionId && !projectId) return Response.json({ error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found' } }, { status: 404 })
   if (body.surface !== 'native-preview' && body.surface !== 'chromium-stream') {
     return Response.json({ error: { code: 'INVALID_SURFACE', message: 'Browser surface is invalid' } }, { status: 400 })
   }
@@ -48,30 +46,27 @@ export async function POST(request: Request) {
     : (isPreviewTargetId(body.previewTargetId) ? body.previewTargetId : '')
   if (requestedTargetId === '') return Response.json({ error: { code: 'INVALID_PREVIEW_TARGET', message: 'Preview target is invalid' } }, { status: 400 })
 
-  let targets: BrowserPreviewTarget[] = []
-  let discoveryError: string | null = null
-  try {
-    const discovered = await listBrowserPreviewTargets(chatSessionId)
-    if (discovered.ok) targets = discovered.targets
-    else discoveryError = discovered.error.message
-  } catch (error) {
-    discoveryError = error instanceof Error ? error.message : t('无法发现项目开发服务器')
-  }
+  const scope = await resolveBrowserPreviewScope(supabase, user.id, { chatSessionId, projectId })
+  if (!scope.ok) return Response.json({ error: scope.error }, { status: scope.status })
+  const discovered = await discoverBrowserPreviewTargets(scope.project.id, scope.preferredSessionId)
+  const targets: BrowserPreviewTarget[] = discovered.ok ? discovered.targets : []
+  const discoveryError = discovered.ok ? null : discovered.error.message
   const selected = requestedTargetId
     ? targets.find((target) => target.id === requestedTargetId) ?? null
     : targets[0] ?? null
   if (requestedTargetId && !selected) {
+    if (!discovered.ok) return Response.json({ error: discovered.error }, { status: discovered.status })
     return Response.json({ error: { code: 'PREVIEW_TARGET_NOT_FOUND', message: t('所选开发服务器已停止，请刷新预览目标'), recoverable: true } }, { status: 409 })
   }
 
   const requestBody: Record<string, unknown> = {
     ownerId: user.id,
-    workspaceId: chat.workspace_id,
-    projectId: chat.project_id,
+    workspaceId: scope.workspaceId,
+    projectId: scope.project.id,
     // Browser Host sessions are intentionally ephemeral, but a Chromium
     // profile must remain stable when the UI reconnects or switches surface.
     // Keep the key private to the Agent Host/Browser Host boundary.
-    profileKey: chatSessionId,
+    profileKey: chatSessionId ?? `preview-${user.id}-${scope.project.id}`,
     surface: body.surface,
     viewport: body.viewport,
     ...(selected ? { previewTargetId: selected.id } : {}),
@@ -107,7 +102,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const response = await fetch(`${config.baseUrl}/v1/projects/${encodeURIComponent(chat.project_id)}/browser/sessions`, {
+  const response = await fetch(`${config.baseUrl}/v1/projects/${encodeURIComponent(scope.project.id)}/browser/sessions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(requestBody),

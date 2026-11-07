@@ -286,7 +286,8 @@ export class BrowserConnection {
 }
 
 export async function createBrowserSession(input: {
-  chatSessionId: string
+  chatSessionId?: string
+  projectId: string
   surface: 'native-preview' | 'chromium-stream'
   initialUrl?: string
   previewTargetId?: string
@@ -318,8 +319,10 @@ export async function createBrowserSession(input: {
   }
 }
 
-export async function listBrowserPreviewTargets(chatSessionId: string): Promise<BrowserPreviewTarget[]> {
-  const response = await fetch(`/api/browser/preview-targets?chatSessionId=${encodeURIComponent(chatSessionId)}`, { cache: 'no-store' })
+export async function listBrowserPreviewTargets(input: { projectId: string; chatSessionId?: string }): Promise<BrowserPreviewTarget[]> {
+  const query = new URLSearchParams({ projectId: input.projectId })
+  if (input.chatSessionId) query.set('chatSessionId', input.chatSessionId)
+  const response = await fetch(`/api/browser/preview-targets?${query.toString()}`, { cache: 'no-store' })
   const payload = await response.json().catch(() => null) as { targets?: unknown; error?: { message?: string } } | null
   if (!response.ok) throw new Error(payload?.error?.message || `Preview discovery failed (${response.status})`)
   return Array.isArray(payload?.targets)
@@ -337,7 +340,9 @@ export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
     : []
 }
 
-export async function deleteBrowserSession(chatSessionId: string, browserSessionId: string): Promise<void> {
-  const response = await fetch(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}?chatSessionId=${encodeURIComponent(chatSessionId)}`, { method: 'DELETE' })
+export async function deleteBrowserSession(input: { projectId: string; chatSessionId?: string }, browserSessionId: string): Promise<void> {
+  const query = new URLSearchParams({ projectId: input.projectId })
+  if (input.chatSessionId) query.set('chatSessionId', input.chatSessionId)
+  const response = await fetch(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}?${query.toString()}`, { method: 'DELETE' })
   if (!response.ok && response.status !== 404) throw new Error(`Browser session cleanup failed (${response.status})`)
 }

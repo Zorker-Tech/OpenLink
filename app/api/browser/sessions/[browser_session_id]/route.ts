@@ -1,5 +1,5 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
+import { resolveBrowserPreviewScope } from '@/lib/browser-preview-targets.server'
 
 export const runtime = 'nodejs'
 
@@ -13,16 +13,16 @@ export async function DELETE(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: { code: 'AUTH_REQUIRED' } }, { status: 401 })
-  const chatSessionId = new URL(request.url).searchParams.get('chatSessionId') || ''
-  const chat = isChatSessionId(chatSessionId) ? await getChatSession(supabase, user.id, chatSessionId) : null
-  if (!chat) {
-    return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
-  }
+  const query = new URL(request.url).searchParams
+  const chatSessionId = query.get('chatSessionId') || undefined
+  const projectId = query.get('projectId') || undefined
+  const scope = await resolveBrowserPreviewScope(supabase, user.id, { chatSessionId, projectId })
+  if (!scope.ok) return Response.json({ error: scope.error }, { status: scope.status })
   const { browser_session_id: browserSessionId } = await params
-  const response = await fetch(`${baseUrl}/v1/projects/${encodeURIComponent(chat.project_id)}/browser/sessions/${encodeURIComponent(browserSessionId)}`, {
+  const response = await fetch(`${baseUrl}/v1/projects/${encodeURIComponent(scope.project.id)}/browser/sessions/${encodeURIComponent(browserSessionId)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ownerId: user.id, workspaceId: chat.workspace_id }),
+    body: JSON.stringify({ ownerId: user.id, workspaceId: scope.workspaceId }),
     cache: 'no-store',
   })
   return new Response(response.body, { status: response.status })
