@@ -15,6 +15,7 @@ import type { DesktopRuntimeStatus, DesktopSuspendResult } from './backends/desk
 import { CodeServerGateway } from './code-server-gateway.js'
 import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
 import { handleProjectMemoryMcpRequest, type CivilizationMemoryServiceConfig, type ProjectAgentMode } from './project-memory-mcp.js'
+import { isPreviewTargetId } from './preview-target-id.js'
 
 export interface PromptRuntimeSession {
   control?(input: { action: string; text?: string }): Promise<unknown>
@@ -488,7 +489,7 @@ function parseBrowserSessionBody(value: unknown) {
   if (!surface) throw new AgentHostError('INVALID_BODY', 'Browser surface is invalid')
   if (body.viewport !== undefined && (!body.viewport || typeof body.viewport !== 'object')) throw new AgentHostError('INVALID_BODY', 'Browser viewport is invalid')
   const previewTargetId = body.previewTargetId === undefined ? undefined : (() => {
-    if (typeof body.previewTargetId !== 'string' || !/^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/.test(body.previewTargetId)) throw new AgentHostError('INVALID_BODY', 'previewTargetId is invalid')
+    if (!isPreviewTargetId(body.previewTargetId)) throw new AgentHostError('INVALID_BODY', 'previewTargetId is invalid')
     return body.previewTargetId
   })()
   if (surface === 'native-preview' && !previewTargetId && (!body.preview || typeof body.preview !== 'object')) throw new AgentHostError('INVALID_BODY', 'Preview configuration is required')
@@ -1230,9 +1231,7 @@ export async function startPromptHttpServer(
         id: target.id,
         label: target.label,
         source: target.source,
-        sessionId: target.sessionId,
         port: target.port,
-        sandboxId: target.sandboxId,
         lastSeenAt: target.lastSeenAt,
       })),
     })

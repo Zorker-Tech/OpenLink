@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { startPromptHttpServer, type PromptRuntimeBackend } from '../src/prompt-http-server.js'
+import { createPreviewTargetId } from '../src/preview-target-id.js'
 import type { ProjectRuntimeManager } from '../src/project-runtime.js'
 
 test('Codex plugin snapshot invalidation is authenticated and explicit', async (context) => {
@@ -992,6 +993,8 @@ test('discovers the authenticated Project preview target without exposing it to 
 test('lists every active Project preview target without exposing proxy credentials', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-preview-targets-test-'))
   const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const currentId = createPreviewTargetId('project-private-key', projectId, 'sandbox-current', 5173)
+  const otherId = createPreviewTargetId('project-private-key', projectId, 'sandbox-other', 3000)
   let preferredSessionId: string | undefined
   const projectRuntimeManager = {
     discoverPreviewTargets: async (id: string, sessionId?: string) => {
@@ -999,12 +1002,12 @@ test('lists every active Project preview target without exposing proxy credentia
       preferredSessionId = sessionId
       return [
         {
-          id: 'sandbox-current:5173', label: 'Current session · :5173', source: 'sandbox',
+          id: currentId, label: 'Preview · :5173', source: 'sandbox',
           sessionId: 'session-current', url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-current/proxy/5173/',
           headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' }, port: 5173, sandboxId: 'sandbox-current', lastSeenAt: '2026-11-03T10:00:00.000Z',
         },
         {
-          id: 'sandbox-other:3000', label: 'Other session · :3000', source: 'sandbox',
+          id: otherId, label: 'Preview · :3000', source: 'sandbox',
           sessionId: 'session-other', url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-other/proxy/3000/',
           headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' }, port: 3000, sandboxId: 'sandbox-other', lastSeenAt: '2026-11-03T10:00:01.000Z',
         },
@@ -1028,10 +1031,12 @@ test('lists every active Project preview target without exposing proxy credentia
     const payload = await response.json() as { targets?: Array<Record<string, unknown>> }
     assert.equal(preferredSessionId, 'session-current')
     assert.equal(payload.targets?.length, 2)
-    assert.equal(payload.targets?.[0]?.id, 'sandbox-current:5173')
+    assert.equal(payload.targets?.[0]?.id, currentId)
     assert.equal(payload.targets?.[0]?.port, 5173)
     assert.equal(payload.targets?.[0]?.url, undefined)
     assert.equal(payload.targets?.[0]?.headers, undefined)
+    assert.equal(payload.targets?.[0]?.sessionId, undefined)
+    assert.equal(payload.targets?.[0]?.sandboxId, undefined)
   } finally {
     runtime.server.close()
     await once(runtime.server, 'close')

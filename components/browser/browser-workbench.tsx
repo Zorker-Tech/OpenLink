@@ -88,7 +88,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       setPreviewTargets(targets)
       setActivePreviewTargetId((current) => current && targets.some((target) => target.id === current)
         ? current
-        : targets.find((target) => target.sessionId === chatSessionId)?.id ?? targets[0]?.id)
+        : targets[0]?.id)
     } catch (error) {
       setPreviewTargets([])
       setPreviewTargetsError(error instanceof Error ? error.message : t('无法发现项目开发服务器'))

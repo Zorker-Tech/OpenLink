@@ -2,6 +2,7 @@ import { getT } from '@/lib/i18n/server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 import { hostConfig, listBrowserPreviewTargets, type BrowserPreviewTarget } from '@/lib/browser-preview-targets.server'
+import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,6 @@ function isConfiguredLocalPreviewUrl(raw: string) {
     return false
   }
 }
-
-const PREVIEW_TARGET_ID = /^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/
 
 export async function POST(request: Request) {
   const { t } = await getT()
@@ -46,7 +45,7 @@ export async function POST(request: Request) {
   }
   const requestedTargetId = body.previewTargetId === undefined
     ? undefined
-    : (typeof body.previewTargetId === 'string' && PREVIEW_TARGET_ID.test(body.previewTargetId) ? body.previewTargetId : '')
+    : (isPreviewTargetId(body.previewTargetId) ? body.previewTargetId : '')
   if (requestedTargetId === '') return Response.json({ error: { code: 'INVALID_PREVIEW_TARGET', message: 'Preview target is invalid' } }, { status: 400 })
 
   let targets: BrowserPreviewTarget[] = []
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
   }
   const selected = requestedTargetId
     ? targets.find((target) => target.id === requestedTargetId) ?? null
-    : targets.find((target) => target.sessionId === chatSessionId) ?? targets[0] ?? null
+    : targets[0] ?? null
   if (requestedTargetId && !selected) {
     return Response.json({ error: { code: 'PREVIEW_TARGET_NOT_FOUND', message: t('所选开发服务器已停止，请刷新预览目标'), recoverable: true } }, { status: 409 })
   }
@@ -120,7 +119,6 @@ export async function POST(request: Request) {
     id: selected.id,
     label: selected.label,
     port: selected.port,
-    ...(selected.sessionId ? { sessionId: selected.sessionId } : {}),
   }
   return Response.json(payload, { status: response.status })
 }

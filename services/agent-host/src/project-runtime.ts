@@ -12,6 +12,7 @@ import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { AGENT_TOOL_CLI } from './agent-tools.js'
+import { createPreviewTargetId } from './preview-target-id.js'
 
 export interface ProjectRuntimeServicePorts {
   opensandbox: number
@@ -1316,9 +1317,10 @@ export class ProjectRuntimeManager {
           const response = await fetch(probeUrl, { headers, signal: AbortSignal.timeout(1_200), redirect: 'manual', cache: 'no-store' })
           if (response.status < 200 || response.status >= 400) continue
           if (response.body) await response.body.cancel().catch(() => undefined)
+          const id = createPreviewTargetId(descriptor.opensandboxApiKey, projectId, sandbox.id, port)
           targets.push({
-            id: `${sandbox.id}:${port}`,
-            label: sandbox.sessionId ? `Session ${sandbox.sessionId} · :${port}` : `Sandbox ${sandbox.id.slice(0, 8)} · :${port}`,
+            id,
+            label: `Preview ${id.slice(0, 6)} · :${port}`,
             source: 'sandbox',
             ...(sandbox.sessionId ? { sessionId: sandbox.sessionId } : {}),
             url: `http://host.containers.internal:${descriptor.servicePorts.opensandbox}/v1/sandboxes/${encodeURIComponent(sandbox.id)}/proxy/${port}/`,
