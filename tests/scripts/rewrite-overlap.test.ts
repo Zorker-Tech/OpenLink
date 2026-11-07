@@ -731,8 +731,8 @@ describe("rewrite overlap gate inputs", () => {
       "packages/local-exec/ls.ts",
       "packages/local-exec/ls-contracts.ts",
       "packages/local-exec/ls-tree-builder.ts",
-      "adapters/interop/agent/local-ls-exec-adapter.ts",
     ]);
+    assert.equal(exemptSourceReason("adapters/interop/agent/local-ls-exec-adapter.ts"), undefined);
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/utils/mcp-meta-tool-options.ts",
       rewritten: "source/packages/agent/utils/mcp-meta-tool-options.ts",

@@ -258,14 +258,16 @@ test("a listing of something that is not there says so", async () => {
   await withTempDir(async (dir) => {
     const executor = new LocalLsExecutor(undefined, ignoreService, dir, traversalOf([]))
     const missing = await executor.execute(createContext(), { path: "nope" })
-    assert.equal(missing.result.case, "error")
-    assert.equal(missing.result.value?.error, `Path does not exist: ${path.join(dir, "nope")}`)
+    assert.equal(missing.kind, "error")
+    if (missing.kind !== "error") assert.fail("expected an ls error")
+    assert.equal(missing.error, `Path does not exist: ${path.join(dir, "nope")}`)
 
     const file = path.join(dir, "a.txt")
     fs.writeFileSync(file, "x")
     const notADirectory = await executor.execute(createContext(), { path: "a.txt" })
-    assert.equal(notADirectory.result.case, "error")
-    assert.match(notADirectory.result.value?.error ?? "", /Path is not a directory/)
+    assert.equal(notADirectory.kind, "error")
+    if (notADirectory.kind !== "error") assert.fail("expected an ls error")
+    assert.match(notADirectory.error, /Path is not a directory/)
   })
 })
 
@@ -281,8 +283,9 @@ test("a listing nests what the traversal reports and counts it by extension", as
     const executor = new LocalLsExecutor(undefined, ignoreService, dir, traversalOf(["src/a.ts", "src/b.ts", "docs/readme.md"]))
     const result = await executor.execute(createContext(), { path: "." })
 
-    assert.equal(result.result.case, "success")
-    const root = result.result.value?.directoryTreeRoot
+    assert.equal(result.kind, "success")
+    if (result.kind !== "success") assert.fail("expected an ls success")
+    const root = result.root
     assert.deepEqual(root?.childrenDirs.map(node => path.basename(node.absPath)), ["docs", "src"])
     const src = root?.childrenDirs.find(node => path.basename(node.absPath) === "src")
     assert.deepEqual(src?.childrenFiles.map(file => file.name), ["a.ts", "b.ts"])
@@ -298,8 +301,9 @@ test("a listing that runs past its budget says it is not complete", async () => 
     const executor = new LocalLsExecutor(undefined, ignoreService, dir, traversalOf(many))
     const result = await executor.execute(createContext(), { path: "." })
 
-    assert.equal(result.result.case, "success")
-    const root = result.result.value?.directoryTreeRoot
+    assert.equal(result.kind, "success")
+    if (result.kind !== "success") assert.fail("expected an ls success")
+    const root = result.root
     assert.equal(root?.childrenWereProcessed, false)
     // Files that arrived after the budget ran out are still counted, by extension, at every level above them.
     assert.equal((root?.fullSubtreeExtensionCounts[".ts"] ?? 0) > 0, true)
@@ -310,7 +314,7 @@ test("a listing that ran out of time is reported as a timeout", async () => {
   await withTempDir(async (dir) => {
     const executor = new LocalLsExecutor(undefined, ignoreService, dir, traversalOf(["src/a.ts"], true))
     const result = await executor.execute(createContext(), { path: "." })
-    assert.equal(result.result.case, "timeout")
+    assert.equal(result.kind, "timeout")
   })
 })
 

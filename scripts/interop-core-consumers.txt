@@ -292,7 +292,6 @@ source/packages/agent/utils/usage-snapshot.ts	../../../adapters/interop/agent/pr
 source/packages/context/telemetry.ts	../../adapters/interop/telemetry/trace-runtime-adapter.ts
 source/packages/hooks/hook-config-validation.ts	../../adapters/interop/agent/hook-config-adapter.ts
 source/packages/hooks/hook-registry.ts	../../adapters/interop/hooks/foreign-hook-response-adapter.ts
-source/packages/local-exec/ls.ts	../../adapters/interop/agent/local-ls-exec-adapter.ts
 source/packages/plugin-install/component-discovery.ts	../../adapters/interop/plugin-marketplace/mcp-placeholder-variable-adapter.ts
 source/packages/plugin-install/git-url-provider.ts	../../adapters/interop/scm/git-host-url-adapter.ts
 source/packages/plugin-install/git-url-scm.ts	../../adapters/interop/scm/git-host-url-adapter.ts

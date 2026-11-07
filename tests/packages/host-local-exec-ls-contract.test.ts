@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import type { Context } from "../../source/packages/context/context.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { LocalLsExecutor, MissingLsTraversalBindingError } from "../../source/packages/local-exec/ls.ts";
+import type { LocalLsOutcome } from "../../source/packages/local-exec/ls.ts";
 
 interface IgnoreRules {
   listCursorIgnoreFilesByRoot(root: string): Promise<readonly string[]>;
@@ -41,8 +42,10 @@ function traversal(lines: readonly string[], didTimeout = false, onWalk?: (conte
   };
 }
 
-function treeOf(result: any): any {
-  return result.result.value?.directoryTreeRoot;
+function treeOf(result: LocalLsOutcome) {
+  if (result.kind !== "success" && result.kind !== "timeout") throw new Error("expected a directory tree")
+  if (result.root === undefined) throw new Error("expected the directory tree root")
+  return result.root
 }
 
 describe("the local directory listing", () => {
@@ -62,21 +65,22 @@ describe("the local directory listing", () => {
         return path.includes("ignored") ? null : path;
       };
       const executor = new LocalLsExecutor(undefined, ignore, rootDir, run as never);
-      const result = await executor.execute(createContext(), { path: ".", ignore: ["tmp/**"], sandboxPolicy: { mode: "read-only" } });
+      const sandboxPolicy = { type: "workspace_readonly" as const };
+      const result = await executor.execute(createContext(), { path: ".", ignore: ["tmp/**"], sandboxPolicy });
 
-      assert.equal(result.result.case, "success");
+      assert.equal(result.kind, "success");
       assert.deepEqual(walkArgs[0], {
         root: resolve(rootDir),
         excludeGlobs: ["tmp/**", "vendor/**"],
         cursorIgnoreFiles: [`${resolve(rootDir)}/.cursorignore`],
-        sandboxPolicy: { mode: "read-only" },
+        sandboxPolicy,
         source: "ls",
       });
       const root = treeOf(result);
       assert.deepEqual(root.childrenDirs.map((node: { absPath: string }) => basename(node.absPath)), ["docs", "src"]);
       assert.deepEqual(resolvedPaths.map((path) => basename(path)), ["a.ts", "secret.txt", "secret.md", "readme.md"]);
       assert.deepEqual(blockedChecks.map((path) => basename(path)), ["a.ts", "secret.txt", "readme.md"]);
-      assert.deepEqual(root.childrenDirs.flatMap((node: { childrenFiles: Array<{ name: string }> }) => node.childrenFiles.map((file) => file.name)), ["readme.md", "a.ts"]);
+      assert.deepEqual(root.childrenDirs.flatMap((node) => node.childrenFiles.map((file) => file.name)), ["readme.md", "a.ts"]);
     });
   });
 
@@ -91,8 +95,8 @@ describe("the local directory listing", () => {
       const result = await executor.execute(parent, { path: ".", timeoutMs: 123 });
       assert.equal(timeoutMs, 123);
       assert.equal(receivedContext, child);
-      assert.equal(result.result.case, "timeout");
-      assert.deepEqual(treeOf(result).childrenDirs.map((node: { childrenFiles: Array<{ name: string }> }) => node.childrenFiles.map((file) => file.name)), [["partial.ts"]]);
+      assert.equal(result.kind, "timeout");
+      assert.deepEqual(treeOf(result).childrenDirs.map((node) => node.childrenFiles.map((file) => file.name)), [["partial.ts"]]);
     });
   });
 
@@ -103,11 +107,13 @@ describe("the local directory listing", () => {
       const executor = new LocalLsExecutor(undefined, ignoreRules(), rootDir, traversal([]) as never);
 
       const missing = await executor.execute(createContext(), { path: "not-there" });
-      assert.equal(missing.result.case, "error");
-      assert.equal(missing.result.value?.error, `Path does not exist: ${join(rootDir, "not-there")}`);
+      assert.equal(missing.kind, "error");
+      if (missing.kind !== "error") assert.fail("expected an ls error");
+      assert.equal(missing.error, `Path does not exist: ${join(rootDir, "not-there")}`);
       const notDirectory = await executor.execute(createContext(), { path: "note.txt" });
-      assert.equal(notDirectory.result.case, "error");
-      assert.equal(notDirectory.result.value?.error, `Path is not a directory: ${filePath}`);
+      assert.equal(notDirectory.kind, "error");
+      if (notDirectory.kind !== "error") assert.fail("expected an ls error");
+      assert.equal(notDirectory.error, `Path is not a directory: ${filePath}`);
     });
   });
 
@@ -130,8 +136,9 @@ describe("the local directory listing", () => {
       const failedWalk = traversal([]) as any;
       failedWalk.walk = () => { throw new Error("traversal unavailable"); };
       const failed = await new LocalLsExecutor(undefined, ignoreRules(), rootDir, failedWalk).execute(createContext(), { path: "." });
-      assert.equal(failed.result.case, "error");
-      assert.equal(failed.result.value?.error, "traversal unavailable");
+      assert.equal(failed.kind, "error");
+      if (failed.kind !== "error") assert.fail("expected an ls error");
+      assert.equal(failed.error, "traversal unavailable");
       await assert.rejects(
         () => new LocalLsExecutor(undefined, ignoreRules(), rootDir).execute(createContext(), { path: "." }),
         MissingLsTraversalBindingError,
@@ -145,7 +152,7 @@ describe("the local directory listing", () => {
       const result = await new LocalLsExecutor(undefined, ignoreRules(), rootDir, run as never).execute(createContext(), { path: "." });
       const root = treeOf(result);
       assert.deepEqual(root.childrenDirs.map((node: { absPath: string }) => basename(node.absPath)), ["a-dir", "b-dir", "c-dir"]);
-      assert.deepEqual(root.childrenDirs.map((node: { childrenFiles: Array<{ name: string }> }) => node.childrenFiles.map((file) => file.name)), [["a.ts", "b.ts", "c.ts"], ["a.md", "c.md"], ["x.ts"]]);
+      assert.deepEqual(root.childrenDirs.map((node) => node.childrenFiles.map((file) => file.name)), [["a.ts", "b.ts", "c.ts"], ["a.md", "c.md"], ["x.ts"]]);
       assert.equal(root.childrenWereProcessed, true);
     });
   });

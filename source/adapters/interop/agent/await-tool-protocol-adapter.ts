@@ -8,12 +8,11 @@ import {
   AwaitToolCall,
 } from "../proto/generated/agent/v1/await_tool_pb.ts"
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
-import { LsArgs } from "../proto/generated/agent/v1/ls_exec_pb.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts"
 import { readExecutorResource, type ReadExecutorArgs } from "../../../packages/agent-exec/read-operation.ts"
-import { lsExecutorResource } from "../../../packages/agent-exec/ls.ts"
+import { lsExecutorResource, type LsExecutorArgs, type SlateDirectoryTreeNode } from "../../../packages/agent-exec/ls.ts"
 import { slateSubagentAwaitExecutorResource } from "../../../packages/agent-exec/subagent-await.ts"
 
 export interface AwaitRequestView {
@@ -212,20 +211,15 @@ export async function readAwaitJobFileInterop(
   throw new Error(`Unknown read result for ${path}`)
 }
 
-export function createAwaitLsArgsInterop(path: string, toolCallId: string): unknown {
-  return new LsArgs({ path, toolCallId, timeoutMs: 2_000 })
+export function createAwaitLsRequest(path: string, toolCallId: string): LsExecutorArgs {
+  return { path, toolCallId, timeoutMs: 2_000 }
 }
 
-function directoryNode(value: unknown): AwaitDirectoryNode | undefined {
-  if (value === undefined || value === null || typeof value !== "object") return undefined
-  const node = value as { readonly absPath?: unknown; readonly childrenFiles?: readonly { readonly name?: unknown }[]; readonly childrenDirs?: readonly unknown[] }
+function directoryNode(node: SlateDirectoryTreeNode): AwaitDirectoryNode {
   return {
-    absPath: typeof node.absPath === "string" ? node.absPath : "",
-    childrenFiles: (node.childrenFiles ?? []).flatMap((file) => typeof file.name === "string" ? [{ name: file.name }] : []),
-    childrenDirs: (node.childrenDirs ?? []).flatMap((child) => {
-      const projected = directoryNode(child)
-      return projected === undefined ? [] : [projected]
-    }),
+    absPath: node.absPath,
+    childrenFiles: node.childrenFiles.map(file => ({ name: file.name })),
+    childrenDirs: node.childrenDirs.map(directoryNode),
   }
 }
 
@@ -236,11 +230,9 @@ export async function listAwaitDirectoryTreeInterop(
   toolCallId: string,
 ): Promise<AwaitDirectoryNode | undefined> {
   const executor = resourceAccessor.get(lsExecutorResource)
-  const value = await executor.execute(ctx, createAwaitLsArgsInterop(path, toolCallId) as never).catch(() => undefined)
-  const result = (value as { readonly result?: { readonly case?: string; readonly value?: { readonly directoryTreeRoot?: unknown } } } | undefined)?.result
-  return result?.case === "success" || result?.case === "timeout"
-    ? directoryNode(result.value?.directoryTreeRoot)
-    : undefined
+  const result = await executor.execute(ctx, createAwaitLsRequest(path, toolCallId)).catch(() => undefined)
+  if (result === undefined || (result.kind !== "success" && result.kind !== "timeout")) return undefined
+  return result.root === undefined ? undefined : directoryNode(result.root)
 }
 
 export async function runAwaitSubagentInterop(

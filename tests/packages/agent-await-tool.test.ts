@@ -6,10 +6,9 @@ import { ToolCallArgParseError } from "../../source/packages/agent/tools/tool-su
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { conversationIdKey } from "../../source/packages/agent/utils/request-scope.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
-import { lsExecutorResource } from "../../source/packages/agent-exec/ls.ts"
+import { lsExecutorResource, type SlateDirectoryTreeNode } from "../../source/packages/agent-exec/ls.ts"
 import { slateSubagentAwaitExecutorResource, type SlateSubagentAwaitResult } from "../../source/packages/agent-exec/subagent-await.ts"
 import type { ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
-import { LsResult, LsSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
 import { AwaitResult } from "../../source/adapters/interop/proto/generated/agent/v1/await_tool_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
@@ -29,7 +28,7 @@ function harness(options: {
   files?: Record<string, string>
   /** Contents that change between reads, which is how a job that finishes during a wait is modelled. */
   sequence?: Record<string, string[]>
-  listing?: unknown
+  listing?: SlateDirectoryTreeNode
   subagentAwait?: SlateSubagentAwaitResult | "throw"
   readError?: "permissionDenied" | "rejected" | "invalidFile" | "error"
   readData?: boolean
@@ -78,11 +77,11 @@ function harness(options: {
       }
       if (resource === lsExecutorResource) {
         return {
-          async execute() {
+          async execute(_ctx: Context, args: { readonly path: string }) {
             listingCalls++
-            if (options.listingTimeout === true) return new LsResult({ result: { case: "timeout", value: { directoryTreeRoot: options.listing } } as never })
-            if (options.listing === undefined) return new LsResult({ result: { case: "fileNotFound", value: {} } as never })
-            return new LsResult({ result: { case: "success", value: new LsSuccess({ directoryTreeRoot: options.listing as never }) } as never })
+            if (options.listingTimeout === true) return { kind: "timeout", ...(options.listing === undefined ? {} : { root: options.listing }) }
+            if (options.listing === undefined) return { kind: "error", path: args.path, error: "directory listing unavailable" }
+            return { kind: "success", root: options.listing }
           },
         }
       }
@@ -125,6 +124,21 @@ const awaitResultOf = (result: AwaitResult) => {
   assert.equal(result.result.case, "success")
   const value = (result.result as { value: { awaitResult?: unknown } }).value.awaitResult
   return value as { case?: string; value?: Record<string, unknown> } | undefined
+}
+
+function listingNode(
+  absPath: string,
+  childrenFiles: readonly { readonly name: string }[] = [],
+  childrenDirs: readonly SlateDirectoryTreeNode[] = [],
+): SlateDirectoryTreeNode {
+  return {
+    absPath,
+    childrenWereProcessed: true,
+    childrenFiles,
+    childrenDirs,
+    numFiles: 0,
+    fullSubtreeExtensionCounts: {},
+  }
 }
 
 const renderOf = async (tool: Tool, result: AwaitResult): Promise<string> => {
@@ -386,7 +400,7 @@ test("a subagent that finished without a transcript path reports none", async ()
   // The executor's answer always carries the field, so a subagent that did not say where its transcript is
   // is reported as having none rather than searched for.
   const harnessed = harness({
-    listing: { absPath: TRANSCRIPTS, childrenFiles: [{ name: "agent-2.jsonl" }], childrenDirs: [] },
+    listing: listingNode(TRANSCRIPTS, [{ name: "agent-2.jsonl" }]),
     subagentAwait: { kind: "complete", agentId: "agent-2", transcriptPathKnown: true },
     tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
@@ -545,7 +559,7 @@ test("a malformed footer still finishes the wait without an exit code", async ()
 
 test("a transcript in a nested directory is found by listing", async () => {
   const harnessed = harness({
-    listing: { absPath: TRANSCRIPTS, childrenFiles: [], childrenDirs: [{ absPath: TRANSCRIPTS + "/run-1", childrenFiles: [{ name: "agent-5.jsonl" }], childrenDirs: [] }] },
+    listing: listingNode(TRANSCRIPTS, [], [listingNode(`${TRANSCRIPTS}/run-1`, [{ name: "agent-5.jsonl" }])]),
     subagentAwait: { kind: "complete", agentId: "agent-5", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
   })
@@ -678,7 +692,7 @@ test("a failed transcript read does not fail the wait", async () => {
 
 test("a timed-out listing still finds a transcript", async () => {
   const harnessed = harness({
-    listing: { absPath: TRANSCRIPTS, childrenFiles: [{ name: "agent-t.jsonl" }], childrenDirs: [] },
+    listing: listingNode(TRANSCRIPTS, [{ name: "agent-t.jsonl" }]),
     listingTimeout: true,
     subagentAwait: { kind: "complete", agentId: "agent-t", transcriptPathKnown: false },
     tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
