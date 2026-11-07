@@ -1,4 +1,10 @@
 import { resolveBrowserPreviewScope } from '@/lib/browser-preview-targets.server'
+import {
+  isPreviewAnnotationObjectPath,
+  PREVIEW_ANNOTATION_BUCKET,
+  previewAnnotationImageDataUrl,
+  decodePreviewAnnotationImage,
+} from '@/lib/preview-annotation-image.server.mjs'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -23,11 +29,28 @@ export async function GET(
 
   const { data, error } = await supabase.schema('openlink')
     .from('preview_annotations')
-    .select('screenshot_data_url')
+    .select('screenshot_data_url, screenshot_object_path')
     .eq('id', annotationId)
     .eq('project_id', scope.project.id)
     .maybeSingle()
   if (error) return Response.json({ error: { code: 'PREVIEW_ANNOTATION_READ_FAILED' } }, { status: 503 })
   if (!data) return Response.json({ error: { code: 'ANNOTATION_NOT_FOUND' } }, { status: 404 })
-  return Response.json({ screenshotDataUrl: data.screenshot_data_url }, { headers: { 'Cache-Control': 'no-store' } })
+  if (data.screenshot_data_url) {
+    if (!decodePreviewAnnotationImage(data.screenshot_data_url)) {
+      return Response.json({ error: { code: 'PREVIEW_ANNOTATION_READ_FAILED' } }, { status: 503 })
+    }
+    return Response.json({ screenshotDataUrl: data.screenshot_data_url }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+  if (!isPreviewAnnotationObjectPath(data.screenshot_object_path, scope.project.id)) {
+    return Response.json({ error: { code: 'PREVIEW_ANNOTATION_READ_FAILED' } }, { status: 503 })
+  }
+  const { data: image, error: downloadError } = await supabase.storage
+    .from(PREVIEW_ANNOTATION_BUCKET)
+    .download(data.screenshot_object_path, {}, { cache: 'no-store' })
+  if (downloadError || !image) {
+    return Response.json({ error: { code: 'PREVIEW_ANNOTATION_READ_FAILED' } }, { status: 503 })
+  }
+  const screenshotDataUrl = previewAnnotationImageDataUrl(new Uint8Array(await image.arrayBuffer()))
+  if (!screenshotDataUrl) return Response.json({ error: { code: 'PREVIEW_ANNOTATION_READ_FAILED' } }, { status: 503 })
+  return Response.json({ screenshotDataUrl }, { headers: { 'Cache-Control': 'no-store' } })
 }

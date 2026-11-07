@@ -454,6 +454,7 @@ export function ProjectPreviewWorkspace({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: selectedProject.id,
+          annotationId: annotationDraft.id,
           targetId: annotationDraft.targetId,
           pagePath: annotationDraft.pagePath,
           selector: annotationDraft.selector,
