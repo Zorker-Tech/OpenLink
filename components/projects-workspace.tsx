@@ -24,7 +24,7 @@ import {
   Search,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface ProjectsWorkspaceProps {
   chatSessions?: ChatSessionSummary[]
@@ -32,6 +32,7 @@ interface ProjectsWorkspaceProps {
   personalWorkspace: PersonalWorkspaceSummary
   organizations: OrganizationSummary[]
   projects: ProjectSummary[]
+  initialPreviewProjectId?: string | null
   nickname: string
   email: string
   avatarUrl: string | null
@@ -115,6 +116,7 @@ export function ProjectsWorkspace({
   personalWorkspace,
   organizations,
   projects,
+  initialPreviewProjectId = null,
   nickname,
   email,
   avatarUrl,
@@ -130,6 +132,7 @@ export function ProjectsWorkspace({
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [openingPreviewProjectId, setOpeningPreviewProjectId] = useState<string | null>(null)
   const [previewOpenError, setPreviewOpenError] = useState(false)
+  const autoOpenedPreviewProjectRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!projects.some((project) => project.status === 'waiting' || project.runtime_status !== 'ready')) return
@@ -165,7 +168,7 @@ export function ProjectsWorkspace({
     ))
   }, [projects, search])
 
-  const openProjectPreview = async (projectId: string) => {
+  const openProjectPreview = useCallback(async (projectId: string) => {
     if (openingPreviewProjectId) return
     setOpeningPreviewProjectId(projectId)
     setPreviewOpenError(false)
@@ -177,7 +180,15 @@ export function ProjectsWorkspace({
       setPreviewOpenError(true)
       setOpeningPreviewProjectId(null)
     }
-  }
+  }, [activeWorkspace.slug, openingPreviewProjectId, router])
+
+  useEffect(() => {
+    if (!initialPreviewProjectId || autoOpenedPreviewProjectRef.current === initialPreviewProjectId) return
+    const project = projects.find((candidate) => candidate.id === initialPreviewProjectId)
+    if (!project || project.kind !== 'code' || project.status !== 'active' || project.runtime_status !== 'ready') return
+    autoOpenedPreviewProjectRef.current = initialPreviewProjectId
+    void openProjectPreview(initialPreviewProjectId)
+  }, [initialPreviewProjectId, openProjectPreview, projects])
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
