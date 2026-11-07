@@ -11,6 +11,12 @@ the schema for Slate's Work HTTP/SSE API, host persistence, internal action flow
 domain types. Internal producers and consumers must use Slate-owned contracts; historical readers
 must be read-only and removed when their supported recovery window ends.
 
+The old protobuf schema tree is mixed material, not a blanket external contract: some declarations
+serve live remote services, while others only connect Slate-owned modules or decode historical state.
+Each file must be classified by its active producer, consumer and lifetime. Only the live remote
+service boundary may keep an exact external shape; internal mappings belong to Slate's migration
+queue, and legacy persistence readers remain read-only until their recovery obligation expires.
+
 Service-specific clients and transport mappings, including the inference and image service adapters,
 also live under this boundary.
 

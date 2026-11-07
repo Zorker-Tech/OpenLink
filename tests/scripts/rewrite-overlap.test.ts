@@ -17,6 +17,11 @@ describe("rewrite overlap gate inputs", () => {
     assert.equal(options.get("limit"), "5");
   });
 
+  it("does not treat the old protobuf schema tree as external by directory", () => {
+    assert.equal(exemptSourceReason("packages/proto/schema/agent/v1/agent.proto"), undefined);
+    assert.equal(exemptSourceReason("packages/proto/schema/aiserver/v1/dashboard.proto"), undefined);
+  });
+
   it("resolves an exact port before an earlier entry's source alias", () => {
     const alias = { port: "component.ts", source: "packages/agent/prompts/user-info.ts", sourcePaths: ["packages/agent/prompts/user-info.ts"] };
     const port = { port: "packages/agent/prompts/user-info.ts", source: "packages/agent/prompts/user-info.ts", sourcePaths: ["packages/agent/prompts/user-info.ts"] };

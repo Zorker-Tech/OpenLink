@@ -11,8 +11,9 @@
  * - **bands** group the landed files by that number, so the rewrite pass can run risk-first: the identical files
  *   (largest first), then the near-identical ones, then the rest.
  * - **check** is the gate: no file may be recorded as rewritten in the ledger while it still reproduces the baseline at
- *   or above the threshold. Generated trees and the interop adapters (which must speak the counterpart's wire shape)
- *   are listed below with the reason they are exempt, and the report prints that list so the exemption stays auditable.
+ *   or above the threshold. Generated trees and individually classified adapters with a current external-format or
+ *   migration obligation are listed below with the reason they are exempt. An adapter directory or protobuf format
+ *   alone does not establish an external compatibility obligation.
  * - a **floor** claim is the third honest book: a file that was rewritten, measured, and found to sit above the threshold
  *   because what is left is the interface other modules call. It needs its measured number and the reason in the ledger,
  *   and `check` refuses a floor claim that could have been a plain rewrite — a floor is a finding, not a shelter.
@@ -110,7 +111,6 @@ const EXEMPT = [
   ["adapters/interop/agent/tool-family-adapter.ts", "interop adapter: maps counterpart tool identifiers into Slate telemetry families"],
   ["adapters/interop/inference/model-capability-adapter.ts", "interop adapter: maps external model-name fragments into Slate inference capability behavior"],
   ["adapters/interop/inference/tool-marker-adapter.ts", "interop adapter: removes external tool-call marker tokens from model arguments"],
-  ["packages/proto/schema/", "external wire schema retained only for counterpart-service interoperability"],
   ["packages/local-exec/sandbox-conversion.ts", "interop port: sandbox policy translation now lives at adapters/interop/agent/sandbox-policy-adapter.ts"],
   ["adapters/interop/agent/sandbox-policy-adapter.ts", "interop adapter: translates Slate sandbox rules to and from the generated executor policy message"],
   ["packages/proto/generated/agent/v1/blob-reference-metadata.ts", "interop adapter metadata derived from counterpart agent message descriptors for blob reachability"],
