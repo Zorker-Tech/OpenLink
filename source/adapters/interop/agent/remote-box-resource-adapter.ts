@@ -1,4 +1,4 @@
-import type { ComputerUseArgs } from "../proto/generated/agent/v1/computer_use_tool_pb.ts";
+import type { SlateComputerUseExecutorRequest } from "../../../packages/agent/conversation-step-state.ts";
 
 /** Projects the command text needed for Slate auditing out of an executor request. */
 export function shellCommandForAudit(args: unknown): string {
@@ -8,6 +8,8 @@ export function shellCommandForAudit(args: unknown): string {
 
 /** Projects the operation label needed for desktop auditing without exposing its wire request type. */
 export function computerUseActionForAudit(args: unknown): string | undefined {
-  const request = args as ComputerUseArgs | undefined;
-  return request?.actions[0]?.action.case;
+  if (typeof args !== "object" || args === null || !("actions" in args) || !Array.isArray(args.actions)) return undefined;
+  const first = args.actions[0] as unknown;
+  if (typeof first !== "object" || first === null || !("kind" in first) || typeof first.kind !== "string") return undefined;
+  return first.kind as SlateComputerUseExecutorRequest["actions"][number]["kind"];
 }

@@ -15,7 +15,10 @@ import {
   CursorPositionAction,
   ComputerUseAction,
   ComputerUseArgs,
+  ComputerUseError,
+  ComputerUseResult as GeneratedComputerUseResultClass,
   type ComputerUseResult as GeneratedComputerUseResult,
+  ComputerUseSuccess,
   DragAction,
   KeyAction,
   MouseButton,
@@ -32,24 +35,38 @@ import type { SlateComputerUseResult } from "../../../host/runner/tools/slate-co
 import type {
   SlateComputerMouseButton,
   SlateComputerScrollDirection,
+  SlateComputerCoordinate,
   SlateComputerUseAction,
   SlateComputerUseExecutorRequest,
 } from "../../../packages/agent/conversation-step-state.ts"
 
-/** Binds generated computer-use request/result messages to the executor registry. */
+/** Keeps the executor registry's public surface in Slate types and owns generated conversion locally. */
 export const computerUseExecutorResource = createResource<
-  Executor<ComputerUseArgs, GeneratedComputerUseResult>,
+  Executor<SlateComputerUseExecutorRequest, SlateComputerUseResult>,
   RemoteExecManager,
   ControlledExecManager
 >(
-  (execManager) => new ExecutorResource(
-    execManager,
-    createServerSerializer("computerUseArgs"),
-    createClientDeserializer("computerUseResult"),
-  ),
+  (execManager) => {
+    const generatedExecutor = new ExecutorResource(
+      execManager,
+      createServerSerializer("computerUseArgs"),
+      createClientDeserializer("computerUseResult"),
+    );
+    return {
+      async execute(context, args, options) {
+        return readGeneratedResult(await generatedExecutor.execute(context, toGeneratedComputerUseArgs(args), options));
+      },
+    };
+  },
   (implementation, controlledExecManager) => controlledExecManager.register(
-    new SimpleControlledExecHandler(
-      implementation,
+    new SimpleControlledExecHandler<ComputerUseArgs, GeneratedComputerUseResult>(
+      {
+        async execute(context, args, options) {
+          const slateRequest = slateComputerUseRequestFromGenerated(args);
+          const slateResult = await implementation.execute(context, slateRequest, options);
+          return generatedComputerUseResultFromSlate(slateResult);
+        },
+      },
       createServerDeserializer("computerUseArgs"),
       createClientSerializer("computerUseResult"),
     ),
@@ -215,6 +232,125 @@ export function toGeneratedComputerUseArgs(toolArgs: SlateComputerUseExecutorReq
   });
 }
 
+function slateMouseButtonFromGenerated(value: MouseButton): SlateComputerMouseButton {
+  switch (value) {
+    case MouseButton.UNSPECIFIED: return "unspecified";
+    case MouseButton.LEFT: return "left";
+    case MouseButton.RIGHT: return "right";
+    case MouseButton.MIDDLE: return "middle";
+    case MouseButton.BACK: return "back";
+    case MouseButton.FORWARD: return "forward";
+    default: return { kind: "unknown", code: value };
+  }
+}
+
+function slateScrollDirectionFromGenerated(value: ScrollDirection): SlateComputerScrollDirection {
+  switch (value) {
+    case ScrollDirection.UNSPECIFIED: return "unspecified";
+    case ScrollDirection.UP: return "up";
+    case ScrollDirection.DOWN: return "down";
+    case ScrollDirection.LEFT: return "left";
+    case ScrollDirection.RIGHT: return "right";
+    default: return { kind: "unknown", code: value };
+  }
+}
+
+function coordinateFromGenerated(value: Coordinate): SlateComputerCoordinate {
+  return { x: value.x, y: value.y };
+}
+
+function slateActionFromGenerated(action: ComputerUseAction): SlateComputerUseAction<string> {
+  switch (action.action.case) {
+    case "mouseMove":
+      return {
+        kind: "mouse-move",
+        ...(action.action.value.coordinate === undefined ? {} : { coordinate: coordinateFromGenerated(action.action.value.coordinate) }),
+      };
+    case "click":
+      return {
+        kind: "click",
+        ...(action.action.value.coordinate === undefined ? {} : { coordinate: coordinateFromGenerated(action.action.value.coordinate) }),
+        button: slateMouseButtonFromGenerated(action.action.value.button),
+        count: action.action.value.count,
+        ...(action.action.value.modifierKeys === undefined ? {} : { modifierKeys: action.action.value.modifierKeys }),
+      };
+    case "mouseDown":
+      return { kind: "mouse-down", button: slateMouseButtonFromGenerated(action.action.value.button) };
+    case "mouseUp":
+      return { kind: "mouse-up", button: slateMouseButtonFromGenerated(action.action.value.button) };
+    case "drag":
+      return {
+        kind: "drag",
+        path: action.action.value.path.map(coordinateFromGenerated),
+        button: slateMouseButtonFromGenerated(action.action.value.button),
+        ...(action.action.value.modifierKeys === undefined ? {} : { modifierKeys: action.action.value.modifierKeys }),
+      };
+    case "scroll":
+      return {
+        kind: "scroll",
+        ...(action.action.value.coordinate === undefined ? {} : { coordinate: coordinateFromGenerated(action.action.value.coordinate) }),
+        direction: slateScrollDirectionFromGenerated(action.action.value.direction),
+        amount: action.action.value.amount,
+        ...(action.action.value.modifierKeys === undefined ? {} : { modifierKeys: action.action.value.modifierKeys }),
+      };
+    case "type":
+      return { kind: "type", text: action.action.value.text };
+    case "key":
+      return {
+        kind: "key",
+        key: action.action.value.key,
+        ...(action.action.value.holdDurationMs === undefined ? {} : { holdDurationMs: action.action.value.holdDurationMs }),
+      };
+    case "wait":
+      return { kind: "wait", durationMs: action.action.value.durationMs };
+    case "screenshot":
+      return { kind: "screenshot" };
+    case "cursorPosition":
+      return { kind: "cursor-position" };
+    case undefined:
+      return { kind: "missing" };
+  }
+}
+
+function slateComputerUseRequestFromGenerated(args: ComputerUseArgs): SlateComputerUseExecutorRequest {
+  return {
+    toolCallId: args.toolCallId,
+    actions: args.actions.map(slateActionFromGenerated),
+    ...(args.description === undefined ? {} : { description: args.description }),
+    ...(args.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: args.bindUnmappedCharacters }),
+  };
+}
+
+function generatedComputerUseResultFromSlate(result: SlateComputerUseResult): GeneratedComputerUseResult {
+  if (result.kind === "success") {
+    return new GeneratedComputerUseResultClass({ result: {
+      case: "success",
+      value: new ComputerUseSuccess({
+        actionCount: result.actionCount,
+        durationMs: result.durationMs,
+        ...(result.screenshot === undefined ? {} : { screenshot: result.screenshot }),
+        ...(result.log === undefined ? {} : { log: result.log }),
+        ...(result.screenshotPath === undefined ? {} : { screenshotPath: result.screenshotPath }),
+        ...(result.cursorPosition === undefined ? {} : { cursorPosition: coordinateToGenerated(result.cursorPosition) }),
+      }),
+    } });
+  }
+  if (result.kind === "error") {
+    return new GeneratedComputerUseResultClass({ result: {
+      case: "error",
+      value: new ComputerUseError({
+        error: result.message,
+        actionCount: result.actionCount,
+        durationMs: result.durationMs,
+        ...(result.log === undefined ? {} : { log: result.log }),
+        ...(result.screenshot === undefined ? {} : { screenshot: result.screenshot }),
+        ...(result.screenshotPath === undefined ? {} : { screenshotPath: result.screenshotPath }),
+      }),
+    } });
+  }
+  return new GeneratedComputerUseResultClass();
+}
+
 /** Reads the generated executor result into Slate's action outcome without dropping diagnostics. */
 function readGeneratedResult(result: GeneratedComputerUseResult): SlateComputerUseResult {
   if (result?.result?.case === "success" && result.result.value != null) {
@@ -248,14 +384,15 @@ export interface ComputerUseExecutorPort {
   execute(context: unknown, args: SlateComputerUseExecutorRequest): Promise<SlateComputerUseResult>;
 }
 
-/** Reads the generated executor resource through Slate's computer-use request and result shapes. */
+/** Reads the Slate executor resource from an accessor supplied by a runner or box. */
 export function computerUseExecutorFromResource(resourceAccessor: { get(resource: unknown): unknown }): ComputerUseExecutorPort {
-  const executor = resourceAccessor.get(computerUseExecutorResource) as Executor<ComputerUseArgs, GeneratedComputerUseResult>;
+  const candidate = resourceAccessor.get(computerUseExecutorResource);
+  if (candidate === null || typeof candidate !== "object" || typeof (candidate as { execute?: unknown }).execute !== "function") {
+    throw new TypeError("computer-use executor resource is unavailable");
+  }
+  const executor = candidate as Executor<SlateComputerUseExecutorRequest, SlateComputerUseResult>;
   return {
-    async execute(context, args) {
-      const result = await executor.execute(context as Context, toGeneratedComputerUseArgs(args));
-      return readGeneratedResult(result);
-    },
+    execute(context, args) { return executor.execute(context as Context, args); },
   };
 }
 

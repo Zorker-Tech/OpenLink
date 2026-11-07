@@ -277,12 +277,15 @@ export function createSlateNavigationProbe<Context>(deps: NavigationProbeDepende
 const COMPUTER_USE_AUDIT_KINDS = new Map<string, string>([
   ["screenshot", "screenshot"],
   ["click", "click"],
-  ["mouseMove", "mouse_move"],
+  ["mouse-move", "mouse_move"],
+  ["mouse-down", "mouse_down"],
+  ["mouse-up", "mouse_up"],
   ["drag", "drag"],
   ["type", "type"],
   ["key", "key"],
   ["scroll", "scroll"],
   ["wait", "wait"],
+  ["cursor-position", "cursor_position"],
 ]);
 
 export function computerUseAuditKind(actionCase: string): string | undefined {

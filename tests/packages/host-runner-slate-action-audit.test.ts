@@ -145,9 +145,9 @@ describe("auditing what an agent did", () => {
 
   it("names the audit kind of every computer-use action", () => {
     assert.deepEqual(
-      ["screenshot", "click", "mouseMove", "drag", "type", "key", "scroll", "wait"].map(computerUseAuditKind),
-      ["screenshot", "click", "mouse_move", "drag", "type", "key", "scroll", "wait"],
+      ["screenshot", "click", "mouse-move", "mouse-down", "mouse-up", "drag", "type", "key", "scroll", "wait", "cursor-position"].map(computerUseAuditKind),
+      ["screenshot", "click", "mouse_move", "mouse_down", "mouse_up", "drag", "type", "key", "scroll", "wait", "cursor_position"],
     );
-    for (const actionCase of ["other", "toString", "__proto__", "constructor", ""]) assert.equal(computerUseAuditKind(actionCase), undefined, actionCase);
+    for (const actionCase of ["other", "mouseMove", "toString", "__proto__", "constructor", ""]) assert.equal(computerUseAuditKind(actionCase), undefined, actionCase);
   });
 });
