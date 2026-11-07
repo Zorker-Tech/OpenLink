@@ -88,6 +88,10 @@ The current ADR set covers these areas:
 - keep complete vendored source trees and license attribution while excluding
   upstream commit ancestry from OpenLink's contributor graph
   ([ADR-0033](./ADR-0033-vendored-history-and-contributor-attribution.md)).
+- proposed: make web Preview target selection workspace/project-scoped and add
+  iframe-based annotations and Design tools while preserving separate Browser
+  and Desktop runtimes
+  ([ADR-0034](./ADR-0034-first-class-preview-and-web-annotation.md)).
 
 New decisions use the format below and the next unused ADR number:
 
