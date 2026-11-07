@@ -11,7 +11,6 @@ import { TodoItem, TodoStatus, UpdateTodosResult, UpdateTodosToolCall } from "..
 import { cloneSlateTodoItem, type SlateTodoItem } from "../../source/packages/agent/tools/core/todo/contracts.ts"
 import { fromInteropTodoItem, toInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
@@ -33,17 +32,15 @@ function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?:
         async execute(_ctx: unknown, args: { path: string; toolCallId?: string }) {
           reads.push({ path: args.path, ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }) })
           const content = options.planContent ?? ""
-          return new ReadResult({
-            result: {
-              case: "success",
-              value: new ReadSuccess({
-                path: args.path,
-                totalLines: content.split("\n").length,
-                fileSize: BigInt(content.length),
-                output: { case: "content", value: content },
-              }),
-            },
-          })
+          return {
+            kind: "success",
+            path: args.path,
+            totalLines: content.split("\n").length,
+            fileSize: BigInt(content.length),
+            output: { kind: "text", text: content },
+            truncated: false,
+            rangeApplied: false,
+          }
         },
       }
       : {

@@ -575,8 +575,8 @@
     },
     "packages/agent-exec/read.ts": {
       "claim": "rewritten",
-      "overlap": 0.02127659574468085,
-      "evidence": "tests/packages/interop-read-exec-operation-adapter.test.ts pins both remote and controlled message-case pairs, ordinary/redacted resource separation, and refusal of the opposite request case; generated schema binding is isolated under adapters/interop."
+      "overlap": 0.074,
+      "evidence": "tests/packages/slate-read-operation-contract.test.ts pins Slate request options, text and byte outputs, absent output, blob references, large 64-bit sizes, and distinct failures. interop-read-exec-operation-adapter.test.ts pins ordinary/redacted remote and controlled transport pairs; reader, plan, shell, image, and attachment suites cover the migrated callers."
     },
     "shared/write-epoch.ts": {
       "claim": "rewritten",

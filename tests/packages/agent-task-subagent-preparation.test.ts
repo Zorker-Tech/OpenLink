@@ -38,8 +38,7 @@ import {
   CustomSubagentPermissionMode,
 } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
-import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { requestContextExecutorResource } from "../../source/packages/agent-exec/request-context-operation.ts"
 import { RequestContext } from "../../source/adapters/interop/proto/generated/agent/v1/request_context_exec_pb.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -470,20 +469,18 @@ function attachmentHarness(options: {
   const readExecutor = {
     async execute(_ctx: Context, args: { path: string }, meta: { execId: string }) {
       reads.push({ path: args.path, execId: meta.execId })
-      if (options.failRead === true) return new ReadResult({ result: { case: "fileNotFound", value: {} } as never })
+      if (options.failRead === true) return { kind: "not-found", path: args.path } satisfies ReadExecutorResult
       const data = options.data ?? new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-      return new ReadResult({
-        result: {
-          case: "success",
-          value: new ReadSuccess({
-            path: args.path,
-            totalLines: 0,
-            fileSize: BigInt(data.length),
-            output: { case: "data", value: data },
-            ...(options.outputBlobId === undefined ? {} : { outputBlobId: options.outputBlobId }),
-          }),
-        },
-      })
+      return {
+        kind: "success",
+        path: args.path,
+        totalLines: 0,
+        fileSize: BigInt(data.length),
+        truncated: false,
+        rangeApplied: false,
+        output: { kind: "data", bytes: data },
+        ...(options.outputBlobId === undefined ? {} : { outputBlobId: options.outputBlobId }),
+      } satisfies ReadExecutorResult
     },
   }
   const requestContextExecutor = {

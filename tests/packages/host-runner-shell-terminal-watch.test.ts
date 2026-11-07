@@ -12,7 +12,6 @@ import { UserMessage } from "../../source/adapters/interop/proto/generated/agent
 import { SlateLocalToolPermissionDeniedError } from "../../source/shared/local-tool-permission-machinery.ts";
 
 const contentWith = (footer: string) => "some output\n---\n" + footer + "\n---";
-const interopReadResult = (result: any) => ({ result } as never);
 const captured = { read: async () => ({ kind: "missing" }) } as never;
 
 describe("reading a terminal file", () => {
@@ -25,7 +24,7 @@ describe("reading a terminal file", () => {
 
   it("passes the read on with the empty call id", async () => {
     const seen: any[] = [];
-    const accessor = createShellWatchReadAccessor({ get: () => ({ execute: async (_ctx: any, args: any) => { seen.push(args); return interopReadResult({ case: "fileNotFound" }); } }) } as never);
+    const accessor = createShellWatchReadAccessor({ get: () => ({ execute: async (_ctx: any, args: any) => { seen.push(args); return { kind: "not-found", path: args.path }; } }) } as never);
     await accessor.read("CTX", { path: "/terms/x.txt", toolCallId: "call-1" });
     assert.deepEqual(seen.map((args) => [args.path, args.toolCallId]), [["/terms/x.txt", "call-1"]]);
   });

@@ -1,8 +1,7 @@
 /** Adapts generated conversation, user-message and read-executor records to the Slate shell-watch contract. */
 
 import { ConversationStateStructure, UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
-import { ReadArgs, type ReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
-import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorArgs, type ReadExecutorResult } from "../../../packages/agent-exec/read-operation.ts"
 import type { BlobStore } from "../../../packages/agent-kv/blob-store.ts"
 import { collectPrependUserMessageRecords } from "../../../host/runner/shell-terminal-watch.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
@@ -14,9 +13,9 @@ import type {
   TerminalRemoteAccessor,
 } from "../../../host/runner/shell-terminal-watch.ts"
 
-interface GeneratedReadAccessor<Context> {
+interface ReadAccessor<Context> {
   get(resource: typeof readExecutorResource): {
-    execute(context: Context, args: ReadArgs, options?: unknown): Promise<ReadResult>
+    execute(context: Context, args: ReadExecutorArgs, options?: unknown): Promise<ReadExecutorResult>
   }
 }
 
@@ -25,16 +24,20 @@ export interface ShellWatchGeneratedStateOwner<Context = unknown> {
   getBlobStore(): BlobStore<Context>
 }
 
-function readResultForSlate(result: ReadResult): TerminalReadResult {
-  switch (result.result.case) {
+function readResultForSlate(result: ReadExecutorResult): TerminalReadResult {
+  switch (result.kind) {
     case "success": {
-      const output = result.result.value.output
-      if (output.case === "content") return { kind: "success", text: output.value }
-      if (output.case === "data") return { kind: "success", bytes: output.value }
+      const output = result.output
+      if (output?.kind === "text") return { kind: "success", text: output.text }
+      if (output?.kind === "data") return { kind: "success", bytes: output.bytes }
       return { kind: "success" }
     }
-    case "fileNotFound": return { kind: "missing" }
-    default: return { kind: "failure", resultName: result.result.case ?? "unknown" }
+    case "not-found": return { kind: "missing" }
+    case "permission-denied": return { kind: "failure", resultName: "permissionDenied" }
+    case "invalid-file": return { kind: "failure", resultName: "invalidFile" }
+    case "rejected": return { kind: "failure", resultName: "rejected" }
+    case "error": return { kind: "failure", resultName: "error" }
+    case "unrecognized": return { kind: "failure", resultName: result.caseName ?? "unknown" }
   }
 }
 
@@ -42,10 +45,10 @@ function readResultForSlate(result: ReadResult): TerminalReadResult {
 export function createShellWatchReadAccessor<Context>(reads: unknown): TerminalRemoteAccessor<Context> {
   return {
     async read(turnContext, args) {
-      const generatedAccessor = reads as GeneratedReadAccessor<Context>
-      const result = await generatedAccessor.get(readExecutorResource).execute(
+      const accessor = reads as ReadAccessor<Context>
+      const result = await accessor.get(readExecutorResource).execute(
         turnContext,
-        new ReadArgs({ path: args.path, toolCallId: args.toolCallId }),
+        { path: args.path, toolCallId: args.toolCallId },
       )
       return readResultForSlate(result)
     },

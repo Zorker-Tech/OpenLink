@@ -402,13 +402,20 @@ describe("the generated pieces a box is built from", () => {
 
   it("checks a read before it happens, and takes computer use out of the box's own hands", async () => {
     const calls: Array<[string, unknown]> = [];
-    const base = { get: (resource: unknown) => ({ execute: async (_ctx: unknown, args: unknown) => { calls.push([resource === readExecutorResource ? "read" : resource === computerUseExecutorResource ? "computer-use" : "other", args]); return { result: { case: "success", value: { from: "base" } } }; } }) };
+    const base = { get: (resource: unknown) => ({ execute: async (_ctx: unknown, args: unknown) => {
+      calls.push([resource === readExecutorResource ? "read" : resource === computerUseExecutorResource ? "computer-use" : "other", args]);
+      return resource === readExecutorResource
+        ? { kind: "success", path: "/workspace/notes.txt", totalLines: 0, fileSize: 0n, truncated: false, rangeApplied: false }
+        : { result: { case: "success", value: { from: "base" } } };
+    } }) };
     const guarded = productionSlateBoxPorts.withFileReadGuard(base as never, async (path: string) => {
       calls.push(["guard", path]);
       if (path === "/secret") throw new Error("that path is not readable here");
     });
     // The read is asked about first, and goes through when it may.
-    assert.deepEqual(await guarded.get(readExecutorResource).execute(createContext(), { path: "/workspace/notes.txt" } as never, undefined) as unknown, { result: { case: "success", value: { from: "base" } } });
+    assert.deepEqual(await guarded.get(readExecutorResource).execute(createContext(), { path: "/workspace/notes.txt" }, undefined), {
+      kind: "success", path: "/workspace/notes.txt", totalLines: 0, fileSize: 0n, truncated: false, rangeApplied: false,
+    });
     assert.deepEqual(calls, [["guard", "/workspace/notes.txt"], ["read", { path: "/workspace/notes.txt" }]]);
     calls.length = 0;
     // A read that is not allowed never reaches the box.

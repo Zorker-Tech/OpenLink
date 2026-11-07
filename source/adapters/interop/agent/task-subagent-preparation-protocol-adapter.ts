@@ -2,8 +2,6 @@ import type {
   RequestContextResult,
 } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { RequestContextArgs } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
-import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts"
-import type { ReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import {
   SelectedContext,
   SelectedImage,
@@ -23,9 +21,7 @@ import type {
 import { fromInteropSelectedImage, toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
 import { fromInteropSelectedVideo, toInteropSelectedVideo } from "./video-attachment-adapter.ts"
 export type TaskAttachmentRequestContextResultInterop = RequestContextResult
-export type TaskAttachmentReadResultInterop = ReadResult
 export type TaskAttachmentRequestContextArgsInterop = InstanceType<typeof RequestContextArgs>
-export type TaskAttachmentReadArgsInterop = InstanceType<typeof ReadArgs>
 export type TaskSelectedContextInterop = SelectedContext
 export type TaskSelectedImageInterop = InstanceType<typeof SelectedImage>
 export type TaskSelectedVideoInterop = InstanceType<typeof SelectedVideo>
@@ -106,13 +102,6 @@ export function toInteropTaskSelectedContext(context: SlateTaskAttachmentSelecti
 
 export function createTaskAttachmentRequestContextArgsInterop(): InstanceType<typeof RequestContextArgs> {
   return new RequestContextArgs()
-}
-
-export function createTaskAttachmentReadArgsInterop(input: {
-  readonly path: string
-  readonly toolCallId: string
-}): InstanceType<typeof ReadArgs> {
-  return new ReadArgs(input)
 }
 
 export function createTaskSelectedContextInterop(input: {

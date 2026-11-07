@@ -8,9 +8,11 @@ import type { ControlledExecHandler, ControlledExecutor } from "../../source/ada
 import {
   readExecutorResource,
   redactedReadExecutorResource,
+  readExecutorResultFromInterop,
 } from "../../source/adapters/interop/agent/read-exec-operation-adapter.ts";
-import type { Resource } from "../../source/packages/agent-exec/resource-provider.ts";
+import type { Resource, ControlledExecManager } from "../../source/packages/agent-exec/resource-provider.ts";
 import type { Executor, RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts";
+import type { ReadExecutorArgs, ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts";
 
 const context = createContext();
 
@@ -28,7 +30,7 @@ function readResult(): ReadResult {
 }
 
 async function assertRemotePair(
-  resource: Resource<Executor<ReadArgs, ReadResult>, RemoteExecManager, never>,
+  resource: Resource<Executor<ReadExecutorArgs, ReadExecutorResult>, RemoteExecManager, ControlledExecManager>,
   argsCase: "readArgs" | "redactedReadArgs",
   resultCase: "readResult" | "redactedReadResult",
 ): Promise<void> {
@@ -46,26 +48,32 @@ async function assertRemotePair(
     },
   };
   const executor = resource.remoteImplementation(manager);
-  const args = new ReadArgs({ path: "/workspace/notes.txt", toolCallId: "call-41" });
+  const args: ReadExecutorArgs = { path: "/workspace/notes.txt", toolCallId: "call-41" };
 
-  assert.equal(await executor.execute(context, args), expected);
+  assert.deepEqual(await executor.execute(context, args), readExecutorResultFromInterop(expected));
   assert.equal(outgoing?.message.case, argsCase);
-  if (outgoing?.message.case === argsCase) assert.deepEqual(outgoing.message.value, args);
+  if (outgoing?.message.case === argsCase) {
+    assert.deepEqual(outgoing.message.value, new ReadArgs({
+      path: args.path,
+      ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
+    }));
+  }
 }
 
 async function assertControlledPair(
-  resource: Resource<Executor<ReadArgs, ReadResult>, never, { register(handler: unknown): void }>,
+  resource: Resource<Executor<ReadExecutorArgs, ReadExecutorResult>, RemoteExecManager, ControlledExecManager>,
   requestCase: "readArgs" | "redactedReadArgs",
   otherRequestCase: "readArgs" | "redactedReadArgs",
   resultCase: "readResult" | "redactedReadResult",
 ): Promise<void> {
   const expected = readResult();
+  const expectedSlate = readExecutorResultFromInterop(expected);
   let handler: ControlledExecHandler | undefined;
-  let received: ReadArgs | undefined;
-  const implementation: ControlledExecutor<ReadArgs, ReadResult> = {
+  let received: ReadExecutorArgs | undefined;
+  const implementation: ControlledExecutor<ReadExecutorArgs, ReadExecutorResult> = {
     async execute(_ctx, args) {
       received = args;
-      return expected;
+      return expectedSlate;
     },
   };
   resource.registerControlledImplementation(implementation, {
@@ -75,28 +83,32 @@ async function assertControlledPair(
   });
   assert.ok(handler);
 
-  const request = new ReadArgs({ path: "/workspace/notes.txt", toolCallId: "call-42" });
-  const other = new ExecServerMessage({ id: 42, message: { case: otherRequestCase, value: request } });
+  const request: ReadExecutorArgs = { path: "/workspace/notes.txt", toolCallId: "call-42" };
+  const interopRequest = new ReadArgs({
+    path: request.path,
+    ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
+  });
+  const other = new ExecServerMessage({ id: 42, message: { case: otherRequestCase, value: interopRequest } });
   assert.equal(handler.handle(context, other), undefined);
 
-  const matching = new ExecServerMessage({ id: 42, message: { case: requestCase, value: request } });
+  const matching = new ExecServerMessage({ id: 42, message: { case: requestCase, value: interopRequest } });
   const stream = handler.handle(context, matching);
   assert.ok(stream);
   const messages: ExecClientMessage[] = [];
   for await (const message of stream) messages.push(message);
 
-  assert.equal(received, request);
+  assert.deepEqual(received, request);
   assert.equal(messages.length, 1);
   assert.equal(messages[0]?.message.case, resultCase);
   if (messages[0]?.message.case === resultCase) assert.deepEqual(messages[0].message.value, expected);
 }
 
-test("ordinary reads use only the ordinary request and response cases", async () => {
+test("ordinary reads use only the ordinary transport cases around Slate values", async () => {
   await assertRemotePair(readExecutorResource, "readArgs", "readResult");
   await assertControlledPair(readExecutorResource, "readArgs", "redactedReadArgs", "readResult");
 });
 
-test("redacted reads use only the redacted request and response cases", async () => {
+test("redacted reads use only the redacted transport cases around Slate values", async () => {
   await assertRemotePair(redactedReadExecutorResource, "redactedReadArgs", "redactedReadResult");
   await assertControlledPair(redactedReadExecutorResource, "redactedReadArgs", "readArgs", "redactedReadResult");
 });

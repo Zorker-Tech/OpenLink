@@ -1,14 +1,42 @@
-/** Maps Slate's local file-read outcomes to the generated executor result envelope. */
+/** Connects the machine-local reader to Slate's read contract and its legacy wire form. */
 
-import {
-  ReadError,
-  ReadFileNotFound,
-  ReadInvalidFile,
-  ReadPermissionDenied,
-  ReadResult,
-  ReadSuccess,
-} from "../proto/generated/agent/v1/read_exec_pb.ts"
+import type { ReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import type { LocalReadArgs, LocalReadOutcome } from "../../../packages/local-exec/read.ts"
+import type { ReadExecutorArgs, ReadExecutorResult } from "../../../packages/agent-exec/read-operation.ts"
+import { readExecutorResultToInterop } from "./read-exec-operation-adapter.ts"
+
+export function localReadArgsFromSlate(args: ReadExecutorArgs): LocalReadArgs {
+  return {
+    path: args.path,
+    ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
+    ...(args.offset === undefined ? {} : { offset: args.offset }),
+    ...(args.limit === undefined ? {} : { limit: args.limit }),
+    ...(args.encodingHint === undefined ? {} : { encodingHint: args.encodingHint }),
+  }
+}
+
+export function localReadOutcomeToSlate(result: LocalReadOutcome): ReadExecutorResult {
+  switch (result.kind) {
+    case "success":
+      return {
+        kind: "success",
+        path: result.path,
+        output: result.output,
+        totalLines: result.totalLines,
+        fileSize: BigInt(result.fileSize),
+        truncated: result.truncated,
+        rangeApplied: result.rangeApplied,
+      }
+    case "invalid_file":
+      return { kind: "invalid-file", path: result.path, reason: result.reason }
+    case "permission_denied":
+      return { kind: "permission-denied", path: result.path }
+    case "not_found":
+      return { kind: "not-found", path: result.path }
+    case "error":
+      return { kind: "error", path: result.path, error: result.error }
+  }
+}
 
 export interface InteropReadRequestFields {
   readonly path: string
@@ -19,40 +47,9 @@ export interface InteropReadRequestFields {
 }
 
 export function localReadArgsFromInterop(args: InteropReadRequestFields): LocalReadArgs {
-  return {
-    path: args.path,
-    ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
-    ...(args.offset === undefined ? {} : { offset: args.offset }),
-    ...(args.limit === undefined ? {} : { limit: args.limit }),
-    ...(args.encodingHint === undefined ? {} : { encodingHint: args.encodingHint }),
-  }
+  return localReadArgsFromSlate(args)
 }
 
 export function localReadOutcomeToInterop(result: LocalReadOutcome): ReadResult {
-  switch (result.kind) {
-    case "success":
-      return new ReadResult({
-        result: {
-          case: "success",
-          value: new ReadSuccess({
-            path: result.path,
-            output: result.output.kind === "text"
-              ? { case: "content", value: result.output.text }
-              : { case: "data", value: result.output.bytes },
-            totalLines: result.totalLines,
-            fileSize: BigInt(result.fileSize),
-            truncated: result.truncated,
-            rangeApplied: result.rangeApplied,
-          }),
-        },
-      })
-    case "invalid_file":
-      return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: result.path, reason: result.reason }) } })
-    case "permission_denied":
-      return new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path: result.path }) } })
-    case "not_found":
-      return new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({ path: result.path }) } })
-    case "error":
-      return new ReadResult({ result: { case: "error", value: new ReadError({ path: result.path, error: result.error }) } })
-  }
+  return readExecutorResultToInterop(localReadOutcomeToSlate(result))
 }

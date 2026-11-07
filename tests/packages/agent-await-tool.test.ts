@@ -8,7 +8,7 @@ import { conversationIdKey } from "../../source/packages/agent/utils/request-sco
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import { lsExecutorResource } from "../../source/packages/agent-exec/ls.ts"
 import { slateSubagentAwaitExecutorResource, type SlateSubagentAwaitResult } from "../../source/packages/agent-exec/subagent-await.ts"
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import type { ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { LsResult, LsSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
 import { AwaitResult } from "../../source/adapters/interop/proto/generated/agent/v1/await_tool_pb.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
@@ -57,19 +57,22 @@ function harness(options: {
               readCounts.set(args.path, index + 1)
               content = sequence[Math.min(index, sequence.length - 1)]
             }
-            if (content === undefined) return new ReadResult({ result: { case: "fileNotFound", value: {} } as never })
-            if (options.readError !== undefined) return new ReadResult({ result: options.readError === "permissionDenied" ? { case: "permissionDenied", value: {} } as never : options.readError === "rejected" ? { case: "rejected", value: { reason: "denied by policy" } } as never : options.readError === "invalidFile" ? { case: "invalidFile", value: { reason: "not a file" } } as never : { case: "error", value: { error: "the read blew up" } } as never })
-            return new ReadResult({
-              result: {
-                case: "success",
-                value: new ReadSuccess({
-                  path: args.path,
-                  totalLines: content.split("\n").length,
-                  fileSize: BigInt(options.fileSizes?.[args.path] ?? content.length),
-                  output: options.readData === true ? { case: "data", value: Buffer.from(content) } : { case: "content", value: content },
-                }),
-              },
-            })
+            if (content === undefined) return { kind: "not-found", path: args.path } satisfies ReadExecutorResult
+            if (options.readError !== undefined) {
+              if (options.readError === "permissionDenied") return { kind: "permission-denied", path: args.path } satisfies ReadExecutorResult
+              if (options.readError === "rejected") return { kind: "rejected", path: args.path, reason: "denied by policy" } satisfies ReadExecutorResult
+              if (options.readError === "invalidFile") return { kind: "invalid-file", path: args.path, reason: "not a file" } satisfies ReadExecutorResult
+              return { kind: "error", path: args.path, error: "the read blew up" } satisfies ReadExecutorResult
+            }
+            return {
+              kind: "success",
+              path: args.path,
+              totalLines: content.split("\n").length,
+              fileSize: BigInt(options.fileSizes?.[args.path] ?? content.length),
+              truncated: false,
+              rangeApplied: false,
+              output: options.readData === true ? { kind: "data", bytes: Buffer.from(content) } : { kind: "text", text: content },
+            } satisfies ReadExecutorResult
           },
         }
       }

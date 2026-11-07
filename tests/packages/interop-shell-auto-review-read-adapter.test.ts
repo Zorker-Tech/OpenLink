@@ -1,9 +1,8 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { slateShellReadAccessorFromInterop } from "../../source/adapters/interop/agent/shell-auto-review-read-adapter.ts"
-import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorArgs, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 
 describe("the shell auto-review read interop adapter", () => {
@@ -13,19 +12,17 @@ describe("the shell auto-review read interop adapter", () => {
       get(resource: unknown) {
         assert.equal(resource, readExecutorResource)
         return {
-          async execute(context: unknown, args: { path: string; toolCallId: string; offset: number; limit: number }) {
+          async execute(context: unknown, args: ReadExecutorArgs): Promise<ReadExecutorResult> {
             calls.push({ context, ...args })
-            return new ReadResult({
-              result: {
-                case: "success",
-                value: new ReadSuccess({
-                  path: args.path,
-                  totalLines: 3,
-                  truncated: false,
-                  output: { case: "content", value: "line one\nline two\nline three" },
-                }),
-              },
-            })
+            return {
+              kind: "success",
+              path: args.path,
+              totalLines: 3,
+              fileSize: 29n,
+              truncated: false,
+              rangeApplied: true,
+              output: { kind: "text", text: "line one\nline two\nline three" },
+            }
           },
         }
       },
@@ -37,13 +34,13 @@ describe("the shell auto-review read interop adapter", () => {
       totalLines: 3,
       truncated: false,
     })
-    assert.deepEqual(calls, [{ context, path: "/work/tool.js", toolCallId: "call-1", offset: 51, limit: 50, encodingHint: undefined }])
+    assert.deepEqual(calls, [{ context, path: "/work/tool.js", toolCallId: "call-1", offset: 51, limit: 50 }])
   })
 
   it("leaves non-text and unsuccessful read variants absent", async () => {
-    const answers = [
-      new ReadResult({ result: { case: "error", value: { error: "no" } as never } }),
-      new ReadResult({ result: { case: "success", value: new ReadSuccess({ output: { case: "data", value: new Uint8Array([1]) } }) } }),
+    const answers: ReadExecutorResult[] = [
+      { kind: "error", path: "/work/tool.js", error: "no" },
+      { kind: "success", path: "/work/tool.js", totalLines: 0, fileSize: 1n, truncated: false, rangeApplied: false, output: { kind: "data", bytes: new Uint8Array([1]) } },
     ]
     const reader = slateShellReadAccessorFromInterop({
       get() { return { async execute() { return answers.shift()! } } },

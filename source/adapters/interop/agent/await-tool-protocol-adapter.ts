@@ -8,12 +8,11 @@ import {
   AwaitToolCall,
 } from "../proto/generated/agent/v1/await_tool_pb.ts"
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
-import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { LsArgs } from "../proto/generated/agent/v1/ls_exec_pb.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts"
-import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorArgs } from "../../../packages/agent-exec/read-operation.ts"
 import { lsExecutorResource } from "../../../packages/agent-exec/ls.ts"
 import { slateSubagentAwaitExecutorResource } from "../../../packages/agent-exec/subagent-await.ts"
 
@@ -187,8 +186,8 @@ export function projectAwaitResultInterop(value: unknown): AwaitResultView {
   return { kind: "unknown" }
 }
 
-export function createAwaitReadArgsInterop(path: string, toolCallId: string): unknown {
-  return new ReadArgs({ path, toolCallId })
+export function createAwaitReadRequest(path: string, toolCallId: string): ReadExecutorArgs {
+  return { path, toolCallId }
 }
 
 export async function readAwaitJobFileInterop(
@@ -198,19 +197,18 @@ export async function readAwaitJobFileInterop(
   toolCallId: string,
 ): Promise<AwaitJobFileSnapshot> {
   const executor = resourceAccessor.get(readExecutorResource)
-  const value = await executor.execute(ctx, createAwaitReadArgsInterop(path, toolCallId) as never)
-  const result = (value as { readonly result?: { readonly case?: string; readonly value?: any } }).result
-  if (result?.case === "success") {
-    const output = result.value.output
-    const content = output.case === "content" ? output.value : output.case === "data" ? Buffer.from(output.value).toString("utf8") : ""
-    const outputLength = Number(result.value.fileSize)
+  const result = await executor.execute(ctx, createAwaitReadRequest(path, toolCallId))
+  if (result.kind === "success") {
+    const output = result.output
+    const content = output?.kind === "text" ? output.text : output?.kind === "data" ? Buffer.from(output.bytes).toString("utf8") : ""
+    const outputLength = Number(result.fileSize)
     return { exists: true, content, outputLength: Number.isFinite(outputLength) && outputLength > 0 ? outputLength : content.length }
   }
-  if (result?.case === "fileNotFound") return { exists: false, content: "", outputLength: 0 }
-  if (result?.case === "permissionDenied") throw new Error(`Permission denied reading ${path}`)
-  if (result?.case === "rejected") throw new Error(result.value.reason || `Read rejected for ${path}`)
-  if (result?.case === "invalidFile") throw new Error(result.value.reason || `Invalid file: ${path}`)
-  if (result?.case === "error") throw new Error(result.value.error || `Read failed for ${path}`)
+  if (result.kind === "not-found") return { exists: false, content: "", outputLength: 0 }
+  if (result.kind === "permission-denied") throw new Error(`Permission denied reading ${path}`)
+  if (result.kind === "rejected") throw new Error(result.reason || `Read rejected for ${path}`)
+  if (result.kind === "invalid-file") throw new Error(result.reason || `Invalid file: ${path}`)
+  if (result.kind === "error") throw new Error(result.error || `Read failed for ${path}`)
   throw new Error(`Unknown read result for ${path}`)
 }
 

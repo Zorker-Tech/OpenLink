@@ -6,17 +6,11 @@ import {
   GenerateImageSuccess,
   GenerateImageToolCall,
 } from "../proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { ReadArgs, type ReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteArgs, type WriteResult } from "../proto/generated/agent/v1/write_exec_pb.ts"
 
 export type GenerateImageResultInterop = GenerateImageResult
 export type GenerateImageToolCallInterop = GenerateImageToolCall
 export type GenerateImageEnvelopeInterop = ToolCall
-
-export type ReferenceImageReadViewInterop =
-  | { readonly kind: "data"; readonly data: Uint8Array }
-  | { readonly kind: "empty" }
-  | { readonly kind: "failed" }
 
 export type ImageWriteViewInterop =
   | { readonly kind: "success" }
@@ -36,22 +30,6 @@ export type GenerateImageResultViewInterop =
   | { readonly kind: "success"; readonly filePath: string; readonly imageData: string }
   | { readonly kind: "error"; readonly error: string }
   | { readonly kind: "unknown" }
-
-export function createGenerateImageReadArgsInterop(input: {
-  readonly path: string
-  readonly toolCallId: string
-}): InstanceType<typeof ReadArgs> {
-  return new ReadArgs(input)
-}
-
-export function projectReferenceImageReadResultInterop(
-  result: ReadResult,
-): ReferenceImageReadViewInterop {
-  if (result.result.case !== "success") return { kind: "failed" }
-  const output = result.result.value.output
-  if (output.case !== "data" || output.value.length === 0) return { kind: "empty" }
-  return { kind: "data", data: output.value }
-}
 
 export function createGenerateImageWriteArgsInterop(input: {
   readonly path: string

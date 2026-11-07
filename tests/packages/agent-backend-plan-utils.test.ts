@@ -13,9 +13,8 @@ import {
 } from "../../source/packages/agent/tools/core/create-plan/backend-plan-utils.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PlanRegistryEntry } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
-import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
@@ -123,21 +122,19 @@ function syncHarness(options: {
         return {
           async execute(_ctx: Context, args: { path: string }) {
             reads.push(args.path)
-            if (options.readFails === true) return new ReadResult({ result: { case: "fileNotFound", value: {} } as never })
+            if (options.readFails === true) return { kind: "not-found", path: args.path } satisfies ReadExecutorResult
             const content = options.planContent ?? ""
-            return new ReadResult({
-              result: {
-                case: "success",
-                value: new ReadSuccess({
-                  path: args.path,
-                  totalLines: content.split("\n").length,
-                  fileSize: BigInt(content.length),
-                  output: options.readBinary === true
-                    ? { case: "data", value: new Uint8Array([1, 2, 3]) }
-                    : { case: "content", value: content },
-                }),
-              },
-            })
+            return {
+              kind: "success",
+              path: args.path,
+              totalLines: content.split("\n").length,
+              fileSize: BigInt(content.length),
+              truncated: false,
+              rangeApplied: false,
+              output: options.readBinary === true
+                ? { kind: "data", bytes: new Uint8Array([1, 2, 3]) }
+                : { kind: "text", text: content },
+            } satisfies ReadExecutorResult
           },
         }
       }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import { ReadArgs } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
-import { localReadArgsFromInterop, localReadOutcomeToInterop } from "../../source/adapters/interop/agent/local-read-executor-adapter.ts"
+import { localReadArgsFromInterop, localReadArgsFromSlate, localReadOutcomeToInterop, localReadOutcomeToSlate } from "../../source/adapters/interop/agent/local-read-executor-adapter.ts"
 import type { LocalReadOutcome } from "../../source/packages/local-exec/read.ts"
 
 describe("the local-read executor interop adapter", () => {
@@ -12,6 +12,22 @@ describe("the local-read executor interop adapter", () => {
       toolCallId: "call-1",
       offset: 2,
       limit: 3,
+    })
+  })
+
+  it("projects Slate read options into the local file reader without generated messages", () => {
+    assert.deepEqual(localReadArgsFromSlate({
+      path: "/repo/a.txt",
+      toolCallId: "call-2",
+      offset: -3,
+      limit: 0,
+      encodingHint: "utf-8",
+    }), {
+      path: "/repo/a.txt",
+      toolCallId: "call-2",
+      offset: -3,
+      limit: 0,
+      encodingHint: "utf-8",
     })
   })
 
@@ -48,5 +64,30 @@ describe("the local-read executor interop adapter", () => {
     assert.equal(failed.result.case, "error")
     if (failed.result.case !== "error") assert.fail("expected a read error")
     assert.equal(failed.result.value.error, "broken")
+  })
+
+  it("maps local read outcomes into Slate cases while retaining byte content", () => {
+    const result = localReadOutcomeToSlate({
+      kind: "success",
+      path: "/repo/archive.pdf",
+      output: { kind: "data", bytes: new Uint8Array([7, 8]) },
+      totalLines: 0,
+      fileSize: 2,
+      truncated: false,
+      rangeApplied: false,
+    })
+    assert.deepEqual(result, {
+      kind: "success",
+      path: "/repo/archive.pdf",
+      output: { kind: "data", bytes: new Uint8Array([7, 8]) },
+      totalLines: 0,
+      fileSize: 2n,
+      truncated: false,
+      rangeApplied: false,
+    })
+    assert.deepEqual(localReadOutcomeToSlate({ kind: "not_found", path: "/repo/missing" }), {
+      kind: "not-found",
+      path: "/repo/missing",
+    })
   })
 })

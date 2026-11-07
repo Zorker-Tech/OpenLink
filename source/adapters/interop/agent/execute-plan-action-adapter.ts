@@ -13,7 +13,6 @@ import { toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/
 import { toRedactedTodoItem } from "../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
 import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../../packages/agent-exec/write-operation.ts"
-import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteArgs } from "../proto/generated/agent/v1/write_exec_pb.ts"
 import { Updates } from "../../../packages/agent-core/interaction-updates.ts"
 import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
@@ -168,9 +167,9 @@ export function createExecutePlanPlanFileIO(resourceAccessor: any): ExecutePlanP
     async exists(context, path) {
       const result = await resourceAccessor.get(readExecutorResource).execute(
         context,
-        new ReadArgs({ path, limit: 1 }),
+        { path, limit: 1 },
       )
-      return result.result.case === "success"
+      return result.kind === "success"
     },
     async restoreFile(context, path, content) {
       const result = await resourceAccessor.get(writeExecutorResource).execute(

@@ -5,16 +5,7 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { createReadTool, type ReadFormattingOptions, type ReadResourceAccessor } from "../../source/packages/agent/tools/core/read/read.ts"
 import { readExecutorResource, redactedReadExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
 import type { Executor, ExecutorOptions } from "../../source/packages/agent-exec/executor-resources.ts"
-import {
-  ReadArgs,
-  ReadError,
-  ReadFileNotFound,
-  ReadInvalidFile,
-  ReadPermissionDenied,
-  ReadRejected,
-  ReadResult,
-  ReadSuccess,
-} from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
+import type { ReadExecutorArgs, ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { ReadToolError, ReadToolResult, ReadToolSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_tool_pb.ts"
 import type { BlobStore } from "../../source/packages/agent-kv/blob-store.ts"
 import { agentEventTrackerKey, type AgentEventTracker, type SkillAppliedEvent } from "../../source/packages/agent/utils/event-tracking.ts"
@@ -56,13 +47,13 @@ function schemaOf(tool: ReadToolLike): JsonSchemaLike {
 }
 
 interface ExecutorHarness {
-  readonly executor: Executor<ReadArgs, ReadResult>
-  readonly calls: ReadArgs[]
+  readonly executor: Executor<ReadExecutorArgs, ReadExecutorResult>
+  readonly calls: ReadExecutorArgs[]
   readonly options: Array<ExecutorOptions | undefined>
 }
 
-function stubExecutor(responder: (args: ReadArgs) => ReadResult | Promise<ReadResult>): ExecutorHarness {
-  const calls: ReadArgs[] = []
+function stubExecutor(responder: (args: ReadExecutorArgs) => ReadExecutorResult | Promise<ReadExecutorResult>): ExecutorHarness {
+  const calls: ReadExecutorArgs[] = []
   const options: Array<ExecutorOptions | undefined> = []
   return {
     calls,
@@ -78,7 +69,7 @@ function stubExecutor(responder: (args: ReadArgs) => ReadResult | Promise<ReadRe
 }
 
 /** Records which operation the tool resolved, so a redacted read can be told from an ordinary one. */
-function accessorFor(executor: Executor<ReadArgs, ReadResult>): { accessor: ReadResourceAccessor; requested: symbol[] } {
+function accessorFor(executor: Executor<ReadExecutorArgs, ReadExecutorResult>): { accessor: ReadResourceAccessor; requested: symbol[] } {
   const requested: symbol[] = []
   return {
     requested,
@@ -130,35 +121,30 @@ function contentResult(content: string, overrides: {
   fileSize?: number
   rangeApplied?: boolean
   outputBlobId?: Uint8Array
-} = {}): ReadResult {
-  return new ReadResult({
-    result: {
-      case: "success",
-      value: new ReadSuccess({
-        path: overrides.path ?? "/repo/file.txt",
-        totalLines: overrides.totalLines ?? content.split("\n").length,
-        fileSize: BigInt(overrides.fileSize ?? content.length),
-        output: { case: "content", value: content },
-        ...(overrides.rangeApplied === undefined ? {} : { rangeApplied: overrides.rangeApplied }),
-        ...(overrides.outputBlobId === undefined ? {} : { outputBlobId: overrides.outputBlobId }),
-      }),
-    },
-  })
+} = {}): ReadExecutorResult {
+  return {
+    kind: "success",
+    path: overrides.path ?? "/repo/file.txt",
+    totalLines: overrides.totalLines ?? content.split("\n").length,
+    fileSize: BigInt(overrides.fileSize ?? content.length),
+    output: { kind: "text", text: content },
+    truncated: false,
+    rangeApplied: overrides.rangeApplied ?? false,
+    ...(overrides.outputBlobId === undefined ? {} : { outputBlobId: overrides.outputBlobId }),
+  }
 }
 
-function dataResult(bytes: Uint8Array, overrides: { path?: string; outputBlobId?: Uint8Array } = {}): ReadResult {
-  return new ReadResult({
-    result: {
-      case: "success",
-      value: new ReadSuccess({
-        path: overrides.path ?? "/repo/image.png",
-        totalLines: 0,
-        fileSize: BigInt(bytes.byteLength),
-        output: { case: "data", value: bytes },
-        ...(overrides.outputBlobId === undefined ? {} : { outputBlobId: overrides.outputBlobId }),
-      }),
-    },
-  })
+function dataResult(bytes: Uint8Array, overrides: { path?: string; outputBlobId?: Uint8Array } = {}): ReadExecutorResult {
+  return {
+    kind: "success",
+    path: overrides.path ?? "/repo/image.png",
+    totalLines: 0,
+    fileSize: BigInt(bytes.byteLength),
+    output: { kind: "data", bytes },
+    truncated: false,
+    rangeApplied: false,
+    ...(overrides.outputBlobId === undefined ? {} : { outputBlobId: overrides.outputBlobId }),
+  }
 }
 
 function blobStoreHarness(): {
@@ -194,7 +180,7 @@ function blobStoreHarness(): {
 }
 
 function buildTool(
-  responder: (args: ReadArgs) => ReadResult | Promise<ReadResult>,
+  responder: (args: ReadExecutorArgs) => ReadExecutorResult | Promise<ReadExecutorResult>,
   options: {
     version?: string
     formatting?: ReadFormattingOptions
@@ -378,24 +364,31 @@ test("content past the hard limit is withheld with the range it should be read i
 })
 
 test("a workspace failure is turned into the error the model is shown", async () => {
-  const { tool } = buildTool(() => new ReadResult({ result: { case: "error", value: new ReadError({ error: "disk on fire" }) } }))
+  const { tool } = buildTool(() => ({ kind: "error", path: "/repo/file.txt", error: "disk on fire" }))
   await assert.rejects(() => runRead(tool, { path: "/repo/file.txt" }), /disk on fire/)
 
-  const rejected = buildTool(() => new ReadResult({ result: { case: "rejected", value: new ReadRejected({ reason: "not allowed" }) } }))
+  const rejected = buildTool(() => ({ kind: "rejected", path: "/repo/file.txt", reason: "not allowed" }))
   await assert.rejects(() => runRead(rejected.tool, { path: "/repo/file.txt" }), /not allowed/)
 
-  const missing = buildTool(() => new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({}) } }))
+  const missing = buildTool(() => ({ kind: "not-found", path: "/repo/file.txt" }))
   await assert.rejects(() => runRead(missing.tool, { path: "/repo/file.txt" }), /File not found/)
 
-  const denied = buildTool(() => new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({}) } }))
+  const denied = buildTool(() => ({ kind: "permission-denied", path: "/repo/file.txt" }))
   await assert.rejects(() => runRead(denied.tool, { path: "/repo/file.txt" }), /Permission denied/)
 
-  const invalid = buildTool(() => new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ reason: "" }) } }))
+  const invalid = buildTool(() => ({ kind: "invalid-file", path: "/repo/file.txt", reason: "" }))
   await assert.rejects(() => runRead(invalid.tool, { path: "/repo/file.txt" }), /Path is not a valid file to read/)
 })
 
 test("a workspace that answers with nothing readable is refused", async () => {
-  const { tool } = buildTool(() => new ReadResult({ result: { case: "success", value: new ReadSuccess({ path: "/repo/file.txt" }) } }))
+  const { tool } = buildTool(() => ({
+    kind: "success",
+    path: "/repo/file.txt",
+    totalLines: 0,
+    fileSize: 0n,
+    truncated: false,
+    rangeApplied: false,
+  }))
   await assert.rejects(() => runRead(tool, { path: "/repo/file.txt" }), /Unknown output type/)
 })
 
