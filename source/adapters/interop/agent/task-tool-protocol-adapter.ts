@@ -1,5 +1,6 @@
 import {
   TaskError,
+  InteractionUpdate,
   TaskResult,
   TaskSuccess,
   TaskToolCall,
@@ -210,10 +211,13 @@ export function serializeTaskErrorInterop(error: unknown): ToolCall {
 }
 
 export function createTaskToolCallDeltaInterop(update: unknown): ToolCallDelta {
+  if (!(update instanceof InteractionUpdate)) {
+    throw new TypeError("Task progress update is invalid")
+  }
   return new ToolCallDelta({
     delta: {
       case: "taskToolCallDelta",
-      value: new TaskToolCallDelta({ interactionUpdate: update as never }),
+      value: new TaskToolCallDelta({ interactionUpdate: update }),
     },
   })
 }
