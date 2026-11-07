@@ -26,6 +26,28 @@ import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
+  ClickAction,
+  ComputerUseAction,
+  ComputerUseArgs,
+  ComputerUseError,
+  ComputerUseResult,
+  ComputerUseSuccess,
+  ComputerUseToolCall,
+  Coordinate,
+  CursorPositionAction,
+  DragAction,
+  KeyAction,
+  MouseButton,
+  MouseDownAction,
+  MouseMoveAction,
+  MouseUpAction,
+  ScreenshotAction,
+  ScrollAction,
+  ScrollDirection,
+  TypeAction,
+  WaitAction,
+} from "../proto/generated/agent/v1/computer_use_tool_pb.ts"
+import {
   CreatePlanArgs,
   CreatePlanError,
   CreatePlanResult,
@@ -139,6 +161,7 @@ import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts"
 import {
   createSlateConversationSummaryToolCall,
   createSlateAskQuestionToolCall,
+  createSlateComputerUseToolCall,
   createSlatePlanDraftToolCall,
   createSlateSendMessageToolCall,
   createSlateAssistantMessageStep,
@@ -147,6 +170,7 @@ import {
   createSlateUnsupportedConversationStep,
   isSlateConversationSummaryToolCall,
   isSlateAskQuestionToolCall,
+  isSlateComputerUseToolCall,
   isSlatePlanDraftToolCall,
   isSlateSendMessageToolCall,
   type SlateConversationStepCompatibility,
@@ -154,6 +178,12 @@ import {
   type SlateConversationSummaryResult,
   type SlateAskQuestionToolArguments,
   type SlateAskQuestionToolOutcome,
+  type SlateComputerCoordinate,
+  type SlateComputerMouseButton,
+  type SlateComputerScrollDirection,
+  type SlateComputerUseAction,
+  type SlateComputerUseToolArguments,
+  type SlateComputerUseToolOutcome,
   type SlatePlanDraftToolArguments,
   type SlatePlanDraftPhase,
   type SlatePlanDraftToolOutcome,
@@ -1618,6 +1648,353 @@ function interopPlanDraftToolFromSlate(
   })
 }
 
+function isInt32Interop(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) &&
+    value >= -2_147_483_648 && value <= 2_147_483_647
+}
+
+function slateComputerCoordinateFromInterop(value: unknown): SlateComputerCoordinate | undefined {
+  if (!isRecordValue(value) || !isInt32Interop(value.x) || !isInt32Interop(value.y)) return undefined
+  return { x: value.x, y: value.y }
+}
+
+function slateComputerMouseButtonFromInterop(value: unknown): SlateComputerMouseButton | undefined {
+  switch (value) {
+    case MouseButton.UNSPECIFIED: return "unspecified"
+    case MouseButton.LEFT: return "left"
+    case MouseButton.RIGHT: return "right"
+    case MouseButton.MIDDLE: return "middle"
+    case MouseButton.BACK: return "back"
+    case MouseButton.FORWARD: return "forward"
+    default:
+      return isInt32Interop(value) ? { kind: "unknown", code: value } : undefined
+  }
+}
+
+function slateComputerScrollDirectionFromInterop(value: unknown): SlateComputerScrollDirection | undefined {
+  switch (value) {
+    case ScrollDirection.UNSPECIFIED: return "unspecified"
+    case ScrollDirection.UP: return "up"
+    case ScrollDirection.DOWN: return "down"
+    case ScrollDirection.LEFT: return "left"
+    case ScrollDirection.RIGHT: return "right"
+    default:
+      return isInt32Interop(value) ? { kind: "unknown", code: value } : undefined
+  }
+}
+
+function slateComputerActionFromInterop(value: unknown): SlateComputerUseAction | undefined {
+  if (!isRecordValue(value)) return undefined
+  const selected = isRecordValue(value.action) ? value.action : undefined
+  const data = isRecordValue(selected?.value) ? selected.value : undefined
+  const optionalCoordinate = (source: Record<string, unknown>): SlateComputerCoordinate | undefined | null =>
+    source.coordinate === undefined ? undefined : slateComputerCoordinateFromInterop(source.coordinate) ?? null
+  const optionalModifierKeys = (source: Record<string, unknown>): SlateToolCallText | undefined | null =>
+    source.modifierKeys === undefined ? undefined : slateToolCallTextFromInterop(source.modifierKeys) ?? null
+  switch (selected?.case) {
+    case "mouseMove": {
+      if (data === undefined) return undefined
+      const coordinate = optionalCoordinate(data)
+      if (coordinate === null) return undefined
+      return { kind: "mouse-move", ...(coordinate === undefined ? {} : { coordinate }) }
+    }
+    case "click": {
+      if (data === undefined || !isInt32Interop(data.count)) return undefined
+      const coordinate = optionalCoordinate(data)
+      const button = slateComputerMouseButtonFromInterop(data.button)
+      const modifierKeys = optionalModifierKeys(data)
+      if (coordinate === null || button === undefined || modifierKeys === null) return undefined
+      return {
+        kind: "click",
+        ...(coordinate === undefined ? {} : { coordinate }),
+        button,
+        count: data.count,
+        ...(modifierKeys === undefined ? {} : { modifierKeys }),
+      }
+    }
+    case "mouseDown":
+    case "mouseUp": {
+      if (data === undefined) return undefined
+      const button = slateComputerMouseButtonFromInterop(data.button)
+      if (button === undefined) return undefined
+      return { kind: selected.case === "mouseDown" ? "mouse-down" : "mouse-up", button }
+    }
+    case "drag": {
+      if (data === undefined) return undefined
+      const path = data.path === undefined ? [] : data.path
+      const button = slateComputerMouseButtonFromInterop(data.button)
+      const modifierKeys = optionalModifierKeys(data)
+      if (!Array.isArray(path) || button === undefined || modifierKeys === null) return undefined
+      const mappedPath = path.map(slateComputerCoordinateFromInterop)
+      if (mappedPath.some(coordinate => coordinate === undefined)) return undefined
+      return {
+        kind: "drag",
+        path: mappedPath as SlateComputerCoordinate[],
+        button,
+        ...(modifierKeys === undefined ? {} : { modifierKeys }),
+      }
+    }
+    case "scroll": {
+      if (data === undefined || !isInt32Interop(data.amount)) return undefined
+      const coordinate = optionalCoordinate(data)
+      const direction = slateComputerScrollDirectionFromInterop(data.direction)
+      const modifierKeys = optionalModifierKeys(data)
+      if (coordinate === null || direction === undefined || modifierKeys === null) return undefined
+      return {
+        kind: "scroll",
+        ...(coordinate === undefined ? {} : { coordinate }),
+        direction,
+        amount: data.amount,
+        ...(modifierKeys === undefined ? {} : { modifierKeys }),
+      }
+    }
+    case "type": {
+      if (data === undefined) return undefined
+      const text = slateToolCallTextFromInterop(data.text)
+      return text === undefined ? undefined : { kind: "type", text }
+    }
+    case "key": {
+      if (data === undefined || (data.holdDurationMs !== undefined && !isInt32Interop(data.holdDurationMs))) return undefined
+      const key = slateToolCallTextFromInterop(data.key)
+      if (key === undefined) return undefined
+      return { kind: "key", key, ...(data.holdDurationMs === undefined ? {} : { holdDurationMs: data.holdDurationMs }) }
+    }
+    case "wait":
+      return data !== undefined && isInt32Interop(data.durationMs)
+        ? { kind: "wait", durationMs: data.durationMs }
+        : undefined
+    case "screenshot":
+      return { kind: "screenshot" }
+    case "cursorPosition":
+      return { kind: "cursor-position" }
+    case undefined:
+      return { kind: "missing" }
+    default:
+      if (selected === undefined) return { kind: "missing" }
+      return {
+        kind: "unsupported",
+        sourceCase: String(selected.case),
+        ...(selected.value === undefined ? {} : { payload: selected.value }),
+      }
+  }
+}
+
+function slateComputerUseToolFromInterop(value: unknown): SlateToolCallValue | undefined {
+  if (!isRecordValue(value)) return undefined
+  const args = value.args === undefined ? undefined : isRecordValue(value.args) ? value.args : null
+  const result = value.result === undefined ? undefined : isRecordValue(value.result) ? value.result : null
+  if (args === null || result === null) return undefined
+
+  let slateArgs: SlateComputerUseToolArguments | undefined
+  if (args !== undefined) {
+    const actions = args.actions === undefined ? [] : args.actions
+    const originalCallId = args.toolCallId === undefined ? "" : args.toolCallId
+    const description = args.description === undefined ? undefined : slateToolCallTextFromInterop(args.description)
+    if (!Array.isArray(actions) || typeof originalCallId !== "string" ||
+        (args.description !== undefined && description === undefined) ||
+        (args.bindUnmappedCharacters !== undefined && typeof args.bindUnmappedCharacters !== "boolean")) return undefined
+    const mappedActions = actions.map(slateComputerActionFromInterop)
+    if (mappedActions.some(action => action === undefined)) return undefined
+    slateArgs = {
+      originalCallId,
+      actions: mappedActions as SlateComputerUseAction[],
+      ...(description === undefined ? {} : { description }),
+      ...(args.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: args.bindUnmappedCharacters }),
+    }
+  }
+
+  let slateResult: SlateComputerUseToolOutcome | undefined
+  if (result !== undefined) {
+    const selected = isRecordValue(result.result) ? result.result : undefined
+    const data = isRecordValue(selected?.value) ? selected.value : undefined
+    switch (selected?.case) {
+      case "success": {
+        if (data === undefined || !isInt32Interop(data.actionCount) || !isInt32Interop(data.durationMs)) return undefined
+        const screenshot = data.screenshot === undefined ? undefined : slateToolCallTextFromInterop(data.screenshot)
+        const log = data.log === undefined ? undefined : slateToolCallTextFromInterop(data.log)
+        const screenshotPath = data.screenshotPath === undefined ? undefined : slateToolCallTextFromInterop(data.screenshotPath)
+        const cursorPosition = data.cursorPosition === undefined ? undefined : slateComputerCoordinateFromInterop(data.cursorPosition)
+        if ((data.screenshot !== undefined && screenshot === undefined) ||
+            (data.log !== undefined && log === undefined) ||
+            (data.screenshotPath !== undefined && screenshotPath === undefined) ||
+            (data.cursorPosition !== undefined && cursorPosition === undefined)) return undefined
+        slateResult = {
+          kind: "success",
+          actionCount: data.actionCount,
+          durationMs: data.durationMs,
+          ...(screenshot === undefined ? {} : { screenshot }),
+          ...(log === undefined ? {} : { log }),
+          ...(screenshotPath === undefined ? {} : { screenshotPath }),
+          ...(cursorPosition === undefined ? {} : { cursorPosition }),
+        }
+        break
+      }
+      case "error": {
+        if (data === undefined || !isInt32Interop(data.actionCount) || !isInt32Interop(data.durationMs)) return undefined
+        const message = data.error === undefined ? "" : slateToolCallTextFromInterop(data.error)
+        const log = data.log === undefined ? undefined : slateToolCallTextFromInterop(data.log)
+        const screenshot = data.screenshot === undefined ? undefined : slateToolCallTextFromInterop(data.screenshot)
+        const screenshotPath = data.screenshotPath === undefined ? undefined : slateToolCallTextFromInterop(data.screenshotPath)
+        if (message === undefined || (data.log !== undefined && log === undefined) ||
+            (data.screenshot !== undefined && screenshot === undefined) ||
+            (data.screenshotPath !== undefined && screenshotPath === undefined)) return undefined
+        slateResult = {
+          kind: "error",
+          message,
+          actionCount: data.actionCount,
+          durationMs: data.durationMs,
+          ...(log === undefined ? {} : { log }),
+          ...(screenshot === undefined ? {} : { screenshot }),
+          ...(screenshotPath === undefined ? {} : { screenshotPath }),
+        }
+        break
+      }
+      default:
+        slateResult = { kind: "unknown" }
+    }
+  }
+  return createSlateComputerUseToolCall({
+    ...(slateArgs === undefined ? {} : { args: slateArgs }),
+    ...(slateResult === undefined ? {} : { result: slateResult }),
+  })
+}
+
+function interopCoordinateFromSlate(value: SlateComputerCoordinate): Coordinate {
+  return new Coordinate({ x: value.x, y: value.y })
+}
+
+function interopMouseButtonFromSlate(value: SlateComputerMouseButton): MouseButton {
+  if (typeof value !== "string") return value.code as MouseButton
+  switch (value) {
+    case "left": return MouseButton.LEFT
+    case "right": return MouseButton.RIGHT
+    case "middle": return MouseButton.MIDDLE
+    case "back": return MouseButton.BACK
+    case "forward": return MouseButton.FORWARD
+    case "unspecified": return MouseButton.UNSPECIFIED
+  }
+}
+
+function interopScrollDirectionFromSlate(value: SlateComputerScrollDirection): ScrollDirection {
+  if (typeof value !== "string") return value.code as ScrollDirection
+  switch (value) {
+    case "up": return ScrollDirection.UP
+    case "down": return ScrollDirection.DOWN
+    case "left": return ScrollDirection.LEFT
+    case "right": return ScrollDirection.RIGHT
+    case "unspecified": return ScrollDirection.UNSPECIFIED
+  }
+}
+
+function interopComputerActionFromSlate(action: SlateComputerUseAction, plain: boolean): ComputerUseAction {
+  const text = (value: SlateToolCallText): string | RedactedString =>
+    isRedactedString(value) && plain ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : value
+  switch (action.kind) {
+    case "mouse-move":
+      return new ComputerUseAction({ action: {
+        case: "mouseMove",
+        value: new MouseMoveAction({ ...(action.coordinate === undefined ? {} : { coordinate: interopCoordinateFromSlate(action.coordinate) }) }),
+      } })
+    case "click":
+      return new ComputerUseAction({ action: {
+        case: "click",
+        value: new ClickAction({
+          ...(action.coordinate === undefined ? {} : { coordinate: interopCoordinateFromSlate(action.coordinate) }),
+          button: interopMouseButtonFromSlate(action.button),
+          count: action.count,
+          ...(action.modifierKeys === undefined ? {} : { modifierKeys: text(action.modifierKeys) as never }),
+        }),
+      } })
+    case "mouse-down":
+      return new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: interopMouseButtonFromSlate(action.button) }) } })
+    case "mouse-up":
+      return new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: interopMouseButtonFromSlate(action.button) }) } })
+    case "drag":
+      return new ComputerUseAction({ action: {
+        case: "drag",
+        value: new DragAction({
+          path: action.path.map(interopCoordinateFromSlate),
+          button: interopMouseButtonFromSlate(action.button),
+          ...(action.modifierKeys === undefined ? {} : { modifierKeys: text(action.modifierKeys) as never }),
+        }),
+      } })
+    case "scroll":
+      return new ComputerUseAction({ action: {
+        case: "scroll",
+        value: new ScrollAction({
+          ...(action.coordinate === undefined ? {} : { coordinate: interopCoordinateFromSlate(action.coordinate) }),
+          direction: interopScrollDirectionFromSlate(action.direction),
+          amount: action.amount,
+          ...(action.modifierKeys === undefined ? {} : { modifierKeys: text(action.modifierKeys) as never }),
+        }),
+      } })
+    case "type":
+      return new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: text(action.text) as never }) } })
+    case "key":
+      return new ComputerUseAction({ action: {
+        case: "key",
+        value: new KeyAction({ key: text(action.key) as never, ...(action.holdDurationMs === undefined ? {} : { holdDurationMs: action.holdDurationMs }) }),
+      } })
+    case "wait":
+      return new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: action.durationMs }) } })
+    case "screenshot":
+      return new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction() } })
+    case "cursor-position":
+      return new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction() } })
+    case "missing":
+      return new ComputerUseAction()
+    case "unsupported":
+      return new ComputerUseAction({ action: { case: action.sourceCase as never, value: action.payload as never } })
+  }
+}
+
+function interopComputerUseToolFromSlate(
+  tool: Extract<SlateToolCallValue, { readonly kind: "computer-use" }>,
+  plain: boolean,
+): ComputerUseToolCall {
+  const text = (value: SlateToolCallText): string | RedactedString =>
+    isRedactedString(value) && plain ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : value
+  const args = tool.args === undefined
+    ? undefined
+    : new ComputerUseArgs({
+        toolCallId: tool.args.originalCallId,
+        actions: tool.args.actions.map(action => interopComputerActionFromSlate(action, plain)),
+        ...(tool.args.description === undefined ? {} : { description: text(tool.args.description) as never }),
+        ...(tool.args.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: tool.args.bindUnmappedCharacters }),
+      })
+  const result = tool.result === undefined
+    ? undefined
+    : tool.result.kind === "success"
+      ? new ComputerUseResult({ result: {
+          case: "success",
+          value: new ComputerUseSuccess({
+            actionCount: tool.result.actionCount,
+            durationMs: tool.result.durationMs,
+            ...(tool.result.screenshot === undefined ? {} : { screenshot: text(tool.result.screenshot) as never }),
+            ...(tool.result.log === undefined ? {} : { log: text(tool.result.log) as never }),
+            ...(tool.result.screenshotPath === undefined ? {} : { screenshotPath: text(tool.result.screenshotPath) as never }),
+            ...(tool.result.cursorPosition === undefined ? {} : { cursorPosition: interopCoordinateFromSlate(tool.result.cursorPosition) }),
+          }),
+        } })
+      : tool.result.kind === "error"
+        ? new ComputerUseResult({ result: {
+            case: "error",
+            value: new ComputerUseError({
+              error: text(tool.result.message) as never,
+              actionCount: tool.result.actionCount,
+              durationMs: tool.result.durationMs,
+              ...(tool.result.log === undefined ? {} : { log: text(tool.result.log) as never }),
+              ...(tool.result.screenshot === undefined ? {} : { screenshot: text(tool.result.screenshot) as never }),
+              ...(tool.result.screenshotPath === undefined ? {} : { screenshotPath: text(tool.result.screenshotPath) as never }),
+            }),
+          } })
+        : new ComputerUseResult()
+  return new ComputerUseToolCall({
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  })
+}
+
 function slateSendMessageToolFromInterop(value: unknown): SlateToolCallValue | undefined {
   if (!isRecordValue(value)) return undefined
   const args = value.args === undefined ? undefined : isRecordValue(value.args) ? value.args : null
@@ -1831,6 +2208,10 @@ function slateSummaryToolCallFromInterop(
 }
 
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "computerUseToolCall") {
+    const computerUse = slateComputerUseToolFromInterop(value)
+    if (computerUse !== undefined) return computerUse
+  }
   if (operation === "sendMessageToolCall") {
     const sendMessage = slateSendMessageToolFromInterop(value)
     if (sendMessage !== undefined) return sendMessage
@@ -1853,6 +2234,10 @@ function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (tool.kind === "computer-use") {
+    if (!isSlateComputerUseToolCall(tool)) throw new TypeError("Slate computer-use operation is invalid")
+    return { case: "computerUseToolCall", value: interopComputerUseToolFromSlate(tool, plain) }
+  }
   if (tool.kind === "send-message") {
     if (!isSlateSendMessageToolCall(tool)) throw new TypeError("Slate send-message operation is invalid")
     return { case: "sendMessageToolCall", value: interopSendMessageToolFromSlate(tool, plain) }
@@ -2545,7 +2930,8 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
           (envelope.version === 1 &&
             (tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
-              tool.operation === "plan-draft" || tool.operation === "send-message")) ||
+              tool.operation === "plan-draft" || tool.operation === "send-message" ||
+              tool.operation === "computer-use")) ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -2620,9 +3006,12 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "send-message" && !isSlateSendMessageToolCall(step.tool)) {
         throw new TypeError("Slate send-message operation is invalid")
       }
+      if (step.tool.kind === "computer-use" && !isSlateComputerUseToolCall(step.tool)) {
+        throw new TypeError("Slate computer-use operation is invalid")
+      }
       if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" &&
           step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" &&
-          step.tool.kind !== "send-message" && step.tool.kind !== "legacy") {
+          step.tool.kind !== "send-message" && step.tool.kind !== "computer-use" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
       }
       storedStep = {
@@ -2638,20 +3027,22 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlateSendMessageToolCall(step.tool)
-          ? { operation: "send-message", payload: encodeSlateValue(step.tool) }
-          : isSlatePlanDraftToolCall(step.tool)
-            ? { operation: "plan-draft", payload: encodeSlateValue(step.tool) }
-            : isSlateAskQuestionToolCall(step.tool)
-              ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
-              : isSlateConversationSummaryToolCall(step.tool)
-                ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
-                : {
+        tool: isSlateComputerUseToolCall(step.tool)
+          ? { operation: "computer-use", payload: encodeSlateValue(step.tool) }
+          : isSlateSendMessageToolCall(step.tool)
+            ? { operation: "send-message", payload: encodeSlateValue(step.tool) }
+            : isSlatePlanDraftToolCall(step.tool)
+              ? { operation: "plan-draft", payload: encodeSlateValue(step.tool) }
+              : isSlateAskQuestionToolCall(step.tool)
+                ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
+                : isSlateConversationSummaryToolCall(step.tool)
+                  ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
+                  : {
               ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
               ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
                 ? { payload: encodeSlateValue(step.tool.value) }
                 : {}),
-                  },
+                    },
       }
       break
     case "unsupported":
@@ -2714,7 +3105,11 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
               ? isSlateSendMessageToolCall(storedPayload)
                 ? storedPayload
                 : (() => { throw new TypeError("Stored Slate send-message operation is invalid") })()
-              : slateToolCallValueFromInterop(storedOperation, storedPayload)
+                : storedOperation === "computer-use"
+                  ? isSlateComputerUseToolCall(storedPayload)
+                    ? storedPayload
+                    : (() => { throw new TypeError("Stored Slate computer-use operation is invalid") })()
+                  : slateToolCallValueFromInterop(storedOperation, storedPayload)
       return createSlateToolCallStep({
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
         ...(step.startedAtMs === undefined ? {} : { startedAtMs: BigInt(step.startedAtMs as string) }),

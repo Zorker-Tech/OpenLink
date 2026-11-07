@@ -3314,9 +3314,9 @@
     },
     "packages/agent/smart-mode-classifier-context.ts": {
       "claim": "rewritten",
-      "overlap": 0.5618556701030928,
-      "refreshReason": "The classifier reads Slate-owned conversation-step kinds and typed ask-question answers; generated user-message, computer-use, and classifier transport projection stay at interop boundaries while the policy returns Slate role/content records.",
-      "evidence": "The typed ask-question step and classifier context tests pass; focused step, classifier, and task suites pass 59/59. The complete Node 24 Work-host suite passes 10018/10018. Typecheck, rewrite:check and interop:check pass (316 core imports / 221 files). Classifier policy reads Slate question arguments and outcomes; generated message projection remains at the adapter. Measured overlap is 0.5618556701030928 against 1940 baseline pairs."
+      "overlap": 0.5278350515463918,
+      "refreshReason": "Auto-review computer-use context now renders Slate action and outcome values in a Slate-owned request/result envelope; generated conversation-step parsing remains at the migration adapter.",
+      "evidence": "The focused conversation-step and rich classifier suites pass 31/31, including all known computer-use action kinds, unknown enum preservation, migration from a version 1 step record, classifier output ownership and screenshot omission. The complete Node 24 Work-host suite passes 10026/10026. Work-host typecheck passes: 1204 rewrite claims under 0.8, 0 floors, 40 removals; interop boundary 316 core imports across 221 files. Measured overlap is 0.5278350515463918 against 1940 baseline pairs."
     },
     "host/local-exec/extension.ts": {
       "claim": "rewritten",
