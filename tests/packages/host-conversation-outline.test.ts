@@ -160,6 +160,7 @@ describe("the conversation outline", () => {
               case: "taskToolCall",
               value: { args: { description: " inspect task " } },
             } }),
+            createSlateToolCallStep({ tool: { kind: "shell", args: { command: "git status" } } }),
           ],
         },
         { kind: "shell", invocation: { commandText: text("ls -la") }, result: { standardOutput: "", standardError: "", exitCode: 0 } },
@@ -177,6 +178,7 @@ describe("the conversation outline", () => {
           { kind: "thinking", id: "outline-0-1", text: "reasoning", durationMs: 7 },
           { kind: "send-message", id: "outline-0-2", message: { type: "text", content: "sent" } },
           { kind: "tool-call", id: "outline-0-3", name: "Task", status: "done", summary: "inspect task" },
+          { kind: "tool-call", id: "outline-0-4", name: "shellToolCall", status: "done", summary: undefined },
         ],
       },
       {

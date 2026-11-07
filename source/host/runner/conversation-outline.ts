@@ -374,6 +374,7 @@ function slateStepToOutlineItem(step: SlateConversationStep, id: string): Outlin
         : { kind: "thinking", id, text, durationMs: step.durationMs > 0 ? step.durationMs : undefined }
     }
     case "tool-call":
+      if (step.tool.kind === "shell") return toolCallItem({ tool: { case: "shellToolCall" } }, id)
       return toolCallItem({
         tool: {
           ...(step.tool.case === undefined ? {} : { case: step.tool.case }),

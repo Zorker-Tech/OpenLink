@@ -16,6 +16,7 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { isSlateShellToolCall } from "../../source/packages/agent/shell-tool-call-state.ts"
 import {
   createSlateConversationStepSerde,
   fromInteropConversationStep,
@@ -28,6 +29,21 @@ import {
   ConversationStep,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import {
+  ShellArgs,
+  ShellBackgroundReason,
+  ShellResult,
+  ShellSuccess,
+  TimeoutBehavior,
+} from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/shell_tool_pb.ts"
+import {
+  NetworkPolicy,
+  NetworkPolicy_DefaultAction,
+  SandboxPolicy,
+  SandboxPolicy_ReadBoundaryMode,
+  SandboxPolicy_Type,
+} from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts"
 import {
   AskQuestionArgs,
   AskQuestionArgs_Option,
@@ -94,6 +110,22 @@ import {
 
 const text = (value: string) =>
   createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)
+
+function storeLegacyStepValue(value: unknown): unknown {
+  if (value === undefined) return { kind: "undefined" }
+  if (value === null) return { kind: "null" }
+  if (typeof value === "string") return { kind: "string", value }
+  if (typeof value === "boolean") return { kind: "boolean", value }
+  if (typeof value === "number") return { kind: "number", value }
+  if (typeof value === "bigint") return { kind: "bigint", decimal: value.toString() }
+  if (value instanceof Uint8Array) return { kind: "bytes", hex: Buffer.from(value).toString("hex") }
+  if (Array.isArray(value)) return { kind: "array", entries: value.map(storeLegacyStepValue) }
+  if (typeof value === "object") {
+    const entries = Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    return { kind: "object", entries: entries.map(([key, entry]) => [key, storeLegacyStepValue(entry)]) }
+  }
+  throw new TypeError(`cannot build a legacy step fixture from ${typeof value}`)
+}
 
 test("assistant, thinking and tool steps round-trip through the Slate serde", () => {
   const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
@@ -194,9 +226,10 @@ test("computer-use steps use Slate storage while preserving every legacy action 
   const storedText = new TextDecoder().decode(storedBytes)
   const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
     version: number
-    step: { tool: { operation: string; payload: { kind: string } } }
+    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
   }
-  assert.equal(envelope.version, 2)
+  assert.equal(envelope.version, 3)
   assert.equal(envelope.step.tool.operation, "computer-use")
   assert.equal(envelope.step.tool.payload.kind, "object")
   assert.match(storedText, /"computer-use"/)
@@ -213,6 +246,250 @@ test("computer-use steps use Slate storage while preserving every legacy action 
     ClickAction.runtime.bin.listUnknownFields(restoredClick.value),
     ClickAction.runtime.bin.listUnknownFields(click),
   )
+})
+
+test("shell tool calls use a typed Slate step operation and preserve redaction and nested unknown fields", () => {
+  const args = new ShellArgs({
+    command: "pnpm test",
+    workingDirectory: "/workspace",
+    timeout: 3_000,
+    toolCallId: "shell-call-1",
+    simpleCommands: ["pnpm"],
+    hasOutputRedirect: true,
+    requestedSandboxPolicy: new SandboxPolicy({
+      type: SandboxPolicy_Type.WORKSPACE_READWRITE,
+      networkAccess: false,
+      additionalReadwritePaths: ["/workspace"],
+    }),
+    isBackground: true,
+    timeoutBehavior: TimeoutBehavior.BACKGROUND,
+    hardTimeout: 30_000,
+    description: "run the package tests",
+    closeStdin: false,
+    adminCommandDenylist: ["rm"],
+  })
+  ShellArgs.runtime.bin.onUnknownField(args, 701, 0, new Uint8Array([7]))
+  const success = new ShellSuccess({
+    command: "pnpm test",
+    workingDirectory: "/workspace",
+    exitCode: 0,
+    signal: "",
+    stdout: "all passed\n",
+    stderr: "",
+    executionTime: 12,
+    shellId: 17,
+    interleavedOutput: "all passed\n",
+    pid: 42,
+    msToWait: 3_000,
+    backgroundReason: ShellBackgroundReason.TIMEOUT,
+  })
+  ShellSuccess.runtime.bin.onUnknownField(success, 702, 0, new Uint8Array([9]))
+  const source = new ConversationStep({
+    message: {
+      case: "toolCall",
+      value: new ToolCall({
+        toolCallId: "shell-call-1",
+        startedAtMs: 100n,
+        completedAtMs: 112n,
+        tool: {
+          case: "shellToolCall",
+          value: new ShellToolCall({
+            args,
+            result: new ShellResult({ result: { case: "success", value: success }, isBackground: true, terminalsFolder: "/tmp/terminals", pid: 42 }),
+          }),
+        },
+      }),
+    },
+  })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slate = serde.deserialize(source.toBinary())
+  if (slate.kind !== "tool-call" || !isSlateShellToolCall(slate.tool)) {
+    assert.fail("expected a Slate shell operation")
+  }
+  assert.equal(slateToolCallMetricLabel(slate.tool), "shell")
+  assert.equal(slate.tool.args?.command === undefined ? undefined : isRedactedString(slate.tool.args.command), true)
+  if (slate.tool.args === undefined || !isRedactedString(slate.tool.args.command)) assert.fail("expected redacted shell command")
+  assert.equal(slate.tool.args.command.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "pnpm test")
+  assert.equal(slate.tool.args.command.__classification, DataClassification.CODE)
+  assert.equal(slate.tool.args.command.__fieldName, "command")
+  assert.equal(slate.tool.result?.isBackground, true)
+  if (slate.tool.result?.outcome.kind !== "success") assert.fail("expected a successful shell result")
+  assert.equal(isRedactedString(slate.tool.result.outcome.stdout), true)
+  if (!isRedactedString(slate.tool.result.outcome.stdout)) assert.fail("expected redacted shell output")
+  assert.equal(slate.tool.result.outcome.stdout.__fieldName, "stdout")
+
+  const stored = serde.serialize(slate)
+  const storedText = new TextDecoder().decode(stored)
+  const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
+  }
+  assert.equal(envelope.version, 3)
+  assert.equal(envelope.step.tool.operation, "shell")
+  assert.equal(envelope.step.tool.payload.kind, "object")
+  assert.equal(envelope.step.tool.case, undefined)
+  assert.deepEqual(envelope.compatibility?.legacyUnknownFields?.map(field => field.path), [
+    [{ field: "toolCall" }, { field: "shellToolCall" }, { field: "args" }],
+    [{ field: "toolCall" }, { field: "shellToolCall" }, { field: "result" }, { field: "success" }],
+  ])
+
+  const decoded = serde.deserialize(stored)
+  const redactedInterop = toInteropConversationStep(decoded)
+  if (redactedInterop.message.case !== "toolCall" || redactedInterop.message.value.tool.case !== "shellToolCall") {
+    assert.fail("expected the redacted shell operation at the interaction boundary")
+  }
+  const redactedArgs = redactedInterop.message.value.tool.value.args as unknown as { readonly command: unknown } | undefined
+  assert.ok(redactedArgs !== undefined && isRedactedString(redactedArgs.command))
+  const redactedResult = redactedInterop.message.value.tool.value.result?.result
+  if (redactedResult?.case !== "success") assert.fail("expected the redacted shell result")
+  assert.ok(isRedactedString(redactedResult.value.stdout))
+
+  const restored = toPlainInteropConversationStep(decoded)
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "shellToolCall") {
+    assert.fail("expected the shell operation to project at the transcript boundary")
+  }
+  const restoredArgs = restored.message.value.tool.value.args
+  const restoredSuccess = restored.message.value.tool.value.result?.result.value
+  assert.ok(restoredArgs instanceof ShellArgs)
+  assert.ok(restoredSuccess instanceof ShellSuccess)
+  if (!(restoredArgs instanceof ShellArgs) || !(restoredSuccess instanceof ShellSuccess)) assert.fail("expected complete shell messages")
+  assert.equal(restoredArgs.command, "pnpm test")
+  assert.equal(restoredArgs.workingDirectory, "/workspace")
+  assert.deepEqual(restoredArgs.simpleCommands, ["pnpm"])
+  assert.equal(restoredArgs.requestedSandboxPolicy?.networkAccess, false)
+  assert.equal(restoredArgs.requestedSandboxPolicy?.networkPolicy?.defaultAction, NetworkPolicy_DefaultAction.DENY)
+  assert.equal(restoredSuccess.stdout, "all passed\n")
+  assert.equal(restoredSuccess.backgroundReason, ShellBackgroundReason.TIMEOUT)
+  assert.deepEqual(ShellArgs.runtime.bin.listUnknownFields(restoredArgs), ShellArgs.runtime.bin.listUnknownFields(args))
+  assert.deepEqual(ShellSuccess.runtime.bin.listUnknownFields(restoredSuccess), ShellSuccess.runtime.bin.listUnknownFields(success))
+})
+
+test("stored V2 shell payloads migrate to the Slate operation and rewrite as V3", () => {
+  const shellCall = new ShellToolCall({
+    args: new ShellArgs({ command: "git diff", workingDirectory: "/repo", toolCallId: "legacy-shell" }),
+    result: new ShellResult({ result: { case: "success", value: new ShellSuccess({
+      command: "git diff",
+      workingDirectory: "/repo",
+      exitCode: 0,
+      signal: "",
+      stdout: "clean",
+      stderr: "",
+      executionTime: 4,
+      interleavedOutput: "clean",
+    }) } }),
+  })
+  const oldEnvelope = {
+    format: "slate.agent-conversation-step",
+    version: 2,
+    step: {
+      kind: "tool-call",
+      toolCallId: "legacy-shell",
+      hookContexts: [],
+      tool: { operation: "shellToolCall", payload: storeLegacyStepValue(shellCall) },
+    },
+  }
+  const bytes = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(oldEnvelope)}`)
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const migrated = serde.deserialize(bytes)
+  if (migrated.kind !== "tool-call" || !isSlateShellToolCall(migrated.tool)) {
+    assert.fail("expected the V2 shell payload to migrate to Slate")
+  }
+  assert.equal(migrated.tool.args?.command, "git diff")
+  if (migrated.tool.result?.outcome.kind !== "success") assert.fail("expected the shell result to migrate")
+  assert.equal(migrated.tool.result.outcome.stdout, "clean")
+
+  const rewritten = serde.serialize(migrated)
+  const envelope = JSON.parse(new TextDecoder().decode(rewritten).slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation: string; payload: { kind: string } } }
+  }
+  assert.equal(envelope.version, 3)
+  assert.equal(envelope.step.tool.operation, "shell")
+  assert.equal(envelope.step.tool.payload.kind, "object")
+  const restored = toPlainInteropConversationStep(serde.deserialize(rewritten))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "shellToolCall") {
+    assert.fail("expected the Slate operation to project to the current transcript view")
+  }
+  assert.equal(restored.message.value.tool.value.args?.command, "git diff")
+  const restoredShellResult = restored.message.value.tool.value.result
+  if (restoredShellResult === undefined || restoredShellResult.result.case !== "success") {
+    assert.fail("expected a successful restored shell result")
+  }
+  assert.equal(restoredShellResult.result.value.stdout, "clean")
+})
+
+test("unmapped sandbox enum values remain lossless legacy shell data", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const policies = [
+    new SandboxPolicy({ type: SandboxPolicy_Type.UNSPECIFIED }),
+    new SandboxPolicy({ type: 77 as SandboxPolicy_Type }),
+    new SandboxPolicy({
+      type: SandboxPolicy_Type.WORKSPACE_READWRITE,
+      readBoundary: SandboxPolicy_ReadBoundaryMode.CUSTOM,
+      additionalReadPaths: ["/workspace/private"],
+    }),
+    new SandboxPolicy({
+      type: SandboxPolicy_Type.WORKSPACE_READWRITE,
+      networkPolicy: new NetworkPolicy({ defaultAction: 77 as NetworkPolicy_DefaultAction, allow: ["internal"] }),
+    }),
+  ]
+  for (const policy of policies) {
+    const source = new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          tool: {
+            case: "shellToolCall",
+            value: new ShellToolCall({ args: new ShellArgs({ command: "echo preserved", requestedSandboxPolicy: policy }) }),
+          },
+        }),
+      },
+    })
+    const imported = serde.deserialize(source.toBinary())
+    if (imported.kind !== "tool-call" || isSlateShellToolCall(imported.tool) || imported.tool.case !== "shellToolCall") {
+      assert.fail("expected an unmapped sandbox enum to remain in the migration payload")
+    }
+    const encoded = serde.serialize(imported)
+    const envelope = JSON.parse(new TextDecoder().decode(encoded).slice("SLATE-AGENT-STEP\n".length)) as {
+      version: number
+      step: { tool: { operation: string } }
+    }
+    assert.equal(envelope.version, 3)
+    assert.equal(envelope.step.tool.operation, "shellToolCall")
+
+    const restored = toPlainInteropConversationStep(serde.deserialize(encoded))
+    if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "shellToolCall") {
+      assert.fail("expected legacy shell data to remain readable")
+    }
+    const restoredPolicy = restored.message.value.tool.value.args?.requestedSandboxPolicy
+    assert.equal(restoredPolicy?.type, policy.type)
+    assert.equal(restoredPolicy?.readBoundary, policy.readBoundary)
+    assert.equal(restoredPolicy?.networkPolicy?.defaultAction, policy.networkPolicy?.defaultAction)
+    assert.deepEqual(restoredPolicy?.networkPolicy?.allow, policy.networkPolicy?.allow)
+  }
+})
+
+test("malformed Slate shell calls are rejected before write and during V3 recovery", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const invalid = { kind: "shell", args: { command: "echo invalid", timeout: "later" } }
+  assert.equal(isSlateShellToolCall(invalid), false)
+  assert.throws(
+    () => serde.serialize(createSlateToolCallStep({ tool: invalid as never })),
+    /Slate shell operation is invalid/,
+  )
+
+  const envelope = {
+    format: "slate.agent-conversation-step",
+    version: 3,
+    step: {
+      kind: "tool-call",
+      hookContexts: [],
+      tool: { operation: "shell", payload: storeLegacyStepValue(invalid) },
+    },
+  }
+  const bytes = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`)
+  assert.throws(() => serde.deserialize(bytes), /Stored Slate shell operation is invalid/)
 })
 
 test("previous computer-use step data migrates to the Slate-owned operation on rewrite", () => {
@@ -243,7 +520,7 @@ test("previous computer-use step data migrates to the Slate-owned operation on r
     count: 1,
   })
   const rewritten = new TextDecoder().decode(serde.serialize(migrated))
-  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 3)
   assert.match(rewritten, /"operation":"computer-use"/)
   assert.doesNotMatch(rewritten, /computerUseToolCall/)
 })
@@ -378,7 +655,7 @@ test("previous Slate send-message tool records migrate and nested unknown fields
   if (migrated.kind !== "tool-call" || migrated.tool.kind !== "send-message") assert.fail("expected Slate send-message data")
   assert.deepEqual(migrated.tool.result, { kind: "delivered", timestampMs: 9n, messageId: "legacy-id" })
   const rewritten = new TextDecoder().decode(serde.serialize(migrated))
-  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 3)
   assert.match(rewritten, /"operation":"send-message"/)
   assert.doesNotMatch(rewritten, /sendMessageToolCall/)
 
@@ -473,7 +750,7 @@ test("task summary and progress operations use Slate values and rebuild their ru
     assert.equal(projected.tool.kind, "conversation-summary")
     assert.equal(projected.tool.case, undefined)
     const storedText = new TextDecoder().decode(serde.serialize(projected))
-    assert.equal(JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+    assert.equal(JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)).version, 3)
     assert.match(storedText, /"operation":"conversation-summary"/)
     const restored = serde.deserialize(serde.serialize(projected))
     assert.equal(restored.kind, "tool-call")
@@ -502,7 +779,7 @@ test("previous Slate step operation names migrate to the owned summary operation
   }
   assert.equal(imported.tool.args?.finalSummary, "saved summary")
   const rewritten = new TextDecoder().decode(serde.serialize(imported))
-  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 3)
   assert.match(rewritten, /"operation":"conversation-summary"/)
   assert.doesNotMatch(rewritten, /sendFinalSummaryToolCall/)
 })
@@ -635,7 +912,7 @@ test("previous Slate plan tool-call envelopes migrate to the owned plan-draft op
   assert.equal(migrated.tool.args?.content, "plan text")
   assert.deepEqual(migrated.tool.result, { kind: "created", planUri: "slate-plan://plan" })
   const rewritten = new TextDecoder().decode(serde.serialize(migrated))
-  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 3)
   assert.match(rewritten, /"operation":"plan-draft"/)
   assert.doesNotMatch(rewritten, /createPlanToolCall/)
 })
@@ -748,7 +1025,7 @@ test("previous Slate ask-question operation names migrate to the owned operation
   assert.equal(migrated.tool.args?.responseMode, "deferred")
   assert.equal(migrated.tool.args?.originalCallId, "call-1")
   const rewritten = new TextDecoder().decode(serde.serialize(migrated))
-  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 3)
   assert.match(rewritten, /"operation":"ask-question"/)
   assert.doesNotMatch(rewritten, /askQuestionToolCall/)
 })

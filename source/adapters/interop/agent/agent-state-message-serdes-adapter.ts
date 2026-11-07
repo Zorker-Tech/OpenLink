@@ -24,6 +24,12 @@ import {
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { GoalStatus } from "../proto/generated/agent/v1/goal_tool_pb.ts"
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
+import { ShellToolCall } from "../proto/generated/agent/v1/shell_tool_pb.ts"
+import {
+  NetworkPolicy_DefaultAction,
+  SandboxPolicy_ReadBoundaryMode,
+  SandboxPolicy_Type,
+} from "../proto/generated/agent/v1/sandbox_pb.ts"
 import type { GitRepoInfo, RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import {
   ClickAction,
@@ -275,6 +281,13 @@ import { fromInteropSelectedContextState, toInteropSelectedContextState } from "
 import { toInteropSelectedImage } from "./selected-context-entry-adapter.ts"
 import { toInteropSelectedVideo } from "./video-attachment-adapter.ts"
 import { toInteropSelectedDocument } from "./document-attachment-adapter.ts"
+import {
+  shellExecutorArgsFromInterop,
+  shellExecutorArgsToInterop,
+  shellResultFromInterop,
+  shellResultToInterop,
+} from "./shell-operation-adapter.ts"
+import { isSlateShellToolCall, type SlateShellToolCall, type SlateShellToolCallText } from "../../../packages/agent/shell-tool-call-state.ts"
 
 export type RedactedAgentConversationStateInterop = ReturnType<typeof toRedactedConversationStateStructure>
 export type AgentStateSelectedContextInterop = SelectedContext
@@ -2208,6 +2221,10 @@ function slateSummaryToolCallFromInterop(
 }
 
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "shellToolCall") {
+    const shellToolCall = slateShellToolCallFromInterop(value)
+    if (shellToolCall !== undefined) return shellToolCall
+  }
   if (operation === "computerUseToolCall") {
     const computerUse = slateComputerUseToolFromInterop(value)
     if (computerUse !== undefined) return computerUse
@@ -2230,10 +2247,70 @@ function slateToolCallValueFromInterop(operation: string | undefined, value: unk
   }
 }
 
+function slateShellToolCallFromInterop(
+  value: unknown,
+): SlateShellToolCall<SlateShellToolCallText> | undefined {
+  if (!isRecordValue(value)) return undefined
+  const argsMessage = value.args
+  const resultMessage = value.result
+  const argsPolicy = isRecordValue(argsMessage) ? argsMessage.requestedSandboxPolicy : undefined
+  const resultPolicy = isRecordValue(resultMessage) ? resultMessage.sandboxPolicy : undefined
+  // A typed shell value is used only when the Slate sandbox model can represent every policy enum
+  // without changing it. Unmapped historical enum values stay in the opaque migration path.
+  if (!canProjectShellSandboxPolicy(argsPolicy) || !canProjectShellSandboxPolicy(resultPolicy)) return undefined
+  const args = value.args === undefined
+    ? undefined
+    : isRecordValue(value.args) ? shellExecutorArgsFromInterop(value.args as never) : null
+  const result = value.result === undefined
+    ? undefined
+    : isRecordValue(value.result) ? shellResultFromInterop(value.result as never) : null
+  if (args === null || result === null) return undefined
+  const slateValue = {
+    kind: "shell",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  } as SlateShellToolCall<SlateShellToolCallText>
+  return isSlateShellToolCall(slateValue) ? slateValue : undefined
+}
+
+function canProjectShellSandboxPolicy(value: unknown): boolean {
+  if (value === undefined) return true
+  if (!isRecordValue(value) || typeof value.type !== "number" || ![
+    SandboxPolicy_Type.INSECURE_NONE,
+    SandboxPolicy_Type.WORKSPACE_READWRITE,
+    SandboxPolicy_Type.WORKSPACE_READONLY,
+  ].includes(value.type as never)) return false
+  if (value.readBoundary !== undefined && value.readBoundary !== SandboxPolicy_ReadBoundaryMode.UNSPECIFIED &&
+      value.readBoundary !== SandboxPolicy_ReadBoundaryMode.SYSTEM &&
+      value.readBoundary !== SandboxPolicy_ReadBoundaryMode.WORKSPACE) return false
+  if (value.networkPolicy !== undefined) {
+    if (!isRecordValue(value.networkPolicy)) return false
+    const action = value.networkPolicy.defaultAction
+    if (action !== undefined && action !== NetworkPolicy_DefaultAction.UNSPECIFIED &&
+        action !== NetworkPolicy_DefaultAction.ALLOW && action !== NetworkPolicy_DefaultAction.DENY) return false
+  }
+  return true
+}
+
 function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (isSlateShellToolCall(tool)) {
+    const args = tool.args === undefined
+      ? undefined
+      : shellExecutorArgsToInterop((plain ? unredactStepValue(tool.args) : tool.args) as never)
+    const result = tool.result === undefined
+      ? undefined
+      : shellResultToInterop((plain ? unredactStepValue(tool.result) : tool.result) as never)
+    return {
+      case: "shellToolCall",
+      value: new ShellToolCall({
+        ...(args === undefined ? {} : { args }),
+        ...(result === undefined ? {} : { result }),
+      }),
+    }
+  }
   if (tool.kind === "computer-use") {
     if (!isSlateComputerUseToolCall(tool)) throw new TypeError("Slate computer-use operation is invalid")
     return { case: "computerUseToolCall", value: interopComputerUseToolFromSlate(tool, plain) }
@@ -2902,7 +2979,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
   if (!hasOnlyKeys(envelope, ["format", "version", "step", "compatibility"]) ||
-      envelope.format !== STEP_STORAGE_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
+      envelope.format !== STEP_STORAGE_FORMAT || (envelope.version !== 1 && envelope.version !== 2 && envelope.version !== 3) ||
       envelope.step === null || typeof envelope.step !== "object" || Array.isArray(envelope.step)) return false
   if (envelope.compatibility !== undefined) {
     if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
@@ -2929,9 +3006,10 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
           (envelope.version === 1 &&
-            (tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
+            (tool.operation === "shell" || tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
               tool.operation === "plan-draft" || tool.operation === "send-message" ||
               tool.operation === "computer-use")) ||
+          (envelope.version === 2 && tool.operation === "shell") ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -2971,7 +3049,7 @@ function serializeStoredStepEnvelope(
 ): Uint8Array {
   const envelope = {
     format: STEP_STORAGE_FORMAT,
-    version: 2,
+    version: 3,
     step: storedStep,
     ...(legacyUnknownFields === undefined || legacyUnknownFields.length === 0
       ? {}
@@ -2994,6 +3072,9 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       }
       break
     case "tool-call":
+      if (step.tool.kind === "shell" && !isSlateShellToolCall(step.tool)) {
+        throw new TypeError("Slate shell operation is invalid")
+      }
       if (step.tool.kind === "conversation-summary" && !isSlateConversationSummaryToolCall(step.tool)) {
         throw new TypeError("Slate conversation summary operation is invalid")
       }
@@ -3009,7 +3090,7 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "computer-use" && !isSlateComputerUseToolCall(step.tool)) {
         throw new TypeError("Slate computer-use operation is invalid")
       }
-      if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" &&
+      if (step.tool.kind !== undefined && step.tool.kind !== "shell" && step.tool.kind !== "conversation-summary" &&
           step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" &&
           step.tool.kind !== "send-message" && step.tool.kind !== "computer-use" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
@@ -3027,7 +3108,9 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlateComputerUseToolCall(step.tool)
+        tool: isSlateShellToolCall(step.tool)
+          ? { operation: "shell", payload: encodeSlateValue(step.tool) }
+          : isSlateComputerUseToolCall(step.tool)
           ? { operation: "computer-use", payload: encodeSlateValue(step.tool) }
           : isSlateSendMessageToolCall(step.tool)
             ? { operation: "send-message", payload: encodeSlateValue(step.tool) }
@@ -3089,7 +3172,11 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
       const storedPayload = Object.prototype.hasOwnProperty.call(tool, "payload")
         ? decodeSlateValue(tool.payload as StoredSlateValue, privacyMode)
         : undefined
-      const toolValue = storedOperation === "conversation-summary"
+      const toolValue = storedOperation === "shell"
+        ? isSlateShellToolCall(storedPayload)
+          ? storedPayload
+          : (() => { throw new TypeError("Stored Slate shell operation is invalid") })()
+        : storedOperation === "conversation-summary"
         ? isSlateConversationSummaryToolCall(storedPayload)
           ? storedPayload
           : (() => { throw new TypeError("Stored Slate conversation summary tool call is invalid") })()
