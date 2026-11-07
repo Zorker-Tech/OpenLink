@@ -224,10 +224,10 @@ describe("the box this build offers", () => {
     const shells: string[] = [];
     const writes: Array<{ path: string; bytes: number }> = [];
     const executors = new Map<unknown, { execute(ctx: unknown, args: Record<string, unknown>): Promise<unknown> }>([
-      [shellExecutorResource, { execute: async (_ctx, args) => { shells.push(String(args.command)); return { result: { case: "success", value: { exitCode: 0 } } }; } }],
+      [shellExecutorResource, { execute: async (_ctx, args) => { shells.push(String(args.command)); return { outcome: { kind: "success", command: String(args.command), workingDirectory: "/workspace", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0 } }; } }],
       [writeExecutorResource, { execute: async (_ctx, args) => { const bytes = args.bytes as Uint8Array | undefined; writes.push({ path: String(args.path), bytes: bytes?.length ?? 0 }); return { kind: "success", path: String(args.path), linesWritten: 0, bytesWritten: bytes?.length ?? 0 }; } }],
     ]);
-    const accessor = { get: (resource: unknown) => executors.get(resource) ?? { execute: async () => ({ result: { case: "success", value: {} } }) } };
+    const accessor = { get: (resource: unknown) => executors.get(resource) ?? { execute: async () => ({ outcome: { kind: "unrecognized" } }) } };
     const transportMarker = { control: {}, exec: {}, accessor };
     const generated = {
       createTransport: (options: (typeof transports)[number]) => { transports.push(options); return transportMarker; },

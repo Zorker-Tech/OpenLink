@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { ShellFailure, ShellResult, ShellSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import { executeBoxWindowShellCommand } from "../../source/adapters/interop/agent/box-window-shell-result-adapter.ts"
 import { createContext } from "../../source/packages/context/context.ts"
+import type { ShellExecResponse } from "../../source/packages/agent-exec/shell.ts"
 import { SLATE_BOX_PRIMARY_WINDOW_INDEX, SlateBoxNoMonitorAvailableError } from "../../source/host/ports/box.ts"
 import {
   BoxWindowError,
@@ -19,7 +19,11 @@ import {
   touchSlateMonitorBusyLease,
 } from "../../source/host/boxes/box-windows.ts"
 
-function shellAccessor(answer: ShellResult | Error, calls: unknown[][] = []) {
+function shellSuccess(fields: Partial<{ exitCode: number; stderr: string }> = {}): ShellExecResponse {
+  return { outcome: { kind: "success", command: "", workingDirectory: "", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0, ...fields } }
+}
+
+function shellAccessor(answer: ShellExecResponse | Error, calls: unknown[][] = []) {
   return {
     get: () => ({
       async execute(_context: unknown, args: unknown) {
@@ -35,13 +39,13 @@ test("window scripts leave the primary alone and validate fork ownership before 
   assert.equal(SLATE_BOX_WINDOW_UNAVAILABLE_EXIT_CODE, 75)
   const calls: unknown[][] = []
   const refused: string[] = []
-  await runWindowScript(createContext(), shellAccessor(new ShellResult(), calls) as never, executeBoxWindowShellCommand as never, "start-window", SLATE_BOX_PRIMARY_WINDOW_INDEX, {
+  await runWindowScript(createContext(), shellAccessor({ outcome: { kind: "unrecognized" } }, calls) as never, executeBoxWindowShellCommand as never, "start-window", SLATE_BOX_PRIMARY_WINDOW_INDEX, {
     reportGuardRefused: (stage) => refused.push(stage),
   })
   assert.deepEqual(refused, ["start-window"])
   assert.deepEqual(calls, [])
   await assert.rejects(
-    runWindowScript(createContext(), shellAccessor(new ShellResult(), calls) as never, executeBoxWindowShellCommand as never, "start-window", 2, { ownerToken: "bad token" }),
+    runWindowScript(createContext(), shellAccessor({ outcome: { kind: "unrecognized" } }, calls) as never, executeBoxWindowShellCommand as never, "start-window", 2, { ownerToken: "bad token" }),
     /malformed owner token/,
   )
   assert.deepEqual(calls, [])
@@ -50,21 +54,21 @@ test("window scripts leave the primary alone and validate fork ownership before 
 test("window scripts send the scoped command and distinguish monitor exhaustion from other failures", async () => {
   const calls: unknown[][] = []
   const token = mintSlateWindowOwnerToken()
-  await runStartWindow(createContext(), shellAccessor(new ShellResult({ result: { case: "success", value: new ShellSuccess() } }), calls) as never, executeBoxWindowShellCommand as never, 2, token)
-  const request = calls[0]?.[0] as { command: string; workingDirectory: string; toolCallId: string; parsingResult: { executableCommands: Array<{ name: string }> } }
-  assert.deepEqual({ command: request.command, name: request.parsingResult.executableCommands[0]?.name, cwd: request.workingDirectory, toolCallId: request.toolCallId }, {
+  await runStartWindow(createContext(), shellAccessor(shellSuccess(), calls) as never, executeBoxWindowShellCommand as never, 2, token)
+  const request = calls[0]?.[0] as { command: string; workingDirectory: string; toolCallId: string; parsing?: { executableCommands: Array<{ name: string }> } }
+  assert.deepEqual({ command: request.command, name: request.parsing?.executableCommands[0]?.name, cwd: request.workingDirectory, toolCallId: request.toolCallId }, {
     command: `/usr/local/bin/start-window 2 ${token}`,
     name: "start-window",
     cwd: "/workspace",
     toolCallId: "slate-start-window",
   })
-  assert.equal(await runStopWindow(createContext(), shellAccessor(new ShellResult({ result: { case: "success", value: new ShellSuccess() } })) as never, executeBoxWindowShellCommand as never, 3), undefined)
+  assert.equal(await runStopWindow(createContext(), shellAccessor(shellSuccess()) as never, executeBoxWindowShellCommand as never, 3), undefined)
 
-  const unavailable = new ShellResult({ result: { case: "success", value: new ShellSuccess({ exitCode: SLATE_BOX_WINDOW_UNAVAILABLE_EXIT_CODE, stderr: "owned" }) } })
+  const unavailable = shellSuccess({ exitCode: SLATE_BOX_WINDOW_UNAVAILABLE_EXIT_CODE, stderr: "owned" })
   await assert.rejects(runWindowScript(createContext(), shellAccessor(unavailable) as never, executeBoxWindowShellCommand as never, "start-window", 4), SlateBoxNoMonitorAvailableError)
-  const failed = new ShellResult({ result: { case: "success", value: new ShellSuccess({ exitCode: 2, stderr: "bad command" }) } })
+  const failed = shellSuccess({ exitCode: 2, stderr: "bad command" })
   await assert.rejects(runWindowScript(createContext(), shellAccessor(failed) as never, executeBoxWindowShellCommand as never, "start-window", 4), /start-window exited 2: bad command/)
-  const rejected = new ShellResult({ result: { case: "failure", value: new ShellFailure() } })
+  const rejected: ShellExecResponse = { outcome: { kind: "failure", command: "", workingDirectory: "", exitCode: 1, signal: "", stdout: "", stderr: "", executionTimeMs: 0, aborted: false } }
   await assert.rejects(runWindowScript(createContext(), shellAccessor(rejected) as never, executeBoxWindowShellCommand as never, "stop-window", 4), /stop-window failed \(failure\)/)
 })
 
@@ -85,8 +89,8 @@ test("window helper state and busy leases stay scoped to the agent and a positiv
   assert.deepEqual([...connections], [["ab#2", 4]])
 
   const calls: unknown[][] = []
-  await touchSlateMonitorBusyLease(createContext(), shellAccessor(new ShellResult(), calls) as never, executeBoxWindowShellCommand as never, 0)
-  await touchSlateMonitorBusyLease(createContext(), shellAccessor(new ShellResult(), calls) as never, executeBoxWindowShellCommand as never, 2)
+  await touchSlateMonitorBusyLease(createContext(), shellAccessor({ outcome: { kind: "unrecognized" } }, calls) as never, executeBoxWindowShellCommand as never, 0)
+  await touchSlateMonitorBusyLease(createContext(), shellAccessor({ outcome: { kind: "unrecognized" } }, calls) as never, executeBoxWindowShellCommand as never, 2)
   assert.equal(calls.length, 1)
   const broken = shellAccessor(new Error("ignored"), calls) as never
   await assert.doesNotReject(touchSlateMonitorBusyLease(createContext(), broken, executeBoxWindowShellCommand as never, 3))

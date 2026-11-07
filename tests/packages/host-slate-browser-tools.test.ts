@@ -20,8 +20,26 @@ import {
   toDriverResponse,
 } from "../../source/host/runner/tools/slate-browser-tools.ts";
 import { SLATE_BROWSER_DRIVER_BOX_DIR, SLATE_BROWSER_DRIVER_BOX_PATH, SLATE_BROWSER_RESULT_MARKER } from "../../source/adapters/interop/browser/browser-driver-source-adapter.ts";
+import type { ShellExecResponse } from "../../source/packages/agent-exec/shell.ts";
 
 const MARKER = SLATE_BROWSER_RESULT_MARKER;
+
+function shellSuccess(stdout = "", fields: Partial<{ stderr: string; exitCode: number }> = {}): ShellExecResponse {
+  return { outcome: {
+    kind: "success",
+    command: "node",
+    workingDirectory: "/workspace",
+    exitCode: fields.exitCode ?? 0,
+    signal: "",
+    stdout,
+    stderr: fields.stderr ?? "",
+    executionTimeMs: 0,
+  } };
+}
+
+function shellTimeout(): ShellExecResponse {
+  return { outcome: { kind: "timeout", command: "node", workingDirectory: "/workspace", timeoutMs: 1_000 } };
+}
 
 function fakeDriver(behaviour: Record<string, unknown> = {}) {
   const shells: Array<Record<string, unknown>> = [];
@@ -30,13 +48,13 @@ function fakeDriver(behaviour: Record<string, unknown> = {}) {
   const persisted: unknown[] = [];
   const navigations: unknown[] = [];
   const ports = {
-    resourceAccessor: { get: () => ({ async execute() { return { result: { case: "success", value: { exitCode: 0, stdout: "" } } }; } }) },
+    resourceAccessor: { get: () => ({ async execute() { return shellSuccess(); } }) },
     async getWindowIndex() { if (behaviour.windowThrows === true) throw new Error("no window"); if (behaviour.windowMissing === true) return undefined; return behaviour.windowIndex === undefined ? 3 : behaviour.windowIndex as number; },
     getBoxId: () => "box-1",
     getDefaultViewId: () => "view-default",
     async uploadFile(_ctx: unknown, _boxId: string, path: string, bytes: Uint8Array) { uploads.push({ path, length: bytes.length }); if (behaviour.uploadThrows === true) throw new Error("upload failed"); },
     async downloadFile(_ctx: unknown, _boxId: string, path: string) { downloads.push({ path }); if (behaviour.downloadThrows === true) throw new Error("download failed"); return behaviour.imageBytes ?? new Uint8Array([1, 2, 3]); },
-    async executeShell(_ctx: unknown, input: Record<string, unknown>) { shells.push(input); if (behaviour.shellThrows === true) throw new Error("shell failed"); return behaviour.shellResult ?? { case: "success", stdout: "", exitCode: 0 }; },
+    async executeShell(_ctx: unknown, input: Record<string, unknown>) { shells.push(input); if (behaviour.shellThrows === true) throw new Error("shell failed"); return behaviour.shellResult ?? shellSuccess(); },
     ...(behaviour.persistImage === true ? { getPersistImage: () => async (bytes: Uint8Array, mimeType: string) => { persisted.push({ bytes: Buffer.from(bytes).toString("hex"), mimeType }); } } : {}),
     ...(behaviour.autoReview === undefined ? {} : { autoReview: behaviour.autoReview }),
   };
@@ -86,7 +104,7 @@ test("a box path token is bounded, sanitized and never empty", () => {
 });
 
 test("the driver carries a request and assembles the answer", async () => {
-  const run = await runOf({ shellResult: { case: "success", stdout: "x\n" + MARKER + "{\"ok\":true,\"summary\":\"did it\",\"url\":\"https://x\",\"title\":\"X\",\"data\":\"body\"}", exitCode: 0 } }, { op: "navigate", toolCallId: "call-1", args: { url: "https://x" } });
+  const run = await runOf({ shellResult: shellSuccess("x\n" + MARKER + "{\"ok\":true,\"summary\":\"did it\",\"url\":\"https://x\",\"title\":\"X\",\"data\":\"body\"}") }, { op: "navigate", toolCallId: "call-1", args: { url: "https://x" } });
   assert.equal("output" in run, true);
   if (!("output" in run)) return;
   assert.deepEqual(run.output, { text: "did it\n\nCurrent page: X (https://x)\n\nbody" });
@@ -108,12 +126,12 @@ test("the driver keeps only the last screenshot it stashed", () => {
 });
 
 test("a driver with no result, a failed shell or a failed answer reports it", async () => {
-  const missing = await runOf({ shellResult: { case: "success", stdout: "", stderr: "boom", exitCode: 7 } }, { op: "click", toolCallId: "call-1", args: {} });
+  const missing = await runOf({ shellResult: shellSuccess("", { stderr: "boom", exitCode: 7 }) }, { op: "click", toolCallId: "call-1", args: {} });
   assert.equal("error" in missing, true);
   if ("error" in missing) assert.match(missing.error.message, /produced no result \(exit 7\): boom/);
-  const failedShell = await runOf({ shellResult: { case: "timeout" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const failedShell = await runOf({ shellResult: shellTimeout() }, { op: "click", toolCallId: "call-1", args: {} });
   if ("error" in failedShell) assert.match(failedShell.error.message, /shell failed \(timeout\)/);
-  const failedAnswer = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":false,\"error\":\"nope\"}" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const failedAnswer = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":false,\"error\":\"nope\"}") }, { op: "click", toolCallId: "call-1", args: {} });
   if ("output" in failedAnswer) assert.deepEqual(failedAnswer.output, { text: "nope", isError: true });
 });
 
@@ -127,14 +145,14 @@ test("the driver reports the window and upload failures it cannot get past", asy
 });
 
 test("an explicit view and a skipped screenshot are carried into the request", async () => {
-  const explicit = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}" } }, { op: "click", toolCallId: "a b/c", args: { viewId: "custom" } });
+  const explicit = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") }, { op: "click", toolCallId: "a b/c", args: { viewId: "custom" } });
   if ("shells" in explicit) {
     const encoded = String(explicit.shells[0]?.command).split(" ")[2] ?? "";
     const request = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as Record<string, unknown>;
     assert.equal(request.viewId, "custom");
     assert.equal(request.shotPath, SLATE_BROWSER_DRIVER_BOX_DIR + "/shot-abc.png");
   }
-  const skipped = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"screenshot\":true}" } }, { op: "get_bounding_box", toolCallId: "call-1", args: {}, skipScreenshot: true });
+  const skipped = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"screenshot\":true}") }, { op: "get_bounding_box", toolCallId: "call-1", args: {}, skipScreenshot: true });
   if ("shells" in skipped) {
     const encoded = String(skipped.shells[0]?.command).split(" ")[2] ?? "";
     const request = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as Record<string, unknown>;
@@ -143,14 +161,14 @@ test("an explicit view and a skipped screenshot are carried into the request", a
 });
 
 test("a screenshot is downloaded, persisted and encoded", async () => {
-  const run = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"screenshot\":true}" }, imageBytes: new Uint8Array([7, 8]), persistImage: true }, { op: "screenshot", toolCallId: "call-1", args: {} });
+  const run = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"screenshot\":true}"), imageBytes: new Uint8Array([7, 8]), persistImage: true }, { op: "screenshot", toolCallId: "call-1", args: {} });
   if ("output" in run) {
     assert.equal(run.output.imageB64, Buffer.from([7, 8]).toString("base64"));
     assert.deepEqual(run.persisted, [{ bytes: "0708", mimeType: "image/png" }]);
   }
-  const empty = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"screenshot\":true}" }, imageBytes: new Uint8Array([]) }, { op: "screenshot", toolCallId: "call-1", args: {} });
+  const empty = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"screenshot\":true}"), imageBytes: new Uint8Array([]) }, { op: "screenshot", toolCallId: "call-1", args: {} });
   if ("output" in empty) assert.equal(empty.output.imageB64, undefined);
-  const failed = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"screenshot\":true}" }, downloadThrows: true }, { op: "screenshot", toolCallId: "call-1", args: {} });
+  const failed = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"screenshot\":true}"), downloadThrows: true }, { op: "screenshot", toolCallId: "call-1", args: {} });
   if ("output" in failed) assert.equal(failed.output.imageB64, undefined);
 });
 
@@ -169,7 +187,7 @@ test("a browser review action carries the call's arguments it knows", () => {
 });
 
 test("the tools are the browser actions, with the schemas and flags the model sees", () => {
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}", exitCode: 0 } });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") });
   const tools = createSlateBrowserTools({ ...fake.ports, onPossibleNavigation: fake.onPossibleNavigation } as never);
   assert.equal(tools.length, 15);
   assert.deepEqual(tools.map((tool) => tool.id).slice(0, 3), ["BROWSER_NAVIGATE", "BROWSER_SNAPSHOT", "BROWSER_CLICK"]);
@@ -180,7 +198,7 @@ test("the tools are the browser actions, with the schemas and flags the model se
 });
 
 test("a tool validates its arguments and runs the driver, reporting navigation", async () => {
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"summary\":\"ran\",\"screenshot\":false}", exitCode: 0 } });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"summary\":\"ran\",\"screenshot\":false}") });
   const tools = createSlateBrowserTools({ ...fake.ports, onPossibleNavigation: fake.onPossibleNavigation } as never);
   const navigate = tools[0]!;
   const missing = await navigate.execute({}, {}, { toolCallId: "call-1" });
@@ -199,7 +217,7 @@ test("a tool validates its arguments and runs the driver, reporting navigation",
 });
 
 test("a tool renders a screenshot result as an image", async () => {
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"screenshot\":true}", exitCode: 0 }, imageBytes: new Uint8Array([5, 6]) });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"screenshot\":true}"), imageBytes: new Uint8Array([5, 6]) });
   const tools = createSlateBrowserTools({ ...fake.ports, onPossibleNavigation: fake.onPossibleNavigation } as never);
   const output = await tools[14]!.execute({}, {}, { toolCallId: "call-1" });
   const rendered = tools[14]!.render(output);
@@ -218,7 +236,7 @@ test("a marker inside the payload is not mistaken for the result marker", () => 
 
 test("a window lookup that failed once is retried on the next call", async () => {
   const attempts: number[] = [];
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}", exitCode: 0 } });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") });
   let calls = 0;
   fake.ports.getWindowIndex = async () => { calls += 1; attempts.push(calls); if (calls === 1) throw new Error("cold"); return 3; };
   const driver = new SlateBrowserDriver(fake.ports as never);
@@ -236,7 +254,7 @@ test("a driver error from the window lookup is rethrown as itself", async () => 
 });
 
 test("the driver uploads the driver source to the box before the first call", async () => {
-  const run = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const run = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") }, { op: "click", toolCallId: "call-1", args: {} });
   if ("uploads" in run) {
     assert.equal(run.uploads.length, 1);
     assert.equal((run.uploads[0] as { path: string }).path, SLATE_BROWSER_DRIVER_BOX_PATH);
@@ -245,7 +263,7 @@ test("the driver uploads the driver source to the box before the first call", as
 });
 
 test("the request names the operation and the command carries it", async () => {
-  const run = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const run = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") }, { op: "click", toolCallId: "call-1", args: {} });
   if ("shells" in run) {
     const encoded = String(run.shells[0]?.command).split(" ")[2] ?? "";
     assert.equal((JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as { op: string }).op, "click");
@@ -253,19 +271,19 @@ test("the request names the operation and the command carries it", async () => {
 });
 
 test("the missing-result error carries both streams, tail-first", async () => {
-  const run = await runOf({ shellResult: { case: "success", stdout: "out", stderr: "err", exitCode: 1 } }, { op: "click", toolCallId: "call-1", args: {} });
+  const run = await runOf({ shellResult: shellSuccess("out", { stderr: "err", exitCode: 1 }) }, { op: "click", toolCallId: "call-1", args: {} });
   if ("error" in run) assert.match(run.error.message, /produced no result \(exit 1\): err \| out/);
 });
 
 test("a response without a summary says Done, and an empty url adds no page line", async () => {
-  const noSummary = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const noSummary = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") }, { op: "click", toolCallId: "call-1", args: {} });
   if ("output" in noSummary) assert.deepEqual(noSummary.output, { text: "Done." });
-  const emptyUrl = await runOf({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true,\"summary\":\"s\",\"url\":\"\"}" } }, { op: "click", toolCallId: "call-1", args: {} });
+  const emptyUrl = await runOf({ shellResult: shellSuccess(MARKER + "{\"ok\":true,\"summary\":\"s\",\"url\":\"\"}") }, { op: "click", toolCallId: "call-1", args: {} });
   if ("output" in emptyUrl) assert.deepEqual(emptyUrl.output, { text: "s" });
 });
 
 test("an empty required argument is refused, not run", async () => {
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}" } });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") });
   const tools = createSlateBrowserTools({ ...fake.ports, onPossibleNavigation: fake.onPossibleNavigation } as never);
   const result = await tools[0]!.execute({}, { url: "" }, { toolCallId: "call-1" });
   assert.deepEqual(result, { text: "url is required", isError: true });
@@ -273,7 +291,7 @@ test("an empty required argument is refused, not run", async () => {
 });
 
 test("a window that is not assigned yet is resolved on the next call", async () => {
-  const fake = fakeDriver({ shellResult: { case: "success", stdout: MARKER + "{\"ok\":true}", exitCode: 0 } });
+  const fake = fakeDriver({ shellResult: shellSuccess(MARKER + "{\"ok\":true}") });
   let calls = 0;
   fake.ports.getWindowIndex = async () => { calls += 1; return calls === 1 ? undefined : 4; };
   const driver = new SlateBrowserDriver(fake.ports as never);

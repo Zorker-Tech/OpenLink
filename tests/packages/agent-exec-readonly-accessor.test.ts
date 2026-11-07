@@ -15,8 +15,8 @@ import { createContext } from "../../source/packages/context/context.ts"
 import type { DeleteExecutorResult } from "../../source/packages/agent-exec/delete.ts"
 import type { BackgroundShellExecutorResult } from "../../source/packages/agent-exec/background-shell.ts"
 import type { ShellStreamExecutorEvent } from "../../source/packages/agent-exec/shell-stream-operation.ts"
+import type { ShellExecResponse } from "../../source/packages/agent-exec/shell.ts"
 import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
-import type { ShellResult } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -117,13 +117,13 @@ test("an MCP tool is refused by name", async () => {
 // ---------------------------------------------------------------------------------------------
 
 test("running a command is refused when shells are wrapped", async () => {
-  const result = await execute<ShellResult>(accessor(true).get(shellExecutorResource), { command: "npm test", workingDirectory: "/repo" })
-  assert.equal(result.result.case, "permissionDenied")
-  const value = (result.result as { value: { command: string; workingDirectory: string; error: string; isReadonly: boolean } }).value
-  assert.equal(value.command, "npm test")
-  assert.equal(value.workingDirectory, "/repo")
-  assert.equal(value.isReadonly, true)
-  assert.match(value.error, READONLY_REASON)
+  const result = await execute<ShellExecResponse>(accessor(true).get(shellExecutorResource), { command: "npm test", workingDirectory: "/repo" })
+  assert.equal(result.outcome.kind, "permission-denied")
+  if (result.outcome.kind !== "permission-denied") assert.fail("expected a shell permission denial")
+  assert.equal(result.outcome.command, "npm test")
+  assert.equal(result.outcome.workingDirectory, "/repo")
+  assert.equal(result.outcome.isReadonly, true)
+  assert.match(result.outcome.message, READONLY_REASON)
 })
 
 test("a streamed command is refused with the same answer", async () => {
@@ -144,10 +144,11 @@ test("a background command is refused with the same answer", async () => {
 })
 
 test("a command with nothing to name is still refused", async () => {
-  const result = await execute<ShellResult>(accessor(true).get(shellExecutorResource), {})
-  const value = (result.result as { value: { command: string; workingDirectory: string } }).value
-  assert.equal(value.command, "")
-  assert.equal(value.workingDirectory, "")
+  const result = await execute<ShellExecResponse>(accessor(true).get(shellExecutorResource), {})
+  assert.equal(result.outcome.kind, "permission-denied")
+  if (result.outcome.kind !== "permission-denied") assert.fail("expected a shell permission denial")
+  assert.equal(result.outcome.command, "")
+  assert.equal(result.outcome.workingDirectory, "")
 })
 
 test("shells are left alone when the caller does not ask for them", () => {

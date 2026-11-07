@@ -5,7 +5,7 @@
  * is what the desktop answered, with the monitor the agent was given so it does not drive another's.
  */
 import { Buffer } from "node:buffer";
-import { buildHostShellArgs } from "../../../adapters/interop/agent/box-shell-command-adapter.ts";
+import { buildHostShellArgs } from "../../boxes/box-shell-command.ts";
 import { navigationProbeCommand } from "../slate-action-audit.ts";
 import { SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE } from "../../ports/box.ts";
 import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts";
@@ -368,9 +368,9 @@ async function captureDisplayStateIdentity(
   } catch {
     throw new SlateComputerAutoReviewBlockedError(PAGE_STATE_UNCAPTURED_MESSAGE);
   }
-  if (result?.result?.case !== "success") throw new SlateComputerAutoReviewBlockedError(PAGE_STATE_UNCAPTURED_MESSAGE);
-  if (result.result.value.exitCode !== 0) return SLATE_COMPUTER_PAGE_STATE_CHROME_UNREACHABLE;
-  return computeSlateComputerPageStateIdentity(result.result.value.stdout ?? "");
+  if (result?.outcome?.kind !== "success") throw new SlateComputerAutoReviewBlockedError(PAGE_STATE_UNCAPTURED_MESSAGE);
+  if (result.outcome.exitCode !== 0) return SLATE_COMPUTER_PAGE_STATE_CHROME_UNREACHABLE;
+  return computeSlateComputerPageStateIdentity(result.outcome.stdout ?? "");
 }
 
 /** Saves the screenshot a successful call captured, when the runner has somewhere to save it. */

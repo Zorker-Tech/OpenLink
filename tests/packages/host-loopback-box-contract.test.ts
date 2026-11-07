@@ -73,7 +73,7 @@ function harness(options: {
             async execute(_ctx: unknown, args: { command?: string }) {
               if (args.command?.startsWith("/usr/local/bin/start-window ")) calls.starts.push(args.command);
               if (args.command?.startsWith("/usr/local/bin/stop-window ")) calls.stops.push(args.command);
-              return { result: { case: "success", value: { exitCode: 0, stderr: "" } } };
+              return { outcome: { kind: "success", command: String(args.command ?? ""), workingDirectory: "/workspace", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0 } };
             },
           };
         },

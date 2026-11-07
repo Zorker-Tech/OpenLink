@@ -1,27 +1,13 @@
 import { McpPermissionDenied, McpResult } from "../proto/generated/agent/v1/mcp_exec_pb.ts"
-import { ShellPermissionDenied, ShellResult } from "../proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutor, WriteExecutorArgs, WriteExecutorResult } from "../../../packages/agent-exec/write-operation.ts"
 import type { DeleteExecutor, DeleteExecutorArgs, DeleteExecutorResult } from "../../../packages/agent-exec/delete.ts"
 import type { BackgroundShellExecutor, BackgroundShellExecutorArgs, BackgroundShellExecutorResult } from "../../../packages/agent-exec/background-shell.ts"
+import type { ShellExecutor, ShellExecutorArgs, ShellExecResponse } from "../../../packages/agent-exec/shell.ts"
 import type { ShellStreamExecutor, ShellStreamExecutorArgs, ShellStreamExecutorEvent } from "../../../packages/agent-exec/shell-stream-operation.ts"
 import { permissionDeniedShellEvent } from "../../../packages/local-exec/shell-stream-events.ts"
 
-interface ShellInput {
-  readonly command?: string
-  readonly workingDirectory?: string
-}
-
-function shellRefusal(error: string, args: ShellInput): ShellPermissionDenied {
-  return new ShellPermissionDenied({
-    command: args.command ?? "",
-    workingDirectory: args.workingDirectory ?? "",
-    error,
-    isReadonly: true,
-  })
-}
-
 export interface ReadonlyExecRefusalExecutors {
-  readonly shell: unknown
+  readonly shell: ShellExecutor
   readonly shellStream: ShellStreamExecutor
   readonly backgroundShell: BackgroundShellExecutor
   readonly write: WriteExecutor
@@ -33,8 +19,16 @@ export interface ReadonlyExecRefusalExecutors {
 export function createReadonlyExecRefusalExecutors(errorMessage: string): ReadonlyExecRefusalExecutors {
   return {
     shell: {
-      async execute(_ctx: unknown, args: ShellInput): Promise<ShellResult> {
-        return new ShellResult({ result: { case: "permissionDenied", value: shellRefusal(errorMessage, args) } })
+      async execute(_ctx: unknown, args: ShellExecutorArgs): Promise<ShellExecResponse> {
+        return {
+          outcome: {
+            kind: "permission-denied",
+            command: args.command ?? "",
+            workingDirectory: args.workingDirectory ?? "",
+            message: errorMessage,
+            isReadonly: true,
+          },
+        }
       },
     },
     shellStream: {

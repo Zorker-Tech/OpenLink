@@ -6,10 +6,11 @@
  */
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { buildHostShellArgs } from "../../../adapters/interop/agent/box-shell-command-adapter.ts";
+import { buildHostShellArgs } from "../../boxes/box-shell-command.ts";
 import { navigationProbeCommand, normalizeNavigationUrl, parseNavigationProbeOutput } from "../slate-action-audit.ts";
 import { SLATE_BOX_NO_MONITOR_AVAILABLE_MESSAGE } from "../../ports/box.ts";
 import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts";
+import type { ShellExecResponse } from "../../../packages/agent-exec/shell.ts";
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts";
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts";
 import type { Context as OperationContext } from "../../../packages/context/context.ts";
@@ -186,12 +187,7 @@ export interface BrowserDriverDependencies<Context> {
       workingDirectory: string;
       toolCallId: string;
     },
-  ): Promise<{
-    readonly case: "success" | string;
-    readonly stdout?: string;
-    readonly stderr?: string;
-    readonly exitCode?: number;
-  }>;
+  ): Promise<ShellExecResponse>;
   getPersistImage?():
     | ((fileBytes: Uint8Array, mimeType: string) => Promise<unknown>)
     | undefined;
@@ -286,20 +282,25 @@ export class SlateBrowserDriver<Context = unknown> {
       workingDirectory: "/workspace",
       toolCallId: `slate-browser-${input.op}-${sanitizeForBoxPath(input.toolCallId)}`,
     });
-    if (shellRun.case !== "success") {
+    if (shellRun.outcome.kind !== "success") {
+      const outcomeLabel = shellRun.outcome.kind === "spawn-error"
+        ? "spawnError"
+        : shellRun.outcome.kind === "permission-denied"
+          ? "permissionDenied"
+          : shellRun.outcome.kind === "unrecognized" ? "unknown" : shellRun.outcome.kind;
       throw new SlateBrowserDriverError(
-        `Browser driver shell failed (${shellRun.case || "unknown"})`,
+        `Browser driver shell failed (${outcomeLabel})`,
       );
     }
 
-    const driverReply = parseDriverResponse(shellRun.stdout ?? "");
+    const driverReply = parseDriverResponse(shellRun.outcome.stdout);
     if (driverReply === undefined) {
-      const failureDetail = [shellRun.stderr ?? "", shellRun.stdout ?? ""]
+      const failureDetail = [shellRun.outcome.stderr, shellRun.outcome.stdout]
         .map((part) => part.trim().slice(-400))
         .filter((part) => part.length > 0)
         .join(" | ");
       throw new SlateBrowserDriverError(
-        `Browser driver produced no result (exit ${shellRun.exitCode ?? "unknown"})${failureDetail.length > 0 ? `: ${failureDetail}` : ""}`,
+        `Browser driver produced no result (exit ${shellRun.outcome.exitCode})${failureDetail.length > 0 ? `: ${failureDetail}` : ""}`,
       );
     }
     if (!driverReply.ok) {
@@ -427,9 +428,9 @@ async function captureReviewState(args: {
   } catch {
     throw new SlateBrowserAutoReviewBlockedError("Browser Auto-review could not capture the current page state.");
   }
-  if (result?.result?.case !== "success") throw new SlateBrowserAutoReviewBlockedError("Browser Auto-review could not capture the current page state.");
-  if (result.result.value.exitCode !== 0) return { displayStateIdentity: "chrome-unreachable" };
-  const stdout = result.result.value.stdout ?? "";
+  if (result?.outcome?.kind !== "success") throw new SlateBrowserAutoReviewBlockedError("Browser Auto-review could not capture the current page state.");
+  if (result.outcome.exitCode !== 0) return { displayStateIdentity: "chrome-unreachable" };
+  const stdout = result.outcome.stdout ?? "";
   const markerAt = stdout.indexOf(REVIEW_STATE_MARKER);
   const probeText = markerAt >= 0 ? stdout.slice(0, markerAt) : stdout;
   const stateText = markerAt >= 0 ? stdout.slice(markerAt + REVIEW_STATE_MARKER.length) : "";

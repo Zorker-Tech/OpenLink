@@ -14,24 +14,24 @@ export function shellSingleQuote(value: string): string {
 }
 
 export function describeShellFailure(result: ShellExecResult): string {
-  switch (result.case) {
+  switch (result.kind) {
     case "failure": {
-      const { exitCode, signal, stderr, aborted } = result.value
+      const { exitCode, signal, stderr, aborted } = result
       const reason = exitCode < 0 || signal
         ? `killed by signal ${signal || "(unknown)"}${aborted ? " (aborted)" : ""}`
         : `exit ${exitCode}${aborted ? " (aborted)" : ""}`
       return stderr ? `${reason}: ${stderr}` : reason
     }
-    case "spawnError":
-      return `exec-daemon spawn error: ${result.value.error}`
-    case "permissionDenied":
-      return `permission denied: ${result.value.error}`
+    case "spawn-error":
+      return `exec-daemon spawn error: ${result.message}`
+    case "permission-denied":
+      return `permission denied: ${result.message}`
     case "rejected":
-      return `exec-daemon rejected the command: ${result.value.reason}`
+      return `exec-daemon rejected the command: ${result.reason}`
     case "timeout":
-      return `exec-daemon timed out after ${result.value.timeoutMs}ms`
+      return `exec-daemon timed out after ${result.timeoutMs}ms`
     default:
-      return result.case ?? "unknown (no result from exec-daemon)"
+      return "unknown (no result from exec-daemon)"
   }
 }
 
@@ -39,12 +39,12 @@ export function asTransientBoxShellError(
   result: ShellExecResult,
   context: string,
 ): BoxShellTransientError | undefined {
-  switch (result.case) {
+  switch (result.kind) {
     case "failure":
-      return isSignalKillFailure(result.value.exitCode, result.value.signal)
+      return isSignalKillFailure(result.exitCode, result.signal)
         ? new BoxShellSignalKilledError(`${context} signal-killed (${describeShellFailure(result)})`)
         : undefined
-    case "spawnError":
+    case "spawn-error":
     case "timeout":
     case "rejected":
       return new BoxShellUnavailableError(`${context} (${describeShellFailure(result)})`)

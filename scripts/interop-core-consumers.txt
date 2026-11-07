@@ -12,7 +12,6 @@ source/host/automations/listener-integrations.automations.ts	../../adapters/inte
 source/host/automations/slate-automation-cloud-sync.ts	../../adapters/interop/automation/automation-cloud-definition-adapter.ts
 source/host/automations/slate-automation-fire-consumer.ts	../../adapters/interop/backend/slate-client-metadata-adapter.ts
 source/host/boxes/box-file-transfer.ts	../../adapters/interop/agent/box-file-write-adapter.ts
-source/host/boxes/box-file-transfer.ts	../../adapters/interop/agent/box-shell-command-adapter.ts
 source/host/boxes/box-lifecycle/extension.ts	../../../adapters/interop/agent/box-lifecycle-backend-adapter.ts
 source/host/boxes/box-remote-accessor.ts	../../adapters/interop/agent/box-remote-exec-accessor-adapter.ts
 source/host/boxes/box-store-sync/agent-store-slate-files.ts	../../../adapters/interop/cursor-backend/cursor-inference.ts
@@ -46,7 +45,6 @@ source/host/extensions/session/conversation-recovery-roots.ts	../../../adapters/
 source/host/extensions/session/session-maintenance.ts	../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts
 source/host/extensions/session/session-production-handoff.ts	../../../adapters/interop/agent/computer-use-executor-adapter.ts
 source/host/extensions/session/session-production-store.ts	../../../adapters/interop/agent/agent-conversation-protobuf-adapter.ts
-source/host/extensions/teach-recording/teach-recording-service.ts	../../../adapters/interop/agent/box-shell-command-adapter.ts
 source/host/host-runner-composition.ts	../adapters/interop/agent/box-window-shell-result-adapter.ts
 source/host/host-runner-composition.ts	../adapters/interop/agent/prompt-action-adapter.ts
 source/host/host-runner-composition.ts	../adapters/interop/agent/shell-terminal-watch-adapter.ts
@@ -71,7 +69,6 @@ source/host/production-composition.ts	../adapters/interop/agent/production-trans
 source/host/rooms/xuser-relay-http-api.ts	../../adapters/interop/backend/slate-client-metadata-adapter.ts
 source/host/runner-production-bridge.ts	../adapters/interop/agent/web-fetch-tool-adapter.ts
 source/host/runner/agent-adapters.ts	../../adapters/interop/agent/runner-agent-adapters.ts
-source/host/runner/computer-use.ts	../../adapters/interop/agent/box-shell-command-adapter.ts
 source/host/runner/computer-use.ts	../../adapters/interop/agent/computer-use-executor-adapter.ts
 source/host/runner/host-computer-tool-dependencies.ts	../../adapters/interop/agent/box-shell-executor-adapter.ts
 source/host/runner/host-computer-tool-dependencies.ts	../../adapters/interop/agent/computer-use-executor-adapter.ts
@@ -94,9 +91,7 @@ source/host/runner/tools/communicate-tool.ts	../../../adapters/interop/agent/com
 source/host/runner/tools/send-message-encoding.ts	../../../adapters/interop/agent/send-message-tool-protocol-adapter.ts
 source/host/runner/tools/send-message-protobuf.ts	../../../adapters/interop/agent/send-message-tool-protocol-adapter.ts
 source/host/runner/tools/send-message-tool.ts	../../../adapters/interop/agent/send-message-tool-protocol-adapter.ts
-source/host/runner/tools/slate-browser-tools.ts	../../../adapters/interop/agent/box-shell-command-adapter.ts
 source/host/runner/tools/slate-browser-tools.ts	../../../adapters/interop/browser/browser-driver-source-adapter.ts
-source/host/runner/tools/slate-computer-tool.ts	../../../adapters/interop/agent/box-shell-command-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/mcp-meta-tool-options-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/shell-auto-review-read-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/web-fetch-tool-adapter.ts

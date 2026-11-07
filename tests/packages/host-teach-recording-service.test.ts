@@ -25,6 +25,10 @@ const KEY = new TextEncoder().encode("queue-signing-key");
 const queuedFile = "teach-20250101T000000Z-12345678-1234-1234-1234-123456789abc.json";
 const agentId = "agent-1";
 
+const shellSuccess = (exitCode: number, stdout: string, stderr = "") => ({
+  outcome: { kind: "success", command: "", workingDirectory: "/workspace", exitCode, signal: "", stdout, stderr, executionTimeMs: 0 },
+});
+
 function queueEntry(overrides: Record<string, unknown> = {}) {
   const scope = queueScope(agentId);
   const sessionDir = TEACH_SESSIONS_DIR + "/" + queuedFile.slice(0, -5);
@@ -57,15 +61,15 @@ function harness(options: {
     async execute(_ctx: unknown, args: { command: string; toolCallId?: string }) {
       commands.push(args.command);
       if (options.startFails === true && args.command.includes("x11grab")) {
-        return { result: { case: "success", value: { exitCode: 1, stdout: "start failed", stderr: "" } } };
+        return shellSuccess(1, "start failed");
       }
       if (options.verifyFails === true && args.toolCallId === "slate-teach-recording-verify") {
-        return { result: { case: "success", value: { exitCode: 1, stdout: "verify failed", stderr: "" } } };
+        return shellSuccess(1, "verify failed");
       }
       if (options.recoveryScan !== undefined && args.command.includes("pending/*.json") && args.command.includes("for queue_file")) {
-        return { result: { case: "success", value: { exitCode: 0, stdout: options.recoveryScan, stderr: "" } } };
+        return shellSuccess(0, options.recoveryScan);
       }
-      return { result: { case: "success", value: { exitCode: 0, stdout: "", stderr: "" } } };
+      return shellSuccess(0, "");
     },
   };
   const connection = options.noAccessor === true ? {} : { remoteAccessor: { get: (resource: unknown) => resource === shellExecutorResource ? shell : undefined } };

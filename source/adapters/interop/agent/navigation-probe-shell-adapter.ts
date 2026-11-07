@@ -1,32 +1,29 @@
 /** Binds the navigation probe to generated shell requests and projects only its output fields. */
 
-import type { ShellArgs, ShellResult } from "../proto/generated/agent/v1/shell_exec_pb.ts"
 import { requestIdKey } from "../chat-inference-proto/client.ts"
-import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts"
+import { shellExecutorResource, type ShellExecutor } from "../../../packages/agent-exec/shell.ts"
 import type { Context } from "../../../packages/context/context.ts"
-import { buildHostShellArgs } from "./box-shell-command-adapter.ts"
+import { buildHostShellArgs } from "../../../host/boxes/box-shell-command.ts"
 import type { HostShellArgsInput } from "../../../host/boxes/box-shell-command.ts"
 
 export type NavigationProbeShellOutcome =
   | { readonly case: "success"; readonly stdout: string; readonly exitCode: number }
   | { readonly case: "failure" }
 
-interface GeneratedShellResourceAccessor {
-  get(resource: typeof shellExecutorResource): {
-    execute(context: Context, args: ShellArgs): Promise<ShellResult>
-  }
+interface SlateShellResourceAccessor {
+  get(resource: typeof shellExecutorResource): ShellExecutor
 }
 
-function isGeneratedShellResourceAccessor(value: unknown): value is GeneratedShellResourceAccessor {
+function isSlateShellResourceAccessor(value: unknown): value is SlateShellResourceAccessor {
   return typeof value === "object" && value !== null && typeof Reflect.get(value, "get") === "function"
 }
 
-function shellOutcomeForSlate(result: ShellResult): NavigationProbeShellOutcome {
-  if (result.result.case !== "success") return { case: "failure" }
+function shellOutcomeForSlate(result: Awaited<ReturnType<ShellExecutor["execute"]>>): NavigationProbeShellOutcome {
+  if (result.outcome.kind !== "success") return { case: "failure" }
   return {
     case: "success",
-    stdout: result.result.value.stdout,
-    exitCode: result.result.value.exitCode,
+    stdout: result.outcome.stdout,
+    exitCode: result.outcome.exitCode,
   }
 }
 
@@ -36,7 +33,7 @@ export async function runNavigationProbeShellThroughInterop(
   remoteAccessor: unknown,
   input: HostShellArgsInput,
 ): Promise<NavigationProbeShellOutcome | undefined> {
-  if (!isGeneratedShellResourceAccessor(remoteAccessor)) return undefined
+  if (!isSlateShellResourceAccessor(remoteAccessor)) return undefined
   const result = await remoteAccessor.get(shellExecutorResource).execute(context as Context, buildHostShellArgs(input))
   return shellOutcomeForSlate(result)
 }
