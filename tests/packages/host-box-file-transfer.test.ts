@@ -3,7 +3,7 @@ import { test } from "node:test"
 
 import { createContext } from "../../source/packages/context/context.ts"
 import { shellExecutorResource } from "../../source/packages/agent-exec/shell.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import {
   asTransientBoxShellError,
   BoxFileTransferError,
@@ -17,7 +17,7 @@ import {
 } from "../../source/host/boxes/box-file-transfer.ts"
 import type { FileTransferAccessor } from "../../source/host/boxes/box-file-transfer.ts"
 
-function fileTransferHarness(options: { shellResult?: unknown; writeResult?: unknown } = {}) {
+function fileTransferHarness(options: { shellResult?: unknown; writeResult?: WriteExecutorResult } = {}) {
   const shellCalls: Array<Record<string, unknown>> = []
   const writeCalls: Array<Record<string, unknown>> = []
   const accessor = {
@@ -34,7 +34,7 @@ function fileTransferHarness(options: { shellResult?: unknown; writeResult?: unk
         return {
           async execute(_context: unknown, args: unknown) {
             writeCalls.push(args as Record<string, unknown>)
-            return options.writeResult ?? { result: { case: "success", value: {} } }
+            return options.writeResult ?? { kind: "success", path: String((args as { path?: unknown }).path ?? ""), linesWritten: 0, bytesWritten: 0 }
           },
         }
       }
@@ -67,13 +67,13 @@ test("an upload writes to a temporary file before moving into place", async () =
   )
   assert.equal(writeCalls.length, 1)
   assert.match(String(writeCalls[0]!.path), /^\/box\/upload\.txt\.slate-[0-9a-f]{16}\.part$/)
-  assert.deepEqual(writeCalls[0]!.fileBytes, bytes)
+  assert.deepEqual(writeCalls[0]!.bytes, bytes)
   assert.equal(writeCalls[0]!.toolCallId, TRANSFER_TOOL_CALL_ID)
 })
 
 test("a failed write removes its temporary file and preserves the write error", async () => {
   const { accessor, shellCalls, writeCalls } = fileTransferHarness({
-    writeResult: { result: { case: "error", value: { error: "permission denied" } } },
+    writeResult: { kind: "error", path: "/box/upload.txt", error: "permission denied" },
   })
 
   await assert.rejects(

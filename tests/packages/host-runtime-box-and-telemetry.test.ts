@@ -225,7 +225,7 @@ describe("the box this build offers", () => {
     const writes: Array<{ path: string; bytes: number }> = [];
     const executors = new Map<unknown, { execute(ctx: unknown, args: Record<string, unknown>): Promise<unknown> }>([
       [shellExecutorResource, { execute: async (_ctx, args) => { shells.push(String(args.command)); return { result: { case: "success", value: { exitCode: 0 } } }; } }],
-      [writeExecutorResource, { execute: async (_ctx, args) => { writes.push({ path: String(args.path), bytes: Uint8Array.from(args.fileBytes as Uint8Array).length }); return { result: { case: "success", value: {} } }; } }],
+      [writeExecutorResource, { execute: async (_ctx, args) => { const bytes = args.bytes as Uint8Array | undefined; writes.push({ path: String(args.path), bytes: bytes?.length ?? 0 }); return { kind: "success", path: String(args.path), linesWritten: 0, bytesWritten: bytes?.length ?? 0 }; } }],
     ]);
     const accessor = { get: (resource: unknown) => executors.get(resource) ?? { execute: async () => ({ result: { case: "success", value: {} } }) } };
     const transportMarker = { control: {}, exec: {}, accessor };

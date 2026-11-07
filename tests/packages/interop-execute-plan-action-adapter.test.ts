@@ -127,7 +127,7 @@ test("plan todos cross the boundary as redacted entries and unknown statuses def
 })
 
 test("the plan file adapter translates its narrow port into read and write executor messages", async () => {
-  const sent: Array<{ readonly kind: string; readonly args: { readonly path?: string; readonly limit?: number; readonly fileText?: string; readonly returnFileContentAfterWrite?: boolean } }> = []
+  const sent: Array<{ readonly kind: string; readonly args: { readonly path?: string; readonly limit?: number; readonly text?: string; readonly includeContentAfterWrite?: boolean } }> = []
   const resourceAccessor = {
     get(resource: unknown) {
       const kind = resource === readExecutorResource ? "read" : resource === writeExecutorResource ? "write" : "unknown"
@@ -139,15 +139,15 @@ test("the plan file adapter translates its narrow port into read and write execu
             args: {
               ...(typeof request.path === "string" ? { path: request.path } : {}),
               ...(typeof request.limit === "number" ? { limit: request.limit } : {}),
-              ...(typeof request.fileText === "string" ? { fileText: request.fileText } : {}),
-              ...(typeof request.returnFileContentAfterWrite === "boolean"
-                ? { returnFileContentAfterWrite: request.returnFileContentAfterWrite }
+              ...(typeof request.text === "string" ? { text: request.text } : {}),
+              ...(typeof request.includeContentAfterWrite === "boolean"
+                ? { includeContentAfterWrite: request.includeContentAfterWrite }
                 : {}),
             },
           })
           return kind === "read"
             ? { kind: "success", path: String(request.path ?? ""), totalLines: 0, fileSize: 0n, truncated: false, rangeApplied: false }
-            : { result: { case: "success" } }
+            : { kind: "success", path: String(request.path ?? ""), linesWritten: 0, bytesWritten: 0 }
         },
       }
     },
@@ -158,6 +158,6 @@ test("the plan file adapter translates its narrow port into read and write execu
   assert.equal(await fileIO.restoreFile(undefined as never, "/repo/artifacts/plan.md", "plan"), true)
   assert.deepEqual(sent, [
     { kind: "read", args: { path: "/repo/plan.md", limit: 1 } },
-    { kind: "write", args: { path: "/repo/artifacts/plan.md", fileText: "plan", returnFileContentAfterWrite: false } },
+    { kind: "write", args: { path: "/repo/artifacts/plan.md", text: "plan", includeContentAfterWrite: false } },
   ])
 })

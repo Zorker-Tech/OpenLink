@@ -4,7 +4,7 @@ import { test } from "node:test"
 
 import { McpToolResultContentItem, McpTextContent } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 import { OutputLocation } from "../../source/adapters/interop/proto/generated/agent/v1/utils_pb.ts"
-import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import type { WriteExecutorArgs, WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import {
   AGENT_TOOLS_FILE_WRITE_THRESHOLD_BYTES,
   describeOutputLocation,
@@ -58,11 +58,11 @@ test("MCP text stays inline when disabled, already small, or has no writable des
 })
 
 test("tool output files use a platform path, bounded content and the write executor's returned path", async () => {
-  const calls: Array<{ context: unknown; args: WriteArgs }> = []
+  const calls: Array<{ context: unknown; args: WriteExecutorArgs }> = []
   const executor = {
-    async execute(context: unknown, args: WriteArgs) {
+    async execute(context: unknown, args: WriteExecutorArgs): Promise<WriteExecutorResult> {
       calls.push({ context, args })
-      return { result: { case: "success", value: { path: args.path } } } as never
+      return { kind: "success", path: args.path, linesWritten: 1, bytesWritten: 4 }
     },
   }
   const context = createContext()
@@ -76,20 +76,26 @@ test("tool output files use a platform path, bounded content and the write execu
 
   assert.equal(calls.length, 1)
   assert.equal(calls[0]?.context, context)
-  assert.equal(calls[0]?.args instanceof WriteArgs, true)
   assert.equal(calls[0]?.args.path.startsWith(path.win32.join("C:\\repo", "agent-tools")), true)
   assert.equal(calls[0]?.args.path.endsWith(".txt"), true)
-  assert.equal(calls[0]?.args.fileText, "ébc")
+  assert.equal(calls[0]?.args.text, "ébc")
   assert.equal(calls[0]?.args.toolCallId, "call-7")
   assert.deepEqual(result, new OutputLocation({ filePath: calls[0]!.args.path, sizeBytes: 4n, lineCount: 1n }))
 })
 
 test("failed write outcomes do not fabricate an output location", async () => {
-  for (const resultCase of ["permissionDenied", "noSpace", "error", "rejected", undefined]) {
-    const executor = { async execute() { return { result: { case: resultCase } } as never } }
+  const results: WriteExecutorResult[] = [
+    { kind: "permission-denied", path: "/workspace/out.txt", directory: "/workspace", operation: "write", message: "no", isReadonly: true },
+    { kind: "no-space", path: "/workspace/out.txt" },
+    { kind: "error", path: "/workspace/out.txt", error: "no" },
+    { kind: "rejected", path: "/workspace/out.txt", reason: "no" },
+    { kind: "unrecognized" },
+  ]
+  for (const [index, writeResult] of results.entries()) {
+    const executor = { async execute() { return writeResult } }
     assert.equal(await writeToAgentToolsFile(createContext(), executor as never, {
       content: "content", projectDir: "/workspace", osPlatform: "linux", toolCallId: "call",
-    }), undefined, String(resultCase))
+    }), undefined, `failure ${index}`)
   }
 })
 

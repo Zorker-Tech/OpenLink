@@ -1,4 +1,3 @@
-import { WriteArgs } from "../proto/generated/agent/v1/write_exec_pb.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import { writeExecutorResource, type WriteExecutor } from "../../../packages/agent-exec/write-operation.ts"
 
@@ -21,16 +20,17 @@ export async function writeBoxFileBytesThroughInterop(
 ): Promise<BoxFileWriteOutcome> {
   const response = await accessor.get(writeExecutorResource).execute(
     context,
-    new WriteArgs({
+    {
       path,
-      fileBytes: Uint8Array.from(bytes),
+      bytes: Uint8Array.from(bytes),
       toolCallId,
-    }),
+    },
   )
 
-  const result = response.result
-  if (result.case === "success") return { kind: "success" }
-  if (result.case === "error") return { kind: "error", message: result.value.error }
-  if (result.case === "rejected") return { kind: "rejected", reason: result.value.reason }
-  return { kind: "other", case: result.case }
+  if (response.kind === "success") return { kind: "success" }
+  if (response.kind === "error") return { kind: "error", message: response.error }
+  if (response.kind === "rejected") return { kind: "rejected", reason: response.reason }
+  if (response.kind === "permission-denied") return { kind: "other", case: "permissionDenied" }
+  if (response.kind === "no-space") return { kind: "other", case: "noSpace" }
+  return { kind: "other", case: undefined }
 }

@@ -1,12 +1,11 @@
 /** Encodes a Slate workspace-file write as the counterpart executor request. */
 
 import type { Context } from "../../../packages/context/context.ts"
-import { writeExecutorResource } from "../../../packages/agent-exec/write-operation.ts"
-import { WriteArgs } from "../proto/generated/agent/v1/write_exec_pb.ts"
+import { writeExecutorResource, type WriteExecutorArgs } from "../../../packages/agent-exec/write-operation.ts"
 
 export interface InteropWorkspaceFileWriteAccessor {
   get(resource: typeof writeExecutorResource): {
-    execute(context: Context, args: WriteArgs): Promise<unknown>
+    execute(context: Context, args: WriteExecutorArgs): Promise<unknown>
   }
 }
 
@@ -16,9 +15,9 @@ export function writeWorkspaceBytesThroughInterop(
   path: string,
   content: Uint8Array,
 ): Promise<unknown> {
-  return accessor.get(writeExecutorResource).execute(context, new WriteArgs({
+  return accessor.get(writeExecutorResource).execute(context, {
     path,
-    fileBytes: new Uint8Array(content),
-    returnFileContentAfterWrite: false,
-  }))
+    bytes: new Uint8Array(content),
+    includeContentAfterWrite: false,
+  })
 }

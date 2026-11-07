@@ -3,8 +3,7 @@ import assert from "node:assert/strict"
 import { z } from "zod"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
-import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import { writeExecutorResource, type WriteExecutorArgs } from "../../source/packages/agent-exec/write-operation.ts"
 import { FileOperationLockManager } from "../../source/packages/agent/tools/core/file-operation-locks.ts"
 import { ToolCallAbortedError } from "../../source/packages/agent/tools/tool-errors.ts"
 import { renderSelectedTerminalContext } from "../../source/packages/agent/context/terminal-context.ts"
@@ -25,7 +24,8 @@ test("the write operation is named once and reachable from both sides", () => {
   assert.equal(typeof writeExecutorResource.symbol, "symbol")
   const executor = writeExecutorResource.remoteImplementation({} as never)
   assert.equal(typeof executor.execute, "function")
-  assert.equal(new WriteArgs().constructor.name, "WriteArgs")
+  const request: WriteExecutorArgs = { path: "/repo/note.txt", text: "" }
+  assert.deepEqual(request, { path: "/repo/note.txt", text: "" })
 })
 
 // ---------------------------------------------------------------------------------------------

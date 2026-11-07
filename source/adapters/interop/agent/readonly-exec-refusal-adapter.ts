@@ -2,7 +2,7 @@ import { BackgroundShellSpawnResult } from "../proto/generated/agent/v1/backgrou
 import { DeletePermissionDenied, DeleteResult } from "../proto/generated/agent/v1/delete_exec_pb.ts"
 import { McpPermissionDenied, McpResult } from "../proto/generated/agent/v1/mcp_exec_pb.ts"
 import { ShellPermissionDenied, ShellResult, ShellStream } from "../proto/generated/agent/v1/shell_exec_pb.ts"
-import { WritePermissionDenied, WriteResult } from "../proto/generated/agent/v1/write_exec_pb.ts"
+import type { WriteExecutor, WriteExecutorArgs, WriteExecutorResult } from "../../../packages/agent-exec/write-operation.ts"
 
 interface ShellInput {
   readonly command?: string
@@ -22,7 +22,7 @@ export interface ReadonlyExecRefusalExecutors {
   readonly shell: unknown
   readonly shellStream: unknown
   readonly backgroundShell: unknown
-  readonly write: unknown
+  readonly write: WriteExecutor
   readonly delete: unknown
   readonly mcp: unknown
 }
@@ -46,13 +46,15 @@ export function createReadonlyExecRefusalExecutors(errorMessage: string): Readon
       },
     },
     write: {
-      async execute(_ctx: unknown, args: { readonly path: string }): Promise<WriteResult> {
-        return new WriteResult({
-          result: {
-            case: "permissionDenied",
-            value: new WritePermissionDenied({ path: args.path, error: errorMessage, isReadonly: true }),
-          },
-        })
+      async execute(_ctx: unknown, args: WriteExecutorArgs): Promise<WriteExecutorResult> {
+        return {
+          kind: "permission-denied",
+          path: args.path,
+          directory: "",
+          operation: "",
+          message: errorMessage,
+          isReadonly: true,
+        }
       },
     },
     delete: {

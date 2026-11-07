@@ -16,7 +16,7 @@ import type { BackgroundShellSpawnResult } from "../../source/adapters/interop/p
 import type { DeleteResult } from "../../source/adapters/interop/proto/generated/agent/v1/delete_exec_pb.ts"
 import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 import type { ShellResult, ShellStream } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
-import type { WriteResult } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -82,13 +82,13 @@ test("a resource the read-only layer does not know is answered underneath", () =
 // ---------------------------------------------------------------------------------------------
 
 test("writing a file is refused as a read-only policy", async () => {
-  const result = await execute<WriteResult>(accessor(true).get(writeExecutorResource), { path: "/repo/a.ts" })
-  assert.equal(result.result.case, "permissionDenied")
-  const value = (result.result as { value: { path: string; error: string; isReadonly: boolean } }).value
-  assert.equal(value.path, "/repo/a.ts")
-  assert.equal(value.isReadonly, true)
-  assert.match(value.error, READONLY_REASON)
-  assert.match(value.error, READONLY_LAUNCH)
+  const result = await execute<WriteExecutorResult>(accessor(true).get(writeExecutorResource), { path: "/repo/a.ts" })
+  assert.equal(result.kind, "permission-denied")
+  if (result.kind !== "permission-denied") assert.fail("expected a write refusal")
+  assert.equal(result.path, "/repo/a.ts")
+  assert.equal(result.isReadonly, true)
+  assert.match(result.message, READONLY_REASON)
+  assert.match(result.message, READONLY_LAUNCH)
   // The write never reached the accessor underneath.
   assert.deepEqual(asked, [])
 })

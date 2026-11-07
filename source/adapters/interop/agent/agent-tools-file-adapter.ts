@@ -10,7 +10,6 @@ import path from "node:path";
 import type { Context } from "../../../packages/context/context.ts";
 import { McpTextContent, McpToolResultContentItem } from "../proto/generated/agent/v1/mcp_exec_pb.ts";
 import { OutputLocation, type OutputLocation as OutputLocationMessage } from "../proto/generated/agent/v1/utils_pb.ts";
-import { WriteArgs } from "../proto/generated/agent/v1/write_exec_pb.ts";
 import type { WriteExecutor } from "../../../packages/agent-exec/write-operation.ts";
 
 const AGENT_TOOLS_DIR = "agent-tools";
@@ -82,28 +81,24 @@ export async function writeToAgentToolsFile(
   const filePath = joinFn(projectDir, AGENT_TOOLS_DIR, `${randomUUID()}.txt`);
   const lineCount = contentToWrite.split("\n").length;
   const sizeBytes = Buffer.byteLength(contentToWrite, "utf8");
-  const result = await writeExecutor.execute(ctx, new WriteArgs({
+  const result = await writeExecutor.execute(ctx, {
     path: filePath,
-    fileText: contentToWrite,
+    text: contentToWrite,
     toolCallId,
-  }));
-  switch (result.result.case) {
+  });
+  switch (result.kind) {
     case "success":
       return new OutputLocation({
-        filePath: result.result.value.path,
+        filePath: result.path,
         sizeBytes: BigInt(sizeBytes),
         lineCount: BigInt(lineCount),
       });
-    case "permissionDenied":
-    case "noSpace":
+    case "permission-denied":
+    case "no-space":
     case "error":
     case "rejected":
-    case undefined:
+    case "unrecognized":
       return undefined;
-    default: {
-      const _exhaustive: never = result.result;
-      throw new Error(`Unhandled result case: ${_exhaustive}`);
-    }
   }
 }
 

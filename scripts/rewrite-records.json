@@ -480,9 +480,9 @@
     },
     "packages/agent-exec/write.ts": {
       "claim": "rewritten",
-      "overlap": 0.05333333333333334,
-      "refreshReason": "Generated write request and result cases moved into the interop adapter, including the existing performWrite outcome projection.",
-      "evidence": "tests/packages/interop-write-operation-adapter.test.ts pins remote/controlled message cases and maps success, permission, capacity, rejection, editor-unavailable, write-error, and empty results; agent-edit-common and file-write consumers pass. interop:check drops one direct schema consumer."
+      "overlap": 0.147,
+      "refreshReason": "The Slate write request/result contract now owns text and byte payloads, output metadata and failure variants; generated message conversion is isolated in the transport adapter.",
+      "evidence": "tests/packages/interop-write-operation-adapter.test.ts pins text, byte and combined payloads, optional result content, 64-bit-free write metadata, every failure case and remote/controlled routing. Agent edit, image, attachment, plan and output-spill tests cover migrated callers."
     },
     "packages/agent-exec/shell.ts": {
       "claim": "rewritten",

@@ -13,9 +13,8 @@ import {
 } from "../../source/packages/agent/tools/core/create-plan/backend-plan-utils.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { PlanRegistryEntry } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { readExecutorResource, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -139,9 +138,9 @@ function syncHarness(options: {
         }
       }
       return {
-        async execute(_ctx: Context, args: { path: string; fileText?: string }) {
-          writes.push({ path: args.path, ...(args.fileText === undefined ? {} : { text: args.fileText }) })
-          return new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: args.path }) } })
+        async execute(_ctx: Context, args: { path: string; text?: string }): Promise<WriteExecutorResult> {
+          writes.push({ path: args.path, ...(args.text === undefined ? {} : { text: args.text }) })
+          return { kind: "success", path: args.path, linesWritten: 0, bytesWritten: 0 }
         },
       }
     },
@@ -247,10 +246,10 @@ test("the write goes through the same path as any other edit", async () => {
     get: (resource: unknown) => (resource === readExecutorResource
       ? (harnessed.accessor as { get(resource: unknown): unknown }).get(resource)
       : {
-        async execute(_ctx: Context, args: { path: string; fileText?: string }, options: { execId?: string }) {
+        async execute(_ctx: Context, args: { path: string; text?: string }, options: { execId?: string }) {
           writes.push(args.path)
           assert.notEqual(options?.execId, undefined)
-          return new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: args.path }) } })
+          return { kind: "success", path: args.path, linesWritten: 0, bytesWritten: 0 }
         },
       }),
   }
