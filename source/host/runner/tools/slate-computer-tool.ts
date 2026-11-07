@@ -12,6 +12,11 @@ import { shellExecutorResource } from "../../../packages/agent-exec/shell.ts";
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts";
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts";
 import type { Context } from "../../../packages/context/context.ts";
+import type {
+  SlateComputerUseAction,
+  SlateComputerUseExecutorRequest,
+  SlateComputerUseExecutorResult,
+} from "../../../packages/agent/conversation-step-state.ts";
 import { z } from "zod";
 import {
   isSlateComputerAutoReviewBypassAction,
@@ -25,11 +30,11 @@ import {
 import type { SlateAutoReviewMode } from "../slate-auto-review.ts";
 import { SlateToolInputError } from "./tool-input-error.ts";
 
-/** The pointer buttons the box protocol names, by the name an action uses. */
-export const MOUSE_BUTTONS = { left: "LEFT", right: "RIGHT", middle: "MIDDLE" } as const;
+/** Slate's supported pointer buttons, in the names accepted by its computer tool. */
+export const MOUSE_BUTTONS = { left: "left", right: "right", middle: "middle" } as const;
 
-/** The wheel directions the box protocol names, by the name an action uses. */
-export const SCROLL_DIRECTIONS = { up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT" } as const;
+/** Slate's supported wheel directions, in the names accepted by its computer tool. */
+export const SCROLL_DIRECTIONS = { up: "up", down: "down", left: "left", right: "right" } as const;
 
 /** The longest a wait action may ask the box to wait. */
 export const SLATE_COMPUTER_MAX_WAIT_MS = 30_000;
@@ -73,11 +78,16 @@ const CLICK_DRAG_DESCRIPTION_REQUIRED = "Click and drag require description: a c
 const MIN_CLICK_COUNT = 1;
 const MAX_CLICK_COUNT = 3;
 
+/** The executor can carry signed 32-bit coordinates and amounts without narrowing. */
+const MIN_COMPUTER_INT32 = -2_147_483_648;
+const MAX_COMPUTER_INT32 = 2_147_483_647;
+const computerInt32 = z.number().int().min(MIN_COMPUTER_INT32).max(MAX_COMPUTER_INT32);
+
 /** One whole coordinate, which an action may leave out. */
-const optionalInteger = z.number().int().optional();
+const optionalInteger = computerInt32.optional();
 
 /** One point of a drag path, which an action must give both sides of. */
-const pathPoint = z.object({ x: z.number().int(), y: z.number().int() });
+const pathPoint = z.object({ x: computerInt32, y: computerInt32 });
 
 /** The fields every computer action carries, whatever action it names. */
 const actionCoreShape = {
@@ -89,7 +99,7 @@ const actionCoreShape = {
   button: z.enum(Object.keys(MOUSE_BUTTONS) as [keyof typeof MOUSE_BUTTONS, ...(keyof typeof MOUSE_BUTTONS)[]]).optional(),
   count: z.number().int().min(MIN_CLICK_COUNT).max(MAX_CLICK_COUNT).optional(),
   direction: z.enum(Object.keys(SCROLL_DIRECTIONS) as [keyof typeof SCROLL_DIRECTIONS, ...(keyof typeof SCROLL_DIRECTIONS)[]]).optional(),
-  amount: z.number().int().optional(),
+  amount: computerInt32.optional(),
   durationMs: z.number().int().min(0).max(SLATE_COMPUTER_MAX_WAIT_MS).optional(),
 };
 
@@ -165,62 +175,67 @@ export function dragPath(asked: ComputerActionArgs): readonly { x: number; y: nu
   return [{ x: asked.x, y: asked.y }, { x: asked.x2, y: asked.y2 }];
 }
 
-/** One action as the box protocol takes it: the case it names and the value it carries. */
-export interface ComputerProtocolAction {
-  readonly action: { readonly case: string; readonly value: Readonly<Record<string, unknown>> };
-}
-
 /** One point an action names, when it names both sides. */
 function coordinateOf(x: number | undefined, y: number | undefined): { x: number; y: number } | undefined {
   return x == null || y == null ? undefined : { x, y };
 }
 
-/** The coordinate field of a box action, when the action named a point. */
-function optionalCoordinate(asked: ComputerActionArgs): { coordinate?: { x: number; y: number } } {
-  const point = coordinateOf(asked.x, asked.y);
-  return point == null ? {} : { coordinate: point };
+/** The Slate button a mouse action names. */
+function mouseButtonOf(asked: ComputerActionArgs): keyof typeof MOUSE_BUTTONS {
+  return asked.button ?? "left";
 }
 
-/** The box's name for the button a mouse action asks for. */
-function mouseButtonOf(asked: ComputerActionArgs): string {
-  return MOUSE_BUTTONS[asked.button ?? "left"];
+/** The Slate direction a scroll names. */
+function scrollDirectionOf(asked: ComputerActionArgs): keyof typeof SCROLL_DIRECTIONS {
+  return asked.direction ?? "down";
 }
 
-/** The box's name for the wheel direction a scroll asks for. */
-function scrollDirectionOf(asked: ComputerActionArgs): string {
-  return SCROLL_DIRECTIONS[asked.direction ?? "down"];
-}
-
-/** The value one action carries, once its case is known. */
-function actionValue(asked: ComputerActionArgs): Readonly<Record<string, unknown>> {
+/** One parsed tool action as a Slate-owned computer-use value. */
+export function toAction(asked: ComputerActionArgs): SlateComputerUseAction<string> | undefined {
   switch (asked.action) {
-    case "screenshot": return {};
-    case "click": return { ...optionalCoordinate(asked), button: mouseButtonOf(asked), count: asked.count ?? 1 };
-    case "move": return { ...optionalCoordinate(asked) };
+    case "screenshot":
+      return { kind: "screenshot" };
+    case "click": {
+      const coordinate = coordinateOf(asked.x, asked.y);
+      return {
+        kind: "click",
+        ...(coordinate === undefined ? {} : { coordinate }),
+        button: mouseButtonOf(asked),
+        count: asked.count ?? 1,
+      };
+    }
+    case "move": {
+      const coordinate = coordinateOf(asked.x, asked.y);
+      return { kind: "mouse-move", ...(coordinate === undefined ? {} : { coordinate }) };
+    }
     case "drag": {
       const path = dragPath(asked);
       if (path == null) throw new SlateToolInputError(DRAG_PATH_REQUIRED);
-      return { path, button: mouseButtonOf(asked) };
+      return { kind: "drag", path, button: mouseButtonOf(asked) };
     }
-    case "type": return { text: asked.text ?? "" };
-    case "key": return { key: asked.key ?? "" };
-    case "scroll": return { ...optionalCoordinate(asked), direction: scrollDirectionOf(asked), amount: asked.amount ?? 3 };
-    case "wait": return { durationMs: asked.durationMs ?? 1_000 };
+    case "type":
+      return { kind: "type", text: asked.text ?? "" };
+    case "key":
+      return { kind: "key", key: asked.key ?? "" };
+    case "scroll": {
+      const coordinate = coordinateOf(asked.x, asked.y);
+      return {
+        kind: "scroll",
+        ...(coordinate === undefined ? {} : { coordinate }),
+        direction: scrollDirectionOf(asked),
+        amount: asked.amount ?? 3,
+      };
+    }
+    case "wait":
+      return { kind: "wait", durationMs: asked.durationMs ?? 1_000 };
   }
+  return undefined;
 }
 
-/** The protocol case each action is sent under. */
-const PROTOCOL_CASE: Readonly<Record<ComputerActionName, string>> = {
-  screenshot: "screenshot", click: "click", move: "mouseMove", drag: "drag",
-  type: "type", key: "key", scroll: "scroll", wait: "wait",
-};
-
-/** One action as the box protocol takes it, refusing a drag with no path to drag. */
-export function toAction(asked: ComputerActionArgs): ComputerProtocolAction {
-  const protocolCase = PROTOCOL_CASE[asked.action];
-  // An action outside the union was never a box action: it converts to nothing, as it always has.
-  if (protocolCase === undefined) return undefined as never;
-  return { action: { case: protocolCase, value: actionValue(asked) } };
+function requiredSlateAction(asked: ComputerActionArgs): SlateComputerUseAction<string> {
+  const action = toAction(asked);
+  if (action === undefined) throw new SlateToolInputError(`Unsupported computer action: ${String(asked.action)}`);
+  return action;
 }
 
 /** What a turn reports about the desktop: where the pointer went, if it went anywhere. */
@@ -267,23 +282,13 @@ export function reportedBatchPosition(batch: readonly ComputerActionArgs[]): Rep
   return positions.find((position) => position.type !== "drag") ?? positions[0];
 }
 
-/** What a successful computer call leaves behind. */
-export interface ComputerUseSuccess {
-  readonly screenshot?: string;
-  screenshotPath?: string;
-  readonly cursorPosition?: { readonly x: number; readonly y: number };
-}
-
-/** What a computer call answers with: success, a failure, or a case this reader does not know. */
-export type ComputerUseResult =
-  | { readonly result: { readonly case: "success"; readonly value: ComputerUseSuccess } }
-  | { readonly result: { readonly case: "error"; readonly value: { readonly error: string } } }
-  | { readonly result: { readonly case: string; readonly value?: unknown } };
+/** What a computer call answers with, in Slate's result vocabulary. */
+export type SlateComputerUseResult = SlateComputerUseExecutorResult;
 
 /** The line a failed call is described with. */
-function describeFailure(result: ComputerUseResult, operation: "screenshot" | "computer"): string {
+function describeFailure(result: Extract<SlateComputerUseResult, { readonly kind: "error" }>, operation: "screenshot" | "computer"): string {
   const label = operation === "screenshot" ? "Screenshot" : "Computer action";
-  return `${label} failed: ${(result.result.value as { error: string }).error}`;
+  return `${label} failed: ${result.message}`;
 }
 
 /** The heading a call is described with. */
@@ -292,26 +297,25 @@ function describeHeading(operation: "screenshot" | "computer"): string {
 }
 
 /** The lines a success adds after its heading: where the image went and where the cursor is. */
-function describeSuccess(result: ComputerUseResult, heading: string): string[] {
-  const value = result.result.value as ComputerUseSuccess;
+function describeSuccess(result: Extract<SlateComputerUseResult, { readonly kind: "success" }>, heading: string): string[] {
   const lines = [heading];
-  if (value.screenshotPath != null && value.screenshotPath.length > 0) lines.push(`Screenshot saved to ${value.screenshotPath}.`);
-  if (value.cursorPosition != null) lines.push(`Cursor is at (${value.cursorPosition.x}, ${value.cursorPosition.y}).`);
+  if (result.screenshotPath != null && result.screenshotPath.length > 0) lines.push(`Screenshot saved to ${result.screenshotPath}.`);
+  if (result.cursorPosition != null) lines.push(`Cursor is at (${result.cursorPosition.x}, ${result.cursorPosition.y}).`);
   return lines;
 }
 
 /** What a computer call's renderer tells the model about its outcome. */
-export function describeOutcome(result: ComputerUseResult, operation: "screenshot" | "computer"): string {
-  if (result.result.case === "error") return describeFailure(result, operation);
+export function describeOutcome(result: SlateComputerUseResult, operation: "screenshot" | "computer"): string {
+  if (result.kind === "error") return describeFailure(result, operation);
   const heading = describeHeading(operation);
-  if (result.result.case !== "success") return heading;
+  if (result.kind !== "success") return heading;
   return describeSuccess(result, heading).join("\n");
 }
 
 /** What the box tools need from the runner: a resource accessor, an executor, image persistence and the review options. */
 export interface ComputerToolDependencies<Context = unknown> {
   readonly resourceAccessor: { get(resource: unknown): unknown };
-  execute(context: Context, args: { readonly toolCallId: string; readonly actions: readonly ComputerProtocolAction[]; readonly bindUnmappedCharacters?: boolean; readonly description?: string }): Promise<ComputerUseResult>;
+  execute(context: Context, args: SlateComputerUseExecutorRequest): Promise<SlateComputerUseResult>;
   getPersistImage(): ((bytes: Uint8Array, mimeType: string) => Promise<{ readonly fileUrl: string } | undefined>) | undefined;
   isUnicodeTypingEnabled?(): boolean;
   onComputerAction?(action: ReportedComputerAction): void;
@@ -370,29 +374,34 @@ async function captureDisplayStateIdentity(
 }
 
 /** Saves the screenshot a successful call captured, when the runner has somewhere to save it. */
-async function persistScreenshot(success: ComputerUseSuccess, deps: ComputerToolDependencies<unknown>): Promise<void> {
-  if (success.screenshot == null || success.screenshot.length === 0) return;
+async function persistScreenshot(
+  success: Extract<SlateComputerUseResult, { readonly kind: "success" }>,
+  deps: ComputerToolDependencies<unknown>,
+): Promise<Extract<SlateComputerUseResult, { readonly kind: "success" }>> {
+  if (success.screenshot == null || success.screenshot.length === 0) return success;
   const saved = await deps.getPersistImage()?.(Buffer.from(success.screenshot, "base64"), "image/webp");
-  if (saved != null) success.screenshotPath = saved.fileUrl;
+  return saved == null ? success : { ...success, screenshotPath: saved.fileUrl };
 }
 
 /** Runs a computer call, then saves the screenshot it captured. */
-export async function executeAndPersistComputerUse<Context>(context: Context, deps: ComputerToolDependencies<Context>, args: Parameters<ComputerToolDependencies<Context>["execute"]>[1]): Promise<ComputerUseResult> {
+export async function executeAndPersistComputerUse<Context>(context: Context, deps: ComputerToolDependencies<Context>, args: Parameters<ComputerToolDependencies<Context>["execute"]>[1]): Promise<SlateComputerUseResult> {
   const result = await deps.execute(context, args);
-  if (result.result.case === "success") await persistScreenshot(result.result.value as ComputerUseSuccess, deps as ComputerToolDependencies<unknown>);
-  return result;
+  return result.kind === "success"
+    ? await persistScreenshot(result, deps as ComputerToolDependencies<unknown>)
+    : result;
 }
 
 /** The screenshot tool: one screenshot of the agent's own monitor, saved when the runner can save it. */
 export function createScreenshotTool<Context>(deps: ComputerToolDependencies<Context>) {
   return {
     id: "OPENAI_COMPUTER_USE", name: "Screenshot", parameters: screenshotParameters,
-    async execute(_args: Record<string, never>, meta: { context: Context; toolCallId?: string }): Promise<ComputerUseResult> {
+    async execute(_args: Record<string, never>, meta: { context: Context; toolCallId?: string }): Promise<SlateComputerUseResult> {
       return executeAndPersistComputerUse(meta.context, deps, {
-        toolCallId: meta.toolCallId ?? "", actions: [toAction({ action: "screenshot" })],
+        toolCallId: meta.toolCallId ?? "",
+        actions: [requiredSlateAction({ action: "screenshot" })],
       });
     },
-    render: (output: ComputerUseResult) => ({ content: describeOutcome(output, "screenshot") }),
+    render: (output: SlateComputerUseResult) => ({ content: describeOutcome(output, "screenshot") }),
   };
 }
 
@@ -430,11 +439,11 @@ export function createComputerTool<Context>(deps: ComputerToolDependencies<Conte
   const parameters = buildComputerParameters(deps.autoReview);
   return {
     id: "OPENAI_COMPUTER_USE", name: "Computer", parameters,
-    async execute(raw: unknown, meta: { context: Context; toolCallId?: string; signal?: AbortSignal; stateHandler?: unknown; workspacePaths?: readonly string[] }): Promise<ComputerUseResult> {
+    async execute(raw: unknown, meta: { context: Context; toolCallId?: string; signal?: AbortSignal; stateHandler?: unknown; workspacePaths?: readonly string[] }): Promise<SlateComputerUseResult> {
       const parsed = parameters.parse(raw) as ComputerActionArgs;
       const sequence = actionSequence(parsed);
-      const actions = sequence.map(toAction);
-      if (sequence.at(-1)?.action !== "screenshot") actions.push(toAction({ action: "screenshot" }));
+      const actions = sequence.map(requiredSlateAction);
+      if (sequence.at(-1)?.action !== "screenshot") actions.push(requiredSlateAction({ action: "screenshot" }));
       const autoReview = deps.autoReview;
       if (autoReview != null) {
         await runSlateComputerAutoReviewPreflight(preflightFor(meta as never, deps as ComputerToolDependencies<unknown>, parsed, autoReview));
@@ -448,6 +457,6 @@ export function createComputerTool<Context>(deps: ComputerToolDependencies<Conte
         ...(description == null || description.length === 0 ? {} : { description }),
       });
     },
-    render: (output: ComputerUseResult) => ({ content: describeOutcome(output, "computer") }),
+    render: (output: SlateComputerUseResult) => ({ content: describeOutcome(output, "computer") }),
   };
 }

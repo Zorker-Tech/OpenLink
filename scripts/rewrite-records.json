@@ -4432,6 +4432,12 @@
       "refreshReason": "Removed generated argument DTO imports from runner resource discovery; the host checks resource capabilities without depending on their wire shapes.",
       "evidence": "The computer-use coordination and generated shell/computer executor contracts pass 15/15 as an esbuild bundle with class names preserved. Work-host typecheck/build pass. Interop boundary reports no new direct imports. Measured overlap is 0.6772823779193206 against 471 baseline pairs."
     },
+    "host/runner/tools/slate-computer-tool.ts": {
+      "claim": "rewritten",
+      "overlap": 0.6596543951915853,
+      "refreshReason": "The host computer tool now parses inputs into Slate action kinds and Slate result outcomes; generated executor messages are projected only at the executor adapter.",
+      "evidence": "Computer tool, executor adapter, conversation-step and classifier contracts pass 53/53; the full Node 24 Work-host suite passes 10026/10026. Package typecheck passes with 1204 rewrite claims under 0.8, 0 floors and 40 removals; interop boundary reports 316 core imports across 221 files. Measured overlap is 0.6596543951915853 against 1331 baseline pairs."
+    },
     "packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts": {
       "claim": "rewritten",
       "overlap": 0.4639175257731959,

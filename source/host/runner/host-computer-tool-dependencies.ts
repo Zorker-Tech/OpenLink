@@ -11,9 +11,8 @@ import { createHostBoxShellExecutor, type HostShellResult } from "../../adapters
 import type { ExecutorOptions } from "../../packages/agent-exec/executor-resources.ts";
 import type { HostShellArgsInput } from "../boxes/box-shell-command.ts";
 import type {
-  ComputerProtocolAction,
   ComputerToolDependencies,
-  ComputerUseResult,
+  SlateComputerUseResult,
   ReportedComputerAction,
 } from "./tools/slate-computer-tool.ts";
 import type { BrowserDriverDependencies } from "./tools/slate-browser-tools.ts";
@@ -77,7 +76,7 @@ async function runComputerUse(
   executor: ComputerUseExecutorPort,
   context: unknown,
   toolArgs: Parameters<ComputerToolDependencies["execute"]>[1],
-): Promise<ComputerUseResult> {
+): Promise<SlateComputerUseResult> {
   return await executor.execute(context, toolArgs);
 }
 

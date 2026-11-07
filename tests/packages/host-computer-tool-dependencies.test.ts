@@ -8,28 +8,28 @@ import {
 } from "../../source/host/runner/host-computer-tool-dependencies.ts";
 import { toGeneratedComputerUseArgs } from "../../source/adapters/interop/agent/computer-use-executor-adapter.ts";
 
-const action = (wireCase: string, value: unknown) => ({ action: { case: wireCase, value } });
+const action = (kind: string, value: unknown = {}) => ({ kind, ...(value as object) });
 
-/** The action cases as the generated protobuf exposes them. */
+/** The action cases at the installed executor boundary. */
 const describeGenerated = (args: ReturnType<typeof toGeneratedComputerUseArgs>) =>
   args.actions.map(generated => ({ case: generated.action.case, value: generated.action.value }));
 
-describe("protocol actions read as generated actions", () => {
+describe("Slate computer-use requests at the executor adapter", () => {
   it("carries every supported action through", () => {
     const args = toGeneratedComputerUseArgs({
       toolCallId: "call-1",
       actions: [
-        action("mouseMove", { coordinate: { x: 1, y: 2 } }),
-        action("click", { coordinate: { x: 3, y: 4 }, button: "LEFT", count: 2, modifierKeys: "CTRL" }),
-        action("mouseDown", { button: "RIGHT" }),
-        action("mouseUp", { button: "MIDDLE" }),
-        action("drag", { path: [{ x: 0, y: 0 }, { x: 5, y: 6 }], button: "LEFT" }),
-        action("scroll", { direction: "DOWN", amount: 3 }),
+        action("mouse-move", { coordinate: { x: 1, y: 2 } }),
+        action("click", { coordinate: { x: 3, y: 4 }, button: "left", count: 2, modifierKeys: "CTRL" }),
+        action("mouse-down", { button: "right" }),
+        action("mouse-up", { button: "middle" }),
+        action("drag", { path: [{ x: 0, y: 0 }, { x: 5, y: 6 }], button: "left" }),
+        action("scroll", { direction: "down", amount: 3 }),
         action("type", { text: "hello ✓" }),
         action("key", { key: "Enter", holdDurationMs: 0 }),
         action("wait", { durationMs: 250 }),
-        action("screenshot", {}),
-        action("cursorPosition", {}),
+        action("screenshot"),
+        action("cursor-position"),
       ] as never,
     });
     assert.equal(args.toolCallId, "call-1");
@@ -41,6 +41,16 @@ describe("protocol actions read as generated actions", () => {
     const click = describeGenerated(args)[1]?.value as { button: number; count: number; modifierKeys?: string };
     assert.deepEqual([click.button, click.count, click.modifierKeys], [1, 2, "CTRL"]);
     assert.deepEqual((describeGenerated(args)[4]?.value as { path: unknown[] }).path.length, 2);
+    const unknownButton = toGeneratedComputerUseArgs({
+      toolCallId: "call-2",
+      actions: [action("click", { button: { kind: "unknown", code: 77 }, count: 1 })] as never,
+    });
+    assert.equal((describeGenerated(unknownButton)[0]?.value as { button: number }).button, 77);
+    const unknownDirection = toGeneratedComputerUseArgs({
+      toolCallId: "call-3",
+      actions: [action("scroll", { direction: { kind: "unknown", code: 78 }, amount: 1 })] as never,
+    });
+    assert.equal((describeGenerated(unknownDirection)[0]?.value as { direction: number }).direction, 78);
   });
 
   it("carries the argument-level optional fields only when they are set", () => {
@@ -51,37 +61,32 @@ describe("protocol actions read as generated actions", () => {
     assert.deepEqual([toGeneratedComputerUseArgs({ toolCallId: "c", actions: [] }).bindUnmappedCharacters], [undefined]);
   });
 
-  it("refuses a payload it cannot read, naming the case", () => {
+  it("refuses malformed Slate values with field-specific errors", () => {
     const refusals: Array<[string, unknown, RegExp]> = [
-      ["no case", { action: { value: {} } }, /computer action has no case/],
-      ["missing action", {}, /Cannot read properties of undefined/],
-      ["null value", action("click", null), /computer action click has no value/],
-      ["array value", action("wait", []), /computer action wait has no value/],
-      ["unknown case", action("teleport", {}), /unsupported computer action: teleport$/],
-      ["bad coordinate", action("mouseMove", { coordinate: { x: 1 } }), /computer action field coordinate\.y is not numeric/],
-      ["non-numeric coordinate", action("mouseMove", { coordinate: { x: "1", y: 2 } }), /coordinate\.x is not numeric/],
-      ["NaN coordinate", action("mouseMove", { coordinate: { x: Number.NaN, y: 2 } }), /coordinate\.x is not numeric/],
+      ["missing action", {}, /unsupported Slate computer action: undefined/],
+      ["unknown action", action("teleport"), /unsupported Slate computer action: teleport$/],
+      ["bad coordinate", action("mouse-move", { coordinate: { x: 1 } }), /computer action field coordinate\.y is not numeric/],
+      ["non-numeric coordinate", action("mouse-move", { coordinate: { x: "1", y: 2 } }), /coordinate\.x is not numeric/],
+      ["NaN coordinate", action("mouse-move", { coordinate: { x: Number.NaN, y: 2 } }), /coordinate\.x is not numeric/],
+      ["fractional coordinate", action("mouse-move", { coordinate: { x: 1.5, y: 2 } }), /coordinate\.x is not a 32-bit integer/],
       ["bad button", action("click", { button: "SIDEWAYS", count: 1 }), /unknown computer action button: SIDEWAYS/],
-      ["bad count", action("click", { button: "LEFT", count: "2" }), /computer action field count is not numeric/],
-      ["bad modifier keys", action("click", { button: "LEFT", count: 1, modifierKeys: 3 }), /computer action field modifierKeys is not textual/],
-      ["drag path not an array", action("drag", { path: "rows", button: "LEFT" }), /computer action drag path is not an array/],
-      ["drag point without coordinate", action("drag", { path: [null], button: "LEFT" }), /computer action drag path contains no coordinate/],
-      ["bad direction", action("scroll", { direction: "AROUND", amount: 1 }), /unknown computer action direction: AROUND/],
+      ["bad count", action("click", { button: "left", count: "2" }), /computer action field count is not numeric/],
+      ["bad modifier keys", action("click", { button: "left", count: 1, modifierKeys: 3 }), /computer action field modifierKeys is not textual/],
+      ["drag path not an array", action("drag", { path: "rows", button: "left" }), /computer action drag path is not an array/],
+      ["drag point without coordinate", action("drag", { path: [null], button: "left" }), /computer action coordinate has no value/],
+      ["bad direction", action("scroll", { direction: "around", amount: 1 }), /unknown computer action direction: around/],
+      ["out-of-range amount", action("scroll", { direction: "down", amount: 2_147_483_648 }), /amount is not a 32-bit integer/],
       ["bad duration", action("wait", { durationMs: Number.POSITIVE_INFINITY }), /computer action field durationMs is not numeric/],
     ];
     for (const [label, input, expected] of refusals) {
       assert.throws(() => toGeneratedComputerUseArgs({ toolCallId: "c", actions: [input as never] }), expected, label);
     }
+    assert.throws(() => toGeneratedComputerUseArgs({ toolCallId: "c", actions: [null as never] }), /computer action must be an object/);
   });
 
-  it("keeps the platform's lookup quirk for inherited names", () => {
-    // A name the table does not own but the object prototype has is returned as-is: the shipped behaviour, pinned.
-    const quirky = toGeneratedComputerUseArgs({ toolCallId: "c", actions: [action("click", { button: "toString", count: 1 }), action("scroll", { direction: "valueOf", amount: 1 })] as never });
-    const generated = describeGenerated(quirky);
-    assert.equal(typeof (generated[0]?.value as { button: unknown }).button, "function");
-    assert.equal(typeof (generated[1]?.value as { direction: unknown }).direction, "function");
-    // A name the table does not own and the prototype does not have is refused with that name.
-    assert.throws(() => toGeneratedComputerUseArgs({ toolCallId: "c", actions: [action("click", { button: "SIDEWAYS", count: 1 })] as never }), /unknown computer action button: SIDEWAYS/);
+  it("rejects inherited object names instead of treating them as action values", () => {
+    assert.throws(() => toGeneratedComputerUseArgs({ toolCallId: "c", actions: [action("click", { button: "toString", count: 1 })] as never }), /unknown computer action button: toString/);
+    assert.throws(() => toGeneratedComputerUseArgs({ toolCallId: "c", actions: [action("scroll", { direction: "valueOf", amount: 1 })] as never }), /unknown computer action direction: valueOf/);
   });
 });
 
@@ -104,27 +109,52 @@ describe("the computer tool projection", () => {
   }
 
   it("asks the turn's executor and reads its result back into the host's shape", async () => {
-    const world = computerWorld({ result: { case: "success", value: { screenshot: "image", cursorPosition: { x: 4, y: 5 } } } });
+    const world = computerWorld({ result: { case: "success", value: {
+      actionCount: 1,
+      durationMs: 10,
+      screenshot: "image",
+      log: "finished",
+      screenshotPath: "file:///capture.webp",
+      cursorPosition: { x: 4, y: 5 },
+    } } });
     const persistImage = async () => undefined;
     const dependencies = createHostComputerToolDependencies({ resourceAccessor: world.resourceAccessor, persistImage, isUnicodeTypingEnabled: () => true, onComputerAction: () => {}, autoReview: {} } as never) as never as Record<string, unknown>;
     assert.deepEqual(Object.keys(dependencies), ["resourceAccessor", "execute", "getPersistImage", "isUnicodeTypingEnabled", "onComputerAction", "autoReview"]);
     assert.equal(dependencies.resourceAccessor, world.resourceAccessor);
     assert.equal((dependencies.getPersistImage as () => unknown)(), persistImage, "the persist hook is handed back as it was given");
     const outcome = await (dependencies.execute as (context: unknown, args: unknown) => Promise<unknown>)({ user: "c" }, { toolCallId: "c1", actions: [action("wait", { durationMs: 1 })] });
-    assert.deepEqual(outcome, { result: { case: "success", value: { screenshot: "image", cursorPosition: { x: 4, y: 5 } } } });
+    assert.deepEqual(outcome, {
+      kind: "success",
+      actionCount: 1,
+      durationMs: 10,
+      screenshot: "image",
+      log: "finished",
+      screenshotPath: "file:///capture.webp",
+      cursorPosition: { x: 4, y: 5 },
+    });
     assert.equal(world.calls.length, 2);
     const executed = world.calls[1] as [string, unknown, { actions: { action: { case: string } }[] }];
-    assert.equal(executed[2].actions[0]?.action.case, "wait", "the protocol action was converted before the executor saw it");
+    assert.equal(executed[2].actions[0]?.action.case, "wait", "the adapter converts the Slate action at the executor boundary");
     const converted = executed[2].actions[0] as unknown as { action: { value: { constructor: { name: string } } } };
     assert.equal(converted.action.value.constructor.name, "WaitAction", "the executor receives the generated action, not the protocol record");
   });
 
-  it("reads an empty, an error and an unnamed result honestly, and raises a failing executor", async () => {
+  it("reads success, error and unknown executor outcomes as Slate results, and raises a failing executor", async () => {
     const read = (result: unknown) => createHostComputerToolDependencies({ resourceAccessor: computerWorld(result).resourceAccessor } as never) as never as { execute(context: unknown, args: unknown): Promise<unknown> };
     const request = { toolCallId: "c", actions: [] };
-    assert.deepEqual(await read({ result: { case: "success", value: {} } }).execute({}, request), { result: { case: "success", value: {} } });
-    assert.deepEqual(await read({ result: { case: "error", value: { error: "it broke" } } }).execute({}, request), { result: { case: "error", value: { error: "it broke" } } });
-    assert.deepEqual(await read({ result: {} }).execute({}, request), { result: { case: "" } });
+    assert.deepEqual(await read({ result: { case: "success", value: { actionCount: 0, durationMs: 0 } } }).execute({}, request), { kind: "success", actionCount: 0, durationMs: 0 });
+    assert.deepEqual(await read({ result: { case: "error", value: {
+      error: "it broke", actionCount: 2, durationMs: 3, log: "partial", screenshot: "capture", screenshotPath: "file:///partial.webp",
+    } } }).execute({}, request), {
+      kind: "error",
+      message: "it broke",
+      actionCount: 2,
+      durationMs: 3,
+      log: "partial",
+      screenshot: "capture",
+      screenshotPath: "file:///partial.webp",
+    });
+    assert.deepEqual(await read({ result: {} }).execute({}, request), { kind: "unknown" });
     await assert.rejects(() => read(new Error("executor exploded")).execute({}, request), { message: "executor exploded" });
   });
 });
