@@ -77,9 +77,18 @@ describe("reaching a box over the tunnel", () => {
     assert.deepEqual(yielded, [{ kind: "stdout", text: "one" }, { kind: "stdout", text: "two" }]);
     for await (const message of manager.createExecInstance("CTX" as never, (id) => ({ requestId: id } as never))) void message;
     assert.deepEqual(execCalls, [{ ctx: "CTX", args: { requestId: 0 } }, { ctx: "CTX", args: { requestId: 1 } }], "each instance gets its own request id");
-    // A control throw becomes an error carrying the box's message and stack.
-    const throwing = new BoxRemoteExecManager({ exec: async function* () { yield { element: { case: "execClientControlMessage", value: { message: { case: "throw", value: { error: "box failed", stackTrace: "box stack" } } } } }; } } as never);
-    await assert.rejects(async () => { for await (const message of throwing.createExecInstance("CTX" as never, () => ({}) as never)) void message; }, { message: "box failed", stack: "box stack" });
+    // A control throw becomes an error carrying the box's message, stack and retry-classification code.
+    const throwing = new BoxRemoteExecManager({ exec: async function* () { yield { element: { case: "execClientControlMessage", value: { message: { case: "throw", value: { error: "box failed", stackTrace: "box stack", errorCode: "BOX_EXEC_UNSUPPORTED" } } } } }; } } as never);
+    await assert.rejects(
+      async () => { for await (const message of throwing.createExecInstance("CTX" as never, () => ({}) as never)) void message; },
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, "box failed");
+        assert.equal((error as Error).stack, "box stack");
+        assert.equal((error as Error & { errorCode?: string }).errorCode, "BOX_EXEC_UNSUPPORTED");
+        return true;
+      },
+    );
   });
 
   it("wires a resource accessor from a transport or from an endpoint", () => {
