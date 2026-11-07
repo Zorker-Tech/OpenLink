@@ -37,16 +37,11 @@ import {
 } from '@/components/ai-elements/context'
 import { PromptAddMenu } from '@/components/prompt-add-menu'
 import {
-  BrowserWorkbench,
   type BrowserWorkbenchHandle,
   type BrowserWorkbenchUiState,
 } from '@/components/browser/browser-workbench'
-import { CloudComputerPreviewWorkbench } from '@/components/browser/cloud-computer-preview-workbench'
 import { ThinkingOrb } from '@/components/thinking/src'
-import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
-import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
-import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
-import { ProjectSupabaseStudioFrame } from '@/components/project-supabase-studio-frame'
+import { WorkspaceSurfaces } from '@/components/browser/workspace-surfaces'
 import { Sidebar } from '@/components/app-workspace'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
@@ -62,7 +57,6 @@ import type { Translator } from '@/lib/i18n/messages'
 import { createPastedTextAttachment, insertRestoredPastedText, PASTED_TEXT_ATTACHMENT_MAX_COUNT, pastedTextByteLength, shouldAttachPastedText } from '@/lib/agent-runtime/pasted-text'
 import { recoverInterruptedInitialEvents } from '@/lib/agent-runtime/stream-integrity'
 import { useSessionUiState, type SessionWorkspaceTab, type SessionWorkspaceView } from '@/lib/session-ui-state'
-import { useTabVisibilityPause } from '@/lib/use-tab-visibility-pause'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
@@ -79,8 +73,6 @@ import { codexPluginToken } from '@/lib/prompt-input-protocol'
 import { AccessWritesBanner } from '@/components/access-writes-banner'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  ArrowLeft,
-  ArrowRight,
   BookOpen,
   ChevronDown,
   Code2,
@@ -88,16 +80,11 @@ import {
   ExternalLink,
   FileText,
   Globe2,
-  Inspect,
   MessageCircle,
   Monitor,
   MoreHorizontal,
   PanelLeft,
-  Pause,
   Plus,
-  RefreshCw,
-  RotateCw,
-  Server,
   Send,
   Square,
   Share2,
@@ -710,113 +697,6 @@ function ChatTopbar({
       </div>
       )}
     </header>
-  )
-}
-
-function BrowserNavigationBar({
-  browserState,
-  browserWorkbenchRef,
-  gitVersions,
-  gitVersionsLoading,
-  gitVersionError,
-  onSelectGitVersion,
-  onToggleDeviceView,
-  selectedGitRef,
-  sessionId,
-  workspaceView,
-}: {
-  browserState: BrowserWorkbenchUiState
-  browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
-  gitVersions: GitVersionOption[]
-  gitVersionsLoading: boolean
-  gitVersionError: string | null
-  onSelectGitVersion: (ref: string | null) => void
-  onToggleDeviceView: () => void
-  selectedGitRef: string | null
-  sessionId: string
-  workspaceView: 'mobile' | 'browser'
-}) {
-  const [addressDraft, setAddressDraft] = useState(browserState.address)
-  const addressInputRef = useRef<HTMLInputElement | null>(null)
-  const t = useT()
-
-  useEffect(() => {
-    if (document.activeElement !== addressInputRef.current) setAddressDraft(browserState.address)
-  }, [browserState.address])
-
-  return (
-    <div aria-label={t('浏览器工具栏')} className="flex h-11 shrink-0 items-center gap-1.5 border-b border-[var(--app-border)] bg-[var(--app-background)] p-2 text-[var(--app-foreground)]">
-      <div aria-hidden className="size-7 shrink-0" />
-      <div className="flex min-w-[150px] flex-1 items-center justify-center">
-        <form className="flex h-7 w-full max-w-[500px] items-center overflow-hidden rounded-md border border-[var(--app-control-border)] px-0.5" onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
-          <ToolbarButton className="size-6! rounded" disabled={!browserState.canGoBack} label={t("后退")} onClick={() => browserWorkbenchRef.current?.back()}><ArrowLeft className="size-4" /></ToolbarButton>
-          <ToolbarButton className="size-6! rounded" disabled={!browserState.canGoForward} label={t("前进")} onClick={() => browserWorkbenchRef.current?.forward()}><ArrowRight className="size-4" /></ToolbarButton>
-          <ToolbarButton aria-pressed={workspaceView === 'mobile'} className="size-6! rounded hover:bg-transparent!" label={t("设备")} onClick={onToggleDeviceView}><img alt="" className="app-control-icon size-4" src="/openlink/app/phone.svg" /></ToolbarButton>
-          <input
-            aria-label={t('浏览器地址')}
-            className="h-6 min-w-0 flex-1 bg-transparent px-1 text-[12px] tracking-[-0.0762px] text-[var(--app-muted)] outline-none focus:text-[var(--app-foreground)]"
-            onBlur={() => setAddressDraft(browserState.address)}
-            onChange={(event) => setAddressDraft(event.currentTarget.value)}
-            placeholder={t('输入网址或搜索')}
-            ref={addressInputRef}
-            spellCheck={false}
-            value={addressDraft}
-          />
-          <ToolbarButton aria-pressed={browserState.inspectMode} className={`size-6! rounded ${browserState.inspectMode ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}`} disabled={!browserState.canInspect} label={t('选择组件')} onClick={() => browserWorkbenchRef.current?.toggleInspector()}><Inspect className="size-4" /></ToolbarButton>
-          <ToolbarButton className="size-6! rounded" disabled={!browserState.externalUrl} label={t("在新窗口打开")} onClick={() => browserWorkbenchRef.current?.openExternal()}><ExternalLink className="size-4" /></ToolbarButton>
-          <ToolbarButton className="size-6! rounded" disabled={(!browserState.canInspect && !browserState.externalUrl) || browserState.status === 'connecting' || browserState.status === 'reconnecting'} label={t("刷新")} onClick={() => browserWorkbenchRef.current?.reload()}><RotateCw className="size-4" /></ToolbarButton>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<button aria-label={t('切换开发服务器')} className="flex h-6 max-w-[120px] shrink-0 items-center gap-1 rounded px-1 text-[11px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}>
-              <Server className="size-3.5 shrink-0" />
-              <span className="truncate">{browserState.previewTargets.find((target) => target.id === browserState.activePreviewTargetId)?.port ? `:${browserState.previewTargets.find((target) => target.id === browserState.activePreviewTargetId)?.port}` : t('预览目标')}</span>
-              <ChevronDown className="size-3.5 shrink-0" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[300px] rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-              <div className="flex items-center justify-between px-2.5 py-1.5 text-[11px] font-medium text-[var(--app-muted)]">
-                <span>{t('开发服务器')}</span>
-                <button aria-label={t('刷新开发服务器')} className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={() => browserWorkbenchRef.current?.refreshPreviewTargets()} type="button"><RefreshCw className="size-3" />{t('刷新')}</button>
-              </div>
-              {browserState.previewTargetsLoading && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">{t('正在探测项目开发服务器…')}</div>}
-              {!browserState.previewTargetsLoading && browserState.previewTargetsError && <div className="px-2.5 py-2 text-xs text-[var(--app-danger)]">{browserState.previewTargetsError}</div>}
-              {!browserState.previewTargetsLoading && !browserState.previewTargetsError && browserState.previewTargets.length === 0 && <div className="px-2.5 py-2 text-xs leading-5 text-[var(--app-muted)]">{t('未检测到运行中的开发服务器。启动 dev server 后点击刷新。')}</div>}
-              {browserState.previewTargets.map((target) => (
-                <DropdownMenuItem className="h-auto min-h-9 cursor-pointer gap-2 rounded-md px-2.5 py-1.5 text-sm focus:bg-[var(--app-hover)]" key={target.id} onClick={() => browserWorkbenchRef.current?.selectPreviewTarget(target.id)}>
-                  <Server className="size-3.5 shrink-0 text-[var(--app-muted)]" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{target.sessionId === sessionId ? t('当前会话') : target.label}</span>
-                    <span className="block text-[11px] text-[var(--app-muted)]">:{target.port}{target.sessionId && target.sessionId !== sessionId ? ` · ${target.sessionId.slice(0, 12)}` : ''}</span>
-                  </span>
-                  {browserState.activePreviewTargetId === target.id && <span className="text-[11px] text-[var(--app-brand)]">{t('当前')}</span>}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </form>
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<button aria-label={t('切换预览版本')} className="flex h-7 w-[96px] shrink-0 items-center justify-center gap-1 rounded-md text-sm font-medium tracking-[-0.1504px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}>
-          <span className="max-w-[70px] truncate">{selectedGitRef ? `@${gitVersions.find((version) => version.ref === selectedGitRef)?.shortRef ?? selectedGitRef.slice(0, 8)}` : 'Latest'}</span>
-          <ChevronDown className="size-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[280px] rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-          <DropdownMenuItem className="h-9 cursor-pointer gap-2 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" disabled={!selectedGitRef} onClick={() => onSelectGitVersion(null)}>
-            <span className="min-w-0 flex-1 truncate">{t('最新')}</span>
-            {!selectedGitRef && <span className="text-[11px] text-[var(--app-muted)]">{t('当前')}</span>}
-          </DropdownMenuItem>
-          {gitVersionsLoading && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">{t('正在读取 Git 版本…')}</div>}
-          {!gitVersionsLoading && gitVersions.length === 0 && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">{t('暂无可切换的 Git 版本')}</div>}
-          {!gitVersionsLoading && gitVersions.map((version) => (
-            <DropdownMenuItem className="h-auto min-h-9 cursor-pointer gap-2 rounded-md px-2.5 py-1.5 text-sm focus:bg-[var(--app-hover)]" key={version.ref} onClick={() => onSelectGitVersion(version.ref)}>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{version.message}</span>
-                <span className="block text-[11px] text-[var(--app-muted)]">@{version.shortRef}{version.current ? t(' · 当前提交') : ''}</span>
-              </span>
-            </DropdownMenuItem>
-          ))}
-          {gitVersionError && <div className="px-2.5 py-2 text-xs text-[var(--app-danger)]">{gitVersionError}</div>}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
   )
 }
 
@@ -1549,111 +1429,6 @@ export function ChatComposer({
     </div>
   )
 }
-
-function PreviewPaused() {
-  const t = useT()
-  return (
-    <main aria-label={t('预览已暂停')} className={`flex size-full items-center justify-center p-6 ${theme('canvas')}`}>
-      <div className="flex max-w-sm flex-col items-center text-center">
-        <span className={`mb-4 flex size-12 items-center justify-center rounded-2xl ${theme('border', 'surface')}`}><Pause className="size-5" /></span>
-        <h2 className="text-sm font-medium">{t('预览已暂停')}</h2>
-        <p className={`mt-2 text-xs leading-5 ${theme('muted')}`}>{t('会话和任务仍在后台正常运行。返回页面后会自动恢复预览。')}</p>
-      </div>
-    </main>
-  )
-}
-
-function PreviewCanvas({
-  browserState,
-  browserWorkbenchRef,
-  cloudRuntime,
-  view,
-  openTabs,
-  uiReady,
-  paused,
-  initialBrowserUrl,
-  initialPreviewTargetId,
-  onBrowserStateChange,
-  onToggleDeviceView,
-  sessionId,
-  projectName,
-  panelProps,
-  dataSurface,
-  gitVersions,
-  gitVersionsLoading,
-  gitVersionError,
-  onSelectGitVersion,
-  selectedGitRef,
-}: {
-  browserState: BrowserWorkbenchUiState
-  browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
-  cloudRuntime: boolean
-  view: SessionWorkspaceView
-  openTabs: WorkspaceTabId[]
-  uiReady: boolean
-  paused: boolean
-  initialBrowserUrl: string
-  initialPreviewTargetId: string | null
-  onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
-  onToggleDeviceView: () => void
-  sessionId: string
-  projectName: string
-  dataSurface: 'panel' | 'studio'
-  gitVersions: GitVersionOption[]
-  gitVersionsLoading: boolean
-  gitVersionError: string | null
-  onSelectGitVersion: (ref: string | null) => void
-  selectedGitRef: string | null
-  panelProps: Pick<ChatWorkspaceProps, 'activeWorkspace' | 'avatarUrl' | 'chatSessions' | 'email' | 'nickname' | 'organizations' | 'personalWorkspace' | 'projectId' | 'userId'>
-}) {
-  const t = useT()
-  if (!uiReady) return <div className="size-full" aria-busy="true" />
-
-  // code-server owns an iframe and editor layout. Keep it mounted for the life
-  // of its workspace tab; hiding it avoids a full editor reload when the user
-  // switches to another workspace surface.
-  const codeOpen = openTabs.includes('code')
-  const codeSurface = codeOpen ? (
-    <div aria-hidden={view !== 'code'} className={view === 'code' ? 'size-full' : 'hidden'} data-workspace-surface="code">
-      <CodeServerWorkbench chatSessionId={sessionId} />
-    </div>
-  ) : null
-  if (view === 'code') return <div className="size-full">{codeSurface}</div>
-
-  const browserMode = view === 'browser'
-  const activeSurface = paused && (view === 'desktop' || browserMode || view === 'mobile')
-    ? <PreviewPaused />
-    : view === 'desktop'
-      ? <DesktopWorkbench chatSessionId={sessionId} />
-      : view === 'data'
-        ? (dataSurface === 'studio'
-          ? <ProjectSupabaseStudioFrame sessionId={sessionId} />
-          : <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />)
-        : (
-          <div className="flex size-full min-w-0 flex-col" data-workspace-surface={browserMode ? 'browser' : 'mobile'}>
-            <BrowserNavigationBar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} sessionId={sessionId} workspaceView={view} />
-            <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${browserMode ? theme('surface') : theme('editor')}`}>
-              <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
-                <div className={browserMode ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}>
-                  {cloudRuntime
-                    ? <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} />
-                    : <BrowserWorkbench chatSessionId={sessionId} initialPreviewTargetId={initialPreviewTargetId || undefined} initialSurface={browserState.surface} initialUrl={initialBrowserUrl || undefined} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />}
-                </div>
-              </div>
-            </main>
-          </div>
-        )
-
-  return (
-    <div className="size-full min-h-0 min-w-0">
-      {codeSurface}
-      <div className="size-full" data-workspace-surface={view}>
-        {activeSurface}
-      </div>
-    </div>
-  )
-}
-
 export function ChatWorkspace({
   activeWorkspace,
   personalWorkspace,
@@ -1690,7 +1465,6 @@ export function ChatWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
-  const previewSuspended = useTabVisibilityPause(15_000)
   const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)
   const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
   const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
@@ -1759,11 +1533,9 @@ export function ChatWorkspace({
     if (tab === 'preview') {
       setWorkspaceView('browser')
       setBrowserState((current) => current.surface === 'native-preview' ? current : { ...current, surface: 'native-preview' })
-      browserWorkbenchRef.current?.setSurface('native-preview')
     } else if (tab === 'realtime') {
       setWorkspaceView('browser')
       setBrowserState((current) => current.surface === 'chromium-stream' ? current : { ...current, surface: 'chromium-stream' })
-      browserWorkbenchRef.current?.setSurface('chromium-stream')
     } else if (tab === 'code') {
       setWorkspaceView('code')
     } else if (tab === 'database') {
@@ -2526,7 +2298,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <PreviewCanvas browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={persistedUi.previewTargetId} openTabs={openWorkspaceTabs} paused={previewSuspended} uiReady={uiReady} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={persistedUi.previewTargetId} openTabs={openWorkspaceTabs} uiReady={uiReady} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>
