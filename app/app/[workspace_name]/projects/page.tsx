@@ -1,7 +1,7 @@
 import { listChatSessions } from '@/lib/chat-sessions'
 import { ProjectsWorkspace } from '@/components/projects-workspace'
 import { getT } from '@/lib/i18n/server'
-import { listOrganizations } from '@/lib/organizations'
+import { listOrganizations, type OrganizationSummary } from '@/lib/organizations'
 import { listProjects } from '@/lib/projects'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
@@ -15,15 +15,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ProjectsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspace_name: string }>
+  searchParams: Promise<{ openPreview?: string | string[] }>
 }) {
-  const { workspace_name: workspaceName } = await params
+  const [{ workspace_name: workspaceName }, search] = await Promise.all([params, searchParams])
+  const openPreview = typeof search.openPreview === 'string' ? search.openPreview : undefined
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect(`/login?next=${encodeURIComponent(`/app/${workspaceName}/projects`)}`)
+    const requestedPath = `/app/${workspaceName}/projects${openPreview ? `?openPreview=${encodeURIComponent(openPreview)}` : ''}`
+    redirect(`/login?next=${encodeURIComponent(requestedPath)}`)
   }
 
   const [workspace, personalWorkspace, organizations] = await Promise.all([
@@ -45,8 +49,16 @@ export default async function ProjectsPage({
   ])
 
   const nickname = (profile.data as { nickname?: string } | null)?.nickname ?? workspace.name
+  const previewProject = openPreview && openPreview !== 'first-ready'
+    ? projects.find((project) => project.id === openPreview)
+    : projects.find((project) => project.kind === 'code' && project.status === 'active' && project.runtime_status === 'ready')
+  const initialPreviewProjectId = previewProject?.kind === 'code'
+    && previewProject.status === 'active'
+    && previewProject.runtime_status === 'ready'
+    ? previewProject.id
+    : null
   const organizationRole = workspace.organization_id
-    ? organizations.find((organization) => organization.id === workspace.organization_id)?.role
+    ? organizations.find((organization: OrganizationSummary) => organization.id === workspace.organization_id)?.role
     : null
   const canManageProjects = workspace.scope_type === 'personal'
     || organizationRole === 'owner'
@@ -63,6 +75,7 @@ export default async function ProjectsPage({
       avatarUrl={getAvatarUrl(user)}
       canManageProjects={canManageProjects}
       chatSessions={chatSessions}
+      initialPreviewProjectId={initialPreviewProjectId}
       email={user.email ?? nickname}
       nickname={nickname}
       organizations={organizations}
