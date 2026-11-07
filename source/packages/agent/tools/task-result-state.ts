@@ -4,23 +4,18 @@ import { DataClassification } from "../../redaction/classification.ts"
 import { createRedactedString } from "../../redaction/create.ts"
 import { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import {
+  SlateSubagentBackgroundReason,
+  type SubagentBackgroundReason,
+} from "../../agent-exec/subagent.ts"
+import {
   createSlateConversationSummaryToolCall,
   createSlateAssistantMessageStep,
   createSlateToolCallStep,
   type SlateConversationStep,
 } from "../conversation-step-state.ts"
 
-export const SlateTaskBackgroundReason = {
-  UNSPECIFIED: "unspecified",
-  AGENT_REQUEST: "agent-request",
-  USER_REQUEST: "user-request",
-  QUEUED_FOLLOW_UP: "queued-follow-up",
-  UNKNOWN: "unknown",
-} as const
-
-export type SlateTaskBackgroundReason =
-  (typeof SlateTaskBackgroundReason)[keyof typeof SlateTaskBackgroundReason]
-  | `unknown-${number}`
+export const SlateTaskBackgroundReason = SlateSubagentBackgroundReason
+export type SlateTaskBackgroundReason = SubagentBackgroundReason
 
 export interface SlateTaskSuccessResult {
   readonly kind: "success"

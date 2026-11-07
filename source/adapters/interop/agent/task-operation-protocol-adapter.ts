@@ -11,6 +11,10 @@ import {
   TargetMachine,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { TaskMode } from "../proto/generated/agent/v1/subagents_pb.ts"
+import {
+  createUnrecognizedSubagentBackgroundReason,
+  isSubagentBackgroundReason,
+} from "../../../packages/agent-exec/subagent.ts"
 import type { TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
 import type {
   SlateTaskExecutionEnvironment,
@@ -60,7 +64,7 @@ export function taskBackgroundReasonFromInterop(value: unknown): SlateTaskBackgr
     case SubagentBackgroundReason.QUEUED_FOLLOW_UP: return SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
     case SubagentBackgroundReason.UNSPECIFIED: return SlateTaskBackgroundReason.UNSPECIFIED
     default: return typeof value === "number" && Number.isInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647
-      ? `unknown-${value}`
+      ? createUnrecognizedSubagentBackgroundReason(value)
       : SlateTaskBackgroundReason.UNKNOWN
   }
 }
@@ -85,8 +89,9 @@ export function taskBackgroundReasonToInterop(value: SlateTaskBackgroundReasonVa
     case SlateTaskBackgroundReason.UNKNOWN:
       return SubagentBackgroundReason.UNSPECIFIED
     default: {
-      const unknown = /^unknown-(-?\d+)$/.exec(value)
-      return unknown === null ? SubagentBackgroundReason.UNSPECIFIED : Number(unknown[1]) as SubagentBackgroundReason
+      return isSubagentBackgroundReason(value) && typeof value !== "string"
+        ? value.compatibility.legacyCode as SubagentBackgroundReason
+        : SubagentBackgroundReason.UNSPECIFIED
     }
   }
 }

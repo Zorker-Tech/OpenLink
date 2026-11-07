@@ -62,6 +62,8 @@ import {
 } from "./task-subagent-preparation.ts"
 import type { SlateTaskRequest } from "./task-runtime-types.ts"
 import {
+  createUnrecognizedSubagentBackgroundReason,
+  isSubagentBackgroundReason,
   RUNNING_SUBAGENT_FOLLOWUP_ERROR,
   RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT,
 } from "../../agent-exec/subagent.ts"
@@ -145,6 +147,19 @@ export function formatSubagentBackgroundMessage(
 }
 
 function normalizeTaskResultBackgroundReason(value: unknown): SlateTaskBackgroundReason {
+  if (typeof value === "string" && isSubagentBackgroundReason(value)) return value
+  if (isSubagentBackgroundReason(value) && typeof value !== "string") {
+    return createUnrecognizedSubagentBackgroundReason(value.compatibility.legacyCode)
+  }
+  if (typeof value === "string") {
+    const legacyCode = /^unknown-(-?\d+)$/.exec(value)
+    if (legacyCode !== null) {
+      const code = Number(legacyCode[1])
+      if (Number.isInteger(code) && code >= -2_147_483_648 && code <= 2_147_483_647) {
+        return createUnrecognizedSubagentBackgroundReason(code)
+      }
+    }
+  }
   switch (value as SlateTaskBackgroundReason | "agent_request" | "user_request" | "queued_follow_up") {
     case "agent_request":
     case SlateTaskBackgroundReason.AGENT_REQUEST:
