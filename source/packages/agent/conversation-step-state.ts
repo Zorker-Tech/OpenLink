@@ -147,12 +147,103 @@ export interface SlateSendMessageToolCall {
   readonly value?: undefined
 }
 
+export interface SlateComputerCoordinate {
+  readonly x: number
+  readonly y: number
+}
+
+export type SlateComputerMouseButton =
+  | "unspecified"
+  | "left"
+  | "right"
+  | "middle"
+  | "back"
+  | "forward"
+  | { readonly kind: "unknown"; readonly code: number }
+
+export type SlateComputerScrollDirection =
+  | "unspecified"
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | { readonly kind: "unknown"; readonly code: number }
+
+export type SlateComputerUseAction =
+  | { readonly kind: "mouse-move"; readonly coordinate?: SlateComputerCoordinate }
+  | {
+      readonly kind: "click"
+      readonly coordinate?: SlateComputerCoordinate
+      readonly button: SlateComputerMouseButton
+      readonly count: number
+      readonly modifierKeys?: SlateToolCallText
+    }
+  | { readonly kind: "mouse-down"; readonly button: SlateComputerMouseButton }
+  | { readonly kind: "mouse-up"; readonly button: SlateComputerMouseButton }
+  | {
+      readonly kind: "drag"
+      readonly path: readonly SlateComputerCoordinate[]
+      readonly button: SlateComputerMouseButton
+      readonly modifierKeys?: SlateToolCallText
+    }
+  | {
+      readonly kind: "scroll"
+      readonly coordinate?: SlateComputerCoordinate
+      readonly direction: SlateComputerScrollDirection
+      readonly amount: number
+      readonly modifierKeys?: SlateToolCallText
+    }
+  | { readonly kind: "type"; readonly text: SlateToolCallText }
+  | { readonly kind: "key"; readonly key: SlateToolCallText; readonly holdDurationMs?: number }
+  | { readonly kind: "wait"; readonly durationMs: number }
+  | { readonly kind: "screenshot" }
+  | { readonly kind: "cursor-position" }
+  | { readonly kind: "missing" }
+  | { readonly kind: "unsupported"; readonly sourceCase: string; readonly payload?: unknown }
+
+export interface SlateComputerUseToolArguments {
+  readonly originalCallId: string
+  readonly actions: readonly SlateComputerUseAction[]
+  readonly description?: SlateToolCallText
+  readonly bindUnmappedCharacters?: boolean
+}
+
+export type SlateComputerUseToolOutcome =
+  | {
+      readonly kind: "success"
+      readonly actionCount: number
+      readonly durationMs: number
+      readonly screenshot?: SlateToolCallText
+      readonly log?: SlateToolCallText
+      readonly screenshotPath?: SlateToolCallText
+      readonly cursorPosition?: SlateComputerCoordinate
+    }
+  | {
+      readonly kind: "error"
+      readonly message: SlateToolCallText
+      readonly actionCount: number
+      readonly durationMs: number
+      readonly log?: SlateToolCallText
+      readonly screenshot?: SlateToolCallText
+      readonly screenshotPath?: SlateToolCallText
+    }
+  | { readonly kind: "unknown" }
+
+export interface SlateComputerUseToolCall {
+  readonly kind: "computer-use"
+  readonly args?: SlateComputerUseToolArguments
+  readonly result?: SlateComputerUseToolOutcome
+  readonly case?: undefined
+  readonly value?: undefined
+}
+
 export type SlateToolCallValue =
   | SlateLegacyToolCallValue
   | SlateConversationSummaryToolCall
   | SlateAskQuestionToolCall
   | SlatePlanDraftToolCall
   | SlateSendMessageToolCall
+  | SlateComputerUseToolCall
 
 export interface SlateStepHookContextEntry {
   readonly event: string
@@ -510,6 +601,153 @@ export function isSlateSendMessageToolCall(value: unknown): value is SlateSendMe
     default:
       return false
   }
+}
+
+export function createSlateComputerUseToolCall(input: {
+  readonly args?: SlateComputerUseToolArguments
+  readonly result?: SlateComputerUseToolOutcome
+}): SlateComputerUseToolCall {
+  const cloneCoordinate = (coordinate: SlateComputerCoordinate): SlateComputerCoordinate => ({ ...coordinate })
+  const cloneAction = (action: SlateComputerUseAction): SlateComputerUseAction => {
+    switch (action.kind) {
+      case "mouse-move":
+        return { ...action, ...(action.coordinate === undefined ? {} : { coordinate: cloneCoordinate(action.coordinate) }) }
+      case "click":
+      case "scroll":
+        return { ...action, ...(action.coordinate === undefined ? {} : { coordinate: cloneCoordinate(action.coordinate) }) }
+      case "drag":
+        return { ...action, path: action.path.map(cloneCoordinate) }
+      default:
+        return { ...action }
+    }
+  }
+  const args = input.args === undefined
+    ? undefined
+    : {
+        ...input.args,
+        actions: input.args.actions.map(cloneAction),
+      }
+  const result = input.result === undefined
+    ? undefined
+    : {
+        ...input.result,
+        ...(input.result.kind === "success" && input.result.cursorPosition !== undefined
+          ? { cursorPosition: cloneCoordinate(input.result.cursorPosition) }
+          : {}),
+      }
+  const operation: SlateComputerUseToolCall = {
+    kind: "computer-use",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  }
+  if (!isSlateComputerUseToolCall(operation)) throw new TypeError("Slate computer-use operation is invalid")
+  return operation
+}
+
+export function isSlateComputerUseToolCall(value: unknown): value is SlateComputerUseToolCall {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = value as Record<string, unknown>
+  if (tool.kind !== "computer-use" || !hasOnlyOwnKeys(tool, ["kind", "args", "result"])) return false
+  if (tool.args !== undefined) {
+    if (tool.args === null || typeof tool.args !== "object" || Array.isArray(tool.args)) return false
+    const args = tool.args as Record<string, unknown>
+    if (!hasOnlyOwnKeys(args, ["originalCallId", "actions", "description", "bindUnmappedCharacters"]) ||
+        typeof args.originalCallId !== "string" || !Array.isArray(args.actions) ||
+        (args.description !== undefined && !isToolCallText(args.description)) ||
+        (args.bindUnmappedCharacters !== undefined && typeof args.bindUnmappedCharacters !== "boolean") ||
+        !args.actions.every(isSlateComputerUseAction)) return false
+  }
+  if (tool.result === undefined) return true
+  if (tool.result === null || typeof tool.result !== "object" || Array.isArray(tool.result)) return false
+  const result = tool.result as Record<string, unknown>
+  switch (result.kind) {
+    case "unknown":
+      return hasOnlyOwnKeys(result, ["kind"])
+    case "success":
+      return hasOnlyOwnKeys(result, ["kind", "actionCount", "durationMs", "screenshot", "log", "screenshotPath", "cursorPosition"]) &&
+        isInt32Value(result.actionCount) && isInt32Value(result.durationMs) &&
+        (result.screenshot === undefined || isToolCallText(result.screenshot)) &&
+        (result.log === undefined || isToolCallText(result.log)) &&
+        (result.screenshotPath === undefined || isToolCallText(result.screenshotPath)) &&
+        (result.cursorPosition === undefined || isSlateComputerCoordinate(result.cursorPosition))
+    case "error":
+      return hasOnlyOwnKeys(result, ["kind", "message", "actionCount", "durationMs", "log", "screenshot", "screenshotPath"]) &&
+        isToolCallText(result.message) && isInt32Value(result.actionCount) && isInt32Value(result.durationMs) &&
+        (result.log === undefined || isToolCallText(result.log)) &&
+        (result.screenshot === undefined || isToolCallText(result.screenshot)) &&
+        (result.screenshotPath === undefined || isToolCallText(result.screenshotPath))
+    default:
+      return false
+  }
+}
+
+function isSlateComputerUseAction(value: unknown): value is SlateComputerUseAction {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const action = value as Record<string, unknown>
+  switch (action.kind) {
+    case "mouse-move":
+      return hasOnlyOwnKeys(action, ["kind", "coordinate"]) &&
+        (action.coordinate === undefined || isSlateComputerCoordinate(action.coordinate))
+    case "click":
+      return hasOnlyOwnKeys(action, ["kind", "coordinate", "button", "count", "modifierKeys"]) &&
+        (action.coordinate === undefined || isSlateComputerCoordinate(action.coordinate)) &&
+        isSlateComputerMouseButton(action.button) && isInt32Value(action.count) &&
+        (action.modifierKeys === undefined || isToolCallText(action.modifierKeys))
+    case "mouse-down":
+    case "mouse-up":
+      return hasOnlyOwnKeys(action, ["kind", "button"]) && isSlateComputerMouseButton(action.button)
+    case "drag":
+      return hasOnlyOwnKeys(action, ["kind", "path", "button", "modifierKeys"]) &&
+        Array.isArray(action.path) && action.path.every(isSlateComputerCoordinate) &&
+        isSlateComputerMouseButton(action.button) &&
+        (action.modifierKeys === undefined || isToolCallText(action.modifierKeys))
+    case "scroll":
+      return hasOnlyOwnKeys(action, ["kind", "coordinate", "direction", "amount", "modifierKeys"]) &&
+        (action.coordinate === undefined || isSlateComputerCoordinate(action.coordinate)) &&
+        isSlateComputerScrollDirection(action.direction) && isInt32Value(action.amount) &&
+        (action.modifierKeys === undefined || isToolCallText(action.modifierKeys))
+    case "type":
+      return hasOnlyOwnKeys(action, ["kind", "text"]) && isToolCallText(action.text)
+    case "key":
+      return hasOnlyOwnKeys(action, ["kind", "key", "holdDurationMs"]) && isToolCallText(action.key) &&
+        (action.holdDurationMs === undefined || isInt32Value(action.holdDurationMs))
+    case "wait":
+      return hasOnlyOwnKeys(action, ["kind", "durationMs"]) && isInt32Value(action.durationMs)
+    case "screenshot":
+    case "cursor-position":
+    case "missing":
+      return hasOnlyOwnKeys(action, ["kind"])
+    case "unsupported":
+      return hasOnlyOwnKeys(action, ["kind", "sourceCase", "payload"]) && typeof action.sourceCase === "string"
+    default:
+      return false
+  }
+}
+
+function isSlateComputerCoordinate(value: unknown): value is SlateComputerCoordinate {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const coordinate = value as Record<string, unknown>
+  return hasOnlyOwnKeys(coordinate, ["x", "y"]) && isInt32Value(coordinate.x) && isInt32Value(coordinate.y)
+}
+
+function isSlateComputerMouseButton(value: unknown): value is SlateComputerMouseButton {
+  if (typeof value === "string") return ["unspecified", "left", "right", "middle", "back", "forward"].includes(value)
+  return isUnknownSlateEnumCode(value)
+}
+
+function isSlateComputerScrollDirection(value: unknown): value is SlateComputerScrollDirection {
+  if (typeof value === "string") return ["unspecified", "up", "down", "left", "right"].includes(value)
+  return isUnknownSlateEnumCode(value)
+}
+
+function isUnknownSlateEnumCode(value: unknown): value is { readonly kind: "unknown"; readonly code: number } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const unknown = value as Record<string, unknown>
+  return hasOnlyOwnKeys(unknown, ["kind", "code"]) && unknown.kind === "unknown" && isInt32Value(unknown.code)
+}
+
+function isInt32Value(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647
 }
 
 /** Product-facing metric labels remain stable when a call moves from the legacy envelope to a Slate kind. */

@@ -29,6 +29,15 @@ import {
   AskQuestionSuccess_Answer,
   AskQuestionToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/ask_question_tool_pb.ts";
+import {
+  ClickAction,
+  ComputerUseAction,
+  ComputerUseResult,
+  ComputerUseSuccess,
+  ComputerUseToolCall,
+  Coordinate,
+  MouseButton,
+} from "../../source/adapters/interop/proto/generated/agent/v1/computer_use_tool_pb.ts";
 import { SelectedContext, SelectedCursorCommand } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
 import { AgentSkill } from "../../source/adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts";
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts";
@@ -179,6 +188,60 @@ describe("the classifier context beyond the basic slice", () => {
       message.role === "user_answer" &&
       message.content === "Q: Which path?\nA: Left, unknown-option, check the adjacent file",
     ))
+  })
+
+  it("builds computer-use classifier context from the Slate operation and keeps screenshots out of the prompt", async () => {
+    const computerStep = new ConversationStep({
+      message: {
+        case: "toolCall",
+        value: new ToolCall({
+          toolCallId: "outer-call",
+          tool: {
+            case: "computerUseToolCall",
+            value: new ComputerUseToolCall({
+              args: {
+                toolCallId: "inner-call",
+                description: "inspect the menu",
+                actions: [new ComputerUseAction({
+                  action: {
+                    case: "click",
+                    value: new ClickAction({
+                      coordinate: new Coordinate({ x: 12, y: 5 }),
+                      button: MouseButton.LEFT,
+                      count: 2,
+                      modifierKeys: "CTRL",
+                    }),
+                  },
+                })],
+              },
+              result: new ComputerUseResult({
+                result: {
+                  case: "success",
+                  value: new ComputerUseSuccess({
+                    actionCount: 1,
+                    durationMs: 18,
+                    screenshot: "private image bytes",
+                    log: "clicked",
+                    screenshotPath: "/tmp/capture.png",
+                    cursorPosition: new Coordinate({ x: 12, y: 5 }),
+                  }),
+                },
+              }),
+            }),
+          },
+        }),
+      },
+    })
+    const { ctx, stateHandler } = await conversation({
+      turns: [{ userText: "inspect the page", conversationSteps: [computerStep] }],
+    })
+
+    const messages = await tryExtractSlateAutoReviewClassifierConversationContext(ctx, stateHandler as never)
+    assert.deepEqual(messages.at(-1), {
+      role: "computer",
+      content: `request:\n{"purpose":"inspect the menu","actions":[{"kind":"click","coordinate":{"x":12,"y":5},"button":"left","count":2,"modifierKeys":"CTRL"}]}\nresult:\n{"status":"success","actionCount":1,"durationMs":18,"log":"clicked","screenshotPath":"/tmp/capture.png","cursorPosition":{"x":12,"y":5},"screenshotOmitted":true}`,
+    })
+    assert.doesNotMatch(messages.at(-1)!.content, /private image bytes/)
   })
 
   it("skips a message the platform wrote, and trusts the ones it is told to trust", async () => {

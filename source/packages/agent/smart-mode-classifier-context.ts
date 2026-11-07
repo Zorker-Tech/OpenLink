@@ -17,10 +17,15 @@
  * cannot be read yields no context rather than failing the call the classifier was asked to judge.
  */
 import { AgentConversationTurnHandle, type ConversationStateHandle } from "./state.ts"
-import type { SlateAskQuestionToolCall, SlateConversationStep } from "./conversation-step-state.ts"
+import type {
+  SlateAskQuestionToolCall,
+  SlateComputerUseAction,
+  SlateComputerUseToolCall,
+  SlateConversationStep,
+  SlateToolCallText,
+} from "./conversation-step-state.ts"
 import {
   isAutomaticClassifierContextMessageInterop,
-  readClassifierComputerUseCallInterop,
   readClassifierUserMessageInterop,
   selectedWorkflowPathsForClassifierInterop,
   toSmartModeClassifierConversationMessagesInterop,
@@ -82,36 +87,94 @@ async function recentAssistantTexts(ctx: OperationContext, stateHandler: Classif
   return newestFirst.toReversed()
 }
 
-/** What one computer-use call looks like to a classifier: the call it makes and the outcome it had. */
-function computerCallContext(toolCall: any): string {
-  const declaredPurpose = toolCall.args?.description?.trim()
-  const input = {
-    ...(declaredPurpose !== undefined && declaredPurpose.length > 0 ? { declared_purpose: declaredPurpose } : {}),
-    actions: toolCall.args?.actions.map((action: any) => action.toJson()) ?? [],
+function classifierText(value: SlateToolCallText): string {
+  return isRedactedString(value) ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : value
+}
+
+/** Renders a Slate computer action as a JSON-safe, product-owned classifier value. */
+function computerActionForClassifier(action: SlateComputerUseAction): Record<string, unknown> {
+  switch (action.kind) {
+    case "mouse-move":
+      return { kind: action.kind, ...(action.coordinate === undefined ? {} : { coordinate: action.coordinate }) }
+    case "click":
+      return {
+        kind: action.kind,
+        ...(action.coordinate === undefined ? {} : { coordinate: action.coordinate }),
+        button: action.button,
+        count: action.count,
+        ...(action.modifierKeys === undefined ? {} : { modifierKeys: classifierText(action.modifierKeys) }),
+      }
+    case "mouse-down":
+    case "mouse-up":
+      return { kind: action.kind, button: action.button }
+    case "drag":
+      return {
+        kind: action.kind,
+        path: action.path,
+        button: action.button,
+        ...(action.modifierKeys === undefined ? {} : { modifierKeys: classifierText(action.modifierKeys) }),
+      }
+    case "scroll":
+      return {
+        kind: action.kind,
+        ...(action.coordinate === undefined ? {} : { coordinate: action.coordinate }),
+        direction: action.direction,
+        amount: action.amount,
+        ...(action.modifierKeys === undefined ? {} : { modifierKeys: classifierText(action.modifierKeys) }),
+      }
+    case "type":
+      return { kind: action.kind, text: classifierText(action.text) }
+    case "key":
+      return {
+        kind: action.kind,
+        key: classifierText(action.key),
+        ...(action.holdDurationMs === undefined ? {} : { holdDurationMs: action.holdDurationMs }),
+      }
+    case "wait":
+      return { kind: action.kind, durationMs: action.durationMs }
+    case "screenshot":
+      return { kind: action.kind }
+    case "cursor-position":
+      return { kind: action.kind }
+    case "missing":
+      return { kind: action.kind }
+    case "unsupported":
+      return { kind: action.kind, sourceCase: action.sourceCase, ...(action.payload === undefined ? {} : { payload: action.payload }) }
   }
-  const result = toolCall.result?.result
-  const output = result?.case === "success"
+}
+
+/** What one computer-use call looks like to a classifier: the call it makes and the outcome it had. */
+function computerCallContext(toolCall: SlateComputerUseToolCall): string {
+  const declaredPurpose = toolCall.args?.description === undefined
+    ? undefined
+    : classifierText(toolCall.args.description).trim()
+  const input = {
+    ...(declaredPurpose !== undefined && declaredPurpose.length > 0 ? { purpose: declaredPurpose } : {}),
+    actions: toolCall.args?.actions.map(computerActionForClassifier) ?? [],
+  }
+  const result = toolCall.result
+  const output = result?.kind === "success"
     ? {
         status: "success",
-        actionCount: result.value.actionCount,
-        durationMs: result.value.durationMs,
-        ...(result.value.log === undefined ? {} : { log: result.value.log }),
-        ...(result.value.screenshotPath === undefined ? {} : { screenshotPath: result.value.screenshotPath }),
-        ...(result.value.cursorPosition === undefined ? {} : { cursorPosition: result.value.cursorPosition.toJson() }),
-        screenshotOmitted: result.value.screenshot !== undefined && result.value.screenshot.length > 0,
+        actionCount: result.actionCount,
+        durationMs: result.durationMs,
+        ...(result.log === undefined ? {} : { log: classifierText(result.log) }),
+        ...(result.screenshotPath === undefined ? {} : { screenshotPath: classifierText(result.screenshotPath) }),
+        ...(result.cursorPosition === undefined ? {} : { cursorPosition: result.cursorPosition }),
+        screenshotOmitted: result.screenshot !== undefined && classifierText(result.screenshot).length > 0,
       }
-    : result?.case === "error"
+    : result?.kind === "error"
       ? {
           status: "error",
-          error: result.value.error,
-          actionCount: result.value.actionCount,
-          durationMs: result.value.durationMs,
-          ...(result.value.log === undefined ? {} : { log: result.value.log }),
-          ...(result.value.screenshotPath === undefined ? {} : { screenshotPath: result.value.screenshotPath }),
-          screenshotOmitted: result.value.screenshot !== undefined && result.value.screenshot.length > 0,
+          error: classifierText(result.message),
+          actionCount: result.actionCount,
+          durationMs: result.durationMs,
+          ...(result.log === undefined ? {} : { log: classifierText(result.log) }),
+          ...(result.screenshotPath === undefined ? {} : { screenshotPath: classifierText(result.screenshotPath) }),
+          screenshotOmitted: result.screenshot !== undefined && classifierText(result.screenshot).length > 0,
         }
       : { status: "pending" }
-  return `input:\n${JSON.stringify(input)}\noutput:\n${JSON.stringify(output)}`
+  return `request:\n${JSON.stringify(input)}\nresult:\n${JSON.stringify(output)}`
 }
 
 /** The index of the turn that carries the user's current intent: the newest turn with a user message to read. */
@@ -145,9 +208,8 @@ async function intentComputerCalls(ctx: OperationContext, stateHandler: Classifi
     if (!(turn instanceof AgentConversationTurnHandle)) continue
     for (const stepRef of (turn as any).steps) {
       const step = await stepRef.get(ctx) as SlateConversationStep
-      const isComputerUseCall = step.kind === "tool-call" && step.tool.case === "computerUseToolCall"
-      if (!isComputerUseCall) continue
-      computerCalls.push(computerCallContext(readClassifierComputerUseCallInterop(step.tool.value, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)))
+      if (step.kind !== "tool-call" || step.tool.kind !== "computer-use") continue
+      computerCalls.push(computerCallContext(step.tool))
     }
   }
   return computerCalls

@@ -3,9 +3,11 @@ import assert from "node:assert/strict"
 
 import {
   createSlateAssistantMessageStep,
+  createSlateComputerUseToolCall,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
   isSlateConversationSummaryToolCall,
+  isSlateComputerUseToolCall,
   isSlateSendMessageToolCall,
   isSuccessfulSlateSendMessage,
   slateToolCallMetricLabel,
@@ -18,6 +20,7 @@ import {
   createSlateConversationStepSerde,
   fromInteropConversationStep,
   fromInteropToolCallStep,
+  toPlainInteropConversationStep,
   toInteropConversationStep,
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { toRedactedToolCallInterop } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
@@ -68,6 +71,26 @@ import {
   SendMessageText,
   SendMessageToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/send_message_tool_pb.ts"
+import {
+  ClickAction,
+  ComputerUseAction,
+  ComputerUseResult,
+  ComputerUseSuccess,
+  ComputerUseToolCall,
+  Coordinate,
+  CursorPositionAction,
+  DragAction,
+  KeyAction,
+  MouseButton,
+  MouseDownAction,
+  MouseMoveAction,
+  MouseUpAction,
+  ScreenshotAction,
+  ScrollAction,
+  ScrollDirection,
+  TypeAction,
+  WaitAction,
+} from "../../source/adapters/interop/proto/generated/agent/v1/computer_use_tool_pb.ts"
 
 const text = (value: string) =>
   createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)
@@ -105,6 +128,124 @@ test("assistant, thinking and tool steps round-trip through the Slate serde", ()
       "notice",
     )
   }
+})
+
+test("computer-use steps use Slate storage while preserving every legacy action and unknown enum", () => {
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const click = ClickAction.fromBinary(appendUnknownVarint(new ClickAction({
+    coordinate: new Coordinate({ x: 12, y: 5 }),
+    button: 77 as MouseButton,
+    count: 2,
+    modifierKeys: "CTRL",
+  }).toBinary()))
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    toolCallId: "outer-call",
+    tool: { case: "computerUseToolCall", value: new ComputerUseToolCall({
+      args: {
+        toolCallId: "inner-call",
+        description: "inspect the menu",
+        bindUnmappedCharacters: true,
+        actions: [
+          new ComputerUseAction({ action: { case: "mouseMove", value: new MouseMoveAction({ coordinate: new Coordinate({ x: 1, y: 2 }) }) } }),
+          new ComputerUseAction({ action: { case: "click", value: click } }),
+          new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: MouseButton.LEFT }) } }),
+          new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: MouseButton.RIGHT }) } }),
+          new ComputerUseAction({ action: { case: "drag", value: new DragAction({ path: [new Coordinate({ x: 2, y: 3 }), new Coordinate({ x: 8, y: 9 })], button: MouseButton.LEFT, modifierKeys: "SHIFT" }) } }),
+          new ComputerUseAction({ action: { case: "scroll", value: new ScrollAction({ coordinate: new Coordinate({ x: 4, y: 6 }), direction: ScrollDirection.DOWN, amount: 12 }) } }),
+          new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: "hello" }) } }),
+          new ComputerUseAction({ action: { case: "key", value: new KeyAction({ key: "ENTER", holdDurationMs: 250 }) } }),
+          new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: 30 }) } }),
+          new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction() } }),
+          new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction() } }),
+          new ComputerUseAction(),
+        ],
+      },
+      result: new ComputerUseResult({ result: { case: "success", value: new ComputerUseSuccess({
+        actionCount: 11,
+        durationMs: 420,
+        screenshot: "image-data",
+        log: "completed",
+        screenshotPath: "/tmp/screen.png",
+        cursorPosition: new Coordinate({ x: 20, y: 21 }),
+      }) } }),
+    }) },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const projected = serde.deserialize(source.toBinary())
+  assert.equal(projected.kind, "tool-call")
+  if (projected.kind !== "tool-call" || !isSlateComputerUseToolCall(projected.tool)) {
+    assert.fail("expected a Slate computer-use operation")
+  }
+  assert.deepEqual(projected.tool.args?.actions.map(action => action.kind), [
+    "mouse-move", "click", "mouse-down", "mouse-up", "drag", "scroll",
+    "type", "key", "wait", "screenshot", "cursor-position", "missing",
+  ])
+  const clickAction = projected.tool.args?.actions[1]
+  assert.equal(clickAction?.kind, "click")
+  if (clickAction?.kind !== "click") assert.fail("expected a click action")
+  assert.deepEqual(clickAction.button, { kind: "unknown", code: 77 })
+
+  const storedBytes = serde.serialize(projected)
+  const storedText = new TextDecoder().decode(storedBytes)
+  const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation: string; payload: { kind: string } } }
+  }
+  assert.equal(envelope.version, 2)
+  assert.equal(envelope.step.tool.operation, "computer-use")
+  assert.equal(envelope.step.tool.payload.kind, "object")
+  assert.match(storedText, /"computer-use"/)
+  assert.match(storedText, /"mouse-move"/)
+
+  const restored = toPlainInteropConversationStep(serde.deserialize(storedBytes))
+  assert.deepEqual(restored.toJson(), source.toJson())
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "computerUseToolCall") {
+    assert.fail("expected the legacy boundary projection")
+  }
+  const restoredClick = restored.message.value.tool.value.args!.actions[1]!.action
+  if (restoredClick.case !== "click") assert.fail("expected the restored click action")
+  assert.deepEqual(
+    ClickAction.runtime.bin.listUnknownFields(restoredClick.value),
+    ClickAction.runtime.bin.listUnknownFields(click),
+  )
+})
+
+test("previous computer-use step data migrates to the Slate-owned operation on rewrite", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const previous = createSlateToolCallStep({ tool: {
+    case: "computerUseToolCall",
+    value: {
+      args: {
+        toolCallId: "legacy-call",
+        actions: [{ action: { case: "click", value: { button: MouseButton.LEFT, count: 1 } } }],
+      },
+      result: { result: { case: "success", value: { actionCount: 1, durationMs: 5 } } },
+    },
+  } })
+  const envelope = JSON.parse(
+    new TextDecoder().decode(serde.serialize(previous)).slice("SLATE-AGENT-STEP\n".length),
+  ) as { version: number; step: unknown }
+  envelope.version = 1
+  const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`))
+  assert.equal(migrated.kind, "tool-call")
+  if (migrated.kind !== "tool-call" || migrated.tool.kind !== "computer-use") {
+    assert.fail("expected a migrated Slate computer-use operation")
+  }
+  assert.equal(migrated.tool.args?.originalCallId, "legacy-call")
+  assert.deepEqual(migrated.tool.args?.actions[0], {
+    kind: "click",
+    button: "left",
+    count: 1,
+  })
+  const rewritten = new TextDecoder().decode(serde.serialize(migrated))
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.match(rewritten, /"operation":"computer-use"/)
+  assert.doesNotMatch(rewritten, /computerUseToolCall/)
 })
 
 test("the tool-call envelope preserves the oneof case and opaque payload", () => {
