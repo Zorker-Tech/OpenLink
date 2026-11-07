@@ -36,7 +36,7 @@ export default async function WorkspacePreviewPage({
     listProjects(supabase, workspace.id),
     supabase.schema('openlink').from('profiles').select('nickname').eq('user_id', user.id).maybeSingle(),
   ])
-  const projects = allProjects.filter((project) => project.kind === 'code').map((project) => ({
+  const projects = allProjects.filter((project) => project.kind === 'code' && project.status === 'active').map((project) => ({
     id: project.id,
     name: project.name,
     source_url: project.source_url,

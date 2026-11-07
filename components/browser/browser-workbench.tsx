@@ -5,7 +5,7 @@ import { NativePreviewSurface } from '@/components/browser/native-preview-surfac
 import { ThinkingOrb } from '@/components/thinking/src'
 import { useT } from '@/lib/i18n/client'
 import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, listBrowserPreviewTargets, type BrowserConnectionStatus, type BrowserPreviewTarget } from '@/lib/browser-runtime/client'
-import type { BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
+import type { BrowserAction, BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
@@ -27,6 +27,11 @@ export interface BrowserWorkbenchUiState {
   canInspect: boolean
   externalUrl?: string
   inspectMode: boolean
+  annotateMode: boolean
+  selectedElement?: ElementReference
+  selectedStyles?: Record<string, string>
+  previewLayers?: PreviewLayerItem[]
+  themeTokens?: Record<string, string>
   status: BrowserConnectionStatus
   surface: 'native-preview' | 'chromium-stream'
   /** Live development servers discovered in this chat's Project runtime. */
@@ -34,6 +39,20 @@ export interface BrowserWorkbenchUiState {
   activePreviewTargetId?: string
   previewTargetsLoading: boolean
   previewTargetsError?: string
+}
+
+export type PreviewInspectionMode = 'none' | 'edit' | 'annotate'
+
+export interface PreviewLayerItem {
+  element: ElementReference
+  depth: number
+  parentRef?: string
+}
+
+export interface BrowserPreviewAnnotationTarget {
+  element?: ElementReference
+  pagePath: string
+  bounds: { x: number; y: number; width: number; height: number }
 }
 
 export interface BrowserWorkbenchHandle {
@@ -46,6 +65,15 @@ export interface BrowserWorkbenchHandle {
   selectPreviewTarget: (targetId: string) => void
   refreshPreviewTargets: () => void
   toggleInspector: () => void
+  setInspectionMode: (mode: PreviewInspectionMode) => void
+  readElementStyles: (ref: string) => void
+  readLayers: (rootRef?: string) => void
+  readThemeTokens: () => void
+  activateElement: (ref: string) => void
+  setElementStyle: (ref: string, property: string, value: string) => void
+  resetElementStyle: (ref: string, property: string) => void
+  setThemeToken: (token: string, value: string) => void
+  resetThemeToken: (token: string) => void
 }
 
 interface BrowserWorkbenchProps {
@@ -60,10 +88,11 @@ interface BrowserWorkbenchProps {
   /** Keep a project Preview on its target error instead of switching to Realtime. */
   allowRealtimeFallback?: boolean
   onStateChange?: (state: BrowserWorkbenchUiState) => void
+  onAnnotationTarget?: (target: BrowserPreviewAnnotationTarget) => void
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, allowRealtimeFallback = true, onStateChange, viewportMode }, ref) {
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, allowRealtimeFallback = true, onStateChange, onAnnotationTarget, viewportMode }, ref) {
   const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
   const initialUrlRef = useRef(initialUrl ?? '')
@@ -74,14 +103,22 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const [status, setStatus] = useState<BrowserConnectionStatus>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState('')
-  const [inspectMode, setInspectMode] = useState(false)
+  const [inspectionMode, setInspectionMode] = useState<PreviewInspectionMode>('none')
   const [selectedElement, setSelectedElement] = useState<ElementReference | null>(null)
+  const [selectedStyles, setSelectedStyles] = useState<Record<string, string> | undefined>()
+  const [previewLayers, setPreviewLayers] = useState<PreviewLayerItem[] | undefined>()
+  const [themeTokens, setThemeTokens] = useState<Record<string, string> | undefined>()
   const [previewTargets, setPreviewTargets] = useState<BrowserPreviewTarget[]>([])
   const [activePreviewTargetId, setActivePreviewTargetId] = useState<string | undefined>(initialPreviewTargetId)
   const [previewTargetsLoading, setPreviewTargetsLoading] = useState(true)
   const [previewTargetsError, setPreviewTargetsError] = useState<string | undefined>()
   const requestVersion = useRef(0)
   const connectionRef = useRef<BrowserConnection | null>(null)
+  const previewActionKinds = useRef(new Map<string, BrowserAction['type']>())
+  const annotationTargetRef = useRef(onAnnotationTarget)
+  const inspectMode = inspectionMode === 'edit'
+
+  useEffect(() => { annotationTargetRef.current = onAnnotationTarget }, [onAnnotationTarget])
 
   const refreshPreviewTargets = useCallback(async () => {
     setPreviewTargetsLoading(true)
@@ -104,8 +141,12 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     const version = ++requestVersion.current
     setError(null)
     setStatus('connecting')
-    setInspectMode(false)
+    setInspectionMode('none')
     setSelectedElement(null)
+    setSelectedStyles(undefined)
+    setPreviewLayers(undefined)
+    setThemeTokens(undefined)
+    previewActionKinds.current.clear()
     const previous = connectionRef.current
     connectionRef.current = null
     previous?.close()
@@ -160,6 +201,39 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         if (envelope.event.type !== 'action.result') return
         const result: BrowserActionResult = envelope.event.result
         if (result.element) setSelectedElement(result.element)
+        const actionType = previewActionKinds.current.get(result.actionId)
+        if (actionType) previewActionKinds.current.delete(result.actionId)
+        if (result.snapshot && actionType) {
+          try {
+            const snapshot = JSON.parse(result.snapshot) as Record<string, unknown>
+            if ((actionType === 'preview.styles.read' || actionType === 'preview.style.set' || actionType === 'preview.style.reset')
+              && snapshot.styles && typeof snapshot.styles === 'object' && !Array.isArray(snapshot.styles)) {
+              setSelectedStyles(snapshot.styles as Record<string, string>)
+            }
+            if (actionType === 'preview.layers.read' && Array.isArray(snapshot.nodes)) {
+              setPreviewLayers(snapshot.nodes as PreviewLayerItem[])
+            }
+            if (actionType === 'preview.theme.read' || actionType === 'preview.theme.set' || actionType === 'preview.theme.reset') {
+              if (snapshot.tokens && typeof snapshot.tokens === 'object' && !Array.isArray(snapshot.tokens)) {
+                setThemeTokens(snapshot.tokens as Record<string, string>)
+              }
+            }
+            if (actionType === 'preview.annotation.select'
+              && typeof snapshot.pagePath === 'string'
+              && snapshot.bounds && typeof snapshot.bounds === 'object') {
+              const bounds = snapshot.bounds as Record<string, unknown>
+              if (['x', 'y', 'width', 'height'].every((key) => typeof bounds[key] === 'number' && Number.isFinite(bounds[key]))) {
+                annotationTargetRef.current?.({
+                  ...(result.element ? { element: result.element } : {}),
+                  pagePath: snapshot.pagePath,
+                  bounds: bounds as BrowserPreviewAnnotationTarget['bounds'],
+                })
+              }
+            }
+          } catch {
+            setError(t('预览工具返回了无法识别的数据'))
+          }
+        }
         if (!result.ok && result.error) setError(result.error.message)
       })
       next.connect()
@@ -224,6 +298,60 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [connection, viewportMode])
 
   const activePage = sessionState?.pages.find((page) => page.id === sessionState.activePageId)
+  const runPreviewAction = useCallback((action: BrowserAction) => {
+    if (!connection || surface !== 'native-preview' || !activePage) return
+    try {
+      const actionId = connection.sendAction(action)
+      previewActionKinds.current.set(actionId, action.type)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : String(actionError))
+    }
+  }, [activePage, connection, surface])
+  const handleElementSelected = useCallback((element: ElementReference | null) => {
+    setSelectedElement(element)
+    if (!element || !activePage) {
+      setSelectedStyles(undefined)
+      return
+    }
+    runPreviewAction({ type: 'preview.styles.read', pageId: activePage.id, ref: element.ref })
+    runPreviewAction({ type: 'preview.layers.read', pageId: activePage.id, rootRef: element.ref })
+  }, [activePage, runPreviewAction])
+  const setInspectionModeForPreview = useCallback((mode: PreviewInspectionMode) => {
+    setInspectionMode(mode)
+    if (mode !== 'edit') setSelectedElement(null)
+    if (mode !== 'edit') setSelectedStyles(undefined)
+  }, [])
+  const readElementStyles = useCallback((elementRef: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.styles.read', pageId: activePage.id, ref: elementRef })
+  }, [activePage, runPreviewAction])
+  const readLayers = useCallback((rootRef?: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.layers.read', pageId: activePage.id, ...(rootRef ? { rootRef } : {}) })
+  }, [activePage, runPreviewAction])
+  const readThemeTokens = useCallback(() => {
+    if (activePage) runPreviewAction({ type: 'preview.theme.read', pageId: activePage.id })
+  }, [activePage, runPreviewAction])
+  const activateElement = useCallback((elementRef: string) => {
+    if (!activePage) return
+    setInspectionMode('edit')
+    runPreviewAction({ type: 'preview.element.activate', pageId: activePage.id, ref: elementRef })
+    runPreviewAction({ type: 'preview.styles.read', pageId: activePage.id, ref: elementRef })
+    runPreviewAction({ type: 'preview.layers.read', pageId: activePage.id, rootRef: elementRef })
+  }, [activePage, runPreviewAction])
+  const setElementStyle = useCallback((elementRef: string, property: string, value: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.style.set', pageId: activePage.id, ref: elementRef, property, value })
+  }, [activePage, runPreviewAction])
+  const resetElementStyle = useCallback((elementRef: string, property: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.style.reset', pageId: activePage.id, ref: elementRef, property })
+  }, [activePage, runPreviewAction])
+  const setThemeToken = useCallback((token: string, value: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.theme.set', pageId: activePage.id, token, value })
+  }, [activePage, runPreviewAction])
+  const resetThemeToken = useCallback((token: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.theme.reset', pageId: activePage.id, token })
+  }, [activePage, runPreviewAction])
+  const selectAnnotationTarget = useCallback((selection: { x: number; y: number; width?: number; height?: number }) => {
+    if (activePage) runPreviewAction({ type: 'preview.annotation.select', pageId: activePage.id, ...selection })
+  }, [activePage, runPreviewAction])
   useEffect(() => {
     if (!inspectMode) setSelectedElement(null)
   }, [inspectMode])
@@ -283,8 +411,17 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     setSurface: setNextSurface,
     selectPreviewTarget,
     refreshPreviewTargets: () => { void refreshPreviewTargets() },
-    toggleInspector: () => setInspectMode((value) => !value),
-  }), [navigate, openExternal, refreshPreviewTargets, selectPreviewTarget, sendPageAction, setNextSurface])
+    toggleInspector: () => setInspectionMode((value) => value === 'edit' ? 'none' : 'edit'),
+    setInspectionMode: setInspectionModeForPreview,
+    readElementStyles,
+    readLayers,
+    readThemeTokens,
+    activateElement,
+    setElementStyle,
+    resetElementStyle,
+    setThemeToken,
+    resetThemeToken,
+  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementStyle, resetThemeToken, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
 
   useEffect(() => {
     onStateChange?.({
@@ -295,6 +432,11 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       canInspect: Boolean(connection),
       externalUrl,
       inspectMode,
+      annotateMode: inspectionMode === 'annotate',
+      ...(selectedElement ? { selectedElement } : {}),
+      ...(selectedStyles ? { selectedStyles } : {}),
+      ...(previewLayers ? { previewLayers } : {}),
+      ...(themeTokens ? { themeTokens } : {}),
       status,
       surface,
       previewTargets,
@@ -302,13 +444,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       previewTargetsLoading,
       ...(previewTargetsError ? { previewTargetsError } : {}),
     })
-  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, onStateChange, previewTargets, previewTargetsError, previewTargetsLoading, status, surface])
+  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, inspectionMode, onStateChange, previewLayers, previewTargets, previewTargetsError, previewTargetsLoading, selectedElement, selectedStyles, status, surface, themeTokens])
 
   return (
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
-          <NativePreviewSurface connection={connection} inspectMode={inspectMode} onElementSelected={setSelectedElement} />
+          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementSelected={handleElementSelected} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
           <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />

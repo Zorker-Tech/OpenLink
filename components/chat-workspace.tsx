@@ -1481,6 +1481,7 @@ export function ChatWorkspace({
     canGoForward: false,
     canInspect: false,
     inspectMode: false,
+    annotateMode: false,
     status: 'connecting',
     surface: 'native-preview',
     previewTargets: [],

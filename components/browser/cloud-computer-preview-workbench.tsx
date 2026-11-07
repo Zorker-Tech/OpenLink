@@ -90,6 +90,7 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     canGoForward: false,
     canInspect: false,
     inspectMode: false,
+    annotateMode: false,
     status: 'connecting',
     surface: 'native-preview',
     previewTargets: [],
@@ -144,6 +145,7 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
       canGoForward: false,
       canInspect: false,
       inspectMode: false,
+      annotateMode: false,
       surface: 'native-preview',
     }))
   }, [requestTunnel, updateService])
@@ -180,6 +182,7 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
           canGoForward: false,
           canInspect: false,
           inspectMode: false,
+          annotateMode: false,
         }))
         setError(errorCode)
         return
@@ -283,6 +286,15 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     },
     refreshPreviewTargets: () => { void discoverAndOpen(true) },
     toggleInspector: () => undefined,
+    setInspectionMode: () => undefined,
+    readElementStyles: () => undefined,
+    readLayers: () => undefined,
+    readThemeTokens: () => undefined,
+    activateElement: () => undefined,
+    setElementStyle: () => undefined,
+    resetElementStyle: () => undefined,
+    setThemeToken: () => undefined,
+    resetThemeToken: () => undefined,
   }), [discoverAndOpen, navigate, openExternal, openTunnel, reload, services])
 
   const displayedError = error === 'CLOUD_WEBSITE_NOT_RUNNING'
