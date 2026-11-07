@@ -271,11 +271,13 @@ export async function pingBox<Pipe>(
 function thrownByControlFrame(frame: {
   readonly error: string;
   readonly stackTrace?: string;
+  readonly errorCode?: string;
 }): Error {
-  const raised = new Error(frame.error);
+  const raised = new Error(frame.error) as Error & { errorCode?: string };
   if (frame.stackTrace != null && frame.stackTrace.length > 0) {
     raised.stack = frame.stackTrace;
   }
+  if (frame.errorCode !== undefined) raised.errorCode = frame.errorCode;
   return raised;
 }
 
