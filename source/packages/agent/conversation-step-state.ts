@@ -169,14 +169,14 @@ export type SlateComputerScrollDirection =
   | "right"
   | { readonly kind: "unknown"; readonly code: number }
 
-export type SlateComputerUseAction =
+export type SlateComputerUseAction<Text extends SlateToolCallText = SlateToolCallText> =
   | { readonly kind: "mouse-move"; readonly coordinate?: SlateComputerCoordinate }
   | {
       readonly kind: "click"
       readonly coordinate?: SlateComputerCoordinate
       readonly button: SlateComputerMouseButton
       readonly count: number
-      readonly modifierKeys?: SlateToolCallText
+      readonly modifierKeys?: Text
     }
   | { readonly kind: "mouse-down"; readonly button: SlateComputerMouseButton }
   | { readonly kind: "mouse-up"; readonly button: SlateComputerMouseButton }
@@ -184,48 +184,48 @@ export type SlateComputerUseAction =
       readonly kind: "drag"
       readonly path: readonly SlateComputerCoordinate[]
       readonly button: SlateComputerMouseButton
-      readonly modifierKeys?: SlateToolCallText
+      readonly modifierKeys?: Text
     }
   | {
       readonly kind: "scroll"
       readonly coordinate?: SlateComputerCoordinate
       readonly direction: SlateComputerScrollDirection
       readonly amount: number
-      readonly modifierKeys?: SlateToolCallText
+      readonly modifierKeys?: Text
     }
-  | { readonly kind: "type"; readonly text: SlateToolCallText }
-  | { readonly kind: "key"; readonly key: SlateToolCallText; readonly holdDurationMs?: number }
+  | { readonly kind: "type"; readonly text: Text }
+  | { readonly kind: "key"; readonly key: Text; readonly holdDurationMs?: number }
   | { readonly kind: "wait"; readonly durationMs: number }
   | { readonly kind: "screenshot" }
   | { readonly kind: "cursor-position" }
   | { readonly kind: "missing" }
   | { readonly kind: "unsupported"; readonly sourceCase: string; readonly payload?: unknown }
 
-export interface SlateComputerUseToolArguments {
+export interface SlateComputerUseToolArguments<Text extends SlateToolCallText = SlateToolCallText> {
   readonly originalCallId: string
-  readonly actions: readonly SlateComputerUseAction[]
-  readonly description?: SlateToolCallText
+  readonly actions: readonly SlateComputerUseAction<Text>[]
+  readonly description?: Text
   readonly bindUnmappedCharacters?: boolean
 }
 
-export type SlateComputerUseToolOutcome =
+export type SlateComputerUseToolOutcome<Text extends SlateToolCallText = SlateToolCallText> =
   | {
       readonly kind: "success"
       readonly actionCount: number
       readonly durationMs: number
-      readonly screenshot?: SlateToolCallText
-      readonly log?: SlateToolCallText
-      readonly screenshotPath?: SlateToolCallText
+      readonly screenshot?: Text
+      readonly log?: Text
+      readonly screenshotPath?: Text
       readonly cursorPosition?: SlateComputerCoordinate
     }
   | {
       readonly kind: "error"
-      readonly message: SlateToolCallText
+      readonly message: Text
       readonly actionCount: number
       readonly durationMs: number
-      readonly log?: SlateToolCallText
-      readonly screenshot?: SlateToolCallText
-      readonly screenshotPath?: SlateToolCallText
+      readonly log?: Text
+      readonly screenshot?: Text
+      readonly screenshotPath?: Text
     }
   | { readonly kind: "unknown" }
 
@@ -236,6 +236,16 @@ export interface SlateComputerUseToolCall {
   readonly case?: undefined
   readonly value?: undefined
 }
+
+/** Slate's request and outcome for one executor call, before it becomes a conversation step. */
+export interface SlateComputerUseExecutorRequest {
+  readonly toolCallId: string
+  readonly actions: readonly SlateComputerUseAction<string>[]
+  readonly description?: string
+  readonly bindUnmappedCharacters?: boolean
+}
+
+export type SlateComputerUseExecutorResult = SlateComputerUseToolOutcome<string>
 
 export type SlateToolCallValue =
   | SlateLegacyToolCallValue

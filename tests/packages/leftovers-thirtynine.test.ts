@@ -30,8 +30,8 @@ describe("the session as a production host assembles it", () => {
 describe("the tool an agent drives a computer with", () => {
   it("names the actions, the buttons and the directions it accepts, and bounds a follow-up", () => {
     assert.equal(COMPUTER_ACTIONS.length, 8);
-    assert.deepEqual(MOUSE_BUTTONS, { left: "LEFT", right: "RIGHT", middle: "MIDDLE" });
-    assert.deepEqual(SCROLL_DIRECTIONS, { up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT" });
+    assert.deepEqual(MOUSE_BUTTONS, { left: "left", right: "right", middle: "middle" });
+    assert.deepEqual(SCROLL_DIRECTIONS, { up: "up", down: "down", left: "left", right: "right" });
     assert.equal(SLATE_COMPUTER_MAX_FOLLOW_UP_ACTIONS, 9);
     assert.equal(SLATE_COMPUTER_MAX_WAIT_MS, 30_000);
   });

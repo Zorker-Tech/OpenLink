@@ -28,7 +28,13 @@ import {
   TypeAction,
   WaitAction,
 } from "../../interop/proto/generated/agent/v1/computer_use_tool_pb.ts"
-import type { ComputerProtocolAction, ComputerToolDependencies, ComputerUseResult } from "../../../host/runner/tools/slate-computer-tool.ts"
+import type { SlateComputerUseResult } from "../../../host/runner/tools/slate-computer-tool.ts"
+import type {
+  SlateComputerMouseButton,
+  SlateComputerScrollDirection,
+  SlateComputerUseAction,
+  SlateComputerUseExecutorRequest,
+} from "../../../packages/agent/conversation-step-state.ts"
 
 /** Binds generated computer-use request/result messages to the executor registry. */
 export const computerUseExecutorResource = createResource<
@@ -50,203 +56,196 @@ export const computerUseExecutorResource = createResource<
   ),
 )
 
-/** One action's payload read as a record, or the refusal for something that is not one. */
-type ActionPayload = Readonly<Record<string, unknown>>;
-
-function payloadRecord(payload: unknown, wireCase: string): ActionPayload {
-  if (typeof payload !== "object" || payload == null || Array.isArray(payload)) {
-    throw new TypeError(`computer action ${wireCase} has no value`);
+function coordinateToGenerated(value: { readonly x: number; readonly y: number }): Coordinate {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("computer action coordinate has no value");
   }
-  return payload as ActionPayload;
-}
-
-function finiteField(payload: unknown, field: string): number {
-  if (typeof payload !== "number" || !Number.isFinite(payload)) {
-    throw new TypeError(`computer action field ${field} is not numeric`);
-  }
-  return payload;
-}
-
-function stringField(payload: unknown, field: string): string {
-  if (typeof payload !== "string") {
-    throw new TypeError(`computer action field ${field} is not textual`);
-  }
-  return payload;
-}
-
-/** A coordinate when the payload names one, and nothing when it does not. */
-function coordinateFrom(payload: unknown): Coordinate | undefined {
-  if (payload == null) return undefined;
-  const record = payloadRecord(payload, "coordinate");
   return new Coordinate({
-    x: finiteField(record.x, "coordinate.x"),
-    y: finiteField(record.y, "coordinate.y"),
+    x: int32Number(value.x, "coordinate.x"),
+    y: int32Number(value.y, "coordinate.y"),
   });
 }
 
-/** A mouse button name as the generated enum, or the refusal for a name it does not know. */
-function buttonFromName(payload: unknown): MouseButton {
-  if (typeof payload !== "string") {
+function finiteNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new TypeError(`computer action field ${field} is not numeric`);
+  }
+  return value;
+}
+
+function int32Number(value: unknown, field: string): number {
+  const number = finiteNumber(value, field);
+  if (!Number.isInteger(number) || number < -2_147_483_648 || number > 2_147_483_647) {
+    throw new TypeError(`computer action field ${field} is not a 32-bit integer`);
+  }
+  return number;
+}
+
+function stringValue(value: unknown, field: string): string {
+  if (typeof value !== "string") throw new TypeError(`computer action field ${field} is not textual`);
+  return value;
+}
+
+function optionalModifiers(value: unknown): { modifierKeys?: string } {
+  return value === undefined ? {} : { modifierKeys: stringValue(value, "modifierKeys") };
+}
+
+function mouseButtonToGenerated(value: SlateComputerMouseButton): MouseButton {
+  if (typeof value !== "string") {
+    if (value?.kind === "unknown" && Number.isInteger(value.code) &&
+        value.code >= -2_147_483_648 && value.code <= 2_147_483_647) return value.code as MouseButton;
     throw new TypeError("computer action button is not textual");
   }
-  const buttons: Readonly<Record<string, MouseButton>> = {
-    LEFT: MouseButton.LEFT,
-    RIGHT: MouseButton.RIGHT,
-    MIDDLE: MouseButton.MIDDLE,
-    BACK: MouseButton.BACK,
-    FORWARD: MouseButton.FORWARD,
-  };
-  const result = buttons[payload];
-  if (result === undefined) throw new TypeError(`unknown computer action button: ${payload}`);
-  return result;
+  switch (value) {
+    case "unspecified": return MouseButton.UNSPECIFIED;
+    case "left": return MouseButton.LEFT;
+    case "right": return MouseButton.RIGHT;
+    case "middle": return MouseButton.MIDDLE;
+    case "back": return MouseButton.BACK;
+    case "forward": return MouseButton.FORWARD;
+    default: throw new TypeError(`unknown computer action button: ${value}`);
+  }
 }
 
-/** A scroll direction name as the generated enum, or the refusal for a name it does not know. */
-function directionFromName(payload: unknown): ScrollDirection {
-  if (typeof payload !== "string") {
+function scrollDirectionToGenerated(value: SlateComputerScrollDirection): ScrollDirection {
+  if (typeof value !== "string") {
+    if (value?.kind === "unknown" && Number.isInteger(value.code) &&
+        value.code >= -2_147_483_648 && value.code <= 2_147_483_647) return value.code as ScrollDirection;
     throw new TypeError("computer action direction is not textual");
   }
-  const directions: Readonly<Record<string, ScrollDirection>> = {
-    UP: ScrollDirection.UP,
-    DOWN: ScrollDirection.DOWN,
-    LEFT: ScrollDirection.LEFT,
-    RIGHT: ScrollDirection.RIGHT,
-  };
-  const result = directions[payload];
-  if (result === undefined) throw new TypeError(`unknown computer action direction: ${payload}`);
-  return result;
+  switch (value) {
+    case "unspecified": return ScrollDirection.UNSPECIFIED;
+    case "up": return ScrollDirection.UP;
+    case "down": return ScrollDirection.DOWN;
+    case "left": return ScrollDirection.LEFT;
+    case "right": return ScrollDirection.RIGHT;
+    default: throw new TypeError(`unknown computer action direction: ${value}`);
+  }
 }
 
-/** The modifier keys a click, a drag or a scroll was given, when the payload carries them. */
-function carriedModifiers(payload: ActionPayload): { modifierKeys?: string } {
-  return payload.modifierKeys == null ? {} : { modifierKeys: stringField(payload.modifierKeys, "modifierKeys") };
-}
-
-/** One builder per action case: what the payload is read as before the generated action is created. */
-type ActionBuilder = (payload: ActionPayload) => ComputerUseAction;
-
-/** The builders for every action the protocol can name, in the case spellings the wire uses. */
-const ACTION_READERS: ReadonlyMap<string, ActionBuilder> = new Map<string, ActionBuilder>([
-  ["mouseMove", payload => {
-    const coordinate = coordinateFrom(payload.coordinate);
-    return new ComputerUseAction({
-      action: {
+/** Encodes a Slate action only where the installed executor still requires its generated request. */
+function generatedActionFromSlate(action: SlateComputerUseAction<string>): ComputerUseAction {
+  if (action === null || typeof action !== "object" || Array.isArray(action)) {
+    throw new TypeError("computer action must be an object");
+  }
+  switch (action.kind) {
+    case "mouse-move":
+      return new ComputerUseAction({ action: {
         case: "mouseMove",
-        value: new MouseMoveAction({
-          ...(coordinate === undefined ? {} : { coordinate }),
-        }),
-      },
-    });
-  }],
-  ["click", payload => {
-    const coordinate = coordinateFrom(payload.coordinate);
-    return new ComputerUseAction({
-      action: {
+        value: new MouseMoveAction({ ...(action.coordinate === undefined ? {} : { coordinate: coordinateToGenerated(action.coordinate) }) }),
+      } });
+    case "click":
+      return new ComputerUseAction({ action: {
         case: "click",
         value: new ClickAction({
-          ...(coordinate === undefined ? {} : { coordinate }),
-          button: buttonFromName(payload.button),
-          count: finiteField(payload.count, "count"),
-          ...carriedModifiers(payload),
+          ...(action.coordinate === undefined ? {} : { coordinate: coordinateToGenerated(action.coordinate) }),
+          button: mouseButtonToGenerated(action.button),
+          count: int32Number(action.count, "count"),
+          ...optionalModifiers(action.modifierKeys),
         }),
-      },
-    });
-  }],
-  ["mouseDown", payload => new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: buttonFromName(payload.button) }) } })],
-  ["mouseUp", payload => new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: buttonFromName(payload.button) }) } })],
-  ["drag", payload => {
-    if (!Array.isArray(payload.path)) throw new TypeError("computer action drag path is not an array");
-    const path = payload.path.map(point => {
-      const coordinate = coordinateFrom(point);
-      if (coordinate === undefined) throw new TypeError("computer action drag path contains no coordinate");
-      return coordinate;
-    });
-    return new ComputerUseAction({
-      action: {
+      } });
+    case "mouse-down":
+      return new ComputerUseAction({ action: { case: "mouseDown", value: new MouseDownAction({ button: mouseButtonToGenerated(action.button) }) } });
+    case "mouse-up":
+      return new ComputerUseAction({ action: { case: "mouseUp", value: new MouseUpAction({ button: mouseButtonToGenerated(action.button) }) } });
+    case "drag":
+      if (!Array.isArray(action.path)) throw new TypeError("computer action drag path is not an array");
+      return new ComputerUseAction({ action: {
         case: "drag",
         value: new DragAction({
-          path,
-          button: buttonFromName(payload.button),
-          ...carriedModifiers(payload),
+          path: action.path.map(coordinateToGenerated),
+          button: mouseButtonToGenerated(action.button),
+          ...optionalModifiers(action.modifierKeys),
         }),
-      },
-    });
-  }],
-  ["scroll", payload => {
-    const coordinate = coordinateFrom(payload.coordinate);
-    return new ComputerUseAction({
-      action: {
+      } });
+    case "scroll":
+      return new ComputerUseAction({ action: {
         case: "scroll",
         value: new ScrollAction({
-          ...(coordinate === undefined ? {} : { coordinate }),
-          direction: directionFromName(payload.direction),
-          amount: finiteField(payload.amount, "amount"),
-          ...carriedModifiers(payload),
+          ...(action.coordinate === undefined ? {} : { coordinate: coordinateToGenerated(action.coordinate) }),
+          direction: scrollDirectionToGenerated(action.direction),
+          amount: int32Number(action.amount, "amount"),
+          ...optionalModifiers(action.modifierKeys),
         }),
-      },
-    });
-  }],
-  ["type", payload => new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: stringField(payload.text, "text") }) } })],
-  ["key", payload => new ComputerUseAction({
-    action: {
-      case: "key",
-      value: new KeyAction({
-        key: stringField(payload.key, "key"),
-        ...(payload.holdDurationMs == null ? {} : { holdDurationMs: finiteField(payload.holdDurationMs, "holdDurationMs") }),
-      }),
-    },
-  })],
-  ["wait", payload => new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: finiteField(payload.durationMs, "durationMs") }) } })],
-  ["screenshot", () => new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction({}) } })],
-  ["cursorPosition", () => new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction({}) } })],
-]);
-
-/** One protocol action as the generated computer-use action, refusing what it cannot read. */
-function toGeneratedAction(action: ComputerProtocolAction): ComputerUseAction {
-  const wireCase = action.action.case;
-  if (wireCase === undefined) throw new TypeError("computer action has no case");
-  const payload = payloadRecord(action.action.value, wireCase);
-  const build = ACTION_READERS.get(wireCase);
-  if (build === undefined) throw new TypeError(`unsupported computer action: ${wireCase}`);
-  return build(payload);
+      } });
+    case "type":
+      return new ComputerUseAction({ action: { case: "type", value: new TypeAction({ text: stringValue(action.text, "text") }) } });
+    case "key":
+      return new ComputerUseAction({ action: {
+        case: "key",
+        value: new KeyAction({
+          key: stringValue(action.key, "key"),
+          ...(action.holdDurationMs === undefined ? {} : { holdDurationMs: int32Number(action.holdDurationMs, "holdDurationMs") }),
+        }),
+      } });
+    case "wait":
+      return new ComputerUseAction({ action: { case: "wait", value: new WaitAction({ durationMs: int32Number(action.durationMs, "durationMs") }) } });
+    case "screenshot":
+      return new ComputerUseAction({ action: { case: "screenshot", value: new ScreenshotAction({}) } });
+    case "cursor-position":
+      return new ComputerUseAction({ action: { case: "cursorPosition", value: new CursorPositionAction({}) } });
+    case "missing":
+      return new ComputerUseAction();
+    case "unsupported":
+      throw new TypeError(`unsupported Slate computer action: ${action.sourceCase}`);
+    default: {
+      const unsupportedKind = (action as { readonly kind?: unknown })?.kind;
+      throw new TypeError(`unsupported Slate computer action: ${String(unsupportedKind)}`);
+    }
+  }
 }
 
-export function toGeneratedComputerUseArgs(toolArgs: {
-  readonly toolCallId: string;
-  readonly actions: readonly ComputerProtocolAction[];
-  readonly bindUnmappedCharacters?: boolean;
-  readonly description?: string;
-}): ComputerUseArgs {
+export function toGeneratedComputerUseArgs(toolArgs: SlateComputerUseExecutorRequest): ComputerUseArgs {
+  if (toolArgs === null || typeof toolArgs !== "object" || Array.isArray(toolArgs)) {
+    throw new TypeError("Slate computer-use request must be an object");
+  }
+  if (typeof toolArgs.toolCallId !== "string") throw new TypeError("Slate computer-use toolCallId must be text");
+  if (!Array.isArray(toolArgs.actions)) throw new TypeError("Slate computer-use actions must be an array");
+  if (toolArgs.bindUnmappedCharacters !== undefined && typeof toolArgs.bindUnmappedCharacters !== "boolean") {
+    throw new TypeError("Slate computer-use bindUnmappedCharacters must be boolean");
+  }
+  if (toolArgs.description !== undefined && typeof toolArgs.description !== "string") {
+    throw new TypeError("Slate computer-use description must be text");
+  }
   return new ComputerUseArgs({
     toolCallId: toolArgs.toolCallId,
-    actions: toolArgs.actions.map(toGeneratedAction),
+    actions: toolArgs.actions.map(generatedActionFromSlate),
     ...(toolArgs.bindUnmappedCharacters === undefined ? {} : { bindUnmappedCharacters: toolArgs.bindUnmappedCharacters }),
     ...(toolArgs.description === undefined ? {} : { description: toolArgs.description }),
   });
 }
 
-/** A successful generated result read as the host's success shape. */
-function readGeneratedSuccess(payload: { readonly screenshot?: string | undefined; readonly cursorPosition?: { readonly x: number; readonly y: number } | undefined }): ComputerUseResult {
-  return {
-    result: {
-      case: "success",
-      value: {
-        ...(payload.screenshot === undefined ? {} : { screenshot: payload.screenshot }),
-        ...(payload.cursorPosition === undefined ? {} : { cursorPosition: { x: payload.cursorPosition.x, y: payload.cursorPosition.y } }),
-      },
-    },
-  };
-}
-
-/** A generated result read as the host's shape: its success or error, or an empty result it did not name. */
-function readGeneratedResult(result: GeneratedComputerUseResult): ComputerUseResult {
-  if (result.result.case === "success") return readGeneratedSuccess(result.result.value);
-  if (result.result.case === "error") return { result: { case: "error", value: { error: result.result.value.error } } };
-  return { result: { case: "" } };
+/** Reads the generated executor result into Slate's action outcome without dropping diagnostics. */
+function readGeneratedResult(result: GeneratedComputerUseResult): SlateComputerUseResult {
+  if (result?.result?.case === "success" && result.result.value != null) {
+    const value = result.result.value;
+    return {
+      kind: "success",
+      actionCount: value.actionCount,
+      durationMs: value.durationMs,
+      ...(value.screenshot === undefined ? {} : { screenshot: value.screenshot }),
+      ...(value.log === undefined ? {} : { log: value.log }),
+      ...(value.screenshotPath === undefined ? {} : { screenshotPath: value.screenshotPath }),
+      ...(value.cursorPosition === undefined ? {} : { cursorPosition: { x: value.cursorPosition.x, y: value.cursorPosition.y } }),
+    };
+  }
+  if (result?.result?.case === "error" && result.result.value != null) {
+    const value = result.result.value;
+    return {
+      kind: "error",
+      message: value.error,
+      actionCount: value.actionCount,
+      durationMs: value.durationMs,
+      ...(value.log === undefined ? {} : { log: value.log }),
+      ...(value.screenshot === undefined ? {} : { screenshot: value.screenshot }),
+      ...(value.screenshotPath === undefined ? {} : { screenshotPath: value.screenshotPath }),
+    };
+  }
+  return { kind: "unknown" };
 }
 
 export interface ComputerUseExecutorPort {
-  execute(context: unknown, args: Parameters<ComputerToolDependencies["execute"]>[1]): Promise<ComputerUseResult>;
+  execute(context: unknown, args: SlateComputerUseExecutorRequest): Promise<SlateComputerUseResult>;
 }
 
 /** Reads the generated executor resource through Slate's computer-use request and result shapes. */
@@ -274,14 +273,9 @@ export async function captureComputerUseScreenshot(
   const accessor = connection.remoteAccessor as ResourceAccessor<RemoteExecManager> | undefined
   if (accessor == null) return null
 
-  const executor = accessor.get(computerUseExecutorResource) as Executor<ComputerUseArgs, GeneratedComputerUseResult>
-  const response = await executor.execute(context, new ComputerUseArgs({
-    actions: [
-      new ComputerUseAction({
-        action: { case: "screenshot", value: new ScreenshotAction({}) },
-      }),
-    ],
-  }))
-  if (response.result.case !== "success") return null
-  return response.result.value.screenshot ?? null
+  const response = await computerUseExecutorFromResource(accessor).execute(context, {
+    toolCallId: "",
+    actions: [{ kind: "screenshot" }],
+  })
+  return response.kind === "success" ? response.screenshot ?? null : null
 }
