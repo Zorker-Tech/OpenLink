@@ -195,8 +195,6 @@ const EXEMPT = [
   ["adapters/interop/agent/testing-prompt-profile-adapter.ts", "interop adapter: maps external model and tool catalog fields to the Slate testing prompt profile"],
   ["adapters/interop/agent/user-message-action-input-adapter.ts", "interop adapter: decodes redacted counterpart messages and derives host action policy from counterpart modes and model markers"],
   ["adapters/interop/agent/execute-plan-action-adapter.ts", "interop adapter: decodes counterpart plan actions and maps Slate plan decisions to generated agent, todo and executor messages"],
-  ["adapters/interop/agent/computer-use-executor-adapter.ts", "interop adapter: constructs counterpart computer-use requests and projects its screenshot result to the Slate handoff port"],
-  ["adapters/interop/agent/remote-box-resource-adapter.ts", "interop adapter: extracts the counterpart command and computer-action fields used by Slate resource policy"],
   ["adapters/interop/agent/video-attachment-adapter.ts", "interop adapter: maps stored video messages and workspace writes to Slate video attachment values"],
   ["adapters/interop/agent/watch-video-eligibility-adapter.ts", "interop adapter: maps the host background-source enum to Slate watch-video capability inputs"],
   ["adapters/interop/agent/background-task-completion-adapter.ts", "interop adapter: decodes stored task-completion messages and constructs the generated simulated user message"],
