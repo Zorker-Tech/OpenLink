@@ -12,9 +12,10 @@ in isolated migration metadata so rewriting a supported historical checkpoint do
 are never included in classifier context; the classifier receives only whether a screenshot was present.
 
 The current computer-use executor resource still crosses the older generated executor message layer. That is an
-internal protocol migration, not a product contract or an external compatibility exemption. Its completion must move
-the host and box-exec consumer together to a versioned Slate-owned request/result contract before the generated path
-can be removed. This conversation-operation slice does not claim that executor transport is migrated.
+internal protocol migration, not a product contract or a lasting external compatibility exemption. The overlap
+inventory still carries a historical exemption for this adapter; remove it with the protocol migration. Completion
+must move the host and box-exec consumer together to a versioned Slate-owned request/result contract before the
+generated path can be removed. This conversation-operation slice does not claim that executor transport is migrated.
 
 `slate-conversation-step-state.test.ts` pins all known action variants, unknown enum values, lossless projection of the
 historical message, Slate version-1 record migration, and the Slate-native version-2 operation. The classifier context
