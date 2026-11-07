@@ -528,9 +528,9 @@
     },
     "packages/agent-exec/background-shell.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "Generated shell-start and stdin message cases moved to the interop adapter; the package path is now a stable Slate-facing export.",
-      "evidence": "tests/packages/interop-background-shell-operation-adapter.test.ts pins separate remote and controlled request/result cases, cross-operation refusal, argument preservation, and distinct resources. Read-only accessor, remote-box resource, and generic executor suites pass; interop:check drops one direct schema consumer."
+      "overlap": 0.023,
+      "refreshReason": "The Slate spawn and stdin request/result contracts now own shell identity and lifecycle outcomes; generated transport mapping stays in the boundary adapter.",
+      "evidence": "tests/packages/interop-background-shell-operation-adapter.test.ts pins spawn and stdin shapes, every spawn result, unknown outcomes, remote/controlled case routing and separation. local-exec-production-executor, readonly-accessor and remote-box suites verify integration."
     },
     "host/cloud-agents/extension.ts": {
       "claim": "rewritten",

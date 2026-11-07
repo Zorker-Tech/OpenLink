@@ -18,7 +18,7 @@ import type {
   LocalExecExecutorOutput,
 } from "../host/local-exec/local-exec-provider.ts";
 import { backgroundShellExecutorResource } from "../packages/agent-exec/background-shell.ts";
-import { backgroundShellSpawnInputFromInterop, backgroundShellSpawnOutcomeToInterop } from "../adapters/interop/agent/background-shell-operation-adapter.ts";
+import { backgroundShellSpawnOutcomeFromLocal } from "../adapters/interop/agent/background-shell-operation-adapter.ts";
 import { SimpleControlledExecManager } from "../adapters/interop/agent/controlled-exec-manager-adapter.ts";
 import { createGeneratedProductionExecCodec } from "../adapters/interop/agent/production-exec-codec-adapter.ts";
 import { lsExecutorResource, type LsExecutorArgs } from "../packages/agent-exec/ls.ts";
@@ -27,6 +27,7 @@ import { RegistryResourceAccessor } from "../packages/agent-exec/resource-provid
 import { shellStreamExecutorResource } from "../packages/agent-exec/shell-stream-operation.ts";
 import { createContext, type Context } from "../packages/context/context.ts";
 import { LocalBackgroundShellExecutor } from "../packages/local-exec/background-shell.ts";
+import type { BackgroundShellSpawnInput } from "../packages/local-exec/background-shell-contracts.ts";
 import { LocalDirectoryTraversal } from "../packages/local-exec/directory-traversal.ts";
 import { LocalLsExecutor } from "../packages/local-exec/ls.ts";
 import { LocalReadExecutor } from "../packages/local-exec/read.ts";
@@ -285,6 +286,36 @@ async function settleShellOperation(guards: LocalExecGuards, root: string, value
   return { args: value, requestedDirectory, resolution };
 }
 
+interface SettledBackgroundShellOperation {
+  readonly args: BackgroundShellSpawnInput;
+  readonly requestedDirectory: string;
+  readonly resolution: ShellDirectoryResolution;
+}
+
+function assertBackgroundShellArguments(value: unknown): asserts value is BackgroundShellSpawnInput {
+  if (!isRecordObject(value) || typeof value.command !== "string") {
+    throw new TypeError("local-exec background shell arguments require a string command");
+  }
+  if (value.workingDirectory !== undefined && typeof value.workingDirectory !== "string") {
+    throw new TypeError("local-exec background shell workingDirectory must be a string");
+  }
+}
+
+async function settleBackgroundShellOperation(
+  guards: LocalExecGuards,
+  root: string,
+  value: unknown,
+): Promise<SettledBackgroundShellOperation> {
+  assertBackgroundShellArguments(value);
+  const requestedDirectory = value.workingDirectory ?? "";
+  const resolution = await guards.resolveShellWorkingDirectory({ root, requested: requestedDirectory });
+  return {
+    args: { ...value, workingDirectory: resolution.workingDirectory },
+    requestedDirectory,
+    resolution,
+  };
+}
+
 /** The refusal a read gets when the file behind the path is larger than the daemon will read. */
 function oversizedReadRefusal(path: string, sizeBytes: number | undefined, maxFileBytes: number): LocalReadOutcome | undefined {
   if (sizeBytes === undefined || sizeBytes <= maxFileBytes) return undefined;
@@ -346,9 +377,8 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
   });
   registry.register(backgroundShellExecutorResource, {
     execute: async (ctx: Context, argsValue: unknown) => {
-      const operation = await settleShellOperation(guards, root, argsValue);
-      const input = backgroundShellSpawnInputFromInterop(operation.args);
-      return backgroundShellSpawnOutcomeToInterop(await backgroundShellExecutor.execute(ctx, input));
+      const operation = await settleBackgroundShellOperation(guards, root, argsValue);
+      return backgroundShellSpawnOutcomeFromLocal(await backgroundShellExecutor.execute(ctx, operation.args));
     },
   });
   registry.register(readExecutorResource, {
