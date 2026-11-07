@@ -160,7 +160,17 @@ test("a box that is still preparing refuses resource access before connecting", 
 test("background and foreground shell calls preserve their distinct audit paths", async () => {
   const executors = new Map<unknown, ExecutorPort>();
   executors.set(backgroundShellExecutorResource, {
-    async execute(_context, args) { worlded.calls.push(["background", args]); return { result: { case: "success" } }; },
+    async execute(_context, args) {
+      worlded.calls.push(["background", args]);
+      const request = args as { readonly command?: unknown; readonly workingDirectory?: unknown };
+      return {
+        kind: "success",
+        shellId: 1,
+        command: typeof request.command === "string" ? request.command : "",
+        workingDirectory: typeof request.workingDirectory === "string" ? request.workingDirectory : "",
+        pid: 1,
+      };
+    },
   });
   executors.set(shellExecutorResource, {
     async execute(_context, args) { worlded.calls.push(["shell", args]); return { result: { case: "success" } }; },

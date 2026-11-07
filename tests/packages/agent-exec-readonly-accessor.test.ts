@@ -12,8 +12,8 @@ import { writeExecutorResource } from "../../source/packages/agent-exec/write-op
 import type { ResourceAccessor, RemoteResource } from "../../source/packages/agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts"
 import { createContext } from "../../source/packages/context/context.ts"
-import type { BackgroundShellSpawnResult } from "../../source/adapters/interop/proto/generated/agent/v1/background_shell_exec_pb.ts"
 import type { DeleteExecutorResult } from "../../source/packages/agent-exec/delete.ts"
+import type { BackgroundShellExecutorResult } from "../../source/packages/agent-exec/background-shell.ts"
 import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 import type { ShellResult, ShellStream } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
@@ -135,9 +135,10 @@ test("a streamed command is refused with the same answer", async () => {
 })
 
 test("a background command is refused with the same answer", async () => {
-  const result = await execute<BackgroundShellSpawnResult>(accessor(true).get(backgroundShellExecutorResource), { command: "npm run watch" })
-  assert.equal(result.result.case, "permissionDenied")
-  assert.match((result.result as { value: { error: string } }).value.error, READONLY_REASON)
+  const result = await execute<BackgroundShellExecutorResult>(accessor(true).get(backgroundShellExecutorResource), { command: "npm run watch" })
+  assert.equal(result.kind, "permission-denied")
+  if (result.kind !== "permission-denied") assert.fail("expected a background-shell refusal")
+  assert.match(result.message, READONLY_REASON)
 })
 
 test("a command with nothing to name is still refused", async () => {
