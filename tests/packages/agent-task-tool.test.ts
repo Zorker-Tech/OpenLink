@@ -1,7 +1,9 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { createTaskTool } from "../../source/packages/agent/tools/task.ts"
+import { createSlateTaskTool } from "../../source/packages/agent/tools/task.ts"
+import { createTaskAgentToolInterop } from "../../source/adapters/interop/agent/task-agent-tool-adapter.ts"
+import type { TaskSubagentModelConfig } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
@@ -23,8 +25,13 @@ type Tool = {
   ) => Promise<unknown>
 }
 
-function createTool(options: Record<string, unknown> = {}, parentModelInfo: Record<string, unknown> = { promptVersion: "latest" }) {
-  return createTaskTool(
+function createCoreTool(
+  options: Record<string, unknown> = {},
+  parentModelInfo: Record<string, unknown> = { promptVersion: "latest" },
+  configs: readonly TaskSubagentModelConfig[] = [],
+  subagentModels: unknown = { modelsBySlug: new Map() },
+) {
+  return createSlateTaskTool(
     {} as never,
     async () => ({ agentConfig: {}, promptSession: {}, summarizationHandler: {} }) as never,
     parentModelInfo as never,
@@ -38,9 +45,13 @@ function createTool(options: Record<string, unknown> = {}, parentModelInfo: Reco
       resolveSubagentId: () => undefined,
       getSubagentIdToResume: () => undefined,
     } as never,
-    [],
-    { subagentModels: { modelsBySlug: new Map() }, ...options } as never,
-  ) as unknown as Tool
+    configs as never,
+    { subagentModels, ...options } as never,
+  )
+}
+
+function createTool(options: Record<string, unknown> = {}, parentModelInfo: Record<string, unknown> = { promptVersion: "latest" }) {
+  return createTaskAgentToolInterop(createCoreTool(options, parentModelInfo)) as unknown as Tool
 }
 
 async function* argsStream(args: unknown) {
@@ -56,23 +67,7 @@ const subagentModelCatalog = createSubagentModels({ standard: { slug: "standard-
 
 /** A tool that offers the configured subagents, so its schema and its launch decisions are the real ones. */
 function createConfiguredTool(options: Record<string, unknown> = {}, parentModelInfo: Record<string, unknown> = { promptVersion: "latest" }) {
-  return createTaskTool(
-    {} as never,
-    async () => ({ agentConfig: {}, promptSession: {}, summarizationHandler: {} }) as never,
-    parentModelInfo as never,
-    {
-      turns: [],
-      getBlobStore: () => ({}),
-      getPrivacyMode: () => PrivacyMode.UNSPECIFIED,
-      persistSubagentState: () => {},
-      computeNewStructure: async () => ({}),
-      restoreSubagentState: () => undefined,
-      resolveSubagentId: () => undefined,
-      getSubagentIdToResume: () => undefined,
-    } as never,
-    subagentConfigs as never,
-    { subagentModels: subagentModelCatalog, ...options } as never,
-  ) as unknown as Tool & {
+  return createTaskAgentToolInterop(createCoreTool(options, parentModelInfo, subagentConfigs as never, subagentModelCatalog)) as unknown as Tool & {
     readonly toolIdentifier: string
     readonly parameters: unknown
     readonly render: (ctx: unknown, result: TaskResult, props?: unknown) => Promise<{ isError?: boolean; content?: readonly { text?: string }[] }>
@@ -80,6 +75,13 @@ function createConfiguredTool(options: Record<string, unknown> = {}, parentModel
     readonly prepareSubagent: (ctx: unknown, rawArgs: unknown, meta: { toolCallId: string }) => Promise<unknown>
   }
 }
+
+test("the task core consumes and renders its Slate result directly", async () => {
+  const core = createCoreTool()
+  const rendered = await core.render(createContext(), { kind: "error", message: "the subagent refused" })
+  assert.equal(rendered.isError, true)
+  assert.equal(rendered.content[0]?.text, "Error: the subagent refused")
+})
 
 test("the tool is named for the model family that reads it", () => {
   assert.equal(createTool().name, "Task")

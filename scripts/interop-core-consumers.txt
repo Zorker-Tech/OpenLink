@@ -94,6 +94,7 @@ source/host/runner/tools/send-message-tool.ts	../../../adapters/interop/agent/se
 source/host/runner/tools/slate-browser-tools.ts	../../../adapters/interop/browser/browser-driver-source-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/mcp-meta-tool-options-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/shell-auto-review-read-adapter.ts
+source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/task-agent-tool-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/web-fetch-tool-adapter.ts
 source/host/runner/tools/turn-toolset.ts	../../../adapters/interop/agent/web-search-tool-adapter.ts
 source/host/runner/turn-agent-composition.ts	../../adapters/interop/agent/local-shell-stream-executor-adapter.ts
