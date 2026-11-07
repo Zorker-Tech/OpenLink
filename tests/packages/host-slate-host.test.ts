@@ -476,7 +476,7 @@ describe("the process", () => {
       lock,
       async () => {},
       control as never,
-      { log: () => {} },
+      { log: () => {}, error: () => {} },
       5,
     );
     registration.shutdown("SIGTERM");

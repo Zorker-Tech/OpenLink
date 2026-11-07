@@ -1151,9 +1151,9 @@
     },
     "host/main.ts": {
       "claim": "rewritten",
-      "overlap": 0.7636363636363637,
-      "refreshReason": "The host gained a production composition root and direct executable bootstrap while retaining the injected lifecycle orchestration; overlap was measured after the launch path landed.",
-      "evidence": "The built-process smoke starts the actual host with an isolated data root, verifies the discovered gateway health response and process id, sends SIGTERM, and checks clean exit and discovery cleanup. The host-main, Slate-host, runner-composition and production-extension contracts pass 30/30; the full Work-host suite passes 9767/9767."
+      "overlap": 0.7224242424242424,
+      "refreshReason": "Startup failure now unwinds each initialized resource, and shutdown continues through independent cleanup failures with a bounded fatal telemetry flush.",
+      "evidence": "The host-main and Slate-host lifecycle suites pass 33/33. They cover lock release when host construction fails, disposal after partial startup, closing an opened gateway after discovery failure, attempting every cleanup step after individual failures, bounded startup and watchdog telemetry flushes, failed lock-release exit status, and handling a rejected box-ready report. Work-host typecheck and rewrite/interop gates pass: 1204 rewrite claims below 0.8, 0 floors, 40 removals, 0 direct proto consumers, and 308 core interop imports across 218 files."
     },
     "host/extensions/local-tool-permission/extension.ts": {
       "claim": "rewritten",

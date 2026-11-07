@@ -29,6 +29,7 @@ import { launchBoxExecDaemon, resolveBoxDaemonEntryFromHost, type HostOwnedBoxEx
 export const BOX_COPY_IN_ARG = "--box-copy-in";
 export const BOX_COPY_IN_EXIT_FAILED = 1;
 export const SHUTDOWN_WATCHDOG_MS = 5_000;
+const FATAL_TELEMETRY_FLUSH_GRACE_MS = 250;
 
 /** What the process is, from the outside: its arguments, its pid and the two ways it can end. */
 export type HostProcessControl = {
@@ -141,9 +142,14 @@ const TERMINALS_DIRECTORY_NAME = "box-terminals";
 /** The crash kinds the process reports, named once because a log reader searches for them. */
 const CRASH_KINDS = {
   fatalStartup: "fatal_startup",
+  hostStartupCleanup: "host_startup_cleanup",
+  gatewayStartupCleanup: "gateway_startup_cleanup",
+  discoveryStartupCleanup: "gateway_discovery_startup_cleanup",
+  startupLockRelease: "startup_lock_release",
   daemonStartupCleanup: "box_exec_daemon_startup_cleanup",
   shutdownWatchdog: "shutdown_watchdog",
   shutdownError: "shutdown_error",
+  telemetryFlushError: "telemetry_flush_error",
 } as const;
 
 /** Whether the deployment runs its own box-exec daemon, which this process must not start. */
@@ -303,18 +309,99 @@ function logGatewayListening(log: Pick<Console, "log">, scheme: string, config: 
   );
 }
 
-/** A startup that failed: report it, flush, clean up the daemon, release the lock, exit non-zero — in that order. */
-async function handleStartupFailure(
-  host: HostMainHost,
-  hostLock: HostLock,
-  processControl: HostProcessControl,
-  boxExecDaemon: HostOwnedBoxExecDaemon | undefined,
+type CrashReporter = Pick<HostMainHost, "reportProcessCrash"> | undefined;
+type FatalTelemetry = Pick<HostMainHost, "reportProcessCrash" | "flushTelemetryForFatalExit"> | undefined;
+
+/** Failure reporting is secondary: a broken telemetry reporter must not skip resource cleanup. */
+function reportProcessCrashSafely(
+  host: CrashReporter,
+  log: Pick<Console, "error">,
   error: unknown,
-): Promise<void> {
-  host.reportProcessCrash(error, CRASH_KINDS.fatalStartup);
-  await host.flushTelemetryForFatalExit();
-  await boxExecDaemon?.close().catch((closeError) => host.reportProcessCrash(closeError, CRASH_KINDS.daemonStartupCleanup));
-  hostLock.release();
+  kind: string,
+): void {
+  if (host === undefined) {
+    log.error(`${HOST_LOG_PREFIX} ${kind}:`, error);
+    return;
+  }
+  try {
+    host.reportProcessCrash(error, kind);
+  } catch (reportError) {
+    log.error(`${HOST_LOG_PREFIX} crash reporter failed while reporting ${kind}:`, reportError);
+    log.error(`${HOST_LOG_PREFIX} ${kind}:`, error);
+  }
+}
+
+/** A fatal flush is useful but bounded, so it cannot hold the process lock forever. */
+async function flushFatalTelemetry(host: FatalTelemetry, log: Pick<Console, "error">): Promise<void> {
+  if (host === undefined) return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timeout = setTimeout(resolve, FATAL_TELEMETRY_FLUSH_GRACE_MS);
+  });
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => host.flushTelemetryForFatalExit()).catch((error: unknown) => {
+        reportProcessCrashSafely(host, log, error, CRASH_KINDS.telemetryFlushError);
+      }),
+      deadline,
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+async function attemptCleanup(
+  operation: (() => Promise<unknown> | unknown) | undefined,
+  reportFailure: (error: unknown) => void,
+): Promise<boolean> {
+  if (operation === undefined) return true;
+  try {
+    await operation();
+    return true;
+  } catch (error) {
+    reportFailure(error);
+    return false;
+  }
+}
+
+/** A failed start unwinds every acquired resource, even when an earlier cleanup step also fails. */
+async function handleStartupFailure(input: {
+  readonly error: unknown;
+  readonly host?: HostMainHost;
+  readonly gateway?: StartedGateway;
+  readonly hostLock: HostLock;
+  readonly processControl: HostProcessControl;
+  readonly clearGatewayDiscovery?: () => Promise<void>;
+  readonly boxExecDaemon?: HostOwnedBoxExecDaemon;
+  readonly log: Pick<Console, "log" | "error">;
+}): Promise<void> {
+  const { error, host, gateway, hostLock, processControl, clearGatewayDiscovery, boxExecDaemon, log } = input;
+  reportProcessCrashSafely(host, log, error, CRASH_KINDS.fatalStartup);
+  await flushFatalTelemetry(host, log);
+
+  let cleanupFailed = false;
+  const cleanup = async (operation: (() => Promise<unknown> | unknown) | undefined, kind: string) => {
+    return attemptCleanup(operation, (cleanupError) => {
+      cleanupFailed = true;
+      reportProcessCrashSafely(host, log, cleanupError, kind);
+    });
+  };
+
+  await cleanup(gateway === undefined ? undefined : () => gateway.close(), CRASH_KINDS.gatewayStartupCleanup);
+  await cleanup(host === undefined ? undefined : () => host.dispose(), CRASH_KINDS.hostStartupCleanup);
+  await cleanup(boxExecDaemon === undefined ? undefined : () => boxExecDaemon.close(), CRASH_KINDS.daemonStartupCleanup);
+  await cleanup(
+    clearGatewayDiscovery,
+    CRASH_KINDS.discoveryStartupCleanup,
+  );
+  if (cleanupFailed) await flushFatalTelemetry(host, log);
+
+  try {
+    hostLock.release();
+  } catch (releaseError) {
+    reportProcessCrashSafely(host, log, releaseError, CRASH_KINDS.startupLockRelease);
+    await flushFatalTelemetry(host, log);
+  }
   processControl.exit(1);
 }
 
@@ -326,27 +413,41 @@ async function runHostProcess(
 ): Promise<void> {
   const crashGuards = deps.installProcessCrashGuards({ scope: "slate-host" });
   const lockResult = await deps.acquireHostLock();
-  reportLockOutcome(lockResult, deps.getSlateRootDir(), log);
-
   const hostLock = lockResult.lock;
+  let host: HostMainHost | undefined;
+  let gateway: StartedGateway | undefined;
   let boxExecDaemon: HostOwnedBoxExecDaemon | undefined;
-  const host = deps.createHost();
-  wireProcessReporters(host, crashGuards, deps);
+  let discoveryWriteAttempted = false;
 
   try {
+    reportLockOutcome(lockResult, deps.getSlateRootDir(), log);
+    host = deps.createHost();
+    wireProcessReporters(host, crashGuards, deps);
     boxExecDaemon = await deps.startBoxExecDaemon?.();
     await host.start();
     const gatewayConfig = deps.resolveGatewayServerConfig();
     const scheme = deps.gatewayScheme(gatewayConfig);
-    const gateway = await deps.startGatewayServer(gatewayStartOptions(host, gatewayConfig));
+    gateway = await deps.startGatewayServer(gatewayStartOptions(host, gatewayConfig));
 
+    discoveryWriteAttempted = true;
     await deps.writeGatewayDiscovery(gatewayDiscoveryRecord(gateway.port, processControl.pid, host.startedAt, scheme, gatewayConfig));
     logGatewayListening(log, scheme, gatewayConfig, gateway.port);
 
     installShutdownHandlers(host, gateway, hostLock, deps.clearGatewayDiscovery, processControl, log, SHUTDOWN_WATCHDOG_MS, boxExecDaemon);
-    void host.reportBoxReady();
+    void host.reportBoxReady().catch((error: unknown) => {
+      log.error(`${HOST_LOG_PREFIX} box-ready reporting failed:`, error);
+    });
   } catch (error) {
-    await handleStartupFailure(host, hostLock, processControl, boxExecDaemon, error);
+    await handleStartupFailure({
+      error,
+      ...(host === undefined ? {} : { host }),
+      ...(gateway === undefined ? {} : { gateway }),
+      hostLock,
+      processControl,
+      ...(discoveryWriteAttempted ? { clearGatewayDiscovery: deps.clearGatewayDiscovery } : {}),
+      ...(boxExecDaemon === undefined ? {} : { boxExecDaemon }),
+      log,
+    });
   }
 }
 
@@ -382,12 +483,17 @@ function armShutdownWatchdog(
   host: Pick<HostMainHost, "reportProcessCrash" | "flushTelemetryForFatalExit">,
   hostLock: HostLock,
   processControl: HostProcessControl,
+  log: Pick<Console, "error">,
   watchdogMs: number,
 ): ReturnType<typeof setTimeout> {
   const watchdog = setTimeout(() => {
-    host.reportProcessCrash(null, CRASH_KINDS.shutdownWatchdog);
-    void host.flushTelemetryForFatalExit().finally(() => {
-      hostLock.release();
+    reportProcessCrashSafely(host, log, null, CRASH_KINDS.shutdownWatchdog);
+    void flushFatalTelemetry(host, log).finally(() => {
+      try {
+        hostLock.release();
+      } catch (error) {
+        reportProcessCrashSafely(host, log, error, CRASH_KINDS.shutdownError);
+      }
       processControl.exit(1);
     });
   }, watchdogMs);
@@ -404,21 +510,31 @@ async function drainBeforeExit(session: {
   readonly processControl: HostProcessControl,
   readonly watchdog: ReturnType<typeof setTimeout>,
   readonly boxExecDaemon: HostOwnedBoxExecDaemon | undefined,
+  readonly log: Pick<Console, "log" | "error">,
 }): Promise<void> {
-  const { host, gateway, hostLock, clearGatewayDiscovery, processControl, watchdog, boxExecDaemon } = session;
+  const { host, gateway, hostLock, clearGatewayDiscovery, processControl, watchdog, boxExecDaemon, log } = session;
+  let cleanupFailed = false;
+  const cleanup = (operation: () => Promise<unknown> | unknown) => attemptCleanup(operation, (error) => {
+    cleanupFailed = true;
+    reportProcessCrashSafely(host, log, error, CRASH_KINDS.shutdownError);
+  });
+
+  await cleanup(() => gateway.close());
+  await cleanup(() => host.dispose());
+  await cleanup(() => boxExecDaemon?.close());
+  await cleanup(clearGatewayDiscovery);
+  if (cleanupFailed) await flushFatalTelemetry(host, log);
+
+  clearTimeout(watchdog);
+  let lockReleaseFailed = false;
   try {
-    await gateway.close();
-    await host.dispose();
-    await boxExecDaemon?.close();
-    await clearGatewayDiscovery();
-  } catch (error) {
-    host.reportProcessCrash(error, CRASH_KINDS.shutdownError);
-    await host.flushTelemetryForFatalExit();
-  } finally {
-    clearTimeout(watchdog);
     hostLock.release();
-    processControl.exit(0);
+  } catch (error) {
+    lockReleaseFailed = true;
+    reportProcessCrashSafely(host, log, error, CRASH_KINDS.shutdownError);
+    await flushFatalTelemetry(host, log);
   }
+  processControl.exit(lockReleaseFailed ? 1 : 0);
 }
 
 /**
@@ -434,7 +550,7 @@ export function installShutdownHandlers(
   hostLock: HostLock,
   clearGatewayDiscovery: () => Promise<void>,
   processControl: HostProcessControl = defaultProcessControl,
-  log: Pick<Console, "log"> = console,
+  log: Pick<Console, "log" | "error"> = console,
   watchdogMs = SHUTDOWN_WATCHDOG_MS,
   boxExecDaemon?: HostOwnedBoxExecDaemon,
 ): ShutdownRegistration {
@@ -444,8 +560,8 @@ export function installShutdownHandlers(
     if (isShuttingDown) return;
     isShuttingDown = true;
     log.log(`${HOST_LOG_PREFIX} received ${signal}, shutting down`);
-    const watchdog = armShutdownWatchdog(host, hostLock, processControl, watchdogMs);
-    void drainBeforeExit({ host, gateway, hostLock, clearGatewayDiscovery, processControl, watchdog, boxExecDaemon });
+    const watchdog = armShutdownWatchdog(host, hostLock, processControl, log, watchdogMs);
+    void drainBeforeExit({ host, gateway, hostLock, clearGatewayDiscovery, processControl, watchdog, boxExecDaemon, log });
   };
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) processControl.on(signal, () => shutdown(signal));
