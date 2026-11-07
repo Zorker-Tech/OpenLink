@@ -61,6 +61,10 @@ services:
     image: zokerbase/postgres:2026.08.10
   supavisor:
     container_name: zokerbase-pooler
+    # Supavisor's Erlang distribution uses its container hostname as the node
+    # host. Keep that host stable and resolvable on the Compose network instead
+    # of depending on Docker's generated container ID.
+    hostname: zokerbase-pooler
     image: zokerbase/supavisor:2026.08.10
 
 volumes:
