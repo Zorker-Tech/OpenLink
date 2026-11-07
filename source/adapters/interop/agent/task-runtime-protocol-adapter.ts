@@ -1,14 +1,8 @@
 import {
   CloudSubagentReference,
   ConversationAction,
-  NewCloudVmTarget,
-  SameMachineTarget,
-  SelfHostedPoolTarget,
-  SelfHostedWorkerLabel,
-  SelfHostedWorkerTarget,
   SubagentExecutionEnvironment,
   SubagentPersistedState,
-  TargetMachine,
   UserMessageAction,
 } from "../proto/generated/agent/v1/agent_pb.ts"
 import { CustomSubagentPermissionMode } from "../proto/generated/agent/v1/subagents_pb.ts"
@@ -25,6 +19,9 @@ import { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { toInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { createSlateConversationStepSerde } from "./agent-state-message-serdes-adapter.ts"
 import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
+import { targetMachineFromProtoInterop, targetMachineToProtoInterop } from "./task-operation-protocol-adapter.ts"
+
+export { targetMachineFromProtoInterop, targetMachineToProtoInterop } from "./task-operation-protocol-adapter.ts"
 
 export type ConversationTurnView =
   | { readonly kind: "agent"; readonly stepBlobIds: readonly Uint8Array[] }
@@ -108,59 +105,6 @@ export function taskEnvironmentFromProtoInterop(environment: unknown): TaskEnvir
       return "cloud"
     case SubagentExecutionEnvironment.LOCAL:
       return "local"
-    default:
-      return undefined
-  }
-}
-
-export function targetMachineToProtoInterop(placement: TaskTargetMachine): TargetMachine {
-  switch (placement.kind) {
-    case "same-device":
-      return new TargetMachine({ machine: { case: "sameMachine", value: new SameMachineTarget() } })
-    case "cloud-machine":
-      return new TargetMachine({
-        machine: {
-          case: "newCloudVm",
-          value: new NewCloudVmTarget({
-            ...(placement.environmentBuildId === undefined ? {} : { environmentBuildId: placement.environmentBuildId }),
-            ...(placement.baseBranch === undefined ? {} : { baseBranch: placement.baseBranch }),
-          }),
-        },
-      })
-    case "hosted-worker":
-      return new TargetMachine({ machine: { case: "selfHostedWorker", value: new SelfHostedWorkerTarget({ workerId: placement.workerId }) } })
-    case "worker-pool":
-      return new TargetMachine({
-        machine: {
-          case: "selfHostedPool",
-          value: new SelfHostedPoolTarget({
-            ...(placement.pool === undefined ? {} : { pool: placement.pool }),
-            labels: Object.entries(placement.labels ?? {}).map(([key, value]) => new SelfHostedWorkerLabel({ key, value })),
-          }),
-        },
-      })
-  }
-}
-
-export function targetMachineFromProtoInterop(value: unknown): TaskTargetMachine | undefined {
-  const wire = value as TargetMachine | undefined
-  switch (wire?.machine.case) {
-    case "sameMachine":
-      return { kind: "same-device" }
-    case "newCloudVm":
-      return {
-        kind: "cloud-machine",
-        ...(wire.machine.value.environmentBuildId === undefined ? {} : { environmentBuildId: wire.machine.value.environmentBuildId }),
-        ...(wire.machine.value.baseBranch === undefined ? {} : { baseBranch: wire.machine.value.baseBranch }),
-      }
-    case "selfHostedWorker":
-      return { kind: "hosted-worker", workerId: wire.machine.value.workerId }
-    case "selfHostedPool":
-      return {
-        kind: "worker-pool",
-        ...(wire.machine.value.pool === undefined ? {} : { pool: wire.machine.value.pool }),
-        ...(wire.machine.value.labels.length === 0 ? {} : { labels: Object.fromEntries(wire.machine.value.labels.map(({ key, value: labelValue }) => [key, labelValue])) }),
-      }
     default:
       return undefined
   }

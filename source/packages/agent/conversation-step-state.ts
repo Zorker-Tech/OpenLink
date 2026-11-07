@@ -8,6 +8,7 @@ import type {
 import type { SlateTodoStatus } from "./tools/core/todo/contracts.ts"
 import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import { isSlateShellToolCall, type SlateShellToolCall, type SlateShellToolCallText } from "./shell-tool-call-state.ts"
+import { isSlateTaskToolCall, type SlateTaskToolCall, type SlateTaskToolText } from "./task-tool-call-state.ts"
 
 export interface SlateConversationStepCompatibility {
   readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
@@ -250,6 +251,7 @@ export type SlateComputerUseExecutorResult = SlateComputerUseToolOutcome<string>
 
 export type SlateToolCallValue =
   | SlateLegacyToolCallValue
+  | SlateTaskToolCall<SlateTaskToolText>
   | SlateShellToolCall<SlateShellToolCallText>
   | SlateConversationSummaryToolCall
   | SlateAskQuestionToolCall
@@ -764,6 +766,7 @@ function isInt32Value(value: unknown): value is number {
 
 /** Product-facing metric labels remain stable when a call moves from the legacy envelope to a Slate kind. */
 export function slateToolCallMetricLabel(tool: SlateToolCallValue): string | undefined {
+  if (isSlateTaskToolCall(tool)) return "task"
   if (isSlateShellToolCall(tool)) return "shell"
   if (tool.kind === "send-message") return "sendMessage"
   if (tool.kind === "ask-question") return "askQuestion"

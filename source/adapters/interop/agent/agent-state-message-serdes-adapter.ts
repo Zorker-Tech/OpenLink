@@ -17,6 +17,11 @@ import {
   SubagentRunState,
   SubagentRunStatus,
   StepTiming,
+  TaskArgs,
+  TaskError,
+  TaskResult,
+  TaskSuccess,
+  TaskToolCall,
   TrackedGitRepo,
   ThinkingMessage,
   ToolCall,
@@ -132,6 +137,17 @@ import { DataClassification, PrivacyCapability, type DataClassification as DataC
 import { PrivacyMode as PrivacyModes, type PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { createRedactedBytes, createRedactedString } from "../../../packages/redaction/create.ts"
 import { isRedactedString, RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { slateSubagentTypeFromInterop, subagentTypeToInterop } from "./subagent-type-adapter.ts"
+import {
+  taskBackgroundReasonToInterop,
+  taskExecutionEnvironmentFromInterop,
+  taskExecutionEnvironmentToInterop,
+  taskModeFromInterop,
+  taskModeToInterop,
+  slateTaskBackgroundReasonFromInterop,
+  targetMachineFromProtoInterop,
+  targetMachineToProtoInterop,
+} from "./task-operation-protocol-adapter.ts"
 import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import {
@@ -288,6 +304,17 @@ import {
   shellResultToInterop,
 } from "./shell-operation-adapter.ts"
 import { isSlateShellToolCall, type SlateShellToolCall, type SlateShellToolCallText } from "../../../packages/agent/shell-tool-call-state.ts"
+import {
+  isSlateTaskToolCall,
+  type SlateTaskExecutionEnvironment,
+  type SlateTaskMode,
+  type SlateTaskPlacement,
+  type SlateTaskSubagentType,
+  type SlateTaskToolArguments,
+  type SlateTaskToolCall,
+  type SlateTaskToolOutcome,
+  type SlateTaskToolText,
+} from "../../../packages/agent/task-tool-call-state.ts"
 
 export type RedactedAgentConversationStateInterop = ReturnType<typeof toRedactedConversationStateStructure>
 export type AgentStateSelectedContextInterop = SelectedContext
@@ -2220,7 +2247,115 @@ function slateSummaryToolCallFromInterop(
   return undefined
 }
 
+function slateTaskSubagentTypeFromInterop(value: unknown): SlateTaskSubagentType<SlateTaskToolText> | undefined {
+  if (!isRecordValue(value)) return undefined
+  const projected = slateSubagentTypeFromInterop(value as never)
+  const selected = isRecordValue(value.type) ? value.type : undefined
+  if (selected?.case === "custom" && isRecordValue(selected.value)) {
+    const customName = slateToolCallTextFromInterop(selected.value.name)
+    if (customName === undefined) return undefined
+    return { ...projected, customName } as SlateTaskSubagentType<SlateTaskToolText>
+  }
+  return projected as SlateTaskSubagentType<SlateTaskToolText>
+}
+
+function taskMachineHasDuplicateLabels(value: unknown): boolean {
+  if (!isRecordValue(value) || !isRecordValue(value.machine) || value.machine.case !== "selfHostedPool") return false
+  if (!isRecordValue(value.machine.value) || !Array.isArray(value.machine.value.labels)) return true
+  const keys = new Set<string>()
+  for (const item of value.machine.value.labels) {
+    if (!isRecordValue(item) || typeof item.key !== "string" || keys.has(item.key)) return true
+    keys.add(item.key)
+  }
+  return false
+}
+
+function slateTaskToolArgumentsFromInterop(value: unknown): SlateTaskToolArguments<SlateTaskToolText> | undefined {
+  if (!isRecordValue(value) || !Array.isArray(value.attachments) ||
+      !value.attachments.every((entry: unknown) => slateToolCallTextFromInterop(entry) !== undefined) ||
+      !Array.isArray(value.respondingToMessageIds) || !value.respondingToMessageIds.every((entry: unknown) => typeof entry === "string")) return undefined
+  const description = slateToolCallTextFromInterop(value.description)
+  const prompt = slateToolCallTextFromInterop(value.prompt)
+  const subagentType = value.subagentType === undefined ? undefined : slateTaskSubagentTypeFromInterop(value.subagentType)
+  if (description === undefined || prompt === undefined || (value.subagentType !== undefined && subagentType === undefined)) return undefined
+  if ((value.model !== undefined && slateToolCallTextFromInterop(value.model) === undefined) ||
+      (value.resume !== undefined && slateToolCallTextFromInterop(value.resume) === undefined) ||
+      (value.agentId !== undefined && slateToolCallTextFromInterop(value.agentId) === undefined)) return undefined
+  if (value.machine !== undefined && taskMachineHasDuplicateLabels(value.machine)) return undefined
+  const machine = value.machine === undefined ? undefined : targetMachineFromProtoInterop(value.machine)
+  const mode = taskModeFromInterop(value.mode)
+  const environment = taskExecutionEnvironmentFromInterop(value.environment)
+  if (value.machine !== undefined && machine === undefined) return undefined
+  if (mode === undefined || environment === undefined) return undefined
+  return {
+    description,
+    prompt,
+    ...(subagentType === undefined ? {} : { subagentType }),
+    ...(value.model === undefined ? {} : { model: slateToolCallTextFromInterop(value.model)! as SlateTaskToolText }),
+    ...(value.resume === undefined ? {} : { resume: slateToolCallTextFromInterop(value.resume)! as SlateTaskToolText }),
+    ...(value.agentId === undefined ? {} : { agentId: slateToolCallTextFromInterop(value.agentId)! as SlateTaskToolText }),
+    attachments: value.attachments.map((entry: unknown) => slateToolCallTextFromInterop(entry)! as SlateTaskToolText),
+    mode,
+    respondingToMessageIds: [...value.respondingToMessageIds],
+    environment,
+    ...(machine === undefined ? {} : { machine: machine as SlateTaskPlacement<SlateTaskToolText> }),
+  }
+}
+
+function slateTaskToolOutcomeFromInterop(value: unknown): SlateTaskToolOutcome<SlateTaskToolText> | undefined {
+  if (!isRecordValue(value)) return undefined
+  const selected = isRecordValue(value.result) ? value.result : undefined
+  if (selected === undefined) return undefined
+  if (selected.case === "error") {
+    if (!isRecordValue(selected.value)) return undefined
+    const message = slateToolCallTextFromInterop(selected.value.error)
+    return message === undefined ? undefined : { kind: "error", message }
+  }
+  if (selected.case !== "success") return { kind: "unknown" }
+  if (!isRecordValue(selected.value)) return undefined
+  const fields = selected.value
+  const conversationSteps = fields.conversationSteps
+  if (!Array.isArray(conversationSteps)) return undefined
+  const backgroundReason = slateTaskBackgroundReasonFromInterop(fields.backgroundReason)
+  if (backgroundReason === undefined) return undefined
+  if ((fields.agentId !== undefined && typeof fields.agentId !== "string") ||
+      (fields.isBackground !== undefined && typeof fields.isBackground !== "boolean") ||
+      (fields.durationMs !== undefined && typeof fields.durationMs !== "bigint") ||
+      (fields.resultSuffix !== undefined && slateToolCallTextFromInterop(fields.resultSuffix) === undefined) ||
+      (fields.transcriptPath !== undefined && slateToolCallTextFromInterop(fields.transcriptPath) === undefined)) return undefined
+  return {
+    kind: "success",
+    conversationSteps: conversationSteps.map((step: unknown) => fromInteropConversationStep(step as ConversationStep)),
+    ...(fields.agentId === undefined ? {} : { agentId: fields.agentId }),
+    isBackground: fields.isBackground === true,
+    ...(fields.durationMs === undefined ? {} : { durationMs: fields.durationMs }),
+    ...(fields.resultSuffix === undefined ? {} : { resultSuffix: slateToolCallTextFromInterop(fields.resultSuffix)! as SlateTaskToolText }),
+    backgroundReason,
+    ...(fields.transcriptPath === undefined ? {} : { transcriptUri: slateToolCallTextFromInterop(fields.transcriptPath)! as SlateTaskToolText }),
+  }
+}
+
+function slateTaskToolCallFromInterop(value: unknown): SlateTaskToolCall<SlateTaskToolText> | undefined {
+  if (!isRecordValue(value)) return undefined
+  const args = value.args === undefined ? undefined : slateTaskToolArgumentsFromInterop(value.args)
+  const result = value.result === undefined ? undefined : slateTaskToolOutcomeFromInterop(value.result)
+  const cloudAgentId = value.cloudAgentBcId === undefined ? undefined : slateToolCallTextFromInterop(value.cloudAgentBcId)
+  if ((value.args !== undefined && args === undefined) || (value.result !== undefined && result === undefined) ||
+      (value.cloudAgentBcId !== undefined && cloudAgentId === undefined)) return undefined
+  const operation: SlateTaskToolCall<SlateTaskToolText> = {
+    kind: "task",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+    ...(cloudAgentId === undefined ? {} : { cloudAgentId }),
+  }
+  return isSlateTaskToolCall(operation) ? operation : undefined
+}
+
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "taskToolCall") {
+    const taskToolCall = slateTaskToolCallFromInterop(value)
+    if (taskToolCall !== undefined) return taskToolCall
+  }
   if (operation === "shellToolCall") {
     const shellToolCall = slateShellToolCallFromInterop(value)
     if (shellToolCall !== undefined) return shellToolCall
@@ -2273,6 +2408,73 @@ function slateShellToolCallFromInterop(
   return isSlateShellToolCall(slateValue) ? slateValue : undefined
 }
 
+function taskToolTextToInterop(value: SlateTaskToolText, plain: boolean): string | RedactedString {
+  return plain && isRedactedString(value)
+    ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : value
+}
+
+function taskToolArgumentsToInterop(
+  value: SlateTaskToolArguments<SlateTaskToolText>,
+  plain: boolean,
+): TaskArgs {
+  const subagentType = value.subagentType === undefined
+    ? undefined
+    : subagentTypeToInterop((plain ? unredactStepValue(value.subagentType) : value.subagentType) as never)
+  const machine = value.machine === undefined
+    ? undefined
+    : targetMachineToProtoInterop((plain ? unredactStepValue(value.machine) : value.machine) as never)
+  return new TaskArgs({
+    description: taskToolTextToInterop(value.description, plain) as never,
+    prompt: taskToolTextToInterop(value.prompt, plain) as never,
+    ...(subagentType === undefined ? {} : { subagentType }),
+    ...(value.model === undefined ? {} : { model: taskToolTextToInterop(value.model, plain) as never }),
+    ...(value.resume === undefined ? {} : { resume: taskToolTextToInterop(value.resume, plain) as never }),
+    ...(value.agentId === undefined ? {} : { agentId: taskToolTextToInterop(value.agentId, plain) as never }),
+    attachments: value.attachments.map(entry => taskToolTextToInterop(entry, plain) as never),
+    mode: taskModeToInterop(value.mode),
+    respondingToMessageIds: [...value.respondingToMessageIds],
+    environment: taskExecutionEnvironmentToInterop(value.environment),
+    ...(machine === undefined ? {} : { machine }),
+  })
+}
+
+function taskToolOutcomeToInterop(value: SlateTaskToolOutcome<SlateTaskToolText>, plain: boolean): TaskResult {
+  switch (value.kind) {
+    case "unknown":
+      return new TaskResult()
+    case "error":
+      return new TaskResult({ result: {
+        case: "error",
+        value: new TaskError({ error: taskToolTextToInterop(value.message, plain) as never }),
+      } })
+    case "success":
+      return new TaskResult({ result: {
+        case: "success",
+        value: new TaskSuccess({
+          conversationSteps: value.conversationSteps.map(step => plain
+            ? toPlainInteropConversationStep(step)
+            : toInteropConversationStep(step)),
+          ...(value.agentId === undefined ? {} : { agentId: taskToolTextToInterop(value.agentId, plain) as never }),
+          isBackground: value.isBackground,
+          ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+          ...(value.resultSuffix === undefined ? {} : { resultSuffix: taskToolTextToInterop(value.resultSuffix, plain) as never }),
+          backgroundReason: taskBackgroundReasonToInterop(value.backgroundReason),
+          ...(value.transcriptUri === undefined ? {} : { transcriptPath: taskToolTextToInterop(value.transcriptUri, plain) as never }),
+        }),
+      } })
+  }
+}
+
+function taskToolCallToInterop(value: SlateTaskToolCall<SlateTaskToolText>, plain: boolean): TaskToolCall {
+  if (!isSlateTaskToolCall(value)) throw new TypeError("Slate task operation is invalid")
+  return new TaskToolCall({
+    ...(value.args === undefined ? {} : { args: taskToolArgumentsToInterop(value.args, plain) }),
+    ...(value.result === undefined ? {} : { result: taskToolOutcomeToInterop(value.result, plain) }),
+    ...(value.cloudAgentId === undefined ? {} : { cloudAgentBcId: taskToolTextToInterop(value.cloudAgentId, plain) as never }),
+  })
+}
+
 function canProjectShellSandboxPolicy(value: unknown): boolean {
   if (value === undefined) return true
   if (!isRecordValue(value) || typeof value.type !== "number" || ![
@@ -2296,6 +2498,9 @@ function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (isSlateTaskToolCall(tool)) {
+    return { case: "taskToolCall", value: taskToolCallToInterop(tool, plain) }
+  }
   if (isSlateShellToolCall(tool)) {
     const args = tool.args === undefined
       ? undefined
@@ -3006,10 +3211,10 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
       if (!hasOnlyKeys(tool, ["operation", "payload"]) ||
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
           (envelope.version === 1 &&
-            (tool.operation === "shell" || tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
+            (tool.operation === "task" || tool.operation === "shell" || tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
               tool.operation === "plan-draft" || tool.operation === "send-message" ||
               tool.operation === "computer-use")) ||
-          (envelope.version === 2 && tool.operation === "shell") ||
+          (envelope.version === 2 && (tool.operation === "shell" || tool.operation === "task")) ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -3072,6 +3277,9 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       }
       break
     case "tool-call":
+      if (step.tool.kind === "task" && !isSlateTaskToolCall(step.tool)) {
+        throw new TypeError("Slate task operation is invalid")
+      }
       if (step.tool.kind === "shell" && !isSlateShellToolCall(step.tool)) {
         throw new TypeError("Slate shell operation is invalid")
       }
@@ -3090,7 +3298,7 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "computer-use" && !isSlateComputerUseToolCall(step.tool)) {
         throw new TypeError("Slate computer-use operation is invalid")
       }
-      if (step.tool.kind !== undefined && step.tool.kind !== "shell" && step.tool.kind !== "conversation-summary" &&
+      if (step.tool.kind !== undefined && step.tool.kind !== "task" && step.tool.kind !== "shell" && step.tool.kind !== "conversation-summary" &&
           step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" &&
           step.tool.kind !== "send-message" && step.tool.kind !== "computer-use" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
@@ -3108,7 +3316,9 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlateShellToolCall(step.tool)
+        tool: isSlateTaskToolCall(step.tool)
+          ? { operation: "task", payload: encodeSlateValue(step.tool) }
+          : isSlateShellToolCall(step.tool)
           ? { operation: "shell", payload: encodeSlateValue(step.tool) }
           : isSlateComputerUseToolCall(step.tool)
           ? { operation: "computer-use", payload: encodeSlateValue(step.tool) }
@@ -3176,6 +3386,10 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
         ? isSlateShellToolCall(storedPayload)
           ? storedPayload
           : (() => { throw new TypeError("Stored Slate shell operation is invalid") })()
+        : storedOperation === "task"
+          ? isSlateTaskToolCall(storedPayload)
+            ? storedPayload
+            : (() => { throw new TypeError("Stored Slate task operation is invalid") })()
         : storedOperation === "conversation-summary"
         ? isSlateConversationSummaryToolCall(storedPayload)
           ? storedPayload
