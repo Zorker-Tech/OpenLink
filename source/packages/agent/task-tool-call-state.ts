@@ -34,18 +34,30 @@ export type SlateTaskSubagentType<Text extends string | RedactedString = SlateTa
 export type SlateTaskPlacement<Text extends string | RedactedString = SlateTaskToolText> =
   SlateTaskTextProjection<TaskTargetMachine, Text>
 
-export interface SlateTaskToolArguments<Text extends string | RedactedString = SlateTaskToolText> {
-  readonly description: Text
-  readonly prompt: Text
-  readonly subagentType?: SlateTaskSubagentType<Text>
-  readonly model?: Text
-  readonly resume?: Text
-  readonly agentId?: Text
+export interface SlateTaskToolRequest<Text extends string | RedactedString = SlateTaskToolText> {
+  readonly summary: Text
+  readonly instructions: Text
   readonly attachments: readonly Text[]
+}
+
+export interface SlateTaskToolAssignment<Text extends string | RedactedString = SlateTaskToolText> {
+  readonly profile?: SlateTaskSubagentType<Text>
+  readonly modelId?: Text
+  readonly resumeFromId?: Text
+  readonly agentId?: Text
+}
+
+export interface SlateTaskToolExecution<Text extends string | RedactedString = SlateTaskToolText> {
   readonly mode: SlateTaskMode
-  readonly respondingToMessageIds: readonly string[]
   readonly environment: SlateTaskExecutionEnvironment
-  readonly machine?: SlateTaskPlacement<Text>
+  readonly placement?: SlateTaskPlacement<Text>
+}
+
+export interface SlateTaskToolArguments<Text extends string | RedactedString = SlateTaskToolText> {
+  readonly request: SlateTaskToolRequest<Text>
+  readonly assignment?: SlateTaskToolAssignment<Text>
+  readonly execution: SlateTaskToolExecution<Text>
+  readonly triggerMessageIds: readonly string[]
 }
 
 export type SlateTaskToolBackgroundReason = Exclude<SlateTaskBackgroundReason, { readonly kind: "unrecognized" }>
@@ -88,7 +100,7 @@ function isOptional(value: unknown, predicate: (value: unknown) => boolean): boo
   return value === undefined || predicate(value)
 }
 
-function isSlateTaskSubagentType(value: unknown): boolean {
+export function isSlateTaskSubagentType(value: unknown): value is SlateTaskSubagentType {
   if (!isRecord(value) || !hasOnlyOwnKeys(value, ["kind", "customName", "compatibility"]) ||
       typeof value.kind !== "string" || value.kind.trim().length === 0 ||
       !isOptional(value.customName, isText)) return false
@@ -97,7 +109,7 @@ function isSlateTaskSubagentType(value: unknown): boolean {
     isOptional(value.compatibility.legacyDiscriminator, isText)
 }
 
-function isTaskPlacement(value: unknown): boolean {
+export function isSlateTaskPlacement(value: unknown): value is SlateTaskPlacement {
   if (!isRecord(value) || typeof value.kind !== "string") return false
   switch (value.kind) {
     case "same-device":
@@ -151,16 +163,26 @@ function isBackgroundReason(value: unknown): value is SlateTaskToolBackgroundRea
   ].includes(value)
 }
 
-function isTaskArguments(value: unknown): boolean {
-  return isRecord(value) && hasOnlyOwnKeys(value, [
-    "description", "prompt", "subagentType", "model", "resume", "agentId", "attachments", "mode",
-    "respondingToMessageIds", "environment", "machine",
-  ]) && isText(value.description) && isText(value.prompt) &&
-    isOptional(value.subagentType, isSlateTaskSubagentType) &&
-    isOptional(value.model, isText) && isOptional(value.resume, isText) && isOptional(value.agentId, isText) &&
-    Array.isArray(value.attachments) && value.attachments.every(isText) && isTaskMode(value.mode) &&
-    Array.isArray(value.respondingToMessageIds) && value.respondingToMessageIds.every(item => typeof item === "string") &&
-    isTaskEnvironment(value.environment) && isOptional(value.machine, isTaskPlacement)
+function isTaskRequest(value: unknown): value is SlateTaskToolRequest {
+  return isRecord(value) && hasOnlyOwnKeys(value, ["summary", "instructions", "attachments"]) &&
+    isText(value.summary) && isText(value.instructions) && Array.isArray(value.attachments) && value.attachments.every(isText)
+}
+
+function isTaskAssignment(value: unknown): value is SlateTaskToolAssignment {
+  return isRecord(value) && hasOnlyOwnKeys(value, ["profile", "modelId", "resumeFromId", "agentId"]) &&
+    isOptional(value.profile, isSlateTaskSubagentType) && isOptional(value.modelId, isText) &&
+    isOptional(value.resumeFromId, isText) && isOptional(value.agentId, isText)
+}
+
+function isTaskExecution(value: unknown): value is SlateTaskToolExecution {
+  return isRecord(value) && hasOnlyOwnKeys(value, ["mode", "environment", "placement"]) &&
+    isTaskMode(value.mode) && isTaskEnvironment(value.environment) && isOptional(value.placement, isSlateTaskPlacement)
+}
+
+function isTaskArguments(value: unknown): value is SlateTaskToolArguments {
+  return isRecord(value) && hasOnlyOwnKeys(value, ["request", "assignment", "execution", "triggerMessageIds"]) &&
+    isTaskRequest(value.request) && isOptional(value.assignment, isTaskAssignment) && isTaskExecution(value.execution) &&
+    Array.isArray(value.triggerMessageIds) && value.triggerMessageIds.every(item => typeof item === "string")
 }
 
 function isTaskOutcome(value: unknown): boolean {

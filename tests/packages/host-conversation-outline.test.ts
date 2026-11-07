@@ -164,12 +164,13 @@ describe("the conversation outline", () => {
             createSlateToolCallStep({ tool: {
               kind: "task",
               args: {
-                description: text("child task"),
-                prompt: text("run the child task"),
-                attachments: [],
-                mode: "agent",
-                respondingToMessageIds: [],
-                environment: "local",
+                request: {
+                  summary: text("child task"),
+                  instructions: text("run the child task"),
+                  attachments: [],
+                },
+                triggerMessageIds: [],
+                execution: { mode: "agent", environment: "local" },
               },
               result: { kind: "error", message: text("task failed") },
             } }),

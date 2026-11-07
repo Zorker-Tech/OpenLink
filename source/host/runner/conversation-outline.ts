@@ -394,8 +394,8 @@ function slateTaskToolCallItem(task: SlateTaskToolCall, id: string): OutlineItem
   const failure = task.result?.kind === "error" ? outlineText(task.result.message) : undefined
   const summary = firstNonEmpty(
     failure,
-    task.args === undefined ? undefined : outlineText(task.args.description),
-    task.args === undefined ? undefined : outlineText(task.args.prompt),
+    task.args === undefined ? undefined : outlineText(task.args.request.summary),
+    task.args === undefined ? undefined : outlineText(task.args.request.instructions),
   )
   return {
     kind: "tool-call",

@@ -125,6 +125,10 @@ import {
 const text = (value: string) =>
   createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)
 
+const plainTaskText = (value: unknown): unknown => isRedactedString(value)
+  ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  : value
+
 function storeLegacyStepValue(value: unknown): unknown {
   if (value === undefined) return { kind: "undefined" }
   if (value === null) return { kind: "null" }
@@ -246,7 +250,7 @@ test("computer-use steps use Slate storage while preserving every legacy action 
   const storedText = new TextDecoder().decode(storedBytes)
   const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
     version: number
-    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    step: { tool: { operation: string; operationVersion?: number; payload: { kind: string }; case?: string } }
     compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
   }
   assert.equal(envelope.version, 3)
@@ -342,7 +346,7 @@ test("shell tool calls use a typed Slate step operation and preserve redaction a
   const storedText = new TextDecoder().decode(stored)
   const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
     version: number
-    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    step: { tool: { operation: string; operationVersion?: number; payload: { kind: string }; case?: string } }
     compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
   }
   assert.equal(envelope.version, 3)
@@ -559,19 +563,27 @@ test("task calls use Slate request, placement and nested result contracts with r
   const slate = serde.deserialize(source.toBinary())
   if (slate.kind !== "tool-call" || !isSlateTaskToolCall(slate.tool)) assert.fail("expected a Slate task operation")
   assert.equal(slateToolCallMetricLabel(slate.tool), "task")
-  assert.equal(slate.tool.args?.mode, "plan")
-  assert.equal(slate.tool.args?.environment, "cloud")
-  assert.equal(slate.tool.args?.agentId, "child-agent")
-  assert.deepEqual(slate.tool.args?.respondingToMessageIds, ["message-1", "message-2"])
-  assert.equal(slate.tool.args?.machine?.kind, "worker-pool")
+  assert.equal(plainTaskText(slate.tool.args?.request.summary), "inspect the workspace")
+  assert.equal(plainTaskText(slate.tool.args?.request.instructions), "find the failing test")
+  assert.deepEqual(slate.tool.args?.request.attachments.map(value => isRedactedString(value)
+    ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    : value), ["/workspace/README.md"])
+  assert.deepEqual(slate.tool.args?.triggerMessageIds, ["message-1", "message-2"])
+  assert.equal(plainTaskText(slate.tool.args?.assignment?.profile?.customName), "qa-helper")
+  assert.equal(plainTaskText(slate.tool.args?.assignment?.modelId), "model-fast")
+  assert.equal(plainTaskText(slate.tool.args?.assignment?.resumeFromId), "resume-child")
+  assert.equal(plainTaskText(slate.tool.args?.assignment?.agentId), "child-agent")
+  assert.equal(slate.tool.args?.execution.mode, "plan")
+  assert.equal(slate.tool.args?.execution.environment, "cloud")
+  assert.equal(slate.tool.args?.execution.placement?.kind, "worker-pool")
   assert.equal(slate.tool.cloudAgentId, "cloud-connection-7")
   assert.equal(slate.tool.result?.kind, "success")
   if (slate.tool.result?.kind !== "success") assert.fail("expected a successful task result")
   assert.equal(slate.tool.result.conversationSteps[0]?.kind, "assistant-message")
   assert.equal(slate.tool.result.backgroundReason, "user-request")
   assert.equal(slate.tool.result.durationMs, 55n)
-  assert.equal(isRedactedString(slate.tool.args?.description), true)
-  assert.equal(isRedactedString(slate.tool.args?.attachments[0]), true)
+  assert.equal(isRedactedString(slate.tool.args?.request.summary), true)
+  assert.equal(isRedactedString(slate.tool.args?.request.attachments[0]), true)
   assert.equal(isRedactedString(slate.tool.result.resultSuffix), true)
   assert.equal(isRedactedString(slate.tool.result.transcriptUri), true)
 
@@ -579,11 +591,12 @@ test("task calls use Slate request, placement and nested result contracts with r
   const storedText = new TextDecoder().decode(stored)
   const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
     version: number
-    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    step: { tool: { operation: string; operationVersion?: number; payload: { kind: string }; case?: string } }
     compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
   }
   assert.equal(envelope.version, 3)
   assert.equal(envelope.step.tool.operation, "task")
+  assert.equal(envelope.step.tool.operationVersion, 2)
   assert.equal(envelope.step.tool.payload.kind, "object")
   assert.equal(envelope.step.tool.case, undefined)
   assert.deepEqual(envelope.compatibility?.legacyUnknownFields?.map(field => field.path), [
@@ -646,8 +659,8 @@ test("stored V2 task payloads migrate to the typed Slate task operation", () => 
   const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
   const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(oldEnvelope)}`))
   if (migrated.kind !== "tool-call" || !isSlateTaskToolCall(migrated.tool)) assert.fail("expected the V2 task call to migrate")
-  if (migrated.tool.args === undefined || !isRedactedString(migrated.tool.args.prompt)) assert.fail("expected redacted task prompt")
-  assert.equal(migrated.tool.args.prompt.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "check the patch")
+  if (migrated.tool.args === undefined || !isRedactedString(migrated.tool.args.request.instructions)) assert.fail("expected redacted task instructions")
+  assert.equal(migrated.tool.args.request.instructions.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "check the patch")
   if (migrated.tool.result?.kind !== "error" || !isRedactedString(migrated.tool.result.message)) {
     assert.fail("expected the old redacted task error")
   }
@@ -655,10 +668,127 @@ test("stored V2 task payloads migrate to the typed Slate task operation", () => 
   const rewritten = serde.serialize(migrated)
   const envelope = JSON.parse(new TextDecoder().decode(rewritten).slice("SLATE-AGENT-STEP\n".length)) as {
     version: number
-    step: { tool: { operation: string } }
+    step: { tool: { operation: string; operationVersion?: number } }
   }
   assert.equal(envelope.version, 3)
   assert.equal(envelope.step.tool.operation, "task")
+  assert.equal(envelope.step.tool.operationVersion, 2)
+})
+
+test("V3 task operation version 1 migrates grouped request fields without losing its runner view", () => {
+  const legacy = {
+    kind: "task",
+    args: {
+      description: text("review the module"),
+      prompt: text("find the behavior mismatch"),
+      model: text("model-fast"),
+      resume: text("run-previous"),
+      agentId: text("agent-child"),
+      attachments: [text("/workspace/spec.md")],
+      mode: "plan",
+      respondingToMessageIds: ["message-a"],
+      environment: "cloud",
+      machine: { kind: "cloud-machine", baseBranch: "dev" },
+    },
+    result: { kind: "error", message: text("runner stopped") },
+    cloudAgentId: text("cloud-connection"),
+  }
+  const legacyEnvelope = {
+    format: "slate.agent-conversation-step",
+    version: 3,
+    step: {
+      kind: "tool-call",
+      toolCallId: "task-v1-call",
+      hookContexts: [],
+      tool: { operation: "task", payload: storeLegacyStepValue(legacy) },
+    },
+  }
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const oldBlob = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(legacyEnvelope)}`)
+  const migrated = serde.deserialize(oldBlob)
+  if (migrated.kind !== "tool-call" || !isSlateTaskToolCall(migrated.tool)) assert.fail("expected the V1 task operation to migrate")
+  assert.equal(plainTaskText(migrated.tool.args?.request.summary), "review the module")
+  assert.equal(plainTaskText(migrated.tool.args?.request.instructions), "find the behavior mismatch")
+  assert.equal(plainTaskText(migrated.tool.args?.assignment?.modelId), "model-fast")
+  assert.equal(plainTaskText(migrated.tool.args?.assignment?.resumeFromId), "run-previous")
+  assert.equal(plainTaskText(migrated.tool.args?.assignment?.agentId), "agent-child")
+  assert.deepEqual(migrated.tool.args?.triggerMessageIds, ["message-a"])
+  assert.equal(migrated.tool.args?.execution.placement?.kind, "cloud-machine")
+
+  const rewritten = serde.serialize(migrated)
+  const envelope = JSON.parse(new TextDecoder().decode(rewritten).slice("SLATE-AGENT-STEP\n".length)) as {
+    step: { tool: { operation: string; operationVersion: number; payload: unknown } }
+  }
+  assert.equal(envelope.step.tool.operation, "task")
+  assert.equal(envelope.step.tool.operationVersion, 2)
+  const restored = toPlainInteropConversationStep(serde.deserialize(rewritten))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the migrated task to reconstruct at the runner boundary")
+  }
+  const restoredArgs = restored.message.value.tool.value.args
+  assert.ok(restoredArgs)
+  assert.equal(restoredArgs.description, "review the module")
+  assert.equal(restoredArgs.prompt, "find the behavior mismatch")
+  assert.equal(restoredArgs.model, "model-fast")
+  assert.equal(restoredArgs.resume, "run-previous")
+  assert.equal(restoredArgs.agentId, "agent-child")
+  assert.deepEqual(restoredArgs.attachments, ["/workspace/spec.md"])
+  assert.equal(restoredArgs.mode, TaskMode.PLAN)
+  assert.deepEqual(restoredArgs.respondingToMessageIds, ["message-a"])
+  assert.equal(restoredArgs.environment, SubagentExecutionEnvironment.CLOUD)
+  assert.equal(restoredArgs.machine?.machine.case, "newCloudVm")
+  if (restoredArgs.machine?.machine.case !== "newCloudVm") assert.fail("expected a cloud-machine placement")
+  assert.equal(restoredArgs.machine.machine.value.baseBranch, "dev")
+})
+
+test("V3 task operation version 1 keeps unrecognized enums in the legacy restore path", () => {
+  const legacy = {
+    kind: "task",
+    args: {
+      description: text("keep old task summary"),
+      prompt: text("keep old instructions"),
+      attachments: [],
+      mode: { kind: "unknown", code: 71 },
+      respondingToMessageIds: ["message-old"],
+      environment: { kind: "unknown", code: 83 },
+    },
+    result: {
+      kind: "success",
+      conversationSteps: [],
+      isBackground: true,
+      backgroundReason: "unknown-97",
+    },
+  }
+  const oldEnvelope = {
+    format: "slate.agent-conversation-step",
+    version: 3,
+    step: { kind: "tool-call", hookContexts: [], tool: { operation: "task", payload: storeLegacyStepValue(legacy) } },
+  }
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const oldBlob = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(oldEnvelope)}`)
+  const migrated = serde.deserialize(oldBlob)
+  if (migrated.kind !== "tool-call" || isSlateTaskToolCall(migrated.tool) ||
+      (migrated.tool as SlateLegacyToolCallValue).case !== "taskToolCall") {
+    assert.fail("expected unrecognized V1 enums to remain isolated legacy data")
+  }
+  const rewritten = serde.serialize(migrated)
+  const envelope = JSON.parse(new TextDecoder().decode(rewritten).slice("SLATE-AGENT-STEP\n".length)) as {
+    step: { tool: { operation: string } }
+  }
+  assert.equal(envelope.step.tool.operation, "taskToolCall")
+  const restored = toPlainInteropConversationStep(serde.deserialize(rewritten))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the preserved legacy Task call to restore")
+  }
+  const args = restored.message.value.tool.value.args
+  assert.ok(args)
+  assert.equal(args.description, "keep old task summary")
+  assert.equal(args.prompt, "keep old instructions")
+  assert.equal(args.mode, 71)
+  assert.equal(args.environment, 83)
+  const result = restored.message.value.tool.value.result?.result
+  if (result?.case !== "success") assert.fail("expected the legacy success result")
+  assert.equal(result.value.backgroundReason, 97)
 })
 
 test("unknown task enum codes remain opaque migration data and round-trip losslessly", () => {
