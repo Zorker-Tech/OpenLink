@@ -6,70 +6,15 @@ import {
   GenerateImageSuccess,
   GenerateImageToolCall,
 } from "../proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { WriteArgs, type WriteResult } from "../proto/generated/agent/v1/write_exec_pb.ts"
 
 export type GenerateImageResultInterop = GenerateImageResult
 export type GenerateImageToolCallInterop = GenerateImageToolCall
 export type GenerateImageEnvelopeInterop = ToolCall
 
-export type ImageWriteViewInterop =
-  | { readonly kind: "success" }
-  | { readonly kind: "error"; readonly error: string }
-  | {
-      readonly kind: "permission-denied"
-      readonly operation: string
-      readonly isReadonly: boolean
-      readonly error: string
-    }
-  | { readonly kind: "rejected"; readonly reason: string }
-  | { readonly kind: "no-space" }
-  | { readonly kind: "unknown" }
-  | { readonly kind: "unhandled" }
-
 export type GenerateImageResultViewInterop =
   | { readonly kind: "success"; readonly filePath: string; readonly imageData: string }
   | { readonly kind: "error"; readonly error: string }
   | { readonly kind: "unknown" }
-
-export function createGenerateImageWriteArgsInterop(input: {
-  readonly path: string
-  readonly fileBytes: InstanceType<typeof WriteArgs>["fileBytes"]
-}): InstanceType<typeof WriteArgs> {
-  return new WriteArgs({
-    ...input,
-    returnFileContentAfterWrite: false,
-  })
-}
-
-export function writeResultCaseNameInterop(result: WriteResult): string {
-  return result.result.case ?? "undefined"
-}
-
-export function projectGenerateImageWriteResultInterop(
-  result: WriteResult,
-): ImageWriteViewInterop {
-  switch (result.result.case) {
-    case "success":
-      return { kind: "success" }
-    case "error":
-      return { kind: "error", error: result.result.value.error }
-    case "permissionDenied":
-      return {
-        kind: "permission-denied",
-        operation: result.result.value.operation || "unknown",
-        isReadonly: result.result.value.isReadonly,
-        error: result.result.value.error,
-      }
-    case "rejected":
-      return { kind: "rejected", reason: result.result.value.reason }
-    case "noSpace":
-      return { kind: "no-space" }
-    case undefined:
-      return { kind: "unknown" }
-    default:
-      return { kind: "unhandled" }
-  }
-}
 
 export function createGenerateImageSuccessInterop(input: {
   readonly filePath: string

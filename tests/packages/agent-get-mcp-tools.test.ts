@@ -18,8 +18,8 @@ import {
   type McpMetaToolOptions,
 } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_pb.ts"
 import { McpStateExecResult, McpStateSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { GetMcpToolsAgentResult, GetMcpToolsError } from "../../source/adapters/interop/proto/generated/agent/v1/get_mcp_tools_tool_pb.ts"
+import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -101,9 +101,9 @@ function harness(options: {
         },
       }
       : {
-        async execute(_ctx: Context, args: { fileText?: string }) {
-          writes.push(args.fileText ?? "")
-          return new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: "/repo/.slate/tools/output.json" }) } })
+        async execute(_ctx: Context, args: { text?: string }): Promise<WriteExecutorResult> {
+          writes.push(args.text ?? "")
+          return { kind: "success", path: "/repo/.slate/tools/output.json", linesWritten: 1, bytesWritten: 0 }
         },
       },
   }

@@ -142,7 +142,7 @@ const successOf = (items: McpToolResultContentItem[]): McpResult =>
 
 interface SpillHarness {
   readonly writes: Array<{ path: string; text: string }>
-  readonly resourceAccessor: { get(): { execute(ctx: Context, args: { path: string; fileText?: string; fileBytes?: Uint8Array }): Promise<unknown> } }
+  readonly resourceAccessor: { get(): { execute(ctx: Context, args: { path: string; text?: string; bytes?: Uint8Array }): Promise<unknown> } }
 }
 
 function spillHarness(options: { failWrite?: boolean } = {}): SpillHarness {
@@ -154,11 +154,11 @@ function spillHarness(options: { failWrite?: boolean } = {}): SpillHarness {
         void resource
         return {
           async execute(_ctx, args) {
-            if (options.failWrite === true) return { result: { case: "error", value: { error: "the workspace is read-only" } } }
+            if (options.failWrite === true) return { kind: "error", path: args.path, error: "the workspace is read-only" }
             // The writer sends text; bytes are the other form a write can take.
-            const text = args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array())
+            const text = args.text ?? new TextDecoder().decode(args.bytes ?? new Uint8Array())
             writes.push({ path: args.path, text })
-            return { result: { case: "success", value: { path: args.path } } }
+            return { kind: "success", path: args.path, linesWritten: text.split("\n").length, bytesWritten: Buffer.byteLength(text, "utf8") }
           },
         }
       },

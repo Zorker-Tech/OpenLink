@@ -14,9 +14,9 @@ function world(options: { answer?: WebFetchServiceResult; rejectQuery?: string; 
   const fetched: string[] = [];
   const resourceAccessor = {
     get: () => ({
-      async execute(_ctx: Context, args: { path: string; fileText?: string; fileBytes?: Uint8Array }) {
+      async execute(_ctx: Context, args: { path: string; text?: string; bytes?: Uint8Array }) {
         writes.push(args.path);
-        return { result: { case: "success", value: { path: args.path } } };
+        return { kind: "success", path: args.path, linesWritten: args.text?.split("\n").length ?? 0, bytesWritten: args.bytes?.length ?? 0 };
       },
     }),
   };

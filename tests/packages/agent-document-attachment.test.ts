@@ -8,7 +8,7 @@ import { processInteropDocumentAttachment } from "../../source/adapters/interop/
 import type { AttachmentContentStore } from "../../source/packages/agent/context/attachment-hydration.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { SelectedDocument } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
-import type { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import type { WriteExecutorArgs } from "../../source/packages/agent-exec/write-operation.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -40,12 +40,12 @@ function blobHarness(): BlobHarness {
 }
 
 interface WriteHarness {
-  readonly writes: WriteArgs[]
-  readonly accessor: { get(): { execute(ctx: Context, args: WriteArgs): Promise<unknown> } }
+  readonly writes: WriteExecutorArgs[]
+  readonly accessor: { get(): { execute(ctx: Context, args: WriteExecutorArgs): Promise<unknown> } }
 }
 
 function writeHarness(failWith?: Error): WriteHarness {
-  const writes: WriteArgs[] = []
+  const writes: WriteExecutorArgs[] = []
   return {
     writes,
     accessor: {
@@ -127,8 +127,8 @@ test("a document's bytes are stored and written into the workspace for the agent
   assert.equal(path.dirname(written?.path ?? ""), "/repo/uploads")
   // The name keeps its extension and takes a short random suffix, so two uploads cannot collide.
   assert.match(path.basename(written?.path ?? ""), /^report_[a-z0-9]{4}\.pdf$/)
-  assert.deepEqual(written?.fileBytes, data)
-  assert.equal(written?.returnFileContentAfterWrite, false)
+  assert.deepEqual(written?.bytes, data)
+  assert.equal(written?.includeContentAfterWrite, false)
   assert.equal(result.documentFilePath, written?.path)
   assert.equal(result.selectedDocument?.path, written?.path)
   assert.equal(result.mimeType, "application/pdf")
@@ -213,7 +213,7 @@ test("a document that names stored bytes is fetched and written out like any oth
     workspaceRoot: "/repo",
   })
   assert.deepEqual(result.docData, data)
-  assert.deepEqual(writes.writes[0]?.fileBytes, data)
+  assert.deepEqual(writes.writes[0]?.bytes, data)
   assert.equal(result.documentFilePath !== undefined, true)
 })
 

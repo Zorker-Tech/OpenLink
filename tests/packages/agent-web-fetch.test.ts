@@ -38,13 +38,13 @@ function harness(options: {
     get: (resource?: unknown) => {
       void resource
       return {
-        async execute(_ctx: Context, args: { path: string; fileText?: string; fileBytes?: Uint8Array }) {
-          if (options.failWrite === true) return { result: { case: "error", value: { error: "no" } } }
+        async execute(_ctx: Context, args: { path: string; text?: string; bytes?: Uint8Array }) {
+          if (options.failWrite === true) return { kind: "error", path: args.path, error: "no" }
           writes.push({
             path: args.path,
-            text: args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array()),
+            text: args.text ?? new TextDecoder().decode(args.bytes ?? new Uint8Array()),
           })
-          return { result: { case: "success", value: { path: args.path } } }
+          return { kind: "success", path: args.path, linesWritten: 1, bytesWritten: 0 }
         },
       }
     },

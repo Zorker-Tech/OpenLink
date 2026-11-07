@@ -12,9 +12,8 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { ASK_MODE_MODEL_ERROR } from "../../source/packages/agent/tools/tool-support.ts"
 import { ToolCallRejectedError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { GenerateImageResult } from "../../source/adapters/interop/proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
 import { readExecutorResource, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a tool built over fake executors, so the provider and the filesystem are both scripted
@@ -34,7 +33,7 @@ interface Harness {
 }
 
 function harness(options: {
-  write?: WriteResult
+  write?: WriteExecutorResult
   read?: ReadExecutorResult
   generate?: () => Promise<{ filePath: string; imageData: string; usage?: unknown }>
   requestContext?: { env?: { projectFolder?: string; artifactsFolder?: string; workspacePaths?: readonly string[] } }
@@ -64,9 +63,10 @@ function harness(options: {
     },
   }
   const writeExecutor = {
-    async execute(_ctx: Context, args: { path: string; fileBytes: Uint8Array }) {
-      writes.push({ path: args.path, bytes: args.fileBytes })
-      return options.write ?? new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: args.path }) } })
+    async execute(_ctx: Context, args: { path: string; bytes?: Uint8Array }) {
+      const bytes = args.bytes ?? new Uint8Array()
+      writes.push({ path: args.path, bytes })
+      return options.write ?? { kind: "success", path: args.path, linesWritten: 0, bytesWritten: bytes.length }
     },
   }
   const resourceAccessor = {
@@ -314,7 +314,7 @@ test("the limiter lets the configured number through and queues the rest", async
 test("a write refused because the session is read-only is reported as such", async () => {
   const { tool } = harness({
     requestContext: { env: { projectFolder: "/repo" } },
-    write: new WriteResult({ result: { case: "permissionDenied", value: { operation: "write", isReadonly: true, error: "no" } } as never }),
+    write: { kind: "permission-denied", path: "/repo/assets/generated.png", directory: "/repo/assets", operation: "write", isReadonly: true, message: "no" },
   })
   const result = await run(asTool(tool), { description: "a cat wearing a hat" })
   assert.equal(result.result.case, "error")
@@ -322,22 +322,22 @@ test("a write refused because the session is read-only is reported as such", asy
 })
 
 test("a write that fails for another reason is thrown with what the workspace said", async () => {
-  const cases: Array<{ write: WriteResult; expected: RegExp; isRejected?: boolean }> = [
+  const cases: Array<{ write: WriteExecutorResult; expected: RegExp; isRejected?: boolean }> = [
     {
-      write: new WriteResult({ result: { case: "error", value: { error: "the disk is full" } } as never }),
+      write: { kind: "error", path: "/repo/assets/generated.png", error: "the disk is full" },
       expected: /Failed to save generated image: the disk is full/,
     },
     {
-      write: new WriteResult({ result: { case: "permissionDenied", value: { operation: "write", isReadonly: false, error: "denied" } } as never }),
+      write: { kind: "permission-denied", path: "/repo/assets/generated.png", directory: "/repo/assets", operation: "write", isReadonly: false, message: "denied" },
       expected: /permission denied \(operation=write, isReadonly=false, error=denied\)/,
     },
     {
-      write: new WriteResult({ result: { case: "rejected", value: { reason: "the user said no" } } as never }),
+      write: { kind: "rejected", path: "/repo/assets/generated.png", reason: "the user said no" },
       expected: /Failed to save generated image: rejected \(reason=the user said no\)/,
       isRejected: true,
     },
     {
-      write: new WriteResult({ result: { case: "noSpace", value: {} } as never }),
+      write: { kind: "no-space", path: "/repo/assets/generated.png" },
       expected: /Failed to save generated image: No space left on device/,
     },
   ]
@@ -360,7 +360,7 @@ test("a write that fails for another reason is thrown with what the workspace sa
 test("a rejection caused by a missing tool call context is not reported as the user refusing", async () => {
   const { tool } = harness({
     requestContext: { env: { projectFolder: "/repo" } },
-    write: new WriteResult({ result: { case: "rejected", value: { reason: "Failed to find tool call context for the write" } } as never }),
+    write: { kind: "rejected", path: "/repo/assets/generated.png", reason: "Failed to find tool call context for the write" },
   })
   await assert.rejects(
     () => run(asTool(tool), { description: "a cat wearing a hat" }),

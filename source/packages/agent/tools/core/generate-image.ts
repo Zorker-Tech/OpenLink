@@ -30,15 +30,12 @@ import {
   createGenerateImageErrorInterop,
   createGenerateImageSuccessInterop,
   createGenerateImageToolCallInterop,
-  createGenerateImageWriteArgsInterop,
   emptyGenerateImageToolCallInterop,
   generateImageResultTextInterop,
   mergeGenerateImageToolCallInterop,
   projectGenerateImageResultInterop,
-  projectGenerateImageWriteResultInterop,
   serializeGenerateImageErrorInterop,
   wrapGenerateImageToolCallInterop,
-  writeResultCaseNameInterop,
   type GenerateImageEnvelopeInterop,
   type GenerateImageResultInterop,
   type GenerateImageToolCallInterop,
@@ -54,7 +51,7 @@ import { formatRedacted, shouldRedact } from "../../../redaction/should-redact.t
 import { resizeImageBufferIfNeeded } from "../../../utils/image-resize.ts"
 import { createImageResult, createStringResult } from "../../../chat-inference/prompt-executor.ts"
 import { readExecutorResource, type ReadExecutor } from "../../../agent-exec/read-operation.ts"
-import { writeExecutorResource, type WriteExecutor } from "../../../agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutor, type WriteExecutorResult } from "../../../agent-exec/write-operation.ts"
 import type { ResourceAccessor } from "../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../agent-exec/executor-resources.ts"
 import { ASK_MODE_MODEL_ERROR, createZodAgentTool, withSafeParsedArgs } from "../tool-support.ts"
@@ -430,6 +427,39 @@ function imageOutputPathOf(options: { folder: string; filename: string; artifact
   return join(artifactsFolder || folder, "assets", filename);
 }
 
+type ImageWriteResultView =
+  | { readonly kind: "success" }
+  | { readonly kind: "error"; readonly error: string }
+  | { readonly kind: "permission-denied"; readonly operation: string; readonly isReadonly: boolean; readonly error: string }
+  | { readonly kind: "rejected"; readonly reason: string }
+  | { readonly kind: "no-space" }
+  | { readonly kind: "unknown" }
+
+function imageWriteResultView(result: WriteExecutorResult): ImageWriteResultView {
+  switch (result.kind) {
+    case "success": return { kind: "success" };
+    case "error": return { kind: "error", error: result.error };
+    case "permission-denied": return {
+      kind: "permission-denied",
+      operation: result.operation || "unknown",
+      isReadonly: result.isReadonly,
+      error: result.message,
+    };
+    case "rejected": return { kind: "rejected", reason: result.reason };
+    case "no-space": return { kind: "no-space" };
+    case "unrecognized": return { kind: "unknown" };
+  }
+}
+
+function writeResultMetricKind(result: WriteExecutorResult): string {
+  switch (result.kind) {
+    case "permission-denied": return "permissionDenied";
+    case "no-space": return "noSpace";
+    case "unrecognized": return "undefined";
+    default: return result.kind;
+  }
+}
+
 async function writeGeneratedImage(
   context: Context,
   writeExecutor: WriteExecutor,
@@ -446,12 +476,13 @@ async function writeGeneratedImage(
   const path = imageOutputPathOf({ folder, filename: portableBaseName(filePath), ...(artifactsFolder === undefined ? {} : { artifactsFolder }) });
   const binaryBytes = Buffer.from(stripDataUri(imageData), "base64");
   const privacyMode = options.privacyMode ?? PrivacyMode.UNSPECIFIED;
-  const result = await writeExecutor.execute(context, createGenerateImageWriteArgsInterop({
+  const result = await writeExecutor.execute(context, {
     path,
-    fileBytes: new Uint8Array(binaryBytes),
-  }));
-  const writeView = projectGenerateImageWriteResultInterop(result);
-  const caseName = writeResultCaseNameInterop(result);
+    bytes: new Uint8Array(binaryBytes),
+    includeContentAfterWrite: false,
+  });
+  const writeView = imageWriteResultView(result);
+  const caseName = writeResultMetricKind(result);
   const permissionState = writeView.kind === "permission-denied"
     ? { operation: writeView.operation, isReadonly: writeView.isReadonly ? "true" : "false" }
     : { operation: "n/a", isReadonly: "n/a" };
@@ -491,14 +522,6 @@ async function writeGeneratedImage(
       break;
     case "unknown":
       failureText = "unknown result case";
-      failure = new Error(`Failed to save generated image: ${failureText}`);
-      break;
-    case "unhandled":
-      failureText = "unhandled case";
-      failure = new Error(`Failed to save generated image: ${failureText}`);
-      break;
-    default:
-      failureText = "unhandled case";
       failure = new Error(`Failed to save generated image: ${failureText}`);
       break;
   }

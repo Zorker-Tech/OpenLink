@@ -6,8 +6,7 @@ import path from "node:path"
 
 import { createContext } from "../../source/packages/context/context.ts"
 import { SlateMode, type SlateMode as SlateModeValue } from "../../source/packages/agent/mode-processing.ts"
-import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorArgs } from "../../source/packages/agent-exec/write-operation.ts"
 import { writeCodeSelectionToFile } from "../../source/packages/agent/context/code-selection-spill.ts"
 import { renderSelectedCodeSelections } from "../../source/packages/agent/context/code-selection-context.ts"
 import { hasNetworkAllowlist } from "../../source/packages/agent/tools/core/shell/sandbox-permissions.ts"
@@ -23,7 +22,7 @@ const ctx = () => createContext()
 
 /** A write executor that records what it was asked to write, so the file never has to exist. */
 function recordingWriteExecutor(): {
-  accessor: { get(resource: typeof writeExecutorResource): { execute(ctx: unknown, args: WriteArgs): Promise<unknown> } }
+  accessor: { get(resource: typeof writeExecutorResource): { execute(ctx: unknown, args: WriteExecutorArgs): Promise<unknown> } }
   writes: Array<{ path: string; fileBytes: Uint8Array }>
 } {
   const writes: Array<{ path: string; fileBytes: Uint8Array }> = []
@@ -31,8 +30,8 @@ function recordingWriteExecutor(): {
     writes,
     accessor: {
       get: (_resource: typeof writeExecutorResource) => ({
-        async execute(_ctx: unknown, args: WriteArgs) {
-          writes.push({ path: args.path, fileBytes: args.fileBytes })
+        async execute(_ctx: unknown, args: WriteExecutorArgs) {
+          writes.push({ path: args.path, fileBytes: args.bytes ?? new Uint8Array() })
           return {}
         },
       }),
@@ -353,10 +352,10 @@ test("a real spill lands in the uploads folder on disk", async () => {
   try {
     const accessor = {
       get: () => ({
-        async execute(_ctx: unknown, args: WriteArgs) {
+        async execute(_ctx: unknown, args: WriteExecutorArgs) {
           const { writeFile, mkdir } = await import("node:fs/promises")
           await mkdir(path.dirname(args.path), { recursive: true })
-          await writeFile(args.path, args.fileBytes)
+          await writeFile(args.path, args.bytes ?? new Uint8Array())
           return {}
         },
       }),

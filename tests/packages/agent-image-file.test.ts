@@ -3,14 +3,13 @@ import assert from "node:assert/strict"
 import path from "node:path"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { WriteArgs } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorArgs } from "../../source/packages/agent-exec/write-operation.ts"
 import { writeSelectedImageToProjectAssets } from "../../source/packages/agent/context/image-file-spill.ts"
 
 const ctx = () => createContext()
 
 function recordingWriteExecutor(): {
-  accessor: { get(resource: typeof writeExecutorResource): { execute(ctx: unknown, args: WriteArgs): Promise<unknown> } }
+  accessor: { get(resource: typeof writeExecutorResource): { execute(ctx: unknown, args: WriteExecutorArgs): Promise<unknown> } }
   writes: Array<{ path: string; fileBytes: Uint8Array }>
 } {
   const writes: Array<{ path: string; fileBytes: Uint8Array }> = []
@@ -18,8 +17,8 @@ function recordingWriteExecutor(): {
     writes,
     accessor: {
       get: () => ({
-        async execute(_ctx: unknown, args: WriteArgs) {
-          writes.push({ path: args.path, fileBytes: args.fileBytes })
+        async execute(_ctx: unknown, args: WriteExecutorArgs) {
+          writes.push({ path: args.path, fileBytes: args.bytes ?? new Uint8Array() })
           return {}
         },
       }),

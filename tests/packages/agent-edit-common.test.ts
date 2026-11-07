@@ -17,8 +17,7 @@ import {
 } from "../../source/packages/agent/tools/tool-errors.ts"
 import { WORKTREE_GUARD_ERROR } from "../../source/packages/utils/paths.ts"
 import { SlateMode, type SlateMode as SlateModeValue } from "../../source/packages/agent/mode-processing.ts"
-import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
-import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
+import { writeExecutorResource, type WriteExecutorArgs, type WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import { agentStoreConflictNoticeExecutorResource } from "../../source/packages/agent-exec/agent-store-conflict-notice.ts"
 import { canvasDiagnosticsExecutorResource } from "../../source/packages/agent-exec/canvas-diagnostics.ts"
 import type { HookContextEntry } from "../../source/packages/hooks-carriers/hook-additional-context.ts"
@@ -34,7 +33,7 @@ interface Harness {
 }
 
 function harness(options: {
-  write?: WriteResult | (() => never)
+  write?: WriteExecutorResult | (() => never)
   noWriteExecutor?: boolean
   decorate?: boolean
 } = {}): Harness {
@@ -45,16 +44,16 @@ function harness(options: {
       if (resource === writeExecutorResource) {
         if (options.noWriteExecutor === true) return undefined
         return {
-          async execute(_ctx: Context, args: { path: string; fileText?: string; toolCallId?: string }, execOptions: { execId?: string } & Record<string, unknown>) {
+          async execute(_ctx: Context, args: WriteExecutorArgs, execOptions: { execId?: string } & Record<string, unknown>) {
             writes.push({
               path: args.path,
-              ...(args.fileText === undefined ? {} : { text: args.fileText }),
+              ...(args.text === undefined ? {} : { text: args.text }),
               ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
               ...(execOptions?.execId === undefined ? {} : { execId: execOptions.execId }),
               options: execOptions,
             })
             if (typeof options.write === "function") (options.write as () => never)()
-            return options.write ?? new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: args.path }) } })
+            return options.write ?? { kind: "success", path: args.path, linesWritten: 0, bytesWritten: 0 }
           },
         }
       }
@@ -185,7 +184,7 @@ test("an edit that named its own content to hand back keeps it", async () => {
 
 test("a refusal becomes a permission problem the user may be able to change", async () => {
   const harnessed = harness({
-    write: new WriteResult({ result: { case: "permissionDenied", value: { error: "no writes here", isReadonly: true } } as never }),
+    write: { kind: "permission-denied", path: "/repo/src/app.ts", directory: "/repo/src", operation: "write", message: "no writes here", isReadonly: true },
   })
   await assert.rejects(
     () => write(harnessed),
@@ -196,7 +195,7 @@ test("a refusal becomes a permission problem the user may be able to change", as
 })
 
 test("a full disk is a device problem the turn is not judged for", async () => {
-  const harnessed = harness({ write: new WriteResult({ result: { case: "noSpace", value: {} } as never }) })
+  const harnessed = harness({ write: { kind: "no-space", path: "/repo/src/app.ts" } })
   await assert.rejects(
     () => write(harnessed),
     (error: unknown) => error instanceof CustomToolCallError &&
@@ -206,7 +205,7 @@ test("a full disk is a device problem the turn is not judged for", async () => {
 })
 
 test("a write the user rejected is a decision rather than an error", async () => {
-  const harnessed = harness({ write: new WriteResult({ result: { case: "rejected", value: { reason: "the user said no" } } as never }) })
+  const harnessed = harness({ write: { kind: "rejected", path: "/repo/src/app.ts", reason: "the user said no" } })
   await assert.rejects(
     () => write(harnessed),
     (error: unknown) => error instanceof WriteRejectedError &&
@@ -217,7 +216,7 @@ test("a write the user rejected is a decision rather than an error", async () =>
 
 test("a rejection caused by a missing tool call context is reported as a write failure", async () => {
   const harnessed = harness({
-    write: new WriteResult({ result: { case: "rejected", value: { reason: "Failed to find tool call context for the write" } } as never }),
+    write: { kind: "rejected", path: "/repo/src/app.ts", reason: "Failed to find tool call context for the write" },
   })
   await assert.rejects(
     () => write(harnessed),
@@ -228,13 +227,13 @@ test("a rejection caused by a missing tool call context is reported as a write f
 })
 
 test("a worktree guard failure is about the environment", async () => {
-  const harnessed = harness({ write: new WriteResult({ result: { case: "error", value: { error: WORKTREE_GUARD_ERROR } } as never }) })
+  const harnessed = harness({ write: { kind: "error", path: "/repo/src/app.ts", error: WORKTREE_GUARD_ERROR } })
   await assert.rejects(() => write(harnessed), ToolCallUnexpectedEnvironmentError)
 })
 
 test("a notebook with no editor support is told apart from an edit that failed", async () => {
   const harnessed = harness({
-    write: new WriteResult({ result: { case: "error", value: { error: "Missing viewType for notebook" } } as never }),
+    write: { kind: "error", path: "/repo/src/app.ts", error: "Missing viewType for notebook" },
   })
   await assert.rejects(
     () => write(harnessed),
@@ -245,7 +244,7 @@ test("a notebook with no editor support is told apart from an edit that failed",
 })
 
 test("any other write failure is reported as the workspace worded it", async () => {
-  const harnessed = harness({ write: new WriteResult({ result: { case: "error", value: { error: "the disk is on fire" } } as never }) })
+  const harnessed = harness({ write: { kind: "error", path: "/repo/src/app.ts", error: "the disk is on fire" } })
   await assert.rejects(
     () => write(harnessed),
     (error: unknown) => error instanceof ToolCallError &&
@@ -254,7 +253,7 @@ test("any other write failure is reported as the workspace worded it", async () 
 })
 
 test("a workspace that answers with nothing at all is an unknown error", async () => {
-  const harnessed = harness({ write: new WriteResult({}) })
+  const harnessed = harness({ write: { kind: "unrecognized" } })
   await assert.rejects(
     () => write(harnessed),
     (error: unknown) => error instanceof ToolCallError && error.clientVisibleErrorMessage === "Unknown error",
@@ -262,7 +261,7 @@ test("a workspace that answers with nothing at all is an unknown error", async (
 })
 
 test("a failure does not record the file as written", async () => {
-  const harnessed = harness({ write: new WriteResult({ result: { case: "error", value: { error: "no" } } as never }) })
+  const harnessed = harness({ write: { kind: "error", path: "/repo/src/app.ts", error: "no" } })
   const state = stateHandler()
   await assert.rejects(() => write(harnessed, { state }))
   assert.deepEqual(state.states, [])

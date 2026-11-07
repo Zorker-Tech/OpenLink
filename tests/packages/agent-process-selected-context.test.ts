@@ -6,6 +6,7 @@ import { projectSelectedContextForProcessing } from "../../source/adapters/inter
 import { fromInteropAgentMode } from "../../source/adapters/interop/agent/mode-processing-adapter.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
+import type { WriteExecutorArgs, WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { AgentMode } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { SimulatedMsgReason } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
@@ -34,7 +35,7 @@ interface Harness {
   readonly config: Record<string, unknown>
   readonly appliedSkills: Array<{ skillId: string; entrypoint: string; skillSource: string }>
   readonly ctx: Context
-  readonly resourceAccessor: { get(): { execute(ctx: Context, args: { path: string; fileText?: string; fileBytes?: Uint8Array }): Promise<unknown> } }
+  readonly resourceAccessor: { get(): { execute(ctx: Context, args: WriteExecutorArgs): Promise<unknown> } }
 }
 
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
@@ -55,11 +56,11 @@ function harness(options: {
   } as unknown as AgentEventTracker
   const ctx = createContext().with(agentEventTrackerKey, tracker)
   const writeExecutor = {
-    async execute(_ctx: Context, args: { path: string; fileText?: string; fileBytes?: Uint8Array }) {
+    async execute(_ctx: Context, args: WriteExecutorArgs): Promise<WriteExecutorResult> {
       if (options.writeThrows === true) throw new Error("the workspace is read-only")
-      if (options.writeFails === true) return { result: { case: "error", value: { error: "the workspace is read-only" } } }
-      writes.push({ path: args.path, ...(args.fileText === undefined ? {} : { text: args.fileText }), ...(args.fileBytes === undefined ? {} : { bytes: args.fileBytes }) })
-      return { result: { case: "success", value: { path: args.path } } }
+      if (options.writeFails === true) return { kind: "error", path: args.path, error: "the workspace is read-only" }
+      writes.push({ path: args.path, ...(args.text === undefined ? {} : { text: args.text }), ...(args.bytes === undefined ? {} : { bytes: args.bytes }) })
+      return { kind: "success", path: args.path, linesWritten: args.text?.split("\n").length ?? 0, bytesWritten: args.bytes?.length ?? 0 }
     },
   }
   return {

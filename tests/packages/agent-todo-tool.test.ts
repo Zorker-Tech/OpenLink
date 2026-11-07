@@ -11,7 +11,7 @@ import { TodoItem, TodoStatus, UpdateTodosResult, UpdateTodosToolCall } from "..
 import { cloneSlateTodoItem, type SlateTodoItem } from "../../source/packages/agent/tools/core/todo/contracts.ts"
 import { fromInteropTodoItem, toInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
-import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
+import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import type { TextResult } from "../../source/packages/chat-inference/prompt-executor.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -44,9 +44,9 @@ function harness(options: { todos?: TodoItem[]; planPath?: string; planContent?:
         },
       }
       : {
-        async execute(_ctx: unknown, args: { path: string; fileText?: string }) {
-          writes.push({ path: args.path, ...(args.fileText === undefined ? {} : { text: args.fileText }) })
-          return new WriteResult({ result: { case: "success", value: new WriteSuccess({ path: args.path }) } })
+        async execute(_ctx: unknown, args: { path: string; text?: string }): Promise<WriteExecutorResult> {
+          writes.push({ path: args.path, ...(args.text === undefined ? {} : { text: args.text }) })
+          return { kind: "success", path: args.path, linesWritten: 0, bytesWritten: 0 }
         },
       },
   }
