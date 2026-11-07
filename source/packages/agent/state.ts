@@ -1072,7 +1072,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
 
   recordToolCall(toolCall: RedactedToolCallInput, toolCallId?: string): void {
     const redactedStep = this.createToolCallStep(toolCall, toolCallId);
-    if (redactedStep.tool.case === "sendMessageToolCall") {
+    if (redactedStep.tool.kind === "send-message") {
       this.sendMessageStepIndices.push(this.steps.length);
     }
     this.steps.push(new EagerReference(this.serdes.conversationStep, this.blobStore, redactedStep));
@@ -1089,7 +1089,7 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         return;
       }
     }
-    if (redactedStep.tool.case === "sendMessageToolCall") {
+    if (redactedStep.tool.kind === "send-message") {
       this.sendMessageStepIndices.push(this.steps.length);
     }
     this.steps.push(new EagerReference(this.serdes.conversationStep, this.blobStore, redactedStep));
