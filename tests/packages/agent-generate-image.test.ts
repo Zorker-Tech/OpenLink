@@ -12,9 +12,8 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { ASK_MODE_MODEL_ERROR } from "../../source/packages/agent/tools/tool-support.ts"
 import { ToolCallRejectedError, ToolErrorClassification } from "../../source/packages/agent/tools/tool-errors.ts"
 import { GenerateImageResult } from "../../source/adapters/interop/proto/generated/agent/v1/generate_image_tool_pb.ts"
-import { ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { WriteResult, WriteSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/write_exec_pb.ts"
-import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -36,7 +35,7 @@ interface Harness {
 
 function harness(options: {
   write?: WriteResult
-  read?: ReadResult
+  read?: ReadExecutorResult
   generate?: () => Promise<{ filePath: string; imageData: string; usage?: unknown }>
   requestContext?: { env?: { projectFolder?: string; artifactsFolder?: string; workspacePaths?: readonly string[] } }
   promptVersion?: string
@@ -53,7 +52,15 @@ function harness(options: {
   const readExecutor = {
     async execute(_ctx: Context, args: { path: string; toolCallId?: string }) {
       reads.push({ path: args.path, ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }) })
-      return options.read ?? new ReadResult({ result: { case: "success", value: new ReadSuccess({ path: args.path, totalLines: 0, fileSize: 0n, output: { case: "data", value: new Uint8Array([1, 2, 3]) } }) } })
+      return options.read ?? {
+        kind: "success",
+        path: args.path,
+        totalLines: 0,
+        fileSize: 3n,
+        truncated: false,
+        rangeApplied: false,
+        output: { kind: "data", bytes: new Uint8Array([1, 2, 3]) },
+      }
     },
   }
   const writeExecutor = {
@@ -258,7 +265,7 @@ test("the aspect ratio and the reference images reach the provider", async () =>
 test("a reference image that cannot be read is left out rather than failing the call", async () => {
   const { tool, generated } = harness({
     requestContext: { env: { projectFolder: "/repo" } },
-    read: new ReadResult({ result: { case: "fileNotFound", value: {} } as never }),
+    read: { kind: "not-found", path: "/repo/missing.png" },
   })
   const result = await run(asTool(tool), { description: "a cat wearing a hat", reference_image_paths: ["/repo/missing.png"] })
   assert.equal(result.result.case, "success")

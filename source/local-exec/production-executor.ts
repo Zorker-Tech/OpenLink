@@ -36,7 +36,7 @@ import { adaptSandboxPolicyValueFromInterop } from "../adapters/interop/agent/sa
 import { createInteropLocalShellStreamExecutor, shellStderrEventFromInterop, shellTimeoutBehaviorFromInterop } from "../adapters/interop/agent/local-shell-stream-executor-adapter.ts";
 import { EmptyWorkspaceIgnorePolicy } from "../packages/local-exec/runtime-ignore-policy.ts";
 import { PermissiveLocalExecAuthorization } from "../packages/local-exec/runtime-permission-policy.ts";
-import { localReadArgsFromInterop, localReadOutcomeToInterop } from "../adapters/interop/agent/local-read-executor-adapter.ts";
+import { localReadArgsFromSlate, localReadOutcomeToSlate } from "../adapters/interop/agent/local-read-executor-adapter.ts";
 import type { LocalReadOutcome } from "../packages/local-exec/read.ts";
 import { createDefaultTerminalExecutor } from "../packages/shell-exec/index.ts";
 import type { LocalExecWireJsonValue } from "../shared/local-exec-protocol.ts";
@@ -356,8 +356,8 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
       assertPathArguments(argsValue);
       const resolvedPath = await guards.containPath({ root, path: argsValue.path });
       const refusal = oversizedReadRefusal(resolvedPath, await guards.regularFileSizeBytes(resolvedPath), maxFileBytes);
-      const outcome = refusal ?? await readExecutor.execute(ctx, localReadArgsFromInterop(argsValue));
-      return localReadOutcomeToInterop(outcome);
+      const outcome = refusal ?? await readExecutor.execute(ctx, localReadArgsFromSlate(argsValue));
+      return localReadOutcomeToSlate(outcome);
     },
   });
   registry.register(lsExecutorResource, {

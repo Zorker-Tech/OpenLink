@@ -6,7 +6,6 @@ import { isVideoAttachmentModelId } from "../../../adapters/interop/inference/vi
 import type { Context } from "../../context/context.ts"
 import {
   appendTaskSelectedCursorCommandsInterop,
-  createTaskAttachmentReadArgsInterop,
   createTaskAttachmentRequestContextArgsInterop,
   createTaskSelectedContextInterop,
   createTaskSelectedImageDataInterop,
@@ -19,10 +18,8 @@ import {
 import type { AttachedMediaUrlProvider } from "../context/video-attachment.ts"
 import { detectImageMimeType } from "./core/read/image-utils.ts"
 import { requestContextExecutorResource } from "../../agent-exec/request-context-operation.ts"
-import { readExecutorResource } from "../../agent-exec/read-operation.ts"
+import { readExecutorResource, type ReadExecutorArgs, type ReadExecutorResult } from "../../agent-exec/read-operation.ts"
 import type {
-  TaskAttachmentReadArgsInterop,
-  TaskAttachmentReadResultInterop,
   TaskAttachmentRequestContextArgsInterop,
   TaskAttachmentRequestContextResultInterop,
   TaskSelectedContextInterop,
@@ -246,9 +243,9 @@ interface AttachmentResourceAccessor {
   get(resource: typeof readExecutorResource): {
     execute(
       ctx: Context,
-      args: TaskAttachmentReadArgsInterop,
+      args: ReadExecutorArgs,
       meta: { readonly execId: string },
-    ): Promise<TaskAttachmentReadResultInterop>;
+    ): Promise<ReadExecutorResult>;
   };
 }
 
@@ -743,17 +740,17 @@ async function collectAttachments(
     }
     const readResult = await reader.execute(
       ctx,
-      createTaskAttachmentReadArgsInterop({ path: attachmentPath, toolCallId }),
+      { path: attachmentPath, toolCallId },
       { execId: generateSeededUuid(`${toolCallId}:${attachmentPath}`) },
     );
-    if (readResult.result.case !== "success") {
+    if (readResult.kind !== "success") {
       throw new Error(`Failed to read attachment: ${attachmentPath}`);
     }
-    const output = readResult.result.value.output;
-    if (output.case !== "data") {
+    const output = readResult.output;
+    if (output?.kind !== "data") {
       throw new Error(`Attachment is not binary data: ${attachmentPath}`);
     }
-    const bytes = output.value;
+    const bytes = output.bytes;
     const imageMime = detectImageMimeType(bytes, attachmentPath);
     const foundVideoMime = getPotentialVideoMimeTypeFromPath(attachmentPath);
     const mimeLookup = mimeTypes.lookup(attachmentPath);
@@ -764,7 +761,7 @@ async function collectAttachments(
     if (!resolvedMime) {
       throw new Error(`Could not detect mime type for attachment: ${attachmentPath}`);
     }
-    const blobId = readResult.result.value.outputBlobId;
+    const blobId = readResult.outputBlobId;
     const blob = blobId === undefined ? {} : { blobId }
     const imagePayload = createTaskSelectedImageDataInterop({ data: bytes, ...blob })
     const videoPayload = createTaskSelectedVideoDataInterop({ data: bytes, ...blob })

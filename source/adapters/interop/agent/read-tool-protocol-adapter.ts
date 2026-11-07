@@ -1,9 +1,13 @@
-/** Keep counterpart executor and transcript messages at the edge of Slate's read feature. */
+/** Keep generated transcript messages at the edge; the workspace reader uses Slate's own contract. */
 
 import type { Context } from "../../../packages/context/context.ts"
 import type { ResourceAccessor } from "../../../packages/agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../packages/agent-exec/executor-resources.ts"
-import { readExecutorResource, redactedReadExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
+import {
+  readExecutorResource,
+  redactedReadExecutorResource,
+  type ReadExecutorResult,
+} from "../../../packages/agent-exec/read-operation.ts"
 import type { HookContextEntry } from "../../../packages/hooks-carriers/hook-additional-context.ts"
 import type {
   ReadConversationPort,
@@ -18,7 +22,6 @@ import type {
   ReadToolResultModel,
   ReadToolSuccessModel,
 } from "../../../packages/agent/tools/core/read/read-contract.ts"
-import { ReadArgs, ReadResult as InteropReadResult } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import {
   ReadRange,
   ReadToolArgs,
@@ -197,12 +200,12 @@ export function createReadExecutorPort(
   const executor = resourceAccessor.get(preferRedactedRead ? redactedReadExecutorResource : readExecutorResource)
   return {
     async execute(context: Context, request: ReadExecutionRequest, options: ReadExecutorOptions): Promise<ReadExecutionResultModel> {
-      const result = await executor.execute(context, new ReadArgs({
+      const result = await executor.execute(context, {
         path: request.path,
         toolCallId: request.toolCallId,
         ...(request.offset === undefined ? {} : { offset: request.offset }),
         ...(request.limit === undefined ? {} : { limit: request.limit }),
-      }), {
+      }, {
         execId: options.execId,
         ...(options.hookContextCollector === undefined ? {} : { hookContextCollector: options.hookContextCollector }),
       })
@@ -211,39 +214,33 @@ export function createReadExecutorPort(
   }
 }
 
-function decodeReadExecutionResult(value: InteropReadResult): ReadExecutionResultModel {
-  const result = recordOf(value.result)
-  if (result === undefined) return { result: { case: undefined } }
-  const row = recordOf(result.value) ?? {}
-  switch (result.case) {
+function decodeReadExecutionResult(value: ReadExecutorResult): ReadExecutionResultModel {
+  switch (value.kind) {
     case "success": {
-      const output = decodeReadOutput(row.output)
       return {
         result: {
           case: "success",
           value: {
-            path: stringField(row, "path"),
-            totalLines: numberField(row, "totalLines"),
-            fileSize: numberField(row, "fileSize"),
-            rangeApplied: booleanField(row, "rangeApplied"),
-            ...(output?.case === "content" || output?.case === "data" ? { output } : {}),
-            ...(bytesField(row.outputBlobId) === undefined ? {} : { outputBlobId: bytesField(row.outputBlobId) as Uint8Array }),
+            path: value.path,
+            totalLines: value.totalLines,
+            fileSize: Number(value.fileSize),
+            rangeApplied: value.rangeApplied,
+            ...(value.output === undefined ? {} : {
+              output: value.output.kind === "text"
+                ? { case: "content" as const, value: value.output.text }
+                : { case: "data" as const, value: value.output.bytes },
+            }),
+            ...(value.outputBlobId === undefined ? {} : { outputBlobId: value.outputBlobId }),
           },
         },
       }
     }
-    case "error":
-      return { result: { case: "error", value: { error: stringField(row, "error") } } }
-    case "rejected":
-      return { result: { case: "rejected", value: { reason: stringField(row, "reason") } } }
-    case "fileNotFound":
-      return { result: { case: "fileNotFound", value: { path: stringField(row, "path") } } }
-    case "permissionDenied":
-      return { result: { case: "permissionDenied", value: { path: stringField(row, "path") } } }
-    case "invalidFile":
-      return { result: { case: "invalidFile", value: { reason: stringField(row, "reason") } } }
-    default:
-      return { result: { case: undefined } }
+    case "error": return { result: { case: "error", value: { error: value.error } } }
+    case "rejected": return { result: { case: "rejected", value: { reason: value.reason } } }
+    case "not-found": return { result: { case: "fileNotFound", value: { path: value.path } } }
+    case "permission-denied": return { result: { case: "permissionDenied", value: { path: value.path } } }
+    case "invalid-file": return { result: { case: "invalidFile", value: { reason: value.reason } } }
+    case "unrecognized": return { result: { case: undefined } }
   }
 }
 

@@ -7,16 +7,7 @@ import {
   ExecClientThrow,
   type ExecServerMessage,
 } from "../proto/generated/agent/v1/exec_pb.ts";
-import {
-  ReadArgs,
-  ReadError,
-  ReadFileNotFound,
-  ReadInvalidFile,
-  ReadPermissionDenied,
-  ReadRejected,
-  ReadResult,
-  ReadSuccess,
-} from "../proto/generated/agent/v1/read_exec_pb.ts";
+import { ReadArgs } from "../proto/generated/agent/v1/read_exec_pb.ts";
 import {
   ShellArgs,
   ShellFailure,
@@ -48,6 +39,8 @@ import {
 import type { BoxRemoteExecClient, BoxRemoteExecEnvelope } from "../agent/box-remote-exec-accessor-adapter.ts";
 import type { SlateBoxExecClient } from "./slate-box-exec-client.ts";
 import type { SlateBoxRequestWithHeaders } from "./slate-box-control-client.ts";
+import { readExecutorArgsFromInterop, readExecutorResultToInterop } from "../agent/read-exec-operation-adapter.ts";
+import type { ReadExecutorResult } from "../../../packages/agent-exec/read-operation.ts";
 
 export function boxExecRequestFromInterop(message: ExecServerMessage): BoxExecRequest {
   switch (message.message.case) {
@@ -55,15 +48,16 @@ export function boxExecRequestFromInterop(message: ExecServerMessage): BoxExecRe
     case "redactedReadArgs": {
       const value = message.message.value;
       if (!(value instanceof ReadArgs)) break;
+      const args = readExecutorArgsFromInterop(value);
       return {
         schema: SLATE_BOX_EXEC_SCHEMA,
         id: message.id,
         op: "workspace.read",
         redacted: message.message.case === "redactedReadArgs",
-        path: value.path,
-        ...(value.encodingHint === undefined ? {} : { encodingHint: value.encodingHint }),
-        ...(value.offset === undefined ? {} : { offset: value.offset }),
-        ...(value.limit === undefined ? {} : { limit: value.limit }),
+        path: args.path,
+        ...(args.encodingHint === undefined ? {} : { encodingHint: args.encodingHint }),
+        ...(args.offset === undefined ? {} : { offset: args.offset }),
+        ...(args.limit === undefined ? {} : { limit: args.limit }),
       };
     }
     case "shellArgs":
@@ -123,41 +117,34 @@ export function boxExecRequestFromInterop(message: ExecServerMessage): BoxExecRe
   };
 }
 
-function readMessage(response: Extract<BoxExecResponse, { kind: "workspace.read" }>): ExecClientMessage {
-  const value = response.result;
-  let result: ReadResult;
+function readResultFromBoxProtocol(response: Extract<BoxExecResponse, { kind: "workspace.read" }>['result']): ReadExecutorResult {
+  const value = response;
   switch (value.kind) {
     case "success":
-      result = new ReadResult({
-        result: {
-          case: "success",
-          value: new ReadSuccess({
-            path: value.path,
-            output: { case: "content", value: value.content },
-            totalLines: value.totalLines,
-            fileSize: BigInt(value.fileSize),
-            truncated: value.truncated,
-            rangeApplied: value.rangeApplied,
-          }),
-        },
-      });
-      break;
+      return {
+        kind: "success",
+        path: value.path,
+        output: { kind: "text", text: value.content },
+        totalLines: value.totalLines,
+        fileSize: BigInt(value.fileSize),
+        truncated: value.truncated,
+        rangeApplied: value.rangeApplied,
+      };
     case "invalid-file":
-      result = new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: value.path, reason: value.reason }) } });
-      break;
+      return { kind: "invalid-file", path: value.path, reason: value.reason };
     case "rejected":
-      result = new ReadResult({ result: { case: "rejected", value: new ReadRejected({ path: value.path, reason: value.reason }) } });
-      break;
+      return { kind: "rejected", path: value.path, reason: value.reason };
     case "file-not-found":
-      result = new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({ path: value.path }) } });
-      break;
+      return { kind: "not-found", path: value.path };
     case "permission-denied":
-      result = new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path: value.path }) } });
-      break;
+      return { kind: "permission-denied", path: value.path };
     case "error":
-      result = new ReadResult({ result: { case: "error", value: new ReadError({ path: value.path, error: value.error }) } });
-      break;
+      return { kind: "error", path: value.path, error: value.error };
   }
+}
+
+function readMessage(response: Extract<BoxExecResponse, { kind: "workspace.read" }>): ExecClientMessage {
+  const result = readExecutorResultToInterop(readResultFromBoxProtocol(response.result));
   return new ExecClientMessage({
     id: response.id,
     message: {

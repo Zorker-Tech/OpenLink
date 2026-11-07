@@ -28,7 +28,6 @@ import { z } from "zod"
 
 import {
   createGenerateImageErrorInterop,
-  createGenerateImageReadArgsInterop,
   createGenerateImageSuccessInterop,
   createGenerateImageToolCallInterop,
   createGenerateImageWriteArgsInterop,
@@ -37,7 +36,6 @@ import {
   mergeGenerateImageToolCallInterop,
   projectGenerateImageResultInterop,
   projectGenerateImageWriteResultInterop,
-  projectReferenceImageReadResultInterop,
   serializeGenerateImageErrorInterop,
   wrapGenerateImageToolCallInterop,
   writeResultCaseNameInterop,
@@ -396,19 +394,19 @@ async function readReferenceImages(
   const results = await Promise.all(paths.map(async path => {
     const logImagePath = logPath(path, privacyMode, "image_path");
     try {
-      const result = await readExecutor.execute(context, createGenerateImageReadArgsInterop({ path, toolCallId }));
-      const view = projectReferenceImageReadResultInterop(result);
-      if (view.kind === "failed") {
+      const result = await readExecutor.execute(context, { path, toolCallId });
+      if (result.kind !== "success") {
         logger.warn(context, "[generate-image] ref image read failed", { imagePath: logImagePath });
         return null;
       }
-      if (view.kind === "empty") {
+      const output = result.output;
+      if (output?.kind !== "data" || output.bytes.length === 0) {
         logger.warn(context, "[generate-image] ref image read empty", { imagePath: logImagePath });
         return null;
       }
-      logger.info(context, "[generate-image] ref image read success", { imagePath: logImagePath, dataLength: view.data.length });
+      logger.info(context, "[generate-image] ref image read success", { imagePath: logImagePath, dataLength: output.bytes.length });
       return {
-        data: Buffer.from(view.data).toString("base64"),
+        data: Buffer.from(output.bytes).toString("base64"),
         mimeType: mimeTypeOfPath(path),
       };
     } catch (error) {

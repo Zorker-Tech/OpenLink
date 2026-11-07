@@ -25,13 +25,7 @@ import {
   WriteShellStdinSuccess,
 } from "../proto/generated/agent/v1/background_shell_exec_pb.ts"
 import {
-  ReadError,
-  ReadFileNotFound,
-  ReadInvalidFile,
-  ReadPermissionDenied,
-  ReadRejected,
   ReadResult,
-  ReadSuccess,
   type ReadArgs,
 } from "../proto/generated/agent/v1/read_exec_pb.ts"
 import {
@@ -55,6 +49,8 @@ import type {
   BoxShellStreamEvent,
   BoxWriteShellInputResult,
 } from "../../../box-exec/runtime.ts"
+import { readExecutorArgsFromInterop, readExecutorResultToInterop } from "./read-exec-operation-adapter.ts"
+import type { ReadExecutorResult } from "../../../packages/agent-exec/read-operation.ts"
 
 // Generated service descriptors widen MethodKind during reconstruction; the daemon owns these literal routes.
 const BoxControlService = {
@@ -100,32 +96,36 @@ function throwElement(id: number, error: unknown, errorCode = "BOX_EXEC_DAEMON_E
 }
 
 function readResultInterop(result: BoxReadResult): ReadResult {
+  let slateResult: ReadExecutorResult
   switch (result.kind) {
     case "success":
-      return new ReadResult({
-        result: {
-          case: "success",
-          value: new ReadSuccess({
-            path: result.path,
-            output: { case: "content", value: result.content },
-            totalLines: result.totalLines,
-            fileSize: result.fileSize,
-            truncated: result.truncated,
-            rangeApplied: result.rangeApplied,
-          }),
-        },
-      })
+      slateResult = {
+        kind: "success",
+        path: result.path,
+        output: { kind: "text", text: result.content },
+        totalLines: result.totalLines,
+        fileSize: result.fileSize,
+        truncated: result.truncated,
+        rangeApplied: result.rangeApplied,
+      }
+      break
     case "invalid-file":
-      return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: result.path, reason: result.reason }) } })
+      slateResult = { kind: "invalid-file", path: result.path, reason: result.reason }
+      break
     case "rejected":
-      return new ReadResult({ result: { case: "rejected", value: new ReadRejected({ path: result.path, reason: result.reason }) } })
+      slateResult = { kind: "rejected", path: result.path, reason: result.reason }
+      break
     case "file-not-found":
-      return new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({ path: result.path }) } })
+      slateResult = { kind: "not-found", path: result.path }
+      break
     case "permission-denied":
-      return new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path: result.path }) } })
+      slateResult = { kind: "permission-denied", path: result.path }
+      break
     case "error":
-      return new ReadResult({ result: { case: "error", value: new ReadError({ path: result.path, error: result.error }) } })
+      slateResult = { kind: "error", path: result.path, error: result.error }
+      break
   }
+  return readExecutorResultToInterop(slateResult)
 }
 
 function shellResultInterop(result: BoxShellResult): ShellResult {
@@ -206,11 +206,12 @@ async function* dispatchBoxExecCall(runtime: BoxExecRuntime, call: ExecServerMes
       case "readArgs":
       case "redactedReadArgs": {
         const input = call.message.value as ReadArgs
+        const request = readExecutorArgsFromInterop(input)
         const result = readResultInterop(await runtime.readFileAttrs({
-          path: input.path,
-          ...(input.encodingHint === undefined ? {} : { encodingHint: input.encodingHint }),
-          ...(input.offset === undefined ? {} : { offset: input.offset }),
-          ...(input.limit === undefined ? {} : { limit: input.limit }),
+          path: request.path,
+          ...(request.encodingHint === undefined ? {} : { encodingHint: request.encodingHint }),
+          ...(request.offset === undefined ? {} : { offset: request.offset }),
+          ...(request.limit === undefined ? {} : { limit: request.limit }),
         }))
         const responseCase = call.message.case === "readArgs" ? "readResult" : "redactedReadResult"
         yield clientElement(call.id, call.execId, { case: responseCase, value: result } as ExecClientMessage["message"])

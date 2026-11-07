@@ -13,7 +13,6 @@ import {
   toInteropReadToolCall,
   toInteropReadToolResult,
 } from "../../source/adapters/interop/agent/read-tool-protocol-adapter.ts"
-import { ReadArgs, ReadResult, ReadSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/read_exec_pb.ts"
 import { ReadToolResult } from "../../source/adapters/interop/proto/generated/agent/v1/read_tool_pb.ts"
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import type {
@@ -21,6 +20,7 @@ import type {
   ReadExecutorOptions,
   ReadToolResultModel,
 } from "../../source/packages/agent/tools/core/read/read-contract.ts"
+import type { ReadExecutorArgs, ReadExecutorResult } from "../../source/packages/agent-exec/read-operation.ts"
 
 test("Slate read results encode and decode through the external transcript envelope", () => {
   const imageBytes = new Uint8Array([1, 2, 3])
@@ -101,19 +101,21 @@ test("the interaction bridge records a Slate call as the counterpart tool event"
 
 test("the executor adapter owns request construction and normalizes the wire response", async () => {
   const context = createContext()
-  const calls: Array<{ request: ReadArgs; options: ReadExecutorOptions; resource: symbol }> = []
+  const calls: Array<{ request: ReadExecutorArgs; options: ReadExecutorOptions; resource: symbol }> = []
   const accessor = {
     get(resource: { symbol: symbol }) {
       return {
-        async execute(_context: unknown, request: ReadArgs, options: ReadExecutorOptions) {
+        async execute(_context: unknown, request: ReadExecutorArgs, options: ReadExecutorOptions): Promise<ReadExecutorResult> {
           calls.push({ request, options, resource: resource.symbol })
-          return new ReadResult({ result: { case: "success", value: new ReadSuccess({
+          return {
+            kind: "success",
             path: request.path,
             totalLines: 1,
-            fileSize: BigInt(4),
+            fileSize: 4n,
             rangeApplied: true,
-            output: { case: "content", value: "text" },
-          }) } })
+            truncated: false,
+            output: { kind: "text", text: "text" },
+          }
         },
       }
     },

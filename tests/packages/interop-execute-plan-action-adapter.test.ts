@@ -145,7 +145,9 @@ test("the plan file adapter translates its narrow port into read and write execu
                 : {}),
             },
           })
-          return { result: { case: "success" } }
+          return kind === "read"
+            ? { kind: "success", path: String(request.path ?? ""), totalLines: 0, fileSize: 0n, truncated: false, rangeApplied: false }
+            : { result: { case: "success" } }
         },
       }
     },

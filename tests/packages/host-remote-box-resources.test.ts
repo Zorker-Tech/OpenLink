@@ -16,6 +16,10 @@ type ExecutorPort = {
   execute(context: unknown, args: unknown, options?: unknown): Promise<unknown> | AsyncIterable<unknown>;
 };
 
+function readSuccess(path = "/repo/file") {
+  return { kind: "success", path, totalLines: 0, fileSize: 0n, truncated: false, rangeApplied: false } as const;
+}
+
 function world(options: {
   readonly desktop?: boolean;
   readonly preparing?: boolean;
@@ -113,7 +117,7 @@ test("a failed connection is cleared so the next call can recover", async () => 
     remoteAccessor: {
       get(resource: unknown) {
         assert.equal(resource, readExecutorResource);
-        return { async execute() { calls.push("read"); return { result: { case: "success" } }; } };
+        return { async execute() { calls.push("read"); return readSuccess(); } };
       },
     },
   };
@@ -136,7 +140,7 @@ test("a prepared connection is used without asking the box again", async () => {
   const worlded = world({
     prepared: true,
     executors: new Map([[readExecutorResource, {
-      async execute() { worlded.calls.push("read"); return { result: { case: "success" } }; },
+      async execute() { worlded.calls.push("read"); return readSuccess(); },
     }]]),
   });
   const read = worlded.accessor.get(readExecutorResource) as unknown as ExecutorPort;
@@ -265,7 +269,7 @@ test("a box with no available monitor is reported as not ready", async () => {
 test("reading a file does not go through shell approval or command auditing", async () => {
   const worlded = world({
     executors: new Map([[readExecutorResource, {
-      async execute(_context, args) { worlded.calls.push(["read", args]); return { result: { case: "success" } }; },
+      async execute(_context, args) { worlded.calls.push(["read", args]); return readSuccess(String((args as { path?: unknown }).path ?? "")); },
     }]]),
   });
   const read = worlded.accessor.get(readExecutorResource) as unknown as ExecutorPort;
