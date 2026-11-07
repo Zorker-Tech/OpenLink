@@ -16,7 +16,11 @@ import {
 } from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import { isSlateUserMessageActionPayload } from "../../agent-action-state.ts";
 import type { Context } from "../../../context/context.ts";
-import type { SlateConversationStep } from "../../conversation-step-state.ts";
+import {
+  isSuccessfulSlateSendMessage,
+  slateToolCallMetricLabel,
+  type SlateConversationStep,
+} from "../../conversation-step-state.ts";
 import {
   cloneSlateTodoItem,
   slateTodoItemWithReadableContent,
@@ -515,9 +519,7 @@ async function isSendMessageDeliveryOwed(
       const agentStep = await conversationTurn.steps[stepIndex]!.get(runContext);
       if (
         agentStep.kind === "tool-call" &&
-        agentStep.tool.case === "sendMessageToolCall" &&
-        (agentStep.tool.value as { readonly result?: { readonly result?: { readonly case?: string } } } | undefined)
-          ?.result?.result?.case === "success"
+        isSuccessfulSlateSendMessage(agentStep.tool)
       ) {
         return false;
       }
@@ -2153,8 +2155,8 @@ export class AbstractUserMessageActionHandler {
           const lastStepRef = conversationTurn.steps[conversationTurn.steps.length - 1]!;
           const lastStep = await lastStepRef.get(runContext);
           if (lastStep.kind === "tool-call") {
-            const toolCase = lastStep.tool.case;
-            if (toolCase !== undefined) priorToolCallName = toolCase.replace("ToolCall", "").replace(/_/g, "-");
+            const toolName = slateToolCallMetricLabel(lastStep.tool);
+            if (toolName !== undefined) priorToolCallName = toolName;
           }
         }
         const resultTags = { toolCallName: priorToolCallName };

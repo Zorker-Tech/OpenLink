@@ -124,11 +124,35 @@ export interface SlatePlanDraftToolCall {
   readonly value?: undefined
 }
 
+export type SlateSendMessageContent =
+  | { readonly kind: "text"; readonly content: SlateToolCallText }
+  | { readonly kind: "attachment"; readonly url: SlateToolCallText; readonly alt?: SlateToolCallText }
+  | { readonly kind: "missing" }
+  | { readonly kind: "unsupported"; readonly sourceCase: string; readonly payload?: unknown }
+
+export interface SlateSendMessageToolArguments {
+  readonly message?: SlateSendMessageContent
+}
+
+export type SlateSendMessageToolOutcome =
+  | { readonly kind: "delivered"; readonly timestampMs: bigint; readonly messageId: string }
+  | { readonly kind: "error"; readonly message: SlateToolCallText }
+  | { readonly kind: "unknown" }
+
+export interface SlateSendMessageToolCall {
+  readonly kind: "send-message"
+  readonly args?: SlateSendMessageToolArguments
+  readonly result?: SlateSendMessageToolOutcome
+  readonly case?: undefined
+  readonly value?: undefined
+}
+
 export type SlateToolCallValue =
   | SlateLegacyToolCallValue
   | SlateConversationSummaryToolCall
   | SlateAskQuestionToolCall
   | SlatePlanDraftToolCall
+  | SlateSendMessageToolCall
 
 export interface SlateStepHookContextEntry {
   readonly event: string
@@ -410,6 +434,98 @@ export function isSlatePlanDraftToolCall(value: unknown): value is SlatePlanDraf
     default:
       return false
   }
+}
+
+export function createSlateSendMessageToolCall(input: {
+  readonly args?: SlateSendMessageToolArguments
+  readonly result?: SlateSendMessageToolOutcome
+}): SlateSendMessageToolCall {
+  const message = input.args?.message
+  const args = input.args === undefined
+    ? undefined
+    : {
+        ...(message === undefined ? {} : {
+          message: message.kind === "text"
+            ? { ...message }
+            : message.kind === "attachment"
+              ? { ...message }
+              : message.kind === "unsupported"
+                ? { ...message }
+                : { kind: "missing" as const },
+        }),
+      }
+  const result = input.result === undefined ? undefined : { ...input.result }
+  const operation: SlateSendMessageToolCall = {
+    kind: "send-message",
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  }
+  if (!isSlateSendMessageToolCall(operation)) throw new TypeError("Slate send-message operation is invalid")
+  return operation
+}
+
+export function isSlateSendMessageToolCall(value: unknown): value is SlateSendMessageToolCall {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = value as Record<string, unknown>
+  if (tool.kind !== "send-message" || !hasOnlyOwnKeys(tool, ["kind", "args", "result"])) return false
+  if (tool.args !== undefined) {
+    if (tool.args === null || typeof tool.args !== "object" || Array.isArray(tool.args)) return false
+    const args = tool.args as Record<string, unknown>
+    if (!hasOnlyOwnKeys(args, ["message"])) return false
+    if (args.message !== undefined) {
+      if (args.message === null || typeof args.message !== "object" || Array.isArray(args.message)) return false
+      const message = args.message as Record<string, unknown>
+      switch (message.kind) {
+        case "text":
+          if (!hasOnlyOwnKeys(message, ["kind", "content"]) || !isToolCallText(message.content)) return false
+          break
+        case "attachment":
+          if (!hasOnlyOwnKeys(message, ["kind", "url", "alt"]) || !isToolCallText(message.url) ||
+              (message.alt !== undefined && !isToolCallText(message.alt))) return false
+          break
+        case "missing":
+          if (!hasOnlyOwnKeys(message, ["kind"])) return false
+          break
+        case "unsupported":
+          if (!hasOnlyOwnKeys(message, ["kind", "sourceCase", "payload"]) ||
+              typeof message.sourceCase !== "string") return false
+          break
+        default:
+          return false
+      }
+    }
+  }
+  if (tool.result === undefined) return true
+  if (tool.result === null || typeof tool.result !== "object" || Array.isArray(tool.result)) return false
+  const result = tool.result as Record<string, unknown>
+  switch (result.kind) {
+    case "unknown":
+      return hasOnlyOwnKeys(result, ["kind"])
+    case "error":
+      return hasOnlyOwnKeys(result, ["kind", "message"]) && isToolCallText(result.message)
+    case "delivered":
+      return hasOnlyOwnKeys(result, ["kind", "timestampMs", "messageId"]) &&
+        typeof result.timestampMs === "bigint" && result.timestampMs >= 0n &&
+        result.timestampMs <= (1n << 64n) - 1n && typeof result.messageId === "string"
+    default:
+      return false
+  }
+}
+
+/** Product-facing metric labels remain stable when a call moves from the legacy envelope to a Slate kind. */
+export function slateToolCallMetricLabel(tool: SlateToolCallValue): string | undefined {
+  if (tool.kind === "send-message") return "sendMessage"
+  if (tool.kind === "ask-question") return "askQuestion"
+  if (tool.kind === "plan-draft") return "createPlan"
+  if (tool.kind === "conversation-summary") {
+    return tool.source === "final" ? "sendFinalSummary" : "communicateUpdate"
+  }
+  const operation = tool.case
+  return operation === undefined ? undefined : operation.replace("ToolCall", "").replace(/_/g, "-")
+}
+
+export function isSuccessfulSlateSendMessage(tool: SlateToolCallValue): boolean {
+  return isSlateSendMessageToolCall(tool) && tool.result?.kind === "delivered"
 }
 
 function isPlanDraftTodo(value: unknown): value is SlatePlanDraftTodo {

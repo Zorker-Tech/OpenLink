@@ -29,6 +29,7 @@ import {
   SubagentExecutionEnvironment,
   TrackedGitRepo,
   StepTiming,
+  ToolCall,
   NewCloudVmTarget,
   TargetMachine,
   UserMessage,
@@ -42,7 +43,10 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import type { SlateCommunicationTurnState } from "../../source/packages/agent/conversation-state.ts"
 import { SlateGoalState } from "../../source/packages/agent/goal-state.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
-import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
+import {
+  fromInteropUserMessage,
+  toRedactedToolCallInterop,
+} from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import {
   deserializeSlateConversationPlan,
   fromRedactedSubagentPersistedStateInterop,
@@ -52,6 +56,7 @@ import {
 import { fromRedactedInteropTodoItem } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import { toPlainInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { toInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
+import { SendMessageArgs, SendMessageText, SendMessageToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/send_message_tool_pb.ts"
 import {
   createSlateShellInvocation,
   createSlateShellResult,
@@ -621,6 +626,56 @@ test("an agent turn records assistant and thinking steps in Slate's step vocabul
     assert.equal(steps[1].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "reason")
     assert.equal(steps[1].durationMs, 0)
   }
+})
+
+test("send-message indexing follows the Slate operation through append and upsert", async () => {
+  const harnessed = harness()
+  const ctx = createContext()
+  const turn = await harnessed.handle.createAgentTurn(
+    ctx,
+    fromInteropUserMessage(new UserMessage({ text: "send a result", messageId: "message-1" })),
+    { env: {}, gitRepos: [] } as never,
+    {
+      enableTerminalFiles: false,
+      enableAgentNotes: false,
+      enableImageFiles: false,
+      enableLongCodeSelectionSpillToFile: false,
+      formattingOptions: {},
+      planSystemReminderGenerator: () => "",
+      askSystemReminderGenerator: () => "",
+      debugSystemReminderGenerator: () => "",
+      triageSystemReminderGenerator: () => "",
+      webScraperService: { getContentInWebsiteFast: async () => null },
+      documentationHydrationService: { hydrate: async () => undefined },
+    } as never,
+    undefined,
+  )
+  const call = (): ToolCall => new ToolCall({
+    tool: {
+      case: "sendMessageToolCall",
+      value: new SendMessageToolCall({
+        args: new SendMessageArgs({
+          message: { case: "text", value: new SendMessageText({ content: "The answer" }) },
+        }),
+      }),
+    },
+  })
+  const otherCall = toRedactedToolCallInterop(new ToolCall(), PrivacyMode.NO_STORAGE)
+  turn.recordToolCall(toRedactedToolCallInterop(call(), PrivacyMode.NO_STORAGE), "message-1")
+  await turn.writeToBlobStore(ctx)
+  assert.deepEqual(turn.getInnerStructure().sendMessageStepIndices, [0])
+
+  turn.recordToolCall(otherCall, "other-1")
+  await turn.writeToBlobStore(ctx)
+  assert.deepEqual(turn.getInnerStructure().sendMessageStepIndices, [0])
+
+  await turn.upsertToolCall(ctx, toRedactedToolCallInterop(call(), PrivacyMode.NO_STORAGE), "message-1")
+  await turn.writeToBlobStore(ctx)
+  assert.deepEqual(turn.getInnerStructure().sendMessageStepIndices, [0], "upserting an existing delivery does not duplicate its index")
+
+  await turn.upsertToolCall(ctx, toRedactedToolCallInterop(call(), PrivacyMode.NO_STORAGE), "message-2")
+  await turn.writeToBlobStore(ctx)
+  assert.deepEqual(turn.getInnerStructure().sendMessageStepIndices, [0, 2], "a newly appended delivery gets its current step index")
 })
 
 test("a new structure keeps the turns the conversation already had", async () => {

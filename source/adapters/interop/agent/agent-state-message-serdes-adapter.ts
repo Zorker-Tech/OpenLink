@@ -35,6 +35,15 @@ import {
 } from "../proto/generated/agent/v1/create_plan_tool_pb.ts"
 import { TodoItem as InteropTodoItem } from "../proto/generated/agent/v1/todo_tool_pb.ts"
 import {
+  SendMessageArgs,
+  SendMessageAttachment,
+  SendMessageError,
+  SendMessageResult,
+  SendMessageSuccess,
+  SendMessageText,
+  SendMessageToolCall,
+} from "../proto/generated/agent/v1/send_message_tool_pb.ts"
+import {
   AskQuestionArgs,
   AskQuestionArgs_Option,
   AskQuestionArgs_Question,
@@ -131,6 +140,7 @@ import {
   createSlateConversationSummaryToolCall,
   createSlateAskQuestionToolCall,
   createSlatePlanDraftToolCall,
+  createSlateSendMessageToolCall,
   createSlateAssistantMessageStep,
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
@@ -138,6 +148,7 @@ import {
   isSlateConversationSummaryToolCall,
   isSlateAskQuestionToolCall,
   isSlatePlanDraftToolCall,
+  isSlateSendMessageToolCall,
   type SlateConversationStepCompatibility,
   type SlateConversationStep,
   type SlateConversationSummaryResult,
@@ -147,6 +158,9 @@ import {
   type SlatePlanDraftPhase,
   type SlatePlanDraftToolOutcome,
   type SlatePlanDraftTodo,
+  type SlateSendMessageContent,
+  type SlateSendMessageToolArguments,
+  type SlateSendMessageToolOutcome,
   type SlateProgressUpdateResult,
   type SlateToolCallText,
   type SlateToolCallValue,
@@ -1604,6 +1618,119 @@ function interopPlanDraftToolFromSlate(
   })
 }
 
+function slateSendMessageToolFromInterop(value: unknown): SlateToolCallValue | undefined {
+  if (!isRecordValue(value)) return undefined
+  const args = value.args === undefined ? undefined : isRecordValue(value.args) ? value.args : null
+  const result = value.result === undefined ? undefined : isRecordValue(value.result) ? value.result : null
+  if (args === null || result === null) return undefined
+
+  let slateArgs: SlateSendMessageToolArguments | undefined
+  if (args !== undefined) {
+    const message = isRecordValue(args.message) ? args.message : undefined
+    let slateMessage: SlateSendMessageContent
+    if (message === undefined) {
+      slateMessage = { kind: "missing" }
+    } else {
+      switch (message.case) {
+        case "text": {
+          const data = isRecordValue(message.value) ? message.value : undefined
+          const content = data?.content === undefined ? "" : slateToolCallTextFromInterop(data.content)
+          if (content === undefined) return undefined
+          slateMessage = { kind: "text", content }
+          break
+        }
+        case "attachment": {
+          const data = isRecordValue(message.value) ? message.value : undefined
+          const url = data?.url === undefined ? "" : slateToolCallTextFromInterop(data.url)
+          const alt = data?.alt === undefined ? undefined : slateToolCallTextFromInterop(data.alt)
+          if (url === undefined || (data?.alt !== undefined && alt === undefined)) return undefined
+          slateMessage = { kind: "attachment", url, ...(alt === undefined ? {} : { alt }) }
+          break
+        }
+        case undefined:
+          slateMessage = { kind: "missing" }
+          break
+        default:
+          slateMessage = {
+            kind: "unsupported",
+            sourceCase: String(message.case),
+            ...(message.value === undefined ? {} : { payload: message.value }),
+          }
+      }
+    }
+    slateArgs = { message: slateMessage }
+  }
+
+  let slateResult: SlateSendMessageToolOutcome | undefined
+  if (result !== undefined) {
+    const selected = isRecordValue(result.result) ? result.result : undefined
+    const data = isRecordValue(selected?.value) ? selected.value : undefined
+    switch (selected?.case) {
+      case "success":
+        if (typeof data?.timestamp !== "bigint" || typeof data.messageId !== "string") return undefined
+        slateResult = { kind: "delivered", timestampMs: data.timestamp, messageId: data.messageId }
+        break
+      case "error": {
+        const message = data?.error === undefined ? "" : slateToolCallTextFromInterop(data.error)
+        if (message === undefined) return undefined
+        slateResult = { kind: "error", message }
+        break
+      }
+      default:
+        slateResult = { kind: "unknown" }
+    }
+  }
+  return createSlateSendMessageToolCall({
+    ...(slateArgs === undefined ? {} : { args: slateArgs }),
+    ...(slateResult === undefined ? {} : { result: slateResult }),
+  })
+}
+
+function interopSendMessageToolFromSlate(
+  tool: Extract<SlateToolCallValue, { readonly kind: "send-message" }>,
+  plain: boolean,
+): SendMessageToolCall {
+  const text = (value: SlateToolCallText): string | RedactedString =>
+    isRedactedString(value) && plain
+      ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      : value
+  const message = tool.args?.message
+  const args = tool.args === undefined
+    ? undefined
+    : new SendMessageArgs({
+        message: message === undefined || message.kind === "missing"
+          ? { case: undefined }
+          : message.kind === "text"
+            ? { case: "text", value: new SendMessageText({ content: text(message.content) as never }) }
+            : message.kind === "attachment"
+              ? { case: "attachment", value: new SendMessageAttachment({
+                  url: text(message.url) as never,
+                  ...(message.alt === undefined ? {} : { alt: text(message.alt) as never }),
+                }) }
+              : { case: message.sourceCase as never, value: message.payload as never },
+      })
+  const result = tool.result === undefined
+    ? undefined
+    : tool.result.kind === "delivered"
+      ? new SendMessageResult({ result: {
+          case: "success",
+          value: new SendMessageSuccess({
+            timestamp: tool.result.timestampMs,
+            messageId: tool.result.messageId,
+          }),
+        } })
+      : tool.result.kind === "error"
+        ? new SendMessageResult({ result: {
+            case: "error",
+            value: new SendMessageError({ error: text(tool.result.message) as never }),
+          } })
+        : new SendMessageResult()
+  return new SendMessageToolCall({
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  })
+}
+
 function slateSummaryToolCallFromInterop(
   operation: string | undefined,
   value: unknown,
@@ -1704,6 +1831,10 @@ function slateSummaryToolCallFromInterop(
 }
 
 function slateToolCallValueFromInterop(operation: string | undefined, value: unknown): SlateToolCallValue {
+  if (operation === "sendMessageToolCall") {
+    const sendMessage = slateSendMessageToolFromInterop(value)
+    if (sendMessage !== undefined) return sendMessage
+  }
   if (operation === "createPlanToolCall") {
     const planDraft = slatePlanDraftToolFromInterop(value)
     if (planDraft !== undefined) return planDraft
@@ -1722,6 +1853,10 @@ function interopToolCallValueFromSlate(
   tool: SlateToolCallValue,
   plain: boolean,
 ): { readonly case: string | undefined; readonly value?: unknown } {
+  if (tool.kind === "send-message") {
+    if (!isSlateSendMessageToolCall(tool)) throw new TypeError("Slate send-message operation is invalid")
+    return { case: "sendMessageToolCall", value: interopSendMessageToolFromSlate(tool, plain) }
+  }
   if (tool.kind === "plan-draft") {
     if (!isSlatePlanDraftToolCall(tool)) throw new TypeError("Slate plan-draft operation is invalid")
     return { case: "createPlanToolCall", value: interopPlanDraftToolFromSlate(tool, plain) }
@@ -2410,7 +2545,7 @@ function isStoredStepEnvelope(value: unknown): value is Record<string, unknown> 
           (tool.operation !== undefined && typeof tool.operation !== "string") ||
           (envelope.version === 1 &&
             (tool.operation === "conversation-summary" || tool.operation === "ask-question" ||
-              tool.operation === "plan-draft")) ||
+              tool.operation === "plan-draft" || tool.operation === "send-message")) ||
           (tool.payload !== undefined && !isStoredSlateValue(tool.payload))) return false
       return step.hookContexts.every(context => {
         if (context === null || typeof context !== "object" || Array.isArray(context)) return false
@@ -2482,8 +2617,12 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
       if (step.tool.kind === "plan-draft" && !isSlatePlanDraftToolCall(step.tool)) {
         throw new TypeError("Slate plan-draft operation is invalid")
       }
+      if (step.tool.kind === "send-message" && !isSlateSendMessageToolCall(step.tool)) {
+        throw new TypeError("Slate send-message operation is invalid")
+      }
       if (step.tool.kind !== undefined && step.tool.kind !== "conversation-summary" &&
-          step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" && step.tool.kind !== "legacy") {
+          step.tool.kind !== "ask-question" && step.tool.kind !== "plan-draft" &&
+          step.tool.kind !== "send-message" && step.tool.kind !== "legacy") {
         throw new TypeError("Slate tool operation kind is unsupported")
       }
       storedStep = {
@@ -2499,18 +2638,20 @@ function encodeStoredConversationStep(step: SlateConversationStep): Uint8Array {
           event: context.event,
           text: encodeRedactedStepText(context.text, "hook_additional_context"),
         })),
-        tool: isSlatePlanDraftToolCall(step.tool)
-          ? { operation: "plan-draft", payload: encodeSlateValue(step.tool) }
-          : isSlateAskQuestionToolCall(step.tool)
-            ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
-            : isSlateConversationSummaryToolCall(step.tool)
-              ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
-              : {
+        tool: isSlateSendMessageToolCall(step.tool)
+          ? { operation: "send-message", payload: encodeSlateValue(step.tool) }
+          : isSlatePlanDraftToolCall(step.tool)
+            ? { operation: "plan-draft", payload: encodeSlateValue(step.tool) }
+            : isSlateAskQuestionToolCall(step.tool)
+              ? { operation: "ask-question", payload: encodeSlateValue(step.tool) }
+              : isSlateConversationSummaryToolCall(step.tool)
+                ? { operation: "conversation-summary", payload: encodeSlateValue(step.tool) }
+                : {
               ...(step.tool.case === undefined ? {} : { operation: step.tool.case }),
               ...(Object.prototype.hasOwnProperty.call(step.tool, "value")
                 ? { payload: encodeSlateValue(step.tool.value) }
                 : {}),
-                },
+                  },
       }
       break
     case "unsupported":
@@ -2569,7 +2710,11 @@ function decodeStoredConversationStep(bytes: Uint8Array, privacyMode: PrivacyMod
             ? isSlatePlanDraftToolCall(storedPayload)
               ? storedPayload
               : (() => { throw new TypeError("Stored Slate plan-draft operation is invalid") })()
-            : slateToolCallValueFromInterop(storedOperation, storedPayload)
+            : storedOperation === "send-message"
+              ? isSlateSendMessageToolCall(storedPayload)
+                ? storedPayload
+                : (() => { throw new TypeError("Stored Slate send-message operation is invalid") })()
+              : slateToolCallValueFromInterop(storedOperation, storedPayload)
       return createSlateToolCallStep({
         ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId as string }),
         ...(step.startedAtMs === undefined ? {} : { startedAtMs: BigInt(step.startedAtMs as string) }),

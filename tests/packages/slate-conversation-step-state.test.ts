@@ -6,6 +6,9 @@ import {
   createSlateThinkingMessageStep,
   createSlateToolCallStep,
   isSlateConversationSummaryToolCall,
+  isSlateSendMessageToolCall,
+  isSuccessfulSlateSendMessage,
+  slateToolCallMetricLabel,
 } from "../../source/packages/agent/conversation-step-state.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
@@ -56,6 +59,15 @@ import {
   SendFinalSummarySuccess,
   SendFinalSummaryToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/send_final_summary_tool_pb.ts"
+import {
+  SendMessageArgs,
+  SendMessageAttachment,
+  SendMessageError,
+  SendMessageResult,
+  SendMessageSuccess,
+  SendMessageText,
+  SendMessageToolCall,
+} from "../../source/adapters/interop/proto/generated/agent/v1/send_message_tool_pb.ts"
 
 const text = (value: string) =>
   createRedactedString(value, DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)
@@ -118,14 +130,14 @@ test("the tool-call envelope preserves the oneof case and opaque payload", () =>
   }
 })
 
-test("a persisted tool-call case survives the complete redaction serde", () => {
+test("send-message text stays redaction-aware through the Slate operation serde", () => {
   const plain = new ToolCall({
     toolCallId: "call-1",
     tool: {
       case: "sendMessageToolCall",
-      value: {
-        args: { message: { case: "text", value: { content: "hello" } } },
-      } as never,
+      value: new SendMessageToolCall({
+        args: new SendMessageArgs({ message: { case: "text", value: new SendMessageText({ content: "hello" }) } }),
+      }),
     },
   })
   const step = fromInteropToolCallStep(
@@ -136,28 +148,121 @@ test("a persisted tool-call case survives the complete redaction serde", () => {
   const decoded = serde.deserialize(serde.serialize(step))
 
   assert.equal(decoded.kind, "tool-call")
-  if (decoded.kind === "tool-call") {
-    assert.equal(decoded.tool.case, "sendMessageToolCall")
-    const content = (decoded.tool.value as {
-      args?: {
-        message?: {
-          value?: {
-            content?: {
-              unwrap(purpose: PrivacyCapability): string
-              readonly __classification?: DataClassification
-              readonly __privacyMode?: PrivacyMode
-            }
-          }
-        }
-      }
-    }).args?.message?.value?.content
+  if (decoded.kind === "tool-call" && decoded.tool.kind === "send-message") {
+    assert.equal(decoded.tool.case, undefined)
+    const content = decoded.tool.args?.message?.kind === "text" ? decoded.tool.args.message.content : undefined
+    assert.equal(isRedactedString(content), true)
+    if (!isRedactedString(content)) assert.fail("expected redacted send-message text")
     assert.equal(
       content?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
       "hello",
     )
     assert.equal(content?.__classification, DataClassification.CODE)
     assert.equal(content?.__privacyMode, PrivacyMode.NO_STORAGE)
+  } else {
+    assert.fail("expected the Slate send-message operation")
   }
+})
+
+test("send-message text, attachment, and delivery outcomes use Slate values", () => {
+  const sources = [
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "sendMessageToolCall", value: new SendMessageToolCall({
+        args: new SendMessageArgs({ message: { case: "text", value: new SendMessageText({ content: "A delivered message" }) } }),
+        result: new SendMessageResult({ result: {
+          case: "success",
+          value: new SendMessageSuccess({ timestamp: 1720000000123n, messageId: "message-1" }),
+        } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "sendMessageToolCall", value: new SendMessageToolCall({
+        args: new SendMessageArgs({ message: { case: "attachment", value: new SendMessageAttachment({ url: "file:///tmp/report.pdf", alt: "Report" }) } }),
+        result: new SendMessageResult({ result: { case: "error", value: new SendMessageError({ error: "delivery failed" }) } }),
+      }) },
+    }) } }),
+    new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+      tool: { case: "sendMessageToolCall", value: new SendMessageToolCall({
+        args: new SendMessageArgs(),
+        result: new SendMessageResult(),
+      }) },
+    }) } }),
+  ]
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slateCalls = sources.map(source => fromInteropConversationStep(source))
+
+  for (const [index, source] of sources.entries()) {
+    const step = slateCalls[index]!
+    assert.equal(step.kind, "tool-call")
+    if (step.kind !== "tool-call") assert.fail("expected a tool call")
+    assert.equal(step.tool.kind, "send-message")
+    assert.equal(step.tool.case, undefined)
+    const stored = new TextDecoder().decode(serde.serialize(step))
+    assert.match(stored, /"operation":"send-message"/)
+    const restored = serde.deserialize(serde.serialize(step))
+    assert.deepEqual(toInteropConversationStep(restored).toJson(), source.toJson())
+  }
+
+  const first = slateCalls[0]!
+  assert.equal(first.kind, "tool-call")
+  if (first.kind !== "tool-call" || first.tool.kind !== "send-message") assert.fail("expected a Slate send-message operation")
+  assert.equal(isSlateSendMessageToolCall(first.tool), true)
+  assert.equal(isSuccessfulSlateSendMessage(first.tool), true)
+  assert.equal(slateToolCallMetricLabel(first.tool), "sendMessage")
+  assert.deepEqual(first.tool.result, { kind: "delivered", timestampMs: 1720000000123n, messageId: "message-1" })
+  const failed = slateCalls[1]!
+  assert.equal(failed.kind, "tool-call")
+  if (failed.kind !== "tool-call" || failed.tool.kind !== "send-message") assert.fail("expected a Slate send-message operation")
+  assert.equal(isSuccessfulSlateSendMessage(failed.tool), false)
+  assert.equal(slateToolCallMetricLabel(failed.tool), "sendMessage")
+})
+
+test("previous Slate send-message tool records migrate and nested unknown fields survive", () => {
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const previous = createSlateToolCallStep({
+    tool: {
+      case: "sendMessageToolCall",
+      value: {
+        args: { message: { case: "text", value: { content: "legacy message" } } },
+        result: { result: { case: "success", value: { timestamp: 9n, messageId: "legacy-id" } } },
+      },
+    },
+  })
+  const envelope = JSON.parse(
+    new TextDecoder().decode(serde.serialize(previous)).slice("SLATE-AGENT-STEP\n".length),
+  ) as { version: number; step: unknown; compatibility?: unknown }
+  envelope.version = 1
+  const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`))
+  assert.equal(migrated.kind, "tool-call")
+  if (migrated.kind !== "tool-call" || migrated.tool.kind !== "send-message") assert.fail("expected Slate send-message data")
+  assert.deepEqual(migrated.tool.result, { kind: "delivered", timestampMs: 9n, messageId: "legacy-id" })
+  const rewritten = new TextDecoder().decode(serde.serialize(migrated))
+  assert.equal(JSON.parse(rewritten.slice("SLATE-AGENT-STEP\n".length)).version, 2)
+  assert.match(rewritten, /"operation":"send-message"/)
+  assert.doesNotMatch(rewritten, /sendMessageToolCall/)
+
+  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(bytes.length + 3)
+    result.set(bytes)
+    result.set([0xa0, 0x06, 0x07], bytes.length)
+    return result
+  }
+  const textMessage = SendMessageText.fromBinary(appendUnknownVarint(new SendMessageText({ content: "with unknown" }).toBinary()))
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "sendMessageToolCall", value: new SendMessageToolCall({
+      args: new SendMessageArgs({ message: { case: "text", value: textMessage } }),
+    }) },
+  }) } })
+  const restored = toInteropConversationStep(serde.deserialize(serde.serialize(serde.deserialize(source.toBinary()))))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "sendMessageToolCall") {
+    assert.fail("expected a restored send-message call")
+  }
+  const restoredMessage = restored.message.value.tool.value.args!.message
+  if (restoredMessage.case !== "text") assert.fail("expected a text message")
+  assert.deepEqual(
+    SendMessageText.runtime.bin.listUnknownFields(restoredMessage.value),
+    SendMessageText.runtime.bin.listUnknownFields(textMessage),
+  )
 })
 
 test("task summary and progress operations use Slate values and rebuild their runner messages", () => {
