@@ -18,7 +18,7 @@ import {
   Code2,
   GitBranch,
   LoaderCircle,
-  MoreHorizontal,
+  MonitorPlay,
   Plus,
   Search,
 } from 'lucide-react'
@@ -86,8 +86,8 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         >
           {project.name}
         </button>
-        <button aria-label={t('{name} 更多操作', { name: project.name })} className="row-span-2 flex size-7 items-center justify-center self-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]" type="button">
-          <MoreHorizontal className="size-4" />
+        <button aria-label={t('打开 {name} 预览', { name: project.name })} className="row-span-2 flex size-7 items-center justify-center self-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]" onClick={() => router.push(`/app/${workspaceSlug}/preview?project=${encodeURIComponent(project.id)}`)} type="button">
+          <MonitorPlay className="size-4" />
         </button>
         <span className="flex items-center gap-1.5 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
           <i className={`size-1.5 rounded-full ${ready ? 'bg-[var(--app-success)]' : failed ? 'bg-[var(--app-warning)]' : 'bg-[var(--app-subtle-surface)]'}`} />
