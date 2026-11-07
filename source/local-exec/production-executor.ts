@@ -24,7 +24,7 @@ import { createGeneratedProductionExecCodec } from "../adapters/interop/agent/pr
 import { lsExecutorResource, type LsExecutorArgs } from "../packages/agent-exec/ls.ts";
 import { readExecutorResource } from "../packages/agent-exec/read-operation.ts";
 import { RegistryResourceAccessor } from "../packages/agent-exec/resource-provider.ts";
-import { shellStreamExecutorResource } from "../packages/agent-exec/shell-stream-operation.ts";
+import { shellStreamExecutorResource, type ShellStreamExecutorArgs } from "../packages/agent-exec/shell-stream-operation.ts";
 import { createContext, type Context } from "../packages/context/context.ts";
 import { LocalBackgroundShellExecutor } from "../packages/local-exec/background-shell.ts";
 import type { BackgroundShellSpawnInput } from "../packages/local-exec/background-shell-contracts.ts";
@@ -32,9 +32,7 @@ import { LocalDirectoryTraversal } from "../packages/local-exec/directory-traver
 import { LocalLsExecutor } from "../packages/local-exec/ls.ts";
 import { LocalReadExecutor } from "../packages/local-exec/read.ts";
 import { BaseShellCoreExecutor } from "../packages/local-exec/shell-core.ts";
-import { LocalShellStreamExecutor, type ShellStreamArgs as LocalShellStreamArgs } from "../packages/local-exec/shell-stream.ts";
-import { adaptSandboxPolicyValueFromInterop } from "../adapters/interop/agent/sandbox-policy-adapter.ts";
-import { createInteropLocalShellStreamExecutor, shellStderrEventFromInterop, shellTimeoutBehaviorFromInterop } from "../adapters/interop/agent/local-shell-stream-executor-adapter.ts";
+import { LocalShellStreamExecutor } from "../packages/local-exec/shell-stream.ts";
 import { EmptyWorkspaceIgnorePolicy } from "../packages/local-exec/runtime-ignore-policy.ts";
 import { PermissiveLocalExecAuthorization } from "../packages/local-exec/runtime-permission-policy.ts";
 import { localReadArgsFromSlate, localReadOutcomeToSlate } from "../adapters/interop/agent/local-read-executor-adapter.ts";
@@ -46,26 +44,7 @@ import type { LocalExecWireJsonValue } from "../shared/local-exec-protocol.ts";
 export type ProductionLocalExecExecutorFactory = () => LocalExecExecutor;
 
 /** What one shell operation carries to the executor: the command and where it runs. */
-interface ShellResourceArgs {
-  command: string;
-  workingDirectory?: string;
-  toolCallId?: string;
-  conversationId?: string;
-  requestedSandboxPolicy?: unknown;
-  closeStdin?: boolean;
-  timeout?: number;
-  timeoutBehavior?: unknown;
-  hardTimeout?: number;
-  fileOutputThresholdBytes?: number;
-  adminCommandDenylist?: readonly string[];
-  skipApproval?: boolean;
-  smartModeApproval?: { reason?: string; requestId?: string };
-  classifierResult?: unknown;
-  description?: string;
-  outputNotification?: unknown;
-  hookApprovalRequirement?: unknown;
-  isBackground?: boolean;
-}
+type ShellResourceArgs = ShellStreamExecutorArgs;
 
 /** What one path operation carries: the path, and the read or list options that may come with it. */
 interface PathResourceArgs {
@@ -344,7 +323,6 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
     ignoreService,
     backgroundShellExecutor.getManager(),
   );
-  const interopShellStreamExecutor = createInteropLocalShellStreamExecutor(shellStreamExecutor);
   const readExecutor = new LocalReadExecutor(permissionsService, root);
   const lsExecutor = new LocalLsExecutor(
     permissionsService,
@@ -358,21 +336,12 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
     execute: (ctx: Context, argsValue: unknown) => (async function* () {
       const operation = await settleShellOperation(guards, root, argsValue);
       if (operation.resolution.fellBackToRoot) {
-        yield shellStderrEventFromInterop(guards.missingWorkingDirectoryNotice({ requested: operation.requestedDirectory, root }));
+        yield {
+          type: "stderr",
+          data: guards.missingWorkingDirectoryNotice({ requested: operation.requestedDirectory, root }),
+        };
       }
-      const {
-        requestedSandboxPolicy: requestedWirePolicy,
-        timeoutBehavior: requestedTimeoutBehavior,
-        ...shellArgs
-      } = operation.args;
-      const internalArgs: LocalShellStreamArgs = {
-        ...shellArgs,
-        ...(requestedWirePolicy === undefined ? {} : { requestedSandboxPolicy: adaptSandboxPolicyValueFromInterop(requestedWirePolicy) }),
-        ...(requestedTimeoutBehavior === undefined ? {} : {
-          timeoutBehavior: shellTimeoutBehaviorFromInterop(requestedTimeoutBehavior),
-        }),
-      };
-      yield* interopShellStreamExecutor.execute(ctx, internalArgs);
+      yield* shellStreamExecutor.execute(ctx, operation.args);
     })(),
   });
   registry.register(backgroundShellExecutorResource, {

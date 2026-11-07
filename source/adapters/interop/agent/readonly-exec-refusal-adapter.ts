@@ -1,8 +1,10 @@
 import { McpPermissionDenied, McpResult } from "../proto/generated/agent/v1/mcp_exec_pb.ts"
-import { ShellPermissionDenied, ShellResult, ShellStream } from "../proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellPermissionDenied, ShellResult } from "../proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutor, WriteExecutorArgs, WriteExecutorResult } from "../../../packages/agent-exec/write-operation.ts"
 import type { DeleteExecutor, DeleteExecutorArgs, DeleteExecutorResult } from "../../../packages/agent-exec/delete.ts"
 import type { BackgroundShellExecutor, BackgroundShellExecutorArgs, BackgroundShellExecutorResult } from "../../../packages/agent-exec/background-shell.ts"
+import type { ShellStreamExecutor, ShellStreamExecutorArgs, ShellStreamExecutorEvent } from "../../../packages/agent-exec/shell-stream-operation.ts"
+import { permissionDeniedShellEvent } from "../../../packages/local-exec/shell-stream-events.ts"
 
 interface ShellInput {
   readonly command?: string
@@ -20,7 +22,7 @@ function shellRefusal(error: string, args: ShellInput): ShellPermissionDenied {
 
 export interface ReadonlyExecRefusalExecutors {
   readonly shell: unknown
-  readonly shellStream: unknown
+  readonly shellStream: ShellStreamExecutor
   readonly backgroundShell: BackgroundShellExecutor
   readonly write: WriteExecutor
   readonly delete: DeleteExecutor
@@ -36,8 +38,8 @@ export function createReadonlyExecRefusalExecutors(errorMessage: string): Readon
       },
     },
     shellStream: {
-      async *execute(_ctx: unknown, args: ShellInput): AsyncIterable<ShellStream> {
-        yield new ShellStream({ event: { case: "permissionDenied", value: shellRefusal(errorMessage, args) } })
+      async *execute(_ctx: unknown, args: ShellStreamExecutorArgs): AsyncIterable<ShellStreamExecutorEvent> {
+        yield permissionDeniedShellEvent(args.command, args.workingDirectory ?? "", true, errorMessage)
       },
     },
     backgroundShell: {

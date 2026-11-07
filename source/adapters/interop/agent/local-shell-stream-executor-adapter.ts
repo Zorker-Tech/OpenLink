@@ -12,17 +12,19 @@ import {
   ShellStream,
   ShellStreamBackgrounded,
   ShellStreamExit,
+  ShellStreamHookContext,
   ShellStreamStart,
   ShellStreamStderr,
   ShellStreamStdout,
   ShellSuccess,
   TimeoutBehavior,
 } from "../proto/generated/agent/v1/shell_exec_pb.ts"
-import { adaptSandboxPolicyToInterop } from "./sandbox-policy-adapter.ts"
+import { adaptSandboxPolicyFromInterop, adaptSandboxPolicyToInterop } from "./sandbox-policy-adapter.ts"
 import type { Context } from "../../../packages/context/context.ts"
 import type { LocalShellStreamExecutor, LocalShellForegroundHandoff } from "../../../packages/local-exec/shell-stream.ts"
 import type { ShellStreamArgs } from "../../../packages/local-exec/shell-stream-contracts.ts"
 import type { LocalShellStreamEvent } from "../../../packages/local-exec/shell-stream-events.ts"
+import { fromInteropHookContextMessages, toInteropHookContextMessages } from "./hook-context-adapter.ts"
 
 export function localShellStreamEventToInterop(event: LocalShellStreamEvent): ShellStream {
   switch (event.type) {
@@ -37,7 +39,7 @@ export function localShellStreamEventToInterop(event: LocalShellStreamEvent): Sh
           value: new ShellPermissionDenied({
             command: event.command,
             workingDirectory: event.workingDirectory,
-            error: "Command blocked by permissions configuration",
+            error: event.message ?? "Command blocked by permissions configuration",
             isReadonly: event.isReadonly,
           }),
         },
@@ -62,7 +64,9 @@ export function localShellStreamEventToInterop(event: LocalShellStreamEvent): Sh
             ...(event.outputLocation === undefined ? {} : { outputLocation: event.outputLocation as never }),
             aborted: event.aborted,
             ...(event.abortReason === undefined ? {} : {
-              abortReason: event.abortReason === "user_abort" ? ShellAbortReason.USER_ABORT : ShellAbortReason.TIMEOUT,
+              abortReason: typeof event.abortReason === "object"
+                ? event.abortReason.code as ShellAbortReason
+                : event.abortReason === "user_abort" ? ShellAbortReason.USER_ABORT : ShellAbortReason.TIMEOUT,
             }),
             ...(event.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.localExecutionTimeMs }),
           }),
@@ -90,17 +94,115 @@ export function localShellStreamEventToInterop(event: LocalShellStreamEvent): Sh
             command: event.command,
             workingDirectory: event.workingDirectory,
             ...(event.pid === undefined ? {} : { pid: event.pid }),
-            msToWait: event.elapsedMs,
-            reason: event.reason === "user" ? ShellBackgroundReason.USER_REQUEST : ShellBackgroundReason.TIMEOUT,
+            ...(event.elapsedMs === undefined ? {} : { msToWait: event.elapsedMs }),
+            ...(event.reason === undefined ? {} : {
+              reason: typeof event.reason === "object"
+                ? event.reason.code as ShellBackgroundReason
+                : event.reason === "user" ? ShellBackgroundReason.USER_REQUEST : ShellBackgroundReason.TIMEOUT,
+            }),
           }),
         },
       })
+    case "hookContext":
+      return new ShellStream({
+        event: { case: "hookContext", value: new ShellStreamHookContext({ hookAdditionalContexts: toInteropHookContextMessages(event.contexts) }) },
+      })
+    case "unrecognized":
+      return new ShellStream()
+  }
+}
+
+/** Projects a generated stream message into Slate's shell event vocabulary. */
+export function localShellStreamEventFromInterop(stream: ShellStream): LocalShellStreamEvent {
+  const event = stream.event
+  switch (event.case) {
+    case "rejected":
+      return { type: "rejected", command: event.value.command, workingDirectory: event.value.workingDirectory, reason: event.value.reason }
+    case "permissionDenied":
+      return {
+        type: "permissionDenied",
+        command: event.value.command,
+        workingDirectory: event.value.workingDirectory,
+        isReadonly: event.value.isReadonly,
+        message: event.value.error,
+      }
+    case "start": {
+      const policy = event.value.sandboxPolicy === undefined ? undefined : adaptSandboxPolicyFromInterop(event.value.sandboxPolicy)
+      return policy === undefined ? { type: "start" } : { type: "start", policy }
+    }
+    case "stdout":
+    case "stderr":
+      return { type: event.case, data: event.value.data }
+    case "exit": {
+      const reason = event.value.abortReason
+      const abortReason = reason === undefined
+        ? undefined
+        : reason === ShellAbortReason.USER_ABORT
+          ? "user_abort"
+          : reason === ShellAbortReason.TIMEOUT
+            ? "timeout"
+            : { kind: "unknown" as const, code: reason }
+      return {
+        type: "exit",
+        code: event.value.code,
+        cwd: event.value.cwd,
+        ...(event.value.outputLocation === undefined ? {} : {
+          outputLocation: {
+            filePath: event.value.outputLocation.filePath,
+            sizeBytes: BigInt(event.value.outputLocation.sizeBytes),
+            lineCount: BigInt(event.value.outputLocation.lineCount),
+          },
+        }),
+        aborted: event.value.aborted,
+        ...(abortReason === undefined ? {} : { abortReason }),
+        ...(event.value.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.value.localExecutionTimeMs }),
+      }
+    }
+    case "sandboxUnsupported":
+      return {
+        type: "sandboxUnsupported",
+        command: event.value.command,
+        workingDirectory: event.value.workingDirectory,
+        policyType: event.value.sandboxPolicyType,
+        reason: event.value.reason,
+        readonly: event.value.isReadonly,
+      }
+    case "backgrounded": {
+      const reason = event.value.reason
+      const backgroundReason = reason === undefined
+        ? undefined
+        : reason === ShellBackgroundReason.USER_REQUEST
+          ? "user"
+          : reason === ShellBackgroundReason.TIMEOUT
+            ? "timeout"
+            : { kind: "unknown" as const, code: reason }
+      return {
+        type: "backgrounded",
+        shellId: event.value.shellId,
+        command: event.value.command,
+        workingDirectory: event.value.workingDirectory,
+        ...(event.value.pid === undefined ? {} : { pid: event.value.pid }),
+        ...(event.value.msToWait === undefined ? {} : { elapsedMs: event.value.msToWait }),
+        ...(backgroundReason === undefined ? {} : { reason: backgroundReason }),
+      }
+    }
+    case "hookContext":
+      return { type: "hookContext", contexts: fromInteropHookContextMessages(event.value.hookAdditionalContexts) }
+    case undefined:
+      return { type: "unrecognized" }
   }
 }
 
 /** Maps the generated timeout preference to the local executor's shell mode. */
 export function shellTimeoutBehaviorFromInterop(value: unknown): "background" | "foreground" {
   return value === TimeoutBehavior.BACKGROUND ? "background" : "foreground"
+}
+
+/** Encodes Slate's shell timeout preference at the generated transport edge. */
+export function shellTimeoutBehaviorToInterop(value: "background" | "foreground" | undefined): TimeoutBehavior {
+  return value === undefined
+    ? TimeoutBehavior.UNSPECIFIED
+    : value === "background" ? TimeoutBehavior.BACKGROUND : TimeoutBehavior.CANCEL
 }
 
 /** Builds the stderr stream event used when a shell's requested directory falls back to the workspace root. */

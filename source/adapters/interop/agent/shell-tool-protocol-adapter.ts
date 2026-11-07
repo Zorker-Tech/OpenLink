@@ -1,5 +1,6 @@
 import { Struct, type JsonValue } from "@bufbuild/protobuf"
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
+import type { ShellStreamExecutorArgs, ShellStreamExecutorEvent } from "../../../packages/agent-exec/shell-stream-operation.ts"
 import { SandboxPolicy, SandboxPolicy_Type } from "../proto/generated/agent/v1/sandbox_pb.ts"
 import {
   ShellArgs,
@@ -15,7 +16,6 @@ import {
   ShellSuccess,
   ShellTimeout,
   TimeoutBehavior,
-  type ShellStream,
 } from "../proto/generated/agent/v1/shell_exec_pb.ts"
 import { ShellToolCall } from "../proto/generated/agent/v1/shell_tool_pb.ts"
 import {
@@ -24,10 +24,10 @@ import {
   SmartModeRiskTarget,
   type SmartModeClassifierResult,
 } from "../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
+import { adaptSandboxPolicyFromInterop } from "./sandbox-policy-adapter.ts"
 import { renderInteropShellResultToString } from "./shell-result-format-adapter.ts"
 
 export type ShellArgsInterop = ShellArgs
-export type ShellStreamInterop = ShellStream
 export type ShellResultInterop = ShellResult
 export type ShellToolCallInterop = ShellToolCall
 export type ShellToolEnvelopeInterop = ToolCall
@@ -215,38 +215,68 @@ export function emptyShellArgsInterop(): ShellArgsInterop {
   return new ShellArgs()
 }
 
-export function projectShellStreamEventInterop(stream: ShellStream): ShellStreamEventViewInterop {
-  const event = stream.event
-  switch (event.case) {
+/** Projects the recorded tool-call arguments into the executor's Slate request contract. */
+export function shellStreamArgsFromToolCallInterop(args: ShellArgsInterop): ShellStreamExecutorArgs {
+  return {
+    command: args.command,
+    workingDirectory: args.workingDirectory,
+    timeout: args.timeout,
+    toolCallId: args.toolCallId,
+    ...(args.requestedSandboxPolicy === undefined ? {} : { requestedSandboxPolicy: adaptSandboxPolicyFromInterop(args.requestedSandboxPolicy) }),
+    isBackground: args.isBackground,
+    skipApproval: args.skipApproval,
+    timeoutBehavior: args.timeoutBehavior === TimeoutBehavior.BACKGROUND ? "background" : "foreground",
+    ...(args.hardTimeout === undefined ? {} : { hardTimeout: args.hardTimeout }),
+    ...(args.description === undefined ? {} : { description: args.description }),
+    closeStdin: args.closeStdin,
+    ...(args.classifierResult === undefined ? {} : { classifierResult: args.classifierResult }),
+    ...(args.outputNotification === undefined ? {} : { outputNotification: args.outputNotification }),
+    ...(args.smartModeApproval === undefined ? {} : { smartModeApproval: { reason: args.smartModeApproval.reason, requestId: args.smartModeApproval.requestId } }),
+    ...(args.hookApprovalRequirement === undefined ? {} : { hookApprovalRequirement: args.hookApprovalRequirement }),
+    ...(args.conversationId === undefined ? {} : { conversationId: args.conversationId }),
+    adminCommandDenylist: [...args.adminCommandDenylist],
+  }
+}
+
+export function projectShellStreamEventInterop(event: ShellStreamExecutorEvent): ShellStreamEventViewInterop {
+  switch (event.type) {
     case "stdout":
     case "stderr":
-      return { kind: event.case, data: event.value.data }
-    case "exit":
+      return { kind: event.type, data: event.data }
+    case "exit": {
+      const abortReason = event.abortReason === "user_abort"
+        ? 1
+        : event.abortReason === "timeout"
+          ? 2
+          : typeof event.abortReason === "object" ? event.abortReason.code : undefined
       return {
         kind: "exit",
-        code: event.value.code,
-        aborted: event.value.aborted,
-        ...(event.value.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.value.localExecutionTimeMs }),
-        ...(event.value.outputLocation === undefined ? {} : { outputLocation: event.value.outputLocation }),
-        ...(event.value.abortReason === undefined ? {} : { abortReason: event.value.abortReason }),
+        code: event.code,
+        aborted: event.aborted,
+        ...(event.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.localExecutionTimeMs }),
+        ...(event.outputLocation === undefined ? {} : { outputLocation: event.outputLocation }),
+        ...(abortReason === undefined ? {} : { abortReason }),
       }
+    }
     case "rejected":
-      return { kind: "rejected", command: event.value.command, workingDirectory: event.value.workingDirectory, reason: event.value.reason }
+      return { kind: "rejected", command: event.command, workingDirectory: event.workingDirectory, reason: event.reason }
     case "permissionDenied":
-      return { kind: "permission-denied", command: event.value.command, workingDirectory: event.value.workingDirectory, error: event.value.error, isReadonly: event.value.isReadonly }
+      return { kind: "permission-denied", command: event.command, workingDirectory: event.workingDirectory, error: event.message ?? "Command blocked by permissions configuration", isReadonly: event.isReadonly }
     case "sandboxUnsupported":
-      return { kind: "sandbox-unsupported", reason: event.value.reason }
+      return { kind: "sandbox-unsupported", reason: event.reason }
     case "backgrounded":
       return {
         kind: "backgrounded",
-        command: event.value.command,
-        workingDirectory: event.value.workingDirectory,
-        shellId: event.value.shellId,
-        ...(event.value.pid === undefined ? {} : { pid: event.value.pid }),
-        ...(event.value.msToWait === undefined ? {} : { msToWait: event.value.msToWait }),
-        ...(event.value.reason === undefined ? {} : { reason: event.value.reason }),
+        command: event.command,
+        workingDirectory: event.workingDirectory,
+        shellId: event.shellId,
+        ...(event.pid === undefined ? {} : { pid: event.pid }),
+        ...(event.elapsedMs === undefined ? {} : { msToWait: event.elapsedMs }),
+        ...(event.reason === undefined ? {} : { reason: event.reason === "user" ? 2 : event.reason === "timeout" ? 1 : event.reason.code }),
       }
-    default:
+    case "start":
+    case "hookContext":
+    case "unrecognized":
       return { kind: "other" }
   }
 }
