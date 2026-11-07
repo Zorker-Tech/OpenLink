@@ -32,9 +32,9 @@
     },
     "packages/agent-exec/shell-stream.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "The Slate shell stream port delegates generated event envelopes to the interop adapter.",
-      "evidence": "tests/packages/interop-shell-stream-exec-adapter.test.ts verifies event filtering, ordered streamed output, controlled request matching, and response cases; the agent-shell-tool suite also passes (26/26). Both ran as local esbuild bundles because Node 22.20 cannot parse the repository's using declarations. Package typecheck passes and interop:check removes one direct schema consumer."
+      "overlap": 0.05172413793103448,
+      "refreshReason": "Slate shell-stream args and events now use first-party request and event types; generated frames are translated in the transport adapter.",
+      "evidence": "Focused shell, local-exec and remote-box suites pass 86/86; work-host typecheck, rewrite and interop gates pass. The full suite passed 10044/10045; its only failure was an authenticated box-daemon Ping timeout, while the isolated box-process suite passes 15/15."
     },
     "packages/agent-exec/subagent-await.ts": {
       "claim": "rewritten",

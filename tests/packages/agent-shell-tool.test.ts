@@ -13,10 +13,7 @@ import {
 } from "../../source/packages/agent/tools/core/shell/create-shell-tool.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { shellStreamExecutorResource } from "../../source/packages/agent-exec/shell-stream-operation.ts"
-import {
-  ShellStream,
-} from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
-import { SandboxPolicy_Type } from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts"
+import type { LocalShellStreamEvent } from "../../source/packages/local-exec/shell-stream-events.ts"
 import type { ShellResult } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
@@ -26,15 +23,15 @@ import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1
 
 const ctx = createContext()
 
-const stdout = (data: string) => new ShellStream({ event: { case: "stdout", value: { data } } as never })
-const stderr = (data: string) => new ShellStream({ event: { case: "stderr", value: { data } } as never })
-const exit = (code: number, extra: Record<string, unknown> = {}) =>
-  new ShellStream({ event: { case: "exit", value: { code, aborted: false, localExecutionTimeMs: 12, ...extra } } as never })
-const backgrounded = (fields: Record<string, unknown>) =>
-  new ShellStream({ event: { case: "backgrounded", value: { command: "npm run watch", workingDirectory: "/repo", shellId: 3, ...fields } } as never })
+const stdout = (data: string): LocalShellStreamEvent => ({ type: "stdout", data })
+const stderr = (data: string): LocalShellStreamEvent => ({ type: "stderr", data })
+const exit = (code: number, extra: Record<string, unknown> = {}): LocalShellStreamEvent =>
+  ({ type: "exit", code, cwd: "/repo", aborted: false, localExecutionTimeMs: 12, ...extra } as LocalShellStreamEvent)
+const backgrounded = (fields: Record<string, unknown>): LocalShellStreamEvent =>
+  ({ type: "backgrounded", command: "npm run watch", workingDirectory: "/repo", shellId: 3, ...fields } as LocalShellStreamEvent)
 
 /** An executor that answers with the events the test asks for, and records what it was asked. */
-function executor(events: ShellStream[] | { throw: unknown }) {
+function executor(events: LocalShellStreamEvent[] | { throw: unknown }) {
   const calls: Array<{ args: unknown; options: unknown }> = []
   return {
     calls,
@@ -65,7 +62,7 @@ function interaction(options: { aborted?: boolean; onExecute?: (call: ToolCall) 
   }
 }
 
-const tool = (options: ShellToolOptions, events: ShellStream[] | { throw: unknown } = [exit(0)]) => {
+const tool = (options: ShellToolOptions, events: LocalShellStreamEvent[] | { throw: unknown } = [exit(0)]) => {
   const recorded = executor(events)
   return { recorded, built: createShellTool(accessor(recorded.executor) as never, options) }
 }
@@ -131,7 +128,7 @@ test("a command that fails is a failure rather than an error", async () => {
 })
 
 test("a command that was stopped says so", async () => {
-  const { built } = tool({}, [exit(143, { aborted: true, abortReason: 1 })])
+  const { built } = tool({}, [exit(143, { aborted: true, abortReason: "user_abort" })])
   const result = await run(built as Record<string, unknown>, { command: "sleep 100" })
   assert.equal(result.result.case, "failure")
   const value = (result.result as { value: { aborted?: boolean; signal: string } }).value
@@ -145,7 +142,7 @@ test("a stream that ends without an exit is not a result", async () => {
 })
 
 test("a command that is moved to the background answers with the shell to watch", async () => {
-  const { built } = tool({}, [stdout("starting\n"), backgrounded({ pid: 42, msToWait: 5, reason: 1 })])
+  const { built } = tool({}, [stdout("starting\n"), backgrounded({ pid: 42, elapsedMs: 5, reason: "timeout" })])
   const recorded = interaction()
   const result = await run(built as Record<string, unknown>, { command: "npm run watch" }, recorded.handler)
   assert.equal(result.result.case, "success")
@@ -160,14 +157,17 @@ test("a command that is moved to the background answers with the shell to watch"
 
 test("the command is sent with everything the parser found in it", async () => {
   const { recorded, built } = tool({})
-  await run(built as Record<string, unknown>, { command: "git status && ls > /dev/null", working_directory: "/repo" })
-  const args = recorded.calls[0]?.args as { command: string; workingDirectory: string; simpleCommands: string[]; hasOutputRedirect: boolean; parsingResult: { hasRedirects: boolean; allRedirectsAreDevNull?: boolean } }
+  let call: ToolCall | undefined
+  const bridge = interaction({ onExecute: value => { call = value } })
+  await run(built as Record<string, unknown>, { command: "git status && ls > /dev/null", working_directory: "/repo" }, bridge.handler)
+  const args = argsOf(call!)
   assert.equal(args.command, "git status && ls > /dev/null")
   assert.equal(args.workingDirectory, "/repo")
   assert.deepEqual(args.simpleCommands, ["git", "ls"])
   assert.equal(args.hasOutputRedirect, true)
-  assert.equal(args.parsingResult.hasRedirects, true)
-  assert.equal(args.parsingResult.allRedirectsAreDevNull, true)
+  const parsingResult = args.parsingResult as { hasRedirects: boolean; allRedirectsAreDevNull?: boolean }
+  assert.equal(parsingResult.hasRedirects, true)
+  assert.equal(parsingResult.allRedirectsAreDevNull, true)
 })
 
 test("a description is passed on under the name its prompt version uses", async () => {
@@ -209,25 +209,25 @@ test("a sandboxed session gets the policy the command asked for", async () => {
   const asked = async (args: Record<string, unknown>) => {
     const { recorded, built } = tool({ sandboxEnabled: true })
     await run(built as Record<string, unknown>, args)
-    return (recorded.calls[0]?.args as { requestedSandboxPolicy?: { type: number; networkAccess: boolean; additionalReadwritePaths: string[] } }).requestedSandboxPolicy
+    return (recorded.calls[0]?.args as { requestedSandboxPolicy?: { type: string; networkPolicy?: { default?: string }; additionalReadwritePaths?: string[] } }).requestedSandboxPolicy
   }
   // Nothing asked for means a workspace it may write, without the network.
   const plain = await asked({ command: "ls" })
-  assert.equal(plain?.type, SandboxPolicy_Type.WORKSPACE_READWRITE)
-  assert.equal(plain?.networkAccess, false)
+  assert.equal(plain?.type, "workspace_readwrite")
+  assert.equal(plain?.networkPolicy?.default, "deny")
   const networked = await asked({ command: "curl example.com", required_permissions: ["network"] })
-  assert.equal(networked?.networkAccess, true)
+  assert.equal(networked?.networkPolicy?.default, "allow")
   // Asking for everything means no sandbox at all.
-  assert.equal((await asked({ command: "ls", required_permissions: ["all"] }))?.type, SandboxPolicy_Type.INSECURE_NONE)
+  assert.equal((await asked({ command: "ls", required_permissions: ["all"] }))?.type, "insecure_none")
 })
 
 test("a read-only session is confined however much it asks for", async () => {
   const { recorded, built } = tool({ sandboxEnabled: true, isReadonly: true })
   await run(built as Record<string, unknown>, { command: "ls", required_permissions: ["network"] })
-  const policy = (recorded.calls[0]?.args as { requestedSandboxPolicy: { type: number; networkAccess: boolean } }).requestedSandboxPolicy
-  assert.equal(policy.type, SandboxPolicy_Type.WORKSPACE_READONLY)
+  const policy = (recorded.calls[0]?.args as { requestedSandboxPolicy: { type: string; networkPolicy?: { default?: string } } }).requestedSandboxPolicy
+  assert.equal(policy.type, "workspace_readonly")
   // The network is still what the command asked for, since reading a page changes nothing.
-  assert.equal(policy.networkAccess, true)
+  assert.equal(policy.networkPolicy?.default, "allow")
 })
 
 test("a read-only session cannot even ask for everything", async () => {
@@ -297,7 +297,7 @@ test("the platform's own guard refuses a command that would look at the user's s
 })
 
 test("a command the executor refuses is answered as a refusal", async () => {
-  const { built } = tool({}, [new ShellStream({ event: { case: "rejected", value: { command: "rm -rf /", workingDirectory: "/repo", reason: "the user said no" } } as never })])
+  const { built } = tool({}, [{ type: "rejected", command: "rm -rf /", workingDirectory: "/repo", reason: "the user said no" }])
   await assert.rejects(
     () => run(built as Record<string, unknown>, { command: "rm -rf /" }),
     (error: unknown) => {
@@ -309,7 +309,7 @@ test("a command the executor refuses is answered as a refusal", async () => {
 })
 
 test("a command the platform denies is answered as a denial", async () => {
-  const { built } = tool({}, [new ShellStream({ event: { case: "permissionDenied", value: { command: "rm -rf /", workingDirectory: "/repo", error: "read-only", isReadonly: true } } as never })])
+  const { built } = tool({}, [{ type: "permissionDenied", command: "rm -rf /", workingDirectory: "/repo", message: "read-only", isReadonly: true }])
   await assert.rejects(
     () => run(built as Record<string, unknown>, { command: "rm -rf /" }),
     (error: unknown) => {
@@ -321,7 +321,7 @@ test("a command the platform denies is answered as a denial", async () => {
 })
 
 test("a sandbox this machine cannot provide is an environment failure", async () => {
-  const { built } = tool({}, [new ShellStream({ event: { case: "sandboxUnsupported", value: { reason: "no seatbelt here" } } as never })])
+  const { built } = tool({}, [{ type: "sandboxUnsupported", command: "git status", workingDirectory: "/repo", policyType: "workspace_readwrite", reason: "no seatbelt here", readonly: false }])
   await assert.rejects(() => run(built as Record<string, unknown>, { command: "ls" }), /no seatbelt here/)
 })
 

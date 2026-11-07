@@ -14,8 +14,9 @@ import type { RemoteExecManager } from "../../source/packages/agent-exec/executo
 import { createContext } from "../../source/packages/context/context.ts"
 import type { DeleteExecutorResult } from "../../source/packages/agent-exec/delete.ts"
 import type { BackgroundShellExecutorResult } from "../../source/packages/agent-exec/background-shell.ts"
+import type { ShellStreamExecutorEvent } from "../../source/packages/agent-exec/shell-stream-operation.ts"
 import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
-import type { ShellResult, ShellStream } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import type { ShellResult } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -126,12 +127,13 @@ test("running a command is refused when shells are wrapped", async () => {
 })
 
 test("a streamed command is refused with the same answer", async () => {
-  const events = await collect(accessor(true).get(shellStreamExecutorResource), { command: "npm test" })
+  const events = await collect(accessor(true).get(shellStreamExecutorResource), { command: "npm test" }) as ShellStreamExecutorEvent[]
   assert.equal(events.length, 1)
-  const event = (events[0] as { event: { case: string; value: { command: string; error: string } } }).event
-  assert.equal(event.case, "permissionDenied")
-  assert.equal(event.value.command, "npm test")
-  assert.match(event.value.error, READONLY_REASON)
+  const event = events[0]
+  assert.equal(event?.type, "permissionDenied")
+  if (event?.type !== "permissionDenied") assert.fail("expected a permission denial")
+  assert.equal(event.command, "npm test")
+  assert.match(event.message ?? "", READONLY_REASON)
 })
 
 test("a background command is refused with the same answer", async () => {

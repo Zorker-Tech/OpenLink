@@ -125,9 +125,7 @@ source/local-exec/main.ts	../adapters/interop/telemetry/local-exec-crash-reporte
 source/local-exec/production-executor.ts	../adapters/interop/agent/background-shell-operation-adapter.ts
 source/local-exec/production-executor.ts	../adapters/interop/agent/controlled-exec-manager-adapter.ts
 source/local-exec/production-executor.ts	../adapters/interop/agent/local-read-executor-adapter.ts
-source/local-exec/production-executor.ts	../adapters/interop/agent/local-shell-stream-executor-adapter.ts
 source/local-exec/production-executor.ts	../adapters/interop/agent/production-exec-codec-adapter.ts
-source/local-exec/production-executor.ts	../adapters/interop/agent/sandbox-policy-adapter.ts
 source/packages/agent-client/errors.ts	../../adapters/interop/agent/agent-error-details-adapter.ts
 source/packages/agent-core/interaction-updates.ts	../../adapters/interop/agent/interaction-update-adapter.ts
 source/packages/agent-core/redacted-interaction-updates.ts	../../adapters/interop/agent/redacted-interaction-updates-adapter.ts

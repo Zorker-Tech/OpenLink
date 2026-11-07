@@ -33,8 +33,8 @@ import { z } from "zod"
 
 import { createStringResult } from "../../../../chat-inference/prompt-executor.ts"
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
-import type { RemoteExecManager, StreamExecutor } from "../../../../agent-exec/executor-resources.ts"
-import { shellStreamExecutorResource } from "../../../../agent-exec/shell-stream-operation.ts"
+import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
+import { shellStreamExecutorResource, type ShellStreamExecutor, type ShellStreamExecutorArgs, type ShellStreamExecutorEvent } from "../../../../agent-exec/shell-stream-operation.ts"
 import { smartModeClassifierExecutorResource } from "../../../../agent-exec/smart-mode-classifier-operation.ts"
 import {
   createBackgroundShellSuccessInterop,
@@ -47,6 +47,7 @@ import {
   escalatedShellSandboxPolicyInterop,
   formatShellResultInterop,
   projectShellStreamEventInterop,
+  shellStreamArgsFromToolCallInterop,
   projectSmartModeClassifierDecisionInterop,
   shellSandboxPolicyFingerprintInterop,
   createShellStreamResultInterop,
@@ -54,7 +55,6 @@ import {
   type ShellResultInterop,
   type ShellSandboxPolicy,
   type ShellStreamEventViewInterop,
-  type ShellStreamInterop,
   type ShellTimeoutBehaviorInterop,
   type ShellToolEnvelopeInterop,
 } from "../../../../../adapters/interop/agent/shell-tool-protocol-adapter.ts"
@@ -85,7 +85,7 @@ import { checkShellDesktopControl } from "./ui-automation-guard.ts"
 
 /** The resource boundary the shell shellStreamExecutor lane owns. */
 export type ShellToolResourceAccessor = ResourceAccessor<RemoteExecManager>
-export type ShellStreamExecutor = StreamExecutor<ShellArgsInterop, ShellStreamInterop>
+export type { ShellStreamExecutor }
 
 /** Where a command runs: the machine the user is at, or a box that was made for it. */
 export type ShellToolSurface = "host_machine" | "isolated_box"
@@ -201,7 +201,7 @@ export interface ShellToolOptions {
   }
   readonly preflight?: (toolCtx: Context, request: ShellPreflightRequest) => Promise<ShellPreflightDecision>
   readonly onAudit?: (toolCtx: Context, request: ShellPreflightRequest, decision: ShellPreflightDecision) => void
-  readonly onStreamEvent?: (toolCtx: Context, event: ShellStreamInterop) => Promise<void>
+  readonly onStreamEvent?: (toolCtx: Context, event: ShellStreamExecutorEvent) => Promise<void>
   readonly onTelemetry?: (toolCtx: Context, event: { readonly type: "started" | "finished" | "backgrounded"; readonly toolCallId: string }) => void
   readonly isPlatformEnabled?: (platform: NodeJS.Platform) => boolean
   readonly smartModeClassifierControls?: SmartModeClassifierControls
@@ -557,7 +557,7 @@ function streamResultOf(command: string, workingDirectory: string, stdout: strin
 }
 
 /** Reads the shellStreamExecutor's outputStream to its end, where a command that was moved to the background ends early. */
-async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecutor, args: ShellArgsInterop, interactionBridge: ShellToolInteractionHandler, executionMeta: ShellToolExecutionMeta, settings: ShellToolOptions, policy: ShellSandboxPolicy | undefined): Promise<ShellResultInterop> {
+async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecutor, args: ShellStreamExecutorArgs, interactionBridge: ShellToolInteractionHandler, executionMeta: ShellToolExecutionMeta, settings: ShellToolOptions, policy: ShellSandboxPolicy | undefined): Promise<ShellResultInterop> {
   let stdout = ""
   let stderr = ""
   let interleavedOutput = ""
@@ -595,7 +595,7 @@ async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecu
       case "other": break
     }
   }
-  return streamResultOf(args.command, args.workingDirectory, stdout, stderr, interleavedOutput, exit, policy)
+  return streamResultOf(args.command, args.workingDirectory ?? "", stdout, stderr, interleavedOutput, exit, policy)
 }
 
 /** Every way a command can fail has its own shape in the result the model and the user read. */
@@ -738,7 +738,7 @@ export function createShellTool(resourceAccessor: ShellToolResourceAccessor, set
       // A command that changes files waits for whatever else is changing them, since two writers at once is
       // how a workspace ends up inconsistent.
       const lock = settings.fileOperationLockManager === undefined ? undefined : await settings.fileOperationLockManager.waitForExclusiveLock(runCtx)
-      try { return await runStream(runCtx, shellStreamExecutor, args, interactionBridge, executionMeta, settings, policy) }
+      try { return await runStream(runCtx, shellStreamExecutor, shellStreamArgsFromToolCallInterop(args), interactionBridge, executionMeta, settings, policy) }
       finally { lock?.[Symbol.dispose]() }
     }, mergedResult => createShellToolCallInterop({ args, result: mergedResult }), executionMeta.hookContextCollector)
     settings.onTelemetry?.(toolCtx, { type: "finished", toolCallId: executionMeta.toolCallId })
