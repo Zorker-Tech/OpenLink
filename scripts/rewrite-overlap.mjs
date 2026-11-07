@@ -131,7 +131,6 @@ const EXEMPT = [
   ["adapters/interop/agent/remote-hooks-protocol-adapter.ts", "interop adapter: builds and projects generated hook executor messages at the workspace boundary"],
   ["adapters/interop/agent/compaction-skill-message-adapter.ts", "interop adapter: projects external redacted conversation messages and summary markers into Slate skill-retention policy"],
   ["adapters/interop/agent/recording-file-name-adapter.ts", "interop adapter: maps Slate recording-name decisions to the counterpart rejection enum"],
-  ["adapters/interop/agent/local-ls-exec-adapter.ts", "interop adapter: executes a local listing while projecting tree and result values into the external Agent LS messages"],
   ["adapters/interop/analytics/action-audit-backend-adapter.ts", "interop adapter: serializes Slate audit records into generated dashboard events and submits request batches"],
   ["adapters/interop/agent/shell-block-result-adapter.ts", "interop adapter: encodes Slate shell-block decisions as the counterpart executor result"],
   ["adapters/interop/agent/smart-mode-classifier-controls-adapter.ts", "interop adapter: projects counterpart request-context classifier settings into Slate controls"],
@@ -1962,7 +1961,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ["packages/local-exec/ls.ts", [
     "packages/local-exec/ls-contracts.ts",
     "packages/local-exec/ls-tree-builder.ts",
-    "adapters/interop/agent/local-ls-exec-adapter.ts",
   ]],
   ["packages/agent/utils/mcp-meta-tool-options.ts", [
     "adapters/interop/agent/mcp-meta-tool-options-adapter.ts",

@@ -348,9 +348,9 @@
     },
     "packages/agent-exec/ls.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "Directory-listing executor cases moved into interop and the package module remains the operation export.",
-      "evidence": "tests/packages/interop-ls-operation-adapter.test.ts pins remote and controlled case routing and wrong-operation refusal; await tool, executor, and remote-box suites pass. interop:check drops one direct schema consumer."
+      "overlap": 0.034,
+      "refreshReason": "The Slate listing request/result union and shared directory-tree data now live at the application boundary; generated message conversion is isolated in the transport adapter.",
+      "evidence": "tests/packages/interop-ls-operation-adapter.test.ts pins argument and recursive result conversion, terminal metadata, timeout, unknown result, remote routing, controlled routing, and wrong-operation refusal; agent-exec and await-tool suites use Slate values."
     },
     "packages/agent-exec/hook-executor.ts": {
       "claim": "rewritten",
@@ -958,9 +958,9 @@
     },
     "packages/local-exec/ls.ts": {
       "claim": "rewritten",
-      "overlap": 0.4177978883861237,
-      "refreshReason": "Generated LS result construction moved into a dedicated interop adapter; the rewrite source group now measures Slate traversal/contracts and lists the adapter as an auditable exemption.",
-      "evidence": "host-local-exec-ls-contract.test.ts passes 6/6, local-exec-foundations.test.ts passes 25/25, rewrite-overlap.test.ts passes 62/62, and work-host typecheck passes. The interop boundary now tracks 76 direct schema consumers."
+      "overlap": 0.549,
+      "refreshReason": "The bounded directory traversal now constructs Slate directory-tree records and returns a typed Slate result.",
+      "evidence": "host-local-exec-ls-contract.test.ts and local-exec-foundations.test.ts pin ignore policy, sandbox propagation, sorting, budgeted counts, partial timeout trees, missing paths, and traversal failures; package typecheck passes."
     },
     "shared/os-notification.ts": {
       "claim": "rewritten",

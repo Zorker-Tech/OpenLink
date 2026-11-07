@@ -21,7 +21,7 @@ import { backgroundShellExecutorResource } from "../packages/agent-exec/backgrou
 import { backgroundShellSpawnInputFromInterop, backgroundShellSpawnOutcomeToInterop } from "../adapters/interop/agent/background-shell-operation-adapter.ts";
 import { SimpleControlledExecManager } from "../adapters/interop/agent/controlled-exec-manager-adapter.ts";
 import { createGeneratedProductionExecCodec } from "../adapters/interop/agent/production-exec-codec-adapter.ts";
-import { lsExecutorResource } from "../packages/agent-exec/ls.ts";
+import { lsExecutorResource, type LsExecutorArgs } from "../packages/agent-exec/ls.ts";
 import { readExecutorResource } from "../packages/agent-exec/read-operation.ts";
 import { RegistryResourceAccessor } from "../packages/agent-exec/resource-provider.ts";
 import { shellStreamExecutorResource } from "../packages/agent-exec/shell-stream-operation.ts";
@@ -362,9 +362,10 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
   });
   registry.register(lsExecutorResource, {
     execute: async (ctx: Context, argsValue: unknown) => {
-      assertPathArguments(argsValue);
-      await guards.containPath({ root, path: argsValue.path });
-      return lsExecutor.execute(ctx, argsValue);
+      const args = argsValue as LsExecutorArgs;
+      assertPathArguments(args);
+      await guards.containPath({ root, path: args.path });
+      return lsExecutor.execute(ctx, args);
     },
   });
   return registry;

@@ -67,7 +67,7 @@ import {
   conflictNoticeSyncAndPeek,
 } from "../../source/packages/agent-exec/agent-store-conflict-notice.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { LsArgs, LsResult } from "../../source/adapters/interop/proto/generated/agent/v1/ls_exec_pb.ts"
+import type { LsExecutorArgs, LsExecutorResult } from "../../source/packages/agent-exec/ls.ts"
 import { ExecClientMessage } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import {
   ShellHookApprovalRequirement,
@@ -112,9 +112,19 @@ test("an operation runs where the host is, over the exec channel", async () => {
   const registry = new RegistryResourceAccessor()
   let calls = 0
   registry.register(lsExecutorResource, {
-    async execute(_ctx: Context, args: LsArgs) {
+    async execute(_ctx: Context, args: LsExecutorArgs): Promise<LsExecutorResult> {
       calls += 1
-      return new LsResult({ result: { case: "success", value: { directoryTreeRoot: { absPath: args.path } } as never } })
+      return {
+        kind: "success",
+        root: {
+          absPath: args.path,
+          childrenWereProcessed: true,
+          childrenFiles: [],
+          childrenDirs: [],
+          numFiles: 0,
+          fullSubtreeExtensionCounts: {},
+        },
+      }
     },
   })
   const serving = SimpleControlledExecManager.fromResources(registry)
@@ -126,11 +136,10 @@ test("an operation runs where the host is, over the exec channel", async () => {
     },
   })
 
-  const result = await client.get(lsExecutorResource).execute(createContext(), new LsArgs({ path: "/repo" }))
+  const result = await client.get(lsExecutorResource).execute(createContext(), { path: "/repo" })
   assert.equal(calls, 1)
-  assert.equal(result instanceof LsResult, true)
-  assert.equal(result.result.case, "success")
-  assert.equal(result.result.case === "success" ? result.result.value.directoryTreeRoot?.absPath : "", "/repo")
+  assert.equal(result.kind, "success")
+  assert.equal(result.kind === "success" ? result.root?.absPath : "", "/repo")
 })
 
 test("a client reaches an operation by the resource, and gets an executor for it", () => {
