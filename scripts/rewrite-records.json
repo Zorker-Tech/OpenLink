@@ -2734,9 +2734,9 @@
     },
     "host/extensions/session/production.ts": {
       "claim": "rewritten",
-      "overlap": 0.5151079136690647,
+      "overlap": 0.5913669064748202,
       "refreshReason": "The session production store now hydrates SlateHydratedConversation directly and projects only to the existing outline view.",
-      "evidence": "Slate session-store assembly hydrates first-party conversation values and projects the existing maintenance outline at its boundary. The full Work-host suite passes 9982/9982 across 1427 suites under Node 24.14 with concurrency 1; typecheck, extension-id, rewrite and interop gates pass."
+      "evidence": "Slate session-store assembly hydrates first-party conversation values and projects the existing maintenance outline at its boundary. The generated computer-use executor bridge is included in the measured source group rather than exempted; overlap is 0.5913669064748202 against 695 baseline pairs. The full Node 24 Work-host suite passes 10029/10029; typecheck, extension-id, rewrite and interop gates pass."
     },
     "packages/agent-core/interaction-queries.ts": {
       "claim": "rewritten",
@@ -2767,8 +2767,8 @@
     },
     "host/runner/remote-box-resources.ts": {
       "claim": "rewritten",
-      "overlap": 0.7552870090634441,
-      "evidence": "Remote-box connection, shell-gating, audit, desktop-monitor, classifier-registration and interop projection contracts pass 26/26; the full Work-host suite passes 9126/9126 under Node 24. Work-host typecheck, interop boundary (159 direct consumers) and rewrite gate pass. The runner now uses a bounded executor port and Slate-owned command/action audit projections; wire request types stay in adapters."
+      "overlap": 0.7749244712990937,
+      "evidence": "Remote-box connection, shell-gating, audit, desktop-monitor, classifier-registration and Slate computer-resource contracts pass; the full Node 24 Work-host suite passes 10029/10029. Work-host typecheck, interop boundary (316 core imports across 221 files) and rewrite gate pass. Both computer-use adapter sources are included in the measured source group; overlap is 0.7749244712990937 against 662 baseline pairs."
     },
     "packages/agent/context-processing-video-data.ts": {
       "claim": "rewritten",
@@ -4436,7 +4436,7 @@
       "claim": "rewritten",
       "overlap": 0.6596543951915853,
       "refreshReason": "The host computer tool now parses inputs into Slate action kinds and Slate result outcomes; generated executor messages are projected only at the executor adapter.",
-      "evidence": "Computer tool, public executor resource, both executor conversion directions, conversation-step and classifier contracts pass 57/57; the full Node 24 Work-host suite passes 10028/10028. Package typecheck passes with 1204 rewrite claims under 0.8, 0 floors and 40 removals; interop boundary reports 316 core imports across 221 files. Measured overlap is 0.6596543951915853 against 1331 baseline pairs."
+      "evidence": "Computer tool, public executor resource, both executor conversion directions, conversation-step and classifier contracts pass 57/57; the full Node 24 Work-host suite passes 10029/10029. Package typecheck passes with 1204 rewrite claims under 0.8, 0 floors and 40 removals; interop boundary reports 316 core imports across 221 files. Measured overlap is 0.6596543951915853 against 1331 baseline pairs."
     },
     "packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts": {
       "claim": "rewritten",

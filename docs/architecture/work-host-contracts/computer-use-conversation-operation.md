@@ -18,12 +18,12 @@ are never included in classifier context; the classifier receives only whether a
 The public `computerUseExecutorResource` also exposes the Slate request/result types. Its adapter encodes those values
 to the older generated executor envelope and decodes back; both remote and controlled directions are pinned. That is
 an internal protocol migration, not a product contract or a lasting external compatibility exemption. The overlap
-inventory still carries a historical exemption for this adapter; remove it with the protocol migration. Completion
-must move the host and box-exec consumer together to a versioned Slate-owned request/result contract before the
-generated path can be removed. The adapter preserves action counts, elapsed time, logs, screenshot paths, screenshot
-data and cursor coordinates in both success and error outcomes. The default Slate box-exec daemon currently reports
-computer-use as unsupported; this slice does not claim to add that desktop execution backend or to change the
-advertised capability.
+inventory's historical exemptions for the computer-use executor and remote-box projection have been removed; both
+owning source groups are now measured below 0.8. Completion must move the host and box-exec consumer together to a
+versioned Slate-owned request/result contract before the generated path can be removed. The adapter preserves action
+counts, elapsed time, logs, screenshot paths, screenshot data and cursor coordinates in both success and error
+outcomes. The default Slate box-exec daemon currently reports computer-use as unsupported; this slice does not claim
+to add that desktop execution backend or to change the advertised capability.
 
 `host-computer-tool.test.ts` pins Slate action projection, validation, defaults, result rendering and screenshot
 persistence. `host-computer-tool-dependencies.test.ts` pins the Slate host port and executor message mapping.

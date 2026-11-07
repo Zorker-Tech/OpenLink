@@ -249,6 +249,11 @@ describe("rewrite overlap gate inputs", () => {
     assert.match(exemptSourceReason("adapters/interop/agent/box-remote-exec-accessor-adapter.ts") ?? "", /interop adapter/);
   });
 
+  it("measures the Slate-owned computer executor bridge instead of exempting its directory", () => {
+    assert.equal(exemptSourceReason("adapters/interop/agent/computer-use-executor-adapter.ts"), undefined);
+    assert.equal(exemptSourceReason("adapters/interop/agent/remote-box-resource-adapter.ts"), undefined);
+  });
+
   it("ignores comments and whitespace while retaining code tokens", () => {
     assert.deepEqual(codeTokens("const value = 1; // comment\n"), ["const", "value", "1"]);
     assert.deepEqual(overlapOf("const value = 1;", "const\nvalue=1;"), {
