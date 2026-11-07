@@ -13,10 +13,10 @@ Related: [ADR-0004](./ADR-0004-browser-runtime-surfaces.md),
 ## Context
 
 ADR-0004 already selects a sandboxed iframe for managed web previews and a
-Chromium stream for arbitrary browser sessions. The Project preview proxy
-provides an authenticated route, forwards HTTP and HMR WebSockets, and injects
-the Inspector Bridge. noVNC is a separate desktop surface. The Preview product
-direction should preserve those boundaries.
+streamed full-browser surface for arbitrary browser sessions. The Project
+preview proxy provides an authenticated route, forwards HTTP and HMR WebSockets,
+and injects the Inspector Bridge. Remote desktop remains a separate surface.
+The Preview product direction should preserve those boundaries.
 
 The current target picker is still chat-led. The browser API requires a chat
 session, resolves its `project_id`, discovers servers across that Project's
@@ -52,11 +52,11 @@ must not be the only way to identify or open that target.
 
 ## Proposed Decision
 
-1. Keep the iframe as the default renderer for OpenLink-managed web apps.
-   Continue serving these targets through Browser Host's authenticated
-   HTTP/WebSocket proxy and versioned Inspector Bridge. Use noVNC only for the
-   full remote desktop surface. Use `chromium-stream` for sites or applications
-   that cannot safely or reliably be embedded and proxied.
+1. Keep the iframe as the default renderer for managed web apps. Continue
+   serving these targets through the authenticated HTTP/WebSocket proxy and
+   versioned Inspector Bridge. Use the remote desktop surface only for full
+   desktop interaction. Use a streamed full-browser surface for sites or
+   applications that cannot safely or reliably be embedded and proxied.
 
 2. Introduce a Preview Target contract independent of a chat session. A target
    belongs to an authorized workspace or project and identifies its source
@@ -71,8 +71,8 @@ must not be the only way to identify or open that target.
    external URL. Provider URLs, proxy credentials, and runtime secrets remain
    server-side. Browser clients receive opaque target ids and safe labels. An
    external URL is never fetched by a general-purpose server-side proxy; if it
-   cannot be embedded directly, open it in the isolated Chromium surface or a
-   top-level tab without Inspector Bridge privileges.
+   cannot be embedded directly, open it in the isolated full-browser surface or
+   a top-level tab without Inspector Bridge privileges.
 
 3. Make Preview navigation state belong to the selected target and its viewport,
    not to an ephemeral Browser Host session. Recreating the iframe transport,
@@ -87,6 +87,10 @@ must not be the only way to identify or open that target.
    - **Annotate** adds numbered comments anchored to a target revision, a
      screenshot, and a best-effort DOM locator/rectangle. Comments are sent to
      the selected agent/chat as one batch and do not mutate source code.
+     Store annotation metadata in Postgres and new screenshots in private,
+     project-scoped object storage. Continue reading legacy inline screenshots
+     during migration. Resolve screenshot content only after project
+     authorization; never expose a public object URL.
    - **Design** supports element selection, pending style edits, undo/redo,
      before/after, and natural-language instructions with a selected-element
      screenshot. Apply requires an editable source binding and sends a
@@ -108,7 +112,7 @@ must not be the only way to identify or open that target.
    annotations.
 
 6. Retain the Browser Protocol as the shared automation contract. Keep the
-   agent's durable Chromium session independent from the UI-owned iframe
+   agent's durable browser session independent from the UI-owned iframe
    session, as required by standard 12. Add Preview Target ownership alongside
    that protocol instead of making the agent browser session own Preview.
 
@@ -121,7 +125,7 @@ flowchart LR
   G --> F[Sandboxed iframe]
   F <-->|versioned postMessage| B[Injected Inspector Bridge]
   B <--> U[Preview, Annotate, and Design tools]
-  E[External or incompatible site] --> C[Chromium stream or top-level tab]
+  E[External or incompatible site] --> C[Full-browser stream or top-level tab]
 ```
 
 ## Consequences
@@ -157,16 +161,17 @@ flowchart LR
 - Chat session remains useful as a default target hint and as the receiver of
   annotation or design instructions, but it no longer defines Preview's
   lifetime.
-- The noVNC desktop remains available for native desktop applications and
-  full-OS interaction; it is not involved in web Preview rendering.
+- Remote desktop remains available for native desktop applications and full-OS
+  interaction; it is not involved in web Preview rendering.
 
 ## Alternatives Considered
 
-### Render every Preview through noVNC
+### Render every Preview through remote desktop streaming
 
 Rejected for web development. It streams pixels and input, adds CPU and
 bandwidth cost, and does not provide the native DOM and bridge needed for
-element-level inspection and annotations. It remains appropriate for Desktop.
+element-level inspection and annotations. It remains appropriate for full
+desktop interaction.
 
 ### Keep Preview keyed only by the active chat session
 
@@ -189,18 +194,19 @@ temporary pending preview state before a source-aware Apply operation.
 
 ## Rollout Plan
 
-1. **Preview target boundary:** define the provider-neutral target contract and
-   workspace/project-scoped discovery and selection APIs. Adapt the current
-   Project sandbox provider first; keep the current UI behavior as its default.
-2. **Iframe Preview hardening:** preserve authenticated proxying, route and HMR
-   support, capability isolation, target health/reload state, and viewport
-   controls. Add explicit read-only external URL behavior and Chromium fallback.
-3. **Web annotations:** extend the bridge for hover/selection geometry and
-   stable-enough locators; add screenshot comments, batch submit, and target
-   revision context.
-4. **Design panel:** add pending style edits, undo/redo and before/after; then
-   connect Apply to an editable worktree and show the resulting diff. Add Theme
-   tokens and richer Layers metadata through source adapters.
+1. **Project-scoped Preview:** stabilize the project target contract, iframe
+   lifecycle, navigation controls, and authenticated proxy behavior independent
+   of the initiating chat.
+2. **Target providers:** add explicitly selected worktree targets and read-only
+   external URLs. Keep URL resolution, secrets, and authorization server-side;
+   use the isolated full-browser surface when direct embedding is unavailable.
+3. **Web annotations:** retain metadata and private screenshots across reloads,
+   batch comments with visual context, and attach target revision and
+   best-effort locator data.
+4. **Design panel:** complete selected-element context and pending style edits,
+   undo/redo and before/after; then connect Apply to an editable worktree and
+   show the resulting diff. Add Theme tokens and richer Layers metadata through
+   source adapters.
 
 Do not update binding standard 12 until this ADR is accepted and the first two
 steps have an implementation contract. At that point, revise its target scope
@@ -217,17 +223,9 @@ the remaining code-edit requirements as follow-up decisions if needed.
 3. Confirm iframe navigation, reload, assets, cookies, and HMR WebSockets work
    through the authenticated path at desktop and mobile viewport sizes.
 4. Confirm an external site that rejects framing is handled by the documented
-   Chromium/top-level fallback and does not receive an injected bridge.
+   full-browser/top-level fallback and does not receive an injected bridge.
 5. Add multiple annotations, submit them as one batch, and verify they retain
    screenshot, target revision, and best-effort locator context after reload.
 6. Apply a Design edit to an editable worktree and verify a reviewable source
    diff; confirm read-only targets cannot invoke Apply.
-7. Keep noVNC Desktop usable independently when Preview is opened or closed.
-
-## References
-
-- `components/browser/native-preview-surface.tsx`
-- `services/browser-host/src/preview-proxy.ts`
-- `app/api/browser/sessions/route.ts`
-- `lib/browser-preview-targets.server.ts`
-- `components/browser/desktop-workbench.tsx`
+7. Keep remote desktop usable independently when Preview is opened or closed.
