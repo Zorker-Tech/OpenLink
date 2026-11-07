@@ -15,17 +15,19 @@ Unknown numeric button and direction codes remain represented as unknown enum va
 in isolated migration metadata so rewriting a supported historical checkpoint does not discard them. Screenshot bytes
 are never included in classifier context; the classifier receives only whether a screenshot was present.
 
-The executor adapter still encodes the Slate request and decodes its complete result at the older generated executor
-boundary. That is an internal protocol migration, not a product contract or a lasting external compatibility
-exemption. The overlap inventory still carries a historical exemption for this adapter; remove it with the protocol
-migration. Completion must move the host and box-exec consumer together to a versioned Slate-owned request/result
-contract before the generated path can be removed. The adapter preserves action counts, elapsed time, logs, screenshot
-paths, screenshot data and cursor coordinates in both success and error outcomes. The default Slate box-exec daemon
-currently reports computer-use as unsupported; this slice does not claim to add that missing desktop execution backend
-or to change the advertised capability.
+The public `computerUseExecutorResource` also exposes the Slate request/result types. Its adapter encodes those values
+to the older generated executor envelope and decodes back; both remote and controlled directions are pinned. That is
+an internal protocol migration, not a product contract or a lasting external compatibility exemption. The overlap
+inventory still carries a historical exemption for this adapter; remove it with the protocol migration. Completion
+must move the host and box-exec consumer together to a versioned Slate-owned request/result contract before the
+generated path can be removed. The adapter preserves action counts, elapsed time, logs, screenshot paths, screenshot
+data and cursor coordinates in both success and error outcomes. The default Slate box-exec daemon currently reports
+computer-use as unsupported; this slice does not claim to add that desktop execution backend or to change the
+advertised capability.
 
 `host-computer-tool.test.ts` pins Slate action projection, validation, defaults, result rendering and screenshot
-persistence. `host-computer-tool-dependencies.test.ts` pins the boundary mapping for every action, all result metadata,
-unknown enum preservation, malformed values, and rejection of inherited enum property names. The step-state test pins
-all historical action variants and lossless recovery. The classifier context suite pins the product-owned prompt shape
-and screenshot omission.
+persistence. `host-computer-tool-dependencies.test.ts` pins the Slate host port and executor message mapping.
+`slate-computer-use-resource-adapter.test.ts` pins generated message conversion in both directions, all action kinds,
+all result metadata, unknown enum preservation and malformed values. `host-remote-box-resources.test.ts` pins Slate action
+audit values. The step-state test pins historical action variants and lossless recovery; the classifier context suite
+pins the product-owned prompt shape and screenshot omission.

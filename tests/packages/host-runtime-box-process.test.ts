@@ -422,7 +422,7 @@ describe("the generated pieces a box is built from", () => {
     const unmonitored = productionSlateBoxPorts.withNoMonitorComputerUse(base as never);
     // A box without a private desktop says so instead of pretending it took a screenshot.
     assert.equal(isNoMonitorComputerUseExecutor(unmonitored.get(computerUseExecutorResource)), true);
-    await unmonitored.get(computerUseExecutorResource).execute(createContext(), { action: "screenshot" } as never, undefined).then(
+    await unmonitored.get(computerUseExecutorResource).execute(createContext(), { toolCallId: "call-1", actions: [{ kind: "screenshot" }] } as never, undefined).then(
       () => assert.fail("computer use ran on a box that has no private desktop"),
       (error: Error) => assert.equal(error.message, "No private desktop monitor is available on the shared box."),
     );

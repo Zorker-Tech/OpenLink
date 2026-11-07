@@ -10,7 +10,8 @@ test("box command and desktop action projections expose only audit details", () 
   assert.equal(shellCommandForAudit({ command: "git status", toolCallId: "call-1" }), "git status");
   assert.equal(shellCommandForAudit({ command: 5 }), "");
   assert.equal(computerUseActionForAudit({
-    actions: [{ action: { case: "click", value: { x: 2, y: 3 } } }],
+    actions: [{ kind: "click", coordinate: { x: 2, y: 3 }, button: "left", count: 1 }],
   }), "click");
   assert.equal(computerUseActionForAudit({ actions: [] }), undefined);
+  assert.equal(computerUseActionForAudit({ actions: [{ action: { case: "click" } }] }), undefined);
 });

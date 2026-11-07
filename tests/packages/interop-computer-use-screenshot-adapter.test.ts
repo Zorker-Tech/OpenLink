@@ -19,9 +19,9 @@ test("a screenshot request is sent through the registered remote executor", asyn
           get(resource: unknown) {
             assert.equal(resource, computerUseExecutorResource);
             return {
-              async execute(_ctx: unknown, args: { actions: Array<{ action: { case: string } }> }) {
+              async execute(_ctx: unknown, args: { actions: Array<{ kind: string }> }) {
                 calls.push(args);
-                return { result: { case: "success", value: { screenshot: "data:image/png;base64,AA==" } } };
+                return { kind: "success", actionCount: 1, durationMs: 0, screenshot: "data:image/png;base64,AA==" };
               },
             };
           },
@@ -35,7 +35,7 @@ test("a screenshot request is sent through the registered remote executor", asyn
     "data:image/png;base64,AA==",
   );
   assert.equal(calls.length, 1);
-  assert.equal((calls[0] as { actions: Array<{ action: { case: string } }> }).actions[0]?.action.case, "screenshot");
+  assert.equal((calls[0] as { actions: Array<{ kind: string }> }).actions[0]?.kind, "screenshot");
 });
 
 test("a missing remote accessor or unsuccessful response yields no image", async () => {
@@ -50,7 +50,7 @@ test("a missing remote accessor or unsuccessful response yields no image", async
         return {
           remoteAccessor: {
             get() {
-              return { async execute() { return { result: { case: "error" } }; } };
+              return { async execute() { return { kind: "unknown" }; } };
             },
           },
         };

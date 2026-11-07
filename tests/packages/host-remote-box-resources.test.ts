@@ -182,7 +182,7 @@ test("background and foreground shell calls preserve their distinct audit paths"
 test("shell navigation probes run around a streamed command, including a failed stream", async () => {
   const failure = new Error("shell stream ended");
   const executors = new Map<unknown, ExecutorPort>();
-  executors.set(computerUseExecutorResource, { async execute() { return { result: { case: "success" } }; } });
+  executors.set(computerUseExecutorResource, { async execute() { return { kind: "success", actionCount: 0, durationMs: 0 }; } });
   executors.set(shellStreamExecutorResource, {
     execute() {
       return (async function* () {
@@ -221,7 +221,7 @@ test("the classifier resource exists only while a review mode is active", () => 
 test("desktop use records intent after execution and always probes afterward", async () => {
   const executors = new Map<unknown, ExecutorPort>([
     [computerUseExecutorResource, {
-      async execute() { worlded.calls.push("computer-use"); return { result: { case: "success" } }; },
+      async execute() { worlded.calls.push("computer-use"); return { kind: "success", actionCount: 1, durationMs: 1 }; },
     }],
     [shellExecutorResource, {
       async execute(_context, args) {
@@ -233,7 +233,7 @@ test("desktop use records intent after execution and always probes afterward", a
   const worlded = world({ desktop: true, executors });
   const computer = worlded.accessor.get(computerUseExecutorResource) as unknown as ExecutorPort;
 
-  await computer.execute(createContext(), { actions: [{ action: { case: "click" } }] });
+  await computer.execute(createContext(), { toolCallId: "call-1", actions: [{ kind: "click", button: "left", count: 1 }] });
   assert.deepEqual(worlded.calls, [
     "ensure-ready",
     ["terminals", "/box/terminals"],
@@ -253,7 +253,7 @@ test("a box with no available monitor is reported as not ready", async () => {
   });
   const computer = worlded.accessor.get(computerUseExecutorResource) as unknown as ExecutorPort;
   await assert.rejects(
-    async () => await computer.execute(createContext(), { actions: [{ action: { case: "click" } }] }),
+    async () => await computer.execute(createContext(), { toolCallId: "call-1", actions: [{ kind: "click", button: "left", count: 1 }] }),
     (error: unknown) => {
       assert.equal(error instanceof BoxNotReadyError, true);
       assert.equal((error as Error).cause instanceof SlateBoxNoMonitorAvailableError, true);

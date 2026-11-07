@@ -11,6 +11,7 @@ import {
 import { computerUseExecutorResource } from "../../adapters/interop/agent/computer-use-executor-adapter.ts";
 import { shellExecutorResource } from "../../packages/agent-exec/shell.ts";
 import { buildHostShellArgs } from "../../adapters/interop/agent/box-shell-command-adapter.ts";
+import type { SlateComputerUseExecutorRequest, SlateComputerUseExecutorResult } from "../../packages/agent/conversation-step-state.ts";
 import { isNoMonitorComputerUseExecutor } from "../ports/box.ts";
 import { mergeTurnUsage, type TurnUsage } from "./turn-usage.ts";
 
@@ -41,7 +42,7 @@ export interface ComputerUseCoordinationDependencies<Context> {
 
 interface ComputerUseResourceAccessor<Context> {
   get(resource: typeof computerUseExecutorResource): {
-    execute(context: Context, args: unknown): Promise<unknown>;
+    execute(context: Context, args: SlateComputerUseExecutorRequest): Promise<SlateComputerUseExecutorResult>;
   };
   get(resource: typeof shellExecutorResource): {
     execute(context: Context, args: unknown): Promise<unknown>;

@@ -109,14 +109,14 @@ describe("the computer tool projection", () => {
   }
 
   it("asks the turn's executor and reads its result back into the host's shape", async () => {
-    const world = computerWorld({ result: { case: "success", value: {
+    const world = computerWorld({ kind: "success",
       actionCount: 1,
       durationMs: 10,
       screenshot: "image",
       log: "finished",
       screenshotPath: "file:///capture.webp",
       cursorPosition: { x: 4, y: 5 },
-    } } });
+    });
     const persistImage = async () => undefined;
     const dependencies = createHostComputerToolDependencies({ resourceAccessor: world.resourceAccessor, persistImage, isUnicodeTypingEnabled: () => true, onComputerAction: () => {}, autoReview: {} } as never) as never as Record<string, unknown>;
     assert.deepEqual(Object.keys(dependencies), ["resourceAccessor", "execute", "getPersistImage", "isUnicodeTypingEnabled", "onComputerAction", "autoReview"]);
@@ -133,19 +133,15 @@ describe("the computer tool projection", () => {
       cursorPosition: { x: 4, y: 5 },
     });
     assert.equal(world.calls.length, 2);
-    const executed = world.calls[1] as [string, unknown, { actions: { action: { case: string } }[] }];
-    assert.equal(executed[2].actions[0]?.action.case, "wait", "the adapter converts the Slate action at the executor boundary");
-    const converted = executed[2].actions[0] as unknown as { action: { value: { constructor: { name: string } } } };
-    assert.equal(converted.action.value.constructor.name, "WaitAction", "the executor receives the generated action, not the protocol record");
+    const executed = world.calls[1] as [string, unknown, { actions: { kind: string }[] }];
+    assert.equal(executed[2].actions[0]?.kind, "wait", "the host executor resource receives the Slate action unchanged");
   });
 
   it("reads success, error and unknown executor outcomes as Slate results, and raises a failing executor", async () => {
     const read = (result: unknown) => createHostComputerToolDependencies({ resourceAccessor: computerWorld(result).resourceAccessor } as never) as never as { execute(context: unknown, args: unknown): Promise<unknown> };
     const request = { toolCallId: "c", actions: [] };
-    assert.deepEqual(await read({ result: { case: "success", value: { actionCount: 0, durationMs: 0 } } }).execute({}, request), { kind: "success", actionCount: 0, durationMs: 0 });
-    assert.deepEqual(await read({ result: { case: "error", value: {
-      error: "it broke", actionCount: 2, durationMs: 3, log: "partial", screenshot: "capture", screenshotPath: "file:///partial.webp",
-    } } }).execute({}, request), {
+    assert.deepEqual(await read({ kind: "success", actionCount: 0, durationMs: 0 }).execute({}, request), { kind: "success", actionCount: 0, durationMs: 0 });
+    assert.deepEqual(await read({
       kind: "error",
       message: "it broke",
       actionCount: 2,
@@ -153,8 +149,10 @@ describe("the computer tool projection", () => {
       log: "partial",
       screenshot: "capture",
       screenshotPath: "file:///partial.webp",
+    }).execute({}, request), {
+      kind: "error", message: "it broke", actionCount: 2, durationMs: 3, log: "partial", screenshot: "capture", screenshotPath: "file:///partial.webp",
     });
-    assert.deepEqual(await read({ result: {} }).execute({}, request), { kind: "unknown" });
+    assert.deepEqual(await read({ kind: "unknown" }).execute({}, request), { kind: "unknown" });
     await assert.rejects(() => read(new Error("executor exploded")).execute({}, request), { message: "executor exploded" });
   });
 });
