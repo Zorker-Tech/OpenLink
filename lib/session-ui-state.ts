@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
 export type SessionWorkspaceTab = 'preview' | 'realtime' | 'desktop' | 'code' | 'database'
 export type SessionWorkspaceView = 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
@@ -61,7 +62,7 @@ export function sanitizeSessionUiState(value: unknown): SessionUiState {
       ? raw.browserSurface as SessionBrowserSurface
       : DEFAULT_SESSION_UI_STATE.browserSurface,
     browserAddress: safeString(raw.browserAddress, 8192),
-    previewTargetId: typeof raw.previewTargetId === 'string' && /^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/.test(raw.previewTargetId) ? raw.previewTargetId : null,
+    previewTargetId: isPreviewTargetId(raw.previewTargetId) ? raw.previewTargetId : null,
     selectedGitRef: typeof raw.selectedGitRef === 'string' && raw.selectedGitRef.length <= 256 ? raw.selectedGitRef : null,
     chatPanelCollapsed: raw.chatPanelCollapsed === true,
     composerDraft: safeString(raw.composerDraft, 10_000),

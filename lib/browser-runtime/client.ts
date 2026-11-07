@@ -10,12 +10,12 @@ import {
   type BrowserSessionState,
   type BrowserSocketServerMessage,
 } from '@/packages/browser-protocol/src/index'
+import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
 export interface BrowserPreviewTarget {
   id: string
   label: string
   port: number
-  sessionId?: string
 }
 
 export interface BrowserSessionConnectionDescriptor {
@@ -326,12 +326,11 @@ export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
     ? payload.targets.flatMap((value) => {
         if (!value || typeof value !== 'object') return []
         const target = value as Record<string, unknown>
-        return typeof target.id === 'string' && typeof target.label === 'string' && typeof target.port === 'number'
+        return isPreviewTargetId(target.id) && typeof target.label === 'string' && typeof target.port === 'number'
           ? [{
               id: target.id,
               label: target.label,
               port: target.port,
-              ...(typeof target.sessionId === 'string' ? { sessionId: target.sessionId } : {}),
             }]
           : []
       })

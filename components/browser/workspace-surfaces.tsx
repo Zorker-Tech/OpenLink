@@ -139,8 +139,8 @@ function BrowserNavigationBar({
                 <DropdownMenuItem className="h-auto min-h-9 cursor-pointer gap-2 rounded-md px-2.5 py-1.5 text-sm focus:bg-[var(--app-hover)]" key={target.id} onClick={() => onSelectPreviewTarget(target.id)}>
                   <Server className="size-3.5 shrink-0 text-[var(--app-muted)]" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{target.sessionId === sessionId ? t('当前会话') : target.label}</span>
-                    <span className="block text-[11px] text-[var(--app-muted)]">:{target.port}{target.sessionId && target.sessionId !== sessionId ? ` · ${target.sessionId.slice(0, 12)}` : ''}</span>
+                    <span className="block truncate">{target.label}</span>
+                    <span className="block text-[11px] text-[var(--app-muted)]">:{target.port}</span>
                   </span>
                   {browserState.activePreviewTargetId === target.id && <span className="text-[11px] text-[var(--app-brand)]">{t('当前')}</span>}
                 </DropdownMenuItem>

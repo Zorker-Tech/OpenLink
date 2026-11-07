@@ -1,14 +1,13 @@
 import { getT } from '@/lib/i18n/server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
+import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 
 export interface BrowserPreviewTarget {
   id: string
   label: string
   source: 'sandbox'
-  sessionId?: string
   port: number
-  sandboxId: string
   lastSeenAt: string
 }
 
@@ -22,17 +21,14 @@ function hostConfig() {
 function safeTarget(value: unknown): BrowserPreviewTarget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const target = value as Record<string, unknown>
-  if (typeof target.id !== 'string' || !/^[A-Za-z0-9_-]{1,160}:[0-9]{1,5}$/.test(target.id)) return null
+  if (!isPreviewTargetId(target.id)) return null
   if (typeof target.label !== 'string' || !target.label.trim()) return null
   if (typeof target.port !== 'number' || !Number.isSafeInteger(target.port) || target.port <= 0 || target.port > 65_535) return null
-  if (typeof target.sandboxId !== 'string' || !target.sandboxId) return null
   return {
     id: target.id,
     label: target.label.slice(0, 160),
     source: 'sandbox',
-    ...(typeof target.sessionId === 'string' && target.sessionId.length <= 128 ? { sessionId: target.sessionId } : {}),
     port: target.port,
-    sandboxId: target.sandboxId.slice(0, 160),
     lastSeenAt: typeof target.lastSeenAt === 'string' ? target.lastSeenAt : new Date().toISOString(),
   }
 }
@@ -68,8 +64,6 @@ export async function listBrowserPreviewTargets(chatSessionId: string): Promise<
     const targets = Array.isArray(payload?.targets)
       ? payload.targets.flatMap((value) => { const target = safeTarget(value); return target ? [target] : [] })
       : []
-    // Prefer the current session's own server, then the conventional ports.
-    targets.sort((left, right) => Number(right.sessionId === chatSessionId) - Number(left.sessionId === chatSessionId))
     return { ok: true, targets, chat }
   } catch (error) {
     return {
