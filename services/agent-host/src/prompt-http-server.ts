@@ -517,9 +517,13 @@ function parseBrowserDeleteBody(value: unknown) {
 function parseCodeServerSessionBody(value: unknown) {
   if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Code-server session body is invalid')
   const body = value as Record<string, unknown>
+  if (body.frameAncestorOrigin !== undefined && typeof body.frameAncestorOrigin !== 'string') {
+    throw new AgentHostError('INVALID_BODY', 'Code-server frame origin is invalid')
+  }
   return {
     ownerId: safeIdentity(body.ownerId, 'ownerId'),
     workspaceId: safeIdentity(body.workspaceId, 'workspaceId'),
+    frameAncestorOrigin: body.frameAncestorOrigin as string | undefined,
   }
 }
 
@@ -1368,6 +1372,7 @@ export async function startPromptHttpServer(
       workspaceId: body.workspaceId,
       projectId,
       upstream: runtime.codeServerEndpoint,
+      frameAncestorOrigin: body.frameAncestorOrigin,
     })
     json(response, 201, { version: 1, session })
   }

@@ -69,6 +69,7 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
 
   const session = reachableGateway.create({
     ownerId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', upstream: upstreamUrl,
+    frameAncestorOrigin: 'http://192.168.3.2:57714',
   })
   try {
     const bootstrap = await fetch(session.url, { redirect: 'manual' })
@@ -79,14 +80,25 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
     assert.ok(location)
 
     const page = await fetch(`${edgeUrl}${location}`, {
-      headers: { Cookie: cookie!.split(';')[0]!, Authorization: 'Bearer must-not-reach-code-server' },
+      headers: {
+        Cookie: cookie!.split(';')[0]!,
+        Origin: 'http://192.168.3.2:57714',
+        Authorization: 'Bearer must-not-reach-code-server',
+      },
     })
     assert.equal(page.status, 200)
     assert.match(page.headers.get('content-security-policy') || '', /frame-ancestors http:\/\/localhost:3002/)
+    assert.match(page.headers.get('content-security-policy') || '', /http:\/\/192\.168\.3\.2:57714/)
+    assert.doesNotMatch(page.headers.get('content-security-policy') || '', /http:\/\/192\.168\.3\.2:\*/)
     assert.doesNotMatch(page.headers.get('content-security-policy') || '', /frame-ancestors 'self'/)
     assert.equal(page.headers.get('x-frame-options'), null)
     assert.equal(upstreamAuthorization, undefined)
     assert.equal(await page.text(), '<!doctype html><title>VS Code</title>')
+
+    const wrongLanPort = await fetch(`${edgeUrl}${location}`, {
+      headers: { Cookie: cookie!.split(';')[0]!, Origin: 'http://192.168.3.2:57715' },
+    })
+    assert.equal(wrongLanPort.status, 500)
   } finally {
     reachableGateway.close()
     await Promise.all([close(edge), close(upstream)])

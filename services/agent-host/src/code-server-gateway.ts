@@ -16,6 +16,7 @@ interface CodeServerBinding {
   ownerId: string
   workspaceId: string
   projectId: string
+  frameAncestorOrigin?: string
   upstream: URL
   expiresAt: number
   cleanupTimer: NodeJS.Timeout
@@ -78,9 +79,10 @@ function loopbackAliases(origin: string): string[] {
  * Authenticated HTTP/WebSocket edge for a project-scoped code-server.
  *
  * The editor never receives the Project VM endpoint or an Agent Host API
- * token. A short-lived bootstrap URL exchanges its one-time query token for
- * an HttpOnly, path-scoped cookie; all subsequent HTTP and WebSocket traffic
- * is authorized by this binding and proxied to the VM-local code-server.
+ * token. The authenticated Web BFF exchanges the short-lived session token
+ * for an HttpOnly, path-scoped cookie before loading the iframe; the bootstrap
+ * endpoint remains for older clients. All traffic is authorized by this
+ * binding and proxied to the VM-local code-server.
  */
 export class CodeServerGateway {
   private readonly publicBaseUrl: string
@@ -99,15 +101,26 @@ export class CodeServerGateway {
     if (!this.allowedOrigins.size) throw new Error('Code-server gateway requires at least one allowed origin')
   }
 
-  create(input: { ownerId: string; workspaceId: string; projectId: string; upstream: string; ttlMs?: number }): PublicCodeServerSession {
+  create(input: { ownerId: string; workspaceId: string; projectId: string; upstream: string; frameAncestorOrigin?: string; ttlMs?: number }): PublicCodeServerSession {
     const sessionId = randomBytes(18).toString('base64url')
     const token = randomBytes(32).toString('base64url')
     const upstream = new URL(input.upstream)
     if (!['http:', 'https:'].includes(upstream.protocol)) throw new AgentHostError('PROVISIONING_FAILED', 'Code-server endpoint protocol is invalid')
+    let frameAncestorOrigin: string | undefined
+    if (input.frameAncestorOrigin !== undefined) {
+      let parsedOrigin: URL
+      try { parsedOrigin = new URL(input.frameAncestorOrigin) } catch {
+        throw new AgentHostError('INVALID_BODY', 'Code-server frame origin is invalid')
+      }
+      if (!['http:', 'https:'].includes(parsedOrigin.protocol) || parsedOrigin.origin !== input.frameAncestorOrigin) {
+        throw new AgentHostError('INVALID_BODY', 'Code-server frame origin is invalid')
+      }
+      frameAncestorOrigin = parsedOrigin.origin
+    }
     const expiresAt = Date.now() + Math.max(60_000, Math.min(input.ttlMs ?? 30 * 60_000, 24 * 60 * 60_000))
     const cleanupTimer = setTimeout(() => this.unregister(sessionId), expiresAt - Date.now())
     cleanupTimer.unref()
-    this.bindings.set(sessionId, { sessionId, token, ownerId: input.ownerId, workspaceId: input.workspaceId, projectId: input.projectId, upstream, expiresAt, cleanupTimer })
+    this.bindings.set(sessionId, { sessionId, token, ownerId: input.ownerId, workspaceId: input.workspaceId, projectId: input.projectId, frameAncestorOrigin, upstream, expiresAt, cleanupTimer })
     return { sessionId, url: this.url(sessionId, token, true), expiresAt: new Date(expiresAt).toISOString() }
   }
 
@@ -125,7 +138,7 @@ export class CodeServerGateway {
 
   async handleHttp(request: IncomingMessage, response: ServerResponse, sessionId: string): Promise<void> {
     const binding = this.requireBinding(sessionId)
-    this.assertOrigin(request)
+    this.assertOrigin(request, binding)
     const external = new URL(request.url || '/', this.publicBaseUrl)
     const prefix = this.prefix(sessionId)
     const suffix = external.pathname === prefix ? '/' : external.pathname.startsWith(`${prefix}/`) ? external.pathname.slice(prefix.length) || '/' : null
@@ -158,7 +171,7 @@ export class CodeServerGateway {
       const match = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(external.pathname)
       if (!match) return false
       const binding = this.requireBinding(decodeURIComponent(match[1]!))
-      this.assertOrigin(request)
+      this.assertOrigin(request, binding)
       this.authorize(external.searchParams.get('token'), request.headers.cookie, binding)
       const prefix = this.prefix(binding.sessionId)
       const suffix = external.pathname === prefix ? '/' : external.pathname.slice(prefix.length) || '/'
@@ -209,9 +222,11 @@ export class CodeServerGateway {
     return binding
   }
 
-  private assertOrigin(request: IncomingMessage): void {
+  private assertOrigin(request: IncomingMessage, binding: CodeServerBinding): void {
     const origin = request.headers.origin
-    if (origin && !isAllowedOrigin(origin, this.allowedOrigins)) throw new AgentHostError('AUTH_DENIED', 'Code-server gateway origin is not allowed')
+    if (origin && origin !== binding.frameAncestorOrigin && !isAllowedOrigin(origin, this.allowedOrigins)) {
+      throw new AgentHostError('AUTH_DENIED', 'Code-server gateway origin is not allowed')
+    }
   }
 
   private authorize(queryToken: string | null | undefined, cookieHeader: string | undefined, binding: CodeServerBinding): void {
@@ -242,7 +257,9 @@ export class CodeServerGateway {
         delete responseHeaders['content-encoding']
         delete responseHeaders['transfer-encoding']
         delete responseHeaders['x-frame-options']
-        const frameAncestors = originSourcesForCsp(this.allowedOrigins).join(' ')
+        const frameAncestorSources = new Set(originSourcesForCsp(this.allowedOrigins))
+        if (binding.frameAncestorOrigin) frameAncestorSources.add(binding.frameAncestorOrigin)
+        const frameAncestors = [...frameAncestorSources].join(' ')
         // code-server commonly sends `frame-ancestors 'self'`; appending a
         // second directive does not override it. Replace the upstream rule so
         // the explicitly configured OpenLink application origins can embed

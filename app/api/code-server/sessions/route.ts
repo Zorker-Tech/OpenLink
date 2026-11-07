@@ -20,6 +20,45 @@ function parseUrl(value: unknown): URL | null {
   }
 }
 
+function codeServerGatewaySession(value: unknown): { sessionId: string; path: string; token: string; expiresAt: string; maxAge: number } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const session = value as Record<string, unknown>
+  const sessionId = typeof session.sessionId === 'string' ? session.sessionId : ''
+  const rawUrl = typeof session.url === 'string' ? session.url : ''
+  const expiresAt = typeof session.expiresAt === 'string' ? session.expiresAt : ''
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId) || !expiresAt) return null
+  const url = parseUrl(rawUrl)
+  if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) return null
+  const path = `/v1/code-server/gateway/sessions/${sessionId}`
+  if (url.pathname !== `${path}/__openlink_bootstrap` || url.searchParams.getAll('token').length !== 1) return null
+  const token = url.searchParams.get('token') || ''
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) return null
+  const expires = Date.parse(expiresAt)
+  const maxAge = Math.floor((expires - Date.now()) / 1000)
+  if (!Number.isFinite(expires) || maxAge < 1 || maxAge > 24 * 60 * 60) return null
+  return { sessionId, path, token, expiresAt: new Date(expires).toISOString(), maxAge }
+}
+
+function cookieName(sessionId: string): string {
+  return `openlink_code_server_gateway_${sessionId.replace(/[^A-Za-z0-9]/g, '').slice(0, 48)}`
+}
+
+function requestOrigin(request: Request): string | null {
+  const origin = request.headers.get('origin') || new URL(request.url).origin
+  try {
+    const parsed = new URL(origin)
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin) return null
+    return parsed.origin
+  } catch {
+    return null
+  }
+}
+
+function requestIsSecure(request: Request): boolean {
+  if (new URL(request.url).protocol === 'https:') return true
+  return request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase() === 'https'
+}
+
 export async function POST(request: Request) {
   const cloudMode = getRuntimeMode() === 'cloud'
   const host = cloudMode ? null : agentHostConfig()
@@ -42,6 +81,11 @@ export async function POST(request: Request) {
   // from the authenticated server-side session row instead of trusting it.
   const chat = await getChatSession(supabase, user.id, chatSessionId)
   if (!chat) return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
+
+  const frameAncestorOrigin = requestOrigin(request)
+  if (!frameAncestorOrigin || request.headers.get('sec-fetch-site') === 'cross-site') {
+    return Response.json({ error: { code: 'ORIGIN_NOT_ALLOWED' } }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
+  }
 
   if (cloudMode) {
     try {
@@ -84,9 +128,28 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${host!.apiToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ownerId: user.id, workspaceId: chat.workspace_id }),
+    body: JSON.stringify({ ownerId: user.id, workspaceId: chat.workspace_id, frameAncestorOrigin }),
     cache: 'no-store',
   })
   const payload = await response.json().catch(() => ({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }))
-  return Response.json(payload, { status: response.status })
+  if (!response.ok) return Response.json(payload, { status: response.status, headers: { 'Cache-Control': 'no-store' } })
+
+  const outer = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null
+  const session = codeServerGatewaySession(outer?.session)
+  if (!session) return Response.json({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
+
+  const secure = requestIsSecure(request) ? '; Secure' : ''
+  const cookie = `${cookieName(session.sessionId)}=${encodeURIComponent(session.token)}; HttpOnly; SameSite=Strict; Path=${session.path}/; Max-Age=${session.maxAge}${secure}`
+  return Response.json({
+    version: outer?.version,
+    session: { sessionId: session.sessionId, url: `${session.path}/`, expiresAt: session.expiresAt },
+  }, {
+    status: response.status,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Set-Cookie': cookie,
+    },
+  })
 }
