@@ -1,6 +1,5 @@
 import {
   TaskError,
-  InteractionUpdate,
   TaskResult,
   TaskSuccess,
   TaskToolCall,
@@ -23,7 +22,10 @@ import {
   type SlateTaskResult,
 } from "../../../packages/agent/tools/task-result-state.ts"
 import type { SlateTaskRequest, TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
+import type { SlateTaskProgressUpdate } from "../../../packages/agent/tools/task-progress-state.ts"
+import { createTaskProgressListenerInterop, slateTaskProgressUpdateToInterop } from "./task-progress-protocol-adapter.ts"
 import { taskBackgroundReasonFromInterop, taskBackgroundReasonToInterop } from "./task-operation-protocol-adapter.ts"
+export { createTaskProgressListenerInterop } from "./task-progress-protocol-adapter.ts"
 export {
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
@@ -210,14 +212,11 @@ export function serializeTaskErrorInterop(error: unknown): ToolCall {
   })
 }
 
-export function createTaskToolCallDeltaInterop(update: unknown): ToolCallDelta {
-  if (!(update instanceof InteractionUpdate)) {
-    throw new TypeError("Task progress update is invalid")
-  }
+export function createTaskToolCallDeltaInterop(update: SlateTaskProgressUpdate): ToolCallDelta {
   return new ToolCallDelta({
     delta: {
       case: "taskToolCallDelta",
-      value: new TaskToolCallDelta({ interactionUpdate: update }),
+      value: new TaskToolCallDelta({ interactionUpdate: slateTaskProgressUpdateToInterop(update) }),
     },
   })
 }

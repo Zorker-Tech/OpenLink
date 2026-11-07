@@ -1,0 +1,368 @@
+import { isDeepStrictEqual } from "node:util"
+import type { JsonValue as ProtocolJsonValue } from "@bufbuild/protobuf"
+import { InteractionUpdate } from "../proto/generated/agent/v1/agent_pb.ts"
+import type { JsonValue } from "@slate/work-domain"
+import type { SlateInteractionQuery, SlateInteractionResponse } from "../../../packages/agent-core/interaction-queries.ts"
+import type {
+  SlateTaskProgressCompatibility,
+  SlateTaskProgressUpdate,
+} from "../../../packages/agent/tools/task-progress-state.ts"
+
+type TaskProgressListener<Context> = {
+  sendUpdate(context: Context, update: SlateTaskProgressUpdate): Promise<void>
+  query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse>
+  enqueuePostTurnEndedWork?: ((work: () => Promise<unknown>) => void) | undefined
+  flushPostTurnEndedWork?: ((context: Context) => Promise<void>) | undefined
+}
+
+type LegacyMessage = { toJson(): JsonValue }
+
+function compatibility(update: InteractionUpdate): SlateTaskProgressCompatibility {
+  return { format: "legacy-binary", payload: update.toBinary().slice() }
+}
+
+function eventJson(value: unknown): { readonly kind: string; readonly value: JsonValue } | undefined {
+  if (value === null || typeof value !== "object") return undefined
+  const event = value as { readonly case?: unknown; readonly value?: unknown }
+  if (
+    typeof event.case !== "string" ||
+    event.value === null ||
+    typeof event.value !== "object" ||
+    !("toJson" in event.value) ||
+    typeof event.value.toJson !== "function"
+  ) return undefined
+  return { kind: event.case, value: (event.value as LegacyMessage).toJson() }
+}
+
+function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProgressUpdate {
+  const compat = compatibility(update)
+  const message = update.message
+  switch (message.case) {
+    case "textDelta":
+      return { schemaVersion: 1, kind: "assistant-text", text: message.value.text, serverNotice: message.value.isServerNotice, compatibility: compat }
+    case "toolCallStarted":
+    case "toolCallCompleted":
+      return {
+        schemaVersion: 1,
+        kind: message.case === "toolCallStarted" ? "tool-call-started" : "tool-call-completed",
+        callId: message.value.callId,
+        modelCallId: message.value.modelCallId,
+        ...(message.value.toolCall === undefined ? {} : { toolCall: message.value.toolCall.toJson() }),
+        compatibility: compat,
+      }
+    case "thinkingDelta":
+      return {
+        schemaVersion: 1,
+        kind: "reasoning-text",
+        text: message.value.text,
+        ...(message.value.thinkingStyle === undefined ? {} : { style: message.value.thinkingStyle }),
+        compatibility: compat,
+      }
+    case "thinkingCompleted":
+      return { schemaVersion: 1, kind: "reasoning-completed", durationMs: message.value.thinkingDurationMs, compatibility: compat }
+    case "userMessageAppended":
+      return {
+        schemaVersion: 1,
+        kind: "user-message-appended",
+        ...(message.value.userMessage === undefined ? {} : { message: message.value.userMessage.toJson() }),
+        compatibility: compat,
+      }
+    case "partialToolCall":
+      return {
+        schemaVersion: 1,
+        kind: "tool-arguments-progress",
+        callId: message.value.callId,
+        modelCallId: message.value.modelCallId,
+        argumentsDelta: message.value.argsTextDelta,
+        ...(message.value.toolCall === undefined ? {} : { toolCall: message.value.toolCall.toJson() }),
+        compatibility: compat,
+      }
+    case "tokenDelta":
+      return { schemaVersion: 1, kind: "token-count", tokens: message.value.tokens, compatibility: compat }
+    case "summary":
+      return { schemaVersion: 1, kind: "summary-progress", text: message.value.summary, compatibility: compat }
+    case "summaryStarted":
+      return { schemaVersion: 1, kind: "summary-started", compatibility: compat }
+    case "summaryCompleted":
+      return {
+        schemaVersion: 1,
+        kind: "summary-completed",
+        ...(message.value.hookMessage === undefined ? {} : { hookMessage: message.value.hookMessage }),
+        compatibility: compat,
+      }
+    case "shellOutputDelta": {
+      const output = eventJson(message.value.event)
+      return { schemaVersion: 1, kind: "shell-output-progress", ...(output === undefined ? {} : { output }), compatibility: compat }
+    }
+    case "heartbeat":
+      return { schemaVersion: 1, kind: "heartbeat", compatibility: compat }
+    case "turnEnded": {
+      const value = message.value
+      const usage = {
+        ...(value.inputTokens === undefined ? {} : { inputTokens: value.inputTokens.toString() }),
+        ...(value.outputTokens === undefined ? {} : { outputTokens: value.outputTokens.toString() }),
+        ...(value.cacheReadTokens === undefined ? {} : { cacheReadTokens: value.cacheReadTokens.toString() }),
+        ...(value.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: value.cacheWriteTokens.toString() }),
+        ...(value.reasoningTokens === undefined ? {} : { reasoningTokens: value.reasoningTokens.toString() }),
+      }
+      return {
+        schemaVersion: 1,
+        kind: "turn-ended",
+        ...(Object.keys(usage).length === 0 ? {} : { usage }),
+        compatibility: compat,
+      }
+    }
+    case "toolCallDelta":
+      return {
+        schemaVersion: 1,
+        kind: "tool-call-progress",
+        callId: message.value.callId,
+        modelCallId: message.value.modelCallId,
+        ...(message.value.toolCallDelta === undefined ? {} : { delta: message.value.toolCallDelta.toJson() }),
+        compatibility: compat,
+      }
+    case "stepStarted":
+      return { schemaVersion: 1, kind: "step-started", stepId: message.value.stepId.toString(), compatibility: compat }
+    case "stepCompleted":
+      return {
+        schemaVersion: 1,
+        kind: "step-completed",
+        stepId: message.value.stepId.toString(),
+        durationMs: message.value.stepDurationMs.toString(),
+        compatibility: compat,
+      }
+    case "promptSuggestion":
+      return { schemaVersion: 1, kind: "prompt-suggestion", suggestion: message.value.suggestion, compatibility: compat }
+    case "postRequestPrompt":
+      return {
+        schemaVersion: 1,
+        kind: "post-request-prompt",
+        title: message.value.title,
+        message: message.value.message,
+        buttonLabel: message.value.buttonLabel,
+        buttonUrl: message.value.buttonUrl,
+        compatibility: compat,
+      }
+    case "activeBranchChange":
+      return {
+        schemaVersion: 1,
+        kind: "branch-changed",
+        path: message.value.path,
+        branchName: message.value.branchName,
+        compatibility: compat,
+      }
+    case "feedbackRequest":
+      return {
+        schemaVersion: 1,
+        kind: "feedback-request",
+        requestId: message.value.requestId,
+        ...(message.value.canonicalModelName === undefined ? {} : { canonicalModelName: message.value.canonicalModelName }),
+        categories: message.value.categories.map(category => category.toJson()),
+        categoryGroups: message.value.categoryGroups.map(group => group.toJson()),
+        showImmediately: message.value.showFormImmediately,
+        ...(message.value.title === undefined ? {} : { title: message.value.title }),
+        ...(message.value.negativeTitle === undefined ? {} : { negativeTitle: message.value.negativeTitle }),
+        ...(message.value.commentPlaceholder === undefined ? {} : { commentPlaceholder: message.value.commentPlaceholder }),
+        compatibility: compat,
+      }
+    case "responseComparison": {
+      const event = eventJson(message.value.event)
+      return {
+        schemaVersion: 1,
+        kind: "model-comparison",
+        comparisonId: message.value.comparisonId,
+        ...(event === undefined ? {} : { event }),
+        compatibility: compat,
+      }
+    }
+    case "contextInjectionState": {
+      const state = eventJson(message.value.state?.state)
+      return {
+        schemaVersion: 1,
+        kind: "context-injection-state",
+        injectionId: message.value.injectionId,
+        ...(state === undefined ? {} : { state }),
+        compatibility: compat,
+      }
+    }
+    case "routedModel":
+      return { schemaVersion: 1, kind: "routed-model", displayName: message.value.displayName, compatibility: compat }
+    default:
+      if (InteractionUpdate.runtime.bin.listUnknownFields(update).length === 0) {
+        throw new TypeError("Task progress update has no recognized event")
+      }
+      return { schemaVersion: 1, kind: "unrecognized", compatibility: compat }
+  }
+}
+
+export function slateTaskProgressUpdateFromInterop(value: unknown): SlateTaskProgressUpdate {
+  if (!(value instanceof InteractionUpdate)) throw new TypeError("Task progress update is invalid")
+  return taskProgressUpdateFromMessage(value)
+}
+
+function semanticFields(value: SlateTaskProgressUpdate): unknown {
+  const { compatibility: _compatibility, ...semantic } = value
+  return semantic
+}
+
+function legacyJsonFromSlate(value: SlateTaskProgressUpdate): JsonValue {
+  switch (value.kind) {
+    case "assistant-text":
+      return { textDelta: { text: value.text, isServerNotice: value.serverNotice } }
+    case "tool-call-started":
+    case "tool-call-completed":
+      return {
+        [value.kind === "tool-call-started" ? "toolCallStarted" : "toolCallCompleted"]: {
+          callId: value.callId,
+          modelCallId: value.modelCallId,
+          ...(value.toolCall === undefined ? {} : { toolCall: value.toolCall }),
+        },
+      }
+    case "reasoning-text":
+      return { thinkingDelta: { text: value.text, ...(value.style === undefined ? {} : { thinkingStyle: value.style }) } }
+    case "reasoning-completed":
+      return { thinkingCompleted: { thinkingDurationMs: value.durationMs } }
+    case "user-message-appended":
+      return { userMessageAppended: value.message === undefined ? {} : { userMessage: value.message } }
+    case "tool-arguments-progress":
+      return {
+        partialToolCall: {
+          callId: value.callId,
+          modelCallId: value.modelCallId,
+          argsTextDelta: value.argumentsDelta,
+          ...(value.toolCall === undefined ? {} : { toolCall: value.toolCall }),
+        },
+      }
+    case "token-count":
+      return { tokenDelta: { tokens: value.tokens } }
+    case "summary-progress":
+      return { summary: { summary: value.text } }
+    case "summary-started":
+      return { summaryStarted: {} }
+    case "summary-completed":
+      return { summaryCompleted: value.hookMessage === undefined ? {} : { hookMessage: value.hookMessage } }
+    case "shell-output-progress":
+      return { shellOutputDelta: value.output === undefined ? {} : { [value.output.kind]: value.output.value } }
+    case "heartbeat":
+      return { heartbeat: {} }
+    case "turn-ended":
+      return {
+        turnEnded: value.usage === undefined
+          ? {}
+          : {
+              ...(value.usage.inputTokens === undefined ? {} : { inputTokens: value.usage.inputTokens }),
+              ...(value.usage.outputTokens === undefined ? {} : { outputTokens: value.usage.outputTokens }),
+              ...(value.usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: value.usage.cacheReadTokens }),
+              ...(value.usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: value.usage.cacheWriteTokens }),
+              ...(value.usage.reasoningTokens === undefined ? {} : { reasoningTokens: value.usage.reasoningTokens }),
+            },
+      }
+    case "tool-call-progress":
+      return {
+        toolCallDelta: {
+          callId: value.callId,
+          modelCallId: value.modelCallId,
+          ...(value.delta === undefined ? {} : { toolCallDelta: value.delta }),
+        },
+      }
+    case "step-started":
+      return { stepStarted: { stepId: value.stepId } }
+    case "step-completed":
+      return { stepCompleted: { stepId: value.stepId, stepDurationMs: value.durationMs } }
+    case "prompt-suggestion":
+      return { promptSuggestion: { suggestion: value.suggestion } }
+    case "post-request-prompt":
+      return {
+        postRequestPrompt: {
+          title: value.title,
+          message: value.message,
+          buttonLabel: value.buttonLabel,
+          buttonUrl: value.buttonUrl,
+        },
+      }
+    case "branch-changed":
+      return { activeBranchChange: { path: value.path, branchName: value.branchName } }
+    case "feedback-request":
+      return {
+        feedbackRequest: {
+          requestId: value.requestId,
+          ...(value.canonicalModelName === undefined ? {} : { canonicalModelName: value.canonicalModelName }),
+          categories: [...value.categories],
+          categoryGroups: [...value.categoryGroups],
+          showFormImmediately: value.showImmediately,
+          ...(value.title === undefined ? {} : { title: value.title }),
+          ...(value.negativeTitle === undefined ? {} : { negativeTitle: value.negativeTitle }),
+          ...(value.commentPlaceholder === undefined ? {} : { commentPlaceholder: value.commentPlaceholder }),
+        },
+      }
+    case "model-comparison":
+      return {
+        responseComparison: {
+          comparisonId: value.comparisonId,
+          ...(value.event === undefined ? {} : { [value.event.kind]: value.event.value }),
+        },
+      }
+    case "context-injection-state":
+      return {
+        contextInjectionState: {
+          injectionId: value.injectionId,
+          ...(value.state === undefined ? {} : { state: { [value.state.kind]: value.state.value } }),
+        },
+      }
+    case "routed-model":
+      return { routedModel: { displayName: value.displayName } }
+    case "unrecognized":
+      throw new TypeError("An unrecognized task progress event requires compatibility data")
+  }
+}
+
+export function slateTaskProgressUpdateToInterop(value: unknown): InteractionUpdate {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Task progress update is invalid")
+  }
+  const update = value as SlateTaskProgressUpdate
+  if (update.schemaVersion !== 1 || typeof update.kind !== "string") {
+    throw new TypeError("Task progress update is invalid")
+  }
+
+  if (update.compatibility !== undefined) {
+    if (
+      update.compatibility === null ||
+      typeof update.compatibility !== "object" ||
+      update.compatibility.format !== "legacy-binary" ||
+      !(update.compatibility.payload instanceof Uint8Array)
+    ) {
+      throw new TypeError("Task progress update is invalid")
+    }
+    let interop: InteractionUpdate
+    try {
+      interop = InteractionUpdate.fromBinary(update.compatibility.payload)
+    } catch (cause) {
+      throw new TypeError("Task progress compatibility data is invalid", { cause })
+    }
+    const restored = taskProgressUpdateFromMessage(interop)
+    if (!isDeepStrictEqual(semanticFields(restored), semanticFields(update))) {
+      throw new TypeError("Task progress fields do not match their compatibility data")
+    }
+    return interop
+  }
+
+  try {
+    return InteractionUpdate.fromJson(legacyJsonFromSlate(update) as unknown as ProtocolJsonValue)
+  } catch (cause) {
+    throw new TypeError("Slate task progress fields are invalid", { cause })
+  }
+}
+
+export function createTaskProgressListenerInterop<Context>(listener: TaskProgressListener<Context>) {
+  return {
+    async sendUpdate(context: Context, update: InteractionUpdate): Promise<void> {
+      await listener.sendUpdate(context, slateTaskProgressUpdateFromInterop(update))
+    },
+    query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse> {
+      return listener.query(context, query)
+    },
+    enqueuePostTurnEndedWork: listener.enqueuePostTurnEndedWork,
+    flushPostTurnEndedWork: listener.flushPostTurnEndedWork,
+  }
+}

@@ -20,6 +20,7 @@ import type { RemoteExecManager } from "../../agent-exec/executor-resources.ts";
 import { createReadonlyResourceAccessor } from "../../agent-exec/readonly-resource-accessor.ts";
 import { subagentRegistryResource } from "./subagent-registry.ts";
 import {
+  createTaskProgressListenerInterop,
   createTaskUserMessageActionInterop,
   createTaskToolCallDeltaInterop,
   fromRedactedTaskConversationState,
@@ -28,6 +29,7 @@ import {
   slateAgentActionFromInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
+import type { SlateTaskProgressUpdate } from "./task-progress-state.ts";
 import type { SlateAgentAction } from "../agent-action-state.ts";
 import type { SlatePreparedTask } from "./task-prepared-state.ts";
 import { buildSlatePreparedTaskHookInput } from "./task-prepared-state.ts";
@@ -189,7 +191,7 @@ function presentFields(fields: Readonly<Record<string, unknown>>): Readonly<Reco
 class StreamingTaskInteractionListener {
   constructor(private readonly interactionHandler: Any, private readonly toolCallId: string) {}
 
-  async sendUpdate(ctx: Context, update: Any): Promise<void> {
+  async sendUpdate(ctx: Context, update: SlateTaskProgressUpdate): Promise<void> {
     await this.interactionHandler.emitToolCallDelta(
       ctx,
       this.toolCallId,
@@ -348,7 +350,7 @@ async function runServerTaskSubagent(args: {
     ? setTimeout(() => registry.cancel(resolved.subagentId, { intentional: true, reason: `Subagent exceeded execution timeout of ${timeoutMs}ms` }), timeoutMs)
     : undefined;
   const interactionListener = toRedactedInteractionListener(
-    new StreamingTaskInteractionListener(interactionHandler, meta.toolCallId),
+    createTaskProgressListenerInterop(new StreamingTaskInteractionListener(interactionHandler, meta.toolCallId)),
     stateHandler.getPrivacyMode(),
   );
   const baseAgentConfig = taskToolConfig.agentConfig;
