@@ -28,13 +28,13 @@
       "claim": "rewritten",
       "overlap": 0.034482758620689655,
       "refreshReason": "Shell handoff now uses Slate tool-call identity and explicit accepted, not-found and unrecognized outcomes with an optional Slate shell result.",
-      "evidence": "Focused shell, handoff, box, browser, transfer and recording suite passes 153/153; tests/packages/interop-shell-control-exec-adapter.test.ts pins remote and controlled paths, nested result round-trips, not-found and unknown status preservation. Direct tsc and interop:check pass; measured overlap is 0.034482758620689655 against 58 baseline pairs."
+      "evidence": "Focused shell, handoff, box, browser, transfer and recording suite passes 232/232; tests/packages/interop-shell-control-exec-adapter.test.ts pins remote and controlled paths, nested result round-trips, not-found and unknown status preservation. Direct tsc and interop:check pass; measured overlap is 0.034482758620689655 against 58 baseline pairs."
     },
     "packages/agent-exec/shell-stream.ts": {
       "claim": "rewritten",
       "overlap": 0.05172413793103448,
       "refreshReason": "Slate shell-stream args and events now use first-party request and event types; generated frames are translated in the transport adapter.",
-      "evidence": "Focused shell, local-exec and remote-box suites pass 86/86; work-host typecheck, rewrite and interop gates pass. The full suite passed 10044/10045; its only failure was an authenticated box-daemon Ping timeout, while the isolated box-process suite passes 15/15."
+      "evidence": "Focused shell, local-exec and remote-box suite passes 232/232; tests pin all Slate event round-trips, production shell behavior, cancellation and foreground handoff. Direct tsc and interop:check pass; measured overlap is 0.05172413793103448 against 58 baseline pairs."
     },
     "packages/agent-exec/subagent-await.ts": {
       "claim": "rewritten",
@@ -488,7 +488,7 @@
       "claim": "rewritten",
       "overlap": 0.16,
       "refreshReason": "The package now owns the shell request model and outcome union; generated request/result construction stays in the transport adapter.",
-      "evidence": "The focused shell, box, browser, transfer, recording and readonly suite passes 151/151; tests/packages/interop-shell-operation-adapter.test.ts round-trips every outcome and result metadata. Work-host typecheck passes with 308 interop imports across 218 files and zero direct proto consumers."
+      "evidence": "The focused shell, box, browser, transfer, recording and readonly suite passes 232/232; tests/packages/interop-shell-operation-adapter.test.ts round-trips every outcome, large integer threshold and result metadata. Direct tsc and interop:check pass with 308 interop imports across 218 files and zero direct proto consumers."
     },
     "packages/agent/prompts/user-info-git-rule-gates.ts": {
       "claim": "rewritten",
@@ -664,8 +664,8 @@
     "packages/local-exec/shell-stream.ts": {
       "claim": "rewritten",
       "overlap": 0.4702660406885759,
-      "refreshReason": "Generated ShellStream events and ForceBackground results moved behind the interop adapter; the core now returns Slate-owned stream events and handoff outcomes.",
-      "evidence": "tests/packages/local-exec-shell-stream-contract.test.ts pins Slate event ordering, permission preflights, denylist refusal, sandbox mapping, cancellation, foreground registration and handoff lifecycle; interop-local-shell-stream-executor-adapter.test.ts pins generated event and handoff encoding; local-exec-execution.test.ts covers the production executor path."
+      "refreshReason": "The local executor now emits Slate stream events directly; generated event frames are confined to the stream transport adapter and handoff status uses the Slate shell-control contract.",
+      "evidence": "The focused shell and local-exec suite passes 232/232; local-exec-shell-stream-contract pins event order, permission preflights, denylist refusal, sandbox policy, cancellation and foreground handoff; interop-local-shell-stream-executor-adapter pins event round-trips; interop-shell-control-exec-adapter pins handoff status and nested response mapping."
     },
     "shared/workflow-model.ts": {
       "claim": "rewritten",
@@ -3258,7 +3258,7 @@
       "claim": "rewritten",
       "overlap": 0.5307017543859649,
       "refreshReason": "Box shell failures are now classified from Slate's typed shell outcome rather than a generated oneof.",
-      "evidence": "The focused shell/box suite passes 151/151; transfer tests pin atomic upload, cleanup and retry classification against the Slate shell result union."
+      "evidence": "The focused shell/box suite passes 232/232; transfer tests pin atomic upload, cleanup and retry classification against the Slate shell result union."
     },
     "shared/send-message-preview.ts": {
       "claim": "rewritten",
