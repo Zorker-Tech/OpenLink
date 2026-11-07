@@ -1,5 +1,4 @@
 import {
-  SubagentBackgroundReason,
   TaskError,
   TaskResult,
   TaskSuccess,
@@ -20,11 +19,10 @@ import {
 import { slateAgentActionFromInterop } from "./turn-agent-run-projection-adapter.ts"
 export { createTaskUserMessageActionInterop } from "./task-runtime-protocol-adapter.ts"
 import {
-  SlateTaskBackgroundReason,
-  type SlateTaskBackgroundReason as SlateTaskBackgroundReasonValue,
   type SlateTaskResult,
 } from "../../../packages/agent/tools/task-result-state.ts"
 import type { SlateTaskRequest, TaskTargetMachine } from "../../../packages/agent/tools/task-runtime-types.ts"
+import { taskBackgroundReasonFromInterop, taskBackgroundReasonToInterop } from "./task-operation-protocol-adapter.ts"
 export {
   fromInteropTaskConversationState,
   fromRedactedTaskConversationState,
@@ -153,33 +151,6 @@ export function slateTaskRequestFromModelArgumentsInterop(
   }
 }
 
-function backgroundReasonFromInterop(value: unknown): SlateTaskBackgroundReasonValue {
-  switch (value) {
-    case SubagentBackgroundReason.AGENT_REQUEST: return SlateTaskBackgroundReason.AGENT_REQUEST
-    case SubagentBackgroundReason.USER_REQUEST: return SlateTaskBackgroundReason.USER_REQUEST
-    case SubagentBackgroundReason.QUEUED_FOLLOW_UP: return SlateTaskBackgroundReason.QUEUED_FOLLOW_UP
-    case SubagentBackgroundReason.UNSPECIFIED: return SlateTaskBackgroundReason.UNSPECIFIED
-    default: return typeof value === "number" && Number.isInteger(value)
-      ? `unknown-${value}`
-      : SlateTaskBackgroundReason.UNKNOWN
-  }
-}
-
-function backgroundReasonToInterop(value: SlateTaskBackgroundReasonValue): SubagentBackgroundReason {
-  switch (value) {
-    case SlateTaskBackgroundReason.AGENT_REQUEST: return SubagentBackgroundReason.AGENT_REQUEST
-    case SlateTaskBackgroundReason.USER_REQUEST: return SubagentBackgroundReason.USER_REQUEST
-    case SlateTaskBackgroundReason.QUEUED_FOLLOW_UP: return SubagentBackgroundReason.QUEUED_FOLLOW_UP
-    case SlateTaskBackgroundReason.UNSPECIFIED:
-    case SlateTaskBackgroundReason.UNKNOWN:
-      return SubagentBackgroundReason.UNSPECIFIED
-    default: {
-      const unknown = /^unknown-(-?\d+)$/.exec(value)
-      return unknown === null ? SubagentBackgroundReason.UNSPECIFIED : Number(unknown[1]) as SubagentBackgroundReason
-    }
-  }
-}
-
 /** Projects the Slate task result into the generated message required by the current tool executor. */
 export function toInteropTaskResultInterop(value: SlateTaskResult): TaskResultInterop {
   if (value.kind === "error") {
@@ -195,7 +166,7 @@ export function toInteropTaskResultInterop(value: SlateTaskResult): TaskResultIn
         isBackground: value.isBackground,
         ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
         ...(value.resultSuffix === undefined ? {} : { resultSuffix: value.resultSuffix }),
-        backgroundReason: backgroundReasonToInterop(value.backgroundReason),
+        backgroundReason: taskBackgroundReasonToInterop(value.backgroundReason),
         ...(value.transcriptUri === undefined ? {} : { transcriptPath: value.transcriptUri }),
       }),
     },
@@ -215,7 +186,7 @@ export function fromInteropTaskResultInterop(value: TaskResultInterop): SlateTas
         isBackground: value.result.value.isBackground,
         ...(value.result.value.durationMs === undefined ? {} : { durationMs: value.result.value.durationMs }),
         ...(value.result.value.resultSuffix === undefined ? {} : { resultSuffix: value.result.value.resultSuffix }),
-        backgroundReason: backgroundReasonFromInterop(value.result.value.backgroundReason),
+        backgroundReason: taskBackgroundReasonFromInterop(value.result.value.backgroundReason),
         ...(value.result.value.transcriptPath === undefined ? {} : { transcriptUri: value.result.value.transcriptPath }),
       }
     default:

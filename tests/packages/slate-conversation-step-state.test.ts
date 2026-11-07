@@ -11,12 +11,14 @@ import {
   isSlateSendMessageToolCall,
   isSuccessfulSlateSendMessage,
   slateToolCallMetricLabel,
+  type SlateLegacyToolCallValue,
 } from "../../source/packages/agent/conversation-step-state.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { isSlateShellToolCall } from "../../source/packages/agent/shell-tool-call-state.ts"
+import { isSlateTaskToolCall } from "../../source/packages/agent/task-tool-call-state.ts"
 import {
   createSlateConversationStepSerde,
   fromInteropConversationStep,
@@ -26,7 +28,18 @@ import {
 } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { toRedactedToolCallInterop } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import {
+  AssistantMessage,
   ConversationStep,
+  SelfHostedPoolTarget,
+  SelfHostedWorkerLabel,
+  SubagentBackgroundReason,
+  SubagentExecutionEnvironment,
+  TargetMachine,
+  TaskArgs,
+  TaskError,
+  TaskResult,
+  TaskSuccess,
+  TaskToolCall,
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
@@ -37,6 +50,7 @@ import {
   TimeoutBehavior,
 } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import { ShellToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/shell_tool_pb.ts"
+import { SubagentType, SubagentTypeCustom, TaskMode } from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
 import {
   NetworkPolicy,
   NetworkPolicy_DefaultAction,
@@ -118,6 +132,12 @@ function storeLegacyStepValue(value: unknown): unknown {
   if (typeof value === "boolean") return { kind: "boolean", value }
   if (typeof value === "number") return { kind: "number", value }
   if (typeof value === "bigint") return { kind: "bigint", decimal: value.toString() }
+  if (isRedactedString(value)) return {
+    kind: "redacted-string",
+    rawText: value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    classification: value.__classification,
+    fieldName: value.__fieldName,
+  }
   if (value instanceof Uint8Array) return { kind: "bytes", hex: Buffer.from(value).toString("hex") }
   if (Array.isArray(value)) return { kind: "array", entries: value.map(storeLegacyStepValue) }
   if (typeof value === "object") {
@@ -447,7 +467,8 @@ test("unmapped sandbox enum values remain lossless legacy shell data", () => {
       },
     })
     const imported = serde.deserialize(source.toBinary())
-    if (imported.kind !== "tool-call" || isSlateShellToolCall(imported.tool) || imported.tool.case !== "shellToolCall") {
+    if (imported.kind !== "tool-call" || isSlateShellToolCall(imported.tool) || isSlateTaskToolCall(imported.tool) ||
+        (imported.tool as SlateLegacyToolCallValue).case !== "shellToolCall") {
       assert.fail("expected an unmapped sandbox enum to remain in the migration payload")
     }
     const encoded = serde.serialize(imported)
@@ -490,6 +511,269 @@ test("malformed Slate shell calls are rejected before write and during V3 recove
   }
   const bytes = new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(envelope)}`)
   assert.throws(() => serde.deserialize(bytes), /Stored Slate shell operation is invalid/)
+})
+
+test("task calls use Slate request, placement and nested result contracts with redaction-aware restoration", () => {
+  const customSubagent = new SubagentTypeCustom({ name: "qa-helper" })
+  SubagentTypeCustom.runtime.bin.onUnknownField(customSubagent, 903, 0, new Uint8Array([3]))
+  const args = new TaskArgs({
+    description: "inspect the workspace",
+    prompt: "find the failing test",
+    subagentType: new SubagentType({ type: { case: "custom", value: customSubagent } }),
+    model: "model-fast",
+    resume: "resume-child",
+    agentId: "child-agent",
+    attachments: ["/workspace/README.md"],
+    mode: TaskMode.PLAN,
+    respondingToMessageIds: ["message-1", "message-2"],
+    environment: SubagentExecutionEnvironment.CLOUD,
+    machine: new TargetMachine({ machine: { case: "selfHostedPool", value: new SelfHostedPoolTarget({
+      pool: "build-workers",
+      labels: [new SelfHostedWorkerLabel({ key: "architecture", value: "arm64" }), new SelfHostedWorkerLabel({ key: "region", value: "west" })],
+    }) } }),
+  })
+  TaskArgs.runtime.bin.onUnknownField(args, 901, 0, new Uint8Array([1]))
+  const success = new TaskSuccess({
+    conversationSteps: [new ConversationStep({ message: { case: "assistantMessage", value: new AssistantMessage({ text: "found the issue" }) } })],
+    agentId: "child-agent",
+    isBackground: true,
+    durationMs: 55n,
+    resultSuffix: "Task complete",
+    backgroundReason: SubagentBackgroundReason.USER_REQUEST,
+    transcriptPath: "/tmp/child-transcript.json",
+  })
+  TaskSuccess.runtime.bin.onUnknownField(success, 902, 0, new Uint8Array([2]))
+  const taskCall = new TaskToolCall({
+    args,
+    result: new TaskResult({ result: { case: "success", value: success } }),
+    cloudAgentBcId: "cloud-connection-7",
+  })
+  TaskToolCall.runtime.bin.onUnknownField(taskCall, 904, 0, new Uint8Array([4]))
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    toolCallId: "task-call-1",
+    startedAtMs: 1_000n,
+    completedAtMs: 1_055n,
+    tool: { case: "taskToolCall", value: taskCall },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slate = serde.deserialize(source.toBinary())
+  if (slate.kind !== "tool-call" || !isSlateTaskToolCall(slate.tool)) assert.fail("expected a Slate task operation")
+  assert.equal(slateToolCallMetricLabel(slate.tool), "task")
+  assert.equal(slate.tool.args?.mode, "plan")
+  assert.equal(slate.tool.args?.environment, "cloud")
+  assert.equal(slate.tool.args?.agentId, "child-agent")
+  assert.deepEqual(slate.tool.args?.respondingToMessageIds, ["message-1", "message-2"])
+  assert.equal(slate.tool.args?.machine?.kind, "worker-pool")
+  assert.equal(slate.tool.cloudAgentId, "cloud-connection-7")
+  assert.equal(slate.tool.result?.kind, "success")
+  if (slate.tool.result?.kind !== "success") assert.fail("expected a successful task result")
+  assert.equal(slate.tool.result.conversationSteps[0]?.kind, "assistant-message")
+  assert.equal(slate.tool.result.backgroundReason, "user-request")
+  assert.equal(slate.tool.result.durationMs, 55n)
+  assert.equal(isRedactedString(slate.tool.args?.description), true)
+  assert.equal(isRedactedString(slate.tool.args?.attachments[0]), true)
+  assert.equal(isRedactedString(slate.tool.result.resultSuffix), true)
+  assert.equal(isRedactedString(slate.tool.result.transcriptUri), true)
+
+  const stored = serde.serialize(slate)
+  const storedText = new TextDecoder().decode(stored)
+  const envelope = JSON.parse(storedText.slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation: string; payload: { kind: string }; case?: string } }
+    compatibility?: { legacyUnknownFields?: Array<{ path: Array<{ field?: string; index?: number; key?: string }> }> }
+  }
+  assert.equal(envelope.version, 3)
+  assert.equal(envelope.step.tool.operation, "task")
+  assert.equal(envelope.step.tool.payload.kind, "object")
+  assert.equal(envelope.step.tool.case, undefined)
+  assert.deepEqual(envelope.compatibility?.legacyUnknownFields?.map(field => field.path), [
+    [{ field: "toolCall" }, { field: "taskToolCall" }],
+    [{ field: "toolCall" }, { field: "taskToolCall" }, { field: "args" }],
+    [{ field: "toolCall" }, { field: "taskToolCall" }, { field: "args" }, { field: "subagentType" }, { field: "custom" }],
+    [{ field: "toolCall" }, { field: "taskToolCall" }, { field: "result" }, { field: "success" }],
+  ])
+
+  const redactedBoundary = toInteropConversationStep(serde.deserialize(stored))
+  if (redactedBoundary.message.case !== "toolCall" || redactedBoundary.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the task operation at the redacted runner boundary")
+  }
+  assert.equal(isRedactedString(redactedBoundary.message.value.tool.value.args?.prompt), true)
+  const steps = redactedBoundary.message.value.tool.value.result?.result
+  if (steps?.case !== "success") assert.fail("expected the redacted task result")
+  assert.equal(isRedactedString(steps.value.resultSuffix), true)
+  const nestedStep = steps.value.conversationSteps[0]
+  if (nestedStep?.message.case !== "assistantMessage") assert.fail("expected a nested assistant step")
+  assert.equal(isRedactedString(nestedStep.message.value.text), true)
+  const restored = toPlainInteropConversationStep(serde.deserialize(stored))
+  assert.deepEqual(restored.toJson(), source.toJson())
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the Slate task operation at the plain boundary")
+  }
+  const restoredTaskCall = restored.message.value.tool.value
+  assert.deepEqual(TaskToolCall.runtime.bin.listUnknownFields(restoredTaskCall), TaskToolCall.runtime.bin.listUnknownFields(taskCall))
+  const restoredArgs = restoredTaskCall.args
+  assert.ok(restoredArgs)
+  assert.deepEqual(TaskArgs.runtime.bin.listUnknownFields(restoredArgs), TaskArgs.runtime.bin.listUnknownFields(args))
+  const restoredSubagentType = restoredArgs.subagentType?.type
+  if (restoredSubagentType?.case !== "custom") assert.fail("expected the custom task type")
+  assert.deepEqual(SubagentTypeCustom.runtime.bin.listUnknownFields(restoredSubagentType.value), SubagentTypeCustom.runtime.bin.listUnknownFields(customSubagent))
+  const restoredTaskResult = restoredTaskCall.result?.result
+  if (restoredTaskResult?.case !== "success") assert.fail("expected the task success result")
+  assert.deepEqual(TaskSuccess.runtime.bin.listUnknownFields(restoredTaskResult.value), TaskSuccess.runtime.bin.listUnknownFields(success))
+})
+
+test("stored V2 task payloads migrate to the typed Slate task operation", () => {
+  const taskCall = new TaskToolCall({
+    args: new TaskArgs({
+      description: "review changes",
+      prompt: "check the patch",
+      mode: TaskMode.AGENT,
+      environment: SubagentExecutionEnvironment.LOCAL,
+    }),
+    result: new TaskResult({ result: { case: "error", value: new TaskError({ error: "tool stopped" }) } }),
+  })
+  const redactedTaskCall = toRedactedToolCallInterop(new ToolCall({ tool: { case: "taskToolCall", value: taskCall } }), PrivacyMode.NO_STORAGE)
+  const oldEnvelope = {
+    format: "slate.agent-conversation-step",
+    version: 2,
+    step: {
+      kind: "tool-call",
+      toolCallId: "old-task-call",
+      hookContexts: [],
+      tool: { operation: "taskToolCall", payload: storeLegacyStepValue(redactedTaskCall.tool.value) },
+    },
+  }
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const migrated = serde.deserialize(new TextEncoder().encode(`SLATE-AGENT-STEP\n${JSON.stringify(oldEnvelope)}`))
+  if (migrated.kind !== "tool-call" || !isSlateTaskToolCall(migrated.tool)) assert.fail("expected the V2 task call to migrate")
+  if (migrated.tool.args === undefined || !isRedactedString(migrated.tool.args.prompt)) assert.fail("expected redacted task prompt")
+  assert.equal(migrated.tool.args.prompt.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "check the patch")
+  if (migrated.tool.result?.kind !== "error" || !isRedactedString(migrated.tool.result.message)) {
+    assert.fail("expected the old redacted task error")
+  }
+  assert.equal(migrated.tool.result.message.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "tool stopped")
+  const rewritten = serde.serialize(migrated)
+  const envelope = JSON.parse(new TextDecoder().decode(rewritten).slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation: string } }
+  }
+  assert.equal(envelope.version, 3)
+  assert.equal(envelope.step.tool.operation, "task")
+})
+
+test("unknown task enum codes remain opaque migration data and round-trip losslessly", () => {
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "taskToolCall", value: new TaskToolCall({
+      args: new TaskArgs({ description: "", prompt: "preserve unknown values", mode: 71 as TaskMode, environment: 83 as SubagentExecutionEnvironment }),
+      result: new TaskResult({ result: { case: "error", value: new TaskError({ error: "task failed" }) } }),
+    }) },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slate = serde.deserialize(source.toBinary())
+  if (slate.kind !== "tool-call" || isSlateTaskToolCall(slate.tool) ||
+      (slate.tool as SlateLegacyToolCallValue).case !== "taskToolCall") {
+    assert.fail("expected an unrecognized wire enum to stay in the opaque migration payload")
+  }
+  const legacyTask = (slate.tool as SlateLegacyToolCallValue).value as {
+    readonly result?: { readonly result?: { readonly value?: { readonly error?: unknown } } }
+  }
+  const legacyError = legacyTask.result?.result?.value?.error
+  if (!isRedactedString(legacyError)) {
+    assert.fail("expected a redacted Slate task error")
+  }
+  assert.equal(legacyError.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "task failed")
+  const serialized = serde.serialize(slate)
+  const envelope = JSON.parse(new TextDecoder().decode(serialized).slice("SLATE-AGENT-STEP\n".length)) as {
+    version: number
+    step: { tool: { operation?: string } }
+  }
+  assert.equal(envelope.version, 3)
+  assert.equal(envelope.step.tool.operation, "taskToolCall")
+  const restored = toPlainInteropConversationStep(serde.deserialize(serialized))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the historical task payload to restore at the runner boundary")
+  }
+  assert.equal(restored.message.value.tool.value.args?.mode, 71)
+  assert.equal(restored.message.value.tool.value.args?.environment, 83)
+  const restoredResult = restored.message.value.tool.value.result?.result
+  if (restoredResult?.case !== "error") assert.fail("expected the restored task error")
+  assert.equal(restoredResult.value.error, "task failed")
+})
+
+test("an unknown task completion reason stays out of the Slate result contract", () => {
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "taskToolCall", value: new TaskToolCall({
+      args: new TaskArgs({ description: "", prompt: "preserve the historical reason" }),
+      result: new TaskResult({ result: { case: "success", value: new TaskSuccess({
+        conversationSteps: [],
+        backgroundReason: 97 as SubagentBackgroundReason,
+      }) } }),
+    }) },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slate = serde.deserialize(source.toBinary())
+  if (slate.kind !== "tool-call" || isSlateTaskToolCall(slate.tool) ||
+      (slate.tool as SlateLegacyToolCallValue).case !== "taskToolCall") {
+    assert.fail("expected an unknown completion reason to remain in the opaque migration payload")
+  }
+  const serialized = serde.serialize(slate)
+  const restored = toPlainInteropConversationStep(serde.deserialize(serialized))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the historical task result to restore")
+  }
+  const result = restored.message.value.tool.value.result?.result
+  if (result?.case !== "success") assert.fail("expected the historical successful result")
+  assert.equal(result.value.backgroundReason, 97)
+})
+
+test("the Slate task contract rejects counterpart enum escape values on new writes", () => {
+  const task = {
+    kind: "task",
+    args: {
+      description: "delegate the work",
+      prompt: "check the change",
+      attachments: [],
+      mode: { kind: "unknown", code: 71 },
+      respondingToMessageIds: [],
+      environment: "local",
+    },
+    result: {
+      kind: "success",
+      conversationSteps: [],
+      isBackground: false,
+      backgroundReason: "unknown-97",
+    },
+  } as never
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  assert.throws(() => serde.serialize(createSlateToolCallStep({ tool: task })), /Slate task operation is invalid/)
+})
+
+test("task placements without a Slate projection remain lossless legacy values", () => {
+  const machine = new TargetMachine()
+  TargetMachine.runtime.bin.onUnknownField(machine, 901, 0, new Uint8Array([5]))
+  const source = new ConversationStep({ message: { case: "toolCall", value: new ToolCall({
+    tool: { case: "taskToolCall", value: new TaskToolCall({
+      args: new TaskArgs({ description: "", prompt: "keep the unknown placement", machine }),
+    }) },
+  }) } })
+  const serde = createSlateConversationStepSerde(PrivacyMode.NO_STORAGE)
+  const slate = serde.deserialize(source.toBinary())
+  if (slate.kind !== "tool-call" || isSlateTaskToolCall(slate.tool) ||
+      (slate.tool as SlateLegacyToolCallValue).case !== "taskToolCall") {
+    assert.fail("expected the unsupported task placement to remain in its migration payload")
+  }
+  const encoded = serde.serialize(slate)
+  const envelope = JSON.parse(new TextDecoder().decode(encoded).slice("SLATE-AGENT-STEP\n".length)) as {
+    step: { tool: { operation: string } }
+  }
+  assert.equal(envelope.step.tool.operation, "taskToolCall")
+  const restored = toPlainInteropConversationStep(serde.deserialize(encoded))
+  if (restored.message.case !== "toolCall" || restored.message.value.tool.case !== "taskToolCall") {
+    assert.fail("expected the old task call to restore")
+  }
+  const restoredMachine = restored.message.value.tool.value.args?.machine
+  assert.ok(restoredMachine)
+  assert.deepEqual(TargetMachine.runtime.bin.listUnknownFields(restoredMachine), TargetMachine.runtime.bin.listUnknownFields(machine))
 })
 
 test("previous computer-use step data migrates to the Slate-owned operation on rewrite", () => {

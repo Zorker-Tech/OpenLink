@@ -16,6 +16,7 @@ import type {
   SlateHydratedConversationTurn,
 } from "../../packages/agent/conversation-transcript-state.ts";
 import type { SlateConversationStep } from "../../packages/agent/conversation-step-state.ts";
+import type { SlateTaskToolCall } from "../../packages/agent/task-tool-call-state.ts";
 
 /** The tool-call name a send-message call is outlined under. */
 export const SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME = "sendMessageToolCall";
@@ -374,6 +375,7 @@ function slateStepToOutlineItem(step: SlateConversationStep, id: string): Outlin
         : { kind: "thinking", id, text, durationMs: step.durationMs > 0 ? step.durationMs : undefined }
     }
     case "tool-call":
+      if (step.tool.kind === "task") return slateTaskToolCallItem(step.tool, id)
       if (step.tool.kind === "shell") return toolCallItem({ tool: { case: "shellToolCall" } }, id)
       return toolCallItem({
         tool: {
@@ -385,6 +387,22 @@ function slateStepToOutlineItem(step: SlateConversationStep, id: string): Outlin
       }, id)
     case "unsupported":
       return null
+  }
+}
+
+function slateTaskToolCallItem(task: SlateTaskToolCall, id: string): OutlineItem {
+  const failure = task.result?.kind === "error" ? outlineText(task.result.message) : undefined
+  const summary = firstNonEmpty(
+    failure,
+    task.args === undefined ? undefined : outlineText(task.args.description),
+    task.args === undefined ? undefined : outlineText(task.args.prompt),
+  )
+  return {
+    kind: "tool-call",
+    id,
+    name: "Task",
+    status: task.result?.kind === "error" ? "failed" : "done",
+    summary,
   }
 }
 

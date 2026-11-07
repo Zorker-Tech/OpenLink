@@ -161,6 +161,18 @@ describe("the conversation outline", () => {
               value: { args: { description: " inspect task " } },
             } }),
             createSlateToolCallStep({ tool: { kind: "shell", args: { command: "git status" } } }),
+            createSlateToolCallStep({ tool: {
+              kind: "task",
+              args: {
+                description: text("child task"),
+                prompt: text("run the child task"),
+                attachments: [],
+                mode: "agent",
+                respondingToMessageIds: [],
+                environment: "local",
+              },
+              result: { kind: "error", message: text("task failed") },
+            } }),
           ],
         },
         { kind: "shell", invocation: { commandText: text("ls -la") }, result: { standardOutput: "", standardError: "", exitCode: 0 } },
@@ -179,6 +191,7 @@ describe("the conversation outline", () => {
           { kind: "send-message", id: "outline-0-2", message: { type: "text", content: "sent" } },
           { kind: "tool-call", id: "outline-0-3", name: "Task", status: "done", summary: "inspect task" },
           { kind: "tool-call", id: "outline-0-4", name: "shellToolCall", status: "done", summary: undefined },
+          { kind: "tool-call", id: "outline-0-5", name: "Task", status: "failed", summary: "task failed" },
         ],
       },
       {
