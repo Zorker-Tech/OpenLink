@@ -1,11 +1,19 @@
 import { isDeepStrictEqual } from "node:util"
 import type { JsonValue as ProtocolJsonValue } from "@bufbuild/protobuf"
 import { ConversationStep, InteractionUpdate, type ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
+import { RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import {
+  fromRedactedInteractionUpdate,
+  toRedactedInteractionUpdate,
+} from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import type { JsonValue } from "@slate/work-domain"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
+import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { SlateInteractionQuery, SlateInteractionResponse } from "../../../packages/agent-core/interaction-queries.ts"
 import type {
   SlateTaskProgressCompatibility,
   SlateTaskProgressUpdate,
+  SlateTaskProgressUpdateView,
 } from "../../../packages/agent/tools/task-progress-state.ts"
 import type { SlateToolCallStep } from "../../../packages/agent/conversation-step-state.ts"
 import { fromInteropConversationStep, toPlainInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
@@ -372,6 +380,73 @@ export function slateTaskProgressUpdateToInterop(value: unknown): InteractionUpd
   } catch (cause) {
     throw new TypeError("Slate task progress fields are invalid", { cause })
   }
+}
+
+function taskProgressJsonValue(value: unknown, ancestors = new Set<object>()): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("Task progress contains a non-finite number")
+    return value
+  }
+  if (typeof value === "bigint") return value.toString()
+  if (value instanceof RedactedString) {
+    return value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
+      enforcing: true,
+      redactUnallowedFieldsInsteadOfThrowing: true,
+    })
+  }
+  if (value instanceof RedactedBytes) {
+    return Buffer.from(value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
+      enforcing: true,
+      redactUnallowedFieldsInsteadOfThrowing: true,
+    })).toString("base64")
+  }
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64")
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value !== "object") throw new TypeError("Task progress contains a non-JSON value")
+  if (ancestors.has(value)) throw new TypeError("Task progress contains a cycle")
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) return value.map(entry => taskProgressJsonValue(entry, ancestors))
+    if (value instanceof Map) {
+      const projected: Record<string, JsonValue> = {}
+      for (const [key, entry] of value) {
+        if (typeof key !== "string") throw new TypeError("Task progress map key is not a string")
+        projected[key] = taskProgressJsonValue(entry, ancestors)
+      }
+      return projected
+    }
+    if (value instanceof Set) return [...value].map(entry => taskProgressJsonValue(entry, ancestors))
+
+    const projected: Record<string, JsonValue> = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (key === "compatibility" || key === "_privacyMode" || entry === undefined) continue
+      projected[key] = taskProgressJsonValue(entry, ancestors)
+    }
+    return projected
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+/** Removes the private migration bytes and applies the same field redaction policy as the interaction stream. */
+export function taskProgressUpdateForListener(
+  update: SlateTaskProgressUpdate,
+  privacyMode: PrivacyMode,
+): SlateTaskProgressUpdateView {
+  if (update.kind === "unrecognized") return { schemaVersion: 1, kind: "unrecognized" }
+  const legacy = slateTaskProgressUpdateToInterop(update)
+  const redacted = toRedactedInteractionUpdate(legacy, privacyMode)
+  const projected = (fromRedactedInteractionUpdate as unknown as (
+    value: ReturnType<typeof toRedactedInteractionUpdate>,
+    purpose: PrivacyCapability,
+    options: { readonly redactUnallowedFieldsInsteadOfThrowing: true; readonly enforcing: true },
+  ) => InteractionUpdate)(redacted, PrivacyCapability.STORAGE_FOR_TRAINING, {
+    redactUnallowedFieldsInsteadOfThrowing: true,
+    enforcing: true,
+  })
+  const safeUpdate = taskProgressUpdateFromMessage(projected)
+  return taskProgressJsonValue(safeUpdate) as SlateTaskProgressUpdateView
 }
 
 export function createTaskProgressListenerInterop<Context>(listener: TaskProgressListener<Context>) {

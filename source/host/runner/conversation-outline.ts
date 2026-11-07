@@ -17,6 +17,7 @@ import type {
 } from "../../packages/agent/conversation-transcript-state.ts";
 import type { SlateConversationStep } from "../../packages/agent/conversation-step-state.ts";
 import type { SlateTaskToolCall } from "../../packages/agent/task-tool-call-state.ts";
+import type { SlateTaskProgressUpdateView } from "../../packages/agent/tools/task-progress-state.ts";
 
 /** The tool-call name a send-message call is outlined under. */
 export const SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME = "sendMessageToolCall";
@@ -44,6 +45,7 @@ export type OutlineItem =
     readonly name: string;
     readonly status: "pending" | "failed" | "done";
     readonly summary: string | undefined;
+    readonly progress?: SlateTaskProgressUpdateView;
   };
 
 /** Arguments that can serialize themselves, as a tool call's arguments do. */

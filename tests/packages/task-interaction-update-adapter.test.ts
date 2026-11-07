@@ -45,6 +45,9 @@ import {
   createTaskProgressListenerInterop,
 } from "../../source/adapters/interop/agent/task-progress-protocol-adapter.ts"
 import { createTaskToolCallDeltaInterop } from "../../source/adapters/interop/agent/task-tool-protocol-adapter.ts"
+import { toRedactedInteractionListener } from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import type { SlateTaskProgressUpdateView } from "../../source/packages/agent/tools/task-progress-state.ts"
 
 function interaction(caseName: string, value: unknown): InteractionUpdate {
   return new InteractionUpdate({ message: { case: caseName, value } } as never)
@@ -180,6 +183,45 @@ test("the listener adapter exposes a Slate update to task policy", async () => {
   })
   await listener.sendUpdate("run", cases[0]![1])
   assert.equal((received[0] as { kind?: unknown }).kind, "assistant-text")
+})
+
+test("the parent listener receives privacy-projected Slate progress without compatibility bytes", async () => {
+  const received: Array<{ readonly toolCallId: string; readonly update: SlateTaskProgressUpdateView }> = []
+  const listener = toRedactedInteractionListener({
+    async sendUpdate() {},
+    async query(_context: string, query: { readonly id: number; readonly kind: string; readonly payload?: unknown }) {
+      return { id: query.id, kind: query.kind, payload: query.payload }
+    },
+    async sendTaskProgressUpdate(_context: string, toolCallId: string, update: SlateTaskProgressUpdateView) {
+      received.push({ toolCallId, update })
+    },
+  }, PrivacyMode.NO_TRAINING)
+
+  const update = slateTaskProgressUpdateFromInterop(
+    interaction("textDelta", new TextDeltaUpdate({ text: "private child code" })),
+  )
+  await listener.sendTaskProgressUpdate?.("run", "task-call-1", update)
+
+  assert.equal(received.length, 1)
+  assert.equal(received[0]?.toolCallId, "task-call-1")
+  assert.equal(received[0]?.update.kind, "assistant-text")
+  assert.equal(received[0]?.update.text, "[redacted:text]")
+  assert.equal("compatibility" in (received[0]?.update ?? {}), false)
+
+  const appendedMessage = slateTaskProgressUpdateFromInterop(interaction(
+    "userMessageAppended",
+    new UserMessageAppendedUpdate({ userMessage: new UserMessage({ text: "private child message", messageId: "message-2" }) }),
+  ))
+  await listener.sendTaskProgressUpdate?.("run", "task-call-1", appendedMessage)
+  assert.equal(received.length, 2)
+  const messageUpdate = received[1]?.update
+  assert.equal(messageUpdate?.kind, "user-message-appended")
+  if (messageUpdate?.kind === "user-message-appended") {
+    const message = messageUpdate.message as { readonly text?: unknown; readonly messageId?: unknown } | undefined
+    assert.equal(message?.text, "[redacted:text]")
+    assert.equal(message?.messageId, "message-2")
+  }
+  assert.equal("compatibility" in (messageUpdate ?? {}), false)
 })
 
 test("task progress rejects empty, mismatched and non-interaction messages", () => {

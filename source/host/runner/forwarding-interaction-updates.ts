@@ -7,10 +7,17 @@ import {
   type OutlineToolCall,
 } from "./conversation-outline.ts";
 import { turnUsageFromTurnEnded, type TurnEndedUsage } from "./turn-usage.ts";
+import type { SlateTaskProgressUpdateView } from "../../packages/agent/tools/task-progress-state.ts";
 
 export interface ForwardedUpdate {
   readonly type: string;
   readonly [key: string]: unknown;
+}
+
+export interface ForwardedTaskProgressUpdate extends ForwardedUpdate {
+  readonly type: "task-progress"
+  readonly toolCallId: string
+  readonly update: SlateTaskProgressUpdateView
 }
 
 export interface ForwardingInteractionObservers {
@@ -71,6 +78,15 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
       default:
         return;
     }
+  }
+
+  async sendTaskProgressUpdate(
+    _ctx: { readonly canceled?: boolean },
+    toolCallId: string,
+    update: SlateTaskProgressUpdateView,
+  ): Promise<void> {
+    const event: ForwardedTaskProgressUpdate = { type: "task-progress", toolCallId, update };
+    this.onUpdate(event);
   }
 
   private forwardToolCall(phase: ToolCallPhase, value: { callId: string; toolCall?: OutlineToolCall; modelCallId?: string }): void {

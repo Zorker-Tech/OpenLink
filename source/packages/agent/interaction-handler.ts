@@ -23,6 +23,7 @@
 import { createLogger, createSpan } from "../context/index.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import { Updates } from "../agent-core/interaction-updates.ts"
+import type { SlateTaskProgressUpdate } from "./tools/task-progress-state.ts"
 import { InputTokenLimitError } from "../chat-inference/prompt-executor.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
 import {
@@ -266,6 +267,13 @@ export class InteractionHandler {
   async emitToolCallDelta(context: Loose, callId: string, callDelta: Loose): Promise<void> {
     this.applyDeltaToLatestToolCall(callId, callDelta);
     await this.interactionProvider.sendUpdate(context, Updates.toolCallDelta(callId, callDelta, this.invocationId));
+  }
+
+  async emitTaskProgressUpdate(context: Loose, toolCallId: string, update: SlateTaskProgressUpdate): Promise<boolean> {
+    const sendTaskProgressUpdate = this.interactionProvider.sendTaskProgressUpdate
+    if (typeof sendTaskProgressUpdate !== "function") return false
+    await sendTaskProgressUpdate.call(this.interactionProvider, context, toolCallId, update)
+    return true
   }
 
   async emitToolCallError(context: Loose, callId: string, failedCall: Loose): Promise<void> {
