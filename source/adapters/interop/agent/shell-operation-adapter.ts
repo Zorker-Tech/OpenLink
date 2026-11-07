@@ -203,7 +203,7 @@ export function shellExecutorArgsFromInterop(value: ShellArgs): ShellExecutorArg
   };
 }
 
-function shellArgsToInterop(value: ShellExecutorArgs): ShellArgs {
+export function shellExecutorArgsToInterop(value: ShellExecutorArgs): ShellArgs {
   const parsingResult = parsingToInterop(value.parsing);
   const requestedSandboxPolicy = adaptSandboxPolicyToInterop(value.requestedSandboxPolicy);
   const classifierResult = classifierResultToInterop(value.classifierResult);
@@ -434,7 +434,7 @@ export const shellExecutorResource = createResource<ShellExecutor, RemoteExecMan
     const deserializeResult = createClientDeserializer("shellResult");
     return new ExecutorResource(
       manager,
-      (id, args, options) => serializeArgs(id, shellArgsToInterop(args), options),
+      (id, args, options) => serializeArgs(id, shellExecutorArgsToInterop(args), options),
       (message) => {
         const decoded = deserializeResult(message);
         return {

@@ -1,22 +1,8 @@
+/** Encodes Slate shell tool calls for the model and transcript interaction boundary. */
+
 import { Struct, type JsonValue } from "@bufbuild/protobuf"
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
-import type { ShellStreamExecutorArgs, ShellStreamExecutorEvent } from "../../../packages/agent-exec/shell-stream-operation.ts"
-import { SandboxPolicy, SandboxPolicy_Type } from "../proto/generated/agent/v1/sandbox_pb.ts"
-import {
-  ShellArgs,
-  ShellCommandParsingResult,
-  ShellCommandParsingResult_ExecutableCommand,
-  ShellCommandParsingResult_ExecutableCommandArg,
-  ShellCommandParsingResult_Redirect,
-  ShellFailure,
-  ShellPermissionDenied,
-  ShellRejected,
-  ShellResult,
-  ShellSpawnError,
-  ShellSuccess,
-  ShellTimeout,
-  TimeoutBehavior,
-} from "../proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellArgs } from "../proto/generated/agent/v1/shell_exec_pb.ts"
 import { ShellToolCall } from "../proto/generated/agent/v1/shell_tool_pb.ts"
 import {
   SmartModeClassifierArgs,
@@ -24,81 +10,16 @@ import {
   SmartModeRiskTarget,
   type SmartModeClassifierResult,
 } from "../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
-import { adaptSandboxPolicyFromInterop } from "./sandbox-policy-adapter.ts"
-import { renderInteropShellResultToString } from "./shell-result-format-adapter.ts"
+import type { ShellExecResponse } from "../../../packages/agent-exec/shell.ts"
+import { shellExecutorArgsToInterop, shellResultToInterop } from "./shell-operation-adapter.ts"
+import type { Context } from "../../../packages/context/context.ts"
+import type { HookContextEntry } from "../../../packages/hooks-carriers/hook-additional-context.ts"
+import type { ShellToolInteractionPort, SlateShellToolCall } from "../../../packages/agent/tools/core/shell/shell-tool-contract.ts"
 
-export type ShellArgsInterop = ShellArgs
-export type ShellResultInterop = ShellResult
-export type ShellToolCallInterop = ShellToolCall
-export type ShellToolEnvelopeInterop = ToolCall
-export type ShellTimeoutBehaviorInterop = "background"
-
-export interface ShellSandboxPolicy {
-  readonly mode: "workspace_readonly" | "workspace_readwrite" | "unrestricted"
-  readonly networkAccess?: boolean
-  readonly additionalReadwritePaths?: readonly string[]
-  readonly enableSharedBuildCache?: boolean
-}
-
-export type ShellStreamEventViewInterop =
-  | { readonly kind: "stdout" | "stderr"; readonly data: string }
-  | {
-      readonly kind: "exit"
-      readonly code: number
-      readonly aborted: boolean
-      readonly localExecutionTimeMs?: number
-      readonly outputLocation?: unknown
-      readonly abortReason?: unknown
-    }
-  | { readonly kind: "rejected"; readonly command: string; readonly workingDirectory: string; readonly reason: string }
-  | { readonly kind: "permission-denied"; readonly command: string; readonly workingDirectory: string; readonly error: string; readonly isReadonly: boolean }
-  | { readonly kind: "sandbox-unsupported"; readonly reason: string }
-  | {
-      readonly kind: "backgrounded"
-      readonly command: string
-      readonly workingDirectory: string
-      readonly shellId: number
-      readonly pid?: number
-      readonly msToWait?: number
-      readonly reason?: number
-    }
-  | { readonly kind: "other" }
-
-export type SmartModeClassifierDecisionViewInterop =
+export type SmartModeClassifierDecisionView =
   | { readonly kind: "allow" }
-  | { readonly kind: "block"; readonly reason?: string; readonly proposedAllowRule?: string }
   | { readonly kind: "unknown" }
-
-export function createShellSandboxPolicyInterop(input: {
-  readonly mode: ShellSandboxPolicy["mode"]
-  readonly networkAccess?: boolean
-  readonly additionalReadwritePaths?: readonly string[]
-  readonly enableSharedBuildCache?: boolean
-}): SandboxPolicy {
-  const type = input.mode === "workspace_readonly"
-    ? SandboxPolicy_Type.WORKSPACE_READONLY
-    : input.mode === "workspace_readwrite"
-      ? SandboxPolicy_Type.WORKSPACE_READWRITE
-      : SandboxPolicy_Type.INSECURE_NONE
-  return new SandboxPolicy({
-    type,
-    ...(input.networkAccess === undefined ? {} : { networkAccess: input.networkAccess }),
-    ...(input.additionalReadwritePaths === undefined ? {} : { additionalReadwritePaths: [...input.additionalReadwritePaths] }),
-    ...(input.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: input.enableSharedBuildCache }),
-  })
-}
-
-export function shellSandboxPolicyFingerprintInterop(policy: ShellSandboxPolicy | undefined): JsonValue | null {
-  if (policy === undefined) return null
-  return createShellSandboxPolicyInterop(policy).toJson({ emitDefaultValues: true }) as JsonValue
-}
-
-export function escalatedShellSandboxPolicyInterop(policy: ShellSandboxPolicy | undefined): ShellSandboxPolicy {
-  return {
-    mode: "unrestricted",
-    ...(policy?.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: policy.enableSharedBuildCache }),
-  }
-}
+  | { readonly kind: "block"; readonly reason?: string; readonly proposedAllowRule?: string }
 
 export function createSmartModeRiskTargetInterop(input: {
   readonly action: string
@@ -126,7 +47,7 @@ export function createSmartModeClassifierArgsInterop(input: {
 
 export function projectSmartModeClassifierDecisionInterop(
   result: SmartModeClassifierResult,
-): SmartModeClassifierDecisionViewInterop {
+): SmartModeClassifierDecisionView {
   if (result.result.case !== "success") return { kind: "unknown" }
   switch (result.result.value.decision) {
     case SmartModeClassifierDecision.ALLOW:
@@ -142,256 +63,60 @@ export function projectSmartModeClassifierDecisionInterop(
   }
 }
 
-export function createShellArgsInterop(input: {
-  readonly command: string
-  readonly workingDirectory: string
-  readonly timeout: number
-  readonly toolCallId: string
-  readonly simpleCommands: readonly string[]
-  readonly hasInputRedirect: boolean
-  readonly hasOutputRedirect: boolean
-  readonly parsingResult: {
-    readonly parsingFailed: boolean
-    readonly hasRedirects: boolean
-    readonly hasCommandSubstitution: boolean
-    readonly allRedirectsAreDevNull?: boolean
-    readonly executableCommands: readonly {
-      readonly name: string
-      readonly fullText: string
-      readonly args: readonly { readonly type: string; readonly value: string }[]
-    }[]
-    readonly redirects: readonly {
-      readonly operator: string
-      readonly destinationFds: readonly number[]
-      readonly targetNodeType: string
-      readonly targetText?: string
-    }[]
-  }
-  readonly requestedSandboxPolicy?: ShellSandboxPolicy
-  readonly isBackground: boolean
-  readonly skipApproval: boolean
-  readonly timeoutBehavior: ShellTimeoutBehaviorInterop
-  readonly hardTimeout?: number
-  readonly description?: string
-  readonly adminCommandDenylist: readonly string[]
-}): ShellArgsInterop {
-  return new ShellArgs({
-    command: input.command,
-    workingDirectory: input.workingDirectory,
-    timeout: input.timeout,
-    toolCallId: input.toolCallId,
-    simpleCommands: [...input.simpleCommands],
-    hasInputRedirect: input.hasInputRedirect,
-    hasOutputRedirect: input.hasOutputRedirect,
-    parsingResult: new ShellCommandParsingResult({
-      parsingFailed: input.parsingResult.parsingFailed,
-      hasRedirects: input.parsingResult.hasRedirects,
-      hasCommandSubstitution: input.parsingResult.hasCommandSubstitution,
-      ...(input.parsingResult.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: input.parsingResult.allRedirectsAreDevNull }),
-      executableCommands: input.parsingResult.executableCommands.map((command) => new ShellCommandParsingResult_ExecutableCommand({
-        name: command.name,
-        fullText: command.fullText,
-        args: command.args.map((argument) => new ShellCommandParsingResult_ExecutableCommandArg({ type: argument.type, value: argument.value })),
-      })),
-      redirects: input.parsingResult.redirects.map((redirect) => new ShellCommandParsingResult_Redirect({
-        operator: redirect.operator,
-        destinationFds: [...redirect.destinationFds],
-        targetNodeType: redirect.targetNodeType,
-        ...(redirect.targetText === undefined ? {} : { targetText: redirect.targetText }),
-      })),
-    }),
-    ...(input.requestedSandboxPolicy === undefined ? {} : { requestedSandboxPolicy: createShellSandboxPolicyInterop(input.requestedSandboxPolicy) }),
-    isBackground: input.isBackground,
-    skipApproval: input.skipApproval,
-    timeoutBehavior: TimeoutBehavior.BACKGROUND,
-    ...(input.hardTimeout === undefined ? {} : { hardTimeout: input.hardTimeout }),
-    ...(input.description === undefined ? {} : { description: input.description }),
-    closeStdin: false,
-    adminCommandDenylist: [...input.adminCommandDenylist],
-  })
-}
-
-export function emptyShellArgsInterop(): ShellArgsInterop {
-  return new ShellArgs()
-}
-
-/** Projects the recorded tool-call arguments into the executor's Slate request contract. */
-export function shellStreamArgsFromToolCallInterop(args: ShellArgsInterop): ShellStreamExecutorArgs {
-  return {
-    command: args.command,
-    workingDirectory: args.workingDirectory,
-    timeout: args.timeout,
-    toolCallId: args.toolCallId,
-    ...(args.requestedSandboxPolicy === undefined ? {} : { requestedSandboxPolicy: adaptSandboxPolicyFromInterop(args.requestedSandboxPolicy) }),
-    isBackground: args.isBackground,
-    skipApproval: args.skipApproval,
-    timeoutBehavior: args.timeoutBehavior === TimeoutBehavior.BACKGROUND ? "background" : "foreground",
-    ...(args.hardTimeout === undefined ? {} : { hardTimeout: args.hardTimeout }),
-    ...(args.description === undefined ? {} : { description: args.description }),
-    closeStdin: args.closeStdin,
-    ...(args.classifierResult === undefined ? {} : { classifierResult: args.classifierResult }),
-    ...(args.outputNotification === undefined ? {} : { outputNotification: args.outputNotification }),
-    ...(args.smartModeApproval === undefined ? {} : { smartModeApproval: { reason: args.smartModeApproval.reason, requestId: args.smartModeApproval.requestId } }),
-    ...(args.hookApprovalRequirement === undefined ? {} : { hookApprovalRequirement: args.hookApprovalRequirement }),
-    ...(args.conversationId === undefined ? {} : { conversationId: args.conversationId }),
-    adminCommandDenylist: [...args.adminCommandDenylist],
-  }
-}
-
-export function projectShellStreamEventInterop(event: ShellStreamExecutorEvent): ShellStreamEventViewInterop {
-  switch (event.type) {
-    case "stdout":
-    case "stderr":
-      return { kind: event.type, data: event.data }
-    case "exit": {
-      const abortReason = event.abortReason === "user_abort"
-        ? 1
-        : event.abortReason === "timeout"
-          ? 2
-          : typeof event.abortReason === "object" ? event.abortReason.code : undefined
-      return {
-        kind: "exit",
-        code: event.code,
-        aborted: event.aborted,
-        ...(event.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.localExecutionTimeMs }),
-        ...(event.outputLocation === undefined ? {} : { outputLocation: event.outputLocation }),
-        ...(abortReason === undefined ? {} : { abortReason }),
-      }
-    }
-    case "rejected":
-      return { kind: "rejected", command: event.command, workingDirectory: event.workingDirectory, reason: event.reason }
-    case "permissionDenied":
-      return { kind: "permission-denied", command: event.command, workingDirectory: event.workingDirectory, error: event.message ?? "Command blocked by permissions configuration", isReadonly: event.isReadonly }
-    case "sandboxUnsupported":
-      return { kind: "sandbox-unsupported", reason: event.reason }
-    case "backgrounded":
-      return {
-        kind: "backgrounded",
-        command: event.command,
-        workingDirectory: event.workingDirectory,
-        shellId: event.shellId,
-        ...(event.pid === undefined ? {} : { pid: event.pid }),
-        ...(event.elapsedMs === undefined ? {} : { msToWait: event.elapsedMs }),
-        ...(event.reason === undefined ? {} : { reason: event.reason === "user" ? 2 : event.reason === "timeout" ? 1 : event.reason.code }),
-      }
-    case "start":
-    case "hookContext":
-    case "unrecognized":
-      return { kind: "other" }
-  }
-}
-
-export function createShellStreamResultInterop(input: {
-  readonly command: string
-  readonly workingDirectory: string
-  readonly stdout: string
-  readonly stderr: string
-  readonly interleavedOutput: string
-  readonly exit: Extract<ShellStreamEventViewInterop, { readonly kind: "exit" }>
-  readonly sandboxPolicy?: ShellSandboxPolicy
-}): ShellResultInterop {
-  const success = input.exit.code === 0 && !input.exit.aborted
-  const base = {
-    command: input.command,
-    workingDirectory: input.workingDirectory,
-    exitCode: input.exit.code,
-    signal: input.exit.aborted ? "SIGTERM" : "",
-    stdout: input.stdout,
-    stderr: input.stderr,
-    executionTime: input.exit.localExecutionTimeMs ?? 0,
-    interleavedOutput: input.interleavedOutput,
-    ...(input.exit.outputLocation === undefined ? {} : { outputLocation: input.exit.outputLocation as never }),
-    ...(input.exit.abortReason === undefined ? {} : { abortReason: input.exit.abortReason as never }),
-    ...(input.exit.aborted ? { aborted: true } : {}),
-  }
-  return new ShellResult({
-    result: success
-      ? { case: "success", value: new ShellSuccess(base) }
-      : { case: "failure", value: new ShellFailure(base) },
-    ...(input.sandboxPolicy === undefined ? {} : { sandboxPolicy: createShellSandboxPolicyInterop(input.sandboxPolicy) }),
-  })
-}
-
-export function createBackgroundShellSuccessInterop(input: {
-  readonly command: string
-  readonly workingDirectory: string
-  readonly shellId: number
-  readonly pid?: number
-  readonly msToWait?: number
-  readonly reason?: number
-  readonly stdout: string
-  readonly stderr: string
-  readonly interleavedOutput: string
-  readonly sandboxPolicy?: ShellSandboxPolicy
-}): ShellResultInterop {
-  return new ShellResult({
-    result: {
-      case: "success",
-      value: new ShellSuccess({
-        command: input.command,
-        workingDirectory: input.workingDirectory,
-        shellId: input.shellId,
-        ...(input.pid === undefined ? {} : { pid: input.pid }),
-        ...(input.msToWait === undefined ? {} : { msToWait: input.msToWait }),
-        ...(input.reason === undefined ? {} : { backgroundReason: input.reason as never }),
-        stdout: input.stdout,
-        stderr: input.stderr,
-        interleavedOutput: input.interleavedOutput,
-        executionTime: 0,
-      }),
-    },
-    isBackground: true,
-    ...(input.sandboxPolicy === undefined ? {} : { sandboxPolicy: createShellSandboxPolicyInterop(input.sandboxPolicy) }),
-  })
-}
-
-export function createShellToolCallInterop(input: {
-  readonly args?: ShellArgsInterop
-  readonly result?: ShellResultInterop
-}): ShellToolEnvelopeInterop {
+/** Encodes Slate's own shell call and execution result for model/transcript consumers. */
+export function shellToolCallToInterop(call: SlateShellToolCall): ToolCall {
   return new ToolCall({
     tool: {
       case: "shellToolCall",
       value: new ShellToolCall({
-        ...(input.args === undefined ? {} : { args: input.args }),
-        ...(input.result === undefined ? {} : { result: input.result }),
+        ...(call.args === undefined ? {} : { args: shellExecutorArgsToInterop(call.args) }),
+        ...(call.result === undefined ? {} : { result: shellResultToInterop(call.result) }),
       }),
     },
   })
 }
 
-export function createShellFailureToolCallInterop(input:
-  | { readonly kind: "rejected"; readonly command: string; readonly workingDirectory: string; readonly reason: string }
-  | { readonly kind: "permission-denied"; readonly command: string; readonly workingDirectory: string; readonly error: string; readonly isReadonly: boolean }
-  | { readonly kind: "timeout"; readonly command: string; readonly workingDirectory: string; readonly timeoutMs: number }
-  | { readonly kind: "spawn-error"; readonly error: string }
-): ShellToolEnvelopeInterop {
-  const result = input.kind === "rejected"
-    ? { case: "rejected" as const, value: new ShellRejected({ command: input.command, workingDirectory: input.workingDirectory, reason: input.reason }) }
-    : input.kind === "permission-denied"
-      ? { case: "permissionDenied" as const, value: new ShellPermissionDenied({ command: input.command, workingDirectory: input.workingDirectory, error: input.error, isReadonly: input.isReadonly }) }
-      : input.kind === "timeout"
-        ? { case: "timeout" as const, value: new ShellTimeout({ command: input.command, workingDirectory: input.workingDirectory, timeoutMs: input.timeoutMs }) }
-        : { case: "spawnError" as const, value: new ShellSpawnError({ error: input.error }) }
-  return createShellToolCallInterop({ result: new ShellResult({ result }) })
+/** The streamed-argument placeholder is encoded only when it enters the interaction handler. */
+export function emptyShellToolCallInterop(): ToolCall {
+  return new ToolCall({ tool: { case: "shellToolCall", value: new ShellToolCall({ args: new ShellArgs() }) } })
 }
 
-export function formatShellResultInterop(result: ShellResultInterop, input: {
-  readonly terminalsFolder?: string
-  readonly promptVersion?: string
-  readonly sandboxPromptEnabled?: boolean
-  readonly useMinimalHarness?: boolean
-}): string {
-  return renderInteropShellResultToString({
-    result: result.result,
-    sandboxPolicy: result.sandboxPolicy,
-    isBackground: result.isBackground,
-    terminalsFolder: input.terminalsFolder,
-  }, {
-    ...(input.promptVersion === undefined ? {} : { promptVersion: input.promptVersion }),
-    ...(input.sandboxPromptEnabled === undefined ? {} : { sandboxPromptEnabled: input.sandboxPromptEnabled }),
-    ...(input.useMinimalHarness === undefined ? {} : { useMinimalHarness: input.useMinimalHarness }),
-  })
+interface InteropShellToolInteractionHandler {
+  executeToolCall(
+    context: Context,
+    call: ToolCall,
+    callId: string,
+    run: (context: Context) => Promise<ShellExecResponse>,
+    merge: (result: ShellExecResponse) => ToolCall,
+    hookContexts?: readonly HookContextEntry[],
+  ): Promise<ShellExecResponse>
+  getAbortSignal(context: Context): AbortSignal
+  emitPartialToolCall?(context: Context, callId: string, call: ToolCall): Promise<void>
+}
+
+/** Keeps generated transcript objects at the interaction-handler boundary. */
+export function shellToolInteractionPortFromInterop(handler: unknown): ShellToolInteractionPort {
+  const interop = handler as InteropShellToolInteractionHandler
+  return {
+    executeToolCall(context, call, callId, run, merge, hookContexts) {
+      return interop.executeToolCall(
+        context,
+        shellToolCallToInterop(call),
+        callId,
+        run,
+        result => shellToolCallToInterop(merge(result)),
+        hookContexts,
+      )
+    },
+    getAbortSignal(context) {
+      return interop.getAbortSignal(context)
+    },
+    ...(interop.emitPartialToolCall === undefined ? {} : {
+      emitPartialToolCall(context: Context, callId: string, call: SlateShellToolCall) {
+        return interop.emitPartialToolCall!(context, callId, shellToolCallToInterop(call))
+      },
+    }),
+  }
 }
 
 function toJsonRecord(value: Record<string, unknown>): Record<string, JsonValue> {
