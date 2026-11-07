@@ -26,9 +26,9 @@
     },
     "packages/agent-exec/shell-control.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "The package keeps its shell-control resource while its generated executor case mapping moves to interop.",
-      "evidence": "tests/packages/interop-shell-control-exec-adapter.test.ts verifies remote routing, controlled registration, unrelated-case refusal, and result serialization; it passed as an esbuild Node 20-target bundle. Package typecheck passes and interop:check removes one direct schema consumer."
+      "overlap": 0.034482758620689655,
+      "refreshReason": "Shell handoff now uses Slate tool-call identity and explicit accepted, not-found and unrecognized outcomes with an optional Slate shell result.",
+      "evidence": "Focused shell, handoff, box, browser, transfer and recording suite passes 153/153; tests/packages/interop-shell-control-exec-adapter.test.ts pins remote and controlled paths, nested result round-trips, not-found and unknown status preservation. Direct tsc and interop:check pass; measured overlap is 0.034482758620689655 against 58 baseline pairs."
     },
     "packages/agent-exec/shell-stream.ts": {
       "claim": "rewritten",

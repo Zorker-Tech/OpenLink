@@ -407,7 +407,7 @@ function shellOutcomeToInterop(value: ShellExecResult): InteropShellResult["resu
   }
 }
 
-function shellResultFromInterop(value: InteropShellResult): ShellExecResponse {
+export function shellResultFromInterop(value: InteropShellResult): ShellExecResponse {
   return {
     outcome: shellOutcomeFromInterop(value.result),
     ...(value.sandboxPolicy === undefined ? {} : { sandboxPolicy: adaptSandboxPolicyFromInterop(value.sandboxPolicy) }),
@@ -417,7 +417,7 @@ function shellResultFromInterop(value: InteropShellResult): ShellExecResponse {
   };
 }
 
-function shellResultToInterop(value: ShellExecResponse): ShellResult {
+export function shellResultToInterop(value: ShellExecResponse): ShellResult {
   const sandboxPolicy = adaptSandboxPolicyToInterop(value.sandboxPolicy);
   return new ShellResult({
     result: shellOutcomeToInterop(value.outcome),

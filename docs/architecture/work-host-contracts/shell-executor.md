@@ -19,3 +19,8 @@ through its own transcript adapter.
 `tests/packages/interop-shell-operation-adapter.test.ts` covers bidirectional request conversion and round-trips each
 response case, timing and output-file metadata, background details and unknown enum values. Host consumer tests pin
 retry classification, read-only refusal, box-window decisions, browser execution, file transfer and recording cleanup.
+
+Foreground-to-background handoff is a separate resource with `ShellControlArgs` and `ShellControlResult` in
+`source/packages/agent-exec/shell-control.ts`. It names the target by tool-call id, distinguishes accepted, not-found
+and unrecognized statuses, and carries an optional Slate shell result. The control adapter preserves unknown status
+codes and the accepted command's output metadata.
