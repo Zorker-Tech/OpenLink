@@ -515,6 +515,44 @@ function parseBrowserDeleteBody(value: unknown) {
   }
 }
 
+function parsePreviewScreenshotBody(value: unknown) {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Preview screenshot request is invalid')
+  const body = value as Record<string, unknown>
+  const ownerId = safeIdentity(body.ownerId, 'ownerId')
+  const workspaceId = safeIdentity(body.workspaceId, 'workspaceId')
+  if (!isPreviewTargetId(body.previewTargetId)) throw new AgentHostError('INVALID_BODY', 'previewTargetId is invalid')
+  const pagePath = typeof body.pagePath === 'string' ? body.pagePath : ''
+  const unsafePath = pagePath.split('/').some((segment) => {
+    try {
+      const decoded = decodeURIComponent(segment)
+      return decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')
+    } catch {
+      return true
+    }
+  })
+  if (!pagePath.startsWith('/') || pagePath.startsWith('//') || pagePath.length > 2048
+    || /[?#\\\u0000-\u001f\u007f]/.test(pagePath) || unsafePath) {
+    throw new AgentHostError('INVALID_BODY', 'pagePath is invalid')
+  }
+  const rawViewport = body.viewport
+  const viewport = rawViewport && typeof rawViewport === 'object' ? rawViewport as Record<string, unknown> : {}
+  const width = Number(viewport.width)
+  const height = Number(viewport.height)
+  const deviceScaleFactor = viewport.deviceScaleFactor === undefined ? 1 : Number(viewport.deviceScaleFactor)
+  if (!Number.isSafeInteger(width) || width < 240 || width > 2560
+    || !Number.isSafeInteger(height) || height < 240 || height > 4320
+    || !Number.isFinite(deviceScaleFactor) || deviceScaleFactor < 0.5 || deviceScaleFactor > 3) {
+    throw new AgentHostError('INVALID_BODY', 'viewport is invalid')
+  }
+  return {
+    ownerId,
+    workspaceId,
+    previewTargetId: body.previewTargetId,
+    pagePath,
+    viewport: { width, height, deviceScaleFactor },
+  }
+}
+
 function parseCodeServerSessionBody(value: unknown) {
   if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Code-server session body is invalid')
   const body = value as Record<string, unknown>
@@ -1237,6 +1275,54 @@ export async function startPromptHttpServer(
     })
   }
 
+  async function handleProjectPreviewScreenshot(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const body = parsePreviewScreenshotBody(await readJson(request))
+    const runtime = await config.projectRuntimeManager.ensure(projectId, 'thin')
+    const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId)
+    const target = targets.find((candidate) => candidate.id === body.previewTargetId)
+    if (!target) throw new AgentHostError('BROWSER_SESSION_FAILED', 'The selected preview target is no longer active', { retryable: true })
+
+    const upstream = new URL(target.url)
+    const basePath = upstream.pathname.replace(/\/+$/, '')
+    const relativePath = body.pagePath.replace(/^\/+/, '')
+    upstream.pathname = `${basePath}/${relativePath}` || '/'
+    upstream.search = ''
+    upstream.hash = ''
+
+    const browser = new BrowserHostClient({ baseUrl: runtime.browserHostEndpoint, serviceToken: runtime.browserApiToken })
+    let session: BrowserAgentSession | undefined
+    try {
+      session = await browser.createSession({
+        ownerId: body.ownerId,
+        workspaceId: body.workspaceId,
+        projectId,
+        surface: 'chromium-stream',
+        viewport: body.viewport,
+        chromium: {
+          initialUrl: upstream.toString(),
+          initialRequestHeaders: target.headers,
+          headless: true,
+          preserveProfile: false,
+          networkPolicy: { allowedDomains: [], deniedDomains: [], allowLoopback: true, allowPrivateNetworks: true },
+        },
+      })
+      const pageId = session.state.activePageId
+      if (!pageId) throw new AgentHostError('BROWSER_SESSION_FAILED', 'Preview screenshot page is not ready', { retryable: true })
+      const result = await browser.perform(session, { type: 'page.screenshot', pageId })
+      if (!result.ok || !result.image || result.image.mimeType !== 'image/jpeg') {
+        throw new AgentHostError('BROWSER_ACTION_FAILED', 'Preview screenshot could not be captured', { retryable: true })
+      }
+      json(response, 200, { image: result.image })
+    } finally {
+      if (session) await browser.close(session.state.id).catch(() => undefined)
+    }
+  }
+
   // Exposes only the safe, publishable Project Supabase connection material
   // (gateway URL + publishable/anon key + revision). The service-role key and
   // database password are never stored on the descriptor, so this endpoint
@@ -1826,6 +1912,13 @@ export async function startPromptHttpServer(
         const preferredSessionId = url.searchParams.get('sessionId') ?? undefined
         if (preferredSessionId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(preferredSessionId)) throw new AgentHostError('INVALID_BODY', 'sessionId is invalid')
         await handleProjectPreviewTargets(response, projectId, preferredSessionId)
+        return
+      }
+      const projectPreviewScreenshot = /^\/v1\/projects\/([^/]+)\/preview-screenshot$/.exec(url.pathname)
+      if (request.method === 'POST' && projectPreviewScreenshot) {
+        const projectId = decodeURIComponent(projectPreviewScreenshot[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectPreviewScreenshot(request, response, projectId)
         return
       }
       const projectPreviewTarget = /^\/v1\/projects\/([^/]+)\/preview-target$/.exec(url.pathname)

@@ -20,6 +20,8 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   const VERSION = 1;
   const elementRefs = new WeakMap();
   const refElements = new Map();
+  const originalStyles = new WeakMap();
+  const originalThemeTokens = new Map();
   let refSequence = 0;
   let inspectActive = false;
   let selectedElement = null;
@@ -160,6 +162,112 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     return JSON.stringify({ url: location.href, title: document.title, nodes });
   }
 
+  const editableProperties = new Set([
+    'color', 'background-color', 'font-size', 'font-weight', 'line-height', 'text-align',
+    'width', 'height', 'min-width', 'max-width', 'margin', 'padding', 'gap', 'border-radius',
+    'border-color', 'border-width', 'opacity', 'display', 'position', 'justify-content',
+    'align-items', 'flex-direction', 'box-shadow'
+  ]);
+
+  function safeStyleValue(value) {
+    return typeof value === 'string' && value.length <= 256
+      && !/[;{}\u0000-\u001f]/.test(value)
+      && !/(?:url\s*\(|expression\s*\(|javascript:|@import)/i.test(value);
+  }
+
+  function readStyles(element) {
+    const computed = getComputedStyle(element);
+    const properties = {};
+    for (const property of editableProperties) properties[property] = computed.getPropertyValue(property);
+    return properties;
+  }
+
+  function setElementStyle(element, property, value) {
+    if (!editableProperties.has(property) || !safeStyleValue(value)) throw new Error('Style value is not supported');
+    let originals = originalStyles.get(element);
+    if (!originals) { originals = new Map(); originalStyles.set(element, originals); }
+    if (!originals.has(property)) originals.set(property, {
+      value: element.style.getPropertyValue(property),
+      priority: element.style.getPropertyPriority(property)
+    });
+    element.style.setProperty(property, value);
+    return { element: describe(element), styles: readStyles(element) };
+  }
+
+  function resetElementStyle(element, property) {
+    if (!editableProperties.has(property)) throw new Error('Style property is not supported');
+    const originals = originalStyles.get(element);
+    const original = originals && originals.get(property);
+    if (original) {
+      if (original.value) element.style.setProperty(property, original.value, original.priority);
+      else element.style.removeProperty(property);
+      originals.delete(property);
+    }
+    return { element: describe(element), styles: readStyles(element) };
+  }
+
+  function readThemeTokens() {
+    const computed = getComputedStyle(document.documentElement);
+    const tokens = {};
+    for (let index = 0; index < computed.length && Object.keys(tokens).length < 32; index++) {
+      const token = computed.item(index);
+      if (!token.startsWith('--') || !/(?:color|background|foreground|primary|secondary|muted|accent|border|surface|ring)/i.test(token)) continue;
+      const value = computed.getPropertyValue(token).trim();
+      if (value && CSS.supports('color', value)) tokens[token] = value;
+    }
+    return tokens;
+  }
+
+  function setThemeToken(token, value) {
+    if (!/^--[a-zA-Z0-9_-]{1,64}$/.test(token) || !safeStyleValue(value) || !CSS.supports('color', value)) {
+      throw new Error('Theme token value is not supported');
+    }
+    const available = readThemeTokens();
+    if (!Object.prototype.hasOwnProperty.call(available, token)) throw new Error('Theme token is not available');
+    if (!originalThemeTokens.has(token)) originalThemeTokens.set(token, document.documentElement.style.getPropertyValue(token));
+    document.documentElement.style.setProperty(token, value);
+    return readThemeTokens();
+  }
+
+  function resetThemeToken(token) {
+    if (!/^--[a-zA-Z0-9_-]{1,64}$/.test(token) || !originalThemeTokens.has(token)) throw new Error('Theme token is not available');
+    const original = originalThemeTokens.get(token);
+    if (original) document.documentElement.style.setProperty(token, original);
+    else document.documentElement.style.removeProperty(token);
+    originalThemeTokens.delete(token);
+    return readThemeTokens();
+  }
+
+  function layerSnapshot(root) {
+    const nodes = [];
+    const visit = (element, depth, parentRef) => {
+      if (!element || depth > 7 || nodes.length >= 400 || element === overlay || element.hasAttribute('data-openlink-inspector-overlay')) return;
+      if (['script', 'style', 'meta', 'link', 'noscript', 'template'].includes(element.localName)) return;
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const info = describe(element);
+      nodes.push({ element: info, depth, parentRef });
+      for (const child of Array.from(element.children)) visit(child, depth + 1, info.ref);
+    };
+    const start = root || document.body || document.documentElement;
+    visit(start, 0, undefined);
+    return JSON.stringify({ nodes });
+  }
+
+  function pagePath() {
+    return location.pathname.replace(/^\/v1\/browser\/(?:gateway\/)?sessions\/[^/]+\/preview(?=\/|$)/, '') || '/';
+  }
+
+  function clippedRect(rect) {
+    const maxX = Math.max(0, window.innerWidth - 1);
+    const maxY = Math.max(0, window.innerHeight - 1);
+    const x = Math.max(0, Math.min(maxX, rect.x));
+    const y = Math.max(0, Math.min(maxY, rect.y));
+    const right = Math.max(x + 1, Math.min(window.innerWidth, rect.x + rect.width));
+    const bottom = Math.max(y + 1, Math.min(window.innerHeight, rect.y + rect.height));
+    return { x, y, width: right - x, height: bottom - y };
+  }
+
   async function execute(envelope) {
     const action = envelope.action;
     const result = { version: VERSION, actionId: envelope.actionId, sessionId, ok: true };
@@ -174,6 +282,58 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
         case 'page.forward': setTimeout(() => history.forward(), 0); break;
         case 'page.reload': setTimeout(() => location.reload(), 0); break;
         case 'page.read': result.snapshot = pageSnapshot(); break;
+        case 'preview.styles.read': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          result.element = describe(element);
+          result.snapshot = JSON.stringify({ styles: readStyles(element) });
+          break;
+        }
+        case 'preview.layers.read': {
+          const root = action.rootRef ? refElements.get(action.rootRef)?.deref() : undefined;
+          if (action.rootRef && !root) throw new Error('Layer root is no longer available');
+          result.snapshot = layerSnapshot(root);
+          break;
+        }
+        case 'preview.style.set': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          const changed = setElementStyle(element, action.property, action.value);
+          result.element = changed.element;
+          result.snapshot = JSON.stringify({ styles: changed.styles });
+          break;
+        }
+        case 'preview.style.reset': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          const changed = resetElementStyle(element, action.property);
+          result.element = changed.element;
+          result.snapshot = JSON.stringify({ styles: changed.styles });
+          break;
+        }
+        case 'preview.theme.read': result.snapshot = JSON.stringify({ tokens: readThemeTokens() }); break;
+        case 'preview.theme.set': result.snapshot = JSON.stringify({ tokens: setThemeToken(action.token, action.value) }); break;
+        case 'preview.theme.reset': result.snapshot = JSON.stringify({ tokens: resetThemeToken(action.token) }); break;
+        case 'preview.element.activate': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          element.scrollIntoView({ block: 'center', inline: 'center' });
+          selectedElement = element;
+          result.element = show(element);
+          break;
+        }
+        case 'preview.annotation.select': {
+          const element = elementAt(action.x, action.y);
+          const rect = clippedRect(action.width && action.height && (action.width > 4 || action.height > 4)
+            ? { x: action.x, y: action.y, width: action.width, height: action.height }
+            : element?.getBoundingClientRect() || { x: action.x, y: action.y, width: 1, height: 1 });
+          if (element && element !== overlay && !overlay.contains(element)) result.element = describe(element);
+          result.snapshot = JSON.stringify({
+            pagePath: pagePath(),
+            bounds: rect
+          });
+          break;
+        }
         case 'element.click': {
           const element = resolveElement(action);
           if (!element) throw new Error('Element not found');

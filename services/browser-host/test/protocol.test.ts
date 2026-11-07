@@ -15,3 +15,22 @@ test('protocol validator accepts bounded browser input and rejects malformed inp
   assert.equal(isBrowserActionEnvelope({ ...action, actor: 'root' }), false)
   assert.equal(isBrowserActionEnvelope({ ...action, action: { type: 'viewport.set', viewport: { width: 1, height: 1, deviceScaleFactor: 99 } } }), false)
 })
+
+test('native Preview design and annotation actions validate their bounded inputs', () => {
+  const base = { version: BROWSER_PROTOCOL_VERSION, actionId: 'preview-action', sessionId: 'session-1', actor: 'human' as const }
+  for (const action of [
+    { type: 'preview.styles.read', pageId: 'preview', ref: 'el-1' },
+    { type: 'preview.layers.read', pageId: 'preview', rootRef: 'el-1' },
+    { type: 'preview.style.set', pageId: 'preview', ref: 'el-1', property: 'background-color', value: 'rgb(1, 2, 3)' },
+    { type: 'preview.style.reset', pageId: 'preview', ref: 'el-1', property: 'border-radius' },
+    { type: 'preview.theme.read', pageId: 'preview' },
+    { type: 'preview.theme.set', pageId: 'preview', token: '--primary', value: 'oklch(0.6 0.2 30)' },
+    { type: 'preview.theme.reset', pageId: 'preview', token: '--primary' },
+    { type: 'preview.element.activate', pageId: 'preview', ref: 'el-1' },
+    { type: 'preview.annotation.select', pageId: 'preview', x: 20, y: 30, width: 80, height: 50 },
+  ]) assert.equal(isBrowserActionEnvelope({ ...base, action }), true, action.type)
+
+  assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.style.set', pageId: 'preview', ref: 'el-1', property: 'background-color', value: 'x'.repeat(257) } }), false)
+  assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.theme.set', pageId: 'preview', token: 'color', value: 'red' } }), false)
+  assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.annotation.select', pageId: 'preview', x: -1, y: 0 } }), false)
+})

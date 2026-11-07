@@ -83,6 +83,15 @@ export type BrowserAction =
   | { type: 'page.reload'; pageId: string }
   | { type: 'page.read'; pageId: string }
   | { type: 'page.screenshot'; pageId: string; fullPage?: boolean }
+  | { type: 'preview.styles.read'; pageId: string; ref: string }
+  | { type: 'preview.layers.read'; pageId: string; rootRef?: string }
+  | { type: 'preview.style.set'; pageId: string; ref: string; property: string; value: string }
+  | { type: 'preview.style.reset'; pageId: string; ref: string; property: string }
+  | { type: 'preview.theme.read'; pageId: string }
+  | { type: 'preview.theme.set'; pageId: string; token: string; value: string }
+  | { type: 'preview.theme.reset'; pageId: string; token: string }
+  | { type: 'preview.element.activate'; pageId: string; ref: string }
+  | { type: 'preview.annotation.select'; pageId: string; x: number; y: number; width?: number; height?: number }
   | { type: 'element.click'; pageId: string; ref?: string; selector?: string; x?: number; y?: number; button?: 'left' | 'middle' | 'right'; clickCount?: number }
   | { type: 'element.hover'; pageId: string; ref?: string; selector?: string; x?: number; y?: number }
   | { type: 'element.type'; pageId: string; ref?: string; selector?: string; text: string; submit?: boolean }
@@ -214,6 +223,25 @@ export function isBrowserActionEnvelope(value: unknown): value is BrowserActionE
     case 'page.read': return pageId()
     case 'page.navigate': return pageId() && url()
     case 'page.screenshot': return pageId() && (action.fullPage === undefined || typeof action.fullPage === 'boolean')
+    case 'preview.styles.read':
+    case 'preview.element.activate': return pageId() && isString(action.ref) && action.ref.length <= 128
+    case 'preview.layers.read': return pageId() && (action.rootRef === undefined || (isString(action.rootRef) && action.rootRef.length <= 128))
+    case 'preview.style.set':
+      return pageId() && isString(action.ref) && action.ref.length <= 128
+        && isString(action.property) && /^[-a-z]{1,48}$/.test(action.property)
+        && isString(action.value) && action.value.length <= 256
+    case 'preview.style.reset':
+      return pageId() && isString(action.ref) && action.ref.length <= 128
+        && isString(action.property) && /^[-a-z]{1,48}$/.test(action.property)
+    case 'preview.theme.read': return pageId()
+    case 'preview.theme.set':
+      return pageId() && isString(action.token) && /^--[a-zA-Z0-9_-]{1,64}$/.test(action.token)
+        && isString(action.value) && action.value.length <= 128
+    case 'preview.theme.reset': return pageId() && isString(action.token) && /^--[a-zA-Z0-9_-]{1,64}$/.test(action.token)
+    case 'preview.annotation.select':
+      return pageId() && isFiniteNumber(action.x) && action.x >= 0 && isFiniteNumber(action.y) && action.y >= 0
+        && (action.width === undefined || (isFiniteNumber(action.width) && action.width >= 0 && action.width <= 7680))
+        && (action.height === undefined || (isFiniteNumber(action.height) && action.height >= 0 && action.height <= 4320))
     case 'element.click': return pageId() && (isString(action.ref) || isString(action.selector) || (isFiniteNumber(action.x) && isFiniteNumber(action.y)))
     case 'element.hover': return pageId() && (isString(action.ref) || isString(action.selector) || (isFiniteNumber(action.x) && isFiniteNumber(action.y)))
     case 'element.type': return pageId() && isString(action.text) && (isString(action.ref) || isString(action.selector))

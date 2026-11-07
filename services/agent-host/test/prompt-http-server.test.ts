@@ -1045,6 +1045,127 @@ test('lists every active Project preview target without exposing proxy credentia
   }
 })
 
+test('captures a Project preview screenshot through a short-lived authenticated browser session', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-preview-screenshot-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const previewTargetId = createPreviewTargetId('project-private-key', projectId, 'sandbox-1', 5173)
+  let browserEndpoint = ''
+  let browserSessionRequest: Record<string, unknown> | undefined
+  let screenshotAction: Record<string, unknown> | undefined
+  let closedSessionId: string | undefined
+  let serviceAuthValid = false
+  let controlAuthValid = false
+  let notifyBrowserClosed: (() => void) | undefined
+  const browserClosed = new Promise<void>((resolve) => { notifyBrowserClosed = resolve })
+  const browserHost = createServer(async (request, response) => {
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(Buffer.from(chunk))
+    const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown> : {}
+    if (request.method === 'POST' && request.url === '/v1/browser/sessions') {
+      serviceAuthValid = request.headers.authorization === 'Bearer browser-service-token'
+      browserSessionRequest = body
+      response.writeHead(201, { 'Content-Type': 'application/json' })
+      response.end(JSON.stringify({
+        session: { id: 'screenshot-session', activePageId: 'screenshot-page' },
+        connection: {
+          controlToken: 'browser-control-token',
+          eventsUrl: `ws://127.0.0.1:${(browserHost.address() as AddressInfo).port}/v1/browser/sessions/screenshot-session/events`,
+        },
+      }))
+      return
+    }
+    if (request.method === 'POST' && request.url === '/v1/browser/sessions/screenshot-session/actions') {
+      screenshotAction = body.action as Record<string, unknown>
+      controlAuthValid = request.headers.authorization === 'Bearer browser-control-token'
+      response.writeHead(200, { 'Content-Type': 'application/json' })
+      response.end(JSON.stringify({ result: { ok: true, image: { mimeType: 'image/jpeg', data: 'aGVsbG8=' } } }))
+      return
+    }
+    if (request.method === 'DELETE' && request.url === '/v1/browser/sessions/screenshot-session') {
+      serviceAuthValid = serviceAuthValid && request.headers.authorization === 'Bearer browser-service-token'
+      closedSessionId = 'screenshot-session'
+      notifyBrowserClosed?.()
+      response.writeHead(204)
+      response.end()
+      return
+    }
+    response.writeHead(404)
+    response.end()
+  })
+  browserHost.listen(0, '127.0.0.1')
+  await once(browserHost, 'listening')
+  browserEndpoint = `http://127.0.0.1:${(browserHost.address() as AddressInfo).port}`
+  const projectRuntimeManager = {
+    ensure: async (id: string, mode: string) => {
+      assert.equal(id, projectId)
+      assert.equal(mode, 'thin')
+      return { browserHostEndpoint: browserEndpoint, browserApiToken: 'browser-service-token' }
+    },
+    discoverPreviewTargets: async (id: string) => {
+      assert.equal(id, projectId)
+      return [{
+        id: previewTargetId,
+        url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-1/proxy/5173/',
+        headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' },
+        port: 5173,
+        sandboxId: 'sandbox-1',
+      }]
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/projects/${projectId}/preview-screenshot`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ownerId: 'owner', workspaceId: 'workspace', previewTargetId, pagePath: '/settings',
+        viewport: { width: 391, height: 835, deviceScaleFactor: 1 },
+      }),
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { image: { mimeType: 'image/jpeg', data: 'aGVsbG8=' } })
+    assert.deepEqual(browserSessionRequest, {
+      ownerId: 'owner', workspaceId: 'workspace', projectId,
+      surface: 'chromium-stream',
+      viewport: { width: 391, height: 835, deviceScaleFactor: 1 },
+      chromium: {
+        initialUrl: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-1/proxy/5173/settings',
+        initialRequestHeaders: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' },
+        headless: true,
+        preserveProfile: false,
+        networkPolicy: { allowedDomains: [], deniedDomains: [], allowLoopback: true, allowPrivateNetworks: true },
+      },
+    })
+    assert.deepEqual(screenshotAction, { type: 'page.screenshot', pageId: 'screenshot-page' })
+    let closeTimeout: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      browserClosed,
+      new Promise<void>((_resolve, reject) => {
+        closeTimeout = setTimeout(() => reject(new Error('Browser session cleanup did not finish')), 5_000)
+        closeTimeout.unref()
+      }),
+    ]).finally(() => { if (closeTimeout) clearTimeout(closeTimeout) })
+    assert.equal(closedSessionId, 'screenshot-session')
+    assert.equal(serviceAuthValid, true)
+    assert.equal(controlAuthValid, true)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    browserHost.close()
+    await once(browserHost, 'close')
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
 test('exposes only the safe Project Supabase connection material to authenticated callers', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-route-test-'))
   const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
