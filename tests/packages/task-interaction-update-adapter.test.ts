@@ -129,6 +129,13 @@ test("all 24 interaction event cases map to Slate task progress semantics and ro
   for (const [expectedKind, wireUpdate] of cases) {
     const slateUpdate = slateTaskProgressUpdateFromInterop(wireUpdate)
     assert.equal(slateUpdate.kind, expectedKind)
+    if (slateUpdate.kind === "tool-call-started") {
+      assert.equal(slateUpdate.toolCall?.kind, "tool-call")
+      if (slateUpdate.toolCall?.kind === "tool-call") assert.equal(slateUpdate.toolCall.tool.kind, "task")
+    }
+    if (slateUpdate.kind === "user-message-appended") {
+      assert.equal(slateUpdate.message?.messageId, "message-1")
+    }
     assert.deepEqual(slateTaskProgressUpdateToInterop(slateUpdate).toBinary(), wireUpdate.toBinary())
 
     const { compatibility: _compatibility, ...ownedUpdate } = slateUpdate
