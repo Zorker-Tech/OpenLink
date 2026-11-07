@@ -363,7 +363,15 @@ async function ensurePodmanConfig() {
 
 async function executable(candidates) {
   if (process.env.OPENLINK_CHROME_EXECUTABLE) return process.env.OPENLINK_CHROME_EXECUTABLE
-  for (const candidate of candidates) {
+  const availableCandidates = [...candidates]
+  try {
+    const { chromium } = await import('playwright')
+    availableCandidates.push(chromium.executablePath())
+  } catch {
+    // Playwright is an optional development dependency. Keep packaged and
+    // minimal installs working through the configured/system-browser paths.
+  }
+  for (const candidate of availableCandidates) {
     try {
       await access(candidate, constants.X_OK)
       return candidate
