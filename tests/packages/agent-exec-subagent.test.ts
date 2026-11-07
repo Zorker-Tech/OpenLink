@@ -6,6 +6,7 @@ import {
   RUNNING_SUBAGENT_FOLLOWUP_ERROR,
   RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT,
   createSubagentExecutor,
+  createUnrecognizedSubagentBackgroundReason,
   type SubagentExecutionArgs,
 } from "../../source/packages/agent-exec/subagent.ts";
 
@@ -54,8 +55,27 @@ describe("the subagent executor", () => {
     const world = fakeAdapter({ status: "background", finalMessage: "later", toolCallCount: 3, backgroundReason: "agent_request", transcriptPath: "/tmp/t" });
     const result = await createSubagentExecutor(world.adapter as never).execute(ctx, argsFor());
     assert.equal(result.status, "success");
-    assert.equal(result.backgroundReason, "agent_request");
+    assert.equal(result.backgroundReason, "agent-request");
     assert.equal(result.transcriptPath, "/tmp/t");
+  });
+
+  it("normalizes historical reason labels while retaining unknown reason codes as compatibility data", async () => {
+    const historical = fakeAdapter({
+      status: "background",
+      backgroundReason: "unknown-73",
+    });
+    const result = await createSubagentExecutor(historical.adapter as never).execute(ctx, argsFor());
+    assert.equal(result.status, "success");
+    if (result.status !== "success") assert.fail("expected a successful background result");
+    assert.deepEqual(result.backgroundReason, createUnrecognizedSubagentBackgroundReason(73));
+
+    const sourceReason = createUnrecognizedSubagentBackgroundReason(74)
+    const structured = fakeAdapter({ status: "background", backgroundReason: sourceReason });
+    const structuredResult = await createSubagentExecutor(structured.adapter as never).execute(ctx, argsFor());
+    assert.equal(structuredResult.status, "success");
+    if (structuredResult.status !== "success") assert.fail("expected a successful background result");
+    assert.notEqual(structuredResult.backgroundReason, sourceReason);
+    assert.deepEqual(structuredResult.backgroundReason, sourceReason);
   });
 
   it("releases the session and reports a thrown failure", async () => {

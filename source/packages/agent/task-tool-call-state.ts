@@ -48,7 +48,7 @@ export interface SlateTaskToolArguments<Text extends string | RedactedString = S
   readonly machine?: SlateTaskPlacement<Text>
 }
 
-export type SlateTaskToolBackgroundReason = Exclude<SlateTaskBackgroundReason, `unknown-${number}`>
+export type SlateTaskToolBackgroundReason = Exclude<SlateTaskBackgroundReason, { readonly kind: "unrecognized" }>
 
 export type SlateTaskToolOutcome<Text extends string | RedactedString = SlateTaskToolText> =
   | { readonly kind: "unknown" }

@@ -12,12 +12,48 @@ export const RUNNING_SUBAGENT_FOLLOWUP_ERROR =
 export const RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT =
   "If you intended to interrupt this agent, you may retry with `interrupt` set to true"
 
-export type SubagentBackgroundReason =
-  | "unspecified"
-  | "agent-request"
-  | "user-request"
-  | "queued-follow-up"
-  | `unknown-${number}`
+export const SlateSubagentBackgroundReason = {
+  UNSPECIFIED: "unspecified",
+  AGENT_REQUEST: "agent-request",
+  USER_REQUEST: "user-request",
+  QUEUED_FOLLOW_UP: "queued-follow-up",
+  UNKNOWN: "unknown",
+} as const
+
+export type KnownSubagentBackgroundReason =
+  (typeof SlateSubagentBackgroundReason)[keyof typeof SlateSubagentBackgroundReason]
+
+/** Exact legacy enum data stays in an explicit migration field, outside Slate's business vocabulary. */
+export interface UnrecognizedSubagentBackgroundReason {
+  readonly kind: "unrecognized"
+  readonly compatibility: {
+    readonly legacyCode: number
+  }
+}
+
+export type SubagentBackgroundReason = KnownSubagentBackgroundReason | UnrecognizedSubagentBackgroundReason
+
+function isInt32(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647
+}
+
+export function createUnrecognizedSubagentBackgroundReason(legacyCode: number): UnrecognizedSubagentBackgroundReason {
+  if (!isInt32(legacyCode)) throw new TypeError("Legacy subagent background reason code must be a signed 32-bit integer")
+  return { kind: "unrecognized", compatibility: { legacyCode } }
+}
+
+export function isSubagentBackgroundReason(value: unknown): value is SubagentBackgroundReason {
+  if (typeof value === "string") {
+    return Object.values(SlateSubagentBackgroundReason).includes(value as KnownSubagentBackgroundReason)
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const reason = value as Record<string, unknown>
+  if (Object.keys(reason).some(key => key !== "kind" && key !== "compatibility") || reason.kind !== "unrecognized") return false
+  const compatibility = reason.compatibility
+  if (compatibility === null || typeof compatibility !== "object" || Array.isArray(compatibility)) return false
+  const fields = compatibility as Record<string, unknown>
+  return Object.keys(fields).length === 1 && Object.prototype.hasOwnProperty.call(fields, "legacyCode") && isInt32(fields.legacyCode)
+}
 
 export interface SubagentContinuationConfig {
   readonly idleThreshold: number
@@ -100,6 +136,26 @@ function inFlightKeyOf(args: SubagentExecutionArgs): string | undefined {
   return [parentConversationId, toolCallId, args.resumeAgentId ?? "", args.forkAgentId ?? ""].join("\0")
 }
 
+function normalizeSubagentBackgroundReason(value: unknown): SubagentBackgroundReason {
+  if (typeof value === "string" && isSubagentBackgroundReason(value)) return value
+  if (isSubagentBackgroundReason(value) && typeof value !== "string") {
+    return createUnrecognizedSubagentBackgroundReason(value.compatibility.legacyCode)
+  }
+  switch (value) {
+    case "agent_request": return SlateSubagentBackgroundReason.AGENT_REQUEST
+    case "user_request": return SlateSubagentBackgroundReason.USER_REQUEST
+    case "queued_follow_up": return SlateSubagentBackgroundReason.QUEUED_FOLLOW_UP
+  }
+  if (typeof value === "string") {
+    const match = /^unknown-(-?\d+)$/.exec(value)
+    if (match !== null) {
+      const code = Number(match[1])
+      if (isInt32(code)) return createUnrecognizedSubagentBackgroundReason(code)
+    }
+  }
+  return SlateSubagentBackgroundReason.UNKNOWN
+}
+
 const MAX_COMPLETED_TOOL_CALL_RESULTS = 1_000
 
 /** Runs, coalesces and caches successful subagent calls by their parent and tool-call identity. */
@@ -132,7 +188,7 @@ export function createSubagentExecutor(
         ...(outcome.finalMessage === undefined ? {} : { finalMessage: outcome.finalMessage }),
         toolCallCount: outcome.toolCallCount ?? 0,
         ...(outcome.status === "background" ? {
-          backgroundReason: outcome.backgroundReason,
+          backgroundReason: normalizeSubagentBackgroundReason(outcome.backgroundReason),
           ...(outcome.transcriptPath === undefined ? {} : { transcriptPath: outcome.transcriptPath }),
         } : {}),
       }

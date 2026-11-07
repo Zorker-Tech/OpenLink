@@ -71,4 +71,25 @@ describe("the subagent executor interop adapter", () => {
     assert.equal(result.result.value.agentId, "agent-2")
     assert.equal(result.result.value.error, "runner failed")
   })
+
+  it("keeps unknown wire enum numbers in Slate compatibility metadata and restores them at the boundary", async () => {
+    let observed: unknown
+    const executor = createInteropSubagentExecutor({
+      async createOrResumeSession() { return "agent-3" },
+      async runSession() {
+        return {
+          status: "background",
+          backgroundReason: 97 as SubagentBackgroundReason,
+          toolCallCount: 0,
+        }
+      },
+    })
+    const result = await executor.execute(createContext(), new SubagentArgs({
+      toolCallId: "call-3",
+      parentConversationId: "parent-1",
+    }), {})
+    if (result.result.case !== "success") assert.fail("expected an encoded successful result")
+    observed = result.result.value.backgroundReason
+    assert.equal(observed, 97)
+  })
 })

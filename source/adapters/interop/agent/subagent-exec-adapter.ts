@@ -21,6 +21,8 @@ import {
   createServerSerializer,
 } from "./exec-message-adapter.ts"
 import {
+  createUnrecognizedSubagentBackgroundReason,
+  isSubagentBackgroundReason,
   createSubagentExecutor,
   type SubagentBackgroundReason as SlateSubagentBackgroundReason,
   type SubagentExecutionArgs,
@@ -60,7 +62,7 @@ function reasonFromWire(value: SubagentBackgroundReason): SlateSubagentBackgroun
     case SubagentBackgroundReason.AGENT_REQUEST: return "agent-request"
     case SubagentBackgroundReason.USER_REQUEST: return "user-request"
     case SubagentBackgroundReason.QUEUED_FOLLOW_UP: return "queued-follow-up"
-    default: return `unknown-${value}`
+    default: return createUnrecognizedSubagentBackgroundReason(value)
   }
 }
 
@@ -70,10 +72,9 @@ function reasonToWire(value: SlateSubagentBackgroundReason): SubagentBackgroundR
     case "agent-request": return SubagentBackgroundReason.AGENT_REQUEST
     case "user-request": return SubagentBackgroundReason.USER_REQUEST
     case "queued-follow-up": return SubagentBackgroundReason.QUEUED_FOLLOW_UP
-    default: {
-      const unknown = /^unknown-(-?\d+)$/.exec(value)
-      return unknown === null ? SubagentBackgroundReason.UNSPECIFIED : Number(unknown[1]) as SubagentBackgroundReason
-    }
+    default: return isSubagentBackgroundReason(value) && typeof value !== "string"
+      ? value.compatibility.legacyCode as SubagentBackgroundReason
+      : SubagentBackgroundReason.UNSPECIFIED
   }
 }
 

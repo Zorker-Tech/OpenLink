@@ -21,7 +21,12 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { slateSubagentExecutorResource } from "../../source/packages/agent-exec/subagent.ts"
 import type { SubagentContinuationConfig, SubagentExecutionArgs, SubagentExecutionResult } from "../../source/packages/agent-exec/subagent.ts"
-import { RUNNING_SUBAGENT_FOLLOWUP_ERROR, RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT } from "../../source/packages/agent-exec/subagent.ts"
+import {
+  createUnrecognizedSubagentBackgroundReason,
+  isSubagentBackgroundReason,
+  RUNNING_SUBAGENT_FOLLOWUP_ERROR,
+  RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT,
+} from "../../source/packages/agent-exec/subagent.ts"
 import { slateSubagentBackgroundHandoffExecutorResource } from "../../source/packages/agent-exec/subagent-control.ts"
 import { WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 import {
@@ -279,32 +284,41 @@ test("a suffix the platform added is shown after the answer", () => {
   assert.match(rendered, /the box was reclaimed$/)
 })
 
-test("Slate task results preserve conversation content and unknown background codes at the runner boundary", () => {
+test("Slate task results preserve conversation content and compatibility codes at the runner boundary", () => {
   const source = createSlateTaskSuccessResult({
     conversationSteps: [answerStep("answer"), summaryStep("summary")],
     agentId: "agent-8",
     isBackground: true,
     durationMs: 22n,
     resultSuffix: "done",
-    backgroundReason: "unknown-4096",
+    backgroundReason: createUnrecognizedSubagentBackgroundReason(4096),
     transcriptUri: "/tmp/transcript.jsonl",
   })
   const restored = fromInteropTaskResultInterop(toInteropTaskResultInterop(source))
 
   assert.equal(restored.kind, "success")
   if (restored.kind !== "success") assert.fail("expected a successful task result")
-  assert.equal(restored.backgroundReason, "unknown-4096")
+  assert.deepEqual(restored.backgroundReason, createUnrecognizedSubagentBackgroundReason(4096))
   assert.equal(restored.durationMs, 22n)
   assert.equal(restored.transcriptUri, "/tmp/transcript.jsonl")
   assert.deepEqual(projectSlateTaskResult(restored), {
     kind: "success",
     agentId: "agent-8",
     resultSuffix: "done",
-    backgroundReason: "unknown-4096",
+    backgroundReason: createUnrecognizedSubagentBackgroundReason(4096),
     transcriptUri: "/tmp/transcript.jsonl",
     finalAssistantText: "answer",
     chosenSummary: "summary",
   })
+})
+
+test("unrecognized background enum codes stay in validated compatibility metadata", () => {
+  const reason = createUnrecognizedSubagentBackgroundReason(4096)
+  assert.deepEqual(reason, { kind: "unrecognized", compatibility: { legacyCode: 4096 } })
+  assert.equal(isSubagentBackgroundReason(reason), true)
+  assert.equal(isSubagentBackgroundReason({ kind: "unrecognized", compatibility: { legacyCode: "4096" } }), false)
+  assert.throws(() => createUnrecognizedSubagentBackgroundReason(2_147_483_648), /signed 32-bit integer/)
+  assert.match(renderTaskResultToString(successResult({ backgroundReason: reason })), /Subagent is running in the background/)
 })
 
 test("a failed run reads as its error", () => {
@@ -453,15 +467,20 @@ test("a background run has no answer to show and keeps its transcript", async ()
   assert.equal(result.transcriptUri, "/tmp/transcript.jsonl")
 })
 
-test("an unrecognized background reason stays background and round-trips through the result", async () => {
+test("an unrecognized legacy background reason stays background and keeps its compatibility code", async () => {
   const harnessed = executionHarness({
-    result: { status: "success", agentId: "agent-unknown", toolCallCount: 0, backgroundReason: "unknown-4096" },
+    result: {
+      status: "success",
+      agentId: "agent-unknown",
+      toolCallCount: 0,
+      backgroundReason: createUnrecognizedSubagentBackgroundReason(4096),
+    },
   })
   const result = await harnessed.run()
   assert.equal(result.kind, "success")
   if (result.kind !== "success") assert.fail("expected a successful task result")
   assert.equal(result.isBackground, true)
-  assert.equal(result.backgroundReason, "unknown-4096")
+  assert.deepEqual(result.backgroundReason, createUnrecognizedSubagentBackgroundReason(4096))
   assert.deepEqual(result.conversationSteps, [])
 })
 
