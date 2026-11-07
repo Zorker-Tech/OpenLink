@@ -23,6 +23,8 @@ test('native Preview design and annotation actions validate their bounded inputs
     { type: 'preview.layers.read', pageId: 'preview', rootRef: 'el-1' },
     { type: 'preview.style.set', pageId: 'preview', ref: 'el-1', property: 'background-color', value: 'rgb(1, 2, 3)' },
     { type: 'preview.style.reset', pageId: 'preview', ref: 'el-1', property: 'border-radius' },
+    { type: 'preview.content.set', pageId: 'preview', ref: 'el-1', content: 'Updated heading' },
+    { type: 'preview.content.reset', pageId: 'preview', ref: 'el-1' },
     { type: 'preview.theme.read', pageId: 'preview' },
     { type: 'preview.theme.set', pageId: 'preview', token: '--primary', value: 'oklch(0.6 0.2 30)' },
     { type: 'preview.theme.reset', pageId: 'preview', token: '--primary' },
@@ -31,6 +33,7 @@ test('native Preview design and annotation actions validate their bounded inputs
   ]) assert.equal(isBrowserActionEnvelope({ ...base, action }), true, action.type)
 
   assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.style.set', pageId: 'preview', ref: 'el-1', property: 'background-color', value: 'x'.repeat(257) } }), false)
+  assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.content.set', pageId: 'preview', ref: 'el-1', content: 'x'.repeat(2001) } }), false)
   assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.theme.set', pageId: 'preview', token: 'color', value: 'red' } }), false)
   assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.annotation.select', pageId: 'preview', x: -1, y: 0 } }), false)
 })

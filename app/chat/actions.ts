@@ -21,6 +21,7 @@ export interface CreateChatSessionInput {
 export type CreateChatSessionResult =
   | { id: string; path: string; fallback: false }
   | { id: null; path: string; fallback: true }
+  | { id: null; path: null; fallback: false; error: 'AUTH_REQUIRED' }
   | { id: null; path: null; fallback: false; error: string; diagnosticId: string }
 
 export async function createChatSessionAction(

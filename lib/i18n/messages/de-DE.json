@@ -1242,5 +1242,17 @@
   "查看截图": "Screenshot ansehen",
   "收起截图": "Screenshot ausblenden",
   "正在读取截图…": "Screenshot wird geladen…",
-  "无法读取批注截图": "Annotations-Screenshot konnte nicht geladen werden"
+  "无法读取批注截图": "Annotations-Screenshot konnte nicht geladen werden",
+  "Capture failed; retry to attach element context": "Screenshot fehlgeschlagen. Erneut versuchen, um den visuellen Kontext anzuhängen",
+  "Design instructions are too long. Apply fewer changes.": "Die Designanweisungen sind zu lang. Wende weniger Änderungen an.",
+  "Could not send design changes.": "Designänderungen konnten nicht gesendet werden.",
+  "所选项目不可用": "Das ausgewählte Projekt ist nicht verfügbar.",
+  "Hold Ctrl or ⌘ and drag to move the selected element.": "Halte Strg oder ⌘ gedrückt und ziehe das ausgewählte Element.",
+  "Capturing selected element context…": "Visueller Kontext des ausgewählten Elements wird erfasst…",
+  "Selected element screenshot": "Screenshot des ausgewählten Elements",
+  "Retry screenshot": "Screenshot erneut aufnehmen",
+  "Full viewport context": "Kontext des gesamten Ansichtsbereichs",
+  "Text content": "Textinhalt",
+  "This element does not support text editing.": "Dieses Element unterstützt keine Textbearbeitung.",
+  "Choose color": "Farbe auswählen"
 }

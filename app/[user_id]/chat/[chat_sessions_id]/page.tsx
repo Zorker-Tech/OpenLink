@@ -3,7 +3,7 @@ import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listPersistedChatEvents } from '@/lib/chat-session-persistence.server'
 import { getChatSessionRun } from '@/lib/chat-session-runs.server'
 import { listOrganizations } from '@/lib/organizations'
-import { getProject } from '@/lib/projects'
+import { getProject, listProjects } from '@/lib/projects'
 import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
 import { getUserPreferences } from '@/lib/user-preferences.server'
 import { getUserSkill, listUserSkills } from '@/lib/user-skills.server'
@@ -39,7 +39,7 @@ export default async function ChatSessionPage({
   const session = await observeChatStage('session.load', getChatSession(supabase, user.id, sessionId))
   if (!session) notFound()
 
-  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, initialEvents, skillSummaries, preferences, initialRun] = await Promise.all([
+  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, previewProjectRows, initialEvents, skillSummaries, preferences, initialRun] = await Promise.all([
     observeChatStage('workspace.load', getAccessibleWorkspaceById(supabase, session.workspace_id)),
     observeChatStage('personal_workspace.load', getOwnedWorkspace(supabase, user.id)),
     observeChatStage('organizations.load', listOrganizations(supabase, user.id)),
@@ -52,6 +52,7 @@ export default async function ChatSessionPage({
     observeChatStage('models.load', listConfiguredModels(supabase, user.id)),
     observeChatStage('sessions.load', listChatSessions(supabase, user.id, session.workspace_id)),
     observeChatStage('project.load', getProject(supabase, session.project_id)),
+    observeChatStage('preview_projects.load', listProjects(supabase, session.workspace_id)),
     observeChatStage('events.load', listPersistedChatEvents(supabase, user.id, session.id)),
     observeChatStage('skills.load', listUserSkills(supabase, user.id)),
     observeChatStage('preferences.load', getUserPreferences(supabase, user.id)),
@@ -89,6 +90,9 @@ export default async function ChatSessionPage({
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       projectId={project.id}
       projectName={project.name}
+      previewProjects={previewProjectRows
+        .filter((candidate) => candidate.kind === 'code' && candidate.status !== 'archived')
+        .map((candidate) => ({ id: candidate.id, name: candidate.name }))}
       sessionId={session.id}
       thinkingVisibility={preferences.thinkingVisibility}
       initialAccessMode={session.access_mode}

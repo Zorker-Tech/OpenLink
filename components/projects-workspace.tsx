@@ -13,6 +13,7 @@ import type { ProjectSummary } from '@/lib/projects'
 import { useT } from '@/lib/i18n/client'
 import type { Translator } from '@/lib/i18n/messages'
 import { projectRuntimeDisplay } from '@/lib/project-runtime-display'
+import { createChatSessionAction } from '@/app/chat/actions'
 import {
   BookOpenText,
   Code2,
@@ -46,7 +47,17 @@ function relativeProjectTime(value: string, t: Translator) {
   return t('just now')
 }
 
-function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; workspaceSlug: string }) {
+function ProjectCard({
+  project,
+  workspaceSlug,
+  openingPreview,
+  onOpenPreview,
+}: {
+  project: ProjectSummary
+  workspaceSlug: string
+  openingPreview: boolean
+  onOpenPreview: (projectId: string) => void
+}) {
   const router = useRouter()
   const t = useT()
   const Icon = project.kind === 'research' ? BookOpenText : Code2
@@ -86,8 +97,8 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         >
           {project.name}
         </button>
-        <button aria-label={t('打开 {name} 预览', { name: project.name })} className="row-span-2 flex size-7 items-center justify-center self-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]" onClick={() => router.push(`/app/${workspaceSlug}/preview?project=${encodeURIComponent(project.id)}`)} type="button">
-          <MonitorPlay className="size-4" />
+        <button aria-label={t('打开 {name} 预览', { name: project.name })} className="row-span-2 flex size-7 items-center justify-center self-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)] disabled:opacity-50" disabled={openingPreview} onClick={() => onOpenPreview(project.id)} type="button">
+          {openingPreview ? <LoaderCircle className="size-4 animate-spin" /> : <MonitorPlay className="size-4" />}
         </button>
         <span className="flex items-center gap-1.5 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
           <i className={`size-1.5 rounded-full ${ready ? 'bg-[var(--app-success)]' : failed ? 'bg-[var(--app-warning)]' : 'bg-[var(--app-subtle-surface)]'}`} />
@@ -117,6 +128,8 @@ export function ProjectsWorkspace({
   const [systemLight, setSystemLight] = useState(false)
   const [search, setSearch] = useState('')
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [openingPreviewProjectId, setOpeningPreviewProjectId] = useState<string | null>(null)
+  const [previewOpenError, setPreviewOpenError] = useState(false)
 
   useEffect(() => {
     if (!projects.some((project) => project.status === 'waiting' || project.runtime_status !== 'ready')) return
@@ -151,6 +164,20 @@ export function ProjectsWorkspace({
       || project.kind.includes(query)
     ))
   }, [projects, search])
+
+  const openProjectPreview = async (projectId: string) => {
+    if (openingPreviewProjectId) return
+    setOpeningPreviewProjectId(projectId)
+    setPreviewOpenError(false)
+    try {
+      const result = await createChatSessionAction({ workspaceSlug: activeWorkspace.slug, projectId })
+      if (!result.id || !result.path) throw new Error('PROJECT_CHAT_CREATE_FAILED')
+      router.push(result.path)
+    } catch {
+      setPreviewOpenError(true)
+      setOpeningPreviewProjectId(null)
+    }
+  }
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
@@ -217,10 +244,12 @@ export function ProjectsWorkspace({
               </button>
             </div>
 
+            {previewOpenError && <p className="mt-3 text-sm text-[var(--app-danger)]" role="alert">{t('无法创建项目聊天')}</p>}
+
             {filteredProjects.length ? (
               <section aria-label={t('项目列表')} className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} workspaceSlug={activeWorkspace.slug} />
+                  <ProjectCard key={project.id} openingPreview={openingPreviewProjectId === project.id} onOpenPreview={openProjectPreview} project={project} workspaceSlug={activeWorkspace.slug} />
                 ))}
               </section>
             ) : (

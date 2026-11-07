@@ -1242,5 +1242,17 @@
   "查看截图": "View screenshot",
   "收起截图": "Hide screenshot",
   "正在读取截图…": "Loading screenshot…",
-  "无法读取批注截图": "Could not load annotation screenshot"
+  "无法读取批注截图": "Could not load annotation screenshot",
+  "Capture failed; retry to attach element context": "Capture failed; retry to attach element context",
+  "Design instructions are too long. Apply fewer changes.": "Design instructions are too long. Apply fewer changes.",
+  "Could not send design changes.": "Could not send design changes.",
+  "所选项目不可用": "The selected project is unavailable.",
+  "Hold Ctrl or ⌘ and drag to move the selected element.": "Hold Ctrl or ⌘ and drag to move the selected element.",
+  "Capturing selected element context…": "Capturing selected element context…",
+  "Selected element screenshot": "Selected element screenshot",
+  "Retry screenshot": "Retry screenshot",
+  "Full viewport context": "Full viewport context",
+  "Text content": "Text content",
+  "This element does not support text editing.": "This element does not support text editing.",
+  "Choose color": "Choose color"
 }

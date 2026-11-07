@@ -21,10 +21,13 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   const elementRefs = new WeakMap();
   const refElements = new Map();
   const originalStyles = new WeakMap();
+  const originalContent = new WeakMap();
   const originalThemeTokens = new Map();
   let refSequence = 0;
   let inspectActive = false;
   let selectedElement = null;
+  let moveDrag = null;
+  let suppressInspectClick = false;
   let lastActivityAt = 0;
 
   const overlay = document.createElement('div');
@@ -101,6 +104,9 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
       text: compactText(element) || undefined, selector: selectorFor(element),
       componentName: element.getAttribute('data-openlink-component') || element.getAttribute('data-component') || undefined,
       source: element.getAttribute('data-openlink-source') || undefined,
+      content: element.children.length === 0 ? (element.textContent || '').slice(0, 2000) : undefined,
+      canEditContent: canEditContent(element),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
       bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, attributes
     };
   }
@@ -124,19 +130,88 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     return element;
   }
 
+  function translateCoordinates(element) {
+    const value = getComputedStyle(element).translate;
+    if (!value || value === 'none') return { x: 0, y: 0 };
+    const parts = value.trim().split(/\s+/);
+    if (parts.length > 2) return null;
+    const parseLength = (part, size) => {
+      if (/^-?(?:\d+\.?\d*|\.\d+)px$/.test(part)) return Number.parseFloat(part);
+      if (/^-?(?:\d+\.?\d*|\.\d+)%$/.test(part)) return Number.parseFloat(part) * size / 100;
+      if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(part)) return Number.parseFloat(part);
+      return null;
+    };
+    const x = parseLength(parts[0] || '', element.offsetWidth);
+    const y = parts.length > 1 ? parseLength(parts[1] || '', element.offsetHeight) : 0;
+    return x === null || y === null ? null : { x, y };
+  }
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!inspectActive || event.button !== 0 || !(event.metaKey || event.ctrlKey)) return;
+    activity('pointer');
+    const element = elementAt(event.clientX, event.clientY);
+    if (!element || element === overlay || overlay.contains(element)) return;
+    const base = translateCoordinates(element);
+    if (!base) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    try { event.target?.setPointerCapture?.(event.pointerId); } catch {}
+    selectedElement = element;
+    moveDrag = { element, startX: event.clientX, startY: event.clientY, baseX: base.x, baseY: base.y, lastX: 0, lastY: 0, after: '' };
+    send({ type: 'inspect.selected', element: show(element) });
+  }, true);
+
   document.addEventListener('pointermove', (event) => {
+    if (moveDrag) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const drag = moveDrag;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      drag.lastX = dx;
+      drag.lastY = dy;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        drag.after = (drag.baseX + dx) + 'px ' + (drag.baseY + dy) + 'px';
+        setElementStyle(drag.element, 'translate', drag.after);
+        show(drag.element);
+      }
+      return;
+    }
     if (!inspectActive) return;
     const element = elementAt(event.clientX, event.clientY);
     if (element && element !== overlay && !overlay.contains(element)) send({ type: 'inspect.hover', element: show(element) });
   }, true);
-  document.addEventListener('pointerleave', () => { if (inspectActive) hide(); }, true);
+  document.addEventListener('pointerup', (event) => {
+    if (!moveDrag) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const drag = moveDrag;
+    moveDrag = null;
+    if (Math.abs(drag.lastX) > 4 || Math.abs(drag.lastY) > 4) {
+      suppressInspectClick = true;
+      setTimeout(() => { suppressInspectClick = false; }, 0);
+      const before = drag.baseX === 0 && drag.baseY === 0 ? 'none' : drag.baseX + 'px ' + drag.baseY + 'px';
+      const after = drag.after || (drag.baseX + drag.lastX) + 'px ' + (drag.baseY + drag.lastY) + 'px';
+      send({ type: 'inspect.moved', element: show(drag.element), property: 'translate', before, after });
+    }
+  }, true);
+  document.addEventListener('pointercancel', () => {
+    if (!moveDrag) return;
+    resetElementStyle(moveDrag.element, 'translate');
+    moveDrag = null;
+  }, true);
+  document.addEventListener('pointerleave', () => { if (inspectActive && !moveDrag) hide(); }, true);
   document.addEventListener('click', (event) => {
+    if (suppressInspectClick) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      suppressInspectClick = false;
+      return;
+    }
     if (!inspectActive) return;
     const element = elementAt(event.clientX, event.clientY);
     if (!element || element === overlay || overlay.contains(element)) return;
     event.preventDefault(); event.stopImmediatePropagation();
     selectedElement = element;
-    inspectActive = false;
     send({ type: 'inspect.selected', element: show(element) });
   }, true);
   document.addEventListener('pointerdown', () => activity('pointer'), true);
@@ -163,10 +238,10 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   }
 
   const editableProperties = new Set([
-    'color', 'background-color', 'font-size', 'font-weight', 'line-height', 'text-align',
+    'color', 'background-color', 'font-family', 'font-size', 'font-style', 'font-weight', 'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-decoration-color', 'text-indent', 'text-transform', 'word-spacing',
     'width', 'height', 'min-width', 'max-width', 'margin', 'padding', 'gap', 'border-radius',
     'border-color', 'border-width', 'opacity', 'display', 'position', 'justify-content',
-    'align-items', 'flex-direction', 'box-shadow'
+    'align-items', 'flex-direction', 'box-shadow', 'translate'
   ]);
 
   function safeStyleValue(value) {
@@ -180,6 +255,30 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     const properties = {};
     for (const property of editableProperties) properties[property] = computed.getPropertyValue(property);
     return properties;
+  }
+
+  function canEditContent(element) {
+    return element.namespaceURI === 'http://www.w3.org/1999/xhtml'
+      && element.children.length === 0
+      && !['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'textarea', 'select', 'option', 'script', 'style'].includes(element.localName);
+  }
+
+  function setElementContent(element, content) {
+    if (!canEditContent(element) || typeof content !== 'string' || content.length > 2000) {
+      throw new Error('Text content cannot be edited for this element');
+    }
+    if (!originalContent.has(element)) originalContent.set(element, element.textContent || '');
+    element.textContent = content;
+    return { element: describe(element), content: element.textContent || '' };
+  }
+
+  function resetElementContent(element) {
+    if (!canEditContent(element)) throw new Error('Text content cannot be edited for this element');
+    if (originalContent.has(element)) {
+      element.textContent = originalContent.get(element);
+      originalContent.delete(element);
+    }
+    return { element: describe(element), content: element.textContent || '' };
   }
 
   function setElementStyle(element, property, value) {
@@ -311,6 +410,22 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
           result.snapshot = JSON.stringify({ styles: changed.styles });
           break;
         }
+        case 'preview.content.set': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          const changed = setElementContent(element, action.content);
+          result.element = changed.element;
+          result.snapshot = JSON.stringify({ content: changed.content });
+          break;
+        }
+        case 'preview.content.reset': {
+          const element = refElements.get(action.ref)?.deref();
+          if (!element) throw new Error('Element is no longer available');
+          const changed = resetElementContent(element);
+          result.element = changed.element;
+          result.snapshot = JSON.stringify({ content: changed.content });
+          break;
+        }
         case 'preview.theme.read': result.snapshot = JSON.stringify({ tokens: readThemeTokens() }); break;
         case 'preview.theme.set': result.snapshot = JSON.stringify({ tokens: setThemeToken(action.token, action.value) }); break;
         case 'preview.theme.reset': result.snapshot = JSON.stringify({ tokens: resetThemeToken(action.token) }); break;
@@ -330,7 +445,8 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
           if (element && element !== overlay && !overlay.contains(element)) result.element = describe(element);
           result.snapshot = JSON.stringify({
             pagePath: pagePath(),
-            bounds: rect
+            bounds: rect,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
           });
           break;
         }

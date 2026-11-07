@@ -68,6 +68,9 @@ export interface ElementReference {
   selector?: string
   componentName?: string
   source?: string
+  content?: string
+  canEditContent?: boolean
+  viewport?: { width: number; height: number }
   bounds: { x: number; y: number; width: number; height: number }
   attributes: Record<string, string>
 }
@@ -87,6 +90,8 @@ export type BrowserAction =
   | { type: 'preview.layers.read'; pageId: string; rootRef?: string }
   | { type: 'preview.style.set'; pageId: string; ref: string; property: string; value: string }
   | { type: 'preview.style.reset'; pageId: string; ref: string; property: string }
+  | { type: 'preview.content.set'; pageId: string; ref: string; content: string }
+  | { type: 'preview.content.reset'; pageId: string; ref: string }
   | { type: 'preview.theme.read'; pageId: string }
   | { type: 'preview.theme.set'; pageId: string; token: string; value: string }
   | { type: 'preview.theme.reset'; pageId: string; token: string }
@@ -173,6 +178,7 @@ export type InspectorBridgeEvent =
   | { type: 'human.activity'; activity: 'pointer' | 'keyboard' | 'scroll' }
   | { type: 'inspect.hover'; element: ElementReference }
   | { type: 'inspect.selected'; element: ElementReference }
+  | { type: 'inspect.moved'; element: ElementReference; property: 'translate'; before: string; after: string }
   | { type: 'action.result'; result: BrowserActionResult }
   | { type: 'bridge.error'; message: string }
 
@@ -233,6 +239,10 @@ export function isBrowserActionEnvelope(value: unknown): value is BrowserActionE
     case 'preview.style.reset':
       return pageId() && isString(action.ref) && action.ref.length <= 128
         && isString(action.property) && /^[-a-z]{1,48}$/.test(action.property)
+    case 'preview.content.set':
+      return pageId() && isString(action.ref) && action.ref.length <= 128
+        && isString(action.content) && action.content.length <= 2000
+    case 'preview.content.reset': return pageId() && isString(action.ref) && action.ref.length <= 128
     case 'preview.theme.read': return pageId()
     case 'preview.theme.set':
       return pageId() && isString(action.token) && /^--[a-zA-Z0-9_-]{1,64}$/.test(action.token)

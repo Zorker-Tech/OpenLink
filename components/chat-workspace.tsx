@@ -4,7 +4,7 @@ import { promptShouldExpand } from '@/lib/prompt-expansion'
 import { PageTransition } from '@/components/ui/page-transition'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 
-import { deleteChatSessionAction, updateChatSessionTitleAction } from '@/app/chat/actions'
+import { createChatSessionAction, deleteChatSessionAction, updateChatSessionTitleAction } from '@/app/chat/actions'
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -166,6 +166,7 @@ interface ChatWorkspaceProps {
   sessionTitle: string
   projectName: string
   projectId: string
+  previewProjects: Array<{ id: string; name: string }>
   userId: string
   localRuntime: boolean
   initialAccessMode?: AccessMode
@@ -1447,6 +1448,7 @@ export function ChatWorkspace({
   sessionTitle,
   projectName,
   projectId,
+  previewProjects,
   userId,
   localRuntime,
   initialAccessMode = 'restricted',
@@ -1487,6 +1489,7 @@ export function ChatWorkspace({
     previewTargets: [],
     previewTargetsLoading: true,
   })
+  const [previewProjectId, setPreviewProjectId] = useState(projectId)
   const [currentSessionTitle, setCurrentSessionTitle] = useState(sessionTitle)
   const titleRequestedRef = useRef(false)
   const manualTitleRef = useRef(false)
@@ -1546,6 +1549,32 @@ export function ChatWorkspace({
     }
   }, [])
 
+  const selectPreviewProject = useCallback((nextProjectId: string) => {
+    if (!previewProjects.some((project) => project.id === nextProjectId)) return
+    setPreviewProjectId(nextProjectId)
+    setBrowserState((current) => ({
+      ...current,
+      browserSessionId: undefined,
+      address: '',
+      canGoBack: false,
+      canGoForward: false,
+      canInspect: false,
+      externalUrl: undefined,
+      inspectMode: false,
+      annotateMode: false,
+      selectedElement: undefined,
+      selectedStyles: undefined,
+      previewLayers: undefined,
+      themeTokens: undefined,
+      previewTargets: [],
+      activePreviewTargetId: undefined,
+      previewTargetsLoading: true,
+      previewTargetsError: undefined,
+      status: 'connecting',
+      surface: 'native-preview',
+    }))
+  }, [previewProjects])
+
   const reorderWorkspaceTabs = useCallback((source: WorkspaceTabId, target: WorkspaceTabId, after: boolean) => {
     setOpenWorkspaceTabs((current) => {
       if (source === target || !current.includes(source) || !current.includes(target)) return current
@@ -1599,10 +1628,13 @@ export function ChatWorkspace({
       surface: persistedUi.browserSurface,
       ...(persistedUi.browserAddress ? { address: persistedUi.browserAddress } : {}),
     }))
+    setPreviewProjectId(previewProjects.some((project) => project.id === persistedUi.previewProjectId)
+      ? persistedUi.previewProjectId!
+      : projectId)
     setSelectedGitRef(persistedUi.selectedGitRef)
     setChatPanelCollapsed(persistedUi.chatPanelCollapsed)
     window.setTimeout(() => { uiStatePersistArmedRef.current = true }, 0)
-  }, [persistedUi.browserAddress, persistedUi.browserSurface, persistedUi.chatPanelCollapsed, persistedUi.dataSurface, persistedUi.openWorkspaceTabs, persistedUi.selectedGitRef, persistedUi.workspaceView, uiReady])
+  }, [persistedUi.browserAddress, persistedUi.browserSurface, persistedUi.chatPanelCollapsed, persistedUi.dataSurface, persistedUi.openWorkspaceTabs, persistedUi.previewProjectId, persistedUi.selectedGitRef, persistedUi.workspaceView, previewProjects, projectId, uiReady])
 
   useEffect(() => {
     if (!uiReady || !uiStatePersistArmedRef.current) return
@@ -1612,11 +1644,12 @@ export function ChatWorkspace({
       dataSurface,
       browserSurface: browserState.surface,
       browserAddress: browserState.address,
+      previewProjectId,
       previewTargetId: browserState.activePreviewTargetId ?? null,
       selectedGitRef,
       chatPanelCollapsed,
     })
-  }, [browserState.activePreviewTargetId, browserState.address, browserState.surface, chatPanelCollapsed, dataSurface, openWorkspaceTabs, selectedGitRef, uiReady, updatePersistedUi, workspaceView])
+  }, [browserState.activePreviewTargetId, browserState.address, browserState.surface, chatPanelCollapsed, dataSurface, openWorkspaceTabs, previewProjectId, selectedGitRef, uiReady, updatePersistedUi, workspaceView])
   const [gitVersionError, setGitVersionError] = useState<string | null>(null)
   const [runtimeResources, setRuntimeResources] = useState<RuntimeComposerResources | null>(null)
   const [codexResources, setCodexResources] = useState<CodexComposerResources | null>(null)
@@ -2027,6 +2060,35 @@ export function ChatWorkspace({
     return accepted
   }, [agentStreamStatus, appendAgentEvents, enqueueStreamEvent, router, sessionId, workspaceView])
 
+  const submitPreviewRequest = useCallback(async (message: string, attachments: AgentPromptAttachment[], targetProjectId: string) => {
+    if (!previewProjects.some((project) => project.id === targetProjectId)) throw new Error(t('所选项目不可用'))
+    if (targetProjectId !== projectId) {
+      const created = await createChatSessionAction({ workspaceSlug: activeWorkspace.slug, projectId: targetProjectId })
+      if (!created.id || !created.path) throw new Error('error' in created ? created.error : t('创建代码任务失败'))
+      const response = await fetch(`/api/chat/${encodeURIComponent(created.id)}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, attachments }),
+      })
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null) as { error?: string; detail?: string } | null
+        throw new Error(failure?.detail || failure?.error || t('Could not send design changes.'))
+      }
+      await response.body?.cancel().catch(() => undefined)
+      router.push(created.path)
+      return true
+    }
+    if (agentStreamStatus !== 'streaming') return submitAgentMessage(message, null, { attachments })
+    const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/queue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crypto.randomUUID(), message, attachments, model: null }),
+    })
+    const payload = await response.json().catch(() => null) as { error?: string } | null
+    if (!response.ok) throw new Error(payload?.error || t('消息加入队列失败'))
+    return true
+  }, [activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionId, submitAgentMessage, t])
+
   const retrySavedInitialPrompt = useCallback(async () => {
     const prompt = initialPrompt.trim()
     if (!prompt) return
@@ -2299,7 +2361,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={persistedUi.previewTargetId} openTabs={openWorkspaceTabs} uiReady={uiReady} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} cloudRuntime={!localRuntime} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={persistedUi.previewTargetId} openTabs={openWorkspaceTabs} uiReady={uiReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

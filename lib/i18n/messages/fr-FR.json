@@ -1242,5 +1242,17 @@
   "查看截图": "Voir la capture d’écran",
   "收起截图": "Masquer la capture d’écran",
   "正在读取截图…": "Chargement de la capture d’écran…",
-  "无法读取批注截图": "Impossible de charger la capture de l’annotation"
+  "无法读取批注截图": "Impossible de charger la capture de l’annotation",
+  "Capture failed; retry to attach element context": "Échec de la capture. Réessayez pour joindre le contexte visuel",
+  "Design instructions are too long. Apply fewer changes.": "Les instructions de conception sont trop longues. Appliquez moins de modifications.",
+  "Could not send design changes.": "Impossible d’envoyer les modifications de conception.",
+  "所选项目不可用": "Le projet sélectionné n’est pas disponible.",
+  "Hold Ctrl or ⌘ and drag to move the selected element.": "Maintenez Ctrl ou ⌘ et faites glisser l’élément sélectionné.",
+  "Capturing selected element context…": "Capture du contexte visuel de l’élément sélectionné…",
+  "Selected element screenshot": "Capture de l’élément sélectionné",
+  "Retry screenshot": "Réessayer la capture",
+  "Full viewport context": "Contexte de la fenêtre d’affichage complète",
+  "Text content": "Contenu du texte",
+  "This element does not support text editing.": "La modification du texte n’est pas disponible pour cet élément.",
+  "Choose color": "Choisir une couleur"
 }

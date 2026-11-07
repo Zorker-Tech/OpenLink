@@ -1242,5 +1242,17 @@
   "查看截图": "查看截圖",
   "收起截图": "收起截圖",
   "正在读取截图…": "正在讀取截圖…",
-  "无法读取批注截图": "無法讀取註解截圖"
+  "无法读取批注截图": "無法讀取註解截圖",
+  "Capture failed; retry to attach element context": "選取元素的截圖失敗，請重試以附加視覺脈絡",
+  "Design instructions are too long. Apply fewer changes.": "設計修改說明過長，請減少修改項目後再套用。",
+  "Could not send design changes.": "無法傳送設計修改。",
+  "所选项目不可用": "所選專案無法使用",
+  "Hold Ctrl or ⌘ and drag to move the selected element.": "按住 Ctrl 或 ⌘ 並拖曳，即可移動選取的元素。",
+  "Capturing selected element context…": "正在擷取選取元素的視覺脈絡…",
+  "Selected element screenshot": "選取元素截圖",
+  "Retry screenshot": "重試截圖",
+  "Full viewport context": "完整檢視區脈絡",
+  "Text content": "文字內容",
+  "This element does not support text editing.": "此元素不支援文字編輯。",
+  "Choose color": "選擇顏色"
 }

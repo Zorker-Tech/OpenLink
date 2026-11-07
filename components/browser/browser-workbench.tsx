@@ -34,7 +34,7 @@ export interface BrowserWorkbenchUiState {
   themeTokens?: Record<string, string>
   status: BrowserConnectionStatus
   surface: 'native-preview' | 'chromium-stream'
-  /** Live development servers discovered in this chat's Project runtime. */
+  /** Live development servers discovered in the selected Preview project's runtime. */
   previewTargets: BrowserPreviewTarget[]
   activePreviewTargetId?: string
   previewTargetsLoading: boolean
@@ -53,6 +53,14 @@ export interface BrowserPreviewAnnotationTarget {
   element?: ElementReference
   pagePath: string
   bounds: { x: number; y: number; width: number; height: number }
+  viewport: { width: number; height: number }
+}
+
+export interface BrowserElementMove {
+  element: ElementReference
+  property: 'translate'
+  before: string
+  after: string
 }
 
 export interface BrowserWorkbenchHandle {
@@ -72,6 +80,8 @@ export interface BrowserWorkbenchHandle {
   activateElement: (ref: string) => void
   setElementStyle: (ref: string, property: string, value: string) => void
   resetElementStyle: (ref: string, property: string) => void
+  setElementContent: (ref: string, content: string) => void
+  resetElementContent: (ref: string) => void
   setThemeToken: (token: string, value: string) => void
   resetThemeToken: (token: string) => void
 }
@@ -89,10 +99,11 @@ interface BrowserWorkbenchProps {
   allowRealtimeFallback?: boolean
   onStateChange?: (state: BrowserWorkbenchUiState) => void
   onAnnotationTarget?: (target: BrowserPreviewAnnotationTarget) => void
+  onElementMoved?: (move: BrowserElementMove) => void
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, allowRealtimeFallback = true, onStateChange, onAnnotationTarget, viewportMode }, ref) {
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, allowRealtimeFallback = true, onStateChange, onAnnotationTarget, onElementMoved, viewportMode }, ref) {
   const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
   const initialUrlRef = useRef(initialUrl ?? '')
@@ -116,9 +127,16 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const connectionRef = useRef<BrowserConnection | null>(null)
   const previewActionKinds = useRef(new Map<string, BrowserAction['type']>())
   const annotationTargetRef = useRef(onAnnotationTarget)
+  const elementMoveRef = useRef(onElementMoved)
   const inspectMode = inspectionMode === 'edit'
 
+  useEffect(() => {
+    initialUrlRef.current = initialUrl ?? ''
+    initialPreviewTargetIdRef.current = initialPreviewTargetId
+  }, [initialPreviewTargetId, initialUrl])
+
   useEffect(() => { annotationTargetRef.current = onAnnotationTarget }, [onAnnotationTarget])
+  useEffect(() => { elementMoveRef.current = onElementMoved }, [onElementMoved])
 
   const refreshPreviewTargets = useCallback(async () => {
     setPreviewTargetsLoading(true)
@@ -220,13 +238,17 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
             }
             if (actionType === 'preview.annotation.select'
               && typeof snapshot.pagePath === 'string'
-              && snapshot.bounds && typeof snapshot.bounds === 'object') {
+              && snapshot.bounds && typeof snapshot.bounds === 'object'
+              && snapshot.viewport && typeof snapshot.viewport === 'object') {
               const bounds = snapshot.bounds as Record<string, unknown>
-              if (['x', 'y', 'width', 'height'].every((key) => typeof bounds[key] === 'number' && Number.isFinite(bounds[key]))) {
+              const viewport = snapshot.viewport as Record<string, unknown>
+              if (['x', 'y', 'width', 'height'].every((key) => typeof bounds[key] === 'number' && Number.isFinite(bounds[key]))
+                && ['width', 'height'].every((key) => Number.isSafeInteger(viewport[key]) && Number(viewport[key]) > 0)) {
                 annotationTargetRef.current?.({
                   ...(result.element ? { element: result.element } : {}),
                   pagePath: snapshot.pagePath,
                   bounds: bounds as BrowserPreviewAnnotationTarget['bounds'],
+                  viewport: viewport as BrowserPreviewAnnotationTarget['viewport'],
                 })
               }
             }
@@ -316,10 +338,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     runPreviewAction({ type: 'preview.styles.read', pageId: activePage.id, ref: element.ref })
     runPreviewAction({ type: 'preview.layers.read', pageId: activePage.id, rootRef: element.ref })
   }, [activePage, runPreviewAction])
+  const handleElementMoved = useCallback((move: BrowserElementMove) => {
+    setSelectedElement(move.element)
+    setSelectedStyles((current) => current ? { ...current, [move.property]: move.after } : current)
+    elementMoveRef.current?.(move)
+  }, [])
   const setInspectionModeForPreview = useCallback((mode: PreviewInspectionMode) => {
     setInspectionMode(mode)
-    if (mode !== 'edit') setSelectedElement(null)
-    if (mode !== 'edit') setSelectedStyles(undefined)
   }, [])
   const readElementStyles = useCallback((elementRef: string) => {
     if (activePage) runPreviewAction({ type: 'preview.styles.read', pageId: activePage.id, ref: elementRef })
@@ -343,6 +368,12 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const resetElementStyle = useCallback((elementRef: string, property: string) => {
     if (activePage) runPreviewAction({ type: 'preview.style.reset', pageId: activePage.id, ref: elementRef, property })
   }, [activePage, runPreviewAction])
+  const setElementContent = useCallback((elementRef: string, content: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.content.set', pageId: activePage.id, ref: elementRef, content })
+  }, [activePage, runPreviewAction])
+  const resetElementContent = useCallback((elementRef: string) => {
+    if (activePage) runPreviewAction({ type: 'preview.content.reset', pageId: activePage.id, ref: elementRef })
+  }, [activePage, runPreviewAction])
   const setThemeToken = useCallback((token: string, value: string) => {
     if (activePage) runPreviewAction({ type: 'preview.theme.set', pageId: activePage.id, token, value })
   }, [activePage, runPreviewAction])
@@ -353,8 +384,9 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     if (activePage) runPreviewAction({ type: 'preview.annotation.select', pageId: activePage.id, ...selection })
   }, [activePage, runPreviewAction])
   useEffect(() => {
-    if (!inspectMode) setSelectedElement(null)
-  }, [inspectMode])
+    setSelectedElement(null)
+    setSelectedStyles(undefined)
+  }, [activePage?.id, activePage?.url])
   const sendPageAction = useCallback((action: 'page.back' | 'page.forward' | 'page.reload') => {
     if (!connection || !activePage) return
     try { connection.sendAction({ type: action, pageId: activePage.id }) } catch {}
@@ -419,9 +451,11 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     activateElement,
     setElementStyle,
     resetElementStyle,
+    setElementContent,
+    resetElementContent,
     setThemeToken,
     resetThemeToken,
-  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementStyle, resetThemeToken, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
+  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementContent, resetElementStyle, resetThemeToken, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementContent, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
 
   useEffect(() => {
     onStateChange?.({
@@ -450,7 +484,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
-          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementSelected={handleElementSelected} />
+          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
           <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />

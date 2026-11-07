@@ -5,8 +5,8 @@ import {
   INSPECTOR_BRIDGE_CHANNEL,
   isInspectorBridgeEnvelope,
   type ElementReference,
-  type InspectorBridgeEnvelope,
   type InspectorBridgeEvent,
+  type InspectorBridgeEnvelope,
 } from '@/packages/browser-protocol/src/index'
 import { BrowserConnection } from '@/lib/browser-runtime/client'
 import { useT } from '@/lib/i18n/client'
@@ -19,12 +19,14 @@ export function NativePreviewSurface({
   inspectMode,
   annotationMode,
   onElementSelected,
+  onElementMoved,
   onAnnotationSelect,
 }: {
   connection: BrowserConnection
   inspectMode: boolean
   annotationMode: boolean
   onElementSelected: (element: ElementReference | null) => void
+  onElementMoved: (move: Extract<InspectorBridgeEvent, { type: 'inspect.moved' }>) => void
   onAnnotationSelect: (selection: { x: number; y: number; width?: number; height?: number }) => void
 }) {
   const t = useT()
@@ -70,6 +72,7 @@ export function NativePreviewSurface({
         for (const payload of pendingCommands.current.values()) post(payload)
       }
       if (message.payload.type === 'inspect.selected') onElementSelected(message.payload.element)
+      if (message.payload.type === 'inspect.moved') onElementMoved(message.payload)
       if (message.payload.type === 'human.activity') {
         try { connection.sendAction({ type: 'control.acquire', owner: 'human', ttlMs: 15_000 }) } catch {}
       }
@@ -83,11 +86,10 @@ export function NativePreviewSurface({
     }
     window.addEventListener('message', listener)
     return () => window.removeEventListener('message', listener)
-  }, [connection, nonce, onElementSelected])
+  }, [connection, nonce, onElementMoved, onElementSelected])
 
   useEffect(() => {
     post(inspectMode ? { type: 'inspect.start' } : { type: 'inspect.stop' })
-    if (!inspectMode) onElementSelected(null)
   }, [inspectMode, nonce])
 
   if (!iframeUrl) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>{t('预览地址尚未就绪')}</div>
