@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { ForceBackgroundShellStatus, ShellAbortReason, ShellBackgroundReason, ShellStream, ShellStreamHookContext } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellAbortReason, ShellBackgroundReason, ShellStream, ShellStreamHookContext } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import { HookAdditionalContext } from "../../source/adapters/interop/proto/generated/agent/v1/hook_additional_context_pb.ts"
 import { OutputLocation } from "../../source/adapters/interop/proto/generated/agent/v1/utils_pb.ts"
 import { SandboxPolicy, SandboxPolicy_Type } from "../../source/adapters/interop/proto/generated/agent/v1/sandbox_pb.ts"
-import { localShellForegroundHandoffToInterop, localShellStreamEventFromInterop, localShellStreamEventToInterop } from "../../source/adapters/interop/agent/local-shell-stream-executor-adapter.ts"
+import { localShellStreamEventFromInterop, localShellStreamEventToInterop } from "../../source/adapters/interop/agent/local-shell-stream-executor-adapter.ts"
 import type { LocalShellStreamEvent } from "../../source/packages/local-exec/shell-stream-events.ts"
 
 function omitUndefined(value: unknown): unknown {
@@ -38,28 +38,6 @@ describe("the local shell stream interop adapter", () => {
     if (exit.event.case !== "exit") assert.fail("expected an exit event")
     assert.equal(exit.event.value.code, 7)
     assert.equal(exit.event.value.outputLocation?.filePath, "/repo/output.txt")
-  })
-
-  it("encodes foreground handoff status and the accepted run", () => {
-    const notFound = localShellForegroundHandoffToInterop({ status: "not_found" })
-    assert.equal(notFound.status, ForceBackgroundShellStatus.NOT_FOUND)
-
-    const accepted = localShellForegroundHandoffToInterop({
-      status: "accepted",
-      shellResult: {
-        shellId: 42,
-        command: "tail -f output",
-        workingDirectory: "/repo",
-        msToWait: 250,
-        backgroundReason: "user",
-        interleavedOutput: "before handoff",
-      },
-    })
-    assert.equal(accepted.status, ForceBackgroundShellStatus.ACCEPTED)
-    assert.equal(accepted.shellResult?.result.case, "success")
-    if (accepted.shellResult?.result.case !== "success") assert.fail("expected a successful shell result")
-    assert.equal(accepted.shellResult.result.value.backgroundReason, ShellBackgroundReason.USER_REQUEST)
-    assert.equal(accepted.shellResult.result.value.interleavedOutput, "before handoff")
   })
 
   it("decodes stream events into Slate fields and retains unknown enum values", () => {
