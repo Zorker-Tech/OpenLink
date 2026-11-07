@@ -22,15 +22,10 @@ import { subagentRegistryResource } from "./subagent-registry.ts";
 import {
   createTaskUserMessageActionInterop,
   createTaskToolCallDeltaInterop,
-  createTaskToolCallInterop,
-  serializeTaskErrorInterop,
-  fromInteropTaskResultInterop,
   fromRedactedTaskConversationState,
   normalizePreparedTaskConversationStateInterop,
   slateTaskRequestFromModelArgumentsInterop,
   slateAgentActionFromInterop,
-  toInteropTaskResultInterop,
-  type TaskResultInterop,
 } from "../../../adapters/interop/agent/task-tool-protocol-adapter.ts";
 import type { SlateTaskConversationState } from "../subagent-persisted-state.ts";
 import type { SlateAgentAction } from "../agent-action-state.ts";
@@ -43,12 +38,12 @@ import { Responses } from "../../agent-core/interaction-queries.ts";
 import type { SlateInteractionQuery, SlateInteractionResponse } from "../../agent-core/interaction-queries.ts";
 import { toRedactedInteractionListener } from "../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 import { AgentRoot } from "../index.ts";
-import { createZodAgentTool, withSafeParsedArgs } from "./tool-support.ts";
 import { isPromptVisibleDescription } from "./tool-execution.ts";
 import { getTaskToolName } from "./task-tool-name.ts";
 import {
   buildTaskParameterSchemas,
   buildTaskToolDescriptionParts,
+  type TaskParameterSchemas,
   type TaskSchemaSubagentConfig,
 } from "./task-tool-schema.ts";
 import { isComputerUseSubagentType, slateSubagentTypeName } from "../subagent-type.ts";
@@ -75,7 +70,7 @@ import {
   type TaskSubagentCompletionContext,
   type TaskSubagentIterationState,
 } from "./task-subagent-completion.ts";
-import { createStringResult } from "../../chat-inference/prompt-executor.ts";
+import { createStringResult, type TextResult } from "../../chat-inference/prompt-executor.ts";
 import { SubagentModelForcePolicy } from "./subagent-model-policy.ts";
 
 type Any = any;
@@ -90,6 +85,17 @@ type ModelCostComparison = (candidateModelId: string, parentModelId: string) => 
 interface ToolExecutionMetaLike {
   readonly toolCallId: string;
   readonly [key: string]: unknown;
+}
+
+/** Slate's task tool definition; the AgentRoot message wrapper is added by the host boundary adapter. */
+export interface SlateTaskToolDefinition {
+  readonly name: string;
+  readonly schemaTowardsModel: TaskParameterSchemas["schemaTowardsModel"];
+  readonly schemaForParsing: TaskParameterSchemas["schemaForParsing"];
+  readonly descriptionGenerator: (props: unknown, options: unknown) => string;
+  readonly prepareSubagent: (ctx: Context, rawArgs: unknown, meta: ToolExecutionMetaLike) => Promise<unknown>;
+  readonly execute: (ctx: Context, interactionHandler: unknown, modelArgs: unknown, meta: ToolExecutionMetaLike) => Promise<SlateTaskResult>;
+  readonly render: (ctx: Context, result: SlateTaskResult) => Promise<TextResult>;
 }
 
 /** How a subagent is started: off this machine from the client, by the server, or as a cloud task. */
@@ -442,14 +448,14 @@ async function runServerTaskSubagent(args: {
   }
 }
 
-export function createTaskTool(
+export function createSlateTaskTool(
   resourceAccessor: ResourceAccessor<RemoteExecManager>,
   getTaskToolConfig: (modelId: string, subagentType: Any) => Promise<TaskToolConfig>,
   parentModelInfo: Any,
   stateHandler: ParentStateHandler,
   subagentConfigs: readonly TaskSubagentModelConfig[],
   options: TaskToolOptions,
-): Record<string, unknown> {
+): SlateTaskToolDefinition {
   const canUseClientSideSubagent = options.useClientSideSubagent === true && options.requireServerSideSubagent !== true;
   const includeRunInBackground = canUseClientSideSubagent || options.enableCloudAsyncSubagents === true;
   const allowResumeSelfFork = (canUseClientSideSubagent || options.enableCloudAsyncSubagents === true) && options.allowResumeSelfFork === true;
@@ -596,8 +602,7 @@ export function createTaskTool(
   };
 
   /** What the rendered result of a task run says, and whether it is an error. */
-  const renderResult = (result: TaskResultInterop) => {
-    const slateResult = fromInteropTaskResultInterop(result)
+  const renderResult = (slateResult: SlateTaskResult) => {
     return createStringResult(
       renderTaskResultToString(slateResult, {
         enableJobCompletionNotifications: notificationHints,
@@ -608,7 +613,7 @@ export function createTaskTool(
     )
   }
 
-  const execute = async (ctx: Context, interactionHandler: Any, modelArgs: Any, meta: ToolExecutionMetaLike): Promise<TaskResultInterop> => {
+  const execute = async (ctx: Context, interactionHandler: Any, modelArgs: Any, meta: ToolExecutionMetaLike): Promise<SlateTaskResult> => {
     const rawArgs = parse(modelArgs);
     const parentState = createParentStateAccessor(stateHandler);
     const resolved = await resolveTaskSubagentConfig({
@@ -633,25 +638,23 @@ export function createTaskTool(
         interrupt: (rawArgs as Any).interrupt,
         contextInjectionSignal: (meta as Any).contextInjectionSignal,
       })
-      return toInteropTaskResultInterop(result)
+      return result
     }
     const serverLaunch = { options, parentModelInfo, getTaskToolConfig, resourceAccessor, stateHandler, parentState, resolved, rawArgs, meta, interactionHandler, ctx };
     try {
-      return toInteropTaskResultInterop(await runServerTaskSubagent(serverLaunch));
+      return await runServerTaskSubagent(serverLaunch);
     } catch (error) {
-      return toInteropTaskResultInterop(createSlateTaskErrorResult(error));
+      return createSlateTaskErrorResult(error);
     }
   };
 
-  return createZodAgentTool("TASK", {
+  return {
     name: toolName,
+    schemaTowardsModel,
+    schemaForParsing,
     descriptionGenerator: description,
-    parameters: schemaTowardsModel,
     prepareSubagent: prepareLaunch,
-    // The wrapper hands the tool's arguments and the orchestrator over untyped, since a tool does not hold the
-    // orchestrator's types; the callback's own signature is what it is written against.
-    execute: withSafeParsedArgs(schemaForParsing, execute as unknown as Parameters<typeof withSafeParsedArgs>[1], createTaskToolCallInterop()),
-    render: async (_ctx: Context, result: TaskResultInterop) => renderResult(result),
-    serializeError: serializeTaskErrorInterop,
-  });
+    execute,
+    render: async (_ctx: Context, result: SlateTaskResult) => renderResult(result),
+  };
 }

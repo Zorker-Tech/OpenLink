@@ -27,7 +27,8 @@ import { resolveSlateExternalMachine } from "../../../shared/agents/agent-tool-n
 import { SLATE_REACT_TO_MESSAGE_TOOL_NAME } from "./slate-reaction-tool.ts";
 import { SLATE_UPDATE_STATE_TOOL_NAME } from "./slate-state-tool.ts";
 import { SLATE_SEND_MESSAGE_TOOL_NAME } from "./send-message-tool.ts";
-import { createTaskTool } from "../../../packages/agent/tools/task.ts";
+import { createSlateTaskTool } from "../../../packages/agent/tools/task.ts";
+import { createTaskAgentToolInterop } from "../../../adapters/interop/agent/task-agent-tool-adapter.ts";
 import type { ToolSetHandle } from "../../../packages/agent/tools/tool-execution.ts";
 import { slateLocalToolScopeKey, slateTurnDirectionEpochKey } from "../../../shared/local-tool-permission-machinery.ts";
 import type { SlateLocalToolAction } from "../../../shared/local-tool-permission.ts";
@@ -132,7 +133,7 @@ export interface TurnTool {
   execute(...args: readonly unknown[]): Promise<unknown>;
 }
 
-type TaskToolParameters = Parameters<typeof createTaskTool>;
+type TaskToolParameters = Parameters<typeof createSlateTaskTool>;
 type TaskToolConfigFactory = TaskToolParameters[1];
 type TaskToolConfig = Awaited<ReturnType<TaskToolConfigFactory>>;
 type StreamingTurnTool = TurnTool & { execute(context: unknown, interactionHandler: unknown, argumentsStream: AsyncIterable<string>, metadata: unknown): Promise<unknown> };
@@ -375,7 +376,7 @@ export interface TurnToolFactories {
   subagentManagement?(): readonly TurnTool[];
 }
 
-export type TurnTaskToolParameters = Parameters<typeof createTaskTool>;
+export type TurnTaskToolParameters = Parameters<typeof createSlateTaskTool>;
 
 /** What the shipped Task constructor needs, kept exact so no generic factory bag can lose the resource/session identity. */
 export interface TurnTaskToolFactoryInput {
@@ -555,7 +556,14 @@ function asTurnTool<T extends object>(value: T): T & TurnTool {
 }
 
 export function createTurnTaskToolFactory(input: TurnTaskToolFactoryInput): () => TurnTool {
-  return () => asTurnTool(createTaskTool(input.resourceAccessor, input.getTaskToolConfig, input.parentModelInfo, input.stateHandler, input.subagentConfigs, input.options));
+  return () => asTurnTool(createTaskAgentToolInterop(createSlateTaskTool(
+    input.resourceAccessor,
+    input.getTaskToolConfig,
+    input.parentModelInfo,
+    input.stateHandler,
+    input.subagentConfigs,
+    input.options,
+  )));
 }
 
 export function createTurnMultitaskToolFactory(input: TurnMultitaskToolFactoryInput): () => TurnTool {
