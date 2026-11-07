@@ -41,13 +41,19 @@ function processControl(argv: string[] = []) {
 interface DepsOverrides {
   executeBoxCopyInFromEnv?: () => Promise<number>;
   acquireHostLock?: () => Promise<unknown>;
+  releaseHostLock?: () => void;
   startBoxExecDaemon?: () => Promise<unknown>;
+  closeBoxExecDaemon?: () => Promise<void>;
   createHost?: () => unknown;
   startHost?: () => Promise<void>;
+  disposeHost?: () => Promise<void>;
+  flushTelemetry?: () => Promise<void>;
   resolveGatewayServerConfig?: () => unknown;
   startGatewayServer?: (options: unknown) => Promise<unknown>;
+  closeGateway?: () => Promise<void>;
   writeGatewayDiscovery?: (discovery: unknown) => Promise<void>;
   clearGatewayDiscovery?: () => Promise<void>;
+  reportBoxReady?: () => Promise<void>;
   withDaemon?: boolean;
   withLog?: boolean;
 }
@@ -62,7 +68,7 @@ function graph(overrides: DepsOverrides = {}) {
   const host = {
     startedAt: 1_000,
     start: async () => { calls.push("host.start"); await overrides.startHost?.(); },
-    dispose: async () => { calls.push("host.dispose"); },
+    dispose: async () => { calls.push("host.dispose"); await overrides.disposeHost?.(); },
     getApi: () => "api",
     subscribe: () => () => {},
     getHealth: () => "health",
@@ -76,21 +82,21 @@ function graph(overrides: DepsOverrides = {}) {
     reportHostDiagnostic: () => {},
     reportGatewayCommandError: () => {},
     reportGatewayCommandSuccess: () => {},
-    flushTelemetryForFatalExit: async () => { calls.push("flush"); },
-    reportBoxReady: async () => { calls.push("boxReady"); },
+    flushTelemetryForFatalExit: async () => { calls.push("flush"); await overrides.flushTelemetry?.(); },
+    reportBoxReady: overrides.reportBoxReady ?? (async () => { calls.push("boxReady"); }),
   };
-  const daemon = { close: async () => { calls.push("daemon.close"); } };
+  const daemon = { close: async () => { calls.push("daemon.close"); await overrides.closeBoxExecDaemon?.(); } };
   const deps: Record<string, unknown> = {
     executeBoxCopyInFromEnv: overrides.executeBoxCopyInFromEnv ?? (async () => { calls.push("copyIn"); return 0; }),
     installProcessCrashGuards: () => ({ setReporter: () => { calls.push("setReporter"); } }),
     installInvariantReporter: () => {},
     pinHostDiagnosticsReporter: () => {},
-    acquireHostLock: overrides.acquireHostLock ?? (async () => { calls.push("lock"); return { lock: { release: () => { released += 1; calls.push("lock.release"); } }, outcome: "fresh" }; }),
+    acquireHostLock: overrides.acquireHostLock ?? (async () => { calls.push("lock"); return { lock: { release: () => { released += 1; calls.push("lock.release"); overrides.releaseHostLock?.(); } }, outcome: "fresh" }; }),
     getSlateRootDir: () => "/tmp/slate-root",
     createHost: overrides.createHost ?? (() => { calls.push("createHost"); return host; }),
     resolveGatewayServerConfig: overrides.resolveGatewayServerConfig ?? (() => { calls.push("gatewayConfig"); return { host: "127.0.0.1", port: 4321 }; }),
     gatewayScheme: () => { calls.push("scheme"); return "http"; },
-    startGatewayServer: overrides.startGatewayServer ?? (async (gatewayOptions: unknown) => { calls.push("gateway"); options.push(gatewayOptions); return { port: 4321, close: async () => { calls.push("gateway.close"); } }; }),
+    startGatewayServer: overrides.startGatewayServer ?? (async (gatewayOptions: unknown) => { calls.push("gateway"); options.push(gatewayOptions); return { port: 4321, close: async () => { calls.push("gateway.close"); await overrides.closeGateway?.(); } }; }),
     writeGatewayDiscovery: overrides.writeGatewayDiscovery ?? (async (record: unknown) => { calls.push("discovery"); discovery.push(record); }),
     clearGatewayDiscovery: overrides.clearGatewayDiscovery ?? (async () => { calls.push("clearDiscovery"); }),
     ...(overrides.withDaemon === false ? {} : { startBoxExecDaemon: overrides.startBoxExecDaemon ?? (async () => { calls.push("daemon.start"); return daemon; }) }),
@@ -181,8 +187,87 @@ describe("the host process entry point", () => {
     assert.equal(calls.includes("boxReady"), false);
     const cleanup = calls.indexOf("crash:fatal_startup");
     assert.equal(calls.indexOf("flush") > cleanup, true, "telemetry is flushed after the crash is reported");
+    assert.equal(calls.includes("host.dispose"), true, "a partially started host is disposed");
+    assert.equal(calls.includes("clearDiscovery"), false, "existing discovery is preserved until a replacement was attempted");
+    assert.equal(calls.includes("daemon.close"), true);
     assert.equal(calls.includes("lock.release"), true);
     assert.equal(lockState(), 1);
+  });
+
+  it("releases the lock when host construction fails after lock acquisition", async () => {
+    const { control, exits } = processControl();
+    const { deps, calls } = graph({
+      createHost: () => { calls.push("createHost"); throw new Error("host construction failed"); },
+    });
+    await main(deps as never, control as never);
+    assert.deepEqual(exits, [1]);
+    assert.equal(calls.includes("lock.release"), true);
+    assert.equal(calls.includes("daemon.start"), false);
+  });
+
+  it("continues startup cleanup when the fatal telemetry flush hangs", async () => {
+    const { control, exits } = processControl();
+    const { deps, calls, lockState } = graph({
+      startHost: async () => { throw new Error("host start failed"); },
+      flushTelemetry: () => new Promise<void>(() => {}),
+    });
+    await main(deps as never, control as never);
+    assert.deepEqual(exits, [1]);
+    assert.equal(calls.includes("host.dispose"), true);
+    assert.equal(calls.includes("daemon.close"), true);
+    assert.equal(calls.includes("lock.release"), true);
+    assert.equal(lockState(), 1);
+  });
+
+  it("closes an opened gateway when discovery publication fails", async () => {
+    const { control, exits } = processControl();
+    const { deps, calls, lockState } = graph({
+      writeGatewayDiscovery: async () => { calls.push("discovery"); throw new Error("discovery write failed"); },
+    });
+    await main(deps as never, control as never);
+    assert.deepEqual(exits, [1]);
+    assert.deepEqual(calls.filter(call => [
+      "gateway.close", "host.dispose", "daemon.close", "clearDiscovery", "lock.release",
+    ].includes(call)), ["gateway.close", "host.dispose", "daemon.close", "clearDiscovery", "lock.release"]);
+    assert.equal(lockState(), 1);
+  });
+
+  it("continues startup cleanup when each cleanup step fails", async () => {
+    const { control, exits } = processControl();
+    const { deps, calls, lockState } = graph({
+      writeGatewayDiscovery: async () => { calls.push("discovery"); throw new Error("discovery write failed"); },
+      closeGateway: async () => { throw new Error("gateway close failed"); },
+      disposeHost: async () => { throw new Error("host dispose failed"); },
+      closeBoxExecDaemon: async () => { throw new Error("daemon close failed"); },
+      clearGatewayDiscovery: async () => { calls.push("clearDiscovery"); throw new Error("discovery clear failed"); },
+    });
+    await main(deps as never, control as never);
+
+    assert.deepEqual(exits, [1]);
+    assert.deepEqual(calls.filter(call => [
+      "gateway.close", "host.dispose", "daemon.close", "clearDiscovery", "lock.release",
+    ].includes(call)), ["gateway.close", "host.dispose", "daemon.close", "clearDiscovery", "lock.release"]);
+    assert.equal(calls.includes("crash:gateway_startup_cleanup"), true);
+    assert.equal(calls.includes("crash:host_startup_cleanup"), true);
+    assert.equal(calls.includes("crash:box_exec_daemon_startup_cleanup"), true);
+    assert.equal(calls.includes("crash:gateway_discovery_startup_cleanup"), true);
+    assert.equal(calls.filter(call => call === "flush").length, 2);
+    assert.equal(lockState(), 1);
+  });
+
+  it("logs a failed box-ready report without leaving a rejected promise unhandled", async () => {
+    const { control, exits, handlers } = processControl();
+    const { deps, calls, errors } = graph({
+      reportBoxReady: async () => { calls.push("boxReady"); throw new Error("telemetry unavailable"); },
+    });
+    await main(deps as never, control as never);
+    await until(() => errors.length > 0);
+    assert.deepEqual(exits, []);
+    assert.equal(calls.includes("crash:fatal_startup"), false);
+    assert.match(String(errors[0]?.[0]), /box-ready reporting failed/);
+    handlers.get("SIGTERM")!();
+    await until(() => exits.length > 0);
+    assert.deepEqual(exits, [0]);
   });
 
   it("reports a box-exec daemon that also fails to close during startup cleanup", async () => {
@@ -201,7 +286,16 @@ describe("the host process entry point", () => {
 // shutdown
 // ---------------------------------------------------------------------------------------------
 
-function shutdownHarness(overrides: { gatewayClose?: () => Promise<void>; dispose?: () => Promise<void>; daemonClose?: () => Promise<void>; clearDiscovery?: () => Promise<void>; watchdogMs?: number; withDaemon?: boolean } = {}) {
+function shutdownHarness(overrides: {
+  gatewayClose?: () => Promise<void>;
+  dispose?: () => Promise<void>;
+  daemonClose?: () => Promise<void>;
+  clearDiscovery?: () => Promise<void>;
+  flush?: () => Promise<void>;
+  releaseLock?: () => void;
+  watchdogMs?: number;
+  withDaemon?: boolean;
+} = {}) {
   const calls: string[] = [];
   const logs: string[] = [];
   const exits: number[] = [];
@@ -209,17 +303,20 @@ function shutdownHarness(overrides: { gatewayClose?: () => Promise<void>; dispos
   const host = {
     dispose: async () => { calls.push("host.dispose"); await overrides.dispose?.(); },
     reportProcessCrash: (error: unknown, kind: string) => { calls.push("crash:" + kind); void error; },
-    flushTelemetryForFatalExit: async () => { calls.push("flush"); },
+    flushTelemetryForFatalExit: async () => { calls.push("flush"); await overrides.flush?.(); },
   };
   const gateway = { close: async () => { calls.push("gateway.close"); await overrides.gatewayClose?.(); } };
-  const lock = { release: () => { calls.push("lock.release"); } };
+  const lock = { release: () => { calls.push("lock.release"); overrides.releaseLock?.(); } };
   const daemon = overrides.withDaemon === false ? undefined : { close: async () => { calls.push("daemon.close"); await overrides.daemonClose?.(); } };
   const control = {
     argv: [], pid: 1,
     on: (signal: string, listener: () => void) => { handlers.set(signal, listener); },
     exit: (code: number) => { exits.push(code); },
   };
-  const registration = installShutdownHandlers(host as never, gateway as never, lock as never, async () => { calls.push("clearDiscovery"); await overrides.clearDiscovery?.(); }, control as never, { log: (line: string) => logs.push(line) }, overrides.watchdogMs ?? SHUTDOWN_WATCHDOG_MS, daemon as never);
+  const registration = installShutdownHandlers(host as never, gateway as never, lock as never, async () => { calls.push("clearDiscovery"); await overrides.clearDiscovery?.(); }, control as never, {
+    log: (line: string) => logs.push(line),
+    error: (...values: unknown[]) => logs.push(values.map(String).join(" ")),
+  }, overrides.watchdogMs ?? SHUTDOWN_WATCHDOG_MS, daemon as never);
   return { calls, logs, exits, handlers, registration };
 }
 
@@ -244,7 +341,18 @@ describe("shutdown", () => {
       assert.equal(harness.calls.includes("flush"), true, failing);
       assert.deepEqual(harness.exits, [0], failing);
       assert.equal(harness.calls.includes("lock.release"), true, failing);
+      assert.deepEqual(harness.calls.filter(call => [
+        "gateway.close", "host.dispose", "daemon.close", "clearDiscovery",
+      ].includes(call)), ["gateway.close", "host.dispose", "daemon.close", "clearDiscovery"], failing);
     }
+  });
+
+  it("exits non-zero when it cannot release the host lock", async () => {
+    const harness = shutdownHarness({ releaseLock: () => { throw new Error("lock release failed"); } });
+    harness.registration.shutdown("SIGTERM");
+    await until(() => harness.exits.length > 0);
+    assert.deepEqual(harness.exits, [1]);
+    assert.equal(harness.calls.includes("crash:shutdown_error"), true);
   });
 
   it("reports a shutdown that overruns its watchdog and exits non-zero", async () => {
@@ -254,6 +362,19 @@ describe("shutdown", () => {
     assert.deepEqual(harness.exits, [1]);
     assert.equal(harness.calls.includes("crash:shutdown_watchdog"), true);
     assert.equal(harness.calls.includes("flush"), true);
+    assert.equal(harness.calls.includes("lock.release"), true);
+  });
+
+  it("releases the lock and exits when the watchdog telemetry flush also hangs", async () => {
+    const harness = shutdownHarness({
+      gatewayClose: () => new Promise<void>(() => {}),
+      flush: () => new Promise<void>(() => {}),
+      watchdogMs: 5,
+    });
+    harness.registration.shutdown("SIGTERM");
+    await until(() => harness.exits.length > 0);
+    assert.deepEqual(harness.exits, [1]);
+    assert.equal(harness.calls.includes("crash:shutdown_watchdog"), true);
     assert.equal(harness.calls.includes("lock.release"), true);
   });
 });
