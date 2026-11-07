@@ -14,6 +14,7 @@ import {
 import { isManagedSubagentConversationId } from "../../shared/agents/subagents.ts";
 import { transcriptReplicaKey } from "../../shared/ordering.ts";
 import { SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME } from "../runner/conversation-outline.ts";
+import type { SlateTaskProgressUpdateView } from "../../packages/agent/tools/task-progress-state.ts";
 import { mergeAsyncTasks } from "./async-task-union.ts";
 import { ProfileWatch } from "./profile-watch.ts";
 import { RosterEmit } from "./roster-emit.ts";
@@ -392,6 +393,27 @@ export class RosterProjection {
 
   applyAgentUpdateToOutline(nextUpdate: any): void {
     if (this.outlineAgentId == null) return;
+    if (nextUpdate.type === "task-progress") {
+      if (typeof nextUpdate.toolCallId !== "string" || nextUpdate.toolCallId.length === 0) return;
+      this.streamingAssistantOutlineId = undefined;
+      this.streamingThinkingOutlineId = undefined;
+      const current = this.outline.find(item => item.id === nextUpdate.toolCallId);
+      if (current?.kind === "tool-call" && current.name === "Task") {
+        this.updateOutlineItem(nextUpdate.toolCallId, item => item.kind === "tool-call"
+          ? { ...item, progress: nextUpdate.update as SlateTaskProgressUpdateView }
+          : item);
+      } else if (current === undefined) {
+        this.appendOutlineItem({
+          kind: "tool-call",
+          id: nextUpdate.toolCallId,
+          name: "Task",
+          status: "pending",
+          summary: undefined,
+          progress: nextUpdate.update as SlateTaskProgressUpdateView,
+        });
+      }
+      return;
+    }
     if (nextUpdate.type === "text-delta" || nextUpdate.type === "thinking-delta") {
       if (nextUpdate.text.length === 0) return;
       const isThinking = nextUpdate.type === "thinking-delta";

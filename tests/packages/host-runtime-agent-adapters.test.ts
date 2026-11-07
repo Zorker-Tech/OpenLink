@@ -7,12 +7,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { requestIdKey } from "../../source/adapters/interop/chat-inference-proto/client.ts";
+import { InteractionUpdate, TextDeltaUpdate } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { slateTaskProgressUpdateFromInterop } from "../../source/adapters/interop/agent/task-progress-protocol-adapter.ts";
+import { toRedactedInteractionListener, toUnredactedInteractionListener } from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 import { createContext } from "../../source/packages/context/context.ts";
+import { InteractionHandler } from "../../source/packages/agent/interaction-handler.ts";
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { withRootParentRequestId } from "../../source/packages/agent/utils/request-scope.ts";
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
 import { computeSubagentRequestId } from "../../source/host/runner/subagent-runtime.ts";
 import { SlateSubagentDispatchError, SlateRequestContextExecutor, SlateSubagentHostAdapter, ForwardingInteractionListener, deriveSlateSubagentRequestLineage, type SubagentAdapterArgs } from "../../source/host/runner/agent-adapters.ts";
+import type { SlateTaskProgressUpdateView } from "../../source/packages/agent/tools/task-progress-state.ts";
 
 const args = (over: Partial<SubagentAdapterArgs> = {}): SubagentAdapterArgs => ({ subagentType: "generalPurpose", toolCallId: "call-1", prompt: "look into it", ...over });
 
@@ -215,6 +221,39 @@ describe("what an agent's updates mean to the conversation", () => {
     updates.length = 0;
     await forwarding.sendUpdate({}, { message: { case: "somethingElse", value: {} } });
     assert.deepEqual(updates, []);
+  });
+
+  it("forwards Slate task progress as a host update", async () => {
+    const { listener: forwarding, updates } = listener();
+    const progress: SlateTaskProgressUpdateView = {
+      schemaVersion: 1,
+      kind: "assistant-text",
+      text: "child output",
+      serverNotice: false,
+    };
+    await forwarding.sendTaskProgressUpdate({}, "task-call-1", progress);
+    assert.deepEqual(updates, [{ type: "task-progress", toolCallId: "task-call-1", update: progress }]);
+  });
+
+  it("projects child progress through the privacy-aware parent listener", async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const hostListener = new ForwardingInteractionListener(update => { updates.push(update); });
+    const redacted = toRedactedInteractionListener(hostListener, PrivacyMode.NO_TRAINING);
+    const interaction = toUnredactedInteractionListener(redacted, PrivacyMode.NO_TRAINING);
+    const handler = new InteractionHandler(interaction, {} as never, "parent-invocation");
+    const childMessage = new InteractionUpdate({
+      message: { case: "textDelta", value: new TextDeltaUpdate({ text: "private child code" }) },
+    });
+    const childUpdate = slateTaskProgressUpdateFromInterop(childMessage);
+
+    assert.equal(await handler.emitTaskProgressUpdate(createContext(), "task-call-1", childUpdate), true);
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0]?.type, "task-progress");
+    assert.equal(updates[0]?.toolCallId, "task-call-1");
+    const forwarded = updates[0]?.update as { kind?: string; text?: string; compatibility?: unknown };
+    assert.equal(forwarded.kind, "assistant-text");
+    assert.equal(forwarded.text, "[redacted:text]");
+    assert.equal(forwarded.compatibility, undefined);
   });
 
   it("forwards a tool call with what it is doing, and what the surface makes of it", async () => {

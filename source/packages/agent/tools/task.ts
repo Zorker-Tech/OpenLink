@@ -192,6 +192,8 @@ class StreamingTaskInteractionListener {
   constructor(private readonly interactionHandler: Any, private readonly toolCallId: string) {}
 
   async sendUpdate(ctx: Context, update: SlateTaskProgressUpdate): Promise<void> {
+    if (typeof this.interactionHandler.emitTaskProgressUpdate === "function" &&
+        await this.interactionHandler.emitTaskProgressUpdate(ctx, this.toolCallId, update)) return
     await this.interactionHandler.emitToolCallDelta(
       ctx,
       this.toolCallId,

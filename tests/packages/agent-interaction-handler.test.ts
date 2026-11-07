@@ -384,6 +384,31 @@ test("the listener is the interaction provider", () => {
   assert.equal(harness.handler.listener, (harness.handler as unknown as { interactionProvider: unknown }).interactionProvider)
 })
 
+test("task progress uses the dedicated listener port when the host supports it", async () => {
+  const seen: unknown[] = []
+  const recorder = recorderHarness()
+  const handler = new InteractionHandler({
+    async sendUpdate() { assert.fail("task progress should use the dedicated listener port") },
+    async sendTaskProgressUpdate(_context: Context, toolCallId: string, update: unknown) {
+      seen.push([toolCallId, update])
+    },
+  }, recorder.recorder, "invocation-1")
+  const update = { schemaVersion: 1, kind: "assistant-text", text: "child output", serverNotice: false } as const
+
+  assert.equal(await handler.emitTaskProgressUpdate(createContext(), "task-call-1", update), true)
+  assert.deepEqual(seen, [["task-call-1", update]])
+})
+
+test("task progress reports when a listener needs the compatibility transport", async () => {
+  const harness = handlerWith()
+  assert.equal(await harness.handler.emitTaskProgressUpdate(createContext(), "task-call-1", {
+    schemaVersion: 1,
+    kind: "assistant-text",
+    text: "child output",
+    serverNotice: false,
+  }), false)
+})
+
 // ---------------------------------------------------------------------------------------------
 // what is counted
 // ---------------------------------------------------------------------------------------------

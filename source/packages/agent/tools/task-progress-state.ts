@@ -113,3 +113,19 @@ export type SlateTaskProgressUpdate =
       readonly kind: "unrecognized"
       readonly compatibility: SlateTaskProgressCompatibility
     }
+
+type SlateTaskProgressViewOf<Value> =
+  Value extends { readonly kind: "tool-call-started" | "tool-call-completed"; readonly toolCall?: SlateToolCallStep }
+    ? Omit<Value, "compatibility" | "toolCall"> & { readonly toolCall?: JsonValue }
+    : Value extends { readonly kind: "tool-arguments-progress"; readonly toolCall?: SlateToolCallStep }
+      ? Omit<Value, "compatibility" | "toolCall"> & { readonly toolCall?: JsonValue }
+      : Value extends { readonly kind: "user-message-appended"; readonly message?: SlateUserMessage }
+        ? Omit<Value, "compatibility" | "message"> & { readonly message?: JsonValue }
+        : Value extends { readonly compatibility?: SlateTaskProgressCompatibility }
+          ? Omit<Value, "compatibility">
+          : never
+
+/** Safe JSON-shaped event fields delivered to the host runner after privacy projection. */
+export type SlateTaskProgressUpdateView = SlateTaskProgressUpdate extends infer Update
+  ? Update extends unknown ? SlateTaskProgressViewOf<Update> : never
+  : never
