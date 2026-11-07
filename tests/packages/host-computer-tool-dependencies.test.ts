@@ -167,7 +167,7 @@ describe("the shell executor projection", () => {
         return {
           async execute(context: unknown, args: unknown, options: unknown) {
             calls.push(["execute", context, args, options]);
-            return { result: { case: "success", value: { stdout: "out", stderr: "err", exitCode: 0 } } };
+            return { outcome: { kind: "success", command: "echo hi", workingDirectory: "/workspace", stdout: "out", stderr: "err", exitCode: 0, signal: "", executionTimeMs: 0 } };
           },
         };
       },
@@ -177,7 +177,7 @@ describe("the shell executor projection", () => {
     const options = { signal: { aborted: false } };
     const result = await dependencies.execute({ user: "c" }, { command: "echo hi", timeoutMs: 1_000, description: "run it" } as never, options as never);
     assert.deepEqual(guards, ["approval", ["audit", "echo hi"]], "both safety callbacks run, approval first");
-    assert.deepEqual((result as { result: { case: string } }).result.case, "success");
+    assert.deepEqual((result as { outcome: { kind: string } }).outcome.kind, "success");
     const executed = calls[1] as [string, unknown, { command: string }, unknown];
     assert.equal(executed[2].command, "echo hi", "the host shell args were built before the executor saw them");
     assert.equal(executed[3], options, "the abort-bearing options are passed through as given");
@@ -200,7 +200,7 @@ describe("the browser driver projection", () => {
     async downloadFile(context: unknown, agentId: string, path: string) { this.ready.push(["download", agentId, path]); return new Uint8Array([1, 2, 3]); },
   };
   const shell = {
-    async execute(context: unknown, input: unknown) { return { result: { case: "success", value: { stdout: "o", stderr: "e", exitCode: 2 } } }; },
+    async execute(context: unknown, input: unknown) { return { outcome: { kind: "success", command: "browser-driver", workingDirectory: "/workspace", stdout: "o", stderr: "e", exitCode: 2, signal: "", executionTimeMs: 0 } }; },
   };
 
   it("checks the box is ready before looking up its window, and passes file transfers through", async () => {
@@ -218,13 +218,13 @@ describe("the browser driver projection", () => {
   it("maps a shell result to the driver's outcome and carries the optional hooks only when set", async () => {
     const full = createHostBrowserDriverDependencies({ resourceAccessor: { get: () => shell }, box, getBoxId: () => "b", getDefaultViewId: () => "v", executeShell: shell, getPersistImage: async () => undefined, autoReview: {} } as never) as never as Record<string, unknown>;
     assert.deepEqual(Object.keys(full).slice(-2), ["getPersistImage", "autoReview"]);
-    assert.deepEqual(await (full.executeShell as (context: unknown, input: unknown) => Promise<unknown>)({}, { command: "ls" }), { case: "success", stdout: "o", stderr: "e", exitCode: 2 });
-    const failedShell = { async execute() { return { result: { case: "rejected", value: {} } }; } };
+    assert.deepEqual((await (full.executeShell as (context: unknown, input: unknown) => Promise<{ outcome: { kind: string } }>)({}, { command: "ls" })).outcome.kind, "success");
+    const failedShell = { async execute() { return { outcome: { kind: "rejected", command: "ls", workingDirectory: "/workspace", reason: "blocked", isReadonly: false } }; } };
     const failed = createHostBrowserDriverDependencies({ resourceAccessor: { get: () => failedShell }, box, getBoxId: () => "b", getDefaultViewId: () => "v", executeShell: failedShell } as never);
-    assert.deepEqual(await failed.executeShell({} as never, { command: "ls" } as never), { case: "rejected" });
-    const unnamed = { async execute() { return { result: {} }; } };
+    assert.deepEqual((await failed.executeShell({} as never, { command: "ls" } as never)).outcome.kind, "rejected");
+    const unnamed = { async execute() { return { outcome: { kind: "unrecognized" } }; } };
     const empty = createHostBrowserDriverDependencies({ resourceAccessor: { get: () => unnamed }, box, getBoxId: () => "b", getDefaultViewId: () => "v", executeShell: unnamed } as never);
-    assert.deepEqual(await empty.executeShell({} as never, { command: "ls" } as never), { case: "" });
+    assert.deepEqual((await empty.executeShell({} as never, { command: "ls" } as never)).outcome.kind, "unrecognized");
     const throwing = { async execute() { throw new Error("driver shell exploded"); } };
     const broken = createHostBrowserDriverDependencies({ resourceAccessor: { get: () => throwing }, box, getBoxId: () => "b", getDefaultViewId: () => "v", executeShell: throwing } as never);
     await assert.rejects(() => broken.executeShell({} as never, { command: "ls" } as never), { message: "driver shell exploded" });

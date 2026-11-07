@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import { createContext } from "../../source/packages/context/context.ts"
-import { shellExecutorResource } from "../../source/packages/agent-exec/shell.ts"
+import { shellExecutorResource, type ShellExecResult } from "../../source/packages/agent-exec/shell.ts"
 import { writeExecutorResource, type WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
 import {
   asTransientBoxShellError,
@@ -26,7 +26,7 @@ function fileTransferHarness(options: { shellResult?: unknown; writeResult?: Wri
         return {
           async execute(_context: unknown, args: unknown) {
             shellCalls.push(args as Record<string, unknown>)
-            return options.shellResult ?? { result: { case: "success", value: { exitCode: 0 } } }
+            return options.shellResult ?? { outcome: { kind: "success", command: "", workingDirectory: "", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0 } }
           },
         }
       }
@@ -90,16 +90,23 @@ test("a failed write removes its temporary file and preserves the write error", 
 })
 
 test("signal-killed and unavailable shell commands stay retryable", () => {
-  const killed = {
-    case: "failure",
-    value: { exitCode: -1, signal: "SIGTERM", stderr: "stopped", aborted: true },
-  } as never
-  const timedOut = { case: "timeout", value: { timeoutMs: 500 } } as never
+  const killed: ShellExecResult = {
+    kind: "failure",
+    command: "copy",
+    workingDirectory: "/box",
+    exitCode: -1,
+    signal: "SIGTERM",
+    stdout: "",
+    stderr: "stopped",
+    executionTimeMs: 0,
+    aborted: true,
+  }
+  const timedOut: ShellExecResult = { kind: "timeout", command: "copy", workingDirectory: "/box", timeoutMs: 500 }
 
   assert.equal(isSignalKillFailure(-1, ""), true)
   assert.equal(isSignalKillFailure(1, ""), false)
   assert.equal(describeShellFailure(killed), "killed by signal SIGTERM (aborted): stopped")
   assert.ok(asTransientBoxShellError(killed, "copy") instanceof BoxShellSignalKilledError)
   assert.ok(asTransientBoxShellError(timedOut, "copy") instanceof BoxShellUnavailableError)
-  assert.equal(asTransientBoxShellError({ case: "permissionDenied", value: { error: "denied" } } as never, "copy"), undefined)
+  assert.equal(asTransientBoxShellError({ kind: "permission-denied", command: "copy", workingDirectory: "/box", message: "denied", isReadonly: true }, "copy"), undefined)
 })

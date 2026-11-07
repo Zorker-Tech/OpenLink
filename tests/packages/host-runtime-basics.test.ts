@@ -14,7 +14,7 @@ import { normalizeSlateUserFullName, renderUserIdentitySystemPrompt, MAX_FULL_NA
 import { publishTranscriptMutation, subscribeTranscriptMutations, type TranscriptMutation } from "../../source/host/transcript/transcript-mutation-events.ts";
 import { StatKeyedParseCache, RACY_MTIME_TICK_WINDOW_MS, mtimeTickCouldStillHideAnEdit } from "../../source/host/workflows/stat-keyed-parse-cache.ts";
 import { applyBoxEnvironmentViaTransport, type BoxEnvironmentControlClient } from "../../source/adapters/interop/agent/box-environment-transport-adapter.ts";
-import { buildHostShellArgs } from "../../source/adapters/interop/agent/box-shell-command-adapter.ts";
+import { buildHostShellArgs } from "../../source/host/boxes/box-shell-command.ts";
 import { assertPathOutsideProtectedRoots, SlateProtectedPathError } from "../../source/host/boxes/protected-path-guard.ts";
 import { augmentWatchResultWithTranscriptDump, cloudAgentTranscriptDumpPath, dumpCloudAgentTranscript, formatCloudAgentDumpCompletionLine } from "../../source/host/cloud-agents/cloud-agent-transcript-dump.ts";
 import { GROUP_MAX_MEMBERS, getSlateGroupPath, isSlateGroupDir, normalizeMemberIds, normalizeRemoteMembers, readSlateGroupConfig, writeSlateGroupConfig } from "../../source/host/groups/group-store.ts";
@@ -135,10 +135,10 @@ describe("what a box is given", () => {
     assert.equal(args.workingDirectory, "/workspace");
     assert.equal(args.toolCallId, "call-1");
     assert.equal(args.skipApproval, true);
-    assert.equal(args.parsingResult?.parsingFailed, false);
-    assert.equal(args.parsingResult?.hasRedirects, false);
-    assert.equal(args.parsingResult?.executableCommands[0]?.name, "ls");
-    assert.equal(args.parsingResult?.executableCommands[0]?.fullText, "ls -la /workspace");
+    assert.equal(args.parsing?.failed, false);
+    assert.equal(args.parsing?.hasRedirects, false);
+    assert.equal(args.parsing?.executableCommands[0]?.name, "ls");
+    assert.equal(args.parsing?.executableCommands[0]?.fullText, "ls -la /workspace");
   });
 });
 

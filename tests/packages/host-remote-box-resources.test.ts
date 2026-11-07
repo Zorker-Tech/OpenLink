@@ -173,7 +173,7 @@ test("background and foreground shell calls preserve their distinct audit paths"
     },
   });
   executors.set(shellExecutorResource, {
-    async execute(_context, args) { worlded.calls.push(["shell", args]); return { result: { case: "success" } }; },
+    async execute(_context, args) { worlded.calls.push(["shell", args]); return { outcome: { kind: "success", command: "", workingDirectory: "", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0 } }; },
   });
   const worlded = world({
     executors,
@@ -240,7 +240,7 @@ test("desktop use records intent after execution and always probes afterward", a
     [shellExecutorResource, {
       async execute(_context, args) {
         worlded.calls.push(["lease", (args as { command?: string }).command]);
-        return { result: { case: "success" } };
+        return { outcome: { kind: "success", command: "", workingDirectory: "", exitCode: 0, signal: "", stdout: "", stderr: "", executionTimeMs: 0 } };
       },
     }],
   ]);

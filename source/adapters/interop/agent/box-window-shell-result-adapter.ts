@@ -6,12 +6,12 @@ import type {
   BoxWindowShellCommandExecutor,
   SlateWindowShellOutcome,
 } from "../../../host/boxes/box-window-shell-contract.ts"
-import { buildHostShellArgs } from "./box-shell-command-adapter.ts"
+import { buildHostShellArgs } from "../../../host/boxes/box-shell-command.ts"
 
-/** Strip the generated oneof so box window policy only consumes a Slate result. */
+/** Project the shell outcome to the fields window policy needs. */
 export function projectWindowShellOutcome(result: ShellExecResponse): SlateWindowShellOutcome {
-  if (result.result.case !== "success") return { kind: "not-completed", resultKind: result.result.case }
-  return { kind: "completed", exitCode: result.result.value.exitCode, stderr: result.result.value.stderr }
+  if (result.outcome.kind !== "success") return { kind: "not-completed", resultKind: result.outcome.kind }
+  return { kind: "completed", exitCode: result.outcome.exitCode, stderr: result.outcome.stderr }
 }
 
 export const executeBoxWindowShellCommand: BoxWindowShellCommandExecutor = async (

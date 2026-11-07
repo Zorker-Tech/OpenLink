@@ -7,7 +7,8 @@
  * driver's identity and shell bridge.
  */
 import { computerUseExecutorFromResource, type ComputerUseExecutorPort } from "../../adapters/interop/agent/computer-use-executor-adapter.ts";
-import { createHostBoxShellExecutor, type HostShellResult } from "../../adapters/interop/agent/box-shell-executor-adapter.ts";
+import { createHostBoxShellExecutor } from "../../adapters/interop/agent/box-shell-executor-adapter.ts";
+import type { ShellExecResponse } from "../../packages/agent-exec/shell.ts";
 import type { ExecutorOptions } from "../../packages/agent-exec/executor-resources.ts";
 import type { HostShellArgsInput } from "../boxes/box-shell-command.ts";
 import type {
@@ -44,7 +45,7 @@ export interface HostShellExecutor {
     context: unknown,
     toolArgs: HostShellArgsInput,
     options?: ExecutorOptions,
-  ): Promise<HostShellResult>;
+  ): Promise<ShellExecResponse>;
 }
 
 /** The box a browser driver drives: its readiness, its window per agent, and its file transfers. */
@@ -109,7 +110,7 @@ async function shellThrough(
   context: unknown,
   toolArgs: HostShellArgsInput,
   options?: ExecutorOptions,
-): Promise<HostShellResult> {
+): Promise<ShellExecResponse> {
   guards.assertNoPendingApproval();
   guards.auditShellCommand(toolArgs.command);
   return await executor.execute(context, toolArgs, options);
@@ -135,19 +136,6 @@ async function windowIndexOf<Context>(hostInput: HostBrowserDriverProjectionInpu
   return hostInput.box.getAgentWindowIndex(boxId);
 }
 
-/** A shell result read as the browser driver's outcome: its success fields, or its failure case. */
-function shellOutcome(result: HostShellResult): { case: "success"; stdout: string; stderr: string; exitCode: number } | { case: string } {
-  if (result.result.case === "success") {
-    return {
-      case: "success",
-      stdout: result.result.value?.stdout ?? "",
-      stderr: result.result.value?.stderr ?? "",
-      exitCode: result.result.value?.exitCode ?? 0,
-    };
-  }
-  return { case: result.result.case ?? "" };
-}
-
 /** Send one file into the box for a conversation. */
 async function uploadIntoBox<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, boxId: string, path: string, bytes: Uint8Array): Promise<void> {
   await hostInput.box.uploadFile(context, boxId, path, bytes);
@@ -159,8 +147,8 @@ async function downloadFromBox<Context>(hostInput: HostBrowserDriverProjectionIn
 }
 
 /** Run one shell request through the shell projection the host supplied. */
-async function shellViaDriver<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, shellInput: HostShellArgsInput): Promise<{ case: "success"; stdout: string; stderr: string; exitCode: number } | { case: string }> {
-  return shellOutcome(await hostInput.executeShell.execute(context, shellInput));
+async function shellViaDriver<Context>(hostInput: HostBrowserDriverProjectionInput<Context>, context: Context, shellInput: HostShellArgsInput): Promise<ShellExecResponse> {
+  return await hostInput.executeShell.execute(context, shellInput);
 }
 
 /**

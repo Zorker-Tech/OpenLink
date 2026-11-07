@@ -3,7 +3,7 @@ import { posix } from "node:path"
 
 import type { Context } from "../../packages/context/context.ts"
 import { shellExecutorResource } from "../../packages/agent-exec/shell.ts"
-import { buildHostShellArgs } from "../../adapters/interop/agent/box-shell-command-adapter.ts"
+import { buildHostShellArgs } from "./box-shell-command.ts"
 import { writeBoxFileBytesThroughInterop } from "../../adapters/interop/agent/box-file-write-adapter.ts"
 import {
   BoxFileTransferError,
@@ -46,8 +46,8 @@ export async function runBoxShell(
       toolCallId: TRANSFER_TOOL_CALL_ID,
     }),
   )
-  const result = response.result
-  if (result.case === "success" && result.value.exitCode === 0) return
+  const result = response.outcome
+  if (result.kind === "success" && result.exitCode === 0) return
 
   const transient = asTransientBoxShellError(result, "box shell command")
   if (transient !== undefined) throw transient

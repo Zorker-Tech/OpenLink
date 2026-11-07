@@ -10,7 +10,7 @@ import {
 } from "./slate-action-audit.ts";
 import { computerUseExecutorResource } from "../../adapters/interop/agent/computer-use-executor-adapter.ts";
 import { shellExecutorResource } from "../../packages/agent-exec/shell.ts";
-import { buildHostShellArgs } from "../../adapters/interop/agent/box-shell-command-adapter.ts";
+import { buildHostShellArgs } from "../boxes/box-shell-command.ts";
 import type { SlateComputerUseExecutorRequest, SlateComputerUseExecutorResult } from "../../packages/agent/conversation-step-state.ts";
 import { isNoMonitorComputerUseExecutor } from "../ports/box.ts";
 import { mergeTurnUsage, type TurnUsage } from "./turn-usage.ts";
