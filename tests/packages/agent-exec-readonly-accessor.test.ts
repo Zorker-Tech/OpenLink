@@ -13,7 +13,7 @@ import type { ResourceAccessor, RemoteResource } from "../../source/packages/age
 import type { RemoteExecManager } from "../../source/packages/agent-exec/executor-resources.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import type { BackgroundShellSpawnResult } from "../../source/adapters/interop/proto/generated/agent/v1/background_shell_exec_pb.ts"
-import type { DeleteResult } from "../../source/adapters/interop/proto/generated/agent/v1/delete_exec_pb.ts"
+import type { DeleteExecutorResult } from "../../source/packages/agent-exec/delete.ts"
 import type { McpResult } from "../../source/adapters/interop/proto/generated/agent/v1/mcp_exec_pb.ts"
 import type { ShellResult, ShellStream } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import type { WriteExecutorResult } from "../../source/packages/agent-exec/write-operation.ts"
@@ -94,12 +94,12 @@ test("writing a file is refused as a read-only policy", async () => {
 })
 
 test("deleting a path is refused as a read-only policy", async () => {
-  const result = await execute<DeleteResult>(accessor(true).get(deleteExecutorResource), { path: "/repo/old.ts" })
-  assert.equal(result.result.case, "permissionDenied")
-  const value = (result.result as { value: { path: string; clientVisibleError: string; isReadonly: boolean } }).value
-  assert.equal(value.path, "/repo/old.ts")
-  assert.equal(value.isReadonly, true)
-  assert.match(value.clientVisibleError, READONLY_REASON)
+  const result = await execute<DeleteExecutorResult>(accessor(true).get(deleteExecutorResource), { path: "/repo/old.ts" })
+  assert.equal(result.kind, "permission-denied")
+  if (result.kind !== "permission-denied") assert.fail("expected a delete refusal")
+  assert.equal(result.path, "/repo/old.ts")
+  assert.equal(result.isReadonly, true)
+  assert.match(result.message, READONLY_REASON)
 })
 
 test("an MCP tool is refused by name", async () => {

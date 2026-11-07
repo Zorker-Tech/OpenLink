@@ -384,9 +384,9 @@
     },
     "packages/agent-exec/delete.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "The generated delete request/result binding moved to interop and the package path now only exports the operation resource.",
-      "evidence": "tests/packages/interop-delete-operation-adapter.test.ts pins remote serialization, controlled registration, result decoding, and rejection of a different operation; executor and readonly-accessor suites pass. interop:check drops one direct schema consumer."
+      "overlap": 0.034,
+      "refreshReason": "The Slate delete request/result union now owns the operation meaning, while generated transport conversion stays in its adapter.",
+      "evidence": "tests/packages/interop-delete-operation-adapter.test.ts pins request identity, prior content, 64-bit file size, every failure case, unset results and remote/controlled execution; readonly-accessor tests cover permission refusal."
     },
     "packages/agent-exec/conversation-search.ts": {
       "claim": "rewritten",
