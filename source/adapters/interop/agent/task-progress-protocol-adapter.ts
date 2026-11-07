@@ -1,12 +1,15 @@
 import { isDeepStrictEqual } from "node:util"
 import type { JsonValue as ProtocolJsonValue } from "@bufbuild/protobuf"
-import { InteractionUpdate } from "../proto/generated/agent/v1/agent_pb.ts"
+import { ConversationStep, InteractionUpdate, type ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
 import type { JsonValue } from "@slate/work-domain"
 import type { SlateInteractionQuery, SlateInteractionResponse } from "../../../packages/agent-core/interaction-queries.ts"
 import type {
   SlateTaskProgressCompatibility,
   SlateTaskProgressUpdate,
 } from "../../../packages/agent/tools/task-progress-state.ts"
+import type { SlateToolCallStep } from "../../../packages/agent/conversation-step-state.ts"
+import { fromInteropConversationStep, toPlainInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
+import { fromInteropUserMessage, toInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
 
 type TaskProgressListener<Context> = {
   sendUpdate(context: Context, update: SlateTaskProgressUpdate): Promise<void>
@@ -34,6 +37,23 @@ function eventJson(value: unknown): { readonly kind: string; readonly value: Jso
   return { kind: event.case, value: (event.value as LegacyMessage).toJson() }
 }
 
+function slateToolCallStepFromInterop(value: undefined): undefined
+function slateToolCallStepFromInterop(value: ToolCall): SlateToolCallStep
+function slateToolCallStepFromInterop(value: ToolCall | undefined): SlateToolCallStep | undefined {
+  if (value === undefined) return undefined
+  const step = fromInteropConversationStep(new ConversationStep({
+    message: { case: "toolCall", value },
+  }))
+  if (step.kind !== "tool-call") throw new TypeError("Task progress tool call could not be projected")
+  return step
+}
+
+function interopToolCallFromSlate(value: SlateToolCallStep): ToolCall {
+  const step = toPlainInteropConversationStep(value)
+  if (step.message.case !== "toolCall") throw new TypeError("Task progress tool call could not be encoded")
+  return step.message.value
+}
+
 function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProgressUpdate {
   const compat = compatibility(update)
   const message = update.message
@@ -47,7 +67,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         kind: message.case === "toolCallStarted" ? "tool-call-started" : "tool-call-completed",
         callId: message.value.callId,
         modelCallId: message.value.modelCallId,
-        ...(message.value.toolCall === undefined ? {} : { toolCall: message.value.toolCall.toJson() }),
+        ...(message.value.toolCall === undefined ? {} : { toolCall: slateToolCallStepFromInterop(message.value.toolCall) }),
         compatibility: compat,
       }
     case "thinkingDelta":
@@ -64,7 +84,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
       return {
         schemaVersion: 1,
         kind: "user-message-appended",
-        ...(message.value.userMessage === undefined ? {} : { message: message.value.userMessage.toJson() }),
+        ...(message.value.userMessage === undefined ? {} : { message: fromInteropUserMessage(message.value.userMessage) }),
         compatibility: compat,
       }
     case "partialToolCall":
@@ -74,7 +94,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         callId: message.value.callId,
         modelCallId: message.value.modelCallId,
         argumentsDelta: message.value.argsTextDelta,
-        ...(message.value.toolCall === undefined ? {} : { toolCall: message.value.toolCall.toJson() }),
+        ...(message.value.toolCall === undefined ? {} : { toolCall: slateToolCallStepFromInterop(message.value.toolCall) }),
         compatibility: compat,
       }
     case "tokenDelta":
@@ -215,7 +235,7 @@ function legacyJsonFromSlate(value: SlateTaskProgressUpdate): JsonValue {
         [value.kind === "tool-call-started" ? "toolCallStarted" : "toolCallCompleted"]: {
           callId: value.callId,
           modelCallId: value.modelCallId,
-          ...(value.toolCall === undefined ? {} : { toolCall: value.toolCall }),
+          ...(value.toolCall === undefined ? {} : { toolCall: interopToolCallFromSlate(value.toolCall).toJson() }),
         },
       }
     case "reasoning-text":
@@ -223,14 +243,14 @@ function legacyJsonFromSlate(value: SlateTaskProgressUpdate): JsonValue {
     case "reasoning-completed":
       return { thinkingCompleted: { thinkingDurationMs: value.durationMs } }
     case "user-message-appended":
-      return { userMessageAppended: value.message === undefined ? {} : { userMessage: value.message } }
+      return { userMessageAppended: value.message === undefined ? {} : { userMessage: toInteropUserMessage(value.message).toJson() } }
     case "tool-arguments-progress":
       return {
         partialToolCall: {
           callId: value.callId,
           modelCallId: value.modelCallId,
           argsTextDelta: value.argumentsDelta,
-          ...(value.toolCall === undefined ? {} : { toolCall: value.toolCall }),
+          ...(value.toolCall === undefined ? {} : { toolCall: interopToolCallFromSlate(value.toolCall).toJson() }),
         },
       }
     case "token-count":

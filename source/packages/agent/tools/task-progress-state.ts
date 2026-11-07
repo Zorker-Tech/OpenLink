@@ -1,4 +1,6 @@
 import type { JsonValue } from "@slate/work-domain"
+import type { SlateToolCallStep } from "../conversation-step-state.ts"
+import type { SlateUserMessage } from "../user-message-state.ts"
 
 /** Opaque bytes held only while the task progress transport is being migrated. */
 export interface SlateTaskProgressCompatibility {
@@ -20,7 +22,7 @@ export type SlateTaskProgressUpdate =
   | (SlateTaskProgressBase<"tool-call-started" | "tool-call-completed"> & {
       readonly callId: string
       readonly modelCallId: string
-      readonly toolCall?: JsonValue
+      readonly toolCall?: SlateToolCallStep
     })
   | (SlateTaskProgressBase<"reasoning-text"> & {
       readonly text: string
@@ -30,13 +32,13 @@ export type SlateTaskProgressUpdate =
       readonly durationMs: number
     })
   | (SlateTaskProgressBase<"user-message-appended"> & {
-      readonly message?: JsonValue
+      readonly message?: SlateUserMessage
     })
   | (SlateTaskProgressBase<"tool-arguments-progress"> & {
       readonly callId: string
       readonly modelCallId: string
       readonly argumentsDelta: string
-      readonly toolCall?: JsonValue
+      readonly toolCall?: SlateToolCallStep
     })
   | (SlateTaskProgressBase<"token-count"> & {
       readonly tokens: number
