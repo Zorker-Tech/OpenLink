@@ -241,12 +241,13 @@ describe("rewrite overlap gate inputs", () => {
     assert.match(exemptSourceReason("adapters/interop/agent/communicate-tool-adapter.ts") ?? "", /interop adapter/);
   });
 
-  it("keeps box exec RPC envelopes in the interop adapter", () => {
+  it("keeps the supported legacy box Connect envelope at its compatibility boundary", () => {
     assert.deepEqual(sourcePathsOf({
       port: "host/boxes/box-remote-accessor.ts",
       rewritten: "source/host/boxes/box-remote-accessor.ts",
     }), ["adapters/interop/agent/box-remote-exec-accessor-adapter.ts"]);
-    assert.match(exemptSourceReason("adapters/interop/agent/box-remote-exec-accessor-adapter.ts") ?? "", /interop adapter/);
+    assert.match(exemptSourceReason("host/boxes/box-remote-accessor.ts") ?? "", /legacy box Connect compatibility/);
+    assert.match(exemptSourceReason("adapters/interop/agent/box-remote-exec-accessor-adapter.ts") ?? "", /supported legacy box Connect exec envelope/);
   });
 
   it("measures the Slate-owned computer executor bridge instead of exempting its directory", () => {
