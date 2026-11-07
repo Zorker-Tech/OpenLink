@@ -1,6 +1,7 @@
 'use client'
 
 import { BrowserWorkbench, type BrowserWorkbenchHandle, type BrowserWorkbenchUiState } from '@/components/browser/browser-workbench'
+import { PreviewDesignPanel, type PreviewAnnotationMarker, type PreviewDesignPanelHandle, type PreviewProjectOption } from '@/components/browser/preview-design-panel'
 import { CloudComputerPreviewWorkbench } from '@/components/browser/cloud-computer-preview-workbench'
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
@@ -11,9 +12,10 @@ import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/compone
 import type { SessionWorkspaceTab, SessionWorkspaceView } from '@/lib/session-ui-state'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
+import type { AgentPromptAttachment } from '@/lib/agent-runtime/events'
 import { theme } from '@/lib/theme'
 import { useT } from '@/lib/i18n/client'
-import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, Inspect, RefreshCw, RotateCw, Server } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, Inspect, PanelRightOpen, RefreshCw, RotateCw, Server } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 
 interface GitVersionOption {
@@ -45,9 +47,13 @@ interface WorkspaceSurfacesProps {
   uiReady: boolean
   initialBrowserUrl: string
   initialPreviewTargetId: string | null
+  previewProjects: PreviewProjectOption[]
+  previewProjectId: string
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
+  onSelectPreviewProject: (projectId: string) => void
   onSelectWorkspaceTab: (tab: SessionWorkspaceTab) => void
   onToggleDeviceView: () => void
+  onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string) => Promise<boolean>
   sessionId: string
   projectName: string
   dataSurface: 'panel' | 'studio'
@@ -76,6 +82,8 @@ function BrowserNavigationBar({
   onSelectGitVersion,
   onSelectPreviewTarget,
   onToggleDeviceView,
+  onToggleDesignPanel,
+  designPanelOpen,
   selectedGitRef,
   workspaceView,
 }: {
@@ -87,6 +95,8 @@ function BrowserNavigationBar({
   onSelectGitVersion: (ref: string | null) => void
   onSelectPreviewTarget: (targetId: string) => void
   onToggleDeviceView: () => void
+  onToggleDesignPanel: () => void
+  designPanelOpen: boolean
   selectedGitRef: string | null
   workspaceView: 'mobile' | 'browser'
 }) {
@@ -118,6 +128,7 @@ function BrowserNavigationBar({
           />
           <ToolbarButton aria-pressed={browserState.inspectMode} className={`size-6! rounded ${browserState.inspectMode ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}`} disabled={!browserState.canInspect} label={t('选择组件')} onClick={() => browserWorkbenchRef.current?.toggleInspector()}><Inspect className="size-4" /></ToolbarButton>
           <ToolbarButton className="size-6! rounded" disabled={!browserState.externalUrl} label={t('在新窗口打开')} onClick={() => browserWorkbenchRef.current?.openExternal()}><ExternalLink className="size-4" /></ToolbarButton>
+          <ToolbarButton aria-pressed={designPanelOpen} className={`size-6! rounded md:hidden ${designPanelOpen ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}`} label={designPanelOpen ? t('关闭预览工具') : t('预览工具')} onClick={onToggleDesignPanel}><PanelRightOpen className="size-4" /></ToolbarButton>
           <ToolbarButton className="size-6! rounded" disabled={(!browserState.canInspect && !browserState.externalUrl) || browserState.status === 'connecting' || browserState.status === 'reconnecting'} label={t('刷新')} onClick={() => browserWorkbenchRef.current?.reload()}><RotateCw className="size-4" /></ToolbarButton>
           <DropdownMenu>
             <DropdownMenuTrigger render={<button aria-label={t('切换开发服务器')} className="flex h-6 max-w-[120px] shrink-0 items-center gap-1 rounded px-1 text-[11px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}>
@@ -189,9 +200,13 @@ export function WorkspaceSurfaces({
   uiReady,
   initialBrowserUrl,
   initialPreviewTargetId,
+  previewProjects,
+  previewProjectId,
   onBrowserStateChange,
+  onSelectPreviewProject,
   onSelectWorkspaceTab,
   onToggleDeviceView,
+  onSubmitPreviewRequest,
   sessionId,
   projectName,
   panelProps,
@@ -204,9 +219,12 @@ export function WorkspaceSurfaces({
 }: WorkspaceSurfacesProps) {
   const t = useT()
   const [studioMounted, setStudioMounted] = useState(dataSurface === 'studio')
+  const [designPanelOpen, setDesignPanelOpen] = useState(true)
   const previewWorkbenchRef = useRef<BrowserWorkbenchHandle | null>(null)
+  const previewDesignPanelRef = useRef<PreviewDesignPanelHandle | null>(null)
   const realtimeWorkbenchRef = useRef<BrowserWorkbenchHandle | null>(null)
   const [previewState, setPreviewState] = useState<BrowserWorkbenchUiState>(() => ({ ...browserState, surface: 'native-preview' }))
+  const [previewAnnotations, setPreviewAnnotations] = useState<PreviewAnnotationMarker[]>([])
   const [realtimeState, setRealtimeState] = useState<BrowserWorkbenchUiState>(() => ({ ...browserState, surface: 'chromium-stream' }))
   const [pendingPreviewTargetId, setPendingPreviewTargetId] = useState<string | null>(null)
   const previewOpen = openTabs.includes('preview')
@@ -219,6 +237,15 @@ export function WorkspaceSurfaces({
   useEffect(() => {
     if (dataSurface === 'studio') setStudioMounted(true)
   }, [dataSurface])
+
+  useEffect(() => {
+    setPreviewState({
+      address: '', canGoBack: false, canGoForward: false, canInspect: false, inspectMode: false,
+      annotateMode: false, status: 'connecting', surface: 'native-preview', previewTargets: [],
+      previewTargetsLoading: true,
+    })
+    setPreviewAnnotations([])
+  }, [previewProjectId])
 
   useEffect(() => {
     if (!uiReady || !previewOpen || !pendingPreviewTargetId || !previewWorkbenchRef.current) return
@@ -269,30 +296,68 @@ export function WorkspaceSurfaces({
       {browserOpen && (
         <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-surface={view === 'mobile' ? 'mobile' : 'browser'}>
           <div className="flex size-full min-w-0 flex-col">
-            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
-            <main aria-label={t('预览画布')} className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${view === 'browser' ? theme('surface') : theme('editor')}`}>
-              <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
-                <div className={`relative ${view === 'browser' ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}`}>
-                  {cloudRuntime ? (
-                    <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-browser-surface="cloud">
-                      <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} />
-                    </div>
-                  ) : (
-                    <>
-                      {previewOpen && (
-                        <div aria-hidden={!previewActive} className={surfaceClass(previewActive)} data-workspace-browser-surface="preview">
-                          <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialPreviewTargetId={initialPreviewTargetId || undefined} initialSurface="native-preview" initialUrl={initialBrowserUrl || undefined} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
-                        </div>
-                      )}
-                      {realtimeOpen && (
-                        <div aria-hidden={!realtimeActive} className={surfaceClass(realtimeActive)} data-workspace-browser-surface="realtime">
-                          <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
-                        </div>
-                      )}
-                    </>
-                  )}
+            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} designPanelOpen={designPanelOpen} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDesignPanel={() => setDesignPanelOpen((open) => !open)} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
+            <main aria-label={t('预览画布')} className={`relative flex min-h-0 min-w-0 flex-1 overflow-hidden ${view === 'browser' ? theme('surface') : theme('editor')}`}>
+              <div className="relative flex min-h-0 min-w-0 flex-1">
+                <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
+                  <div className={`relative ${view === 'browser' ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}`}>
+                    {cloudRuntime ? (
+                      <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-browser-surface="cloud">
+                        <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} />
+                      </div>
+                    ) : (
+                      <>
+                        {previewOpen && (
+                          <div aria-hidden={!previewActive} className={surfaceClass(previewActive)} data-workspace-browser-surface="preview">
+                            <BrowserWorkbench
+                              chatSessionId={previewProjectId === panelProps.projectId ? sessionId : undefined}
+                              onAnnotationTarget={(target) => previewDesignPanelRef.current?.handleAnnotationTarget(target)}
+                              onElementMoved={(move) => previewDesignPanelRef.current?.handleElementMoved(move)}
+                              onStateChange={handlePreviewStateChange}
+                              projectId={previewProjectId}
+                              ref={previewWorkbenchRef}
+                              initialPreviewTargetId={previewProjectId === panelProps.projectId ? initialPreviewTargetId || undefined : undefined}
+                              initialSurface="native-preview"
+                              initialUrl={previewProjectId === panelProps.projectId ? initialBrowserUrl || undefined : undefined}
+                              viewportMode={view === 'mobile' ? 'mobile' : 'browser'}
+                            />
+                            {previewActive && previewAnnotations.map((annotation, index) => (
+                              <button
+                                aria-label={t('第 {number} 条批注', { number: index + 1 })}
+                                className="pointer-events-auto absolute z-30 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-[var(--app-focus-ring)] text-[10px] font-semibold text-white shadow"
+                                key={annotation.id}
+                                onClick={() => previewDesignPanelRef.current?.showAnnotation(annotation.id)}
+                                style={{ left: `${annotation.bounds.x / annotation.viewport.width * 100}%`, top: `${annotation.bounds.y / annotation.viewport.height * 100}%` }}
+                                type="button"
+                              >{index + 1}</button>
+                            ))}
+                          </div>
+                        )}
+                        {realtimeOpen && (
+                          <div aria-hidden={!realtimeActive} className={surfaceClass(realtimeActive)} data-workspace-browser-surface="realtime">
+                            <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+              {!cloudRuntime && previewOpen && activeBrowserTab === 'preview' && (
+                <PreviewDesignPanel
+                  browserState={previewState}
+                  className={designPanelOpen ? '' : 'max-[720px]:hidden'}
+                  onSubmitRequest={onSubmitPreviewRequest}
+                  onSelectPreviewProject={onSelectPreviewProject}
+                  previewProjects={previewProjects}
+                  projectId={previewProjectId}
+                  selectedPreviewProjectId={previewProjectId}
+                  sessionId={sessionId}
+                  onAnnotationsChange={setPreviewAnnotations}
+                  ref={previewDesignPanelRef}
+                  workbenchRef={previewWorkbenchRef}
+                />
+              )}
             </main>
           </div>
         </div>

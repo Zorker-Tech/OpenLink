@@ -56,6 +56,26 @@ test('native Preview relays design actions through the inspector bridge', async 
   }
   runtime.resolveBridgeResult(command.commandId, result)
   assert.deepEqual(await resultPromise, result)
+
+  const contentEnvelope: BrowserActionEnvelope = {
+    version: BROWSER_PROTOCOL_VERSION,
+    actionId: 'content-1',
+    sessionId: 'session-1',
+    actor: 'human',
+    action: { type: 'preview.content.set', pageId: 'preview', ref: 'el-1', content: 'Updated heading' },
+  }
+  const contentResultPromise = runtime.perform(contentEnvelope)
+  const contentCommand = emitted[1] as { type: string; commandId: string; action: BrowserActionEnvelope }
+  assert.equal(contentCommand.action.action.type, 'preview.content.set')
+  const contentResult: BrowserActionResult = {
+    version: BROWSER_PROTOCOL_VERSION,
+    actionId: contentEnvelope.actionId,
+    sessionId: contentEnvelope.sessionId,
+    ok: true,
+    snapshot: JSON.stringify({ content: 'Updated heading' }),
+  }
+  runtime.resolveBridgeResult(contentCommand.commandId, contentResult)
+  assert.deepEqual(await contentResultPromise, contentResult)
   await runtime.close()
 })
 

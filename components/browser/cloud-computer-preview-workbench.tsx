@@ -293,6 +293,8 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     activateElement: () => undefined,
     setElementStyle: () => undefined,
     resetElementStyle: () => undefined,
+    setElementContent: () => undefined,
+    resetElementContent: () => undefined,
     setThemeToken: () => undefined,
     resetThemeToken: () => undefined,
   }), [discoverAndOpen, navigate, openExternal, openTunnel, reload, services])

@@ -14,6 +14,7 @@ export interface SessionUiState {
   dataSurface: 'panel' | 'studio'
   browserSurface: SessionBrowserSurface
   browserAddress: string
+  previewProjectId: string | null
   previewTargetId: string | null
   selectedGitRef: string | null
   chatPanelCollapsed: boolean
@@ -27,6 +28,7 @@ export const DEFAULT_SESSION_UI_STATE: SessionUiState = {
   dataSurface: 'panel',
   browserSurface: 'native-preview',
   browserAddress: '',
+  previewProjectId: null,
   previewTargetId: null,
   selectedGitRef: null,
   chatPanelCollapsed: false,
@@ -36,6 +38,7 @@ export const DEFAULT_SESSION_UI_STATE: SessionUiState = {
 const TABS = new Set<SessionWorkspaceTab>(['preview', 'realtime', 'desktop', 'code', 'database'])
 const VIEWS = new Set<SessionWorkspaceView>(['mobile', 'browser', 'desktop', 'code', 'data'])
 const SURFACES = new Set<SessionBrowserSurface>(['native-preview', 'chromium-stream'])
+const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function storageKey(sessionId: string): string {
   return `openlink:session-ui:v1:${sessionId}`
@@ -62,6 +65,9 @@ export function sanitizeSessionUiState(value: unknown): SessionUiState {
       ? raw.browserSurface as SessionBrowserSurface
       : DEFAULT_SESSION_UI_STATE.browserSurface,
     browserAddress: safeString(raw.browserAddress, 8192),
+    previewProjectId: typeof raw.previewProjectId === 'string' && PROJECT_ID_PATTERN.test(raw.previewProjectId)
+      ? raw.previewProjectId
+      : null,
     previewTargetId: isPreviewTargetId(raw.previewTargetId) ? raw.previewTargetId : null,
     selectedGitRef: typeof raw.selectedGitRef === 'string' && raw.selectedGitRef.length <= 256 ? raw.selectedGitRef : null,
     chatPanelCollapsed: raw.chatPanelCollapsed === true,

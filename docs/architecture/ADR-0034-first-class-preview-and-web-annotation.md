@@ -18,37 +18,39 @@ preview proxy provides an authenticated route, forwards HTTP and HMR WebSockets,
 and injects the Inspector Bridge. Remote desktop remains a separate surface.
 The Preview product direction should preserve those boundaries.
 
-The current target picker is still chat-led. The browser API requires a chat
-session, resolves its `project_id`, discovers servers across that Project's
-active sandboxes, and ranks the current chat's server first. This permits
-switching to another active session in the same Project, but does not make
-Preview a workspace-level surface that can select a different repository,
-worktree, standalone development server, or read-only URL without starting
-from a chat.
+The Preview tab now lets users choose an authorized code project in the
+workspace. Browser APIs resolve a target from either the active chat or the
+selected project, discover servers across that project's active sandboxes, and
+prefer the active chat's server when it belongs to the selected project.
+Targets are reusable across chats, but providers are still limited to project
+sandbox servers; worktree servers and read-only external URLs are not yet
+available.
 
-The current Inspector Bridge can select and describe live DOM elements and
-relay browser actions. It does not provide persistent annotation threads,
-editable style state, layer navigation, theme-token controls, or a mapping from
-a visual edit back to a source file. Its element references are scoped to the
-running page and are not durable identifiers for saved comments or code edits.
+The Inspector Bridge supports live element selection, temporary text and style
+edits, DOM layers, CSS-variable controls, and browser actions. Project-scoped
+annotations retain screenshots and locator context. The bridge's element
+references still belong to one running page, and visual edits do not map
+directly to source files or durable component identifiers.
 
 ### Product interaction requirements
 
-The supplied interface shows an embedded Preview canvas with viewport and
-navigation controls, plus Edit, Theme, and Layers tools. The screenshot is an
-empty conversation, so it shows the controls and instructions rather than a
-running app.
+Users open Preview from the Preview tab in the existing chat workspace. The tab
+provides the embedded canvas, responsive viewport, navigation controls, and
+Edit, Theme, Layers, and Annotate tools. Edit selects live elements and previews
+temporary text or style changes immediately. Changes remain pending until
+applied to an editable source checkout as a reviewable change. Theme edits
+available design tokens; Layers navigates the live document hierarchy. Annotate
+places numbered comments on the preview and submits them with screenshot and
+locator context. A project selector inside the tab lets users switch among
+authorized code projects in the workspace. Requests for the current project
+use the active chat; requests for another project open a chat bound to that
+project. The tab reuses the chat workspace layout and iframe, while the
+selected target and its server lifecycle are scoped to the project or workspace.
 
-The interaction model should operate on the live app: select an element, make
-visual adjustments that appear immediately, keep those adjustments pending
-until applied, and turn an Apply action into a reviewable source change.
-Annotations are a separate feedback mode: place numbered comments on the
-preview and submit them together with their visual context. This ADR defines
-OpenLink's target behavior and system boundaries.
-
-OpenLink should separate the running web app from its display surface. A chat
-may be associated with a Preview target or provide the preferred target, but it
-must not be the only way to identify or open that target.
+OpenLink should separate the running web app from its display surface. The
+active chat can provide an initial project context and receive design or
+annotation requests. The selected Preview target remains identifiable and
+reusable across chats with workspace access.
 
 ## Proposed Decision
 
@@ -77,8 +79,8 @@ must not be the only way to identify or open that target.
 3. Make Preview navigation state belong to the selected target and its viewport,
    not to an ephemeral Browser Host session. Recreating the iframe transport,
    changing chat tabs, or closing the Browser panel must not change the target
-   or stop its development server. The chat that opened Preview can still be
-   recorded as the initiating context.
+   or stop its development server. The active chat can still be recorded as
+   the initiating context and receive code-change requests.
 
 4. Build visual tools as modes over the same live Preview document and bridge:
 
@@ -86,17 +88,17 @@ must not be the only way to identify or open that target.
      viewports, navigation, reload, and hot reload.
    - **Annotate** adds numbered comments anchored to a target revision, a
      screenshot, and a best-effort DOM locator/rectangle. Comments are sent to
-     the selected agent/chat as one batch and do not mutate source code.
+     the project code chat as one batch and do not mutate source code.
      Store annotation metadata in Postgres and new screenshots in private,
      project-scoped object storage. Continue reading legacy inline screenshots
      during migration. Resolve screenshot content only after project
      authorization; never expose a public object URL.
    - **Design** supports element selection, pending style edits, undo/redo,
-     before/after, and natural-language instructions with a selected-element
-     screenshot. Apply requires an editable source binding and sends a
-     structured change request to the code-editing path. It must produce a
-     reviewable source diff associated with that checkout/revision; direct DOM
-     mutations remain temporary preview feedback.
+     before/after, and natural-language instructions with selected-element and
+     viewport screenshots. Apply sends a structured request to the selected
+     project's code chat. The code-editing path must produce a reviewable source
+     diff associated with that project's editable checkout; direct DOM mutations
+     remain temporary preview feedback.
    - **Theme** and **Layers** are capabilities of the Design panel, not separate
      browser runtimes. Theme controls may use project design tokens when the
      source adapter can identify them. Layers initially expose the live DOM
@@ -195,18 +197,21 @@ temporary pending preview state before a source-aware Apply operation.
 ## Rollout Plan
 
 1. **Project-scoped Preview:** stabilize the project target contract, iframe
-   lifecycle, navigation controls, and authenticated proxy behavior independent
-   of the initiating chat.
+   lifecycle, navigation controls, authenticated proxy behavior, and in-chat
+   project selector independent of the initiating chat.
 2. **Target providers:** add explicitly selected worktree targets and read-only
    external URLs. Keep URL resolution, secrets, and authorization server-side;
    use the isolated full-browser surface when direct embedding is unavailable.
-3. **Web annotations:** retain metadata and private screenshots across reloads,
-   batch comments with visual context, and attach target revision and
-   best-effort locator data.
-4. **Design panel:** complete selected-element context and pending style edits,
-   undo/redo and before/after; then connect Apply to an editable worktree and
-   show the resulting diff. Add Theme tokens and richer Layers metadata through
-   source adapters.
+3. **Web annotations:** retain metadata and private screenshots across reloads
+   and send selected comments as a batch with screenshot and locator context.
+   Add target revision tracking and improve locator recovery across app updates.
+4. **Design panel:** keep the panel inside the existing chat workspace Preview
+   tab. The first implementation provides selected-element and viewport
+   context, temporary text, typography, color, and layout edits, Cmd/Ctrl-drag
+   positioning, undo/redo, before/after, CSS-variable controls, and live DOM
+   layers. Apply routes the structured request and screenshots to the selected
+   project's code chat. Add source-aware token mapping, component metadata, and
+   explicit diff linkage through source adapters.
 
 Do not update binding standard 12 until this ADR is accepted and the first two
 steps have an implementation contract. At that point, revise its target scope
@@ -229,3 +234,6 @@ the remaining code-edit requirements as follow-up decisions if needed.
 6. Apply a Design edit to an editable worktree and verify a reviewable source
    diff; confirm read-only targets cannot invoke Apply.
 7. Keep remote desktop usable independently when Preview is opened or closed.
+8. Confirm Design text and style edits, color controls, and Cmd/Ctrl-drag
+   positioning update the live page and restore correctly through undo, reset,
+   and before/after.

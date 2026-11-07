@@ -1242,5 +1242,17 @@
   "查看截图": "스크린샷 보기",
   "收起截图": "스크린샷 접기",
   "正在读取截图…": "스크린샷을 불러오는 중…",
-  "无法读取批注截图": "주석 스크린샷을 불러오지 못했습니다"
+  "无法读取批注截图": "주석 스크린샷을 불러오지 못했습니다",
+  "Capture failed; retry to attach element context": "선택한 요소 캡처에 실패했습니다. 시각적 컨텍스트를 첨부하려면 다시 시도하세요",
+  "Design instructions are too long. Apply fewer changes.": "디자인 지침이 너무 깁니다. 변경 사항을 줄여 적용하세요.",
+  "Could not send design changes.": "디자인 변경 사항을 보내지 못했습니다.",
+  "所选项目不可用": "선택한 프로젝트를 사용할 수 없습니다.",
+  "Hold Ctrl or ⌘ and drag to move the selected element.": "Ctrl 또는 ⌘를 누른 채 드래그하면 선택한 요소를 이동할 수 있습니다.",
+  "Capturing selected element context…": "선택한 요소의 시각적 컨텍스트를 캡처하는 중…",
+  "Selected element screenshot": "선택한 요소 스크린샷",
+  "Retry screenshot": "다시 캡처",
+  "Full viewport context": "전체 뷰포트 컨텍스트",
+  "Text content": "텍스트 내용",
+  "This element does not support text editing.": "이 요소는 텍스트 편집을 지원하지 않습니다.",
+  "Choose color": "색상 선택"
 }
