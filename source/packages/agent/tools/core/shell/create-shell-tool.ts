@@ -35,28 +35,16 @@ import { createStringResult } from "../../../../chat-inference/prompt-executor.t
 import type { ResourceAccessor } from "../../../../agent-exec/resource-provider.ts"
 import type { RemoteExecManager } from "../../../../agent-exec/executor-resources.ts"
 import { shellStreamExecutorResource, type ShellStreamExecutor, type ShellStreamExecutorArgs, type ShellStreamExecutorEvent } from "../../../../agent-exec/shell-stream-operation.ts"
+import type { ShellExecResponse, ShellExecResult, ShellExecutorArgs, ShellKnownOrUnknownReason, ShellOutputLocation } from "../../../../agent-exec/shell.ts"
+import type { SandboxRule } from "../../../../local-exec/sandbox-policy.ts"
 import { smartModeClassifierExecutorResource } from "../../../../agent-exec/smart-mode-classifier-operation.ts"
 import {
-  createBackgroundShellSuccessInterop,
-  createShellArgsInterop,
-  createShellFailureToolCallInterop,
-  createShellToolCallInterop,
   createSmartModeClassifierArgsInterop,
   createSmartModeRiskTargetInterop,
-  emptyShellArgsInterop,
-  escalatedShellSandboxPolicyInterop,
-  formatShellResultInterop,
-  projectShellStreamEventInterop,
-  shellStreamArgsFromToolCallInterop,
+  emptyShellToolCallInterop,
   projectSmartModeClassifierDecisionInterop,
-  shellSandboxPolicyFingerprintInterop,
-  createShellStreamResultInterop,
-  type ShellArgsInterop,
-  type ShellResultInterop,
-  type ShellSandboxPolicy,
-  type ShellStreamEventViewInterop,
-  type ShellTimeoutBehaviorInterop,
-  type ShellToolEnvelopeInterop,
+  shellToolCallToInterop,
+  shellToolInteractionPortFromInterop,
 } from "../../../../../adapters/interop/agent/shell-tool-protocol-adapter.ts"
 import type { HookContextEntry } from "../../../../hooks-carriers/hook-additional-context.ts"
 import { analyzeShellCommand, type ShellCommandAnalysis } from "../../../../shell-exec/shell-parser.ts"
@@ -82,6 +70,8 @@ import { delayDevSmartModeClassifierIfRequested, type OneShotState } from "../..
 import { withToolExecutionTimeoutSuspended } from "../../tool-timeout-suspension.ts"
 import type { ConversationStateHandle } from "../../../state.ts"
 import { checkShellDesktopControl } from "./ui-automation-guard.ts"
+import { renderSlateShellResultToString } from "./formatters.ts"
+import type { ShellSandboxPolicy, ShellToolInteractionPort, SlateShellToolCall } from "./shell-tool-contract.ts"
 
 /** The resource boundary the shell shellStreamExecutor lane owns. */
 export type ShellToolResourceAccessor = ResourceAccessor<RemoteExecManager>
@@ -94,7 +84,7 @@ export interface ShellExecutionPlan {
   readonly shouldStartInBackground: boolean
   readonly backgroundAfterMs: number
   readonly hardTimeoutMs?: number
-  readonly timeoutBehavior: ShellTimeoutBehaviorInterop
+  readonly timeoutBehavior: "background"
 }
 
 export interface ShellPreflightRequest {
@@ -111,18 +101,7 @@ export type ShellPreflightDecision =
   | { readonly allow: true; readonly auditId?: string }
   | { readonly allow: false; readonly reason: string; readonly auditId?: string }
 
-export interface ShellToolInteractionHandler {
-  executeToolCall(
-    toolCtx: Context,
-    toolCall: ShellToolEnvelopeInterop,
-    toolCallId: string,
-    execute: (toolCtx: Context) => Promise<ShellResultInterop>,
-    merge: (result: ShellResultInterop) => ShellToolEnvelopeInterop,
-    hookContextCollector?: unknown,
-  ): Promise<ShellResultInterop>
-  getAbortSignal(toolCtx: Context): AbortSignal
-  emitPartialToolCall?(toolCtx: Context, toolCallId: string, toolCall: ShellToolEnvelopeInterop): Promise<void>
-}
+export type { ShellToolInteractionPort as ShellToolInteractionHandler } from "./shell-tool-contract.ts"
 
 export interface ShellToolExecutionMeta {
   readonly toolCallId: string
@@ -331,7 +310,13 @@ function jsonRecordFrom(value: Record<string, unknown>): Record<string, SlateJso
 
 /** A policy as JSON with its defaults, so that two policies that differ only by an unset field compare equal. */
 function policyFingerprintOf(policy: ShellSandboxPolicy | undefined): unknown | null {
-  return shellSandboxPolicyFingerprintInterop(policy)
+  if (policy === undefined) return null
+  return {
+    mode: policy.mode,
+    networkAccess: policy.networkAccess ?? false,
+    additionalReadwritePaths: [...(policy.additionalReadwritePaths ?? [])],
+    enableSharedBuildCache: policy.enableSharedBuildCache ?? false,
+  }
 }
 
 function approvalFingerprintOf(target: ShellSmartModeApprovalTarget): string {
@@ -355,7 +340,36 @@ function approvalFingerprintOf(target: ShellSmartModeApprovalTarget): string {
 function escalatedPolicyFor(
   requestedSandboxPolicy: ShellSandboxPolicy | undefined,
 ): ShellSandboxPolicy {
-  return escalatedShellSandboxPolicyInterop(requestedSandboxPolicy)
+  return {
+    mode: "unrestricted",
+    ...(requestedSandboxPolicy?.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: requestedSandboxPolicy.enableSharedBuildCache }),
+  }
+}
+
+/** Maps the product's shell permission choice to the sandbox engine's own rule shape. */
+function sandboxRuleFor(policy: ShellSandboxPolicy | undefined): SandboxRule | undefined {
+  if (policy === undefined) return undefined
+  if (policy.mode === "unrestricted") {
+    return {
+      type: "insecure_none",
+      allowlistEscalated: false,
+      enableSharedBuildCache: policy.enableSharedBuildCache ?? false,
+      debugOutputDir: "",
+      captureDenies: false,
+    }
+  }
+  return {
+    type: policy.mode === "workspace_readonly" ? "workspace_readonly" : "workspace_readwrite",
+    networkPolicy: { version: 1, default: policy.networkAccess === true ? "allow" : "deny" },
+    skipStatsigDefaults: false,
+    ...(policy.mode === "workspace_readwrite" ? { additionalReadwritePaths: [...(policy.additionalReadwritePaths ?? [])] } : {}),
+    additionalReadonlyPaths: [],
+    disableTmpWrite: false,
+    enableSharedBuildCache: policy.enableSharedBuildCache ?? false,
+    debugOutputDir: "",
+    captureDenies: false,
+    networkPolicyStrict: false,
+  }
 }
 
 /** The caller's own enrichment can say that what will run could not be bound to the review. */
@@ -510,12 +524,13 @@ async function classifyShellCall(
   }
 }
 
-/** The command as the shellStreamExecutor is asked to run it, including everything the parser found in it. */
-function shellArgumentsOf(callArgs: Record<string, unknown>, parsedCommand: ShellCommandAnalysis, executionPlan: ShellExecutionPlan, settings: ShellToolOptions, executionMeta: ShellToolExecutionMeta, policy: ShellSandboxPolicy | undefined, skipApproval = false): ShellArgsInterop {
+/** The command as the shell executor is asked to run it, including what Slate's parser found in it. */
+function shellArgumentsOf(callArgs: Record<string, unknown>, parsedCommand: ShellCommandAnalysis, executionPlan: ShellExecutionPlan, settings: ShellToolOptions, executionMeta: ShellToolExecutionMeta, policy: ShellSandboxPolicy | undefined, skipApproval = false): ShellExecutorArgs {
   const command = String(callArgs.command)
   const workingDirectory = typeof callArgs.working_directory === "string" ? callArgs.working_directory : ""
   const description = typeof callArgs.description === "string" ? callArgs.description : typeof callArgs.explanation === "string" ? callArgs.explanation : undefined
-  return createShellArgsInterop({
+  const requestedSandboxPolicy = sandboxRuleFor(policy)
+  return {
     command,
     workingDirectory,
     timeout: executionPlan.backgroundAfterMs,
@@ -523,52 +538,142 @@ function shellArgumentsOf(callArgs: Record<string, unknown>, parsedCommand: Shel
     simpleCommands: parsedCommand.legacy.simpleCommands,
     hasInputRedirect: parsedCommand.legacy.hasInputRedirect,
     hasOutputRedirect: parsedCommand.legacy.hasOutputRedirect,
-    parsingResult: {
-      parsingFailed: parsedCommand.structured.parsingFailed,
+    parsing: {
+      failed: parsedCommand.structured.parsingFailed,
       hasRedirects: parsedCommand.structured.hasRedirects,
       hasCommandSubstitution: parsedCommand.structured.hasCommandSubstitution,
       ...(parsedCommand.structured.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: parsedCommand.structured.allRedirectsAreDevNull }),
       executableCommands: parsedCommand.structured.executableCommands.map(commandValue => ({
         name: commandValue.name,
         fullText: commandValue.fullText,
-        args: commandValue.args.map(argument => ({ type: argument.type, value: argument.value })),
+        arguments: commandValue.args.map(argument => ({ type: argument.type, value: argument.value })),
       })),
       redirects: parsedCommand.structured.redirects.map(redirect => ({
         operator: redirect.operator,
-        destinationFds: redirect.destinationFds,
+        destinationFileDescriptors: redirect.destinationFds,
         targetNodeType: redirect.targetNodeType,
         ...(redirect.targetText === undefined ? {} : { targetText: redirect.targetText }),
       })),
     },
-    ...(policy === undefined ? {} : { requestedSandboxPolicy: policy }),
+    ...(requestedSandboxPolicy === undefined ? {} : { requestedSandboxPolicy }),
     isBackground: executionPlan.shouldStartInBackground,
     skipApproval,
     timeoutBehavior: executionPlan.timeoutBehavior,
     ...(executionPlan.hardTimeoutMs === undefined ? {} : { hardTimeout: executionPlan.hardTimeoutMs }),
     ...(description === undefined ? {} : { description }),
     adminCommandDenylist: settings.adminCommandDenylist ?? [],
-  })
+    closeStdin: false,
+  }
+}
+
+/** The stream executor receives only execution inputs; parser details stay on the recorded call. */
+function shellStreamArgsOf(args: ShellExecutorArgs): ShellStreamExecutorArgs {
+  const timeoutBehavior = typeof args.timeoutBehavior === "string"
+    ? args.timeoutBehavior
+    : args.timeoutBehavior === undefined ? undefined : "foreground"
+  return {
+    command: args.command,
+    ...(args.workingDirectory === undefined ? {} : { workingDirectory: args.workingDirectory }),
+    ...(args.toolCallId === undefined ? {} : { toolCallId: args.toolCallId }),
+    ...(args.conversationId === undefined ? {} : { conversationId: args.conversationId }),
+    ...(args.requestedSandboxPolicy === undefined ? {} : { requestedSandboxPolicy: args.requestedSandboxPolicy }),
+    ...(args.closeStdin === undefined ? {} : { closeStdin: args.closeStdin }),
+    ...(args.timeout === undefined ? {} : { timeout: args.timeout }),
+    ...(timeoutBehavior === undefined ? {} : { timeoutBehavior }),
+    ...(args.hardTimeout === undefined ? {} : { hardTimeout: args.hardTimeout }),
+    ...(args.adminCommandDenylist === undefined ? {} : { adminCommandDenylist: args.adminCommandDenylist }),
+    ...(args.skipApproval === undefined ? {} : { skipApproval: args.skipApproval }),
+    ...(args.smartModeApproval === undefined ? {} : { smartModeApproval: args.smartModeApproval }),
+    ...(args.classifierResult === undefined ? {} : { classifierResult: args.classifierResult }),
+    ...(args.description === undefined ? {} : { description: args.description }),
+    ...(args.outputNotification === undefined ? {} : { outputNotification: args.outputNotification }),
+    ...(args.hookApprovalRequirement === undefined ? {} : { hookApprovalRequirement: args.hookApprovalRequirement }),
+    ...(args.isBackground === undefined ? {} : { isBackground: args.isBackground }),
+  }
+}
+
+type ShellStreamEventView =
+  | { readonly kind: "stdout" | "stderr"; readonly data: string }
+  | { readonly kind: "exit"; readonly code: number; readonly aborted: boolean; readonly localExecutionTimeMs?: number; readonly outputLocation?: ShellOutputLocation; readonly abortReason?: ShellKnownOrUnknownReason<"user-abort" | "timeout"> }
+  | { readonly kind: "rejected"; readonly command: string; readonly workingDirectory: string; readonly reason: string }
+  | { readonly kind: "permission-denied"; readonly command: string; readonly workingDirectory: string; readonly error: string; readonly isReadonly: boolean }
+  | { readonly kind: "sandbox-unsupported"; readonly reason: string }
+  | { readonly kind: "backgrounded"; readonly command: string; readonly workingDirectory: string; readonly shellId: number; readonly pid?: number; readonly msToWait?: number; readonly reason?: ShellKnownOrUnknownReason<"user" | "timeout"> }
+  | { readonly kind: "other" }
+
+/** Reduces Slate's local stream events to the outcomes the shell tool handles. */
+function shellStreamEventView(event: ShellStreamExecutorEvent): ShellStreamEventView {
+  switch (event.type) {
+    case "stdout":
+    case "stderr":
+      return { kind: event.type, data: event.data }
+    case "exit":
+      return {
+        kind: "exit",
+        code: event.code,
+        aborted: event.aborted,
+        ...(event.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: event.localExecutionTimeMs }),
+        ...(event.outputLocation === undefined ? {} : { outputLocation: event.outputLocation }),
+        ...(event.abortReason === undefined ? {} : { abortReason: event.abortReason === "user_abort" ? "user-abort" : event.abortReason }),
+      }
+    case "rejected":
+      return { kind: "rejected", command: event.command, workingDirectory: event.workingDirectory, reason: event.reason }
+    case "permissionDenied":
+      return { kind: "permission-denied", command: event.command, workingDirectory: event.workingDirectory, error: event.message ?? "Command blocked by permissions configuration", isReadonly: event.isReadonly }
+    case "sandboxUnsupported":
+      return { kind: "sandbox-unsupported", reason: event.reason }
+    case "backgrounded":
+      return {
+        kind: "backgrounded",
+        command: event.command,
+        workingDirectory: event.workingDirectory,
+        shellId: event.shellId,
+        ...(event.pid === undefined ? {} : { pid: event.pid }),
+        ...(event.elapsedMs === undefined ? {} : { msToWait: event.elapsedMs }),
+        ...(event.reason === undefined ? {} : { reason: event.reason }),
+      }
+    case "start":
+    case "hookContext":
+    case "unrecognized":
+      return { kind: "other" }
+  }
 }
 
 /** The result of a command that ran to its end, which is a success only when it exited cleanly and was not stopped. */
-function streamResultOf(command: string, workingDirectory: string, stdout: string, stderr: string, interleavedOutput: string, exit: Extract<ShellStreamEventViewInterop, { readonly kind: "exit" }> | undefined, policy: ShellSandboxPolicy | undefined): ShellResultInterop {
+function streamResultOf(command: string, workingDirectory: string, stdout: string, stderr: string, interleavedOutput: string, exit: Extract<ShellStreamEventView, { readonly kind: "exit" }> | undefined, policy: ShellSandboxPolicy | undefined): ShellExecResponse {
   if (exit === undefined) throw new Error("Shell exec outputStream closed without an exit event; result is unknown")
-  return createShellStreamResultInterop({ command, workingDirectory, stdout, stderr, interleavedOutput, exit, ...(policy === undefined ? {} : { sandboxPolicy: policy }) })
+  const output = {
+    command,
+    workingDirectory,
+    exitCode: exit.code,
+    signal: exit.aborted ? "SIGTERM" : "",
+    stdout,
+    stderr,
+    executionTimeMs: exit.localExecutionTimeMs ?? 0,
+    interleavedOutput,
+    ...(exit.outputLocation === undefined ? {} : { outputFile: exit.outputLocation }),
+    ...(exit.aborted ? { aborted: true } : {}),
+  }
+  const outcome: ShellExecResult = exit.code === 0 && !exit.aborted
+    ? { kind: "success", ...output }
+    : { kind: "failure", ...output, aborted: exit.aborted, ...(exit.abortReason === undefined ? {} : { abortReason: exit.abortReason }) }
+  const requestedSandboxPolicy = sandboxRuleFor(policy)
+  return { outcome, ...(requestedSandboxPolicy === undefined ? {} : { sandboxPolicy: requestedSandboxPolicy }) }
 }
 
 /** Reads the shellStreamExecutor's outputStream to its end, where a command that was moved to the background ends early. */
-async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecutor, args: ShellStreamExecutorArgs, interactionBridge: ShellToolInteractionHandler, executionMeta: ShellToolExecutionMeta, settings: ShellToolOptions, policy: ShellSandboxPolicy | undefined): Promise<ShellResultInterop> {
+async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecutor, args: ShellStreamExecutorArgs, executionMeta: ShellToolExecutionMeta, settings: ShellToolOptions, policy: ShellSandboxPolicy | undefined): Promise<ShellExecResponse> {
   let stdout = ""
   let stderr = ""
   let interleavedOutput = ""
-  let exit: Extract<ShellStreamEventViewInterop, { readonly kind: "exit" }> | undefined
+  let exit: Extract<ShellStreamEventView, { readonly kind: "exit" }> | undefined
   const executorOptions = {
     ...(executionMeta.execId === undefined ? {} : { execId: executionMeta.execId }),
     ...(executionMeta.hookContextCollector === undefined ? {} : { hookContextCollector: executionMeta.hookContextCollector }),
   }
   for await (const event of shellStreamExecutor.execute(toolCtx, args, executorOptions)) {
     await settings.onStreamEvent?.(toolCtx, event)
-    const view = projectShellStreamEventInterop(event)
+    const view = shellStreamEventView(event)
     switch (view.kind) {
       case "stdout": stdout += view.data; interleavedOutput += view.data; break
       case "stderr": stderr += view.data; interleavedOutput += view.data; break
@@ -579,18 +684,23 @@ async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecu
       case "backgrounded": {
         // The command has not finished; what it has produced so far is what the result carries.
         settings.onTelemetry?.(toolCtx, { type: "backgrounded", toolCallId: executionMeta.toolCallId })
-        return createBackgroundShellSuccessInterop({
+        const outcome: ShellExecResult = {
+          kind: "success",
           command: view.command,
           workingDirectory: view.workingDirectory,
-          shellId: view.shellId,
-          ...(view.pid === undefined ? {} : { pid: view.pid }),
-          ...(view.msToWait === undefined ? {} : { msToWait: view.msToWait }),
-          ...(view.reason === undefined ? {} : { reason: view.reason }),
+          exitCode: 0,
+          signal: "",
           stdout,
           stderr,
+          executionTimeMs: 0,
           interleavedOutput,
-          ...(policy === undefined ? {} : { sandboxPolicy: policy }),
-        })
+          shellId: view.shellId,
+          ...(view.pid === undefined ? {} : { processId: view.pid }),
+          ...(view.msToWait === undefined ? {} : { waitedMs: view.msToWait }),
+          ...(view.reason === undefined ? {} : { backgroundReason: view.reason }),
+        }
+        const requestedSandboxPolicy = sandboxRuleFor(policy)
+        return { outcome, isBackground: true, ...(requestedSandboxPolicy === undefined ? {} : { sandboxPolicy: requestedSandboxPolicy }) }
       }
       case "other": break
     }
@@ -599,21 +709,21 @@ async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecu
 }
 
 /** Every way a command can fail has its own shape in the result the model and the user read. */
-function shellFailureCall(error: unknown): ShellToolEnvelopeInterop {
+function shellFailureCall(error: unknown): SlateShellToolCall {
   if (error instanceof ShellToolRejectedError) {
-    return createShellFailureToolCallInterop({ kind: "rejected", command: error.command, workingDirectory: error.workingDirectory ?? "", reason: error.reason })
+    return { kind: "shell", result: { outcome: { kind: "rejected", command: error.command, workingDirectory: error.workingDirectory ?? "", reason: error.reason, isReadonly: false } } }
   }
   if (error instanceof ShellToolPermissionDeniedError) {
-    return createShellFailureToolCallInterop({ kind: "permission-denied", command: error.command, workingDirectory: error.workingDirectory ?? "", error: error.error, isReadonly: error.isReadonly })
+    return { kind: "shell", result: { outcome: { kind: "permission-denied", command: error.command, workingDirectory: error.workingDirectory ?? "", message: error.error, isReadonly: error.isReadonly } } }
   }
   if (error instanceof ShellToolTimeoutError) {
-    return createShellFailureToolCallInterop({ kind: "timeout", command: error.command, workingDirectory: error.workingDirectory ?? "", timeoutMs: error.timeoutMs })
+    return { kind: "shell", result: { outcome: { kind: "timeout", command: error.command, workingDirectory: error.workingDirectory ?? "", timeoutMs: error.timeoutMs } } }
   }
-  return createShellFailureToolCallInterop({ kind: "spawn-error", error: error instanceof Error ? error.message : String(error) })
+  return { kind: "shell", result: { outcome: { kind: "spawn-error", command: "", workingDirectory: "", message: error instanceof Error ? error.message : String(error) } } }
 }
 
-function renderShellResult(result: ShellResultInterop, settings: ShellToolOptions): string {
-  return formatShellResultInterop(result, {
+function renderShellResult(result: ShellExecResponse, settings: ShellToolOptions): string {
+  return renderSlateShellResultToString(result, {
     ...(settings.terminalsFolder === undefined ? {} : { terminalsFolder: settings.terminalsFolder }),
     ...(settings.promptVersion === undefined ? {} : { promptVersion: settings.promptVersion }),
     ...((settings.sandboxPromptEnabled ?? settings.sandboxEnabled) === undefined ? {} : { sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled }),
@@ -636,7 +746,8 @@ export function createShellTool(resourceAccessor: ShellToolResourceAccessor, set
   const smartModeApprovalParametersEnabled = settings.agentType !== AgentType.BACKGROUND && settings.smartModeClassifierMode === true
   const parameters = withApprovalParameters(settings.parametersSchema ?? getShellToolParametersSchema(sandboxEnabled, shellPromptProfile, { isReadonly: settings.isReadonly, enableBlockUntilMs: settings.enableBlockUntilMs, requireBlockUntilMs: settings.requireBlockUntilMs, defaultBlockUntilMs }), smartModeApprovalParametersEnabled)
   const shellStreamExecutor = resourceAccessor.get(shellStreamExecutorResource)
-  const execute = async (toolCtx: Context, interactionBridge: ShellToolInteractionHandler, callArgs: Record<string, unknown>, executionMeta: ShellToolExecutionMeta): Promise<ShellResultInterop> => {
+  const execute = async (toolCtx: Context, interopInteractionHandler: unknown, callArgs: Record<string, unknown>, executionMeta: ShellToolExecutionMeta): Promise<ShellExecResponse> => {
+    const interactionBridge: ShellToolInteractionPort = shellToolInteractionPortFromInterop(interopInteractionHandler)
     const command = String(callArgs.command)
     const workingDirectory = typeof callArgs.working_directory === "string" ? callArgs.working_directory : undefined
     const parsedCommand = analyzeShellCommand(command)
@@ -715,7 +826,7 @@ export function createShellTool(resourceAccessor: ShellToolResourceAccessor, set
     }
     settings.onTelemetry?.(toolCtx, { type: "started", toolCallId: executionMeta.toolCallId })
     const args = shellArgumentsOf(callArgs, parsedCommand, executionPlan, settings, executionMeta, policy, smartModeApprovalProviderApproved || (smartModeDecision.kind === "allow" && smartModeDecision.enabled))
-    const toolCall = createShellToolCallInterop({ args })
+    const toolCall: SlateShellToolCall = { kind: "shell", args }
     if (executionPlan.shouldStartInBackground) await interactionBridge.emitPartialToolCall?.(toolCtx, executionMeta.toolCallId, toolCall)
     const result = await interactionBridge.executeToolCall(toolCtx, toolCall, executionMeta.toolCallId, async runCtx => {
       if (interactionBridge.getAbortSignal(runCtx).aborted) throw new ToolCallAbortedError()
@@ -738,9 +849,9 @@ export function createShellTool(resourceAccessor: ShellToolResourceAccessor, set
       // A command that changes files waits for whatever else is changing them, since two writers at once is
       // how a workspace ends up inconsistent.
       const lock = settings.fileOperationLockManager === undefined ? undefined : await settings.fileOperationLockManager.waitForExclusiveLock(runCtx)
-      try { return await runStream(runCtx, shellStreamExecutor, shellStreamArgsFromToolCallInterop(args), interactionBridge, executionMeta, settings, policy) }
+      try { return await runStream(runCtx, shellStreamExecutor, shellStreamArgsOf(args), executionMeta, settings, policy) }
       finally { lock?.[Symbol.dispose]() }
-    }, mergedResult => createShellToolCallInterop({ args, result: mergedResult }), executionMeta.hookContextCollector)
+    }, mergedResult => ({ kind: "shell", args, result: mergedResult }), executionMeta.hookContextCollector)
     settings.onTelemetry?.(toolCtx, { type: "finished", toolCallId: executionMeta.toolCallId })
     return result
   }
@@ -760,9 +871,9 @@ export function createShellTool(resourceAccessor: ShellToolResourceAccessor, set
       readToolName: settings.readToolIdentifier === undefined ? undefined : descriptionProps.allTools?.[settings.readToolIdentifier]?.name ?? settings.readToolIdentifier,
     }),
     parameters,
-    execute: withSafeParsedArgs(parameters, execute as unknown as (toolCtx: Context, interactionHandler: unknown, args: unknown, executionMeta: unknown) => Promise<unknown>, createShellToolCallInterop({ args: emptyShellArgsInterop() })),
-    render: async (_ctx: Context, result: ShellResultInterop) => createStringResult(renderShellResult(result, settings)),
-    serializeError: shellFailureCall,
+    execute: withSafeParsedArgs(parameters, execute as unknown as (toolCtx: Context, interactionHandler: unknown, args: unknown, executionMeta: unknown) => Promise<unknown>, emptyShellToolCallInterop()),
+    render: async (_ctx: Context, result: ShellExecResponse) => createStringResult(renderShellResult(result, settings)),
+    serializeError: (error: unknown) => shellToolCallToInterop(shellFailureCall(error)),
   })
 }
 

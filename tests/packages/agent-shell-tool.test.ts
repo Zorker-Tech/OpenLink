@@ -8,13 +8,16 @@ import {
   ShellToolTimeoutError,
   createShellTool,
   type ShellToolExecutionMeta,
-  type ShellToolInteractionHandler,
   type ShellToolOptions,
 } from "../../source/packages/agent/tools/core/shell/create-shell-tool.ts"
+import type { ShellToolInteractionPort } from "../../source/packages/agent/tools/core/shell/shell-tool-contract.ts"
+import { renderSlateShellResultToString } from "../../source/packages/agent/tools/core/shell/formatters.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { shellStreamExecutorResource } from "../../source/packages/agent-exec/shell-stream-operation.ts"
 import type { LocalShellStreamEvent } from "../../source/packages/local-exec/shell-stream-events.ts"
-import type { ShellResult } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import type { ShellExecResponse } from "../../source/packages/agent-exec/shell.ts"
+import { shellResultToInterop } from "../../source/adapters/interop/agent/shell-operation-adapter.ts"
+import { renderInteropShellResultToString } from "../../source/adapters/interop/agent/shell-result-format-adapter.ts"
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -47,18 +50,20 @@ function executor(events: LocalShellStreamEvent[] | { throw: unknown }) {
 
 const accessor = (implementation: unknown) => ({ get: () => implementation })
 
-function interaction(options: { aborted?: boolean; onExecute?: (call: ToolCall) => void } = {}) {
+function interaction(options: { aborted?: boolean; onExecute?: (call: ToolCall) => void; onComplete?: (call: ToolCall) => void } = {}) {
   const partials: ToolCall[] = []
   return {
     partials,
     handler: {
-      async executeToolCall(_ctx: Context, call: ToolCall, _id: string, run: (ctx: Context) => Promise<ShellResult>) {
+      async executeToolCall(_ctx: Context, call: ToolCall, _id: string, run: (ctx: Context) => Promise<ShellExecResponse>, merge: (result: ShellExecResponse) => ToolCall) {
         options.onExecute?.(call)
-        return await run(_ctx)
+        const result = await run(_ctx)
+        options.onComplete?.(merge(result))
+        return result
       },
       getAbortSignal: () => ({ aborted: options.aborted === true }) as AbortSignal,
       async emitPartialToolCall(_ctx: Context, _id: string, call: ToolCall) { partials.push(call) },
-    } as unknown as ShellToolInteractionHandler,
+    } as unknown as ShellToolInteractionPort,
   }
 }
 
@@ -72,8 +77,8 @@ async function run(
   args: Record<string, unknown>,
   handler = interaction().handler,
   meta: ShellToolExecutionMeta = { toolCallId: "call-1" },
-): Promise<ShellResult> {
-  const execute = built.execute as (ctx: Context, handler: unknown, stream: AsyncIterable<string>, meta: unknown) => Promise<ShellResult>
+): Promise<ShellExecResponse> {
+  const execute = built.execute as (ctx: Context, handler: unknown, stream: AsyncIterable<string>, meta: unknown) => Promise<ShellExecResponse>
   const stream = (async function* () { yield JSON.stringify(args) })()
   return await execute(ctx, handler, stream, meta)
 }
@@ -110,8 +115,10 @@ test("the placement says where the tool belongs in a session", () => {
 test("a command that succeeds comes back as its own output and exit code", async () => {
   const { recorded, built } = tool({}, [stdout("hello\n"), stderr("careful\n"), exit(0)])
   const result = await run(built as Record<string, unknown>, { command: "echo hello" })
-  assert.equal(result.result.case, "success")
-  const value = (result.result as { value: { stdout: string; stderr: string; exitCode: number; interleavedOutput: string } }).value
+  assert.equal(result.outcome.kind, "success")
+  const value = result.outcome
+  assert.equal(value.kind, "success")
+  if (value.kind !== "success") throw new Error("expected a successful shell result")
   assert.equal(value.stdout, "hello\n")
   assert.equal(value.stderr, "careful\n")
   // What the user would have seen is the two streams in the order they arrived.
@@ -120,18 +127,31 @@ test("a command that succeeds comes back as its own output and exit code", async
   assert.equal(recorded.calls.length, 1)
 })
 
+test("the Slate result is encoded when the interaction handler records the completed call", async () => {
+  const { built } = tool({}, [stdout("hello\n"), stderr("careful\n"), exit(0)])
+  let completed: ToolCall | undefined
+  await run(built as Record<string, unknown>, { command: "echo hello" }, interaction({ onComplete: call => { completed = call } }).handler)
+  const value = (completed!.tool as unknown as { value: { result: { result: { case?: string; value: { stdout: string; stderr: string; interleavedOutput: string } } } } }).value
+  assert.equal(value.result.result.case, "success")
+  assert.equal(value.result.result.value.stdout, "hello\n")
+  assert.equal(value.result.result.value.stderr, "careful\n")
+  assert.equal(value.result.result.value.interleavedOutput, "hello\ncareful\n")
+})
+
 test("a command that fails is a failure rather than an error", async () => {
   const { built } = tool({}, [stdout("boom\n"), exit(1)])
   const result = await run(built as Record<string, unknown>, { command: "false" })
-  assert.equal(result.result.case, "failure")
-  assert.equal((result.result as { value: { exitCode: number } }).value.exitCode, 1)
+  assert.equal(result.outcome.kind, "failure")
+  if (result.outcome.kind !== "failure") throw new Error("expected a failed shell result")
+  assert.equal(result.outcome.exitCode, 1)
 })
 
 test("a command that was stopped says so", async () => {
   const { built } = tool({}, [exit(143, { aborted: true, abortReason: "user_abort" })])
   const result = await run(built as Record<string, unknown>, { command: "sleep 100" })
-  assert.equal(result.result.case, "failure")
-  const value = (result.result as { value: { aborted?: boolean; signal: string } }).value
+  assert.equal(result.outcome.kind, "failure")
+  if (result.outcome.kind !== "failure") throw new Error("expected a failed shell result")
+  const value = result.outcome
   assert.equal(value.aborted, true)
   assert.equal(value.signal, "SIGTERM")
 })
@@ -145,10 +165,11 @@ test("a command that is moved to the background answers with the shell to watch"
   const { built } = tool({}, [stdout("starting\n"), backgrounded({ pid: 42, elapsedMs: 5, reason: "timeout" })])
   const recorded = interaction()
   const result = await run(built as Record<string, unknown>, { command: "npm run watch" }, recorded.handler)
-  assert.equal(result.result.case, "success")
-  const value = (result.result as { value: { shellId: number; pid?: number; stdout: string } }).value
+  assert.equal(result.outcome.kind, "success")
+  if (result.outcome.kind !== "success") throw new Error("expected a successful shell result")
+  const value = result.outcome
   assert.equal(value.shellId, 3)
-  assert.equal(value.pid, 42)
+  assert.equal(value.processId, 42)
   assert.equal(value.stdout, "starting\n")
   assert.equal(result.isBackground, true)
   // The user is shown the call as soon as it is known to be a background one.
@@ -362,11 +383,57 @@ test("every way a command can fail has its own result shape", () => {
 
 test("a result is rendered as the text the model reads", async () => {
   const built = tool({}).built as Record<string, unknown>
-  const render = built.render as (ctx: Context, result: ShellResult) => Promise<{ content: Array<{ text: string }> }>
+  const render = built.render as (ctx: Context, result: ShellExecResponse) => Promise<{ content: Array<{ text: string }> }>
   const { built: other } = tool({}, [stdout("hello\n"), exit(0)])
   const result = await run(other as Record<string, unknown>, { command: "echo hello" })
   const rendered = await render(ctx, result)
   assert.match(rendered.content[0]?.text ?? "", /hello/)
   // A result that is not a result at all is reported as an unknown error rather than rendered.
-  assert.equal(await render(ctx, { result: { case: undefined } } as never).then(r => r.content[0]?.text), "Unknown error")
+  assert.equal(await render(ctx, { outcome: { kind: "unrecognized" } }).then(r => r.content[0]?.text), "Unknown error")
+})
+
+test("Slate result formatting preserves the existing transcript rendering across result variants", () => {
+  const responses: ShellExecResponse[] = [
+    {
+      outcome: {
+        kind: "success", command: "npm run watch", workingDirectory: "/repo", exitCode: 0, signal: "",
+        stdout: "starting\n", stderr: "", executionTimeMs: 0, interleavedOutput: "starting\n", shellId: 3,
+        processId: 42, waitedMs: 5, backgroundReason: "timeout",
+      },
+      isBackground: true,
+      terminalsFolder: "/tmp/terminals",
+      sandboxPolicy: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "deny" }, additionalReadwritePaths: ["/repo"] },
+    },
+    {
+      outcome: {
+        kind: "failure", command: "sleep 100", workingDirectory: "/repo", exitCode: 143, signal: "SIGTERM",
+        stdout: "partial", stderr: "", executionTimeMs: 9, interleavedOutput: "partial", aborted: true,
+        abortReason: "user-abort", localExecutionTimeMs: 9,
+      },
+      sandboxPolicy: { type: "workspace_readonly", networkPolicy: { version: 1, default: "deny" } },
+    },
+    { outcome: { kind: "timeout", command: "sleep 100", workingDirectory: "/repo", timeoutMs: 1_000 } },
+    { outcome: { kind: "rejected", command: "rm -rf /", workingDirectory: "/repo", reason: "blocked", isReadonly: false } },
+    { outcome: { kind: "permission-denied", command: "git push", workingDirectory: "/repo", message: "read only", isReadonly: true } },
+    { outcome: { kind: "spawn-error", command: "", workingDirectory: "", message: "ENOENT" } },
+    { outcome: { kind: "unrecognized" } },
+  ]
+  const optionSets = [
+    {},
+    { promptVersion: "dsv3-1018", sandboxPromptEnabled: true },
+    { useMinimalHarness: true, sandboxPromptEnabled: true },
+  ]
+  for (const response of responses) {
+    const interop = shellResultToInterop(response)
+    for (const options of optionSets) {
+      const slateText = renderSlateShellResultToString(response, { ...options, terminalsFolder: response.terminalsFolder })
+      const interopText = renderInteropShellResultToString({
+        result: interop.result,
+        sandboxPolicy: interop.sandboxPolicy,
+        isBackground: interop.isBackground,
+        terminalsFolder: response.terminalsFolder,
+      }, options)
+      assert.equal(slateText, interopText, `${response.outcome.kind} with ${JSON.stringify(options)}`)
+    }
+  }
 })

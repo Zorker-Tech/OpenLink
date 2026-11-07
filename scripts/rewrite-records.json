@@ -1630,9 +1630,9 @@
     },
     "packages/agent/tools/core/shell/formatters.ts": {
       "claim": "rewritten",
-      "overlap": 0.7270531400966184,
-      "refreshReason": "Sandbox and shell-result enums now map through a dedicated interop adapter, and the user-facing result prose has been rewritten in Slate's own voice.",
-      "evidence": "The focused shell formatter, schema projection, shell execution and action suites pass 147/147; Work-host typecheck passes. Contracts pin compact and full results, output truncation, sandbox permissions, background continuation, timeout, abort and refusal behavior. The core formatter no longer imports generated shell or sandbox enums; interop boundary check reports 184 direct consumers."
+      "overlap": 0.7334943639291466,
+      "refreshReason": "Slate shell results now format directly from the first-party execution contract, while generated result and sandbox messages stay at transcript and transport boundaries.",
+      "evidence": "tests/packages/agent-shell-tool.test.ts passes 28/28. Its formatter parity contract compares all 7 Slate outcome kinds across 3 formatter option sets against the interop projection; interaction recording also verifies the encoded success payload. Work-host direct TypeScript check passes; rewrite:check reports 1204 claims under 0.8 with 0 floors and 40 removals. Measured overlap is 0.7334943639291466 against 1242 baseline pairs."
     },
     "host/transcript/slate-ack-obligation-store.ts": {
       "claim": "rewritten",

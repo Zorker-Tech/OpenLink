@@ -22,6 +22,8 @@
 import { ASK_MODE_MODEL_ERROR, truncateOutput } from "../../tool-support.ts"
 import { buildToolCallExecutionTimedOutMessage } from "../../tool-execution-timeout.ts"
 import { analyzeFailure } from "./retry-helpers.ts"
+import type { ShellExecResponse, ShellExecResult } from "../../../../agent-exec/shell.ts"
+import type { SandboxRule } from "../../../../local-exec/sandbox-policy.ts"
 
 const SHELL_CHAR_HARD_LIMIT = 20_000
 const SHELL_MISSING_EXIT_ERROR_MESSAGE = "Shell output ended without an exit code. Treat the command outcome as unknown; do not assume it succeeded. If this keeps happening, restart the execution environment."
@@ -395,6 +397,93 @@ export function renderShellResultToString(shellResult: RenderShellResult, option
       return "Unknown error"
     default:
       throw new Error(`Unsupported shell result: ${result.case}`)
+  }
+}
+
+/** Formats a Slate-owned execution result without projecting it through a transport message. */
+export function renderSlateShellResultToString(
+  response: ShellExecResponse,
+  options: ShellFormatterOptions & { readonly terminalsFolder?: string | undefined } = {},
+): string {
+  const sandboxPolicy = sandboxProfileFromRule(response.sandboxPolicy)
+  const outcome = response.outcome
+  const result = renderCaseFromOutcome(outcome)
+  return renderShellResultToString({
+    result,
+    ...(sandboxPolicy === undefined ? {} : { sandboxPolicy }),
+    ...(response.isBackground === undefined ? {} : { isBackground: response.isBackground }),
+    ...(options.terminalsFolder === undefined ? response.terminalsFolder === undefined ? {} : { terminalsFolder: response.terminalsFolder } : { terminalsFolder: options.terminalsFolder }),
+  }, options)
+}
+
+function sandboxProfileFromRule(policy: SandboxRule | undefined): ShellSandboxProfile | undefined {
+  if (policy === undefined) return undefined
+  const mode = policy.type === "insecure_none"
+    ? "unrestricted"
+    : policy.type === "workspace_readonly"
+      ? "workspace-readonly"
+      : policy.type === "workspace_readwrite"
+        ? "workspace-readwrite"
+        : "unspecified"
+  const networkAccess = policy.networkPolicy?.default === "allow" || (policy.networkPolicy?.allow?.length ?? 0) > 0
+  return {
+    mode,
+    ...(policy.allowlistEscalated === undefined ? {} : { allowlistEscalated: policy.allowlistEscalated }),
+    ...(mode === "unrestricted" ? {} : { networkAccess }),
+    ...(policy.networkPolicy === undefined ? {} : { networkPolicy: { allow: [...(policy.networkPolicy.allow ?? [])] } }),
+  }
+}
+
+function renderCaseFromOutcome(outcome: ShellExecResult): ShellRenderCase {
+  switch (outcome.kind) {
+    case "success":
+      return {
+        case: "success",
+        value: {
+          command: outcome.command,
+          workingDirectory: outcome.workingDirectory,
+          exitCode: outcome.exitCode,
+          signal: outcome.signal,
+          stdout: outcome.stdout,
+          stderr: outcome.stderr,
+          ...(outcome.interleavedOutput === undefined ? {} : { interleavedOutput: outcome.interleavedOutput }),
+          ...(outcome.outputFile === undefined ? {} : { outputLocation: outcome.outputFile }),
+          ...(outcome.shellId === undefined ? {} : { shellId: outcome.shellId }),
+          ...(outcome.processId === undefined ? {} : { pid: outcome.processId }),
+          ...(outcome.waitedMs === undefined ? {} : { msToWait: outcome.waitedMs }),
+          ...(outcome.backgroundReason === "user" ? { backgroundReason: "user-request" as const } : outcome.backgroundReason === "timeout" ? { backgroundReason: "timeout" as const } : {}),
+          ...(outcome.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: outcome.localExecutionTimeMs }),
+          executionTime: outcome.executionTimeMs,
+        },
+      }
+    case "failure":
+      return {
+        case: "failure",
+        value: {
+          command: outcome.command,
+          workingDirectory: outcome.workingDirectory,
+          exitCode: outcome.exitCode,
+          signal: outcome.signal,
+          stdout: outcome.stdout,
+          stderr: outcome.stderr,
+          aborted: outcome.aborted,
+          ...(outcome.interleavedOutput === undefined ? {} : { interleavedOutput: outcome.interleavedOutput }),
+          ...(outcome.outputFile === undefined ? {} : { outputLocation: outcome.outputFile }),
+          ...(outcome.abortReason === "user-abort" ? { abortReason: "user" as const } : outcome.abortReason === "timeout" ? { abortReason: "timeout" as const } : {}),
+          ...(outcome.localExecutionTimeMs === undefined ? {} : { localExecutionTimeMs: outcome.localExecutionTimeMs }),
+          executionTime: outcome.executionTimeMs,
+        },
+      }
+    case "timeout":
+      return { case: "timeout", value: { command: outcome.command, timeoutMs: outcome.timeoutMs } }
+    case "rejected":
+      return { case: "rejected", value: { command: outcome.command, reason: outcome.reason, isReadonly: outcome.isReadonly } }
+    case "permission-denied":
+      return { case: "permissionDenied", value: { command: outcome.command, error: outcome.message, isReadonly: outcome.isReadonly } }
+    case "spawn-error":
+      return { case: "spawnError", value: { command: outcome.command, error: outcome.message } }
+    case "unrecognized":
+      return { value: { command: "" } }
   }
 }
 
