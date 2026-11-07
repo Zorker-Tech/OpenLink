@@ -360,9 +360,9 @@
     },
     "packages/agent-exec/grep.ts": {
       "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "Grep request/result case binding now lives in the interop adapter; the package file is a stable resource export.",
-      "evidence": "tests/packages/interop-grep-operation-adapter.test.ts pins remote serialization, controlled routing, wrong-case refusal, and result decoding; executor, read-only accessor, remote-box, and shell suites pass. interop:check drops one direct schema consumer."
+      "overlap": 0.034,
+      "refreshReason": "Slate now owns search filters, result modes and truncation data; generated message conversion stays at the executor boundary.",
+      "evidence": "tests/packages/interop-grep-operation-adapter.test.ts pins every argument filter, count/files/content outputs, recursive workspace/editor results, truncation metadata, error and unset results, plus remote/controlled routing."
     },
     "packages/agent-exec/git-diff.ts": {
       "claim": "rewritten",
