@@ -57,6 +57,7 @@ import type { Translator } from '@/lib/i18n/messages'
 import { createPastedTextAttachment, insertRestoredPastedText, PASTED_TEXT_ATTACHMENT_MAX_COUNT, pastedTextByteLength, shouldAttachPastedText } from '@/lib/agent-runtime/pasted-text'
 import { recoverInterruptedInitialEvents } from '@/lib/agent-runtime/stream-integrity'
 import { useSessionUiState, type SessionWorkspaceTab, type SessionWorkspaceView } from '@/lib/session-ui-state'
+import { createEmptyWorkspacePreviewState, loadWorkspacePreviewState, saveWorkspacePreviewState, type WorkspacePreviewState } from '@/lib/workspace-preview-state.mjs'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
@@ -166,6 +167,7 @@ interface ChatWorkspaceProps {
   sessionTitle: string
   projectName: string
   projectId: string
+  workspaceId: string
   previewProjects: Array<{ id: string; name: string }>
   userId: string
   localRuntime: boolean
@@ -1448,6 +1450,7 @@ export function ChatWorkspace({
   sessionTitle,
   projectName,
   projectId,
+  workspaceId,
   previewProjects,
   userId,
   localRuntime,
@@ -1490,6 +1493,8 @@ export function ChatWorkspace({
     previewTargetsLoading: true,
   })
   const [previewProjectId, setPreviewProjectId] = useState(projectId)
+  const [workspacePreviewState, setWorkspacePreviewState] = useState<WorkspacePreviewState>(createEmptyWorkspacePreviewState)
+  const [workspacePreviewReady, setWorkspacePreviewReady] = useState(false)
   const [currentSessionTitle, setCurrentSessionTitle] = useState(sessionTitle)
   const titleRequestedRef = useRef(false)
   const manualTitleRef = useRef(false)
@@ -1552,6 +1557,7 @@ export function ChatWorkspace({
   const selectPreviewProject = useCallback((nextProjectId: string) => {
     if (!previewProjects.some((project) => project.id === nextProjectId)) return
     setPreviewProjectId(nextProjectId)
+    setWorkspacePreviewState((current) => ({ ...current, selectedProjectId: nextProjectId }))
     setBrowserState((current) => ({
       ...current,
       browserSessionId: undefined,
@@ -1628,13 +1634,45 @@ export function ChatWorkspace({
       surface: persistedUi.browserSurface,
       ...(persistedUi.browserAddress ? { address: persistedUi.browserAddress } : {}),
     }))
-    setPreviewProjectId(previewProjects.some((project) => project.id === persistedUi.previewProjectId)
+    const allowedProjectIds = previewProjects.map((project) => project.id)
+    const restoredWorkspacePreview = loadWorkspacePreviewState(userId, workspaceId, allowedProjectIds)
+    const sessionProjectId = previewProjects.some((project) => project.id === persistedUi.previewProjectId)
       ? persistedUi.previewProjectId!
-      : projectId)
+      : projectId
+    const selectedProjectId = restoredWorkspacePreview?.selectedProjectId
+      ?? (previewProjects.some((project) => project.id === sessionProjectId) ? sessionProjectId : projectId)
+    const migratedTargetIds = restoredWorkspacePreview?.targetIds
+      ?? (persistedUi.previewTargetId ? { [sessionProjectId]: persistedUi.previewTargetId } : {})
+    const nextWorkspacePreview: WorkspacePreviewState = {
+      version: 1,
+      selectedProjectId,
+      targetIds: migratedTargetIds,
+    }
+    setWorkspacePreviewState(nextWorkspacePreview)
+    setPreviewProjectId(selectedProjectId)
     setSelectedGitRef(persistedUi.selectedGitRef)
     setChatPanelCollapsed(persistedUi.chatPanelCollapsed)
+    setWorkspacePreviewReady(true)
     window.setTimeout(() => { uiStatePersistArmedRef.current = true }, 0)
-  }, [persistedUi.browserAddress, persistedUi.browserSurface, persistedUi.chatPanelCollapsed, persistedUi.dataSurface, persistedUi.openWorkspaceTabs, persistedUi.previewProjectId, persistedUi.selectedGitRef, persistedUi.workspaceView, previewProjects, projectId, uiReady])
+  }, [persistedUi.browserAddress, persistedUi.browserSurface, persistedUi.chatPanelCollapsed, persistedUi.dataSurface, persistedUi.openWorkspaceTabs, persistedUi.previewProjectId, persistedUi.previewTargetId, persistedUi.selectedGitRef, persistedUi.workspaceView, previewProjects, projectId, uiReady, userId, workspaceId])
+
+  useEffect(() => {
+    if (!workspacePreviewReady) return
+    saveWorkspacePreviewState(userId, workspaceId, workspacePreviewState, previewProjects.map((project) => project.id))
+  }, [previewProjects, userId, workspaceId, workspacePreviewReady, workspacePreviewState])
+
+  useEffect(() => {
+    if (!workspacePreviewReady || browserState.previewTargetsLoading || browserState.previewTargetsError) return
+    setWorkspacePreviewState((current) => {
+      const previousTargetId = current.targetIds[previewProjectId]
+      const activeTargetId = browserState.activePreviewTargetId
+      if (previousTargetId === activeTargetId) return current
+      const targetIds = { ...current.targetIds }
+      if (activeTargetId) targetIds[previewProjectId] = activeTargetId
+      else delete targetIds[previewProjectId]
+      return { ...current, targetIds }
+    })
+  }, [browserState.activePreviewTargetId, browserState.previewTargetsError, browserState.previewTargetsLoading, previewProjectId, workspacePreviewReady])
 
   useEffect(() => {
     if (!uiReady || !uiStatePersistArmedRef.current) return
@@ -2361,7 +2399,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={persistedUi.previewTargetId} openTabs={openWorkspaceTabs} uiReady={uiReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

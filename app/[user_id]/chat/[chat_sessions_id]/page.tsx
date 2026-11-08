@@ -90,6 +90,7 @@ export default async function ChatSessionPage({
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       projectId={project.id}
       projectName={project.name}
+      workspaceId={workspace.id}
       previewProjects={previewProjectRows
         .filter((candidate) => candidate.kind === 'code' && candidate.status !== 'archived')
         .map((candidate) => ({ id: candidate.id, name: candidate.name }))}
