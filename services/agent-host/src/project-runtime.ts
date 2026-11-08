@@ -58,7 +58,7 @@ export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
  * Reattach treats an older descriptor as stale so the provisioning path
  * rewrites the OpenSandbox config and reconciles its containers.
  */
-const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-02-agent-tool-registry-v2'
+const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-08-preview-worktree-storage-v3'
 
 /**
  * Hash the committed tree, tracked working-tree diff, and non-ignored
@@ -353,6 +353,10 @@ function randomSecret(): string {
   return randomBytes(32).toString('base64url')
 }
 
+function projectGitPreviewWorktreeRoot(workspacePath: string): string {
+  return resolveGuestPath(workspacePath, '..', '.openlink-preview-worktrees')
+}
+
 function projectDiskMode(value: unknown): ProjectVmDiskMode | undefined {
   return value === 'thin' || value === 'thick' ? value : undefined
 }
@@ -471,6 +475,8 @@ export class ProjectRuntimeManager {
   private readonly gitInitializations = new Map<string, Promise<void>>()
   /** One expensive revision scan per project can run at a time. */
   private readonly sourceRevisionProbes = new Map<string, Promise<string | null>>()
+  /** One preview workload per project/commit can be created at a time. */
+  private readonly gitPreviewOpens = new Map<string, Promise<{ version: ProjectGitVersion; targetId: string }>>()
   /**
    * Session storage is durable VM state. Repeated page leases must not pay
    * two remote mkdir/chmod round trips each time; cache the completed (or
@@ -1291,16 +1297,59 @@ export class ProjectRuntimeManager {
       throw new AgentHostError('GIT_CHECKOUT_FAILED', `Git 版本无法用于预览：${error instanceof Error ? error.message : String(error)}`, { retryable: true })
     }
 
-    const worktreePath = resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees', commit)
+    const key = `${projectId}:${commit}`
+    const existing = this.gitPreviewOpens.get(key)
+    if (existing) return existing
+    const task = this.createGitPreviewTarget(descriptor, projectId, commit)
+    this.gitPreviewOpens.set(key, task)
+    try {
+      return await task
+    } finally {
+      if (this.gitPreviewOpens.get(key) === task) this.gitPreviewOpens.delete(key)
+    }
+  }
+
+  private async createGitPreviewTarget(
+    descriptor: ProjectRuntimeDescriptor,
+    projectId: string,
+    commit: string,
+  ): Promise<{ version: ProjectGitVersion; targetId: string }> {
+    if (!this.machineDriver.runInMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM command runner is unavailable')
+
+    const worktreeRoot = projectGitPreviewWorktreeRoot(descriptor.workspacePath)
+    const worktreePath = resolveGuestPath(worktreeRoot, commit)
+    await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['!', '-L', worktreeRoot]).catch(() => {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 目录不能是符号链接')
+    })
+    await this.machineDriver.runInMachine(descriptor.machineName, 'mkdir', ['-p', worktreeRoot])
+    await this.machineDriver.runInMachine(descriptor.machineName, 'chmod', ['700', worktreeRoot])
+    const [workspaceRealPath, worktreeRootRealPath] = await Promise.all([
+      this.machineDriver.runInMachine(descriptor.machineName, 'realpath', ['-e', descriptor.workspacePath]),
+      this.machineDriver.runInMachine(descriptor.machineName, 'realpath', ['-e', worktreeRoot]),
+    ])
+    if (workspaceRealPath.stdout.trim() !== resolveGuestPath(descriptor.workspacePath)
+      || worktreeRootRealPath.stdout.trim() !== worktreeRoot) {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 路径未通过项目目录校验')
+    }
+
+    await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['!', '-L', worktreePath]).catch(() => {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 不能是符号链接')
+    })
     const present = await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', worktreePath]).then(() => true, () => false)
     if (present) {
       const head = await this.machineDriver.runInMachine(descriptor.machineName, 'git', ['-C', worktreePath, 'rev-parse', '--verify', 'HEAD'])
       if (head.stdout.trim().toLowerCase() !== commit) throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 与所选版本不一致')
     } else {
-      await this.machineDriver.runInMachine(descriptor.machineName, 'mkdir', ['-p', resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees')])
+      await this.machineDriver.runInMachine(descriptor.machineName, 'git', [
+        '-C', descriptor.workspacePath, 'worktree', 'prune', '--expire', 'now',
+      ])
       await this.machineDriver.runInMachine(descriptor.machineName, 'git', [
         '-C', descriptor.workspacePath, 'worktree', 'add', '--detach', worktreePath, commit,
       ])
+    }
+    const worktreeRealPath = await this.machineDriver.runInMachine(descriptor.machineName, 'realpath', ['-e', worktreePath])
+    if (worktreeRealPath.stdout.trim() !== worktreePath) {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 路径未通过项目目录校验')
     }
 
     const manifestResult = await this.machineDriver.runInMachine(descriptor.machineName, 'cat', [resolveGuestPath(worktreePath, 'package.json')]).catch(() => null)
@@ -1341,6 +1390,13 @@ export class ProjectRuntimeManager {
       await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', dependencyPath]).catch(() => {
         throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', '项目依赖尚未安装。请先在当前项目中安装依赖，再打开 Git 版本预览。', { retryable: true })
       })
+      await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['!', '-L', dependencyPath]).catch(() => {
+        throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', '项目依赖目录不能是符号链接。请先在当前项目中安装依赖，再打开 Git 版本预览。', { retryable: true })
+      })
+      const dependencyRealPath = await this.machineDriver.runInMachine(descriptor.machineName, 'realpath', ['-e', dependencyPath])
+      if (dependencyRealPath.stdout.trim() !== dependencyPath) {
+        throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', '项目依赖目录未通过路径校验。请在当前项目中重新安装依赖后重试。', { retryable: true })
+      }
       sandbox = await Sandbox.create({
         connectionConfig,
         image: descriptor.agentWorkerImage,
@@ -1399,8 +1455,11 @@ export class ProjectRuntimeManager {
       await this.ensureProjectGitRepository(projectId)
       let workspacePath = descriptor.workspacePath
       if (worktreeRef) {
-        workspacePath = resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees', worktreeRef)
+        workspacePath = resolveGuestPath(projectGitPreviewWorktreeRoot(descriptor.workspacePath), worktreeRef)
+        await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['!', '-L', workspacePath])
         await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', workspacePath])
+        const realPath = await this.machineDriver.runInMachine(descriptor.machineName, 'realpath', ['-e', workspacePath])
+        if (realPath.stdout.trim() !== workspacePath) throw new Error('Git preview path did not resolve inside the Project workspace')
       }
       const result = await this.machineDriver.runInMachine(descriptor.machineName, 'bash', [
         '-lc',
@@ -2898,7 +2957,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       `execd_image = "${input.execdImage}"`,
       '',
       '[storage]',
-      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}", "/usr/local/bin/openlink-agent-desktop", "/run/user/1000/openlink-desktop-tool.sock", "/var/lib/openlink/agent-tools"]`,
+      `allowed_host_paths = ["${input.workspacePath}", "${input.sessionStorageRoot}", "${projectGitPreviewWorktreeRoot(input.workspacePath)}", "/usr/local/bin/openlink-agent-desktop", "/run/user/1000/openlink-desktop-tool.sock", "/var/lib/openlink/agent-tools"]`,
       'volume_default_size = "1Gi"',
       '',
       '[store]',
