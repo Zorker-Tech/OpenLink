@@ -48,6 +48,7 @@ test('recreates failed Project VM service containers instead of restarting stale
   const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
     calls.push({ command, args })
     const podmanArgs = command === 'sudo' && args[0] === '-n' && args[1] === 'podman' ? args.slice(2) : command === 'podman' ? args : null
+    if (command === 'realpath' && args[0] === '-e') return { stdout: `${resolve(input.workspacePath, '..', '.openlink-preview-worktrees')}\n`, stderr: '' }
     if (command === 'id' && args[0] === '-u') return { stdout: '1000\n', stderr: '' }
     if (command === 'id' && args[0] === '-g') return { stdout: '1000\n', stderr: '' }
     if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'exists') return { stdout: 'true\n', stderr: '' }
@@ -135,6 +136,7 @@ test('does not fail Project VM activation when a stale session workload cannot r
   const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
     calls.push({ command, args })
     const podmanArgs = command === 'sudo' && args[0] === '-n' && args[1] === 'podman' ? args.slice(2) : command === 'podman' ? args : null
+    if (command === 'realpath' && args[0] === '-e') return { stdout: `${resolve(input.workspacePath, '..', '.openlink-preview-worktrees')}\n`, stderr: '' }
     if (command === 'id' && args[0] === '-u') return { stdout: '1000\n', stderr: '' }
     if (command === 'id' && args[0] === '-g') return { stdout: '1000\n', stderr: '' }
     if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'exists') return { stdout: 'true\n', stderr: '' }
@@ -201,6 +203,7 @@ test('resumes definition-identical Project VM services after a VM restart withou
   const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
     calls.push({ command, args })
     const podmanArgs = command === 'podman' ? args : null
+    if (command === 'realpath' && args[0] === '-e') return { stdout: `${resolve('/home/core/openlink/projects/test/workspace', '..', '.openlink-preview-worktrees')}\n`, stderr: '' }
     if (command === 'id' && args[0] === '-u') return { stdout: '1000\n', stderr: '' }
     if (command === 'id' && args[0] === '-g') return { stdout: '1000\n', stderr: '' }
     if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'exists') return { stdout: 'true\n', stderr: '' }
@@ -333,7 +336,6 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     execdImage: 'openlink/opensandbox-execd:dev',
     egressImage: 'openlink/opensandbox-egress:dev',
     agentWorkerImage: 'openlink/agent-worker:dev',
-    projectPortBase: 51_000,
     projectPortRangeSize: 10,
     hostPortAvailable: async () => true,
   })
@@ -349,8 +351,8 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     assert.notEqual(allocations[0]?.ports.codeServer, allocations[1]?.ports.codeServer)
     assert.notEqual(allocations[0]?.ports.codeServer, allocations[1]?.ports.browserHost)
     assert.notEqual(allocations[1]?.ports.codeServer, allocations[0]?.ports.browserHost)
-    assert.deepEqual(allocations.map((allocation) => allocation.ports.opensandbox).sort(), [51_000, 51_001])
-    assert.deepEqual(allocations.map((allocation) => allocation.ports.codeServer).sort(), [53_000, 53_001])
+    assert.deepEqual(allocations.map((allocation) => allocation.ports.opensandbox).sort(), [57_000, 57_001])
+    assert.deepEqual(allocations.map((allocation) => allocation.ports.codeServer).sort(), [59_000, 59_001])
     assert.match(await readFile(`${stateRoot}/projects/${first}/runtime.json`, 'utf8'), /"diskMode":"thin"/)
     assert.match(await readFile(`${stateRoot}/projects/${second}/runtime.json`, 'utf8'), /"diskMode":"thick"/)
     assert.match(await readFile(`${stateRoot}/projects/${first}/ports.json`, 'utf8'), new RegExp(first))

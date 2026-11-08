@@ -542,7 +542,7 @@ export class ProjectRuntimeManager {
     // OpenSandbox allocates sandbox ingress ports from 44000-50000 inside the
     // project VM. Keep the two long-lived control-plane endpoints outside that
     // range so a session cannot collide with its own OpenSandbox/Browser Host.
-    this.projectPortBase = port(options.projectPortBase ?? 51_000, 'projectPortBase')
+    this.projectPortBase = port(options.projectPortBase ?? 57_000, 'projectPortBase')
     this.projectPortRangeSize = options.projectPortRangeSize ?? 1_000
     this.opensandboxPortOffset = options.opensandboxPortOffset ?? 0
     this.browserPortOffset = options.browserPortOffset ?? 1_000

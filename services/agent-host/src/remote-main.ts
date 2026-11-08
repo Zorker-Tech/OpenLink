@@ -185,7 +185,7 @@ const projectRuntimeManager = new ProjectRuntimeManager({
     [manifest.images.agentWorkerImage]: imageArchive,
     [manifest.images.rpcImage]: imageArchive,
   },
-  projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000),
+  projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 57_000, 1_024, 65_000),
   projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
   browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
   publicHost: '127.0.0.1',

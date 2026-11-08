@@ -20,7 +20,7 @@ test('interrupt owns the request while project provisioning is still pending', {
   let created = 0
   const backend: PromptRuntimeBackend = { createSession: async () => { created++; return { prompt: async () => new Response(''), cleanup: async () => {} } }, close: async () => {} }
   const runtime = await startPromptHttpServer({ host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot, transport: 'test', sessionIdleTtlMs: 60000,
-    projectRuntimeManager: { ensure: async () => { started.resolve(); await gate.promise; return {} }, prepareSessionStorage: async () => {}, ensureProjectGitRepository: async () => {} } as unknown as ProjectRuntimeController,
+    projectRuntimeManager: { ensure: async () => { started.resolve(); await gate.promise; return {} }, prepareSessionStorage: async () => {}, ensureProjectGitRepository: async () => {}, getGitPreviewSessionBinding: async () => undefined } as unknown as ProjectRuntimeController,
   }, backend)
   const url = `http://127.0.0.1:${(runtime.server.address() as AddressInfo).port}/v1/agent/sessions/controls`
   try {
@@ -80,6 +80,7 @@ test('fork persists the native child thread into the distinct target session roo
   }
   const manager = {
     ensure: async () => ({}), prepareSessionStorage: async () => '', ensureProjectGitRepository: async () => {},
+    getGitPreviewSessionBinding: async () => undefined,
     persistCodexThreadId: async (_project: string, user: string, workspace: string, session: string, thread: string) => { persisted.push(`${user}:${workspace}:${session}:${thread}`) },
   } as unknown as ProjectRuntimeController
   const runtime = await startPromptHttpServer({ host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot, transport: 'test', sessionIdleTtlMs: 60000, projectRuntimeManager: manager }, backend)
