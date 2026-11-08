@@ -1716,13 +1716,13 @@ export function ChatWorkspace({
       workspaceView,
       dataSurface,
       browserSurface: browserState.surface,
-      browserAddress: browserState.address,
+      ...(!browserState.readOnlyExternal ? { browserAddress: browserState.address } : {}),
       previewProjectId,
       previewTargetId: browserState.activePreviewTargetId ?? null,
       selectedGitRef,
       chatPanelCollapsed,
     })
-  }, [browserState.activePreviewTargetId, browserState.address, browserState.surface, chatPanelCollapsed, dataSurface, openWorkspaceTabs, previewProjectId, selectedGitRef, uiReady, updatePersistedUi, workspaceView])
+  }, [browserState.activePreviewTargetId, browserState.address, browserState.readOnlyExternal, browserState.surface, chatPanelCollapsed, dataSurface, openWorkspaceTabs, previewProjectId, selectedGitRef, uiReady, updatePersistedUi, workspaceView])
   const [gitVersionError, setGitVersionError] = useState<string | null>(null)
   const [runtimeResources, setRuntimeResources] = useState<RuntimeComposerResources | null>(null)
   const [codexResources, setCodexResources] = useState<CodexComposerResources | null>(null)
@@ -2281,11 +2281,23 @@ export function ChatWorkspace({
     await deleteChat(sessionId)
   }, [deleteChat, sessionId])
 
+  const activePreviewTarget = browserState.previewTargets.find((target) => target.id === browserState.activePreviewTargetId)
+  const activePreviewGitRef = activePreviewTarget
+    ? activePreviewTarget.source === 'worktree' ? activePreviewTarget.gitRef ?? null : null
+    : selectedGitRef
+
   const selectGitVersion = useCallback(async (ref: string | null) => {
-    const previous = selectedGitRef
+    const previous = activePreviewGitRef
     setGitVersionError(null)
     if (!ref && !previous) {
       browserWorkbenchRef.current?.reload()
+      return
+    }
+    if (!ref) {
+      setSelectedGitRef(null)
+      const latestTarget = browserState.previewTargets.find((target) => target.source !== 'worktree')
+      if (latestTarget) browserWorkbenchRef.current?.selectPreviewTarget(latestTarget.id)
+      else browserWorkbenchRef.current?.refreshPreviewTargets()
       return
     }
     setSelectedGitRef(ref)
@@ -2296,15 +2308,16 @@ export function ChatWorkspace({
         body: JSON.stringify({ ref: ref ?? 'latest' }),
         cache: 'no-store',
       })
-      const payload = await response.json().catch(() => null) as { version?: GitVersionOption; error?: { message?: unknown } } | null
+      const payload = await response.json().catch(() => null) as { version?: GitVersionOption; targetId?: string; error?: { message?: unknown } } | null
       if (!response.ok) throw new Error(typeof payload?.error?.message === 'string' ? payload.error.message : t('Git 版本切换失败'))
       if (payload?.version) setGitVersions((current) => current.map((version) => ({ ...version, current: version.ref === payload.version!.ref })))
-      browserWorkbenchRef.current?.reload()
+      if (typeof payload?.targetId !== 'string') throw new Error(t('Git 版本切换失败'))
+      browserWorkbenchRef.current?.selectPreviewTarget(payload.targetId)
     } catch (error) {
       setSelectedGitRef(previous)
       setGitVersionError(error instanceof Error ? error.message : t('Git 版本切换失败'))
     }
-  }, [selectedGitRef, sessionId])
+  }, [activePreviewGitRef, browserState.previewTargets, sessionId, t])
 
   const toggleChatPanel = () => {
     // There is no resizable workspace panel to collapse when every workspace
@@ -2437,7 +2450,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={activePreviewGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

@@ -8,6 +8,7 @@ import { Buffer } from 'node:buffer'
 import { createServer } from 'node:net'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { ConnectionConfig, Sandbox } from '@alibaba-group/opensandbox'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
@@ -84,6 +85,34 @@ revision="$(printf "%s\0%s\0%s" "$head" "$tracked" "$untracked" | sha256sum | cu
 printf 'git-sha256:%s\n' "$revision"
 `
 
+/** Select only known web-server entry points. The project script itself runs
+ * inside an isolated, credential-free workload with egress disabled. */
+export function previewRunCommand(manifest: {
+  packageManager?: unknown
+  scripts?: Record<string, unknown>
+  dependencies?: Record<string, unknown>
+  devDependencies?: Record<string, unknown>
+} | null): { argv: string[]; script: 'dev' | 'start' } | null {
+  if (!manifest?.scripts || typeof manifest.scripts !== 'object') return null
+  const script = typeof manifest.scripts.dev === 'string' ? 'dev'
+    : typeof manifest.scripts.start === 'string' ? 'start'
+      : null
+  if (!script) return null
+  const dependencies = { ...manifest.dependencies, ...manifest.devDependencies }
+  const framework = ['next', 'vite', 'astro', '@angular/cli', 'react-scripts']
+    .find((name) => Object.hasOwn(dependencies, name))
+  if (!framework) return null
+  const packageManager = typeof manifest.packageManager === 'string' ? manifest.packageManager.split('@', 1)[0] : 'npm'
+  if (!['npm', 'pnpm', 'yarn'].includes(packageManager)) return null
+  const runner = packageManager === 'npm' ? ['npm', 'run'] : [packageManager, 'run']
+  const args = framework === 'next'
+    ? ['--hostname', '0.0.0.0', '--port', '4173']
+    : framework === 'react-scripts'
+      ? []
+      : ['--host', '0.0.0.0', '--port', '4173']
+  return { argv: [...runner, script, ...(args.length ? ['--', ...args] : [])], script }
+}
+
 /**
  * Resolve the architecture of a persisted runtime. Older descriptors predate
  * the explicit field: qemu-kvm belonged to T1 and podman-machine to E1. T2 also
@@ -138,8 +167,10 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
 export interface ProjectPreviewTarget {
   id: string
   label: string
-  source: 'sandbox'
+  source: 'sandbox' | 'worktree'
   sessionId?: string
+  gitRef?: string
+  targetRevision?: string
   url: string
   headers: Record<string, string>
   port: number
@@ -1227,7 +1258,11 @@ export class ProjectRuntimeManager {
    * configuration and returns null; operational failures remain recoverable
    * errors for callers that need revision-bound writes.
    */
-  async getProjectSourceRevision(projectId: string): Promise<string | null> {
+  async getProjectSourceRevision(projectId: string, worktreeRef?: string): Promise<string | null> {
+    if (worktreeRef !== undefined) {
+      if (!/^[0-9a-f]{40}$/i.test(worktreeRef)) throw new AgentHostError('GIT_REF_INVALID', 'Git preview reference is invalid')
+      return this.readProjectSourceRevision(projectId, worktreeRef.toLowerCase())
+    }
     const inFlight = this.sourceRevisionProbes.get(projectId)
     if (inFlight) return inFlight
 
@@ -1240,16 +1275,138 @@ export class ProjectRuntimeManager {
     }
   }
 
-  private async readProjectSourceRevision(projectId: string): Promise<string | null> {
+  async openGitPreviewVersion(projectId: string, ref: string): Promise<{ version: ProjectGitVersion; targetId: string }> {
+    const descriptor = await this.ensure(projectId)
+    if (!this.machineDriver.runInMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM command runner is unavailable')
+    if (!/^[0-9a-f]{7,40}$/i.test(ref)) throw new AgentHostError('GIT_REF_INVALID', 'Git preview reference is invalid')
+
+    let commit = ''
+    try {
+      const result = await this.machineDriver.runInMachine(descriptor.machineName, 'git', [
+        '-C', descriptor.workspacePath, 'rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`,
+      ])
+      commit = result.stdout.trim().toLowerCase()
+      if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error('Git returned an invalid commit id')
+    } catch (error) {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', `Git 版本无法用于预览：${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    }
+
+    const worktreePath = resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees', commit)
+    const present = await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', worktreePath]).then(() => true, () => false)
+    if (present) {
+      const head = await this.machineDriver.runInMachine(descriptor.machineName, 'git', ['-C', worktreePath, 'rev-parse', '--verify', 'HEAD'])
+      if (head.stdout.trim().toLowerCase() !== commit) throw new AgentHostError('GIT_CHECKOUT_FAILED', '预览 worktree 与所选版本不一致')
+    } else {
+      await this.machineDriver.runInMachine(descriptor.machineName, 'mkdir', ['-p', resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees')])
+      await this.machineDriver.runInMachine(descriptor.machineName, 'git', [
+        '-C', descriptor.workspacePath, 'worktree', 'add', '--detach', worktreePath, commit,
+      ])
+    }
+
+    const manifestResult = await this.machineDriver.runInMachine(descriptor.machineName, 'cat', [resolveGuestPath(worktreePath, 'package.json')]).catch(() => null)
+    let manifest: { scripts?: Record<string, unknown>; dependencies?: Record<string, unknown>; devDependencies?: Record<string, unknown> } | null = null
+    try {
+      const parsed = manifestResult ? JSON.parse(manifestResult.stdout) as typeof manifest : null
+      if (parsed && typeof parsed === 'object') manifest = parsed
+    } catch {}
+    const run = previewRunCommand(manifest)
+    if (!run) throw new AgentHostError('PREVIEW_START_COMMAND_UNAVAILABLE', '所选版本没有可识别的 Web 开发脚本，无法启动隔离预览')
+
+    const dependencyPath = resolveGuestPath(descriptor.workspacePath, 'node_modules')
+
+    const listUrl = new URL('/v1/sandboxes', descriptor.opensandboxEndpoint)
+    listUrl.searchParams.set('metadata', `openlink.project_id=${projectId}&openlink.preview_ref=${commit}`)
+    listUrl.searchParams.set('pageSize', '20')
+    const listed = await fetch(listUrl, {
+      headers: { 'OPEN-SANDBOX-API-KEY': descriptor.opensandboxApiKey },
+      signal: AbortSignal.timeout(5_000),
+      cache: 'no-store',
+    })
+    if (!listed.ok) throw new AgentHostError('PROVISIONING_FAILED', `Could not inspect Git preview runtime (${listed.status})`, { retryable: true })
+    const body = await listed.json() as { items?: Array<{ id?: unknown; status?: { state?: unknown } }> }
+    const running = (body.items ?? []).find((item) => typeof item.id === 'string' && !/failed|deleted|stopped|terminated|expired/i.test(String(item.status?.state ?? '')))
+
+    const endpoint = new URL(descriptor.opensandboxEndpoint)
+    const connectionConfig = new ConnectionConfig({
+      domain: endpoint.host,
+      protocol: endpoint.protocol === 'https:' ? 'https' : 'http',
+      apiKey: descriptor.opensandboxApiKey,
+      requestTimeoutSeconds: 120,
+      useServerProxy: true,
+    })
+    let sandbox: Sandbox
+    if (typeof running?.id === 'string') {
+      sandbox = await Sandbox.connect({ connectionConfig, sandboxId: running.id, readyTimeoutSeconds: 60 })
+    } else {
+      await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', dependencyPath]).catch(() => {
+        throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', '项目依赖尚未安装。请先在当前项目中安装依赖，再打开 Git 版本预览。', { retryable: true })
+      })
+      sandbox = await Sandbox.create({
+        connectionConfig,
+        image: descriptor.agentWorkerImage,
+        timeoutSeconds: 86_400,
+        metadata: {
+          'openlink.project_id': projectId,
+          'openlink.preview_ref': commit,
+          'openlink.preview_provider': 'worktree',
+        },
+        networkPolicy: { defaultAction: 'deny', egress: [] },
+        volumes: [
+          { name: 'workspace', host: { path: worktreePath }, mountPath: '/workspace', readOnly: false },
+          { name: 'project-dependencies', host: { path: dependencyPath }, mountPath: '/opt/openlink/project-node-modules', readOnly: true },
+        ],
+        resource: { cpu: '2', memory: '2Gi' },
+        readyTimeoutSeconds: 180,
+      })
+    }
+
+    try {
+      if (typeof running?.id === 'string') await sandbox.renew(86_400).catch(() => undefined)
+      await sandbox.commands.run(['sh', '-lc', 'if [ -L /workspace/node_modules ]; then ln -sfnT /opt/openlink/project-node-modules /workspace/node_modules; elif [ ! -e /workspace/node_modules ]; then ln -s /opt/openlink/project-node-modules /workspace/node_modules; fi'], {
+        workingDirectory: '/workspace', timeoutSeconds: 15,
+      })
+      const port = 4173
+      const check = await sandbox.commands.run(['curl', '-sS', '-o', '/dev/null', '--max-time', '2', `http://127.0.0.1:${port}/`], {
+        workingDirectory: '/workspace', timeoutSeconds: 5,
+      }).then(() => true, () => false)
+      if (!check) {
+        await sandbox.commands.run(run.argv, {
+          workingDirectory: '/workspace',
+          background: true,
+          envs: { HOST: '0.0.0.0', HOSTNAME: '0.0.0.0', PORT: String(port), OPENLINK_PREVIEW_PORT: String(port) },
+        })
+        await sandbox.commands.run(['sh', '-lc', 'for i in $(seq 1 45); do curl -sS -o /dev/null --max-time 1 http://127.0.0.1:4173/ && exit 0; sleep 1; done; exit 1'], {
+          workingDirectory: '/workspace', timeoutSeconds: 50,
+        })
+      }
+    } catch (error) {
+      if (typeof running?.id !== 'string') await sandbox.kill().catch(() => undefined)
+      throw new AgentHostError('PREVIEW_START_FAILED', `Git 版本预览启动失败：${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    } finally {
+      await sandbox.close().catch(() => undefined)
+    }
+
+    const version = (await this.listGitVersions(projectId)).find((candidate) => candidate.ref === commit)
+    if (!version) throw new AgentHostError('GIT_CHECKOUT_FAILED', '无法读取所选 Git 版本')
+    const id = createPreviewTargetId(descriptor.opensandboxApiKey, projectId, sandbox.id, 4173)
+    return { version, targetId: id }
+  }
+
+  private async readProjectSourceRevision(projectId: string, worktreeRef?: string): Promise<string | null> {
     const descriptor = await this.ensure(projectId)
     if (!this.machineDriver.runInMachine) return null
     try {
       await this.ensureProjectGitRepository(projectId)
+      let workspacePath = descriptor.workspacePath
+      if (worktreeRef) {
+        workspacePath = resolveGuestPath(descriptor.workspacePath, '.openlink', 'preview-worktrees', worktreeRef)
+        await this.machineDriver.runInMachine(descriptor.machineName, 'test', ['-d', workspacePath])
+      }
       const result = await this.machineDriver.runInMachine(descriptor.machineName, 'bash', [
         '-lc',
         PREVIEW_SOURCE_REVISION_SCRIPT,
         'openlink-preview-source-revision',
-        descriptor.workspacePath,
+        workspacePath,
       ])
       const revision = result.stdout.trim()
       if (!isPreviewSourceRevision(revision)) throw new Error('Source revision response was invalid')
@@ -1278,27 +1435,6 @@ export class ProjectRuntimeManager {
         && !path.split('/').includes('..')
       ))
       .slice(0, 5_000)
-  }
-
-  async checkoutGitVersion(projectId: string, ref: string): Promise<ProjectGitVersion> {
-    const descriptor = await this.ensure(projectId)
-    if (!this.machineDriver.runInMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM command runner is unavailable')
-    if (ref !== 'latest' && !/^[0-9a-f]{7,40}$/i.test(ref)) throw new AgentHostError('GIT_REF_INVALID', 'Git version reference is invalid')
-    const status = await this.machineDriver.runInMachine(descriptor.machineName, 'git', ['-C', descriptor.workspacePath, 'status', '--porcelain'])
-    if (status.stdout.trim()) {
-      throw new AgentHostError('GIT_WORKTREE_DIRTY', '请先保存或提交当前工作区改动，再切换版本')
-    }
-    try {
-      const target = ref === 'latest' ? 'main' : ref
-      await this.machineDriver.runInMachine(descriptor.machineName, 'git', ['-C', descriptor.workspacePath, 'cat-file', '-e', `${target}^{commit}`])
-      await this.machineDriver.runInMachine(descriptor.machineName, 'git', ['-C', descriptor.workspacePath, 'checkout', ...(ref === 'latest' ? ['main'] : ['--detach', '--force', ref])])
-    } catch (error) {
-      throw new AgentHostError('GIT_CHECKOUT_FAILED', `Git 版本切换失败：${error instanceof Error ? error.message : String(error)}`, { retryable: true })
-    }
-    const versions = await this.listGitVersions(projectId)
-    const selected = versions.find((version) => version.current)
-    if (!selected) throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Git 版本切换后无法读取版本信息', { retryable: true })
-    return selected
   }
 
   private async initializeProjectGitRepository(descriptor: ProjectRuntimeDescriptor): Promise<void> {
@@ -1356,14 +1492,19 @@ export class ProjectRuntimeManager {
       }>
     }
     const sandboxes = (body.items ?? [])
-      .filter((item) => typeof item.id === 'string' && !/failed|deleted|stopped/i.test(String(item.status?.state ?? '')))
-      .slice(0, 12)
+      .filter((item) => typeof item.id === 'string' && !/failed|deleted|stopped|terminated|expired/i.test(String(item.status?.state ?? '')))
       .map((item) => ({
         id: item.id as string,
         sessionId: typeof item.metadata?.['openlink.session_id'] === 'string'
           ? item.metadata['openlink.session_id'] as string
           : undefined,
+        gitRef: typeof item.metadata?.['openlink.preview_ref'] === 'string'
+          && /^[0-9a-f]{40}$/i.test(item.metadata['openlink.preview_ref'] as string)
+          ? (item.metadata['openlink.preview_ref'] as string).toLowerCase()
+          : undefined,
       }))
+      .sort((a, b) => Number(Boolean(b.gitRef)) - Number(Boolean(a.gitRef)))
+      .slice(0, 12)
     if (preferredSessionId) {
       sandboxes.sort((a, b) => Number(b.sessionId === preferredSessionId) - Number(a.sessionId === preferredSessionId))
     }
@@ -1385,11 +1526,15 @@ export class ProjectRuntimeManager {
           if (response.status < 200 || response.status >= 400) continue
           if (response.body) await response.body.cancel().catch(() => undefined)
           const id = createPreviewTargetId(descriptor.opensandboxApiKey, projectId, sandbox.id, port)
+          const gitRef = sandbox.gitRef
+          const targetRevision = gitRef ? await this.getProjectSourceRevision(projectId, gitRef).catch(() => null) : null
           targets.push({
             id,
-            label: `Preview ${id.slice(0, 6)} · :${port}`,
-            source: 'sandbox',
+            label: gitRef ? `Git @${gitRef.slice(0, 7)} · :${port}` : `Preview ${id.slice(0, 6)} · :${port}`,
+            source: gitRef ? 'worktree' : 'sandbox',
             ...(sandbox.sessionId ? { sessionId: sandbox.sessionId } : {}),
+            ...(gitRef ? { gitRef } : {}),
+            ...(targetRevision ? { targetRevision } : {}),
             url: `http://host.containers.internal:${descriptor.servicePorts.opensandbox}/v1/sandboxes/${encodeURIComponent(sandbox.id)}/proxy/${port}/`,
             headers,
             port,

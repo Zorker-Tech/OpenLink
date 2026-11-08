@@ -18,6 +18,19 @@ function normalizeAddress(value: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`
 }
 
+function safeExternalPreviewUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '')
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null
+    if (!hostname.includes('.') || ['.localhost', '.local', '.internal', '.lan', '.home.arpa'].some((suffix) => hostname.endsWith(suffix))) return null
+    if (/^\d+(?:\.\d+){3}$/.test(hostname) || hostname.includes(':')) return null
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 export interface BrowserWorkbenchUiState {
   /** Private id used by the authenticated Chat API to bind Pi browser tools. */
   browserSessionId?: string
@@ -26,6 +39,7 @@ export interface BrowserWorkbenchUiState {
   canGoForward: boolean
   canInspect: boolean
   externalUrl?: string
+  readOnlyExternal?: boolean
   inspectMode: boolean
   annotateMode: boolean
   selectedElement?: ElementReference
@@ -121,6 +135,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const [status, setStatus] = useState<BrowserConnectionStatus>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState('')
+  const [readOnlyExternalUrl, setReadOnlyExternalUrl] = useState<string | null>(null)
+  const [externalReloadToken, setExternalReloadToken] = useState(0)
   const [previewPagePath, setPreviewPagePath] = useState<string | undefined>()
   const [previewBootstrapPath, setPreviewBootstrapPath] = useState<string | undefined>()
   const [inspectionMode, setInspectionMode] = useState<PreviewInspectionMode>('none')
@@ -217,7 +233,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       connectionRef.current = next
       setConnection(next)
       setSessionState(descriptor.session)
-      if (descriptor.previewTarget?.id) setActivePreviewTargetId(descriptor.previewTarget.id)
+      if (descriptor.previewTarget?.id) {
+        setActivePreviewTargetId(descriptor.previewTarget.id)
+        setPreviewTargets((current) => [
+          ...current.filter((target) => target.id !== descriptor.previewTarget!.id),
+          descriptor.previewTarget!,
+        ])
+      }
       setAddress(descriptor.session.pages.find((page) => page.active)?.url || initialUrl || '')
       next.onStatus(setStatus)
       next.onState((state) => {
@@ -449,9 +471,32 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const navigate = useCallback((value: string) => {
     if (!connection || !activePage) return
     const url = normalizeAddress(value)
+    if (surface === 'native-preview') {
+      let managedOrigin: string | null = null
+      try { managedOrigin = new URL(connection.descriptor.connection.previewUrl || '').origin } catch {}
+      let requestedOrigin: string | null = null
+      try { requestedOrigin = new URL(url).origin } catch {}
+      if (requestedOrigin !== managedOrigin) {
+        const candidate = safeExternalPreviewUrl(url)
+        if (!candidate) {
+          setError(t('该网址不支持在预览中打开。'))
+          return
+        }
+        setReadOnlyExternalUrl(candidate)
+        setAddress(candidate)
+        setInspectionMode('none')
+        setSelectedElement(null)
+        setSelectedStyles(undefined)
+        setPreviewLayers(undefined)
+        setThemeTokens(undefined)
+        setError(null)
+        return
+      }
+    }
+    setReadOnlyExternalUrl(null)
     setAddress(url)
     try { connection.sendAction({ type: 'page.navigate', pageId: activePage.id, url }) } catch {}
-  }, [activePage, connection])
+  }, [activePage, connection, surface, t])
 
   const handlePreviewPageUrlChange = useCallback((url: string, pagePath: string) => {
     const safePath = sanitizePreviewPagePath(pagePath)
@@ -462,6 +507,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [])
 
   const externalUrl = (() => {
+    if (readOnlyExternalUrl) return readOnlyExternalUrl
     if (surface !== 'native-preview') return activePage?.url
     const previewUrl = connection?.descriptor.connection.previewUrl
     if (!previewUrl) return undefined
@@ -470,6 +516,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     url.pathname = url.pathname.replace(/\/__openlink_bootstrap$/, '/')
     return url.toString()
   })()
+  const readOnlyExternal = Boolean(readOnlyExternalUrl)
 
   // The control socket can be connected before the browser session has
   // finished provisioning its page. Keep the same branded loading state for
@@ -480,11 +527,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
 
   const setNextSurface = useCallback((next: 'native-preview' | 'chromium-stream') => {
     if (next === surface) return
+    setReadOnlyExternalUrl(null)
     setSurface(next)
     void openSession(next, address)
   }, [address, openSession, surface])
 
   const selectPreviewTarget = useCallback((targetId: string, pagePath?: string) => {
+    setReadOnlyExternalUrl(null)
     setActivePreviewTargetId(targetId)
     // A different development server is an authenticated target resolved by
     // Agent Host. The native Preview surface is recreated against it so the
@@ -498,11 +547,11 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [externalUrl])
 
   useImperativeHandle(ref, () => ({
-    back: () => sendPageAction('page.back'),
-    forward: () => sendPageAction('page.forward'),
+    back: () => { if (!readOnlyExternal) sendPageAction('page.back') },
+    forward: () => { if (!readOnlyExternal) sendPageAction('page.forward') },
     navigate,
     openExternal,
-    reload: () => sendPageAction('page.reload'),
+    reload: () => { if (readOnlyExternal) setExternalReloadToken((current) => current + 1); else sendPageAction('page.reload') },
     setSurface: setNextSurface,
     selectPreviewTarget,
     refreshPreviewTargets: () => { void refreshPreviewTargets() },
@@ -519,16 +568,17 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     setThemeToken,
     resetThemeToken,
     resolvePreviewLocator,
-  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementContent, resetElementStyle, resetThemeToken, resolvePreviewLocator, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementContent, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
+  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, readOnlyExternal, refreshPreviewTargets, resetElementContent, resetElementStyle, resetThemeToken, resolvePreviewLocator, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementContent, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
 
   useEffect(() => {
     onStateChange?.({
       browserSessionId: connection?.state.id,
       address,
-      canGoBack: Boolean(activePage?.canGoBack),
-      canGoForward: Boolean(activePage?.canGoForward),
-      canInspect: Boolean(connection),
+      canGoBack: !readOnlyExternal && Boolean(activePage?.canGoBack),
+      canGoForward: !readOnlyExternal && Boolean(activePage?.canGoForward),
+      canInspect: !readOnlyExternal && Boolean(connection),
       externalUrl,
+      readOnlyExternal,
       inspectMode,
       annotateMode: inspectionMode === 'annotate',
       ...(selectedElement ? { selectedElement } : {}),
@@ -543,24 +593,24 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       previewTargetsLoading,
       ...(previewTargetsError ? { previewTargetsError } : {}),
     })
-  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, inspectionMode, onStateChange, previewLayers, previewPagePath, previewTargets, previewTargetsError, previewTargetsLoading, selectedElement, selectedStyles, status, surface, themeTokens])
+  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, inspectionMode, onStateChange, previewLayers, previewPagePath, previewTargets, previewTargetsError, previewTargetsLoading, readOnlyExternal, selectedElement, selectedStyles, status, surface, themeTokens])
 
   return (
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
-          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} initialPagePath={previewBootstrapPath} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} onPageUrlChange={handlePreviewPageUrlChange} />
+          <NativePreviewSurface annotationMode={!readOnlyExternal && inspectionMode === 'annotate'} connection={connection} externalPreviewUrl={readOnlyExternalUrl ?? undefined} externalReloadToken={externalReloadToken} initialPagePath={previewBootstrapPath} inspectMode={!readOnlyExternal && inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} onPageUrlChange={handlePreviewPageUrlChange} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
           <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />
         )}
-        {sessionInitializing ? (
+        {sessionInitializing && !readOnlyExternal ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--app-background)]/88 text-sm text-[var(--app-muted)] backdrop-blur-sm">
             <ThinkingOrb aria-label={status === 'reconnecting' ? t('正在恢复浏览器连接') : t('正在启动浏览器')} size={64} state="shaping" />
             <span>{status === 'reconnecting' ? t('正在恢复浏览器连接') : t('正在启动浏览器')}</span>
           </div>
         ) : null}
-        {error && !connection ? (
+        {error && !connection && !readOnlyExternal ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--app-background)] px-6 text-center">
             <MonitorUp className="size-7 text-[var(--app-muted)]" />
             <div><p className="text-sm font-medium">{t('浏览器运行时尚未就绪')}</p>
@@ -571,7 +621,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
             </div>
           </div>
         ) : null}
-        {error && connection ? <div className="absolute bottom-3 left-1/2 z-30 max-w-[70%] -translate-x-1/2 rounded-full border border-[var(--app-danger)] bg-[var(--app-danger-surface)] px-3 py-1.5 text-xs text-[var(--app-danger)] shadow-lg backdrop-blur">{error}</div> : null}
+        {error && connection && !readOnlyExternal ? <div className="absolute bottom-3 left-1/2 z-30 max-w-[70%] -translate-x-1/2 rounded-full border border-[var(--app-danger)] bg-[var(--app-danger-surface)] px-3 py-1.5 text-xs text-[var(--app-danger)] shadow-lg backdrop-blur">{error}</div> : null}
       </div>
     </section>
   )

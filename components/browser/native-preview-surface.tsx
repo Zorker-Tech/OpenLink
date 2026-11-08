@@ -25,6 +25,8 @@ export function NativePreviewSurface({
   onAnnotationSelect,
   initialPagePath,
   onPageUrlChange,
+  externalPreviewUrl,
+  externalReloadToken = 0,
 }: {
   connection: BrowserConnection
   inspectMode: boolean
@@ -34,6 +36,9 @@ export function NativePreviewSurface({
   onAnnotationSelect: (selection: { x: number; y: number; width?: number; height?: number }) => void
   initialPagePath?: string
   onPageUrlChange: (url: string, path: string) => void
+  /** Direct, read-only iframe URL. It never receives the Inspector Bridge. */
+  externalPreviewUrl?: string
+  externalReloadToken?: number
 }) {
   const t = useT()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -41,7 +46,7 @@ export function NativePreviewSurface({
   const pendingCommands = useRef(new Map<string, InspectorBridgeEnvelope['payload']>())
   const selectionStart = useRef<{ x: number; y: number } | null>(null)
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const iframeUrl = connection.descriptor.connection.previewUrl
+  const iframeUrl = externalPreviewUrl ?? connection.descriptor.connection.previewUrl
   const nonce = connection.descriptor.connection.bridgeNonce
   const iframeOrigin = useMemo(() => {
     if (!iframeUrl || typeof window === 'undefined') return null
@@ -51,6 +56,7 @@ export function NativePreviewSurface({
     ? 'null'
     : iframeOrigin
   const iframeSrc = useMemo(() => {
+    if (externalPreviewUrl) return externalPreviewUrl
     if (!iframeUrl || typeof window === 'undefined') return iframeUrl
     try {
       const url = new URL(iframeUrl, window.location.href)
@@ -60,15 +66,16 @@ export function NativePreviewSurface({
     } catch {
       return iframeUrl
     }
-  }, [iframeUrl, initialPagePath])
+  }, [externalPreviewUrl, iframeUrl, initialPagePath])
   const sandbox = useMemo(() => {
+    if (externalPreviewUrl) return 'allow-scripts allow-forms'
     if (!iframeOrigin || typeof window === 'undefined') return 'allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-pointer-lock allow-presentation'
     const crossOrigin = iframeOrigin !== window.location.origin
     return `allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-pointer-lock allow-presentation${crossOrigin ? ' allow-same-origin' : ''}`
-  }, [iframeOrigin])
+  }, [externalPreviewUrl, iframeOrigin])
 
   const post = (payload: InspectorBridgeEnvelope['payload']) => {
-    if (!iframeRef.current?.contentWindow || !nonce || !iframeOrigin) return
+    if (externalPreviewUrl || !iframeRef.current?.contentWindow || !nonce || !iframeOrigin) return
     iframeRef.current.contentWindow.postMessage({
       channel: INSPECTOR_BRIDGE_CHANNEL,
       version: BROWSER_PROTOCOL_VERSION,
@@ -84,9 +91,10 @@ export function NativePreviewSurface({
     const payload = { type: 'action.execute' as const, envelope: envelope.event.action }
     pendingCommands.current.set(envelope.event.action.actionId, payload)
     post(payload)
-  }), [connection, nonce])
+  }), [connection, externalPreviewUrl, nonce])
 
   useEffect(() => {
+    if (externalPreviewUrl) return
     const listener = (event: MessageEvent<unknown>) => {
       if (event.source !== iframeRef.current?.contentWindow || event.origin !== expectedMessageOrigin || !isInspectorBridgeEnvelope(event.data)) return
       const message = event.data as InspectorBridgeEnvelope<InspectorBridgeEvent>
@@ -119,20 +127,23 @@ export function NativePreviewSurface({
     }
     window.addEventListener('message', listener)
     return () => window.removeEventListener('message', listener)
-  }, [connection, expectedMessageOrigin, iframeOrigin, nonce, onElementMoved, onElementSelected, onPageUrlChange])
+  }, [connection, expectedMessageOrigin, externalPreviewUrl, iframeOrigin, nonce, onElementMoved, onElementSelected, onPageUrlChange])
 
   useEffect(() => {
+    if (externalPreviewUrl) return
     post(inspectMode ? { type: 'inspect.start' } : { type: 'inspect.stop' })
-  }, [inspectMode, nonce])
+  }, [externalPreviewUrl, inspectMode, nonce])
 
   if (!iframeSrc) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>{t('预览地址尚未就绪')}</div>
 
   return (
     <div className="relative size-full overflow-hidden">
       <iframe
-        allow="clipboard-read; clipboard-write; fullscreen"
+        allow={externalPreviewUrl ? 'fullscreen' : 'clipboard-read; clipboard-write; fullscreen'}
         className={`size-full border-0 ${theme('surface')}`}
         ref={iframeRef}
+        key={externalPreviewUrl ? `${externalPreviewUrl}:${externalReloadToken}` : 'managed-preview'}
+        referrerPolicy={externalPreviewUrl ? 'no-referrer' : undefined}
         sandbox={sandbox}
         src={iframeSrc}
         title={t('OpenLink 项目预览')}

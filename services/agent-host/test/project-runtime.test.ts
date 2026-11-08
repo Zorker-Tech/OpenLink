@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
-import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
+import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, previewRunCommand, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
 import { ProjectVmManager, type ProjectVmCommandResult, type ProjectVmMachineDriver, type ProjectVmPortForward } from '../src/project-vm.js'
 
 const projectSupabaseResult = (command: string, args: string[]): ProjectVmCommandResult | undefined => {
@@ -19,6 +19,20 @@ const projectSupabaseResult = (command: string, args: string[]): ProjectVmComman
 }
 
 const projectSupabaseRunInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
+
+test('Git Preview only selects known package runner entry points', () => {
+  assert.deepEqual(previewRunCommand({
+    packageManager: 'pnpm@10.12.4',
+    scripts: { dev: 'next dev' },
+    dependencies: { next: '16.0.0' },
+  }), { argv: ['pnpm', 'run', 'dev', '--', '--hostname', '0.0.0.0', '--port', '4173'], script: 'dev' })
+  assert.deepEqual(previewRunCommand({
+    scripts: { dev: 'vite' },
+    devDependencies: { vite: '7.0.0' },
+  }), { argv: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0', '--port', '4173'], script: 'dev' })
+  assert.equal(previewRunCommand({ scripts: { dev: 'custom' }, dependencies: { unknown: '1' } }), null)
+  assert.equal(previewRunCommand({ packageManager: 'npm;curl bad', scripts: { dev: 'vite' }, dependencies: { vite: '1' } }), null)
+})
 
 test('recreates failed Project VM service containers instead of restarting stale state', async () => {
   const calls: Array<{ command: string; args: string[] }> = []

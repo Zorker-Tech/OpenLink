@@ -13,5 +13,8 @@
   "该网站服务已停止，请刷新检测活跃端口。": "Ce service web s'est arrêté. Actualisez pour détecter les ports actifs.",
   "重新检测": "Détecter à nouveau",
   "项目预览暂不可用": "Aperçu du projet indisponible",
-  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "Cette conversation est en lecture seule. Passez l’accès à « Demander » avant d’appliquer des modifications au code source."
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "Cette conversation est en lecture seule. Passez l’accès à « Demander » avant d’appliquer des modifications au code source.",
+  "外部网页在隔离只读预览中打开，编辑和批注功能不可用。": "Les pages externes s’ouvrent dans un aperçu isolé en lecture seule. La modification et les annotations ne sont pas disponibles.",
+  "Git 历史版本预览为只读，请切换到最新版本后应用源码修改。": "Les aperçus des anciennes versions Git sont en lecture seule. Passez à la version la plus récente pour appliquer les modifications du code source.",
+  "该网址不支持在预览中打开。": "Cette URL ne peut pas être ouverte dans l’aperçu."
 }

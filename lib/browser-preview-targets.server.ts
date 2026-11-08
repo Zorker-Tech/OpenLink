@@ -8,9 +8,10 @@ import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
 export interface BrowserPreviewTarget {
   id: string
   label: string
-  source: 'sandbox'
+  source: 'sandbox' | 'worktree'
   port: number
   lastSeenAt: string
+  gitRef?: string
   targetRevision?: string
 }
 
@@ -30,9 +31,10 @@ function safeTarget(value: unknown): BrowserPreviewTarget | null {
   return {
     id: target.id,
     label: target.label.slice(0, 160),
-    source: 'sandbox',
+    source: target.source === 'worktree' ? 'worktree' : 'sandbox',
     port: target.port,
     lastSeenAt: typeof target.lastSeenAt === 'string' ? target.lastSeenAt : new Date().toISOString(),
+    ...(typeof target.gitRef === 'string' && /^[0-9a-f]{40}$/i.test(target.gitRef) ? { gitRef: target.gitRef.toLowerCase() } : {}),
     ...(isPreviewSourceRevision(target.targetRevision)
       ? { targetRevision: target.targetRevision }
       : {}),
