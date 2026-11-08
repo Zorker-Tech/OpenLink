@@ -12,11 +12,14 @@ import {
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts"
 import { RedactedUpdates } from "../../source/packages/agent-core/redacted-interaction-updates.ts"
 import {
+  isSlateInteractionUpdate,
   isSlateRedactedInteractionUpdate,
+  redactSlateInteractionUpdate,
   SlateInteractionUpdates,
   SlateRedactedInteractionUpdates,
   slateRedactedTurnEndedUpdate,
   slateTurnEndedUpdate,
+  unredactSlateInteractionUpdate,
 } from "../../source/packages/agent-core/slate-interaction-updates.ts"
 import * as agentCore from "../../source/packages/agent-core/index.ts"
 
@@ -135,6 +138,28 @@ test("an update without text takes its privacy mode explicitly", () => {
     durationMs: 10,
   })
   assert.equal(SlateRedactedInteractionUpdates.promptSuggestion("try this", mode).privacyMode, mode)
+})
+
+test("step, suggestion and branch events round-trip through Slate privacy projection", () => {
+  const updates = [
+    SlateInteractionUpdates.stepStarted(2),
+    SlateInteractionUpdates.stepCompleted(2, 15),
+    SlateInteractionUpdates.promptSuggestion("try a narrower search"),
+    SlateInteractionUpdates.activeBranchChange("/repo", "feature/branch"),
+  ]
+
+  for (const update of updates) {
+    assert.equal(isSlateInteractionUpdate(update), true)
+    const redacted = redactSlateInteractionUpdate(update, mode)
+    assert.equal(isSlateRedactedInteractionUpdate(redacted), true)
+    assert.equal(redacted.privacyMode, mode)
+    assert.deepEqual(unredactSlateInteractionUpdate(redacted), update)
+  }
+
+  const redactedSuggestion = SlateRedactedInteractionUpdates.promptSuggestion("suggestion", mode)
+  const redactedBranch = SlateRedactedInteractionUpdates.activeBranchChange("/repo", "main", mode)
+  assert.equal(redactedSuggestion.suggestion.__classification, DataClassification.CODE)
+  assert.equal(redactedBranch.path.__classification, DataClassification.PATH)
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {
