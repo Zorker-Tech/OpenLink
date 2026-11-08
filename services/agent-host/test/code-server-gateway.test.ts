@@ -88,8 +88,9 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
     assert.equal(bootstrap.headers.get('cache-control'), 'no-store')
     const cookie = bootstrap.headers.get('set-cookie')
     assert.ok(cookie?.includes('HttpOnly'))
-    assert.match(cookie || '', /Path=\/v1\/code-server\/gateway\/sessions\//)
-    const pageUrl = `${edgeUrl}/v1/code-server/gateway/sessions/${session.sessionId}/`
+    const cookiePath = cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('Path='))
+    assert.equal(cookiePath, `Path=/v1/code-server/gateway/sessions/${session.sessionId}`)
+    const pageUrl = `${edgeUrl}/v1/code-server/gateway/sessions/${session.sessionId}`
 
     const page = await fetch(pageUrl, {
       headers: {

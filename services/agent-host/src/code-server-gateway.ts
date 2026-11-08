@@ -175,7 +175,10 @@ export class CodeServerGateway {
       if (method !== 'POST' && method !== 'GET') throw new AgentHostError('INVALID_BODY', 'Code-server gateway bootstrap method is invalid')
       this.consumeBootstrapToken(bootstrapToken, binding)
       const secure = new URL(this.publicBaseUrl).protocol === 'https:' ? '; Secure' : ''
-      response.setHeader('Set-Cookie', `${cookieName(sessionId)}=${encodeURIComponent(binding.token)}; HttpOnly; SameSite=Strict; Path=${prefix}/${secure}`)
+      // Next.js canonicalizes trailing slashes before applying external
+      // rewrites. Scope the cookie to the session path itself so it matches
+      // both that canonical path and all nested code-server assets.
+      response.setHeader('Set-Cookie', `${cookieName(sessionId)}=${encodeURIComponent(binding.token)}; HttpOnly; SameSite=Strict; Path=${prefix}${secure}`)
       response.setHeader('Referrer-Policy', 'no-referrer')
       response.setHeader('Cache-Control', 'no-store')
       if (method === 'POST') response.writeHead(204)
