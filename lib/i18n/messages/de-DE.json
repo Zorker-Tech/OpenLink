@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "Annotations-Screenshot konnte nicht geladen werden",
   "Capture failed; retry to attach element context": "Screenshot fehlgeschlagen. Erneut versuchen, um den visuellen Kontext anzuhängen",
   "Design instructions are too long. Apply fewer changes.": "Die Designanweisungen sind zu lang. Wende weniger Änderungen an.",
+  "Applying changes…": "Änderungen werden angewendet…",
   "Could not send design changes.": "Designänderungen konnten nicht gesendet werden.",
   "所选项目不可用": "Das ausgewählte Projekt ist nicht verfügbar.",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "Halte Strg oder ⌘ gedrückt und ziehe das ausgewählte Element.",

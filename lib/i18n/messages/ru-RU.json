@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "Не удалось загрузить снимок для комментария",
   "Capture failed; retry to attach element context": "Не удалось сделать снимок. Повторите попытку, чтобы приложить визуальный контекст",
   "Design instructions are too long. Apply fewer changes.": "Инструкции по дизайну слишком длинные. Примените меньше изменений.",
+  "Applying changes…": "Применение изменений…",
   "Could not send design changes.": "Не удалось отправить изменения дизайна.",
   "所选项目不可用": "Выбранный проект недоступен.",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "Удерживайте Ctrl или ⌘ и перетащите выбранный элемент.",
