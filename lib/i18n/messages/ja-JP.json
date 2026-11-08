@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "注釈のスクリーンショットを読み込めませんでした",
   "Capture failed; retry to attach element context": "選択した要素の撮影に失敗しました。視覚コンテキストを添付するには再試行してください",
   "Design instructions are too long. Apply fewer changes.": "デザインの指示が長すぎます。変更数を減らして適用してください。",
+  "Applying changes…": "変更を適用しています…",
   "Could not send design changes.": "デザイン変更を送信できませんでした。",
   "所选项目不可用": "選択したプロジェクトを利用できません。",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "Ctrl または ⌘ を押しながらドラッグすると、選択した要素を移動できます。",

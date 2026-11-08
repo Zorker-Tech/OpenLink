@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "無法讀取註解截圖",
   "Capture failed; retry to attach element context": "選取元素的截圖失敗，請重試以附加視覺脈絡",
   "Design instructions are too long. Apply fewer changes.": "設計修改說明過長，請減少修改項目後再套用。",
+  "Applying changes…": "正在套用變更…",
   "Could not send design changes.": "無法傳送設計修改。",
   "所选项目不可用": "所選專案無法使用",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "按住 Ctrl 或 ⌘ 並拖曳，即可移動選取的元素。",

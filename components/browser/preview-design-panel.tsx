@@ -4,6 +4,7 @@ import type { BrowserElementMove, BrowserPreviewAnnotationTarget, BrowserWorkben
 import type { AgentPromptAttachment } from '@/lib/agent-runtime/events'
 import { useT } from '@/lib/i18n/client'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
+import { beginPreviewEditTransaction, commitPreviewEditSnapshot, createPreviewEditHistory, finishPreviewEditTransaction, previewStyleEditKey, redoPreviewEditHistory, undoPreviewEditHistory } from '@/lib/preview-edit-history.mjs'
 import { previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference } from '@/packages/browser-protocol/src/index'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppWindow, Eye, Layers3, LoaderCircle, MessageSquarePlus, Palette, RotateCw, Undo2, Redo2, WandSparkles, X } from 'lucide-react'
@@ -168,9 +169,8 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
 }, forwardedRef) {
   const t = useT()
   const [panelTab, setPanelTab] = useState<PreviewPanelTab>('edit')
-  const [pendingEdits, setPendingEdits] = useState<PreviewEdit[]>([])
-  const [undoStack, setUndoStack] = useState<PreviewEdit[][]>([])
-  const [redoStack, setRedoStack] = useState<PreviewEdit[][]>([])
+  const [editHistory, setEditHistory] = useState(() => createPreviewEditHistory<PreviewEdit>())
+  const pendingEdits = editHistory.pending
   const [showingBefore, setShowingBefore] = useState(false)
   const [styleDrafts, setStyleDrafts] = useState<Record<string, string>>({})
   const [themeDrafts, setThemeDrafts] = useState<Record<string, string>>({})
@@ -178,6 +178,8 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   const [designScreenshot, setDesignScreenshot] = useState<DesignScreenshotContext | null>(null)
   const [designScreenshotRetry, setDesignScreenshotRetry] = useState(0)
   const [applyError, setApplyError] = useState<string | null>(null)
+  const [applyingDesign, setApplyingDesign] = useState(false)
+  const applyInFlightRef = useRef(false)
   const [annotations, setAnnotations] = useState<PreviewAnnotation[]>([])
   const [annotationDraft, setAnnotationDraft] = useState<AnnotationDraft | null>(null)
   const [annotationComment, setAnnotationComment] = useState('')
@@ -199,11 +201,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
 
   useEffect(() => {
     setContentDraft(browserState.selectedElement?.content ?? '')
-  }, [browserState.selectedElement?.content, browserState.selectedElement?.ref])
-
-  useEffect(() => {
-    if (browserState.themeTokens) setThemeDrafts(browserState.themeTokens)
-  }, [browserState.themeTokens])
+  }, [browserState.selectedElement?.ref])
 
   useEffect(() => {
     if (panelTab === 'theme') workbenchRef.current?.readThemeTokens()
@@ -211,12 +209,11 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   }, [panelTab, workbenchRef])
 
   useEffect(() => {
-    setPendingEdits([])
-    setUndoStack([])
-    setRedoStack([])
+    setEditHistory(createPreviewEditHistory<PreviewEdit>())
     setShowingBefore(false)
     setStyleDrafts({})
     setThemeDrafts({})
+    setContentDraft(browserState.selectedElement?.content ?? '')
     setDesignScreenshot(null)
     setAnnotationDraft(null)
     setAnnotations([])
@@ -307,62 +304,72 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       .map(({ id, page_path, element_label, bounds, viewport }) => ({ id, page_path, element_label, bounds, viewport })))
   }, [annotations, onAnnotationsChange, pagePath])
 
-  const pushEditSnapshot = useCallback((next: PreviewEdit[]) => {
-    setUndoStack((stack) => [...stack.slice(-29), pendingEdits])
-    setRedoStack([])
-    setPendingEdits(next)
+  const pushEditSnapshot = useCallback((next: PreviewEdit[], transactionKey?: string) => {
+    setEditHistory((current) => commitPreviewEditSnapshot(current, next, transactionKey))
     setShowingBefore(false)
-  }, [pendingEdits])
+  }, [])
 
-  const updateStyle = useCallback((property: string, value: string) => {
+  const beginEditTransaction = useCallback((key: string) => {
+    setEditHistory((current) => beginPreviewEditTransaction(current, key))
+  }, [])
+
+  const finishEditTransaction = useCallback((key: string) => {
+    setEditHistory((current) => finishPreviewEditTransaction(current, key))
+  }, [])
+
+  const updateStyle = useCallback((property: string, value: string, transactionKey?: string) => {
     const element = browserState.selectedElement
-    if (!element || showingBefore) return
-    const key = `style:${element.ref}:${property}`
+    if (!element || showingBefore || applyingDesign) return
+    const key = previewStyleEditKey(element.ref, property)
     const existing = pendingEdits.find((edit) => edit.key === key)
     const before = existing?.before ?? browserState.selectedStyles?.[property] ?? ''
     const next = pendingEdits.filter((edit) => edit.key !== key)
     const changed = value.trim() !== before.trim()
     if (changed) next.push({ key, kind: 'style', ref: element.ref, property, selector: element.selector || element.tagName, label: element.componentName || element.text || element.tagName, before, after: value })
-    pushEditSnapshot(next)
+    pushEditSnapshot(next, transactionKey)
+    setStyleDrafts((current) => ({ ...current, [key]: value }))
     if (changed) workbenchRef.current?.setElementStyle(element.ref, property, value)
     else workbenchRef.current?.resetElementStyle(element.ref, property)
-  }, [browserState.selectedElement, browserState.selectedStyles, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
+  }, [applyingDesign, browserState.selectedElement, browserState.selectedStyles, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
 
-  const updateContent = useCallback((value: string) => {
+  const updateContent = useCallback((value: string, transactionKey?: string) => {
     const element = browserState.selectedElement
-    if (!element?.canEditContent || showingBefore) return
+    if (!element?.canEditContent || showingBefore || applyingDesign) return
     const key = `content:${element.ref}`
     const existing = pendingEdits.find((edit) => edit.key === key)
     const before = existing?.before ?? element.content ?? ''
     const next = pendingEdits.filter((edit) => edit.key !== key)
     if (value !== before) next.push({ key, kind: 'content', ref: element.ref, property: 'text content', selector: element.selector || element.tagName, label: element.componentName || element.text || element.tagName, before, after: value })
-    pushEditSnapshot(next)
+    pushEditSnapshot(next, transactionKey)
+    setContentDraft(value)
     if (value !== before) workbenchRef.current?.setElementContent(element.ref, value)
     else workbenchRef.current?.resetElementContent(element.ref)
-  }, [browserState.selectedElement, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
+  }, [applyingDesign, browserState.selectedElement, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
 
   const handleElementMoved = useCallback((move: BrowserElementMove) => {
-    const key = `style:${move.element.ref}:${move.property}`
+    if (applyInFlightRef.current) return
+    const key = previewStyleEditKey(move.element.ref, move.property)
     const existing = pendingEdits.find((edit) => edit.key === key)
     const before = existing?.before ?? move.before
     const next = pendingEdits.filter((edit) => edit.key !== key)
     if (move.after !== before) next.push({ key, kind: 'style', ref: move.element.ref, property: move.property, selector: move.element.selector || move.element.tagName, label: move.element.componentName || move.element.text || move.element.tagName, before, after: move.after })
-    setStyleDrafts((current) => ({ ...current, [move.property]: move.after }))
+    setStyleDrafts((current) => ({ ...current, [key]: move.after }))
     pushEditSnapshot(next)
   }, [pendingEdits, pushEditSnapshot])
 
-  const updateThemeToken = useCallback((token: string, value: string) => {
-    if (showingBefore) return
+  const updateThemeToken = useCallback((token: string, value: string, transactionKey?: string) => {
+    if (showingBefore || applyingDesign) return
     const key = `theme:${token}`
     const existing = pendingEdits.find((edit) => edit.key === key)
     const before = existing?.before ?? browserState.themeTokens?.[token] ?? ''
     const next = pendingEdits.filter((edit) => edit.key !== key)
     const changed = value.trim() !== before.trim()
     if (changed) next.push({ key, kind: 'theme', ref: 'root', property: token, selector: ':root', label: token, before, after: value })
-    pushEditSnapshot(next)
+    pushEditSnapshot(next, transactionKey)
+    setThemeDrafts((current) => ({ ...current, [token]: value }))
     if (changed) workbenchRef.current?.setThemeToken(token, value)
     else workbenchRef.current?.resetThemeToken(token)
-  }, [browserState.themeTokens, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
+  }, [applyingDesign, browserState.themeTokens, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
 
   const applyEditSnapshot = useCallback((from: PreviewEdit[], to: PreviewEdit[]) => {
     const fromByKey = new Map(from.map((edit) => [edit.key, edit]))
@@ -370,6 +377,15 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     for (const key of new Set([...fromByKey.keys(), ...toByKey.keys()])) {
       const previous = fromByKey.get(key)
       const next = toByKey.get(key)
+      const draftValue = next?.after ?? previous?.before
+      const draftEdit = next ?? previous
+      if (draftValue !== undefined && draftEdit?.kind === 'style') {
+        setStyleDrafts((current) => ({ ...current, [key]: draftValue }))
+      } else if (draftValue !== undefined && draftEdit?.kind === 'content') {
+        if (draftEdit.ref === browserState.selectedElement?.ref) setContentDraft(draftValue)
+      } else if (draftValue !== undefined && draftEdit?.kind === 'theme') {
+        setThemeDrafts((current) => ({ ...current, [draftEdit.property]: draftValue }))
+      }
       if (next) {
         if (next.kind === 'style') workbenchRef.current?.setElementStyle(next.ref, next.property, next.after)
         else if (next.kind === 'content') workbenchRef.current?.setElementContent(next.ref, next.after)
@@ -378,47 +394,66 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       else if (previous?.kind === 'content') workbenchRef.current?.resetElementContent(previous.ref)
       else if (previous) workbenchRef.current?.resetThemeToken(previous.property)
     }
-    setPendingEdits(to)
     setShowingBefore(false)
-  }, [workbenchRef])
+  }, [browserState.selectedElement?.ref, workbenchRef])
 
   const undoEdit = useCallback(() => {
-    const previous = undoStack.at(-1)
-    if (!previous) return
-    setRedoStack((stack) => [...stack, pendingEdits])
-    setUndoStack((stack) => stack.slice(0, -1))
-    applyEditSnapshot(pendingEdits, previous)
-  }, [applyEditSnapshot, pendingEdits, undoStack])
+    if (applyingDesign) return
+    const next = undoPreviewEditHistory(editHistory)
+    if (next === editHistory) return
+    applyEditSnapshot(editHistory.pending, next.pending)
+    setEditHistory(next)
+  }, [applyingDesign, applyEditSnapshot, editHistory])
 
   const redoEdit = useCallback(() => {
-    const next = redoStack.at(-1)
-    if (!next) return
-    setUndoStack((stack) => [...stack, pendingEdits])
-    setRedoStack((stack) => stack.slice(0, -1))
-    applyEditSnapshot(pendingEdits, next)
-  }, [applyEditSnapshot, pendingEdits, redoStack])
+    if (applyingDesign) return
+    const next = redoPreviewEditHistory(editHistory)
+    if (next === editHistory) return
+    applyEditSnapshot(editHistory.pending, next.pending)
+    setEditHistory(next)
+  }, [applyingDesign, applyEditSnapshot, editHistory])
 
   const toggleBeforeAfter = useCallback(() => {
+    if (applyingDesign) return
     const showBefore = !showingBefore
     for (const edit of pendingEdits) {
-      if (edit.kind === 'style') workbenchRef.current?.setElementStyle(edit.ref, edit.property, showBefore ? edit.before : edit.after)
-      else if (edit.kind === 'content') workbenchRef.current?.setElementContent(edit.ref, showBefore ? edit.before : edit.after)
-      else workbenchRef.current?.setThemeToken(edit.property, showBefore ? edit.before : edit.after)
+      const value = showBefore ? edit.before : edit.after
+      if (edit.kind === 'style') {
+        setStyleDrafts((current) => ({ ...current, [edit.key]: value }))
+        workbenchRef.current?.setElementStyle(edit.ref, edit.property, value)
+      } else if (edit.kind === 'content') {
+        if (edit.ref === browserState.selectedElement?.ref) setContentDraft(value)
+        workbenchRef.current?.setElementContent(edit.ref, value)
+      } else {
+        setThemeDrafts((current) => ({ ...current, [edit.property]: value }))
+        workbenchRef.current?.setThemeToken(edit.property, value)
+      }
     }
     setShowingBefore(showBefore)
-  }, [pendingEdits, showingBefore, workbenchRef])
+  }, [applyingDesign, browserState.selectedElement?.ref, pendingEdits, showingBefore, workbenchRef])
 
   const resetDesign = useCallback(() => {
+    if (applyingDesign) return
     for (const edit of pendingEdits) {
       if (edit.kind === 'style') workbenchRef.current?.resetElementStyle(edit.ref, edit.property)
       else if (edit.kind === 'content') workbenchRef.current?.resetElementContent(edit.ref)
       else workbenchRef.current?.resetThemeToken(edit.property)
     }
-    setPendingEdits([])
-    setUndoStack([])
-    setRedoStack([])
+    setEditHistory(createPreviewEditHistory<PreviewEdit>())
+    setStyleDrafts((current) => {
+      const next = { ...current }
+      for (const edit of pendingEdits) if (edit.kind === 'style') next[edit.key] = edit.before
+      return next
+    })
+    setThemeDrafts((current) => {
+      const next = { ...current }
+      for (const edit of pendingEdits) if (edit.kind === 'theme') next[edit.property] = edit.before
+      return next
+    })
+    const contentEdit = pendingEdits.find((edit) => edit.kind === 'content' && edit.ref === browserState.selectedElement?.ref)
+    if (contentEdit) setContentDraft(contentEdit.before)
     setShowingBefore(false)
-  }, [pendingEdits, workbenchRef])
+  }, [applyingDesign, browserState.selectedElement?.ref, pendingEdits, workbenchRef])
 
   const usableDesignScreenshot = Boolean(designScreenshot
     && designScreenshot.projectId === projectId
@@ -430,7 +465,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     && designScreenshot.selectedElementDataUrl)
 
   const applyDesignChanges = useCallback(async () => {
-    if (!canApplyDesign || !pendingEdits.length || !targetId || showingBefore) return
+    if (!canApplyDesign || !pendingEdits.length || !targetId || showingBefore || applyingDesign || applyInFlightRef.current) return
     const screenshotIsCurrent = usableDesignScreenshot
     const needsElementContext = pendingEdits.some((edit) => edit.kind === 'style' || edit.kind === 'content')
     if (needsElementContext && !screenshotIsCurrent) {
@@ -455,17 +490,29 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       setApplyError(t('Design instructions are too long. Apply fewer changes.'))
       return
     }
+    applyInFlightRef.current = true
+    setApplyingDesign(true)
     try {
       const attachments: AgentPromptAttachment[] = screenshotIsCurrent ? [
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.fullViewportDataUrl!, filename: 'preview-viewport.jpg' },
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.selectedElementDataUrl!, filename: 'preview-selection.jpg' },
       ] : []
       const accepted = await onSubmitRequest(prompt, attachments, projectId, 'design')
-      if (!accepted) setApplyError(t('Could not send design changes.'))
+      if (!accepted) {
+        setApplyError(t('Could not send design changes.'))
+      } else {
+        setEditHistory(createPreviewEditHistory<PreviewEdit>())
+        setStyleDrafts({})
+        setThemeDrafts({})
+        setShowingBefore(false)
+      }
     } catch (error) {
       setApplyError(error instanceof Error ? error.message : t('Could not send design changes.'))
+    } finally {
+      applyInFlightRef.current = false
+      setApplyingDesign(false)
     }
-  }, [browserState.previewTargets, canApplyDesign, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
+  }, [applyingDesign, browserState.previewTargets, browserState.themeTokens, canApplyDesign, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
 
   const handleAnnotationTarget = useCallback((target: BrowserPreviewAnnotationTarget) => {
     if (!isPreviewTargetId(targetId)) {
@@ -633,30 +680,32 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
                   </div>}
                 </div>
               )}
-              {selectedElement.canEditContent ? <label className="block space-y-1.5"><span className="font-medium text-[var(--app-foreground)]">{t('Text content')}</span><textarea className="min-h-16 w-full resize-y rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 text-xs text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)] disabled:opacity-50" disabled={showingBefore} maxLength={2000} onChange={(event) => { const value = event.currentTarget.value; setContentDraft(value); updateContent(value) }} value={contentDraft} /></label> : <p>{t('This element does not support text editing.')}</p>}
+              {selectedElement.canEditContent ? <label className="block space-y-1.5"><span className="font-medium text-[var(--app-foreground)]">{t('Text content')}</span><textarea aria-busy={applyingDesign} className="min-h-16 w-full resize-y rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 text-xs text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)] disabled:opacity-50" disabled={showingBefore || applyingDesign} maxLength={2000} onBlur={() => finishEditTransaction(`content:${selectedElement.ref}`)} onChange={(event) => updateContent(event.currentTarget.value, `content:${selectedElement.ref}`)} onFocus={() => beginEditTransaction(`content:${selectedElement.ref}`)} value={contentDraft} /></label> : <p>{t('This element does not support text editing.')}</p>}
               <div className="flex items-center gap-1">
-                <button aria-label={t('Undo')} className="flex size-7 items-center justify-center rounded border border-[var(--app-control-border)] disabled:opacity-35" disabled={!undoStack.length} onClick={undoEdit} type="button"><Undo2 className="size-3.5" /></button>
-                <button aria-label={t('Redo')} className="flex size-7 items-center justify-center rounded border border-[var(--app-control-border)] disabled:opacity-35" disabled={!redoStack.length} onClick={redoEdit} type="button"><Redo2 className="size-3.5" /></button>
-                <button className="ml-auto flex h-7 items-center gap-1 rounded border border-[var(--app-control-border)] px-2 text-[10px] disabled:opacity-35" disabled={!pendingEdits.length} onClick={toggleBeforeAfter} type="button"><Eye className="size-3" />{showingBefore ? t('Show after') : t('Before / after')}</button>
+                <button aria-label={t('Undo')} className="flex size-7 items-center justify-center rounded border border-[var(--app-control-border)] disabled:opacity-35" disabled={applyingDesign || !editHistory.undo.length} onClick={undoEdit} type="button"><Undo2 className="size-3.5" /></button>
+                <button aria-label={t('Redo')} className="flex size-7 items-center justify-center rounded border border-[var(--app-control-border)] disabled:opacity-35" disabled={applyingDesign || !editHistory.redo.length} onClick={redoEdit} type="button"><Redo2 className="size-3.5" /></button>
+                <button className="ml-auto flex h-7 items-center gap-1 rounded border border-[var(--app-control-border)] px-2 text-[10px] disabled:opacity-35" disabled={applyingDesign || !pendingEdits.length} onClick={toggleBeforeAfter} type="button"><Eye className="size-3" />{showingBefore ? t('Show after') : t('Before / after')}</button>
               </div>
               <div className="space-y-2">
-                {STYLE_PROPERTIES.map((property) => (
-                  <label className="grid grid-cols-[94px_minmax(0,1fr)] items-center gap-2" key={property}>
+                {STYLE_PROPERTIES.map((property) => {
+                  const transactionKey = previewStyleEditKey(selectedElement.ref, property)
+                  const styleValue = pendingEdits.find((edit) => edit.key === transactionKey)?.after ?? styleDrafts[transactionKey] ?? browserState.selectedStyles?.[property] ?? ''
+                  return <label className="grid grid-cols-[94px_minmax(0,1fr)] items-center gap-2" key={property}>
                     <span className="truncate font-mono text-[10px]">{property}</span>
                     <span className="flex min-w-0 items-center gap-1">
-                      {COLOR_PROPERTIES.has(property) && <input aria-label={`${t('Choose color')}: ${property}`} className="size-7 shrink-0 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-0.5 disabled:opacity-50" disabled={showingBefore || !browserState.selectedStyles} onChange={(event) => { const value = event.currentTarget.value; setStyleDrafts((current) => ({ ...current, [property]: value })); updateStyle(property, value) }} type="color" value={colorPickerValue(styleDrafts[property] ?? browserState.selectedStyles?.[property] ?? '') ?? '#000000'} />}
-                      <input className="h-7 min-w-0 flex-1 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-[10px] text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)] disabled:opacity-50" disabled={showingBefore || !browserState.selectedStyles} onChange={(event) => { const value = event.currentTarget.value; setStyleDrafts((current) => ({ ...current, [property]: value })); updateStyle(property, value) }} value={styleDrafts[property] ?? browserState.selectedStyles?.[property] ?? ''} />
+                      {COLOR_PROPERTIES.has(property) && <input aria-label={`${t('Choose color')}: ${property}`} className="size-7 shrink-0 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-0.5 disabled:opacity-50" disabled={showingBefore || applyingDesign || !browserState.selectedStyles} onBlur={() => finishEditTransaction(transactionKey)} onChange={(event) => updateStyle(property, event.currentTarget.value, transactionKey)} onFocus={() => beginEditTransaction(transactionKey)} type="color" value={colorPickerValue(styleValue) ?? '#000000'} />}
+                      <input aria-busy={applyingDesign} className="h-7 min-w-0 flex-1 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-[10px] text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)] disabled:opacity-50" disabled={showingBefore || applyingDesign || !browserState.selectedStyles} onBlur={() => finishEditTransaction(transactionKey)} onChange={(event) => updateStyle(property, event.currentTarget.value, transactionKey)} onFocus={() => beginEditTransaction(transactionKey)} value={styleValue} />
                     </span>
                   </label>
-                ))}
+                })}
               </div>
               {pendingEdits.length > 0 && <div className="space-y-2 border-t border-[var(--app-border)] pt-3">
-                <p>{t('{count} pending changes', { count: pendingEdits.length })}</p>
+                <p aria-live="polite" className="flex items-center gap-1.5">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{applyingDesign ? t('Applying changes…') : t('{count} pending changes', { count: pendingEdits.length })}</p>
                 {!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}
                 {applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}
                 <div className="flex gap-2">
-                  <button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)]" onClick={resetDesign} type="button">{t('Reset')}</button>
-                  <button className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button"><WandSparkles className="size-3" />{t('Apply changes')}</button>
+                  <button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} onClick={resetDesign} type="button">{t('Reset')}</button>
+                  <button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{applyingDesign ? <LoaderCircle className="size-3 animate-spin" /> : <WandSparkles className="size-3" />}{t('Apply changes')}</button>
                 </div>
               </div>}
             </div>
@@ -670,18 +719,20 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         )}
         {panelTab === 'theme' && <div className="space-y-2">
           <p className="mb-3">{t('主题颜色来自当前页面可用的 CSS 变量。修改会暂时应用到预览。')}</p>
-          {Object.entries(browserState.themeTokens ?? {}).map(([token, currentValue]) => (
-            <label className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-2" key={token}>
+          {Object.entries(browserState.themeTokens ?? {}).map(([token, currentValue]) => {
+            const transactionKey = `theme:${token}`
+            const themeValue = pendingEdits.find((edit) => edit.key === transactionKey)?.after ?? themeDrafts[token] ?? currentValue
+            return <label className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-2" key={token}>
               <span className="truncate font-mono text-[10px]" title={token}>{token}</span>
               <span className="flex min-w-0 items-center gap-1">
-                {colorPickerValue(themeDrafts[token] ?? currentValue) && <input aria-label={`${t('Choose color')}: ${token}`} className="size-7 shrink-0 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-0.5" onChange={(event) => { const value = event.currentTarget.value; setThemeDrafts((current) => ({ ...current, [token]: value })); updateThemeToken(token, value) }} type="color" value={colorPickerValue(themeDrafts[token] ?? currentValue) ?? '#000000'} />}
-                <input className="h-7 min-w-0 flex-1 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-[10px] text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => { const value = event.currentTarget.value; setThemeDrafts((current) => ({ ...current, [token]: value })); updateThemeToken(token, value) }} value={themeDrafts[token] ?? currentValue} />
+                {colorPickerValue(themeValue) && <input aria-label={`${t('Choose color')}: ${token}`} className="size-7 shrink-0 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-0.5 disabled:opacity-50" disabled={showingBefore || applyingDesign} onBlur={() => finishEditTransaction(transactionKey)} onChange={(event) => updateThemeToken(token, event.currentTarget.value, transactionKey)} onFocus={() => beginEditTransaction(transactionKey)} type="color" value={colorPickerValue(themeValue) ?? '#000000'} />}
+                <input aria-busy={applyingDesign} className="h-7 min-w-0 flex-1 rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-[10px] text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)] disabled:opacity-50" disabled={showingBefore || applyingDesign} onBlur={() => finishEditTransaction(transactionKey)} onChange={(event) => updateThemeToken(token, event.currentTarget.value, transactionKey)} onFocus={() => beginEditTransaction(transactionKey)} value={themeValue} />
               </span>
             </label>
-          ))}
+          })}
           {browserState.themeTokens && Object.keys(browserState.themeTokens).length === 0 && <p>{t('当前页面没有可编辑的颜色变量。')}</p>}
           {!browserState.themeTokens && <button className="h-7 rounded border border-[var(--app-control-border)] px-3 hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readThemeTokens()} type="button">{t('读取主题变量')}</button>}
-          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p>{t('{count} pending changes', { count: pendingEdits.length })}</p>{!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)]" onClick={resetDesign} type="button">{t('Reset')}</button><button className="h-7 flex-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{t('Apply changes')}</button></div></div>}
+          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p aria-live="polite" className="flex items-center gap-1.5">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{applyingDesign ? t('Applying changes…') : t('{count} pending changes', { count: pendingEdits.length })}</p>{!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} onClick={resetDesign} type="button">{t('Reset')}</button><button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || !pendingEdits.length} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{t('Apply changes')}</button></div></div>}
         </div>}
         {panelTab === 'layers' && <div className="space-y-1">
           <div className="mb-2 flex items-center justify-between"><p className="font-medium text-[var(--app-foreground)]">{t('图层')}</p><button aria-label={t('刷新图层')} className="flex size-7 items-center justify-center rounded hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readLayers()} type="button"><RotateCw className="size-3.5" /></button></div>
@@ -715,12 +766,12 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       <div className="space-y-2 border-t border-[var(--app-border)] px-3 py-2 text-[10px] text-[var(--app-subtle-foreground)]">
         <div className="text-[var(--app-muted)]">{t('项目')}</div>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<button aria-label={t('项目')} className="flex h-7 w-full items-center justify-between gap-2 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 text-left text-xs text-[var(--app-foreground)] hover:bg-[var(--app-hover)]" type="button" />}>
+          <DropdownMenuTrigger render={<button aria-label={t('项目')} className="flex h-7 w-full items-center justify-between gap-2 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 text-left text-xs text-[var(--app-foreground)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} type="button" />}>
             <span className="truncate">{previewProjects.find((project) => project.id === selectedPreviewProjectId)?.name ?? t('项目')}</span>
             <span aria-hidden className="text-[var(--app-muted)]">⌄</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-h-64 w-[250px] overflow-y-auto rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-            {previewProjects.map((project) => <DropdownMenuItem className="h-8 cursor-pointer gap-2 rounded-md px-2.5 text-xs focus:bg-[var(--app-hover)]" key={project.id} onClick={() => onSelectPreviewProject(project.id)}>
+            {previewProjects.map((project) => <DropdownMenuItem className="h-8 cursor-pointer gap-2 rounded-md px-2.5 text-xs focus:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} key={project.id} onClick={() => onSelectPreviewProject(project.id)}>
               <span className="min-w-0 flex-1 truncate">{project.name}</span>
               {project.id === selectedPreviewProjectId && <span className="text-[10px] text-[var(--app-brand)]">{t('当前')}</span>}
             </DropdownMenuItem>)}

@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "Could not load annotation screenshot",
   "Capture failed; retry to attach element context": "Capture failed; retry to attach element context",
   "Design instructions are too long. Apply fewer changes.": "Design instructions are too long. Apply fewer changes.",
+  "Applying changes…": "Applying changes…",
   "Could not send design changes.": "Could not send design changes.",
   "所选项目不可用": "The selected project is unavailable.",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "Hold Ctrl or ⌘ and drag to move the selected element.",

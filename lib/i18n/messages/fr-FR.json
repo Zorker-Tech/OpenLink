@@ -1246,6 +1246,7 @@
   "无法读取批注截图": "Impossible de charger la capture de l’annotation",
   "Capture failed; retry to attach element context": "Échec de la capture. Réessayez pour joindre le contexte visuel",
   "Design instructions are too long. Apply fewer changes.": "Les instructions de conception sont trop longues. Appliquez moins de modifications.",
+  "Applying changes…": "Application des modifications…",
   "Could not send design changes.": "Impossible d’envoyer les modifications de conception.",
   "所选项目不可用": "Le projet sélectionné n’est pas disponible.",
   "Hold Ctrl or ⌘ and drag to move the selected element.": "Maintenez Ctrl ou ⌘ et faites glisser l’élément sélectionné.",
