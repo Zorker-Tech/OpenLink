@@ -33,53 +33,22 @@ import {
   type InteropRedactedToolCall,
 } from "../../../adapters/interop/agent/ask-question-result-adapter.ts"
 import { formatAskQuestionOutcomeAsString } from "../../agent/tools/core/ask-question/outcome-format.ts"
+import {
+  type AskQuestionCompletionAction,
+  type SlateAskQuestionCompletionResult,
+  type SlateAskQuestionText,
+} from "./ask-question-completion-contracts.ts"
 
-export type SlateAskQuestionText = string | RedactedString
-
-export interface SlateAskQuestionOption {
-  readonly id: string
-  readonly label: SlateAskQuestionText
-}
-
-export interface SlateAskQuestionQuestion {
-  readonly id: string
-  readonly prompt: SlateAskQuestionText
-  readonly allowMultiple: boolean
-  readonly options: readonly SlateAskQuestionOption[]
-}
-
-export interface SlateAskQuestionArguments {
-  readonly title: SlateAskQuestionText
-  readonly questions: readonly SlateAskQuestionQuestion[]
-}
-
-export interface SlateAskQuestionAnswer {
-  readonly questionId: string
-  readonly selectedOptionIds: readonly string[]
-  readonly freeformText: SlateAskQuestionText
-}
-
-/** Slate outcome union, kept redaction-aware until text is written to a prompt or wire message. */
-export type SlateAskQuestionCompletionResult =
-  | { readonly kind: "answered"; readonly answers: readonly SlateAskQuestionAnswer[] }
-  | { readonly kind: "error"; readonly message: SlateAskQuestionText; readonly askWasTooEarly: boolean }
-  | { readonly kind: "rejected"; readonly reason: SlateAskQuestionText }
-  | { readonly kind: "async" }
-  | { readonly kind: "unknown" }
-
-/** Slate's versioned completion contract for an asynchronous question. */
-export interface AskQuestionCompletionAction {
-  readonly schema: "slate.agent-action.ask-question-completion"
-  readonly version: 1
-  readonly privacyMode: PrivacyMode
-  readonly originalToolCallId: string
-  readonly originalArgs?: SlateAskQuestionArguments | undefined
-  readonly result?: SlateAskQuestionCompletionResult | undefined
-  readonly compatibility?: {
-    readonly legacyResult?: unknown
-    readonly legacyPayload?: Readonly<Record<string, unknown>>
-  }
-}
+export { isSlateAskQuestionCompletionAction } from "./ask-question-completion-contracts.ts"
+export type {
+  AskQuestionCompletionAction,
+  SlateAskQuestionAnswer,
+  SlateAskQuestionArguments,
+  SlateAskQuestionCompletionResult,
+  SlateAskQuestionOption,
+  SlateAskQuestionQuestion,
+  SlateAskQuestionText,
+} from "./ask-question-completion-contracts.ts"
 
 /** What the session remembers about completions it has applied. */
 interface AskQuestionCompletionStateHandler {

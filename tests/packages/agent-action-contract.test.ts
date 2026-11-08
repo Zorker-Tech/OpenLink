@@ -2,11 +2,12 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  isSlateAgentAction,
   slateAgentActionFromQueuedInterop,
   slateAgentActionFromRedactedInterop,
   slateAgentActionFromInterop,
 } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts"
-import { createSlateResumeAgentAction, isSlateResumeActionPayload, SlateAgentActionKind, isSlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
+import { createSlateResumeAgentAction, isSlateResumeActionPayload, isSlateLegacyAgentActionPayload, SlateAgentActionKind, isSlateUserMessageActionPayload } from "../../source/packages/agent/agent-action-state.ts"
 import { createSlateUserMessageInput } from "../../source/packages/agent/user-message-state.ts"
 import { isSlateExecutePlanActionPayload } from "../../source/packages/agent/actions/execute-plan-contracts.ts"
 import {
@@ -49,7 +50,7 @@ import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
-import type { AskQuestionCompletionAction } from "../../source/packages/agent/actions/ask-question-completion.ts"
+import { isSlateAskQuestionCompletionAction, type AskQuestionCompletionAction } from "../../source/packages/agent/actions/ask-question-completion-contracts.ts"
 import {
   BackgroundTaskCompletion,
   BackgroundTaskCompletionAction,
@@ -136,8 +137,14 @@ test("every supported runner route maps to a Slate kind and first-party payload 
       assert.equal(payload.version, 1)
       assert.equal(payload.originalToolCallId, "")
       assert.ok(payload.compatibility?.legacyPayload)
+    } else if (sourceCase === "startPlanAction") {
+      const payload = action.payload
+      assert.equal(isSlateLegacyAgentActionPayload(payload), true)
+      if (!isSlateLegacyAgentActionPayload(payload)) assert.fail("expected a Slate legacy payload")
+      assert.equal(payload.sourceKind, sourceCase)
+      assert.deepEqual(payload.value, { sourceCase })
     } else {
-      assert.equal(action.payload, payload, sourceCase)
+      assert.fail(`route ${sourceCase} did not receive an owned payload assertion`)
     }
     assert.equal(action.context.privacyMode, PrivacyMode.NO_STORAGE, sourceCase)
     assert.equal(action.context.telemetryName, sourceCase, sourceCase)
@@ -182,6 +189,26 @@ test("ask-question completion uses Slate fields and preserves the historical pay
   assert.equal(payload.result?.kind, "answered")
   assert.equal(payload.compatibility?.legacyResult, legacyPayload.result)
   assert.equal(payload.compatibility?.legacyPayload, legacyPayload)
+})
+
+test("the action envelope validator checks nested ask-question payloads before narrowing the route", () => {
+  const valid: AskQuestionCompletionAction = {
+    schema: "slate.agent-action.ask-question-completion",
+    version: 1,
+    privacyMode: PrivacyMode.NO_STORAGE,
+    originalToolCallId: "call-1",
+    originalArgs: {
+      title: "Choose one",
+      questions: [{ id: "question-1", prompt: "Which?", allowMultiple: false, options: [{ id: "option-1", label: "First" }] }],
+    },
+    result: { kind: "answered", answers: [{ questionId: "question-1", selectedOptionIds: ["option-1"], freeformText: "" }] },
+  }
+  assert.equal(isSlateAskQuestionCompletionAction(valid), true)
+  assert.equal(isSlateAskQuestionCompletionAction({ ...valid, originalArgs: { title: 12, questions: [] } }), false)
+  assert.equal(isSlateAskQuestionCompletionAction({
+    ...valid,
+    result: { kind: "answered", answers: [{ questionId: "question-1", selectedOptionIds: [7], freeformText: "" }] },
+  }), false)
 })
 
 test("cancel actions carry a Slate reason and preserve historical resolution data", () => {
@@ -368,7 +395,31 @@ test("missing and unknown routes remain distinguishable, and the unknown source 
   const unsupported = slateAgentActionFromQueuedInterop({ case: "futureAction", value: { id: "x" } }, PrivacyMode.UNSPECIFIED)
   assert.equal(unsupported.kind, SlateAgentActionKind.UNSUPPORTED)
   assert.equal(unsupported.compatibility?.sourceKind, "futureAction")
-  assert.deepEqual(unsupported.payload, { id: "x" })
+  assert.equal(isSlateLegacyAgentActionPayload(unsupported.payload), true)
+  if (!isSlateLegacyAgentActionPayload(unsupported.payload)) assert.fail("expected a Slate legacy payload")
+  assert.deepEqual(unsupported.payload, {
+    schema: "slate.agent-action.legacy",
+    version: 1,
+    sourceKind: "futureAction",
+    value: { id: "x" },
+  })
+})
+
+test("Slate action recognition requires a matching route payload and context", () => {
+  const valid = slateAgentActionFromQueuedInterop({ case: "resumeAction" }, PrivacyMode.NO_STORAGE)
+  assert.equal(isSlateAgentAction(valid), true)
+  assert.equal(isSlateAgentAction({ ...valid, kind: SlateAgentActionKind.USER_MESSAGE } as never), false)
+  assert.equal(isSlateAgentAction({
+    ...valid,
+    context: { ...valid.context, privacyMode: "not-a-policy" },
+  } as never), false)
+
+  const unsupported = slateAgentActionFromQueuedInterop({ case: "futureAction", value: { id: "x" } }, PrivacyMode.UNSPECIFIED)
+  assert.equal(isSlateAgentAction(unsupported), true)
+  assert.equal(isSlateAgentAction({
+    ...unsupported,
+    payload: { ...unsupported.payload, sourceKind: "differentAction" },
+  } as never), false)
 })
 
 test("redacted action context is projected into Slate actor and request metadata", () => {

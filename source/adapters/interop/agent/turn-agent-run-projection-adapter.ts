@@ -2,21 +2,26 @@
 
 import { toRedactedConversationAction } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { ConversationAction, ConversationStateStructure } from "../proto/generated/agent/v1/agent_pb.ts"
-import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
+import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../../../packages/redaction/privacy-mode.ts"
 import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import { createRedactedString } from "../../../packages/redaction/create.ts"
 import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import {
+  createSlateLegacyAgentActionPayload,
+  isSlateLegacyAgentActionPayload,
   isSlateResumeActionPayload,
   isSlateUserMessageActionPayload,
   SlateAgentActionKind,
   type SlateAgentAction,
+  type SlateAgentActionCompatibility,
+  type SlateAgentActionContext,
   type SlateAgentActionKind as SlateAgentActionKindValue,
   type SlateResumeActionPayload,
   type SlateUserMessageActionPayload,
 } from "../../../packages/agent/agent-action-state.ts"
 import { isSlateConversationCheckpointV2, type SlateConversationCheckpointV2 } from "../../../packages/agent/conversation-checkpoint-state.ts"
+import { isSlateAskQuestionCompletionAction } from "../../../packages/agent/actions/ask-question-completion-contracts.ts"
 import { decodeIncomingSlateUserMessage } from "./user-message-action-input-adapter.ts"
 import { redactSlateUserMessage } from "./user-message-action-protocol-adapter.ts"
 import { decodeExecutePlanAction } from "./execute-plan-action-adapter.ts"
@@ -244,9 +249,66 @@ function slateContextInjectionPayloadFromRedacted(
   })
 }
 
-function isSlateAgentAction(value: InteropConversationAction | SlateAgentAction): value is SlateAgentAction {
-  if (value === null || typeof value !== "object" || !("kind" in value) || !("context" in value)) return false
-  return typeof value.kind === "string" && typeof value.context === "object" && value.context !== null
+function isSlateAgentActionContext(value: unknown): value is SlateAgentActionContext {
+  const context = record(value)
+  if (context === undefined || !Object.values(PrivacyMode).includes(context.privacyMode as PrivacyModeValue)) return false
+  if (context.actor !== undefined) {
+    const actor = record(context.actor)
+    if (actor === undefined ||
+        (actor.authId !== undefined && typeof actor.authId !== "string") ||
+        (actor.userInfo !== undefined && record(actor.userInfo) === undefined)) return false
+  }
+  if (context.requestReferences !== undefined && record(context.requestReferences) === undefined) return false
+  return context.telemetryName === undefined || typeof context.telemetryName === "string"
+}
+
+/** Validates a Slate action before it bypasses the historical route decoder. */
+export function isSlateAgentAction(value: InteropConversationAction | SlateAgentAction): value is SlateAgentAction {
+  const action = record(value)
+  if (action === undefined || !isSlateAgentActionContext(action.context)) return false
+  const compatibility = action.compatibility === undefined ? undefined : record(action.compatibility)
+  if (action.compatibility !== undefined && compatibility === undefined) return false
+  if (compatibility?.sourceKind !== undefined && typeof compatibility.sourceKind !== "string") return false
+
+  switch (action.kind) {
+    case SlateAgentActionKind.USER_MESSAGE:
+      return isSlateUserMessageActionPayload(action.payload)
+    case SlateAgentActionKind.RESUME:
+      return isSlateResumeActionPayload(action.payload)
+    case SlateAgentActionKind.CANCEL:
+      return isSlateCancelActionPayload(action.payload)
+    case SlateAgentActionKind.SUMMARIZE:
+      return isSlateSummarizeActionPayload(action.payload)
+    case SlateAgentActionKind.SHELL_COMMAND:
+      return isSlateShellCommandActionPayload(action.payload)
+    case SlateAgentActionKind.DEPRECATED_PLAN_START:
+      return isSlateLegacyAgentActionPayload(action.payload)
+    case SlateAgentActionKind.EXECUTE_PLAN:
+      return isSlateExecutePlanActionPayload(action.payload)
+    case SlateAgentActionKind.ASK_QUESTION_COMPLETION:
+      return isSlateAskQuestionCompletionAction(action.payload)
+    case SlateAgentActionKind.CANCEL_SUBAGENT:
+      return isSlateCancelSubagentActionPayload(action.payload)
+    case SlateAgentActionKind.BACKGROUND_TASK_COMPLETION:
+      return isSlateBackgroundTaskCompletionActionPayload(action.payload)
+    case SlateAgentActionKind.BACKGROUND_SHELL:
+      return isSlateBackgroundShellActionPayload(action.payload)
+    case SlateAgentActionKind.BACKGROUND_SUBAGENT:
+      return isSlateBackgroundSubagentActionPayload(action.payload)
+    case SlateAgentActionKind.SUBSCRIPTION_NOTIFICATION:
+      return isSlateSubscriptionNotificationActionPayload(action.payload)
+    case SlateAgentActionKind.GOAL_CONTINUATION:
+      return isSlateGoalContinuationActionPayload(action.payload)
+    case SlateAgentActionKind.CONTEXT_INJECTION:
+      return isSlateContextInjectionActionPayload(action.payload)
+    case SlateAgentActionKind.MISSING:
+      return action.payload === undefined && action.compatibility === undefined
+    case SlateAgentActionKind.UNSUPPORTED:
+      return isSlateLegacyAgentActionPayload(action.payload) &&
+        compatibility?.sourceKind === action.payload.sourceKind
+    default:
+      return false
+  }
 }
 
 function redactSlateAgentAction(action: SlateAgentAction, privacyMode: PrivacyMode): SlateAgentAction {
@@ -397,6 +459,15 @@ const SLATE_ACTION_KIND_BY_INTEROP_CASE: Readonly<Record<string, SlateAgentActio
   injectContextAction: SlateAgentActionKind.CONTEXT_INJECTION,
 }
 
+type SlateAgentActionCandidate = {
+  [Kind in SlateAgentActionKindValue]: {
+    readonly kind: Kind
+    readonly payload?: unknown
+    readonly context: SlateAgentActionContext
+    readonly compatibility?: SlateAgentActionCompatibility
+  }
+}[SlateAgentActionKindValue]
+
 function slateAgentActionFromCaseValue(input: {
   readonly actionCase: string | undefined
   readonly value?: Readonly<Record<string, unknown>> | undefined
@@ -404,7 +475,7 @@ function slateAgentActionFromCaseValue(input: {
   readonly triggeringAuthId?: string | undefined
   readonly triggeringUserInfo?: Readonly<Record<string, unknown>> | undefined
   readonly requestContextParts?: Readonly<Record<string, unknown>> | undefined
-}): SlateAgentAction {
+}): SlateAgentActionCandidate {
   const kind = input.actionCase === undefined
     ? SlateAgentActionKind.MISSING
     : SLATE_ACTION_KIND_BY_INTEROP_CASE[input.actionCase] ?? SlateAgentActionKind.UNSUPPORTED
@@ -426,6 +497,34 @@ function slateAgentActionFromCaseValue(input: {
     ...(kind === SlateAgentActionKind.UNSUPPORTED && input.actionCase !== undefined
       ? { compatibility: { sourceKind: input.actionCase } }
       : {}),
+  }
+}
+
+function slateLegacyAgentActionFromCandidate(action: SlateAgentActionCandidate): SlateAgentAction {
+  switch (action.kind) {
+    case SlateAgentActionKind.MISSING:
+      return { kind: SlateAgentActionKind.MISSING, context: action.context }
+    case SlateAgentActionKind.DEPRECATED_PLAN_START:
+      return {
+        kind: SlateAgentActionKind.DEPRECATED_PLAN_START,
+        context: action.context,
+        payload: createSlateLegacyAgentActionPayload(
+          action.context.telemetryName ?? SlateAgentActionKind.DEPRECATED_PLAN_START,
+          record(action.payload),
+        ),
+      }
+    case SlateAgentActionKind.UNSUPPORTED: {
+      const sourceKind = action.compatibility?.sourceKind
+      if (sourceKind === undefined) throw new TypeError("Unsupported action must retain its source kind")
+      return {
+        kind: SlateAgentActionKind.UNSUPPORTED,
+        context: action.context,
+        payload: createSlateLegacyAgentActionPayload(sourceKind, record(action.payload)),
+        compatibility: { sourceKind },
+      }
+    }
+    default:
+      throw new TypeError(`Slate action payload projection is missing for ${action.kind}`)
   }
 }
 
@@ -522,7 +621,7 @@ export function slateAgentActionFromRedactedInterop(action: RedactedAgentAction)
   if (slateAction.kind === SlateAgentActionKind.USER_MESSAGE) {
     return { ...slateAction, payload: slateUserMessageActionPayloadFromRedacted(action.action.value) }
   }
-  return slateAction
+  return slateLegacyAgentActionFromCandidate(slateAction)
 }
 
 /** Converts a counterpart action at a direct Agent entry such as the task subagent runner. */
@@ -595,11 +694,11 @@ export function slateAgentActionFromQueuedInterop(
     return slateAgentActionFromRedactedInterop(toRedactedConversationAction(wrapped, privacyMode))
   }
   const value = action.value
-  return slateAgentActionFromCaseValue({
+  return slateLegacyAgentActionFromCandidate(slateAgentActionFromCaseValue({
     actionCase: action.case,
     ...(value === undefined ? {} : { value: value as Readonly<Record<string, unknown>> }),
     privacyMode,
-  })
+  }))
 }
 
 export function cloneInteropConversationState(state: InteropConversationState): InteropConversationState {

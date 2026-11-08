@@ -1,7 +1,7 @@
 import { DataClassification } from "../../redaction/classification.ts"
 import { createRedactedString } from "../../redaction/create.ts"
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts"
-import type { SlateUserMessageActionPayload } from "../agent-action-state.ts"
+import type { SlateUserMessageActionPayload } from "./user-message-action-contracts.ts"
 import {
   createSlateUserMessageInput,
   SlateSimulatedMessageReason,

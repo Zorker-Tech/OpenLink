@@ -4460,9 +4460,9 @@
     },
     "packages/agent/actions/ask-question-completion.ts": {
       "claim": "rewritten",
-      "overlap": 0.5050847457627119,
-      "refreshReason": "Defined a versioned Slate completion event and result union; retained completion policy and prompt history in Slate core, with historical action decoding and stored-call encoding at the interop boundary.",
-      "evidence": "Focused ask-question completion, action-handler and route-contract suites pass 36/36; the full Work-host suite passes 9993/9993 under Node 24. Work-host typecheck and rewrite/interop gates pass. Contracts cover the Slate action projection, preservation of historical values, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. The Slate result is authoritative when known. Measured overlap is 0.5050847457627119 against 590 baseline pairs."
+      "overlap": 0.43559322033898307,
+      "refreshReason": "Moved the Slate completion payload schema and nested validator into a lightweight contract module so action routing does not import business-side tool result serialization.",
+      "evidence": "The full Node 24 Work-host suite passed 10088/10088 before the contract-only file extraction. After extraction, agent-action-contract and agent-action-handlers focused suites pass 17/17 each; direct action-guard coverage includes malformed nested ask-question data, route/payload mismatches and invalid legacy source labels. The versioned Slate action validator also covers duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. Work-host typecheck and rewrite/interop gates pass. Measured overlap is 0.43559322033898307 against 590 baseline pairs."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",
