@@ -106,7 +106,8 @@ describe("auditing what an agent did", () => {
     const accessor = {
       get: () => ({
         execute: async () => ({
-          result: { case: "success", value: { exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\",\"title\":\"One\"},{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\"},{\"id\":\"p2\",\"type\":\"service-worker\",\"url\":\"https://a.com/two\"},{\"id\":\"\",\"type\":\"page\",\"url\":\"https://a.com/three\"}]" } } }),
+          outcome: { kind: "success", exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\",\"title\":\"One\"},{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\"},{\"id\":\"p2\",\"type\":\"service-worker\",\"url\":\"https://a.com/two\"},{\"id\":\"\",\"type\":\"page\",\"url\":\"https://a.com/three\"}]" },
+      }),
       }),
     };
     probe.probe("CTX" as never, accessor, 1);
@@ -120,7 +121,7 @@ describe("auditing what an agent did", () => {
     }]);
     // A failing probe records nothing.
     const failing = createSlateNavigationProbe({ agentId: "agent-1", auditor: { record: (entry: any) => { records.push(entry); return Promise.resolve(); } } as never, now: () => 20_000 });
-    failing.probe("CTX" as never, { get: () => ({ execute: async () => ({ result: { case: "success", value: { exitCode: 1, stdout: "" } } }) }) }, 1);
+    failing.probe("CTX" as never, { get: () => ({ execute: async () => ({ outcome: { kind: "success", exitCode: 1, stdout: "" } }) }) }, 1);
     await settle(); await settle();
     assert.equal(records.length, 1);
   });
@@ -132,8 +133,8 @@ describe("auditing what an agent did", () => {
       auditor: { record: (entry: any) => { records.push(entry); return Promise.resolve(); } } as never,
       now: () => 5_000,
     });
-    const baselineAccessor = { get: () => ({ execute: async () => ({ result: { case: "success", value: { exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\"}]" } } }) }) };
-    const accessor = { get: () => ({ execute: async () => ({ result: { case: "success", value: { exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/two\"}]" } } }) }) };
+    const baselineAccessor = { get: () => ({ execute: async () => ({ outcome: { kind: "success", exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/one\"}]" } }) }) };
+    const accessor = { get: () => ({ execute: async () => ({ outcome: { kind: "success", exitCode: 0, stdout: "[{\"id\":\"p1\",\"type\":\"page\",\"url\":\"https://a.com/two\"}]" } }) }) };
     const baseline = probe.captureBaseline("CTX" as never, baselineAccessor, 1);
     assert.equal(probe.captureBaseline("CTX" as never, baselineAccessor, 1), baseline, "one baseline per probe");
     probe.probe("CTX" as never, accessor, 1);
