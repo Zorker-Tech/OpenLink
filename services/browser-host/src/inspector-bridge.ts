@@ -539,6 +539,50 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
           });
           break;
         }
+        case 'preview.locator.resolve': {
+          selectedElement = null;
+          overlay.style.display = 'none';
+          const matchesFor = (candidate) => {
+            try {
+              if (candidate.kind === 'id') {
+                const matches = [];
+                for (const element of document.querySelectorAll('[id]')) {
+                  if (element.id === candidate.value && matches.length < 2) matches.push(element);
+                  if (matches.length === 2) break;
+                }
+                return matches;
+              }
+              if (candidate.kind === 'data-testid' || candidate.kind === 'data-test' || candidate.kind === 'data-cy') {
+                const attribute = candidate.kind;
+                const matches = [];
+                for (const element of document.querySelectorAll('[' + attribute + ']')) {
+                  if (element.getAttribute(attribute) === candidate.value && matches.length < 2) matches.push(element);
+                  if (matches.length === 2) break;
+                }
+                return matches;
+              }
+              return Array.from(document.querySelectorAll(candidate.value)).filter((element) => element.localName === action.locator.tagName).slice(0, 2);
+            } catch { return []; }
+          };
+          const uniqueMatches = [];
+          let ambiguousCandidate = false;
+          for (const candidate of action.locator.candidates) {
+            const matches = matchesFor(candidate).filter((element) => element.localName === action.locator.tagName && element !== overlay && !overlay.contains(element));
+            if (matches.length === 1) uniqueMatches.push({ element: matches[0], kind: candidate.kind });
+            else if (matches.length > 1) ambiguousCandidate = true;
+          }
+          const uniqueElements = Array.from(new Set(uniqueMatches.map((match) => match.element)));
+          if (uniqueElements.length === 1 && !ambiguousCandidate) {
+            const element = uniqueElements[0];
+            element.scrollIntoView({ block: 'center', inline: 'center' });
+            selectedElement = element;
+            result.element = show(element);
+            result.snapshot = JSON.stringify({ status: 'matched', strategies: uniqueMatches.filter((match) => match.element === element).map((match) => match.kind) });
+          } else {
+            result.snapshot = JSON.stringify({ status: uniqueElements.length > 1 || ambiguousCandidate ? 'ambiguous' : 'not-found' });
+          }
+          break;
+        }
         case 'element.click': {
           const element = resolveElement(action);
           if (!element) throw new Error('Element not found');

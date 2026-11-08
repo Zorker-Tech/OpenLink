@@ -1,11 +1,11 @@
 'use client'
 
-import type { BrowserElementMove, BrowserPreviewAnnotationTarget, BrowserWorkbenchHandle, BrowserWorkbenchUiState } from '@/components/browser/browser-workbench'
+import type { BrowserElementMove, BrowserPreviewAnnotationTarget, BrowserWorkbenchHandle, BrowserWorkbenchUiState, PreviewLocatorResolution } from '@/components/browser/browser-workbench'
 import type { AgentPromptAttachment } from '@/lib/agent-runtime/events'
 import { useT } from '@/lib/i18n/client'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 import { beginPreviewEditTransaction, commitPreviewEditSnapshot, createPreviewEditHistory, finishPreviewEditTransaction, previewStyleEditKey, redoPreviewEditHistory, undoPreviewEditHistory } from '@/lib/preview-edit-history.mjs'
-import { isPreviewSourceRevision, previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference } from '@/packages/browser-protocol/src/index'
+import { createPreviewElementLocator, isPreviewSourceRevision, previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference, type PreviewElementLocator } from '@/packages/browser-protocol/src/index'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppWindow, Eye, Layers3, LoaderCircle, MessageSquarePlus, Palette, RotateCw, Undo2, Redo2, WandSparkles, X } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -26,6 +26,7 @@ interface PreviewAnnotation {
   id: string
   target_id: string
   target_revision: string | null
+  element_locator: PreviewElementLocator | null
   page_path: string
   element_selector: string | null
   element_label: string | null
@@ -47,6 +48,7 @@ interface AnnotationDraft {
   bounds: { x: number; y: number; width: number; height: number }
   viewport: { width: number; height: number }
   targetRevision: string | null
+  locator: PreviewElementLocator | null
   targetRevisionReceipt?: string
   screenshotDataUrl?: string
   capturing: boolean
@@ -188,6 +190,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   const [annotationDraft, setAnnotationDraft] = useState<AnnotationDraft | null>(null)
   const [annotationComment, setAnnotationComment] = useState('')
   const [annotationError, setAnnotationError] = useState<string | null>(null)
+  const [locatorResolution, setLocatorResolution] = useState<{ id: string; status: 'pending' | PreviewLocatorResolution } | null>(null)
   const [annotationBusy, setAnnotationBusy] = useState(false)
   const [screenshotLoadingId, setScreenshotLoadingId] = useState<string | null>(null)
   const [expandedAnnotationId, setExpandedAnnotationId] = useState<string | null>(null)
@@ -553,6 +556,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       bounds: target.bounds,
       viewport,
       targetRevision: null,
+      locator: target.element ? createPreviewElementLocator(target.element) : null,
       capturing: true,
     }
     setAnnotationDraft(draft)
@@ -605,6 +609,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
           targetId: annotationDraft.targetId,
           targetRevision: annotationDraft.targetRevision,
           targetRevisionReceipt: annotationDraft.targetRevisionReceipt,
+          locator: annotationDraft.locator,
           pagePath: annotationDraft.pagePath,
           selector: annotationDraft.selector,
           label: annotationDraft.label,
@@ -656,6 +661,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         ...selectedWithScreenshots.map(({ annotation }, index) => [
           `${index + 1}. Page ${annotation.page_path}${annotation.element_label ? ` — ${annotation.element_label}` : ''}`,
           `   Target source revision: ${annotation.target_revision ?? 'unavailable (legacy annotation)'}`,
+          annotation.element_locator ? `   Locator hints: ${annotation.element_locator.candidates.map(({ kind, value }) => `${kind}=${JSON.stringify(value)}`).join('; ').slice(0, 1200)}` : '',
           annotation.element_selector ? `   Selector: ${annotation.element_selector.slice(0, 300)}` : '',
           `   Region: x=${Math.round(annotation.bounds.x)}, y=${Math.round(annotation.bounds.y)}, width=${Math.round(annotation.bounds.width)}, height=${Math.round(annotation.bounds.height)} of ${annotation.viewport.width}×${annotation.viewport.height}`,
           `   Comment: ${annotation.comment.slice(0, 1800)}`,
@@ -682,10 +688,20 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   }, [])
 
   const showAnnotation = useCallback((annotationId: string) => {
-    if (!annotations.some((annotation) => annotation.id === annotationId)) return
+    const annotation = annotations.find((item) => item.id === annotationId)
+    if (!annotation) return
     setPanelTab('annotations')
     setExpandedAnnotationId(annotationId)
-  }, [annotations])
+    if (annotation.element_locator) {
+      if (annotation.page_path !== pagePath || browserState.activePreviewTargetId !== annotation.target_id) {
+        setLocatorResolution({ id: annotation.id, status: 'navigating' })
+        workbenchRef.current?.selectPreviewTarget(annotation.target_id, annotation.page_path)
+        return
+      }
+      setLocatorResolution({ id: annotation.id, status: 'pending' })
+      workbenchRef.current?.resolvePreviewLocator(annotation.element_locator, (status) => setLocatorResolution({ id: annotation.id, status }))
+    }
+  }, [annotations, browserState.activePreviewTargetId, pagePath, workbenchRef])
 
   useImperativeHandle(forwardedRef, () => ({ handleElementMoved, handleAnnotationTarget, showAnnotation }), [handleAnnotationTarget, handleElementMoved, showAnnotation])
 
@@ -693,6 +709,34 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     ['edit', 'Edit', WandSparkles], ['theme', 'Theme', Palette], ['layers', '图层', Layers3], ['annotations', 'Annotate', MessageSquarePlus],
   ]
   const selectedElement = browserState.selectedElement
+  const selectedTargetRevision = browserState.previewTargets.find((target) => target.id === targetId)?.targetRevision
+
+  useEffect(() => {
+    if (locatorResolution?.status !== 'navigating') return
+    const annotation = annotations.find((item) => item.id === locatorResolution.id)
+    if (annotation && pagePath === annotation.page_path && browserState.activePreviewTargetId === annotation.target_id) {
+      setLocatorResolution(null)
+      return
+    }
+    const annotationId = locatorResolution.id
+    const timeout = setTimeout(() => {
+      setLocatorResolution((current) => current?.id === annotationId && current.status === 'navigating'
+        ? { id: annotationId, status: 'failed' }
+        : current)
+    }, 20_000)
+    return () => clearTimeout(timeout)
+  }, [annotations, browserState.activePreviewTargetId, locatorResolution, pagePath])
+
+  const focusAnnotationElement = (annotation: PreviewAnnotation) => {
+    if (!annotation.element_locator) return
+    if (annotation.page_path !== pagePath || browserState.activePreviewTargetId !== annotation.target_id) {
+      setLocatorResolution({ id: annotation.id, status: 'navigating' })
+      workbenchRef.current?.selectPreviewTarget(annotation.target_id, annotation.page_path)
+      return
+    }
+    setLocatorResolution({ id: annotation.id, status: 'pending' })
+    workbenchRef.current?.resolvePreviewLocator(annotation.element_locator, (status) => setLocatorResolution({ id: annotation.id, status }))
+  }
 
   return (
     <aside aria-label={t('预览工具')} className={`flex h-full w-[280px] shrink-0 flex-col border-l border-[var(--app-border)] bg-[var(--app-background)] text-xs text-[var(--app-muted)] max-[720px]:absolute max-[720px]:inset-y-0 max-[720px]:right-0 max-[720px]:z-40 max-[720px]:w-[252px] max-[720px]:shadow-xl ${className}`}>
@@ -795,6 +839,8 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
           {!annotationDraft && !annotations.length && <div className="space-y-2 py-3 text-center"><MessageSquarePlus className="mx-auto size-5" /><p>{t('点击工具栏批注按钮，再点击预览元素或拖动选择区域。')}</p></div>}
           {annotations.map((annotation, index) => <div className="rounded-md border border-[var(--app-control-border)] p-2" key={annotation.id}>
             <label className="flex cursor-pointer gap-2"><input checked={annotationSelection.includes(annotation.id)} disabled={!annotationSelection.includes(annotation.id) && annotationSelection.length >= 4} onChange={(event) => toggleAnnotationForChat(annotation.id, event.currentTarget.checked)} type="checkbox" /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-[var(--app-foreground)]">{index + 1}. {annotation.element_label || t('批注区域')}</span><span className="block truncate font-mono text-[10px]">{annotation.page_path}</span><span className="mt-1 line-clamp-3 block text-[11px]">{annotation.comment}</span></span></label>
+            <div className="mt-2 flex items-center justify-between gap-2"><span className="truncate text-[10px] text-[var(--app-subtle-foreground)]">{annotation.target_revision ? `${t('源码版本')} ${annotation.target_revision.slice(-8)}${isPreviewSourceRevision(selectedTargetRevision) && selectedTargetRevision !== annotation.target_revision ? ` · ${t('页面已更新')}` : ''}` : t('旧批注没有源码版本')}</span><button className="shrink-0 rounded px-1.5 py-1 text-[10px] text-[var(--app-muted)] hover:bg-[var(--app-hover)] disabled:opacity-40" disabled={!annotation.element_locator || (locatorResolution?.id === annotation.id && (locatorResolution.status === 'pending' || locatorResolution.status === 'navigating'))} onClick={() => focusAnnotationElement(annotation)} type="button">{t('定位元素')}</button></div>
+            {locatorResolution?.id === annotation.id && <p className="mt-1 text-[10px]">{locatorResolution.status === 'pending' ? t('正在定位…') : locatorResolution.status === 'matched' ? t('已高亮匹配元素，请核对后再继续。') : locatorResolution.status === 'ambiguous' ? t('有多个候选元素，无法安全自动定位。') : locatorResolution.status === 'navigating' ? t('正在打开批注对应页面，请等待加载后再次定位。') : t('当前预览无法执行元素定位。')}</p>}
             <button className="mt-2 flex min-h-7 items-center gap-2 rounded px-1 text-[11px] text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" disabled={screenshotLoadingId === annotation.id} onClick={async () => {
               if (annotation.screenshot_data_url) { setExpandedAnnotationId((current) => current === annotation.id ? null : annotation.id); return }
               setAnnotationError(null)

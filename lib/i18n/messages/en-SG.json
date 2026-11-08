@@ -1256,5 +1256,18 @@
   "Full viewport context": "Full viewport context",
   "Text content": "Text content",
   "This element does not support text editing.": "This element does not support text editing.",
-  "Choose color": "Choose colour"
+  "Choose color": "Choose colour",
+  "源码版本": "Source version",
+  "页面已更新": "Page has changed",
+  "旧批注没有源码版本": "Legacy annotation has no source revision",
+  "定位元素": "Locate element",
+  "正在定位…": "Locating…",
+  "已高亮匹配元素，请核对后再继续。": "Matching element highlighted. Review it before continuing.",
+  "有多个候选元素，无法安全自动定位。": "Multiple elements match; automatic location is unsafe.",
+  "页面或目标已切换；打开批注对应页面后重试。": "The page or target changed. Open the annotation page and try again.",
+  "源码在截图期间发生变化，或当前版本不可用。请重新捕获。": "The source changed during capture or its version is unavailable. Capture again.",
+  "截图版本凭据不可用，请重新捕获。": "The screenshot version receipt is unavailable. Capture again.",
+  "无法确认当前源码版本，请刷新预览目标后重试。": "Could not confirm the current source version. Refresh the Preview target and try again.",
+  "当前预览无法执行元素定位。": "Element location is unavailable in the current Preview.",
+  "正在打开批注对应页面，请等待加载后再次定位。": "Opening the annotation page. Wait for it to load, then retry location."
 }

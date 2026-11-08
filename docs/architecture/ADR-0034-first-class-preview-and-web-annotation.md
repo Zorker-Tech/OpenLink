@@ -43,14 +43,17 @@ the authenticated iframe bootstrap to it.
 
 The Inspector Bridge supports live element selection, temporary text and style
 edits, DOM layers, CSS-variable controls, and browser actions. Project-scoped
-annotations retain screenshots, locator context, and a content-derived source
-revision covering the repository state at capture time. The Browser Host only
-attaches a revision when the source is stable across screenshot capture; the
-web server signs a short-lived receipt bound to the user, project, target,
-page, viewport, source revision, and screenshot bytes before accepting a new
-annotation. Existing annotations without a revision remain readable. The
-bridge's element references still belong to one running page, and visual edits
-do not map directly to source files or durable component identifiers.
+annotations retain screenshots, bounded locator candidates, and a
+content-derived source revision covering the repository state at capture time.
+The Browser Host only attaches a revision when the source is stable across
+screenshot capture; the web server signs a short-lived receipt bound to the
+user, project, target, page, viewport, source revision, and screenshot bytes
+before accepting a new annotation. Existing annotations without a revision
+remain readable. After a page update, the bridge can re-evaluate those
+candidates and highlights an element only when the match is unique; ambiguous
+or missing matches stay unresolved. Element references still belong to one
+running page, and visual edits do not map directly to source files or durable
+component identifiers.
 
 Local and Cloud workspaces previously used different Preview paths. Local mode
 used the managed iframe and Inspector Bridge; Cloud mode used a session-bound
@@ -247,8 +250,9 @@ temporary pending preview state before a source-aware Apply operation.
 3. **Web annotations:** retain metadata and private screenshots across reloads
    and send selected comments as a batch with screenshot and locator context.
    Target revisions now bind the captured source state to an authenticated
-   screenshot receipt and persist with each new annotation. The remaining work
-   is durable locator matching and recovery across app updates.
+   screenshot receipt and persist with each new annotation. Bounded locator
+   candidates can be re-evaluated after a page update; the bridge only
+   auto-highlights a unique match and reports ambiguous or missing candidates.
 4. **Design panel:** keep the panel inside the existing chat workspace Preview
    tab. The first implementation provides selected-element and viewport
    context, temporary text, typography, color, and layout edits, Cmd/Ctrl-drag

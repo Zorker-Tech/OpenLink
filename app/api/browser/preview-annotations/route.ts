@@ -5,7 +5,7 @@ import {
   PREVIEW_ANNOTATION_BUCKET,
   previewAnnotationObjectPath,
 } from '@/lib/preview-annotation-image.server.mjs'
-import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
+import { isPreviewElementLocator, isPreviewSourceRevision, type PreviewElementLocator } from '@/packages/browser-protocol/src/index'
 import { verifyPreviewScreenshotReceipt } from '@/lib/preview-screenshot-receipt.server.mjs'
 import { createClient } from '@/utils/supabase/server'
 
@@ -75,6 +75,16 @@ function sameViewport(left: unknown, right: unknown): boolean {
   return left.width === right.width && left.height === right.height
 }
 
+function normalizedLocator(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (!isPreviewElementLocator(value)) return 'invalid'
+  return JSON.stringify({
+    version: value.version,
+    tagName: value.tagName,
+    candidates: value.candidates.map(({ kind, value: candidateValue }) => ({ kind, value: candidateValue })),
+  })
+}
+
 function sameAnnotation(
   row: Record<string, unknown>,
   input: {
@@ -88,6 +98,7 @@ function sameAnnotation(
     viewport: { width: number; height: number }
     comment: string
     targetRevision: string
+    locator: PreviewElementLocator | null
     objectPath: string
   },
 ): boolean {
@@ -101,6 +112,7 @@ function sameAnnotation(
     && sameViewport(row.viewport, input.viewport)
     && row.comment === input.comment
     && row.target_revision === input.targetRevision
+    && normalizedLocator(row.element_locator) === normalizedLocator(input.locator)
     && row.screenshot_object_path === input.objectPath
     && row.screenshot_data_url === null
 }
@@ -115,6 +127,7 @@ function annotationFields(body: {
   viewport: { width: number; height: number }
   comment: string
   targetRevision: string
+  locator?: PreviewElementLocator | null
 }) {
   return {
     id: body.annotationId.toLowerCase(),
@@ -126,10 +139,11 @@ function annotationFields(body: {
     viewport: body.viewport,
     comment: body.comment.trim(),
     target_revision: body.targetRevision,
+    element_locator: body.locator ?? null,
   }
 }
 
-const ANNOTATION_RESPONSE_FIELDS = 'id, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, created_at'
+const ANNOTATION_RESPONSE_FIELDS = 'id, target_id, target_revision, element_locator, page_path, element_selector, element_label, bounds, viewport, comment, created_at'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -145,7 +159,7 @@ export async function GET(request: Request) {
   if (!scope.ok) return Response.json({ error: scope.error }, { status: scope.status })
   const { data, error } = await supabase.schema('openlink')
     .from('preview_annotations')
-    .select('id, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, created_at')
+    .select('id, target_id, target_revision, element_locator, page_path, element_selector, element_label, bounds, viewport, comment, created_at')
     .eq('project_id', scope.project.id)
     .eq('target_id', targetId)
     .order('created_at', { ascending: true })
@@ -176,6 +190,7 @@ export async function POST(request: Request) {
     screenshotDataUrl?: unknown
     targetRevision?: unknown
     targetRevisionReceipt?: unknown
+    locator?: unknown
   }
   if (typeof body.projectId !== 'string' || !ID_PATTERN.test(body.projectId)
     || typeof body.annotationId !== 'string' || !ID_PATTERN.test(body.annotationId)
@@ -183,6 +198,7 @@ export async function POST(request: Request) {
     || !isRect(body.bounds) || !isViewport(body.viewport)
     || !isPreviewSourceRevision(body.targetRevision)
     || typeof body.targetRevisionReceipt !== 'string' || body.targetRevisionReceipt.length > 2048
+    || (body.locator !== undefined && body.locator !== null && !isPreviewElementLocator(body.locator))
     || typeof body.comment !== 'string' || !body.comment.trim() || body.comment.trim().length > 2000
     || (body.selector !== undefined && body.selector !== null && (typeof body.selector !== 'string' || body.selector.length > 1000))
     || (body.label !== undefined && body.label !== null && (typeof body.label !== 'string' || body.label.length > 240))) {
@@ -220,6 +236,7 @@ export async function POST(request: Request) {
     viewport: { width: number; height: number }
     comment: string
     targetRevision: string
+    locator: PreviewElementLocator | null
   })
   const objectPath = previewAnnotationObjectPath(scope.project.id, user.id, fields.id, image)
   const expected = {
@@ -233,11 +250,12 @@ export async function POST(request: Request) {
     viewport: fields.viewport,
     comment: fields.comment,
     targetRevision: fields.target_revision,
+    locator: fields.element_locator,
     objectPath,
   }
   const annotations = supabase.schema('openlink').from('preview_annotations')
   const { data: existing, error: existingError } = await annotations
-    .select('id, created_by, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
+    .select('id, created_by, target_id, target_revision, element_locator, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
     .eq('id', fields.id)
     .eq('project_id', scope.project.id)
     .maybeSingle()
@@ -280,7 +298,7 @@ export async function POST(request: Request) {
   }).select(ANNOTATION_RESPONSE_FIELDS).single()
   if (error || !data) {
     const { data: raced } = await supabase.schema('openlink').from('preview_annotations')
-      .select('id, created_by, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
+      .select('id, created_by, target_id, target_revision, element_locator, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
       .eq('id', fields.id)
       .eq('project_id', scope.project.id)
       .maybeSingle()

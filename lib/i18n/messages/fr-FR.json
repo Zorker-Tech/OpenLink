@@ -1256,5 +1256,18 @@
   "Full viewport context": "Contexte de la fenêtre d’affichage complète",
   "Text content": "Contenu du texte",
   "This element does not support text editing.": "La modification du texte n’est pas disponible pour cet élément.",
-  "Choose color": "Choisir une couleur"
+  "Choose color": "Choisir une couleur",
+  "源码版本": "Version du code source",
+  "页面已更新": "La page a changé",
+  "旧批注没有源码版本": "Aucune version source n’est enregistrée pour cette ancienne annotation",
+  "定位元素": "Localiser l’élément",
+  "正在定位…": "Localisation…",
+  "已高亮匹配元素，请核对后再继续。": "L’élément correspondant est surligné. Vérifiez-le avant de continuer.",
+  "有多个候选元素，无法安全自动定位。": "Plusieurs éléments correspondent ; la localisation automatique n’est pas sûre.",
+  "页面或目标已切换；打开批注对应页面后重试。": "La page ou la cible a changé. Ouvrez la page de l’annotation et réessayez.",
+  "源码在截图期间发生变化，或当前版本不可用。请重新捕获。": "Le code source a changé pendant la capture ou sa version est indisponible. Recommencez la capture.",
+  "截图版本凭据不可用，请重新捕获。": "Le justificatif de version de la capture est indisponible. Recommencez la capture.",
+  "无法确认当前源码版本，请刷新预览目标后重试。": "Impossible de confirmer la version actuelle du code source. Actualisez la cible Preview et réessayez.",
+  "当前预览无法执行元素定位。": "La localisation d’élément n’est pas disponible dans l’aperçu actuel.",
+  "正在打开批注对应页面，请等待加载后再次定位。": "Ouverture de la page de l’annotation. Attendez son chargement, puis réessayez."
 }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BROWSER_PROTOCOL_VERSION, isBrowserActionEnvelope, isBrowserSocketClientMessage } from '@openlink/browser-protocol'
+import { BROWSER_PROTOCOL_VERSION, createPreviewElementLocator, isBrowserActionEnvelope, isBrowserSocketClientMessage } from '@openlink/browser-protocol'
 
 test('protocol validator accepts bounded browser input and rejects malformed input', () => {
   const action = {
@@ -30,7 +30,18 @@ test('native Preview design and annotation actions validate their bounded inputs
     { type: 'preview.theme.reset', pageId: 'preview', token: '--primary' },
     { type: 'preview.element.activate', pageId: 'preview', ref: 'el-1' },
     { type: 'preview.annotation.select', pageId: 'preview', x: 20, y: 30, width: 80, height: 50 },
+    { type: 'preview.locator.resolve', pageId: 'preview', locator: { version: 1, tagName: 'button', candidates: [{ kind: 'data-testid', value: 'save' }] } },
   ]) assert.equal(isBrowserActionEnvelope({ ...base, action }), true, action.type)
+
+  const locator = createPreviewElementLocator({
+    tagName: 'button', selector: '#save', attributes: { id: 'save', 'data-testid': 'save' },
+  })
+  assert.deepEqual(locator, {
+    version: 1,
+    tagName: 'button',
+    candidates: [{ kind: 'data-testid', value: 'save' }, { kind: 'id', value: 'save' }, { kind: 'css', value: '#save' }],
+  })
+  assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.locator.resolve', pageId: 'preview', locator: { version: 1, tagName: 'button', candidates: [] } } }), false)
 
   assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.style.set', pageId: 'preview', ref: 'el-1', property: 'background-color', value: 'x'.repeat(257) } }), false)
   assert.equal(isBrowserActionEnvelope({ ...base, action: { type: 'preview.content.set', pageId: 'preview', ref: 'el-1', content: 'x'.repeat(2001) } }), false)
