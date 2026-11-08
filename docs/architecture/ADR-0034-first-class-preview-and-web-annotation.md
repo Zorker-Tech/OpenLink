@@ -29,6 +29,12 @@ selected project. Targets are reusable across chats, but providers are still
 limited to project sandbox servers; worktree servers and read-only external
 URLs are not yet available.
 
+The selected project and opaque target preference now persist in the browser
+profile under a user-and-workspace key, so opening another chat in that profile
+does not silently switch Preview back to that chat's project. Restored project
+ids are filtered against the current workspace's authorized project list; the
+server still re-resolves every target before opening its proxy.
+
 The Inspector Bridge supports live element selection, temporary text and style
 edits, DOM layers, CSS-variable controls, and browser actions. Project-scoped
 annotations retain screenshots and locator context. The bridge's element
@@ -97,8 +103,11 @@ reusable across chats with workspace access.
 3. Make Preview navigation state belong to the selected target and its viewport,
    not to an ephemeral Browser Host session. Recreating the iframe transport,
    changing chat tabs, or closing the Browser panel must not change the target
-   or stop its development server. The active chat can still be recorded as
-   the initiating context and receive code-change requests.
+   or stop its development server. Persist the selected project and opaque
+   target preference per user and workspace, without persisting upstream URLs
+   or credentials. Revalidate both project access and target liveness on restore.
+   The active chat can still be recorded as the initiating context and receive
+   code-change requests.
 
 4. Build visual tools as modes over the same live Preview document and bridge:
 

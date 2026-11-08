@@ -2,86 +2,39 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const source = await readFile(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
+const chat = await readFile(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
 const sidebar = await readFile(new URL('../../components/app-workspace.tsx', import.meta.url), 'utf8')
+const sessionPage = await readFile(new URL('../../app/[user_id]/chat/[chat_sessions_id]/page.tsx', import.meta.url), 'utf8')
+const projectsPage = await readFile(new URL('../../app/app/[workspace_name]/projects/page.tsx', import.meta.url), 'utf8')
+const projects = await readFile(new URL('../../components/projects-workspace.tsx', import.meta.url), 'utf8')
+const legacyPreviewPage = await readFile(new URL('../../app/app/[workspace_name]/preview/page.tsx', import.meta.url), 'utf8')
+const surfaces = await readFile(new URL('../../components/browser/workspace-surfaces.tsx', import.meta.url), 'utf8')
+const previewSurface = await readFile(new URL('../../components/browser/native-preview-surface.tsx', import.meta.url), 'utf8')
 
-test('workspace modes use persistent labeled tabs and a new-tab menu', () => {
-  assert.match(source, /type WorkspaceTabId = 'preview' \| 'realtime' \| 'code' \| 'database'/)
-  assert.match(source, /aria-label=\{t\('工作区标签'\)\}/)
-  assert.match(source, /role="tab"/)
-  assert.match(source, /label=\{t\(["']打开新标签["']\)\}/)
-  assert.match(source, /aria-label=\{t\('关闭\{label\}标签', \{ label: tab\.label \}\)\}/)
-  assert.match(source, /const closeWorkspaceTab = useCallback\(\(tabId: WorkspaceTabId\)/)
-  assert.match(source, /current\.includes\(tab\) \? current : \[\.\.\.current, tab\]/)
-  assert.match(source, /side: 'chat' \| 'workspace'/)
-  assert.match(source, /data-header-region="chat-title"/)
-  assert.match(source, /data-header-region="workspace-tabs"/)
-  assert.match(source, /const \[openWorkspaceTabs, setOpenWorkspaceTabs\] = useState<WorkspaceTabId\[\]>\(\['preview'\]\)/)
-  assert.match(source, /const workspaceTabsOpen = openWorkspaceTabs\.length > 0/)
-  assert.doesNotMatch(source, /chatPanelWidth|--chat-panel-width|setChatPanelWidth/)
-  for (const label of ['预览', '实时浏览器', '代码', '数据库']) assert.match(source, new RegExp(`label: t\\(['\"]${label}['\"]\\)`))
+test('Preview is a first-class tab in the chat workspace header', () => {
+  assert.match(chat, /type WorkspaceTabId = SessionWorkspaceTab/)
+  assert.match(chat, /\{ id: 'preview', label: t\('预览'\)/)
+  assert.match(chat, /const \[openWorkspaceTabs, setOpenWorkspaceTabs\] = useState<WorkspaceTabId\[]>\(\['preview'\]\)/)
+  assert.match(chat, /data-header-region="workspace-tabs"[\s\S]*?<WorkspaceTabs[\s\S]*?openTabs=\{openTabs\}/)
+  assert.match(chat, /aria-label=\{t\('工作区标签'\)\}[\s\S]*?role="tablist"/)
+  assert.match(chat, /aria-selected=\{selected\}[\s\S]*?role="tab"/)
+  assert.match(chat, /id="preview-panel"[\s\S]*?<ChatTopbar \{\.\.\.chatTopbarProps\} side="workspace" \/>[\s\S]*?<WorkspaceSurfaces/)
+  assert.match(sessionPage, /<ChatWorkspace[\s\S]*workspaceId=\{workspace\.id\}/)
 })
 
-test('collapsing the timeline also collapses its matching title region', () => {
-  const topbar = source.slice(source.indexOf('function ChatTopbar('), source.indexOf('function BrowserNavigationBar('))
-
-  assert.match(topbar, /<motion\.div/)
-  assert.match(topbar, /animate=\{\{ opacity: chatCollapsed \? 0 : 1, x: chatCollapsed \? -10 : 0 \}\}/)
-  assert.match(topbar, /aria-hidden=\{chatCollapsed\}/)
-  assert.match(topbar, /data-header-region="chat-title"/)
-  // The title slot animates its real width (measured text width ⇄ editor
-  // width) so neighbouring chrome glides instead of jumping.
-  assert.match(source, /const TITLE_EDITOR_WIDTH = \d+/)
-  assert.match(topbar, /ref=\{titleMeasureRef\}/)
-  assert.match(topbar, /animate=\{\{ width: editingTitle \? TITLE_EDITOR_WIDTH : \(titleWidth \?\? undefined\) \}\}/)
-  assert.match(topbar, /chatCollapsed && collapsed && <ToolbarButton label=\{t\('展开侧边栏'\)\}/)
+test('project preview actions open a project chat and legacy links route to that flow', () => {
+  assert.match(projects, /createChatSessionAction\(\{ workspaceSlug: activeWorkspace\.slug, projectId \}\)/)
+  assert.match(projects, /router\.push\(result\.path\)/)
+  assert.match(projectsPage, /initialPreviewProjectId=\{initialPreviewProjectId\}/)
+  assert.match(legacyPreviewPage, /redirect\(`\/app\/\$\{workspaceName\}\/projects\?\$\{query\.toString\(\)\}`\)/)
+  assert.doesNotMatch(legacyPreviewPage, /WorkspaceSurfaces|BrowserWorkbench/)
 })
 
-test('closing the final workspace tab switches the desktop surface to chat-only', () => {  assert.match(source, /setOpenWorkspaceTabs\(remaining\)/)
-  assert.match(source, /if \(remaining\.length === 0\)/)
-  assert.match(source, /setBrowserState\(\(current\) => current\.surface === 'native-preview'/)
-  assert.match(source, /data-workspace-layout=\{workspaceTabsOpen \? 'split' : 'chat-only'\}/)
-  assert.match(source, /<AnimatePresence initial=\{false\} mode="popLayout">/)
-  assert.match(source, /key="workspace-split"/)
-  assert.match(source, /key="chat-only"/)
-  assert.match(source, /data-chat-panel="full"/)
-  assert.match(source, /<ChatTopbar \{\.\.\.chatTopbarProps\} side="chat" \/>/)
-  assert.match(source, /<ChatTopbar \{\.\.\.chatTopbarProps\} side="workspace" \/>/)
-  assert.match(source, /<ResizablePanelGroup className="min-h-0"[\s\S]*<ChatTopbar \{\.\.\.chatTopbarProps\} side="chat"[\s\S]*<ChatTopbar \{\.\.\.chatTopbarProps\} side="workspace"/)
-  assert.match(source, /data-chat-panel="full"/)
-  assert.match(source, /w-full max-w-3xl flex-1 flex-col/)
-  assert.match(source, /initialSurface=\{browserState\.surface\}/)
-})
-
-test('browser navigation lives in a dedicated preview-canvas toolbar', () => {
-  const topbar = source.slice(source.indexOf('function ChatTopbar('), source.indexOf('function BrowserNavigationBar('))
-  const navigation = source.slice(source.indexOf('function BrowserNavigationBar('), source.indexOf('function ComposerAttachments('))
-  const preview = source.slice(source.indexOf('function PreviewCanvas('), source.indexOf('export function ChatWorkspace('))
-
-  assert.doesNotMatch(topbar, /aria-label="浏览器地址"/)
-  assert.match(navigation, /aria-label=\{t\('浏览器工具栏'\)\}/)
-  assert.match(navigation, /className="flex h-11 shrink-0/)
-  assert.match(navigation, /max-w-\[500px\]/)
-  assert.match(preview, /<BrowserNavigationBar /)
-})
-
-test('the selected workspace tab is visible without hover and the title editor expands in place', () => {
-  const tabs = source.slice(source.indexOf('function WorkspaceTabs('), source.indexOf('function ChatTopbar('))
-  const topbar = source.slice(source.indexOf('function ChatTopbar('), source.indexOf('function BrowserNavigationBar('))
-
-  // Every open tab keeps its own surface and hairline ring, so an inactive tab
-  // never looks like bare background text; the active tab adds the selected
-  // fill and a lift.
-  assert.match(tabs, /selected \? 'bg-\[var\(--app-active\)\] text-\[var\(--app-foreground\)\] shadow-\[inset_0_0_0_1px_var\(--app-control-border\),0_1px_2px_var\(--app-shadow\)\]'/)
-  assert.match(tabs, /: 'bg-\[var\(--app-surface\)\] text-\[var\(--app-muted\)\] shadow-\[inset_0_0_0_1px_var\(--app-control-border\)\] hover:bg-\[var\(--app-hover\)\] hover:text-\[var\(--app-foreground\)\]'/)
-  assert.match(tabs, /transition-\[background-color,color,box-shadow\]/)
-
-  // Entering and leaving title edit mode is one layout animation instead of an
-  // abrupt swap, and neither state inherits the global press scale.
-  assert.match(topbar, /<motion\.div[\s\S]*?animate=\{\{ width: editingTitle \? TITLE_EDITOR_WIDTH/)
-  assert.match(topbar, /data-no-press-motion[\s\S]{0,800}?key="title-editor"/)
-  assert.match(topbar, /data-no-press-motion[\s\S]{0,400}?key="title-display"/)
-  assert.match(topbar, /<motion\.div[\s\S]*?transition=\{\{ duration: 0\.24/)
+test('chat workspace Preview uses the native iframe workbench and keeps its toolbar beside it', () => {
+  assert.match(surfaces, /<BrowserNavigationBar[\s\S]*?<main aria-label=\{t\('预览画布'\)\}/)
+  assert.match(surfaces, /data-workspace-browser-surface="preview"[\s\S]*?<BrowserWorkbench[\s\S]*?initialSurface="native-preview"/)
+  assert.match(previewSurface, /<iframe[\s\S]*?src=\{iframeUrl\}/)
+  assert.match(previewSurface, /postMessage\(/)
 })
 
 test('sidebar chat rows expose delete actions without opening a session', () => {
@@ -92,6 +45,6 @@ test('sidebar chat rows expose delete actions without opening a session', () => 
   assert.match(sidebar, /data-chat-actions/)
   assert.match(sidebar, /data-chat-status-orb/)
   assert.match(sidebar, /group-hover:opacity-0 group-focus-within:opacity-0/)
-  assert.match(source, /onDeleteChat=\{\(chatId\) => \{ void deleteChat\(chatId\) \}\}/)
-  assert.match(source, /const deleteChat = useCallback\(async \(targetSessionId: string\)/)
+  assert.match(chat, /onDeleteChat=\{\(chatId\) => \{ void deleteChat\(chatId\) \}\}/)
+  assert.match(chat, /const deleteChat = useCallback\(async \(targetSessionId: string\)/)
 })

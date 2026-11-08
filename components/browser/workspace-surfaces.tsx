@@ -308,7 +308,7 @@ export function WorkspaceSurfaces({
                           onStateChange={handlePreviewStateChange}
                           projectId={previewProjectId}
                           ref={previewWorkbenchRef}
-                          initialPreviewTargetId={previewProjectId === panelProps.projectId ? initialPreviewTargetId || undefined : undefined}
+                          initialPreviewTargetId={initialPreviewTargetId || undefined}
                           initialSurface="native-preview"
                           initialUrl={previewProjectId === panelProps.projectId ? initialBrowserUrl || undefined : undefined}
                           viewportMode={view === 'mobile' ? 'mobile' : 'browser'}
