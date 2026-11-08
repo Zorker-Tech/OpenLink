@@ -1637,6 +1637,32 @@ export function ChatWorkspace({
   const [gitVersions, setGitVersions] = useState<GitVersionOption[]>([])
   const [selectedGitRef, setSelectedGitRef] = useState<string | null>(null)
   const [gitVersionsLoading, setGitVersionsLoading] = useState(true)
+  const [sessionGitRef, setSessionGitRef] = useState<string | null>(null)
+  const [sessionGitBindingState, setSessionGitBindingState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setSessionGitRef(null)
+    setSessionGitBindingState('loading')
+    void fetch(`/api/chat/${encodeURIComponent(sessionId)}/git/binding`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('GIT_SESSION_BINDING_READ_FAILED')
+        const payload = await response.json() as { binding?: { ref?: unknown } | null }
+        const ref = payload.binding?.ref
+        if (ref !== null && ref !== undefined && (typeof ref !== 'string' || !/^[0-9a-f]{40}$/i.test(ref))) {
+          throw new Error('GIT_SESSION_BINDING_INVALID')
+        }
+        if (controller.signal.aborted) return
+        setSessionGitRef(typeof ref === 'string' ? ref.toLowerCase() : null)
+        setSessionGitBindingState('ready')
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setSessionGitRef(null)
+        setSessionGitBindingState('unavailable')
+      })
+    return () => controller.abort()
+  }, [sessionId])
 
   useEffect(() => {
     if (!uiReady || uiStateAppliedRef.current) return
@@ -2133,14 +2159,35 @@ export function ChatWorkspace({
     return accepted
   }, [agentStreamStatus, appendAgentEvents, enqueueStreamEvent, router, sessionId, workspaceView])
 
-  const submitPreviewRequest = useCallback(async (message: string, attachments: AgentPromptAttachment[], targetProjectId: string, intent: 'design' | 'annotation') => {
+  const submitPreviewRequest = useCallback(async (message: string, attachments: AgentPromptAttachment[], targetProjectId: string, intent: 'design' | 'annotation', sourceRef?: string) => {
     if (!previewProjects.some((project) => project.id === targetProjectId)) throw new Error(t('所选项目不可用'))
-    if (intent === 'design' && targetProjectId === projectId && accessMode === 'restricted') {
+    const normalizedSourceRef = sourceRef?.toLowerCase()
+    if (sourceRef && !/^[0-9a-f]{40}$/i.test(sourceRef)) throw new Error(t('无法确认所选 Git 版本，请刷新预览目标后重试。'))
+    const sourceMatchesCurrentChat = sessionGitBindingState === 'ready' && normalizedSourceRef === sessionGitRef
+    const createSourceChat = targetProjectId !== projectId || sessionGitBindingState !== 'ready' || !sourceMatchesCurrentChat
+    if ((intent === 'design' || intent === 'annotation') && targetProjectId === projectId && accessMode === 'restricted' && !createSourceChat) {
       throw new Error(t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。'))
     }
-    if (targetProjectId !== projectId) {
-      const created = await createChatSessionAction({ workspaceSlug: activeWorkspace.slug, projectId: targetProjectId, ...(intent === 'design' ? { accessMode: 'ask' as const } : {}) })
+    if (createSourceChat) {
+      const created = await createChatSessionAction({
+        workspaceSlug: activeWorkspace.slug,
+        projectId: targetProjectId,
+        accessMode: 'ask',
+      })
       if (!created.id || !created.path) throw new Error('error' in created ? created.error : t('创建代码任务失败'))
+      if (normalizedSourceRef) {
+        const bindingResponse = await fetch(`/api/chat/${encodeURIComponent(created.id)}/git/binding`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: normalizedSourceRef }),
+        })
+        if (!bindingResponse.ok) {
+          const failure = await bindingResponse.json().catch(() => null) as { error?: { message?: string }; message?: string } | null
+          const cleanup = await deleteChatSessionAction(created.id)
+          if (!cleanup.ok) console.error('OpenLink Preview chat cleanup failed:', cleanup.error)
+          throw new Error(failure?.error?.message || failure?.message || t('无法绑定所选 Git 版本，请重试。'))
+        }
+      }
       const response = await fetch(`/api/chat/${encodeURIComponent(created.id)}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2163,7 +2210,7 @@ export function ChatWorkspace({
     const payload = await response.json().catch(() => null) as { error?: string } | null
     if (!response.ok) throw new Error(payload?.error || t('消息加入队列失败'))
     return true
-  }, [accessMode, activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionId, submitAgentMessage, t])
+  }, [accessMode, activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionGitBindingState, sessionGitRef, sessionId, submitAgentMessage, t])
 
   const retrySavedInitialPrompt = useCallback(async () => {
     const prompt = initialPrompt.trim()

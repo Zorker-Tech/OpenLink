@@ -31,10 +31,12 @@ its own restricted application sandbox. Its checkout is stored in a
 VM-managed directory outside the editable source tree; only that validated
 path and the existing dependencies are mounted. It starts a `dev` or `start`
 script only when the manifest declares a supported Node web framework.
-Worktree targets are revision-bound and read-only for source Apply until a code
-chat is explicitly bound to that worktree. External HTTP(S) URLs can be opened
-directly in a separate sandboxed iframe; they do not use the managed proxy or
-Inspector Bridge and are not persisted.
+Worktree targets are revision-bound and remain read-only in their preview
+sandbox. Applying a historical target creates a separate code chat bound to
+that exact commit and gives its Agent and code editor the same isolated,
+editable worktree. External HTTP(S) URLs can be opened directly in a separate
+sandboxed iframe; they do not use the managed proxy or Inspector Bridge and are
+not persisted.
 
 The selected project, opaque target, pathname, and desktop/mobile viewport
 preference now persist in the browser profile under a user-and-workspace key, so
@@ -76,10 +78,11 @@ project-list action may open a chat with Preview selected, but it must not
 render a second Preview page. The tab provides the embedded canvas, responsive
 viewport, navigation controls, and Edit, Theme, Layers, and Annotate tools. Edit
 selects live elements and previews temporary text or style changes immediately.
-Changes remain pending until applied to the current editable project checkout
-as a reviewable change. Historical worktree previews and external URLs remain
-read-only for Apply until a code session is bound to that exact source. Theme
-edits available design tokens; Layers navigates the live document hierarchy.
+Changes remain pending until applied to an editable project checkout as a
+reviewable change. Applying a historical worktree target first creates a
+separate chat bound to its exact commit; the target sandbox itself stays
+read-only. Theme edits available design tokens; Layers navigates the live
+document hierarchy.
 Annotate places numbered comments on the preview and
 submits them with screenshot and locator context. A project selector inside the
 tab lets users switch among authorized code projects in the workspace. Requests
@@ -121,13 +124,15 @@ reusable across chats with workspace access.
    outbound network access. A package must declare a supported Node web
    framework and a `dev` or `start` script; dependencies already installed in
    the Project are reused. The
-   selected worktree is revision-bound; Apply stays unavailable until an Agent
-   code session is attached to that worktree. Provider URLs, proxy credentials,
-   and runtime secrets remain server-side. Browser clients receive opaque
-   target ids and safe labels. External URLs are validated in the browser and
-   loaded directly into a sandboxed iframe with no same-origin privilege or
-   Inspector Bridge. They are never fetched through a server-side proxy; users
-   can open a top-level tab when the site refuses framing.
+   selected worktree is revision-bound. Applying it creates a new chat bound
+   to that commit, backed by a separate editable worktree shared by the Agent
+   and code editor; it never edits the read-only preview checkout. Provider
+   URLs, proxy credentials, and runtime secrets remain server-side. Browser
+   clients receive opaque target ids and safe labels. External URLs are
+   validated in the browser and loaded directly into a sandboxed iframe with
+   no same-origin privilege or Inspector Bridge. They are never fetched
+   through a server-side proxy; users can open a top-level tab when the site
+   refuses framing.
 
 3. Make Preview navigation state belong to the selected target and its viewport,
    not to an ephemeral Browser Host session. Recreating the iframe transport,
@@ -155,10 +160,10 @@ reusable across chats with workspace access.
      viewport screenshots. Apply sends a structured request to the selected
      project's code chat. The code-editing path must produce a reviewable source
      diff associated with that project's editable checkout; direct DOM mutations
-     remain temporary preview feedback. Apply is unavailable in a read-only chat,
-     on a historical worktree preview, or on an external URL.
-     Applying to another project opens a project-bound chat in confirmation mode,
-     so file writes still require explicit approval.
+     remain temporary preview feedback. Apply is unavailable for external URLs.
+     Applying a historical target creates or reuses a chat bound to that exact
+     commit; applying to another project opens a project-bound chat in
+     confirmation mode, so file writes still require explicit approval.
    - **Theme** and **Layers** are capabilities of the Design panel, not separate
      browser runtimes. Theme controls may use project design tokens when the
      source adapter can identify them. Layers initially expose the live DOM
@@ -264,8 +269,9 @@ temporary pending preview state before a source-aware Apply operation.
    and read-only external HTTP(S) URLs are available in the in-chat Preview tab.
    Worktree servers use a separate egress-denied sandbox and are selected by
    opaque target id. External URLs use a direct, non-bridged sandboxed iframe,
-   with no server-side fetch and a top-level fallback. Bind Agent code sessions
-   to worktrees before enabling Apply there.
+   with no server-side fetch and a top-level fallback. Applying a worktree target
+   creates a code chat bound to the selected commit; its Agent and code editor
+   use the same isolated worktree.
 3. **Web annotations:** retain metadata and private screenshots across reloads
    and send selected comments as a batch with screenshot and locator context.
    Target revisions now bind the captured source state to an authenticated
@@ -281,8 +287,8 @@ temporary pending preview state before a source-aware Apply operation.
    explicit diff linkage through source adapters.
 
 Binding standard 12 records the current workspace/project authorization and
-provider boundaries. Agent code-session binding for historical worktrees and
-source-adapter diff mapping remain follow-up requirements.
+provider boundaries. Historical worktree code-session binding is implemented;
+source-adapter diff mapping remains a follow-up requirement.
 
 ## Validation Criteria
 
@@ -304,7 +310,9 @@ source-adapter diff mapping remain follow-up requirements.
 6. Add multiple annotations, submit them as one batch, and verify they retain
    screenshot, target revision, and best-effort locator context after reload.
 7. Apply a Design edit to the current editable project target and verify a
-   reviewable source diff; confirm historical worktree and external targets
+   reviewable source diff. Apply a historical target and confirm a new chat is
+   bound to its exact commit, the Agent and code editor use its isolated
+   worktree, and the preview checkout remains unchanged. Confirm external targets
    cannot invoke Apply.
 8. Keep Realtime and remote desktop usable independently when Preview is
    opened or closed.

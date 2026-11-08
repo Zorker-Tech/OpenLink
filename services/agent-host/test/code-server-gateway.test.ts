@@ -22,8 +22,10 @@ function close(server: ReturnType<typeof createServer>): Promise<void> {
 
 test('code-server gateway exchanges the one-time bootstrap token and rewrites CSP before proxying the workbench', async () => {
   let upstreamAuthorization: string | undefined
+  let upstreamFolder: string | null = null
   const upstream = createServer((request, response) => {
     upstreamAuthorization = request.headers.authorization
+    upstreamFolder = new URL(request.url || '/', 'http://code-server.local').searchParams.get('folder')
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': "default-src 'self'; frame-ancestors 'self'",
@@ -69,6 +71,7 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
 
   const session = reachableGateway.create({
     ownerId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', upstream: upstreamUrl,
+    workspaceFolder: '/preview-worktrees/sessions/chat-id_1',
     frameAncestorOrigin: 'http://192.168.3.2:57714',
   })
   try {
@@ -93,6 +96,7 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
     assert.doesNotMatch(page.headers.get('content-security-policy') || '', /frame-ancestors 'self'/)
     assert.equal(page.headers.get('x-frame-options'), null)
     assert.equal(upstreamAuthorization, undefined)
+    assert.equal(upstreamFolder, '/preview-worktrees/sessions/chat-id_1')
     assert.equal(await page.text(), '<!doctype html><title>VS Code</title>')
 
     const wrongLanPort = await fetch(`${edgeUrl}${location}`, {

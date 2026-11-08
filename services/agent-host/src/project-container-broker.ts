@@ -3,7 +3,7 @@ import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { AgentHostError } from './errors.js'
 import type { ProjectRuntimeController } from './project-runtime-router.js'
-import type { ProjectRuntimeCloseOptions, ProjectRuntimeDescriptor, ProjectSupabaseManagementRequest, ProjectSupabaseStudioProxyRequest } from './project-runtime.js'
+import type { ProjectGitPreviewSessionBinding, ProjectRuntimeCloseOptions, ProjectRuntimeDescriptor, ProjectSupabaseManagementRequest, ProjectSupabaseStudioProxyRequest } from './project-runtime.js'
 
 const PROJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -12,7 +12,7 @@ const ACTIONS = new Set([
   'prepareSessionStorage', 'ensureProjectGitRepository', 'listGitVersions',
   'getProjectSourceRevision',
   'persistCodexThreadId',
-  'listWorkspaceFiles', 'openGitPreviewVersion', 'hasPersistedRuntime', 'restorePersistedRuntimes',
+  'listWorkspaceFiles', 'openGitPreviewVersion', 'bindGitPreviewSession', 'getGitPreviewSessionBinding', 'hasPersistedRuntime', 'restorePersistedRuntimes',
   'discoverPreviewTarget', 'discoverPreviewTargets', 'close',
 ])
 
@@ -63,6 +63,17 @@ async function dispatch(controller: ProjectRuntimeController, request: BrokerReq
     case 'openGitPreviewVersion': {
       if (typeof payload.ref !== 'string' || !/^[a-f0-9]{7,40}$/i.test(payload.ref)) throw new AgentHostError('INVALID_BODY', 'Git preview ref is invalid')
       return controller.openGitPreviewVersion(id!, payload.ref)
+    }
+    case 'bindGitPreviewSession': {
+      const values = [payload.userId, payload.workspaceId, payload.sessionId]
+      if (values.some((value) => typeof value !== 'string' || !IDENTIFIER.test(value))) throw new AgentHostError('INVALID_BODY', 'Git preview session identity is invalid')
+      if (typeof payload.ref !== 'string' || !/^[a-f0-9]{40}$/i.test(payload.ref)) throw new AgentHostError('INVALID_BODY', 'Git preview session ref is invalid')
+      return controller.bindGitPreviewSession(id!, values[0] as string, values[1] as string, values[2] as string, payload.ref)
+    }
+    case 'getGitPreviewSessionBinding': {
+      const values = [payload.userId, payload.workspaceId, payload.sessionId]
+      if (values.some((value) => typeof value !== 'string' || !IDENTIFIER.test(value))) throw new AgentHostError('INVALID_BODY', 'Git preview session identity is invalid')
+      return controller.getGitPreviewSessionBinding(id!, values[0] as string, values[1] as string, values[2] as string) as Promise<ProjectGitPreviewSessionBinding | null>
     }
     case 'hasPersistedRuntime': return controller.hasPersistedRuntime(id!)
     case 'restorePersistedRuntimes': return controller.restorePersistedRuntimes()
@@ -156,6 +167,8 @@ export class ProjectContainerBrokerClient implements ProjectRuntimeController {
   getProjectSourceRevision(projectId: string, worktreeRef?: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['getProjectSourceRevision']>>>('getProjectSourceRevision', projectId, worktreeRef ? { worktreeRef } : undefined) }
   listWorkspaceFiles(projectId: string) { return this.request<string[]>('listWorkspaceFiles', projectId) }
   openGitPreviewVersion(projectId: string, ref: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['openGitPreviewVersion']>>>('openGitPreviewVersion', projectId, { ref }) }
+  bindGitPreviewSession(projectId: string, userId: string, workspaceId: string, sessionId: string, ref: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['bindGitPreviewSession']>>>('bindGitPreviewSession', projectId, { userId, workspaceId, sessionId, ref }) }
+  getGitPreviewSessionBinding(projectId: string, userId: string, workspaceId: string, sessionId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['getGitPreviewSessionBinding']>>>('getGitPreviewSessionBinding', projectId, { userId, workspaceId, sessionId }) }
   getActive(projectId: string) { return this.active.get(projectId) }
   hasPersistedRuntime(projectId: string) { return this.request<boolean>('hasPersistedRuntime', projectId) }
   async restorePersistedRuntimes() { await this.request('restorePersistedRuntimes') }

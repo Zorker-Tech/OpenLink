@@ -88,7 +88,7 @@ interface PreviewDesignPanelProps {
   onSelectPreviewProject: (projectId: string) => void
   sessionId: string
   className?: string
-  onSubmitRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent) => Promise<boolean>
+  onSubmitRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent, sourceRef?: string) => Promise<boolean>
   onAnnotationsChange: (annotations: PreviewAnnotationMarker[]) => void
 }
 
@@ -495,8 +495,13 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
 
   const applyDesignChanges = useCallback(async () => {
     if (!canApplyDesign || !pendingEdits.length || !targetId || showingBefore || applyingDesign || applyInFlightRef.current) return
-    const targetRevision = designScreenshot?.targetRevision
-      ?? browserState.previewTargets.find((target) => target.id === targetId)?.targetRevision
+    const target = browserState.previewTargets.find((candidate) => candidate.id === targetId)
+    const sourceRef = target?.source === 'worktree' ? target.gitRef : undefined
+    if (target?.source === 'worktree' && (!sourceRef || !/^[0-9a-f]{40}$/i.test(sourceRef))) {
+      setApplyError(t('无法确认所选 Git 版本，请刷新预览目标后重试。'))
+      return
+    }
+    const targetRevision = designScreenshot?.targetRevision ?? target?.targetRevision
     if (!isPreviewSourceRevision(targetRevision)) {
       setApplyError(t('无法确认当前源码版本，请刷新预览目标后重试。'))
       return
@@ -514,6 +519,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       `Preview page: ${pagePath}`,
       `Preview target: ${browserState.previewTargets.find((target) => target.id === targetId)?.label || 'the active project preview'}`,
       `Target source revision: ${targetRevision}. If the current checkout has moved since this snapshot, inspect and reconcile the current files before editing.`,
+      sourceRef ? `Selected Git commit: ${sourceRef}. This request opens an isolated editable worktree for that exact commit. Make changes in the bound /workspace and leave other project checkouts untouched.` : '',
       screenshotIsCurrent ? `Preview viewport: ${designScreenshot?.viewport?.width ?? 'unknown'}×${designScreenshot?.viewport?.height ?? 'unknown'} CSS pixels.` : '',
       screenshotIsCurrent ? 'Image 1 shows the full Preview viewport. Image 2 is a crop around the selected element. Use both as visual context.' : '',
       screenshotIsCurrent && designScreenshot?.selector ? `Selected element: ${designScreenshot.selector}${designScreenshot.elementLabel ? ` (${designScreenshot.elementLabel})` : ''}.` : '',
@@ -533,7 +539,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.fullViewportDataUrl!, filename: 'preview-viewport.jpg' },
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.selectedElementDataUrl!, filename: 'preview-selection.jpg' },
       ] : []
-      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'design')
+      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'design', sourceRef)
       if (!accepted) {
         setApplyError(t('Could not send design changes.'))
       } else {
@@ -667,6 +673,19 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     setAnnotationError(null)
     try {
       const selected = annotations.filter((annotation) => annotationSelection.includes(annotation.id))
+      if (!selected.length) throw new Error(t('所选批注已失效，请重新选择。'))
+      const selectedTargets = selected.map((annotation) => browserState.previewTargets.find((target) => target.id === annotation.target_id))
+      if (selectedTargets.some((target) => !target)) {
+        throw new Error(t('所选批注的预览目标已失效，请先重新打开对应版本。'))
+      }
+      const sourceRefs = new Set(selectedTargets.map((target) => target?.source === 'worktree' ? target.gitRef?.toLowerCase() ?? 'invalid' : 'latest'))
+      if (sourceRefs.has('invalid') || sourceRefs.size > 1) {
+        throw new Error(t('请按同一个预览版本分批发送批注。'))
+      }
+      const sourceRef = [...sourceRefs][0] === 'latest' ? undefined : [...sourceRefs][0]
+      if (sourceRef && !/^[0-9a-f]{40}$/.test(sourceRef)) {
+        throw new Error(t('所选 Git 版本不可用，请刷新预览目标后重试。'))
+      }
       const selectedWithScreenshots = await Promise.all(selected.map(async (annotation) => ({ annotation, screenshotDataUrl: await loadAnnotationScreenshot(annotation) })))
       const prompt = [
         'Review the attached Preview annotations and update the current project code to address them.',
@@ -684,14 +703,14 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       const attachments: AgentPromptAttachment[] = selectedWithScreenshots.map(({ annotation, screenshotDataUrl: image }, index) => ({
         type: 'image', mediaType: 'image/jpeg', url: image, filename: `preview-annotation-${index + 1}.jpg`,
       }))
-      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'annotation')
+      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'annotation', sourceRef)
       if (!accepted) throw new Error(t('发送批注失败'))
     } catch (error) {
       setAnnotationError(error instanceof Error ? error.message : t('发送批注失败'))
     } finally {
       setSendingAnnotations(false)
     }
-  }, [annotationSelection, annotations, loadAnnotationScreenshot, onSubmitRequest, projectId, sendingAnnotations, t])
+  }, [annotationSelection, annotations, browserState.previewTargets, loadAnnotationScreenshot, onSubmitRequest, projectId, sendingAnnotations, t])
 
   const toggleAnnotationForChat = useCallback((id: string, checked: boolean) => {
     setAnnotationSelection((current) => {
@@ -725,9 +744,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   const selectedTargetRevision = browserState.previewTargets.find((target) => target.id === targetId)?.targetRevision
   const applyDisabledMessage = browserState.readOnlyExternal
     ? t('外部网页在隔离只读预览中打开，编辑和批注功能不可用。')
-    : browserState.previewTargets.find((target) => target.id === targetId)?.source === 'worktree'
-      ? t('Git 历史版本预览为只读，请切换到最新版本后应用源码修改。')
-      : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')
+    : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')
 
   useEffect(() => {
     if (locatorResolution?.status !== 'navigating') return

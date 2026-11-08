@@ -170,6 +170,7 @@ test('code-server session creation is authenticated and bound to the requested P
       ensuredProject = id
       return { codeServerEndpoint: `http://127.0.0.1:${upstreamAddress.port}` }
     },
+    getGitPreviewSessionBinding: async () => null,
   } as unknown as ProjectRuntimeManager
   const backend: PromptRuntimeBackend = {
     createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
@@ -186,14 +187,14 @@ test('code-server session creation is authenticated and bound to the requested P
   const endpoint = `http://127.0.0.1:${address.port}`
   try {
     const denied = await fetch(`${endpoint}/v1/projects/${projectId}/code-server/sessions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace' }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace', sessionId: 'chat-id_1' }),
     })
     assert.equal(denied.status, 403)
 
     const created = await fetch(`${endpoint}/v1/projects/${projectId}/code-server/sessions`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace' }),
+      body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace', sessionId: 'chat-id_1' }),
     })
     assert.equal(created.status, 201)
     assert.equal(ensuredProject, projectId)

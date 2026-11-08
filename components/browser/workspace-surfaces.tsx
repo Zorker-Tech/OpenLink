@@ -56,7 +56,7 @@ interface WorkspaceSurfacesProps {
   onSelectPreviewViewport: (targetId: string, mode: 'browser' | 'mobile') => void
   onSelectWorkspaceTab: (tab: SessionWorkspaceTab) => void
   onToggleDeviceView: () => void
-  onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent) => Promise<boolean>
+  onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent, sourceRef?: string) => Promise<boolean>
   sessionId: string
   projectName: string
   dataSurface: 'panel' | 'studio'
@@ -357,7 +357,7 @@ export function WorkspaceSurfaces({
                   previewProjects={previewProjects}
                   projectId={previewProjectId}
                   selectedPreviewProjectId={previewProjectId}
-                  canApplyDesign={canApplyDesign && activePreviewTarget?.source !== 'worktree' && !previewState.readOnlyExternal}
+                  canApplyDesign={(canApplyDesign || activePreviewTarget?.source === 'worktree') && !previewState.readOnlyExternal}
                   sessionId={sessionId}
                   onAnnotationsChange={setPreviewAnnotations}
                   ref={previewDesignPanelRef}

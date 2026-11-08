@@ -17,6 +17,7 @@ interface CodeServerBinding {
   workspaceId: string
   projectId: string
   frameAncestorOrigin?: string
+  workspaceFolder: string
   upstream: URL
   expiresAt: number
   cleanupTimer: NodeJS.Timeout
@@ -101,11 +102,15 @@ export class CodeServerGateway {
     if (!this.allowedOrigins.size) throw new Error('Code-server gateway requires at least one allowed origin')
   }
 
-  create(input: { ownerId: string; workspaceId: string; projectId: string; upstream: string; frameAncestorOrigin?: string; ttlMs?: number }): PublicCodeServerSession {
+  create(input: { ownerId: string; workspaceId: string; projectId: string; upstream: string; workspaceFolder?: string; frameAncestorOrigin?: string; ttlMs?: number }): PublicCodeServerSession {
     const sessionId = randomBytes(18).toString('base64url')
     const token = randomBytes(32).toString('base64url')
     const upstream = new URL(input.upstream)
     if (!['http:', 'https:'].includes(upstream.protocol)) throw new AgentHostError('PROVISIONING_FAILED', 'Code-server endpoint protocol is invalid')
+    const workspaceFolder = input.workspaceFolder ?? '/workspace'
+    if (workspaceFolder !== '/workspace' && !/^\/preview-worktrees\/sessions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspaceFolder)) {
+      throw new AgentHostError('INVALID_BODY', 'Code-server workspace folder is invalid')
+    }
     let frameAncestorOrigin: string | undefined
     if (input.frameAncestorOrigin !== undefined) {
       let parsedOrigin: URL
@@ -120,7 +125,7 @@ export class CodeServerGateway {
     const expiresAt = Date.now() + Math.max(60_000, Math.min(input.ttlMs ?? 30 * 60_000, 24 * 60 * 60_000))
     const cleanupTimer = setTimeout(() => this.unregister(sessionId), expiresAt - Date.now())
     cleanupTimer.unref()
-    this.bindings.set(sessionId, { sessionId, token, ownerId: input.ownerId, workspaceId: input.workspaceId, projectId: input.projectId, frameAncestorOrigin, upstream, expiresAt, cleanupTimer })
+    this.bindings.set(sessionId, { sessionId, token, ownerId: input.ownerId, workspaceId: input.workspaceId, projectId: input.projectId, frameAncestorOrigin, workspaceFolder, upstream, expiresAt, cleanupTimer })
     return { sessionId, url: this.url(sessionId, token, true), expiresAt: new Date(expiresAt).toISOString() }
   }
 
@@ -157,6 +162,13 @@ export class CodeServerGateway {
     upstream.pathname = suffix
     upstream.search = external.search
     upstream.searchParams.delete('token')
+    if (suffix === '/' && request.method === 'GET') {
+      // A single upstream serves multiple chats. Force the per-gateway binding
+      // on the initial workbench route so one chat cannot inherit another
+      // chat's last-opened folder.
+      upstream.searchParams.delete('workspace')
+      upstream.searchParams.set('folder', binding.workspaceFolder)
+    }
     await this.proxyHttp(request, response, binding, upstream)
   }
 

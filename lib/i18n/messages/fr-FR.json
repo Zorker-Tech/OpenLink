@@ -1272,5 +1272,11 @@
   "正在打开批注对应页面，请等待加载后再次定位。": "Ouverture de la page de l’annotation. Attendez son chargement, puis réessayez.",
   "外部网页在隔离只读预览中打开，编辑和批注功能不可用。": "Les pages externes s’ouvrent dans un aperçu isolé en lecture seule. La modification et les annotations ne sont pas disponibles.",
   "Git 历史版本预览为只读，请切换到最新版本后应用源码修改。": "Les aperçus des anciennes versions Git sont en lecture seule. Passez à la version la plus récente pour appliquer les modifications du code source.",
-  "该网址不支持在预览中打开。": "Cette URL ne peut pas être ouverte dans l’aperçu."
+  "该网址不支持在预览中打开。": "Cette URL ne peut pas être ouverte dans l’aperçu.",
+  "无法确认所选 Git 版本，请刷新预览目标后重试。": "Impossible de vérifier la version Git sélectionnée. Actualisez la cible Preview et réessayez.",
+  "所选批注已失效，请重新选择。": "Certaines annotations sélectionnées ne sont plus disponibles. Sélectionnez-les à nouveau.",
+  "所选批注的预览目标已失效，请先重新打开对应版本。": "La cible Preview d’une annotation sélectionnée n’est plus disponible. Rouvrez d’abord cette version.",
+  "请按同一个预览版本分批发送批注。": "Envoyez les annotations par lots distincts pour chaque version Preview.",
+  "所选 Git 版本不可用，请刷新预览目标后重试。": "La version Git sélectionnée est indisponible. Actualisez la cible Preview et réessayez.",
+  "无法绑定所选 Git 版本，请重试。": "Impossible de lier la version Git sélectionnée. Réessayez."
 }

@@ -1272,5 +1272,11 @@
   "正在打开批注对应页面，请等待加载后再次定位。": "Opening the annotation page. Wait for it to load, then retry location.",
   "外部网页在隔离只读预览中打开，编辑和批注功能不可用。": "External pages open in an isolated, read-only preview. Editing and annotations are unavailable.",
   "Git 历史版本预览为只读，请切换到最新版本后应用源码修改。": "Git history previews are read-only. Switch to Latest to apply source changes.",
-  "该网址不支持在预览中打开。": "This URL can’t be opened in Preview."
+  "该网址不支持在预览中打开。": "This URL can’t be opened in Preview.",
+  "无法确认所选 Git 版本，请刷新预览目标后重试。": "Could not verify the selected Git version. Refresh the Preview target and try again.",
+  "所选批注已失效，请重新选择。": "Some selected annotations are no longer available. Select them again.",
+  "所选批注的预览目标已失效，请先重新打开对应版本。": "The Preview target for a selected annotation is no longer available. Reopen that version first.",
+  "请按同一个预览版本分批发送批注。": "Send annotations in separate batches for each Preview version.",
+  "所选 Git 版本不可用，请刷新预览目标后重试。": "The selected Git version is unavailable. Refresh the Preview target and try again.",
+  "无法绑定所选 Git 版本，请重试。": "Could not bind the selected Git version. Try again."
 }

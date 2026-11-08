@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, readlink, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
+import { promisify } from 'node:util'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, previewRunCommand, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
 import { ProjectVmManager, type ProjectVmCommandResult, type ProjectVmMachineDriver, type ProjectVmPortForward } from '../src/project-vm.js'
 
@@ -17,6 +19,8 @@ const projectSupabaseResult = (command: string, args: string[]): ProjectVmComman
   if (action === 'stop') return { stdout: JSON.stringify({ stopped: true }), stderr: '' }
   throw new Error(`unexpected Project Supabase controller action ${action}`)
 }
+
+const execFileAsync = promisify(execFile)
 
 const projectSupabaseRunInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
 
@@ -835,6 +839,81 @@ test('initializes a Project workspace Git baseline exactly once before agent use
   } finally {
     await runtime.close()
     await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('binds a chat to an isolated historical Git worktree and repairs it after runtime loss', async () => {
+  const root = await mkdtemp(join('/tmp', 'openlink-project-preview-binding-'))
+  const stateRoot = join(root, 'state')
+  const guestWorkspaceRoot = join(root, 'guest-projects')
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const sessionId = 'chat_id_1'
+  const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
+    const supabase = projectSupabaseResult(command, args)
+    if (supabase) return supabase
+    const result = await execFileAsync(command, args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 })
+    return { stdout: result.stdout, stderr: result.stderr }
+  }
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine,
+    forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, guestWorkspaceRoot })
+  const serviceDriver = { supportsEgress: true, ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined }
+  const createRuntime = () => new ProjectRuntimeManager({
+    stateRoot, vmManager, machineDriver, serviceDriver,
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+    hostPortAvailable: async () => true,
+    reattachProbe: async () => undefined,
+    reattachProbeTimeoutMs: 1_000,
+  })
+  const runtime = createRuntime()
+  try {
+    await runtime.ensure(projectId, 'thin')
+    const workspacePath = vmManager.workspacePath(projectId)
+    await writeFile(join(workspacePath, '.gitignore'), 'node_modules/\n')
+    await runtime.ensureProjectGitRepository(projectId)
+    await mkdir(join(workspacePath, 'node_modules'))
+    await writeFile(join(workspacePath, 'node_modules', 'dependency.txt'), 'shared read-only dependency\n')
+    await writeFile(join(workspacePath, 'source.txt'), 'selected historical source\n')
+    await execFileAsync('git', ['-C', workspacePath, 'add', 'source.txt'])
+    await execFileAsync('git', ['-C', workspacePath, 'commit', '-m', 'historical preview source'])
+    const { stdout: refOutput } = await execFileAsync('git', ['-C', workspacePath, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
+    const ref = refOutput.trim()
+
+    assert.deepEqual(await runtime.bindGitPreviewSession(projectId, 'user_1', 'workspace_1', sessionId, ref), { ref })
+    const binding = await runtime.getGitPreviewSessionBinding(projectId, 'user_1', 'workspace_1', sessionId)
+    assert.equal(binding?.ref, ref)
+    assert.equal(binding?.workspacePath, join(root, 'guest-projects', projectId, '.openlink-preview-worktrees', 'sessions', sessionId))
+    assert.equal(binding?.codeServerFolder, `/preview-worktrees/sessions/${sessionId}`)
+    assert.equal(binding?.dependenciesPath, join(workspacePath, 'node_modules'))
+    assert.equal(await readlink(join(binding!.workspacePath, 'node_modules')), join(workspacePath, 'node_modules'))
+    assert.equal(await readFile(join(binding!.workspacePath, 'node_modules', 'dependency.txt'), 'utf8'), 'shared read-only dependency\n')
+    assert.equal(await readFile(join(binding!.workspacePath, 'source.txt'), 'utf8'), 'selected historical source\n')
+    assert.equal((await execFileAsync('git', ['-C', workspacePath, 'status', '--porcelain'], { encoding: 'utf8' })).stdout, '')
+    await assert.rejects(runtime.bindGitPreviewSession(projectId, 'user_1', 'workspace_1', sessionId, 'b'.repeat(40)), (error: unknown) => (
+      error instanceof Error && 'code' in error && error.code === 'GIT_SESSION_BINDING_CONFLICT'
+    ))
+
+    await rm(binding!.workspacePath, { recursive: true, force: true })
+    const repaired = await runtime.getGitPreviewSessionBinding(projectId, 'user_1', 'workspace_1', sessionId)
+    assert.equal(repaired?.ref, ref)
+    assert.equal(await readFile(join(repaired!.workspacePath, 'source.txt'), 'utf8'), 'selected historical source\n')
+
+    const bindingDirectory = join(stateRoot, 'projects', projectId, 'git-preview-bindings')
+    assert.equal((await stat(bindingDirectory)).mode & 0o777, 0o700)
+    assert.equal((await stat(join(bindingDirectory, `${sessionId}.json`))).mode & 0o777, 0o600)
+  } finally {
+    await runtime.close({ stopRuntimes: false })
+    await rm(root, { recursive: true, force: true })
   }
 })
 
