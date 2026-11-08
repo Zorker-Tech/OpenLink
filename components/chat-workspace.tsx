@@ -2133,10 +2133,13 @@ export function ChatWorkspace({
     return accepted
   }, [agentStreamStatus, appendAgentEvents, enqueueStreamEvent, router, sessionId, workspaceView])
 
-  const submitPreviewRequest = useCallback(async (message: string, attachments: AgentPromptAttachment[], targetProjectId: string) => {
+  const submitPreviewRequest = useCallback(async (message: string, attachments: AgentPromptAttachment[], targetProjectId: string, intent: 'design' | 'annotation') => {
     if (!previewProjects.some((project) => project.id === targetProjectId)) throw new Error(t('所选项目不可用'))
+    if (intent === 'design' && targetProjectId === projectId && accessMode === 'restricted') {
+      throw new Error(t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。'))
+    }
     if (targetProjectId !== projectId) {
-      const created = await createChatSessionAction({ workspaceSlug: activeWorkspace.slug, projectId: targetProjectId })
+      const created = await createChatSessionAction({ workspaceSlug: activeWorkspace.slug, projectId: targetProjectId, ...(intent === 'design' ? { accessMode: 'ask' as const } : {}) })
       if (!created.id || !created.path) throw new Error('error' in created ? created.error : t('创建代码任务失败'))
       const response = await fetch(`/api/chat/${encodeURIComponent(created.id)}/events`, {
         method: 'POST',
@@ -2160,7 +2163,7 @@ export function ChatWorkspace({
     const payload = await response.json().catch(() => null) as { error?: string } | null
     if (!response.ok) throw new Error(payload?.error || t('消息加入队列失败'))
     return true
-  }, [activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionId, submitAgentMessage, t])
+  }, [accessMode, activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionId, submitAgentMessage, t])
 
   const retrySavedInitialPrompt = useCallback(async () => {
     const prompt = initialPrompt.trim()
@@ -2434,7 +2437,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

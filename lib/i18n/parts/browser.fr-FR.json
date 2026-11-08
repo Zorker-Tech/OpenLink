@@ -12,5 +12,6 @@
   "正在检测项目网站服务…": "Détection du service web du projet…",
   "该网站服务已停止，请刷新检测活跃端口。": "Ce service web s'est arrêté. Actualisez pour détecter les ports actifs.",
   "重新检测": "Détecter à nouveau",
-  "项目预览暂不可用": "Aperçu du projet indisponible"
+  "项目预览暂不可用": "Aperçu du projet indisponible",
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "Cette conversation est en lecture seule. Passez l’accès à « Demander » avant d’appliquer des modifications au code source."
 }

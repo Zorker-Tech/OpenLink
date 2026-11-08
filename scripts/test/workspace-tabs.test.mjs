@@ -10,6 +10,7 @@ const projects = await readFile(new URL('../../components/projects-workspace.tsx
 const legacyPreviewPage = await readFile(new URL('../../app/app/[workspace_name]/preview/page.tsx', import.meta.url), 'utf8')
 const surfaces = await readFile(new URL('../../components/browser/workspace-surfaces.tsx', import.meta.url), 'utf8')
 const previewSurface = await readFile(new URL('../../components/browser/native-preview-surface.tsx', import.meta.url), 'utf8')
+const previewDesignPanel = await readFile(new URL('../../components/browser/preview-design-panel.tsx', import.meta.url), 'utf8')
 
 test('Preview is a first-class tab in the chat workspace header', () => {
   assert.match(chat, /type WorkspaceTabId = SessionWorkspaceTab/)
@@ -35,6 +36,9 @@ test('chat workspace Preview uses the native iframe workbench and keeps its tool
   assert.match(surfaces, /data-workspace-browser-surface="preview"[\s\S]*?<BrowserWorkbench[\s\S]*?initialSurface="native-preview"/)
   assert.match(surfaces, /selectPreviewTarget\(targetId, previewPagePaths\[targetId\]\)/)
   assert.match(surfaces, /previewViewportModes\[targetId\]/)
+  assert.match(previewDesignPanel, /disabled=\{!canApplyDesign/)
+  assert.match(chat, /accessMode: 'ask'/)
+  assert.match(chat, /intent === 'design' && targetProjectId === projectId && accessMode === 'restricted'/)
   assert.match(previewSurface, /<iframe[\s\S]*?src=\{iframeSrc\}/)
   assert.match(previewSurface, /postMessage\(/)
 })

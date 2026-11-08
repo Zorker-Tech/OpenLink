@@ -12,5 +12,6 @@
   "正在检测项目网站服务…": "Detecting the project web service…",
   "该网站服务已停止，请刷新检测活跃端口。": "This web service has stopped. Refresh to detect active ports.",
   "重新检测": "Detect again",
-  "项目预览暂不可用": "Project preview unavailable"
+  "项目预览暂不可用": "Project preview unavailable",
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "This chat is read-only. Switch access to Ask before applying source changes."
 }
