@@ -23,7 +23,7 @@ class MemoryStorage {
 
 test('stores Preview project and target preference by user and workspace, not chat', () => {
   const storage = new MemoryStorage()
-  const state = { version: 2, selectedProjectId: projectB, targetIds: { [projectA]: targetA, [projectB]: targetB }, pagePaths: { [targetA]: '/settings', [targetB]: '/dashboard' } }
+  const state = { version: 3, selectedProjectId: projectB, targetIds: { [projectA]: targetA, [projectB]: targetB }, pagePaths: { [targetA]: '/settings', [targetB]: '/dashboard' }, viewportModes: { [targetA]: 'mobile', [targetB]: 'browser' } }
 
   assert.equal(saveWorkspacePreviewState(userId, workspaceId, state, [projectA, projectB], storage), true)
   assert.deepEqual(loadWorkspacePreviewState(userId, workspaceId, [projectA, projectB], storage), state)
@@ -36,9 +36,10 @@ test('drops unauthorized projects and malformed target IDs when restoring local 
     selectedProjectId: projectB,
     targetIds: { [projectA]: targetA, [projectB]: 'not-an-opaque-target', '../../etc/passwd': targetB },
     pagePaths: { [targetA]: '/settings', [targetB]: '/dashboard', ['C'.repeat(43)]: '/unbound', [targetA + 'x']: '//external.example', ['D'.repeat(43)]: '/private?token=secret' },
+    viewportModes: { [targetA]: 'mobile', [targetB]: 'browser', ['C'.repeat(43)]: 'mobile', [targetA + 'x']: 'tablet' },
   }, [projectA])
 
-  assert.deepEqual(state, { version: 2, selectedProjectId: null, targetIds: { [projectA]: targetA }, pagePaths: { [targetA]: '/settings' } })
+  assert.deepEqual(state, { version: 3, selectedProjectId: null, targetIds: { [projectA]: targetA }, pagePaths: { [targetA]: '/settings' }, viewportModes: { [targetA]: 'mobile' } })
 })
 
 test('migrates the prior project and target preference to the route-aware state version', () => {
@@ -50,16 +51,35 @@ test('migrates the prior project and target preference to the route-aware state 
   }))
 
   assert.deepEqual(loadWorkspacePreviewState(userId, workspaceId, [projectA], storage), {
-    version: 2,
+    version: 3,
     selectedProjectId: projectA,
     targetIds: { [projectA]: targetA },
     pagePaths: {},
+    viewportModes: {},
+  })
+})
+
+test('preserves route preferences while migrating the route-aware state to target-specific viewports', () => {
+  const storage = new MemoryStorage()
+  storage.setItem('openlink:workspace-preview:v2:' + userId + ':' + workspaceId, JSON.stringify({
+    version: 2,
+    selectedProjectId: projectA,
+    targetIds: { [projectA]: targetA },
+    pagePaths: { [targetA]: '/details' },
+  }))
+
+  assert.deepEqual(loadWorkspacePreviewState(userId, workspaceId, [projectA], storage), {
+    version: 3,
+    selectedProjectId: projectA,
+    targetIds: { [projectA]: targetA },
+    pagePaths: { [targetA]: '/details' },
+    viewportModes: {},
   })
 })
 
 test('recovers the prior version when the current browser-profile value is corrupt', () => {
   const storage = new MemoryStorage()
-  storage.setItem('openlink:workspace-preview:v2:' + userId + ':' + workspaceId, '{')
+  storage.setItem('openlink:workspace-preview:v3:' + userId + ':' + workspaceId, '{')
   storage.setItem('openlink:workspace-preview:v1:' + userId + ':' + workspaceId, JSON.stringify({
     version: 1,
     selectedProjectId: projectA,
@@ -67,10 +87,11 @@ test('recovers the prior version when the current browser-profile value is corru
   }))
 
   assert.deepEqual(loadWorkspacePreviewState(userId, workspaceId, [projectA], storage), {
-    version: 2,
+    version: 3,
     selectedProjectId: projectA,
     targetIds: { [projectA]: targetA },
     pagePaths: {},
+    viewportModes: {},
   })
 })
 
@@ -79,7 +100,7 @@ test('handles unavailable or corrupt local storage without breaking Preview', ()
   const corrupt = new MemoryStorage()
   corrupt.setItem('openlink:workspace-preview:v1:' + userId + ':' + workspaceId, '{')
 
-  assert.deepEqual(createEmptyWorkspacePreviewState(), { version: 2, selectedProjectId: null, targetIds: {}, pagePaths: {} })
+  assert.deepEqual(createEmptyWorkspacePreviewState(), { version: 3, selectedProjectId: null, targetIds: {}, pagePaths: {}, viewportModes: {} })
   assert.equal(loadWorkspacePreviewState(userId, workspaceId, [projectA], unavailable), null)
   assert.equal(saveWorkspacePreviewState(userId, workspaceId, createEmptyWorkspacePreviewState(), [projectA], unavailable), false)
   assert.equal(loadWorkspacePreviewState(userId, workspaceId, [projectA], corrupt), null)
