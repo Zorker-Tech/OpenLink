@@ -2,26 +2,22 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts";
-import { slateTurnEndedUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts";
+import { SlateInteractionUpdates, slateTurnEndedUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts";
 import {
   FeedbackRequestCategory,
-  ThinkingDeltaUpdate,
+  InteractionUpdate,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 
-const messageOf = (update: ReturnType<typeof Updates.textDelta>) => update.message!;
+const messageOf = (update: InteractionUpdate) => update.message!;
 const caseOf = (update: unknown) => (update as { message: { case: string } }).message.case;
 const recordOf = (value: unknown) => value as unknown as Record<string, unknown>;
 
 describe("the agent interaction updates", () => {
   it("builds the simple text and token deltas", () => {
-    assert.equal(caseOf(Updates.textDelta("hello")), "textDelta");
-    const text = messageOf(Updates.textDelta("hello"));
-    assert.equal(text.case, "textDelta");
-    assert.equal((text.value as { text: string }).text, "hello");
-    assert.equal(caseOf(Updates.tokenDelta(12)), "tokenDelta");
-    assert.equal((messageOf(Updates.tokenDelta(12)).value as { tokens: number }).tokens, 12);
-    assert.equal(caseOf(Updates.heartbeat()), "heartbeat");
+    assert.deepEqual(SlateInteractionUpdates.textDelta("hello"), { kind: "text-delta", text: "hello" });
+    assert.deepEqual(SlateInteractionUpdates.tokenDelta(12), { kind: "token-delta", tokens: 12 });
+    assert.deepEqual(SlateInteractionUpdates.heartbeat(), { kind: "heartbeat" });
     assert.equal(caseOf(Updates.summaryStarted()), "summaryStarted");
     assert.equal((messageOf(Updates.summary("the summary")).value as { summary: string }).summary, "the summary");
     assert.equal((messageOf(Updates.promptSuggestion("try this")).value as { suggestion: string }).suggestion, "try this");
@@ -44,12 +40,18 @@ describe("the agent interaction updates", () => {
   });
 
   it("carries thinking, user message and summary completions", () => {
-    const thinking = messageOf(Updates.thinkingDelta("hm", undefined));
-    assert.equal(thinking.case, "thinkingDelta");
-    assert.equal((thinking.value as ThinkingDeltaUpdate).text, "hm");
-    const styled = messageOf(Updates.thinkingDelta("hm", 1 as never)).value as ThinkingDeltaUpdate;
-    assert.equal(styled.thinkingStyle, 1);
-    assert.equal((messageOf(Updates.thinkingCompleted(250)).value as { thinkingDurationMs: number }).thinkingDurationMs, 250);
+    assert.deepEqual(SlateInteractionUpdates.thinkingDelta("hm"), { kind: "thinking-delta", text: "hm" });
+    assert.deepEqual(SlateInteractionUpdates.thinkingDelta("hm", 2), {
+      kind: "thinking-delta",
+      text: "hm",
+      style: "code-oriented",
+    });
+    assert.equal(SlateInteractionUpdates.thinkingDelta("hm", 0).style, "unspecified");
+    assert.equal(SlateInteractionUpdates.thinkingDelta("hm", 1).style, "standard");
+    assert.equal(SlateInteractionUpdates.thinkingDelta("hm", 3).style, "alternate");
+    assert.deepEqual(SlateInteractionUpdates.thinkingDelta("hm", 87).style, { kind: "unknown", code: 87 });
+    assert.deepEqual(SlateInteractionUpdates.thinkingDelta("hm", "custom-style").style, { kind: "custom", value: "custom-style" });
+    assert.deepEqual(SlateInteractionUpdates.thinkingCompleted(250), { kind: "thinking-completed", durationMs: 250 });
     const appended = messageOf(Updates.userMessageAppended(new UserMessage())).value as { userMessage?: UserMessage };
     assert.equal(appended.userMessage instanceof UserMessage, true);
     assert.equal(caseOf(Updates.summaryCompleted(undefined)), "summaryCompleted");

@@ -12,7 +12,7 @@ function harness() {
   const provider = {
     async sendUpdate(_ctx: unknown, update: any) {
       const message = update?.message;
-      sent.push({ kind: message?.case ?? "unknown", payload: message?.value });
+      sent.push({ kind: message?.case ?? update?.kind ?? "unknown", payload: message?.value ?? update });
     },
     async query(_ctx: unknown, query: unknown) {
       return { answered: query };
@@ -34,7 +34,7 @@ describe("what the handler keeps and what it does not", () => {
     assert.equal(sent.length, 0, "three characters are not a token yet");
     assert.equal((handler as any).leftoverTokenCharCount, 3);
     await handler.emitTokenDeltaFromChars("CTX", "de");
-    assert.deepEqual(sent.map((update) => update.kind), ["tokenDelta"], "five characters are one token, and the remainder waits");
+    assert.deepEqual(sent.map((update) => update.kind), ["token-delta"], "five characters are one Slate token delta, and the remainder waits");
     assert.equal((handler as any).leftoverTokenCharCount, 1);
   });
 

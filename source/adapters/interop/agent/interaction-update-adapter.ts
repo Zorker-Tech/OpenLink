@@ -2,7 +2,6 @@
 import {
   ActiveBranchChange,
   FeedbackRequestUpdate,
-  HeartbeatUpdate,
   InteractionUpdate,
   PartialToolCallUpdate,
   PromptSuggestionUpdate,
@@ -12,10 +11,6 @@ import {
   SummaryCompletedUpdate,
   SummaryStartedUpdate,
   SummaryUpdate,
-  TextDeltaUpdate,
-  ThinkingCompletedUpdate,
-  ThinkingDeltaUpdate,
-  TokenDeltaUpdate,
   ToolCallCompletedUpdate,
   ToolCallDeltaUpdate,
   ToolCallStartedUpdate,
@@ -30,9 +25,6 @@ function wireUpdate(caseName: InteractionUpdate["message"]["case"], value: unkno
 }
 
 export const Updates = {
-  textDelta(text: string): InteractionUpdate {
-    return wireUpdate("textDelta", new TextDeltaUpdate({ text }))
-  },
   toolCallStarted(callId: string, toolCall: ToolCallStartedUpdate["toolCall"], modelCallId: string): InteractionUpdate {
     return wireUpdate("toolCallStarted", new ToolCallStartedUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }))
   },
@@ -46,29 +38,17 @@ export const Updates = {
   toolCallDelta(callId: string, toolCallDelta: ToolCallDeltaUpdate["toolCallDelta"], modelCallId: string): InteractionUpdate {
     return wireUpdate("toolCallDelta", new ToolCallDeltaUpdate({ callId, ...(toolCallDelta === undefined ? {} : { toolCallDelta }), modelCallId }))
   },
-  thinkingDelta(text: string, thinkingStyle: ThinkingDeltaUpdate["thinkingStyle"]): InteractionUpdate {
-    return wireUpdate("thinkingDelta", new ThinkingDeltaUpdate({ text, ...(thinkingStyle === undefined ? {} : { thinkingStyle }) }))
-  },
-  thinkingCompleted(thinkingDurationMs: number): InteractionUpdate {
-    return wireUpdate("thinkingCompleted", new ThinkingCompletedUpdate({ thinkingDurationMs }))
-  },
   userMessageAppended(userMessage: UserMessageAppendedUpdate["userMessage"]): InteractionUpdate {
     return wireUpdate("userMessageAppended", new UserMessageAppendedUpdate({ ...(userMessage === undefined ? {} : { userMessage }) }))
   },
   partialToolCall(callId: string, toolCall: PartialToolCallUpdate["toolCall"], modelCallId: string): InteractionUpdate {
     return wireUpdate("partialToolCall", new PartialToolCallUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }))
   },
-  tokenDelta(tokens: number): InteractionUpdate {
-    return wireUpdate("tokenDelta", new TokenDeltaUpdate({ tokens }))
-  },
   summary(summary: string): InteractionUpdate {
     return wireUpdate("summary", new SummaryUpdate({ summary }))
   },
   summaryStarted(): InteractionUpdate {
     return wireUpdate("summaryStarted", new SummaryStartedUpdate())
-  },
-  heartbeat(): InteractionUpdate {
-    return wireUpdate("heartbeat", new HeartbeatUpdate())
   },
   summaryCompleted(hookMessage: SummaryCompletedUpdate["hookMessage"]): InteractionUpdate {
     return wireUpdate("summaryCompleted", new SummaryCompletedUpdate({ ...(hookMessage === undefined ? {} : { hookMessage }) }))

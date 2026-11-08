@@ -27,13 +27,14 @@ import type {
   SlateTaskProgressUpdate,
 } from "../../../packages/agent/tools/task-progress-state.ts"
 import {
-  isSlateRedactedTurnEndedUpdate,
-  isSlateTurnEndedUpdate,
-  slateRedactedTurnEndedUpdate,
+  isSlateInteractionUpdate,
+  isSlateRedactedInteractionUpdate,
+  redactSlateInteractionUpdate,
+  unredactSlateInteractionUpdate,
 } from "../../../packages/agent-core/slate-interaction-updates.ts"
 import type {
-  SlateRedactedTurnEndedUpdate,
-  SlateTurnEndedUpdate,
+  SlateInteractionUpdate,
+  SlateRedactedInteractionUpdate,
 } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import { taskProgressUpdateForListener } from "./task-progress-protocol-adapter.ts"
 import {
@@ -54,8 +55,8 @@ export interface InteractionListenerAdapter<Context, Update, Query, Response, Pr
 }
 
 type RedactedInteractionUpdate = ReturnType<typeof toRedactedInteractionUpdateMessage>
-type RedactedInteractionUpdateValue = RedactedInteractionUpdate | SlateRedactedTurnEndedUpdate
-type InteractionUpdateValue = InteractionUpdate | SlateTurnEndedUpdate
+type RedactedInteractionUpdateValue = RedactedInteractionUpdate | SlateRedactedInteractionUpdate
+type InteractionUpdateValue = InteractionUpdate | SlateInteractionUpdate
 type RedactedInteractionQuery = ReturnType<typeof toRedactedInteractionQuery>
 type RedactedInteractionResponse = ReturnType<typeof toRedactedInteractionResponse>
 
@@ -77,8 +78,8 @@ export function toUnredactedInteractionListener<Context>(
 ): InteractionListenerAdapter<Context, InteractionUpdateValue, SlateInteractionQuery, SlateInteractionResponse, SlateTaskProgressUpdate> {
   return {
     async sendUpdate(ctx, update) {
-      if (isSlateTurnEndedUpdate(update)) {
-        await delegate.sendUpdate(ctx, slateRedactedTurnEndedUpdate(privacyMode, update.usage))
+      if (isSlateInteractionUpdate(update)) {
+        await delegate.sendUpdate(ctx, redactSlateInteractionUpdate(update, privacyMode))
         return
       }
       await delegate.sendUpdate(ctx, redactInteractionUpdate(update, privacyMode))
@@ -121,9 +122,8 @@ export function toRedactedInteractionListener<Context>(
 > {
   return {
     async sendUpdate(ctx, update) {
-      if (isSlateRedactedTurnEndedUpdate(update)) {
-        const { kind, usage } = update
-        await delegate.sendUpdate(ctx, usage === undefined ? { kind } : { kind, usage })
+      if (isSlateRedactedInteractionUpdate(update)) {
+        await delegate.sendUpdate(ctx, unredactSlateInteractionUpdate(update))
         return
       }
       await delegate.sendUpdate(

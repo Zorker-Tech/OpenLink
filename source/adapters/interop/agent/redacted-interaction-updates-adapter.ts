@@ -78,13 +78,6 @@ export interface RedactedFeedbackCategoryGroup {
 }
 
 export const RedactedUpdates = {
-  textDelta(text: RedactedString): RedactedInteractionUpdate {
-    const privacyMode = text.__privacyMode
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "textDelta", value: { _privacyMode: privacyMode, text, isServerNotice: false } },
-    }
-  },
   toolCallStarted(callId: string, toolCall: RedactedCarrier, modelCallId: unknown): RedactedInteractionUpdate {
     const privacyMode = toolCall._privacyMode
     return {
@@ -104,19 +97,6 @@ export const RedactedUpdates = {
     return {
       _privacyMode: privacyMode,
       message: { case: "toolCallDelta", value: { _privacyMode: privacyMode, callId, toolCallDelta, modelCallId } },
-    }
-  },
-  thinkingDelta(text: RedactedString, thinkingStyle: unknown): RedactedInteractionUpdate {
-    const privacyMode = text.__privacyMode
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "thinkingDelta", value: { _privacyMode: privacyMode, text, thinkingStyle } },
-    }
-  },
-  thinkingCompleted(privacyMode: PrivacyMode, thinkingDurationMs: unknown): RedactedInteractionUpdate {
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "thinkingCompleted", value: { _privacyMode: privacyMode, thinkingDurationMs } },
     }
   },
   userMessageAppended(userMessage: RedactedCarrier): RedactedInteractionUpdate {
@@ -144,9 +124,6 @@ export const RedactedUpdates = {
       },
     }
   },
-  tokenDelta(privacyMode: PrivacyMode, tokens: unknown): RedactedInteractionUpdate {
-    return { _privacyMode: privacyMode, message: { case: "tokenDelta", value: { _privacyMode: privacyMode, tokens } } }
-  },
   summary(summary: RedactedString): RedactedInteractionUpdate {
     const privacyMode = summary.__privacyMode
     return {
@@ -156,9 +133,6 @@ export const RedactedUpdates = {
   },
   summaryStarted(privacyMode: PrivacyMode): RedactedInteractionUpdate {
     return { _privacyMode: privacyMode, message: { case: "summaryStarted", value: { _privacyMode: privacyMode } } }
-  },
-  heartbeat(privacyMode: PrivacyMode): RedactedInteractionUpdate {
-    return { _privacyMode: privacyMode, message: { case: "heartbeat", value: { _privacyMode: privacyMode } } }
   },
   contextInjectionState(
     privacyMode: PrivacyMode,
