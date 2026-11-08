@@ -14,6 +14,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // These same-origin capability routes authenticate with their own scoped
+  // gateway token. Supabase session refresh here can interfere with the
+  // gateway's Set-Cookie exchange and WebSocket handshake headers.
+  if (request.nextUrl.pathname.startsWith('/v1/code-server/gateway/')) {
+    return NextResponse.next()
+  }
+
   // Supabase Studio is hard-wired to serve from `/`. It is therefore given its
   // own origin (a second port on the same `localhost` host, tagged here) so its
   // root-relative `_next/*` assets stay isolated from the application. Do not

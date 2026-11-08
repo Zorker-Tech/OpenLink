@@ -20,7 +20,7 @@ function parseUrl(value: unknown): URL | null {
   }
 }
 
-function codeServerGatewaySession(value: unknown): { sessionId: string; path: string; token: string; expiresAt: string; maxAge: number } | null {
+function codeServerGatewaySession(value: unknown): { sessionId: string; path: string; bootstrapToken: string; expiresAt: string } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const session = value as Record<string, unknown>
   const sessionId = typeof session.sessionId === 'string' ? session.sessionId : ''
@@ -31,16 +31,11 @@ function codeServerGatewaySession(value: unknown): { sessionId: string; path: st
   if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) return null
   const path = `/v1/code-server/gateway/sessions/${sessionId}`
   if (url.pathname !== `${path}/__openlink_bootstrap` || url.searchParams.getAll('token').length !== 1) return null
-  const token = url.searchParams.get('token') || ''
-  if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) return null
+  const bootstrapToken = url.searchParams.get('token') || ''
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(bootstrapToken)) return null
   const expires = Date.parse(expiresAt)
-  const maxAge = Math.floor((expires - Date.now()) / 1000)
-  if (!Number.isFinite(expires) || maxAge < 1 || maxAge > 24 * 60 * 60) return null
-  return { sessionId, path, token, expiresAt: new Date(expires).toISOString(), maxAge }
-}
-
-function cookieName(sessionId: string): string {
-  return `openlink_code_server_gateway_${sessionId.replace(/[^A-Za-z0-9]/g, '').slice(0, 48)}`
+  if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.now() + 24 * 60 * 60_000) return null
+  return { sessionId, path, bootstrapToken, expiresAt: new Date(expires).toISOString() }
 }
 
 function requestOrigin(request: Request): string | null {
@@ -52,11 +47,6 @@ function requestOrigin(request: Request): string | null {
   } catch {
     return null
   }
-}
-
-function requestIsSecure(request: Request): boolean {
-  if (new URL(request.url).protocol === 'https:') return true
-  return request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase() === 'https'
 }
 
 export async function POST(request: Request) {
@@ -140,16 +130,16 @@ export async function POST(request: Request) {
   const session = codeServerGatewaySession(outer?.session)
   if (!session) return Response.json({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
 
-  const secure = requestIsSecure(request) ? '; Secure' : ''
-  const cookie = `${cookieName(session.sessionId)}=${encodeURIComponent(session.token)}; HttpOnly; SameSite=Strict; Path=${session.path}/; Max-Age=${session.maxAge}${secure}`
   return Response.json({
     version: outer?.version,
-    session: { sessionId: session.sessionId, url: `${session.path}/`, expiresAt: session.expiresAt },
+    session: {
+      sessionId: session.sessionId,
+      url: `${session.path}/`,
+      bootstrapToken: session.bootstrapToken,
+      expiresAt: session.expiresAt,
+    },
   }, {
     status: response.status,
-    headers: {
-      'Cache-Control': 'no-store',
-      'Set-Cookie': cookie,
-    },
+    headers: { 'Cache-Control': 'no-store' },
   })
 }

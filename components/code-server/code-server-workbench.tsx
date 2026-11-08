@@ -14,6 +14,7 @@ interface CodeServerWorkbenchProps {
 interface CodeServerSessionResponse {
   session?: {
     url?: unknown
+    bootstrapToken?: unknown
     expiresAt?: unknown
   }
   error?: {
@@ -50,7 +51,29 @@ export function CodeServerWorkbench({ chatSessionId }: CodeServerWorkbenchProps)
         const code = typeof payload.error?.code === 'string' ? payload.error.code : 'CODE_SERVER_SESSION_FAILED'
         throw new Error(code)
       }
-      if (!controller.signal.aborted) setUrl(browserReachableGatewayUrl(candidate))
+      const reachableCandidate = browserReachableGatewayUrl(candidate)
+      const bootstrapToken = payload.session?.bootstrapToken
+      if (bootstrapToken !== undefined) {
+        if (typeof bootstrapToken !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(bootstrapToken)) {
+          throw new Error('CODE_SERVER_SESSION_FAILED')
+        }
+        const gatewayUrl = new URL(reachableCandidate, window.location.href)
+        if (gatewayUrl.origin !== window.location.origin
+          || !/^\/v1\/code-server\/gateway\/sessions\/[A-Za-z0-9_-]{1,128}\/?$/.test(gatewayUrl.pathname)
+          || gatewayUrl.search || gatewayUrl.hash) {
+          throw new Error('CODE_SERVER_SESSION_FAILED')
+        }
+        const bootstrapUrl = new URL('__openlink_bootstrap', gatewayUrl)
+        const bootstrapResponse = await fetch(bootstrapUrl, {
+          method: 'POST',
+          headers: { 'X-OpenLink-Code-Server-Bootstrap': bootstrapToken },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (!bootstrapResponse.ok) throw new Error('CODE_SERVER_SESSION_FAILED')
+      }
+      if (!controller.signal.aborted) setUrl(reachableCandidate)
     }).catch((reason: unknown) => {
       if (controller.signal.aborted) return
       setError(reason instanceof Error ? reason.message : 'CODE_SERVER_SESSION_FAILED')
