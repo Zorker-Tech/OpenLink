@@ -4462,7 +4462,7 @@
       "claim": "rewritten",
       "overlap": 0.43559322033898307,
       "refreshReason": "Moved the Slate completion payload schema and nested validator into a lightweight contract module so action routing does not import business-side tool result serialization.",
-      "evidence": "The full Node 24 Work-host suite passed 10088/10088 before the contract-only file extraction. After extraction, agent-action-contract and agent-action-handlers focused suites pass 17/17 each; direct action-guard coverage includes malformed nested ask-question data, route/payload mismatches and invalid legacy source labels. The versioned Slate action validator also covers duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. Work-host typecheck and rewrite/interop gates pass. Measured overlap is 0.43559322033898307 against 590 baseline pairs."
+      "evidence": "The full Node 24 Work-host suite passes 10089/10089 after the contract-only file extraction. After extraction, agent-action-contract and agent-action-handlers focused suites pass 17/17 each; direct action-guard coverage includes malformed nested ask-question data, route/payload mismatches and invalid legacy source labels. The versioned Slate action validator also covers duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. Work-host typecheck and rewrite/interop gates pass. Measured overlap is 0.43559322033898307 against 590 baseline pairs."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",
