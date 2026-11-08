@@ -18,13 +18,16 @@ preview proxy provides an authenticated route, forwards HTTP and HMR WebSockets,
 and injects the Inspector Bridge. Remote desktop remains a separate surface.
 The Preview product direction should preserve those boundaries.
 
-The Preview tab now lets users choose an authorized code project in the
-workspace. Browser APIs resolve a target from either the active chat or the
-selected project, discover servers across that project's active sandboxes, and
-prefer the active chat's server when it belongs to the selected project.
-Targets are reusable across chats, but providers are still limited to project
-sandbox servers; worktree servers and read-only external URLs are not yet
-available.
+The canonical Preview entry is the Preview tab in the existing chat workspace
+header. The canvas and its design tools live in that workspace's right-hand
+pane; Preview is not a separate application page. Legacy Preview URLs only
+redirect into the project/chat flow. The tab lets users choose an authorized
+code project in the workspace. Browser APIs resolve a target from either the
+active chat or the selected project, discover servers across that project's
+active sandboxes, and prefer the active chat's server when it belongs to the
+selected project. Targets are reusable across chats, but providers are still
+limited to project sandbox servers; worktree servers and read-only external
+URLs are not yet available.
 
 The Inspector Bridge supports live element selection, temporary text and style
 edits, DOM layers, CSS-variable controls, and browser actions. Project-scoped
@@ -40,18 +43,21 @@ editing and annotation capabilities.
 
 ### Product interaction requirements
 
-Users open Preview from the Preview tab in the existing chat workspace. The tab
-provides the embedded canvas, responsive viewport, navigation controls, and
-Edit, Theme, Layers, and Annotate tools. Edit selects live elements and previews
-temporary text or style changes immediately. Changes remain pending until
-applied to an editable source checkout as a reviewable change. Theme edits
-available design tokens; Layers navigates the live document hierarchy. Annotate
-places numbered comments on the preview and submits them with screenshot and
-locator context. A project selector inside the tab lets users switch among
-authorized code projects in the workspace. Requests for the current project
-use the active chat; requests for another project open a chat bound to that
-project. The tab reuses the chat workspace layout and iframe, while the
-selected target and its server lifecycle are scoped to the project or workspace.
+Users open Preview from the Preview tab in the existing chat workspace. This
+tab is the entry and the only place that renders the managed Preview canvas; a
+project-list action may open a chat with Preview selected, but it must not
+render a second Preview page. The tab provides the embedded canvas, responsive
+viewport, navigation controls, and Edit, Theme, Layers, and Annotate tools. Edit
+selects live elements and previews temporary text or style changes immediately.
+Changes remain pending until applied to an editable source checkout as a
+reviewable change. Theme edits available design tokens; Layers navigates the
+live document hierarchy. Annotate places numbered comments on the preview and
+submits them with screenshot and locator context. A project selector inside the
+tab lets users switch among authorized code projects in the workspace. Requests
+for the current project use the active chat; requests for another project open
+a chat bound to that project. The tab reuses the chat workspace layout and
+iframe, while the selected target and its server lifecycle are scoped to the
+project or workspace.
 
 OpenLink should separate the running web app from its display surface. The
 active chat can provide an initial project context and receive design or
@@ -187,11 +193,12 @@ bandwidth cost, and does not provide the native DOM and bridge needed for
 element-level inspection and annotations. It remains appropriate for full
 desktop interaction.
 
-### Keep Preview keyed only by the active chat session
+### Bind the Preview target only to the active chat
 
-Rejected as the product model. It is simple and matches the current API, but it
-keeps the preview picker inside one Project and makes a standalone workspace,
-worktree, or reusable preview dependent on a chat existing first.
+Rejected as the target identity and authorization model. The Preview tab remains
+inside the chat workspace, but a target belongs to its authorized project or
+workspace and can be selected from another chat. The active chat is context for
+requests, not the target's identity.
 
 ### Put every arbitrary URL behind the managed preview proxy
 
