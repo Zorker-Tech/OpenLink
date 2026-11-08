@@ -1269,5 +1269,8 @@
   "截图版本凭据不可用，请重新捕获。": "Le justificatif de version de la capture est indisponible. Recommencez la capture.",
   "无法确认当前源码版本，请刷新预览目标后重试。": "Impossible de confirmer la version actuelle du code source. Actualisez la cible Preview et réessayez.",
   "当前预览无法执行元素定位。": "La localisation d’élément n’est pas disponible dans l’aperçu actuel.",
-  "正在打开批注对应页面，请等待加载后再次定位。": "Ouverture de la page de l’annotation. Attendez son chargement, puis réessayez."
+  "正在打开批注对应页面，请等待加载后再次定位。": "Ouverture de la page de l’annotation. Attendez son chargement, puis réessayez.",
+  "外部网页在隔离只读预览中打开，编辑和批注功能不可用。": "Les pages externes s’ouvrent dans un aperçu isolé en lecture seule. La modification et les annotations ne sont pas disponibles.",
+  "Git 历史版本预览为只读，请切换到最新版本后应用源码修改。": "Les aperçus des anciennes versions Git sont en lecture seule. Passez à la version la plus récente pour appliquer les modifications du code source.",
+  "该网址不支持在预览中打开。": "Cette URL ne peut pas être ouverte dans l’aperçu."
 }

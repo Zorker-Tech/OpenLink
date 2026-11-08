@@ -12,7 +12,7 @@ const ACTIONS = new Set([
   'prepareSessionStorage', 'ensureProjectGitRepository', 'listGitVersions',
   'getProjectSourceRevision',
   'persistCodexThreadId',
-  'listWorkspaceFiles', 'checkoutGitVersion', 'hasPersistedRuntime', 'restorePersistedRuntimes',
+  'listWorkspaceFiles', 'openGitPreviewVersion', 'hasPersistedRuntime', 'restorePersistedRuntimes',
   'discoverPreviewTarget', 'discoverPreviewTargets', 'close',
 ])
 
@@ -55,11 +55,14 @@ async function dispatch(controller: ProjectRuntimeController, request: BrokerReq
     }
     case 'ensureProjectGitRepository': return controller.ensureProjectGitRepository(id!)
     case 'listGitVersions': return controller.listGitVersions(id!)
-    case 'getProjectSourceRevision': return controller.getProjectSourceRevision(id!)
+    case 'getProjectSourceRevision': {
+      if (payload.worktreeRef !== undefined && (typeof payload.worktreeRef !== 'string' || !/^[a-f0-9]{40}$/i.test(payload.worktreeRef))) throw new AgentHostError('INVALID_BODY', 'Git preview revision ref is invalid')
+      return controller.getProjectSourceRevision(id!, payload.worktreeRef as string | undefined)
+    }
     case 'listWorkspaceFiles': return controller.listWorkspaceFiles(id!)
-    case 'checkoutGitVersion': {
-      if (typeof payload.ref !== 'string' || (payload.ref !== 'latest' && !/^[a-f0-9]{7,40}$/i.test(payload.ref))) throw new AgentHostError('INVALID_BODY', 'Git ref is invalid')
-      return controller.checkoutGitVersion(id!, payload.ref)
+    case 'openGitPreviewVersion': {
+      if (typeof payload.ref !== 'string' || !/^[a-f0-9]{7,40}$/i.test(payload.ref)) throw new AgentHostError('INVALID_BODY', 'Git preview ref is invalid')
+      return controller.openGitPreviewVersion(id!, payload.ref)
     }
     case 'hasPersistedRuntime': return controller.hasPersistedRuntime(id!)
     case 'restorePersistedRuntimes': return controller.restorePersistedRuntimes()
@@ -150,9 +153,9 @@ export class ProjectContainerBrokerClient implements ProjectRuntimeController {
   async persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string) { await this.request('persistCodexThreadId', projectId, { userId, workspaceId, sessionId, threadId }) }
   async ensureProjectGitRepository(projectId: string) { await this.request('ensureProjectGitRepository', projectId) }
   listGitVersions(projectId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['listGitVersions']>>>('listGitVersions', projectId) }
-  getProjectSourceRevision(projectId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['getProjectSourceRevision']>>>('getProjectSourceRevision', projectId) }
+  getProjectSourceRevision(projectId: string, worktreeRef?: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['getProjectSourceRevision']>>>('getProjectSourceRevision', projectId, worktreeRef ? { worktreeRef } : undefined) }
   listWorkspaceFiles(projectId: string) { return this.request<string[]>('listWorkspaceFiles', projectId) }
-  checkoutGitVersion(projectId: string, ref: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['checkoutGitVersion']>>>('checkoutGitVersion', projectId, { ref }) }
+  openGitPreviewVersion(projectId: string, ref: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['openGitPreviewVersion']>>>('openGitPreviewVersion', projectId, { ref }) }
   getActive(projectId: string) { return this.active.get(projectId) }
   hasPersistedRuntime(projectId: string) { return this.request<boolean>('hasPersistedRuntime', projectId) }
   async restorePersistedRuntimes() { await this.request('restorePersistedRuntimes') }

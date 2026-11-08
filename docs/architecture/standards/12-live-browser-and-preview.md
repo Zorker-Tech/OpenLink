@@ -53,9 +53,9 @@ Project and opaque target preference by user and workspace; the validated page
 pathname and desktop/mobile viewport are stored per target. None of these
 preferences contain upstream URLs, credentials, query strings, or fragments.
 
-The current provider is the Project sandbox provider. A Project may run several
-OpenSandbox session sandboxes, each with several development servers.
-`ProjectRuntimeManager.discoverPreviewTargets()`:
+Managed targets can come from active Project sandboxes or a detached commit
+worktree. A Project may run several OpenSandbox session sandboxes, each with
+several development servers. `ProjectRuntimeManager.discoverPreviewTargets()`:
 
 - lists active sandboxes for the Project;
 - probes a bounded conventional port set concurrently through the authenticated
@@ -67,13 +67,28 @@ OpenSandbox session sandboxes, each with several development servers.
 The public list endpoint returns opaque ids, labels, ports and session hints
 only. The proxy URL and `OPEN-SANDBOX-API-KEY` remain inside Agent Host.
 Browser session creation resolves the selected id inside Agent Host. Worktree
-servers and read-only external URL providers are future extensions; they must
-use separate authorization and transport policies and may not inherit the
-managed Preview bridge by default.
+targets are created from a validated commit ref, mounted into a separate
+egress-denied OpenSandbox workload, and start a package's `dev` or `start`
+script when its manifest declares a supported Node web framework. Existing
+Project dependencies are reused. They receive no provider credentials. Their
+content-derived revision is attached to screenshot
+receipts. Design Apply remains disabled until a code session is explicitly
+bound to that worktree.
+
+External URLs are entered explicitly in the Preview address bar and loaded
+directly by the user's browser in a separate iframe sandbox. Dotted hostnames
+over HTTP(S) are accepted; localhost-like names, IP literals, credentials, and
+unsupported schemes are rejected. The frame has no
+`allow-same-origin`, popups, or Inspector Bridge. The server never fetches an
+external URL. A top-level link is available when the site rejects framing.
+External URLs are not persisted with Preview state.
 
 ## Preview UI
 
 - The Preview toolbar lists every discovered target and can refresh the list.
+- The Git version menu creates or reuses an isolated worktree Preview target;
+  selecting Latest returns to a managed Project target. Historical worktrees
+  do not mutate the shared Project checkout.
 - Selecting a target recreates the native Preview tunnel with the correct
   upstream headers. Only native Preview sessions are UI-owned and released on
   switch/unmount.
@@ -97,3 +112,8 @@ managed Preview bridge by default.
 7. Open the same Project from two chats and confirm the chosen target, pathname,
    and viewport restore from the same browser profile while target authorization
    is checked again by the server.
+8. Switch Git versions and confirm a detached worktree target appears without
+   changing the shared checkout; confirm revision receipts match that worktree.
+9. Open an external domain, verify it has no bridge access or persisted URL,
+   and verify localhost, IP-literal, credential-bearing, and unsupported URLs
+   are rejected.

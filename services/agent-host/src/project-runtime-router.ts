@@ -18,9 +18,9 @@ export interface ProjectRuntimeController {
   persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void>
   ensureProjectGitRepository(projectId: string): Promise<void>
   listGitVersions(projectId: string): Promise<ProjectGitVersion[]>
-  getProjectSourceRevision(projectId: string): Promise<string | null>
+  getProjectSourceRevision(projectId: string, worktreeRef?: string): Promise<string | null>
   listWorkspaceFiles(projectId: string): Promise<string[]>
-  checkoutGitVersion(projectId: string, ref: string): Promise<ProjectGitVersion>
+  openGitPreviewVersion(projectId: string, ref: string): Promise<{ version: ProjectGitVersion; targetId: string }>
   getActive(projectId: string): ProjectRuntimeDescriptor | undefined
   hasPersistedRuntime(projectId: string): Promise<boolean>
   restorePersistedRuntimes(): Promise<void>
@@ -297,16 +297,16 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
     return (await this.manager(projectIdValue)).listGitVersions(projectIdValue)
   }
 
-  async getProjectSourceRevision(projectIdValue: string) {
-    return (await this.manager(projectIdValue)).getProjectSourceRevision(projectIdValue)
+  async getProjectSourceRevision(projectIdValue: string, worktreeRef?: string) {
+    return (await this.manager(projectIdValue)).getProjectSourceRevision(projectIdValue, worktreeRef)
   }
 
   async listWorkspaceFiles(projectIdValue: string) {
     return (await this.manager(projectIdValue)).listWorkspaceFiles(projectIdValue)
   }
 
-  async checkoutGitVersion(projectIdValue: string, ref: string) {
-    return (await this.manager(projectIdValue)).checkoutGitVersion(projectIdValue, ref)
+  async openGitPreviewVersion(projectIdValue: string, ref: string) {
+    return (await this.manager(projectIdValue)).openGitPreviewVersion(projectIdValue, ref)
   }
 
   getActive(projectIdValue: string) {

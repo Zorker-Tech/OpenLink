@@ -114,6 +114,9 @@ export async function POST(request: Request) {
     id: selected.id,
     label: selected.label,
     port: selected.port,
+    source: selected.source,
+    ...(selected.gitRef ? { gitRef: selected.gitRef } : {}),
+    ...(selected.targetRevision ? { targetRevision: selected.targetRevision } : {}),
   }
   return Response.json(payload, { status: response.status })
 }

@@ -207,6 +207,19 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   selectedElementRefData.current = browserState.selectedElement ?? null
 
   useEffect(() => {
+    if (!browserState.readOnlyExternal) return
+    setPanelTab('edit')
+    setEditHistory(createPreviewEditHistory<PreviewEdit>())
+    setStyleDrafts({})
+    setThemeDrafts({})
+    setContentDraft('')
+    setDesignScreenshot(null)
+    setShowingBefore(false)
+    setAnnotationDraft(null)
+    setAnnotationComment('')
+  }, [browserState.readOnlyExternal])
+
+  useEffect(() => {
     setContentDraft(browserState.selectedElement?.content ?? '')
   }, [browserState.selectedElement?.ref])
 
@@ -710,6 +723,11 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   ]
   const selectedElement = browserState.selectedElement
   const selectedTargetRevision = browserState.previewTargets.find((target) => target.id === targetId)?.targetRevision
+  const applyDisabledMessage = browserState.readOnlyExternal
+    ? t('外部网页在隔离只读预览中打开，编辑和批注功能不可用。')
+    : browserState.previewTargets.find((target) => target.id === targetId)?.source === 'worktree'
+      ? t('Git 历史版本预览为只读，请切换到最新版本后应用源码修改。')
+      : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')
 
   useEffect(() => {
     if (locatorResolution?.status !== 'navigating') return
@@ -741,13 +759,14 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   return (
     <aside aria-label={t('预览工具')} className={`flex h-full w-[280px] shrink-0 flex-col border-l border-[var(--app-border)] bg-[var(--app-background)] text-xs text-[var(--app-muted)] max-[720px]:absolute max-[720px]:inset-y-0 max-[720px]:right-0 max-[720px]:z-40 max-[720px]:w-[252px] max-[720px]:shadow-xl ${className}`}>
       <div className="grid h-[60px] shrink-0 grid-cols-4 border-b border-[var(--app-border)]">
-        {tabs.map(([tab, label, Icon]) => (
+        {tabs.filter(([tab]) => !browserState.readOnlyExternal || tab === 'edit').map(([tab, label, Icon]) => (
           <button aria-pressed={panelTab === tab} className={`flex flex-col items-center justify-center gap-1 border-b-2 text-[10px] ${panelTab === tab ? 'border-[var(--app-foreground)] text-[var(--app-foreground)]' : 'border-transparent text-[var(--app-muted)] hover:text-[var(--app-foreground)]'}`} key={tab} onClick={() => setPanelTab(tab)} type="button">
             <Icon className="size-4" strokeWidth={1.7} />{t(label)}
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {browserState.readOnlyExternal && <p className="rounded-md border border-[var(--app-control-border)] p-2 leading-5">{t('外部网页在隔离只读预览中打开，编辑和批注功能不可用。')}</p>}
         {panelTab === 'edit' && (
           selectedElement ? (
             <div className="space-y-3">
@@ -788,11 +807,11 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
               </div>
               {pendingEdits.length > 0 && <div className="space-y-2 border-t border-[var(--app-border)] pt-3">
                 <p aria-live="polite" className="flex items-center gap-1.5">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{applyingDesign ? t('Applying changes…') : t('{count} pending changes', { count: pendingEdits.length })}</p>
-                {!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}
+                {!canApplyDesign && <p className="text-[var(--app-muted)]">{applyDisabledMessage}</p>}
                 {applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}
                 <div className="flex gap-2">
                   <button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} onClick={resetDesign} type="button">{t('Reset')}</button>
-                  <button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{applyingDesign ? <LoaderCircle className="size-3 animate-spin" /> : <WandSparkles className="size-3" />}{t('Apply changes')}</button>
+                  <button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : applyDisabledMessage} type="button">{applyingDesign ? <LoaderCircle className="size-3 animate-spin" /> : <WandSparkles className="size-3" />}{t('Apply changes')}</button>
                 </div>
               </div>}
             </div>
@@ -819,7 +838,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
           })}
           {browserState.themeTokens && Object.keys(browserState.themeTokens).length === 0 && <p>{t('当前页面没有可编辑的颜色变量。')}</p>}
           {!browserState.themeTokens && <button className="h-7 rounded border border-[var(--app-control-border)] px-3 hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readThemeTokens()} type="button">{t('读取主题变量')}</button>}
-          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p aria-live="polite" className="flex items-center gap-1.5">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{applyingDesign ? t('Applying changes…') : t('{count} pending changes', { count: pendingEdits.length })}</p>{!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} onClick={resetDesign} type="button">{t('Reset')}</button><button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || !pendingEdits.length} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{t('Apply changes')}</button></div></div>}
+          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p aria-live="polite" className="flex items-center gap-1.5">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{applyingDesign ? t('Applying changes…') : t('{count} pending changes', { count: pendingEdits.length })}</p>{!canApplyDesign && <p className="text-[var(--app-muted)]">{applyDisabledMessage}</p>}{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} onClick={resetDesign} type="button">{t('Reset')}</button><button aria-busy={applyingDesign} className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || applyingDesign || !pendingEdits.length} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : applyDisabledMessage} type="button">{applyingDesign && <LoaderCircle className="size-3 animate-spin" />}{t('Apply changes')}</button></div></div>}
         </div>}
         {panelTab === 'layers' && <div className="space-y-1">
           <div className="mb-2 flex items-center justify-between"><p className="font-medium text-[var(--app-foreground)]">{t('图层')}</p><button aria-label={t('刷新图层')} className="flex size-7 items-center justify-center rounded hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readLayers()} type="button"><RotateCw className="size-3.5" /></button></div>

@@ -89,6 +89,7 @@ function BrowserNavigationBar({
   designPanelOpen,
   selectedGitRef,
   workspaceView,
+  previewToolsAvailable,
 }: {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: RefObject<BrowserWorkbenchHandle | null>
@@ -102,6 +103,7 @@ function BrowserNavigationBar({
   designPanelOpen: boolean
   selectedGitRef: string | null
   workspaceView: 'mobile' | 'browser'
+  previewToolsAvailable: boolean
 }) {
   const [addressDraft, setAddressDraft] = useState(browserState.address)
   const addressInputRef = useRef<HTMLInputElement | null>(null)
@@ -133,7 +135,7 @@ function BrowserNavigationBar({
           <ToolbarButton className="size-6! rounded" disabled={!browserState.externalUrl} label={t('在新窗口打开')} onClick={() => browserWorkbenchRef.current?.openExternal()}><ExternalLink className="size-4" /></ToolbarButton>
           <ToolbarButton aria-pressed={designPanelOpen} className={`size-6! rounded md:hidden ${designPanelOpen ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''}`} label={designPanelOpen ? t('关闭预览工具') : t('预览工具')} onClick={onToggleDesignPanel}><PanelRightOpen className="size-4" /></ToolbarButton>
           <ToolbarButton className="size-6! rounded" disabled={(!browserState.canInspect && !browserState.externalUrl) || browserState.status === 'connecting' || browserState.status === 'reconnecting'} label={t('刷新')} onClick={() => browserWorkbenchRef.current?.reload()}><RotateCw className="size-4" /></ToolbarButton>
-          <DropdownMenu>
+          {previewToolsAvailable && <DropdownMenu>
             <DropdownMenuTrigger render={<button aria-label={t('切换开发服务器')} className="flex h-6 max-w-[120px] shrink-0 items-center gap-1 rounded px-1 text-[11px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}>
               <Server className="size-3.5 shrink-0" />
               <span className="truncate">{browserState.previewTargets.find((target) => target.id === browserState.activePreviewTargetId)?.port ? `:${browserState.previewTargets.find((target) => target.id === browserState.activePreviewTargetId)?.port}` : t('预览目标')}</span>
@@ -158,10 +160,10 @@ function BrowserNavigationBar({
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
         </form>
       </div>
-      <DropdownMenu>
+      {previewToolsAvailable && <DropdownMenu>
         <DropdownMenuTrigger render={<button aria-label={t('切换预览版本')} className="flex h-7 w-[96px] shrink-0 items-center justify-center gap-1 rounded-md text-sm font-medium tracking-[-0.1504px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}>
           <span className="max-w-[70px] truncate">{selectedGitRef ? `@${gitVersions.find((version) => version.ref === selectedGitRef)?.shortRef ?? selectedGitRef.slice(0, 8)}` : 'Latest'}</span>
           <ChevronDown className="size-4" />
@@ -183,7 +185,7 @@ function BrowserNavigationBar({
           ))}
           {gitVersionError && <div className="px-2.5 py-2 text-xs text-[var(--app-danger)]">{gitVersionError}</div>}
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu>}
     </div>
   )
 }
@@ -272,6 +274,7 @@ export function WorkspaceSurfaces({
   const previewActive = browserVisible && activeBrowserTab === 'preview'
   const realtimeActive = browserVisible && activeBrowserTab === 'realtime'
   const activeBrowserState = activeBrowserTab === 'preview' ? previewState : realtimeState
+  const activePreviewTarget = previewState.previewTargets.find((target) => target.id === previewState.activePreviewTargetId)
   const handlePreviewStateChange = useCallback((state: BrowserWorkbenchUiState) => {
     const previewTabState = state.surface === 'native-preview' ? state : { ...state, surface: 'native-preview' as const }
     setPreviewState(previewTabState)
@@ -304,7 +307,7 @@ export function WorkspaceSurfaces({
       {browserOpen && (
         <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-surface={view === 'mobile' ? 'mobile' : 'browser'}>
           <div className="flex size-full min-w-0 flex-col">
-            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} designPanelOpen={designPanelOpen} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDesignPanel={() => setDesignPanelOpen((open) => !open)} onToggleDeviceView={() => activeBrowserTab === 'preview' && previewState.activePreviewTargetId ? onSelectPreviewViewport(previewState.activePreviewTargetId, view === 'mobile' ? 'browser' : 'mobile') : onToggleDeviceView()} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
+            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} designPanelOpen={designPanelOpen} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDesignPanel={() => setDesignPanelOpen((open) => !open)} onToggleDeviceView={() => activeBrowserTab === 'preview' && previewState.activePreviewTargetId ? onSelectPreviewViewport(previewState.activePreviewTargetId, view === 'mobile' ? 'browser' : 'mobile') : onToggleDeviceView()} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} previewToolsAvailable={activeBrowserTab === 'preview'} />
             <main aria-label={t('预览画布')} className={`relative flex min-h-0 min-w-0 flex-1 overflow-hidden ${view === 'browser' ? theme('surface') : theme('editor')}`}>
               <div className="relative flex min-h-0 min-w-0 flex-1">
                 <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
@@ -354,7 +357,7 @@ export function WorkspaceSurfaces({
                   previewProjects={previewProjects}
                   projectId={previewProjectId}
                   selectedPreviewProjectId={previewProjectId}
-                  canApplyDesign={canApplyDesign}
+                  canApplyDesign={canApplyDesign && activePreviewTarget?.source !== 'worktree' && !previewState.readOnlyExternal}
                   sessionId={sessionId}
                   onAnnotationsChange={setPreviewAnnotations}
                   ref={previewDesignPanelRef}

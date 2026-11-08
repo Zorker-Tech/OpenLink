@@ -25,9 +25,15 @@ redirect into the project/chat flow. The tab lets users choose an authorized
 code project in the workspace. Browser APIs resolve a target from either the
 active chat or the selected project, discover servers across that project's
 active sandboxes, and prefer the active chat's server when it belongs to the
-selected project. Targets are reusable across chats, but providers are still
-limited to project sandbox servers; worktree servers and read-only external
-URLs are not yet available.
+selected project. Targets are reusable across chats. Providers include active
+Project sandbox servers and detached commit worktrees. A worktree target gets
+its own restricted application sandbox, mounts the selected source and existing
+dependencies, and starts a `dev` or `start` script only when the package
+declares a supported Node web framework. Worktree
+targets are revision-bound and read-only for source Apply until a code chat is
+explicitly bound to that worktree. External HTTP(S) URLs can be opened directly
+in a separate sandboxed iframe; they do not use the managed proxy or Inspector
+Bridge and are not persisted.
 
 The selected project, opaque target, pathname, and desktop/mobile viewport
 preference now persist in the browser profile under a user-and-workspace key, so
@@ -69,9 +75,11 @@ project-list action may open a chat with Preview selected, but it must not
 render a second Preview page. The tab provides the embedded canvas, responsive
 viewport, navigation controls, and Edit, Theme, Layers, and Annotate tools. Edit
 selects live elements and previews temporary text or style changes immediately.
-Changes remain pending until applied to an editable source checkout as a
-reviewable change. Theme edits available design tokens; Layers navigates the
-live document hierarchy. Annotate places numbered comments on the preview and
+Changes remain pending until applied to the current editable project checkout
+as a reviewable change. Historical worktree previews and external URLs remain
+read-only for Apply until a code session is bound to that exact source. Theme
+edits available design tokens; Layers navigates the live document hierarchy.
+Annotate places numbered comments on the preview and
 submits them with screenshot and locator context. A project selector inside the
 tab lets users switch among authorized code projects in the workspace. Requests
 for the current project use the active chat; requests for another project open
@@ -106,13 +114,19 @@ reusable across chats with workspace access.
    id may be retained as provenance or a ranking hint, not as the target's
    identity or authorization boundary.
 
-   Initial providers should cover the current Project sandbox server, an
-   explicitly selected workspace/repository worktree server, and a read-only
-   external URL. Provider URLs, proxy credentials, and runtime secrets remain
-   server-side. Browser clients receive opaque target ids and safe labels. An
-   external URL is never fetched by a general-purpose server-side proxy; if it
-   cannot be embedded directly, open it in the isolated full-browser surface or
-   a top-level tab without Inspector Bridge privileges.
+   Initial providers cover the current Project sandbox server, an explicitly
+   selected detached commit worktree, and a read-only external URL. Worktree
+   preview processes run in a separate sandbox with no provider credentials or
+   outbound network access. A package must declare a supported Node web
+   framework and a `dev` or `start` script; dependencies already installed in
+   the Project are reused. The
+   selected worktree is revision-bound; Apply stays unavailable until an Agent
+   code session is attached to that worktree. Provider URLs, proxy credentials,
+   and runtime secrets remain server-side. Browser clients receive opaque
+   target ids and safe labels. External URLs are validated in the browser and
+   loaded directly into a sandboxed iframe with no same-origin privilege or
+   Inspector Bridge. They are never fetched through a server-side proxy; users
+   can open a top-level tab when the site refuses framing.
 
 3. Make Preview navigation state belong to the selected target and its viewport,
    not to an ephemeral Browser Host session. Recreating the iframe transport,
@@ -140,7 +154,8 @@ reusable across chats with workspace access.
      viewport screenshots. Apply sends a structured request to the selected
      project's code chat. The code-editing path must produce a reviewable source
      diff associated with that project's editable checkout; direct DOM mutations
-     remain temporary preview feedback. Apply is unavailable in a read-only chat.
+     remain temporary preview feedback. Apply is unavailable in a read-only chat,
+     on a historical worktree preview, or on an external URL.
      Applying to another project opens a project-bound chat in confirmation mode,
      so file writes still require explicit approval.
    - **Theme** and **Layers** are capabilities of the Design panel, not separate
@@ -244,9 +259,12 @@ temporary pending preview state before a source-aware Apply operation.
 1. **Project-scoped Preview:** stabilize the project target contract, iframe
    lifecycle, navigation controls, authenticated proxy behavior, and in-chat
    project selector independent of the initiating chat.
-2. **Target providers:** add explicitly selected worktree targets and read-only
-   external URLs. Keep URL resolution, secrets, and authorization server-side;
-   use the isolated full-browser surface when direct embedding is unavailable.
+2. **Target providers:** project sandbox targets, detached commit worktrees,
+   and read-only external HTTP(S) URLs are available in the in-chat Preview tab.
+   Worktree servers use a separate egress-denied sandbox and are selected by
+   opaque target id. External URLs use a direct, non-bridged sandboxed iframe,
+   with no server-side fetch and a top-level fallback. Bind Agent code sessions
+   to worktrees before enabling Apply there.
 3. **Web annotations:** retain metadata and private screenshots across reloads
    and send selected comments as a batch with screenshot and locator context.
    Target revisions now bind the captured source state to an authenticated
@@ -261,10 +279,9 @@ temporary pending preview state before a source-aware Apply operation.
    project's code chat. Add source-aware token mapping, component metadata, and
    explicit diff linkage through source adapters.
 
-Do not update binding standard 12 until this ADR is accepted and the first two
-steps have an implementation contract. At that point, revise its target scope
-from chat-led Project discovery to workspace/project authorization and record
-the remaining code-edit requirements as follow-up decisions if needed.
+Binding standard 12 records the current workspace/project authorization and
+provider boundaries. Agent code-session binding for historical worktrees and
+source-adapter diff mapping remain follow-up requirements.
 
 ## Validation Criteria
 
@@ -279,12 +296,15 @@ the remaining code-edit requirements as follow-up decisions if needed.
    runtime credentials to another target.
 4. Confirm iframe navigation, reload, assets, cookies, and HMR WebSockets work
    through the authenticated path at desktop and mobile viewport sizes.
-5. Confirm an external site that rejects framing is handled by the documented
-   full-browser/top-level fallback and does not receive an injected bridge.
+5. Confirm a domain URL loads directly in the sandboxed iframe when allowed,
+   uses the top-level fallback when framing is rejected, is not saved as Preview
+   state, and receives no Inspector Bridge messages. Reject localhost and IP
+   literal hosts, embedded credentials, and non-HTTP(S) schemes.
 6. Add multiple annotations, submit them as one batch, and verify they retain
    screenshot, target revision, and best-effort locator context after reload.
-7. Apply a Design edit to an editable worktree and verify a reviewable source
-   diff; confirm read-only targets cannot invoke Apply.
+7. Apply a Design edit to the current editable project target and verify a
+   reviewable source diff; confirm historical worktree and external targets
+   cannot invoke Apply.
 8. Keep Realtime and remote desktop usable independently when Preview is
    opened or closed.
 9. Confirm Design text and style edits, color controls, and Cmd/Ctrl-drag

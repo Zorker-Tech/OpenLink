@@ -23,6 +23,9 @@ export type AgentHostErrorCode =
   | 'GIT_REF_INVALID'
   | 'GIT_CHECKOUT_FAILED'
   | 'PREVIEW_REVISION_UNAVAILABLE'
+  | 'PREVIEW_START_COMMAND_UNAVAILABLE'
+  | 'PREVIEW_DEPENDENCIES_UNAVAILABLE'
+  | 'PREVIEW_START_FAILED'
 
 export class AgentHostError extends Error {
   readonly code: AgentHostErrorCode

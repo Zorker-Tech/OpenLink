@@ -17,6 +17,8 @@ export interface BrowserPreviewTarget {
   id: string
   label: string
   port: number
+  source?: 'sandbox' | 'worktree'
+  gitRef?: string
   targetRevision?: string
 }
 
@@ -336,6 +338,8 @@ export async function listBrowserPreviewTargets(input: { projectId: string; chat
               id: target.id,
               label: target.label,
               port: target.port,
+            ...(target.source === 'worktree' ? { source: 'worktree' as const } : { source: 'sandbox' as const }),
+            ...(typeof target.gitRef === 'string' && /^[0-9a-f]{40}$/i.test(target.gitRef) ? { gitRef: target.gitRef } : {}),
             ...(isPreviewSourceRevision(target.targetRevision)
               ? { targetRevision: target.targetRevision }
               : {}),

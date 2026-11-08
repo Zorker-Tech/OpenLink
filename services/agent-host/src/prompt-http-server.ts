@@ -1263,7 +1263,7 @@ export async function startPromptHttpServer(
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId, preferredSessionId)
     let targetRevision: string | null = null
-    if (targets.length) {
+    if (targets.some((target) => !target.targetRevision)) {
       try {
         targetRevision = await config.projectRuntimeManager.getProjectSourceRevision(projectId)
       } catch {
@@ -1280,7 +1280,8 @@ export async function startPromptHttpServer(
         source: target.source,
         port: target.port,
         lastSeenAt: target.lastSeenAt,
-        targetRevision,
+        ...(target.gitRef ? { gitRef: target.gitRef } : {}),
+        targetRevision: target.targetRevision ?? targetRevision,
       })),
       targetRevision,
     })
@@ -1299,7 +1300,9 @@ export async function startPromptHttpServer(
     if (!target) throw new AgentHostError('BROWSER_SESSION_FAILED', 'The selected preview target is no longer active', { retryable: true })
     const readSourceRevision = async (): Promise<string | null> => {
       try {
-        return await config.projectRuntimeManager!.getProjectSourceRevision(projectId)
+        return target.gitRef
+          ? await config.projectRuntimeManager!.getProjectSourceRevision(projectId, target.gitRef)
+          : await config.projectRuntimeManager!.getProjectSourceRevision(projectId)
       } catch {
         return null
       }
@@ -1417,7 +1420,7 @@ export async function startPromptHttpServer(
   ): Promise<void> {
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const { ref } = parseGitCheckoutBody(await readJson(request))
-    json(response, 200, { version: await config.projectRuntimeManager.checkoutGitVersion(projectId, ref) })
+    json(response, 200, await config.projectRuntimeManager.openGitPreviewVersion(projectId, ref))
   }
 
   async function handleBrowserDelete(
@@ -1989,9 +1992,9 @@ export async function startPromptHttpServer(
         await handleProjectWorkspaceFiles(response, projectId)
         return
       }
-      const projectGitCheckout = /^\/v1\/projects\/([^/]+)\/git\/checkout$/.exec(url.pathname)
-      if (request.method === 'POST' && projectGitCheckout) {
-        const projectId = decodeURIComponent(projectGitCheckout[1]!)
+      const projectGitPreview = /^\/v1\/projects\/([^/]+)\/git\/(?:preview|checkout)$/.exec(url.pathname)
+      if (request.method === 'POST' && projectGitPreview) {
+        const projectId = decodeURIComponent(projectGitPreview[1]!)
         if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
         await handleProjectGitCheckout(request, response, projectId)
         return

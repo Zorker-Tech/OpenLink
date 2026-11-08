@@ -29,7 +29,7 @@ async function proxyGitRequest(
   const authenticated = await getAuthenticatedChat(sessionId)
   if ('response' in authenticated) return authenticated.response
 
-  const url = `${host.baseUrl}/v1/projects/${encodeURIComponent(authenticated.chat.project_id)}/git/${method === 'GET' ? 'versions' : 'checkout'}`
+  const url = `${host.baseUrl}/v1/projects/${encodeURIComponent(authenticated.chat.project_id)}/git/${method === 'GET' ? 'versions' : 'preview'}`
   const response = await fetch(url, {
     method,
     headers: {

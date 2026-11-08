@@ -1269,5 +1269,8 @@
   "截图版本凭据不可用，请重新捕获。": "The screenshot version receipt is unavailable. Capture again.",
   "无法确认当前源码版本，请刷新预览目标后重试。": "Could not confirm the current source version. Refresh the Preview target and try again.",
   "当前预览无法执行元素定位。": "Element location is unavailable in the current Preview.",
-  "正在打开批注对应页面，请等待加载后再次定位。": "Opening the annotation page. Wait for it to load, then retry location."
+  "正在打开批注对应页面，请等待加载后再次定位。": "Opening the annotation page. Wait for it to load, then retry location.",
+  "外部网页在隔离只读预览中打开，编辑和批注功能不可用。": "External pages open in an isolated, read-only preview. Editing and annotations are unavailable.",
+  "Git 历史版本预览为只读，请切换到最新版本后应用源码修改。": "Git history previews are read-only. Switch to Latest to apply source changes.",
+  "该网址不支持在预览中打开。": "This URL can’t be opened in Preview."
 }
