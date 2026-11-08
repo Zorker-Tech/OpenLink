@@ -277,6 +277,8 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     openExternal,
     reload,
     setSurface: () => undefined,
+    setPendingPreviewChanges: () => undefined,
+    confirmPendingPreviewNavigation: () => undefined,
     selectPreviewTarget: (targetId: string) => {
       const service = services.find((candidate) => `cloud-${candidate.port}` === targetId && candidate.status === 'running')
       if (service) void openTunnel(service, '/').catch((reason: unknown) => {
@@ -297,6 +299,7 @@ export const CloudComputerPreviewWorkbench = forwardRef<BrowserWorkbenchHandle, 
     resetElementContent: () => undefined,
     setThemeToken: () => undefined,
     resetThemeToken: () => undefined,
+    resolvePreviewLocator: (_locator, onResult) => onResult('failed'),
   }), [discoverAndOpen, navigate, openExternal, openTunnel, reload, services])
 
   const displayedError = error === 'CLOUD_WEBSITE_NOT_RUNNING'

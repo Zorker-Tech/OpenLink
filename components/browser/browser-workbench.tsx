@@ -85,6 +85,8 @@ export interface BrowserWorkbenchHandle {
   openExternal: () => void
   reload: () => void
   setSurface: (surface: 'native-preview' | 'chromium-stream') => void
+  setPendingPreviewChanges: (hasPendingChanges: boolean) => void
+  confirmPendingPreviewNavigation: () => void
   selectPreviewTarget: (targetId: string, pagePath?: string) => void
   refreshPreviewTargets: () => void
   toggleInspector: () => void
@@ -144,6 +146,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const [selectedStyles, setSelectedStyles] = useState<Record<string, string> | undefined>()
   const [previewLayers, setPreviewLayers] = useState<PreviewLayerItem[] | undefined>()
   const [themeTokens, setThemeTokens] = useState<Record<string, string> | undefined>()
+  const [hasPendingPreviewChanges, setHasPendingPreviewChanges] = useState(false)
+  const pendingPreviewNavigationConfirmation = useRef<(() => void) | null>(null)
   const [previewTargets, setPreviewTargets] = useState<BrowserPreviewTarget[]>([])
   const [activePreviewTargetId, setActivePreviewTargetId] = useState<string | undefined>(initialPreviewTargetId)
   const [previewTargetsLoading, setPreviewTargetsLoading] = useState(true)
@@ -442,6 +446,9 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const setElementStyle = useCallback((elementRef: string, property: string, value: string) => {
     if (activePage) runPreviewAction({ type: 'preview.style.set', pageId: activePage.id, ref: elementRef, property, value })
   }, [activePage, runPreviewAction])
+  const registerPendingPreviewNavigationConfirmation = useCallback((confirm: (() => void) | null) => {
+    pendingPreviewNavigationConfirmation.current = confirm
+  }, [])
   const resetElementStyle = useCallback((elementRef: string, property: string) => {
     if (activePage) runPreviewAction({ type: 'preview.style.reset', pageId: activePage.id, ref: elementRef, property })
   }, [activePage, runPreviewAction])
@@ -553,6 +560,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     openExternal,
     reload: () => { if (readOnlyExternal) setExternalReloadToken((current) => current + 1); else sendPageAction('page.reload') },
     setSurface: setNextSurface,
+    setPendingPreviewChanges: setHasPendingPreviewChanges,
+    confirmPendingPreviewNavigation: () => pendingPreviewNavigationConfirmation.current?.(),
     selectPreviewTarget,
     refreshPreviewTargets: () => { void refreshPreviewTargets() },
     toggleInspector: () => setInspectionMode((value) => value === 'edit' ? 'none' : 'edit'),
@@ -599,7 +608,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
-          <NativePreviewSurface annotationMode={!readOnlyExternal && inspectionMode === 'annotate'} connection={connection} externalPreviewUrl={readOnlyExternalUrl ?? undefined} externalReloadToken={externalReloadToken} initialPagePath={previewBootstrapPath} inspectMode={!readOnlyExternal && inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} onPageUrlChange={handlePreviewPageUrlChange} />
+          <NativePreviewSurface annotationMode={!readOnlyExternal && inspectionMode === 'annotate'} connection={connection} externalPreviewUrl={readOnlyExternalUrl ?? undefined} externalReloadToken={externalReloadToken} hasPendingDesignChanges={!readOnlyExternal && hasPendingPreviewChanges} initialPagePath={previewBootstrapPath} inspectMode={!readOnlyExternal && inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} onPageUrlChange={handlePreviewPageUrlChange} onRegisterPendingNavigationConfirmation={registerPendingPreviewNavigationConfirmation} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
           <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />

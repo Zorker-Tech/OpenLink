@@ -187,6 +187,8 @@ export type BrowserSocketServerMessage =
 export type InspectorBridgeCommand =
   | { type: 'inspect.start' }
   | { type: 'inspect.stop' }
+  | { type: 'preview.pending-changes'; hasPendingChanges: boolean; confirmationMessage: string }
+  | { type: 'preview.navigation-confirmed' }
   | { type: 'element.activate'; ref: string }
   | { type: 'element.snapshot'; ref?: string }
   | { type: 'action.execute'; envelope: BrowserActionEnvelope }

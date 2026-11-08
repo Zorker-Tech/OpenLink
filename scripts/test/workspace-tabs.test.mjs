@@ -11,6 +11,7 @@ const legacyPreviewPage = await readFile(new URL('../../app/app/[workspace_name]
 const surfaces = await readFile(new URL('../../components/browser/workspace-surfaces.tsx', import.meta.url), 'utf8')
 const previewSurface = await readFile(new URL('../../components/browser/native-preview-surface.tsx', import.meta.url), 'utf8')
 const previewDesignPanel = await readFile(new URL('../../components/browser/preview-design-panel.tsx', import.meta.url), 'utf8')
+const previewBridge = await readFile(new URL('../../services/browser-host/src/inspector-bridge.ts', import.meta.url), 'utf8')
 
 test('Preview is a first-class tab in the chat workspace header', () => {
   assert.match(chat, /type WorkspaceTabId = SessionWorkspaceTab/)
@@ -38,9 +39,22 @@ test('chat workspace Preview uses the native iframe workbench and keeps its tool
   assert.match(surfaces, /previewViewportModes\[targetId\]/)
   assert.match(previewDesignPanel, /disabled=\{!canApplyDesign/)
   assert.match(chat, /accessMode: 'ask'/)
-  assert.match(chat, /intent === 'design' && targetProjectId === projectId && accessMode === 'restricted'/)
+  assert.match(chat, /\(intent === 'design' \|\| intent === 'annotation'\) && targetProjectId === projectId && accessMode === 'restricted' && !createSourceChat/)
   assert.match(previewSurface, /<iframe[\s\S]*?src=\{iframeSrc\}/)
   assert.match(previewSurface, /postMessage\(/)
+})
+
+test('pending visual edits survive until explicit confirmation before Preview navigation', () => {
+  assert.match(previewDesignPanel, /confirmPendingChanges[\s\S]*?window\.confirm/)
+  assert.match(previewDesignPanel, /setPendingPreviewChanges\(hasPendingChanges\)/)
+  assert.match(surfaces, /onBeforeNavigate\(\)\) browserWorkbenchRef\.current\?\.navigate/)
+  assert.match(chat, /tab === 'realtime'[\s\S]*?confirmPendingPreviewChanges\(\)/)
+  assert.match(chat, /tabId === 'preview' && !confirmPendingPreviewChanges\(\)/)
+  assert.match(chat, /previewPendingChangesConfirmationRef\.current/)
+  assert.match(previewDesignPanel, /confirmPendingPreviewNavigation\(\)/)
+  assert.match(previewSurface, /preview\.navigation-confirmed/)
+  assert.match(previewBridge, /document\.addEventListener\('click'[\s\S]*?window\.confirm/)
+  assert.match(previewBridge, /window\.addEventListener\('beforeunload'/)
 })
 
 test('sidebar chat rows expose delete actions without opening a session', () => {
