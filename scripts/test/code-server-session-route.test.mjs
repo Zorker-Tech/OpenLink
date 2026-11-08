@@ -62,38 +62,29 @@ function close(server) {
   return new Promise(resolve => server.close(resolve))
 }
 
-test('local session BFF sets a host-only cookie and returns a token-free same-origin path for LAN and loopback origins', async () => {
+test('local session BFF returns a clean same-origin path and one-time bootstrap token for LAN and loopback origins', async () => {
   for (const origin of ['http://192.168.3.2:3000', 'http://localhost:57714', 'http://127.0.0.1:3000']) {
     const f = fixture()
     const response = await f.post(origin)
     assert.equal(response.status, 201)
     assert.equal(f.calls[0].body.frameAncestorOrigin, origin)
     assert.equal(f.calls[0].body.sessionId, 'chat-id')
-    const cookie = response.headers.get('set-cookie') || ''
-    assert.match(cookie, /HttpOnly/)
-    assert.match(cookie, /SameSite=Strict/)
-    assert.match(cookie, /Path=\/v1\/code-server\/gateway\/sessions\/session-id_1\//)
-    assert.doesNotMatch(cookie, /Domain=/)
-    assert.doesNotMatch(cookie, /; Secure/)
+    assert.equal(response.headers.get('set-cookie'), null)
     const payload = await response.json()
     assert.equal(payload.session.url, '/v1/code-server/gateway/sessions/session-id_1/')
-    assert.doesNotMatch(JSON.stringify(payload), new RegExp(f.token))
+    assert.equal(payload.session.bootstrapToken, f.token)
+    assert.equal(payload.session.url.includes(f.token), false)
   }
 })
 
-test('HTTPS and forwarded HTTPS issue Secure cookies, and cross-site session creation is rejected', async () => {
-  const https = fixture()
-  assert.match((await https.post('https://openlink.example')).headers.get('set-cookie') || '', /; Secure/)
-  const forwarded = fixture()
-  assert.match((await forwarded.post('http://openlink.example', { 'x-forwarded-proto': 'https' })).headers.get('set-cookie') || '', /; Secure/)
-
+test('cross-site session creation is rejected', async () => {
   const crossSite = fixture()
   const response = await crossSite.post('http://localhost:3000', { origin: 'https://attacker.example', 'sec-fetch-site': 'cross-site' })
   assert.equal(response.status, 403)
   assert.equal(crossSite.calls.length, 0)
 })
 
-test('BFF-issued cookie authorizes a clean same-origin iframe URL at the real gateway', async () => {
+test('same-origin bootstrap exchange authorizes a clean iframe URL and rejects replay', async () => {
   const upstream = createServer((_request, response) => {
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
@@ -114,6 +105,7 @@ test('BFF-issued cookie authorizes a clean same-origin iframe URL at the real ga
   })
 
   const frameOrigin = 'http://192.168.3.2:3000'
+  let issuedSession
   const f = fixture({
     hostRequest: async (_url, options) => {
       const body = JSON.parse(options.body)
@@ -124,6 +116,7 @@ test('BFF-issued cookie authorizes a clean same-origin iframe URL at the real ga
         upstream: upstreamUrl,
         frameAncestorOrigin: body.frameAncestorOrigin,
       })
+      issuedSession = session
       return Response.json({ version: 1, session }, { status: 201 })
     },
   })
@@ -133,8 +126,21 @@ test('BFF-issued cookie authorizes a clean same-origin iframe URL at the real ga
     assert.equal(createResponse.status, 201)
     const payload = await createResponse.json()
     assert.equal(payload.session.url, `/v1/code-server/gateway/sessions/${payload.session.sessionId}/`)
-    const cookie = createResponse.headers.get('set-cookie')?.split(';')[0]
+    assert.equal(payload.session.bootstrapToken, new URL(issuedSession.url).searchParams.get('token'))
+    const bootstrapUrl = `${edgeUrl}${payload.session.url.replace(/\/$/, '')}/__openlink_bootstrap`
+    const bootstrapHeaders = {
+      Origin: frameOrigin,
+      'X-OpenLink-Code-Server-Bootstrap': payload.session.bootstrapToken,
+    }
+    const bootstrap = await fetch(bootstrapUrl, { method: 'POST', headers: bootstrapHeaders })
+    assert.equal(bootstrap.status, 204)
+    const cookie = bootstrap.headers.get('set-cookie')?.split(';')[0]
     assert.ok(cookie)
+    assert.match(bootstrap.headers.get('set-cookie') || '', /HttpOnly/)
+    assert.match(bootstrap.headers.get('set-cookie') || '', /SameSite=Strict/)
+
+    const replay = await fetch(bootstrapUrl, { method: 'POST', headers: bootstrapHeaders })
+    assert.equal(replay.status, 500)
 
     const page = await fetch(`${edgeUrl}${payload.session.url}`, { headers: { Cookie: cookie, Origin: frameOrigin } })
     assert.equal(page.status, 200)

@@ -13,6 +13,9 @@ const COOKIE_PREFIX = 'openlink_code_server_gateway_'
 interface CodeServerBinding {
   sessionId: string
   token: string
+  bootstrapToken: string
+  bootstrapExpiresAt: number
+  bootstrapConsumed: boolean
   ownerId: string
   workspaceId: string
   projectId: string
@@ -80,10 +83,9 @@ function loopbackAliases(origin: string): string[] {
  * Authenticated HTTP/WebSocket edge for a project-scoped code-server.
  *
  * The editor never receives the Project VM endpoint or an Agent Host API
- * token. The authenticated Web BFF exchanges the short-lived session token
- * for an HttpOnly, path-scoped cookie before loading the iframe; the bootstrap
- * endpoint remains for older clients. All traffic is authorized by this
- * binding and proxied to the VM-local code-server.
+ * token. The authenticated Web BFF exchanges a one-time bootstrap token
+ * for an HttpOnly, path-scoped cookie before loading the iframe. All traffic
+ * is authorized by this binding and proxied to the VM-local code-server.
  */
 export class CodeServerGateway {
   private readonly publicBaseUrl: string
@@ -105,6 +107,7 @@ export class CodeServerGateway {
   create(input: { ownerId: string; workspaceId: string; projectId: string; upstream: string; workspaceFolder?: string; frameAncestorOrigin?: string; ttlMs?: number }): PublicCodeServerSession {
     const sessionId = randomBytes(18).toString('base64url')
     const token = randomBytes(32).toString('base64url')
+    const bootstrapToken = randomBytes(32).toString('base64url')
     const upstream = new URL(input.upstream)
     if (!['http:', 'https:'].includes(upstream.protocol)) throw new AgentHostError('PROVISIONING_FAILED', 'Code-server endpoint protocol is invalid')
     const workspaceFolder = input.workspaceFolder ?? '/workspace'
@@ -125,8 +128,22 @@ export class CodeServerGateway {
     const expiresAt = Date.now() + Math.max(60_000, Math.min(input.ttlMs ?? 30 * 60_000, 24 * 60 * 60_000))
     const cleanupTimer = setTimeout(() => this.unregister(sessionId), expiresAt - Date.now())
     cleanupTimer.unref()
-    this.bindings.set(sessionId, { sessionId, token, ownerId: input.ownerId, workspaceId: input.workspaceId, projectId: input.projectId, frameAncestorOrigin, workspaceFolder, upstream, expiresAt, cleanupTimer })
-    return { sessionId, url: this.url(sessionId, token, true), expiresAt: new Date(expiresAt).toISOString() }
+    this.bindings.set(sessionId, {
+      sessionId,
+      token,
+      bootstrapToken,
+      bootstrapExpiresAt: Math.min(expiresAt, Date.now() + 2 * 60_000),
+      bootstrapConsumed: false,
+      ownerId: input.ownerId,
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      frameAncestorOrigin,
+      workspaceFolder,
+      upstream,
+      expiresAt,
+      cleanupTimer,
+    })
+    return { sessionId, url: this.url(sessionId, bootstrapToken, true), expiresAt: new Date(expiresAt).toISOString() }
   }
 
   unregister(sessionId: string): void {
@@ -149,11 +166,20 @@ export class CodeServerGateway {
     const suffix = external.pathname === prefix ? '/' : external.pathname.startsWith(`${prefix}/`) ? external.pathname.slice(prefix.length) || '/' : null
     if (!suffix) throw new AgentHostError('INVALID_BODY', 'Code-server gateway path is invalid')
     if (suffix === '/__openlink_bootstrap') {
-      this.authorize(external.searchParams.get('token'), undefined, binding)
+      const method = request.method || 'GET'
+      const bootstrapToken = method === 'POST'
+        ? request.headers['x-openlink-code-server-bootstrap']
+        : method === 'GET'
+          ? external.searchParams.get('token')
+          : undefined
+      if (method !== 'POST' && method !== 'GET') throw new AgentHostError('INVALID_BODY', 'Code-server gateway bootstrap method is invalid')
+      this.consumeBootstrapToken(bootstrapToken, binding)
       const secure = new URL(this.publicBaseUrl).protocol === 'https:' ? '; Secure' : ''
       response.setHeader('Set-Cookie', `${cookieName(sessionId)}=${encodeURIComponent(binding.token)}; HttpOnly; SameSite=Strict; Path=${prefix}/${secure}`)
       response.setHeader('Referrer-Policy', 'no-referrer')
-      response.writeHead(302, { Location: `${prefix}/` })
+      response.setHeader('Cache-Control', 'no-store')
+      if (method === 'POST') response.writeHead(204)
+      else response.writeHead(302, { Location: `${prefix}/` })
       response.end()
       return
     }
@@ -244,6 +270,14 @@ export class CodeServerGateway {
   private authorize(queryToken: string | null | undefined, cookieHeader: string | undefined, binding: CodeServerBinding): void {
     const cookie = parseCookies(cookieHeader).get(cookieName(binding.sessionId))
     if (!tokenEquals(queryToken ?? undefined, binding.token) && !tokenEquals(cookie, binding.token)) throw new AgentHostError('AUTH_DENIED', 'Code-server gateway token is invalid')
+  }
+
+  private consumeBootstrapToken(value: string | string[] | null | undefined, binding: CodeServerBinding): void {
+    const bootstrapToken = Array.isArray(value) ? value[0] : value
+    if (binding.bootstrapConsumed || binding.bootstrapExpiresAt <= Date.now() || !tokenEquals(bootstrapToken ?? undefined, binding.bootstrapToken)) {
+      throw new AgentHostError('AUTH_DENIED', 'Code-server gateway bootstrap token is invalid')
+    }
+    binding.bootstrapConsumed = true
   }
 
   private async proxyHttp(request: IncomingMessage, response: ServerResponse, binding: CodeServerBinding, upstream: URL): Promise<void> {

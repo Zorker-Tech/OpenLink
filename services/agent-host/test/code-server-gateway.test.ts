@@ -75,14 +75,23 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
     frameAncestorOrigin: 'http://192.168.3.2:57714',
   })
   try {
-    const bootstrap = await fetch(session.url, { redirect: 'manual' })
-    assert.equal(bootstrap.status, 302)
+    const bootstrapUrl = `${edgeUrl}/v1/code-server/gateway/sessions/${session.sessionId}/__openlink_bootstrap`
+    const bootstrapToken = new URL(session.url).searchParams.get('token')!
+    const bootstrap = await fetch(bootstrapUrl, {
+      method: 'POST',
+      headers: {
+        Origin: 'http://192.168.3.2:57714',
+        'X-OpenLink-Code-Server-Bootstrap': bootstrapToken,
+      },
+    })
+    assert.equal(bootstrap.status, 204)
+    assert.equal(bootstrap.headers.get('cache-control'), 'no-store')
     const cookie = bootstrap.headers.get('set-cookie')
     assert.ok(cookie?.includes('HttpOnly'))
-    const location = bootstrap.headers.get('location')
-    assert.ok(location)
+    assert.match(cookie || '', /Path=\/v1\/code-server\/gateway\/sessions\//)
+    const pageUrl = `${edgeUrl}/v1/code-server/gateway/sessions/${session.sessionId}/`
 
-    const page = await fetch(`${edgeUrl}${location}`, {
+    const page = await fetch(pageUrl, {
       headers: {
         Cookie: cookie!.split(';')[0]!,
         Origin: 'http://192.168.3.2:57714',
@@ -99,12 +108,42 @@ test('code-server gateway exchanges the one-time bootstrap token and rewrites CS
     assert.equal(upstreamFolder, '/preview-worktrees/sessions/chat-id_1')
     assert.equal(await page.text(), '<!doctype html><title>VS Code</title>')
 
-    const wrongLanPort = await fetch(`${edgeUrl}${location}`, {
+    const replay = await fetch(bootstrapUrl, {
+      method: 'POST',
+      headers: { Origin: 'http://192.168.3.2:57714', 'X-OpenLink-Code-Server-Bootstrap': bootstrapToken },
+    })
+    assert.equal(replay.status, 500)
+
+    const wrongLanPort = await fetch(pageUrl, {
       headers: { Cookie: cookie!.split(';')[0]!, Origin: 'http://192.168.3.2:57715' },
     })
     assert.equal(wrongLanPort.status, 500)
   } finally {
     reachableGateway.close()
+    await Promise.all([close(edge), close(upstream)])
+  }
+})
+
+test('code-server gateway accepts a one-time legacy GET bootstrap URL', async () => {
+  const upstream = createServer((_request, response) => response.end('ok'))
+  const upstreamUrl = await listen(upstream)
+  const edge = createServer()
+  const edgeUrl = await listen(edge)
+  const gateway = new CodeServerGateway({ publicBaseUrl: edgeUrl, allowedOrigins: ['http://localhost:3002'] })
+  edge.on('request', (request, response) => {
+    const match = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(new URL(request.url || '/', edgeUrl).pathname)
+    if (!match) { response.writeHead(404).end(); return }
+    void gateway.handleHttp(request, response, decodeURIComponent(match[1]!)).catch(() => response.writeHead(500).end())
+  })
+  const session = gateway.create({ ownerId: 'user', workspaceId: 'workspace', projectId: 'project', upstream: upstreamUrl })
+  try {
+    const response = await fetch(session.url, { redirect: 'manual', headers: { Origin: 'http://localhost:3002' } })
+    assert.equal(response.status, 302)
+    assert.ok(response.headers.get('set-cookie')?.includes('HttpOnly'))
+    const replay = await fetch(session.url, { redirect: 'manual', headers: { Origin: 'http://localhost:3002' } })
+    assert.equal(replay.status, 500)
+  } finally {
+    gateway.close()
     await Promise.all([close(edge), close(upstream)])
   }
 })
@@ -124,6 +163,11 @@ test('code-server gateway preserves VS Code initial WebSocket frames and uses th
   const edge = createServer()
   const edgeUrl = await listen(edge)
   const gateway = new CodeServerGateway({ publicBaseUrl: edgeUrl, allowedOrigins: ['http://localhost:3002'] })
+  edge.on('request', (request, response) => {
+    const match = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(new URL(request.url || '/', edgeUrl).pathname)
+    if (!match) { response.writeHead(404).end(); return }
+    void gateway.handleHttp(request, response, decodeURIComponent(match[1]!)).catch(() => response.writeHead(500).end())
+  })
   edge.on('upgrade', (request, socket, head) => {
     if (!gateway.handleUpgrade(request, socket, head)) socket.destroy()
   })
@@ -132,12 +176,24 @@ test('code-server gateway preserves VS Code initial WebSocket frames and uses th
   })
 
   try {
-    const socketUrl = session.url.replace('/__openlink_bootstrap', '')
+    const bootstrap = await fetch(session.url, { redirect: 'manual', headers: { Origin: 'http://localhost:3002' } })
+    assert.equal(bootstrap.status, 302)
+    const cookie = bootstrap.headers.get('set-cookie')?.split(';')[0]
+    assert.ok(cookie)
+    const socketUrl = new URL(session.url)
+    socketUrl.pathname = `/v1/code-server/gateway/sessions/${session.sessionId}/`
+    socketUrl.search = ''
     const response = await new Promise<string>((resolve, reject) => {
-      const socket = new WebSocket(socketUrl, { origin: 'http://localhost:3002' })
+      const socket = new WebSocket(socketUrl.toString(), { origin: 'http://localhost:3002', headers: { Cookie: cookie } })
       socket.once('error', reject)
+      socket.once('unexpected-response', (_request, response) => {
+        reject(new Error(`WebSocket upgrade was rejected: ${response.statusCode}`))
+      })
+      const timeout = setTimeout(() => reject(new Error('WebSocket echo timed out')), 5_000)
+      timeout.unref()
       socket.once('open', () => socket.send('vscode-initial-greeting'))
       socket.once('message', (data) => {
+        clearTimeout(timeout)
         socket.close()
         resolve(data.toString())
       })
