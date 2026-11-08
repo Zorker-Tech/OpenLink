@@ -1262,6 +1262,15 @@ export async function startPromptHttpServer(
   ): Promise<void> {
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId, preferredSessionId)
+    let targetRevision: string | null = null
+    if (targets.length) {
+      try {
+        targetRevision = await config.projectRuntimeManager.getProjectSourceRevision(projectId)
+      } catch {
+        // Target discovery is useful even when source metadata is temporarily
+        // unavailable. Revision-bound operations can retry independently.
+      }
+    }
     // List responses are safe for UI discovery (project VM probe URLs stay
     // behind this boundary).
     json(response, 200, {
@@ -1271,7 +1280,9 @@ export async function startPromptHttpServer(
         source: target.source,
         port: target.port,
         lastSeenAt: target.lastSeenAt,
+        targetRevision,
       })),
+      targetRevision,
     })
   }
 
@@ -1286,6 +1297,14 @@ export async function startPromptHttpServer(
     const targets = await config.projectRuntimeManager.discoverPreviewTargets(projectId)
     const target = targets.find((candidate) => candidate.id === body.previewTargetId)
     if (!target) throw new AgentHostError('BROWSER_SESSION_FAILED', 'The selected preview target is no longer active', { retryable: true })
+    const readSourceRevision = async (): Promise<string | null> => {
+      try {
+        return await config.projectRuntimeManager!.getProjectSourceRevision(projectId)
+      } catch {
+        return null
+      }
+    }
+    const revisionBeforeCapture = await readSourceRevision()
 
     const upstream = new URL(target.url)
     const basePath = upstream.pathname.replace(/\/+$/, '')
@@ -1317,7 +1336,14 @@ export async function startPromptHttpServer(
       if (!result.ok || !result.image || result.image.mimeType !== 'image/jpeg') {
         throw new AgentHostError('BROWSER_ACTION_FAILED', 'Preview screenshot could not be captured', { retryable: true })
       }
-      json(response, 200, { image: result.image })
+      const revisionAfterCapture = await readSourceRevision()
+      // Do not attach a revision if source changed while Chromium was taking
+      // the screenshot; this prevents stale visual context from being treated
+      // as a precise code snapshot. The image remains usable for inspection.
+      const targetRevision = revisionBeforeCapture && revisionBeforeCapture === revisionAfterCapture
+        ? revisionBeforeCapture
+        : null
+      json(response, 200, { image: result.image, targetRevision })
     } finally {
       if (session) await browser.close(session.state.id).catch(() => undefined)
     }

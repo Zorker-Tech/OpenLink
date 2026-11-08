@@ -1013,6 +1013,7 @@ test('lists every active Project preview target without exposing proxy credentia
         },
       ]
     },
+    getProjectSourceRevision: async () => `git-sha256:${'b'.repeat(64)}`,
   } as unknown as ProjectRuntimeManager
   const backend: PromptRuntimeBackend = {
     createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
@@ -1028,11 +1029,13 @@ test('lists every active Project preview target without exposing proxy credentia
       headers: { Authorization: 'Bearer test-token-which-is-long-enough' },
     })
     assert.equal(response.status, 200)
-    const payload = await response.json() as { targets?: Array<Record<string, unknown>> }
+    const payload = await response.json() as { targets?: Array<Record<string, unknown>>; targetRevision?: string }
     assert.equal(preferredSessionId, 'session-current')
     assert.equal(payload.targets?.length, 2)
+    assert.equal(payload.targetRevision, `git-sha256:${'b'.repeat(64)}`)
     assert.equal(payload.targets?.[0]?.id, currentId)
     assert.equal(payload.targets?.[0]?.port, 5173)
+    assert.equal(payload.targets?.[0]?.targetRevision, `git-sha256:${'b'.repeat(64)}`)
     assert.equal(payload.targets?.[0]?.url, undefined)
     assert.equal(payload.targets?.[0]?.headers, undefined)
     assert.equal(payload.targets?.[0]?.sessionId, undefined)
@@ -1055,6 +1058,7 @@ test('captures a Project preview screenshot through a short-lived authenticated 
   let closedSessionId: string | undefined
   let serviceAuthValid = false
   let controlAuthValid = false
+  let revisionReads = 0
   let notifyBrowserClosed: (() => void) | undefined
   const browserClosed = new Promise<void>((resolve) => { notifyBrowserClosed = resolve })
   const browserHost = createServer(async (request, response) => {
@@ -1111,6 +1115,11 @@ test('captures a Project preview screenshot through a short-lived authenticated 
         sandboxId: 'sandbox-1',
       }]
     },
+    getProjectSourceRevision: async (id: string) => {
+      assert.equal(id, projectId)
+      revisionReads++
+      return `git-sha256:${'c'.repeat(64)}`
+    },
   } as unknown as ProjectRuntimeManager
   const backend: PromptRuntimeBackend = {
     createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
@@ -1131,7 +1140,11 @@ test('captures a Project preview screenshot through a short-lived authenticated 
       }),
     })
     assert.equal(response.status, 200)
-    assert.deepEqual(await response.json(), { image: { mimeType: 'image/jpeg', data: 'aGVsbG8=' } })
+    assert.deepEqual(await response.json(), {
+      image: { mimeType: 'image/jpeg', data: 'aGVsbG8=' },
+      targetRevision: `git-sha256:${'c'.repeat(64)}`,
+    })
+    assert.equal(revisionReads, 2, 'the target revision must remain stable across screenshot capture')
     assert.deepEqual(browserSessionRequest, {
       ownerId: 'owner', workspaceId: 'workspace', projectId,
       surface: 'chromium-stream',

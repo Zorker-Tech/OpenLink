@@ -1,3 +1,5 @@
+import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
+import { createPreviewScreenshotReceipt } from '@/lib/preview-screenshot-receipt.server.mjs'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 import { resolveBrowserPreviewScope } from '@/lib/browser-preview-targets.server'
 import { createClient } from '@/utils/supabase/server'
@@ -61,12 +63,33 @@ export async function POST(request: Request) {
       cache: 'no-store',
       signal: AbortSignal.timeout(60_000),
     })
-    const payload = await response.json().catch(() => null) as { image?: { mimeType?: unknown; data?: unknown } } | null
+    const payload = await response.json().catch(() => null) as {
+      image?: { mimeType?: unknown; data?: unknown }
+      targetRevision?: unknown
+    } | null
     if (!response.ok || payload?.image?.mimeType !== 'image/jpeg' || typeof payload.image.data !== 'string'
       || payload.image.data.length > 2_800_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload.image.data)) {
       return Response.json({ error: { code: 'PREVIEW_SCREENSHOT_FAILED', message: 'Could not capture the current Preview target' } }, { status: response.ok ? 502 : response.status })
     }
-    return Response.json({ image: { mimeType: 'image/jpeg', data: payload.image.data } }, { headers: { 'Cache-Control': 'no-store' } })
+    const targetRevision = isPreviewSourceRevision(payload.targetRevision) ? payload.targetRevision : null
+    const image = Buffer.from(payload.image.data, 'base64')
+    const targetRevisionReceipt = targetRevision
+      ? createPreviewScreenshotReceipt({
+        secret: apiToken,
+        userId: user.id,
+        projectId: scope.project.id,
+        targetId: body.previewTargetId,
+        pagePath: body.pagePath,
+        viewport: { width: viewport.width, height: viewport.height },
+        targetRevision,
+        image,
+      })
+      : null
+    return Response.json({
+      image: { mimeType: 'image/jpeg', data: payload.image.data },
+      targetRevision,
+      targetRevisionReceipt,
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     return Response.json({ error: { code: 'PREVIEW_SCREENSHOT_FAILED', message: 'Could not capture the current Preview target' } }, { status: 503 })
   }

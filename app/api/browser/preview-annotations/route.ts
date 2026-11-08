@@ -5,6 +5,8 @@ import {
   PREVIEW_ANNOTATION_BUCKET,
   previewAnnotationObjectPath,
 } from '@/lib/preview-annotation-image.server.mjs'
+import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
+import { verifyPreviewScreenshotReceipt } from '@/lib/preview-screenshot-receipt.server.mjs'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -85,6 +87,7 @@ function sameAnnotation(
     bounds: { x: number; y: number; width: number; height: number }
     viewport: { width: number; height: number }
     comment: string
+    targetRevision: string
     objectPath: string
   },
 ): boolean {
@@ -97,6 +100,7 @@ function sameAnnotation(
     && samePointRect(row.bounds, input.bounds)
     && sameViewport(row.viewport, input.viewport)
     && row.comment === input.comment
+    && row.target_revision === input.targetRevision
     && row.screenshot_object_path === input.objectPath
     && row.screenshot_data_url === null
 }
@@ -110,6 +114,7 @@ function annotationFields(body: {
   bounds: { x: number; y: number; width: number; height: number }
   viewport: { width: number; height: number }
   comment: string
+  targetRevision: string
 }) {
   return {
     id: body.annotationId.toLowerCase(),
@@ -120,10 +125,11 @@ function annotationFields(body: {
     bounds: body.bounds,
     viewport: body.viewport,
     comment: body.comment.trim(),
+    target_revision: body.targetRevision,
   }
 }
 
-const ANNOTATION_RESPONSE_FIELDS = 'id, target_id, page_path, element_selector, element_label, bounds, viewport, comment, created_at'
+const ANNOTATION_RESPONSE_FIELDS = 'id, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, created_at'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -139,7 +145,7 @@ export async function GET(request: Request) {
   if (!scope.ok) return Response.json({ error: scope.error }, { status: scope.status })
   const { data, error } = await supabase.schema('openlink')
     .from('preview_annotations')
-    .select('id, target_id, page_path, element_selector, element_label, bounds, viewport, comment, created_at')
+    .select('id, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, created_at')
     .eq('project_id', scope.project.id)
     .eq('target_id', targetId)
     .order('created_at', { ascending: true })
@@ -168,11 +174,15 @@ export async function POST(request: Request) {
     viewport?: unknown
     comment?: unknown
     screenshotDataUrl?: unknown
+    targetRevision?: unknown
+    targetRevisionReceipt?: unknown
   }
   if (typeof body.projectId !== 'string' || !ID_PATTERN.test(body.projectId)
     || typeof body.annotationId !== 'string' || !ID_PATTERN.test(body.annotationId)
     || !isPreviewTargetId(body.targetId) || !isPagePath(body.pagePath)
     || !isRect(body.bounds) || !isViewport(body.viewport)
+    || !isPreviewSourceRevision(body.targetRevision)
+    || typeof body.targetRevisionReceipt !== 'string' || body.targetRevisionReceipt.length > 2048
     || typeof body.comment !== 'string' || !body.comment.trim() || body.comment.trim().length > 2000
     || (body.selector !== undefined && body.selector !== null && (typeof body.selector !== 'string' || body.selector.length > 1000))
     || (body.label !== undefined && body.label !== null && (typeof body.label !== 'string' || body.label.length > 240))) {
@@ -185,6 +195,21 @@ export async function POST(request: Request) {
   }
   const scope = await resolveBrowserPreviewScope(supabase, user.id, { projectId: body.projectId })
   if (!scope.ok) return Response.json({ error: scope.error }, { status: scope.status })
+  if (!verifyPreviewScreenshotReceipt({
+    secret: process.env.OPENLINK_AGENT_API_TOKEN ?? '',
+    receipt: body.targetRevisionReceipt,
+    expected: {
+      userId: user.id,
+      projectId: scope.project.id,
+      targetId: body.targetId,
+      pagePath: body.pagePath,
+      viewport: body.viewport as { width: number; height: number },
+      targetRevision: body.targetRevision,
+      image,
+    },
+  })) {
+    return Response.json({ error: { code: 'SCREENSHOT_RECEIPT_INVALID', message: 'Retake the Preview screenshot before saving this annotation' } }, { status: 409 })
+  }
   const fields = annotationFields(body as {
     annotationId: string
     targetId: string
@@ -194,6 +219,7 @@ export async function POST(request: Request) {
     bounds: { x: number; y: number; width: number; height: number }
     viewport: { width: number; height: number }
     comment: string
+    targetRevision: string
   })
   const objectPath = previewAnnotationObjectPath(scope.project.id, user.id, fields.id, image)
   const expected = {
@@ -206,11 +232,12 @@ export async function POST(request: Request) {
     bounds: fields.bounds,
     viewport: fields.viewport,
     comment: fields.comment,
+    targetRevision: fields.target_revision,
     objectPath,
   }
   const annotations = supabase.schema('openlink').from('preview_annotations')
   const { data: existing, error: existingError } = await annotations
-    .select('id, created_by, target_id, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
+    .select('id, created_by, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
     .eq('id', fields.id)
     .eq('project_id', scope.project.id)
     .maybeSingle()
@@ -253,7 +280,7 @@ export async function POST(request: Request) {
   }).select(ANNOTATION_RESPONSE_FIELDS).single()
   if (error || !data) {
     const { data: raced } = await supabase.schema('openlink').from('preview_annotations')
-      .select('id, created_by, target_id, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
+      .select('id, created_by, target_id, target_revision, page_path, element_selector, element_label, bounds, viewport, comment, screenshot_object_path, screenshot_data_url, created_at')
       .eq('id', fields.id)
       .eq('project_id', scope.project.id)
       .maybeSingle()

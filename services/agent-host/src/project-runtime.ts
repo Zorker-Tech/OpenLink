@@ -13,6 +13,7 @@ import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type Pro
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { AGENT_TOOL_CLI } from './agent-tools.js'
 import { createPreviewTargetId } from './preview-target-id.js'
+import { isPreviewSourceRevision } from '@openlink/browser-protocol'
 
 export interface ProjectRuntimeServicePorts {
   opensandbox: number
@@ -57,6 +58,31 @@ export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
  * rewrites the OpenSandbox config and reconciles its containers.
  */
 const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-02-agent-tool-registry-v2'
+
+/**
+ * Hash the committed tree, tracked working-tree diff, and non-ignored
+ * untracked files without sending source contents back through the runtime
+ * control channel. Paths are always positional arguments, never shell source.
+ */
+export const PREVIEW_SOURCE_REVISION_SCRIPT = String.raw`
+set -euo pipefail
+export LC_ALL=C
+workspace="$1"
+head="$(git -C "$workspace" rev-parse --verify HEAD)"
+tracked="$(git -C "$workspace" diff --binary HEAD -- | sha256sum | cut -d' ' -f1)"
+untracked="$(git -C "$workspace" ls-files --others --exclude-standard -z \
+  | sort -z \
+  | xargs -0 -r -n 1 bash -c '
+    workspace="$1"
+    path="$2"
+    object="$(git -C "$workspace" hash-object --no-filters -- "$path")"
+    mode="$(stat -c "%a" -- "$workspace/$path")"
+    printf "%s\0%s\0%s\0" "$path" "$mode" "$object"
+  ' openlink-preview-source-revision "$workspace" \
+  | sha256sum | cut -d' ' -f1)"
+revision="$(printf "%s\0%s\0%s" "$head" "$tracked" "$untracked" | sha256sum | cut -d' ' -f1)"
+printf 'git-sha256:%s\n' "$revision"
+`
 
 /**
  * Resolve the architecture of a persisted runtime. Older descriptors predate
@@ -412,6 +438,8 @@ export class ProjectRuntimeManager {
   /** Git initialization is independent from service provisioning, but must be
    * serialized because two first prompts can arrive for the same project. */
   private readonly gitInitializations = new Map<string, Promise<void>>()
+  /** One expensive revision scan per project can run at a time. */
+  private readonly sourceRevisionProbes = new Map<string, Promise<string | null>>()
   /**
    * Session storage is durable VM state. Repeated page leases must not pay
    * two remote mkdir/chmod round trips each time; cache the completed (or
@@ -1190,6 +1218,45 @@ export class ProjectRuntimeManager {
         current: ref === currentRef,
       }]
     })
+  }
+
+  /**
+   * Return a content-derived revision for the project checkout used by the
+   * active sandbox Preview targets. This is metadata only: source bytes stay
+   * inside the project VM. A missing command runner is a supported read-only
+   * configuration and returns null; operational failures remain recoverable
+   * errors for callers that need revision-bound writes.
+   */
+  async getProjectSourceRevision(projectId: string): Promise<string | null> {
+    const inFlight = this.sourceRevisionProbes.get(projectId)
+    if (inFlight) return inFlight
+
+    const probe = this.readProjectSourceRevision(projectId)
+    this.sourceRevisionProbes.set(projectId, probe)
+    try {
+      return await probe
+    } finally {
+      if (this.sourceRevisionProbes.get(projectId) === probe) this.sourceRevisionProbes.delete(projectId)
+    }
+  }
+
+  private async readProjectSourceRevision(projectId: string): Promise<string | null> {
+    const descriptor = await this.ensure(projectId)
+    if (!this.machineDriver.runInMachine) return null
+    try {
+      await this.ensureProjectGitRepository(projectId)
+      const result = await this.machineDriver.runInMachine(descriptor.machineName, 'bash', [
+        '-lc',
+        PREVIEW_SOURCE_REVISION_SCRIPT,
+        'openlink-preview-source-revision',
+        descriptor.workspacePath,
+      ])
+      const revision = result.stdout.trim()
+      if (!isPreviewSourceRevision(revision)) throw new Error('Source revision response was invalid')
+      return revision
+    } catch {
+      throw new AgentHostError('PREVIEW_REVISION_UNAVAILABLE', 'Project source revision could not be read', { retryable: true })
+    }
   }
 
   /** List real files from the Project VM workspace for prompt `@file` completion. */
