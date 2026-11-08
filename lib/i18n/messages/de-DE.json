@@ -1256,5 +1256,18 @@
   "Full viewport context": "Kontext des gesamten Ansichtsbereichs",
   "Text content": "Textinhalt",
   "This element does not support text editing.": "Dieses Element unterstützt keine Textbearbeitung.",
-  "Choose color": "Farbe auswählen"
+  "Choose color": "Farbe auswählen",
+  "源码版本": "Quellversion",
+  "页面已更新": "Die Seite wurde aktualisiert",
+  "旧批注没有源码版本": "Für ältere Anmerkungen ist keine Quellversion gespeichert",
+  "定位元素": "Element suchen",
+  "正在定位…": "Element wird gesucht…",
+  "已高亮匹配元素，请核对后再继续。": "Das passende Element ist markiert. Bitte prüfe es, bevor du fortfährst.",
+  "有多个候选元素，无法安全自动定位。": "Mehrere Elemente passen. Eine automatische Auswahl ist nicht sicher.",
+  "页面或目标已切换；打开批注对应页面后重试。": "Seite oder Ziel hat gewechselt. Öffne die Seite der Anmerkung und versuche es erneut.",
+  "源码在截图期间发生变化，或当前版本不可用。请重新捕获。": "Der Quellcode hat sich während der Aufnahme geändert oder seine Version ist nicht verfügbar. Bitte erneut aufnehmen.",
+  "截图版本凭据不可用，请重新捕获。": "Der Screenshot-Versionsnachweis ist nicht verfügbar. Bitte erneut aufnehmen.",
+  "无法确认当前源码版本，请刷新预览目标后重试。": "Die aktuelle Quellversion konnte nicht bestätigt werden. Aktualisiere das Preview-Ziel und versuche es erneut.",
+  "当前预览无法执行元素定位。": "Das Element kann in der aktuellen Vorschau nicht gesucht werden.",
+  "正在打开批注对应页面，请等待加载后再次定位。": "Die Seite der Anmerkung wird geöffnet. Warte, bis sie geladen ist, und versuche es erneut."
 }

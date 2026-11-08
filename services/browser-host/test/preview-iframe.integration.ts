@@ -106,7 +106,7 @@ test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSo
       'Link': '</assets/preload.svg>; rel=preload; as=image',
       'Set-Cookie': 'preview-app=ready; Path=/; HttpOnly; SameSite=Lax',
     })
-    response.end('<!doctype html><html><head><title>Preview fixture</title><link rel=stylesheet href=/assets/preview.css><script src="/assets/preview.js"></script><script type="module" src="/assets/preview-module.js"></script></head><body><img src="/assets/image.svg"><a id="route-link" href="/about">About</a><button id="apply">Apply style</button></body></html>')
+    response.end('<!doctype html><html><head><title>Preview fixture</title><link rel=stylesheet href=/assets/preview.css><script src="/assets/preview.js"></script><script type="module" src="/assets/preview-module.js"></script></head><body><img src="/assets/image.svg"><a id="route-link" href="/about">About</a><button id="apply" data-testid="apply-style">Apply style</button></body></html>')
   })
   const upstreamPort = await listen(upstream)
   const upstreamWebSockets = new WebSocketServer({ noServer: true })
@@ -317,6 +317,110 @@ test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSo
   )
   assert.equal(relayedResult.type, 'event')
   assert.equal(relayedResult.payload.event.type === 'action.result' && relayedResult.payload.event.result.ok, true)
+
+  await page.frameLocator('#preview').locator('#apply').evaluate((element) => {
+    const replacement = document.createElement('button')
+    replacement.id = 'replacement'
+    replacement.dataset.testid = 'apply-style'
+    replacement.style.color = getComputedStyle(element).color
+    replacement.textContent = 'Apply style'
+    element.replaceWith(replacement)
+  })
+  const locatorEnvelope: BrowserActionEnvelope = {
+    version: BROWSER_PROTOCOL_VERSION,
+    actionId: 'integration-locator-resolve',
+    sessionId: created.session.id,
+    actor: 'human',
+    action: {
+      type: 'preview.locator.resolve',
+      pageId: 'preview',
+      locator: {
+        version: 1,
+        tagName: 'button',
+        candidates: [
+          { kind: 'data-testid', value: 'apply-style' },
+          { kind: 'id', value: 'apply' },
+          { kind: 'css', value: '#apply' },
+        ],
+      },
+    },
+  }
+  socket.send(JSON.stringify({ type: 'action', payload: locatorEnvelope }))
+  const locatorCommand = await waitFor(
+    () => messages.find((message): message is Extract<BrowserSocketServerMessage, { type: 'event' }> => (
+      message.type === 'event' && message.payload.event.type === 'bridge.command'
+      && message.payload.event.action.actionId === locatorEnvelope.actionId
+    )),
+    'the locator resolution bridge command',
+  )
+  if (locatorCommand.type !== 'event' || locatorCommand.payload.event.type !== 'bridge.command') throw new Error('Unexpected locator bridge event')
+  await page.evaluate(({ origin, data, command }) => {
+    const frame = document.querySelector<HTMLIFrameElement>('#preview')!
+    frame.contentWindow!.postMessage({
+      channel: data.channel,
+      version: data.version,
+      sessionId: data.sessionId,
+      nonce: data.nonce,
+      payload: { type: 'action.execute', envelope: command.action },
+    }, origin)
+  }, { origin: bridgeReady.origin, data: bridgeReady.data, command: locatorCommand.payload.event })
+  const locatorResultMessage = await page.waitForFunction((actionId) => window.previewMessages?.find((message) => (
+    message.data.payload?.type === 'action.result'
+    && message.data.payload.result?.actionId === actionId
+  )), locatorEnvelope.actionId)
+  const locatorResult = await locatorResultMessage.jsonValue() as { data: InspectorBridgeEnvelope<Extract<InspectorBridgeEvent, { type: 'action.result' }>> }
+  assert.equal(locatorResult.data.payload.result.ok, true)
+  assert.equal(locatorResult.data.payload.result.element?.attributes.id, 'replacement')
+  assert.match(locatorResult.data.payload.result.snapshot || '', /"status":"matched"/)
+  socket.send(JSON.stringify({ type: 'bridge.result', commandId: locatorCommand.payload.event.commandId, result: locatorResult.data.payload.result }))
+  await waitFor(
+    () => messages.find((message): message is Extract<BrowserSocketServerMessage, { type: 'event' }> => (
+      message.type === 'event' && message.payload.event.type === 'action.result'
+      && message.payload.event.result.actionId === locatorEnvelope.actionId
+    )),
+    'the relayed locator resolution result',
+  )
+
+  await page.frameLocator('#preview').locator('#replacement').evaluate((element) => {
+    const duplicate = document.createElement('button')
+    duplicate.dataset.testid = 'apply-style'
+    duplicate.textContent = 'Another action'
+    element.after(duplicate)
+  })
+  const ambiguousLocatorEnvelope: BrowserActionEnvelope = {
+    ...locatorEnvelope,
+    actionId: 'integration-locator-ambiguous',
+    action: locatorEnvelope.action,
+  }
+  socket.send(JSON.stringify({ type: 'action', payload: ambiguousLocatorEnvelope }))
+  const ambiguousCommand = await waitFor(
+    () => messages.find((message): message is Extract<BrowserSocketServerMessage, { type: 'event' }> => (
+      message.type === 'event' && message.payload.event.type === 'bridge.command'
+      && message.payload.event.action.actionId === ambiguousLocatorEnvelope.actionId
+    )),
+    'the ambiguous locator bridge command',
+  )
+  if (ambiguousCommand.type !== 'event' || ambiguousCommand.payload.event.type !== 'bridge.command') throw new Error('Unexpected ambiguous locator bridge event')
+  await page.evaluate(({ origin, data, command }) => {
+    const frame = document.querySelector<HTMLIFrameElement>('#preview')!
+    frame.contentWindow!.postMessage({
+      channel: data.channel,
+      version: data.version,
+      sessionId: data.sessionId,
+      nonce: data.nonce,
+      payload: { type: 'action.execute', envelope: command.action },
+    }, origin)
+  }, { origin: bridgeReady.origin, data: bridgeReady.data, command: ambiguousCommand.payload.event })
+  const ambiguousResultMessage = await page.waitForFunction((actionId) => window.previewMessages?.find((message) => (
+    message.data.payload?.type === 'action.result'
+    && message.data.payload.result?.actionId === actionId
+  )), ambiguousLocatorEnvelope.actionId)
+  const ambiguousResult = await ambiguousResultMessage.jsonValue() as { data: InspectorBridgeEnvelope<Extract<InspectorBridgeEvent, { type: 'action.result' }>> }
+  assert.equal(ambiguousResult.data.payload.result.ok, true)
+  assert.equal(ambiguousResult.data.payload.result.element, undefined)
+  assert.match(ambiguousResult.data.payload.result.snapshot || '', /"status":"ambiguous"/)
+  socket.send(JSON.stringify({ type: 'bridge.result', commandId: ambiguousCommand.payload.event.commandId, result: ambiguousResult.data.payload.result }))
+
   const nextAddress = `${restoredUrl.pathname}/settings?token=must-not-persist`
   await page.frameLocator('#preview').locator('body').evaluate((_, path) => history.pushState({}, '', path), nextAddress)
   const updatedMessage = await page.waitForFunction(() => window.previewMessages?.find((message) => message.data.payload?.type === 'page.updated'))

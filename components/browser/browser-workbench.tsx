@@ -5,7 +5,7 @@ import { NativePreviewSurface } from '@/components/browser/native-preview-surfac
 import { ThinkingOrb } from '@/components/thinking/src'
 import { useT } from '@/lib/i18n/client'
 import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, listBrowserPreviewTargets, type BrowserConnectionStatus, type BrowserPreviewTarget } from '@/lib/browser-runtime/client'
-import { sanitizePreviewPagePath, type BrowserAction, type BrowserActionResult, type BrowserSessionState, type ElementReference } from '@/packages/browser-protocol/src/index'
+import { sanitizePreviewPagePath, type BrowserAction, type BrowserActionResult, type BrowserSessionState, type ElementReference, type PreviewElementLocator } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
@@ -85,7 +85,10 @@ export interface BrowserWorkbenchHandle {
   resetElementContent: (ref: string) => void
   setThemeToken: (token: string, value: string) => void
   resetThemeToken: (token: string) => void
+  resolvePreviewLocator: (locator: PreviewElementLocator, onResult: (status: PreviewLocatorResolution) => void) => void
 }
+
+export type PreviewLocatorResolution = 'matched' | 'ambiguous' | 'not-found' | 'failed' | 'navigating'
 
 interface BrowserWorkbenchProps {
   projectId: string
@@ -133,6 +136,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const connectionRef = useRef<BrowserConnection | null>(null)
   const previewPagePathRef = useRef<string | undefined>(initialPreviewPagePath)
   const previewActionKinds = useRef(new Map<string, BrowserAction['type']>())
+  const locatorResolutionCallbacks = useRef(new Map<string, { callback: (status: PreviewLocatorResolution) => void; timeout: ReturnType<typeof setTimeout> }>())
   const annotationTargetRef = useRef(onAnnotationTarget)
   const elementMoveRef = useRef(onElementMoved)
   const inspectMode = inspectionMode === 'edit'
@@ -177,6 +181,11 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     setPreviewLayers(undefined)
     setThemeTokens(undefined)
     previewActionKinds.current.clear()
+    for (const entry of locatorResolutionCallbacks.current.values()) {
+      clearTimeout(entry.timeout)
+      entry.callback('failed')
+    }
+    locatorResolutionCallbacks.current.clear()
     const previous = connectionRef.current
     connectionRef.current = null
     previous?.close()
@@ -233,6 +242,21 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         if (result.element) setSelectedElement(result.element)
         const actionType = previewActionKinds.current.get(result.actionId)
         if (actionType) previewActionKinds.current.delete(result.actionId)
+        if (actionType === 'preview.locator.resolve' && !result.element) {
+          setSelectedElement(null)
+          setSelectedStyles(undefined)
+        }
+        const locatorResolution = locatorResolutionCallbacks.current.get(result.actionId)
+        if (locatorResolution) {
+          clearTimeout(locatorResolution.timeout)
+          locatorResolutionCallbacks.current.delete(result.actionId)
+          let resolution: PreviewLocatorResolution = result.ok ? 'not-found' : 'failed'
+          try {
+            const snapshot = JSON.parse(result.snapshot || '{}') as Record<string, unknown>
+            if (snapshot.status === 'matched' || snapshot.status === 'ambiguous' || snapshot.status === 'not-found') resolution = snapshot.status
+          } catch {}
+          locatorResolution.callback(resolution)
+        }
         if (result.snapshot && actionType) {
           try {
             const snapshot = JSON.parse(result.snapshot) as Record<string, unknown>
@@ -310,6 +334,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined, initialPreviewTargetIdRef.current, initialPreviewPagePathRef.current)
     return () => {
       requestVersion.current += 1
+      for (const entry of locatorResolutionCallbacks.current.values()) clearTimeout(entry.timeout)
+      locatorResolutionCallbacks.current.clear()
       const current = connectionRef.current
       connectionRef.current = null
       // Close this client transport. The Chromium Browser Session is retained
@@ -331,13 +357,15 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [connection, viewportMode])
 
   const activePage = sessionState?.pages.find((page) => page.id === sessionState.activePageId)
-  const runPreviewAction = useCallback((action: BrowserAction) => {
-    if (!connection || surface !== 'native-preview' || !activePage) return
+  const runPreviewAction = useCallback((action: BrowserAction): string | undefined => {
+    if (!connection || surface !== 'native-preview' || !activePage) return undefined
     try {
       const actionId = connection.sendAction(action)
       previewActionKinds.current.set(actionId, action.type)
+      return actionId
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : String(actionError))
+      return undefined
     }
   }, [activePage, connection, surface])
   const handleElementSelected = useCallback((element: ElementReference | null) => {
@@ -366,6 +394,22 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const readThemeTokens = useCallback(() => {
     if (activePage) runPreviewAction({ type: 'preview.theme.read', pageId: activePage.id })
   }, [activePage, runPreviewAction])
+  const resolvePreviewLocator = useCallback((locator: PreviewElementLocator, onResult: (status: PreviewLocatorResolution) => void) => {
+    if (!connection || surface !== 'native-preview' || !activePage) {
+      onResult('failed')
+      return
+    }
+    const actionId = runPreviewAction({ type: 'preview.locator.resolve', pageId: activePage.id, locator })
+    if (!actionId) {
+      onResult('failed')
+      return
+    }
+    const timeout = setTimeout(() => {
+      locatorResolutionCallbacks.current.delete(actionId)
+      onResult('failed')
+    }, 10_000)
+    locatorResolutionCallbacks.current.set(actionId, { callback: onResult, timeout })
+  }, [activePage, connection, runPreviewAction, surface])
   const activateElement = useCallback((elementRef: string) => {
     if (!activePage) return
     setInspectionMode('edit')
@@ -474,7 +518,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     resetElementContent,
     setThemeToken,
     resetThemeToken,
-  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementContent, resetElementStyle, resetThemeToken, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementContent, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
+    resolvePreviewLocator,
+  }), [activateElement, navigate, openExternal, readElementStyles, readLayers, readThemeTokens, refreshPreviewTargets, resetElementContent, resetElementStyle, resetThemeToken, resolvePreviewLocator, selectAnnotationTarget, selectPreviewTarget, sendPageAction, setElementContent, setElementStyle, setInspectionModeForPreview, setNextSurface, setThemeToken])
 
   useEffect(() => {
     onStateChange?.({

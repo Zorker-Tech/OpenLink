@@ -1,8 +1,11 @@
+import { isPreviewElementLocator } from './preview-element-locator.ts'
+
 export const BROWSER_PROTOCOL_VERSION = 1 as const
 export const INSPECTOR_BRIDGE_CHANNEL = 'openlink.browser.inspector' as const
 
 export { previewPagePathFromAddress, sanitizePreviewPagePath } from './preview-path.ts'
 export { isPreviewSourceRevision } from './preview-source-revision.ts'
+export { createPreviewElementLocator, isPreviewElementLocator } from './preview-element-locator.ts'
 
 export type BrowserProtocolVersion = typeof BROWSER_PROTOCOL_VERSION
 export type BrowserSurfaceKind = 'native-preview' | 'chromium-stream' | 'desktop-integrated'
@@ -78,6 +81,18 @@ export interface ElementReference {
   attributes: Record<string, string>
 }
 
+export interface PreviewElementLocatorCandidate {
+  kind: 'data-testid' | 'data-test' | 'data-cy' | 'id' | 'css'
+  value: string
+}
+
+/** Safe, bounded matching hints that can be re-evaluated after a page reload. */
+export interface PreviewElementLocator {
+  version: 1
+  tagName: string
+  candidates: PreviewElementLocatorCandidate[]
+}
+
 export type BrowserAction =
   | { type: 'page.list' }
   | { type: 'page.open'; url: string }
@@ -100,6 +115,7 @@ export type BrowserAction =
   | { type: 'preview.theme.reset'; pageId: string; token: string }
   | { type: 'preview.element.activate'; pageId: string; ref: string }
   | { type: 'preview.annotation.select'; pageId: string; x: number; y: number; width?: number; height?: number }
+  | { type: 'preview.locator.resolve'; pageId: string; locator: PreviewElementLocator }
   | { type: 'element.click'; pageId: string; ref?: string; selector?: string; x?: number; y?: number; button?: 'left' | 'middle' | 'right'; clickCount?: number }
   | { type: 'element.hover'; pageId: string; ref?: string; selector?: string; x?: number; y?: number }
   | { type: 'element.type'; pageId: string; ref?: string; selector?: string; text: string; submit?: boolean }
@@ -255,6 +271,7 @@ export function isBrowserActionEnvelope(value: unknown): value is BrowserActionE
       return pageId() && isFiniteNumber(action.x) && action.x >= 0 && isFiniteNumber(action.y) && action.y >= 0
         && (action.width === undefined || (isFiniteNumber(action.width) && action.width >= 0 && action.width <= 7680))
         && (action.height === undefined || (isFiniteNumber(action.height) && action.height >= 0 && action.height <= 4320))
+    case 'preview.locator.resolve': return pageId() && isPreviewElementLocator(action.locator)
     case 'element.click': return pageId() && (isString(action.ref) || isString(action.selector) || (isFiniteNumber(action.x) && isFiniteNumber(action.y)))
     case 'element.hover': return pageId() && (isString(action.ref) || isString(action.selector) || (isFiniteNumber(action.x) && isFiniteNumber(action.y)))
     case 'element.type': return pageId() && isString(action.text) && (isString(action.ref) || isString(action.selector))
