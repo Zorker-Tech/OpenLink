@@ -13,6 +13,10 @@ const localInterfaceOrigins = Object.values(networkInterfaces())
 
 const nextConfig = {
   distDir: process.env.OPENLINK_NEXT_DIST_DIR || '.next',
+  // Preserve the gateway's trailing slash so relative editor assets resolve
+  // under the per-session path. proxy.ts keeps the normal canonical redirect
+  // behavior for every other route.
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     const beforeFiles = []
     if (localZokerbaseUrl) {

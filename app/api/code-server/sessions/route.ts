@@ -41,12 +41,17 @@ function codeServerGatewaySession(value: unknown): { sessionId: string; path: st
 function codeServerGatewayCookie(sessionId: string, value: string, path: string): string | null {
   const expectedName = `openlink_code_server_gateway_${sessionId.replace(/[^A-Za-z0-9]/g, '').slice(0, 48)}`
   const prefix = `${expectedName}=`
+  const cookieParts = value.split(';').map((part) => part.trim())
+  const cookiePath = cookieParts.find((part) => /^Path=/i.test(part))?.slice('Path='.length)
+  if (cookiePath !== path && cookiePath !== `${path}/`) return null
   if (!value.startsWith(prefix)
-    || !value.includes(`Path=${path}/`)
     || !/;\s*HttpOnly(?:;|$)/i.test(value)
     || !/;\s*SameSite=Strict(?:;|$)/i.test(value)
     || /;\s*Domain=/i.test(value)) return null
-  return value
+  // Next.js canonicalizes a trailing slash before applying the gateway
+  // rewrite. Normalize both old and new Agent Host cookie paths so the
+  // browser sends the cookie after that redirect and on nested assets.
+  return value.replace(/;\s*Path=[^;]*/i, `; Path=${path}`)
 }
 
 function requestOrigin(request: Request): string | null {

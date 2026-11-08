@@ -81,6 +81,8 @@ test('local session BFF exchanges bootstrap server-side and sets a scoped cookie
     assert.equal(f.calls[0].body.sessionId, 'chat-id')
     assert.match(response.headers.get('set-cookie') || '', /HttpOnly/)
     assert.match(response.headers.get('set-cookie') || '', /SameSite=Strict/)
+    assert.match(response.headers.get('set-cookie') || '', /Path=\/v1\/code-server\/gateway\/sessions\/session-id_1(?:;|$)/)
+    assert.doesNotMatch(response.headers.get('set-cookie') || '', /Path=\/v1\/code-server\/gateway\/sessions\/session-id_1\//)
     assert.match(response.headers.get('set-cookie') || '', /Max-Age=/)
     const payload = await response.json()
     assert.equal(payload.session.url, '/v1/code-server/gateway/sessions/session-id_1/')

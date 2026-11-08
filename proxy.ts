@@ -10,6 +10,13 @@ function requestHostname(request: NextRequest): string {
 }
 
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  if (!pathname.startsWith('/v1/code-server/gateway/') && pathname !== '/' && pathname.endsWith('/')) {
+    const canonicalUrl = new URL(request.url)
+    canonicalUrl.pathname = pathname.replace(/\/+$/, '') || '/'
+    return NextResponse.redirect(canonicalUrl, 308)
+  }
+
   if (request.nextUrl.pathname.startsWith('/api/openlink-zokerbase/')) {
     return NextResponse.next()
   }
