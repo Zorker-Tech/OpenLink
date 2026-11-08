@@ -647,7 +647,6 @@ function ChatTopbar({
               <input
                 aria-label={t('编辑项目名称')}
                 className="h-7 w-full min-w-0 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)]"
-                data-no-press-motion
                 disabled={savingTitle}
                 key="title-editor"
                 maxLength={120}
@@ -667,7 +666,6 @@ function ChatTopbar({
               <button
                 aria-label={t('编辑项目名称')}
                 className="flex h-7 w-full min-w-0 items-center rounded-md px-1 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]"
-                data-no-press-motion
                 key="title-display"
                 onClick={() => setEditingTitle(true)}
                 type="button"
@@ -723,7 +721,7 @@ function ComposerSubmitButton({ status, input, disabled, hasStructuredAttachment
   const stopping = status === 'streaming' && !hasDraft
   return <PromptInputSubmit
     aria-label={status === 'streaming' ? hasDraft ? t('加入队列') : t('停止') : t('发送')}
-    className="size-7 shrink-0 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:opacity-90"
+    className="size-7 shrink-0 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] transition-[color,background-color,border-color,opacity] hover:opacity-90"
     disabled={disabled}
     onMouseDown={(event) => { if (stopping) event.preventDefault() }}
     onClick={(event) => { if (stopping) { event.preventDefault(); onStop() } }}
@@ -1180,7 +1178,7 @@ export function ChatComposer({
   const actionButtons = (
     <>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-        <ModelSelectorTrigger render={<PromptInputButton aria-label={t('选择模型，当前 {model}', { model: selectedModel?.name ?? t('未配置') })} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
+        <ModelSelectorTrigger render={<PromptInputButton aria-label={t('选择模型，当前 {model}', { model: selectedModel?.name ?? t('未配置') })} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
           {selectedModel ? <ModelSelectorLogo className="size-4" provider={selectedModel.logo} /> : <img alt="" className="size-4" src="/openlink/model.svg" />}
           <ChevronDown className="size-4" />
         </ModelSelectorTrigger>

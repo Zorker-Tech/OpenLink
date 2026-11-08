@@ -261,29 +261,19 @@
 }
 
 @layer components {
-  /* One interaction rhythm for every OpenLink surface. The scale property is
-     independent from transform, so existing layout transforms (centering,
-     sidebar slides, etc.) remain intact while a press still feels tactile. */
+  /* Keep pointer and keyboard feedback consistent without shifting controls. */
   .openlink-motion-page {
     min-height: 100%;
     width: 100%;
   }
 
-  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]) {
-    transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale;
+  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']) {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
     transition-duration: 160ms;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]):active {
-    scale: 0.985;
-  }
-
-  body [data-no-press-motion-scope] :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):active {
-    scale: none;
-  }
-
-  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]):focus-visible {
+  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):focus-visible {
     transition-duration: 120ms;
   }
 
@@ -560,7 +550,6 @@
 
   body :where(button, a[href], [role='button'], [role='menuitem'], [role='tab']) {
     transition-duration: 0ms !important;
-    scale: 1 !important;
   }
 
   .openlink-collapsible-content,

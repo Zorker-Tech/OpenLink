@@ -1241,20 +1241,20 @@ function WorkFlowGroup({
             sideOffset={8}
           >
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)] data-popup-open:bg-[var(--app-hover)]">
+              <DropdownMenuSubTrigger className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)] data-popup-open:bg-[var(--app-hover)]">
                 <RefreshCw className="size-4 text-[var(--app-muted)]" />
                 <span>{t('重试')}</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-[144px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-                <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>{t('从此处重试')}</DropdownMenuItem>
-                <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>{t('使用相同模型')}</DropdownMenuItem>
+                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>{t('从此处重试')}</DropdownMenuItem>
+                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>{t('使用相同模型')}</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => { void navigator.clipboard.writeText(checkpointText) }}>
+            <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => { void navigator.clipboard.writeText(checkpointText) }}>
               <Copy className="size-4 text-[var(--app-muted)]" />
               <span>{t('复制')}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={copyCheckpointLink}>
+            <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={copyCheckpointLink}>
               <Link2 className="size-4 text-[var(--app-muted)]" />
               <span>{t('Copy Link')}</span>
             </DropdownMenuItem>
@@ -1343,7 +1343,6 @@ export function ChatTimeline({
   return (
     <Conversation
       className="min-h-0 w-full flex-1"
-      data-no-press-motion-scope
       resize={isStreaming ? 'smooth' : 'instant'}
     >
       <ConversationContent className={`min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px] ${contentClassName}`}>
