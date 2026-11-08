@@ -79,10 +79,12 @@ render a second Preview page. The tab provides the embedded canvas, responsive
 viewport, navigation controls, and Edit, Theme, Layers, and Annotate tools. Edit
 selects live elements and previews temporary text or style changes immediately.
 Changes remain pending until applied to an editable project checkout as a
-reviewable change. Applying a historical worktree target first creates a
-separate chat bound to its exact commit; the target sandbox itself stays
-read-only. Theme edits available design tokens; Layers navigates the live
-document hierarchy.
+reviewable change. Require confirmation before Preview navigation, reload,
+target or version switch, or tab close when pending changes would be discarded.
+Cancelling keeps the current page and edits intact. Applying a historical
+worktree target first creates a separate chat bound to its exact commit; the
+target sandbox itself stays read-only. Theme edits available design tokens;
+Layers navigates the live document hierarchy.
 Annotate places numbered comments on the preview and
 submits them with screenshot and locator context. A project selector inside the
 tab lets users switch among authorized code projects in the workspace. Requests

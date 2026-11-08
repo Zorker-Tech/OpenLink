@@ -22,5 +22,6 @@
   "所选批注的预览目标已失效，请先重新打开对应版本。": "The Preview target for a selected annotation is no longer available. Reopen that version first.",
   "请按同一个预览版本分批发送批注。": "Send annotations in separate batches for each Preview version.",
   "所选 Git 版本不可用，请刷新预览目标后重试。": "The selected Git version is unavailable. Refresh the Preview target and try again.",
-  "无法绑定所选 Git 版本，请重试。": "Could not bind the selected Git version. Try again."
+  "无法绑定所选 Git 版本，请重试。": "Could not bind the selected Git version. Try again.",
+  "预览中还有未应用的更改。继续将丢弃这些更改。": "This Preview has unapplied changes. Continue and discard them?"
 }

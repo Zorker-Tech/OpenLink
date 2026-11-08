@@ -71,6 +71,11 @@ test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSo
         document.addEventListener('click', (event) => {
           const link = event.target.closest?.('#route-link');
           if (link) { event.preventDefault(); document.documentElement.dataset.routeClick = link.pathname; }
+          const programmaticRoute = event.target.closest?.('#route-programmatic');
+          if (programmaticRoute) {
+            document.documentElement.dataset.routeAttempt = 'true';
+            history.pushState({}, '', location.pathname + '/settings?token=must-not-persist');
+          }
         });
       `)
       return
@@ -106,7 +111,7 @@ test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSo
       'Link': '</assets/preload.svg>; rel=preload; as=image',
       'Set-Cookie': 'preview-app=ready; Path=/; HttpOnly; SameSite=Lax',
     })
-    response.end('<!doctype html><html><head><title>Preview fixture</title><link rel=stylesheet href=/assets/preview.css><script src="/assets/preview.js"></script><script type="module" src="/assets/preview-module.js"></script></head><body><img src="/assets/image.svg"><a id="route-link" href="/about">About</a><button id="apply" data-testid="apply-style">Apply style</button></body></html>')
+    response.end('<!doctype html><html><head><title>Preview fixture</title><link rel=stylesheet href=/assets/preview.css><script src="/assets/preview.js"></script><script type="module" src="/assets/preview-module.js"></script></head><body><img src="/assets/image.svg"><a id="route-link" href="/about">About</a><a id="external-link" href="https://example.invalid/">External</a><button id="route-programmatic">Navigate with SPA</button><button id="apply" data-testid="apply-style">Apply style</button></body></html>')
   })
   const upstreamPort = await listen(upstream)
   const upstreamWebSockets = new WebSocketServer({ noServer: true })
@@ -421,12 +426,74 @@ test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSo
   assert.match(ambiguousResult.data.payload.result.snapshot || '', /"status":"ambiguous"/)
   socket.send(JSON.stringify({ type: 'bridge.result', commandId: ambiguousCommand.payload.event.commandId, result: ambiguousResult.data.payload.result }))
 
+  await page.evaluate(({ origin, data }) => {
+    const frame = document.querySelector<HTMLIFrameElement>('#preview')!
+    frame.contentWindow!.postMessage({
+      channel: data.channel,
+      version: data.version,
+      sessionId: data.sessionId,
+      nonce: data.nonce,
+      payload: { type: 'inspect.stop' },
+    }, origin)
+  }, bridgeReady)
   const nextAddress = `${restoredUrl.pathname}/settings?token=must-not-persist`
-  await page.frameLocator('#preview').locator('body').evaluate((_, path) => history.pushState({}, '', path), nextAddress)
-  const updatedMessage = await page.waitForFunction(() => window.previewMessages?.find((message) => message.data.payload?.type === 'page.updated'))
+  await page.evaluate(({ origin, data }) => {
+    const frame = document.querySelector<HTMLIFrameElement>('#preview')!
+    frame.contentWindow!.postMessage({
+      channel: data.channel,
+      version: data.version,
+      sessionId: data.sessionId,
+      nonce: data.nonce,
+      payload: {
+        type: 'preview.pending-changes',
+        hasPendingChanges: true,
+        confirmationMessage: 'Preview has unapplied changes. Continue?',
+      },
+    }, origin)
+  }, { origin: bridgeReady.origin, data: bridgeReady.data })
+  const dismissExternalNavigationDialog = page.waitForEvent('dialog', { timeout: 5_000 }).then((dialog) => dialog.dismiss())
+  await page.frameLocator('#preview').getByRole('link', { name: 'External' }).click()
+  await dismissExternalNavigationDialog
+  assert.equal(await page.frameLocator('#preview').locator('body').evaluate(() => location.pathname), restoredUrl.pathname)
+  const dismissNavigationDialog = page.waitForEvent('dialog', { timeout: 5_000 }).then(async (dialog) => {
+    assert.match(dialog.message(), /Preview has unapplied changes/)
+    await dialog.dismiss()
+  }).catch(async (error) => {
+    const state = await page.frameLocator('#preview').locator('html').evaluate((element) => ({
+      routeAttempt: element.dataset.routeAttempt,
+      pathname: location.pathname,
+    }))
+    throw new Error(`No confirmation dialog for SPA navigation: ${String(error)} ${JSON.stringify(state)}`)
+  })
+  await page.frameLocator('#preview').getByRole('button', { name: 'Navigate with SPA' }).click()
+  await dismissNavigationDialog
+  assert.equal(await page.frameLocator('#preview').locator('body').evaluate(() => location.pathname), restoredUrl.pathname)
+
+  const acceptNavigationDialog = page.waitForEvent('dialog', { timeout: 5_000 }).then((dialog) => dialog.accept())
+  const updatedMessagePromise = page.waitForFunction(() => window.previewMessages?.find((message) => message.data.payload?.type === 'page.updated'))
+  await page.frameLocator('#preview').getByRole('button', { name: 'Navigate with SPA' }).click()
+  await acceptNavigationDialog
+  const updatedMessage = await updatedMessagePromise
   const updated = await updatedMessage.jsonValue() as { data: InspectorBridgeEnvelope<Extract<InspectorBridgeEvent, { type: 'page.updated' }>> }
   assert.equal(previewPagePathFromAddress(updated.data.payload.url), '/dashboard/settings')
   assert.equal(new URL(updated.data.payload.url).search, '?token=must-not-persist')
+
+  const dismissHistoryNavigationDialog = page.waitForEvent('dialog', { timeout: 5_000 }).then((dialog) => dialog.dismiss())
+  await page.frameLocator('#preview').locator('body').evaluate(() => history.back())
+  await dismissHistoryNavigationDialog
+  assert.match(await page.frameLocator('#preview').locator('body').evaluate(() => location.pathname), /\/dashboard\/settings$/)
+
+  const pageUpdateCount = await page.evaluate(() => window.previewMessages?.filter((message) => message.data.payload?.type === 'page.updated').length ?? 0)
+  const historyBackUpdate = page.waitForFunction((previousCount) => (
+    (window.previewMessages?.filter((message) => message.data.payload?.type === 'page.updated').length ?? 0) > previousCount
+    && window.previewMessages?.some((message) => message.data.payload?.type === 'page.updated'
+      && new URL(message.data.payload.url).pathname.endsWith('/dashboard'))
+  ), pageUpdateCount)
+  const acceptHistoryNavigationDialog = page.waitForEvent('dialog', { timeout: 5_000 }).then((dialog) => dialog.accept())
+  await page.frameLocator('#preview').locator('body').evaluate(() => history.back())
+  await acceptHistoryNavigationDialog
+  await historyBackUpdate
+  assert.equal(await page.frameLocator('#preview').locator('body').evaluate(() => location.pathname), restoredUrl.pathname)
   const color = await page.frameLocator('#preview').getByRole('button', { name: 'Apply style' }).evaluate((element) => getComputedStyle(element).color)
   assert.equal(color, 'rgb(255, 0, 0)')
   assert.deepEqual(pageErrors, [])

@@ -8,6 +8,11 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   const nonce = script.dataset.openlinkNonce || '';
   const previewPath = script.dataset.openlinkPreviewPath || '';
   let allowedOrigins = [];
+  let hasPendingPreviewChanges = false;
+  let pendingPreviewConfirmationMessage = 'You have unapplied Preview changes. Continue and discard them?';
+  let allowPendingUnload = false;
+  let allowNextTraverse = false;
+  let allowNextNavigation = false;
   try {
     allowedOrigins = JSON.parse(atob(script.dataset.openlinkOrigins || 'W10='));
   } catch {}
@@ -637,6 +642,13 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     const payload = message.payload;
     if (payload.type === 'inspect.start') { inspectActive = true; selectedElement = null; }
     else if (payload.type === 'inspect.stop') { inspectActive = false; selectedElement = null; hide(); }
+    else if (payload.type === 'preview.pending-changes') {
+      hasPendingPreviewChanges = payload.hasPendingChanges === true;
+      if (typeof payload.confirmationMessage === 'string' && payload.confirmationMessage.length <= 300) {
+        pendingPreviewConfirmationMessage = payload.confirmationMessage;
+      }
+    }
+    else if (payload.type === 'preview.navigation-confirmed') hasPendingPreviewChanges = false;
     else if (payload.type === 'element.activate') {
       const element = refElements.get(payload.ref)?.deref();
       if (element) { element.scrollIntoView({ block: 'center', inline: 'center' }); selectedElement = element; show(element); }
@@ -646,12 +658,77 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     } else if (payload.type === 'action.execute') void execute(payload.envelope);
   });
 
+  const confirmPendingPreviewNavigation = (destination) => {
+    if (!hasPendingPreviewChanges || !destination?.origin || !destination?.pathname) return true;
+    if (destination.origin === location.origin
+      && destination.pathname === location.pathname && destination.search === location.search) return true;
+    if (!window.confirm(pendingPreviewConfirmationMessage)) return false;
+    allowPendingUnload = true;
+    setTimeout(() => { allowPendingUnload = false; }, 1_000);
+    return true;
+  };
+  const navigation = window.navigation;
+  if (navigation && typeof navigation.addEventListener === 'function') {
+    navigation.addEventListener('navigate', (event) => {
+      if (allowNextTraverse || allowNextNavigation) {
+        allowNextTraverse = false;
+        allowNextNavigation = false;
+        return;
+      }
+      if (!event.cancelable) return;
+      let destination;
+      try { destination = new URL(event.destination.url, location.href); } catch { return; }
+      if (!confirmPendingPreviewNavigation(destination)) event.preventDefault();
+    });
+  } else document.addEventListener('click', (event) => {
+    if (!hasPendingPreviewChanges || event.defaultPrevented || event.button !== 0
+      || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    const anchor = target instanceof Element ? target.closest('a[href]') : null;
+    if (!(anchor instanceof HTMLAnchorElement) || (anchor.target && anchor.target !== '_self') || anchor.hasAttribute('download')) return;
+    let destination;
+    try { destination = new URL(anchor.href, location.href); } catch { return; }
+    if (!confirmPendingPreviewNavigation(destination)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  for (const method of ['back', 'forward', 'go']) {
+    const original = history[method];
+    history[method] = function() {
+      if (hasPendingPreviewChanges) {
+        if (!window.confirm(pendingPreviewConfirmationMessage)) return;
+        allowPendingUnload = true;
+        setTimeout(() => { allowPendingUnload = false; }, 1_000);
+        allowNextTraverse = true;
+        setTimeout(() => { allowNextTraverse = false; }, 1_000);
+      }
+      return Reflect.apply(original, this, Array.from(arguments));
+    };
+  }
+  window.addEventListener('beforeunload', (event) => {
+    if (!hasPendingPreviewChanges) return;
+    if (allowPendingUnload) {
+      allowPendingUnload = false;
+      return;
+    }
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
   const notifyPageUpdated = () => send({ type: 'page.updated', url: location.href, title: document.title });
   for (const method of ['pushState', 'replaceState']) {
     const original = history[method];
     history[method] = function() {
       const args = Array.from(arguments);
       if (args.length > 2 && args[2] !== null) args[2] = rewritePreviewRequestUrl(String(args[2]));
+      if (hasPendingPreviewChanges && args.length > 2 && args[2] !== null) {
+        let destination;
+        try { destination = new URL(String(args[2]), location.href); } catch { destination = null; }
+        if (!confirmPendingPreviewNavigation(destination)) return;
+        allowNextNavigation = true;
+        setTimeout(() => { allowNextNavigation = false; }, 0);
+      }
       const result = Reflect.apply(original, this, args);
       queueMicrotask(notifyPageUpdated);
       return result;

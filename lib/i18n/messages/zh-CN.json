@@ -216,5 +216,6 @@
   "Full viewport context": "完整视口上下文",
   "Text content": "文本内容",
   "This element does not support text editing.": "此元素不支持文本编辑。",
-  "Choose color": "选择颜色"
+  "Choose color": "选择颜色",
+  "预览中还有未应用的更改。继续将丢弃这些更改。": "预览中还有未应用的更改。继续将丢弃这些更改。"
 }

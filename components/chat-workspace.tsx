@@ -1472,6 +1472,8 @@ export function ChatWorkspace({
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)
   const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
+  const [previewHasPendingChanges, setPreviewHasPendingChanges] = useState(false)
+  const previewPendingChangesConfirmationRef = useRef<(() => boolean) | null>(null)
   const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
@@ -1537,7 +1539,18 @@ export function ChatWorkspace({
     if (panelMotionTimerRef.current !== null) window.clearTimeout(panelMotionTimerRef.current)
   }, [])
 
+  const registerPreviewPendingChangesConfirmation = useCallback((confirm: (() => boolean) | null) => {
+    previewPendingChangesConfirmationRef.current = confirm
+  }, [])
+
+  const confirmPendingPreviewChanges = useCallback(() => {
+    const confirm = previewPendingChangesConfirmationRef.current
+    if (confirm) return confirm()
+    return !previewHasPendingChanges || window.confirm(t('预览中还有未应用的更改。继续将丢弃这些更改。'))
+  }, [previewHasPendingChanges, t])
+
   const selectWorkspaceTab = useCallback((tab: WorkspaceTabId) => {
+    if (tab === 'realtime' && browserState.surface === 'native-preview' && !confirmPendingPreviewChanges()) return
     setOpenWorkspaceTabs((current) => current.includes(tab) ? current : [...current, tab])
     if (tab === 'preview') {
       const targetId = workspacePreviewState.targetIds[previewProjectId]
@@ -1553,7 +1566,7 @@ export function ChatWorkspace({
     } else {
       setWorkspaceView('desktop')
     }
-  }, [previewProjectId, workspacePreviewState.targetIds, workspacePreviewState.viewportModes])
+  }, [browserState.surface, confirmPendingPreviewChanges, previewProjectId, workspacePreviewState.targetIds, workspacePreviewState.viewportModes])
 
   const selectPreviewProject = useCallback((nextProjectId: string) => {
     if (!previewProjects.some((project) => project.id === nextProjectId)) return
@@ -1610,6 +1623,7 @@ export function ChatWorkspace({
   }, [])
 
   const closeWorkspaceTab = useCallback((tabId: WorkspaceTabId) => {
+    if (tabId === 'preview' && !confirmPendingPreviewChanges()) return
     const closingIndex = openWorkspaceTabs.indexOf(tabId)
     const remaining = openWorkspaceTabs.filter((candidate) => candidate !== tabId)
     setOpenWorkspaceTabs(remaining)
@@ -1623,7 +1637,7 @@ export function ChatWorkspace({
       const nextTab = remaining[Math.min(Math.max(closingIndex, 0), remaining.length - 1)]!
       selectWorkspaceTab(nextTab)
     }
-  }, [activeWorkspaceTabId, openWorkspaceTabs, selectWorkspaceTab])
+  }, [activeWorkspaceTabId, confirmPendingPreviewChanges, openWorkspaceTabs, selectWorkspaceTab])
 
   const interruptAgentMessage = useCallback(() => {
     // Stopping is explicit now that page navigation no longer owns the run.
@@ -2497,7 +2511,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={activePreviewGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onPendingPreviewChangesChange={setPreviewHasPendingChanges} onRegisterPreviewPendingChangesConfirmation={registerPreviewPendingChangesConfirmation} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={activePreviewGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

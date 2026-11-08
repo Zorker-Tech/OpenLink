@@ -73,6 +73,7 @@ interface DesignScreenshotContext {
 export interface PreviewDesignPanelHandle {
   handleElementMoved: (move: BrowserElementMove) => void
   handleAnnotationTarget: (target: BrowserPreviewAnnotationTarget) => void
+  confirmPendingChanges: () => boolean
   showAnnotation: (annotationId: string) => void
 }
 
@@ -89,6 +90,7 @@ interface PreviewDesignPanelProps {
   sessionId: string
   className?: string
   onSubmitRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent, sourceRef?: string) => Promise<boolean>
+  onPendingChangesChange: (hasPendingChanges: boolean) => void
   onAnnotationsChange: (annotations: PreviewAnnotationMarker[]) => void
 }
 
@@ -171,12 +173,15 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   sessionId,
   className = '',
   onSubmitRequest,
+  onPendingChangesChange,
   onAnnotationsChange,
 }, forwardedRef) {
   const t = useT()
   const [panelTab, setPanelTab] = useState<PreviewPanelTab>('edit')
   const [editHistory, setEditHistory] = useState(() => createPreviewEditHistory<PreviewEdit>())
   const pendingEdits = editHistory.pending
+  const pendingEditsRef = useRef(pendingEdits)
+  pendingEditsRef.current = pendingEdits
   const [showingBefore, setShowingBefore] = useState(false)
   const [styleDrafts, setStyleDrafts] = useState<Record<string, string>>({})
   const [themeDrafts, setThemeDrafts] = useState<Record<string, string>>({})
@@ -205,6 +210,22 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   }
   const selectedElementRefData = useRef(browserState.selectedElement ?? null)
   selectedElementRefData.current = browserState.selectedElement ?? null
+  const hasPendingChanges = pendingEdits.length > 0
+
+  useEffect(() => {
+    onPendingChangesChange(hasPendingChanges)
+    workbenchRef.current?.setPendingPreviewChanges(hasPendingChanges)
+  }, [hasPendingChanges, onPendingChangesChange, workbenchRef])
+
+  useEffect(() => () => {
+    for (const edit of pendingEditsRef.current) {
+      if (edit.kind === 'style') workbenchRef.current?.resetElementStyle(edit.ref, edit.property)
+      else if (edit.kind === 'content') workbenchRef.current?.resetElementContent(edit.ref)
+      else workbenchRef.current?.resetThemeToken(edit.property)
+    }
+    onPendingChangesChange(false)
+    workbenchRef.current?.setPendingPreviewChanges(false)
+  }, [onPendingChangesChange, workbenchRef])
 
   useEffect(() => {
     if (!browserState.readOnlyExternal) return
@@ -231,6 +252,11 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   useEffect(() => {
     setEditHistory(createPreviewEditHistory<PreviewEdit>())
     setShowingBefore(false)
+    for (const edit of pendingEditsRef.current) {
+      if (edit.kind === 'style') workbenchRef.current?.resetElementStyle(edit.ref, edit.property)
+      else if (edit.kind === 'content') workbenchRef.current?.resetElementContent(edit.ref)
+      else workbenchRef.current?.resetThemeToken(edit.property)
+    }
     setStyleDrafts({})
     setThemeDrafts({})
     setContentDraft(browserState.selectedElement?.content ?? '')
@@ -239,7 +265,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     setAnnotations([])
     setAnnotationSelection([])
     setExpandedAnnotationId(null)
-  }, [projectId, sessionId, targetId, pagePath])
+  }, [pagePath, projectId, sessionId, targetId, workbenchRef])
 
   useEffect(() => {
     const element = selectedElementRefData.current
@@ -613,6 +639,15 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     })
   }, [projectId, t, targetId])
 
+  const confirmPendingChanges = useCallback(() => {
+    if (applyingDesign) return false
+    if (!hasPendingChanges) return true
+    if (!window.confirm(t('预览中还有未应用的更改。继续将丢弃这些更改。'))) return false
+    resetDesign()
+    workbenchRef.current?.confirmPendingPreviewNavigation()
+    return true
+  }, [applyingDesign, hasPendingChanges, resetDesign, t])
+
   const saveAnnotation = useCallback(async () => {
     if (!annotationDraft?.screenshotDataUrl || !isPreviewSourceRevision(annotationDraft.targetRevision)
       || !annotationDraft.targetRevisionReceipt || !annotationComment.trim() || annotationBusy) return
@@ -726,6 +761,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     setExpandedAnnotationId(annotationId)
     if (annotation.element_locator) {
       if (annotation.page_path !== pagePath || browserState.activePreviewTargetId !== annotation.target_id) {
+        if (!confirmPendingChanges()) return
         setLocatorResolution({ id: annotation.id, status: 'navigating' })
         workbenchRef.current?.selectPreviewTarget(annotation.target_id, annotation.page_path)
         return
@@ -733,9 +769,9 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       setLocatorResolution({ id: annotation.id, status: 'pending' })
       workbenchRef.current?.resolvePreviewLocator(annotation.element_locator, (status) => setLocatorResolution({ id: annotation.id, status }))
     }
-  }, [annotations, browserState.activePreviewTargetId, pagePath, workbenchRef])
+  }, [annotations, browserState.activePreviewTargetId, confirmPendingChanges, pagePath, workbenchRef])
 
-  useImperativeHandle(forwardedRef, () => ({ handleElementMoved, handleAnnotationTarget, showAnnotation }), [handleAnnotationTarget, handleElementMoved, showAnnotation])
+  useImperativeHandle(forwardedRef, () => ({ handleElementMoved, handleAnnotationTarget, confirmPendingChanges, showAnnotation }), [confirmPendingChanges, handleAnnotationTarget, handleElementMoved, showAnnotation])
 
   const tabs: Array<[PreviewPanelTab, string, typeof WandSparkles]> = [
     ['edit', 'Edit', WandSparkles], ['theme', 'Theme', Palette], ['layers', '图层', Layers3], ['annotations', 'Annotate', MessageSquarePlus],
@@ -765,6 +801,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   const focusAnnotationElement = (annotation: PreviewAnnotation) => {
     if (!annotation.element_locator) return
     if (annotation.page_path !== pagePath || browserState.activePreviewTargetId !== annotation.target_id) {
+      if (!confirmPendingChanges()) return
       setLocatorResolution({ id: annotation.id, status: 'navigating' })
       workbenchRef.current?.selectPreviewTarget(annotation.target_id, annotation.page_path)
       return
@@ -896,7 +933,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
             <span aria-hidden className="text-[var(--app-muted)]">⌄</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-h-64 w-[250px] overflow-y-auto rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-            {previewProjects.map((project) => <DropdownMenuItem className="h-8 cursor-pointer gap-2 rounded-md px-2.5 text-xs focus:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} key={project.id} onClick={() => onSelectPreviewProject(project.id)}>
+            {previewProjects.map((project) => <DropdownMenuItem className="h-8 cursor-pointer gap-2 rounded-md px-2.5 text-xs focus:bg-[var(--app-hover)] disabled:opacity-45" disabled={applyingDesign} key={project.id} onClick={() => { if (confirmPendingChanges()) onSelectPreviewProject(project.id) }}>
               <span className="min-w-0 flex-1 truncate">{project.name}</span>
               {project.id === selectedPreviewProjectId && <span className="text-[10px] text-[var(--app-brand)]">{t('当前')}</span>}
             </DropdownMenuItem>)}

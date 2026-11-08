@@ -20,22 +20,26 @@ export function NativePreviewSurface({
   connection,
   inspectMode,
   annotationMode,
+  hasPendingDesignChanges,
   onElementSelected,
   onElementMoved,
   onAnnotationSelect,
   initialPagePath,
   onPageUrlChange,
+  onRegisterPendingNavigationConfirmation,
   externalPreviewUrl,
   externalReloadToken = 0,
 }: {
   connection: BrowserConnection
   inspectMode: boolean
   annotationMode: boolean
+  hasPendingDesignChanges: boolean
   onElementSelected: (element: ElementReference | null) => void
   onElementMoved: (move: Extract<InspectorBridgeEvent, { type: 'inspect.moved' }>) => void
   onAnnotationSelect: (selection: { x: number; y: number; width?: number; height?: number }) => void
   initialPagePath?: string
   onPageUrlChange: (url: string, path: string) => void
+  onRegisterPendingNavigationConfirmation: (confirm: (() => void) | null) => void
   /** Direct, read-only iframe URL. It never receives the Inspector Bridge. */
   externalPreviewUrl?: string
   externalReloadToken?: number
@@ -85,6 +89,24 @@ export function NativePreviewSurface({
     } satisfies InspectorBridgeEnvelope, expectedMessageOrigin === 'null' ? '*' : iframeOrigin)
   }
 
+  useEffect(() => {
+    if (externalPreviewUrl) {
+      onRegisterPendingNavigationConfirmation(null)
+      return
+    }
+    onRegisterPendingNavigationConfirmation(() => {
+      if (!iframeRef.current?.contentWindow || !nonce || !iframeOrigin) return
+      iframeRef.current.contentWindow.postMessage({
+        channel: INSPECTOR_BRIDGE_CHANNEL,
+        version: BROWSER_PROTOCOL_VERSION,
+        sessionId: connection.state.id,
+        nonce,
+        payload: { type: 'preview.navigation-confirmed' },
+      } satisfies InspectorBridgeEnvelope, expectedMessageOrigin === 'null' ? '*' : iframeOrigin)
+    })
+    return () => onRegisterPendingNavigationConfirmation(null)
+  }, [connection, expectedMessageOrigin, externalPreviewUrl, iframeOrigin, nonce, onRegisterPendingNavigationConfirmation])
+
   useEffect(() => connection.onEvent((envelope) => {
     if (envelope.event.type !== 'bridge.command') return
     commandIds.current.set(envelope.event.action.actionId, envelope.event.commandId)
@@ -110,6 +132,11 @@ export function NativePreviewSurface({
       }
       if (message.payload.type === 'bridge.ready') {
         post(inspectMode ? { type: 'inspect.start' } : { type: 'inspect.stop' })
+        post({
+          type: 'preview.pending-changes',
+          hasPendingChanges: hasPendingDesignChanges,
+          confirmationMessage: t('预览中还有未应用的更改。继续将丢弃这些更改。'),
+        })
         for (const payload of pendingCommands.current.values()) post(payload)
       }
       if (message.payload.type === 'inspect.selected') onElementSelected(message.payload.element)
@@ -127,12 +154,21 @@ export function NativePreviewSurface({
     }
     window.addEventListener('message', listener)
     return () => window.removeEventListener('message', listener)
-  }, [connection, expectedMessageOrigin, externalPreviewUrl, iframeOrigin, nonce, onElementMoved, onElementSelected, onPageUrlChange])
+  }, [connection, expectedMessageOrigin, externalPreviewUrl, hasPendingDesignChanges, iframeOrigin, nonce, onElementMoved, onElementSelected, onPageUrlChange, t])
 
   useEffect(() => {
     if (externalPreviewUrl) return
     post(inspectMode ? { type: 'inspect.start' } : { type: 'inspect.stop' })
   }, [externalPreviewUrl, inspectMode, nonce])
+
+  useEffect(() => {
+    if (externalPreviewUrl) return
+    post({
+      type: 'preview.pending-changes',
+      hasPendingChanges: hasPendingDesignChanges,
+      confirmationMessage: t('预览中还有未应用的更改。继续将丢弃这些更改。'),
+    })
+  }, [externalPreviewUrl, hasPendingDesignChanges, nonce, t])
 
   if (!iframeSrc) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>{t('预览地址尚未就绪')}</div>
 

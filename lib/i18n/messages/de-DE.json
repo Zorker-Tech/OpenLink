@@ -1278,5 +1278,6 @@
   "所选批注的预览目标已失效，请先重新打开对应版本。": "Das Preview-Ziel einer ausgewählten Anmerkung ist nicht mehr verfügbar. Öffne zuerst diese Version erneut.",
   "请按同一个预览版本分批发送批注。": "Sende Anmerkungen für jede Preview-Version in einem eigenen Stapel.",
   "所选 Git 版本不可用，请刷新预览目标后重试。": "Die ausgewählte Git-Version ist nicht verfügbar. Aktualisiere das Preview-Ziel und versuche es erneut.",
-  "无法绑定所选 Git 版本，请重试。": "Die ausgewählte Git-Version konnte nicht gebunden werden. Versuche es erneut."
+  "无法绑定所选 Git 版本，请重试。": "Die ausgewählte Git-Version konnte nicht gebunden werden. Versuche es erneut.",
+  "预览中还有未应用的更改。继续将丢弃这些更改。": "In der Vorschau gibt es nicht übernommene Änderungen. Wenn Sie fortfahren, werden sie verworfen."
 }
