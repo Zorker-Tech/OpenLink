@@ -6,7 +6,7 @@ import test from 'node:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright-core'
-import { WebSocket } from 'ws'
+import { WebSocket, WebSocketServer } from 'ws'
 import { BROWSER_PROTOCOL_VERSION, previewPagePathFromAddress, type BrowserActionEnvelope, type BrowserSocketServerMessage, type InspectorBridgeEnvelope, type InspectorBridgeEvent } from '@openlink/browser-protocol'
 import { BrowserHostServer } from '../src/browser-server.js'
 import type { BrowserHostConfig } from '../src/config.js'
@@ -42,20 +42,87 @@ async function waitFor<T>(read: () => T | undefined, description: string, timeou
   throw new Error(`Timed out waiting for ${description}`)
 }
 
-test('real Chromium Preview iframe restores a route, runs the inspector bridge, and relays a DOM style action', async (t) => {
+test('real Chromium Preview iframe restores routes and proxies assets, HMR WebSockets, cookies, and inspector actions', async (t) => {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || chromium.executablePath()
   await access(executablePath)
 
   const upstreamPaths: string[] = []
   const upstream = createServer((request, response) => {
     upstreamPaths.push(request.url || '/')
+    if (request.url === '/assets/preview.js') {
+      response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' })
+      response.end(`
+        document.documentElement.dataset.previewAsset = 'loaded';
+        const dynamicImage = new Image();
+        dynamicImage.addEventListener('load', () => { document.documentElement.dataset.dynamicAsset = 'loaded'; });
+        dynamicImage.src = '/assets/dynamic.svg';
+        document.addEventListener('DOMContentLoaded', () => document.body.append(dynamicImage));
+        fetch('/api/health').then((response) => response.text()).then((value) => { document.documentElement.dataset.fetchResult = value; });
+        const xhr = new XMLHttpRequest();
+        xhr.addEventListener('load', () => { document.documentElement.dataset.xhrResult = xhr.responseText; });
+        xhr.open('GET', '/api/xhr');
+        xhr.send();
+        const socketUrl = new URL('/__hmr', location.href);
+        socketUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(socketUrl);
+        socket.addEventListener('open', () => { document.documentElement.dataset.hmrState = 'open'; socket.send('hmr-ping'); });
+        socket.addEventListener('message', (event) => { document.documentElement.dataset.hmrResult = event.data; socket.close(); });
+        socket.addEventListener('error', () => { document.documentElement.dataset.hmrState = 'error'; });
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest?.('#route-link');
+          if (link) { event.preventDefault(); document.documentElement.dataset.routeClick = link.pathname; }
+        });
+      `)
+      return
+    }
+    if (request.url === '/api/health' || request.url === '/api/xhr') {
+      response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+      response.end(request.url === '/api/health' ? 'fetch-ok' : 'xhr-ok')
+      return
+    }
+    if (request.url === '/assets/preview-module.js') {
+      response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' })
+      response.end("import '/assets/module-ping.js'")
+      return
+    }
+    if (request.url === '/assets/module-ping.js') {
+      response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' })
+      response.end("document.documentElement.dataset.previewModule = 'loaded'")
+      return
+    }
+    if (request.url === '/assets/preview.css') {
+      response.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' })
+      response.end("body{background-image:url('/assets/background.svg')}")
+      return
+    }
+    if (request.url === '/assets/background.svg' || request.url === '/assets/preload.svg' || request.url === '/assets/image.svg' || request.url === '/assets/dynamic.svg') {
+      response.writeHead(200, { 'Content-Type': 'image/svg+xml' })
+      response.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path fill="red" d="M0 0h1v1H0z"/></svg>')
+      return
+    }
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': "default-src 'self'; script-src 'self'; frame-ancestors 'none'",
+      'Link': '</assets/preload.svg>; rel=preload; as=image',
+      'Set-Cookie': 'preview-app=ready; Path=/; HttpOnly; SameSite=Lax',
     })
-    response.end('<!doctype html><html><head><title>Preview fixture</title></head><body><button id="apply">Apply style</button></body></html>')
+    response.end('<!doctype html><html><head><title>Preview fixture</title><link rel=stylesheet href=/assets/preview.css><script src="/assets/preview.js"></script><script type="module" src="/assets/preview-module.js"></script></head><body><img src="/assets/image.svg"><a id="route-link" href="/about">About</a><button id="apply">Apply style</button></body></html>')
   })
   const upstreamPort = await listen(upstream)
+  const upstreamWebSockets = new WebSocketServer({ noServer: true })
+  const upstreamWebSocketCookies: string[] = []
+  upstream.on('upgrade', (request, socket, head) => {
+    if (request.url !== '/__hmr') {
+      socket.destroy()
+      return
+    }
+    upstreamWebSocketCookies.push(request.headers.cookie || '')
+    upstreamWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
+      webSocket.on('message', (data) => {
+        webSocket.send(data.toString() === 'hmr-ping' ? 'hmr-pong' : 'unexpected-message', () => webSocket.close())
+      })
+    })
+  })
 
   let previewUrl = ''
   const parent = createServer((_request, response) => {
@@ -106,6 +173,7 @@ test('real Chromium Preview iframe restores a route, runs the inspector bridge, 
     await browser?.close()
     await host.close()
     await close(parent)
+    await new Promise<void>((resolve) => upstreamWebSockets.close(() => resolve()))
     await close(upstream)
     await rm(storageRoot, { recursive: true, force: true })
   })
@@ -151,6 +219,32 @@ test('real Chromium Preview iframe restores a route, runs the inspector bridge, 
   const restoredUrl = new URL((bridgeReady.data.payload as Extract<InspectorBridgeEvent, { type: 'bridge.ready' }>).url)
   assert.equal(restoredUrl.pathname, `/v1/browser/sessions/${created.session.id}/preview/dashboard`)
   assert.ok(upstreamPaths.includes('/dashboard'))
+  await page.frameLocator('#preview').locator('html').waitFor()
+  const hmrResult = await page.frameLocator('#preview').locator('html').evaluate(async (element) => {
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      if (element.dataset.hmrResult && element.dataset.fetchResult && element.dataset.xhrResult && element.dataset.dynamicAsset) {
+        return { result: element.dataset.hmrResult, state: element.dataset.hmrState, asset: element.dataset.previewAsset, module: element.dataset.previewModule, fetch: element.dataset.fetchResult, xhr: element.dataset.xhrResult, dynamicAsset: element.dataset.dynamicAsset }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    return { result: element.dataset.hmrResult, state: element.dataset.hmrState, asset: element.dataset.previewAsset, module: element.dataset.previewModule, fetch: element.dataset.fetchResult, xhr: element.dataset.xhrResult, dynamicAsset: element.dataset.dynamicAsset }
+  })
+  assert.deepEqual(hmrResult, { result: 'hmr-pong', state: 'open', asset: 'loaded', module: 'loaded', fetch: 'fetch-ok', xhr: 'xhr-ok', dynamicAsset: 'loaded' }, `upstream=${JSON.stringify(upstreamPaths)} cookies=${JSON.stringify(upstreamWebSocketCookies)}`)
+  assert.ok(upstreamPaths.includes('/api/health'))
+  assert.ok(upstreamPaths.includes('/api/xhr'))
+  assert.ok(upstreamPaths.includes('/assets/dynamic.svg'))
+  assert.ok(upstreamPaths.includes('/assets/preview.js'))
+  assert.ok(upstreamPaths.includes('/assets/preview-module.js'))
+  assert.ok(upstreamPaths.includes('/assets/module-ping.js'))
+  assert.ok(upstreamPaths.includes('/assets/preview.css'))
+  assert.ok(upstreamPaths.includes('/assets/background.svg'), JSON.stringify(upstreamPaths))
+  assert.ok(upstreamPaths.includes('/assets/image.svg'))
+  assert.ok(upstreamPaths.includes('/assets/preload.svg'))
+  assert.ok(upstreamWebSocketCookies.some((cookie) => cookie.includes('preview-app=ready')))
+  await page.frameLocator('#preview').getByRole('link', { name: 'About' }).click()
+  const routeClickPath = await page.frameLocator('#preview').locator('html').getAttribute('data-route-click')
+  assert.equal(routeClickPath, `/v1/browser/sessions/${created.session.id}/preview/about`)
   await page.evaluate(({ origin, data }) => {
     const frame = document.querySelector<HTMLIFrameElement>('#preview')!
     frame.contentWindow!.postMessage({

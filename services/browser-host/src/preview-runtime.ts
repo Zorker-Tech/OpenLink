@@ -67,6 +67,10 @@ export class NativePreviewRuntime implements BrowserRuntimeSession {
     return this.options.parentOrigins
   }
 
+  get publicOrigin(): string {
+    return new URL(this.options.publicBaseUrl).origin
+  }
+
   get allowedSocketOrigins(): string[] {
     const publicOrigin = new URL(this.options.publicBaseUrl).origin
     return [...new Set([...this.options.parentOrigins, publicOrigin, ...(this.options.parentOrigins.includes(publicOrigin) ? ['null'] : [])])]
