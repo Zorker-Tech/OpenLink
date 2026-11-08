@@ -15,7 +15,7 @@ function fixture({ user = 'user', chat = true, hostRequest } = {}) {
   const modules = {
     '@/lib/chat-sessions': {
       isChatSessionId: () => true,
-      getChatSession: async () => chat ? { project_id: 'project', workspace_id: 'workspace' } : null,
+      getChatSession: async () => chat ? { id: 'chat-id', project_id: 'project', workspace_id: 'workspace' } : null,
     },
     '@/lib/platform-cloud-host.server': { cloudComputerSdkRequest: async () => { throw new Error('unexpected cloud call') } },
     '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
@@ -68,6 +68,7 @@ test('local session BFF sets a host-only cookie and returns a token-free same-or
     const response = await f.post(origin)
     assert.equal(response.status, 201)
     assert.equal(f.calls[0].body.frameAncestorOrigin, origin)
+    assert.equal(f.calls[0].body.sessionId, 'chat-id')
     const cookie = response.headers.get('set-cookie') || ''
     assert.match(cookie, /HttpOnly/)
     assert.match(cookie, /SameSite=Strict/)

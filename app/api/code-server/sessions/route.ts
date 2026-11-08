@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${host!.apiToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ownerId: user.id, workspaceId: chat.workspace_id, frameAncestorOrigin }),
+    body: JSON.stringify({ ownerId: user.id, workspaceId: chat.workspace_id, sessionId: chat.id, frameAncestorOrigin }),
     cache: 'no-store',
   })
   const payload = await response.json().catch(() => ({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }))

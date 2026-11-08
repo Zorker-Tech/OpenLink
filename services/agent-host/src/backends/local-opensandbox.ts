@@ -297,12 +297,13 @@ export class LocalOpenSandboxBackend {
       accessMode: agentOptions?.accessMode ?? 'restricted',
       workerImage: projectRuntime?.agentWorkerImage ?? this.config.image,
       workerRevision: projectRuntime?.agentWorkerRevision ?? null,
+      previewGitRef: projectRuntime?.previewGitRef ?? null,
       desktopRuntime: desktopMode === 'ubuntu-iso' ? 'ubuntu-desktop-iso-v1' : 'ubuntu-gnome-container-v1',
       // The projected environment is part of the durable worker identity. A
       // project container cannot consume host-published services through
       // loopback, so leases created before host-gateway projection must never
       // be reattached with their stale environment after an Agent Host restart.
-      projectContainerNetworking: projectRuntime ? 'host-gateway+mcp-annotations-v2' : null,
+      projectContainerNetworking: projectRuntime ? 'host-gateway+mcp-annotations+git-worktree-v3' : null,
       codexPluginRevision: agentOptions?.agent === 'codex' ? codexPluginRevision ?? null : null,
     })
   }
@@ -709,6 +710,10 @@ export class LocalOpenSandboxBackend {
         'openlink.workspace_id': workspaceId,
         'openlink.session_id': sessionId,
         ...(projectId ? { 'openlink.project_id': projectId } : {}),
+        ...(projectRuntime?.previewGitRef ? {
+          'openlink.preview_ref': projectRuntime.previewGitRef,
+          'openlink.preview_provider': 'worktree',
+        } : {}),
         ...(browser ? { 'openlink.browser_session_id': `b${browser.sessionId}x` } : {}),
         'openlink.runtime': 'node-sdk',
       },
@@ -731,6 +736,22 @@ export class LocalOpenSandboxBackend {
       } : {}),
       volumes: [
         { name: 'workspace', host: { path: projectRuntime?.workspacePath ?? this.config.workspaceRoot }, mountPath: '/workspace', readOnly: false },
+        ...(projectRuntime?.previewGitMetadataPath ? [{
+          name: 'project-git-metadata',
+          host: { path: projectRuntime.previewGitMetadataPath },
+          mountPath: projectRuntime.previewGitMetadataPath,
+          readOnly: false,
+        }] : []),
+        ...(projectRuntime?.previewDependenciesPath ? [{
+          name: 'project-dependencies',
+          host: { path: projectRuntime.previewDependenciesPath },
+          // Session worktrees point node_modules back to this exact Project
+          // path. Mount it read-only at that same guest path so the Agent and
+          // code-server resolve identical dependencies without exposing the
+          // current checkout's source files.
+          mountPath: projectRuntime.previewDependenciesPath,
+          readOnly: true,
+        }] : []),
         { name: 'session', host: { path: layout.root }, mountPath: '/openlink/session', readOnly: false },
         ...(desktopAutomation && projectRuntime ? desktopAutomationVolumes(projectRuntime) : []),
         ...(agentTools ? [agentToolRegistryVolume()] : []),

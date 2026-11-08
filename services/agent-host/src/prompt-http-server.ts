@@ -562,7 +562,21 @@ function parseCodeServerSessionBody(value: unknown) {
   return {
     ownerId: safeIdentity(body.ownerId, 'ownerId'),
     workspaceId: safeIdentity(body.workspaceId, 'workspaceId'),
+    sessionId: safeIdentity(body.sessionId, 'sessionId'),
     frameAncestorOrigin: body.frameAncestorOrigin as string | undefined,
+  }
+}
+
+function parseGitPreviewSessionBindingBody(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AgentHostError('INVALID_BODY', 'Git preview session binding body is invalid')
+  const body = value as Record<string, unknown>
+  const ref = typeof body.ref === 'string' ? body.ref.toLowerCase() : ''
+  if (!/^[a-f0-9]{40}$/.test(ref)) throw new AgentHostError('INVALID_BODY', 'Git preview session ref is invalid')
+  return {
+    userId: safeIdentity(body.userId, 'userId'),
+    workspaceId: safeIdentity(body.workspaceId, 'workspaceId'),
+    sessionId: safeIdentity(body.sessionId, 'sessionId'),
+    ref,
   }
 }
 
@@ -865,12 +879,22 @@ export async function startPromptHttpServer(
     if (config.projectRuntimeManager) {
       await config.projectRuntimeManager.prepareSessionStorage(input.projectId, input.userId, input.workspaceId, input.sessionId)
       await config.projectRuntimeManager.ensureProjectGitRepository(input.projectId)
+      const binding = await config.projectRuntimeManager.getGitPreviewSessionBinding(input.projectId, input.userId, input.workspaceId, input.sessionId)
+      if (binding && projectRuntime) {
+        projectRuntime = {
+          ...projectRuntime,
+          workspacePath: binding.workspacePath,
+          previewGitRef: binding.ref,
+          previewGitMetadataPath: binding.gitMetadataPath,
+          ...(binding.dependenciesPath ? { previewDependenciesPath: binding.dependenciesPath } : {}),
+        }
+      }
     }
     const baseKey = `${input.userId}:${input.workspaceId}:${input.sessionId}`
     // Permissions configure Codex's process-level sandbox and approval mode.
     // Include them in the runtime identity so a user-visible mode change
     // recreates the worker with the new policy rather than only updating DB.
-    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:agent=${input.agent ?? 'pi'}:access=${input.accessMode ?? 'restricted'}:plugins=${input.agent === 'codex' ? codexPluginSnapshotGeneration : 'none'}`
+    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:agent=${input.agent ?? 'pi'}:access=${input.accessMode ?? 'restricted'}:preview=${projectRuntime?.previewGitRef ?? 'latest'}:plugins=${input.agent === 'codex' ? codexPluginSnapshotGeneration : 'none'}`
     return {
       ...input,
       browser,
@@ -1481,11 +1505,13 @@ export async function startPromptHttpServer(
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const body = parseCodeServerSessionBody(await readJson(request))
     const runtime = await config.projectRuntimeManager.ensure(projectId)
+    const binding = await config.projectRuntimeManager.getGitPreviewSessionBinding(projectId, body.ownerId, body.workspaceId, body.sessionId)
     const session = codeServerGateway.create({
       ownerId: body.ownerId,
       workspaceId: body.workspaceId,
       projectId,
       upstream: runtime.codeServerEndpoint,
+      workspaceFolder: binding?.codeServerFolder ?? '/workspace',
       frameAncestorOrigin: body.frameAncestorOrigin,
     })
     json(response, 201, { version: 1, session })
@@ -1985,6 +2011,25 @@ export async function startPromptHttpServer(
         await handleProjectGitVersions(response, projectId)
         return
       }
+      const projectGitSessionBinding = /^\/v1\/projects\/([^/]+)\/git\/session-bindings(?:\/([^/]+))?$/.exec(url.pathname)
+      if (projectGitSessionBinding && (request.method === 'GET' || request.method === 'POST')) {
+        const projectId = decodeURIComponent(projectGitSessionBinding[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+        if (request.method === 'POST' && !projectGitSessionBinding[2]) {
+          const body = parseGitPreviewSessionBindingBody(await readJson(request))
+          json(response, 200, { binding: await config.projectRuntimeManager.bindGitPreviewSession(projectId, body.userId, body.workspaceId, body.sessionId, body.ref) })
+          return
+        }
+        if (request.method === 'GET' && projectGitSessionBinding[2]) {
+          const userId = safeIdentity(url.searchParams.get('userId'), 'userId')
+          const workspaceId = safeIdentity(url.searchParams.get('workspaceId'), 'workspaceId')
+          const sessionId = safeIdentity(decodeURIComponent(projectGitSessionBinding[2]!), 'sessionId')
+          json(response, 200, { binding: await config.projectRuntimeManager.getGitPreviewSessionBinding(projectId, userId, workspaceId, sessionId) })
+          return
+        }
+        throw new AgentHostError('INVALID_BODY', 'Git preview session binding route is invalid')
+      }
       const projectWorkspaceFiles = /^\/v1\/projects\/([^/]+)\/workspace\/files$/.exec(url.pathname)
       if (request.method === 'GET' && projectWorkspaceFiles) {
         const projectId = decodeURIComponent(projectWorkspaceFiles[1]!)
@@ -2033,7 +2078,7 @@ export async function startPromptHttpServer(
         code: failure.code,
         message: failure.message.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 2000),
       })
-      const status = failure.code === 'AUTH_DENIED' ? 403 : failure.code === 'SESSION_BUSY' ? 409 : 400
+      const status = failure.code === 'AUTH_DENIED' ? 403 : failure.code === 'SESSION_BUSY' || failure.code === 'GIT_SESSION_BINDING_CONFLICT' ? 409 : 400
       json(response, status, { error: { code: failure.code, message: failure.message, retryable: failure.retryable } })
     })
   })

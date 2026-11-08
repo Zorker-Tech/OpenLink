@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { AgentHostError } from './errors.js'
-import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor, type ProjectSupabaseManagementRequest, type ProjectSupabaseStudioProxyRequest, type ProjectSupabaseStudioProxyResponse } from './project-runtime.js'
+import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectGitPreviewSessionBinding, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor, type ProjectSupabaseManagementRequest, type ProjectSupabaseStudioProxyRequest, type ProjectSupabaseStudioProxyResponse } from './project-runtime.js'
 import type { ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { ProjectVmManager } from './project-vm.js'
 import { RemoteQemuProjectVmDriver } from './remote-project-vm.js'
@@ -21,6 +21,8 @@ export interface ProjectRuntimeController {
   getProjectSourceRevision(projectId: string, worktreeRef?: string): Promise<string | null>
   listWorkspaceFiles(projectId: string): Promise<string[]>
   openGitPreviewVersion(projectId: string, ref: string): Promise<{ version: ProjectGitVersion; targetId: string }>
+  bindGitPreviewSession(projectId: string, userId: string, workspaceId: string, sessionId: string, ref: string): Promise<{ ref: string }>
+  getGitPreviewSessionBinding(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<ProjectGitPreviewSessionBinding | null>
   getActive(projectId: string): ProjectRuntimeDescriptor | undefined
   hasPersistedRuntime(projectId: string): Promise<boolean>
   restorePersistedRuntimes(): Promise<void>
@@ -307,6 +309,14 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async openGitPreviewVersion(projectIdValue: string, ref: string) {
     return (await this.manager(projectIdValue)).openGitPreviewVersion(projectIdValue, ref)
+  }
+
+  async bindGitPreviewSession(projectIdValue: string, userId: string, workspaceId: string, sessionId: string, ref: string) {
+    return (await this.manager(projectIdValue)).bindGitPreviewSession(projectIdValue, userId, workspaceId, sessionId, ref)
+  }
+
+  async getGitPreviewSessionBinding(projectIdValue: string, userId: string, workspaceId: string, sessionId: string) {
+    return (await this.manager(projectIdValue)).getGitPreviewSessionBinding(projectIdValue, userId, workspaceId, sessionId)
   }
 
   getActive(projectIdValue: string) {

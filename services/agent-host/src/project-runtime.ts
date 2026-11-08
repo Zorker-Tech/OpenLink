@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createReadStream, createWriteStream, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
@@ -58,7 +58,7 @@ export type ProjectRuntimeArchitecture = 't1' | 'e1' | 't2'
  * Reattach treats an older descriptor as stale so the provisioning path
  * rewrites the OpenSandbox config and reconciles its containers.
  */
-const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-08-preview-worktree-storage-v3'
+const PROJECT_RUNTIME_CONFIG_REVISION = '2026-11-08-preview-worktree-code-server-v4'
 
 /**
  * Hash the committed tree, tracked working-tree diff, and non-ignored
@@ -161,6 +161,18 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   }
   /** Whether session sandboxes can use the OpenSandbox egress sidecar. */
   egressMode: 'sidecar' | 'disabled'
+  /** Per-chat Git worktree projection. These fields are never persisted. */
+  previewGitRef?: string
+  previewGitMetadataPath?: string
+  previewDependenciesPath?: string
+}
+
+export interface ProjectGitPreviewSessionBinding {
+  ref: string
+  workspacePath: string
+  gitMetadataPath: string
+  codeServerFolder: string
+  dependenciesPath?: string
 }
 
 /** A verified HTTP service running inside one of a Project's session sandboxes. */
@@ -333,6 +345,17 @@ interface PersistedProjectPorts {
   allocatedAt: string
 }
 
+interface PersistedGitPreviewSessionBinding {
+  version: 1
+  projectId: string
+  userId: string
+  workspaceId: string
+  sessionId: string
+  ref: string
+}
+
+const SAFE_SESSION_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
 function port(value: number, label: string): number {
   if (!Number.isSafeInteger(value) || value < 1024 || value > 65_000) throw new AgentHostError('INVALID_BODY', `${label} is invalid`)
   return value
@@ -477,6 +500,8 @@ export class ProjectRuntimeManager {
   private readonly sourceRevisionProbes = new Map<string, Promise<string | null>>()
   /** One preview workload per project/commit can be created at a time. */
   private readonly gitPreviewOpens = new Map<string, Promise<{ version: ProjectGitVersion; targetId: string }>>()
+  /** A chat can be bound to one immutable source commit only. */
+  private readonly gitPreviewBindingLocks = new Map<string, Promise<void>>()
   /**
    * Session storage is durable VM state. Repeated page leases must not pay
    * two remote mkdir/chmod round trips each time; cache the completed (or
@@ -1306,6 +1331,228 @@ export class ProjectRuntimeManager {
       return await task
     } finally {
       if (this.gitPreviewOpens.get(key) === task) this.gitPreviewOpens.delete(key)
+    }
+  }
+
+  async bindGitPreviewSession(projectId: string, userId: string, workspaceId: string, sessionId: string, ref: string): Promise<{ ref: string }> {
+    this.assertGitPreviewBindingInput(projectId, userId, workspaceId, sessionId, ref)
+    const normalizedRef = ref.toLowerCase()
+    const bindingPath = this.gitPreviewSessionBindingPath(projectId, sessionId)
+    return this.withGitPreviewBindingLock(bindingPath, async () => {
+      const existing = await this.readGitPreviewSessionBinding(bindingPath)
+      if (existing) {
+        this.assertGitPreviewBindingIdentity(existing, projectId, userId, workspaceId, sessionId)
+        if (existing.ref !== normalizedRef) {
+          throw new AgentHostError('GIT_SESSION_BINDING_CONFLICT', 'This chat is already bound to another Git version')
+        }
+        await this.resolveGitPreviewSessionWorkspace(projectId, sessionId, normalizedRef)
+        return { ref: normalizedRef }
+      }
+
+      await this.createGitPreviewSessionWorkspace(projectId, sessionId, normalizedRef)
+      const binding: PersistedGitPreviewSessionBinding = {
+        version: 1, projectId, userId, workspaceId, sessionId, ref: normalizedRef,
+      }
+      const temporaryPath = `${bindingPath}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`
+      try {
+        await mkdir(dirname(bindingPath), { recursive: true, mode: 0o700 })
+        await chmod(dirname(bindingPath), 0o700)
+        await writeFile(temporaryPath, `${JSON.stringify(binding)}\n`, { mode: 0o600 })
+        await rename(temporaryPath, bindingPath)
+      } catch (error) {
+        await rm(temporaryPath, { force: true }).catch(() => undefined)
+        // Keep the detached worktree so an idempotent retry can adopt it. No
+        // worker has been started yet, and deleting it here could destroy a
+        // concurrent retry's checkout after a transient host filesystem error.
+        throw error
+      }
+      return { ref: normalizedRef }
+    })
+  }
+
+  async getGitPreviewSessionBinding(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<ProjectGitPreviewSessionBinding | null> {
+    if (!isProjectId(projectId)
+      || !SAFE_SESSION_IDENTITY.test(userId)
+      || !SAFE_SESSION_IDENTITY.test(workspaceId)
+      || !SAFE_SESSION_IDENTITY.test(sessionId)) {
+      throw new AgentHostError('INVALID_BODY', 'Git preview session identity is invalid')
+    }
+    const bindingPath = this.gitPreviewSessionBindingPath(projectId, sessionId)
+    const binding = await this.readGitPreviewSessionBinding(bindingPath)
+    if (!binding) return null
+    if (binding.projectId !== projectId || binding.userId !== userId || binding.workspaceId !== workspaceId || binding.sessionId !== sessionId) return null
+    return this.resolveGitPreviewSessionWorkspace(projectId, sessionId, binding.ref)
+  }
+
+  private assertGitPreviewBindingInput(projectId: string, userId: string, workspaceId: string, sessionId: string, ref: string): void {
+    if (!isProjectId(projectId)
+      || !SAFE_SESSION_IDENTITY.test(userId)
+      || !SAFE_SESSION_IDENTITY.test(workspaceId)
+      || !SAFE_SESSION_IDENTITY.test(sessionId)) {
+      throw new AgentHostError('INVALID_BODY', 'Git preview session identity is invalid')
+    }
+    if (!/^[0-9a-f]{40}$/i.test(ref)) throw new AgentHostError('GIT_REF_INVALID', 'Git preview reference is invalid')
+  }
+
+  private gitPreviewSessionBindingPath(projectId: string, sessionId: string): string {
+    return resolve(this.stateRoot, 'projects', projectId, 'git-preview-bindings', `${sessionId}.json`)
+  }
+
+  private async readGitPreviewSessionBinding(path: string): Promise<PersistedGitPreviewSessionBinding | null> {
+    try {
+      const parsed = JSON.parse(await readFile(path, 'utf8')) as Partial<PersistedGitPreviewSessionBinding>
+      if (parsed.version !== 1 || !isProjectId(parsed.projectId)
+        || !SAFE_SESSION_IDENTITY.test(parsed.userId ?? '')
+        || !SAFE_SESSION_IDENTITY.test(parsed.workspaceId ?? '')
+        || !SAFE_SESSION_IDENTITY.test(parsed.sessionId ?? '')
+        || !/^[0-9a-f]{40}$/.test(parsed.ref ?? '')) {
+        throw new AgentHostError('PROVISIONING_FAILED', 'Persisted Git preview session binding is invalid', { retryable: false })
+      }
+      return parsed as PersistedGitPreviewSessionBinding
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  }
+
+  private assertGitPreviewBindingIdentity(binding: PersistedGitPreviewSessionBinding, projectId: string, userId: string, workspaceId: string, sessionId: string): void {
+    if (binding.projectId !== projectId || binding.userId !== userId || binding.workspaceId !== workspaceId || binding.sessionId !== sessionId) {
+      throw new AgentHostError('GIT_SESSION_BINDING_CONFLICT', 'This chat is already bound to a different owner or workspace')
+    }
+  }
+
+  private async withGitPreviewBindingLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.gitPreviewBindingLocks.get(key) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolveLock) => { release = resolveLock })
+    const queued = previous.then(() => current)
+    this.gitPreviewBindingLocks.set(key, queued)
+    try {
+      await previous
+      return await operation()
+    } finally {
+      release()
+      if (this.gitPreviewBindingLocks.get(key) === queued) this.gitPreviewBindingLocks.delete(key)
+    }
+  }
+
+  private async createGitPreviewSessionWorkspace(projectId: string, sessionId: string, ref: string): Promise<ProjectGitPreviewSessionBinding> {
+    if (!this.machineDriver.runInMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM command runner is unavailable')
+    await this.ensureProjectGitRepository(projectId)
+    const descriptor = await this.ensure(projectId)
+    const worktreeRoot = projectGitPreviewWorktreeRoot(descriptor.workspacePath)
+    const sessionsRoot = resolveGuestPath(worktreeRoot, 'sessions')
+    const worktreePath = resolveGuestPath(sessionsRoot, sessionId)
+    const run = (command: string, args: string[]) => this.machineDriver.runInMachine!(descriptor.machineName, command, args)
+    const assertRealDirectory = async (path: string, label: string, allowMissing = false) => {
+      await run('test', ['!', '-L', path]).catch(() => {
+        throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} cannot be a symbolic link`)
+      })
+      if (allowMissing && !await run('test', ['-d', path]).then(() => true, () => false)) return false
+      await run('test', ['-d', path]).catch(() => {
+        throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} is unavailable`)
+      })
+      const realPath = await run('realpath', ['-e', path])
+      if (realPath.stdout.trim() !== path) throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} failed path validation`)
+      return true
+    }
+
+    const commit = await run('git', ['-C', descriptor.workspacePath, 'rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])
+    if (commit.stdout.trim().toLowerCase() !== ref) throw new AgentHostError('GIT_REF_INVALID', 'Git preview reference is not an exact project commit')
+    await run('test', ['!', '-L', worktreeRoot]).catch(() => {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Preview worktree directory cannot be a symbolic link')
+    })
+    await run('mkdir', ['-p', worktreeRoot])
+    await run('chmod', ['700', worktreeRoot])
+    await assertRealDirectory(worktreeRoot, 'Preview worktree root')
+    await run('test', ['!', '-L', sessionsRoot]).catch(() => {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Preview session worktree directory cannot be a symbolic link')
+    })
+    await run('mkdir', ['-p', sessionsRoot])
+    await run('chmod', ['700', sessionsRoot])
+    await assertRealDirectory(sessionsRoot, 'Preview session worktree root')
+
+    const exists = await assertRealDirectory(worktreePath, 'Bound Git worktree', true)
+    if (exists) {
+      const top = await run('git', ['-C', worktreePath, 'rev-parse', '--show-toplevel'])
+      const head = await run('git', ['-C', worktreePath, 'rev-parse', '--verify', 'HEAD'])
+      if (top.stdout.trim() !== worktreePath || head.stdout.trim().toLowerCase() !== ref) {
+        throw new AgentHostError('GIT_SESSION_BINDING_CONFLICT', 'The bound worktree does not match the selected Git version')
+      }
+    } else {
+      await run('git', ['-C', descriptor.workspacePath, 'worktree', 'prune', '--expire', 'now'])
+      await run('git', ['-C', descriptor.workspacePath, 'worktree', 'add', '--detach', worktreePath, ref])
+      await assertRealDirectory(worktreePath, 'Bound Git worktree')
+    }
+
+    const gitMetadataPath = resolveGuestPath(descriptor.workspacePath, '.git')
+    await assertRealDirectory(gitMetadataPath, 'Project Git metadata')
+    const dependencyPath = resolveGuestPath(descriptor.workspacePath, 'node_modules')
+    const hasDependencies = await run('test', ['-d', dependencyPath]).then(() => true, () => false)
+    if (hasDependencies) {
+      await run('test', ['!', '-L', dependencyPath]).catch(() => {
+        throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', 'Project dependency directory cannot be a symbolic link')
+      })
+      const realDependencyPath = await run('realpath', ['-e', dependencyPath])
+      if (realDependencyPath.stdout.trim() !== dependencyPath) throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', 'Project dependency directory failed path validation')
+      const worktreeDependencies = resolveGuestPath(worktreePath, 'node_modules')
+      const worktreeHasDependencies = await run('test', ['-e', worktreeDependencies]).then(() => true, () => false)
+      if (!worktreeHasDependencies) await run('ln', ['-s', dependencyPath, worktreeDependencies])
+    }
+
+    return {
+      ref,
+      workspacePath: worktreePath,
+      gitMetadataPath,
+      codeServerFolder: `/preview-worktrees/sessions/${sessionId}`,
+      ...(hasDependencies ? { dependenciesPath: dependencyPath } : {}),
+    }
+  }
+
+  private async resolveGitPreviewSessionWorkspace(projectId: string, sessionId: string, ref: string): Promise<ProjectGitPreviewSessionBinding> {
+    if (!this.machineDriver.runInMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM command runner is unavailable')
+    const descriptor = await this.ensure(projectId)
+    const worktreeRoot = projectGitPreviewWorktreeRoot(descriptor.workspacePath)
+    const sessionsRoot = resolveGuestPath(worktreeRoot, 'sessions')
+    const worktreePath = resolveGuestPath(sessionsRoot, sessionId)
+    const run = (command: string, args: string[]) => this.machineDriver.runInMachine!(descriptor.machineName, command, args)
+    const exists = await run('test', ['-d', worktreePath]).then(() => true, () => false)
+    if (!exists) return this.createGitPreviewSessionWorkspace(projectId, sessionId, ref)
+    for (const [path, label] of [[worktreeRoot, 'Preview worktree root'], [sessionsRoot, 'Preview session worktree root'], [worktreePath, 'Bound Git worktree']] as const) {
+      await run('test', ['!', '-L', path]).catch(() => {
+        throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} cannot be a symbolic link`)
+      })
+      await run('test', ['-d', path]).catch(() => {
+        throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} is unavailable`)
+      })
+      const realPath = await run('realpath', ['-e', path])
+      if (realPath.stdout.trim() !== path) throw new AgentHostError('GIT_CHECKOUT_FAILED', `${label} failed path validation`)
+    }
+    const top = await run('git', ['-C', worktreePath, 'rev-parse', '--show-toplevel'])
+    if (top.stdout.trim() !== worktreePath) throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Bound Git worktree has an unexpected root')
+    const commonDirectory = await run('git', ['-C', worktreePath, 'rev-parse', '--git-common-dir'])
+    const rawCommonDirectory = commonDirectory.stdout.trim()
+    const gitMetadataPath = rawCommonDirectory.startsWith('/')
+      ? resolveGuestPath(rawCommonDirectory)
+      : resolveGuestPath(worktreePath, rawCommonDirectory)
+    if (gitMetadataPath !== resolveGuestPath(descriptor.workspacePath, '.git')) {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Bound Git worktree is not connected to this Project repository')
+    }
+    const dependencyPath = resolveGuestPath(descriptor.workspacePath, 'node_modules')
+    const dependenciesPath = await run('test', ['-d', dependencyPath]).then(async () => {
+      await run('test', ['!', '-L', dependencyPath]).catch(() => {
+        throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', 'Project dependency directory cannot be a symbolic link')
+      })
+      const realPath = await run('realpath', ['-e', dependencyPath])
+      if (realPath.stdout.trim() !== dependencyPath) throw new AgentHostError('PREVIEW_DEPENDENCIES_UNAVAILABLE', 'Project dependency directory failed path validation')
+      return dependencyPath
+    }, () => undefined)
+    return {
+      ref,
+      workspacePath: worktreePath,
+      gitMetadataPath,
+      codeServerFolder: `/preview-worktrees/sessions/${sessionId}`,
+      ...(dependenciesPath ? { dependenciesPath } : {}),
     }
   }
 
@@ -2511,6 +2758,16 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const runInMachine = this.requireRunner()
     const network = `openlink-project-${input.projectId.replaceAll('-', '').slice(0, 16)}`
     await this.prepareRootlessWorkspace(runInMachine, input.machineName, input.workspacePath)
+    const previewWorktreeRoot = projectGitPreviewWorktreeRoot(input.workspacePath)
+    await runInMachine(input.machineName, 'test', ['!', '-L', previewWorktreeRoot]).catch(() => {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Preview worktree directory cannot be a symbolic link')
+    })
+    await runInMachine(input.machineName, 'mkdir', ['-p', previewWorktreeRoot])
+    await runInMachine(input.machineName, 'chmod', ['700', previewWorktreeRoot])
+    const previewWorktreeRealPath = await runInMachine(input.machineName, 'realpath', ['-e', previewWorktreeRoot])
+    if (previewWorktreeRealPath.stdout.trim() !== previewWorktreeRoot) {
+      throw new AgentHostError('GIT_CHECKOUT_FAILED', 'Preview worktree directory failed path validation')
+    }
     await this.ensureImages(input)
     await this.ensureNetwork(runInMachine, input.machineName, network)
     const podmanSocketPath = await this.ensurePodmanSocket(runInMachine, input.machineName)
@@ -2641,7 +2898,14 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
         XDG_CONFIG_HOME: '/workspace/.openlink/code-server/config',
         XDG_CACHE_HOME: '/workspace/.openlink/code-server/cache',
       },
-      volumes: [`${input.workspacePath}:/workspace:rw`],
+      volumes: [
+        `${input.workspacePath}:/workspace:rw`,
+        `${previewWorktreeRoot}:/preview-worktrees:rw`,
+        // Git worktrees keep their private index and HEAD under the common
+        // repository's .git/worktrees directory. Mount the same project path
+        // so code-server can resolve the worktree's .git pointer file.
+        `${input.workspacePath}:${input.workspacePath}:rw`,
+      ],
       // The Project VM is the isolation boundary. Keep the service confined to
       // the VM owner's uid/gid so the editor can write the same workspace as
       // the project tooling without running as container root.
