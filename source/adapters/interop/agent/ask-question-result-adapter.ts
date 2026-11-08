@@ -28,7 +28,7 @@ import type {
   AskQuestionCompletionAction,
   SlateAskQuestionCompletionResult,
   SlateAskQuestionText,
-} from "../../../packages/agent/actions/ask-question-completion.ts"
+} from "../../../packages/agent/actions/ask-question-completion-contracts.ts"
 
 const CLIENT_CALL_FAILED = "Tool call failed"
 

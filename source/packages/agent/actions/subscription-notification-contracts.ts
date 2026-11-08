@@ -1,7 +1,7 @@
 import {
   isSlateUserMessageActionPayload,
   type SlateUserMessageActionPayload,
-} from "../agent-action-state.ts"
+} from "./user-message-action-contracts.ts"
 import type { SlateUserMessage } from "../user-message-state.ts"
 
 /** The Slate notification batch that wakes a subscription's conversation. */
