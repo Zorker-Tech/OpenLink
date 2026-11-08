@@ -5,5 +5,13 @@ export {
   type RedactedFeedbackCategory,
   type RedactedFeedbackCategoryGroup,
 } from "../../adapters/interop/agent/redacted-interaction-updates-adapter.ts";
-export { slateRedactedTurnEndedUpdate } from "./slate-interaction-updates.ts"
-export type { SlateRedactedTurnEndedUpdate } from "./interaction-update-contracts.ts"
+export { SlateRedactedInteractionUpdates, slateRedactedTurnEndedUpdate } from "./slate-interaction-updates.ts"
+export type {
+  SlateRedactedHeartbeatUpdate,
+  SlateRedactedInteractionUpdate,
+  SlateRedactedThinkingCompletedUpdate,
+  SlateRedactedThinkingDeltaUpdate,
+  SlateRedactedTextDeltaUpdate,
+  SlateRedactedTokenDeltaUpdate,
+  SlateRedactedTurnEndedUpdate,
+} from "./interaction-update-contracts.ts"

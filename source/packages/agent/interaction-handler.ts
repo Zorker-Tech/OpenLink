@@ -22,7 +22,7 @@
 
 import { createLogger, createSpan } from "../context/index.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
-import { Updates } from "../agent-core/interaction-updates.ts"
+import { SlateInteractionUpdates, Updates } from "../agent-core/interaction-updates.ts"
 import type { SlateTaskProgressUpdate } from "./tools/task-progress-state.ts"
 import { InputTokenLimitError } from "../chat-inference/prompt-executor.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
@@ -166,7 +166,7 @@ export class InteractionHandler {
     const totalChars = this.leftoverTokenCharCount + addedChars.length;
     const tokenCount = Math.floor(totalChars / 4);
     this.leftoverTokenCharCount = totalChars % 4;
-    if (tokenCount > 0) await this.interactionProvider.sendUpdate(context, Updates.tokenDelta(tokenCount));
+    if (tokenCount > 0) await this.interactionProvider.sendUpdate(context, SlateInteractionUpdates.tokenDelta(tokenCount));
   }
 
   isConsumerSideError(error: unknown): boolean {
@@ -188,7 +188,7 @@ export class InteractionHandler {
       if (!thinkingOpen || thinkingStartedAt === undefined) return;
       thinkingOpen = false;
       const thinkingMs = Math.max(1, Date.now() - thinkingStartedAt);
-      await this.interactionProvider.sendUpdate(context, Updates.thinkingCompleted(thinkingMs));
+      await this.interactionProvider.sendUpdate(context, SlateInteractionUpdates.thinkingCompleted(thinkingMs));
       await transcriptHandler.recordThinking(context, "", thinkingMs);
       const finishedThinkingText = thinkingText;
       thinkingText = "";
@@ -216,7 +216,7 @@ export class InteractionHandler {
               });
             }
           }
-          await this.interactionProvider.sendUpdate(context, Updates.textDelta(chunk.textDelta));
+          await this.interactionProvider.sendUpdate(context, SlateInteractionUpdates.textDelta(chunk.textDelta));
           await this.emitTokenDeltaFromChars(context, chunk.textDelta);
           await transcriptHandler.recordText(context, chunk.textDelta);
         } else if (THINKING_CHUNK_TYPES.includes(chunk.type)) {
@@ -227,7 +227,7 @@ export class InteractionHandler {
           let delta = "";
           if (chunk.type === "reasoning") delta = chunk.textDelta;
           thinkingText += delta;
-          await this.interactionProvider.sendUpdate(context, Updates.thinkingDelta(delta, this.thinkingStyle));
+          await this.interactionProvider.sendUpdate(context, SlateInteractionUpdates.thinkingDelta(delta, this.thinkingStyle));
           await this.emitTokenDeltaFromChars(context, delta);
           await transcriptHandler.recordThinking(context, delta);
         } else if (chunk.type === "tool-call-delta") {
@@ -305,7 +305,7 @@ export class InteractionHandler {
   }
 
   async sendHeartbeat(context: Loose): Promise<void> {
-    await this.interactionProvider.sendUpdate(context, Updates.heartbeat());
+    await this.interactionProvider.sendUpdate(context, SlateInteractionUpdates.heartbeat());
   }
 
   /** Runs a tool call, announcing it before and after, and recording it once it is done. */

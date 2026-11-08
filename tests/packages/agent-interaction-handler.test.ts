@@ -29,9 +29,10 @@ function providerHarness(options: { failOn?: (kind: string) => boolean } = {}): 
     updates: { sent },
     provider: {
       async sendUpdate(_ctx, update) {
-        const message = (update as { message?: { case?: string; value?: unknown } }).message
-        const kind = message?.case ?? "unknown"
-        sent.push({ kind, payload: message?.value })
+        const event = update as { kind?: string; message?: { case?: string; value?: unknown } }
+        const message = event.message
+        const kind = message?.case ?? event.kind ?? "unknown"
+        sent.push({ kind, payload: message?.value ?? event })
         if (options.failOn?.(kind) === true) throw new Error("the consumer is gone")
       },
       async query(_ctx, query) {
@@ -135,7 +136,7 @@ test("text is passed on as it arrives, and recorded", async () => {
 
   assert.deepEqual(text.text, ["hello ", "world"])
   assert.deepEqual(
-    harness.updates.sent.filter(update => update.kind === "textDelta").map(update => (update.payload as { text: string }).text),
+    harness.updates.sent.filter(update => update.kind === "text-delta").map(update => (update.payload as { text: string }).text),
     ["hello ", "world"],
   )
 })
@@ -149,9 +150,9 @@ test("thinking is announced, and finished when the answer starts", async () => {
   ]), text.handler)
 
   const kinds = harness.updates.sent.map(update => update.kind)
-  assert.equal(kinds.includes("thinkingDelta"), true)
-  assert.equal(kinds.includes("thinkingCompleted"), true)
-  assert.equal(kinds.indexOf("thinkingDelta") < kinds.indexOf("thinkingCompleted"), true)
+  assert.equal(kinds.includes("thinking-delta"), true)
+  assert.equal(kinds.includes("thinking-completed"), true)
+  assert.equal(kinds.indexOf("thinking-delta") < kinds.indexOf("thinking-completed"), true)
   assert.deepEqual(text.thinking, ["let me think", ""])
   // The completion is recorded with a duration, which is at least a millisecond.
   assert.equal(text.thinkingDurations[1] !== undefined && text.thinkingDurations[1] >= 1, true)
@@ -187,7 +188,7 @@ test("a callback that fails does not fail the turn", async () => {
     { type: "text-delta", textDelta: "an answer" },
   ]), textHandler().handler)
   // The answer still arrived.
-  assert.equal(harness.updates.sent.some(update => update.kind === "textDelta"), true)
+  assert.equal(harness.updates.sent.some(update => update.kind === "text-delta"), true)
 })
 
 test("tool-call deltas are counted as tokens but not as text", async () => {
@@ -197,7 +198,7 @@ test("tool-call deltas are counted as tokens but not as text", async () => {
     { type: "tool-call-delta", argsTextDelta: "some arguments" },
   ]), text.handler)
   assert.deepEqual(text.text, [])
-  assert.equal(harness.updates.sent.some(update => update.kind === "tokenDelta"), true)
+  assert.equal(harness.updates.sent.some(update => update.kind === "token-delta"), true)
 })
 
 test("tokens are estimated four characters at a time, carrying the remainder", async () => {
@@ -207,7 +208,7 @@ test("tokens are estimated four characters at a time, carrying the remainder", a
     { type: "text-delta", textDelta: "abcdef" },
     { type: "text-delta", textDelta: "ghi" },
   ]), textHandler().handler)
-  const tokenDeltas = harness.updates.sent.filter(update => update.kind === "tokenDelta").map(update => (update.payload as { tokens: number }).tokens)
+  const tokenDeltas = harness.updates.sent.filter(update => update.kind === "token-delta").map(update => (update.payload as { tokens: number }).tokens)
   assert.deepEqual(tokenDeltas, [1, 1])
 })
 
@@ -222,7 +223,7 @@ test("an input-token-limit failure is a signal to summarize rather than an error
 })
 
 test("a failure on the consumer side is passed on rather than swallowed", async () => {
-  const harness = handlerWith({ failOn: kind => kind === "textDelta" })
+  const harness = handlerWith({ failOn: kind => kind === "text-delta" })
   await assert.rejects(
     () => harness.handler.consumeStream(createContext(), streamOf([{ type: "text-delta", textDelta: "hello" }]), textHandler().handler),
     /the consumer is gone/,
@@ -245,7 +246,7 @@ test("a model repeating itself inside one message ends the turn with a loop erro
 test("loop detection is only watching when the session asked for it", async () => {
   const harness = handlerWith()
   await harness.handler.consumeStream(createContext(), streamOf([{ type: "text-delta", textDelta: "a".repeat(100) }]), textHandler().handler)
-  assert.equal(harness.updates.sent.some(update => update.kind === "textDelta"), true)
+  assert.equal(harness.updates.sent.some(update => update.kind === "text-delta"), true)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -416,7 +417,7 @@ test("task progress reports when a listener needs the compatibility transport", 
 test("a tool result's text is counted and its tokens estimated", async () => {
   const harness = handlerWith()
   await harness.handler.recordToolCallResult(createContext(), { content: [{ type: "text", text: "x".repeat(40) }] }, "Read", undefined)
-  const tokenDeltas = harness.updates.sent.filter(update => update.kind === "tokenDelta").map(update => (update.payload as { tokens: number }).tokens)
+  const tokenDeltas = harness.updates.sent.filter(update => update.kind === "token-delta").map(update => (update.payload as { tokens: number }).tokens)
   assert.deepEqual(tokenDeltas, [10])
 })
 

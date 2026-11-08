@@ -3655,9 +3655,9 @@
     },
     "packages/agent-core/interaction-updates.ts": {
       "claim": "rewritten",
-      "overlap": 0.06666666666666667,
-      "refreshReason": "Moved generated InteractionUpdate message construction into a dedicated interop adapter and left Slate-owned usage/copy inputs in agent-core.",
-      "evidence": "agent-core-interaction-updates.test.ts, agent-core-updates.test.ts, agent-core.test.ts and agent-interaction-handler.test.ts pass 60/60 after the public Updates facade was preserved. An isolated mutation sweep caught 8/8 changes with no misses; rewrite-overlap tests pass 62/62. Work-host typecheck passes; interop:check now tracks 60 existing direct consumers. Measured overlap is 0.06666666666666667 against 435 baseline pairs, with only the generated-message adapter exempted as interop."
+      "overlap": 0.078,
+      "refreshReason": "Moved Agent text, token, reasoning and heartbeat streams into Slate-owned interaction events with Slate privacy-aware values; the remaining generated event families stay in their adapter during the staged schema migration.",
+      "evidence": "agent-core-interaction-updates.test.ts, agent-core-updates.test.ts, slate-interaction-turn-ended.test.ts, agent-interaction-handler.test.ts and agent-interaction-handler-contract.test.ts pass 54/54. Tests pin Slate event kinds, reasoning-style mapping and unknown-code preservation, privacy classification and mode, ordered stream projection, token estimates, heartbeat, turn usage omission/defaults, consumer-error propagation and unchanged tool-call behavior. The full Node 24 suite passes 10092/10092 across 1427 suites. Work-host rewrite gate measures 0.078 against 435 baseline token pairs; the generated adapter remains for unmigrated event families."
     },
     "packages/agent-client/errors.ts": {
       "claim": "rewritten",

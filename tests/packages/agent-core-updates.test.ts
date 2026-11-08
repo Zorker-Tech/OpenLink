@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
-import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
@@ -11,19 +11,24 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts"
 import { RedactedUpdates } from "../../source/packages/agent-core/redacted-interaction-updates.ts"
-import { slateRedactedTurnEndedUpdate, slateTurnEndedUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts"
+import {
+  isSlateRedactedInteractionUpdate,
+  SlateInteractionUpdates,
+  SlateRedactedInteractionUpdates,
+  slateRedactedTurnEndedUpdate,
+  slateTurnEndedUpdate,
+} from "../../source/packages/agent-core/slate-interaction-updates.ts"
 import * as agentCore from "../../source/packages/agent-core/index.ts"
 
 const mode = PrivacyMode.NO_STORAGE
 
-test("an update is built with the case its client renders", () => {
-  const text = Updates.textDelta("hello")
-  assert.equal(text.message.case, "textDelta")
-  assert.equal((text.message.value as { text?: string }).text, "hello")
+test("Slate interaction constructors build the local stream values", () => {
+  const text = SlateInteractionUpdates.textDelta("hello")
+  assert.deepEqual(text, { kind: "text-delta", text: "hello" })
 
-  assert.equal(Updates.heartbeat().message.case, "heartbeat")
+  assert.deepEqual(SlateInteractionUpdates.heartbeat(), { kind: "heartbeat" })
   assert.equal(Updates.summaryStarted().message.case, "summaryStarted")
-  assert.equal(Updates.tokenDelta(42).message.case, "tokenDelta")
+  assert.deepEqual(SlateInteractionUpdates.tokenDelta(42), { kind: "token-delta", tokens: 42 })
   assert.equal(Updates.activeBranchChange("/repo", "main").message.case, "activeBranchChange")
 
   const step = Updates.stepStarted(7)
@@ -92,14 +97,19 @@ test("a feedback request carries its categories and only the copy it was given",
   assert.equal(withCopyValue.negativeTitle, undefined)
 })
 
-test("a redacted update takes its privacy mode from the value it is given", () => {
-  const text = createRedactedString("the secret", DataClassification.CODE, "text", mode)
-  const update = RedactedUpdates.textDelta(text)
-  assert.equal(update._privacyMode, mode)
-  assert.equal(update.message.case, "textDelta")
-  const textValue = update.message.value as unknown as { text: unknown; isServerNotice?: boolean }
-  assert.equal(textValue.text, text, "the redacted value travels as it is")
-  assert.equal(textValue.isServerNotice, false)
+test("a Slate redacted update carries the privacy-aware value without a generated envelope", () => {
+  const update = SlateRedactedInteractionUpdates.textDelta("the secret", mode)
+  assert.equal(update.privacyMode, mode)
+  assert.equal(update.kind, "text-delta")
+  assert.equal(update.text.__classification, DataClassification.CODE)
+  assert.equal(update.text.__privacyMode, mode)
+  assert.equal(update.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "the secret")
+
+  const reasoning = SlateRedactedInteractionUpdates.thinkingDelta("private reasoning", mode, { kind: "custom", value: "custom-style" })
+  assert.equal(isSlateRedactedInteractionUpdate(reasoning), true)
+  assert.equal(reasoning.text.__classification, DataClassification.CODE)
+  assert.deepEqual(reasoning.style, { kind: "custom", value: "custom-style" })
+  assert.equal(isSlateRedactedInteractionUpdate({ ...reasoning, privacyMode: "not-a-policy" }), false)
 
   const summary = RedactedUpdates.summary(createRedactedString("summary", DataClassification.CODE, "summary", mode))
   assert.equal(summary._privacyMode, mode)
@@ -109,8 +119,9 @@ test("a redacted update takes its privacy mode from the value it is given", () =
 })
 
 test("an update without text takes its privacy mode explicitly", () => {
-  assert.equal(RedactedUpdates.heartbeat(mode)._privacyMode, mode)
-  assert.equal(RedactedUpdates.tokenDelta(mode, 5)._privacyMode, mode)
+  assert.equal(SlateRedactedInteractionUpdates.heartbeat(mode).privacyMode, mode)
+  assert.equal(SlateRedactedInteractionUpdates.tokenDelta(5, mode).privacyMode, mode)
+  assert.equal(SlateRedactedInteractionUpdates.thinkingCompleted(12, mode).privacyMode, mode)
   assert.equal(RedactedUpdates.stepStarted(mode, 3)._privacyMode, mode)
   assert.equal((RedactedUpdates.stepStarted(mode, 3).message.value as { stepId?: bigint }).stepId, BigInt(3))
   assert.equal(RedactedUpdates.stepCompleted(mode, 3, 10)._privacyMode, mode)

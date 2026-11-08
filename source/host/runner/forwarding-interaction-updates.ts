@@ -12,6 +12,7 @@ import {
   type SlateTaskProgressDelivery,
   type SlateTaskProgressUpdate,
 } from "../../packages/agent/tools/task-progress-state.ts";
+import { isSlateInteractionUpdate } from "../../packages/agent-core/slate-interaction-updates.ts";
 
 export interface ForwardedUpdate {
   readonly type: string;
@@ -56,11 +57,24 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
 
   override async sendUpdate(ctx: { canceled?: boolean }, update: any): Promise<void> {
     await super.sendUpdate(ctx, update);
-    if (update?.kind === "turn-ended") {
-      this.onUpdate(update.usage === undefined
-        ? { type: "turn-ended" }
-        : { type: "turn-ended", usage: { ...update.usage, reasoningTokens: update.usage.reasoningTokens ?? 0 } });
-      return;
+    if (isSlateInteractionUpdate(update)) {
+      switch (update.kind) {
+        case "text-delta":
+          this.onUpdate({ type: "text-delta", text: update.text });
+          return;
+        case "thinking-delta":
+          this.onUpdate({ type: "thinking-delta", text: update.text });
+          return;
+        case "turn-ended":
+          this.onUpdate(update.usage === undefined
+            ? { type: "turn-ended" }
+            : { type: "turn-ended", usage: { ...update.usage, reasoningTokens: update.usage.reasoningTokens ?? 0 } });
+          return;
+        case "token-delta":
+        case "thinking-completed":
+        case "heartbeat":
+          return;
+      }
     }
     const message = update.message;
     switch (message.case) {
