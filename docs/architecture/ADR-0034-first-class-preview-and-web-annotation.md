@@ -32,6 +32,12 @@ annotations retain screenshots and locator context. The bridge's element
 references still belong to one running page, and visual edits do not map
 directly to source files or durable component identifiers.
 
+Local and Cloud workspaces previously used different Preview paths. Local mode
+used the managed iframe and Inspector Bridge; Cloud mode used a session-bound
+computer-service iframe without the bridge and hid the design panel. That
+surface could display a running page, but it could not provide the same live
+editing and annotation capabilities.
+
 ### Product interaction requirements
 
 Users open Preview from the Preview tab in the existing chat workspace. The tab
@@ -54,9 +60,15 @@ reusable across chats with workspace access.
 
 ## Proposed Decision
 
-1. Keep the iframe as the default renderer for managed web apps. Continue
-   serving these targets through the authenticated HTTP/WebSocket proxy and
-   versioned Inspector Bridge. Use the remote desktop surface only for full
+1. Keep the iframe as the default renderer for managed web apps in both Local
+   and Cloud workspaces. Runtime mode selects the authorized target provider;
+   it does not change Preview into a computer-service or streamed-browser
+   surface. Continue serving managed targets through the authenticated
+   HTTP/WebSocket proxy and versioned Inspector Bridge. If no project target is
+   available, show a recoverable empty/error state and keep the Agent-owned
+   Realtime browser separate. Cloud deployments resolve targets through their
+   configured remote Agent Host and Browser Gateway; missing configuration is
+   shown as a recoverable error. Use the remote desktop surface only for full
    desktop interaction. Use a streamed full-browser surface for sites or
    applications that cannot safely or reliably be embedded and proxied.
 
@@ -220,20 +232,25 @@ the remaining code-edit requirements as follow-up decisions if needed.
 
 ## Validation Criteria
 
-1. Open the same managed target from two chats with access to its workspace;
+1. In Local and Cloud workspaces, open a managed target and confirm Preview
+   uses the iframe, Inspector Bridge, and design panel. When no target is
+   available, confirm Preview stays in its recoverable empty/error state and
+   does not replace the Agent-owned Realtime browser.
+2. Open the same managed target from two chats with access to its workspace;
    target identity and dev-server lifetime remain stable.
-2. Open two repositories/worktrees from one authorized workspace and switch
+3. Open two repositories/worktrees from one authorized workspace and switch
    between them without leaking either target's URL, headers, cookies, or
    runtime credentials to another target.
-3. Confirm iframe navigation, reload, assets, cookies, and HMR WebSockets work
+4. Confirm iframe navigation, reload, assets, cookies, and HMR WebSockets work
    through the authenticated path at desktop and mobile viewport sizes.
-4. Confirm an external site that rejects framing is handled by the documented
+5. Confirm an external site that rejects framing is handled by the documented
    full-browser/top-level fallback and does not receive an injected bridge.
-5. Add multiple annotations, submit them as one batch, and verify they retain
+6. Add multiple annotations, submit them as one batch, and verify they retain
    screenshot, target revision, and best-effort locator context after reload.
-6. Apply a Design edit to an editable worktree and verify a reviewable source
+7. Apply a Design edit to an editable worktree and verify a reviewable source
    diff; confirm read-only targets cannot invoke Apply.
-7. Keep remote desktop usable independently when Preview is opened or closed.
-8. Confirm Design text and style edits, color controls, and Cmd/Ctrl-drag
+8. Keep Realtime and remote desktop usable independently when Preview is
+   opened or closed.
+9. Confirm Design text and style edits, color controls, and Cmd/Ctrl-drag
    positioning update the live page and restore correctly through undo, reset,
    and before/after.

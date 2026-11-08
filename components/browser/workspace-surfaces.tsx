@@ -2,7 +2,6 @@
 
 import { BrowserWorkbench, type BrowserWorkbenchHandle, type BrowserWorkbenchUiState } from '@/components/browser/browser-workbench'
 import { PreviewDesignPanel, type PreviewAnnotationMarker, type PreviewDesignPanelHandle, type PreviewProjectOption } from '@/components/browser/preview-design-panel'
-import { CloudComputerPreviewWorkbench } from '@/components/browser/cloud-computer-preview-workbench'
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
@@ -41,7 +40,6 @@ interface WorkspacePanelProps {
 interface WorkspaceSurfacesProps {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: RefObject<BrowserWorkbenchHandle | null>
-  cloudRuntime: boolean
   view: SessionWorkspaceView
   openTabs: SessionWorkspaceTab[]
   uiReady: boolean
@@ -194,7 +192,6 @@ function BrowserNavigationBar({
 export function WorkspaceSurfaces({
   browserState,
   browserWorkbenchRef,
-  cloudRuntime,
   view,
   openTabs,
   uiReady,
@@ -254,22 +251,22 @@ export function WorkspaceSurfaces({
   }, [pendingPreviewTargetId, previewOpen, uiReady])
 
   useEffect(() => {
-    browserWorkbenchRef.current = cloudRuntime || activeBrowserTab === 'preview'
+    browserWorkbenchRef.current = activeBrowserTab === 'preview'
       ? previewWorkbenchRef.current
       : realtimeWorkbenchRef.current
     return () => {
       browserWorkbenchRef.current = null
     }
-  }, [activeBrowserTab, browserWorkbenchRef, cloudRuntime, uiReady])
+  }, [activeBrowserTab, browserWorkbenchRef, uiReady])
 
   const previewActive = browserVisible && activeBrowserTab === 'preview'
   const realtimeActive = browserVisible && activeBrowserTab === 'realtime'
-  const activeBrowserState = cloudRuntime || activeBrowserTab === 'preview' ? previewState : realtimeState
+  const activeBrowserState = activeBrowserTab === 'preview' ? previewState : realtimeState
   const handlePreviewStateChange = useCallback((state: BrowserWorkbenchUiState) => {
     const previewTabState = state.surface === 'native-preview' ? state : { ...state, surface: 'native-preview' as const }
     setPreviewState(previewTabState)
-    if (browserVisible && (cloudRuntime || activeBrowserTab === 'preview')) onBrowserStateChange(previewTabState)
-  }, [activeBrowserTab, browserVisible, cloudRuntime, onBrowserStateChange])
+    if (browserVisible && activeBrowserTab === 'preview') onBrowserStateChange(previewTabState)
+  }, [activeBrowserTab, browserVisible, onBrowserStateChange])
   const handleRealtimeStateChange = useCallback((state: BrowserWorkbenchUiState) => {
     setRealtimeState(state)
     if (browserVisible && activeBrowserTab === 'realtime') onBrowserStateChange(state)
@@ -301,49 +298,42 @@ export function WorkspaceSurfaces({
               <div className="relative flex min-h-0 min-w-0 flex-1">
                 <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
                   <div className={`relative ${view === 'browser' ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}`}>
-                    {cloudRuntime ? (
-                      <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-browser-surface="cloud">
-                        <CloudComputerPreviewWorkbench chatSessionId={sessionId} onStateChange={handlePreviewStateChange} ref={previewWorkbenchRef} />
+                    {previewOpen && (
+                      <div aria-hidden={!previewActive} className={surfaceClass(previewActive)} data-workspace-browser-surface="preview">
+                        <BrowserWorkbench
+                          allowRealtimeFallback={false}
+                          chatSessionId={previewProjectId === panelProps.projectId ? sessionId : undefined}
+                          onAnnotationTarget={(target) => previewDesignPanelRef.current?.handleAnnotationTarget(target)}
+                          onElementMoved={(move) => previewDesignPanelRef.current?.handleElementMoved(move)}
+                          onStateChange={handlePreviewStateChange}
+                          projectId={previewProjectId}
+                          ref={previewWorkbenchRef}
+                          initialPreviewTargetId={previewProjectId === panelProps.projectId ? initialPreviewTargetId || undefined : undefined}
+                          initialSurface="native-preview"
+                          initialUrl={previewProjectId === panelProps.projectId ? initialBrowserUrl || undefined : undefined}
+                          viewportMode={view === 'mobile' ? 'mobile' : 'browser'}
+                        />
+                        {previewActive && previewAnnotations.map((annotation, index) => (
+                          <button
+                            aria-label={t('第 {number} 条批注', { number: index + 1 })}
+                            className="pointer-events-auto absolute z-30 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-[var(--app-focus-ring)] text-[10px] font-semibold text-white shadow"
+                            key={annotation.id}
+                            onClick={() => previewDesignPanelRef.current?.showAnnotation(annotation.id)}
+                            style={{ left: `${annotation.bounds.x / annotation.viewport.width * 100}%`, top: `${annotation.bounds.y / annotation.viewport.height * 100}%` }}
+                            type="button"
+                          >{index + 1}</button>
+                        ))}
                       </div>
-                    ) : (
-                      <>
-                        {previewOpen && (
-                          <div aria-hidden={!previewActive} className={surfaceClass(previewActive)} data-workspace-browser-surface="preview">
-                            <BrowserWorkbench
-                              chatSessionId={previewProjectId === panelProps.projectId ? sessionId : undefined}
-                              onAnnotationTarget={(target) => previewDesignPanelRef.current?.handleAnnotationTarget(target)}
-                              onElementMoved={(move) => previewDesignPanelRef.current?.handleElementMoved(move)}
-                              onStateChange={handlePreviewStateChange}
-                              projectId={previewProjectId}
-                              ref={previewWorkbenchRef}
-                              initialPreviewTargetId={previewProjectId === panelProps.projectId ? initialPreviewTargetId || undefined : undefined}
-                              initialSurface="native-preview"
-                              initialUrl={previewProjectId === panelProps.projectId ? initialBrowserUrl || undefined : undefined}
-                              viewportMode={view === 'mobile' ? 'mobile' : 'browser'}
-                            />
-                            {previewActive && previewAnnotations.map((annotation, index) => (
-                              <button
-                                aria-label={t('第 {number} 条批注', { number: index + 1 })}
-                                className="pointer-events-auto absolute z-30 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-[var(--app-focus-ring)] text-[10px] font-semibold text-white shadow"
-                                key={annotation.id}
-                                onClick={() => previewDesignPanelRef.current?.showAnnotation(annotation.id)}
-                                style={{ left: `${annotation.bounds.x / annotation.viewport.width * 100}%`, top: `${annotation.bounds.y / annotation.viewport.height * 100}%` }}
-                                type="button"
-                              >{index + 1}</button>
-                            ))}
-                          </div>
-                        )}
-                        {realtimeOpen && (
-                          <div aria-hidden={!realtimeActive} className={surfaceClass(realtimeActive)} data-workspace-browser-surface="realtime">
-                            <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
-                          </div>
-                        )}
-                      </>
+                    )}
+                    {realtimeOpen && (
+                      <div aria-hidden={!realtimeActive} className={surfaceClass(realtimeActive)} data-workspace-browser-surface="realtime">
+                        <BrowserWorkbench chatSessionId={sessionId} projectId={panelProps.projectId} initialSurface="chromium-stream" initialUrl={initialBrowserUrl || undefined} onStateChange={handleRealtimeStateChange} ref={realtimeWorkbenchRef} viewportMode={view === 'mobile' ? 'mobile' : 'browser'} />
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
-              {!cloudRuntime && previewOpen && activeBrowserTab === 'preview' && (
+              {previewOpen && activeBrowserTab === 'preview' && (
                 <PreviewDesignPanel
                   browserState={previewState}
                   className={designPanelOpen ? '' : 'max-[720px]:hidden'}
