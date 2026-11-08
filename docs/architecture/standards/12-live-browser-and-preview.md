@@ -69,11 +69,12 @@ only. The proxy URL and `OPEN-SANDBOX-API-KEY` remain inside Agent Host.
 Browser session creation resolves the selected id inside Agent Host. Worktree
 targets are created from a validated commit ref, mounted into a separate
 egress-denied OpenSandbox workload, and start a package's `dev` or `start`
-script when its manifest declares a supported Node web framework. Existing
-Project dependencies are reused. They receive no provider credentials. Their
-content-derived revision is attached to screenshot
-receipts. Design Apply remains disabled until a code session is explicitly
-bound to that worktree.
+script when its manifest declares a supported Node web framework. The checkout
+lives in a mode-restricted Project VM directory outside the editable workspace;
+only its validated path is mounted. Existing Project dependencies are reused.
+They receive no provider credentials. Their content-derived revision is
+attached to screenshot receipts. Design Apply remains disabled until a code
+session is explicitly bound to that worktree.
 
 External URLs are entered explicitly in the Preview address bar and loaded
 directly by the user's browser in a separate iframe sandbox. Dotted hostnames

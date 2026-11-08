@@ -27,13 +27,14 @@ active chat or the selected project, discover servers across that project's
 active sandboxes, and prefer the active chat's server when it belongs to the
 selected project. Targets are reusable across chats. Providers include active
 Project sandbox servers and detached commit worktrees. A worktree target gets
-its own restricted application sandbox, mounts the selected source and existing
-dependencies, and starts a `dev` or `start` script only when the package
-declares a supported Node web framework. Worktree
-targets are revision-bound and read-only for source Apply until a code chat is
-explicitly bound to that worktree. External HTTP(S) URLs can be opened directly
-in a separate sandboxed iframe; they do not use the managed proxy or Inspector
-Bridge and are not persisted.
+its own restricted application sandbox. Its checkout is stored in a
+VM-managed directory outside the editable source tree; only that validated
+path and the existing dependencies are mounted. It starts a `dev` or `start`
+script only when the manifest declares a supported Node web framework.
+Worktree targets are revision-bound and read-only for source Apply until a code
+chat is explicitly bound to that worktree. External HTTP(S) URLs can be opened
+directly in a separate sandboxed iframe; they do not use the managed proxy or
+Inspector Bridge and are not persisted.
 
 The selected project, opaque target, pathname, and desktop/mobile viewport
 preference now persist in the browser profile under a user-and-workspace key, so
