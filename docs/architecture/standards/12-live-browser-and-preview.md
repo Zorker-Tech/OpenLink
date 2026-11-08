@@ -4,8 +4,10 @@ Status: binding
 Owner: browser runtime
 
 The Live Browser is an Agent capability, not a child of the Browser tab. The
-Preview surface is a user discovery and viewing surface over the same Project
-runtime. They are separate ownership domains.
+Preview surface is a user discovery and viewing surface over an authorized
+workspace Project runtime. They are separate ownership domains. The Preview
+entry is the Preview tab in the existing chat workspace; a chat can provide a
+default target hint, but does not own the target or its development server.
 
 ## Agent-owned Browser session
 
@@ -44,8 +46,16 @@ calls `browser_pages` first when the id is unknown.
 
 ## Preview target discovery
 
-A Project may run several OpenSandbox session sandboxes, each with several
-development servers. `ProjectRuntimeManager.discoverPreviewTargets()`:
+A user may select any authorized code Project in the current workspace from the
+Preview tab. Project access and target liveness are rechecked server-side on
+every discovery and session creation. The browser profile stores the selected
+Project and opaque target preference by user and workspace; the validated page
+pathname and desktop/mobile viewport are stored per target. None of these
+preferences contain upstream URLs, credentials, query strings, or fragments.
+
+The current provider is the Project sandbox provider. A Project may run several
+OpenSandbox session sandboxes, each with several development servers.
+`ProjectRuntimeManager.discoverPreviewTargets()`:
 
 - lists active sandboxes for the Project;
 - probes a bounded conventional port set concurrently through the authenticated
@@ -54,9 +64,12 @@ development servers. `ProjectRuntimeManager.discoverPreviewTargets()`:
   first;
 - returns opaque target ids (`<sandboxId>:<port>`) plus a safe label/port.
 
-The public list endpoint returns ids, labels, ports and session ids only. The
-proxy URL and `OPEN-SANDBOX-API-KEY` remain inside Agent Host. Browser session
-creation resolves the selected id inside Agent Host.
+The public list endpoint returns opaque ids, labels, ports and session hints
+only. The proxy URL and `OPEN-SANDBOX-API-KEY` remain inside Agent Host.
+Browser session creation resolves the selected id inside Agent Host. Worktree
+servers and read-only external URL providers are future extensions; they must
+use separate authorization and transport policies and may not inherit the
+managed Preview bridge by default.
 
 ## Preview UI
 
@@ -66,7 +79,9 @@ creation resolves the selected id inside Agent Host.
   switch/unmount.
 - An explicit current-session target is labelled as such; other sessions are
   shown as other active dev hosts.
-- The Preview target id is persisted with session UI state.
+- The Preview target id is persisted by user and workspace, independent of the
+  current chat. Its safe pathname and desktop/mobile viewport are persisted per
+  target. The server still re-resolves the target before opening its proxy.
 
 ## Validation
 
@@ -79,3 +94,6 @@ creation resolves the selected id inside Agent Host.
    `browser_open` succeed and the page is visible after opening Realtime.
 5. Hide or close the Browser tab; the Agent's Chromium session remains usable.
 6. The Preview target list never contains proxy URLs or API keys.
+7. Open the same Project from two chats and confirm the chosen target, pathname,
+   and viewport restore from the same browser profile while target authorization
+   is checked again by the server.
