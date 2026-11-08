@@ -3655,9 +3655,9 @@
     },
     "packages/agent-core/interaction-updates.ts": {
       "claim": "rewritten",
-      "overlap": 0.078,
-      "refreshReason": "Moved Agent text, token, reasoning and heartbeat streams into Slate-owned interaction events with Slate privacy-aware values; the remaining generated event families stay in their adapter during the staged schema migration.",
-      "evidence": "agent-core-interaction-updates.test.ts, agent-core-updates.test.ts, slate-interaction-turn-ended.test.ts, agent-interaction-handler.test.ts and agent-interaction-handler-contract.test.ts pass 54/54. Tests pin Slate event kinds, reasoning-style mapping and unknown-code preservation, privacy classification and mode, ordered stream projection, token estimates, heartbeat, turn usage omission/defaults, consumer-error propagation and unchanged tool-call behavior. The full Node 24 suite passes 10092/10092 across 1427 suites. Work-host rewrite gate measures 0.078 against 435 baseline token pairs; the generated adapter remains for unmigrated event families."
+      "overlap": 0.09,
+      "refreshReason": "Moved Slate interaction event ownership through streaming, step lifecycle, prompt suggestion and branch-change values while keeping generated envelopes at the remaining tool and summary boundaries.",
+      "evidence": "agent-core-interaction-updates.test.ts, agent-core-updates.test.ts, slate-interaction-turn-ended.test.ts, agent-interaction-handler.test.ts, agent-interaction-handler-contract.test.ts, agent-prompt-suggestion.test.ts and agent-abstract-user-message-action-handler.test.ts pass 78/78. Tests pin Slate kinds, redacted text/path classifications, numeric step units, style conversion with unknown-code preservation, ordered stream projection, token estimates, turn usage omission/defaults, prompt suggestion delivery, consumer-error propagation and tool-call behavior. Work-host typecheck passes: rewrite gate 1204 claims under 0.8, zero floors, 40 removals; interop ledger 308 imports/218 files. Full Node 24 suite passes 10092/10092 across 1427 suites. Rewrite overlap is 0.090 against 435 baseline token pairs; generated adapters remain for unmigrated event families."
     },
     "packages/agent-client/errors.ts": {
       "claim": "rewritten",

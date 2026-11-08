@@ -44,7 +44,7 @@ import { BackgroundSummarizationMode, getBackgroundSummarizationTriggerThreshold
 import { isTooManyImagesOrDocumentsError } from "../../../agent-summarization/error-handling.ts";
 import { SummarizationHandler, shouldForceSummarizationForTesting } from "../../../agent-summarization/summarization-handler.ts";
 import { InteractionHandler } from "../../interaction-handler.ts";
-import { RedactedUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
+import { RedactedUpdates, SlateRedactedInteractionUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
 import { Updates } from "../../../agent-core/interaction-updates.ts";
 import { applyAskQuestionCompletion, type AskQuestionCompletionAction } from "../ask-question-completion.ts";
 import { fromInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
@@ -2872,7 +2872,11 @@ export class AbstractUserMessageActionHandler {
           for (const stat of FINAL_ASSISTANT_MESSAGE_UX_STAT_NAMES) finalAssistantMessageUxStatsMetric.histogram(runContext, finalAssistantMessageUxStats[stat], { stat });
         } catch (error) { agentLogger.error(runContext, "Failed to record final assistant message UX stats", error); }
       }
-      await this.interactionListener.sendUpdate(runContext, RedactedUpdates.stepCompleted(turnState.getPrivacyMode(), conversationTurn.steps.length, Math.round(turnDuration)));
+      await this.interactionListener.sendUpdate(runContext, SlateRedactedInteractionUpdates.stepCompleted(
+        conversationTurn.steps.length,
+        Math.round(turnDuration),
+        turnState.getPrivacyMode(),
+      ));
       if (this.config.featureFlags?.enablePromptSuggestion && this.config.modelId !== undefined) {
         try {
           const userMessageForTools = await conversationTurn.userMessage.get(runContext);
@@ -2928,7 +2932,11 @@ export class AbstractUserMessageActionHandler {
       agentTurnDuration.histogram(runContext, turnDuration);
       const outcome = runContext.signal.aborted ? "aborted" : "error";
       agentTurnResult.increment(runContext, 1, { outcome, newConversation: hadPreviousAssistantMessage ? "false" : "true", isauto: getIsAutoFromContext(runContext) ? "true" : "false", ispremium: getIsPremiumFromContext(runContext) ? "true" : "false", isinternalteam: getIsInternalTeamFromContext(runContext) ? "true" : "false", isuserapikey: getIsUserApiKeyFromContext(runContext) ? "true" : "false", issubagent: getIsSubagentFromContext(runContext) ? "true" : "false", autoroutingreason: getAutoRoutingReasonFromContext(runContext) });
-      await this.interactionListener.sendUpdate(runContext, RedactedUpdates.stepCompleted(turnState.getPrivacyMode(), conversationTurn.steps.length, Math.round(turnDuration)));
+      await this.interactionListener.sendUpdate(runContext, SlateRedactedInteractionUpdates.stepCompleted(
+        conversationTurn.steps.length,
+        Math.round(turnDuration),
+        turnState.getPrivacyMode(),
+      ));
       agentToolCallsPerTurn.histogram(runContext, totalToolCallsInTurn, { outcome, ...getClientVersionMetricTagsFromContext(runContext), ...getSdkFlavorMetricTagFromContext(runContext), "user.is_dev": getIsDevFromContext(runContext) ? "true" : "false" });
       const modelName = this.config.modelId ?? "unknown";
       const errorName = error instanceof Error ? error.constructor.name : "unknown";

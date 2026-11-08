@@ -18,7 +18,8 @@
  */
 
 import { createLogger, createSpan, type Context } from "../../context/index.ts"
-import { Updates } from "../../agent-core/interaction-updates.ts"
+import { SlateInteractionUpdates } from "../../agent-core/interaction-updates.ts"
+import type { SlatePromptSuggestionUpdate } from "../../agent-core/interaction-update-contracts.ts"
 import { createCounter } from "../../metrics/index.ts"
 import { PrivacyMode } from "../../redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../redaction/classification.ts"
@@ -51,7 +52,7 @@ interface SuggestionExecutorPort {
 }
 
 interface SuggestionListenerPort {
-  sendUpdate(ctx: Context, update: ReturnType<typeof Updates.promptSuggestion>): Promise<void> | void
+  sendUpdate(ctx: Context, update: SlatePromptSuggestionUpdate): Promise<void> | void
 }
 
 interface PriceOptions {
@@ -208,7 +209,7 @@ export async function requestPromptSuggestion(
       switch (parsedSuggestion.type) {
         case "success":
           outcomeCounter.increment(ctx, 1, { model, outcome: "suggested" })
-          await interactionListener.sendUpdate(ctx, Updates.promptSuggestion(parsedSuggestion.suggestion))
+          await interactionListener.sendUpdate(ctx, SlateInteractionUpdates.promptSuggestion(parsedSuggestion.suggestion))
           break
         case "too_long":
           logger.info(ctx, "Prompt suggestion discarded: too long", { wordCount: parsedSuggestion.wordCount, wordLimit: PROMPT_SUGGESTION_MAX_WORDS, suggestion: parsedSuggestion.suggestion })

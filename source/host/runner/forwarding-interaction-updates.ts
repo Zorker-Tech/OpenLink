@@ -73,6 +73,10 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
         case "token-delta":
         case "thinking-completed":
         case "heartbeat":
+        case "step-started":
+        case "step-completed":
+        case "prompt-suggestion":
+        case "active-branch-change":
           return;
       }
     }

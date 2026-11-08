@@ -5,14 +5,22 @@ import {
 import { createRedactedString } from "../redaction/create.ts"
 import { isRedactedString } from "../redaction/redacted-values.ts"
 import type {
+  SlateActiveBranchChangeUpdate,
   SlateHeartbeatUpdate,
   SlateInteractionUpdate,
+  SlatePromptSuggestionUpdate,
+  SlateRedactedActiveBranchChangeUpdate,
   SlateRedactedHeartbeatUpdate,
   SlateRedactedInteractionUpdate,
+  SlateRedactedPromptSuggestionUpdate,
+  SlateRedactedStepCompletedUpdate,
+  SlateRedactedStepStartedUpdate,
   SlateRedactedThinkingCompletedUpdate,
   SlateRedactedThinkingDeltaUpdate,
   SlateRedactedTextDeltaUpdate,
   SlateRedactedTokenDeltaUpdate,
+  SlateStepCompletedUpdate,
+  SlateStepStartedUpdate,
   SlateThinkingCompletedUpdate,
   SlateThinkingDeltaUpdate,
   SlateThinkingStyle,
@@ -104,6 +112,18 @@ export const SlateInteractionUpdates = {
   heartbeat(): SlateHeartbeatUpdate {
     return { kind: "heartbeat" }
   },
+  stepStarted(stepId: number): SlateStepStartedUpdate {
+    return { kind: "step-started", stepId }
+  },
+  stepCompleted(stepId: number, durationMs: number): SlateStepCompletedUpdate {
+    return { kind: "step-completed", stepId, durationMs }
+  },
+  promptSuggestion(suggestion: string): SlatePromptSuggestionUpdate {
+    return { kind: "prompt-suggestion", suggestion }
+  },
+  activeBranchChange(path: string, branchName: string): SlateActiveBranchChangeUpdate {
+    return { kind: "active-branch-change", path, branchName }
+  },
 }
 
 export const SlateRedactedInteractionUpdates = {
@@ -131,6 +151,27 @@ export const SlateRedactedInteractionUpdates = {
   heartbeat(privacyMode: PrivacyMode): SlateRedactedHeartbeatUpdate {
     return { kind: "heartbeat", privacyMode }
   },
+  stepStarted(stepId: number, privacyMode: PrivacyMode): SlateRedactedStepStartedUpdate {
+    return { kind: "step-started", privacyMode, stepId }
+  },
+  stepCompleted(stepId: number, durationMs: number, privacyMode: PrivacyMode): SlateRedactedStepCompletedUpdate {
+    return { kind: "step-completed", privacyMode, stepId, durationMs }
+  },
+  promptSuggestion(suggestion: string, privacyMode: PrivacyMode): SlateRedactedPromptSuggestionUpdate {
+    return {
+      kind: "prompt-suggestion",
+      privacyMode,
+      suggestion: createRedactedString(suggestion, DataClassification.CODE, "suggestion", privacyMode),
+    }
+  },
+  activeBranchChange(path: string, branchName: string, privacyMode: PrivacyMode): SlateRedactedActiveBranchChangeUpdate {
+    return {
+      kind: "active-branch-change",
+      privacyMode,
+      path: createRedactedString(path, DataClassification.PATH, "path", privacyMode),
+      branchName,
+    }
+  },
   turnEnded(privacyMode: PrivacyMode, usage?: TurnUsage): SlateRedactedTurnEndedUpdate {
     return slateRedactedTurnEndedUpdate(privacyMode, usage)
   },
@@ -147,6 +188,10 @@ export function redactSlateInteractionUpdate(
     case "thinking-delta": return SlateRedactedInteractionUpdates.thinkingDelta(update.text, privacyMode, update.style)
     case "thinking-completed": return SlateRedactedInteractionUpdates.thinkingCompleted(update.durationMs, privacyMode)
     case "heartbeat": return SlateRedactedInteractionUpdates.heartbeat(privacyMode)
+    case "step-started": return SlateRedactedInteractionUpdates.stepStarted(update.stepId, privacyMode)
+    case "step-completed": return SlateRedactedInteractionUpdates.stepCompleted(update.stepId, update.durationMs, privacyMode)
+    case "prompt-suggestion": return SlateRedactedInteractionUpdates.promptSuggestion(update.suggestion, privacyMode)
+    case "active-branch-change": return SlateRedactedInteractionUpdates.activeBranchChange(update.path, update.branchName, privacyMode)
     case "turn-ended": return SlateRedactedInteractionUpdates.turnEnded(privacyMode, update.usage)
   }
 }
@@ -168,6 +213,18 @@ export function unredactSlateInteractionUpdate(update: SlateRedactedInteractionU
       return { kind: update.kind, durationMs: update.durationMs }
     case "heartbeat":
       return { kind: update.kind }
+    case "step-started":
+      return { kind: update.kind, stepId: update.stepId }
+    case "step-completed":
+      return { kind: update.kind, stepId: update.stepId, durationMs: update.durationMs }
+    case "prompt-suggestion":
+      return { kind: update.kind, suggestion: update.suggestion.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }
+    case "active-branch-change":
+      return {
+        kind: update.kind,
+        path: update.path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+        branchName: update.branchName,
+      }
     case "turn-ended":
       return update.usage === undefined
         ? { kind: update.kind }
@@ -193,6 +250,11 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
     case "thinking-delta": return typeof candidate.text === "string" && (candidate.style === undefined || isSlateThinkingStyle(candidate.style))
     case "thinking-completed": return typeof candidate.durationMs === "number" && Number.isFinite(candidate.durationMs) && candidate.durationMs >= 0
     case "heartbeat": return true
+    case "step-started": return typeof candidate.stepId === "number" && Number.isSafeInteger(candidate.stepId) && candidate.stepId >= 0
+    case "step-completed": return typeof candidate.stepId === "number" && Number.isSafeInteger(candidate.stepId) && candidate.stepId >= 0
+      && typeof candidate.durationMs === "number" && Number.isSafeInteger(candidate.durationMs) && candidate.durationMs >= 0
+    case "prompt-suggestion": return typeof candidate.suggestion === "string"
+    case "active-branch-change": return typeof candidate.path === "string" && typeof candidate.branchName === "string"
     case "turn-ended": return isSlateTurnEndedUpdate(value)
     default: return false
   }
@@ -209,6 +271,12 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
       && (candidate.style === undefined || isSlateThinkingStyle(candidate.style))
     case "thinking-completed": return typeof candidate.durationMs === "number" && Number.isFinite(candidate.durationMs) && candidate.durationMs >= 0
     case "heartbeat": return true
+    case "step-started": return typeof candidate.stepId === "number" && Number.isSafeInteger(candidate.stepId) && candidate.stepId >= 0
+    case "step-completed": return typeof candidate.stepId === "number" && Number.isSafeInteger(candidate.stepId) && candidate.stepId >= 0
+      && typeof candidate.durationMs === "number" && Number.isSafeInteger(candidate.durationMs) && candidate.durationMs >= 0
+    case "prompt-suggestion": return isRedactedString(candidate.suggestion) && candidate.suggestion.__privacyMode === candidate.privacyMode
+    case "active-branch-change": return isRedactedString(candidate.path) && candidate.path.__privacyMode === candidate.privacyMode
+      && typeof candidate.branchName === "string"
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
     default: return false
   }

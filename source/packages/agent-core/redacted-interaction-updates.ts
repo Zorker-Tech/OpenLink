@@ -7,8 +7,12 @@ export {
 } from "../../adapters/interop/agent/redacted-interaction-updates-adapter.ts";
 export { SlateRedactedInteractionUpdates, slateRedactedTurnEndedUpdate } from "./slate-interaction-updates.ts"
 export type {
+  SlateRedactedActiveBranchChangeUpdate,
   SlateRedactedHeartbeatUpdate,
   SlateRedactedInteractionUpdate,
+  SlateRedactedPromptSuggestionUpdate,
+  SlateRedactedStepCompletedUpdate,
+  SlateRedactedStepStartedUpdate,
   SlateRedactedThinkingCompletedUpdate,
   SlateRedactedThinkingDeltaUpdate,
   SlateRedactedTextDeltaUpdate,

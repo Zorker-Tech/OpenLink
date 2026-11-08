@@ -1,13 +1,9 @@
 /** Temporary generated-message bridge retained during staged migration of event families. */
 import {
-  ActiveBranchChange,
   FeedbackRequestUpdate,
   InteractionUpdate,
   PartialToolCallUpdate,
-  PromptSuggestionUpdate,
   ShellOutputDeltaUpdate,
-  StepCompletedUpdate,
-  StepStartedUpdate,
   SummaryCompletedUpdate,
   SummaryStartedUpdate,
   SummaryUpdate,
@@ -55,18 +51,6 @@ export const Updates = {
   },
   shellOutputDelta(event: ShellOutputDeltaUpdate["event"]): InteractionUpdate {
     return wireUpdate("shellOutputDelta", new ShellOutputDeltaUpdate({ event }))
-  },
-  stepStarted(stepId: number): InteractionUpdate {
-    return wireUpdate("stepStarted", new StepStartedUpdate({ stepId: BigInt(stepId) }))
-  },
-  stepCompleted(stepId: number, stepDurationMs: number): InteractionUpdate {
-    return wireUpdate("stepCompleted", new StepCompletedUpdate({ stepId: BigInt(stepId), stepDurationMs: BigInt(stepDurationMs) }),)
-  },
-  promptSuggestion(suggestion: string): InteractionUpdate {
-    return wireUpdate("promptSuggestion", new PromptSuggestionUpdate({ suggestion }))
-  },
-  activeBranchChange(path: string, branchName: string): InteractionUpdate {
-    return wireUpdate("activeBranchChange", new ActiveBranchChange({ path, branchName }))
   },
   feedbackRequest(
     requestId: string,

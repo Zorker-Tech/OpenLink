@@ -67,8 +67,8 @@ function harness(options: {
 
 const listenerOf = (updates: string[]): { sendUpdate(_ctx: Context, update: unknown): void } => ({
   sendUpdate: (_ctx, update) => {
-    const value = (update as { message?: { case?: string; value?: { suggestion?: string } } }).message
-    updates.push(value?.value?.suggestion ?? "")
+    const event = update as { readonly kind?: string; readonly suggestion?: string }
+    updates.push(event.kind === "prompt-suggestion" ? event.suggestion ?? "" : "")
   },
 })
 
