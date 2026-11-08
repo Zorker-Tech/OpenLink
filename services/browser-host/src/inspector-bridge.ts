@@ -6,6 +6,7 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
 
   const sessionId = script.dataset.openlinkSession || '';
   const nonce = script.dataset.openlinkNonce || '';
+  const previewPath = script.dataset.openlinkPreviewPath || '';
   let allowedOrigins = [];
   try {
     allowedOrigins = JSON.parse(atob(script.dataset.openlinkOrigins || 'W10='));
@@ -15,6 +16,94 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   })();
   const parentOrigin = allowedOrigins.includes(referrerOrigin) ? referrerOrigin : allowedOrigins[0];
   if (!sessionId || !nonce || !parentOrigin) return;
+
+  const rewritePreviewRequestUrl = (input) => {
+    if (!previewPath || typeof input !== 'string' && !(input instanceof URL)) return input;
+    const value = String(input);
+    try {
+      const url = new URL(value, location.href);
+      const websocket = url.protocol === 'ws:' || url.protocol === 'wss:';
+      const sameOrigin = websocket ? url.host === location.host : url.origin === location.origin;
+      if (!sameOrigin || url.pathname === previewPath || url.pathname.startsWith(previewPath + '/')) return input;
+      url.pathname = previewPath + url.pathname;
+      return url.href;
+    } catch { return input; }
+  };
+
+  const originalFetch = window.fetch;
+  if (typeof originalFetch === 'function') {
+    window.fetch = function(input, init) {
+      if (input instanceof Request) {
+        const rewritten = rewritePreviewRequestUrl(input.url);
+        return Reflect.apply(originalFetch, window, [rewritten === input.url ? input : new Request(rewritten, input), init]);
+      }
+      return Reflect.apply(originalFetch, window, [rewritePreviewRequestUrl(input), init]);
+    };
+  }
+  const originalXhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function() {
+    const args = Array.from(arguments);
+    if (args.length > 1) args[1] = rewritePreviewRequestUrl(args[1]);
+    return Reflect.apply(originalXhrOpen, this, args);
+  };
+  for (const property of ['WebSocket', 'EventSource']) {
+    const NativeConstructor = window[property];
+    if (typeof NativeConstructor === 'function') {
+      window[property] = new Proxy(NativeConstructor, {
+        construct(target, args, newTarget) {
+          if (args.length) args[0] = rewritePreviewRequestUrl(args[0]);
+          return Reflect.construct(target, args, newTarget);
+        }
+      });
+    }
+  }
+  const originalSetAttribute = Element.prototype.setAttribute;
+  const previewUrlAttributes = new Set(['src', 'href', 'action', 'formaction', 'poster', 'data', 'manifest', 'srcset', 'imagesrcset', 'xlink:href']);
+  const rewritePreviewSrcSet = (value) => String(value).replace(/(^|,\s*)(\/[^,\s]+)/g, (match, separator, url) => (
+    separator + rewritePreviewRequestUrl(url)
+  ));
+  Element.prototype.setAttribute = function(name, value) {
+    const attribute = String(name).toLowerCase();
+    let nextValue = value;
+    if (attribute === 'srcset' || attribute === 'imagesrcset') nextValue = rewritePreviewSrcSet(value);
+    else if (previewUrlAttributes.has(attribute)) nextValue = rewritePreviewRequestUrl(String(value));
+    else if (attribute === 'style') {
+      nextValue = String(value).replace(/url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/gi, (match, quote, url) => (
+        'url(' + quote + rewritePreviewRequestUrl(url) + quote + ')'
+      ));
+    }
+    return Reflect.apply(originalSetAttribute, this, [name, nextValue]);
+  };
+  for (const [constructorName, property] of [
+    ['HTMLAnchorElement', 'href'], ['HTMLAreaElement', 'href'], ['HTMLBaseElement', 'href'],
+    ['HTMLLinkElement', 'href'], ['HTMLLinkElement', 'imageSrcset'], ['HTMLImageElement', 'src'],
+    ['HTMLImageElement', 'srcset'], ['HTMLScriptElement', 'src'], ['HTMLIFrameElement', 'src'],
+    ['HTMLFrameElement', 'src'], ['HTMLMediaElement', 'src'], ['HTMLSourceElement', 'src'],
+    ['HTMLSourceElement', 'srcset'], ['HTMLTrackElement', 'src'], ['HTMLInputElement', 'src'],
+    ['HTMLInputElement', 'formAction'], ['HTMLButtonElement', 'formAction'], ['HTMLFormElement', 'action'],
+    ['HTMLObjectElement', 'data'], ['HTMLEmbedElement', 'src'], ['HTMLVideoElement', 'poster']
+  ]) {
+    const prototype = window[constructorName]?.prototype;
+    const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, property);
+    if (!descriptor?.set) continue;
+    Object.defineProperty(prototype, property, {
+      ...descriptor,
+      set(value) {
+        const nextValue = property.toLowerCase().includes('srcset')
+          ? rewritePreviewSrcSet(value)
+          : rewritePreviewRequestUrl(String(value));
+        return Reflect.apply(descriptor.set, this, [nextValue]);
+      }
+    });
+  }
+  window.addEventListener('click', (event) => {
+    const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+    if (!anchor) return;
+    if (anchor.target && anchor.target.toLowerCase() !== '_self') return;
+    const target = new URL(anchor.href, location.href);
+    if (target.origin !== location.origin || target.pathname === previewPath || target.pathname.startsWith(previewPath + '/')) return;
+    anchor.href = rewritePreviewRequestUrl(target.href);
+  }, true);
 
   const CHANNEL = 'openlink.browser.inspector';
   const VERSION = 1;
@@ -517,7 +606,9 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
   for (const method of ['pushState', 'replaceState']) {
     const original = history[method];
     history[method] = function() {
-      const result = Reflect.apply(original, this, arguments);
+      const args = Array.from(arguments);
+      if (args.length > 2 && args[2] !== null) args[2] = rewritePreviewRequestUrl(String(args[2]));
+      const result = Reflect.apply(original, this, args);
       queueMicrotask(notifyPageUpdated);
       return result;
     };

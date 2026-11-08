@@ -9,7 +9,7 @@ import { BrowserHostError } from './errors.js'
 import { INSPECTOR_BRIDGE_SOURCE } from './inspector-bridge.js'
 import type { NativePreviewRuntime } from './preview-runtime.js'
 
-const MAX_HTML_BYTES = 20 * 1024 * 1024
+const MAX_REWRITTEN_RESOURCE_BYTES = 20 * 1024 * 1024
 
 function parseCookies(header: string | undefined): Map<string, string> {
   const cookies = new Map<string, string>()
@@ -26,6 +26,78 @@ function cookieName(sessionId: string): string {
 
 function escapeHtmlAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function rewritePreviewResourceUrl(value: string, runtime: NativePreviewRuntime): string {
+  if (!value || value.startsWith('#') || value.startsWith('data:') || value.startsWith('blob:') || value.startsWith('javascript:')) return value
+  if (!value.startsWith('/') && !/^https?:\/\//i.test(value)) return value
+  const publicPath = runtime.publicPath
+  try {
+    const targetUrl = new URL(value, runtime.target)
+    if (targetUrl.origin !== runtime.target.origin && targetUrl.origin !== runtime.publicOrigin) return value
+    if (targetUrl.pathname === publicPath || targetUrl.pathname.startsWith(`${publicPath}/`)) return value
+    return `${publicPath}${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`
+  } catch {
+    return value
+  }
+}
+
+function rewriteCssResourceUrls(css: string, runtime: NativePreviewRuntime): string {
+  return css.replace(/url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/gi, (match, quote: string, value: string) => {
+    const rewritten = rewritePreviewResourceUrl(value, runtime)
+    return rewritten === value ? match : `url(${quote}${rewritten}${quote})`
+  }).replace(/(@import\s+)(['"])([^'"]+)\2/gi, (match, prefix: string, quote: string, value: string) => {
+    const rewritten = rewritePreviewResourceUrl(value, runtime)
+    return rewritten === value ? match : `${prefix}${quote}${rewritten}${quote}`
+  })
+}
+
+function rewriteJavaScriptModuleUrls(source: string, runtime: NativePreviewRuntime): string {
+  const replaceRootPath = (match: string, prefix: string, quote: string, value: string) => {
+    const rewritten = rewritePreviewResourceUrl(value, runtime)
+    return rewritten === value ? match : `${prefix}${quote}${rewritten}${quote}`
+  }
+  return source
+    .replace(/((?:\bimport|\bexport)\s+(?:[^'";]*?\s+from\s+)?)(['"])(\/[^'"\r\n]*)\2/g, replaceRootPath)
+    .replace(/(\bimport\s*\(\s*)(['"])(\/[^'"\r\n]*)\2/g, replaceRootPath)
+    .replace(/(\bnew\s+URL\s*\(\s*)(['"])(\/[^'"\r\n]*)\2/g, replaceRootPath)
+}
+
+function rewriteHtmlResourceUrls(html: string, runtime: NativePreviewRuntime): string {
+  const urlAttribute = /((?:src|href|action|formaction|poster|data|manifest|xlink:href)\s*=\s*)(?:(['"])(.*?)\2|([^\s'"=<>`]+))/gi
+  return html.replace(urlAttribute, (match, prefix: string, quote: string | undefined, quotedValue: string | undefined, unquotedValue: string | undefined) => {
+    const value = quotedValue ?? unquotedValue ?? ''
+    const rewritten = rewritePreviewResourceUrl(value, runtime)
+    if (rewritten === value) return match
+    return quote ? `${prefix}${quote}${rewritten}${quote}` : `${prefix}${rewritten}`
+  }).replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi, (_match, before: string, css: string, after: string) => (
+    `${before}${rewriteCssResourceUrls(css, runtime)}${after}`
+  )).replace(/(style\s*=\s*)(['"])(.*?)\2/gi, (match, prefix: string, quote: string, css: string) => {
+    const rewritten = rewriteCssResourceUrls(css, runtime)
+    return rewritten === css ? match : `${prefix}${quote}${rewritten}${quote}`
+  }).replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi, (_match, before: string, code: string, after: string) => (
+    `${before}${rewriteJavaScriptModuleUrls(code, runtime)}${after}`
+  )).replace(/((?:srcset|imagesrcset)\s*=\s*)(['"])(.*?)\2/gi, (match, prefix: string, quote: string, value: string) => {
+    const rewritten = value.replace(/(^|,\s*)(\/[^,\s]+)/g, (candidate, separator: string, url: string) => (
+      `${separator}${rewritePreviewResourceUrl(url, runtime)}`
+    ))
+    return rewritten === value ? match : `${prefix}${quote}${rewritten}${quote}`
+  })
+}
+
+function rewriteLinkHeader(value: string | string[] | undefined, runtime: NativePreviewRuntime): string | string[] | undefined {
+  if (!value) return undefined
+  const rewrite = (header: string) => header.replace(/<([^>]+)>/g, (match, url: string) => {
+    const nextUrl = rewritePreviewResourceUrl(url, runtime)
+    return nextUrl === url ? match : `<${nextUrl}>`
+  })
+  return Array.isArray(value) ? value.map(rewrite) : rewrite(value)
+}
+
+function rewritePreviewTextResource(source: string, contentType: string, runtime: NativePreviewRuntime): string {
+  if (/text\/css/i.test(contentType)) return rewriteCssResourceUrls(source, runtime)
+  if (/(?:java|ecma)script/i.test(contentType)) return rewriteJavaScriptModuleUrls(source, runtime)
+  return source
 }
 
 function encodeOrigins(origins: string[]): string {
@@ -54,7 +126,7 @@ function addPreviewPolicyToCsp(value: string | string[] | undefined, runtime: Na
 }
 
 function injectBridge(html: string, runtime: NativePreviewRuntime): string {
-  const tag = `<script nonce="${escapeHtmlAttribute(runtime.bridgeNonce)}" src="/v1/browser/inspector-bridge.js" data-openlink-session="${escapeHtmlAttribute(runtime.sessionId)}" data-openlink-nonce="${escapeHtmlAttribute(runtime.bridgeNonce)}" data-openlink-origins="${escapeHtmlAttribute(encodeOrigins(runtime.parentOrigins))}"></script>`
+  const tag = `<script nonce="${escapeHtmlAttribute(runtime.bridgeNonce)}" src="/v1/browser/inspector-bridge.js" data-openlink-session="${escapeHtmlAttribute(runtime.sessionId)}" data-openlink-nonce="${escapeHtmlAttribute(runtime.bridgeNonce)}" data-openlink-preview-path="${escapeHtmlAttribute(runtime.publicPath)}" data-openlink-origins="${escapeHtmlAttribute(encodeOrigins(runtime.parentOrigins))}"></script>`
   const headOpen = /<head(?:\s[^>]*)?>/i.exec(html)
   if (headOpen?.index !== undefined) {
     const insertAt = headOpen.index + headOpen[0].length
@@ -200,6 +272,9 @@ export class NativePreviewProxy {
         const csp = addPreviewPolicyToCsp(responseHeaders['content-security-policy'], runtime)
         if (csp) responseHeaders['content-security-policy'] = csp
         else delete responseHeaders['content-security-policy']
+        const link = rewriteLinkHeader(responseHeaders.link, runtime)
+        if (link) responseHeaders.link = link
+        else delete responseHeaders.link
         const setCookie = rewriteSetCookie(responseHeaders['set-cookie'], runtime.publicPath)
         if (setCookie) responseHeaders['set-cookie'] = setCookie
         else delete responseHeaders['set-cookie']
@@ -211,7 +286,7 @@ export class NativePreviewProxy {
         }
 
         const contentType = String(upstream.headers['content-type'] || '')
-        if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+        if (!/text\/html|application\/xhtml\+xml|text\/css|(?:application|text)\/(?:java|ecma)script/i.test(contentType)) {
           response.writeHead(upstream.statusCode ?? 502, responseHeaders)
           upstream.pipe(response)
           upstream.once('end', resolve)
@@ -223,16 +298,19 @@ export class NativePreviewProxy {
         let size = 0
         upstream.on('data', (chunk: Buffer) => {
           size += chunk.length
-          if (size > MAX_HTML_BYTES) {
-            upstream.destroy(new BrowserHostError('PREVIEW_HTML_TOO_LARGE', 'Preview HTML exceeds the 20 MiB limit', 502))
+          if (size > MAX_REWRITTEN_RESOURCE_BYTES) {
+            upstream.destroy(new BrowserHostError('PREVIEW_RESOURCE_TOO_LARGE', 'Preview text resource exceeds the 20 MiB limit', 502))
             return
           }
           chunks.push(Buffer.from(chunk))
         })
         upstream.once('error', reject)
         upstream.once('end', () => {
-          const html = injectBridge(Buffer.concat(chunks).toString('utf8'), runtime)
-          const body = Buffer.from(html)
+          const source = Buffer.concat(chunks).toString('utf8')
+          const rewritten = /text\/html|application\/xhtml\+xml/i.test(contentType)
+            ? injectBridge(rewriteHtmlResourceUrls(source, runtime), runtime)
+            : rewritePreviewTextResource(source, contentType, runtime)
+          const body = Buffer.from(rewritten)
           responseHeaders['content-length'] = String(body.length)
           response.writeHead(upstream.statusCode ?? 200, responseHeaders)
           response.end(body, resolve)
