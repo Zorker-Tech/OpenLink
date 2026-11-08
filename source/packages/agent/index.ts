@@ -15,13 +15,12 @@
 // the turn plumbing
 import { flushPostTurnEndedWork } from "../agent-core/interaction-listener.ts";
 import { DeferredInteractionResponseError } from "../agent-core/interaction-queries.ts";
-import { Updates } from "../agent-core/interaction-updates.ts";
+import { slateRedactedTurnEndedUpdate } from "../agent-core/redacted-interaction-updates.ts";
 import { BackgroundSummarizationMode, DISABLED_BACKGROUND_SUMMARIZATION_PROPS } from "../agent-summarization/background-summarization.ts";
 import { withLogAttributes, createSpan } from "../context/index.ts";
 import { createHistogram } from "../metrics/index.ts";
 import { PrivacyMode } from "../redaction/privacy-mode.ts";
 import { restoreAgentConversationState } from "../../adapters/interop/agent/redacted-conversation-state-adapter.ts";
-import { redactInteractionUpdate } from "../../adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 // the session and its state
 import { drainPendingWritesOnRunStreamError } from "./abort-drain.ts";
 import { normalizeAgentConfig } from "./agent-config-runtime.ts";
@@ -168,7 +167,10 @@ export class AgentRoot {
       }
       if (!options?.skipTurnEndedUpdate) {
         const hasTokenUsage = Object.values(usage).some(value => value > 0);
-        await this.interactionListener.sendUpdate(ctx, redactInteractionUpdate(Updates.turnEnded(hasTokenUsage ? usage as Any : undefined), action.context.privacyMode));
+        await this.interactionListener.sendUpdate(ctx, slateRedactedTurnEndedUpdate(
+          action.context.privacyMode,
+          hasTokenUsage ? usage as Any : undefined,
+        ));
       }
       await flushPostTurnEndedWork(ctx, this.interactionListener);
       await pendingWrites;

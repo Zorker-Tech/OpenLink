@@ -216,7 +216,6 @@ source/packages/agent/context/process-selected-context.ts	../../../adapters/inte
 source/packages/agent/context/process-selected-context.ts	../../../adapters/interop/agent/workspace-file-write-adapter.ts
 source/packages/agent/context/video-attachment.ts	../../../adapters/interop/inference/video-model-adapter.ts
 source/packages/agent/index.ts	../../adapters/interop/agent/redacted-conversation-state-adapter.ts
-source/packages/agent/index.ts	../../adapters/interop/agent/redacted-interaction-listener-adapter.ts
 source/packages/agent/interaction-handler.ts	../../adapters/interop/agent/agent-loop-presentation-adapter.ts
 source/packages/agent/interaction-handler.ts	../../adapters/interop/agent/interaction-tool-call-adapter.ts
 source/packages/agent/prompts/cloud-testing-sections.ts	../../../adapters/interop/agent/thread-session-kind-adapter.ts

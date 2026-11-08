@@ -1,4 +1,4 @@
-/** Construct counterpart interaction-update envelopes at the agent/client boundary. */
+/** Temporary generated-message bridge retained during staged migration of event families. */
 import {
   ActiveBranchChange,
   FeedbackRequestUpdate,
@@ -19,12 +19,11 @@ import {
   ToolCallCompletedUpdate,
   ToolCallDeltaUpdate,
   ToolCallStartedUpdate,
-  TurnEndedUpdate,
   UserMessageAppendedUpdate,
   type FeedbackRequestCategory,
   type FeedbackRequestCategoryGroup,
 } from "../proto/generated/agent/v1/agent_pb.ts"
-import type { FeedbackRequestCopy, TurnUsage } from "../../../packages/agent-core/interaction-update-contracts.ts"
+import type { FeedbackRequestCopy } from "../../../packages/agent-core/interaction-update-contracts.ts"
 
 function wireUpdate(caseName: InteractionUpdate["message"]["case"], value: unknown): InteractionUpdate {
   return new InteractionUpdate({ message: { case: caseName, value } } as never)
@@ -76,16 +75,6 @@ export const Updates = {
   },
   shellOutputDelta(event: ShellOutputDeltaUpdate["event"]): InteractionUpdate {
     return wireUpdate("shellOutputDelta", new ShellOutputDeltaUpdate({ event }))
-  },
-  /** Usage is optional: a turn that ended early reports no counts rather than zeroes. */
-  turnEnded(usage?: TurnUsage): InteractionUpdate {
-    return wireUpdate("turnEnded", new TurnEndedUpdate(usage === undefined ? {} : {
-          inputTokens: BigInt(usage.inputTokens),
-          outputTokens: BigInt(usage.outputTokens),
-          cacheReadTokens: BigInt(usage.cacheReadTokens),
-          cacheWriteTokens: BigInt(usage.cacheWriteTokens),
-          reasoningTokens: BigInt(usage.reasoningTokens ?? 0),
-        }),)
   },
   stepStarted(stepId: number): InteractionUpdate {
     return wireUpdate("stepStarted", new StepStartedUpdate({ stepId: BigInt(stepId) }))

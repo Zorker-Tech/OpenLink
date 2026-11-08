@@ -15,13 +15,17 @@ function workerWorld() {
   const worker = new Worker(WORKER_URL, { workerData: { agentId: "agent-1", blobDbPath: join(directory, "blobs.db") } });
   worker.on("message", (message: Record<string, unknown>) => messages.push(message));
   worker.on("error", (error) => messages.push({ kind: "worker-error", message: String(error) }));
-  const exited = new Promise<number>((resolve) => worker.on("exit", (code) => resolve(code ?? 0)));
+  let exitCode: number | undefined;
+  const exited = new Promise<number>((resolve) => worker.on("exit", (code) => { exitCode = code ?? 0; resolve(exitCode); }));
   let nextCallId = 1;
   const send = (message: Record<string, unknown>) => { const callId = nextCallId++; worker.postMessage({ callId, ...message }); return callId; };
   const answer = async (callId: number) => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
+    for (let attempt = 0; attempt < 2_000; attempt += 1) {
       const found = messages.find((message) => message.callId === callId);
       if (found !== undefined) return found;
+      const workerError = messages.find((message) => message.kind === "worker-error");
+      if (workerError !== undefined) throw new Error("worker failed before responding: " + String(workerError.message));
+      if (exitCode !== undefined) throw new Error("worker exited before responding with code " + String(exitCode));
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
     throw new Error("no answer to worker call " + callId + "; saw " + JSON.stringify(messages));

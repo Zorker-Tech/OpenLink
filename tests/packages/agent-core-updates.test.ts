@@ -11,6 +11,7 @@ import {
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts"
 import { RedactedUpdates } from "../../source/packages/agent-core/redacted-interaction-updates.ts"
+import { slateRedactedTurnEndedUpdate, slateTurnEndedUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts"
 import * as agentCore from "../../source/packages/agent-core/index.ts"
 
 const mode = PrivacyMode.NO_STORAGE
@@ -32,31 +33,31 @@ test("an update is built with the case its client renders", () => {
 })
 
 test("turn usage is converted to bigints, and an early end reports nothing", () => {
-  const withUsage = Updates.turnEnded({
+  const withUsage = slateTurnEndedUpdate({
     inputTokens: 100,
     outputTokens: 20,
     cacheReadTokens: 30,
     cacheWriteTokens: 5,
     reasoningTokens: 7,
   })
-  const value = withUsage.message.value as { inputTokens?: bigint; reasoningTokens?: bigint }
-  assert.equal(value.inputTokens, BigInt(100))
-  assert.equal(value.reasoningTokens, BigInt(7))
+  assert.deepEqual(withUsage.usage, {
+    inputTokens: 100,
+    outputTokens: 20,
+    cacheReadTokens: 30,
+    cacheWriteTokens: 5,
+    reasoningTokens: 7,
+  })
 
-  const withoutReasoning = Updates.turnEnded({
+  const withoutReasoning = slateTurnEndedUpdate({
     inputTokens: 1,
     outputTokens: 2,
     cacheReadTokens: 3,
     cacheWriteTokens: 4,
   })
-  assert.equal((withoutReasoning.message.value as { reasoningTokens?: bigint }).reasoningTokens, BigInt(0))
+  assert.equal(withoutReasoning.usage?.reasoningTokens, 0)
 
-  const early = Updates.turnEnded()
-  assert.equal(
-    (early.message.value as { inputTokens?: bigint }).inputTokens,
-    undefined,
-    "usage counts are optional fields, so an omitted usage stays absent",
-  )
+  const early = slateTurnEndedUpdate()
+  assert.equal("usage" in early, false, "usage counts are omitted when the turn reported none")
 })
 
 test("a feedback request carries its categories and only the copy it was given", () => {
@@ -116,19 +117,18 @@ test("an update without text takes its privacy mode explicitly", () => {
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {
-  const withUsage = RedactedUpdates.turnEnded(mode, {
-    inputTokens: "100",
-    outputTokens: 20n,
+  const withUsage = slateRedactedTurnEndedUpdate(mode, {
+    inputTokens: 100,
+    outputTokens: 20,
     cacheReadTokens: 30,
     cacheWriteTokens: 5,
-    reasoningTokens: null,
   })
-  const value = withUsage.message.value as { inputTokens?: bigint; reasoningTokens?: bigint }
-  assert.equal(value.inputTokens, BigInt(100))
-  assert.equal(value.reasoningTokens, BigInt(0), "a null reasoning count is zero, not absent")
+  const value = withUsage.usage
+  assert.equal(value?.inputTokens, 100)
+  assert.equal(value?.reasoningTokens, 0, "an omitted reasoning count becomes zero when usage exists")
 
-  const none = RedactedUpdates.turnEnded(mode, undefined)
-  assert.equal("inputTokens" in (none.message.value as object), false)
+  const none = slateRedactedTurnEndedUpdate(mode, undefined)
+  assert.equal("usage" in none, false)
 })
 
 test("a context injection state is reported in the shape of its kind", () => {
