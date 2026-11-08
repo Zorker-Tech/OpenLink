@@ -1,7 +1,13 @@
 import { isDeepStrictEqual } from "node:util"
 import type { JsonValue as ProtocolJsonValue } from "@bufbuild/protobuf"
-import { ConversationStep, InteractionUpdate, type ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
-import { RedactedBytes, RedactedString } from "../../../packages/redaction/redacted-values.ts"
+import {
+  ConversationStep,
+  InteractionUpdate,
+  TaskToolCallDelta,
+  ToolCallDelta,
+  ToolCallDeltaUpdate,
+  type ToolCall,
+} from "../proto/generated/agent/v1/agent_pb.ts"
 import {
   fromRedactedInteractionUpdate,
   toRedactedInteractionUpdate,
@@ -13,7 +19,6 @@ import type { SlateInteractionQuery, SlateInteractionResponse } from "../../../p
 import type {
   SlateTaskProgressCompatibility,
   SlateTaskProgressUpdate,
-  SlateTaskProgressUpdateView,
 } from "../../../packages/agent/tools/task-progress-state.ts"
 import type { SlateToolCallStep } from "../../../packages/agent/conversation-step-state.ts"
 import { fromInteropConversationStep, toPlainInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
@@ -21,6 +26,12 @@ import { fromInteropUserMessage, toInteropUserMessage } from "./user-message-act
 
 type TaskProgressListener<Context> = {
   sendUpdate(context: Context, update: SlateTaskProgressUpdate): Promise<void>
+  sendTaskProgressUpdate?(
+    context: Context,
+    toolCallId: string,
+    modelCallId: string,
+    update: SlateTaskProgressUpdate,
+  ): Promise<void>
   query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse>
   enqueuePostTurnEndedWork?: ((work: () => Promise<unknown>) => void) | undefined
   flushPostTurnEndedWork?: ((context: Context) => Promise<void>) | undefined
@@ -140,7 +151,23 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         compatibility: compat,
       }
     }
-    case "toolCallDelta":
+    case "toolCallDelta": {
+      const delta = message.value.toolCallDelta
+      if (delta?.delta.case === "taskToolCallDelta" && delta.delta.value.interactionUpdate !== undefined) {
+        const nestedMessage = delta.delta.value.interactionUpdate
+        const nestedUpdate = nestedMessage.message.case === undefined &&
+          InteractionUpdate.runtime.bin.listUnknownFields(nestedMessage).length === 0
+          ? { schemaVersion: 1 as const, kind: "unrecognized" as const }
+          : taskProgressUpdateFromMessage(nestedMessage)
+        return {
+          schemaVersion: 1,
+          kind: "nested-task-progress",
+          toolCallId: message.value.callId,
+          modelCallId: message.value.modelCallId,
+          update: nestedUpdate,
+          compatibility: compat,
+        }
+      }
       return {
         schemaVersion: 1,
         kind: "tool-call-progress",
@@ -149,6 +176,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         ...(message.value.toolCallDelta === undefined ? {} : { delta: message.value.toolCallDelta.toJson() }),
         compatibility: compat,
       }
+    }
     case "stepStarted":
       return { schemaVersion: 1, kind: "step-started", stepId: message.value.stepId.toString(), compatibility: compat }
     case "stepCompleted":
@@ -293,6 +321,8 @@ function legacyJsonFromSlate(value: SlateTaskProgressUpdate): JsonValue {
           ...(value.delta === undefined ? {} : { toolCallDelta: value.delta }),
         },
       }
+    case "nested-task-progress":
+      throw new TypeError("Nested task progress requires the structured message encoder")
     case "step-started":
       return { stepStarted: { stepId: value.stepId } }
     case "step-completed":
@@ -353,6 +383,25 @@ export function slateTaskProgressUpdateToInterop(value: unknown): InteractionUpd
     throw new TypeError("Task progress update is invalid")
   }
 
+  if (update.kind === "nested-task-progress" && update.compatibility === undefined) {
+    const nestedUpdate = slateTaskProgressUpdateToInterop(update.update)
+    return new InteractionUpdate({
+      message: {
+        case: "toolCallDelta",
+        value: new ToolCallDeltaUpdate({
+          callId: update.toolCallId,
+          modelCallId: update.modelCallId,
+          toolCallDelta: new ToolCallDelta({
+            delta: {
+              case: "taskToolCallDelta",
+              value: new TaskToolCallDelta({ interactionUpdate: nestedUpdate }),
+            },
+          }),
+        }),
+      },
+    })
+  }
+
   if (update.compatibility !== undefined) {
     if (
       update.compatibility === null ||
@@ -382,59 +431,12 @@ export function slateTaskProgressUpdateToInterop(value: unknown): InteractionUpd
   }
 }
 
-function taskProgressJsonValue(value: unknown, ancestors = new Set<object>()): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new TypeError("Task progress contains a non-finite number")
-    return value
-  }
-  if (typeof value === "bigint") return value.toString()
-  if (value instanceof RedactedString) {
-    return value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
-      enforcing: true,
-      redactUnallowedFieldsInsteadOfThrowing: true,
-    })
-  }
-  if (value instanceof RedactedBytes) {
-    return Buffer.from(value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
-      enforcing: true,
-      redactUnallowedFieldsInsteadOfThrowing: true,
-    })).toString("base64")
-  }
-  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64")
-  if (value instanceof Date) return value.toISOString()
-  if (typeof value !== "object") throw new TypeError("Task progress contains a non-JSON value")
-  if (ancestors.has(value)) throw new TypeError("Task progress contains a cycle")
-  ancestors.add(value)
-  try {
-    if (Array.isArray(value)) return value.map(entry => taskProgressJsonValue(entry, ancestors))
-    if (value instanceof Map) {
-      const projected: Record<string, JsonValue> = {}
-      for (const [key, entry] of value) {
-        if (typeof key !== "string") throw new TypeError("Task progress map key is not a string")
-        projected[key] = taskProgressJsonValue(entry, ancestors)
-      }
-      return projected
-    }
-    if (value instanceof Set) return [...value].map(entry => taskProgressJsonValue(entry, ancestors))
-
-    const projected: Record<string, JsonValue> = {}
-    for (const [key, entry] of Object.entries(value)) {
-      if (key === "compatibility" || key === "_privacyMode" || entry === undefined) continue
-      projected[key] = taskProgressJsonValue(entry, ancestors)
-    }
-    return projected
-  } finally {
-    ancestors.delete(value)
-  }
-}
-
 /** Removes the private migration bytes and applies the same field redaction policy as the interaction stream. */
 export function taskProgressUpdateForListener(
   update: SlateTaskProgressUpdate,
   privacyMode: PrivacyMode,
-): SlateTaskProgressUpdateView {
-  if (update.kind === "unrecognized") return { schemaVersion: 1, kind: "unrecognized" }
+): SlateTaskProgressUpdate | undefined {
+  if (update.compatibility === undefined && hasUnrecognizedTaskProgress(update)) return undefined
   const legacy = slateTaskProgressUpdateToInterop(update)
   const redacted = toRedactedInteractionUpdate(legacy, privacyMode)
   const projected = (fromRedactedInteractionUpdate as unknown as (
@@ -445,8 +447,14 @@ export function taskProgressUpdateForListener(
     redactUnallowedFieldsInsteadOfThrowing: true,
     enforcing: true,
   })
+  if (projected.message.case === undefined && InteractionUpdate.runtime.bin.listUnknownFields(projected).length === 0) return undefined
   const safeUpdate = taskProgressUpdateFromMessage(projected)
-  return taskProgressJsonValue(safeUpdate) as SlateTaskProgressUpdateView
+  return safeUpdate
+}
+
+function hasUnrecognizedTaskProgress(update: SlateTaskProgressUpdate): boolean {
+  if (update.kind === "unrecognized") return update.compatibility === undefined
+  return update.kind === "nested-task-progress" && hasUnrecognizedTaskProgress(update.update)
 }
 
 export function createTaskProgressListenerInterop<Context>(listener: TaskProgressListener<Context>) {
@@ -454,6 +462,10 @@ export function createTaskProgressListenerInterop<Context>(listener: TaskProgres
     async sendUpdate(context: Context, update: InteractionUpdate): Promise<void> {
       await listener.sendUpdate(context, slateTaskProgressUpdateFromInterop(update))
     },
+    sendTaskProgressUpdate: listener.sendTaskProgressUpdate
+      ? (context: Context, toolCallId: string, modelCallId: string, update: SlateTaskProgressUpdate) =>
+          listener.sendTaskProgressUpdate?.(context, toolCallId, modelCallId, update)
+      : undefined,
     query(context: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse> {
       return listener.query(context, query)
     },

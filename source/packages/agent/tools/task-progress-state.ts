@@ -1,4 +1,6 @@
 import type { JsonValue } from "@slate/work-domain"
+import { PrivacyCapability } from "../../redaction/classification.ts"
+import { RedactedBytes, RedactedString } from "../../redaction/redacted-values.ts"
 import type { SlateToolCallStep } from "../conversation-step-state.ts"
 import type { SlateUserMessage } from "../user-message-state.ts"
 
@@ -108,11 +110,12 @@ export type SlateTaskProgressUpdate =
   | (SlateTaskProgressBase<"routed-model"> & {
       readonly displayName: string
     })
-  | {
-      readonly schemaVersion: 1
-      readonly kind: "unrecognized"
-      readonly compatibility: SlateTaskProgressCompatibility
-    }
+  | (SlateTaskProgressBase<"nested-task-progress"> & {
+      readonly toolCallId: string
+      readonly modelCallId: string
+      readonly update: SlateTaskProgressUpdate
+    })
+  | SlateTaskProgressBase<"unrecognized">
 
 type SlateTaskProgressViewOf<Value> =
   Value extends { readonly kind: "tool-call-started" | "tool-call-completed"; readonly toolCall?: SlateToolCallStep }
@@ -121,6 +124,8 @@ type SlateTaskProgressViewOf<Value> =
       ? Omit<Value, "compatibility" | "toolCall"> & { readonly toolCall?: JsonValue }
       : Value extends { readonly kind: "user-message-appended"; readonly message?: SlateUserMessage }
         ? Omit<Value, "compatibility" | "message"> & { readonly message?: JsonValue }
+        : Value extends { readonly kind: "nested-task-progress"; readonly update: SlateTaskProgressUpdate }
+          ? Omit<Value, "compatibility" | "update"> & { readonly update: SlateTaskProgressUpdateView }
         : Value extends { readonly compatibility?: SlateTaskProgressCompatibility }
           ? Omit<Value, "compatibility">
           : never
@@ -129,3 +134,60 @@ type SlateTaskProgressViewOf<Value> =
 export type SlateTaskProgressUpdateView = SlateTaskProgressUpdate extends infer Update
   ? Update extends unknown ? SlateTaskProgressViewOf<Update> : never
   : never
+
+export interface SlateTaskProgressDelivery {
+  readonly modelCallId: string
+  readonly update: SlateTaskProgressUpdateView
+}
+
+function jsonSafeProgressValue(value: unknown, ancestors = new Set<object>()): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("Task progress contains a non-finite number")
+    return value
+  }
+  if (typeof value === "bigint") return value.toString()
+  if (value instanceof RedactedString) {
+    return value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
+      enforcing: true,
+      redactUnallowedFieldsInsteadOfThrowing: true,
+    })
+  }
+  if (value instanceof RedactedBytes) {
+    return Buffer.from(value.unwrap(PrivacyCapability.STORAGE_FOR_TRAINING, {
+      enforcing: true,
+      redactUnallowedFieldsInsteadOfThrowing: true,
+    })).toString("base64")
+  }
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64")
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value !== "object") throw new TypeError("Task progress contains a non-JSON value")
+  if (ancestors.has(value)) throw new TypeError("Task progress contains a cycle")
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) return value.map(entry => jsonSafeProgressValue(entry, ancestors))
+    if (value instanceof Map) {
+      const projected: Record<string, JsonValue> = {}
+      for (const [key, entry] of value) {
+        if (typeof key !== "string") throw new TypeError("Task progress map key is not a string")
+        projected[key] = jsonSafeProgressValue(entry, ancestors)
+      }
+      return projected
+    }
+    if (value instanceof Set) return [...value].map(entry => jsonSafeProgressValue(entry, ancestors))
+
+    const projected: Record<string, JsonValue> = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (key === "compatibility" || key === "_privacyMode" || entry === undefined) continue
+      projected[key] = jsonSafeProgressValue(entry, ancestors)
+    }
+    return projected
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+/** A transport-safe view with redacted values projected, wide integers normalized and byte values encoded. */
+export function slateTaskProgressUpdateView(update: SlateTaskProgressUpdate): SlateTaskProgressUpdateView {
+  return jsonSafeProgressValue(update) as SlateTaskProgressUpdateView
+}

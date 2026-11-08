@@ -188,7 +188,7 @@ function presentFields(fields: Readonly<Record<string, unknown>>): Readonly<Reco
 }
 
 /** What a subagent's streamed interaction reports to: a tool-call delta on the parent's interaction, and approvals. */
-class StreamingTaskInteractionListener {
+export class StreamingTaskInteractionListener {
   constructor(private readonly interactionHandler: Any, private readonly toolCallId: string) {}
 
   async sendUpdate(ctx: Context, update: SlateTaskProgressUpdate): Promise<void> {
@@ -201,11 +201,38 @@ class StreamingTaskInteractionListener {
     );
   }
 
+  async sendTaskProgressUpdate(
+    ctx: Context,
+    nestedToolCallId: string,
+    nestedModelCallId: string,
+    update: SlateTaskProgressUpdate,
+  ): Promise<void> {
+    const nestedUpdate: SlateTaskProgressUpdate = {
+      schemaVersion: 1,
+      kind: "nested-task-progress",
+      toolCallId: nestedToolCallId,
+      modelCallId: nestedModelCallId,
+      update,
+    }
+    if (await this.interactionHandler.emitTaskProgressUpdate(ctx, this.toolCallId, nestedUpdate)) return
+    if (hasUnrecognizedTaskProgress(update)) return
+    await this.interactionHandler.emitToolCallDelta(
+      ctx,
+      this.toolCallId,
+      createTaskToolCallDeltaInterop(nestedUpdate),
+    )
+  }
+
   async query(_ctx: Context, query: SlateInteractionQuery): Promise<SlateInteractionResponse> {
     const approve = INTERACTION_QUERY_APPROVALS.get(query.kind);
     if (approve == null) throw new Error("Unhandled interaction query type: " + query.kind);
     return approve(query.id);
   }
+}
+
+function hasUnrecognizedTaskProgress(update: SlateTaskProgressUpdate): boolean {
+  if (update.kind === "unrecognized") return update.compatibility === undefined
+  return update.kind === "nested-task-progress" && hasUnrecognizedTaskProgress(update.update)
 }
 
 /** The parent's feature flags, with the subagent's own parent marker turned off. */

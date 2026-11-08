@@ -1,12 +1,13 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { createSlateTaskTool } from "../../source/packages/agent/tools/task.ts"
+import { createSlateTaskTool, StreamingTaskInteractionListener } from "../../source/packages/agent/tools/task.ts"
 import { createTaskAgentToolInterop } from "../../source/adapters/interop/agent/task-agent-tool-adapter.ts"
 import type { TaskSubagentModelConfig } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
+import type { SlateTaskProgressUpdate } from "../../source/packages/agent/tools/task-progress-state.ts"
 import { SubagentBackgroundReason, TaskResult, TaskSuccess } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 
@@ -81,6 +82,38 @@ test("the task core consumes and renders its Slate result directly", async () =>
   const rendered = await core.render(createContext(), { kind: "error", message: "the subagent refused" })
   assert.equal(rendered.isError, true)
   assert.equal(rendered.content[0]?.text, "Error: the subagent refused")
+})
+
+test("a child Task update reaches its parent as a nested Slate progress event", async () => {
+  let delivered: { readonly toolCallId: string; readonly update: SlateTaskProgressUpdate } | undefined
+  const listener = new StreamingTaskInteractionListener({
+    async emitTaskProgressUpdate(_context: unknown, toolCallId: string, update: SlateTaskProgressUpdate) {
+      delivered = { toolCallId, update }
+      return true
+    },
+    async emitToolCallDelta() {
+      assert.fail("the Slate progress port should handle this update")
+    },
+  }, "parent-task-call")
+  const childUpdate: SlateTaskProgressUpdate = {
+    schemaVersion: 1,
+    kind: "assistant-text",
+    text: "child output",
+    serverNotice: false,
+  }
+
+  await listener.sendTaskProgressUpdate(createContext(), "child-tool-call", "child-model-call", childUpdate)
+
+  assert.deepEqual(delivered, {
+    toolCallId: "parent-task-call",
+    update: {
+      schemaVersion: 1,
+      kind: "nested-task-progress",
+      toolCallId: "child-tool-call",
+      modelCallId: "child-model-call",
+      update: childUpdate,
+    },
+  })
 })
 
 test("the tool is named for the model family that reads it", () => {

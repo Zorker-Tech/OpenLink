@@ -7,17 +7,20 @@ import {
   type OutlineToolCall,
 } from "./conversation-outline.ts";
 import { turnUsageFromTurnEnded, type TurnEndedUsage } from "./turn-usage.ts";
-import type { SlateTaskProgressUpdateView } from "../../packages/agent/tools/task-progress-state.ts";
+import {
+  slateTaskProgressUpdateView,
+  type SlateTaskProgressDelivery,
+  type SlateTaskProgressUpdate,
+} from "../../packages/agent/tools/task-progress-state.ts";
 
 export interface ForwardedUpdate {
   readonly type: string;
   readonly [key: string]: unknown;
 }
 
-export interface ForwardedTaskProgressUpdate extends ForwardedUpdate {
+export interface ForwardedTaskProgressUpdate extends ForwardedUpdate, SlateTaskProgressDelivery {
   readonly type: "task-progress"
   readonly toolCallId: string
-  readonly update: SlateTaskProgressUpdateView
 }
 
 export interface ForwardingInteractionObservers {
@@ -83,9 +86,15 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
   async sendTaskProgressUpdate(
     _ctx: { readonly canceled?: boolean },
     toolCallId: string,
-    update: SlateTaskProgressUpdateView,
+    modelCallId: string,
+    update: SlateTaskProgressUpdate,
   ): Promise<void> {
-    const event: ForwardedTaskProgressUpdate = { type: "task-progress", toolCallId, update };
+    const event: ForwardedTaskProgressUpdate = {
+      type: "task-progress",
+      toolCallId,
+      modelCallId,
+      update: slateTaskProgressUpdateView(update),
+    };
     this.onUpdate(event);
   }
 
