@@ -140,7 +140,7 @@ function commonManagerOptions(stateRoot, vmManager, machineDriver, serviceDriver
     agentRpcWorkerImage: 'openlink/agent-rpc-worker:dev',
     codeServerImage: 'openlink/code-server:dev',
     imageArchives: imageArchives(),
-    projectPortBase: Number(process.env.OPENLINK_PROJECT_RUNTIME_PORT_BASE || 51_000),
+    projectPortBase: Number(process.env.OPENLINK_PROJECT_RUNTIME_PORT_BASE || 57_000),
     projectPortRangeSize: Number(process.env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE || 1_000),
     desktopPortOffset: Number(process.env.OPENLINK_PROJECT_RUNTIME_DESKTOP_PORT_OFFSET || 6_000),
     projectDesktop,

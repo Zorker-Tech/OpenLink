@@ -170,7 +170,7 @@ const runtimeManager = new ProjectRuntimeManager({
   agentWorkerImage: 'openlink/agent-worker:dev',
   agentRpcWorkerImage: 'openlink/agent-rpc-worker:dev',
   imageArchives,
-  projectPortBase: integer('OPENLINK_VALIDATION_PROJECT_PORT_BASE', 56_000, 1_024, 63_000),
+  projectPortBase: integer('OPENLINK_VALIDATION_PROJECT_PORT_BASE', 57_000, 1_024, 63_000),
   browserAllowedOrigins: 'http://127.0.0.1:3000',
   publicHost: '127.0.0.1',
 })
