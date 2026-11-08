@@ -513,7 +513,16 @@ export const INSPECTOR_BRIDGE_SOURCE = String.raw`(() => {
     } else if (payload.type === 'action.execute') void execute(payload.envelope);
   });
 
-  window.addEventListener('popstate', () => send({ type: 'page.updated', url: location.href, title: document.title }));
-  window.addEventListener('hashchange', () => send({ type: 'page.updated', url: location.href, title: document.title }));
+  const notifyPageUpdated = () => send({ type: 'page.updated', url: location.href, title: document.title });
+  for (const method of ['pushState', 'replaceState']) {
+    const original = history[method];
+    history[method] = function() {
+      const result = Reflect.apply(original, this, arguments);
+      queueMicrotask(notifyPageUpdated);
+      return result;
+    };
+  }
+  window.addEventListener('popstate', notifyPageUpdated);
+  window.addEventListener('hashchange', notifyPageUpdated);
   send({ type: 'bridge.ready', url: location.href, title: document.title });
 })();`

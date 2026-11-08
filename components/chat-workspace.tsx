@@ -1644,9 +1644,10 @@ export function ChatWorkspace({
     const migratedTargetIds = restoredWorkspacePreview?.targetIds
       ?? (persistedUi.previewTargetId ? { [sessionProjectId]: persistedUi.previewTargetId } : {})
     const nextWorkspacePreview: WorkspacePreviewState = {
-      version: 1,
+      version: 2,
       selectedProjectId,
       targetIds: migratedTargetIds,
+      pagePaths: restoredWorkspacePreview?.pagePaths ?? {},
     }
     setWorkspacePreviewState(nextWorkspacePreview)
     setPreviewProjectId(selectedProjectId)
@@ -1673,6 +1674,15 @@ export function ChatWorkspace({
       return { ...current, targetIds }
     })
   }, [browserState.activePreviewTargetId, browserState.previewTargetsError, browserState.previewTargetsLoading, previewProjectId, workspacePreviewReady])
+
+  useEffect(() => {
+    const targetId = browserState.activePreviewTargetId
+    const pagePath = browserState.previewPagePath
+    if (!workspacePreviewReady || browserState.surface !== 'native-preview' || !targetId || !pagePath) return
+    setWorkspacePreviewState((current) => current.pagePaths[targetId] === pagePath
+      ? current
+      : { ...current, pagePaths: { ...current.pagePaths, [targetId]: pagePath } })
+  }, [browserState.activePreviewTargetId, browserState.previewPagePath, browserState.surface, workspacePreviewReady])
 
   useEffect(() => {
     if (!uiReady || !uiStatePersistArmedRef.current) return
@@ -2399,7 +2409,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} onSelectPreviewProject={selectPreviewProject} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={selectedGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>

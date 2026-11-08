@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright-core'
 import { WebSocket } from 'ws'
-import { BROWSER_PROTOCOL_VERSION, type BrowserActionEnvelope, type BrowserSocketServerMessage, type InspectorBridgeEnvelope, type InspectorBridgeEvent } from '@openlink/browser-protocol'
+import { BROWSER_PROTOCOL_VERSION, previewPagePathFromAddress, type BrowserActionEnvelope, type BrowserSocketServerMessage, type InspectorBridgeEnvelope, type InspectorBridgeEvent } from '@openlink/browser-protocol'
 import { BrowserHostServer } from '../src/browser-server.js'
 import type { BrowserHostConfig } from '../src/config.js'
 
@@ -42,11 +42,13 @@ async function waitFor<T>(read: () => T | undefined, description: string, timeou
   throw new Error(`Timed out waiting for ${description}`)
 }
 
-test('real Chromium Preview iframe runs the injected inspector bridge and relays a DOM style action', async (t) => {
+test('real Chromium Preview iframe restores a route, runs the inspector bridge, and relays a DOM style action', async (t) => {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || chromium.executablePath()
   await access(executablePath)
 
-  const upstream = createServer((_request, response) => {
+  const upstreamPaths: string[] = []
+  const upstream = createServer((request, response) => {
+    upstreamPaths.push(request.url || '/')
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': "default-src 'self'; script-src 'self'; frame-ancestors 'none'",
@@ -125,7 +127,9 @@ test('real Chromium Preview iframe runs the injected inspector bridge and relays
     session: { id: string }
     connection: { previewUrl: string; eventsUrl: string }
   }
-  previewUrl = created.connection.previewUrl
+  const bootstrapUrl = new URL(created.connection.previewUrl)
+  bootstrapUrl.searchParams.set('path', '/dashboard')
+  previewUrl = bootstrapUrl.toString()
 
   browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] })
   page = await browser.newPage()
@@ -144,6 +148,9 @@ test('real Chromium Preview iframe runs the injected inspector bridge and relays
     data: InspectorBridgeEnvelope
   }
   assert.equal(bridgeReady.origin, config.publicBaseUrl)
+  const restoredUrl = new URL((bridgeReady.data.payload as Extract<InspectorBridgeEvent, { type: 'bridge.ready' }>).url)
+  assert.equal(restoredUrl.pathname, `/v1/browser/sessions/${created.session.id}/preview/dashboard`)
+  assert.ok(upstreamPaths.includes('/dashboard'))
   await page.evaluate(({ origin, data }) => {
     const frame = document.querySelector<HTMLIFrameElement>('#preview')!
     frame.contentWindow!.postMessage({
@@ -216,6 +223,12 @@ test('real Chromium Preview iframe runs the injected inspector bridge and relays
   )
   assert.equal(relayedResult.type, 'event')
   assert.equal(relayedResult.payload.event.type === 'action.result' && relayedResult.payload.event.result.ok, true)
+  const nextAddress = `${restoredUrl.pathname}/settings?token=must-not-persist`
+  await page.frameLocator('#preview').locator('body').evaluate((_, path) => history.pushState({}, '', path), nextAddress)
+  const updatedMessage = await page.waitForFunction(() => window.previewMessages?.find((message) => message.data.payload?.type === 'page.updated'))
+  const updated = await updatedMessage.jsonValue() as { data: InspectorBridgeEnvelope<Extract<InspectorBridgeEvent, { type: 'page.updated' }>> }
+  assert.equal(previewPagePathFromAddress(updated.data.payload.url), '/dashboard/settings')
+  assert.equal(new URL(updated.data.payload.url).search, '?token=must-not-persist')
   const color = await page.frameLocator('#preview').getByRole('button', { name: 'Apply style' }).evaluate((element) => getComputedStyle(element).color)
   assert.equal(color, 'rgb(255, 0, 0)')
   assert.deepEqual(pageErrors, [])

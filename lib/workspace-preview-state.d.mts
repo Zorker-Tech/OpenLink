@@ -1,7 +1,8 @@
 export interface WorkspacePreviewState {
-  version: 1
+  version: 2
   selectedProjectId: string | null
   targetIds: Record<string, string>
+  pagePaths: Record<string, string>
 }
 
 export function createEmptyWorkspacePreviewState(): WorkspacePreviewState

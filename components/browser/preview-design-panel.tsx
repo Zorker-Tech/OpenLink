@@ -4,7 +4,7 @@ import type { BrowserElementMove, BrowserPreviewAnnotationTarget, BrowserWorkben
 import type { AgentPromptAttachment } from '@/lib/agent-runtime/events'
 import { useT } from '@/lib/i18n/client'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
-import type { ElementReference } from '@/packages/browser-protocol/src/index'
+import { previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference } from '@/packages/browser-protocol/src/index'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppWindow, Eye, Layers3, LoaderCircle, MessageSquarePlus, Palette, RotateCw, Undo2, Redo2, WandSparkles, X } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -145,12 +145,9 @@ function colorPickerValue(value: string): string | null {
 }
 
 function safePreviewPagePath(address: string): string {
-  try {
-    const url = new URL(address)
-    return url.pathname.replace(/^\/v1\/browser\/(?:gateway\/)?sessions\/[^/]+\/preview(?=\/|$)/, '') || '/'
-  } catch {
-    return address.startsWith('/') ? address : '/'
-  }
+  return previewPagePathFromAddress(address)
+    ?? sanitizePreviewPagePath(address)
+    ?? '/'
 }
 
 export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDesignPanelProps>(function PreviewDesignPanel({

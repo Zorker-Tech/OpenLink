@@ -5,7 +5,7 @@ import { NativePreviewSurface } from '@/components/browser/native-preview-surfac
 import { ThinkingOrb } from '@/components/thinking/src'
 import { useT } from '@/lib/i18n/client'
 import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, listBrowserPreviewTargets, type BrowserConnectionStatus, type BrowserPreviewTarget } from '@/lib/browser-runtime/client'
-import type { BrowserAction, BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
+import { sanitizePreviewPagePath, type BrowserAction, type BrowserActionResult, type BrowserSessionState, type ElementReference } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
@@ -37,6 +37,7 @@ export interface BrowserWorkbenchUiState {
   /** Live development servers discovered in the selected Preview project's runtime. */
   previewTargets: BrowserPreviewTarget[]
   activePreviewTargetId?: string
+  previewPagePath?: string
   previewTargetsLoading: boolean
   previewTargetsError?: string
 }
@@ -70,7 +71,7 @@ export interface BrowserWorkbenchHandle {
   openExternal: () => void
   reload: () => void
   setSurface: (surface: 'native-preview' | 'chromium-stream') => void
-  selectPreviewTarget: (targetId: string) => void
+  selectPreviewTarget: (targetId: string, pagePath?: string) => void
   refreshPreviewTargets: () => void
   toggleInspector: () => void
   setInspectionMode: (mode: PreviewInspectionMode) => void
@@ -95,6 +96,8 @@ interface BrowserWorkbenchProps {
   initialUrl?: string
   /** Last selected development server for the Preview surface. */
   initialPreviewTargetId?: string
+  /** Last safe pathname for the selected managed Preview target. */
+  initialPreviewPagePath?: string
   /** Keep a project Preview on its target error instead of switching to Realtime. */
   allowRealtimeFallback?: boolean
   onStateChange?: (state: BrowserWorkbenchUiState) => void
@@ -103,17 +106,20 @@ interface BrowserWorkbenchProps {
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, allowRealtimeFallback = true, onStateChange, onAnnotationTarget, onElementMoved, viewportMode }, ref) {
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ projectId, chatSessionId, initialSurface = 'native-preview', initialUrl, initialPreviewTargetId, initialPreviewPagePath, allowRealtimeFallback = true, onStateChange, onAnnotationTarget, onElementMoved, viewportMode }, ref) {
   const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
   const initialUrlRef = useRef(initialUrl ?? '')
   const initialPreviewTargetIdRef = useRef(initialPreviewTargetId)
+  const initialPreviewPagePathRef = useRef(initialPreviewPagePath)
   const [surface, setSurface] = useState<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [connection, setConnection] = useState<BrowserConnection | null>(null)
   const [sessionState, setSessionState] = useState<BrowserSessionState | null>(null)
   const [status, setStatus] = useState<BrowserConnectionStatus>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState('')
+  const [previewPagePath, setPreviewPagePath] = useState<string | undefined>()
+  const [previewBootstrapPath, setPreviewBootstrapPath] = useState<string | undefined>()
   const [inspectionMode, setInspectionMode] = useState<PreviewInspectionMode>('none')
   const [selectedElement, setSelectedElement] = useState<ElementReference | null>(null)
   const [selectedStyles, setSelectedStyles] = useState<Record<string, string> | undefined>()
@@ -125,6 +131,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   const [previewTargetsError, setPreviewTargetsError] = useState<string | undefined>()
   const requestVersion = useRef(0)
   const connectionRef = useRef<BrowserConnection | null>(null)
+  const previewPagePathRef = useRef<string | undefined>(initialPreviewPagePath)
   const previewActionKinds = useRef(new Map<string, BrowserAction['type']>())
   const annotationTargetRef = useRef(onAnnotationTarget)
   const elementMoveRef = useRef(onElementMoved)
@@ -133,7 +140,8 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   useEffect(() => {
     initialUrlRef.current = initialUrl ?? ''
     initialPreviewTargetIdRef.current = initialPreviewTargetId
-  }, [initialPreviewTargetId, initialUrl])
+    initialPreviewPagePathRef.current = sanitizePreviewPagePath(initialPreviewPagePath) ?? undefined
+  }, [initialPreviewPagePath, initialPreviewTargetId, initialUrl])
 
   useEffect(() => { annotationTargetRef.current = onAnnotationTarget }, [onAnnotationTarget])
   useEffect(() => { elementMoveRef.current = onElementMoved }, [onElementMoved])
@@ -155,8 +163,12 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     }
   }, [chatSessionId, projectId, t])
 
-  const openSession = useCallback(async (nextSurface: 'native-preview' | 'chromium-stream', initialUrl?: string, previewTargetId?: string) => {
+  const openSession = useCallback(async (nextSurface: 'native-preview' | 'chromium-stream', initialUrl?: string, previewTargetId?: string, previewPath?: string) => {
     const version = ++requestVersion.current
+    const safePreviewPath = nextSurface === 'native-preview' ? sanitizePreviewPagePath(previewPath) ?? undefined : undefined
+    previewPagePathRef.current = safePreviewPath
+    setPreviewPagePath(undefined)
+    setPreviewBootstrapPath(safePreviewPath)
     setError(null)
     setStatus('connecting')
     setInspectionMode('none')
@@ -202,7 +214,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       next.onState((state) => {
         setSessionState(state)
         const page = state.pages.find((candidate) => candidate.id === state.activePageId)
-        if (page) setAddress(page.url)
+        if (page && nextSurface !== 'native-preview') setAddress(page.url)
       })
       next.onError(setError)
       next.onSessionLost((reason) => {
@@ -213,7 +225,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         // reaper, a VM restart, or a token expiry removes one while this tab is
         // still mounted, create a replacement instead of leaving the canvas in
         // a reconnect loop against a dead session id.
-        void openSession(nextSurface, currentAddress, previewTargetId)
+        void openSession(nextSurface, currentAddress, previewTargetId, previewPagePathRef.current)
       })
       next.onEvent((envelope) => {
         if (envelope.event.type !== 'action.result') return
@@ -295,7 +307,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
 
   useEffect(() => {
     void refreshPreviewTargets()
-    void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined, initialPreviewTargetIdRef.current)
+    void openSessionRef.current(initialSurfaceRef.current, initialUrlRef.current || undefined, initialPreviewTargetIdRef.current, initialPreviewPagePathRef.current)
     return () => {
       requestVersion.current += 1
       const current = connectionRef.current
@@ -397,6 +409,14 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     try { connection.sendAction({ type: 'page.navigate', pageId: activePage.id, url }) } catch {}
   }, [activePage, connection])
 
+  const handlePreviewPageUrlChange = useCallback((url: string, pagePath: string) => {
+    const safePath = sanitizePreviewPagePath(pagePath)
+    if (!safePath) return
+    previewPagePathRef.current = safePath
+    setPreviewPagePath(safePath)
+    setAddress(url)
+  }, [])
+
   const externalUrl = (() => {
     if (surface !== 'native-preview') return activePage?.url
     const previewUrl = connection?.descriptor.connection.previewUrl
@@ -420,13 +440,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     void openSession(next, address)
   }, [address, openSession, surface])
 
-  const selectPreviewTarget = useCallback((targetId: string) => {
+  const selectPreviewTarget = useCallback((targetId: string, pagePath?: string) => {
     setActivePreviewTargetId(targetId)
     // A different development server is an authenticated target resolved by
     // Agent Host. The native Preview surface is recreated against it so the
     // proxy receives the correct signing headers and browser path prefix.
     setSurface('native-preview')
-    void openSession('native-preview', undefined, targetId)
+    void openSession('native-preview', undefined, targetId, pagePath)
   }, [openSession])
 
   const openExternal = useCallback(() => {
@@ -474,16 +494,17 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       surface,
       previewTargets,
       ...(activePreviewTargetId ? { activePreviewTargetId } : {}),
+      ...(surface === 'native-preview' && previewPagePath ? { previewPagePath } : {}),
       previewTargetsLoading,
       ...(previewTargetsError ? { previewTargetsError } : {}),
     })
-  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, inspectionMode, onStateChange, previewLayers, previewTargets, previewTargetsError, previewTargetsLoading, selectedElement, selectedStyles, status, surface, themeTokens])
+  }, [activePage?.canGoBack, activePage?.canGoForward, activePreviewTargetId, address, connection, externalUrl, inspectMode, inspectionMode, onStateChange, previewLayers, previewPagePath, previewTargets, previewTargetsError, previewTargetsLoading, selectedElement, selectedStyles, status, surface, themeTokens])
 
   return (
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
-          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} />
+          <NativePreviewSurface annotationMode={inspectionMode === 'annotate'} connection={connection} initialPagePath={previewBootstrapPath} inspectMode={inspectMode} onAnnotationSelect={selectAnnotationTarget} onElementMoved={handleElementMoved} onElementSelected={handleElementSelected} onPageUrlChange={handlePreviewPageUrlChange} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
           <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />

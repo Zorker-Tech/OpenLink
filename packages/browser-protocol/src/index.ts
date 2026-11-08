@@ -1,6 +1,8 @@
 export const BROWSER_PROTOCOL_VERSION = 1 as const
 export const INSPECTOR_BRIDGE_CHANNEL = 'openlink.browser.inspector' as const
 
+export { previewPagePathFromAddress, sanitizePreviewPagePath } from './preview-path.js'
+
 export type BrowserProtocolVersion = typeof BROWSER_PROTOCOL_VERSION
 export type BrowserSurfaceKind = 'native-preview' | 'chromium-stream' | 'desktop-integrated'
 export type BrowserSessionStatus = 'starting' | 'ready' | 'suspended' | 'closing' | 'closed' | 'failed'
