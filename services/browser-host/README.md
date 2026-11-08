@@ -109,6 +109,15 @@ waits for health, and then starts Next.js:
 pnpm dev:browser
 ```
 
+The real iframe and Inspector Bridge integration check uses the Browser Host's
+locked Playwright Chromium build:
+
+```bash
+cd services/browser-host
+npx playwright-core install chromium
+npm run test:integration
+```
+
 The Next.js BFF uses these server-only variables:
 
 ```bash
