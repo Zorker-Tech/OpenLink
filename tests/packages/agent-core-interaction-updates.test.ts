@@ -20,8 +20,12 @@ describe("the agent interaction updates", () => {
     assert.deepEqual(SlateInteractionUpdates.heartbeat(), { kind: "heartbeat" });
     assert.equal(caseOf(Updates.summaryStarted()), "summaryStarted");
     assert.equal((messageOf(Updates.summary("the summary")).value as { summary: string }).summary, "the summary");
-    assert.equal((messageOf(Updates.promptSuggestion("try this")).value as { suggestion: string }).suggestion, "try this");
-    assert.equal((messageOf(Updates.activeBranchChange("/work", "main")).value as { path: string; branchName: string }).branchName, "main");
+    assert.deepEqual(SlateInteractionUpdates.promptSuggestion("try this"), { kind: "prompt-suggestion", suggestion: "try this" });
+    assert.deepEqual(SlateInteractionUpdates.activeBranchChange("/work", "main"), {
+      kind: "active-branch-change",
+      path: "/work",
+      branchName: "main",
+    });
     assert.equal((messageOf(Updates.shellOutputDelta({} as never)).value as { event: unknown }).event !== undefined, true);
   });
 
@@ -57,18 +61,19 @@ describe("the agent interaction updates", () => {
     assert.equal(caseOf(Updates.summaryCompleted(undefined)), "summaryCompleted");
   });
 
-  it("converts turn usage and step numbers to bigints", () => {
+  it("keeps turn usage and step lifecycle values in Slate units", () => {
     const ended = slateTurnEndedUpdate({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 });
     assert.deepEqual(ended, { kind: "turn-ended", usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 } });
     const early = slateTurnEndedUpdate();
     assert.deepEqual(early, { kind: "turn-ended" });
     const noReasoning = slateTurnEndedUpdate({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4 });
     assert.equal(noReasoning.usage?.reasoningTokens, 0);
-    const started = messageOf(Updates.stepStarted(7)).value as { stepId: bigint };
-    assert.equal(started.stepId, 7n);
-    const completed = messageOf(Updates.stepCompleted(7, 1200)).value as { stepId: bigint; stepDurationMs: bigint };
-    assert.equal(completed.stepId, 7n);
-    assert.equal(completed.stepDurationMs, 1200n);
+    assert.deepEqual(SlateInteractionUpdates.stepStarted(7), { kind: "step-started", stepId: 7 });
+    assert.deepEqual(SlateInteractionUpdates.stepCompleted(7, 1200), {
+      kind: "step-completed",
+      stepId: 7,
+      durationMs: 1200,
+    });
   });
 
   it("builds a feedback request with its copy and lists", () => {

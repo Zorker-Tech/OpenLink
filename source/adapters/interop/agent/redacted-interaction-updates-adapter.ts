@@ -163,39 +163,6 @@ export const RedactedUpdates = {
       message: { case: "shellOutputDelta", value: { _privacyMode: privacyMode, event } },
     }
   },
-  stepStarted(privacyMode: PrivacyMode, stepId: string | number | bigint): RedactedInteractionUpdate {
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "stepStarted", value: { _privacyMode: privacyMode, stepId: BigInt(stepId) } },
-    }
-  },
-  stepCompleted(
-    privacyMode: PrivacyMode,
-    stepId: string | number | bigint,
-    stepDurationMs: string | number | bigint,
-  ): RedactedInteractionUpdate {
-    return {
-      _privacyMode: privacyMode,
-      message: {
-        case: "stepCompleted",
-        value: { _privacyMode: privacyMode, stepId: BigInt(stepId), stepDurationMs: BigInt(stepDurationMs) },
-      },
-    }
-  },
-  promptSuggestion(suggestion: RedactedString): RedactedInteractionUpdate {
-    const privacyMode = suggestion.__privacyMode
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "promptSuggestion", value: { _privacyMode: privacyMode, suggestion } },
-    }
-  },
-  activeBranchChange(path: RedactedString, branchName: unknown): RedactedInteractionUpdate {
-    const privacyMode = path.__privacyMode
-    return {
-      _privacyMode: privacyMode,
-      message: { case: "activeBranchChange", value: { _privacyMode: privacyMode, path, branchName } },
-    }
-  },
   feedbackRequest(
     requestId: string,
     canonicalModelName: string,

@@ -29,12 +29,15 @@ test("Slate interaction constructors build the local stream values", () => {
   assert.deepEqual(SlateInteractionUpdates.heartbeat(), { kind: "heartbeat" })
   assert.equal(Updates.summaryStarted().message.case, "summaryStarted")
   assert.deepEqual(SlateInteractionUpdates.tokenDelta(42), { kind: "token-delta", tokens: 42 })
-  assert.equal(Updates.activeBranchChange("/repo", "main").message.case, "activeBranchChange")
+  assert.deepEqual(SlateInteractionUpdates.activeBranchChange("/repo", "main"), {
+    kind: "active-branch-change",
+    path: "/repo",
+    branchName: "main",
+  })
 
-  const step = Updates.stepStarted(7)
-  assert.equal((step.message.value as { stepId?: bigint }).stepId, BigInt(7), "a step id is a bigint on the wire")
-  const completed = Updates.stepCompleted(7, 1500)
-  assert.equal((completed.message.value as { stepDurationMs?: bigint }).stepDurationMs, BigInt(1500))
+  assert.deepEqual(SlateInteractionUpdates.stepStarted(7), { kind: "step-started", stepId: 7 })
+  assert.deepEqual(SlateInteractionUpdates.stepCompleted(7, 1500), { kind: "step-completed", stepId: 7, durationMs: 1500 })
+  assert.deepEqual(SlateInteractionUpdates.promptSuggestion("try this"), { kind: "prompt-suggestion", suggestion: "try this" })
 })
 
 test("turn usage is converted to bigints, and an early end reports nothing", () => {
@@ -114,17 +117,24 @@ test("a Slate redacted update carries the privacy-aware value without a generate
   const summary = RedactedUpdates.summary(createRedactedString("summary", DataClassification.CODE, "summary", mode))
   assert.equal(summary._privacyMode, mode)
 
-  const path = createRedactedString("/repo", DataClassification.PATH, "path", mode)
-  assert.equal(RedactedUpdates.activeBranchChange(path, "main")._privacyMode, mode)
+  const branch = SlateRedactedInteractionUpdates.activeBranchChange("/repo", "main", mode)
+  assert.equal(branch.privacyMode, mode)
+  assert.equal(branch.path.__classification, DataClassification.PATH)
+  assert.equal(branch.path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "/repo")
 })
 
 test("an update without text takes its privacy mode explicitly", () => {
   assert.equal(SlateRedactedInteractionUpdates.heartbeat(mode).privacyMode, mode)
   assert.equal(SlateRedactedInteractionUpdates.tokenDelta(5, mode).privacyMode, mode)
   assert.equal(SlateRedactedInteractionUpdates.thinkingCompleted(12, mode).privacyMode, mode)
-  assert.equal(RedactedUpdates.stepStarted(mode, 3)._privacyMode, mode)
-  assert.equal((RedactedUpdates.stepStarted(mode, 3).message.value as { stepId?: bigint }).stepId, BigInt(3))
-  assert.equal(RedactedUpdates.stepCompleted(mode, 3, 10)._privacyMode, mode)
+  assert.deepEqual(SlateRedactedInteractionUpdates.stepStarted(3, mode), { kind: "step-started", privacyMode: mode, stepId: 3 })
+  assert.deepEqual(SlateRedactedInteractionUpdates.stepCompleted(3, 10, mode), {
+    kind: "step-completed",
+    privacyMode: mode,
+    stepId: 3,
+    durationMs: 10,
+  })
+  assert.equal(SlateRedactedInteractionUpdates.promptSuggestion("try this", mode).privacyMode, mode)
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {

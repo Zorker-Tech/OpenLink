@@ -3,8 +3,12 @@ export { Updates } from "../../adapters/interop/agent/interaction-update-adapter
 export type { FeedbackRequestCopy, TurnUsage } from "./interaction-update-contracts.ts"
 export { SlateInteractionUpdates, slateTurnEndedUpdate } from "./slate-interaction-updates.ts"
 export type {
+  SlateActiveBranchChangeUpdate,
   SlateHeartbeatUpdate,
   SlateInteractionUpdate,
+  SlatePromptSuggestionUpdate,
+  SlateStepCompletedUpdate,
+  SlateStepStartedUpdate,
   SlateThinkingCompletedUpdate,
   SlateThinkingDeltaUpdate,
   SlateThinkingStyle,

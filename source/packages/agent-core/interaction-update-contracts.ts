@@ -60,6 +60,28 @@ export interface SlateHeartbeatUpdate {
   readonly kind: "heartbeat"
 }
 
+export interface SlateStepStartedUpdate {
+  readonly kind: "step-started"
+  readonly stepId: number
+}
+
+export interface SlateStepCompletedUpdate {
+  readonly kind: "step-completed"
+  readonly stepId: number
+  readonly durationMs: number
+}
+
+export interface SlatePromptSuggestionUpdate {
+  readonly kind: "prompt-suggestion"
+  readonly suggestion: string
+}
+
+export interface SlateActiveBranchChangeUpdate {
+  readonly kind: "active-branch-change"
+  readonly path: string
+  readonly branchName: string
+}
+
 export type SlateInteractionUpdate =
   | SlateTurnEndedUpdate
   | SlateTextDeltaUpdate
@@ -67,6 +89,10 @@ export type SlateInteractionUpdate =
   | SlateThinkingDeltaUpdate
   | SlateThinkingCompletedUpdate
   | SlateHeartbeatUpdate
+  | SlateStepStartedUpdate
+  | SlateStepCompletedUpdate
+  | SlatePromptSuggestionUpdate
+  | SlateActiveBranchChangeUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -98,6 +124,32 @@ export interface SlateRedactedHeartbeatUpdate {
   readonly privacyMode: PrivacyMode
 }
 
+export interface SlateRedactedStepStartedUpdate {
+  readonly kind: "step-started"
+  readonly privacyMode: PrivacyMode
+  readonly stepId: number
+}
+
+export interface SlateRedactedStepCompletedUpdate {
+  readonly kind: "step-completed"
+  readonly privacyMode: PrivacyMode
+  readonly stepId: number
+  readonly durationMs: number
+}
+
+export interface SlateRedactedPromptSuggestionUpdate {
+  readonly kind: "prompt-suggestion"
+  readonly privacyMode: PrivacyMode
+  readonly suggestion: RedactedString
+}
+
+export interface SlateRedactedActiveBranchChangeUpdate {
+  readonly kind: "active-branch-change"
+  readonly privacyMode: PrivacyMode
+  readonly path: RedactedString
+  readonly branchName: string
+}
+
 export type SlateRedactedInteractionUpdate =
   | SlateRedactedTurnEndedUpdate
   | SlateRedactedTextDeltaUpdate
@@ -105,3 +157,7 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedThinkingDeltaUpdate
   | SlateRedactedThinkingCompletedUpdate
   | SlateRedactedHeartbeatUpdate
+  | SlateRedactedStepStartedUpdate
+  | SlateRedactedStepCompletedUpdate
+  | SlateRedactedPromptSuggestionUpdate
+  | SlateRedactedActiveBranchChangeUpdate
