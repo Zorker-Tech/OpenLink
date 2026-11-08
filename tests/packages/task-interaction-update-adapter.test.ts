@@ -39,6 +39,7 @@ import {
   ToolCall,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { ShellStreamStdout } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellToolCallDelta, ShellToolCallStdoutDelta } from "../../source/adapters/interop/proto/generated/agent/v1/shell_tool_pb.ts"
 import {
   slateTaskProgressUpdateFromInterop,
   slateTaskProgressUpdateToInterop,
@@ -47,7 +48,7 @@ import {
 import { createTaskToolCallDeltaInterop } from "../../source/adapters/interop/agent/task-tool-protocol-adapter.ts"
 import { toRedactedInteractionListener } from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import type { SlateTaskProgressUpdateView } from "../../source/packages/agent/tools/task-progress-state.ts"
+import { slateTaskProgressUpdateView, type SlateTaskProgressUpdate } from "../../source/packages/agent/tools/task-progress-state.ts"
 
 function interaction(caseName: string, value: unknown): InteractionUpdate {
   return new InteractionUpdate({ message: { case: caseName, value } } as never)
@@ -83,14 +84,10 @@ const cases: readonly [string, InteractionUpdate][] = [
   ["tool-call-progress", interaction("toolCallDelta", new ToolCallDeltaUpdate({
     callId: "call-1",
     modelCallId: "model-1",
-    toolCallDelta: new ToolCallDelta({
-      delta: {
-        case: "taskToolCallDelta",
-        value: new TaskToolCallDelta({
-          interactionUpdate: interaction("textDelta", new TextDeltaUpdate({ text: "nested" })),
-        }),
-      },
-    }),
+    toolCallDelta: new ToolCallDelta({ delta: {
+      case: "shellToolCallDelta",
+      value: new ShellToolCallDelta({ delta: { case: "stdout", value: new ShellToolCallStdoutDelta({ content: "shell delta" }) } }),
+    } }),
   }))],
   ["step-started", interaction("stepStarted", new StepStartedUpdate({ stepId: 7n }))],
   ["step-completed", interaction("stepCompleted", new StepCompletedUpdate({ stepId: 7n, stepDurationMs: 19n }))],
@@ -157,6 +154,75 @@ test("new Slate progress events do not require a legacy payload", () => {
   assert.equal(update.message.value.text, "first-party update")
 })
 
+test("nested Task progress retains both call identities through the Slate envelope", () => {
+  const nested: SlateTaskProgressUpdate = {
+    schemaVersion: 1,
+    kind: "nested-task-progress",
+    toolCallId: "nested-call-1",
+    modelCallId: "nested-model-1",
+    update: slateTaskProgressUpdateFromInterop(cases[0]![1]),
+  }
+  const encoded = slateTaskProgressUpdateToInterop(nested)
+  assert.equal(encoded.message.case, "toolCallDelta")
+  if (encoded.message.case !== "toolCallDelta") assert.fail("expected the nested task event adapter")
+  assert.equal(encoded.message.value.callId, "nested-call-1")
+  assert.equal(encoded.message.value.modelCallId, "nested-model-1")
+  assert.equal(encoded.message.value.toolCallDelta?.delta.case, "taskToolCallDelta")
+
+  const restored = slateTaskProgressUpdateFromInterop(encoded)
+  assert.equal(restored.kind, "nested-task-progress")
+  if (restored.kind !== "nested-task-progress") assert.fail("expected nested progress semantics")
+  assert.equal(restored.toolCallId, "nested-call-1")
+  assert.equal(restored.modelCallId, "nested-model-1")
+  assert.equal(restored.update.kind, "assistant-text")
+  assert.deepEqual(slateTaskProgressUpdateToInterop(restored).toBinary(), encoded.toBinary())
+
+  const deeper: SlateTaskProgressUpdate = {
+    schemaVersion: 1,
+    kind: "nested-task-progress",
+    toolCallId: "deeper-call-1",
+    modelCallId: "deeper-model-1",
+    update: nested,
+  }
+  const wrapped = createTaskToolCallDeltaInterop(deeper)
+  if (wrapped.delta.case !== "taskToolCallDelta" || wrapped.delta.value.interactionUpdate === undefined) {
+    assert.fail("expected a nested task fallback envelope")
+  }
+  const restoredDeeper = slateTaskProgressUpdateFromInterop(wrapped.delta.value.interactionUpdate)
+  assert.equal(restoredDeeper.kind, "nested-task-progress")
+  if (restoredDeeper.kind !== "nested-task-progress") assert.fail("expected nested progress semantics")
+  assert.equal(restoredDeeper.toolCallId, "deeper-call-1")
+  assert.equal(restoredDeeper.modelCallId, "deeper-model-1")
+  assert.equal(restoredDeeper.update.kind, "nested-task-progress")
+  if (restoredDeeper.update.kind === "nested-task-progress") {
+    assert.equal(restoredDeeper.update.toolCallId, "nested-call-1")
+    assert.equal(restoredDeeper.update.modelCallId, "nested-model-1")
+    assert.equal(restoredDeeper.update.update.kind, "assistant-text")
+  }
+})
+
+test("the nested Task listener port carries Slate events and both invocation identities", async () => {
+  const received: unknown[] = []
+  const listener = createTaskProgressListenerInterop({
+    async sendUpdate() {},
+    async sendTaskProgressUpdate(_context: string, toolCallId: string, modelCallId: string, update: SlateTaskProgressUpdate) {
+      received.push({ toolCallId, modelCallId, update })
+    },
+    async query(_context: string, query: { readonly id: number; readonly kind: string; readonly payload?: unknown }) {
+      return { id: query.id, kind: query.kind, payload: query.payload }
+    },
+  })
+  const update: SlateTaskProgressUpdate = {
+    schemaVersion: 1,
+    kind: "assistant-text",
+    text: "nested child output",
+    serverNotice: false,
+  }
+
+  await listener.sendTaskProgressUpdate?.("run", "nested-call-1", "nested-model-1", update)
+  assert.deepEqual(received, [{ toolCallId: "nested-call-1", modelCallId: "nested-model-1", update }])
+})
+
 test("future interaction fields remain opaque and survive task progress wrapping", () => {
   const update = InteractionUpdate.fromBinary(new Uint8Array([0xd8, 0x2d, 0x01]))
 
@@ -185,43 +251,62 @@ test("the listener adapter exposes a Slate update to task policy", async () => {
   assert.equal((received[0] as { kind?: unknown }).kind, "assistant-text")
 })
 
-test("the parent listener receives privacy-projected Slate progress without compatibility bytes", async () => {
-  const received: Array<{ readonly toolCallId: string; readonly update: SlateTaskProgressUpdateView }> = []
+test("the parent listener receives privacy-projected Slate progress without exposing compatibility bytes", async () => {
+  const received: Array<{ readonly toolCallId: string; readonly modelCallId: string; readonly update: SlateTaskProgressUpdate }> = []
   const listener = toRedactedInteractionListener({
     async sendUpdate() {},
     async query(_context: string, query: { readonly id: number; readonly kind: string; readonly payload?: unknown }) {
       return { id: query.id, kind: query.kind, payload: query.payload }
     },
-    async sendTaskProgressUpdate(_context: string, toolCallId: string, update: SlateTaskProgressUpdateView) {
-      received.push({ toolCallId, update })
+    async sendTaskProgressUpdate(_context: string, toolCallId: string, modelCallId: string, update: SlateTaskProgressUpdate) {
+      received.push({ toolCallId, modelCallId, update })
     },
   }, PrivacyMode.NO_TRAINING)
 
   const update = slateTaskProgressUpdateFromInterop(
     interaction("textDelta", new TextDeltaUpdate({ text: "private child code" })),
   )
-  await listener.sendTaskProgressUpdate?.("run", "task-call-1", update)
+  await listener.sendTaskProgressUpdate?.("run", "task-call-1", "parent-invocation", update)
 
   assert.equal(received.length, 1)
   assert.equal(received[0]?.toolCallId, "task-call-1")
+  assert.equal(received[0]?.modelCallId, "parent-invocation")
   assert.equal(received[0]?.update.kind, "assistant-text")
   assert.equal(received[0]?.update.text, "[redacted:text]")
-  assert.equal("compatibility" in (received[0]?.update ?? {}), false)
+  assert.equal("compatibility" in slateTaskProgressUpdateView(received[0]!.update), false)
 
   const appendedMessage = slateTaskProgressUpdateFromInterop(interaction(
     "userMessageAppended",
     new UserMessageAppendedUpdate({ userMessage: new UserMessage({ text: "private child message", messageId: "message-2" }) }),
   ))
-  await listener.sendTaskProgressUpdate?.("run", "task-call-1", appendedMessage)
+  await listener.sendTaskProgressUpdate?.("run", "task-call-1", "parent-invocation", appendedMessage)
   assert.equal(received.length, 2)
-  const messageUpdate = received[1]?.update
+  const messageUpdate = slateTaskProgressUpdateView(received[1]!.update)
   assert.equal(messageUpdate?.kind, "user-message-appended")
   if (messageUpdate?.kind === "user-message-appended") {
     const message = messageUpdate.message as { readonly text?: unknown; readonly messageId?: unknown } | undefined
     assert.equal(message?.text, "[redacted:text]")
     assert.equal(message?.messageId, "message-2")
   }
-  assert.equal("compatibility" in (messageUpdate ?? {}), false)
+  assert.equal("compatibility" in messageUpdate, false)
+
+  const nestedUpdate: SlateTaskProgressUpdate = {
+    schemaVersion: 1,
+    kind: "nested-task-progress",
+    toolCallId: "nested-task-call",
+    modelCallId: "nested-model",
+    update,
+  }
+  await listener.sendTaskProgressUpdate?.("run", "task-call-1", "parent-invocation", nestedUpdate)
+  assert.equal(received.length, 3)
+  const nestedView = slateTaskProgressUpdateView(received[2]!.update)
+  assert.equal(nestedView.kind, "nested-task-progress")
+  if (nestedView.kind === "nested-task-progress") {
+    assert.equal(nestedView.toolCallId, "nested-task-call")
+    assert.equal(nestedView.modelCallId, "nested-model")
+    assert.equal(nestedView.update.kind, "assistant-text")
+    if (nestedView.update.kind === "assistant-text") assert.equal(nestedView.update.text, "[redacted:text]")
+  }
 })
 
 test("task progress rejects empty, mismatched and non-interaction messages", () => {

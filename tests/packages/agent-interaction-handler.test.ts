@@ -389,14 +389,14 @@ test("task progress uses the dedicated listener port when the host supports it",
   const recorder = recorderHarness()
   const handler = new InteractionHandler({
     async sendUpdate() { assert.fail("task progress should use the dedicated listener port") },
-    async sendTaskProgressUpdate(_context: Context, toolCallId: string, update: unknown) {
-      seen.push([toolCallId, update])
+    async sendTaskProgressUpdate(_context: Context, toolCallId: string, modelCallId: string, update: unknown) {
+      seen.push([toolCallId, modelCallId, update])
     },
   }, recorder.recorder, "invocation-1")
   const update = { schemaVersion: 1, kind: "assistant-text", text: "child output", serverNotice: false } as const
 
   assert.equal(await handler.emitTaskProgressUpdate(createContext(), "task-call-1", update), true)
-  assert.deepEqual(seen, [["task-call-1", update]])
+  assert.deepEqual(seen, [["task-call-1", "invocation-1", update]])
 })
 
 test("task progress reports when a listener needs the compatibility transport", async () => {

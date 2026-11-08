@@ -120,18 +120,23 @@ describe("the outline a reader follows", () => {
     world.projection.applyAgentUpdateToOutline({ type: "tool-call", id: "call-1", name: "Shell", status: "done", summary: "listed the files" });
     world.projection.applyAgentUpdateToOutline({ type: "tool-call", id: "task-call-1", name: "Task", status: "pending" });
     const progress = { schemaVersion: 1, kind: "assistant-text", text: "child output", serverNotice: false } as const;
-    world.projection.applyAgentUpdateToOutline({ type: "task-progress", toolCallId: "task-call-1", update: progress });
+    world.projection.applyAgentUpdateToOutline({
+      type: "task-progress",
+      toolCallId: "task-call-1",
+      modelCallId: "task-invocation-1",
+      update: progress,
+    });
     const pendingTask = world.projection.outline.find((item) => item.id === "task-call-1");
     assert.equal(pendingTask?.kind, "tool-call");
     assert.equal(pendingTask?.status, "pending");
-    assert.deepEqual(pendingTask?.progress, progress);
+    assert.deepEqual(pendingTask?.progress, { modelCallId: "task-invocation-1", update: progress });
     world.projection.applyAgentUpdateToOutline({ type: "tool-call", id: "task-call-1", name: "Task", status: "done", summary: "completed task" });
     const tools = world.projection.outline.filter((item) => item.kind === "tool-call");
     assert.deepEqual(tools.map((item) => [item.id, item.status, item.summary]), [
       ["call-1", "done", "listed the files"],
       ["task-call-1", "done", "completed task"],
     ]);
-    assert.deepEqual((tools[1] as { progress?: unknown }).progress, progress);
+    assert.deepEqual((tools[1] as { progress?: unknown }).progress, { modelCallId: "task-invocation-1", update: progress });
     world.projection.applyAgentUpdateToOutline({ type: "text-delta", text: "next" });
     assert.deepEqual(world.projection.outline.at(-1).text, "next");
     // A message the agent sent to the room is its own item, and the end of a turn only stops the streaming.

@@ -272,7 +272,7 @@ export class InteractionHandler {
   async emitTaskProgressUpdate(context: Loose, toolCallId: string, update: SlateTaskProgressUpdate): Promise<boolean> {
     const sendTaskProgressUpdate = this.interactionProvider.sendTaskProgressUpdate
     if (typeof sendTaskProgressUpdate !== "function") return false
-    await sendTaskProgressUpdate.call(this.interactionProvider, context, toolCallId, update)
+    await sendTaskProgressUpdate.call(this.interactionProvider, context, toolCallId, this.invocationId, update)
     return true
   }
 

@@ -25,7 +25,6 @@ import type {
 } from "../../../packages/agent-core/interaction-queries.ts"
 import type {
   SlateTaskProgressUpdate,
-  SlateTaskProgressUpdateView,
 } from "../../../packages/agent/tools/task-progress-state.ts"
 import { taskProgressUpdateForListener } from "./task-progress-protocol-adapter.ts"
 import {
@@ -40,7 +39,7 @@ type MaybePromise<T> = T | Promise<T>
 export interface InteractionListenerAdapter<Context, Update, Query, Response, ProgressUpdate = never> {
   sendUpdate(ctx: Context, update: Update): MaybePromise<void>
   query(ctx: Context, query: Query): MaybePromise<Response>
-  sendTaskProgressUpdate?: ((ctx: Context, toolCallId: string, update: ProgressUpdate) => MaybePromise<void>) | undefined
+  sendTaskProgressUpdate?: ((ctx: Context, toolCallId: string, modelCallId: string, update: ProgressUpdate) => MaybePromise<void>) | undefined
   enqueuePostTurnEndedWork?: ((work: () => Promise<unknown>) => void) | undefined
   flushPostTurnEndedWork?: ((ctx: Context) => MaybePromise<void>) | undefined
 }
@@ -70,8 +69,8 @@ export function toUnredactedInteractionListener<Context>(
       await delegate.sendUpdate(ctx, redactInteractionUpdate(update, privacyMode))
     },
     sendTaskProgressUpdate: delegate.sendTaskProgressUpdate
-      ? async (ctx, toolCallId, update) => {
-          await delegate.sendTaskProgressUpdate?.(ctx, toolCallId, update)
+      ? async (ctx, toolCallId, modelCallId, update) => {
+          await delegate.sendTaskProgressUpdate?.(ctx, toolCallId, modelCallId, update)
         }
       : undefined,
     async query(ctx, query) {
@@ -96,7 +95,7 @@ export function toUnredactedInteractionListener<Context>(
 
 /** Wraps a plain listener so a redacted caller can use it: it reads what it is given and redacts replies. */
 export function toRedactedInteractionListener<Context>(
-  delegate: InteractionListenerAdapter<Context, InteractionUpdate, SlateInteractionQuery, SlateInteractionResponse, SlateTaskProgressUpdateView>,
+  delegate: InteractionListenerAdapter<Context, InteractionUpdate, SlateInteractionQuery, SlateInteractionResponse, SlateTaskProgressUpdate>,
   privacyMode: PrivacyMode,
 ): InteractionListenerAdapter<
   Context,
@@ -116,12 +115,9 @@ export function toRedactedInteractionListener<Context>(
       )
     },
     sendTaskProgressUpdate: delegate.sendTaskProgressUpdate
-      ? async (ctx, toolCallId, update) => {
-          await delegate.sendTaskProgressUpdate?.(
-            ctx,
-            toolCallId,
-            taskProgressUpdateForListener(update, privacyMode),
-          )
+      ? async (ctx, toolCallId, modelCallId, update) => {
+          const safeUpdate = taskProgressUpdateForListener(update, privacyMode)
+          if (safeUpdate !== undefined) await delegate.sendTaskProgressUpdate?.(ctx, toolCallId, modelCallId, safeUpdate)
         }
       : undefined,
     async query(ctx, query) {

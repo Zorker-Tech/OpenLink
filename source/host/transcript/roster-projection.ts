@@ -14,7 +14,7 @@ import {
 import { isManagedSubagentConversationId } from "../../shared/agents/subagents.ts";
 import { transcriptReplicaKey } from "../../shared/ordering.ts";
 import { SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME } from "../runner/conversation-outline.ts";
-import type { SlateTaskProgressUpdateView } from "../../packages/agent/tools/task-progress-state.ts";
+import type { SlateTaskProgressDelivery } from "../../packages/agent/tools/task-progress-state.ts";
 import { mergeAsyncTasks } from "./async-task-union.ts";
 import { ProfileWatch } from "./profile-watch.ts";
 import { RosterEmit } from "./roster-emit.ts";
@@ -394,13 +394,16 @@ export class RosterProjection {
   applyAgentUpdateToOutline(nextUpdate: any): void {
     if (this.outlineAgentId == null) return;
     if (nextUpdate.type === "task-progress") {
-      if (typeof nextUpdate.toolCallId !== "string" || nextUpdate.toolCallId.length === 0) return;
+      if (
+        typeof nextUpdate.toolCallId !== "string" || nextUpdate.toolCallId.length === 0 ||
+        typeof nextUpdate.modelCallId !== "string"
+      ) return;
       this.streamingAssistantOutlineId = undefined;
       this.streamingThinkingOutlineId = undefined;
       const current = this.outline.find(item => item.id === nextUpdate.toolCallId);
       if (current?.kind === "tool-call" && current.name === "Task") {
         this.updateOutlineItem(nextUpdate.toolCallId, item => item.kind === "tool-call"
-          ? { ...item, progress: nextUpdate.update as SlateTaskProgressUpdateView }
+          ? { ...item, progress: { modelCallId: nextUpdate.modelCallId, update: nextUpdate.update } }
           : item);
       } else if (current === undefined) {
         this.appendOutlineItem({
@@ -409,7 +412,7 @@ export class RosterProjection {
           name: "Task",
           status: "pending",
           summary: undefined,
-          progress: nextUpdate.update as SlateTaskProgressUpdateView,
+          progress: { modelCallId: nextUpdate.modelCallId, update: nextUpdate.update },
         });
       }
       return;

@@ -18,7 +18,7 @@ import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1
 import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
 import { computeSubagentRequestId } from "../../source/host/runner/subagent-runtime.ts";
 import { SlateSubagentDispatchError, SlateRequestContextExecutor, SlateSubagentHostAdapter, ForwardingInteractionListener, deriveSlateSubagentRequestLineage, type SubagentAdapterArgs } from "../../source/host/runner/agent-adapters.ts";
-import type { SlateTaskProgressUpdateView } from "../../source/packages/agent/tools/task-progress-state.ts";
+import type { SlateTaskProgressUpdate } from "../../source/packages/agent/tools/task-progress-state.ts";
 
 const args = (over: Partial<SubagentAdapterArgs> = {}): SubagentAdapterArgs => ({ subagentType: "generalPurpose", toolCallId: "call-1", prompt: "look into it", ...over });
 
@@ -225,14 +225,14 @@ describe("what an agent's updates mean to the conversation", () => {
 
   it("forwards Slate task progress as a host update", async () => {
     const { listener: forwarding, updates } = listener();
-    const progress: SlateTaskProgressUpdateView = {
+    const progress: SlateTaskProgressUpdate = {
       schemaVersion: 1,
       kind: "assistant-text",
       text: "child output",
       serverNotice: false,
     };
-    await forwarding.sendTaskProgressUpdate({}, "task-call-1", progress);
-    assert.deepEqual(updates, [{ type: "task-progress", toolCallId: "task-call-1", update: progress }]);
+    await forwarding.sendTaskProgressUpdate({}, "task-call-1", "invocation-1", progress);
+    assert.deepEqual(updates, [{ type: "task-progress", toolCallId: "task-call-1", modelCallId: "invocation-1", update: progress }]);
   });
 
   it("projects child progress through the privacy-aware parent listener", async () => {
@@ -250,6 +250,7 @@ describe("what an agent's updates mean to the conversation", () => {
     assert.equal(updates.length, 1);
     assert.equal(updates[0]?.type, "task-progress");
     assert.equal(updates[0]?.toolCallId, "task-call-1");
+    assert.equal(updates[0]?.modelCallId, "parent-invocation");
     const forwarded = updates[0]?.update as { kind?: string; text?: string; compatibility?: unknown };
     assert.equal(forwarded.kind, "assistant-text");
     assert.equal(forwarded.text, "[redacted:text]");
