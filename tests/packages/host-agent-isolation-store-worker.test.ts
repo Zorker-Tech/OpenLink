@@ -40,9 +40,10 @@ function workerWorld(
     ...(options.captureStderr === true ? { stderr: true } : {}),
   });
   let stderrText = "";
+  let exitCode: number | undefined;
   if (options.captureStderr === true) worker.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderrText += chunk));
   worker.on("message", (message: Record<string, unknown>) => messages.push(message));
-  const exited = new Promise<number>((resolve) => worker.on("exit", (code) => resolve(code ?? 0)));
+  const exited = new Promise<number>((resolve) => worker.on("exit", (code) => { exitCode = code ?? 0; resolve(exitCode); }));
   const crash = new Promise<Error>((resolve) => worker.on("error", resolve));
   return {
     worker, messages, exited, crash,
@@ -50,9 +51,12 @@ function workerWorld(
     send: (request: Record<string, unknown>) => worker.postMessage(request),
     /** The answer to one request, waiting for it to arrive rather than guessing how long it takes. */
     async answer(callId: number): Promise<Record<string, unknown>> {
-      for (let attempt = 0; attempt < 400; attempt += 1) {
+      for (let attempt = 0; attempt < 2_000; attempt += 1) {
         const found = messages.find((message) => message.callId === callId);
         if (found !== undefined) return found;
+        const workerError = messages.find((message) => message.kind === "worker-error");
+        if (workerError !== undefined) throw new Error("worker failed before responding: " + String(workerError.message));
+        if (exitCode !== undefined) throw new Error("worker exited before responding with code " + String(exitCode));
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
       throw new Error(`no answer to worker call ${callId}; saw ${JSON.stringify(messages.map((message) => [message.operation, message.callId]))}`);

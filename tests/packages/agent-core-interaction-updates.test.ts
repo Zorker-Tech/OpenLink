@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { Updates } from "../../source/packages/agent-core/interaction-updates.ts";
+import { slateTurnEndedUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts";
 import {
   FeedbackRequestCategory,
   ThinkingDeltaUpdate,
@@ -55,12 +56,12 @@ describe("the agent interaction updates", () => {
   });
 
   it("converts turn usage and step numbers to bigints", () => {
-    const ended = messageOf(Updates.turnEnded({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 })).value as unknown as Record<string, unknown>;
-    assert.deepEqual([ended.inputTokens, ended.outputTokens, ended.cacheReadTokens, ended.cacheWriteTokens, ended.reasoningTokens], [1n, 2n, 3n, 4n, 5n]);
-    const early = messageOf(Updates.turnEnded()).value as unknown as Record<string, unknown>;
-    assert.equal(early.inputTokens, undefined);
-    const noReasoning = messageOf(Updates.turnEnded({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4 })).value as { reasoningTokens: bigint };
-    assert.equal(noReasoning.reasoningTokens, 0n);
+    const ended = slateTurnEndedUpdate({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 });
+    assert.deepEqual(ended, { kind: "turn-ended", usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 } });
+    const early = slateTurnEndedUpdate();
+    assert.deepEqual(early, { kind: "turn-ended" });
+    const noReasoning = slateTurnEndedUpdate({ inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4 });
+    assert.equal(noReasoning.usage?.reasoningTokens, 0);
     const started = messageOf(Updates.stepStarted(7)).value as { stepId: bigint };
     assert.equal(started.stepId, 7n);
     const completed = messageOf(Updates.stepCompleted(7, 1200)).value as { stepId: bigint; stepDurationMs: bigint };

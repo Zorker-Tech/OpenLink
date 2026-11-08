@@ -56,6 +56,12 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
 
   override async sendUpdate(ctx: { canceled?: boolean }, update: any): Promise<void> {
     await super.sendUpdate(ctx, update);
+    if (update?.kind === "turn-ended") {
+      this.onUpdate(update.usage === undefined
+        ? { type: "turn-ended" }
+        : { type: "turn-ended", usage: { ...update.usage, reasoningTokens: update.usage.reasoningTokens ?? 0 } });
+      return;
+    }
     const message = update.message;
     switch (message.case) {
       case "textDelta":

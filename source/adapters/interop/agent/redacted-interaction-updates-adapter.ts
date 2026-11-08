@@ -189,33 +189,6 @@ export const RedactedUpdates = {
       message: { case: "shellOutputDelta", value: { _privacyMode: privacyMode, event } },
     }
   },
-  turnEnded(
-    privacyMode: PrivacyMode,
-    usage: {
-      readonly inputTokens: string | number | bigint
-      readonly outputTokens: string | number | bigint
-      readonly cacheReadTokens: string | number | bigint
-      readonly cacheWriteTokens: string | number | bigint
-      readonly reasoningTokens?: string | number | bigint | null | undefined
-    } | null | undefined,
-  ): RedactedInteractionUpdate {
-    return {
-      _privacyMode: privacyMode,
-      message: {
-        case: "turnEnded",
-        value: {
-          _privacyMode: privacyMode,
-          ...(usage === null || usage === undefined ? {} : {
-            inputTokens: BigInt(usage.inputTokens),
-            outputTokens: BigInt(usage.outputTokens),
-            cacheReadTokens: BigInt(usage.cacheReadTokens),
-            cacheWriteTokens: BigInt(usage.cacheWriteTokens),
-            reasoningTokens: BigInt(usage.reasoningTokens ?? 0),
-          }),
-        },
-      },
-    }
-  },
   stepStarted(privacyMode: PrivacyMode, stepId: string | number | bigint): RedactedInteractionUpdate {
     return {
       _privacyMode: privacyMode,
