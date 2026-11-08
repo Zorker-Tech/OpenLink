@@ -45,6 +45,8 @@ interface WorkspaceSurfacesProps {
   uiReady: boolean
   initialBrowserUrl: string
   initialPreviewTargetId: string | null
+  initialPreviewPagePath?: string
+  previewPagePaths: Record<string, string>
   previewProjects: PreviewProjectOption[]
   previewProjectId: string
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
@@ -197,6 +199,8 @@ export function WorkspaceSurfaces({
   uiReady,
   initialBrowserUrl,
   initialPreviewTargetId,
+  initialPreviewPagePath,
+  previewPagePaths,
   previewProjects,
   previewProjectId,
   onBrowserStateChange,
@@ -274,11 +278,11 @@ export function WorkspaceSurfaces({
   const handleSelectPreviewTarget = useCallback((targetId: string) => {
     onSelectWorkspaceTab('preview')
     if (previewWorkbenchRef.current) {
-      previewWorkbenchRef.current.selectPreviewTarget(targetId)
+      previewWorkbenchRef.current.selectPreviewTarget(targetId, previewPagePaths[targetId])
     } else {
       setPendingPreviewTargetId(targetId)
     }
-  }, [onSelectWorkspaceTab])
+  }, [onSelectWorkspaceTab, previewPagePaths])
 
   if (!uiReady) return <div className="size-full" aria-busy="true" />
 
@@ -309,6 +313,7 @@ export function WorkspaceSurfaces({
                           projectId={previewProjectId}
                           ref={previewWorkbenchRef}
                           initialPreviewTargetId={initialPreviewTargetId || undefined}
+                          initialPreviewPagePath={initialPreviewPagePath}
                           initialSurface="native-preview"
                           initialUrl={previewProjectId === panelProps.projectId ? initialBrowserUrl || undefined : undefined}
                           viewportMode={view === 'mobile' ? 'mobile' : 'browser'}

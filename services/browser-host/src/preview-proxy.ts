@@ -3,6 +3,7 @@ import { request as httpRequest, type IncomingMessage, type ServerResponse } fro
 import { request as httpsRequest } from 'node:https'
 import type { Socket } from 'node:net'
 import httpProxy from 'http-proxy'
+import { sanitizePreviewPagePath } from '@openlink/browser-protocol'
 import type { BrowserTokenService } from './auth.js'
 import { BrowserHostError } from './errors.js'
 import { INSPECTOR_BRIDGE_SOURCE } from './inspector-bridge.js'
@@ -121,10 +122,11 @@ export class NativePreviewProxy {
     url.searchParams.delete('token')
 
     if (url.pathname === `${runtime.publicPath}/__openlink_bootstrap`) {
+      const pagePath = sanitizePreviewPagePath(url.searchParams.get('path')) ?? '/'
       const secure = new URL(this.publicBaseUrl).protocol === 'https:' ? '; Secure' : ''
       response.setHeader('Set-Cookie', `${cookieName(sessionId)}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=${runtime.publicPath}/${secure}`)
       response.setHeader('Referrer-Policy', 'no-referrer')
-      response.writeHead(302, { Location: `${runtime.publicPath}/` })
+      response.writeHead(302, { Location: `${runtime.publicPath}${pagePath}` })
       response.end()
       return
     }
