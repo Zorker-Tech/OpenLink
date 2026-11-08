@@ -29,11 +29,12 @@ selected project. Targets are reusable across chats, but providers are still
 limited to project sandbox servers; worktree servers and read-only external
 URLs are not yet available.
 
-The selected project and opaque target preference now persist in the browser
-profile under a user-and-workspace key, so opening another chat in that profile
-does not silently switch Preview back to that chat's project. Restored project
-ids are filtered against the current workspace's authorized project list; the
-server still re-resolves every target before opening its proxy.
+The selected project, opaque target, pathname, and desktop/mobile viewport
+preference now persist in the browser profile under a user-and-workspace key, so
+opening another chat in that profile does not silently switch Preview back to
+that chat's project or device view. Restored project ids are filtered against
+the current workspace's authorized project list; the server still re-resolves
+every target before opening its proxy.
 The active managed-preview pathname is also remembered per opaque target. The
 bridge reports full-page and SPA route changes, while durable state keeps only
 the validated pathname and drops query strings, fragments, session ids, and
@@ -110,10 +111,10 @@ reusable across chats with workspace access.
    changing chat tabs, or closing the Browser panel must not change the target
    or stop its development server. Persist the selected project and opaque
    target preference per user and workspace, without persisting upstream URLs
-   or credentials. Persist only a validated pathname for each target; do not
-   persist query strings or fragments. Revalidate both project access and target
-   liveness on restore. The active chat can still be recorded as the initiating
-   context and receive code-change requests.
+   or credentials. Persist a validated pathname and desktop/mobile viewport
+   preference per target; do not persist query strings or fragments. Revalidate
+   both project access and target liveness on restore. The active chat can still
+   be recorded as the initiating context and receive code-change requests.
 
 4. Build visual tools as modes over the same live Preview document and bridge:
 

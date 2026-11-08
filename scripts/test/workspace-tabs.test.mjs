@@ -33,6 +33,8 @@ test('project preview actions open a project chat and legacy links route to that
 test('chat workspace Preview uses the native iframe workbench and keeps its toolbar beside it', () => {
   assert.match(surfaces, /<BrowserNavigationBar[\s\S]*?<main aria-label=\{t\('预览画布'\)\}/)
   assert.match(surfaces, /data-workspace-browser-surface="preview"[\s\S]*?<BrowserWorkbench[\s\S]*?initialSurface="native-preview"/)
+  assert.match(surfaces, /selectPreviewTarget\(targetId, previewPagePaths\[targetId\]\)/)
+  assert.match(surfaces, /previewViewportModes\[targetId\]/)
   assert.match(previewSurface, /<iframe[\s\S]*?src=\{iframeSrc\}/)
   assert.match(previewSurface, /postMessage\(/)
 })

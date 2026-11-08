@@ -1,8 +1,9 @@
 export interface WorkspacePreviewState {
-  version: 2
+  version: 3
   selectedProjectId: string | null
   targetIds: Record<string, string>
   pagePaths: Record<string, string>
+  viewportModes: Record<string, 'browser' | 'mobile'>
 }
 
 export function createEmptyWorkspacePreviewState(): WorkspacePreviewState

@@ -47,10 +47,12 @@ interface WorkspaceSurfacesProps {
   initialPreviewTargetId: string | null
   initialPreviewPagePath?: string
   previewPagePaths: Record<string, string>
+  previewViewportModes: Record<string, 'browser' | 'mobile'>
   previewProjects: PreviewProjectOption[]
   previewProjectId: string
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   onSelectPreviewProject: (projectId: string) => void
+  onSelectPreviewViewport: (targetId: string, mode: 'browser' | 'mobile') => void
   onSelectWorkspaceTab: (tab: SessionWorkspaceTab) => void
   onToggleDeviceView: () => void
   onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string) => Promise<boolean>
@@ -201,10 +203,12 @@ export function WorkspaceSurfaces({
   initialPreviewTargetId,
   initialPreviewPagePath,
   previewPagePaths,
+  previewViewportModes,
   previewProjects,
   previewProjectId,
   onBrowserStateChange,
   onSelectPreviewProject,
+  onSelectPreviewViewport,
   onSelectWorkspaceTab,
   onToggleDeviceView,
   onSubmitPreviewRequest,
@@ -277,12 +281,13 @@ export function WorkspaceSurfaces({
   }, [activeBrowserTab, browserVisible, onBrowserStateChange])
   const handleSelectPreviewTarget = useCallback((targetId: string) => {
     onSelectWorkspaceTab('preview')
+    onSelectPreviewViewport(targetId, previewViewportModes[targetId] ?? (view === 'mobile' ? 'mobile' : 'browser'))
     if (previewWorkbenchRef.current) {
       previewWorkbenchRef.current.selectPreviewTarget(targetId, previewPagePaths[targetId])
     } else {
       setPendingPreviewTargetId(targetId)
     }
-  }, [onSelectWorkspaceTab, previewPagePaths])
+  }, [onSelectPreviewViewport, onSelectWorkspaceTab, previewPagePaths, previewViewportModes, view])
 
   if (!uiReady) return <div className="size-full" aria-busy="true" />
 
@@ -297,7 +302,7 @@ export function WorkspaceSurfaces({
       {browserOpen && (
         <div aria-hidden={!browserVisible} className={surfaceClass(browserVisible)} data-workspace-surface={view === 'mobile' ? 'mobile' : 'browser'}>
           <div className="flex size-full min-w-0 flex-col">
-            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} designPanelOpen={designPanelOpen} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDesignPanel={() => setDesignPanelOpen((open) => !open)} onToggleDeviceView={onToggleDeviceView} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
+            <BrowserNavigationBar browserState={activeBrowserState} browserWorkbenchRef={browserWorkbenchRef} designPanelOpen={designPanelOpen} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onSelectGitVersion={onSelectGitVersion} onSelectPreviewTarget={handleSelectPreviewTarget} onToggleDesignPanel={() => setDesignPanelOpen((open) => !open)} onToggleDeviceView={() => activeBrowserTab === 'preview' && previewState.activePreviewTargetId ? onSelectPreviewViewport(previewState.activePreviewTargetId, view === 'mobile' ? 'browser' : 'mobile') : onToggleDeviceView()} selectedGitRef={selectedGitRef} workspaceView={view === 'mobile' ? 'mobile' : 'browser'} />
             <main aria-label={t('预览画布')} className={`relative flex min-h-0 min-w-0 flex-1 overflow-hidden ${view === 'browser' ? theme('surface') : theme('editor')}`}>
               <div className="relative flex min-h-0 min-w-0 flex-1">
                 <div className={view === 'browser' ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
