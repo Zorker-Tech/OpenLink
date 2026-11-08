@@ -38,6 +38,17 @@ function codeServerGatewaySession(value: unknown): { sessionId: string; path: st
   return { sessionId, path, bootstrapToken, expiresAt: new Date(expires).toISOString() }
 }
 
+function codeServerGatewayCookie(sessionId: string, value: string, path: string): string | null {
+  const expectedName = `openlink_code_server_gateway_${sessionId.replace(/[^A-Za-z0-9]/g, '').slice(0, 48)}`
+  const prefix = `${expectedName}=`
+  if (!value.startsWith(prefix)
+    || !value.includes(`Path=${path}/`)
+    || !/;\s*HttpOnly(?:;|$)/i.test(value)
+    || !/;\s*SameSite=Strict(?:;|$)/i.test(value)
+    || /;\s*Domain=/i.test(value)) return null
+  return value
+}
+
 function requestOrigin(request: Request): string | null {
   const origin = request.headers.get('origin') || new URL(request.url).origin
   try {
@@ -130,16 +141,41 @@ export async function POST(request: Request) {
   const session = codeServerGatewaySession(outer?.session)
   if (!session) return Response.json({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
 
+  let bootstrapResponse: Response
+  try {
+    bootstrapResponse = await fetch(`${host!.baseUrl}${session.path}/__openlink_bootstrap`, {
+      method: 'POST',
+      headers: {
+        Origin: frameAncestorOrigin,
+        'X-OpenLink-Code-Server-Bootstrap': session.bootstrapToken,
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5_000),
+    })
+  } catch {
+    return Response.json({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
+  }
+  const bootstrapCookie = bootstrapResponse.headers.get('set-cookie')
+  const gatewayCookie = bootstrapResponse.ok && bootstrapCookie
+    ? codeServerGatewayCookie(session.sessionId, bootstrapCookie, session.path)
+    : null
+  if (!gatewayCookie) {
+    return Response.json({ error: { code: 'CODE_SERVER_SESSION_FAILED' } }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
+  }
+
+  const headers = new Headers({ 'Cache-Control': 'no-store' })
+  const maxAge = Math.max(1, Math.floor((Date.parse(session.expiresAt) - Date.now()) / 1000))
+  headers.append('Set-Cookie', `${gatewayCookie.replace(/;+\s*$/, '')}; Max-Age=${maxAge}`)
+
   return Response.json({
     version: outer?.version,
     session: {
       sessionId: session.sessionId,
       url: `${session.path}/`,
-      bootstrapToken: session.bootstrapToken,
       expiresAt: session.expiresAt,
     },
   }, {
     status: response.status,
-    headers: { 'Cache-Control': 'no-store' },
+    headers,
   })
 }

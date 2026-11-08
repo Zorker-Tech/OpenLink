@@ -21,6 +21,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // The authenticated route creates the editor cookie itself. Avoid a
+  // competing Supabase refresh response on that exact response path.
+  if (request.nextUrl.pathname === '/api/code-server/sessions' && request.method === 'POST') {
+    return NextResponse.next()
+  }
+
   // Supabase Studio is hard-wired to serve from `/`. It is therefore given its
   // own origin (a second port on the same `localhost` host, tagged here) so its
   // root-relative `_next/*` assets stay isolated from the application. Do not
