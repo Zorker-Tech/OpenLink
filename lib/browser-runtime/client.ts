@@ -11,11 +11,13 @@ import {
   type BrowserSocketServerMessage,
 } from '@/packages/browser-protocol/src/index'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
+import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
 
 export interface BrowserPreviewTarget {
   id: string
   label: string
   port: number
+  targetRevision?: string
 }
 
 export interface BrowserSessionConnectionDescriptor {
@@ -334,6 +336,9 @@ export async function listBrowserPreviewTargets(input: { projectId: string; chat
               id: target.id,
               label: target.label,
               port: target.port,
+            ...(isPreviewSourceRevision(target.targetRevision)
+              ? { targetRevision: target.targetRevision }
+              : {}),
             }]
           : []
       })

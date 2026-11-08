@@ -3,6 +3,7 @@ import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { getProject, type ProjectSummary } from '@/lib/projects'
 import { createClient } from '@/utils/supabase/server'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
+import { isPreviewSourceRevision } from '@/packages/browser-protocol/src/index'
 
 export interface BrowserPreviewTarget {
   id: string
@@ -10,6 +11,7 @@ export interface BrowserPreviewTarget {
   source: 'sandbox'
   port: number
   lastSeenAt: string
+  targetRevision?: string
 }
 
 function hostConfig() {
@@ -31,6 +33,9 @@ function safeTarget(value: unknown): BrowserPreviewTarget | null {
     source: 'sandbox',
     port: target.port,
     lastSeenAt: typeof target.lastSeenAt === 'string' ? target.lastSeenAt : new Date().toISOString(),
+    ...(isPreviewSourceRevision(target.targetRevision)
+      ? { targetRevision: target.targetRevision }
+      : {}),
   }
 }
 
@@ -104,12 +109,20 @@ export async function discoverBrowserPreviewTargets(projectId: string, preferred
       cache: 'no-store',
       signal: AbortSignal.timeout(20_000),
     })
-    const payload = await response.json().catch(() => null) as { targets?: unknown; error?: { message?: string } } | null
+    const payload = await response.json().catch(() => null) as {
+      targets?: unknown
+      targetRevision?: unknown
+      error?: { message?: string }
+    } | null
     if (!response.ok) {
       return { ok: false, status: 503, error: { code: 'PREVIEW_DISCOVERY_FAILED', message: payload?.error?.message ?? t('无法发现项目开发服务器'), recoverable: true } }
     }
+    const sharedRevision = isPreviewSourceRevision(payload?.targetRevision) ? payload.targetRevision : undefined
     const targets = Array.isArray(payload?.targets)
-      ? payload.targets.flatMap((value) => { const target = safeTarget(value); return target ? [target] : [] })
+      ? payload.targets.flatMap((value) => {
+          const target = safeTarget(value)
+          return target ? [{ ...target, ...(target.targetRevision || !sharedRevision ? {} : { targetRevision: sharedRevision }) }] : []
+        })
       : []
     return { ok: true, targets }
   } catch (error) {

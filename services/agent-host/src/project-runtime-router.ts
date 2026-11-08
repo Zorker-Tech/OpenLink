@@ -18,6 +18,7 @@ export interface ProjectRuntimeController {
   persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void>
   ensureProjectGitRepository(projectId: string): Promise<void>
   listGitVersions(projectId: string): Promise<ProjectGitVersion[]>
+  getProjectSourceRevision(projectId: string): Promise<string | null>
   listWorkspaceFiles(projectId: string): Promise<string[]>
   checkoutGitVersion(projectId: string, ref: string): Promise<ProjectGitVersion>
   getActive(projectId: string): ProjectRuntimeDescriptor | undefined
@@ -294,6 +295,10 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async listGitVersions(projectIdValue: string) {
     return (await this.manager(projectIdValue)).listGitVersions(projectIdValue)
+  }
+
+  async getProjectSourceRevision(projectIdValue: string) {
+    return (await this.manager(projectIdValue)).getProjectSourceRevision(projectIdValue)
   }
 
   async listWorkspaceFiles(projectIdValue: string) {

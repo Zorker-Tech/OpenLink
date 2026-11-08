@@ -5,7 +5,7 @@ import type { AgentPromptAttachment } from '@/lib/agent-runtime/events'
 import { useT } from '@/lib/i18n/client'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
 import { beginPreviewEditTransaction, commitPreviewEditSnapshot, createPreviewEditHistory, finishPreviewEditTransaction, previewStyleEditKey, redoPreviewEditHistory, undoPreviewEditHistory } from '@/lib/preview-edit-history.mjs'
-import { previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference } from '@/packages/browser-protocol/src/index'
+import { isPreviewSourceRevision, previewPagePathFromAddress, sanitizePreviewPagePath, type ElementReference } from '@/packages/browser-protocol/src/index'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppWindow, Eye, Layers3, LoaderCircle, MessageSquarePlus, Palette, RotateCw, Undo2, Redo2, WandSparkles, X } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -25,6 +25,7 @@ type PreviewEdit = {
 interface PreviewAnnotation {
   id: string
   target_id: string
+  target_revision: string | null
   page_path: string
   element_selector: string | null
   element_label: string | null
@@ -45,6 +46,8 @@ interface AnnotationDraft {
   label?: string
   bounds: { x: number; y: number; width: number; height: number }
   viewport: { width: number; height: number }
+  targetRevision: string | null
+  targetRevisionReceipt?: string
   screenshotDataUrl?: string
   capturing: boolean
 }
@@ -58,6 +61,7 @@ interface DesignScreenshotContext {
   elementLabel?: string
   elementText?: string
   viewport?: { width: number; height: number }
+  targetRevision?: string
   fullViewportDataUrl?: string
   selectedElementDataUrl?: string
   capturing: boolean
@@ -237,10 +241,18 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       body: JSON.stringify({ projectId, previewTargetId: targetId, pagePath, viewport: { ...viewport, deviceScaleFactor: 1 } }),
       signal: controller.signal,
     }).then(async (response) => {
-      const payload = await response.json().catch(() => null) as { image?: { mimeType?: unknown; data?: unknown }; error?: { message?: string } } | null
+      const payload = await response.json().catch(() => null) as {
+        image?: { mimeType?: unknown; data?: unknown }
+        targetRevision?: unknown
+        targetRevisionReceipt?: unknown
+        error?: { message?: string }
+      } | null
       if (!response.ok || payload?.image?.mimeType !== 'image/jpeg' || typeof payload.image.data !== 'string'
         || payload.image.data.length > 2_800_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload.image.data)) {
         throw new Error(payload?.error?.message || t('Capture failed; retry to attach element context'))
+      }
+      if (!isPreviewSourceRevision(payload.targetRevision)) {
+        throw new Error(t('源码在截图期间发生变化，或当前版本不可用。请重新捕获。'))
       }
       const fullViewportDataUrl = screenshotDataUrl(payload.image.data)
       const selectedElementDataUrl = await cropPreviewScreenshot(fullViewportDataUrl, element.bounds, viewport)
@@ -253,6 +265,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         elementLabel: element.componentName || element.text || element.tagName,
         elementText: element.content ?? element.text,
         viewport,
+        targetRevision: payload.targetRevision,
         fullViewportDataUrl,
         selectedElementDataUrl,
         capturing: false,
@@ -466,6 +479,12 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
 
   const applyDesignChanges = useCallback(async () => {
     if (!canApplyDesign || !pendingEdits.length || !targetId || showingBefore || applyingDesign || applyInFlightRef.current) return
+    const targetRevision = designScreenshot?.targetRevision
+      ?? browserState.previewTargets.find((target) => target.id === targetId)?.targetRevision
+    if (!isPreviewSourceRevision(targetRevision)) {
+      setApplyError(t('无法确认当前源码版本，请刷新预览目标后重试。'))
+      return
+    }
     const screenshotIsCurrent = usableDesignScreenshot
     const needsElementContext = pendingEdits.some((edit) => edit.kind === 'style' || edit.kind === 'content')
     if (needsElementContext && !screenshotIsCurrent) {
@@ -478,6 +497,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       'Apply these visual changes to the editable source code for the current project.',
       `Preview page: ${pagePath}`,
       `Preview target: ${browserState.previewTargets.find((target) => target.id === targetId)?.label || 'the active project preview'}`,
+      `Target source revision: ${targetRevision}. If the current checkout has moved since this snapshot, inspect and reconcile the current files before editing.`,
       screenshotIsCurrent ? `Preview viewport: ${designScreenshot?.viewport?.width ?? 'unknown'}×${designScreenshot?.viewport?.height ?? 'unknown'} CSS pixels.` : '',
       screenshotIsCurrent ? 'Image 1 shows the full Preview viewport. Image 2 is a crop around the selected element. Use both as visual context.' : '',
       screenshotIsCurrent && designScreenshot?.selector ? `Selected element: ${designScreenshot.selector}${designScreenshot.elementLabel ? ` (${designScreenshot.elementLabel})` : ''}.` : '',
@@ -532,6 +552,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       ...(target.element ? { label: target.element.componentName || target.element.text || target.element.tagName } : {}),
       bounds: target.bounds,
       viewport,
+      targetRevision: null,
       capturing: true,
     }
     setAnnotationDraft(draft)
@@ -540,11 +561,29 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, previewTargetId: targetId, pagePath: target.pagePath, viewport: { ...viewport, deviceScaleFactor: 1 } }),
     }).then(async (response) => {
-      const payload = await response.json().catch(() => null) as { image?: { mimeType?: unknown; data?: unknown }; error?: { message?: string } } | null
-      if (!response.ok || payload?.image?.mimeType !== 'image/jpeg' || typeof payload.image.data !== 'string') {
+      const payload = await response.json().catch(() => null) as {
+        image?: { mimeType?: unknown; data?: unknown }
+        targetRevision?: unknown
+        targetRevisionReceipt?: unknown
+        error?: { message?: string }
+      } | null
+      if (!response.ok || payload?.image?.mimeType !== 'image/jpeg' || typeof payload.image.data !== 'string'
+        || payload.image.data.length > 2_800_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload.image.data)) {
         throw new Error(payload?.error?.message || t('无法为批注捕获截图'))
       }
-      setAnnotationDraft((current) => current?.id === id ? { ...current, screenshotDataUrl: screenshotDataUrl(payload.image!.data as string), capturing: false } : current)
+      if (!isPreviewSourceRevision(payload.targetRevision)) {
+        throw new Error(t('源码在截图期间发生变化，或当前版本不可用。请重新捕获。'))
+      }
+      if (typeof payload.targetRevisionReceipt !== 'string') {
+        throw new Error(t('截图版本凭据不可用，请重新捕获。'))
+      }
+      setAnnotationDraft((current) => current?.id === id ? {
+        ...current,
+        screenshotDataUrl: screenshotDataUrl(payload.image!.data as string),
+        targetRevision: payload.targetRevision as string,
+        targetRevisionReceipt: payload.targetRevisionReceipt as string,
+        capturing: false,
+      } : current)
     }).catch((error) => {
       setAnnotationDraft((current) => current?.id === id ? { ...current, capturing: false } : current)
       setAnnotationError(error instanceof Error ? error.message : t('无法为批注捕获截图'))
@@ -552,7 +591,8 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   }, [projectId, t, targetId])
 
   const saveAnnotation = useCallback(async () => {
-    if (!annotationDraft?.screenshotDataUrl || !annotationComment.trim() || annotationBusy) return
+    if (!annotationDraft?.screenshotDataUrl || !isPreviewSourceRevision(annotationDraft.targetRevision)
+      || !annotationDraft.targetRevisionReceipt || !annotationComment.trim() || annotationBusy) return
     setAnnotationBusy(true)
     setAnnotationError(null)
     try {
@@ -563,6 +603,8 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
           projectId,
           annotationId: annotationDraft.id,
           targetId: annotationDraft.targetId,
+          targetRevision: annotationDraft.targetRevision,
+          targetRevisionReceipt: annotationDraft.targetRevisionReceipt,
           pagePath: annotationDraft.pagePath,
           selector: annotationDraft.selector,
           label: annotationDraft.label,
@@ -613,6 +655,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         'Use each screenshot as visual context. Keep the changes scoped to the comments and leave a reviewable source diff.',
         ...selectedWithScreenshots.map(({ annotation }, index) => [
           `${index + 1}. Page ${annotation.page_path}${annotation.element_label ? ` — ${annotation.element_label}` : ''}`,
+          `   Target source revision: ${annotation.target_revision ?? 'unavailable (legacy annotation)'}`,
           annotation.element_selector ? `   Selector: ${annotation.element_selector.slice(0, 300)}` : '',
           `   Region: x=${Math.round(annotation.bounds.x)}, y=${Math.round(annotation.bounds.y)}, width=${Math.round(annotation.bounds.width)}, height=${Math.round(annotation.bounds.height)} of ${annotation.viewport.width}×${annotation.viewport.height}`,
           `   Comment: ${annotation.comment.slice(0, 1800)}`,
@@ -746,7 +789,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
             <div className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="font-medium text-[var(--app-foreground)]">{annotationDraft.label || t('批注区域')}</p><p className="truncate font-mono text-[10px]">{annotationDraft.pagePath}</p></div><button aria-label={t('取消批注')} className="flex size-6 shrink-0 items-center justify-center rounded hover:bg-[var(--app-hover)]" onClick={() => setAnnotationDraft(null)} type="button"><X className="size-3.5" /></button></div>
             {annotationDraft.screenshotDataUrl ? <img alt={t('批注截图')} className="max-h-36 w-full rounded border border-[var(--app-border)] object-cover object-top" src={annotationDraft.screenshotDataUrl} /> : <div className="flex h-20 items-center justify-center gap-2 rounded bg-[var(--app-surface)]">{annotationDraft.capturing && <LoaderCircle className="size-3.5 animate-spin" />}{annotationDraft.capturing ? t('正在捕获批注截图…') : t('截图捕获失败，请重新选择区域')}</div>}
             <textarea className="min-h-20 w-full resize-y rounded border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 text-xs text-[var(--app-foreground)] outline-none focus:border-[var(--app-focus-ring)]" maxLength={2000} onChange={(event) => setAnnotationComment(event.currentTarget.value)} placeholder={t('描述需要调整的内容')} value={annotationComment} />
-            <button className="flex h-7 w-full items-center justify-center gap-1.5 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={annotationBusy || annotationDraft.capturing || !annotationDraft.screenshotDataUrl || !annotationComment.trim()} onClick={() => void saveAnnotation()} type="button">{annotationBusy ? <LoaderCircle className="size-3 animate-spin" /> : <MessageSquarePlus className="size-3" />}{t('保存批注')}</button>
+          <button className="flex h-7 w-full items-center justify-center gap-1.5 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={annotationBusy || annotationDraft.capturing || !annotationDraft.screenshotDataUrl || !isPreviewSourceRevision(annotationDraft.targetRevision) || !annotationDraft.targetRevisionReceipt || !annotationComment.trim()} onClick={() => void saveAnnotation()} type="button">{annotationBusy ? <LoaderCircle className="size-3 animate-spin" /> : <MessageSquarePlus className="size-3" />}{t('保存批注')}</button>
           </div>}
           {annotationError && <p className="text-[var(--app-danger)]">{annotationError}</p>}
           {!annotationDraft && !annotations.length && <div className="space-y-2 py-3 text-center"><MessageSquarePlus className="mx-auto size-5" /><p>{t('点击工具栏批注按钮，再点击预览元素或拖动选择区域。')}</p></div>}

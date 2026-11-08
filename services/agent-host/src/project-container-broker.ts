@@ -10,6 +10,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const ACTIONS = new Set([
   'ensure', 'describeSupabase', 'manageSupabase', 'proxySupabaseStudio',
   'prepareSessionStorage', 'ensureProjectGitRepository', 'listGitVersions',
+  'getProjectSourceRevision',
   'persistCodexThreadId',
   'listWorkspaceFiles', 'checkoutGitVersion', 'hasPersistedRuntime', 'restorePersistedRuntimes',
   'discoverPreviewTarget', 'discoverPreviewTargets', 'close',
@@ -54,6 +55,7 @@ async function dispatch(controller: ProjectRuntimeController, request: BrokerReq
     }
     case 'ensureProjectGitRepository': return controller.ensureProjectGitRepository(id!)
     case 'listGitVersions': return controller.listGitVersions(id!)
+    case 'getProjectSourceRevision': return controller.getProjectSourceRevision(id!)
     case 'listWorkspaceFiles': return controller.listWorkspaceFiles(id!)
     case 'checkoutGitVersion': {
       if (typeof payload.ref !== 'string' || (payload.ref !== 'latest' && !/^[a-f0-9]{7,40}$/i.test(payload.ref))) throw new AgentHostError('INVALID_BODY', 'Git ref is invalid')
@@ -148,6 +150,7 @@ export class ProjectContainerBrokerClient implements ProjectRuntimeController {
   async persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string) { await this.request('persistCodexThreadId', projectId, { userId, workspaceId, sessionId, threadId }) }
   async ensureProjectGitRepository(projectId: string) { await this.request('ensureProjectGitRepository', projectId) }
   listGitVersions(projectId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['listGitVersions']>>>('listGitVersions', projectId) }
+  getProjectSourceRevision(projectId: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['getProjectSourceRevision']>>>('getProjectSourceRevision', projectId) }
   listWorkspaceFiles(projectId: string) { return this.request<string[]>('listWorkspaceFiles', projectId) }
   checkoutGitVersion(projectId: string, ref: string) { return this.request<Awaited<ReturnType<ProjectRuntimeController['checkoutGitVersion']>>>('checkoutGitVersion', projectId, { ref }) }
   getActive(projectId: string) { return this.active.get(projectId) }

@@ -29,6 +29,7 @@ test('Project Container broker exposes project operations without arbitrary exec
     async prepareSessionStorage(_id, user, workspace, session) { return `/sessions/${user}/${workspace}/${session}` },
     async persistCodexThreadId(_id, user, workspace, session, thread) { calls.push(`persist:${user}:${workspace}:${session}:${thread}`) },
     async ensureProjectGitRepository() {}, async listGitVersions() { return [] },
+    async getProjectSourceRevision(id) { calls.push(`preview-revision:${id}`); return `git-sha256:${'a'.repeat(64)}` },
     async listWorkspaceFiles() { return ['README.md'] },
     async checkoutGitVersion(_id, ref) { return { ref, shortRef: ref.slice(0, 7), message: 'test', timestamp: new Date(0).toISOString(), current: true } },
     getActive() { return descriptor }, async hasPersistedRuntime() { return true }, async restorePersistedRuntimes() {},
@@ -44,8 +45,9 @@ test('Project Container broker exposes project operations without arbitrary exec
   const codexThreadId = '019c6e27-e55b-73d1-87d8-4e01f1f75043'
   await client.persistCodexThreadId(projectId, 'user', 'workspace', 'newsession1', codexThreadId)
   assert.deepEqual(await client.listWorkspaceFiles(projectId), ['README.md'])
+  assert.equal(await client.getProjectSourceRevision(projectId), `git-sha256:${'a'.repeat(64)}`)
   assert.deepEqual(await client.discoverPreviewTargets(projectId, 'session-current'), [])
-  assert.deepEqual(calls, [`ensure:${projectId}`, `persist:user:workspace:newsession1:${codexThreadId}`, 'preview-targets:session-current'])
+  assert.deepEqual(calls, [`ensure:${projectId}`, `persist:user:workspace:newsession1:${codexThreadId}`, `preview-revision:${projectId}`, 'preview-targets:session-current'])
 })
 
 test('Project Container broker rejects malformed Codex thread identifiers', async (t) => {
