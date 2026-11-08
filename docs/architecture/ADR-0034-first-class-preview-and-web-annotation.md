@@ -132,7 +132,9 @@ reusable across chats with workspace access.
      viewport screenshots. Apply sends a structured request to the selected
      project's code chat. The code-editing path must produce a reviewable source
      diff associated with that project's editable checkout; direct DOM mutations
-     remain temporary preview feedback.
+     remain temporary preview feedback. Apply is unavailable in a read-only chat.
+     Applying to another project opens a project-bound chat in confirmation mode,
+     so file writes still require explicit approval.
    - **Theme** and **Layers** are capabilities of the Design panel, not separate
      browser runtimes. Theme controls may use project design tokens when the
      source adapter can identify them. Layers initially expose the live DOM

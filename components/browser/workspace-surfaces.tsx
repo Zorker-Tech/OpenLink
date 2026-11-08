@@ -1,7 +1,7 @@
 'use client'
 
 import { BrowserWorkbench, type BrowserWorkbenchHandle, type BrowserWorkbenchUiState } from '@/components/browser/browser-workbench'
-import { PreviewDesignPanel, type PreviewAnnotationMarker, type PreviewDesignPanelHandle, type PreviewProjectOption } from '@/components/browser/preview-design-panel'
+import { PreviewDesignPanel, type PreviewAnnotationMarker, type PreviewDesignPanelHandle, type PreviewProjectOption, type PreviewRequestIntent } from '@/components/browser/preview-design-panel'
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
@@ -50,12 +50,13 @@ interface WorkspaceSurfacesProps {
   previewViewportModes: Record<string, 'browser' | 'mobile'>
   previewProjects: PreviewProjectOption[]
   previewProjectId: string
+  canApplyDesign: boolean
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   onSelectPreviewProject: (projectId: string) => void
   onSelectPreviewViewport: (targetId: string, mode: 'browser' | 'mobile') => void
   onSelectWorkspaceTab: (tab: SessionWorkspaceTab) => void
   onToggleDeviceView: () => void
-  onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string) => Promise<boolean>
+  onSubmitPreviewRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent) => Promise<boolean>
   sessionId: string
   projectName: string
   dataSurface: 'panel' | 'studio'
@@ -206,6 +207,7 @@ export function WorkspaceSurfaces({
   previewViewportModes,
   previewProjects,
   previewProjectId,
+  canApplyDesign,
   onBrowserStateChange,
   onSelectPreviewProject,
   onSelectPreviewViewport,
@@ -352,6 +354,7 @@ export function WorkspaceSurfaces({
                   previewProjects={previewProjects}
                   projectId={previewProjectId}
                   selectedPreviewProjectId={previewProjectId}
+                  canApplyDesign={canApplyDesign}
                   sessionId={sessionId}
                   onAnnotationsChange={setPreviewAnnotations}
                   ref={previewDesignPanelRef}

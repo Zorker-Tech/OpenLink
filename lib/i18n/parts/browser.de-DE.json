@@ -12,5 +12,6 @@
   "正在检测项目网站服务…": "Projekt-Webdienst wird erkannt…",
   "该网站服务已停止，请刷新检测活跃端口。": "Dieser Webdienst wurde beendet. Aktualisieren Sie, um aktive Ports zu erkennen.",
   "重新检测": "Erneut erkennen",
-  "项目预览暂不可用": "Projektvorschau nicht verfügbar"
+  "项目预览暂不可用": "Projektvorschau nicht verfügbar",
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "Dieser Chat ist schreibgeschützt. Stelle den Zugriff auf „Nachfragen“ um, bevor du Quellcodeänderungen anwendest."
 }

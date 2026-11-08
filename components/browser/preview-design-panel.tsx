@@ -69,16 +69,19 @@ export interface PreviewDesignPanelHandle {
   showAnnotation: (annotationId: string) => void
 }
 
+export type PreviewRequestIntent = 'design' | 'annotation'
+
 interface PreviewDesignPanelProps {
   browserState: BrowserWorkbenchUiState
   workbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
   projectId: string
   previewProjects: PreviewProjectOption[]
   selectedPreviewProjectId: string
+  canApplyDesign: boolean
   onSelectPreviewProject: (projectId: string) => void
   sessionId: string
   className?: string
-  onSubmitRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string) => Promise<boolean>
+  onSubmitRequest: (message: string, attachments: AgentPromptAttachment[], projectId: string, intent: PreviewRequestIntent) => Promise<boolean>
   onAnnotationsChange: (annotations: PreviewAnnotationMarker[]) => void
 }
 
@@ -156,6 +159,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   projectId,
   previewProjects,
   selectedPreviewProjectId,
+  canApplyDesign,
   onSelectPreviewProject,
   sessionId,
   className = '',
@@ -426,7 +430,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     && designScreenshot.selectedElementDataUrl)
 
   const applyDesignChanges = useCallback(async () => {
-    if (!pendingEdits.length || !targetId || showingBefore) return
+    if (!canApplyDesign || !pendingEdits.length || !targetId || showingBefore) return
     const screenshotIsCurrent = usableDesignScreenshot
     const needsElementContext = pendingEdits.some((edit) => edit.kind === 'style' || edit.kind === 'content')
     if (needsElementContext && !screenshotIsCurrent) {
@@ -456,12 +460,12 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.fullViewportDataUrl!, filename: 'preview-viewport.jpg' },
         { type: 'image', mediaType: 'image/jpeg', url: designScreenshot!.selectedElementDataUrl!, filename: 'preview-selection.jpg' },
       ] : []
-      const accepted = await onSubmitRequest(prompt, attachments, projectId)
+      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'design')
       if (!accepted) setApplyError(t('Could not send design changes.'))
     } catch (error) {
       setApplyError(error instanceof Error ? error.message : t('Could not send design changes.'))
     }
-  }, [browserState.previewTargets, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
+  }, [browserState.previewTargets, canApplyDesign, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
 
   const handleAnnotationTarget = useCallback((target: BrowserPreviewAnnotationTarget) => {
     if (!isPreviewTargetId(targetId)) {
@@ -571,7 +575,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       const attachments: AgentPromptAttachment[] = selectedWithScreenshots.map(({ annotation, screenshotDataUrl: image }, index) => ({
         type: 'image', mediaType: 'image/jpeg', url: image, filename: `preview-annotation-${index + 1}.jpg`,
       }))
-      const accepted = await onSubmitRequest(prompt, attachments, projectId)
+      const accepted = await onSubmitRequest(prompt, attachments, projectId, 'annotation')
       if (!accepted) throw new Error(t('发送批注失败'))
     } catch (error) {
       setAnnotationError(error instanceof Error ? error.message : t('发送批注失败'))
@@ -648,10 +652,11 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
               </div>
               {pendingEdits.length > 0 && <div className="space-y-2 border-t border-[var(--app-border)] pt-3">
                 <p>{t('{count} pending changes', { count: pendingEdits.length })}</p>
+                {!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}
                 {applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}
                 <div className="flex gap-2">
                   <button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)]" onClick={resetDesign} type="button">{t('Reset')}</button>
-                  <button className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={showingBefore || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} type="button"><WandSparkles className="size-3" />{t('Apply changes')}</button>
+                  <button className="flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore || (pendingEdits.some((edit) => edit.kind !== 'theme') && !usableDesignScreenshot)} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button"><WandSparkles className="size-3" />{t('Apply changes')}</button>
                 </div>
               </div>}
             </div>
@@ -676,7 +681,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
           ))}
           {browserState.themeTokens && Object.keys(browserState.themeTokens).length === 0 && <p>{t('当前页面没有可编辑的颜色变量。')}</p>}
           {!browserState.themeTokens && <button className="h-7 rounded border border-[var(--app-control-border)] px-3 hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readThemeTokens()} type="button">{t('读取主题变量')}</button>}
-          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p>{t('{count} pending changes', { count: pendingEdits.length })}</p>{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)]" onClick={resetDesign} type="button">{t('Reset')}</button><button className="h-7 flex-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={showingBefore} onClick={() => void applyDesignChanges()} type="button">{t('Apply changes')}</button></div></div>}
+          {pendingEdits.some((edit) => edit.kind === 'theme') && <div className="mt-3 space-y-2 border-t border-[var(--app-border)] pt-3"><p>{t('{count} pending changes', { count: pendingEdits.length })}</p>{!canApplyDesign && <p className="text-[var(--app-muted)]">{t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')}</p>}{applyError && <p className="text-[var(--app-danger)]">{applyError}</p>}<div className="flex gap-2"><button className="h-7 flex-1 rounded border border-[var(--app-control-border)] hover:bg-[var(--app-hover)]" onClick={resetDesign} type="button">{t('Reset')}</button><button className="h-7 flex-1 rounded bg-[var(--app-submit-background)] px-2 font-medium text-[var(--app-submit-foreground)] disabled:opacity-45" disabled={!canApplyDesign || showingBefore} onClick={() => void applyDesignChanges()} title={canApplyDesign ? undefined : t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。')} type="button">{t('Apply changes')}</button></div></div>}
         </div>}
         {panelTab === 'layers' && <div className="space-y-1">
           <div className="mb-2 flex items-center justify-between"><p className="font-medium text-[var(--app-foreground)]">{t('图层')}</p><button aria-label={t('刷新图层')} className="flex size-7 items-center justify-center rounded hover:bg-[var(--app-hover)]" onClick={() => workbenchRef.current?.readLayers()} type="button"><RotateCw className="size-3.5" /></button></div>

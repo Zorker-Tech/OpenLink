@@ -157,6 +157,7 @@
   "当前 Provider 未提供": "Vom aktuellen Anbieter nicht bereitgestellt",
   "当前回复结束后可安装": "Nach der aktuellen Antwort installierbar",
   "当前会话没有已连接的 MCP。": "Keine MCP-Server mit dieser Sitzung verbunden.",
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "Dieser Chat ist schreibgeschützt. Stelle den Zugriff auf „Nachfragen“ um, bevor du Quellcodeänderungen anwendest.",
   "当前浏览器不支持 ZIP 解压。": "Dieser Browser unterstützt das Entpacken von ZIP-Dateien nicht.",
   "当前模型尚未启用。": "Dieses Modell ist noch nicht aktiviert.",
   "当前索引后端": "Aktuelles Index-Backend",

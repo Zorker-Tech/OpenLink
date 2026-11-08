@@ -157,6 +157,7 @@
   "当前 Provider 未提供": "Not provided by the current provider",
   "当前回复结束后可安装": "Available after the current reply",
   "当前会话没有已连接的 MCP。": "No MCP servers connected to this session.",
+  "当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。": "This chat is read-only. Switch access to Ask before applying source changes.",
   "当前浏览器不支持 ZIP 解压。": "This browser does not support ZIP extraction.",
   "当前模型尚未启用。": "This model is not enabled yet.",
   "当前索引后端": "Current index backend",
