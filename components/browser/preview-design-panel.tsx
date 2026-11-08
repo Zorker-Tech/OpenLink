@@ -347,7 +347,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
   }, [applyingDesign, browserState.selectedElement, pendingEdits, pushEditSnapshot, showingBefore, workbenchRef])
 
   const handleElementMoved = useCallback((move: BrowserElementMove) => {
-    if (applyInFlightRef.current) return
+    if (applyInFlightRef.current || applyingDesign || showingBefore) return
     const key = previewStyleEditKey(move.element.ref, move.property)
     const existing = pendingEdits.find((edit) => edit.key === key)
     const before = existing?.before ?? move.before
@@ -355,7 +355,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
     if (move.after !== before) next.push({ key, kind: 'style', ref: move.element.ref, property: move.property, selector: move.element.selector || move.element.tagName, label: move.element.componentName || move.element.text || move.element.tagName, before, after: move.after })
     setStyleDrafts((current) => ({ ...current, [key]: move.after }))
     pushEditSnapshot(next)
-  }, [pendingEdits, pushEditSnapshot])
+  }, [applyingDesign, pendingEdits, pushEditSnapshot, showingBefore])
 
   const updateThemeToken = useCallback((token: string, value: string, transactionKey?: string) => {
     if (showingBefore || applyingDesign) return
@@ -512,7 +512,7 @@ export const PreviewDesignPanel = forwardRef<PreviewDesignPanelHandle, PreviewDe
       applyInFlightRef.current = false
       setApplyingDesign(false)
     }
-  }, [applyingDesign, browserState.previewTargets, browserState.themeTokens, canApplyDesign, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
+  }, [applyingDesign, browserState.previewTargets, canApplyDesign, designScreenshot, onSubmitRequest, pagePath, pendingEdits, projectId, showingBefore, t, targetId, usableDesignScreenshot])
 
   const handleAnnotationTarget = useCallback((target: BrowserPreviewAnnotationTarget) => {
     if (!isPreviewTargetId(targetId)) {
