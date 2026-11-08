@@ -270,10 +270,9 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         await openSession(nextSurface, initialUrl)
         return
       }
-      // A Project preview is optional, but the session-scoped Browser agent
-      // capability is not. Fall back to the realtime Chromium surface when no
-      // project web server is listening so @Browser can still navigate and
-      // inspect external pages instead of disappearing from an active chat.
+      // Callers may opt into using the Agent's Chromium surface when a
+      // project preview is unavailable. The chat Preview opts out so opening
+      // it cannot silently take over the Agent-owned Realtime session.
       if (allowRealtimeFallback
         && nextSurface === 'native-preview'
         && sessionError instanceof BrowserSessionCreateError
@@ -287,7 +286,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       setStatus('failed')
       setError(sessionError instanceof Error ? sessionError.message : String(sessionError))
     }
-  }, [address, chatSessionId, projectId, refreshPreviewTargets, t, viewportMode])
+  }, [address, allowRealtimeFallback, chatSessionId, projectId, refreshPreviewTargets, t, viewportMode])
 
   const openSessionRef = useRef(openSession)
   useEffect(() => {
@@ -502,7 +501,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
               <p className="mt-1 max-w-md text-xs leading-5 text-[var(--app-muted)]">{error}</p></div>
             <div className="flex gap-2">
               <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-xs hover:bg-[var(--app-active)]" onClick={() => void openSession(surface, address)} type="button"><RotateCw className="size-3.5" />{t('重试')}</button>
-              {surface === 'native-preview' && <button className="h-8 rounded-md bg-[var(--app-foreground)] px-3 text-xs text-[var(--app-background)]" onClick={() => setNextSurface('chromium-stream')} type="button">{t('打开实时浏览器')}</button>}
+              {allowRealtimeFallback && surface === 'native-preview' && <button className="h-8 rounded-md bg-[var(--app-foreground)] px-3 text-xs text-[var(--app-background)]" onClick={() => setNextSurface('chromium-stream')} type="button">{t('打开实时浏览器')}</button>}
             </div>
           </div>
         ) : null}
