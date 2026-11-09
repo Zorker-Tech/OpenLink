@@ -15,6 +15,8 @@ export type {
   SlateInteractionToolCallValue,
   SlateToolCallUpdate,
   SlateToolCallUpdatePhase,
+  SlateToolCallDeltaUpdate,
+  SlateToolCallDeltaValue,
   SlateTextDeltaUpdate,
   SlateTokenDeltaUpdate,
   SlateTurnEndedUpdate,

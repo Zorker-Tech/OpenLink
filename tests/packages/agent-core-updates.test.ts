@@ -5,12 +5,25 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
-import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
 import {
+  InteractionUpdate,
+  TaskToolCallDelta,
+  TextDeltaUpdate,
+  ToolCall,
+  ToolCallDelta,
+} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { EditToolCallDelta } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts"
+import { ReplaceEnvToolCallDelta } from "../../source/adapters/interop/proto/generated/agent/v1/replace_env_tool_pb.ts"
+import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import { ShellToolCallDelta, ShellToolCallStdoutDelta } from "../../source/adapters/interop/proto/generated/agent/v1/shell_tool_pb.ts"
+import {
+  interopToolCallDeltaFromSlateValue,
   redactSlateInteractionToolCallValue,
+  redactSlateToolCallDeltaValue,
   slateInteractionToolCallValueFromInterop,
+  slateToolCallDeltaValueFromInterop,
   unredactSlateInteractionToolCallValue,
+  unredactSlateToolCallDeltaValue,
 } from "../../source/adapters/interop/agent/interaction-tool-call-adapter.ts"
 import {
   FeedbackRequestCategory,
@@ -182,6 +195,66 @@ test("Slate tool-call events round-trip through the interop privacy boundary", (
   assert.equal(typeof redactedCommand, "object")
   assert.equal((redactedCommand as { readonly __privacyMode?: string }).__privacyMode, mode)
   assert.deepEqual(unredactSlateInteractionUpdate(redacted, unredactSlateInteractionToolCallValue), update)
+})
+
+test("Slate tool-call deltas preserve operation data through the privacy boundary", () => {
+  const deltas = [
+    new ToolCallDelta({
+      delta: { case: "editToolCallDelta", value: new EditToolCallDelta({ streamContentDelta: "patch text" }) },
+    }),
+    new ToolCallDelta({
+      delta: {
+        case: "shellToolCallDelta",
+        value: new ShellToolCallDelta({ delta: { case: "stdout", value: new ShellToolCallStdoutDelta({ content: "shell output" }) } }),
+      },
+    }),
+    new ToolCallDelta({
+      delta: {
+        case: "taskToolCallDelta",
+        value: new TaskToolCallDelta({
+          interactionUpdate: new InteractionUpdate({
+            message: { case: "textDelta", value: new TextDeltaUpdate({ text: "task output" }) },
+          }),
+        }),
+      },
+    }),
+    new ToolCallDelta({
+      delta: { case: "replaceEnvToolCallDelta", value: new ReplaceEnvToolCallDelta({ associatedPodKey: "environment-1" }) },
+    }),
+    new ToolCallDelta(),
+  ]
+
+  const updates = deltas.map((delta, index) => {
+    const slateDelta = slateToolCallDeltaValueFromInterop(delta)
+    assert.ok(slateDelta)
+    const update = SlateInteractionUpdates.toolCallDelta(`call-${index}`, slateDelta, `model-${index}`)
+    assert.equal(isSlateInteractionUpdate(update), true)
+    const redacted = redactSlateInteractionUpdate(update, mode, undefined, redactSlateToolCallDeltaValue)
+    assert.equal(isSlateRedactedInteractionUpdate(redacted), true)
+    const restored = unredactSlateInteractionUpdate(redacted, undefined, unredactSlateToolCallDeltaValue)
+    assert.equal(restored.kind, "tool-call-delta")
+    if (restored.kind !== "tool-call-delta" || restored.delta === undefined) assert.fail("expected the streamed delta value")
+    assert.equal(restored.callId, `call-${index}`)
+    assert.equal(restored.modelCallId, `model-${index}`)
+    assert.deepEqual(interopToolCallDeltaFromSlateValue(restored.delta).toBinary(), delta.toBinary())
+    return restored
+  })
+
+  assert.deepEqual(updates.map(update => update.delta?.kind), [
+    "edit-content",
+    "shell-output",
+    "legacy",
+    "environment-assignment",
+    "legacy",
+  ])
+
+  const unknown = ToolCallDelta.fromBinary(new Uint8Array([0x2a, 0x01, 0x78]))
+  const unknownSlateValue = slateToolCallDeltaValueFromInterop(unknown)
+  assert.deepEqual(interopToolCallDeltaFromSlateValue(unknownSlateValue!).toBinary(), unknown.toBinary())
+
+  const absent = SlateInteractionUpdates.toolCallDelta("call-none", undefined, "model-none")
+  assert.equal(isSlateInteractionUpdate(absent), true)
+  assert.deepEqual(unredactSlateInteractionUpdate(redactSlateInteractionUpdate(absent, mode)), absent)
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {

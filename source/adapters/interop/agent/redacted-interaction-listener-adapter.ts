@@ -39,7 +39,9 @@ import type {
 import { taskProgressUpdateForListener } from "./task-progress-protocol-adapter.ts"
 import {
   redactSlateInteractionToolCallValue,
+  redactSlateToolCallDeltaValue,
   unredactSlateInteractionToolCallValue,
+  unredactSlateToolCallDeltaValue,
 } from "./interaction-tool-call-adapter.ts"
 import {
   fromInteropInteractionQuery,
@@ -83,7 +85,12 @@ export function toUnredactedInteractionListener<Context>(
   return {
     async sendUpdate(ctx, update) {
       if (isSlateInteractionUpdate(update)) {
-        await delegate.sendUpdate(ctx, redactSlateInteractionUpdate(update, privacyMode, redactSlateInteractionToolCallValue))
+        await delegate.sendUpdate(ctx, redactSlateInteractionUpdate(
+          update,
+          privacyMode,
+          redactSlateInteractionToolCallValue,
+          redactSlateToolCallDeltaValue,
+        ))
         return
       }
       await delegate.sendUpdate(ctx, redactInteractionUpdate(update, privacyMode))
@@ -127,7 +134,11 @@ export function toRedactedInteractionListener<Context>(
   return {
     async sendUpdate(ctx, update) {
       if (isSlateRedactedInteractionUpdate(update)) {
-        await delegate.sendUpdate(ctx, unredactSlateInteractionUpdate(update, unredactSlateInteractionToolCallValue))
+        await delegate.sendUpdate(ctx, unredactSlateInteractionUpdate(
+          update,
+          unredactSlateInteractionToolCallValue,
+          unredactSlateToolCallDeltaValue,
+        ))
         return
       }
       await delegate.sendUpdate(

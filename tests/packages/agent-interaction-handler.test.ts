@@ -359,9 +359,17 @@ test("a partial tool call is announced and recorded as pending", async () => {
 test("a tool call delta is announced with the invocation it belongs to", async () => {
   const harness = handlerWith()
   await harness.handler.emitToolCallDelta(createContext(), "call-1", { delta: { case: "editToolCallDelta", value: { streamContentDelta: "x" } } })
-  const delta = harness.updates.sent[0]?.payload as { callId: string; modelCallId: string }
+  const delta = harness.updates.sent[0]?.payload as {
+    kind: string
+    callId: string
+    modelCallId: string
+    delta?: { kind: string; textDelta?: string }
+  }
+  assert.equal(harness.updates.sent[0]?.kind, "tool-call-delta")
+  assert.equal(delta.kind, "tool-call-delta")
   assert.equal(delta.callId, "call-1")
   assert.equal(delta.modelCallId, "invocation-1")
+  assert.deepEqual(delta.delta, { kind: "edit-content", textDelta: "x" })
 })
 
 test("a question that failed is recorded like any other call, and so is its answer", async () => {

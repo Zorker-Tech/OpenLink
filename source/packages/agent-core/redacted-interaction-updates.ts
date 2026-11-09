@@ -17,7 +17,9 @@ export type {
   SlateRedactedThinkingDeltaUpdate,
   SlateRedactedTextDeltaUpdate,
   SlateRedactedToolCallUpdate,
+  SlateRedactedToolCallDeltaUpdate,
   SlateRedactedTokenDeltaUpdate,
   SlateRedactedTurnEndedUpdate,
   SlateToolCallUpdatePhase,
+  SlateToolCallDeltaValue,
 } from "./interaction-update-contracts.ts"

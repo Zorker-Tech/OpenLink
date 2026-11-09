@@ -1,11 +1,20 @@
-import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
-import { EditArgs } from "../proto/generated/agent/v1/edit_tool_pb.ts"
+import { ToolCall, ToolCallDelta } from "../proto/generated/agent/v1/agent_pb.ts"
+import { EditArgs, EditToolCallDelta } from "../proto/generated/agent/v1/edit_tool_pb.ts"
 import { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
-import { fromRedactedToolCall, toRedactedToolCall } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { ReplaceEnvToolCallDelta } from "../proto/generated/agent/v1/replace_env_tool_pb.ts"
+import { ShellToolCallDelta, ShellToolCallStderrDelta, ShellToolCallStdoutDelta } from "../proto/generated/agent/v1/shell_tool_pb.ts"
+import {
+  fromRedactedToolCall,
+  fromRedactedToolCallDelta,
+  toRedactedToolCall,
+  toRedactedToolCallDelta,
+} from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
-import { createSlateToolCallStep, type SlateToolCallStep, type SlateToolCallValue } from "../../../packages/agent/conversation-step-state.ts"
+import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { createSlateToolCallStep, type SlateToolCallStep, type SlateToolCallText, type SlateToolCallValue } from "../../../packages/agent/conversation-step-state.ts"
 import type { SlateInteractionToolCallValue } from "../../../packages/agent-core/interaction-update-contracts.ts"
+import type { SlateToolCallDeltaValue } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import { fromInteropToolCallStep, toInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
 
 function projectSlateInteractionToolCallFromInterop(value: unknown, toolCallId?: string): SlateInteractionToolCallValue {
@@ -90,6 +99,148 @@ export function unredactSlateInteractionToolCallValue(value: SlateInteractionToo
     ),
     value.toolCallId,
   )
+}
+
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function legacyToolCallDelta(
+  sourceCase?: string,
+  value?: unknown,
+  includeValue = value !== undefined,
+): SlateToolCallDeltaValue {
+  return {
+    kind: "legacy",
+    ...(sourceCase === undefined ? {} : { sourceCase }),
+    ...(includeValue ? { value } : {}),
+  }
+}
+
+/** Projects simple streamed operation deltas into Slate values and quarantines nested historical payloads. */
+export function slateToolCallDeltaValueFromInterop(value: unknown): SlateToolCallDeltaValue | undefined {
+  if (value === undefined) return undefined
+  const envelope = recordOf(value)
+  if (envelope === undefined) return legacyToolCallDelta(undefined, value)
+  const operation = recordOf(envelope.delta)
+  if (operation === undefined) return legacyToolCallDelta(undefined, value)
+  const payload = recordOf(operation.value)
+  switch (operation.case) {
+    case "editToolCallDelta":
+      if (payload !== undefined && (typeof payload.streamContentDelta === "string" || isRedactedString(payload.streamContentDelta))) {
+        return { kind: "edit-content", textDelta: payload.streamContentDelta }
+      }
+      return legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
+    case "shellToolCallDelta": {
+      const stream = recordOf(payload?.delta)
+      const streamValue = recordOf(stream?.value)
+      if ((stream?.case === "stdout" || stream?.case === "stderr") &&
+          streamValue !== undefined && (typeof streamValue.content === "string" || isRedactedString(streamValue.content))) {
+        return {
+          kind: "shell-output",
+          stream: stream.case,
+          text: streamValue.content,
+        }
+      }
+      return legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
+    }
+    case "replaceEnvToolCallDelta":
+      if (payload !== undefined && (typeof payload.associatedPodKey === "string" || isRedactedString(payload.associatedPodKey))) {
+        return { kind: "environment-assignment", environmentId: payload.associatedPodKey }
+      }
+      return legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
+    case "taskToolCallDelta":
+      return legacyToolCallDelta(
+        operation.case,
+        operation.value,
+        Object.prototype.hasOwnProperty.call(operation, "value"),
+      )
+    default:
+      return typeof operation.case === "string"
+        ? legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
+        : legacyToolCallDelta(undefined, value, true)
+  }
+}
+
+function plainDeltaText(value: SlateToolCallText): string {
+  return isRedactedString(value) ? value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : value
+}
+
+/** Reconstructs the transient generated delta only where the existing interop and redaction machinery needs it. */
+export function interopToolCallDeltaFromSlateValue(value: SlateToolCallDeltaValue): ToolCallDelta {
+  switch (value.kind) {
+    case "edit-content":
+      return new ToolCallDelta({
+        delta: { case: "editToolCallDelta", value: new EditToolCallDelta({ streamContentDelta: plainDeltaText(value.textDelta) }) },
+      })
+    case "shell-output":
+      return new ToolCallDelta({
+        delta: {
+          case: "shellToolCallDelta",
+          value: new ShellToolCallDelta({
+            delta: value.stream === "stdout"
+              ? { case: "stdout", value: new ShellToolCallStdoutDelta({ content: plainDeltaText(value.text) }) }
+              : { case: "stderr", value: new ShellToolCallStderrDelta({ content: plainDeltaText(value.text) }) },
+          }),
+        },
+      })
+    case "environment-assignment":
+      return new ToolCallDelta({
+        delta: {
+          case: "replaceEnvToolCallDelta",
+          value: new ReplaceEnvToolCallDelta({ associatedPodKey: plainDeltaText(value.environmentId) }),
+        },
+      })
+    case "legacy":
+      if (value.sourceCase === undefined) {
+        return value.value instanceof ToolCallDelta ? value.value.clone() : new ToolCallDelta()
+      }
+      return new ToolCallDelta({ delta: { case: value.sourceCase, value: value.value } as never })
+  }
+}
+
+function redactedInteropToolCallDeltaFromSlateValue(value: SlateToolCallDeltaValue): unknown {
+  switch (value.kind) {
+    case "edit-content":
+      return { delta: { case: "editToolCallDelta", value: { streamContentDelta: value.textDelta } } }
+    case "shell-output":
+      return {
+        delta: {
+          case: "shellToolCallDelta",
+          value: {
+            delta: {
+              case: value.stream,
+              value: { content: value.text },
+            },
+          },
+        },
+      }
+    case "environment-assignment":
+      return { delta: { case: "replaceEnvToolCallDelta", value: { associatedPodKey: value.environmentId } } }
+    case "legacy":
+      return value.sourceCase === undefined
+        ? { delta: { case: undefined, value: undefined } }
+        : { delta: { case: value.sourceCase, ...(Object.hasOwn(value, "value") ? { value: value.value } : {}) } }
+  }
+}
+
+/** Applies the generated field-level privacy policy to a Slate delta at the one owning boundary. */
+export function redactSlateToolCallDeltaValue(value: SlateToolCallDeltaValue, privacyMode: PrivacyMode): SlateToolCallDeltaValue {
+  return slateToolCallDeltaValueFromInterop(
+    toRedactedToolCallDelta(interopToolCallDeltaFromSlateValue(value), privacyMode),
+  ) ?? { kind: "legacy" }
+}
+
+/** Reveals a redacted delta only for the listener's explicit in-process projection. */
+export function unredactSlateToolCallDeltaValue(value: SlateToolCallDeltaValue): SlateToolCallDeltaValue {
+  const plain = fromRedactedToolCallDelta(
+    redactedInteropToolCallDeltaFromSlateValue(value) as never,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    {},
+  )
+  return slateToolCallDeltaValueFromInterop(plain) ?? { kind: "legacy" }
 }
 
 function assertToolCall(value: unknown): ToolCall {

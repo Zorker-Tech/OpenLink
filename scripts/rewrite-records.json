@@ -2636,7 +2636,7 @@
       "claim": "rewritten",
       "overlap": 0.5029900332225914,
       "refreshReason": "Added Slate-owned tool-call lifecycle events while preserving argument recovery, edit streaming, call identity, and redaction through the existing adapters.",
-      "evidence": "The full Node 24 Work-host suite passes 10098/10098 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Focused coverage pins lifecycle phases, preserved arguments, synthetic model-call identity, privacy round trips, and runner projection. Measured overlap is 0.5029900332225914 against 1505 baseline pairs."
+      "evidence": "The full Node 24 Work-host suite passes 10100/10100 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Focused coverage pins lifecycle phases and delta round trips, preserved arguments, synthetic model-call identity, privacy boundaries, and runner projection. Measured overlap is 0.5029900332225914 against 1505 baseline pairs."
     },
     "packages/agent/tools/core/await.ts": {
       "claim": "rewritten",
@@ -4462,7 +4462,7 @@
       "claim": "rewritten",
       "overlap": 0.46440677966101696,
       "refreshReason": "Added a Slate-owned deferred ask-question tool value for lifecycle updates while retaining the versioned completion action, transcript write, and prompt-result behavior.",
-      "evidence": "The full Node 24 Work-host suite passes 10098/10098 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Ask-question tests pin Slate tool arguments/results, privacy-boundary round trips, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation, and active-turn routing. Measured overlap is 0.46440677966101696 against 590 baseline pairs."
+      "evidence": "The full Node 24 Work-host suite passes 10100/10100 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Ask-question tests pin Slate tool arguments/results, privacy-boundary round trips, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation, and active-turn routing. Measured overlap is 0.46440677966101696 against 590 baseline pairs."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",
