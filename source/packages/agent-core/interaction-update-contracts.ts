@@ -2,6 +2,7 @@ import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { RedactedString } from "../redaction/redacted-values.ts"
 import type { SlateToolCallText, SlateToolCallValue } from "../agent/conversation-step-state.ts"
 import type { SlateUserMessage } from "../agent/user-message-state.ts"
+import type { SandboxNetworkPolicy, SandboxRule } from "../local-exec/sandbox-policy.ts"
 
 /** Slate-owned inputs used when describing streamed agent usage and feedback copy. */
 export interface TurnUsage {
@@ -42,6 +43,62 @@ export interface SlateFeedbackRequestUpdate {
 export interface SlateRedactedFeedbackRequestUpdate extends SlateFeedbackRequestUpdate {
   readonly privacyMode: PrivacyMode
 }
+
+export type SlateShellOutputUpdate =
+  | {
+      readonly kind: "shell-output"
+      readonly stream: "start"
+      readonly sandboxPolicy?: SandboxRule
+    }
+  | {
+      readonly kind: "shell-output"
+      readonly stream: "stdout" | "stderr"
+      readonly text: string
+    }
+  | {
+      readonly kind: "shell-output"
+      readonly stream: "exit"
+      readonly code: number
+      readonly aborted: boolean
+    }
+
+type SlateRedactedSandboxNetworkPolicy = Omit<SandboxNetworkPolicy, "logging"> & {
+  readonly logging?: Omit<NonNullable<SandboxNetworkPolicy["logging"]>, "decisionLogPath"> & {
+    readonly decisionLogPath?: RedactedString
+  }
+}
+
+export type SlateRedactedSandboxRule = Omit<
+  SandboxRule,
+  "additionalReadwritePaths" | "additionalReadonlyPaths" | "debugOutputDir" | "additionalReadPaths" | "networkPolicy"
+> & {
+  readonly additionalReadwritePaths?: readonly RedactedString[]
+  readonly additionalReadonlyPaths?: readonly RedactedString[]
+  readonly debugOutputDir?: RedactedString
+  readonly additionalReadPaths?: readonly RedactedString[]
+  readonly networkPolicy?: SlateRedactedSandboxNetworkPolicy
+}
+
+export type SlateRedactedShellOutputUpdate =
+  | {
+      readonly kind: "shell-output"
+      readonly privacyMode: PrivacyMode
+      readonly stream: "start"
+      readonly sandboxPolicy?: SlateRedactedSandboxRule
+    }
+  | {
+      readonly kind: "shell-output"
+      readonly privacyMode: PrivacyMode
+      readonly stream: "stdout" | "stderr"
+      readonly text: RedactedString
+    }
+  | {
+      readonly kind: "shell-output"
+      readonly privacyMode: PrivacyMode
+      readonly stream: "exit"
+      readonly code: number
+      readonly aborted: boolean
+    }
 
 /** Slate's local run event for the end of one agent turn. */
 export interface SlateTurnEndedUpdate {
@@ -205,6 +262,7 @@ export type SlateInteractionUpdate =
   | SlateToolCallDeltaUpdate
   | SlateUserMessageAppendedUpdate
   | SlateFeedbackRequestUpdate
+  | SlateShellOutputUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -280,3 +338,4 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedToolCallDeltaUpdate
   | SlateRedactedUserMessageAppendedUpdate
   | SlateRedactedFeedbackRequestUpdate
+  | SlateRedactedShellOutputUpdate

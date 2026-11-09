@@ -5,6 +5,7 @@ import { ShellCommandActionHandler } from "../../source/packages/agent/actions/s
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
+import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
   createSlateShellCommandActionPayload,
@@ -153,14 +154,14 @@ function handlerWith(options: {
 }): {
   readonly handler: ShellCommandActionHandler
   readonly streams: StreamHarness
-  readonly updates: string[]
+  readonly updates: unknown[]
 } {
   const streams = streamHarness(options.events, options.throwAfter)
-  const updates: string[] = []
+  const updates: unknown[] = []
   const handler = new ShellCommandActionHandler(
     options.config ?? {},
     streams.accessor,
-    { async sendUpdate() { updates.push("update") } },
+    { async sendUpdate(_ctx: unknown, update: unknown) { updates.push(update) } },
     {},
     {},
   )
@@ -218,7 +219,56 @@ test("the user watches the command as it runs", async () => {
   })
   const state = stateHandler()
   await handler.handle(createContext(), shellAction("echo hi"), executorHarness().executor, state.handler, [], () => {})
-  assert.equal(updates.length, 3)
+  assert.deepEqual(updates.map(update => (update as { kind: string }).kind), [
+    "shell-output",
+    "shell-output",
+    "shell-output",
+  ])
+  assert.deepEqual(updates.map(update => (update as { stream: string }).stream), ["start", "stdout", "exit"])
+})
+
+test("a sandboxed shell start carries a redacted Slate policy", async () => {
+  const { handler, updates } = handlerWith({
+    events: [{
+      event: {
+        case: "start",
+        value: {
+          sandboxPolicy: {
+            type: 2,
+            additionalReadwritePaths: ["/repo/private"],
+            additionalReadonlyPaths: [],
+            additionalReadPaths: [],
+            debugOutputDir: "/tmp/private",
+            networkPolicy: {
+              allow: ["example.com"],
+              deny: [],
+              logging: { decisionLogPath: "/var/log/private" },
+            },
+          },
+        },
+      },
+    }],
+  })
+  const state = stateHandler()
+  await handler.handle(createContext(), shellAction("echo hi"), executorHarness().executor, state.handler, [], () => {})
+
+  const update = updates[0] as {
+    kind: string
+    stream: string
+    sandboxPolicy?: {
+      type: string
+      additionalReadwritePaths?: unknown[]
+      debugOutputDir?: unknown
+      networkPolicy?: { allow?: string[]; logging?: { decisionLogPath?: unknown } }
+    }
+  }
+  assert.equal(update.kind, "shell-output")
+  assert.equal(update.stream, "start")
+  assert.equal(update.sandboxPolicy?.type, "workspace_readwrite")
+  assert.equal(update.sandboxPolicy?.additionalReadwritePaths?.[0] instanceof RedactedString, true)
+  assert.equal(update.sandboxPolicy?.debugOutputDir instanceof RedactedString, true)
+  assert.equal(update.sandboxPolicy?.networkPolicy?.logging?.decisionLogPath instanceof RedactedString, true)
+  assert.deepEqual(update.sandboxPolicy?.networkPolicy?.allow, ["example.com"])
 })
 
 test("a resumed turn does not show the output the user has already seen", async () => {

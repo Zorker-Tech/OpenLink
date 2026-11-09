@@ -27,4 +27,5 @@ export type {
   SlateFeedbackRequestUpdate,
   SlateFeedbackRequestCategory,
   SlateFeedbackRequestCategoryGroup,
+  SlateShellOutputUpdate,
 } from "./interaction-update-contracts.ts"

@@ -1,14 +1,12 @@
 import {
   createRedactedShellArgs,
   createRedactedShellCommandParsingResult,
-  createRedactedShellStreamExit,
-  createRedactedShellStreamStderr,
-  createRedactedShellStreamStart,
-  createRedactedShellStreamStdout,
   fromRedactedShellArgs,
   toRedactedShellStream,
 } from "../redacted-protos/generated/agent/v1/shell_exec_redacted.ts";
-import { RedactedUpdates } from "../../../packages/agent-core/redacted-interaction-updates.ts";
+import { SlateRedactedInteractionUpdates } from "../../../packages/agent-core/redacted-interaction-updates.ts";
+import type { SlateRedactedSandboxRule } from "../../../packages/agent-core/interaction-update-contracts.ts";
+import { adaptSandboxPolicyValueFromInterop } from "./sandbox-policy-adapter.ts";
 import { shellStreamExecutorResource } from "../../../packages/agent-exec/shell-stream-operation.ts";
 import { DataClassification, PrivacyCapability } from "../../../packages/redaction/classification.ts";
 import { createRedactedString } from "../../../packages/redaction/create.ts";
@@ -116,12 +114,15 @@ function streamEvents(
       switch (selection.case) {
         case "start": {
           const value = selection.value;
+          const sandboxPolicy = value.sandboxPolicy === undefined
+            ? undefined
+            : adaptSandboxPolicyValueFromInterop(value.sandboxPolicy) as unknown as SlateRedactedSandboxRule;
           yield {
             kind: "started",
-            interactionUpdate: RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-              case: "start",
-              value: createRedactedShellStreamStart(stream._privacyMode, { sandboxPolicy: value.sandboxPolicy }),
-            }),
+            interactionUpdate: SlateRedactedInteractionUpdates.shellOutputStartValue(
+              sandboxPolicy,
+              stream._privacyMode,
+            ),
           };
           break;
         }
@@ -130,10 +131,11 @@ function streamEvents(
           yield {
             kind: "stdout",
             text: value.data.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
-            interactionUpdate: RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-              case: "stdout",
-              value: createRedactedShellStreamStdout(stream._privacyMode, { data: value.data }),
-            }),
+            interactionUpdate: SlateRedactedInteractionUpdates.shellOutputText(
+              "stdout",
+              value.data,
+              stream._privacyMode,
+            ),
           };
           break;
         }
@@ -142,10 +144,11 @@ function streamEvents(
           yield {
             kind: "stderr",
             text: value.data.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
-            interactionUpdate: RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-              case: "stderr",
-              value: createRedactedShellStreamStderr(stream._privacyMode, { data: value.data }),
-            }),
+            interactionUpdate: SlateRedactedInteractionUpdates.shellOutputText(
+              "stderr",
+              value.data,
+              stream._privacyMode,
+            ),
           };
           break;
         }
@@ -155,13 +158,11 @@ function streamEvents(
             kind: "exit",
             code: value.code,
             aborted: value.aborted,
-            interactionUpdate: RedactedUpdates.shellOutputDelta(stream._privacyMode, {
-              case: "exit",
-              value: createRedactedShellStreamExit(stream._privacyMode, {
-                code: value.code,
-                aborted: value.aborted,
-              }),
-            }),
+            interactionUpdate: SlateRedactedInteractionUpdates.shellOutputExit(
+              value.code,
+              value.aborted,
+              stream._privacyMode,
+            ),
           };
           break;
         }

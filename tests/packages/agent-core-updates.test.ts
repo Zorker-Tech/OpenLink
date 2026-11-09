@@ -278,6 +278,39 @@ test("feedback requests round-trip through Slate privacy projection", () => {
   assert.equal("showFormImmediately" in minimal, false)
 })
 
+test("shell output events round-trip through Slate privacy projection", () => {
+  const updates = [
+    SlateInteractionUpdates.shellOutputStart({
+      type: "workspace_readwrite",
+      additionalReadwritePaths: ["/repo/private"],
+      debugOutputDir: "/tmp/private",
+      networkPolicy: {
+        default: "deny",
+        allow: ["example.com"],
+        logging: { decisionLogPath: "/var/log/private" },
+      },
+    }),
+    SlateInteractionUpdates.shellOutputStdout("output"),
+    SlateInteractionUpdates.shellOutputStderr("error"),
+    SlateInteractionUpdates.shellOutputExit(3, true),
+  ]
+
+  for (const update of updates) {
+    assert.equal(isSlateInteractionUpdate(update), true)
+    const redacted = redactSlateInteractionUpdate(update, mode)
+    assert.ok(isSlateRedactedInteractionUpdate(redacted))
+    assert.equal(redacted.privacyMode, mode)
+    assert.deepEqual(unredactSlateInteractionUpdate(redacted), update)
+  }
+
+  const start = redactSlateInteractionUpdate(updates[0]!, mode)
+  assert.ok(start.kind === "shell-output" && start.stream === "start")
+  assert.equal(start.sandboxPolicy?.additionalReadwritePaths?.[0] instanceof RedactedString, true)
+  assert.equal(start.sandboxPolicy?.debugOutputDir instanceof RedactedString, true)
+  assert.equal(start.sandboxPolicy?.networkPolicy?.logging?.decisionLogPath instanceof RedactedString, true)
+  assert.equal(start.sandboxPolicy?.networkPolicy?.allow?.[0], "example.com")
+})
+
 test("Slate tool-call events round-trip through the interop privacy boundary", () => {
   const toolCall = slateInteractionToolCallValueFromInterop(new ToolCall({
     tool: { case: "shellToolCall", value: { args: new ShellArgs({ command: "echo private" }) } as never },
