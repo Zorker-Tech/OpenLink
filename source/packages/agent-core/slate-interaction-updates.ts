@@ -6,6 +6,7 @@ import { createRedactedString } from "../redaction/create.ts"
 import { isRedactedString, RedactedBytes, type RedactedString } from "../redaction/redacted-values.ts"
 import { PrivacyMode as PrivacyModes } from "../redaction/privacy-mode.ts"
 import { isSlateToolCallValue } from "../agent/conversation-step-state.ts"
+import { cloneSlateUserMessage, type SlateUserMessage } from "../agent/user-message-state.ts"
 import type {
   SlateActiveBranchChangeUpdate,
   SlateHeartbeatUpdate,
@@ -43,6 +44,8 @@ import type {
   SlateToolCallUpdatePhase,
   SlateRedactedTurnEndedUpdate,
   SlateTurnEndedUpdate,
+  SlateUserMessageAppendedUpdate,
+  SlateRedactedUserMessageAppendedUpdate,
   TurnUsage,
 } from "./interaction-update-contracts.ts"
 import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../redaction/privacy-mode.ts"
@@ -216,6 +219,9 @@ export const SlateInteractionUpdates = {
   toolCallDelta(callId: string, delta: SlateToolCallDeltaValue | undefined, modelCallId: string): SlateToolCallDeltaUpdate {
     return toolCallDeltaUpdate(callId, delta, modelCallId)
   },
+  userMessageAppended(message: SlateUserMessage): SlateUserMessageAppendedUpdate {
+    return { kind: "user-message-appended", message: cloneSlateUserMessage(message) }
+  },
 }
 
 export const SlateRedactedInteractionUpdates = {
@@ -286,6 +292,12 @@ export const SlateRedactedInteractionUpdates = {
         : { hookMessage: createRedactedString(hookMessage, DataClassification.CODE, "hook_message", privacyMode) }),
     }
   },
+  userMessageAppended(message: SlateUserMessage, privacyMode: PrivacyMode): SlateRedactedUserMessageAppendedUpdate {
+    if (!isRedactedSlateUserMessageValue(message, privacyMode)) {
+      throw new TypeError("Slate redacted user messages must use the update privacy mode")
+    }
+    return { kind: "user-message-appended", privacyMode, message: cloneSlateUserMessage(message) }
+  },
   toolCallStarted(
     callId: string,
     toolCall: SlateInteractionToolCallValue | undefined,
@@ -329,6 +341,7 @@ export function redactSlateInteractionUpdate(
   privacyMode: PrivacyMode,
   redactToolCall?: (value: SlateInteractionToolCallValue, privacyMode: PrivacyMode) => SlateInteractionToolCallValue,
   redactToolCallDelta?: (value: SlateToolCallDeltaValue, privacyMode: PrivacyMode) => SlateToolCallDeltaValue,
+  redactUserMessage?: (value: SlateUserMessage, privacyMode: PrivacyMode) => SlateUserMessage,
 ): SlateRedactedInteractionUpdate {
   switch (update.kind) {
     case "text-delta": return SlateRedactedInteractionUpdates.textDelta(update.text, privacyMode)
@@ -367,6 +380,15 @@ export function redactSlateInteractionUpdate(
       )
     }
     case "turn-ended": return SlateRedactedInteractionUpdates.turnEnded(privacyMode, update.usage)
+    case "user-message-appended": {
+      if (redactUserMessage === undefined) {
+        throw new TypeError("Slate user-message updates require the user-message redaction adapter")
+      }
+      return SlateRedactedInteractionUpdates.userMessageAppended(
+        redactUserMessage(update.message, privacyMode),
+        privacyMode,
+      )
+    }
   }
 }
 
@@ -375,6 +397,7 @@ export function unredactSlateInteractionUpdate(
   update: SlateRedactedInteractionUpdate,
   unredactToolCall?: (value: SlateInteractionToolCallValue) => SlateInteractionToolCallValue,
   unredactToolCallDelta?: (value: SlateToolCallDeltaValue) => SlateToolCallDeltaValue,
+  unredactUserMessage?: (value: SlateUserMessage) => SlateUserMessage,
 ): SlateInteractionUpdate {
   switch (update.kind) {
     case "text-delta":
@@ -441,6 +464,12 @@ export function unredactSlateInteractionUpdate(
       return update.usage === undefined
         ? { kind: update.kind }
         : { kind: update.kind, usage: { ...update.usage } }
+    case "user-message-appended": {
+      if (unredactUserMessage === undefined) {
+        throw new TypeError("Slate user-message updates require the user-message unredaction adapter")
+      }
+      return { kind: update.kind, message: unredactUserMessage(update.message) }
+    }
   }
 }
 
@@ -513,6 +542,34 @@ function isToolCallPhase(value: unknown): value is SlateToolCallUpdatePhase {
   return value === "started" || value === "partial" || value === "completed"
 }
 
+function isSlateUserMessageHookContext(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const context = value as Record<string, unknown>
+  return typeof context.event === "string"
+    && (typeof context.text === "string" || isRedactedString(context.text))
+}
+
+function isSlateUserMessageValue(value: unknown): value is SlateUserMessage {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const message = value as Record<string, unknown>
+  return (typeof message.text === "string" || isRedactedString(message.text))
+    && typeof message.messageId === "string"
+    && typeof message.mode === "string"
+    && message.conversationStateBlobId instanceof Uint8Array
+    && Array.isArray(message.hookContexts)
+    && message.hookContexts.every(isSlateUserMessageHookContext)
+}
+
+function isRedactedSlateUserMessageValue(
+  value: unknown,
+  privacyMode: PrivacyMode,
+): value is SlateUserMessage {
+  return isSlateUserMessageValue(value)
+    && isRedactedString(value.text)
+    && value.text.__privacyMode === privacyMode
+    && redactedValuesUsePrivacyMode(value, privacyMode)
+}
+
 export function isSlateInteractionUpdate(value: unknown): value is SlateInteractionUpdate {
   if (typeof value !== "object" || value === null) return false
   const candidate = value as Record<string, unknown>
@@ -536,6 +593,7 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
     case "tool-call-delta": return typeof candidate.callId === "string" && typeof candidate.modelCallId === "string"
       && (candidate.delta === undefined || isSlateToolCallDeltaValue(candidate.delta))
     case "turn-ended": return isSlateTurnEndedUpdate(value)
+    case "user-message-appended": return isSlateUserMessageValue(candidate.message)
     default: return false
   }
 }
@@ -568,6 +626,7 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
     case "tool-call-delta": return typeof candidate.callId === "string" && typeof candidate.modelCallId === "string"
       && (candidate.delta === undefined || isRedactedSlateToolCallDeltaValue(candidate.delta, candidate.privacyMode))
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
+    case "user-message-appended": return isRedactedSlateUserMessageValue(candidate.message, candidate.privacyMode)
     default: return false
   }
 }

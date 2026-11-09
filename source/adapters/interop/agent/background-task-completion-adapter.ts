@@ -11,14 +11,10 @@ import {
   UserMessage,
 } from "../proto/generated/agent/v1/agent_pb.ts";
 import { SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts";
-import {
-  fromRedactedBackgroundTaskCompletionAction,
-  toRedactedInteractionUpdate,
-} from "../redacted-protos/generated/agent/v1/agent_redacted.ts";
+import { fromRedactedBackgroundTaskCompletionAction } from "../redacted-protos/generated/agent/v1/agent_redacted.ts";
 import { fromRedactedRepositoryIndexingInfo } from "../redacted-protos/generated/agent/v1/repo_redacted.ts";
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts";
 import { fromRedactedSelectedContext } from "../redacted-protos/generated/agent/v1/selected_context_redacted.ts";
-import { Updates } from "../../../packages/agent-core/interaction-updates.ts";
 import { PrivacyCapability as RuntimePrivacyCapability } from "../../../packages/redaction/classification.ts";
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
 import type {
@@ -32,7 +28,7 @@ import { createSlateBackgroundTaskCompletionActionPayload } from "../../../packa
 import type { SlateMode } from "../../../packages/agent/mode-processing.ts";
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts";
 import { toInteropAgentMode } from "./mode-processing-adapter.ts";
-import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts";
+import { fromInteropUserMessage, slateUserMessageAppendedUpdate } from "./user-message-action-protocol-adapter.ts";
 
 export type StoredBackgroundCompletionAction = Parameters<typeof fromRedactedBackgroundTaskCompletionAction>[0];
 
@@ -201,12 +197,10 @@ export function createBackgroundCompletionUserMessage(input: {
     ...(input.metadata === undefined ? {} : { simulatedMessageMetadata: input.metadata as never }),
   });
   if (input.threadId !== undefined && input.threadId.length > 0) userMessage.threadId = input.threadId;
+  const slateUserMessage = fromInteropUserMessage(userMessage);
   return {
     userMessage,
-    slateUserMessage: fromInteropUserMessage(userMessage),
-    listenerUpdate: toRedactedInteractionUpdate(
-      Updates.userMessageAppended(userMessage),
-      input.privacyMode,
-    ),
+    slateUserMessage,
+    listenerUpdate: slateUserMessageAppendedUpdate(slateUserMessage, input.privacyMode),
   };
 }

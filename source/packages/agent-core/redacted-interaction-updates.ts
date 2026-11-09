@@ -1,6 +1,8 @@
 /** Agent-core constructors for privacy-aware interaction updates. */
 export {
   RedactedUpdates,
+  slateUserMessageAppendedUpdate,
+  unredactSlateUserMessage,
   type ContextInjectionState,
   type RedactedFeedbackCategory,
   type RedactedFeedbackCategoryGroup,
@@ -23,6 +25,7 @@ export type {
   SlateRedactedToolCallDeltaUpdate,
   SlateRedactedTokenDeltaUpdate,
   SlateRedactedTurnEndedUpdate,
+  SlateRedactedUserMessageAppendedUpdate,
   SlateToolCallUpdatePhase,
   SlateToolCallDeltaValue,
 } from "./interaction-update-contracts.ts"

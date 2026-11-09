@@ -1,6 +1,7 @@
 import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { RedactedString } from "../redaction/redacted-values.ts"
 import type { SlateToolCallText, SlateToolCallValue } from "../agent/conversation-step-state.ts"
+import type { SlateUserMessage } from "../agent/user-message-state.ts"
 
 /** Slate-owned inputs used when describing streamed agent usage and feedback copy. */
 export interface TurnUsage {
@@ -152,6 +153,15 @@ export interface SlateRedactedToolCallDeltaUpdate extends SlateToolCallDeltaUpda
   readonly privacyMode: PrivacyMode
 }
 
+export interface SlateUserMessageAppendedUpdate {
+  readonly kind: "user-message-appended"
+  readonly message: SlateUserMessage
+}
+
+export interface SlateRedactedUserMessageAppendedUpdate extends SlateUserMessageAppendedUpdate {
+  readonly privacyMode: PrivacyMode
+}
+
 export type SlateInteractionUpdate =
   | SlateTurnEndedUpdate
   | SlateTextDeltaUpdate
@@ -168,6 +178,7 @@ export type SlateInteractionUpdate =
   | SlateSummaryCompletedUpdate
   | SlateToolCallUpdate
   | SlateToolCallDeltaUpdate
+  | SlateUserMessageAppendedUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -241,3 +252,4 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedSummaryCompletedUpdate
   | SlateRedactedToolCallUpdate
   | SlateRedactedToolCallDeltaUpdate
+  | SlateRedactedUserMessageAppendedUpdate

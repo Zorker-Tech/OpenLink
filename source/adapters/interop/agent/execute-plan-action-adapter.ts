@@ -9,12 +9,10 @@ import { TodoItem, TodoStatus } from "../proto/generated/agent/v1/todo_tool_pb.t
 import { SelectedCodeSelection, SelectedContext } from "../proto/generated/agent/v1/selected_context_pb.ts"
 import { Position, Range } from "../proto/generated/agent/v1/utils_pb.ts"
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
-import { toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { toRedactedTodoItem } from "../redacted-protos/generated/agent/v1/todo_tool_redacted.ts"
 import { readExecutorResource } from "../../../packages/agent-exec/read-operation.ts"
 import { writeExecutorResource } from "../../../packages/agent-exec/write-operation.ts"
-import { Updates } from "../../../packages/agent-core/interaction-updates.ts"
-import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
+import { fromInteropUserMessage, slateUserMessageAppendedUpdate } from "./user-message-action-protocol-adapter.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import { todoStatusFromString } from "../../../packages/agent/tools/core/todo/common.ts"
@@ -116,13 +114,11 @@ export function createPlanExecutionMessage(input: PlanExecutionMessageInput) {
       ? { executePlanInfo: new ExecutePlanInfo({ planId: input.planId, planTitle: input.planTitle }) }
       : {}),
   })
+  const slateUserMessage = fromInteropUserMessage(userMessage)
   return {
     userMessage,
-    slateUserMessage: fromInteropUserMessage(userMessage),
-    listenerUpdate: toRedactedInteractionUpdate(
-      Updates.userMessageAppended(userMessage),
-      input.listenerPrivacyMode,
-    ),
+    slateUserMessage,
+    listenerUpdate: slateUserMessageAppendedUpdate(slateUserMessage, input.listenerPrivacyMode),
   }
 }
 

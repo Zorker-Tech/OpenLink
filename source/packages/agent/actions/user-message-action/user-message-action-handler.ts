@@ -18,7 +18,7 @@ import { fromRedactedCoreMessage, toRedactedCoreMessages } from "../../../redact
 import { createLogger } from "../../../context/logging.ts";
 import { createSpan } from "../../../context/telemetry.ts";
 import { createHistogram } from "../../../metrics/index.ts";
-import { RedactedUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
+import { slateUserMessageAppendedUpdate } from "../../../agent-core/redacted-interaction-updates.ts";
 import { FileOperationLockManager } from "../../tools/core/file-operation-locks.ts";
 import { extractToolInfo } from "../../prompts/tool-info.ts";
 import { getBrowserToolNames } from "../../browser-tools.ts";
@@ -225,7 +225,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
       messageIdOf: (message) => message.messageId,
       existingMessageIds: (context) => stateHandler.getUserTurnMessageIdsIndex(context),
       ...(sendToInteractionListener
-        ? { publish: async (context: Any, message: SlateUserMessage) => this.interactionListener.sendUpdate(context, RedactedUpdates.slateUserMessageAppended(message, stateHandler.getPrivacyMode())) }
+        ? { publish: async (context: Any, message: SlateUserMessage) => this.interactionListener.sendUpdate(context, slateUserMessageAppendedUpdate(message, stateHandler.getPrivacyMode())) }
         : {}),
       createTurn: (context, message, turnOptions) => stateHandler.createAgentTurn(
         context,
@@ -404,7 +404,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     if (sendToInteractionListener) {
       await this.interactionListener.sendUpdate(
         ctx,
-        RedactedUpdates.slateUserMessageAppended(userMessage, stateHandler.getPrivacyMode()),
+        slateUserMessageAppendedUpdate(userMessage, stateHandler.getPrivacyMode()),
       );
     }
     const createMainTurnStart = performance.now();

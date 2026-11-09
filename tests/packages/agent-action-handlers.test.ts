@@ -595,14 +595,15 @@ test("a Slate user-message payload creates earlier and current turns and publish
     ["m-current", "current question"],
   ])
   assert.equal(currentMode, SlateMode.AGENT)
-  assert.deepEqual(updates.map(update => (update as { message: { case: string } }).message.case), [
-    "userMessageAppended",
-    "userMessageAppended",
+  assert.deepEqual(updates.map(update => (update as { kind: string }).kind), [
+    "user-message-appended",
+    "user-message-appended",
   ])
-  const publishedMessages = updates.map(update => (update as {
-    message: { value: { userMessage: { _privacyMode: string; text: unknown } } }
-  }).message.value.userMessage)
-  assert.deepEqual(publishedMessages.map(message => message._privacyMode), [PrivacyMode.NO_STORAGE, PrivacyMode.NO_STORAGE])
+  assert.deepEqual(updates.map(update => (update as { privacyMode: string }).privacyMode), [
+    PrivacyMode.NO_STORAGE,
+    PrivacyMode.NO_STORAGE,
+  ])
+  const publishedMessages = updates.map(update => (update as { message: SlateUserMessage }).message)
   assert.equal(publishedMessages[0]?.text instanceof RedactedString, true)
   if (publishedMessages[0]?.text instanceof RedactedString) {
     assert.equal(publishedMessages[0].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "earlier question")

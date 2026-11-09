@@ -5,6 +5,7 @@ import { AgentMode, SimulatedMsgReason } from "../../source/adapters/interop/pro
 import { TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { readExecutorResource } from "../../source/packages/agent-exec/read-operation.ts"
@@ -89,7 +90,9 @@ test("the plan message carries its source selection and a matching redacted upda
   assert.equal(selection?.content, "# Plan\n\nStep")
   assert.equal(selection?.range?.start?.line, 1)
   assert.equal(selection?.range?.end?.line, 3)
-  assert.equal(result.listenerUpdate.message.case, "userMessageAppended")
+  assert.equal(result.listenerUpdate.kind, "user-message-appended")
+  assert.equal(result.listenerUpdate.privacyMode, PrivacyMode.UNSPECIFIED)
+  assert.equal(result.listenerUpdate.message.text instanceof RedactedString, true)
 })
 
 test("a future plan mode is policy-safe and round-trips through the stored user message", () => {

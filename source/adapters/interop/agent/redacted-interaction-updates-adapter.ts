@@ -11,7 +11,13 @@
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
-import { slateUserMessageUpdateCarrier } from "./user-message-action-protocol-adapter.ts"
+import {
+  slateUserMessageAppendedUpdate,
+  slateUserMessageUpdateCarrier,
+  unredactSlateUserMessage,
+} from "./user-message-action-protocol-adapter.ts"
+
+export { slateUserMessageAppendedUpdate, unredactSlateUserMessage }
 
 interface RedactedCarrier {
   readonly _privacyMode: PrivacyMode

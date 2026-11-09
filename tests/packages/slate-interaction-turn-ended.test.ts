@@ -11,6 +11,8 @@ import {
 } from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts"
 import { InteractionUpdateForwarder, type ForwardedUpdate } from "../../source/host/runner/forwarding-interaction-updates.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
 
 test("a Slate turn-ended event reaches the local run observer without a generated message envelope", async () => {
   const events: ForwardedUpdate[] = []
@@ -66,4 +68,46 @@ test("Slate streaming updates cross the privacy boundary and reach the run obser
     { type: "text-delta", text: "answer" },
     { type: "thinking-delta", text: "reasoning" },
   ])
+})
+
+test("a Slate user-message update crosses the privacy boundary and keeps its turn record", async () => {
+  const updates: unknown[] = []
+  const plainListener = {
+    async sendUpdate(_ctx: unknown, update: unknown) { updates.push(update) },
+    async query() { throw new Error("unused") },
+  }
+  const redactedListener = toRedactedInteractionListener(plainListener, PrivacyMode.NO_STORAGE)
+  const listener = toUnredactedInteractionListener(redactedListener, PrivacyMode.NO_STORAGE)
+  const message = {
+    text: "private prompt",
+    messageId: "message-1",
+    mode: SlateMode.AGENT,
+    conversationStateBlobId: new Uint8Array([7]),
+    hookContexts: [{ event: "context", text: "hook text" }],
+  } satisfies SlateUserMessage
+
+  await listener.sendUpdate({}, SlateInteractionUpdates.userMessageAppended(message))
+
+  assert.deepEqual(updates, [SlateInteractionUpdates.userMessageAppended(message)])
+})
+
+test("a Slate user-message update reaches the run observer as a no-op", async () => {
+  const events: ForwardedUpdate[] = []
+  const listener = toUnredactedInteractionListener(
+    toRedactedInteractionListener(
+      new InteractionUpdateForwarder(event => events.push(event)),
+      PrivacyMode.NO_STORAGE,
+    ),
+    PrivacyMode.NO_STORAGE,
+  )
+
+  await listener.sendUpdate({}, SlateInteractionUpdates.userMessageAppended({
+    text: "private prompt",
+    messageId: "message-2",
+    mode: SlateMode.AGENT,
+    conversationStateBlobId: new Uint8Array([8]),
+    hookContexts: [],
+  }))
+
+  assert.deepEqual(events, [])
 })
