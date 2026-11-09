@@ -36,10 +36,14 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import {
   AgentMode,
   ConversationStep,
-  ConversationTurnStructure,
   SubagentExecutionEnvironment,
   TargetMachine,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import {
+  createSlateAgentConversationTurn,
+  createSlateShellConversationTurn,
+} from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { SelectedContext } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts"
 import {
   CustomSubagentPermissionMode,
@@ -47,9 +51,7 @@ import {
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
-import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
 import { createSlateConversationStepSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
-import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -339,12 +341,11 @@ function stepBlobWithId(id: number, message: ConversationStep["message"]): Recor
 function turnBlob(id: number, stepIds: number[]): RecordedBlob {
   return {
     id: idOf(id),
-    bytes: new ConversationTurnStructure({
-      turn: {
-        case: "agentConversationTurn",
-        value: { steps: stepIds.map(idOf) } as never,
-      },
-    }).toBinary(),
+    bytes: slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+      userMessageBlobId: new Uint8Array(),
+      stepBlobIds: stepIds.map(idOf),
+      sendMessageStepIndices: [],
+    })),
   }
 }
 
@@ -406,7 +407,10 @@ test("a turn that is not an agent turn contributes nothing", async () => {
   const ctx = createContext()
   const userTurn: RecordedBlob = {
     id: idOf(3),
-    bytes: new ConversationTurnStructure({ turn: { case: "userConversationTurn", value: {} } as never }).toBinary(),
+    bytes: slateConversationTurnSerde.serialize(createSlateShellConversationTurn({
+      invocationBlobId: idOf(4),
+      resultBlobId: idOf(5),
+    })),
   }
   const store = blobStoreOf([userTurn])
   assert.equal(await extractLastAssistantMessage(ctx, [idOf(3)], store), undefined)

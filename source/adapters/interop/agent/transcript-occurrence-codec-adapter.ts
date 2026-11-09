@@ -132,7 +132,7 @@ export function createSlateTranscriptOccurrenceCodec(): TranscriptOccurrenceCode
         ? { case: "agent", userMessage: decoded.userMessageBlobId, steps: decoded.stepBlobIds }
         : { case: "shell" }
     } catch (error) {
-      if (error instanceof Error && error.message === "Invalid ConversationTurnStructure: missing turn case") {
+      if (error instanceof Error && error.message === "Slate conversation turn record is unsupported or invalid") {
         return { case: undefined }
       }
       throw error

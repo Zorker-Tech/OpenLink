@@ -16,6 +16,8 @@ import type { ConversationBlobStore } from "../../source/packages/agent/tools/ta
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
 import { fromInteropTaskConversationState } from "../../source/adapters/interop/agent/task-conversation-state-adapter.ts"
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import type { SlateTaskConversationState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import type { SlateTaskResult } from "../../source/packages/agent/tools/task-result-state.ts"
 import {
@@ -23,7 +25,6 @@ import {
   ConversationStateStructure,
   FileStateStructure,
   ConversationStep,
-  ConversationTurnStructure,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import type { ExecuteHookArgs } from "../../source/adapters/interop/proto/generated/agent/v1/exec_pb.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
@@ -161,6 +162,13 @@ test("a follow-up is a message to the subagent, with an id that does not change 
 // ---------------------------------------------------------------------------------------------
 
 const idOf = (n: number): Uint8Array => new Uint8Array([n])
+const turnBlobOf = (stepIds: number[]): Uint8Array => slateConversationTurnSerde.serialize(
+  createSlateAgentConversationTurn({
+    userMessageBlobId: new Uint8Array(),
+    stepBlobIds: stepIds.map(idOf),
+    sendMessageStepIndices: [],
+  }),
+)
 
 function blobStoreOf(entries: Array<{ id: Uint8Array; bytes: Uint8Array }>): ConversationBlobStore {
   const byKey = new Map(entries.map(entry => [Buffer.from(entry.id).toString("hex"), entry.bytes]))
@@ -177,7 +185,7 @@ function conversationWith(text: string, toolCalls: number): {
 } {
   const stepIds = [10, 11, 12]
   const entries = [
-    { id: idOf(1), bytes: new ConversationTurnStructure({ turn: { case: "agentConversationTurn", value: { steps: stepIds.map(idOf) } as never } }).toBinary() },
+    { id: idOf(1), bytes: turnBlobOf(stepIds) },
     { id: idOf(10), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text } } as never }).toBinary() },
     ...Array.from({ length: toolCalls }, (_value, index) => ({
       id: idOf(11 + index),
@@ -514,11 +522,10 @@ test("a follow-up carries the selected context it was given", () => {
 test("only the turns of this iteration are collected into the result", async () => {
   const harness = hookHarness(() => stopHookAnswer())
   // Three turns with blobs: two older ones and the turn this iteration added.
-  const turnBlob = (stepIds: number[]): Uint8Array => new ConversationTurnStructure({ turn: { case: "agentConversationTurn", value: { steps: stepIds.map(idOf) } as never } }).toBinary()
   const entries = [
-    { id: idOf(7), bytes: turnBlob([20]) },
-    { id: idOf(8), bytes: turnBlob([21]) },
-    { id: idOf(1), bytes: turnBlob([10]) },
+    { id: idOf(7), bytes: turnBlobOf([20]) },
+    { id: idOf(8), bytes: turnBlobOf([21]) },
+    { id: idOf(1), bytes: turnBlobOf([10]) },
     { id: idOf(10), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "new" } } as never }).toBinary() },
     { id: idOf(20), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "old one" } } as never }).toBinary() },
     { id: idOf(21), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "old two" } } as never }).toBinary() },

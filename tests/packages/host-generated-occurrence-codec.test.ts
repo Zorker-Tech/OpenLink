@@ -6,11 +6,7 @@ import {
   createGeneratedTranscriptOccurrenceCodec,
   type GeneratedTranscriptOccurrenceBindings,
 } from "../../source/adapters/interop/agent/transcript-occurrence-codec-adapter.ts";
-import {
-  AgentConversationTurnStructure,
-  ConversationTurnStructure,
-  UserMessage,
-} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { UserMessage } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts";
@@ -143,7 +139,7 @@ test("the codec keeps the generated collaborators in its closure", () => {
   assert.equal(step.case, undefined);
 });
 
-test("the Slate production codec reads both new and legacy turn envelopes", () => {
+test("the Slate production codec reads Slate turn and step envelopes", () => {
   const codec = createSlateTranscriptOccurrenceCodec();
   const slateUserBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(
     fromInteropUserMessage(new UserMessage({ text: "Slate transcript prompt", messageId: "prompt-1", textBlobId: bytes(6) })),
@@ -151,9 +147,6 @@ test("the Slate production codec reads both new and legacy turn envelopes", () =
   assert.deepEqual(codec.decodeUserMessage(slateUserBytes), {
     text: "Slate transcript prompt",
     textBlobId: bytes(6),
-  });
-  assert.deepEqual(codec.decodeUserMessage(new UserMessage({ text: "legacy transcript prompt" }).toBinary()), {
-    text: "legacy transcript prompt",
   });
   const userMessageId = bytes(7);
   const stepId = bytes(8);
@@ -168,17 +161,5 @@ test("the Slate production codec reads both new and legacy turn envelopes", () =
     createSlateAssistantMessageStep(createRedactedString("answer", DataClassification.CODE, "text", PrivacyMode.NO_STORAGE)),
   );
   assert.deepEqual(codec.decodeStep(stepBytes), { case: "assistant", text: "answer" });
-
-  const legacyTurn = new ConversationTurnStructure({
-    turn: { case: "agentConversationTurn", value: new AgentConversationTurnStructure({
-      userMessage: bytes(9),
-      steps: [bytes(10)],
-    }) },
-  });
-  assert.deepEqual(codec.decodeTurn(legacyTurn.toBinary()), {
-    case: "agent",
-    userMessage: bytes(9),
-    steps: [bytes(10)],
-  });
 });
 
