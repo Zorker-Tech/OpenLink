@@ -47,8 +47,12 @@ test("summary action stores Slate text and emits the same privacy-aware summary 
 
   assert.deepEqual(stored, [{ content: "compressed text" }])
   const update = updates[0] as {
-    readonly message: { readonly case: string; readonly value: { readonly summary: { unwrap(capability: PrivacyCapability): string } } }
+    readonly kind: string
+    readonly privacyMode: PrivacyMode
+    readonly text: { unwrap(capability: PrivacyCapability): string }
   }
-  assert.equal(update.message.case, "summary")
-  assert.equal(update.message.value.summary.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "compressed text")
+  assert.equal(update.kind, "summary")
+  assert.equal(update.privacyMode, PrivacyMode.NO_STORAGE)
+  assert.equal(update.text, summary)
+  assert.equal(update.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "compressed text")
 })

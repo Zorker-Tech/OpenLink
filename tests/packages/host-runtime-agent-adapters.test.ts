@@ -341,5 +341,11 @@ describe("what an agent's updates mean to the conversation", () => {
     assert.equal(summaries, 2);
     await forwarding.sendUpdate({ canceled: true }, { message: { case: "summaryStarted", value: {} } });
     assert.equal(summaries, 2);
+    await forwarding.sendUpdate({}, SlateInteractionUpdates.summaryStarted());
+    await forwarding.sendUpdate({}, SlateInteractionUpdates.summaryCompleted("hook message"));
+    await forwarding.sendUpdate({}, SlateInteractionUpdates.summary("summary body"));
+    assert.equal(summaries, 4);
+    await forwarding.sendUpdate({ canceled: true }, SlateInteractionUpdates.summaryCompleted());
+    assert.equal(summaries, 4);
   });
 });

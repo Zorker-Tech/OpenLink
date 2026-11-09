@@ -202,7 +202,11 @@ function summarizeHarness(options: {
           },
         }),
       } as never,
-      { async sendUpdate(_ctx: Context, update: { message?: { case?: string } }) { updates.push(update.message?.case ?? "unknown") } } as never,
+      {
+        async sendUpdate(_ctx: Context, update: { kind?: string; message?: { case?: string } }) {
+          updates.push(update.kind ?? update.message?.case ?? "unknown")
+        },
+      } as never,
       {
         async handleSummarization() {
           orchestratorCalls.push({ called: true })

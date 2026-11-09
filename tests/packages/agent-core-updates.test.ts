@@ -61,6 +61,9 @@ test("Slate interaction constructors build the local stream values", () => {
   assert.deepEqual(SlateInteractionUpdates.stepStarted(7), { kind: "step-started", stepId: 7 })
   assert.deepEqual(SlateInteractionUpdates.stepCompleted(7, 1500), { kind: "step-completed", stepId: 7, durationMs: 1500 })
   assert.deepEqual(SlateInteractionUpdates.promptSuggestion("try this"), { kind: "prompt-suggestion", suggestion: "try this" })
+  assert.deepEqual(SlateInteractionUpdates.summary("summary text"), { kind: "summary", text: "summary text" })
+  assert.deepEqual(SlateInteractionUpdates.summaryStarted(), { kind: "summary-started" })
+  assert.deepEqual(SlateInteractionUpdates.summaryCompleted("hook message"), { kind: "summary-completed", hookMessage: "hook message" })
 })
 
 test("turn usage is converted to bigints, and an early end reports nothing", () => {
@@ -180,6 +183,29 @@ test("step, suggestion and branch events round-trip through Slate privacy projec
   const redactedBranch = SlateRedactedInteractionUpdates.activeBranchChange("/repo", "main", mode)
   assert.equal(redactedSuggestion.suggestion.__classification, DataClassification.CODE)
   assert.equal(redactedBranch.path.__classification, DataClassification.PATH)
+})
+
+test("summary lifecycle and summary text round-trip through Slate privacy projection", () => {
+  const updates = [
+    SlateInteractionUpdates.summary("summary text"),
+    SlateInteractionUpdates.summaryStarted(),
+    SlateInteractionUpdates.summaryCompleted("hook message"),
+    SlateInteractionUpdates.summaryCompleted(),
+  ]
+
+  for (const update of updates) {
+    assert.equal(isSlateInteractionUpdate(update), true)
+    const redacted = redactSlateInteractionUpdate(update, mode)
+    assert.equal(isSlateRedactedInteractionUpdate(redacted), true)
+    assert.equal(redacted.privacyMode, mode)
+    assert.deepEqual(unredactSlateInteractionUpdate(redacted), update)
+  }
+
+  const summary = SlateRedactedInteractionUpdates.summary("summary text", mode)
+  assert.equal(summary.text.__classification, DataClassification.CODE)
+  assert.equal(summary.text.__privacyMode, mode)
+  const existingSummary = createRedactedString("summary text", DataClassification.CODE, "summary", mode)
+  assert.equal(SlateRedactedInteractionUpdates.summaryValue(existingSummary).text, existingSummary)
 })
 
 test("Slate tool-call events round-trip through the interop privacy boundary", () => {

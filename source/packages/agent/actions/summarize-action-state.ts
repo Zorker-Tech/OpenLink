@@ -1,6 +1,6 @@
 import { buildSummarizeRefreshSnapshot } from "../utils/prompt-token-breakdown.ts"
 import { estimateTokenCount, extractTextContent } from "../self-summary/token-estimate.ts"
-import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts"
+import { SlateRedactedInteractionUpdates } from "../../agent-core/slate-interaction-updates.ts"
 import { createRedactedString } from "../../redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../redaction/classification.ts"
 import { RedactedString } from "../../redaction/redacted-values.ts"
@@ -33,7 +33,7 @@ export async function applySummaryToConversation(options: {
     ? options.summary
     : createRedactedString(options.summary, DataClassification.CODE, "summary", options.privacyMode)
   options.state.setSummary({ content: summaryText })
-  await options.listener.sendUpdate(options.context, RedactedUpdates.summary(redactedSummary))
+  await options.listener.sendUpdate(options.context, SlateRedactedInteractionUpdates.summaryValue(redactedSummary))
   if (options.clearTurns) await options.state.clearTurns()
 
   const messages = options.prompt.getMessages()
