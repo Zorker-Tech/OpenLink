@@ -2,10 +2,9 @@ import { randomUUID } from "node:crypto"
 import { AgentMode } from "../proto/generated/agent/v1/agent_pb.ts"
 import { RequestContext } from "../proto/generated/agent/v1/request_context_exec_pb.ts"
 import { UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
-import { toRedactedInteractionUpdate } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
 import { fromRedactedRepositoryIndexingInfo } from "../redacted-protos/generated/agent/v1/repo_redacted.ts"
-import { Updates } from "../../../packages/agent-core/interaction-updates.ts"
+import type { SlateRedactedUserMessageAppendedUpdate } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
 import type { Context } from "../../../packages/context/context.ts"
@@ -13,7 +12,7 @@ import type { SlateConversationStep } from "../../../packages/agent/conversation
 import type { SlateUserMessage } from "../../../packages/agent/user-message-state.ts"
 import type { SlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
 import { toInteropAgentMode } from "./mode-processing-adapter.ts"
-import { fromInteropUserMessage } from "./user-message-action-protocol-adapter.ts"
+import { fromInteropUserMessage, slateUserMessageAppendedUpdate } from "./user-message-action-protocol-adapter.ts"
 import { toInteropSelectedContextState } from "./selected-context-state-adapter.ts"
 
 const FULL_ACCESS = PrivacyCapability.UNSAFE_ALWAYS_ALLOWED
@@ -56,7 +55,11 @@ export function projectTurnRequestContext(requestContext: RedactedTurnRequestCon
 export function createQuestionnaireContinuation(
   source: ContinuationMessageSource,
   privacyMode: PrivacyMode,
-): { readonly message: UserMessage; readonly slateMessage: SlateUserMessage; readonly appendedUpdate: unknown } {
+): {
+  readonly message: UserMessage
+  readonly slateMessage: SlateUserMessage
+  readonly appendedUpdate: SlateRedactedUserMessageAppendedUpdate
+} {
   const message = new UserMessage({
     text: "Continue with the questionnaire results.",
     messageId: randomUUID(),
@@ -72,9 +75,10 @@ export function createQuestionnaireContinuation(
     ...(source.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: source.bestOfNGroupId as string }),
     ...(source.tryUseBestOfNPromotion === undefined ? {} : { tryUseBestOfNPromotion: source.tryUseBestOfNPromotion as boolean }),
   })
+  const slateMessage = fromInteropUserMessage(message)
   return {
     message,
-    slateMessage: fromInteropUserMessage(message),
-    appendedUpdate: toRedactedInteractionUpdate(Updates.userMessageAppended(message), privacyMode),
+    slateMessage,
+    appendedUpdate: slateUserMessageAppendedUpdate(slateMessage, privacyMode),
   }
 }

@@ -46,6 +46,8 @@ import {
   type SlatePlanExecutionIntent,
 } from "../../../packages/agent/user-message-state.ts"
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
+import { SlateRedactedInteractionUpdates } from "../../../packages/agent-core/slate-interaction-updates.ts"
+import type { SlateRedactedUserMessageAppendedUpdate } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import { fromHex } from "../../../packages/agent-kv/serde.ts"
 import { PrivacyMode as PrivacyModes } from "../../../packages/redaction/privacy-mode.ts"
 import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
@@ -435,6 +437,26 @@ export function redactSlateUserMessage(
     ...redacted,
     ...(message.compatibility === undefined ? {} : { compatibility: message.compatibility }),
   })
+}
+
+/** Builds the Slate-owned interaction update emitted when a user message joins the conversation. */
+export function slateUserMessageAppendedUpdate(
+  message: SlateUserMessage,
+  privacyMode: PrivacyModes,
+): SlateRedactedUserMessageAppendedUpdate {
+  return SlateRedactedInteractionUpdates.userMessageAppended(
+    redactSlateUserMessage(message, privacyMode),
+    privacyMode,
+  )
+}
+
+/** Restores the plain turn record when the in-process listener reads a redacted appended message. */
+export function unredactSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
+  return fromInteropUserMessage(fromRedactedUserMessage(
+    toInteropUserMessage(message) as never,
+    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+    undefined,
+  ))
 }
 
 /** Builds the legacy interaction update carrier at the listener edge from Slate-owned message data. */

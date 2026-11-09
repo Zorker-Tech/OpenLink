@@ -3,8 +3,11 @@ import assert from "node:assert/strict"
 
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
+import { RedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
+import type { SlateUserMessage } from "../../source/packages/agent/user-message-state.ts"
 import {
   InteractionUpdate,
   TaskToolCallDelta,
@@ -41,6 +44,10 @@ import {
   slateTurnEndedUpdate,
   unredactSlateInteractionUpdate,
 } from "../../source/packages/agent-core/slate-interaction-updates.ts"
+import {
+  redactSlateUserMessage,
+  unredactSlateUserMessage,
+} from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import * as agentCore from "../../source/packages/agent-core/index.ts"
 
 const mode = PrivacyMode.NO_STORAGE
@@ -206,6 +213,45 @@ test("summary lifecycle and summary text round-trip through Slate privacy projec
   assert.equal(summary.text.__privacyMode, mode)
   const existingSummary = createRedactedString("summary text", DataClassification.CODE, "summary", mode)
   assert.equal(SlateRedactedInteractionUpdates.summaryValue(existingSummary).text, existingSummary)
+})
+
+test("user-message append events round-trip through Slate privacy projection", () => {
+  const message = {
+    text: "private prompt",
+    messageId: "message-appended",
+    mode: SlateMode.AGENT,
+    conversationStateBlobId: new Uint8Array([1, 2, 3]),
+    hookContexts: [{ event: "context", text: "hook text" }],
+  } satisfies SlateUserMessage
+  const update = SlateInteractionUpdates.userMessageAppended(message)
+  assert.equal(isSlateInteractionUpdate(update), true)
+  assert.notEqual(update.message, message, "the builder owns its copy")
+
+  const redacted = redactSlateInteractionUpdate(
+    update,
+    mode,
+    undefined,
+    undefined,
+    redactSlateUserMessage,
+  )
+  assert.ok(isSlateRedactedInteractionUpdate(redacted))
+  assert.equal(redacted.privacyMode, mode)
+  assert.ok(redacted.kind === "user-message-appended")
+  assert.equal(redacted.message.text instanceof RedactedString, true)
+  assert.equal(redacted.message.hookContexts[0]?.text instanceof RedactedString, true)
+  assert.equal(
+    (redacted.message.text as RedactedString).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+    "private prompt",
+  )
+  assert.deepEqual(
+    unredactSlateInteractionUpdate(redacted, undefined, undefined, unredactSlateUserMessage),
+    update,
+  )
+
+  assert.throws(
+    () => redactSlateInteractionUpdate(update, mode),
+    /user-message redaction adapter/,
+  )
 })
 
 test("Slate tool-call events round-trip through the interop privacy boundary", () => {

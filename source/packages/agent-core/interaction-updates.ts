@@ -23,4 +23,5 @@ export type {
   SlateTextDeltaUpdate,
   SlateTokenDeltaUpdate,
   SlateTurnEndedUpdate,
+  SlateUserMessageAppendedUpdate,
 } from "./interaction-update-contracts.ts"

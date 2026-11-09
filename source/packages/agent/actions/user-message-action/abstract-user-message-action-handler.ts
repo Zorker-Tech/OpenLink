@@ -10,7 +10,6 @@ import {
   fromRedactedRequestContextInterop,
   fromRedactedToolCallInterop,
   isAskQuestionToolCallInterop,
-  toRedactedInteractionUpdateInterop,
   toRedactedToolCallInterop,
   type RequestContextInterop,
 } from "../../../../adapters/interop/agent/user-message-action-protocol-adapter.ts";
@@ -44,8 +43,12 @@ import { BackgroundSummarizationMode, getBackgroundSummarizationTriggerThreshold
 import { isTooManyImagesOrDocumentsError } from "../../../agent-summarization/error-handling.ts";
 import { SummarizationHandler, shouldForceSummarizationForTesting } from "../../../agent-summarization/summarization-handler.ts";
 import { InteractionHandler } from "../../interaction-handler.ts";
-import { RedactedUpdates, SlateRedactedInteractionUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
-import { SlateInteractionUpdates, Updates } from "../../../agent-core/interaction-updates.ts";
+import {
+  RedactedUpdates,
+  SlateRedactedInteractionUpdates,
+  slateUserMessageAppendedUpdate,
+} from "../../../agent-core/redacted-interaction-updates.ts";
+import { SlateInteractionUpdates } from "../../../agent-core/interaction-updates.ts";
 import type { SlateInteractionToolCallValue } from "../../../agent-core/interaction-update-contracts.ts";
 import {
   applyAskQuestionCompletion,
@@ -2982,8 +2985,9 @@ export class AbstractUserMessageActionHandler {
       messageId: randomUUID(),
       isSimulatedMsg: true,
     });
-    await this.interactionListener.sendUpdate(runContext, toRedactedInteractionUpdateInterop(Updates.userMessageAppended(syntheticUserMessage), turnState.getPrivacyMode()));
-    const newTurn = await turnState.createAgentTurn(runContext, fromInteropUserMessage(syntheticUserMessage), requestState, this.config, this.resourceAccessor);
+    const slateUserMessage = fromInteropUserMessage(syntheticUserMessage);
+    await this.interactionListener.sendUpdate(runContext, slateUserMessageAppendedUpdate(slateUserMessage, turnState.getPrivacyMode()));
+    const newTurn = await turnState.createAgentTurn(runContext, slateUserMessage, requestState, this.config, this.resourceAccessor);
     if (this.config.immediatelyUpdateStateOnNewTurn) {
       if (this.config.fireAndForgetCheckpoints) {
         void turnState.computeNewStructure(runContext).then(async newState => { await publishStateUpdate(runContext, newState); }).catch(error => { agentLogger.error(runContext, "Failed to persist checkpoint after creating CLI reflect-general follow-up turn", { error }); });
@@ -3033,7 +3037,7 @@ export class AbstractUserMessageActionHandler {
         try {
           await this.interactionListener.sendUpdate(
             runContext,
-            RedactedUpdates.slateUserMessageAppended(queuedMsg, queuedAction.action.context.privacyMode),
+            slateUserMessageAppendedUpdate(queuedMsg, queuedAction.action.context.privacyMode),
           );
           conversationTurn = await turnState.createAgentTurn(
             runContext,

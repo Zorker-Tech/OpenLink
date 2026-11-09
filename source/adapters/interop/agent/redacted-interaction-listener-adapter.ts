@@ -49,6 +49,10 @@ import {
   toInteropInteractionQuery,
   toInteropInteractionResponse,
 } from "./interaction-query-adapter.ts"
+import {
+  redactSlateUserMessage,
+  unredactSlateUserMessage,
+} from "./user-message-action-protocol-adapter.ts"
 
 type MaybePromise<T> = T | Promise<T>
 
@@ -90,6 +94,7 @@ export function toUnredactedInteractionListener<Context>(
           privacyMode,
           redactSlateInteractionToolCallValue,
           redactSlateToolCallDeltaValue,
+          redactSlateUserMessage,
         ))
         return
       }
@@ -138,6 +143,7 @@ export function toRedactedInteractionListener<Context>(
           update,
           unredactSlateInteractionToolCallValue,
           unredactSlateToolCallDeltaValue,
+          unredactSlateUserMessage,
         ))
         return
       }
