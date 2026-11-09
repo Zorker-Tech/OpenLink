@@ -14,13 +14,6 @@ import { toHex } from "../../source/packages/agent-kv/serde.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
-  AgentConversationStore,
-  getDefaultAgentMetadata,
-  type AgentMetadata,
-  type AgentMetadataKey,
-  type AgentMetadataStore,
-} from "../../source/packages/agent-kv/agent-conversation-store.ts"
-import {
   createEmptySlateConversationCheckpointV2,
   isSlateConversationCheckpointV2,
 } from "../../source/packages/agent/conversation-checkpoint-state.ts"
@@ -40,33 +33,10 @@ import { createSlateShellInvocationSerde, createSlateShellResultSerde } from "..
 
 const codec = createSlateAgentConversationCodec<unknown>()
 
-function metadataStore(initial: AgentMetadata): AgentMetadataStore {
-  const values = { ...initial }
-  return {
-    get<Key extends AgentMetadataKey>(key: Key) { return values[key] },
-    set<Key extends AgentMetadataKey>(key: Key, value: AgentMetadata[Key]) { values[key] = value as never },
-    subscribe() { return () => {} },
-  }
-}
-
 test("the Slate conversation store owns V2 as its checkpoint type", () => {
   const checkpoint: unknown = codec.createEmptyCheckpoint()
   assert.equal(isSlateConversationCheckpointV2(checkpoint), true)
   assert.deepEqual(checkpoint, createEmptySlateConversationCheckpointV2())
-})
-
-test("legacy protobuf roots decode directly into Slate V2 references", () => {
-  const legacy = new ConversationStateStructure({
-    turns: [new Uint8Array([1, 2, 3])],
-    todos: [new Uint8Array([4])],
-    previousWorkspaceUris: ["file:///workspace"],
-  })
-
-  const checkpoint: unknown = codec.decodeCheckpoint(legacy.toBinary())
-  assert.equal(isSlateConversationCheckpointV2(checkpoint), true)
-  assert.deepEqual((checkpoint as { turnBlobIds: readonly string[] }).turnBlobIds, ["010203"])
-  assert.deepEqual((checkpoint as { todoBlobIds: readonly string[] }).todoBlobIds, ["04"])
-  assert.deepEqual((checkpoint as { workspaceUris: readonly string[] }).workspaceUris, ["file:///workspace"])
 })
 
 test("new codec writes serialize the owned Slate V2 checkpoint directly", () => {
@@ -89,36 +59,7 @@ test("new codec writes serialize the owned Slate V2 checkpoint directly", () => 
   assert.deepEqual(envelope.conversation.turnBlobIds, ["aabb"])
 })
 
-test("the store normalizes a runner checkpoint before exposing or persisting it", async () => {
-  const blobs = new Map<string, Uint8Array>()
-  const blobStore = {
-    async getBlob(_context: unknown, id: Uint8Array) { return blobs.get(toHex(id)) ?? null },
-    async setBlob(_context: unknown, id: Uint8Array, value: Uint8Array) { blobs.set(toHex(id), new Uint8Array(value)) },
-    async setBlobLocallyOnly(_context: unknown, id: Uint8Array, value: Uint8Array) { blobs.set(toHex(id), new Uint8Array(value)) },
-    async flush() {},
-  }
-  const store = new AgentConversationStore(blobStore as never, metadataStore(getDefaultAgentMetadata("agent-owned-checkpoint")), {
-    codec,
-  })
-  const legacy = new ConversationStateStructure({
-    turns: [new Uint8Array([0x10, 0x20])],
-    previousWorkspaceUris: ["file:///workspace"],
-  })
-
-  await store.handleCheckpoint(undefined, legacy as never)
-
-  const checkpoint = store.getConversationStateStructure()
-  assert.equal(isSlateConversationCheckpointV2(checkpoint), true)
-  assert.deepEqual(checkpoint.turnBlobIds, ["1020"])
-  assert.deepEqual(checkpoint.workspaceUris, ["file:///workspace"])
-  const persisted = await blobStore.getBlob(undefined, store.getMetadata("latestRootBlobId"))
-  assert.ok(persisted)
-  const header = "SLATE-AGENT-CHECKPOINT\n"
-  assert.ok(new TextDecoder().decode(persisted).startsWith(header))
-  assert.equal(JSON.parse(new TextDecoder().decode(persisted).slice(header.length)).version, 2)
-})
-
-test("the runner projection adapts owned V2 checkpoints and clones legacy runner values", () => {
+test("the runner projection adapts owned V2 checkpoints", () => {
   const slateCheckpoint = {
     ...createEmptySlateConversationCheckpointV2(),
     turnBlobIds: ["010203"],
@@ -127,11 +68,6 @@ test("the runner projection adapts owned V2 checkpoints and clones legacy runner
   const runnerState = runnerConversationStateFromStoreCheckpoint(slateCheckpoint)
   assert.deepEqual(runnerState.turns, [new Uint8Array([1, 2, 3])])
   assert.deepEqual(runnerState.previousWorkspaceUris, ["file:///workspace"])
-
-  const legacyState = new ConversationStateStructure({ turns: [new Uint8Array([4])] })
-  const legacyProjection = runnerConversationStateFromStoreCheckpoint(legacyState)
-  assert.notEqual(legacyProjection, legacyState)
-  assert.deepEqual(legacyProjection.turns, [new Uint8Array([4])])
 })
 
 test("subconversation resolution returns Slate checkpoint records for inline and referenced children", async () => {

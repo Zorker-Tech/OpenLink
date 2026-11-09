@@ -14,6 +14,7 @@ import { Worker } from "node:worker_threads";
 
 import { ReadOnlySqliteBlobStore, runTranscriptMirrorWorker } from "../../source/host/agents/isolation/transcript-mirror-worker.ts";
 import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 
 const WORKER_URL = new URL("../../source/host/agents/isolation/transcript-mirror-worker.ts", import.meta.url);
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
@@ -131,7 +132,7 @@ describe("what the mirror worker answers", () => {
     const message = textBytes(JSON.stringify({ role: "user", content: "what the user asked" }));
     const messageId = sha(message);
     const state = new ConversationStateStructure({ rootPromptMessagesJson: [messageId] });
-    const stateBytes = state.toBinary();
+    const stateBytes = encodeInteropAgentConversationCheckpoint(state);
     const stateId = sha(stateBytes);
     const dbPath = join(directory, "blobs.db");
     blobDatabase(dbPath, [

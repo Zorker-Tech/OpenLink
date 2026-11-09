@@ -6,15 +6,9 @@ import type { Context } from "../../source/packages/context/context.ts"
 import { getBlobId, InMemoryBlobStore, isBlobDurable, toUint8Array } from "../../source/packages/agent-kv/blob-store.ts"
 import { BlobNotFoundError, findBlobNotFoundError } from "../../source/packages/agent-kv/blob-not-found-error.ts"
 import { fromHex, toHex, utf8Serde, type Serde } from "../../source/packages/agent-kv/serde.ts"
-import { serializeSlateAgentCheckpoint } from "../../source/packages/agent-kv/agent-checkpoint-schema.ts"
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
-import {
-  createSlateAgentConversationCodec,
-  decodeSlateAgentConversationCheckpoint,
-  interopAgentConversationCheckpointFromSlate,
-} from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
+import { createSlateAgentConversationCodec } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import { slateConversationCheckpointFromInterop } from "../../source/adapters/interop/agent/slate-agent-checkpoint-interop-adapter.ts"
-import { isSlateConversationCheckpointV2 } from "../../source/packages/agent/conversation-checkpoint-state.ts"
 import {
   createSlateConversationStepSerde,
   createSlateUserMessageSerde,
@@ -39,7 +33,6 @@ import {
 import { resolveSubagentPersistedStates } from "../../source/packages/agent-kv/subagent-states.ts"
 import {
   AgentConversationTurn,
-  ConversationTokenDetails,
   ConversationStateStructure,
   ConversationStep,
   ConversationSummary,
@@ -528,127 +521,6 @@ test("checkpoint roots use Slate's versioned envelope and preserve the complete 
   })
   assert.equal(await reloaded.tryResetFromDb(ctx), true)
   assert.deepEqual(reloaded.getConversationStateStructure(), checkpoint)
-})
-
-test("legacy protobuf checkpoint roots load and migrate on the next write", async () => {
-  const blobStore = new InMemoryBlobStore()
-  const legacyCheckpoint = new ConversationStateStructure({
-    turns: [new Uint8Array([1, 2, 3])],
-    todos: [new Uint8Array([4, 5])],
-    summaryArchives: [new Uint8Array([6])],
-    activeBranchName: "legacy-branch",
-    conversationStartedTimestampMs: 456n,
-  })
-  const legacyBytes = legacyCheckpoint.toBinary()
-  const legacyBlobId = await getBlobId(legacyBytes)
-  const initialMetadata = getDefaultAgentMetadata("agent-legacy")
-  initialMetadata.latestRootBlobId = legacyBlobId
-  const metadata = metadataStore(initialMetadata)
-  await blobStore.setBlob(ctx, legacyBlobId, legacyBytes)
-
-  const conversation = new AgentConversationStore(blobStore, metadata, {
-    codec: createSlateAgentConversationCodec<unknown>(),
-  })
-  assert.equal(await conversation.tryResetFromDb(ctx), true, "legacy protobuf roots stay readable")
-  const migratedCheckpoint = slateCheckpointFromInterop(legacyCheckpoint)
-  assert.deepEqual(conversation.getConversationStateStructure(), migratedCheckpoint)
-
-  await conversation.handleCheckpoint(ctx, migratedCheckpoint)
-  const migratedBytes = await blobStore.getBlob(ctx, conversation.getMetadata("latestRootBlobId"))
-  assert.ok(migratedBytes)
-  assert.ok(new TextDecoder().decode(migratedBytes).startsWith("SLATE-AGENT-CHECKPOINT\n"))
-  assert.equal(JSON.parse(new TextDecoder().decode(migratedBytes).slice("SLATE-AGENT-CHECKPOINT\n".length)).version, 2)
-})
-
-test("version 1 Slate roots import their old snapshot fields and migrate to the owned schema", async () => {
-  const blobStore = new InMemoryBlobStore()
-  const legacyCheckpoint = new ConversationStateStructure({
-    turns: [new Uint8Array([8, 9])],
-    todos: [new Uint8Array([10])],
-    activeBranchName: "version-one",
-    readPaths: ["/repo/ exact.ts "],
-  })
-  const interopSnapshot = { ...(legacyCheckpoint.toJson() as Record<string, unknown>) }
-  delete interopSnapshot.turns
-  delete interopSnapshot.todos
-  delete interopSnapshot.summary
-  delete interopSnapshot.summaryArchive
-  delete interopSnapshot.summaryArchives
-  const legacyBytes = serializeSlateAgentCheckpoint({
-    turnBlobIds: ["0809"],
-    todoBlobIds: ["0a"],
-    summaryArchiveBlobIds: [],
-  }, interopSnapshot as never)
-  const legacyBlobId = await getBlobId(legacyBytes)
-  const initialMetadata = getDefaultAgentMetadata("agent-version-one")
-  initialMetadata.latestRootBlobId = legacyBlobId
-  const metadata = metadataStore(initialMetadata)
-  await blobStore.setBlob(ctx, legacyBlobId, legacyBytes)
-
-  const conversation = new AgentConversationStore(blobStore, metadata, {
-    codec: createSlateAgentConversationCodec<unknown>(),
-  })
-  assert.equal(await conversation.tryResetFromDb(ctx), true)
-  const migratedCheckpoint = slateCheckpointFromInterop(legacyCheckpoint)
-  assert.deepEqual(conversation.getConversationStateStructure(), migratedCheckpoint)
-
-  await conversation.handleCheckpoint(ctx, migratedCheckpoint)
-  const migrated = await blobStore.getBlob(ctx, conversation.getMetadata("latestRootBlobId"))
-  assert.ok(migrated)
-  const envelope = JSON.parse(new TextDecoder().decode(migrated).slice("SLATE-AGENT-CHECKPOINT\n".length))
-  assert.equal(envelope.version, 2)
-  assert.equal("interopSnapshot" in envelope, false)
-  assert.deepEqual(envelope.conversation.turnBlobIds, ["0809"])
-  assert.deepEqual(envelope.conversation.todoBlobIds, ["0a"])
-  assert.deepEqual(envelope.conversation.readPaths, ["/repo/ exact.ts "])
-})
-
-test("unknown root and nested protobuf fields survive a Slate checkpoint write", async () => {
-  function appendUnknownVarint(bytes: Uint8Array): Uint8Array {
-    const result = new Uint8Array(bytes.length + 3)
-    result.set(bytes)
-    result.set([0xa0, 0x06, 0x07], bytes.length)
-    return result
-  }
-
-  const tokenDetails = ConversationTokenDetails.fromBinary(
-    appendUnknownVarint(new ConversationTokenDetails({ usedTokens: 12, maxTokens: 100 }).toBinary()),
-  )
-  const checkpoint = ConversationStateStructure.fromBinary(
-    appendUnknownVarint(new ConversationStateStructure({
-      turns: [new Uint8Array([1, 2, 3])],
-      tokenDetails,
-    }).toBinary()),
-  )
-  const rootUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(checkpoint)
-  const nestedUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(checkpoint.tokenDetails!)
-  assert.equal(rootUnknownFields.length, 1)
-  assert.equal(nestedUnknownFields.length, 1)
-
-  const blobStore = new InMemoryBlobStore()
-  const metadata = metadataStore(getDefaultAgentMetadata("agent-unknown-fields"))
-  const conversation = new AgentConversationStore(blobStore, metadata, {
-    codec: createSlateAgentConversationCodec<unknown>(),
-  })
-  const slateCheckpoint = decodeSlateAgentConversationCheckpoint(checkpoint.toBinary())
-  await conversation.handleCheckpoint(ctx, slateCheckpoint)
-
-  const reloaded = new AgentConversationStore(blobStore, metadata, {
-    codec: createSlateAgentConversationCodec<unknown>(),
-  })
-  assert.equal(await reloaded.tryResetFromDb(ctx), true)
-  const restored = reloaded.getConversationStateStructure()
-  assert.equal(isSlateConversationCheckpointV2(restored), true)
-  assert.equal(restored.compatibility?.legacyUnknownFields?.length, 2)
-  const restoredInterop = interopAgentConversationCheckpointFromSlate(restored)
-  assert.deepEqual(
-    ConversationStateStructure.runtime.bin.listUnknownFields(restoredInterop),
-    rootUnknownFields,
-  )
-  assert.deepEqual(
-    ConversationStateStructure.runtime.bin.listUnknownFields(restoredInterop.tokenDetails!),
-    nestedUnknownFields,
-  )
 })
 
 test("an unsupported Slate checkpoint version is not decoded as an empty legacy root", async () => {

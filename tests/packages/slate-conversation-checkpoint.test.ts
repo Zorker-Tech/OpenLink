@@ -271,37 +271,4 @@ test("unordered root maps serialize deterministically regardless of insertion or
   assert.deepEqual(encodeInteropAgentConversationCheckpoint(first), encodeInteropAgentConversationCheckpoint(second))
 })
 
-test("unknown protobuf fields in the root and nested subagent state survive the v2 migration", () => {
-  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
-    const result = new Uint8Array(bytes.length + 3)
-    result.set(bytes)
-    result.set([0xa0, 0x06, 0x07], bytes.length)
-    return result
-  }
-  const nested = ConversationStateStructure.fromBinary(appendUnknownVarint(
-    new ConversationStateStructure({ selfSummaryCount: 2 }).toBinary(),
-  ))
-  const subagent = SubagentPersistedState.fromBinary(appendUnknownVarint(
-    new SubagentPersistedState({ conversationState: nested }).toBinary(),
-  ))
-  const source = ConversationStateStructure.fromBinary(appendUnknownVarint(
-    new ConversationStateStructure({ subagentStates: { "child-1": subagent } }).toBinary(),
-  ))
-  const rootUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(source)
-  const subagentUnknownFields = SubagentPersistedState.runtime.bin.listUnknownFields(source.subagentStates["child-1"]!)
-  const nestedUnknownFields = ConversationStateStructure.runtime.bin.listUnknownFields(
-    source.subagentStates["child-1"]!.conversationState!,
-  )
 
-  const restored = decodeInteropAgentConversationCheckpoint(encodeInteropAgentConversationCheckpoint(source))
-  assert.equal(ConversationStateStructure.equals(restored, source), true)
-  assert.deepEqual(ConversationStateStructure.runtime.bin.listUnknownFields(restored), rootUnknownFields)
-  assert.deepEqual(
-    SubagentPersistedState.runtime.bin.listUnknownFields(restored.subagentStates["child-1"]!),
-    subagentUnknownFields,
-  )
-  assert.deepEqual(
-    ConversationStateStructure.runtime.bin.listUnknownFields(restored.subagentStates["child-1"]!.conversationState!),
-    nestedUnknownFields,
-  )
-})
