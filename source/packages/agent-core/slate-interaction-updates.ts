@@ -3,11 +3,14 @@ import {
   PrivacyCapability,
 } from "../redaction/classification.ts"
 import { createRedactedString } from "../redaction/create.ts"
-import { isRedactedString } from "../redaction/redacted-values.ts"
+import { isRedactedString, RedactedBytes } from "../redaction/redacted-values.ts"
+import { PrivacyMode as PrivacyModes } from "../redaction/privacy-mode.ts"
+import { isSlateToolCallValue } from "../agent/conversation-step-state.ts"
 import type {
   SlateActiveBranchChangeUpdate,
   SlateHeartbeatUpdate,
   SlateInteractionUpdate,
+  SlateInteractionToolCallValue,
   SlatePromptSuggestionUpdate,
   SlateRedactedActiveBranchChangeUpdate,
   SlateRedactedHeartbeatUpdate,
@@ -19,6 +22,7 @@ import type {
   SlateRedactedThinkingDeltaUpdate,
   SlateRedactedTextDeltaUpdate,
   SlateRedactedTokenDeltaUpdate,
+  SlateRedactedToolCallUpdate,
   SlateStepCompletedUpdate,
   SlateStepStartedUpdate,
   SlateThinkingCompletedUpdate,
@@ -26,6 +30,8 @@ import type {
   SlateThinkingStyle,
   SlateTextDeltaUpdate,
   SlateTokenDeltaUpdate,
+  SlateToolCallUpdate,
+  SlateToolCallUpdatePhase,
   SlateRedactedTurnEndedUpdate,
   SlateTurnEndedUpdate,
   TurnUsage,
@@ -73,6 +79,37 @@ export function slateRedactedTurnEndedUpdate(
   usage?: TurnUsage,
 ): SlateRedactedTurnEndedUpdate {
   return { ...slateTurnEndedUpdate(usage), privacyMode }
+}
+
+function toolCallUpdate(
+  phase: SlateToolCallUpdatePhase,
+  callId: string,
+  toolCall: SlateInteractionToolCallValue | undefined,
+  modelCallId: string,
+): SlateToolCallUpdate {
+  return {
+    kind: "tool-call-update",
+    phase,
+    callId,
+    modelCallId,
+    ...(toolCall === undefined ? {} : { toolCall }),
+  }
+}
+
+function redactedToolCallUpdate(
+  phase: SlateToolCallUpdatePhase,
+  callId: string,
+  toolCall: SlateInteractionToolCallValue | undefined,
+  modelCallId: string,
+  privacyMode: PrivacyMode,
+): SlateRedactedToolCallUpdate {
+  if (toolCall !== undefined && !isRedactedSlateInteractionToolCallValue(toolCall, privacyMode)) {
+    throw new TypeError("Slate redacted tool-call values must use the update privacy mode")
+  }
+  return {
+    ...toolCallUpdate(phase, callId, toolCall, modelCallId),
+    privacyMode,
+  }
 }
 
 /** Translate the supported thinking presentation preference into Slate's own vocabulary. */
@@ -124,6 +161,15 @@ export const SlateInteractionUpdates = {
   activeBranchChange(path: string, branchName: string): SlateActiveBranchChangeUpdate {
     return { kind: "active-branch-change", path, branchName }
   },
+  toolCallStarted(callId: string, toolCall: SlateInteractionToolCallValue | undefined, modelCallId: string): SlateToolCallUpdate {
+    return toolCallUpdate("started", callId, toolCall, modelCallId)
+  },
+  partialToolCall(callId: string, toolCall: SlateInteractionToolCallValue | undefined, modelCallId: string): SlateToolCallUpdate {
+    return toolCallUpdate("partial", callId, toolCall, modelCallId)
+  },
+  toolCallCompleted(callId: string, toolCall: SlateInteractionToolCallValue | undefined, modelCallId: string): SlateToolCallUpdate {
+    return toolCallUpdate("completed", callId, toolCall, modelCallId)
+  },
 }
 
 export const SlateRedactedInteractionUpdates = {
@@ -172,6 +218,30 @@ export const SlateRedactedInteractionUpdates = {
       branchName,
     }
   },
+  toolCallStarted(
+    callId: string,
+    toolCall: SlateInteractionToolCallValue | undefined,
+    modelCallId: string,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedToolCallUpdate {
+    return redactedToolCallUpdate("started", callId, toolCall, modelCallId, privacyMode)
+  },
+  partialToolCall(
+    callId: string,
+    toolCall: SlateInteractionToolCallValue | undefined,
+    modelCallId: string,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedToolCallUpdate {
+    return redactedToolCallUpdate("partial", callId, toolCall, modelCallId, privacyMode)
+  },
+  toolCallCompleted(
+    callId: string,
+    toolCall: SlateInteractionToolCallValue | undefined,
+    modelCallId: string,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedToolCallUpdate {
+    return redactedToolCallUpdate("completed", callId, toolCall, modelCallId, privacyMode)
+  },
   turnEnded(privacyMode: PrivacyMode, usage?: TurnUsage): SlateRedactedTurnEndedUpdate {
     return slateRedactedTurnEndedUpdate(privacyMode, usage)
   },
@@ -181,6 +251,7 @@ export const SlateRedactedInteractionUpdates = {
 export function redactSlateInteractionUpdate(
   update: SlateInteractionUpdate,
   privacyMode: PrivacyMode,
+  redactToolCall?: (value: SlateInteractionToolCallValue, privacyMode: PrivacyMode) => SlateInteractionToolCallValue,
 ): SlateRedactedInteractionUpdate {
   switch (update.kind) {
     case "text-delta": return SlateRedactedInteractionUpdates.textDelta(update.text, privacyMode)
@@ -192,12 +263,27 @@ export function redactSlateInteractionUpdate(
     case "step-completed": return SlateRedactedInteractionUpdates.stepCompleted(update.stepId, update.durationMs, privacyMode)
     case "prompt-suggestion": return SlateRedactedInteractionUpdates.promptSuggestion(update.suggestion, privacyMode)
     case "active-branch-change": return SlateRedactedInteractionUpdates.activeBranchChange(update.path, update.branchName, privacyMode)
+    case "tool-call-update": {
+      if (update.toolCall !== undefined && redactToolCall === undefined) {
+        throw new TypeError("Slate tool-call updates require the tool-call redaction adapter")
+      }
+      return redactedToolCallUpdate(
+        update.phase,
+        update.callId,
+        update.toolCall === undefined ? undefined : redactToolCall!(update.toolCall, privacyMode),
+        update.modelCallId,
+        privacyMode,
+      )
+    }
     case "turn-ended": return SlateRedactedInteractionUpdates.turnEnded(privacyMode, update.usage)
   }
 }
 
 /** Read an internal redacted event for the listener's explicit always-allowed in-process projection. */
-export function unredactSlateInteractionUpdate(update: SlateRedactedInteractionUpdate): SlateInteractionUpdate {
+export function unredactSlateInteractionUpdate(
+  update: SlateRedactedInteractionUpdate,
+  unredactToolCall?: (value: SlateInteractionToolCallValue) => SlateInteractionToolCallValue,
+): SlateInteractionUpdate {
   switch (update.kind) {
     case "text-delta":
       return { kind: update.kind, text: update.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }
@@ -225,6 +311,18 @@ export function unredactSlateInteractionUpdate(update: SlateRedactedInteractionU
         path: update.path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
         branchName: update.branchName,
       }
+    case "tool-call-update": {
+      if (update.toolCall !== undefined && unredactToolCall === undefined) {
+        throw new TypeError("Slate tool-call updates require the tool-call unredaction adapter")
+      }
+      return {
+        kind: update.kind,
+        phase: update.phase,
+        callId: update.callId,
+        modelCallId: update.modelCallId,
+        ...(update.toolCall === undefined ? {} : { toolCall: unredactToolCall!(update.toolCall) }),
+      }
+    }
     case "turn-ended":
       return update.usage === undefined
         ? { kind: update.kind }
@@ -241,6 +339,40 @@ export function isSlateThinkingStyle(value: unknown): value is SlateThinkingStyl
       && candidate.code >= -2_147_483_648 && candidate.code <= 2_147_483_647
 }
 
+function isSlateInteractionToolCallValue(value: unknown): value is SlateInteractionToolCallValue {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const candidate = value as Record<string, unknown>
+  if (candidate.toolCallId !== undefined && typeof candidate.toolCallId !== "string") return false
+  if (candidate.startedAtMs !== undefined && typeof candidate.startedAtMs !== "bigint") return false
+  if (candidate.completedAtMs !== undefined && typeof candidate.completedAtMs !== "bigint") return false
+  if (!Array.isArray(candidate.hookContexts) || !isSlateToolCallValue(candidate.tool)) return false
+  return candidate.hookContexts.every((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false
+    const hook = entry as Record<string, unknown>
+    return typeof hook.event === "string" && (typeof hook.text === "string" || isRedactedString(hook.text))
+  })
+}
+
+function redactedValuesUsePrivacyMode(value: unknown, privacyMode: PrivacyMode, seen = new Set<object>()): boolean {
+  if (isRedactedString(value) || value instanceof RedactedBytes) return value.__privacyMode === privacyMode
+  if (value === null || typeof value !== "object" || value instanceof Uint8Array) return true
+  if (seen.has(value)) return true
+  seen.add(value)
+  if (Array.isArray(value)) return value.every(entry => redactedValuesUsePrivacyMode(entry, privacyMode, seen))
+  return Object.values(value).every(entry => redactedValuesUsePrivacyMode(entry, privacyMode, seen))
+}
+
+function isRedactedSlateInteractionToolCallValue(
+  value: unknown,
+  privacyMode: PrivacyMode,
+): value is SlateInteractionToolCallValue {
+  return isSlateInteractionToolCallValue(value) && redactedValuesUsePrivacyMode(value, privacyMode)
+}
+
+function isToolCallPhase(value: unknown): value is SlateToolCallUpdatePhase {
+  return value === "started" || value === "partial" || value === "completed"
+}
+
 export function isSlateInteractionUpdate(value: unknown): value is SlateInteractionUpdate {
   if (typeof value !== "object" || value === null) return false
   const candidate = value as Record<string, unknown>
@@ -255,6 +387,9 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
       && typeof candidate.durationMs === "number" && Number.isSafeInteger(candidate.durationMs) && candidate.durationMs >= 0
     case "prompt-suggestion": return typeof candidate.suggestion === "string"
     case "active-branch-change": return typeof candidate.path === "string" && typeof candidate.branchName === "string"
+    case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
+      && typeof candidate.modelCallId === "string"
+      && (candidate.toolCall === undefined || isRedactedSlateInteractionToolCallValue(candidate.toolCall, candidate.privacyMode as PrivacyMode))
     case "turn-ended": return isSlateTurnEndedUpdate(value)
     default: return false
   }
@@ -263,6 +398,7 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
 export function isSlateRedactedInteractionUpdate(value: unknown): value is SlateRedactedInteractionUpdate {
   if (typeof value !== "object" || value === null) return false
   const candidate = value as Record<string, unknown>
+  if (!Object.values(PrivacyModes).some(mode => mode === candidate.privacyMode)) return false
   if (!isPrivacyMode(candidate.privacyMode)) return false
   switch (candidate.kind) {
     case "text-delta": return isRedactedString(candidate.text) && candidate.text.__privacyMode === candidate.privacyMode
@@ -277,6 +413,9 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
     case "prompt-suggestion": return isRedactedString(candidate.suggestion) && candidate.suggestion.__privacyMode === candidate.privacyMode
     case "active-branch-change": return isRedactedString(candidate.path) && candidate.path.__privacyMode === candidate.privacyMode
       && typeof candidate.branchName === "string"
+    case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
+      && typeof candidate.modelCallId === "string"
+      && (candidate.toolCall === undefined || isSlateInteractionToolCallValue(candidate.toolCall))
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
     default: return false
   }

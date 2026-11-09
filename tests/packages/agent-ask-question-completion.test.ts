@@ -5,15 +5,28 @@ import {
   applyAskQuestionCompletion,
   hasAppliedAskQuestionCompletion,
   isValidAskQuestionCompletion,
+  slateAskQuestionToolCallForCompletion,
   type AskQuestionCompletionAction,
 } from "../../source/packages/agent/actions/ask-question-completion.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { fromRedactedCoreMessages } from "../../source/packages/redaction/message-redaction.ts"
 import { ASK_QUESTION_AUTO_ANSWER_REASON_BODY } from "../../source/packages/constants/ask-question.ts"
 import { fromRedactedAskQuestionResult } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/ask_question_tool_redacted.ts"
+import {
+  isSlateRedactedInteractionUpdate,
+  redactSlateInteractionUpdate,
+  SlateInteractionUpdates,
+  unredactSlateInteractionUpdate,
+} from "../../source/packages/agent-core/slate-interaction-updates.ts"
+import type { SlateInteractionToolCallValue } from "../../source/packages/agent-core/interaction-update-contracts.ts"
+import {
+  redactSlateInteractionToolCallValue,
+  unredactSlateInteractionToolCallValue,
+} from "../../source/adapters/interop/agent/interaction-tool-call-adapter.ts"
 
 // ---------------------------------------------------------------------------------------------
 // a completion, and the three places it is written to
@@ -114,6 +127,44 @@ test("a completion names the question and says what came of it", () => {
   assert.equal(isValidAskQuestionCompletion(action()), true)
   assert.equal(isValidAskQuestionCompletion(action({ result: { kind: "rejected", reason: redacted("no", "reason") } })), true)
   assert.equal(isValidAskQuestionCompletion(action({ result: { kind: "error", message: redacted("broken", "error"), askWasTooEarly: false } })), true)
+})
+
+test("a deferred answer has a Slate-owned tool-call value", () => {
+  const toolCall = slateAskQuestionToolCallForCompletion(action(), "tool-call-1")
+  assert.equal(toolCall.kind, "ask-question")
+  assert.equal(toolCall.args?.responseMode, "deferred")
+  assert.equal(toolCall.args?.originalCallId, "tool-call-1")
+  const title = toolCall.args?.title
+  assert.equal(isRedactedString(title) ? title.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) : title, "Which database?")
+  assert.equal(toolCall.result?.kind, "answered")
+  if (toolCall.result?.kind === "answered") {
+    assert.equal(toolCall.result.answers[0]?.questionId, "q1")
+    assert.deepEqual(toolCall.result.answers[0]?.selectedOptionIds, ["opt-postgres"])
+  }
+})
+
+test("the emitted Slate ask-question value is redacted and restored at the listener boundary", () => {
+  const toolCallId = "tool-call-1"
+  const modelCallId = "synthetic-model-1"
+  const value: SlateInteractionToolCallValue = {
+    toolCallId,
+    hookContexts: [],
+    tool: slateAskQuestionToolCallForCompletion(action(), toolCallId),
+  }
+  const update = SlateInteractionUpdates.toolCallStarted(toolCallId, value, modelCallId)
+  const redactedUpdate = redactSlateInteractionUpdate(update, PrivacyMode.NO_STORAGE, redactSlateInteractionToolCallValue)
+  assert.equal(isSlateRedactedInteractionUpdate(redactedUpdate), true)
+  assert.equal(redactedUpdate.kind, "tool-call-update")
+  assert.equal(redactedUpdate.toolCall?.tool.kind, "ask-question")
+  const redactedTitle = redactedUpdate.toolCall?.tool.kind === "ask-question"
+    ? redactedUpdate.toolCall.tool.args?.title
+    : undefined
+  assert.equal(isRedactedString(redactedTitle), true)
+  if (isRedactedString(redactedTitle)) {
+    assert.equal(redactedTitle.__privacyMode, PrivacyMode.NO_STORAGE)
+    assert.equal(redactedTitle.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Which database?")
+  }
+  assert.deepEqual(unredactSlateInteractionUpdate(redactedUpdate, unredactSlateInteractionToolCallValue), update)
 })
 
 test("a completion with no question to attach to, or with nothing that happened, is not one", () => {

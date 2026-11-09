@@ -1,5 +1,6 @@
 import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { RedactedString } from "../redaction/redacted-values.ts"
+import type { SlateToolCallText, SlateToolCallValue } from "../agent/conversation-step-state.ts"
 
 /** Slate-owned inputs used when describing streamed agent usage and feedback copy. */
 export interface TurnUsage {
@@ -82,6 +83,28 @@ export interface SlateActiveBranchChangeUpdate {
   readonly branchName: string
 }
 
+export interface SlateInteractionToolCallValue {
+  readonly toolCallId?: string
+  readonly startedAtMs?: bigint
+  readonly completedAtMs?: bigint
+  readonly hookContexts: readonly { readonly event: string; readonly text: SlateToolCallText }[]
+  readonly tool: SlateToolCallValue
+}
+
+export type SlateToolCallUpdatePhase = "started" | "partial" | "completed"
+
+export interface SlateToolCallUpdate {
+  readonly kind: "tool-call-update"
+  readonly phase: SlateToolCallUpdatePhase
+  readonly callId: string
+  readonly modelCallId: string
+  readonly toolCall?: SlateInteractionToolCallValue
+}
+
+export interface SlateRedactedToolCallUpdate extends SlateToolCallUpdate {
+  readonly privacyMode: PrivacyMode
+}
+
 export type SlateInteractionUpdate =
   | SlateTurnEndedUpdate
   | SlateTextDeltaUpdate
@@ -93,6 +116,7 @@ export type SlateInteractionUpdate =
   | SlateStepCompletedUpdate
   | SlatePromptSuggestionUpdate
   | SlateActiveBranchChangeUpdate
+  | SlateToolCallUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -161,3 +185,4 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedStepCompletedUpdate
   | SlateRedactedPromptSuggestionUpdate
   | SlateRedactedActiveBranchChangeUpdate
+  | SlateRedactedToolCallUpdate

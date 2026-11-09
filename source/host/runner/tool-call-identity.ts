@@ -19,6 +19,7 @@ const TOOL_CALL_MEMORY_LIMIT = 128;
 
 /** The event that says a tool call is over. */
 const TOOL_CALL_COMPLETED_EVENT = "toolCallCompleted";
+const SLATE_TOOL_CALL_COMPLETED_PHASE = "completed";
 
 /** What one session's tool calls are known by, while they are being run. */
 export function createToolCallIdentity(host: ToolCallUpdateSink) {
@@ -47,7 +48,7 @@ export function createToolCallIdentity(host: ToolCallUpdateSink) {
   /** The name a call was made under, or the outline's name when the call has none. */
   const resolveModelToolName = (event: string, id: string, outline: string): string => {
     const name = names.get(id);
-    if (event === TOOL_CALL_COMPLETED_EVENT) {
+    if (event === TOOL_CALL_COMPLETED_EVENT || event === SLATE_TOOL_CALL_COMPLETED_PHASE) {
       names.delete(id);
       pending.delete(id);
     }

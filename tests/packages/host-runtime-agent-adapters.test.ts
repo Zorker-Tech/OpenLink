@@ -16,6 +16,8 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { withRootParentRequestId } from "../../source/packages/agent/utils/request-scope.ts";
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
+import { SlateInteractionUpdates } from "../../source/packages/agent-core/slate-interaction-updates.ts";
+import { slateInteractionToolCallValueFromInterop } from "../../source/adapters/interop/agent/interaction-tool-call-adapter.ts";
 import { computeSubagentRequestId } from "../../source/host/runner/subagent-runtime.ts";
 import { SlateSubagentDispatchError, SlateRequestContextExecutor, SlateSubagentHostAdapter, ForwardingInteractionListener, deriveSlateSubagentRequestLineage, type SubagentAdapterArgs } from "../../source/host/runner/agent-adapters.ts";
 import type { SlateTaskProgressUpdate } from "../../source/packages/agent/tools/task-progress-state.ts";
@@ -266,7 +268,7 @@ describe("what an agent's updates mean to the conversation", () => {
     await forwarding.sendUpdate({}, toolUpdate("toolCallStarted", shellCall, "model-call-1"));
     const forwarded = updates[0] as { type: string; id: string; name: string; status: string; summary?: unknown; args?: unknown };
     assert.deepEqual({ type: forwarded.type, id: forwarded.id, name: forwarded.name, status: forwarded.status }, { type: "tool-call", id: "call-1", name: "Shell", status: "pending" });
-    assert.deepEqual(seen, [["seen", "toolCallStarted", "call-1", true]]);
+    assert.deepEqual(seen, [["seen", "started", "call-1", true]]);
     // The same call is also offered to the surface the user sees, as its own update.
     const projected = updates[1] as { type: string; update: { kind: string; value: { toolCallId: string } } };
     assert.deepEqual({ type: projected.type, kind: projected.update.kind, call: projected.update.value.toolCallId }, { type: "client-side-tool-v2", kind: "call", call: "call-1" });
@@ -277,6 +279,18 @@ describe("what an agent's updates mean to the conversation", () => {
     updates.length = 0;
     await forwarding.sendUpdate({}, { message: { case: "toolCallStarted", value: { callId: "call-2" } } });
     assert.deepEqual(updates, []);
+  });
+
+  it("forwards Slate-owned tool-call events through the same client projection", async () => {
+    const seen: unknown[][] = [];
+    const { listener: forwarding, updates } = listener({
+      onToolCall: (phase, callId, toolCall) => { seen.push([phase, callId, toolCall != null]); },
+    });
+    const toolCall = slateInteractionToolCallValueFromInterop(shellCall, "call-7");
+    await forwarding.sendUpdate({}, SlateInteractionUpdates.toolCallStarted("call-7", toolCall, "model-call-7"));
+    assert.equal((updates[0] as { type: string; id: string; status: string }).type, "tool-call");
+    assert.deepEqual(seen, [["started", "call-7", true]]);
+    assert.equal((updates[1] as { type: string }).type, "client-side-tool-v2");
   });
 
   it("asks the surface to look again when a call it could not resolve is still pending", async () => {

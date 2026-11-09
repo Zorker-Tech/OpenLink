@@ -196,6 +196,9 @@ test("a tool call's name is remembered until the update that carries it", () => 
   // The name is handed over until the call completes, and then it is forgotten.
   assert.equal(identity.resolveModelToolName("toolCallDelta", "call-1", "outline"), "Shell")
   assert.equal(identity.resolveModelToolName("toolCallCompleted", "call-1", "outline"), "Shell")
+  identity.recordModelToolName("call-2", "Read")
+  assert.equal(identity.resolveModelToolName("completed", "call-2", "outline"), "Read")
+  assert.equal(identity.resolveModelToolName("started", "call-2", "outline"), "outline", "the Slate completion phase forgets the name")
   // A call nobody recorded falls back to what the caller already had.
   assert.equal(identity.resolveModelToolName("toolCallDelta", "call-2", "outline"), "outline")
 })

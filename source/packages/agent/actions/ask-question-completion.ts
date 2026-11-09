@@ -32,6 +32,11 @@ import {
   createAskQuestionCompletionToolCall,
   type InteropRedactedToolCall,
 } from "../../../adapters/interop/agent/ask-question-result-adapter.ts"
+import {
+  createSlateAskQuestionToolCall,
+  type SlateAskQuestionToolCall,
+  type SlateAskQuestionToolOutcome,
+} from "../conversation-step-state.ts"
 import { formatAskQuestionOutcomeAsString } from "../../agent/tools/core/ask-question/outcome-format.ts"
 import {
   type AskQuestionCompletionAction,
@@ -108,6 +113,48 @@ export function isValidAskQuestionCompletion(completion: AskQuestionCompletionAc
   const resultKind = completion.result?.kind
   return completion.originalToolCallId.length > 0 &&
     (resultKind === "answered" || resultKind === "rejected" || resultKind === "error")
+}
+
+/** Builds the Slate operation emitted into the live conversation for an asynchronous answer. */
+export function slateAskQuestionToolCallForCompletion(
+  action: AskQuestionCompletionAction,
+  originalToolCallId: string,
+): SlateAskQuestionToolCall {
+  const args = action.originalArgs === undefined
+    ? undefined
+    : {
+        title: textValue(action.originalArgs.title),
+        questions: action.originalArgs.questions.map(question => ({
+          id: question.id,
+          prompt: textValue(question.prompt),
+          allowMultiple: question.allowMultiple,
+          options: question.options.map(option => ({ id: option.id, label: textValue(option.label) })),
+        })),
+        responseMode: "deferred" as const,
+        originalCallId: originalToolCallId,
+      }
+  let result: SlateAskQuestionToolOutcome | undefined
+  switch (action.result?.kind) {
+    case "answered":
+      result = {
+        kind: "answered",
+        answers: action.result.answers.map(answer => ({
+          questionId: answer.questionId,
+          selectedOptionIds: [...answer.selectedOptionIds],
+          freeformText: textValue(answer.freeformText),
+        })),
+      }
+      break
+    case "rejected": result = { kind: "rejected", reason: textValue(action.result.reason) }; break
+    case "error": result = { kind: "error", message: textValue(action.result.message) }; break
+    case "async": result = { kind: "async" }; break
+    case "unknown": result = { kind: "unknown" }; break
+    case undefined: result = undefined; break
+  }
+  return createSlateAskQuestionToolCall({
+    ...(args === undefined ? {} : { args }),
+    ...(result === undefined ? {} : { result }),
+  })
 }
 
 /** Whether this completion has already been written into the conversation. */

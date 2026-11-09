@@ -61,11 +61,20 @@ describe("what the handler keeps and what it does not", () => {
   it("announces the started time it remembered", async () => {
     const { handler, sent, recorded } = harness();
     await handler.executeToolCall(createContext(), readCall(), "call-1", async () => ({ ok: true }), () => readCall());
-    const started = sent.find((update) => update.kind === "toolCallStarted")?.payload;
+    const started = sent.find((update) => update.kind === "tool-call-update" && update.payload.phase === "started")?.payload;
     assert.equal(typeof started.toolCall.startedAtMs, "bigint", "the started time is written onto the call");
-    const completed = sent.find((update) => update.kind === "toolCallCompleted")?.payload;
+    const completed = sent.find((update) => update.kind === "tool-call-update" && update.payload.phase === "completed")?.payload;
     assert.equal(typeof completed.toolCall.startedAtMs, "bigint", "the completed call carries the remembered start as well");
     assert.equal((handler as any).toolCallStartedAtMsByCallId.size, 0, "the remembered start is cleared once the call is done");
     assert.deepEqual(recorded, [{ toolCase: "readToolCall", callId: "call-1" }]);
+  });
+
+  it("keeps a synthetic update's model-call identity", async () => {
+    const { handler, sent } = harness();
+    await handler.emitToolCallUpdate(createContext(), "completed", "question-1", readCall(), "synthetic-model-1");
+    assert.deepEqual(
+      [sent[0]?.payload.kind, sent[0]?.payload.phase, sent[0]?.payload.callId, sent[0]?.payload.modelCallId],
+      ["tool-call-update", "completed", "question-1", "synthetic-model-1"],
+    );
   });
 });

@@ -2634,9 +2634,9 @@
     },
     "packages/agent/interaction-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5156146179401994,
-      "refreshReason": "Moved generated tool-call validation, argument merging, edit-delta mutation, metadata stamping, and redaction behind the interop adapter while keeping preservation lifecycle and stream accounting in Slate.",
-      "evidence": "The interaction-handler behavior, error-preservation, and rewrite-boundary suites pass 131/131; an isolated full Work-host run passes 9763/9763. Work-host typecheck passes rewrite:check and interop:check with 14 direct consumers. Measured overlap is 0.5156146179401994 against 1505 baseline pairs."
+      "overlap": 0.5029900332225914,
+      "refreshReason": "Added Slate-owned tool-call lifecycle events while preserving argument recovery, edit streaming, call identity, and redaction through the existing adapters.",
+      "evidence": "The full Node 24 Work-host suite passes 10098/10098 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Focused coverage pins lifecycle phases, preserved arguments, synthetic model-call identity, privacy round trips, and runner projection. Measured overlap is 0.5029900332225914 against 1505 baseline pairs."
     },
     "packages/agent/tools/core/await.ts": {
       "claim": "rewritten",
@@ -4460,9 +4460,9 @@
     },
     "packages/agent/actions/ask-question-completion.ts": {
       "claim": "rewritten",
-      "overlap": 0.43559322033898307,
-      "refreshReason": "Moved the Slate completion payload schema and nested validator into a lightweight contract module so action routing does not import business-side tool result serialization.",
-      "evidence": "The full Node 24 Work-host suite passes 10089/10089 after the contract-only file extraction. After extraction, agent-action-contract and agent-action-handlers focused suites pass 17/17 each; direct action-guard coverage includes malformed nested ask-question data, route/payload mismatches and invalid legacy source labels. The versioned Slate action validator also covers duplicate suppression, receipt behavior, formatted/structured outcomes, continuation and active-turn routing. Work-host typecheck and rewrite/interop gates pass. Measured overlap is 0.43559322033898307 against 590 baseline pairs."
+      "overlap": 0.46440677966101696,
+      "refreshReason": "Added a Slate-owned deferred ask-question tool value for lifecycle updates while retaining the versioned completion action, transcript write, and prompt-result behavior.",
+      "evidence": "The full Node 24 Work-host suite passes 10098/10098 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Ask-question tests pin Slate tool arguments/results, privacy-boundary round trips, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation, and active-turn routing. Measured overlap is 0.46440677966101696 against 590 baseline pairs."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",

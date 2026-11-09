@@ -11,11 +11,13 @@ import {
   RequestContextSuccess,
 } from "../proto/generated/agent/v1/request_context_exec_pb.ts";
 import { projectAgentToolCallToClientSideToolV2 } from "./client-side-tool-v2-projection-adapter.ts";
+import { interopToolCallFromSlateInteractionValue } from "./interaction-tool-call-adapter.ts";
 import {
   InteractionUpdateForwarder,
   type ForwardedUpdate,
   type ForwardingInteractionObservers,
 } from "../../../host/runner/forwarding-interaction-updates.ts";
+import type { OutlineToolCall } from "../../../host/runner/conversation-outline.ts";
 import { createRequestContextResult, type RequestContextProvider } from "../../../host/runner/request-context-result.ts";
 import {
   SlateSubagentDispatchError,
@@ -79,7 +81,7 @@ export class SlateSubagentHostAdapter extends SubagentSessionCoordinator<SlateSu
   }
 }
 
-/** Project runner tool-call updates into the renderer's generated event envelope. */
+/** Project Slate tool-call values only where the existing client projection requires its adapter shape. */
 export class ForwardingInteractionListener extends InteractionUpdateForwarder {
   constructor(
     onUpdate: (event: ForwardedUpdate) => void,
@@ -92,7 +94,8 @@ export class ForwardingInteractionListener extends InteractionUpdateForwarder {
         toolCall as ToolCall,
         modelCallId,
         surfaceName,
-      ));
+      ),
+    (toolCall) => interopToolCallFromSlateInteractionValue(toolCall) as unknown as OutlineToolCall);
   }
 }
 

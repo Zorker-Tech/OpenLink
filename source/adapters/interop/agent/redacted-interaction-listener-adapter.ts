@@ -38,6 +38,10 @@ import type {
 } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import { taskProgressUpdateForListener } from "./task-progress-protocol-adapter.ts"
 import {
+  redactSlateInteractionToolCallValue,
+  unredactSlateInteractionToolCallValue,
+} from "./interaction-tool-call-adapter.ts"
+import {
   fromInteropInteractionQuery,
   fromInteropInteractionResponse,
   toInteropInteractionQuery,
@@ -79,7 +83,7 @@ export function toUnredactedInteractionListener<Context>(
   return {
     async sendUpdate(ctx, update) {
       if (isSlateInteractionUpdate(update)) {
-        await delegate.sendUpdate(ctx, redactSlateInteractionUpdate(update, privacyMode))
+        await delegate.sendUpdate(ctx, redactSlateInteractionUpdate(update, privacyMode, redactSlateInteractionToolCallValue))
         return
       }
       await delegate.sendUpdate(ctx, redactInteractionUpdate(update, privacyMode))
@@ -123,7 +127,7 @@ export function toRedactedInteractionListener<Context>(
   return {
     async sendUpdate(ctx, update) {
       if (isSlateRedactedInteractionUpdate(update)) {
-        await delegate.sendUpdate(ctx, unredactSlateInteractionUpdate(update))
+        await delegate.sendUpdate(ctx, unredactSlateInteractionUpdate(update, unredactSlateInteractionToolCallValue))
         return
       }
       await delegate.sendUpdate(

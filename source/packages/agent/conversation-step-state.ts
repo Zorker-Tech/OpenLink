@@ -259,6 +259,29 @@ export type SlateToolCallValue =
   | SlateSendMessageToolCall
   | SlateComputerUseToolCall
 
+/** The closed Slate call families plus an explicit lossless compatibility value for unmapped calls. */
+export function isSlateToolCallValue(value: unknown): value is SlateToolCallValue {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const tool = value as Record<string, unknown>
+  switch (tool.kind) {
+    case "task": return isSlateTaskToolCall(tool)
+    case "shell": return isSlateShellToolCall(tool)
+    case "conversation-summary": return isSlateConversationSummaryToolCall(tool)
+    case "ask-question": return isSlateAskQuestionToolCall(tool)
+    case "plan-draft": return isSlatePlanDraftToolCall(tool)
+    case "send-message": return isSlateSendMessageToolCall(tool)
+    case "computer-use": return isSlateComputerUseToolCall(tool)
+    case "legacy":
+      return hasOnlyOwnKeys(tool, ["kind", "case", "value"]) &&
+        (tool.case === undefined || typeof tool.case === "string")
+    case undefined:
+      return hasOnlyOwnKeys(tool, ["case", "value"]) &&
+        (tool.case === undefined || typeof tool.case === "string")
+    default:
+      return false
+  }
+}
+
 export interface SlateStepHookContextEntry {
   readonly event: string
   readonly text: RedactedString
