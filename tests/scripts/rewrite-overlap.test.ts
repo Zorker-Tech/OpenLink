@@ -658,7 +658,6 @@ describe("rewrite overlap gate inputs", () => {
     }), [
       "packages/agent-core/interaction-updates.ts",
       "packages/agent-core/interaction-update-contracts.ts",
-      "adapters/interop/agent/interaction-update-adapter.ts",
     ]);
     assert.deepEqual(sourcePathsOf({
       port: "host/slate-activity.ts",

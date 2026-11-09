@@ -123,7 +123,6 @@ source/local-exec/production-executor.ts	../adapters/interop/agent/controlled-ex
 source/local-exec/production-executor.ts	../adapters/interop/agent/local-read-executor-adapter.ts
 source/local-exec/production-executor.ts	../adapters/interop/agent/production-exec-codec-adapter.ts
 source/packages/agent-client/errors.ts	../../adapters/interop/agent/agent-error-details-adapter.ts
-source/packages/agent-core/interaction-updates.ts	../../adapters/interop/agent/interaction-update-adapter.ts
 source/packages/agent-core/redacted-interaction-updates.ts	../../adapters/interop/agent/redacted-interaction-updates-adapter.ts
 source/packages/agent-exec/adopt.ts	../../adapters/interop/agent/adopt-operation-adapter.ts
 source/packages/agent-exec/agent-file-write.ts	../../adapters/interop/agent/agent-file-write-exec-adapter.ts
