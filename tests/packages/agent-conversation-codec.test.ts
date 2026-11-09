@@ -37,7 +37,6 @@ import {
 import { createSlateShellConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { createSlateShellInvocationSerde, createSlateShellResultSerde } from "../../source/adapters/storage/agent/shell-state-storage-adapter.ts"
-import { importLegacyShellInvocation, importLegacyShellResult } from "../../source/adapters/interop/agent/legacy-shell-state-adapter.ts"
 
 const codec = createSlateAgentConversationCodec<unknown>()
 
@@ -209,8 +208,8 @@ test("unknown fields in referenced subagent records survive the Slate V2 project
 })
 
 test("full conversation hydration returns Slate shell values from stored shell blobs", async () => {
-  const invocationSerde = createSlateShellInvocationSerde(PrivacyMode.NO_STORAGE, importLegacyShellInvocation)
-  const resultSerde = createSlateShellResultSerde(PrivacyMode.NO_STORAGE, importLegacyShellResult)
+  const invocationSerde = createSlateShellInvocationSerde(PrivacyMode.NO_STORAGE)
+  const resultSerde = createSlateShellResultSerde(PrivacyMode.NO_STORAGE)
   const invocationBytes = invocationSerde.serialize(storeSlateShellInvocation(
     createSlateShellInvocation("echo slate"),
     PrivacyMode.NO_STORAGE,
