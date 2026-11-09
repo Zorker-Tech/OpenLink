@@ -254,6 +254,30 @@ test("user-message append events round-trip through Slate privacy projection", (
   )
 })
 
+test("feedback requests round-trip through Slate privacy projection", () => {
+  const update = SlateInteractionUpdates.feedbackRequest(
+    "request-1",
+    "model-x",
+    [{ id: "good", label: "Good" }],
+    [{ id: "group", prompt: "How was it?", categories: [{ id: "x", label: "X" }] }],
+    { title: "Title", negativeTitle: "Not this", commentPlaceholder: "Say more" },
+    true,
+  )
+  assert.equal(isSlateInteractionUpdate(update), true)
+  assert.deepEqual(update.categories, [{ id: "good", label: "Good" }])
+  assert.equal(update.showFormImmediately, true)
+
+  const redacted = redactSlateInteractionUpdate(update, mode)
+  assert.ok(isSlateRedactedInteractionUpdate(redacted))
+  assert.equal(redacted.privacyMode, mode)
+  assert.deepEqual(unredactSlateInteractionUpdate(redacted), update)
+
+  const minimal = SlateInteractionUpdates.feedbackRequest("request-2", undefined, [])
+  assert.equal("canonicalModelName" in minimal, false)
+  assert.equal("copy" in minimal, false)
+  assert.equal("showFormImmediately" in minimal, false)
+})
+
 test("Slate tool-call events round-trip through the interop privacy boundary", () => {
   const toolCall = slateInteractionToolCallValueFromInterop(new ToolCall({
     tool: { case: "shellToolCall", value: { args: new ShellArgs({ command: "echo private" }) } as never },

@@ -18,6 +18,31 @@ export interface FeedbackRequestCopy {
   readonly commentPlaceholder?: string
 }
 
+export interface SlateFeedbackRequestCategory {
+  readonly id: string
+  readonly label: string
+}
+
+export interface SlateFeedbackRequestCategoryGroup {
+  readonly id: string
+  readonly prompt: string
+  readonly categories: readonly SlateFeedbackRequestCategory[]
+}
+
+export interface SlateFeedbackRequestUpdate {
+  readonly kind: "feedback-request"
+  readonly requestId: string
+  readonly canonicalModelName?: string
+  readonly categories: readonly SlateFeedbackRequestCategory[]
+  readonly categoryGroups: readonly SlateFeedbackRequestCategoryGroup[]
+  readonly copy?: FeedbackRequestCopy
+  readonly showFormImmediately?: boolean
+}
+
+export interface SlateRedactedFeedbackRequestUpdate extends SlateFeedbackRequestUpdate {
+  readonly privacyMode: PrivacyMode
+}
+
 /** Slate's local run event for the end of one agent turn. */
 export interface SlateTurnEndedUpdate {
   readonly kind: "turn-ended"
@@ -179,6 +204,7 @@ export type SlateInteractionUpdate =
   | SlateToolCallUpdate
   | SlateToolCallDeltaUpdate
   | SlateUserMessageAppendedUpdate
+  | SlateFeedbackRequestUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -253,3 +279,4 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedToolCallUpdate
   | SlateRedactedToolCallDeltaUpdate
   | SlateRedactedUserMessageAppendedUpdate
+  | SlateRedactedFeedbackRequestUpdate
