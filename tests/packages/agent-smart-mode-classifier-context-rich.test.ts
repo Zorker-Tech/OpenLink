@@ -11,11 +11,9 @@ import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts";
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts";
 import {
-  AgentConversationTurnStructure,
   AssistantMessage,
   ConversationStateStructure,
   ConversationStep,
-  ConversationTurnStructure,
   SimulatedMsgReason,
   ToolCall,
   UserMessage,
@@ -41,10 +39,11 @@ import {
 import { SelectedContext, SelectedCursorCommand } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
 import { AgentSkill } from "../../source/adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts";
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts";
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts";
 
 const stepSerde = new ProtobufBlobSerde(ConversationStep);
-const turnSerde = new ProtobufBlobSerde(ConversationTurnStructure);
 const userMessageSerde = new ProtobufBlobSerde(UserMessage);
 
 interface TurnSpec {
@@ -95,11 +94,10 @@ async function conversation(options: { turns: readonly TurnSpec[]; rootPromptTex
     }
     const userMessage = turnSpec.userMessage ?? new UserMessage({ text: turnSpec.userText ?? "", messageId: "message-" + turnHandles.length });
     const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(userMessage)));
-    const turnBytes = turnSerde.serialize(new ConversationTurnStructure({
-      turn: {
-        case: "agentConversationTurn",
-        value: new AgentConversationTurnStructure({ userMessage: userMessageBlobId, steps, sendMessageStepIndices: [] }),
-      },
+    const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+      userMessageBlobId,
+      stepBlobIds: steps,
+      sendMessageStepIndices: [],
     }));
     await store(turnBytes);
     turnHandles.push(handle.createConversationTurnHandleSerde().deserialize(turnBytes));

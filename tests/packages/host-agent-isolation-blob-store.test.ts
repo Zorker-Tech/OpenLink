@@ -13,8 +13,10 @@ import { describe, it } from "node:test";
 
 import { ConversationBlobStoreDb } from "../../source/host/agents/isolation/conversation-blob-store.ts";
 import { CONVERSATION_BLOB_ADOPTION_COMPLETE, CONVERSATION_BLOB_SCHEMA } from "../../source/host/agents/isolation/conversation-blob-db.ts";
-import { ConversationStateStructure, ConversationTurnStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 const sha = (bytes: Uint8Array): Uint8Array => createHash("sha256").update(bytes).digest();
@@ -57,7 +59,11 @@ function checkpointRoot(turnIds: Uint8Array[]) {
 
 /** A turn blob the garbage walk can actually resolve, kept under the id its bytes hash to. */
 function turnBlob() {
-  const turnBytes = new ConversationTurnStructure({}).toBinary();
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId: new Uint8Array(),
+    stepBlobIds: [],
+    sendMessageStepIndices: [],
+  }));
   return { turnBytes, turnId: sha(turnBytes) };
 }
 

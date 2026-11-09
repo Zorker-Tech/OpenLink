@@ -10,8 +10,6 @@ import { fromHex, toHex, utf8Serde, type BlobType, type Serde } from "../../../p
 import {
   createSlateAgentConversationTurn,
   createSlateShellConversationTurn,
-  type SlateConversationTurnCompatibility,
-  type SlateConversationTurnUnknownField,
   type SlateConversationTurn,
 } from "../../../packages/agent/conversation-turn-state.ts";
 
@@ -85,33 +83,12 @@ export function projectConversationTurnEnvelopeInterop(
   }
 }
 
-function unknownTurnFields(message: Message): SlateConversationTurnUnknownField[] {
-  return message.getType().runtime.bin.listUnknownFields(message).map(field => ({
-    number: field.no,
-    wireType: field.wireType,
-    dataHex: toHex(field.data),
-  }))
-}
-
-function applyUnknownTurnFields(message: Message, fields: readonly SlateConversationTurnUnknownField[] | undefined): void {
-  for (const field of fields ?? []) {
-    message.getType().runtime.bin.onUnknownField(
-      message,
-      field.number,
-      field.wireType as Parameters<typeof ConversationTurnStructure.runtime.bin.onUnknownField>[2],
-      fromHex(field.dataHex),
-    )
-  }
-}
-
-/** Projects the historical persisted envelope into Slate's turn vocabulary. */
+/** Projects the persisted envelope into Slate's turn vocabulary. */
 export function fromInteropConversationTurn(
   value: InstanceType<typeof ConversationTurnStructure>,
 ): SlateConversationTurn {
-  const envelopeUnknownFields = unknownTurnFields(value)
   switch (value.turn.case) {
-    case "agentConversationTurn": {
-      const payloadUnknownFields = unknownTurnFields(value.turn.value)
+    case "agentConversationTurn":
       return createSlateAgentConversationTurn({
         userMessageBlobId: value.turn.value.userMessage,
         stepBlobIds: value.turn.value.steps,
@@ -123,29 +100,14 @@ export function fromInteropConversationTurn(
           ? {}
           : { dynamicToolCount: value.turn.value.dynamicToolCount }),
         sendMessageStepIndices: value.turn.value.sendMessageStepIndices,
-        ...((envelopeUnknownFields.length === 0 && payloadUnknownFields.length === 0)
-          ? {}
-          : { compatibility: {
-              ...(envelopeUnknownFields.length === 0 ? {} : { envelopeUnknownFields }),
-              ...(payloadUnknownFields.length === 0 ? {} : { payloadUnknownFields }),
-            } }),
       })
-    }
-    case "shellConversationTurn": {
-      const payloadUnknownFields = unknownTurnFields(value.turn.value)
+    case "shellConversationTurn":
       return createSlateShellConversationTurn({
         invocationBlobId: value.turn.value.shellCommand,
         resultBlobId: value.turn.value.shellOutput,
-        ...((envelopeUnknownFields.length === 0 && payloadUnknownFields.length === 0)
-          ? {}
-          : { compatibility: {
-              ...(envelopeUnknownFields.length === 0 ? {} : { envelopeUnknownFields }),
-              ...(payloadUnknownFields.length === 0 ? {} : { payloadUnknownFields }),
-            } }),
       })
-    }
     default:
-      throw new Error("Invalid ConversationTurnStructure: missing turn case")
+      throw new Error("Conversation turn record has no turn case")
   }
 }
 
@@ -174,8 +136,6 @@ export function toInteropConversationTurn(
     outer = wrapShellConversationTurnInterop(shellTurn)
     payload = shellTurn
   }
-  applyUnknownTurnFields(outer, value.compatibility?.envelopeUnknownFields)
-  applyUnknownTurnFields(payload, value.compatibility?.payloadUnknownFields)
   return outer
 }
 
@@ -202,40 +162,16 @@ function isHexId(value: unknown): value is string {
   return typeof value === "string" && /^(?:[0-9a-f]{2})*$/.test(value)
 }
 
-function isTurnUnknownFields(value: unknown): value is SlateConversationTurnUnknownField[] {
-  return Array.isArray(value) && value.every(field =>
-    field !== null && typeof field === "object" && !Array.isArray(field) &&
-    hasOnlyKeys(field as Record<string, unknown>, ["number", "wireType", "dataHex"]) &&
-    Number.isSafeInteger((field as Record<string, unknown>).number) &&
-    ((field as Record<string, unknown>).number as number) > 0 &&
-    ((field as Record<string, unknown>).number as number) <= 536_870_911 &&
-    Number.isSafeInteger((field as Record<string, unknown>).wireType) &&
-    ((field as Record<string, unknown>).wireType as number) >= 0 &&
-    ((field as Record<string, unknown>).wireType as number) <= 5 &&
-    isHexId((field as Record<string, unknown>).dataHex))
-}
-
-function isTurnCompatibility(value: unknown): value is SlateConversationTurnCompatibility {
-  if (value === undefined) return true
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
-  const compatibility = value as Record<string, unknown>
-  return hasOnlyKeys(compatibility, ["envelopeUnknownFields", "payloadUnknownFields"]) &&
-    (compatibility.envelopeUnknownFields === undefined || isTurnUnknownFields(compatibility.envelopeUnknownFields)) &&
-    (compatibility.payloadUnknownFields === undefined || isTurnUnknownFields(compatibility.payloadUnknownFields))
-}
-
 function isSlateTurnEnvelope(value: unknown): value is {
   readonly format: typeof SLATE_TURN_FORMAT
-  readonly version: 1 | 2
+  readonly version: 2
   readonly turn: Record<string, unknown>
-  readonly compatibility?: SlateConversationTurnCompatibility
 } {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
-  if (!hasOnlyKeys(envelope, ["format", "version", "turn", "compatibility"]) ||
-      envelope.format !== SLATE_TURN_FORMAT || (envelope.version !== 1 && envelope.version !== 2) ||
-      envelope.turn === null || typeof envelope.turn !== "object" || Array.isArray(envelope.turn) ||
-      !isTurnCompatibility(envelope.compatibility)) return false
+  if (!hasOnlyKeys(envelope, ["format", "version", "turn"]) ||
+      envelope.format !== SLATE_TURN_FORMAT || envelope.version !== 2 ||
+      envelope.turn === null || typeof envelope.turn !== "object" || Array.isArray(envelope.turn)) return false
   const turn = envelope.turn as Record<string, unknown>
   if (turn.kind === "agent") {
     return hasOnlyKeys(turn, [
@@ -248,20 +184,10 @@ function isSlateTurnEnvelope(value: unknown): value is {
         Number.isSafeInteger(index) && (index as number) >= 0 && (index as number) <= 0xffff_ffff)
   }
   if (turn.kind === "shell") {
-    return envelope.version === 1
-      ? hasOnlyKeys(turn, ["kind", "shellCommandBlobId", "shellOutputBlobId"]) &&
-          isHexId(turn.shellCommandBlobId) && isHexId(turn.shellOutputBlobId)
-      : hasOnlyKeys(turn, ["kind", "invocationBlobId", "resultBlobId"]) &&
-          isHexId(turn.invocationBlobId) && isHexId(turn.resultBlobId)
+    return hasOnlyKeys(turn, ["kind", "invocationBlobId", "resultBlobId"]) &&
+      isHexId(turn.invocationBlobId) && isHexId(turn.resultBlobId)
   }
   return false
-}
-
-function turnCompatibilityFromEnvelope(value: SlateConversationTurnCompatibility): SlateConversationTurnCompatibility {
-  return {
-    ...(value.envelopeUnknownFields === undefined ? {} : { envelopeUnknownFields: value.envelopeUnknownFields.map(field => ({ ...field })) }),
-    ...(value.payloadUnknownFields === undefined ? {} : { payloadUnknownFields: value.payloadUnknownFields.map(field => ({ ...field })) }),
-  }
 }
 
 function serializeSlateConversationTurn(value: SlateConversationTurn): Uint8Array {
@@ -284,7 +210,6 @@ function serializeSlateConversationTurn(value: SlateConversationTurn): Uint8Arra
     format: SLATE_TURN_FORMAT,
     version: 2,
     turn,
-    ...(value.compatibility === undefined ? {} : { compatibility: turnCompatibilityFromEnvelope(value.compatibility) }),
   }
   return utf8Serde.serialize(`SLATE-AGENT-TURN\n${JSON.stringify(envelope)}`)
 }
@@ -307,27 +232,23 @@ function deserializeSlateConversationTurn(bytes: Uint8Array): SlateConversationT
       ...(turn.encryptedModel === undefined ? {} : { encryptedModel: turn.encryptedModel as string }),
       ...(turn.dynamicToolCount === undefined ? {} : { dynamicToolCount: turn.dynamicToolCount as number }),
       sendMessageStepIndices: turn.sendMessageStepIndices as number[],
-      ...(parsed.compatibility === undefined ? {} : { compatibility: turnCompatibilityFromEnvelope(parsed.compatibility) }),
     })
   }
   return createSlateShellConversationTurn({
-    invocationBlobId: fromHex(
-      (parsed.version === 1 ? turn.shellCommandBlobId : turn.invocationBlobId) as string,
-    ),
-    resultBlobId: fromHex(
-      (parsed.version === 1 ? turn.shellOutputBlobId : turn.resultBlobId) as string,
-    ),
-    ...(parsed.compatibility === undefined ? {} : { compatibility: turnCompatibilityFromEnvelope(parsed.compatibility) }),
+    invocationBlobId: fromHex(turn.invocationBlobId as string),
+    resultBlobId: fromHex(turn.resultBlobId as string),
   })
 }
 
-/** Writes new turns in Slate's own versioned format and imports legacy Proto turn blobs on read. */
+/** Writes and reads turns in Slate's own versioned format. */
 export const slateConversationTurnSerde: SlateConversationTurnSerde = {
   serialize(value) {
     return serializeSlateConversationTurn(value)
   },
   deserialize(bytes) {
-    return deserializeSlateConversationTurn(bytes) ?? fromInteropConversationTurn(ConversationTurnStructure.fromBinary(bytes))
+    const turn = deserializeSlateConversationTurn(bytes)
+    if (turn === undefined) throw new TypeError("Slate conversation turn record is unsupported or invalid")
+    return turn
   },
   getBlobType() {
     return { ...slateConversationTurnBlobType }

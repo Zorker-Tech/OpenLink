@@ -10,14 +10,14 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { toRedactedConversationStateStructure } from "../../source/adapters/interop/redacted-protos/generated/agent/v1/agent_redacted.ts"
 import {
-  AgentConversationTurnStructure,
   AssistantMessage,
   ConversationStateStructure,
   ConversationStep,
-  ConversationTurnStructure,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
+import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -25,7 +25,6 @@ import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 // ---------------------------------------------------------------------------------------------
 
 const stepSerde = new ProtobufBlobSerde(ConversationStep)
-const turnSerde = new ProtobufBlobSerde(ConversationTurnStructure)
 const userMessageSerde = new ProtobufBlobSerde(UserMessage)
 
 interface ConversationHarness {
@@ -68,13 +67,10 @@ async function conversation(options: {
     ...(userMessages[0]?.isSimulated === true ? { isSimulatedMsg: true } : {}),
   }))))
 
-  const turnStructure = new AgentConversationTurnStructure({
-    userMessage: userMessageBlobId,
-    steps,
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId,
+    stepBlobIds: steps,
     sendMessageStepIndices: [],
-  })
-  const turnBytes = turnSerde.serialize(new ConversationTurnStructure({
-    turn: { case: "agentConversationTurn", value: turnStructure },
   }))
   await store(turnBytes)
 

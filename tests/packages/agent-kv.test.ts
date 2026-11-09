@@ -39,12 +39,10 @@ import {
 import { resolveSubagentPersistedStates } from "../../source/packages/agent-kv/subagent-states.ts"
 import {
   AgentConversationTurn,
-  AgentConversationTurnStructure,
   ConversationTokenDetails,
   ConversationStateStructure,
   ConversationStep,
   ConversationSummary,
-  ConversationTurnStructure,
   SubagentPersistedState,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
@@ -53,6 +51,11 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { createSlateAssistantMessageStep } from "../../source/packages/agent/conversation-step-state.ts"
+import {
+  createSlateAgentConversationTurn,
+  createSlateShellConversationTurn,
+} from "../../source/packages/agent/conversation-turn-state.ts"
+import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { createSlateTodoItemSerde } from "../../source/adapters/interop/agent/todo-schema-adapter.ts"
 import {
   createSlateConversationSummarySerde,
@@ -355,14 +358,18 @@ test("checkpointing writes the structure and reloading finds it again", async ()
   const step = new ConversationStep({})
   const stepId = await getBlobId(step.toBinary())
   await store.setBlob(ctx, stepId, step.toBinary())
-  const turnId = await getBlobId(new Uint8Array([9]))
-  await store.setBlob(ctx, turnId, new ConversationTurnStructure({
-    turn: {
-      case: "agentConversationTurn",
-      value: new AgentConversationTurnStructure({ userMessage: userMessageId, steps: [stepId], requestId: "req-1" }),
-    },
-  }).toBinary())
-  const emptyTurnBytes = new ConversationTurnStructure().toBinary()
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId: userMessageId,
+    stepBlobIds: [stepId],
+    requestId: "req-1",
+    sendMessageStepIndices: [],
+  }))
+  const turnId = await getBlobId(turnBytes)
+  await store.setBlob(ctx, turnId, turnBytes)
+  const emptyTurnBytes = slateConversationTurnSerde.serialize(createSlateShellConversationTurn({
+    invocationBlobId: new Uint8Array(),
+    resultBlobId: new Uint8Array(),
+  }))
   const emptyTurnId = await getBlobId(emptyTurnBytes)
   await store.setBlob(ctx, emptyTurnId, emptyTurnBytes)
 
@@ -406,13 +413,11 @@ test("full conversation hydration reads Slate user-message and step blobs throug
   const stepId = await getBlobId(stepBytes)
   await store.setBlob(ctx, stepId, stepBytes)
 
-  const turn = new ConversationTurnStructure({
-    turn: {
-      case: "agentConversationTurn",
-      value: new AgentConversationTurnStructure({ userMessage: userMessageId, steps: [stepId] }),
-    },
-  })
-  const turnBytes = turn.toBinary()
+  const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
+    userMessageBlobId: userMessageId,
+    stepBlobIds: [stepId],
+    sendMessageStepIndices: [],
+  }))
   const turnId = await getBlobId(turnBytes)
   await store.setBlob(ctx, turnId, turnBytes)
   const todoBytes = createSlateTodoItemSerde(PrivacyMode.NO_STORAGE).serialize({

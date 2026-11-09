@@ -972,7 +972,6 @@ export class ShellConversationTurnHandle<Context extends OperationContext = Oper
     const newTurnStructure = createSlateShellConversationTurn({
       invocationBlobId: newInvocationBlobId,
       resultBlobId: newResultBlobId,
-      ...(this.turnStructure.compatibility === undefined ? {} : { compatibility: this.turnStructure.compatibility }),
     });
     const serializedWrapper = slateConversationTurnSerde.serialize(newTurnStructure);
     const newBlobId = await getBlobId(serializedWrapper);
@@ -1177,7 +1176,6 @@ export class AgentConversationTurnHandle<Context extends OperationContext = Oper
         ? { encryptedModel: this.turnStructure.encryptedModel }
         : {}),
       ...(this.turnStructure.dynamicToolCount !== undefined ? { dynamicToolCount: this.turnStructure.dynamicToolCount } : {}),
-      ...(this.turnStructure.compatibility === undefined ? {} : { compatibility: this.turnStructure.compatibility }),
     });
     const serializedWrapper = slateConversationTurnSerde.serialize(newInnerStructure);
     const newBlobId = await getBlobId(serializedWrapper);

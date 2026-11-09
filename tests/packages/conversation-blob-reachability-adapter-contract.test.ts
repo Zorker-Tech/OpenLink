@@ -3,9 +3,7 @@ import { createHash } from "node:crypto"
 import { test } from "node:test"
 
 import {
-  AgentConversationTurnStructure,
   ConversationStateStructure,
-  ConversationTurnStructure,
   ConversationPlan,
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
@@ -52,36 +50,6 @@ test("the adapter's descriptor table includes message edges and keeps byte/strin
     "agent.v1.ConversationStateStructure.summary_archives",
     "agent.v1.UserMessage.conversation_state_blob_id",
   ])
-})
-
-test("reachability follows nested turn and user records but skips back-links and archive edges", () => {
-  const textId = id(2)
-  const omittedBackLink = id(3)
-  const omittedArchive = id(4)
-  const userBytes = new UserMessage({ conversationStateBlobId: omittedBackLink, textBlobId: textId }).toBinary()
-  const userId = digest(userBytes)
-  const turnBytes = new ConversationTurnStructure({
-    turn: { case: "agentConversationTurn", value: new AgentConversationTurnStructure({ userMessage: userId }) },
-  }).toBinary()
-  const turnId = digest(turnBytes)
-  const rootBytes = new ConversationStateStructure({
-    turns: [turnId, turnId],
-    summaryArchive: omittedArchive,
-    summaryArchives: [omittedArchive],
-  }).toBinary()
-  const blobs = new Map([[hex(turnId), turnBytes], [hex(userId), userBytes]])
-  const reads: string[] = []
-
-  const result = collectReachableBlobHexIds({
-    rootBytes,
-    getBlobByHexId: key => { reads.push(key); return blobs.get(key) },
-  })
-
-  assert.deepEqual([...result.reachableHexIds].sort(), [hex(turnId), hex(userId), hex(textId)].sort())
-  assert.deepEqual(reads, [hex(turnId), hex(userId)])
-  assert.equal(result.unresolvedProtoRefs, 0)
-  assert.equal(result.reachableHexIds.has(hex(omittedBackLink)), false)
-  assert.equal(result.reachableHexIds.has(hex(omittedArchive)), false)
 })
 
 test("reachability follows turn and step refs from Slate-encoded blobs", () => {
