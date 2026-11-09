@@ -51,8 +51,12 @@ import type {
   SlateFeedbackRequestCategoryGroup,
   SlateRedactedFeedbackRequestUpdate,
   FeedbackRequestCopy,
+  SlateShellOutputUpdate,
+  SlateRedactedShellOutputUpdate,
+  SlateRedactedSandboxRule,
   TurnUsage,
 } from "./interaction-update-contracts.ts"
+import type { SandboxRule } from "../local-exec/sandbox-policy.ts"
 import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../redaction/privacy-mode.ts"
 
 function isPrivacyMode(value: unknown): value is PrivacyModeValue {
@@ -187,6 +191,119 @@ function feedbackRequestUpdate(
   }
 }
 
+function cloneSandboxRule(policy: SandboxRule): SandboxRule {
+  return {
+    ...policy,
+    ...(policy.networkPolicy === undefined
+      ? {}
+      : {
+          networkPolicy: {
+            ...policy.networkPolicy,
+            ...(policy.networkPolicy.deny === undefined ? {} : { deny: [...policy.networkPolicy.deny] }),
+            ...(policy.networkPolicy.allow === undefined ? {} : { allow: [...policy.networkPolicy.allow] }),
+            ...(policy.networkPolicy.logging === undefined
+              ? {}
+              : { logging: { ...policy.networkPolicy.logging } }),
+          },
+        }),
+    ...(policy.additionalReadwritePaths === undefined
+      ? {}
+      : { additionalReadwritePaths: [...policy.additionalReadwritePaths] }),
+    ...(policy.additionalReadonlyPaths === undefined
+      ? {}
+      : { additionalReadonlyPaths: [...policy.additionalReadonlyPaths] }),
+    ...(policy.additionalReadPaths === undefined
+      ? {}
+      : { additionalReadPaths: [...policy.additionalReadPaths] }),
+  }
+}
+
+function redactSandboxRule(policy: SandboxRule, privacyMode: PrivacyMode): SlateRedactedSandboxRule {
+  const path = (value: string, fieldName: string) =>
+    createRedactedString(value, DataClassification.PATH, fieldName, privacyMode)
+  const networkPolicy = policy.networkPolicy === undefined
+    ? undefined
+    : {
+        ...(policy.networkPolicy.version === undefined ? {} : { version: policy.networkPolicy.version }),
+        ...(policy.networkPolicy.default === undefined ? {} : { default: policy.networkPolicy.default }),
+        ...(policy.networkPolicy.deny === undefined ? {} : { deny: [...policy.networkPolicy.deny] }),
+        ...(policy.networkPolicy.allow === undefined ? {} : { allow: [...policy.networkPolicy.allow] }),
+        ...(policy.networkPolicy.logging === undefined
+          ? {}
+          : {
+              logging: {
+                ...(policy.networkPolicy.logging.decisionLogPath === undefined
+                  ? {}
+                  : {
+                      decisionLogPath: path(
+                        policy.networkPolicy.logging.decisionLogPath,
+                        "sandbox_decision_log_path",
+                      ),
+                    }),
+                ...(policy.networkPolicy.logging.logFormat === undefined
+                  ? {}
+                  : { logFormat: policy.networkPolicy.logging.logFormat }),
+              },
+            }),
+      }
+  return {
+    type: policy.type,
+    ...(networkPolicy === undefined ? {} : { networkPolicy }),
+    ...(policy.skipStatsigDefaults === undefined ? {} : { skipStatsigDefaults: policy.skipStatsigDefaults }),
+    ...(policy.additionalReadwritePaths === undefined
+      ? {}
+      : {
+          additionalReadwritePaths: policy.additionalReadwritePaths.map(value =>
+            path(value, "sandbox_additional_readwrite_paths")),
+        }),
+    ...(policy.additionalReadonlyPaths === undefined
+      ? {}
+      : {
+          additionalReadonlyPaths: policy.additionalReadonlyPaths.map(value =>
+            path(value, "sandbox_additional_readonly_paths")),
+        }),
+    ...(policy.disableTmpWrite === undefined ? {} : { disableTmpWrite: policy.disableTmpWrite }),
+    ...(policy.enableSharedBuildCache === undefined
+      ? {}
+      : { enableSharedBuildCache: policy.enableSharedBuildCache }),
+    ...(policy.debugOutputDir === undefined
+      ? {}
+      : { debugOutputDir: path(policy.debugOutputDir, "sandbox_debug_output_dir") }),
+    ...(policy.captureDenies === undefined ? {} : { captureDenies: policy.captureDenies }),
+    ...(policy.networkPolicyStrict === undefined ? {} : { networkPolicyStrict: policy.networkPolicyStrict }),
+    ...(policy.readBoundary === undefined ? {} : { readBoundary: policy.readBoundary }),
+    ...(policy.additionalReadPaths === undefined
+      ? {}
+      : {
+          additionalReadPaths: policy.additionalReadPaths.map(value =>
+            path(value, "sandbox_additional_read_paths")),
+        }),
+    ...(policy.allowlistEscalated === undefined ? {} : { allowlistEscalated: policy.allowlistEscalated }),
+    ...(policy.ignoreMapping === undefined ? {} : { ignoreMapping: policy.ignoreMapping }),
+  }
+}
+
+function unwrapRedactedValue(value: unknown): unknown {
+  if (isRedactedString(value)) return value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  if (Array.isArray(value)) return value.map(unwrapRedactedValue)
+  if (value === null || typeof value !== "object" || value instanceof Uint8Array) return value
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, unwrapRedactedValue(entry)]),
+  )
+}
+
+function unredactSandboxRule(policy: SlateRedactedSandboxRule): SandboxRule {
+  return unwrapRedactedValue(policy) as SandboxRule
+}
+
+function shellOutputStartUpdate(sandboxPolicy: SandboxRule | undefined): SlateShellOutputUpdate {
+  return {
+    kind: "shell-output",
+    stream: "start",
+    ...(sandboxPolicy === undefined ? {} : { sandboxPolicy: cloneSandboxRule(sandboxPolicy) }),
+  }
+}
+
 /** Translate the supported thinking presentation preference into Slate's own vocabulary. */
 export function slateThinkingStyleFromValue(value: unknown): SlateThinkingStyle | undefined {
   if (value === undefined || value === null) return undefined
@@ -269,6 +386,18 @@ export const SlateInteractionUpdates = {
     showFormImmediately = false,
   ): SlateFeedbackRequestUpdate {
     return feedbackRequestUpdate(requestId, canonicalModelName, categories, categoryGroups, copy, showFormImmediately)
+  },
+  shellOutputStart(sandboxPolicy?: SandboxRule): SlateShellOutputUpdate {
+    return shellOutputStartUpdate(sandboxPolicy)
+  },
+  shellOutputStdout(text: string): SlateShellOutputUpdate {
+    return { kind: "shell-output", stream: "stdout", text }
+  },
+  shellOutputStderr(text: string): SlateShellOutputUpdate {
+    return { kind: "shell-output", stream: "stderr", text }
+  },
+  shellOutputExit(code: number, aborted: boolean): SlateShellOutputUpdate {
+    return { kind: "shell-output", stream: "exit", code, aborted }
   },
 }
 
@@ -359,6 +488,44 @@ export const SlateRedactedInteractionUpdates = {
       ...feedbackRequestUpdate(requestId, canonicalModelName, categories, categoryGroups, copy, showFormImmediately),
       privacyMode,
     }
+  },
+  shellOutputStart(
+    sandboxPolicy: SandboxRule | undefined,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedShellOutputUpdate {
+    return {
+      kind: "shell-output",
+      privacyMode,
+      stream: "start",
+      ...(sandboxPolicy === undefined ? {} : { sandboxPolicy: redactSandboxRule(sandboxPolicy, privacyMode) }),
+    }
+  },
+  shellOutputStartValue(
+    sandboxPolicy: SlateRedactedSandboxRule | undefined,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedShellOutputUpdate {
+    if (sandboxPolicy !== undefined && !isRedactedSandboxRule(sandboxPolicy, privacyMode)) {
+      throw new TypeError("Slate redacted shell output must use the update privacy mode")
+    }
+    return {
+      kind: "shell-output",
+      privacyMode,
+      stream: "start",
+      ...(sandboxPolicy === undefined ? {} : { sandboxPolicy }),
+    }
+  },
+  shellOutputText(
+    stream: "stdout" | "stderr",
+    text: RedactedString,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedShellOutputUpdate {
+    if (text.__privacyMode !== privacyMode) {
+      throw new TypeError("Slate redacted shell output must use the update privacy mode")
+    }
+    return { kind: "shell-output", privacyMode, stream, text }
+  },
+  shellOutputExit(code: number, aborted: boolean, privacyMode: PrivacyMode): SlateRedactedShellOutputUpdate {
+    return { kind: "shell-output", privacyMode, stream: "exit", code, aborted }
   },
   toolCallStarted(
     callId: string,
@@ -461,6 +628,21 @@ export function redactSlateInteractionUpdate(
         update.copy,
         update.showFormImmediately,
       )
+    case "shell-output": {
+      switch (update.stream) {
+        case "start":
+          return SlateRedactedInteractionUpdates.shellOutputStart(update.sandboxPolicy, privacyMode)
+        case "stdout":
+        case "stderr":
+          return SlateRedactedInteractionUpdates.shellOutputText(
+            update.stream,
+            createRedactedString(update.text, DataClassification.CODE, "shell_output", privacyMode),
+            privacyMode,
+          )
+        case "exit":
+          return SlateRedactedInteractionUpdates.shellOutputExit(update.code, update.aborted, privacyMode)
+      }
+    }
   }
 }
 
@@ -557,6 +739,27 @@ export function unredactSlateInteractionUpdate(
           ? {}
           : { showFormImmediately: update.showFormImmediately }),
       }
+    case "shell-output": {
+      switch (update.stream) {
+        case "start":
+          return {
+            kind: update.kind,
+            stream: "start",
+            ...(update.sandboxPolicy === undefined
+              ? {}
+              : { sandboxPolicy: unredactSandboxRule(update.sandboxPolicy) }),
+          }
+        case "stdout":
+        case "stderr":
+          return {
+            kind: update.kind,
+            stream: update.stream,
+            text: update.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+          }
+        case "exit":
+          return { kind: update.kind, stream: "exit", code: update.code, aborted: update.aborted }
+      }
+    }
   }
 }
 
@@ -693,6 +896,93 @@ function isSlateFeedbackRequestUpdate(value: unknown): value is SlateFeedbackReq
     && (update.showFormImmediately === undefined || typeof update.showFormImmediately === "boolean")
 }
 
+function sandboxPolicyShape(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+  const policy = value as Record<string, unknown>
+  if (policy.type !== "insecure_none"
+    && policy.type !== "workspace_readwrite"
+    && policy.type !== "workspace_readonly") return undefined
+  for (const key of ["additionalReadwritePaths", "additionalReadonlyPaths", "additionalReadPaths"]) {
+    if (policy[key] !== undefined && !Array.isArray(policy[key])) return undefined
+  }
+  if (policy.debugOutputDir !== undefined
+    && typeof policy.debugOutputDir !== "string"
+    && !isRedactedString(policy.debugOutputDir)) return undefined
+  if (policy.networkPolicy !== undefined) {
+    const network = policy.networkPolicy
+    if (typeof network !== "object" || network === null || Array.isArray(network)) return undefined
+    const logging = (network as Record<string, unknown>).logging
+    if (logging !== undefined
+      && (typeof logging !== "object" || logging === null || Array.isArray(logging))) return undefined
+  }
+  return policy
+}
+
+function isSandboxRule(value: unknown): value is SandboxRule {
+  const policy = sandboxPolicyShape(value)
+  if (policy === undefined) return false
+  for (const key of ["additionalReadwritePaths", "additionalReadonlyPaths", "additionalReadPaths"]) {
+    const paths = policy[key]
+    if (paths !== undefined && !(paths as unknown[]).every(path => typeof path === "string")) return false
+  }
+  return policy.debugOutputDir === undefined || typeof policy.debugOutputDir === "string"
+}
+
+function isRedactedSandboxRule(
+  value: unknown,
+  privacyMode: PrivacyMode,
+): value is SlateRedactedSandboxRule {
+  const policy = sandboxPolicyShape(value)
+  if (policy === undefined) return false
+  for (const key of ["additionalReadwritePaths", "additionalReadonlyPaths", "additionalReadPaths"]) {
+    const paths = policy[key]
+    if (paths !== undefined
+      && !(paths as unknown[]).every(path =>
+        isRedactedString(path) && path.__privacyMode === privacyMode)) return false
+  }
+  if (policy.debugOutputDir !== undefined
+    && (!isRedactedString(policy.debugOutputDir) || policy.debugOutputDir.__privacyMode !== privacyMode)) {
+    return false
+  }
+  const network = policy.networkPolicy as Record<string, unknown> | undefined
+  const logging = network?.logging as Record<string, unknown> | undefined
+  const decisionLogPath = logging?.decisionLogPath
+  if (decisionLogPath !== undefined
+    && (!isRedactedString(decisionLogPath) || decisionLogPath.__privacyMode !== privacyMode)) {
+    return false
+  }
+  return redactedValuesUsePrivacyMode(value, privacyMode)
+}
+
+function isSlateShellOutputUpdate(value: unknown): value is SlateShellOutputUpdate {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const update = value as Record<string, unknown>
+  switch (update.stream) {
+    case "start": return update.sandboxPolicy === undefined || isSandboxRule(update.sandboxPolicy)
+    case "stdout":
+    case "stderr": return typeof update.text === "string"
+    case "exit": return typeof update.code === "number" && Number.isSafeInteger(update.code) && update.code >= 0
+      && typeof update.aborted === "boolean"
+    default: return false
+  }
+}
+
+function isSlateRedactedShellOutputUpdate(
+  value: unknown,
+  privacyMode: PrivacyMode,
+): value is SlateRedactedShellOutputUpdate {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const update = value as Record<string, unknown>
+  switch (update.stream) {
+    case "start": return update.sandboxPolicy === undefined || isRedactedSandboxRule(update.sandboxPolicy, privacyMode)
+    case "stdout":
+    case "stderr": return isRedactedString(update.text) && update.text.__privacyMode === privacyMode
+    case "exit": return typeof update.code === "number" && Number.isSafeInteger(update.code) && update.code >= 0
+      && typeof update.aborted === "boolean"
+    default: return false
+  }
+}
+
 export function isSlateInteractionUpdate(value: unknown): value is SlateInteractionUpdate {
   if (typeof value !== "object" || value === null) return false
   const candidate = value as Record<string, unknown>
@@ -718,6 +1008,7 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
     case "turn-ended": return isSlateTurnEndedUpdate(value)
     case "user-message-appended": return isSlateUserMessageValue(candidate.message)
     case "feedback-request": return isSlateFeedbackRequestUpdate(value)
+    case "shell-output": return isSlateShellOutputUpdate(value)
     default: return false
   }
 }
@@ -752,6 +1043,7 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
     case "user-message-appended": return isRedactedSlateUserMessageValue(candidate.message, candidate.privacyMode)
     case "feedback-request": return isSlateFeedbackRequestUpdate(value)
+    case "shell-output": return isSlateRedactedShellOutputUpdate(value, candidate.privacyMode)
     default: return false
   }
 }

@@ -29,6 +29,8 @@ export type {
   SlateRedactedFeedbackRequestUpdate,
   SlateFeedbackRequestCategory,
   SlateFeedbackRequestCategoryGroup,
+  SlateRedactedShellOutputUpdate,
+  SlateRedactedSandboxRule,
   SlateToolCallUpdatePhase,
   SlateToolCallDeltaValue,
 } from "./interaction-update-contracts.ts"
