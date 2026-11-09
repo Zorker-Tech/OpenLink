@@ -14,6 +14,8 @@ import {
   TextDeltaUpdate,
   ToolCall,
   ToolCallDelta,
+  UserMessage,
+  UserMessageAppendedUpdate,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { EditToolCallDelta } from "../../source/adapters/interop/proto/generated/agent/v1/edit_tool_pb.ts"
 import { ReplaceEnvToolCallDelta } from "../../source/adapters/interop/proto/generated/agent/v1/replace_env_tool_pb.ts"
@@ -372,10 +374,15 @@ test("Slate tool-call deltas preserve operation data through the privacy boundar
   assert.deepEqual(updates.map(update => update.delta?.kind), [
     "edit-content",
     "shell-output",
-    "legacy",
+    "task-progress",
     "environment-assignment",
     "legacy",
   ])
+  const taskProgress = updates[2]?.delta
+  assert.equal(taskProgress?.kind, "task-progress")
+  if (taskProgress?.kind === "task-progress" && taskProgress.update.kind === "assistant-text") {
+    assert.equal(taskProgress.update.text, "task output")
+  }
 
   const unknown = ToolCallDelta.fromBinary(new Uint8Array([0x2a, 0x01, 0x78]))
   const unknownSlateValue = slateToolCallDeltaValueFromInterop(unknown)
@@ -384,6 +391,61 @@ test("Slate tool-call deltas preserve operation data through the privacy boundar
   const absent = SlateInteractionUpdates.toolCallDelta("call-none", undefined, "model-none")
   assert.equal(isSlateInteractionUpdate(absent), true)
   assert.deepEqual(unredactSlateInteractionUpdate(redactSlateInteractionUpdate(absent, mode)), absent)
+})
+
+test("nested task progress deltas keep their text behind the privacy boundary", () => {
+  const delta = slateToolCallDeltaValueFromInterop(new ToolCallDelta({
+    delta: {
+      case: "taskToolCallDelta",
+      value: new TaskToolCallDelta({
+        interactionUpdate: new InteractionUpdate({
+          message: { case: "textDelta", value: new TextDeltaUpdate({ text: "private task output" }) },
+        }),
+      }),
+    },
+  }))
+  assert.equal(delta?.kind, "task-progress")
+
+  const redacted = redactSlateToolCallDeltaValue(delta!, mode)
+  assert.equal(redacted.kind, "task-progress")
+  if (redacted.kind === "task-progress" && redacted.update.kind === "assistant-text") {
+    assert.equal((redacted.update.text as unknown) instanceof RedactedString, true)
+    assert.equal(
+      (redacted.update.text as unknown as RedactedString).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
+      "private task output",
+    )
+  } else {
+    assert.fail("expected redacted task progress")
+  }
+  assert.deepEqual(unredactSlateToolCallDeltaValue(redacted), delta)
+})
+
+test("nested task progress keeps user messages behind the privacy boundary", () => {
+  const delta = slateToolCallDeltaValueFromInterop(new ToolCallDelta({
+    delta: {
+      case: "taskToolCallDelta",
+      value: new TaskToolCallDelta({
+        interactionUpdate: new InteractionUpdate({
+          message: {
+            case: "userMessageAppended",
+            value: new UserMessageAppendedUpdate({
+              userMessage: new UserMessage({ text: "private child message", messageId: "message-1" }),
+            }),
+          },
+        }),
+      }),
+    },
+  }))
+  assert.equal(delta?.kind, "task-progress")
+
+  const redacted = redactSlateToolCallDeltaValue(delta!, mode)
+  assert.equal(redacted.kind, "task-progress")
+  if (redacted.kind === "task-progress" && redacted.update.kind === "user-message-appended") {
+    assert.equal((redacted.update.message?.text as unknown) instanceof RedactedString, true)
+  } else {
+    assert.fail("expected redacted task progress")
+  }
+  assert.deepEqual(unredactSlateToolCallDeltaValue(redacted), delta)
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {

@@ -2,6 +2,7 @@ import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 import type { RedactedString } from "../redaction/redacted-values.ts"
 import type { SlateToolCallText, SlateToolCallValue } from "../agent/conversation-step-state.ts"
 import type { SlateUserMessage } from "../agent/user-message-state.ts"
+import type { SlateTaskProgressUpdate } from "../agent/tools/task-progress-state.ts"
 import type { SandboxNetworkPolicy, SandboxRule } from "../local-exec/sandbox-policy.ts"
 
 /** Slate-owned inputs used when describing streamed agent usage and feedback copy. */
@@ -222,6 +223,7 @@ export type SlateToolCallDeltaValue =
   | { readonly kind: "edit-content"; readonly textDelta: SlateToolCallText }
   | { readonly kind: "shell-output"; readonly stream: "stdout" | "stderr"; readonly text: SlateToolCallText }
   | { readonly kind: "environment-assignment"; readonly environmentId: SlateToolCallText }
+  | { readonly kind: "task-progress"; readonly update: SlateTaskProgressUpdate }
   | { readonly kind: "legacy"; readonly sourceCase?: string; readonly value?: unknown }
 
 export interface SlateToolCallDeltaUpdate {

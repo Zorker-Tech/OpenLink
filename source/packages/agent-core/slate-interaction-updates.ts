@@ -7,6 +7,7 @@ import { isRedactedString, RedactedBytes, type RedactedString } from "../redacti
 import { PrivacyMode as PrivacyModes } from "../redaction/privacy-mode.ts"
 import { isSlateToolCallValue } from "../agent/conversation-step-state.ts"
 import { cloneSlateUserMessage, type SlateUserMessage } from "../agent/user-message-state.ts"
+import type { SlateTaskProgressUpdate } from "../agent/tools/task-progress-state.ts"
 import type {
   SlateActiveBranchChangeUpdate,
   SlateHeartbeatUpdate,
@@ -802,6 +803,12 @@ function isRedactedSlateInteractionToolCallValue(
   return isSlateInteractionToolCallValue(value) && redactedValuesUsePrivacyMode(value, privacyMode)
 }
 
+function isSlateTaskProgressUpdateValue(value: unknown): value is SlateTaskProgressUpdate {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const update = value as Record<string, unknown>
+  return update.schemaVersion === 1 && typeof update.kind === "string"
+}
+
 function isSlateToolCallDeltaValue(value: unknown): value is SlateToolCallDeltaValue {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false
   const delta = value as Record<string, unknown>
@@ -816,6 +823,9 @@ function isSlateToolCallDeltaValue(value: unknown): value is SlateToolCallDeltaV
     case "environment-assignment":
       return Object.keys(delta).every(key => key === "kind" || key === "environmentId") &&
         (typeof delta.environmentId === "string" || isRedactedString(delta.environmentId))
+    case "task-progress":
+      return Object.keys(delta).every(key => key === "kind" || key === "update") &&
+        isSlateTaskProgressUpdateValue(delta.update)
     case "legacy":
       return Object.keys(delta).every(key => key === "kind" || key === "sourceCase" || key === "value") &&
         (delta.sourceCase === undefined || typeof delta.sourceCase === "string")

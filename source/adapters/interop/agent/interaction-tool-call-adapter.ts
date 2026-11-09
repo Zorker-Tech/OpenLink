@@ -1,4 +1,4 @@
-import { ToolCall, ToolCallDelta } from "../proto/generated/agent/v1/agent_pb.ts"
+import { InteractionUpdate, TaskToolCallDelta, ToolCall, ToolCallDelta } from "../proto/generated/agent/v1/agent_pb.ts"
 import { EditArgs, EditToolCallDelta } from "../proto/generated/agent/v1/edit_tool_pb.ts"
 import { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
 import { ReplaceEnvToolCallDelta } from "../proto/generated/agent/v1/replace_env_tool_pb.ts"
@@ -11,11 +11,16 @@ import {
 } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
 import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
-import { isRedactedString } from "../../../packages/redaction/redacted-values.ts"
+import { isRedactedString, RedactedBytes, type RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { createSlateToolCallStep, type SlateToolCallStep, type SlateToolCallText, type SlateToolCallValue } from "../../../packages/agent/conversation-step-state.ts"
 import type { SlateInteractionToolCallValue } from "../../../packages/agent-core/interaction-update-contracts.ts"
 import type { SlateToolCallDeltaValue } from "../../../packages/agent-core/interaction-update-contracts.ts"
+import type { SlateTaskProgressUpdate } from "../../../packages/agent/tools/task-progress-state.ts"
 import { fromInteropToolCallStep, toInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
+import {
+  slateTaskProgressUpdateFromInterop,
+  slateTaskProgressUpdateToInterop,
+} from "./task-progress-protocol-adapter.ts"
 
 function projectSlateInteractionToolCallFromInterop(value: unknown, toolCallId?: string): SlateInteractionToolCallValue {
   if (typeof value !== "object" || value === null || !("tool" in value)) {
@@ -151,17 +156,36 @@ export function slateToolCallDeltaValueFromInterop(value: unknown): SlateToolCal
         return { kind: "environment-assignment", environmentId: payload.associatedPodKey }
       }
       return legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
-    case "taskToolCallDelta":
+    case "taskToolCallDelta": {
+      const nested = payload?.interactionUpdate
+      if (nested !== undefined) {
+        try {
+          const update = slateTaskProgressUpdateFromInterop(nested)
+          if (update.kind !== "unrecognized" || nested instanceof InteractionUpdate) {
+            return { kind: "task-progress", update: taskProgressDeltaUpdate(update) }
+          }
+        } catch {
+          // Keep the historical payload when the nested progress event cannot be projected.
+        }
+      }
       return legacyToolCallDelta(
         operation.case,
         operation.value,
         Object.prototype.hasOwnProperty.call(operation, "value"),
       )
+    }
     default:
       return typeof operation.case === "string"
         ? legacyToolCallDelta(operation.case, operation.value, Object.prototype.hasOwnProperty.call(operation, "value"))
         : legacyToolCallDelta(undefined, value, true)
   }
+}
+
+/** The nested delta is fully modeled, so its binary compatibility payload is not carried further. */
+function taskProgressDeltaUpdate(value: SlateTaskProgressUpdate): SlateTaskProgressUpdate {
+  if (value.kind === "unrecognized" || value.compatibility === undefined) return value
+  const { compatibility: _compatibility, ...semantic } = value
+  return semantic as SlateTaskProgressUpdate
 }
 
 function plainDeltaText(value: SlateToolCallText): string {
@@ -193,6 +217,15 @@ export function interopToolCallDeltaFromSlateValue(value: SlateToolCallDeltaValu
           value: new ReplaceEnvToolCallDelta({ associatedPodKey: plainDeltaText(value.environmentId) }),
         },
       })
+    case "task-progress":
+      return new ToolCallDelta({
+        delta: {
+          case: "taskToolCallDelta",
+          value: new TaskToolCallDelta({
+            interactionUpdate: slateTaskProgressUpdateToInterop(value.update),
+          }),
+        },
+      })
     case "legacy":
       if (value.sourceCase === undefined) {
         return value.value instanceof ToolCallDelta ? value.value.clone() : new ToolCallDelta()
@@ -219,11 +252,23 @@ function redactedInteropToolCallDeltaFromSlateValue(value: SlateToolCallDeltaVal
       }
     case "environment-assignment":
       return { delta: { case: "replaceEnvToolCallDelta", value: { associatedPodKey: value.environmentId } } }
+    case "task-progress":
+      throw new TypeError("Task progress deltas are unredacted from their Slate value")
     case "legacy":
       return value.sourceCase === undefined
         ? { delta: { case: undefined, value: undefined } }
         : { delta: { case: value.sourceCase, ...(Object.hasOwn(value, "value") ? { value: value.value } : {}) } }
   }
+}
+
+function unwrapRedactedValues(value: unknown): unknown {
+  if (isRedactedString(value)) return value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  if (value instanceof RedactedBytes) return value.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  if (Array.isArray(value)) return value.map(unwrapRedactedValues)
+  if (value === null || typeof value !== "object" || value instanceof Uint8Array) return value
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, unwrapRedactedValues(entry)]),
+  )
 }
 
 /** Applies the generated field-level privacy policy to a Slate delta at the one owning boundary. */
@@ -235,6 +280,9 @@ export function redactSlateToolCallDeltaValue(value: SlateToolCallDeltaValue, pr
 
 /** Reveals a redacted delta only for the listener's explicit in-process projection. */
 export function unredactSlateToolCallDeltaValue(value: SlateToolCallDeltaValue): SlateToolCallDeltaValue {
+  if (value.kind === "task-progress") {
+    return { kind: "task-progress", update: unwrapRedactedValues(value.update) as SlateTaskProgressUpdate }
+  }
   const plain = fromRedactedToolCallDelta(
     redactedInteropToolCallDeltaFromSlateValue(value) as never,
     PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,

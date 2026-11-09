@@ -39,7 +39,8 @@ type TaskProgressListener<Context> = {
 
 type LegacyMessage = { toJson(): JsonValue }
 
-function compatibility(update: InteractionUpdate): SlateTaskProgressCompatibility {
+function compatibility(update: InteractionUpdate): SlateTaskProgressCompatibility | undefined {
+  if (typeof update.toBinary !== "function") return undefined
   return { format: "legacy-binary", payload: update.toBinary().slice() }
 }
 
@@ -75,10 +76,11 @@ function interopToolCallFromSlate(value: SlateToolCallStep): ToolCall {
 
 function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProgressUpdate {
   const compat = compatibility(update)
+  const compatFields = compat === undefined ? {} : { compatibility: compat }
   const message = update.message
   switch (message.case) {
     case "textDelta":
-      return { schemaVersion: 1, kind: "assistant-text", text: message.value.text, serverNotice: message.value.isServerNotice, compatibility: compat }
+      return { schemaVersion: 1, kind: "assistant-text", text: message.value.text, serverNotice: message.value.isServerNotice, ...compatFields }
     case "toolCallStarted":
     case "toolCallCompleted":
       return {
@@ -87,7 +89,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         callId: message.value.callId,
         modelCallId: message.value.modelCallId,
         ...(message.value.toolCall === undefined ? {} : { toolCall: slateToolCallStepFromInterop(message.value.toolCall) }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "thinkingDelta":
       return {
@@ -95,16 +97,16 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         kind: "reasoning-text",
         text: message.value.text,
         ...(message.value.thinkingStyle === undefined ? {} : { style: message.value.thinkingStyle }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "thinkingCompleted":
-      return { schemaVersion: 1, kind: "reasoning-completed", durationMs: message.value.thinkingDurationMs, compatibility: compat }
+      return { schemaVersion: 1, kind: "reasoning-completed", durationMs: message.value.thinkingDurationMs, ...compatFields }
     case "userMessageAppended":
       return {
         schemaVersion: 1,
         kind: "user-message-appended",
         ...(message.value.userMessage === undefined ? {} : { message: fromInteropUserMessage(message.value.userMessage) }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "partialToolCall":
       return {
@@ -114,27 +116,27 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         modelCallId: message.value.modelCallId,
         argumentsDelta: message.value.argsTextDelta,
         ...(message.value.toolCall === undefined ? {} : { toolCall: slateToolCallStepFromInterop(message.value.toolCall) }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "tokenDelta":
-      return { schemaVersion: 1, kind: "token-count", tokens: message.value.tokens, compatibility: compat }
+      return { schemaVersion: 1, kind: "token-count", tokens: message.value.tokens, ...compatFields }
     case "summary":
-      return { schemaVersion: 1, kind: "summary-progress", text: message.value.summary, compatibility: compat }
+      return { schemaVersion: 1, kind: "summary-progress", text: message.value.summary, ...compatFields }
     case "summaryStarted":
-      return { schemaVersion: 1, kind: "summary-started", compatibility: compat }
+      return { schemaVersion: 1, kind: "summary-started", ...compatFields }
     case "summaryCompleted":
       return {
         schemaVersion: 1,
         kind: "summary-completed",
         ...(message.value.hookMessage === undefined ? {} : { hookMessage: message.value.hookMessage }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "shellOutputDelta": {
       const output = eventJson(message.value.event)
-      return { schemaVersion: 1, kind: "shell-output-progress", ...(output === undefined ? {} : { output }), compatibility: compat }
+      return { schemaVersion: 1, kind: "shell-output-progress", ...(output === undefined ? {} : { output }), ...compatFields }
     }
     case "heartbeat":
-      return { schemaVersion: 1, kind: "heartbeat", compatibility: compat }
+      return { schemaVersion: 1, kind: "heartbeat", ...compatFields }
     case "turnEnded": {
       const value = message.value
       const usage = {
@@ -148,7 +150,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         schemaVersion: 1,
         kind: "turn-ended",
         ...(Object.keys(usage).length === 0 ? {} : { usage }),
-        compatibility: compat,
+        ...compatFields,
       }
     }
     case "toolCallDelta": {
@@ -156,7 +158,8 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
       if (delta?.delta.case === "taskToolCallDelta" && delta.delta.value.interactionUpdate !== undefined) {
         const nestedMessage = delta.delta.value.interactionUpdate
         const nestedUpdate = nestedMessage.message.case === undefined &&
-          InteractionUpdate.runtime.bin.listUnknownFields(nestedMessage).length === 0
+          (!(nestedMessage instanceof InteractionUpdate) ||
+            InteractionUpdate.runtime.bin.listUnknownFields(nestedMessage).length === 0)
           ? { schemaVersion: 1 as const, kind: "unrecognized" as const }
           : taskProgressUpdateFromMessage(nestedMessage)
         return {
@@ -165,7 +168,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
           toolCallId: message.value.callId,
           modelCallId: message.value.modelCallId,
           update: nestedUpdate,
-          compatibility: compat,
+          ...compatFields,
         }
       }
       return {
@@ -174,21 +177,21 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         callId: message.value.callId,
         modelCallId: message.value.modelCallId,
         ...(message.value.toolCallDelta === undefined ? {} : { delta: message.value.toolCallDelta.toJson() }),
-        compatibility: compat,
+        ...compatFields,
       }
     }
     case "stepStarted":
-      return { schemaVersion: 1, kind: "step-started", stepId: message.value.stepId.toString(), compatibility: compat }
+      return { schemaVersion: 1, kind: "step-started", stepId: message.value.stepId.toString(), ...compatFields }
     case "stepCompleted":
       return {
         schemaVersion: 1,
         kind: "step-completed",
         stepId: message.value.stepId.toString(),
         durationMs: message.value.stepDurationMs.toString(),
-        compatibility: compat,
+        ...compatFields,
       }
     case "promptSuggestion":
-      return { schemaVersion: 1, kind: "prompt-suggestion", suggestion: message.value.suggestion, compatibility: compat }
+      return { schemaVersion: 1, kind: "prompt-suggestion", suggestion: message.value.suggestion, ...compatFields }
     case "postRequestPrompt":
       return {
         schemaVersion: 1,
@@ -197,7 +200,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         message: message.value.message,
         buttonLabel: message.value.buttonLabel,
         buttonUrl: message.value.buttonUrl,
-        compatibility: compat,
+        ...compatFields,
       }
     case "activeBranchChange":
       return {
@@ -205,7 +208,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         kind: "branch-changed",
         path: message.value.path,
         branchName: message.value.branchName,
-        compatibility: compat,
+        ...compatFields,
       }
     case "feedbackRequest":
       return {
@@ -219,7 +222,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         ...(message.value.title === undefined ? {} : { title: message.value.title }),
         ...(message.value.negativeTitle === undefined ? {} : { negativeTitle: message.value.negativeTitle }),
         ...(message.value.commentPlaceholder === undefined ? {} : { commentPlaceholder: message.value.commentPlaceholder }),
-        compatibility: compat,
+        ...compatFields,
       }
     case "responseComparison": {
       const event = eventJson(message.value.event)
@@ -228,7 +231,7 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         kind: "model-comparison",
         comparisonId: message.value.comparisonId,
         ...(event === undefined ? {} : { event }),
-        compatibility: compat,
+        ...compatFields,
       }
     }
     case "contextInjectionState": {
@@ -238,22 +241,27 @@ function taskProgressUpdateFromMessage(update: InteractionUpdate): SlateTaskProg
         kind: "context-injection-state",
         injectionId: message.value.injectionId,
         ...(state === undefined ? {} : { state }),
-        compatibility: compat,
+        ...compatFields,
       }
     }
     case "routedModel":
-      return { schemaVersion: 1, kind: "routed-model", displayName: message.value.displayName, compatibility: compat }
+      return { schemaVersion: 1, kind: "routed-model", displayName: message.value.displayName, ...compatFields }
     default:
-      if (InteractionUpdate.runtime.bin.listUnknownFields(update).length === 0) {
+      if (typeof update.toBinary === "function" &&
+        InteractionUpdate.runtime.bin.listUnknownFields(update).length === 0) {
         throw new TypeError("Task progress update has no recognized event")
       }
-      return { schemaVersion: 1, kind: "unrecognized", compatibility: compat }
+      return { schemaVersion: 1, kind: "unrecognized", ...compatFields }
   }
 }
 
 export function slateTaskProgressUpdateFromInterop(value: unknown): SlateTaskProgressUpdate {
-  if (!(value instanceof InteractionUpdate)) throw new TypeError("Task progress update is invalid")
-  return taskProgressUpdateFromMessage(value)
+  if (value instanceof InteractionUpdate) return taskProgressUpdateFromMessage(value)
+  if (value !== null && typeof value === "object" && "message" in value &&
+    typeof (value as { readonly _privacyMode?: unknown })._privacyMode === "string") {
+    return taskProgressUpdateFromMessage(value as InteractionUpdate)
+  }
+  throw new TypeError("Task progress update is invalid")
 }
 
 function semanticFields(value: SlateTaskProgressUpdate): unknown {
