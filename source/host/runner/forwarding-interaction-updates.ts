@@ -103,6 +103,11 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
         case "step-completed":
         case "prompt-suggestion":
         case "active-branch-change":
+        case "summary":
+          return;
+        case "summary-started":
+        case "summary-completed":
+          if (!ctx.canceled) this.observers.onSummaryLifecycle?.();
           return;
         case "tool-call-update":
           if (update.toolCall !== undefined) {

@@ -3,7 +3,7 @@ import {
   PrivacyCapability,
 } from "../redaction/classification.ts"
 import { createRedactedString } from "../redaction/create.ts"
-import { isRedactedString, RedactedBytes } from "../redaction/redacted-values.ts"
+import { isRedactedString, RedactedBytes, type RedactedString } from "../redaction/redacted-values.ts"
 import { PrivacyMode as PrivacyModes } from "../redaction/privacy-mode.ts"
 import { isSlateToolCallValue } from "../agent/conversation-step-state.ts"
 import type {
@@ -16,6 +16,9 @@ import type {
   SlateRedactedHeartbeatUpdate,
   SlateRedactedInteractionUpdate,
   SlateRedactedPromptSuggestionUpdate,
+  SlateRedactedSummaryUpdate,
+  SlateRedactedSummaryStartedUpdate,
+  SlateRedactedSummaryCompletedUpdate,
   SlateRedactedStepCompletedUpdate,
   SlateRedactedStepStartedUpdate,
   SlateRedactedThinkingCompletedUpdate,
@@ -26,6 +29,9 @@ import type {
   SlateRedactedToolCallUpdate,
   SlateStepCompletedUpdate,
   SlateStepStartedUpdate,
+  SlateSummaryUpdate,
+  SlateSummaryStartedUpdate,
+  SlateSummaryCompletedUpdate,
   SlateThinkingCompletedUpdate,
   SlateThinkingDeltaUpdate,
   SlateThinkingStyle,
@@ -189,6 +195,15 @@ export const SlateInteractionUpdates = {
   activeBranchChange(path: string, branchName: string): SlateActiveBranchChangeUpdate {
     return { kind: "active-branch-change", path, branchName }
   },
+  summary(text: string): SlateSummaryUpdate {
+    return { kind: "summary", text }
+  },
+  summaryStarted(): SlateSummaryStartedUpdate {
+    return { kind: "summary-started" }
+  },
+  summaryCompleted(hookMessage?: string): SlateSummaryCompletedUpdate {
+    return { kind: "summary-completed", ...(hookMessage === undefined ? {} : { hookMessage }) }
+  },
   toolCallStarted(callId: string, toolCall: SlateInteractionToolCallValue | undefined, modelCallId: string): SlateToolCallUpdate {
     return toolCallUpdate("started", callId, toolCall, modelCallId)
   },
@@ -249,6 +264,28 @@ export const SlateRedactedInteractionUpdates = {
       branchName,
     }
   },
+  summary(text: string, privacyMode: PrivacyMode): SlateRedactedSummaryUpdate {
+    return {
+      kind: "summary",
+      privacyMode,
+      text: createRedactedString(text, DataClassification.CODE, "summary", privacyMode),
+    }
+  },
+  summaryValue(text: RedactedString): SlateRedactedSummaryUpdate {
+    return { kind: "summary", privacyMode: text.__privacyMode, text }
+  },
+  summaryStarted(privacyMode: PrivacyMode): SlateRedactedSummaryStartedUpdate {
+    return { kind: "summary-started", privacyMode }
+  },
+  summaryCompleted(privacyMode: PrivacyMode, hookMessage?: string): SlateRedactedSummaryCompletedUpdate {
+    return {
+      kind: "summary-completed",
+      privacyMode,
+      ...(hookMessage === undefined
+        ? {}
+        : { hookMessage: createRedactedString(hookMessage, DataClassification.CODE, "hook_message", privacyMode) }),
+    }
+  },
   toolCallStarted(
     callId: string,
     toolCall: SlateInteractionToolCallValue | undefined,
@@ -303,6 +340,9 @@ export function redactSlateInteractionUpdate(
     case "step-completed": return SlateRedactedInteractionUpdates.stepCompleted(update.stepId, update.durationMs, privacyMode)
     case "prompt-suggestion": return SlateRedactedInteractionUpdates.promptSuggestion(update.suggestion, privacyMode)
     case "active-branch-change": return SlateRedactedInteractionUpdates.activeBranchChange(update.path, update.branchName, privacyMode)
+    case "summary": return SlateRedactedInteractionUpdates.summary(update.text, privacyMode)
+    case "summary-started": return SlateRedactedInteractionUpdates.summaryStarted(privacyMode)
+    case "summary-completed": return SlateRedactedInteractionUpdates.summaryCompleted(privacyMode, update.hookMessage)
     case "tool-call-update": {
       if (update.toolCall !== undefined && redactToolCall === undefined) {
         throw new TypeError("Slate tool-call updates require the tool-call redaction adapter")
@@ -362,6 +402,17 @@ export function unredactSlateInteractionUpdate(
         kind: update.kind,
         path: update.path.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
         branchName: update.branchName,
+      }
+    case "summary":
+      return { kind: update.kind, text: update.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }
+    case "summary-started":
+      return { kind: update.kind }
+    case "summary-completed":
+      return {
+        kind: update.kind,
+        ...(update.hookMessage === undefined
+          ? {}
+          : { hookMessage: update.hookMessage.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED) }),
       }
     case "tool-call-update": {
       if (update.toolCall !== undefined && unredactToolCall === undefined) {
@@ -476,6 +527,9 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
       && typeof candidate.durationMs === "number" && Number.isSafeInteger(candidate.durationMs) && candidate.durationMs >= 0
     case "prompt-suggestion": return typeof candidate.suggestion === "string"
     case "active-branch-change": return typeof candidate.path === "string" && typeof candidate.branchName === "string"
+    case "summary": return typeof candidate.text === "string"
+    case "summary-started": return true
+    case "summary-completed": return candidate.hookMessage === undefined || typeof candidate.hookMessage === "string"
     case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
       && typeof candidate.modelCallId === "string"
       && (candidate.toolCall === undefined || isSlateInteractionToolCallValue(candidate.toolCall))
@@ -504,6 +558,10 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
     case "prompt-suggestion": return isRedactedString(candidate.suggestion) && candidate.suggestion.__privacyMode === candidate.privacyMode
     case "active-branch-change": return isRedactedString(candidate.path) && candidate.path.__privacyMode === candidate.privacyMode
       && typeof candidate.branchName === "string"
+    case "summary": return isRedactedString(candidate.text) && candidate.text.__privacyMode === candidate.privacyMode
+    case "summary-started": return true
+    case "summary-completed": return candidate.hookMessage === undefined ||
+      isRedactedString(candidate.hookMessage) && candidate.hookMessage.__privacyMode === candidate.privacyMode
     case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
       && typeof candidate.modelCallId === "string"
       && (candidate.toolCall === undefined || isRedactedSlateInteractionToolCallValue(candidate.toolCall, candidate.privacyMode))

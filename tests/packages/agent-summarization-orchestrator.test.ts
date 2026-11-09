@@ -14,6 +14,7 @@ import { createContext, type Context } from "../../source/packages/context/conte
 import type { SlateConversationSummaryArchive } from "../../source/packages/agent/conversation-summary-state.ts"
 import { SlateMode } from "../../source/packages/agent/mode-processing.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts"
 import { toRedactedCoreMessage } from "../../source/packages/redaction/message-redaction.ts"
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
@@ -216,6 +217,7 @@ test("a summary replaces the conversation and keeps what arrived after it starte
   const roles = executor.current.map(entry => (entry as { role: string }).role)
   assert.deepEqual(roles, ["user"])
   assert.deepEqual(recorded.updates.length, 2)
+  assert.deepEqual(recorded.updates.map(update => (update as { kind: string }).kind), ["summary-started", "summary-completed"])
   // The summarized messages were written to the blob store and registered as an archive.
   assert.equal(harnessed.archives.length, 1)
   assert.equal(harnessed.blobs.size > 0, true)
@@ -534,6 +536,12 @@ test("a lifecycle hook's message is carried into the summary", async () => {
   assert.equal(hookCalls.length, 1)
   // The hook's message ends the turn's update, which is where a listener reads it.
   assert.equal(recorded.updates.length, 2)
+  const completion = recorded.updates[1] as { kind: string; hookMessage?: unknown }
+  assert.equal(completion.kind, "summary-completed")
+  assert.equal(isRedactedString(completion.hookMessage), true)
+  if (isRedactedString(completion.hookMessage)) {
+    assert.equal(completion.hookMessage.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "from the hook")
+  }
 })
 
 test("a hook that fails does not stop the summary", async () => {

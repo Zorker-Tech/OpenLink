@@ -83,6 +83,36 @@ export interface SlateActiveBranchChangeUpdate {
   readonly branchName: string
 }
 
+export interface SlateSummaryUpdate {
+  readonly kind: "summary"
+  readonly text: string
+}
+
+export interface SlateSummaryStartedUpdate {
+  readonly kind: "summary-started"
+}
+
+export interface SlateSummaryCompletedUpdate {
+  readonly kind: "summary-completed"
+  readonly hookMessage?: string
+}
+
+export interface SlateRedactedSummaryUpdate {
+  readonly kind: "summary"
+  readonly privacyMode: PrivacyMode
+  readonly text: RedactedString
+}
+
+export interface SlateRedactedSummaryStartedUpdate extends SlateSummaryStartedUpdate {
+  readonly privacyMode: PrivacyMode
+}
+
+export interface SlateRedactedSummaryCompletedUpdate {
+  readonly kind: "summary-completed"
+  readonly privacyMode: PrivacyMode
+  readonly hookMessage?: RedactedString
+}
+
 export interface SlateInteractionToolCallValue {
   readonly toolCallId?: string
   readonly startedAtMs?: bigint
@@ -133,6 +163,9 @@ export type SlateInteractionUpdate =
   | SlateStepCompletedUpdate
   | SlatePromptSuggestionUpdate
   | SlateActiveBranchChangeUpdate
+  | SlateSummaryUpdate
+  | SlateSummaryStartedUpdate
+  | SlateSummaryCompletedUpdate
   | SlateToolCallUpdate
   | SlateToolCallDeltaUpdate
 
@@ -203,5 +236,8 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedStepCompletedUpdate
   | SlateRedactedPromptSuggestionUpdate
   | SlateRedactedActiveBranchChangeUpdate
+  | SlateRedactedSummaryUpdate
+  | SlateRedactedSummaryStartedUpdate
+  | SlateRedactedSummaryCompletedUpdate
   | SlateRedactedToolCallUpdate
   | SlateRedactedToolCallDeltaUpdate

@@ -32,15 +32,13 @@ import {
 import { getRetryDirective } from "../agent-summarization/error-handling.ts"
 import { prepareMessagesForCompaction } from "../agent-summarization/prepare-messages.ts"
 import type { RedactedCoreMessage } from "../agent-summarization/summarization-handler.ts"
-import { RedactedUpdates } from "../agent-core/redacted-interaction-updates.ts"
-import { Updates } from "../agent-core/interaction-updates.ts"
+import { SlateRedactedInteractionUpdates } from "../agent-core/slate-interaction-updates.ts"
 import { hookExecutorResource } from "../agent-exec/hook-executor.ts"
 import { createLogger, createSpan, type Context } from "../context/index.ts"
 import { canRootConversationSendToProject } from "../constants/project-send-message.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import {
   createPreCompactHookArgsInterop,
-  createSummaryCompletedUpdateInterop,
   preCompactHookUserMessageInterop,
 } from "../../adapters/interop/agent/summarization-protocol-adapter.ts"
 import type {
@@ -97,8 +95,6 @@ import {
 type ProjectConversationState = Parameters<typeof resolveSlateProjectConversationContextFromInterop>[1]
 type ProjectRootPromptOptions = NonNullable<Parameters<typeof formatProjectCompactionPrompt>[0]>
 type SummaryArchive = SlateConversationSummaryArchive
-type SummaryCompletedHookMessage = Parameters<typeof Updates.summaryCompleted>[0]
-
 export interface SummarizationTokenDetails extends SlateConversationTokenDetails {}
 
 export interface SummarizationResult {
@@ -715,7 +711,7 @@ export class SummarizationOrchestrator {
     try {
       await updateListener.sendUpdate(
         ctx,
-        RedactedUpdates.summaryStarted(PrivacyMode.UNSPECIFIED),
+        SlateRedactedInteractionUpdates.summaryStarted(PrivacyMode.UNSPECIFIED),
       )
       const persistStartedAt = performance.now()
       const inFlightSnapshot = agentState.messagesUndergoingSummarization!
@@ -949,10 +945,7 @@ export class SummarizationOrchestrator {
       // must not be left waiting.
       await updateListener.sendUpdate(
         ctx,
-        createSummaryCompletedUpdateInterop(
-          Updates.summaryCompleted(lifecycleHookMessage as SummaryCompletedHookMessage),
-          PrivacyMode.UNSPECIFIED,
-        ),
+        SlateRedactedInteractionUpdates.summaryCompleted(PrivacyMode.UNSPECIFIED, lifecycleHookMessage),
       )
     }
   }
