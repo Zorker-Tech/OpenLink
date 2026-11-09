@@ -221,7 +221,6 @@ const EXEMPT = [
   ["adapters/interop/agent/mcp-prompt-tag-adapter.ts", "interop adapter: recognizes the connected MCP prompt marker names"],
   ["adapters/interop/agent/runner-agent-adapters.ts", "interop adapter: maps runner ports to generated request-context, subagent, and client-side update messages"],
   ["adapters/interop/telemetry/privacy-mode-dashboard-adapter.ts", "interop adapter: constructs the counterpart privacy-mode request and maps its enum into Slate's telemetry value"],
-  ["adapters/interop/agent/interaction-update-adapter.ts", "interop adapter: constructs generated interaction-update messages and converts Slate token counts to the wire representation"],
   ["adapters/interop/telemetry/privacy-mode-wire-adapter.ts", "interop adapter: translates account privacy enum values to Slate policy categories"],
   ["adapters/interop/agent/sandbox-workspace-path-adapter.ts", "interop adapter: keeps external editor and agent workspace paths at the sandbox boundary"],
   ["adapters/interop/agent/agent-error-details-adapter.ts", "interop adapter: decodes remote failure details into the Slate error contract"],
@@ -2164,7 +2163,6 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ]],
   ["packages/agent-core/interaction-updates.ts", [
     "packages/agent-core/interaction-update-contracts.ts",
-    "adapters/interop/agent/interaction-update-adapter.ts",
   ]],
   ["shared/automation-schedule.ts", [
     "shared/automation-schedule-contracts.ts",

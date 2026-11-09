@@ -31,12 +31,6 @@ import {
   unredactSlateToolCallDeltaValue,
 } from "../../source/adapters/interop/agent/interaction-tool-call-adapter.ts"
 import {
-  FeedbackRequestCategory,
-  FeedbackRequestCategoryGroup,
-} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import { Updates } from "../../source/packages/agent-core/interaction-updates.ts"
-import { RedactedUpdates } from "../../source/packages/agent-core/redacted-interaction-updates.ts"
-import {
   isSlateInteractionUpdate,
   isSlateRedactedInteractionUpdate,
   redactSlateInteractionUpdate,
@@ -59,7 +53,6 @@ test("Slate interaction constructors build the local stream values", () => {
   assert.deepEqual(text, { kind: "text-delta", text: "hello" })
 
   assert.deepEqual(SlateInteractionUpdates.heartbeat(), { kind: "heartbeat" })
-  assert.equal(Updates.summaryStarted().message.case, "summaryStarted")
   assert.deepEqual(SlateInteractionUpdates.tokenDelta(42), { kind: "token-delta", tokens: 42 })
   assert.deepEqual(SlateInteractionUpdates.activeBranchChange("/repo", "main"), {
     kind: "active-branch-change",
@@ -103,38 +96,6 @@ test("turn usage is converted to bigints, and an early end reports nothing", () 
   assert.equal("usage" in early, false, "usage counts are omitted when the turn reported none")
 })
 
-test("a feedback request carries its categories and only the copy it was given", () => {
-  const update = Updates.feedbackRequest("req-1", "some-model", [new FeedbackRequestCategory({ id: "good", label: "Good" })])
-  const value = update.message.value as { categories: unknown[]; categoryGroups: unknown[]; title?: unknown }
-  assert.equal(value.categories.length, 1)
-  assert.equal(value.categoryGroups.length, 0)
-  assert.equal(value.title, undefined, "copy is optional, so an omitted title stays absent")
-
-  const withCopy = Updates.feedbackRequest(
-    "req-2",
-    undefined,
-    [new FeedbackRequestCategory({ id: "good", label: "Good" })],
-    [new FeedbackRequestCategoryGroup({
-      id: "group",
-      prompt: "How was it?",
-      categories: [new FeedbackRequestCategory({ id: "x", label: "X" })],
-    })],
-    { title: "Rate this", commentPlaceholder: "Notes" },
-  )
-  const withCopyValue = withCopy.message.value as {
-    canonicalModelName?: unknown
-    categoryGroups: unknown[]
-    title?: unknown
-    commentPlaceholder?: unknown
-    negativeTitle?: unknown
-  }
-  assert.equal(withCopyValue.canonicalModelName, undefined)
-  assert.equal(withCopyValue.categoryGroups.length, 1)
-  assert.equal(withCopyValue.title, "Rate this")
-  assert.equal(withCopyValue.commentPlaceholder, "Notes")
-  assert.equal(withCopyValue.negativeTitle, undefined)
-})
-
 test("a Slate redacted update carries the privacy-aware value without a generated envelope", () => {
   const update = SlateRedactedInteractionUpdates.textDelta("the secret", mode)
   assert.equal(update.privacyMode, mode)
@@ -149,8 +110,9 @@ test("a Slate redacted update carries the privacy-aware value without a generate
   assert.deepEqual(reasoning.style, { kind: "custom", value: "custom-style" })
   assert.equal(isSlateRedactedInteractionUpdate({ ...reasoning, privacyMode: "not-a-policy" }), false)
 
-  const summary = RedactedUpdates.summary(createRedactedString("summary", DataClassification.CODE, "summary", mode))
-  assert.equal(summary._privacyMode, mode)
+  const summary = SlateRedactedInteractionUpdates.summary("summary", mode)
+  assert.equal(summary.privacyMode, mode)
+  assert.equal(summary.text.__classification, DataClassification.CODE)
 
   const branch = SlateRedactedInteractionUpdates.activeBranchChange("/repo", "main", mode)
   assert.equal(branch.privacyMode, mode)
@@ -463,61 +425,6 @@ test("redacted turn usage converts the same way, and stays absent when there is 
   assert.equal("usage" in none, false)
 })
 
-test("a context injection state is reported in the shape of its kind", () => {
-  const queued = RedactedUpdates.contextInjectionState(mode, "inj-1", { kind: "queued" })
-  const queuedState = (queued.message.value as unknown as { state: { state: { case: string } } }).state
-  assert.equal(queuedState.state.case, "queued")
-
-  const delivered = RedactedUpdates.contextInjectionState(mode, "inj-2", {
-    kind: "delivered",
-    step: "step-1",
-    deliveryBatchId: "batch-1",
-    deliveredAtMs: 1_700_000_000_000,
-  })
-  const deliveredState = (delivered.message.value as unknown as {
-    state: { state: { case: string; value: { deliveredAtMs?: bigint } } }
-  }).state
-  assert.equal(deliveredState.state.case, "delivered")
-  assert.equal(deliveredState.state.value.deliveredAtMs, BigInt(1_700_000_000_000))
-
-  const rejected = RedactedUpdates.contextInjectionState(mode, "inj-3", { kind: "rejected", reason: "too late" })
-  const rejectedState = (rejected.message.value as unknown as {
-    state: { state: { case: string; value: { reason?: unknown } } }
-  }).state
-  assert.equal(rejectedState.state.case, "rejected")
-  assert.equal(rejectedState.state.value.reason, "too late")
-
-  assert.equal(
-    (RedactedUpdates.contextInjectionState(mode, "inj-4", { kind: "queued_for_next_turn" }).message.value as unknown as {
-      state: { state: { case: string } }
-    }).state.state.case,
-    "queuedForNextTurn",
-  )
-})
-
-test("redacted feedback categories carry the mode with each entry", () => {
-  const update = RedactedUpdates.feedbackRequest(
-    "req-1",
-    "some-model",
-    mode,
-    [new FeedbackRequestCategory({ id: "good", label: "Good" })],
-    [new FeedbackRequestCategoryGroup({
-      id: "group",
-      prompt: "How was it?",
-      categories: [new FeedbackRequestCategory({ id: "x", label: "X" })],
-    })],
-  )
-  const value = update.message.value as unknown as {
-    categories: { _privacyMode?: PrivacyMode; id?: unknown }[]
-    categoryGroups: { _privacyMode?: PrivacyMode; categories: { _privacyMode?: PrivacyMode }[] }[]
-    showFormImmediately?: boolean
-  }
-  assert.equal(value.categories[0]?._privacyMode, mode)
-  assert.equal(value.categoryGroups[0]?._privacyMode, mode)
-  assert.equal(value.categoryGroups[0]?.categories[0]?._privacyMode, mode)
-  assert.equal(value.showFormImmediately, false)
-})
-
 test("a conversation with no queue behind it reports nothing queued", async () => {
   const receiver = new agentCore.NoopConversationActionReceiver()
   const context = createContext()
@@ -538,8 +445,6 @@ test("the action inbox keeps its message shape owned by the caller", async () =>
 
 test("the module's surface is reachable from one place", () => {
   for (const name of [
-    "Updates",
-    "RedactedUpdates",
     "Responses",
     "NoopInteractionListener",
     "buildGoalPursuitGuidelines",

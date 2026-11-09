@@ -18,7 +18,6 @@ import {
   isSlateBackgroundTaskCompletionActionPayload,
   type SlateBackgroundTaskCompletionActionPayload,
 } from "./background-task-completion-contracts.ts";
-import { RedactedUpdates } from "../../agent-core/redacted-interaction-updates.ts";
 import { createSpan } from "../../context/telemetry.ts";
 import { createLogger } from "../../context/logging.ts";
 import { toRedactedCoreMessages } from "../../redaction/message-redaction.ts";
