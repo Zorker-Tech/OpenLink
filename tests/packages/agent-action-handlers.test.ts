@@ -9,7 +9,10 @@ import { BackgroundTaskCompletionActionHandler } from "../../source/packages/age
 import { ExecutePlanActionHandler } from "../../source/packages/agent/actions/execute-plan-action-handler.ts"
 import { ResumeActionHandler } from "../../source/packages/agent/actions/user-message-action/resume-action-handler.ts"
 import { UserMessageActionHandler } from "../../source/packages/agent/actions/user-message-action/user-message-action-handler.ts"
-import { AbstractUserMessageActionHandler } from "../../source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts"
+import {
+  AbstractUserMessageActionHandler,
+  slateFeedbackRequestUpdate,
+} from "../../source/packages/agent/actions/user-message-action/abstract-user-message-action-handler.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import { PrivacyCapability } from "../../source/packages/redaction/classification.ts"
@@ -608,4 +611,39 @@ test("a Slate user-message payload creates earlier and current turns and publish
   if (publishedMessages[0]?.text instanceof RedactedString) {
     assert.equal(publishedMessages[0].text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "earlier question")
   }
+})
+
+test("feedback request details become a Slate event with plain categories and copy", () => {
+  const update = slateFeedbackRequestUpdate("req-1", "model-x", PrivacyMode.NO_STORAGE, {
+    categories: [{ id: "good", label: "Good" }],
+    categoryGroups: [{
+      id: "group",
+      prompt: "How was it?",
+      categories: [{ id: "x", label: "X" }],
+    }],
+    title: "Title",
+    negativeTitle: "Not this",
+    commentPlaceholder: "Say more",
+  })
+
+  assert.equal(update.kind, "feedback-request")
+  assert.equal(update.privacyMode, PrivacyMode.NO_STORAGE)
+  assert.deepEqual(update.categories, [{ id: "good", label: "Good" }])
+  assert.deepEqual(update.categoryGroups, [{
+    id: "group",
+    prompt: "How was it?",
+    categories: [{ id: "x", label: "X" }],
+  }])
+  assert.deepEqual(update.copy, {
+    title: "Title",
+    negativeTitle: "Not this",
+    commentPlaceholder: "Say more",
+  })
+
+  assert.throws(
+    () => slateFeedbackRequestUpdate("req-2", "model-x", PrivacyMode.NO_STORAGE, {
+      categories: [{ id: 1, label: "Bad" }],
+    }),
+    /plain strings/,
+  )
 })

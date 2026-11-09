@@ -46,6 +46,11 @@ import type {
   SlateTurnEndedUpdate,
   SlateUserMessageAppendedUpdate,
   SlateRedactedUserMessageAppendedUpdate,
+  SlateFeedbackRequestUpdate,
+  SlateFeedbackRequestCategory,
+  SlateFeedbackRequestCategoryGroup,
+  SlateRedactedFeedbackRequestUpdate,
+  FeedbackRequestCopy,
   TurnUsage,
 } from "./interaction-update-contracts.ts"
 import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../redaction/privacy-mode.ts"
@@ -149,6 +154,39 @@ function redactedToolCallDeltaUpdate(
   return { ...toolCallDeltaUpdate(callId, delta, modelCallId), privacyMode }
 }
 
+function feedbackRequestCopy(copy: FeedbackRequestCopy | undefined): FeedbackRequestCopy | undefined {
+  if (copy === undefined) return undefined
+  const projected: FeedbackRequestCopy = {
+    ...(copy.title === undefined ? {} : { title: copy.title }),
+    ...(copy.negativeTitle === undefined ? {} : { negativeTitle: copy.negativeTitle }),
+    ...(copy.commentPlaceholder === undefined ? {} : { commentPlaceholder: copy.commentPlaceholder }),
+  }
+  return Object.keys(projected).length === 0 ? undefined : projected
+}
+
+function feedbackRequestUpdate(
+  requestId: string,
+  canonicalModelName: string | undefined,
+  categories: readonly SlateFeedbackRequestCategory[],
+  categoryGroups: readonly SlateFeedbackRequestCategoryGroup[],
+  copy: FeedbackRequestCopy | undefined,
+  showFormImmediately: boolean,
+): SlateFeedbackRequestUpdate {
+  const projectedCopy = feedbackRequestCopy(copy)
+  return {
+    kind: "feedback-request",
+    requestId,
+    ...(canonicalModelName === undefined ? {} : { canonicalModelName }),
+    categories: categories.map(category => ({ ...category })),
+    categoryGroups: categoryGroups.map(group => ({
+      ...group,
+      categories: group.categories.map(category => ({ ...category })),
+    })),
+    ...(projectedCopy === undefined ? {} : { copy: projectedCopy }),
+    ...(showFormImmediately ? { showFormImmediately: true } : {}),
+  }
+}
+
 /** Translate the supported thinking presentation preference into Slate's own vocabulary. */
 export function slateThinkingStyleFromValue(value: unknown): SlateThinkingStyle | undefined {
   if (value === undefined || value === null) return undefined
@@ -221,6 +259,16 @@ export const SlateInteractionUpdates = {
   },
   userMessageAppended(message: SlateUserMessage): SlateUserMessageAppendedUpdate {
     return { kind: "user-message-appended", message: cloneSlateUserMessage(message) }
+  },
+  feedbackRequest(
+    requestId: string,
+    canonicalModelName: string | undefined,
+    categories: readonly SlateFeedbackRequestCategory[],
+    categoryGroups: readonly SlateFeedbackRequestCategoryGroup[] = [],
+    copy: FeedbackRequestCopy = {},
+    showFormImmediately = false,
+  ): SlateFeedbackRequestUpdate {
+    return feedbackRequestUpdate(requestId, canonicalModelName, categories, categoryGroups, copy, showFormImmediately)
   },
 }
 
@@ -297,6 +345,20 @@ export const SlateRedactedInteractionUpdates = {
       throw new TypeError("Slate redacted user messages must use the update privacy mode")
     }
     return { kind: "user-message-appended", privacyMode, message: cloneSlateUserMessage(message) }
+  },
+  feedbackRequest(
+    requestId: string,
+    canonicalModelName: string | undefined,
+    privacyMode: PrivacyMode,
+    categories: readonly SlateFeedbackRequestCategory[],
+    categoryGroups: readonly SlateFeedbackRequestCategoryGroup[] = [],
+    copy: FeedbackRequestCopy = {},
+    showFormImmediately = false,
+  ): SlateRedactedFeedbackRequestUpdate {
+    return {
+      ...feedbackRequestUpdate(requestId, canonicalModelName, categories, categoryGroups, copy, showFormImmediately),
+      privacyMode,
+    }
   },
   toolCallStarted(
     callId: string,
@@ -389,6 +451,16 @@ export function redactSlateInteractionUpdate(
         privacyMode,
       )
     }
+    case "feedback-request":
+      return SlateRedactedInteractionUpdates.feedbackRequest(
+        update.requestId,
+        update.canonicalModelName,
+        privacyMode,
+        update.categories,
+        update.categoryGroups,
+        update.copy,
+        update.showFormImmediately,
+      )
   }
 }
 
@@ -470,6 +542,21 @@ export function unredactSlateInteractionUpdate(
       }
       return { kind: update.kind, message: unredactUserMessage(update.message) }
     }
+    case "feedback-request":
+      return {
+        kind: update.kind,
+        requestId: update.requestId,
+        ...(update.canonicalModelName === undefined ? {} : { canonicalModelName: update.canonicalModelName }),
+        categories: update.categories.map(category => ({ ...category })),
+        categoryGroups: update.categoryGroups.map(group => ({
+          ...group,
+          categories: group.categories.map(category => ({ ...category })),
+        })),
+        ...(update.copy === undefined ? {} : { copy: { ...update.copy } }),
+        ...(update.showFormImmediately === undefined
+          ? {}
+          : { showFormImmediately: update.showFormImmediately }),
+      }
   }
 }
 
@@ -570,6 +657,42 @@ function isRedactedSlateUserMessageValue(
     && redactedValuesUsePrivacyMode(value, privacyMode)
 }
 
+function isSlateFeedbackRequestCategory(value: unknown): value is SlateFeedbackRequestCategory {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const category = value as Record<string, unknown>
+  return typeof category.id === "string" && typeof category.label === "string"
+}
+
+function isSlateFeedbackRequestCategoryGroup(value: unknown): value is SlateFeedbackRequestCategoryGroup {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const group = value as Record<string, unknown>
+  return typeof group.id === "string"
+    && typeof group.prompt === "string"
+    && Array.isArray(group.categories)
+    && group.categories.every(isSlateFeedbackRequestCategory)
+}
+
+function isFeedbackRequestCopy(value: unknown): value is FeedbackRequestCopy {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const copy = value as Record<string, unknown>
+  return (copy.title === undefined || typeof copy.title === "string")
+    && (copy.negativeTitle === undefined || typeof copy.negativeTitle === "string")
+    && (copy.commentPlaceholder === undefined || typeof copy.commentPlaceholder === "string")
+}
+
+function isSlateFeedbackRequestUpdate(value: unknown): value is SlateFeedbackRequestUpdate {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const update = value as Record<string, unknown>
+  return typeof update.requestId === "string"
+    && (update.canonicalModelName === undefined || typeof update.canonicalModelName === "string")
+    && Array.isArray(update.categories)
+    && update.categories.every(isSlateFeedbackRequestCategory)
+    && Array.isArray(update.categoryGroups)
+    && update.categoryGroups.every(isSlateFeedbackRequestCategoryGroup)
+    && (update.copy === undefined || isFeedbackRequestCopy(update.copy))
+    && (update.showFormImmediately === undefined || typeof update.showFormImmediately === "boolean")
+}
+
 export function isSlateInteractionUpdate(value: unknown): value is SlateInteractionUpdate {
   if (typeof value !== "object" || value === null) return false
   const candidate = value as Record<string, unknown>
@@ -594,6 +717,7 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
       && (candidate.delta === undefined || isSlateToolCallDeltaValue(candidate.delta))
     case "turn-ended": return isSlateTurnEndedUpdate(value)
     case "user-message-appended": return isSlateUserMessageValue(candidate.message)
+    case "feedback-request": return isSlateFeedbackRequestUpdate(value)
     default: return false
   }
 }
@@ -627,6 +751,7 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
       && (candidate.delta === undefined || isRedactedSlateToolCallDeltaValue(candidate.delta, candidate.privacyMode))
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
     case "user-message-appended": return isRedactedSlateUserMessageValue(candidate.message, candidate.privacyMode)
+    case "feedback-request": return isSlateFeedbackRequestUpdate(value)
     default: return false
   }
 }

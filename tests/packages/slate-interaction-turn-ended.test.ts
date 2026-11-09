@@ -111,3 +111,22 @@ test("a Slate user-message update reaches the run observer as a no-op", async ()
 
   assert.deepEqual(events, [])
 })
+
+test("a Slate feedback request reaches the run observer as a no-op", async () => {
+  const events: ForwardedUpdate[] = []
+  const listener = toUnredactedInteractionListener(
+    toRedactedInteractionListener(
+      new InteractionUpdateForwarder(event => events.push(event)),
+      PrivacyMode.NO_STORAGE,
+    ),
+    PrivacyMode.NO_STORAGE,
+  )
+
+  await listener.sendUpdate({}, SlateInteractionUpdates.feedbackRequest(
+    "request-1",
+    "model-x",
+    [{ id: "good", label: "Good" }],
+  ))
+
+  assert.deepEqual(events, [])
+})

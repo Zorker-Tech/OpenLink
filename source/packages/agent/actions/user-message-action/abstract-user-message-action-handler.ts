@@ -44,12 +44,14 @@ import { isTooManyImagesOrDocumentsError } from "../../../agent-summarization/er
 import { SummarizationHandler, shouldForceSummarizationForTesting } from "../../../agent-summarization/summarization-handler.ts";
 import { InteractionHandler } from "../../interaction-handler.ts";
 import {
-  RedactedUpdates,
   SlateRedactedInteractionUpdates,
   slateUserMessageAppendedUpdate,
 } from "../../../agent-core/redacted-interaction-updates.ts";
 import { SlateInteractionUpdates } from "../../../agent-core/interaction-updates.ts";
-import type { SlateInteractionToolCallValue } from "../../../agent-core/interaction-update-contracts.ts";
+import type {
+  SlateInteractionToolCallValue,
+  SlateRedactedFeedbackRequestUpdate,
+} from "../../../agent-core/interaction-update-contracts.ts";
 import {
   applyAskQuestionCompletion,
   slateAskQuestionToolCallForCompletion,
@@ -105,6 +107,67 @@ export function slateModeFromUserMessage(
   mode: AgentModeInterop | SlateModeValue | undefined,
 ): SlateModeValue | undefined {
   return typeof mode === "string" ? mode : fromInteropAgentMode(mode);
+}
+
+type FeedbackRequestDetailsCategory = { readonly id: unknown; readonly label: unknown };
+type FeedbackRequestDetailsGroup = {
+  readonly id: unknown;
+  readonly prompt: unknown;
+  readonly categories: readonly FeedbackRequestDetailsCategory[];
+};
+
+function slateFeedbackCategory(category: FeedbackRequestDetailsCategory): {
+  readonly id: string;
+  readonly label: string;
+} {
+  if (typeof category.id !== "string" || typeof category.label !== "string") {
+    throw new TypeError("Feedback request categories must use plain strings");
+  }
+  return { id: category.id, label: category.label };
+}
+
+function slateFeedbackCategoryGroup(group: FeedbackRequestDetailsGroup): {
+  readonly id: string;
+  readonly prompt: string;
+  readonly categories: readonly { readonly id: string; readonly label: string }[];
+} {
+  if (typeof group.id !== "string" || typeof group.prompt !== "string") {
+    throw new TypeError("Feedback request category groups must use plain strings");
+  }
+  return {
+    id: group.id,
+    prompt: group.prompt,
+    categories: group.categories.map(slateFeedbackCategory),
+  };
+}
+
+export interface SlateFeedbackRequestDetails {
+  readonly categories: readonly FeedbackRequestDetailsCategory[];
+  readonly categoryGroups?: readonly FeedbackRequestDetailsGroup[] | undefined;
+  readonly title?: string | undefined;
+  readonly negativeTitle?: string | undefined;
+  readonly commentPlaceholder?: string | undefined;
+}
+
+/** Projects host feedback configuration into the Slate interaction event at one boundary. */
+export function slateFeedbackRequestUpdate(
+  requestId: string,
+  canonicalModelName: string,
+  privacyMode: PrivacyMode,
+  details: SlateFeedbackRequestDetails,
+): SlateRedactedFeedbackRequestUpdate {
+  return SlateRedactedInteractionUpdates.feedbackRequest(
+    requestId,
+    canonicalModelName,
+    privacyMode,
+    details.categories.map(slateFeedbackCategory),
+    (details.categoryGroups ?? []).map(slateFeedbackCategoryGroup),
+    {
+      ...(details.title === undefined ? {} : { title: details.title }),
+      ...(details.negativeTitle === undefined ? {} : { negativeTitle: details.negativeTitle }),
+      ...(details.commentPlaceholder === undefined ? {} : { commentPlaceholder: details.commentPlaceholder }),
+    },
+  );
 }
 import type { AgentConfigTooling } from "../../agent-config-tooling.ts";
 import type { AgentToolsGenerator } from "../../tools/tools-generator.ts";
@@ -2941,7 +3004,12 @@ export class AbstractUserMessageActionHandler {
               if (!hadPreviousAssistantMessage) return;
               const feedbackRequestDetails = await getFeedbackRequestDetails({ canonicalModelName: this.config.canonicalModelName });
               if (feedbackRequestDetails === undefined) return;
-              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.feedbackRequest(feedbackRequestId, this.config.canonicalModelName ?? "", turnState.getPrivacyMode(), feedbackRequestDetails.categories, feedbackRequestDetails.categoryGroups ?? [], { title: feedbackRequestDetails.title, negativeTitle: feedbackRequestDetails.negativeTitle, commentPlaceholder: feedbackRequestDetails.commentPlaceholder }));
+              await this.interactionListener.sendUpdate(runContext, slateFeedbackRequestUpdate(
+                feedbackRequestId,
+                this.config.canonicalModelName ?? "",
+                turnState.getPrivacyMode(),
+                feedbackRequestDetails,
+              ));
             } catch (error) { agentLogger.error(runContext, "Failed to emit feedback request", error); }
           });
         }

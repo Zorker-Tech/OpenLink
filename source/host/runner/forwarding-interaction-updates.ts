@@ -105,6 +105,7 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
         case "active-branch-change":
         case "summary":
         case "user-message-appended":
+        case "feedback-request":
           return;
         case "summary-started":
         case "summary-completed":
