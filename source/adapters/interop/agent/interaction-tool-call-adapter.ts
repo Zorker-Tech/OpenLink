@@ -1,7 +1,96 @@
 import { ToolCall } from "../proto/generated/agent/v1/agent_pb.ts"
 import { EditArgs } from "../proto/generated/agent/v1/edit_tool_pb.ts"
-import { toRedactedToolCall } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { HookAdditionalContext } from "../proto/generated/agent/v1/hook_additional_context_pb.ts"
+import { fromRedactedToolCall, toRedactedToolCall } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
+import { PrivacyCapability } from "../../../packages/redaction/classification.ts"
 import type { PrivacyMode } from "../../../packages/redaction/privacy-mode.ts"
+import { createSlateToolCallStep, type SlateToolCallStep, type SlateToolCallValue } from "../../../packages/agent/conversation-step-state.ts"
+import type { SlateInteractionToolCallValue } from "../../../packages/agent-core/interaction-update-contracts.ts"
+import { fromInteropToolCallStep, toInteropConversationStep } from "./agent-state-message-serdes-adapter.ts"
+
+function projectSlateInteractionToolCallFromInterop(value: unknown, toolCallId?: string): SlateInteractionToolCallValue {
+  if (typeof value !== "object" || value === null || !("tool" in value)) {
+    throw new TypeError("Tool-call update must contain a tool value")
+  }
+  const step = fromInteropToolCallStep(value as never, toolCallId)
+  if (step.kind !== "tool-call") throw new TypeError("Tool-call update could not be projected into Slate state")
+  const tool = step.tool as SlateToolCallValue & { readonly case?: string; readonly value?: unknown }
+  const slateTool: SlateToolCallValue = "kind" in tool
+    ? tool
+    : {
+        kind: "legacy",
+        ...(tool.case === undefined ? {} : { case: tool.case }),
+        ...(Object.prototype.hasOwnProperty.call(tool, "value") ? { value: tool.value } : {}),
+      }
+  return {
+    ...(step.toolCallId === undefined ? {} : { toolCallId: step.toolCallId }),
+    ...(step.startedAtMs === undefined ? {} : { startedAtMs: step.startedAtMs }),
+    ...(step.completedAtMs === undefined ? {} : { completedAtMs: step.completedAtMs }),
+    hookContexts: step.hookContexts.map(context => ({ event: context.event, text: context.text as never })),
+    tool: slateTool,
+  }
+}
+
+function conversationStepForSlateToolCall(value: SlateInteractionToolCallValue): SlateToolCallStep {
+  return createSlateToolCallStep({
+    ...(value.toolCallId === undefined ? {} : { toolCallId: value.toolCallId }),
+    ...(value.startedAtMs === undefined ? {} : { startedAtMs: value.startedAtMs }),
+    ...(value.completedAtMs === undefined ? {} : { completedAtMs: value.completedAtMs }),
+    hookContexts: value.hookContexts.map(context => ({ event: context.event, text: context.text as never })),
+    tool: value.tool,
+  })
+}
+
+/** Projects generated tool values into the existing Slate tool-call domain, retaining unmapped values explicitly. */
+export function slateInteractionToolCallValueFromInterop(value: unknown, toolCallId?: string): SlateInteractionToolCallValue {
+  return projectSlateInteractionToolCallFromInterop(value, toolCallId)
+}
+
+/** Rebuilds the client-side projection payload only at its adapter boundary. */
+export function interopToolCallFromSlateInteractionValue(value: SlateInteractionToolCallValue): ToolCall {
+  const step = toInteropConversationStep(conversationStepForSlateToolCall(value))
+  if (step.message.case !== "toolCall") throw new TypeError("Slate tool-call value did not encode as a tool call")
+  return step.message.value
+}
+
+/** Converts Slate hook context entries into the persisted call's adapter-only representation. */
+export function hookAdditionalContextsToInterop(values: readonly unknown[]): HookAdditionalContext[] {
+  return values.map((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new TypeError("Slate hook context must be an object")
+    }
+    const entry = value as Record<string, unknown>
+    const hookEventName = typeof entry.event === "string" ? entry.event : entry.hookEventName
+    const content = typeof entry.text === "string" ? entry.text : entry.content
+    if (typeof hookEventName !== "string" || typeof content !== "string") {
+      throw new TypeError("Slate hook context must contain an event and text")
+    }
+    return new HookAdditionalContext({ hookEventName, content })
+  })
+}
+
+/** Applies the field-specific privacy policy to Slate tool-call text through the schema adapter. */
+export function redactSlateInteractionToolCallValue(
+  value: SlateInteractionToolCallValue,
+  privacyMode: PrivacyMode,
+): SlateInteractionToolCallValue {
+  return projectSlateInteractionToolCallFromInterop(
+    toRedactedToolCall(interopToolCallFromSlateInteractionValue(value), privacyMode),
+    value.toolCallId,
+  )
+}
+
+/** Reveals a redacted Slate tool-call snapshot only for the local listener projection. */
+export function unredactSlateInteractionToolCallValue(value: SlateInteractionToolCallValue): SlateInteractionToolCallValue {
+  return projectSlateInteractionToolCallFromInterop(
+    fromRedactedToolCall(
+      interopToolCallFromSlateInteractionValue(value) as never,
+      PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
+      {},
+    ),
+    value.toolCallId,
+  )
+}
 
 function assertToolCall(value: unknown): ToolCall {
   if (value instanceof ToolCall && typeof value.clone === "function" && typeof value.toBinary === "function") return value

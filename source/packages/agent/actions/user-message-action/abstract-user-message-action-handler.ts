@@ -45,8 +45,13 @@ import { isTooManyImagesOrDocumentsError } from "../../../agent-summarization/er
 import { SummarizationHandler, shouldForceSummarizationForTesting } from "../../../agent-summarization/summarization-handler.ts";
 import { InteractionHandler } from "../../interaction-handler.ts";
 import { RedactedUpdates, SlateRedactedInteractionUpdates } from "../../../agent-core/redacted-interaction-updates.ts";
-import { Updates } from "../../../agent-core/interaction-updates.ts";
-import { applyAskQuestionCompletion, type AskQuestionCompletionAction } from "../ask-question-completion.ts";
+import { SlateInteractionUpdates, Updates } from "../../../agent-core/interaction-updates.ts";
+import type { SlateInteractionToolCallValue } from "../../../agent-core/interaction-update-contracts.ts";
+import {
+  applyAskQuestionCompletion,
+  slateAskQuestionToolCallForCompletion,
+  type AskQuestionCompletionAction,
+} from "../ask-question-completion.ts";
 import { fromInteropAgentMode } from "../../../../adapters/interop/agent/mode-processing-adapter.ts";
 import {
   createRedactedResponseComparisonUpdateInterop,
@@ -2641,8 +2646,25 @@ export class AbstractUserMessageActionHandler {
             });
             if (application.outcome === "applied") {
               const syntheticModelCallId = randomUUID();
-              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.toolCallStarted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
-              await this.interactionListener.sendUpdate(runContext, RedactedUpdates.toolCallCompleted(application.recordedToolCallId, application.toolCall, syntheticModelCallId));
+              const slateToolCall: SlateInteractionToolCallValue = {
+                toolCallId: application.recordedToolCallId,
+                hookContexts: [],
+                tool: slateAskQuestionToolCallForCompletion(completionAction, application.recordedToolCallId),
+              };
+              const plainInteractionListener = toUnredactedInteractionListener(
+                this.interactionListener,
+                turnState.getPrivacyMode(),
+              );
+              await plainInteractionListener.sendUpdate(runContext, SlateInteractionUpdates.toolCallStarted(
+                application.recordedToolCallId,
+                slateToolCall,
+                syntheticModelCallId,
+              ));
+              await plainInteractionListener.sendUpdate(runContext, SlateInteractionUpdates.toolCallCompleted(
+                application.recordedToolCallId,
+                slateToolCall,
+                syntheticModelCallId,
+              ));
               agentLogger.info(runContext, "Injected async completion into current turn", {
                 originalToolCallId: completionAction.originalToolCallId,
                 resultKind: completionAction.result?.kind,

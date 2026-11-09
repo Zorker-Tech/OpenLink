@@ -23,14 +23,17 @@
 import { createLogger, createSpan } from "../context/index.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
 import { SlateInteractionUpdates, Updates } from "../agent-core/interaction-updates.ts"
+import type { SlateToolCallUpdatePhase } from "../agent-core/interaction-update-contracts.ts"
 import type { SlateTaskProgressUpdate } from "./tools/task-progress-state.ts"
 import { InputTokenLimitError } from "../chat-inference/prompt-executor.ts"
 import { PrivacyMode } from "../redaction/privacy-mode.ts"
 import {
   appendEditToolCallDeltaInterop,
+  hookAdditionalContextsToInterop,
   isAskQuestionToolCallInterop,
   mergeLatestToolCallArgsInterop,
   redactInteractionToolCallInterop,
+  slateInteractionToolCallValueFromInterop,
   stampToolCallMetadataInterop,
   toolCallNameInterop,
 } from "../../adapters/interop/agent/interaction-tool-call-adapter.ts"
@@ -251,7 +254,24 @@ export class InteractionHandler {
   async emitPartialToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
     const stampedCall = this.withToolCallMetadata(callId, pendingCall, undefined);
     this.rememberLatestToolCall(callId, stampedCall);
-    await this.interactionProvider.sendUpdate(context, Updates.partialToolCall(callId, stampedCall, this.invocationId));
+    await this.emitToolCallUpdate(context, "partial", callId, stampedCall);
+  }
+
+  /** Sends one Slate lifecycle update, preserving the caller's model identity when a tool update is synthetic. */
+  async emitToolCallUpdate(
+    context: Loose,
+    phase: SlateToolCallUpdatePhase,
+    callId: string,
+    toolCall: Loose | undefined,
+    modelCallId = this.invocationId,
+  ): Promise<void> {
+    const value = toolCall === undefined ? undefined : slateInteractionToolCallValueFromInterop(toolCall, callId);
+    const update = phase === "started"
+      ? SlateInteractionUpdates.toolCallStarted(callId, value, modelCallId)
+      : phase === "partial"
+        ? SlateInteractionUpdates.partialToolCall(callId, value, modelCallId)
+        : SlateInteractionUpdates.toolCallCompleted(callId, value, modelCallId);
+    await this.interactionProvider.sendUpdate(context, update);
   }
 
   async recordPendingToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
@@ -283,7 +303,7 @@ export class InteractionHandler {
     this.toolCallStartedAtMsByCallId.delete(callId);
     this.latestToolCallsById.delete(callId);
     this.shouldPreserveArgsOnErrorCallIds.delete(callId);
-    await this.interactionProvider.sendUpdate(context, Updates.toolCallCompleted(callId, stampedCall, this.invocationId));
+    await this.emitToolCallUpdate(context, "completed", callId, stampedCall);
     const redactedCall = redactInteractionToolCallInterop(stampedCall, PrivacyMode.UNSPECIFIED);
     if (isAskQuestionToolCallInterop(stampedCall)) await this.upsertRecordedToolCall(context, callId, redactedCall);
     else this.toolCallRecorder.recordToolCall(redactedCall, callId);
@@ -325,7 +345,7 @@ export class InteractionHandler {
       using startUpdateSpan = createSpan(context.withName("executeToolCall.sendStartUpdate"));
       const stampedCall = this.withToolCallMetadata(callId, pendingCall, { startedAtMs: startUpdateAt });
       this.rememberLatestToolCall(callId, stampedCall);
-      await this.interactionProvider.sendUpdate(startUpdateSpan.ctx, Updates.toolCallStarted(callId, stampedCall, this.invocationId));
+      await this.emitToolCallUpdate(startUpdateSpan.ctx, "started", callId, stampedCall);
     }
     const startUpdateMs = Date.now() - startUpdateAt;
     if (startUpdateMs > 1_000) logger.warn(context, "nal.await_stall.start_send_slow", { callId, toolName: toolCallNameInterop(pendingCall), startSendMs: startUpdateMs });
@@ -338,7 +358,9 @@ export class InteractionHandler {
     runToolFn(context).then(value => {
       result = value;
       const completedCall = mergeResultFn(value);
-      if (hookContexts && hookContexts.length > 0) completedCall.hookAdditionalContexts.push(...hookContexts);
+      if (hookContexts && hookContexts.length > 0) {
+        completedCall.hookAdditionalContexts.push(...hookAdditionalContextsToInterop(hookContexts));
+      }
       settle.resolve(completedCall);
     }).catch((error: unknown) => settle.reject(error));
     const completedCall = this.withToolCallMetadata(callId, await settle.promise, { startedAtMs: startUpdateAt, completedAtMs: Date.now() });
@@ -351,7 +373,7 @@ export class InteractionHandler {
     const completionSendStartMs = Date.now();
     {
       using completionSendSpan = createSpan(context.withName("executeToolCall.sendCompletionUpdate"));
-      await this.interactionProvider.sendUpdate(completionSendSpan.ctx, Updates.toolCallCompleted(callId, completedCall, this.invocationId));
+      await this.emitToolCallUpdate(completionSendSpan.ctx, "completed", callId, completedCall);
     }
     const completionSendMs = Date.now() - completionSendStartMs;
     if (completionSendMs > 1_000) logger.warn(context, "nal.await_stall.completion_send_slow", { callId, toolName, toolExecutionMs: executionMs, completionSendMs });

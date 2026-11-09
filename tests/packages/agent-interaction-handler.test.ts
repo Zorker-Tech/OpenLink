@@ -263,7 +263,8 @@ test("a tool call is announced before it runs and completed after", async () => 
     () => readCall(),
   )
   assert.deepEqual(result, { ok: true })
-  assert.deepEqual(harness.updates.sent.map(update => update.kind), ["toolCallStarted", "toolCallCompleted"])
+  assert.deepEqual(harness.updates.sent.map(update => update.kind), ["tool-call-update", "tool-call-update"])
+  assert.deepEqual(harness.updates.sent.map(update => (update.payload as { phase: string }).phase), ["started", "completed"])
   // The call is recorded under the id the turn uses for it.
   assert.deepEqual(harness.recorded, [{ callId: "call-1", toolCase: "readToolCall" }])
 })
@@ -314,10 +315,10 @@ test("an abort while a tool call is running rejects the call", async () => {
 
 test("the hooks' additional context travels with the completed call", async () => {
   const harness = handlerWith()
-  const hookContexts = [{ text: "a hook said something" }]
+  const hookContexts = [{ event: "pre-tool", text: "a hook said something" }]
   await harness.handler.executeToolCall(createContext(), readCall(), "call-1", async () => ({ ok: true }), () => readCall(), hookContexts)
-  const completed = harness.updates.sent[1]?.payload as { toolCall: { hookAdditionalContexts: unknown[] } }
-  assert.deepEqual(completed.toolCall.hookAdditionalContexts, hookContexts)
+  const completed = harness.updates.sent[1]?.payload as { toolCall: { hookContexts: readonly { event: string; text: string }[] } }
+  assert.deepEqual(completed.toolCall.hookContexts, [{ event: "pre-tool", text: "a hook said something" }])
 })
 
 test("the arguments that arrived are kept when a call fails", async () => {
@@ -348,7 +349,8 @@ test("a call's streamed content is applied to the arguments as it arrives", asyn
 test("a partial tool call is announced and recorded as pending", async () => {
   const harness = handlerWith()
   await harness.handler.emitPartialToolCall(createContext(), "call-1", readCall())
-  assert.equal(harness.updates.sent[0]?.kind, "partialToolCall")
+  assert.equal(harness.updates.sent[0]?.kind, "tool-call-update")
+  assert.equal((harness.updates.sent[0]?.payload as { phase: string }).phase, "partial")
 
   await harness.handler.recordPendingToolCall(createContext(), "call-1", readCall())
   assert.deepEqual(harness.pending, [{ callId: "call-1" }])

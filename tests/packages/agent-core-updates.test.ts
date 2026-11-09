@@ -5,6 +5,13 @@ import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
+import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
+import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts"
+import {
+  redactSlateInteractionToolCallValue,
+  slateInteractionToolCallValueFromInterop,
+  unredactSlateInteractionToolCallValue,
+} from "../../source/adapters/interop/agent/interaction-tool-call-adapter.ts"
 import {
   FeedbackRequestCategory,
   FeedbackRequestCategoryGroup,
@@ -160,6 +167,21 @@ test("step, suggestion and branch events round-trip through Slate privacy projec
   const redactedBranch = SlateRedactedInteractionUpdates.activeBranchChange("/repo", "main", mode)
   assert.equal(redactedSuggestion.suggestion.__classification, DataClassification.CODE)
   assert.equal(redactedBranch.path.__classification, DataClassification.PATH)
+})
+
+test("Slate tool-call events round-trip through the interop privacy boundary", () => {
+  const toolCall = slateInteractionToolCallValueFromInterop(new ToolCall({
+    tool: { case: "shellToolCall", value: { args: new ShellArgs({ command: "echo private" }) } as never },
+  }), "call-privacy")
+  const update = SlateInteractionUpdates.toolCallStarted("call-privacy", toolCall, "model-privacy")
+  const redacted = redactSlateInteractionUpdate(update, mode, redactSlateInteractionToolCallValue)
+  assert.equal(isSlateRedactedInteractionUpdate(redacted), true)
+  assert.equal(redacted.kind, "tool-call-update")
+  assert.equal(redacted.toolCall?.tool.kind, "shell")
+  const redactedCommand = redacted.toolCall?.tool.kind === "shell" ? redacted.toolCall.tool.args?.command : undefined
+  assert.equal(typeof redactedCommand, "object")
+  assert.equal((redactedCommand as { readonly __privacyMode?: string }).__privacyMode, mode)
+  assert.deepEqual(unredactSlateInteractionUpdate(redacted, unredactSlateInteractionToolCallValue), update)
 })
 
 test("redacted turn usage converts the same way, and stays absent when there is none", () => {

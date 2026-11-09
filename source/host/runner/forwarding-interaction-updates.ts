@@ -13,6 +13,10 @@ import {
   type SlateTaskProgressUpdate,
 } from "../../packages/agent/tools/task-progress-state.ts";
 import { isSlateInteractionUpdate } from "../../packages/agent-core/slate-interaction-updates.ts";
+import type {
+  SlateInteractionToolCallValue,
+  SlateToolCallUpdatePhase,
+} from "../../packages/agent-core/interaction-update-contracts.ts";
 
 export interface ForwardedUpdate {
   readonly type: string;
@@ -25,34 +29,56 @@ export interface ForwardedTaskProgressUpdate extends ForwardedUpdate, SlateTaskP
 }
 
 export interface ForwardingInteractionObservers {
-  onToolCall?: (phase: string, callId: string, toolCall: unknown) => void;
-  resolveToolName?: (phase: string, callId: string, fallback: string) => string;
+  onToolCall?: (phase: SlateToolCallUpdatePhase, callId: string, toolCall: unknown) => void;
+  resolveToolName?: (phase: SlateToolCallUpdatePhase, callId: string, fallback: string) => string;
   onSurfaceUnresolvedPending?: (callId: string, update: ForwardedUpdate) => void;
   onSummaryLifecycle?: () => void;
 }
 
-type ToolCallPhase = "toolCallStarted" | "partialToolCall" | "toolCallCompleted";
+type InteropToolCallPhase = "toolCallStarted" | "partialToolCall" | "toolCallCompleted";
 type ToolCallProjector = (
-  phase: ToolCallPhase,
+  phase: InteropToolCallPhase,
   callId: string,
   toolCall: unknown,
   modelCallId: string | undefined,
   surfaceName: string,
 ) => unknown | null;
+type SlateToolCallOutlineProjector = (toolCall: SlateInteractionToolCallValue) => OutlineToolCall;
+
+function slateToolCallPhaseFromInterop(phase: InteropToolCallPhase): SlateToolCallUpdatePhase {
+  switch (phase) {
+    case "toolCallStarted": return "started";
+    case "partialToolCall": return "partial";
+    case "toolCallCompleted": return "completed";
+  }
+}
+
+function interopToolCallPhaseFromSlate(phase: SlateToolCallUpdatePhase): InteropToolCallPhase {
+  switch (phase) {
+    case "started": return "toolCallStarted";
+    case "partial": return "partialToolCall";
+    case "completed": return "toolCallCompleted";
+  }
+}
 
 const SURFACE_UNRESOLVED_TOOL_CASES = new Set(["shellToolCall", "readToolCall", "awaitToolCall"]);
 
 /** Translate agent updates into the event shapes the Slate conversation surface consumes. */
 export class InteractionUpdateForwarder extends NoopInteractionListener<{ readonly canceled?: boolean }> {
   #projectToolCall: ToolCallProjector;
+  #projectSlateToolCall: SlateToolCallOutlineProjector;
 
   constructor(
     readonly onUpdate: (event: ForwardedUpdate) => void,
     readonly observers: ForwardingInteractionObservers = {},
     projectToolCall: ToolCallProjector = () => null,
+    projectSlateToolCall: SlateToolCallOutlineProjector = () => {
+      throw new TypeError("A Slate tool-call outline adapter is required")
+    },
   ) {
     super();
     this.#projectToolCall = projectToolCall;
+    this.#projectSlateToolCall = projectSlateToolCall;
   }
 
   override async sendUpdate(ctx: { canceled?: boolean }, update: any): Promise<void> {
@@ -78,6 +104,15 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
         case "prompt-suggestion":
         case "active-branch-change":
           return;
+        case "tool-call-update":
+          if (update.toolCall !== undefined) {
+            this.forwardToolCall(update.phase, {
+              callId: update.callId,
+              modelCallId: update.modelCallId,
+              toolCall: this.#projectSlateToolCall(update.toolCall),
+            });
+          }
+          return;
       }
     }
     const message = update.message;
@@ -96,7 +131,7 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
       case "toolCallStarted":
       case "partialToolCall":
       case "toolCallCompleted":
-        this.forwardToolCall(message.case, message.value);
+        this.forwardToolCall(slateToolCallPhaseFromInterop(message.case), message.value);
         return;
       case "summaryStarted":
       case "summaryCompleted":
@@ -122,23 +157,24 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
     this.onUpdate(event);
   }
 
-  private forwardToolCall(phase: ToolCallPhase, value: { callId: string; toolCall?: OutlineToolCall; modelCallId?: string }): void {
+  private forwardToolCall(phase: SlateToolCallUpdatePhase, value: { callId: string; toolCall?: OutlineToolCall; modelCallId?: string }): void {
     const { callId, toolCall } = value;
     if (toolCall == null) return;
 
+    const interopPhase = interopToolCallPhaseFromSlate(phase);
     this.observers.onToolCall?.(phase, callId, toolCall);
     const outlineName = getOutlineToolCallName(toolCall);
     const forwarded: ForwardedUpdate = {
       type: "tool-call",
       id: callId,
       name: this.observers.resolveToolName?.(phase, callId, outlineName) ?? outlineName,
-      status: getOutlineToolCallStatus(phase, toolCall),
+      status: getOutlineToolCallStatus(interopPhase, toolCall),
       summary: getOutlineToolCallSummary(toolCall),
       args: getToolCallActivityArgs(toolCall),
     };
     this.onUpdate(forwarded);
 
-    const projected = this.#projectToolCall(phase, callId, toolCall, value.modelCallId, forwarded.name as string);
+    const projected = this.#projectToolCall(interopPhase, callId, toolCall, value.modelCallId, forwarded.name as string);
     if (projected != null) this.onUpdate({ type: "client-side-tool-v2", update: projected });
     if (forwarded.status === "pending" && SURFACE_UNRESOLVED_TOOL_CASES.has(forwarded.name as string)) {
       this.observers.onSurfaceUnresolvedPending?.(callId, forwarded);
