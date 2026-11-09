@@ -3,17 +3,10 @@ import { DataClassification, PrivacyCapability } from "../redaction/classificati
 import { createRedactedString } from "../redaction/create.ts"
 import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 import { RedactedString } from "../redaction/redacted-values.ts"
-import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
-
-export interface SlateShellStateCompatibility {
-  /** Historical protobuf fields kept only while supported old turns need lossless restoration. */
-  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
-}
 
 /** A command the user asked Slate to run. */
 export interface SlateShellInvocation {
   readonly commandText: string
-  readonly compatibility?: SlateShellStateCompatibility
 }
 
 /** Output captured from one completed shell invocation. */
@@ -21,7 +14,6 @@ export interface SlateShellResult {
   readonly standardOutput: string
   readonly standardError: string
   readonly exitCode: number
-  readonly compatibility?: SlateShellStateCompatibility
 }
 
 export type SlateStoredShellText = string | RedactedString
@@ -34,23 +26,6 @@ export interface SlateStoredShellInvocation extends Omit<SlateShellInvocation, "
 export interface SlateStoredShellResult extends Omit<SlateShellResult, "standardOutput" | "standardError"> {
   readonly standardOutput: SlateStoredShellText
   readonly standardError: SlateStoredShellText
-}
-
-function copyCompatibility(
-  compatibility: SlateShellStateCompatibility | undefined,
-): SlateShellStateCompatibility | undefined {
-  const fields = compatibility?.legacyUnknownFields
-  if (compatibility === undefined) return undefined
-  return {
-    ...(fields === undefined
-      ? {}
-      : {
-          legacyUnknownFields: fields.map(field => ({
-            ...field,
-            path: field.path.map(step => ({ ...step })),
-          })),
-        }),
-  }
 }
 
 function storedText(value: string | RedactedString, fieldName: string, privacyMode: PrivacyMode): RedactedString {
@@ -93,10 +68,8 @@ export function storeSlateShellInvocation(
   invocation: SlateShellInvocation,
   privacyMode: PrivacyMode,
 ): SlateStoredShellInvocation {
-  const compatibility = copyCompatibility(invocation.compatibility)
   return {
     commandText: storedText(invocation.commandText, "command", privacyMode),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
@@ -105,12 +78,10 @@ export function storeSlateShellResult(
   privacyMode: PrivacyMode,
 ): SlateStoredShellResult {
   const validated = createSlateShellResult(result)
-  const compatibility = copyCompatibility(result.compatibility)
   return {
     standardOutput: storedText(validated.standardOutput, "stdout", privacyMode),
     standardError: storedText(validated.standardError, "stderr", privacyMode),
     exitCode: validated.exitCode,
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
@@ -121,19 +92,13 @@ export function createEmptyStoredSlateShellResult(privacyMode: PrivacyMode): Sla
 export function cloneSlateStoredShellInvocation(
   invocation: SlateStoredShellInvocation,
 ): SlateStoredShellInvocation {
-  const compatibility = copyCompatibility(invocation.compatibility)
-  return {
-    commandText: invocation.commandText,
-    ...(compatibility === undefined ? {} : { compatibility }),
-  }
+  return { commandText: invocation.commandText }
 }
 
 export function cloneSlateStoredShellResult(result: SlateStoredShellResult): SlateStoredShellResult {
-  const compatibility = copyCompatibility(result.compatibility)
   return {
     standardOutput: result.standardOutput,
     standardError: result.standardError,
     exitCode: result.exitCode,
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }

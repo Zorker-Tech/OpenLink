@@ -23,7 +23,6 @@ import {
 import { createSlateConversationSummarySerde, deserializeSlateConversationSummaryInterop } from "./conversation-summary-storage-adapter.ts"
 import { createSlateTodoItemSerde } from "./todo-schema-adapter.ts"
 import { createSlateShellInvocationSerde, createSlateShellResultSerde } from "../../storage/agent/shell-state-storage-adapter.ts"
-import { importLegacyShellInvocation, importLegacyShellResult } from "./legacy-shell-state-adapter.ts"
 import { PrivacyMode as PrivacyModes } from "../../../packages/redaction/privacy-mode.ts"
 import type {
   AgentConversationCodec,
@@ -313,8 +312,8 @@ export async function deriveSlateConversationFromCheckpoint<Context>(
   }
   const userMessageSerde = createSlateUserMessageSerde(PrivacyModes.UNSPECIFIED)
   const stepSerde = createSlateConversationStepSerde(PrivacyModes.UNSPECIFIED)
-  const shellInvocationSerde = createSlateShellInvocationSerde(PrivacyModes.UNSPECIFIED, importLegacyShellInvocation)
-  const shellResultSerde = createSlateShellResultSerde(PrivacyModes.UNSPECIFIED, importLegacyShellResult)
+  const shellInvocationSerde = createSlateShellInvocationSerde(PrivacyModes.UNSPECIFIED)
+  const shellResultSerde = createSlateShellResultSerde(PrivacyModes.UNSPECIFIED)
   const todoSerde = createSlateTodoItemSerde(PrivacyModes.UNSPECIFIED)
   const summarySerde = createSlateConversationSummarySerde(PrivacyModes.UNSPECIFIED)
   const turns: SlateHydratedConversationTurn[] = []

@@ -151,11 +151,9 @@ import {
 import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts"
 import { createRedactedProtoSerde } from "./redacted-protobuf-serde-adapter.ts"
 import {
-  importLegacyShellInvocation,
-  importLegacyShellResult,
   shellInvocationToRunner,
   shellResultToRunner,
-} from "./legacy-shell-state-adapter.ts"
+} from "./shell-state-projection-adapter.ts"
 import {
   createSlateShellInvocationSerde,
   createSlateShellResultSerde,
@@ -4474,8 +4472,8 @@ function serdeDecoder<Redacted, Plain>(
 /** Agent records use Slate-owned serdes where migrated; remaining legacy codecs stay at this adapter boundary. */
 export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
   return {
-    shellInvocation: createSlateShellInvocationSerde(privacyMode, importLegacyShellInvocation),
-    shellResult: createSlateShellResultSerde(privacyMode, importLegacyShellResult),
+    shellInvocation: createSlateShellInvocationSerde(privacyMode),
+    shellResult: createSlateShellResultSerde(privacyMode),
     userMessage: createSlateUserMessageSerde(privacyMode),
     conversationStep: createRedactedProtoSerde(ConversationStep, toRedactedConversationStep, serdeDecoder(fromRedactedConversationStep), privacyMode),
     conversationSummary: createSlateConversationSummarySerde(privacyMode),
@@ -4489,14 +4487,12 @@ export function createAgentStateMessageSerdesInterop(privacyMode: PrivacyMode) {
 export function deserializeSlateShellInvocationInterop(bytes: Uint8Array) {
   return shellInvocationToRunner(createSlateShellInvocationSerde(
     PrivacyModes.UNSPECIFIED,
-    importLegacyShellInvocation,
   ).deserialize(bytes))
 }
 
 export function deserializeSlateShellResultInterop(bytes: Uint8Array) {
   return shellResultToRunner(createSlateShellResultSerde(
     PrivacyModes.UNSPECIFIED,
-    importLegacyShellResult,
   ).deserialize(bytes))
 }
 
