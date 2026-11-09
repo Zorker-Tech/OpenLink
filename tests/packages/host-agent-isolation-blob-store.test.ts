@@ -51,9 +51,9 @@ function storeWorld(options: { legacy?: "rows" | "garbage" } = {}) {
   };
 }
 
-/** A checkpoint root over the turn ids it names. */
+/** A Slate checkpoint root over the turn ids it names. */
 function checkpointRoot(turnIds: Uint8Array[]) {
-  const rootBytes = new ConversationStateStructure({ turns: turnIds }).toBinary();
+  const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: turnIds }));
   return { rootBytes, rootId: sha(rootBytes) };
 }
 
@@ -203,13 +203,13 @@ describe("what may be collected", () => {
     const world = storeWorld();
     const { rootBytes, rootId } = checkpointRoot([]);
     world.store.setBlob(rootId, rootBytes);
-    world.store.setBlob(bytesOf(4), Uint8Array.from([4, 4, 4, 4, 4, 4, 4, 4]));
+    world.store.setBlob(bytesOf(4), new Uint8Array(4096).fill(4));
     // The root is kept, the unreferenced blob is not; the deletion is most of what is left, so it is worth vacuuming.
     const collected = world.store.collectGarbage({ retainedRootIdHex: hex(rootId), pendingWriteRetentionMs: 0 });
     assert.deepEqual(collected, {
       outcome: "collected",
       deletedRows: 1,
-      deletedBytes: 8,
+      deletedBytes: 4096,
       liveRows: 1,
       liveBytes: rootBytes.length,
       retainedPendingRows: 0,

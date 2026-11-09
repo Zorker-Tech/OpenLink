@@ -13,6 +13,7 @@ import { describe, it } from "node:test";
 import { Worker } from "node:worker_threads";
 
 import { ConversationStateStructure } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
+import { encodeInteropAgentConversationCheckpoint } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts";
 import { runAgentStoreWorker } from "../../source/host/agents/isolation/agent-store-worker.ts";
 
 const WORKER_URL = new URL("../../source/host/agents/isolation/agent-store-worker.ts", import.meta.url);
@@ -25,7 +26,7 @@ function blobOf(bytes: Uint8Array) {
   return { bytes, id: sha(bytes) };
 }
 function checkpointRoot(turnIds: Uint8Array[]) {
-  const rootBytes = new ConversationStateStructure({ turns: turnIds }).toBinary();
+  const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: turnIds }));
   return { rootBytes, rootId: sha(rootBytes) };
 }
 
@@ -140,7 +141,7 @@ describe("answering what the store is asked", () => {
       world.send({ operation: "checkpoint.prune", callId: 7, retainedRootIdHex: hex(newer.rootId) });
       assert.deepEqual(await world.answer(7), { outcome: "success", operation: "checkpoint.prune", callId: 7, deletedCount: 1 });
       // A collection over a root with nothing to reach takes what nothing points at, and keeps that root.
-      const plainBytes = new ConversationStateStructure({ previousWorkspaceUris: ["file:///workspace"] }).toBinary();
+      const plainBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ previousWorkspaceUris: ["file:///workspace"] }));
       const plain = { rootBytes: plainBytes, rootId: sha(plainBytes) };
       world.send({ operation: "blob.write", callId: 8, blobId: plain.rootId, blobBytes: plain.rootBytes });
       assert.equal((await world.answer(8)).operation, "blob.write");

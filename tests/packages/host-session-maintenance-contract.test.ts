@@ -184,21 +184,6 @@ describe("conversation recovery projections", () => {
     });
   });
 
-  it("continues to decode legacy protobuf snapshots during recovery", () => {
-    const stored = new ConversationStateStructure({
-      turns: [new Uint8Array([1])],
-      todos: [new Uint8Array([2])],
-      rootPromptMessagesJson: [new Uint8Array([3])],
-      summary: new Uint8Array([4]),
-    });
-    assert.deepEqual(decodeConversationStateStructure(stored.toBinary()), {
-      turns: [new Uint8Array([1])],
-      todos: [new Uint8Array([2])],
-      rootPromptMessagesJson: [new Uint8Array([3])],
-      summary: new Uint8Array([4]),
-    });
-  });
-
   it("rebuilds visible user, outbound and tool entries while omitting hidden user entries", () => {
     const entries = rebuildTranscriptEntriesFromState({
       turns: [{ items: [
@@ -274,17 +259,17 @@ describe("conversation recovery projections", () => {
 
   it("scores only parseable roots with turns whose referenced blobs all exist", () => {
     const turnId = new Uint8Array([0x01, 0xab]);
-    const bytes = new ConversationStateStructure({
+    const bytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({
       turns: [turnId],
       rootPromptMessagesJson: [new Uint8Array([1]), new Uint8Array([2])],
-    }).toBinary();
+    }));
     assert.deepEqual(scoreRootCandidate(bytes, new Set(["01ab"])), {
       turns: 1,
       rootPrompts: 2,
       bytes: bytes.byteLength,
     });
     assert.equal(scoreRootCandidate(bytes, new Set()), null);
-    assert.equal(scoreRootCandidate(new ConversationStateStructure().toBinary(), new Set()), null);
+    assert.equal(scoreRootCandidate(encodeInteropAgentConversationCheckpoint(new ConversationStateStructure()), new Set()), null);
     assert.equal(scoreRootCandidate(new Uint8Array([0xff]), new Set()), null);
     assert.equal(scoreRootCandidate(new Uint8Array(MAX_ROOT_BLOB_BYTES + 1), new Set()), null);
   });
@@ -302,9 +287,9 @@ describe("conversation recovery projections", () => {
     const turnA = new Uint8Array([0x01]);
     const turnB = new Uint8Array([0x02]);
     const turnC = new Uint8Array([0x03]);
-    const rootA = new ConversationStateStructure({ turns: [turnA], rootPromptMessagesJson: [new Uint8Array([1])] }).toBinary();
-    const rootB = new ConversationStateStructure({ turns: [turnA, turnB] }).toBinary();
-    const rootC = new Uint8ClampedArray(new ConversationStateStructure({ turns: [turnA, turnB, turnC] }).toBinary());
+    const rootA = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [turnA], rootPromptMessagesJson: [new Uint8Array([1])] }));
+    const rootB = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [turnA, turnB] }));
+    const rootC = new Uint8ClampedArray(encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [turnA, turnB, turnC] })));
     const blobs = [
       { id: "01", data: new Uint8Array([1]) },
       { id: "02", data: new Uint8Array([2]) },
@@ -444,7 +429,7 @@ describe("session maintenance contract", () => {
   it("recovers a missing root, resets from the recovered state, and backfills transcript entries", async () => {
     const root = new Uint8Array([0xcd]);
     const structure = new ConversationStateStructure({ turns: [new Uint8Array([9])] });
-    const h = harness({ blob: structure.toBinary(), root: new Uint8Array(), durableRoot: root, legacy: true, transcriptEntries: [] });
+    const h = harness({ blob: encodeInteropAgentConversationCheckpoint(structure), root: new Uint8Array(), durableRoot: root, legacy: true, transcriptEntries: [] });
     h.host.resolveConversationState = async received => {
       assert.equal(received instanceof ConversationStateStructure, true);
       return { turns: [{ items: [{ kind: "user", id: "turn-a", text: "restored" } as OutlineItem] }] };
@@ -480,7 +465,7 @@ describe("session maintenance contract", () => {
 
   it("does not replace the root when recovery loses a compare-and-set race", async () => {
     const root = new Uint8Array([7]);
-    const h = harness({ blob: new ConversationStateStructure({ turns: [new Uint8Array([1])] }).toBinary(), root: new Uint8Array(), durableRoot: root, legacy: true });
+    const h = harness({ blob: encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [new Uint8Array([1])] })), root: new Uint8Array(), durableRoot: root, legacy: true });
     h.db.compareAndSetLatestRootBlobId = () => false;
     assert.equal(await recoverConversationIfRootMissing(h.host, "/agents/a/conversation.db", h.db, h.store), false);
     assert.equal(h.calls.resets, 1);

@@ -137,7 +137,7 @@ test("reachability validates both Slate and legacy plan blobs without treating t
 
   for (const [index, planBytes] of blobs.entries()) {
     const planId = ids[index]!
-    const rootBytes = new ConversationStateStructure({ plan: planId }).toBinary()
+    const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ plan: planId }))
     const result = collectReachableBlobHexIds({
       rootBytes,
       getBlobByHexId: key => key === hex(planId) ? planBytes : undefined,
@@ -156,7 +156,7 @@ test("reachability validates Slate todo blobs referenced by a checkpoint", () =>
     updatedAt: 2n,
   })
   const todoId = digest(todoBytes)
-  const rootBytes = new ConversationStateStructure({ todos: [todoId] }).toBinary()
+  const rootBytes = encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ todos: [todoId] }))
   const result = collectReachableBlobHexIds({
     rootBytes,
     getBlobByHexId: key => key === hex(todoId) ? todoBytes : undefined,
@@ -168,7 +168,7 @@ test("reachability validates Slate todo blobs referenced by a checkpoint", () =>
 test("missing typed child blobs are retained as unresolved references", () => {
   const missingChild = id(9)
   const result = collectReachableBlobHexIds({
-    rootBytes: new ConversationStateStructure({ turns: [missingChild] }).toBinary(),
+    rootBytes: encodeInteropAgentConversationCheckpoint(new ConversationStateStructure({ turns: [missingChild] })),
     getBlobByHexId: () => undefined,
   })
 
