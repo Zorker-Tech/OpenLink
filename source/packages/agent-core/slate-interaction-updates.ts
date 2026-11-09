@@ -22,6 +22,7 @@ import type {
   SlateRedactedThinkingDeltaUpdate,
   SlateRedactedTextDeltaUpdate,
   SlateRedactedTokenDeltaUpdate,
+  SlateRedactedToolCallDeltaUpdate,
   SlateRedactedToolCallUpdate,
   SlateStepCompletedUpdate,
   SlateStepStartedUpdate,
@@ -30,6 +31,8 @@ import type {
   SlateThinkingStyle,
   SlateTextDeltaUpdate,
   SlateTokenDeltaUpdate,
+  SlateToolCallDeltaUpdate,
+  SlateToolCallDeltaValue,
   SlateToolCallUpdate,
   SlateToolCallUpdatePhase,
   SlateRedactedTurnEndedUpdate,
@@ -112,6 +115,31 @@ function redactedToolCallUpdate(
   }
 }
 
+function toolCallDeltaUpdate(
+  callId: string,
+  delta: SlateToolCallDeltaValue | undefined,
+  modelCallId: string,
+): SlateToolCallDeltaUpdate {
+  return {
+    kind: "tool-call-delta",
+    callId,
+    modelCallId,
+    ...(delta === undefined ? {} : { delta }),
+  }
+}
+
+function redactedToolCallDeltaUpdate(
+  callId: string,
+  delta: SlateToolCallDeltaValue | undefined,
+  modelCallId: string,
+  privacyMode: PrivacyMode,
+): SlateRedactedToolCallDeltaUpdate {
+  if (delta !== undefined && !isRedactedSlateToolCallDeltaValue(delta, privacyMode)) {
+    throw new TypeError("Slate redacted tool-call deltas must use the update privacy mode")
+  }
+  return { ...toolCallDeltaUpdate(callId, delta, modelCallId), privacyMode }
+}
+
 /** Translate the supported thinking presentation preference into Slate's own vocabulary. */
 export function slateThinkingStyleFromValue(value: unknown): SlateThinkingStyle | undefined {
   if (value === undefined || value === null) return undefined
@@ -169,6 +197,9 @@ export const SlateInteractionUpdates = {
   },
   toolCallCompleted(callId: string, toolCall: SlateInteractionToolCallValue | undefined, modelCallId: string): SlateToolCallUpdate {
     return toolCallUpdate("completed", callId, toolCall, modelCallId)
+  },
+  toolCallDelta(callId: string, delta: SlateToolCallDeltaValue | undefined, modelCallId: string): SlateToolCallDeltaUpdate {
+    return toolCallDeltaUpdate(callId, delta, modelCallId)
   },
 }
 
@@ -242,6 +273,14 @@ export const SlateRedactedInteractionUpdates = {
   ): SlateRedactedToolCallUpdate {
     return redactedToolCallUpdate("completed", callId, toolCall, modelCallId, privacyMode)
   },
+  toolCallDelta(
+    callId: string,
+    delta: SlateToolCallDeltaValue | undefined,
+    modelCallId: string,
+    privacyMode: PrivacyMode,
+  ): SlateRedactedToolCallDeltaUpdate {
+    return redactedToolCallDeltaUpdate(callId, delta, modelCallId, privacyMode)
+  },
   turnEnded(privacyMode: PrivacyMode, usage?: TurnUsage): SlateRedactedTurnEndedUpdate {
     return slateRedactedTurnEndedUpdate(privacyMode, usage)
   },
@@ -252,6 +291,7 @@ export function redactSlateInteractionUpdate(
   update: SlateInteractionUpdate,
   privacyMode: PrivacyMode,
   redactToolCall?: (value: SlateInteractionToolCallValue, privacyMode: PrivacyMode) => SlateInteractionToolCallValue,
+  redactToolCallDelta?: (value: SlateToolCallDeltaValue, privacyMode: PrivacyMode) => SlateToolCallDeltaValue,
 ): SlateRedactedInteractionUpdate {
   switch (update.kind) {
     case "text-delta": return SlateRedactedInteractionUpdates.textDelta(update.text, privacyMode)
@@ -275,6 +315,17 @@ export function redactSlateInteractionUpdate(
         privacyMode,
       )
     }
+    case "tool-call-delta": {
+      if (update.delta !== undefined && redactToolCallDelta === undefined) {
+        throw new TypeError("Slate tool-call deltas require the tool-call delta redaction adapter")
+      }
+      return redactedToolCallDeltaUpdate(
+        update.callId,
+        update.delta === undefined ? undefined : redactToolCallDelta!(update.delta, privacyMode),
+        update.modelCallId,
+        privacyMode,
+      )
+    }
     case "turn-ended": return SlateRedactedInteractionUpdates.turnEnded(privacyMode, update.usage)
   }
 }
@@ -283,6 +334,7 @@ export function redactSlateInteractionUpdate(
 export function unredactSlateInteractionUpdate(
   update: SlateRedactedInteractionUpdate,
   unredactToolCall?: (value: SlateInteractionToolCallValue) => SlateInteractionToolCallValue,
+  unredactToolCallDelta?: (value: SlateToolCallDeltaValue) => SlateToolCallDeltaValue,
 ): SlateInteractionUpdate {
   switch (update.kind) {
     case "text-delta":
@@ -321,6 +373,17 @@ export function unredactSlateInteractionUpdate(
         callId: update.callId,
         modelCallId: update.modelCallId,
         ...(update.toolCall === undefined ? {} : { toolCall: unredactToolCall!(update.toolCall) }),
+      }
+    }
+    case "tool-call-delta": {
+      if (update.delta !== undefined && unredactToolCallDelta === undefined) {
+        throw new TypeError("Slate tool-call deltas require the tool-call delta unredaction adapter")
+      }
+      return {
+        kind: update.kind,
+        callId: update.callId,
+        modelCallId: update.modelCallId,
+        ...(update.delta === undefined ? {} : { delta: unredactToolCallDelta!(update.delta) }),
       }
     }
     case "turn-ended":
@@ -369,6 +432,32 @@ function isRedactedSlateInteractionToolCallValue(
   return isSlateInteractionToolCallValue(value) && redactedValuesUsePrivacyMode(value, privacyMode)
 }
 
+function isSlateToolCallDeltaValue(value: unknown): value is SlateToolCallDeltaValue {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const delta = value as Record<string, unknown>
+  switch (delta.kind) {
+    case "edit-content":
+      return Object.keys(delta).every(key => key === "kind" || key === "textDelta") &&
+        (typeof delta.textDelta === "string" || isRedactedString(delta.textDelta))
+    case "shell-output":
+      return Object.keys(delta).every(key => key === "kind" || key === "stream" || key === "text") &&
+        (delta.stream === "stdout" || delta.stream === "stderr") &&
+        (typeof delta.text === "string" || isRedactedString(delta.text))
+    case "environment-assignment":
+      return Object.keys(delta).every(key => key === "kind" || key === "environmentId") &&
+        (typeof delta.environmentId === "string" || isRedactedString(delta.environmentId))
+    case "legacy":
+      return Object.keys(delta).every(key => key === "kind" || key === "sourceCase" || key === "value") &&
+        (delta.sourceCase === undefined || typeof delta.sourceCase === "string")
+    default:
+      return false
+  }
+}
+
+function isRedactedSlateToolCallDeltaValue(value: unknown, privacyMode: PrivacyMode): value is SlateToolCallDeltaValue {
+  return isSlateToolCallDeltaValue(value) && redactedValuesUsePrivacyMode(value, privacyMode)
+}
+
 function isToolCallPhase(value: unknown): value is SlateToolCallUpdatePhase {
   return value === "started" || value === "partial" || value === "completed"
 }
@@ -389,7 +478,9 @@ export function isSlateInteractionUpdate(value: unknown): value is SlateInteract
     case "active-branch-change": return typeof candidate.path === "string" && typeof candidate.branchName === "string"
     case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
       && typeof candidate.modelCallId === "string"
-      && (candidate.toolCall === undefined || isRedactedSlateInteractionToolCallValue(candidate.toolCall, candidate.privacyMode as PrivacyMode))
+      && (candidate.toolCall === undefined || isSlateInteractionToolCallValue(candidate.toolCall))
+    case "tool-call-delta": return typeof candidate.callId === "string" && typeof candidate.modelCallId === "string"
+      && (candidate.delta === undefined || isSlateToolCallDeltaValue(candidate.delta))
     case "turn-ended": return isSlateTurnEndedUpdate(value)
     default: return false
   }
@@ -415,7 +506,9 @@ export function isSlateRedactedInteractionUpdate(value: unknown): value is Slate
       && typeof candidate.branchName === "string"
     case "tool-call-update": return isToolCallPhase(candidate.phase) && typeof candidate.callId === "string"
       && typeof candidate.modelCallId === "string"
-      && (candidate.toolCall === undefined || isSlateInteractionToolCallValue(candidate.toolCall))
+      && (candidate.toolCall === undefined || isRedactedSlateInteractionToolCallValue(candidate.toolCall, candidate.privacyMode))
+    case "tool-call-delta": return typeof candidate.callId === "string" && typeof candidate.modelCallId === "string"
+      && (candidate.delta === undefined || isRedactedSlateToolCallDeltaValue(candidate.delta, candidate.privacyMode))
     case "turn-ended": return isSlateRedactedTurnEndedUpdate(value)
     default: return false
   }

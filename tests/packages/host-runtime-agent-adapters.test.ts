@@ -12,7 +12,10 @@ import { slateTaskProgressUpdateFromInterop } from "../../source/adapters/intero
 import { toRedactedInteractionListener, toUnredactedInteractionListener } from "../../source/adapters/interop/agent/redacted-interaction-listener-adapter.ts";
 import { createContext } from "../../source/packages/context/context.ts";
 import { InteractionHandler } from "../../source/packages/agent/interaction-handler.ts";
+import { PrivacyCapability } from "../../source/packages/redaction/classification.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
+import { isRedactedString } from "../../source/packages/redaction/redacted-values.ts";
+import { isSlateRedactedInteractionUpdate } from "../../source/packages/agent-core/slate-interaction-updates.ts";
 import { withRootParentRequestId } from "../../source/packages/agent/utils/request-scope.ts";
 import { ToolCall } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts";
 import { ShellArgs } from "../../source/adapters/interop/proto/generated/agent/v1/shell_exec_pb.ts";
@@ -291,6 +294,29 @@ describe("what an agent's updates mean to the conversation", () => {
     assert.equal((updates[0] as { type: string; id: string; status: string }).type, "tool-call");
     assert.deepEqual(seen, [["started", "call-7", true]]);
     assert.equal((updates[1] as { type: string }).type, "client-side-tool-v2");
+  });
+
+  it("redacts Slate tool-call deltas before crossing the listener boundary", async () => {
+    const received: unknown[] = [];
+    const redactedSink = {
+      async sendUpdate(_ctx: unknown, update: unknown) { received.push(update); },
+    };
+    const interaction = toUnredactedInteractionListener(redactedSink as never, PrivacyMode.NO_STORAGE);
+    const handler = new InteractionHandler(interaction as never, {} as never, "invocation-delta");
+    await handler.emitToolCallDelta(createContext(), "call-delta", {
+      delta: { case: "editToolCallDelta", value: { streamContentDelta: "private patch" } },
+    });
+
+    assert.equal(received.length, 1);
+    const update = received[0] as { kind?: string; privacyMode?: string; delta?: { kind?: string; textDelta?: unknown } };
+    assert.equal(isSlateRedactedInteractionUpdate(update), true);
+    assert.equal(update.kind, "tool-call-delta");
+    assert.equal(update.privacyMode, PrivacyMode.NO_STORAGE);
+    assert.equal(update.delta?.kind, "edit-content");
+    assert.equal(isRedactedString(update.delta?.textDelta), true);
+    if (isRedactedString(update.delta?.textDelta)) {
+      assert.equal(update.delta.textDelta.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "private patch");
+    }
   });
 
   it("asks the surface to look again when a call it could not resolve is still pending", async () => {

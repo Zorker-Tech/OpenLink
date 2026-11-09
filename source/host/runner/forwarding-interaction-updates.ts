@@ -113,6 +113,8 @@ export class InteractionUpdateForwarder extends NoopInteractionListener<{ readon
             });
           }
           return;
+        case "tool-call-delta":
+          return;
       }
     }
     const message = update.message;

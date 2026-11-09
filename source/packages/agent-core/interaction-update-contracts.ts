@@ -105,6 +105,23 @@ export interface SlateRedactedToolCallUpdate extends SlateToolCallUpdate {
   readonly privacyMode: PrivacyMode
 }
 
+export type SlateToolCallDeltaValue =
+  | { readonly kind: "edit-content"; readonly textDelta: SlateToolCallText }
+  | { readonly kind: "shell-output"; readonly stream: "stdout" | "stderr"; readonly text: SlateToolCallText }
+  | { readonly kind: "environment-assignment"; readonly environmentId: SlateToolCallText }
+  | { readonly kind: "legacy"; readonly sourceCase?: string; readonly value?: unknown }
+
+export interface SlateToolCallDeltaUpdate {
+  readonly kind: "tool-call-delta"
+  readonly callId: string
+  readonly modelCallId: string
+  readonly delta?: SlateToolCallDeltaValue
+}
+
+export interface SlateRedactedToolCallDeltaUpdate extends SlateToolCallDeltaUpdate {
+  readonly privacyMode: PrivacyMode
+}
+
 export type SlateInteractionUpdate =
   | SlateTurnEndedUpdate
   | SlateTextDeltaUpdate
@@ -117,6 +134,7 @@ export type SlateInteractionUpdate =
   | SlatePromptSuggestionUpdate
   | SlateActiveBranchChangeUpdate
   | SlateToolCallUpdate
+  | SlateToolCallDeltaUpdate
 
 export interface SlateRedactedTextDeltaUpdate {
   readonly kind: "text-delta"
@@ -186,3 +204,4 @@ export type SlateRedactedInteractionUpdate =
   | SlateRedactedPromptSuggestionUpdate
   | SlateRedactedActiveBranchChangeUpdate
   | SlateRedactedToolCallUpdate
+  | SlateRedactedToolCallDeltaUpdate
