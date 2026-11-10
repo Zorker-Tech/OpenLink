@@ -645,7 +645,7 @@ export const FLAGS = {
       // The in-client Origin pull-request experience (userID-bucketed). While
       // OFF, the Codebase repo Pull Requests tab links every repo kind to the
       // in-portal coming-soon teaser at /codebase/:team/:repo/pulls instead of
-      // the review.cursor.com / portal review destinations.
+      // the the review portal / portal review destinations.
       origin_pull_requests_enabled_in_client: {
         client: true,
         default: false
@@ -661,7 +661,7 @@ export const FLAGS = {
         default: false
       },
       // When ON, PR references in the Codebase (Origin) browse UI link to the
-      // GitHub PR (for repos with a GitHub mirror) instead of review.cursor.com —
+      // GitHub PR (for repos with a GitHub mirror) instead of the review portal —
       // for early-access design partners who still work in GitHub PRs.
       use_github_pr_links_in_origin_browse: {
         client: true,
@@ -725,9 +725,9 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Default-off kill switch for the future cursor-agent-host topology. When ON,
+      // Default-off kill switch for the future agent-host topology. When ON,
       // the window-pinned workbench decision swaps the agent-exec fanout /
-      // allowlist / dependency-backfill path over to cursor-agent-host so only one
+      // allowlist / dependency-backfill path over to agent-host so only one
       // of the pair is active in that window, regardless of workspace family.
       cursor_agent_host: {
         client: true,
@@ -750,7 +750,7 @@ export const FLAGS = {
       },
       // Perf Loop (E3): default-off kill switch that defers activation of
       // slate.plugin-activation from the eager "*" activation event to
-      // "onStartupFinished". cursor-agent-exec dominates the eager-activation
+      // "onStartupFinished". agent-exec dominates the eager-activation
       // window on Glass root cold boots (~800ms code-load + ~9ms activate call),
       // so moving it out of the startup-critical eager window reclaims that time.
       // OFF (default) = unchanged eager "*" behavior. ON = the client rewrites the
@@ -805,7 +805,7 @@ export const FLAGS = {
         default: false
       },
       /**
-       * Makes `.cursor/rules` discovery pass `.cursorignore` files to ripgrep
+       * Makes `.slate/rules` discovery pass `.cursorignore` files to ripgrep
        * (`--cursor-ignore`), so negation patterns can re-include gitignored rule
        * files (DESK-9199).
        */
@@ -3278,10 +3278,10 @@ export const FLAGS = {
       },
       /**
        * Gates the Customize "Publish Skill" and "Unpublish Skill" row actions.
-       * Publish packs a personal `~/.cursor/skills` skill, publishes it to the team
+       * Publish packs a personal `~/.slate/skills` skill, publishes it to the team
        * marketplace via `DashboardService.PublishPlugin`, and trashes the local copy
        * once the published commit is confirmed loaded from the plugin cache;
-       * unpublish restores the skill to `~/.cursor/skills` and deletes that plugin.
+       * unpublish restores the skill to `~/.slate/skills` and deletes that plugin.
        * Off means the skill row's overflow menu offers neither, so nothing
        * client-side can reach either RPC. The two share one gate so it can never
        * leave someone with a published skill and no way to take it back.
@@ -3356,7 +3356,7 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      // Controls whether agent dotdirs other than `~/.cursor` are included
+      // Controls whether agent dotdirs other than `~/.slate` are included
       // by Codebase Telemetry V2.
       codebase_telemetry_v2_agent_dot_dirs: {
         client: true,
@@ -4388,8 +4388,8 @@ export const EXPERIMENTS = {
         }
       },
       /** A/B test for agent backend selection.
-       * - control: Users see normal behavior (cursor-agent by default)
-       * - hometown: cursor-agent backend with model switching disabled while the test is active
+       * - control: Users see normal behavior (the agent by default)
+       * - hometown: agent backend with model switching disabled while the test is active
        * - ombre: claude-code backend with model switching disabled for the conversation
        */
       agent_backend_ab_test_1: {
