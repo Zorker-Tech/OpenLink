@@ -11,7 +11,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { createContext } from "../../source/packages/context/context.ts";
+import { createContext } from "../../source/packages/context/context.ts"
+import {
+  createSlateConversationSummaryArchiveSerde,
+  redactSlateConversationSummaryArchive,
+} from "../../source/adapters/interop/agent/conversation-summary-storage-adapter.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import {
   countTranscriptMessageLines,
   formatSingleMessageJsonl,
@@ -43,13 +48,16 @@ function blobStoreOf(entries: Map<string, Uint8Array>) {
   };
 }
 
-/** An archive is the repeated message-id field of a summary, encoded the way the decoder reads it. */
+/** A Slate summary archive over the message ids it records. */
 function archiveOf(ids: readonly Uint8Array[]): Uint8Array {
-  const bytes: number[] = [];
-  for (const id of ids) {
-    bytes.push(0x0a, id.length, ...id);
-  }
-  return new Uint8Array(bytes);
+  return createSlateConversationSummaryArchiveSerde(PrivacyMode.NO_STORAGE).serialize(
+    redactSlateConversationSummaryArchive({
+      summarizedMessageBlobIds: ids,
+      summary: "",
+      summaryMessageBlobId: new Uint8Array(),
+      unsummarizedWindowTail: 0,
+    }, PrivacyMode.NO_STORAGE),
+  );
 }
 
 function stateOf(parts: { prompts?: Uint8Array[]; archives?: Uint8Array[] } = {}) {

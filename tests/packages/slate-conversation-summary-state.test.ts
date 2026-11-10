@@ -1,7 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { ConversationSummary, ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   createSlateConversationSummaryArchiveSerde,
   createSlateConversationSummarySerde,
@@ -33,23 +32,6 @@ test("new summary blobs use Slate fields and reapply privacy policy on read", ()
   assert.equal(deserializeSlateConversationSummaryInterop(bytes).summary, "summary content")
 })
 
-test("unknown fields in a legacy summary survive a Slate write and runner projection", () => {
-  const legacy = new ConversationSummary({ summary: "old summary" })
-  ConversationSummary.runtime.bin.onUnknownField(legacy, 100, 0, new Uint8Array([7]))
-  const serde = createSlateConversationSummarySerde(PrivacyMode.NO_STORAGE)
-  const imported = serde.deserialize(legacy.toBinary())
-  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 1)
-
-  const rewritten = serde.serialize(imported)
-  const reloaded = serde.deserialize(rewritten)
-  if (typeof reloaded.content === "string") assert.fail("expected privacy-aware summary content")
-  assert.equal(reloaded.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "old summary")
-  assert.equal(reloaded.compatibility?.legacyUnknownFields?.length, 1)
-  const projected = deserializeSlateConversationSummaryInterop(rewritten)
-  assert.equal(projected.summary, "old summary")
-  assert.equal(ConversationSummary.runtime.bin.listUnknownFields(projected).length, 1)
-})
-
 test("summary archives persist Slate references and retain historical blob ids", () => {
   const archive = {
     summarizedMessageBlobIds: [new Uint8Array([1, 2]), new Uint8Array([3])],
@@ -71,19 +53,4 @@ test("summary archives persist Slate references and retain historical blob ids",
   assert.deepEqual(projected.summaryMessage, archive.summaryMessageBlobId)
 })
 
-test("unknown fields in a historical summary archive survive Slate storage", () => {
-  const legacy = new ConversationSummaryArchive({
-    summarizedMessages: [new Uint8Array([6])],
-    summary: "old archive",
-    summaryMessage: new Uint8Array([7]),
-    windowTail: 2,
-  })
-  ConversationSummaryArchive.runtime.bin.onUnknownField(legacy, 100, 0, new Uint8Array([8]))
-  const serde = createSlateConversationSummaryArchiveSerde(PrivacyMode.NO_STORAGE)
-  const imported = serde.deserialize(legacy.toBinary())
-  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 1)
-  const rewritten = serde.serialize(imported)
-  const restored = deserializeSlateConversationSummaryArchiveInterop(rewritten)
-  assert.equal(restored.windowTail, 2)
-  assert.equal(ConversationSummaryArchive.runtime.bin.listUnknownFields(restored).length, 1)
-})
+

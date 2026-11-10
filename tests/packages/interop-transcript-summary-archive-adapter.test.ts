@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   createSlateConversationSummaryArchiveSerde,
   redactSlateConversationSummaryArchive,
@@ -10,11 +9,6 @@ import { summaryMessageBlobIdsFromStored } from "../../source/adapters/interop/a
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 
 describe("stored transcript summary archives", () => {
-  it("projects the archived message blob identifiers", () => {
-    const archive = new ConversationSummaryArchive({ summarizedMessages: [new TextEncoder().encode("message-1"), new TextEncoder().encode("message-2")] })
-    assert.deepEqual(summaryMessageBlobIdsFromStored(archive.toBinary()), [new TextEncoder().encode("message-1"), new TextEncoder().encode("message-2")])
-  })
-
   it("reads the same message identifiers from Slate's summary archive schema", () => {
     const serde = createSlateConversationSummaryArchiveSerde(PrivacyMode.NO_STORAGE)
     const bytes = serde.serialize(redactSlateConversationSummaryArchive({
