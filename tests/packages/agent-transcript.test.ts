@@ -6,8 +6,12 @@ import { HistoryVisibilityMode, convertConversationMessagesToTrace } from "../..
 import { stripContextTags, stripTags } from "../../source/host/transcript/agent-transcript/context-stripping.ts"
 import { transcriptFilePath } from "../../source/host/transcript/agent-transcript/paths.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
-import { ConversationSummaryArchive } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { ConversationMessage, ConversationMessage_MessageType } from "../../source/adapters/interop/proto/generated/aiserver/v1/chat_pb.ts"
+import {
+  createSlateConversationSummaryArchiveSerde,
+  redactSlateConversationSummaryArchive,
+} from "../../source/adapters/interop/agent/conversation-summary-storage-adapter.ts"
+import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 
 // ---------------------------------------------------------------------------------------------
 // the harness
@@ -190,11 +194,18 @@ test("hidden reasoning is not part of what the assistant said", async () => {
 })
 
 test("a summary archive is written before the messages that are still live", async () => {
-  const archive = new ConversationSummaryArchive({ summarizedMessages: [blobId("old")] })
+  const archive = createSlateConversationSummaryArchiveSerde(PrivacyMode.NO_STORAGE).serialize(
+    redactSlateConversationSummaryArchive({
+      summarizedMessageBlobIds: [blobId("old")],
+      summary: "",
+      summaryMessageBlobId: new Uint8Array(),
+      unsummarizedWindowTail: 0,
+    }, PrivacyMode.NO_STORAGE),
+  )
   const blobs = new Map([
     ["old", message("user", "the earlier question")],
     ["live", message("user", "the latest question")],
-    ["archive", archive.toBinary()],
+    ["archive", archive],
   ])
   const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("live")], summaryArchives: [blobId("archive")] } })
   await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
@@ -522,11 +533,18 @@ test("an error turn with no reason says its reason is undefined", async () => {
 })
 
 test("an archived summary message is written while an archived system one is not", async () => {
-  const archive = new ConversationSummaryArchive({ summarizedMessages: [blobId("s"), blobId("m")] })
+  const archive = createSlateConversationSummaryArchiveSerde(PrivacyMode.NO_STORAGE).serialize(
+    redactSlateConversationSummaryArchive({
+      summarizedMessageBlobIds: [blobId("s"), blobId("m")],
+      summary: "",
+      summaryMessageBlobId: new Uint8Array(),
+      unsummarizedWindowTail: 0,
+    }, PrivacyMode.NO_STORAGE),
+  )
   const blobs = new Map([
     ["s", message("system", "the archived preamble")],
     ["m", message("assistant", "the archived summary", { isSummary: true })],
-    ["arc", archive.toBinary()],
+    ["arc", archive],
   ])
   const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [], summaryArchives: [blobId("arc")] } })
   await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
