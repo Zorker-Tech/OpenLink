@@ -202,7 +202,7 @@ test("Slate checkpoint v2 owns all conversation fields and round-trips nested st
       conversationId: "conversation-1",
       goalId: "goal-1",
       objective: "finish safely",
-      status: 95 as never,
+      status: GoalStatus.ACTIVE,
       idleContinuationsWithoutToolCalls: 2,
       activeDurationMs: 1_000_000_000_000n,
       lastAccruedAtMs: 1_700_000_001_000n,

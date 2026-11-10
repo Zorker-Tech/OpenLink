@@ -45,16 +45,14 @@ test("goal state preserves its identity, status, clock and ownership", () => {
   assert.equal(roundTripped.agentSessionId, "session-1")
 })
 
-test("an unknown persisted goal status retains its code until Slate changes the status", () => {
+test("an unknown persisted goal status maps to unspecified", () => {
   const slate = fromInteropGoalState(new GoalState({ status: 99 as GoalStatus }))
 
   assert.equal(slate.status, SlateGoalStatus.UNSPECIFIED)
-  assert.equal(slate.unknownStatusCode, 99)
-  assert.equal(toInteropGoalState(slate).status, 99)
+  assert.equal(toInteropGoalState(slate).status, GoalStatus.UNSPECIFIED)
 
   pauseGoalState(slate)
   assert.equal(slate.status, SlateGoalStatus.PAUSED)
-  assert.equal(slate.unknownStatusCode, undefined)
   assert.equal(toInteropGoalState(slate).status, GoalStatus.PAUSED)
 })
 

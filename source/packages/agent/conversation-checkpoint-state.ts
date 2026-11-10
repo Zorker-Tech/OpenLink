@@ -151,7 +151,6 @@ export interface SlateCheckpointGoal {
   readonly lastAccruedAtMs?: string
   readonly continuationCount: number
   readonly agentSessionId?: string
-  readonly compatibility?: { readonly legacyStatusCode?: number }
 }
 
 export type SlateCheckpointUnknownFieldPathStep =
@@ -472,17 +471,12 @@ function isSubagentRun(value: unknown): boolean {
 function isGoal(value: unknown): boolean {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "conversationId", "goalId", "objective", "status",
-    "idleContinuationsWithoutToolCalls", "activeDurationMs", "lastAccruedAtMs", "continuationCount", "agentSessionId", "compatibility",
+    "idleContinuationsWithoutToolCalls", "activeDurationMs", "lastAccruedAtMs", "continuationCount", "agentSessionId",
   ])) return false
   return isText(value.conversationId) && isText(value.goalId) && isText(value.objective) &&
     isText(value.status) && GOAL_STATUSES.has(value.status) &&
     isUint32(value.idleContinuationsWithoutToolCalls) && isDecimalOptional(value.activeDurationMs) &&
-    isDecimalOptional(value.lastAccruedAtMs) && isUint32(value.continuationCount) && isOptionalText(value.agentSessionId) &&
-    (value.compatibility === undefined || (
-      isRecord(value.compatibility) && hasOnlyKeys(value.compatibility, ["legacyStatusCode"]) &&
-      (value.compatibility.legacyStatusCode === undefined ||
-        (isEnumCode(value.compatibility.legacyStatusCode) && value.status === "unspecified"))
-    ))
+    isDecimalOptional(value.lastAccruedAtMs) && isUint32(value.continuationCount) && isOptionalText(value.agentSessionId)
 }
 
 function isStateRecord(value: unknown): value is SlateConversationCheckpointV2 {

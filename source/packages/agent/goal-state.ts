@@ -15,7 +15,6 @@ export interface SlateGoalStateInput {
   readonly lastAccruedAtMs?: bigint | undefined
   readonly continuationCount: number
   readonly agentSessionId?: string | undefined
-  readonly unknownStatusCode?: number | undefined
 }
 
 export class SlateGoalState {
@@ -28,7 +27,6 @@ export class SlateGoalState {
   lastAccruedAtMs?: bigint | undefined
   continuationCount: number
   agentSessionId?: string | undefined
-  unknownStatusCode?: number | undefined
 
   constructor(input: SlateGoalStateInput) {
     this.conversationId = input.conversationId
@@ -40,7 +38,6 @@ export class SlateGoalState {
     this.lastAccruedAtMs = input.lastAccruedAtMs
     this.continuationCount = input.continuationCount
     this.agentSessionId = input.agentSessionId
-    this.unknownStatusCode = input.unknownStatusCode
   }
 
   clone(): SlateGoalState {
@@ -54,14 +51,12 @@ export function isPausedGoalState(value: unknown): value is SlateGoalState {
 
 export function pauseGoalState(value: SlateGoalState): void {
   value.status = SlateGoalStatus.PAUSED
-  delete value.unknownStatusCode
 }
 
 export function activatePausedGoalState(value: SlateGoalState, nowMs: number): SlateGoalState {
   const resumed = value.clone()
   resumed.status = SlateGoalStatus.ACTIVE
   resumed.idleContinuationsWithoutToolCalls = 0
-  delete resumed.unknownStatusCode
   Object.assign(resumed, goalClockOnActivation(resumed, nowMs))
   return resumed
 }
