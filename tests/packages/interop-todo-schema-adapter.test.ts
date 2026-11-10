@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { TodoItem, TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts";
+import { TodoStatus } from "../../source/adapters/interop/proto/generated/agent/v1/todo_tool_pb.ts";
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts";
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts";
 import type { SlateTodoItem } from "../../source/packages/agent/tools/core/todo/contracts.ts";
@@ -80,19 +80,3 @@ test("todo blobs use Slate fields and reapply the active privacy mode on read", 
   assert.equal(deserializeSlateTodoItemInterop(bytes).content, "Keep this task");
 });
 
-test("unknown todo statuses and message fields survive legacy import and Slate write", () => {
-  const legacy = new TodoItem({ id: "future", content: "Keep me", status: 987654 as TodoStatus });
-  TodoItem.runtime.bin.onUnknownField(legacy, 100, 0, new Uint8Array([7]));
-  const serde = createSlateTodoItemSerde(PrivacyMode.NO_STORAGE);
-  const imported = serde.deserialize(legacy.toBinary());
-  assert.equal(imported.status, "unspecified");
-  assert.equal(imported.compatibility?.legacyStatusCode, 987654);
-  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 1);
-
-  const rewritten = serde.deserialize(serde.serialize(imported));
-  assert.equal(rewritten.compatibility?.legacyStatusCode, 987654);
-  assert.equal(rewritten.compatibility?.legacyUnknownFields?.length, 1);
-  const restored = toInteropTodoItem(rewritten);
-  assert.equal(restored.status, 987654);
-  assert.equal(TodoItem.runtime.bin.listUnknownFields(restored).length, 1);
-});

@@ -1556,7 +1556,6 @@ function slatePlanDraftTodoFromInterop(value: unknown): SlatePlanDraftTodo | und
   const item = isMessage(value) ? value as InteropTodoItem : new InteropTodoItem(value as never)
   const projected = fromInteropTodoItem(item)
   const content = slateToolCallTextFromInterop((value as Record<string, unknown>).content) ?? projected.content
-  const legacyStatusCode = projected.compatibility?.legacyStatusCode
   return {
     id: projected.id,
     content,
@@ -1564,7 +1563,6 @@ function slatePlanDraftTodoFromInterop(value: unknown): SlatePlanDraftTodo | und
     createdAt: projected.createdAt,
     updatedAt: projected.updatedAt,
     ...(projected.dependencies === undefined ? {} : { dependencies: [...projected.dependencies] }),
-    ...(legacyStatusCode === undefined ? {} : { compatibility: { legacyStatusCode } }),
   }
 }
 
