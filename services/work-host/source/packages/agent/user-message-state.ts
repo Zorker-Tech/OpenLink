@@ -1,0 +1,193 @@
+/** Slate's product record for a user message while it is becoming a conversation turn. */
+import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
+import { SlateMode } from "./mode-processing.ts"
+import {
+  cloneSlateSelectedContextState,
+  type SlateSelectedContextState,
+} from "./context/selected-context-state.ts"
+import {
+  cloneSlateCustomModeIntent,
+  cloneSlateSimulationDetails,
+  type SlateCustomModeIntent,
+  type SlateSimulationDetails,
+  type SlateTriggeringActor,
+  type SlateUserMessageText,
+} from "./user-message-metadata-state.ts"
+
+export type { SlateUserMessageText } from "./user-message-metadata-state.ts"
+
+export interface SlateUserMessageHookContext extends Omit<HookContextEntry, "text"> {
+  text: SlateUserMessageText
+}
+
+export const SlateSimulatedMessageReason = {
+  UNSPECIFIED: "unspecified",
+  PLAN_EXECUTION: "plan-execution",
+  COMMIT_REMINDER: "commit-reminder",
+  BACKGROUND_TASK_COMPLETION: "background-task-completion",
+  DIFF_TAB_COMMIT: "diff-tab-commit",
+  DIFF_TAB_COMMIT_AND_PUSH: "diff-tab-commit-and-push",
+  DIFF_TAB_PUSH: "diff-tab-push",
+  DIFF_TAB_CREATE_PR: "diff-tab-create-pr",
+  DIFF_TAB_FIX_MERGE_CONFLICTS: "diff-tab-fix-merge-conflicts",
+  USER_SENT_TO_SUBAGENT: "user-sent-to-subagent",
+  USER_INTERRUPTED_SUBAGENT: "user-interrupted-subagent",
+  USER_QUEUED_TO_SUBAGENT: "user-queued-to-subagent",
+  BABYSIT_PR_IN_CLOUD: "babysit-pr-in-cloud",
+  CI_PANEL_INVESTIGATE_FAILURE: "ci-panel-investigate-failure",
+  MULTITASK: "multitask",
+  BUILD_IN_PARALLEL: "build-in-parallel",
+  MULTITASK_SPLIT_PRS: "multitask-split-prs",
+  APPLY_LOCALLY: "apply-locally",
+  CHECKOUT_BRANCH: "checkout-branch",
+  DIFF_TAB_UPDATE_BRANCH: "diff-tab-update-branch",
+  PR_TAB_AUTOMATED_REVIEW_FIX: "pr-tab-automated-review-fix",
+  RUN_AUTOMATED_REVIEW: "run-automated-review",
+  RUN_SECURITY_REVIEW: "run-security-review",
+  FSD_APPLY_FINDING: "fsd-apply-finding",
+  FSD_UNDO_FINDING: "fsd-undo-finding",
+  FSD_START: "fsd-start",
+  FSD_PR_INTERRUPT: "fsd-pr-interrupt",
+  SUBSCRIPTION: "subscription",
+  DIFF_TAB_CREATE_BRANCH: "diff-tab-create-branch",
+  AGENT_STORE_CONFLICT: "agent-store-conflict",
+  GOAL_CONTINUATION: "goal-continuation",
+  PROJECT_KICKOFF: "project-kickoff",
+} as const
+
+export type SlateSimulatedMessageReason =
+  (typeof SlateSimulatedMessageReason)[keyof typeof SlateSimulatedMessageReason]
+  | `unknown-${number}`
+
+export interface SlateProjectConversationDetails {
+  name?: SlateUserMessageText
+  subagent?: SlateProjectSubagentDetails
+  sideChat?: SlateProjectSideChatDetails
+}
+
+export interface SlateProjectSubagentDetails {
+  storeDir?: SlateUserMessageText
+}
+
+export interface SlateProjectSideChatDetails {
+  storeDir?: SlateUserMessageText
+}
+
+/** Slate's execution metadata for a turn that was started from a saved plan. */
+export interface SlatePlanExecutionIntent {
+  readonly id: SlateUserMessageText
+  readonly title: SlateUserMessageText
+}
+
+/**
+ * The top-level user-message record needed while a turn is prepared.
+ *
+ * Selected material is a versioned Slate-owned state model alongside message and turn metadata.
+ */
+export interface SlateUserMessage {
+  text: SlateUserMessageText
+  messageId: string
+  selectedContext?: SlateSelectedContextState
+  mode: SlateMode
+  isSimulatedMsg?: boolean
+  bestOfNGroupId?: string
+  tryUseBestOfNPromotion?: boolean
+  richText?: SlateUserMessageText
+  simulatedMsgReason?: SlateSimulatedMessageReason
+  conversationStateBlobId: Uint8Array
+  subagentSystemReminder?: SlateUserMessageText
+  triggeringActor?: SlateTriggeringActor
+  planExecution?: SlatePlanExecutionIntent
+  simulation?: SlateSimulationDetails
+  promptReferenceId?: string
+  threadId?: string
+  textBlobId?: Uint8Array
+  richTextBlobId?: Uint8Array
+  hookContexts: readonly SlateUserMessageHookContext[]
+  modeIntent?: SlateCustomModeIntent
+  projectDetails?: SlateProjectConversationDetails
+}
+
+/** Product input accepted at the Agent turn boundary before turn-owned defaults are applied. */
+export type SlateUserMessageInput = Pick<SlateUserMessage, "text"> &
+  Partial<Omit<SlateUserMessage, "text" | "messageId" | "mode" | "conversationStateBlobId" | "hookContexts">> & {
+    messageId?: string
+    mode?: SlateMode
+    conversationStateBlobId?: Uint8Array
+    hookContexts?: readonly SlateUserMessageHookContext[]
+  }
+
+function cloneBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes)
+}
+
+function copyProjectDetails(
+  details: SlateProjectConversationDetails | undefined,
+): SlateProjectConversationDetails | undefined {
+  return details === undefined
+    ? undefined
+    : {
+        ...(details.name === undefined ? {} : { name: details.name }),
+        ...(details.subagent === undefined
+          ? {}
+          : {
+              subagent: {
+                ...(details.subagent.storeDir === undefined ? {} : { storeDir: details.subagent.storeDir }),
+              },
+            }),
+        ...(details.sideChat === undefined
+          ? {}
+          : {
+              sideChat: {
+                ...(details.sideChat.storeDir === undefined ? {} : { storeDir: details.sideChat.storeDir }),
+              },
+            }),
+      }
+}
+
+/** Copies mutable byte arrays and every nested selected-context attachment. */
+export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
+  const projectDetails = message.projectDetails === undefined
+    ? undefined
+    : copyProjectDetails(message.projectDetails)
+  return {
+    text: message.text,
+    messageId: message.messageId,
+    ...(message.selectedContext === undefined ? {} : { selectedContext: cloneSlateSelectedContextState(message.selectedContext) }),
+    mode: message.mode,
+    ...(message.isSimulatedMsg === undefined ? {} : { isSimulatedMsg: message.isSimulatedMsg }),
+    ...(message.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: message.bestOfNGroupId }),
+    ...(message.tryUseBestOfNPromotion === undefined
+      ? {}
+      : { tryUseBestOfNPromotion: message.tryUseBestOfNPromotion }),
+    ...(message.richText === undefined ? {} : { richText: message.richText }),
+    ...(message.simulatedMsgReason === undefined ? {} : { simulatedMsgReason: message.simulatedMsgReason }),
+    conversationStateBlobId: cloneBytes(message.conversationStateBlobId),
+    ...(message.subagentSystemReminder === undefined
+      ? {}
+      : { subagentSystemReminder: message.subagentSystemReminder }),
+    ...(message.triggeringActor === undefined ? {} : { triggeringActor: { ...message.triggeringActor } }),
+    ...(message.planExecution === undefined ? {} : { planExecution: { ...message.planExecution } }),
+    ...(message.simulation === undefined
+      ? {}
+      : { simulation: cloneSlateSimulationDetails(message.simulation) }),
+    ...(message.promptReferenceId === undefined ? {} : { promptReferenceId: message.promptReferenceId }),
+    ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
+    ...(message.textBlobId === undefined ? {} : { textBlobId: cloneBytes(message.textBlobId) }),
+    ...(message.richTextBlobId === undefined ? {} : { richTextBlobId: cloneBytes(message.richTextBlobId) }),
+    hookContexts: message.hookContexts.map(context => ({ ...context })),
+    ...(message.modeIntent === undefined ? {} : { modeIntent: cloneSlateCustomModeIntent(message.modeIntent) }),
+    ...(projectDetails === undefined ? {} : { projectDetails }),
+  }
+}
+
+/** Applies the defaults that the turn boundary owns, then copies all mutable state. */
+export function createSlateUserMessageInput(input: SlateUserMessageInput): SlateUserMessage {
+  return cloneSlateUserMessage({
+    ...input,
+    messageId: input.messageId ?? "",
+    mode: input.mode ?? SlateMode.UNSPECIFIED,
+    conversationStateBlobId: new Uint8Array(input.conversationStateBlobId ?? []),
+    hookContexts: input.hookContexts ?? [],
+  })
+}

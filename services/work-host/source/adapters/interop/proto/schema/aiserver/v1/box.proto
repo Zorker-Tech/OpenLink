@@ -1,0 +1,490 @@
+// aiserver.v1 — aiserver/v1/sandbox messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+message AbortBoxStoreMultipartWritesRequest {
+  repeated .aiserver.v1.BoxStoreMultipartWriteAbort uploads = 1 [json_name = "uploads"];
+}
+
+message AbortBoxStoreMultipartWritesResponse {
+  repeated .aiserver.v1.BoxStoreMultipartAbortResult results = 1 [json_name = "results"];
+}
+
+message AdminForceRecreateBoxRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+}
+
+message AdminGetSlateAgentTranscriptPageRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+  string agent_id = 3 [json_name = "agentId"];
+  int64 before_seq = 4 [json_name = "beforeSeq"];
+  uint32 limit = 5 [json_name = "limit"];
+  int64 since_ms = 6 [json_name = "sinceMs"];
+  int64 until_ms = 7 [json_name = "untilMs"];
+}
+
+message AdminGetSlateAgentTranscriptPageResponse {
+  bool reachable = 1 [json_name = "reachable"];
+  string entries_json = 2 [json_name = "entriesJson"];
+  string reason = 3 [json_name = "reason"];
+  int64 next_before_seq = 4 [json_name = "nextBeforeSeq"];
+}
+
+message AdminHibernateBoxRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+  bool force = 3 [json_name = "force"];
+}
+
+message AdminHibernateBoxResponse {
+  bool started = 1 [json_name = "started"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message AdminListSlateAgentsRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+}
+
+message AdminListSlateAgentsResponse {
+  bool reachable = 1 [json_name = "reachable"];
+  string agents_json = 2 [json_name = "agentsJson"];
+  string reason = 3 [json_name = "reason"];
+}
+
+message AdminRecreateBoxRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+  bool preserve_data = 3 [json_name = "preserveData"];
+  bool force = 4 [json_name = "force"];
+}
+
+message AdminBoxHostStatusRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+}
+
+message AdminBoxHostStatusResponse {
+  bool gateway_reachable = 1 [json_name = "gatewayReachable"];
+  optional string host_version = 2 [json_name = "hostVersion"];
+  optional bool host_update_available = 3 [json_name = "hostUpdateAvailable"];
+  optional string latest_host_version = 4 [json_name = "latestHostVersion"];
+  optional bool is_busy = 5 [json_name = "isBusy"];
+  optional int64 last_busy_at_ms = 6 [json_name = "lastBusyAtMs"];
+}
+
+message AdminBoxStoreStatusRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+}
+
+message AdminBoxStoreStatusResponse {
+  bool durable = 1 [json_name = "durable"];
+  int64 entry_count = 2 [json_name = "entryCount"];
+  int64 total_bytes = 3 [json_name = "totalBytes"];
+  int64 last_snapshot_at_ms = 4 [json_name = "lastSnapshotAtMs"];
+  bool reachable = 5 [json_name = "reachable"];
+}
+
+message AdminSnapshotBoxStoreRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+}
+
+message AdminSnapshotBoxStoreResponse {
+  bool ok = 1 [json_name = "ok"];
+  int64 manifest_entries = 2 [json_name = "manifestEntries"];
+  int64 files_uploaded = 3 [json_name = "filesUploaded"];
+  string reason = 4 [json_name = "reason"];
+}
+
+message AdminUpdateBoxHostRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+  bool force = 3 [json_name = "force"];
+}
+
+message AdminUpdateBoxHostResponse {
+  bool started = 1 [json_name = "started"];
+  string reason = 2 [json_name = "reason"];
+  string version = 3 [json_name = "version"];
+}
+
+message AdminWatchBoxMigrationRequest {
+  string auth_id = 1 [json_name = "authId"];
+  string flavor = 2 [json_name = "flavor"];
+  string from_offset_key = 3 [json_name = "fromOffsetKey"];
+}
+
+message CompleteBoxStoreMultipartWritesRequest {
+  repeated .aiserver.v1.BoxStoreMultipartWriteCompletion completions = 1 [json_name = "completions"];
+}
+
+message CompleteBoxStoreMultipartWritesResponse {
+  repeated .aiserver.v1.BoxStoreMultipartWriteResult results = 1 [json_name = "results"];
+}
+
+message DeleteTeamSlateSetupManifestRequest {
+  string manifest_id = 1 [json_name = "manifestId"];
+  string expected_etag = 2 [json_name = "expectedEtag"];
+}
+
+message DeleteTeamSlateSetupManifestResponse {
+}
+
+message EnsureBoxRequest {
+}
+
+message EnsureBoxResponse {
+  string cluster = 1 [json_name = "cluster"];
+  string tenant_id = 2 [json_name = "tenantId"];
+  string pod_id = 3 [json_name = "podId"];
+  string network_token = 4 [json_name = "networkToken"];
+  string exec_daemon_auth_token = 5 [json_name = "execDaemonAuthToken"];
+  string exec_daemon_url = 6 [json_name = "execDaemonUrl"];
+  string vnc_url = 7 [json_name = "vncUrl"];
+  string terminals_folder = 8 [json_name = "terminalsFolder"];
+  optional bool image_update_available = 9 [json_name = "imageUpdateAvailable"];
+  string gateway_url = 10 [json_name = "gatewayUrl"];
+  string gateway_token = 11 [json_name = "gatewayToken"];
+  string fork_vnc_base_url = 12 [json_name = "forkVncBaseUrl"];
+}
+
+message EnsureBoxWindowRequest {
+  int32 window_index = 2 [json_name = "windowIndex"];
+}
+
+message ForceRecreateBoxRequest {
+}
+
+message GetBoxRunStateRequest {
+}
+
+message GetBoxRunStateResponse {
+  .aiserver.v1.BoxRunState state = 1 [json_name = "state"];
+  optional bool image_update_available = 2 [json_name = "imageUpdateAvailable"];
+}
+
+message KillTeamMemberBoxRequest {
+  int32 team_id = 1 [json_name = "teamId"];
+  int32 user_id = 2 [json_name = "userId"];
+  string pod_id = 3 [json_name = "podId"];
+  string cluster = 4 [json_name = "cluster"];
+}
+
+message KillTeamMemberBoxResponse {
+  bool killed = 1 [json_name = "killed"];
+  string reason = 2 [json_name = "reason"];
+  uint32 deleted_count = 3 [json_name = "deletedCount"];
+}
+
+message ListBoxStoreObjectsRequest {
+  string prefix = 1 [json_name = "prefix"];
+  string cursor = 2 [json_name = "cursor"];
+  int32 max_entries = 3 [json_name = "maxEntries"];
+}
+
+message ListBoxStoreObjectsResponse {
+  repeated .aiserver.v1.BoxStoreObjectEntry entries = 1 [json_name = "entries"];
+  string next_cursor = 2 [json_name = "nextCursor"];
+  bool truncated = 3 [json_name = "truncated"];
+}
+
+message ListBoxesRequest {
+}
+
+message ListBoxesResponse {
+  repeated .aiserver.v1.BoxDescriptor boxes = 1 [json_name = "boxes"];
+}
+
+message ListSlateSetupManifestsRequest {
+}
+
+message ListSlateSetupManifestsResponse {
+  uint32 schema_version = 1 [json_name = "schemaVersion"];
+  repeated .aiserver.v1.SlateAssignedSetupManifest manifests = 2 [json_name = "manifests"];
+}
+
+message ListTeamMemberBoxesRequest {
+  int32 team_id = 1 [json_name = "teamId"];
+  int32 user_id = 2 [json_name = "userId"];
+}
+
+message ListTeamMemberBoxesResponse {
+  int32 user_id = 1 [json_name = "userId"];
+  string email = 2 [json_name = "email"];
+  string name = 3 [json_name = "name"];
+  repeated .aiserver.v1.TeamMemberBoxPod boxes = 4 [json_name = "boxes"];
+  bool scan_incomplete = 5 [json_name = "scanIncomplete"];
+}
+
+message ListTeamSlateSetupManifestsRequest {
+}
+
+message ListTeamSlateSetupManifestsResponse {
+  string team_id = 1 [json_name = "teamId"];
+  bool can_manage = 2 [json_name = "canManage"];
+  repeated .aiserver.v1.SlateTeamSetupManifest manifests = 3 [json_name = "manifests"];
+}
+
+message NotifySlateAgentTurnFinishedRequest {
+  string agent_id = 1 [json_name = "agentId"];
+  string agent_name = 2 [json_name = "agentName"];
+  string message_preview = 3 [json_name = "messagePreview"];
+  string last_message_id = 4 [json_name = "lastMessageId"];
+  bool awaiting_user_response = 5 [json_name = "awaitingUserResponse"];
+}
+
+message NotifySlateAgentTurnFinishedResponse {
+}
+
+message PresignBoxStoreReadsRequest {
+  repeated string rel_paths = 1 [json_name = "relPaths"];
+}
+
+message PresignBoxStoreReadsResponse {
+  repeated .aiserver.v1.BoxStoreReadInstruction instructions = 1 [json_name = "instructions"];
+}
+
+message PresignBoxStoreWritesRequest {
+  repeated .aiserver.v1.BoxStoreWriteFile files = 1 [json_name = "files"];
+}
+
+message PresignBoxStoreWritesResponse {
+  repeated .aiserver.v1.BoxStoreWriteInstruction instructions = 1 [json_name = "instructions"];
+}
+
+message RecreateBoxRequest {
+  bool preserve_data = 1 [json_name = "preserveData"];
+  bool force = 2 [json_name = "force"];
+}
+
+message RecreateBoxResponse {
+  bool started = 1 [json_name = "started"];
+  string reason = 2 [json_name = "reason"];
+  string operation_id = 3 [json_name = "operationId"];
+}
+
+message SlateAssignedSetupManifest {
+  .aiserver.v1.SlateSetupManifestScopeKind scope_kind = 1 [json_name = "scopeKind"];
+  string scope_id = 2 [json_name = "scopeId"];
+  string manifest_id = 3 [json_name = "manifestId"];
+  string revision = 4 [json_name = "revision"];
+  repeated .aiserver.v1.SlateSetupManifestEntry entries = 5 [json_name = "entries"];
+}
+
+message BoxDescriptor {
+  bool running = 2 [json_name = "running"];
+}
+
+message BoxMigrationEvent {
+  .aiserver.v1.BoxMigrationPhase phase = 1 [json_name = "phase"];
+  string detail = 2 [json_name = "detail"];
+  int64 at_ms = 3 [json_name = "atMs"];
+  string offset_key = 4 [json_name = "offsetKey"];
+  string operation_id = 5 [json_name = "operationId"];
+}
+
+enum BoxMigrationPhase {
+  SAND_BOX_MIGRATION_PHASE_UNSPECIFIED = 0;
+  SAND_BOX_MIGRATION_PHASE_BACKING_UP = 1;
+  SAND_BOX_MIGRATION_PHASE_CREATING = 2;
+  SAND_BOX_MIGRATION_PHASE_MOVING = 3;
+  SAND_BOX_MIGRATION_PHASE_CLEANING_UP = 4;
+  SAND_BOX_MIGRATION_PHASE_WIPING = 5;
+  SAND_BOX_MIGRATION_PHASE_DONE = 6;
+  SAND_BOX_MIGRATION_PHASE_FAILED = 7;
+}
+
+enum BoxRunState {
+  SAND_BOX_RUN_STATE_UNSPECIFIED = 0;
+  SAND_BOX_RUN_STATE_ABSENT = 1;
+  SAND_BOX_RUN_STATE_HIBERNATED = 2;
+  SAND_BOX_RUN_STATE_RUNNING = 3;
+}
+
+message BoxStoreMultipartAbortResult {
+  uint32 input_index = 1 [json_name = "inputIndex"];
+  string rel_path = 2 [json_name = "relPath"];
+  oneof outcome {
+    .aiserver.v1.BoxStoreMultipartAbortSuccess success = 3 [json_name = "success"];
+    .aiserver.v1.BoxStoreMultipartOperationFailure failure = 4 [json_name = "failure"];
+  }
+}
+
+message BoxStoreMultipartAbortSuccess {
+  bool already_finished = 1 [json_name = "alreadyFinished"];
+}
+
+message BoxStoreMultipartOperationFailure {
+  .aiserver.v1.BoxStoreMultipartOperationFailureCode code = 1 [json_name = "code"];
+}
+
+enum BoxStoreMultipartOperationFailureCode {
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_UNSPECIFIED = 0;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_PRECONDITION_FAILED = 1;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_UPLOAD_NOT_FOUND = 2;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_INVALID_PARTS = 3;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_CHECKSUM_MISMATCH = 4;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_TRANSIENT = 5;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_INTERNAL = 6;
+  SAND_BOX_STORE_MULTIPART_OPERATION_FAILURE_CODE_RESTART_REQUIRED = 7;
+}
+
+message BoxStoreMultipartPart {
+  uint32 part_number = 1 [json_name = "partNumber"];
+  int64 size_bytes = 2 [json_name = "sizeBytes"];
+  string sha256 = 3 [json_name = "sha256"];
+}
+
+message BoxStoreMultipartUploadContext {
+  string upload_id = 1 [json_name = "uploadId"];
+  string rel_path = 2 [json_name = "relPath"];
+  int64 size_bytes = 3 [json_name = "sizeBytes"];
+  string sha256 = 4 [json_name = "sha256"];
+  uint32 expected_part_count = 5 [json_name = "expectedPartCount"];
+  repeated string part_sha256s = 6 [json_name = "partSha256s"];
+  string session_id = 9 [json_name = "sessionId"];
+  oneof precondition {
+    string if_match_etag = 7 [json_name = "ifMatchEtag"];
+    bool expect_absent = 8 [json_name = "expectAbsent"];
+  }
+}
+
+message BoxStoreMultipartUploadPartInstruction {
+  uint32 part_number = 1 [json_name = "partNumber"];
+  string url = 2 [json_name = "url"];
+  map<string, string> headers = 3 [json_name = "headers"];
+  int64 offset_bytes = 4 [json_name = "offsetBytes"];
+  int64 size_bytes = 5 [json_name = "sizeBytes"];
+}
+
+message BoxStoreMultipartUploadedPart {
+  uint32 part_number = 1 [json_name = "partNumber"];
+  string etag = 2 [json_name = "etag"];
+}
+
+message BoxStoreMultipartWriteAbort {
+  optional .aiserver.v1.BoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+}
+
+message BoxStoreMultipartWriteCompletion {
+  optional .aiserver.v1.BoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+  repeated .aiserver.v1.BoxStoreMultipartUploadedPart parts = 2 [json_name = "parts"];
+}
+
+message BoxStoreMultipartWriteInstruction {
+  optional .aiserver.v1.BoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+  repeated .aiserver.v1.BoxStoreMultipartUploadPartInstruction parts = 2 [json_name = "parts"];
+  int64 part_urls_expires_at_ms = 3 [json_name = "partUrlsExpiresAtMs"];
+}
+
+message BoxStoreMultipartWriteResult {
+  uint32 input_index = 1 [json_name = "inputIndex"];
+  string rel_path = 2 [json_name = "relPath"];
+  oneof outcome {
+    .aiserver.v1.BoxStoreMultipartWriteSuccess success = 3 [json_name = "success"];
+    .aiserver.v1.BoxStoreMultipartOperationFailure failure = 4 [json_name = "failure"];
+  }
+}
+
+message BoxStoreMultipartWriteSuccess {
+  string etag = 1 [json_name = "etag"];
+}
+
+message BoxStoreObjectEntry {
+  string rel_path = 1 [json_name = "relPath"];
+  string etag = 2 [json_name = "etag"];
+  int64 size_bytes = 3 [json_name = "sizeBytes"];
+  int64 last_modified_ms = 4 [json_name = "lastModifiedMs"];
+}
+
+message BoxStoreReadInstruction {
+  string rel_path = 1 [json_name = "relPath"];
+  string url = 2 [json_name = "url"];
+  int64 expires_at_ms = 3 [json_name = "expiresAtMs"];
+}
+
+message BoxStoreWriteFile {
+  string rel_path = 1 [json_name = "relPath"];
+  string sha256 = 2 [json_name = "sha256"];
+  int64 size_bytes = 3 [json_name = "sizeBytes"];
+  bool content_addressed = 4 [json_name = "contentAddressed"];
+  string if_match_etag = 5 [json_name = "ifMatchEtag"];
+  bool expect_absent = 6 [json_name = "expectAbsent"];
+  repeated .aiserver.v1.BoxStoreMultipartPart multipart_parts = 7 [json_name = "multipartParts"];
+}
+
+message BoxStoreWriteInstruction {
+  string rel_path = 1 [json_name = "relPath"];
+  string url = 2 [json_name = "url"];
+  map<string, string> headers = 3 [json_name = "headers"];
+  int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+  optional .aiserver.v1.BoxStoreMultipartWriteInstruction multipart = 5 [json_name = "multipart"];
+}
+
+message SlateSetupManifestEntry {
+  string id = 1 [json_name = "id"];
+  string setup = 2 [json_name = "setup"];
+  optional string check = 3 [json_name = "check"];
+}
+
+enum SlateSetupManifestScopeKind {
+  SAND_SETUP_MANIFEST_SCOPE_KIND_UNSPECIFIED = 0;
+  SAND_SETUP_MANIFEST_SCOPE_KIND_USER = 1;
+  SAND_SETUP_MANIFEST_SCOPE_KIND_TEAM = 2;
+  SAND_SETUP_MANIFEST_SCOPE_KIND_ORGANIZATION = 3;
+}
+
+message SlateTeamSetupManifest {
+  string manifest_id = 1 [json_name = "manifestId"];
+  string revision = 2 [json_name = "revision"];
+  string etag = 3 [json_name = "etag"];
+  repeated .aiserver.v1.SlateSetupManifestEntry entries = 4 [json_name = "entries"];
+}
+
+message SaveTeamSlateSetupManifestRequest {
+  string manifest_id = 1 [json_name = "manifestId"];
+  string expected_etag = 2 [json_name = "expectedEtag"];
+  repeated .aiserver.v1.SlateSetupManifestEntry entries = 3 [json_name = "entries"];
+}
+
+message SaveTeamSlateSetupManifestResponse {
+  optional .aiserver.v1.SlateTeamSetupManifest manifest = 1 [json_name = "manifest"];
+}
+
+message StatBoxStoreObjectRequest {
+  string rel_path = 1 [json_name = "relPath"];
+}
+
+message StatBoxStoreObjectResponse {
+  bool exists = 1 [json_name = "exists"];
+  string etag = 2 [json_name = "etag"];
+  int64 size_bytes = 3 [json_name = "sizeBytes"];
+  int64 last_modified_ms = 4 [json_name = "lastModifiedMs"];
+}
+
+message TeamMemberBoxPod {
+  string cluster = 1 [json_name = "cluster"];
+  string pod_id = 2 [json_name = "podId"];
+  string tenant_id = 3 [json_name = "tenantId"];
+  string flavor = 4 [json_name = "flavor"];
+  string run_state = 5 [json_name = "runState"];
+  optional string image_tag = 6 [json_name = "imageTag"];
+  optional int64 created_at_ms = 7 [json_name = "createdAtMs"];
+  optional int64 last_active_at_ms = 8 [json_name = "lastActiveAtMs"];
+  optional string node_id = 9 [json_name = "nodeId"];
+  optional string failure_reason = 10 [json_name = "failureReason"];
+}
+
+message WatchBoxMigrationRequest {
+  string from_offset_key = 1 [json_name = "fromOffsetKey"];
+  bool include_finished = 2 [json_name = "includeFinished"];
+}

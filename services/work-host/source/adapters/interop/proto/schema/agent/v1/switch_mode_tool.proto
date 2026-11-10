@@ -1,0 +1,56 @@
+// agent.v1 — agent/v1/switch_mode_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message SwitchModeRequestResponse {
+  oneof result {
+    .agent.v1.SwitchModeRequestResponse.Approved approved = 1 [json_name = "approved"];
+    .agent.v1.SwitchModeRequestResponse.Rejected rejected = 2 [json_name = "rejected"];
+  }
+  message Approved {
+  }
+  message Rejected {
+    string reason = 1 [json_name = "reason"];
+  }
+}
+
+message SwitchModeToolCall {
+  optional .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SwitchModeResult result = 2 [json_name = "result"];
+}
+
+message SwitchModeArgs {
+  string target_mode_id = 1 [json_name = "targetModeId"];
+  optional string explanation = 2 [json_name = "explanation"];
+  string tool_call_id = 3 [json_name = "toolCallId"];
+}
+
+message SwitchModeResult {
+  oneof result {
+    .agent.v1.SwitchModeSuccess success = 1 [json_name = "success"];
+    .agent.v1.SwitchModeError error = 2 [json_name = "error"];
+    .agent.v1.SwitchModeRejected rejected = 3 [json_name = "rejected"];
+  }
+}
+
+message SwitchModeSuccess {
+  string from_mode_id = 1 [json_name = "fromModeId"];
+  string to_mode_id = 2 [json_name = "toModeId"];
+}
+
+message SwitchModeError {
+  string error = 1 [json_name = "error"];
+}
+
+message SwitchModeRejected {
+  string reason = 1 [json_name = "reason"];
+}
+
+message SwitchModeRequestQuery {
+  optional .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
+}

@@ -1,0 +1,172 @@
+{
+  "entries": {
+    "shared/node/egress-tunnel/ws.d.ts": {
+      "reason": "The copied package declaration moved to the egress-tunnel interop boundary, and the runtime package is now a direct dependency.",
+      "evidence": "Work-host typecheck compiles the live ws consumer against the interop declaration; leftovers-twentyseven.test.ts loads and constructs the actual ws package surface in the focused runtime batch."
+    },
+    "host/runner/production-turn-input-projection.ts": {
+      "reason": "Unused wrapper around createTurnAgentRunInputProjection. No source or test imports this wrapper; the production owner and turn stream call the underlying projector directly, so retaining this separate module only duplicated the handoff and its generated action/state types.",
+      "evidence": "host-runner-cycle.test.ts directly covers action, tool and cloned-state ordering, resume actions and discovery failures. The rewrite removal gate verifies the source is absent and no importers remain."
+    },
+    "host/runner/runner-prompt-glue.ts": {
+      "reason": "Unused runner wrapper: the production host builds the live prompt collector directly, and this module has no runtime call sites.",
+      "evidence": "Source search found only a stale import, a type-only dependency and an export-presence smoke test. Removed those references; active prompt collector, runner capability and large-output-spill contract suites retain the live behavior checks, while the rewrite gate verifies no importers remain."
+    },
+    "packages/agent-exec/agent-skill-metadata.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/await-outcome.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/background-completion-dispatch.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/common.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/exec-error.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/execution-timing.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/request-context-parts.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/subagent-lifecycle-state-machine.ts": {
+      "reason": "Empty module with only export {} and copied comments; no code read or wrote lifecycle state.",
+      "evidence": "Removed its side-effect imports from the agent-exec barrel and the empty lifecycle-store module; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/subagent-lifecycle-store.ts": {
+      "reason": "After removing its import of the empty lifecycle state-machine module, this module contained only export {} and no runtime behavior.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "packages/agent-exec/subagent-queue.ts": {
+      "reason": "Empty module with only export {} and copied comments; it defined no runtime behavior or exported API.",
+      "evidence": "Removed its side-effect import from the agent-exec barrel; removal gate checks the source is absent and no imports remain."
+    },
+    "host/boxes/box-store-sync/files.ts": {
+      "reason": "One byte-limit constant had no source or test consumer; the actual file store uses its own independently-scoped limits.",
+      "evidence": "The port note records importer count zero; the removal gate checks the source path is absent and no imports remain."
+    },
+    "mime-types.d.ts": {
+      "reason": "Duplicate declaration for the mime-types package; its maintained @types package is already declared by work-host.",
+      "evidence": "Work-host typecheck passes with no local declaration; the removal gate verifies no imports target this file."
+    },
+    "packages/agent-core/conversation-actions/context-injection.ts": {
+      "reason": "Empty module with no observable exports or runtime effects.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/agent-core/conversation-actions/controlled.ts": {
+      "reason": "Module initialization only created an unused logger; the retained object had no observable behavior.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/agent-core/conversation-actions/steer-outbox.ts": {
+      "reason": "Empty module with no observable exports or runtime effects.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/agent-core/domain-utils.ts": {
+      "reason": "Only private initialization constants existed; the public surface had no behavior to retain.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/agent-core/mcp-auth-flow.ts": {
+      "reason": "Empty module with no observable exports or runtime effects.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/context/browser-bridge.ts": {
+      "reason": "Empty module with no observable exports or runtime effects.",
+      "evidence": "The source has no importer; the removal gate checks the path is absent and no imports remain."
+    },
+    "packages/cursor-plugins/snapshot-state.ts": {
+      "reason": "Unused five-minute snapshot TTL; no snapshot refresh or consumer existed in Slate.",
+      "evidence": "The port note records importer count zero; the removal gate checks the source path is absent and no imports remain."
+    },
+    "packages/local-exec/pending-decision-provider.ts": {
+      "reason": "Unused OperationType constants; the only references were self-assertions, not runtime consumers.",
+      "evidence": "Removed the self-assertions; the removal gate checks the source path is absent and no imports remain."
+    },
+    "packages/local-exec/pi/truncate.ts": {
+      "reason": "Unused PI_DEFAULT_MAX_BYTES constant; current readers have their own independently-scoped limits.",
+      "evidence": "Removed the self-assertion; the removal gate checks the source path is absent and no imports remain."
+    },
+    "packages/cursor-config/auth/token-refresh-policy.ts": {
+      "reason": "The module has no runtime tokens or behavior; token refresh decisions already belong to the token implementation.",
+      "evidence": "Removed its only side-effect import from the auth barrel; the removal gate verifies the path is absent and no imports remain."
+    },
+    "packages/utils/lru-cache.ts": {
+      "reason": "The file was an inlined copy of a package; work-host declares and uses the maintained lru-cache dependency instead.",
+      "evidence": "The source consumers import the declared package; work-host typecheck and tests validate the call sites."
+    },
+    "packages/constants/composer.ts": {
+      "reason": "MAX_TEXT_SIZE was an isolated constant with no source consumers; local-exec keeps its independently-scoped size limit.",
+      "evidence": "The port mapping records that only the constant's own assertion imported it; that assertion and the barrel export were removed, and the removal gate checks for remaining imports."
+    },
+    "packages/constants/permissions.ts": {
+      "reason": "The permission name table mirrored counterpart account-service capabilities and had no product-code consumers; it is not a Slate-owned permission contract.",
+      "evidence": "Repository search found only the module barrel and its self-assertion test; both were removed, and the removal gate verifies the source path and imports are absent."
+    },
+    "packages/agent/tools/mcp/mcp-output-spill.ts": {
+      "reason": "The package entrypoint only bridged a counterpart-shaped MCP result into file storage. That bridge belongs in the interop adapter; the byte threshold and truncation notice remain in Slate-owned policy.",
+      "evidence": "Moved the only test caller to the interop adapter and removed the package forwarding module. The spill, policy, file-adapter and executor suites pass 47/47; work-host typecheck passes, and the removal gate checks that the old source path and its imports are absent."
+    },
+    "packages/agent/utils/slack-sender-line.ts": {
+      "reason": "The provider-specific sender helper is no longer a Slate core module; its generic sender formatting now lives beside Slate invocation rendering.",
+      "evidence": "Moved the sender cases into the Slate invocation context contract and updated the only utility test and renderer caller. Invocation rendering, adapter and utility contracts pass 34/34; the removal gate confirms the old helper has no imports."
+    },
+    "host/extensions/inference/cursor-web-tools.ts": {
+      "reason": "The host-local file only constructed requests for the counterpart web-search and fetch protocol; that interop code now lives in the adapter, with Slate result types kept in a separate contract.",
+      "evidence": "Moved production wiring and injected-client tests to the interop adapter. Backend-client, inference wiring and extension suites pass 15/15; typecheck and interop boundary checks pass, the full Node 24 suite passes 10564/10564, and the removal gate confirms no references to the old host path remain."
+    },
+    "shared/pr-review.ts": {
+      "reason": "This file only declared provider-specific destination names and an unused empty preference value; no product source code reads either export.",
+      "evidence": "Repository search found only an unused test import, which was removed. The generated provider settings remain under the interop schema boundary, and the removal gate verifies no references to the deleted helper remain."
+    },
+    "packages/local-exec/services/team-settings-service.ts": {
+      "reason": "The file only declared five private constants; it exports no behavior and has no source or test importers.",
+      "evidence": "Repository-wide search found no reference to the path or its constants outside the file. Removing the unreferenced constant-only module leaves no runtime call site to validate; the rewrite removal gate checks that the path is absent and has no importers."
+    },
+    "shared/observability/structured-log-spill.ts": {
+      "reason": "The only export was an unreferenced spill-count constant with no source consumers; the active structured-log transport already uses its own buffer limit.",
+      "evidence": "Repository-wide source search found no importer; only an assertion in shared-foundations.test.ts read the value, so that assertion was removed. host-structured-log-transport.test.ts continues to exercise the active buffer capacity. The rewrite removal gate verifies the old path is absent and has no importers."
+    },
+    "packages/chat-inference/middleware/effort-level-middleware.ts": {
+      "reason": "The module exported nothing and only created an unused logger before importing the base prompt contracts, which the package entry already imports directly.",
+      "evidence": "Removed the sole package-entry import and the no-op module. chat-inference-package-entry-contract.test.ts preserves the public surface, while the base and prompt-executor suites cover the active inference package. The rewrite removal gate verifies the source is absent and no imports remain."
+    },
+    "packages/agent/state-utils.ts": {
+      "reason": "The mapped Slate source only created an agent/state logger that has no source or test importers, so it emitted no diagnostics and had no product behavior.",
+      "evidence": "Repository-wide search found no references to stateLogger outside its definition. The removal gate verifies the source is absent and no importers remain; active agent state behavior is covered by the state and host-agent-state suites."
+    },
+    "packages/local-exec/services/cloud-rules-service.ts": {
+      "reason": "The module only exported two cloud-instructions strings, and no product source imported them; the active Work host has no consumer for this placeholder service.",
+      "evidence": "Repository-wide search found only a test import and literal separator assertion, which were removed. No runtime behavior was connected to the constants. The removal gate verifies that the source is absent and no imports remain."
+    },
+    "packages/cursor-config/auth/index.ts": {
+      "reason": "The mapped Slate module was an import-only auth barrel with no source or test importers; actual auth and policy callers import their specific modules directly.",
+      "evidence": "Repository-wide search found no consumer of the package entry. Removing the unused barrel does not remove either auth implementation, and the rewrite removal gate verifies the mapped source is absent and has no imports."
+    },
+    "shared/vnc-viewer-visibility.ts": {
+      "reason": "The module only declared a viewer-visible channel, but no host, window or client runtime consumes it; the only source reference was its own test assertion.",
+      "evidence": "Repository-wide search found no runtime consumer. Removed the self-check assertion and the unconnected channel constant. The rewrite removal gate verifies the source is absent and has no imports."
+    },
+    "host/boxes/generated-production.ts": {
+      "reason": "The file name and export path described generated production ports after production stopped using generated clients.",
+      "evidence": "Production composition now imports host/boxes/slate-production.ts, whose ports use the Slate control and execution clients. The compatibility exports remain in the interop adapter, and the old host facade has no importers; the generated-port behavior tests pass against the renamed Slate production export."
+    },
+    "packages/hooks/claude-code-mapper.ts": {
+      "reason": "Foreign hook configuration mapping was removed. Slate plugins now ship Slate HookConfig files directly, so there is no second hook dialect to translate.",
+      "evidence": "hooks.test.ts validates Slate hook configs and plugin-install-loader.test.ts covers plugin hook files; the rewrite gate confirms no source or importers remain."
+    },
+    "packages/hooks/claude-code-types.ts": {
+      "reason": "Foreign hook configuration types were removed with the mapper. Slate hook configuration is the only plugin hook contract.",
+      "evidence": "hooks.test.ts validates Slate hook configs and plugin-install-loader.test.ts covers plugin hook files; the rewrite gate confirms no source or importers remain."
+    }
+  }
+}

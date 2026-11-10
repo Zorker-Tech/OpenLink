@@ -1,0 +1,37 @@
+// agent.v1 — agent/v1/edit_pr_labels_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message EditPrLabelsToolCall {
+  optional .agent.v1.EditPrLabelsArgs args = 1 [json_name = "args"];
+  optional .agent.v1.EditPrLabelsResult result = 2 [json_name = "result"];
+}
+
+message EditPrLabelsArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string pr_url = 2 [json_name = "prUrl"];
+  repeated string add_labels = 4 [json_name = "addLabels"];
+  repeated string remove_labels = 5 [json_name = "removeLabels"];
+}
+
+message EditPrLabelsResult {
+  oneof result {
+    .agent.v1.EditPrLabelsSuccess success = 1 [json_name = "success"];
+    .agent.v1.EditPrLabelsError error = 2 [json_name = "error"];
+  }
+}
+
+message EditPrLabelsSuccess {
+  string pr_url = 1 [json_name = "prUrl"];
+  int32 pr_number = 2 [json_name = "prNumber"];
+  string message = 3 [json_name = "message"];
+}
+
+message EditPrLabelsError {
+  string error = 1 [json_name = "error"];
+}

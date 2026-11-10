@@ -1,0 +1,136 @@
+// agent.v1 — agent/v1/pr_management_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message PrManagementResult {
+  oneof result {
+    .agent.v1.PrManagementSuccess success = 1 [json_name = "success"];
+    .agent.v1.PrManagementError error = 2 [json_name = "error"];
+    .agent.v1.PrManagementRejected rejected = 3 [json_name = "rejected"];
+    .agent.v1.PrManagementRegistered registered = 4 [json_name = "registered"];
+    .agent.v1.PrManagementNeedsConfirmation needs_confirmation = 5 [json_name = "needsConfirmation"];
+  }
+}
+
+message PrManagementSuccess {
+  string pr_url = 1 [json_name = "prUrl"];
+  int32 pr_number = 2 [json_name = "prNumber"];
+  string message = 3 [json_name = "message"];
+}
+
+message PrManagementError {
+  string error = 1 [json_name = "error"];
+}
+
+message PrManagementRejected {
+  string reason = 1 [json_name = "reason"];
+}
+
+message PrManagementRegistered {
+  string message = 1 [json_name = "message"];
+  string title = 2 [json_name = "title"];
+  string body = 3 [json_name = "body"];
+  optional string base_branch = 4 [json_name = "baseBranch"];
+  optional bool draft = 5 [json_name = "draft"];
+  string branch_name = 6 [json_name = "branchName"];
+}
+
+message PrManagementNeedsConfirmation {
+  string message = 1 [json_name = "message"];
+  string discovered_pr_url = 2 [json_name = "discoveredPrUrl"];
+  int32 discovered_pr_number = 3 [json_name = "discoveredPrNumber"];
+  string discovered_pr_title = 4 [json_name = "discoveredPrTitle"];
+  string branch_name = 5 [json_name = "branchName"];
+}
+
+message PrManagementToolCall {
+  optional .agent.v1.PrManagementArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PrManagementResult result = 2 [json_name = "result"];
+}
+
+message PrManagementArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  oneof action {
+    .agent.v1.CreatePrAction create_pr = 2 [json_name = "createPr"];
+    .agent.v1.UpdatePrAction update_pr = 3 [json_name = "updatePr"];
+    .agent.v1.PostCommentAction post_comment = 4 [json_name = "postComment"];
+    .agent.v1.ResolveCommentAction resolve_comment = 5 [json_name = "resolveComment"];
+    .agent.v1.GetCiStatusAction get_ci_status = 6 [json_name = "getCiStatus"];
+    .agent.v1.SetPrStatusAction set_pr_status = 7 [json_name = "setPrStatus"];
+  }
+}
+
+message CreatePrAction {
+  string title = 1 [json_name = "title"];
+  string body = 2 [json_name = "body"];
+  optional string base_branch = 3 [json_name = "baseBranch"];
+  optional bool draft = 4 [json_name = "draft"];
+  string branch_name = 5 [json_name = "branchName"];
+  repeated string add_labels = 6 [json_name = "addLabels"];
+  optional string repo_url = 7 [json_name = "repoUrl"];
+  optional bool skip_branch_prefix_check = 8 [json_name = "skipBranchPrefixCheck"];
+  optional int64 stack_on_pr_number = 9 [json_name = "stackOnPrNumber"];
+}
+
+message UpdatePrAction {
+  optional string pr_url = 1 [json_name = "prUrl"];
+  optional string title = 2 [json_name = "title"];
+  optional string body = 3 [json_name = "body"];
+  optional string base_branch = 4 [json_name = "baseBranch"];
+  optional string branch_name = 5 [json_name = "branchName"];
+  repeated string add_labels = 6 [json_name = "addLabels"];
+  repeated string remove_labels = 7 [json_name = "removeLabels"];
+  optional string repo_url = 8 [json_name = "repoUrl"];
+  optional int64 stack_on_pr_number = 9 [json_name = "stackOnPrNumber"];
+  optional bool clear_stack = 10 [json_name = "clearStack"];
+  optional bool draft = 11 [json_name = "draft"];
+}
+
+message PostCommentAction {
+  optional string pr_url = 1 [json_name = "prUrl"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  string body = 3 [json_name = "body"];
+  optional string repo_url = 4 [json_name = "repoUrl"];
+  optional int64 in_reply_to = 5 [json_name = "inReplyTo"];
+  optional string path = 6 [json_name = "path"];
+  optional int32 line = 7 [json_name = "line"];
+  optional int32 start_line = 8 [json_name = "startLine"];
+  optional string side = 9 [json_name = "side"];
+  optional string reply_to_reference = 10 [json_name = "replyToReference"];
+}
+
+message ResolveCommentAction {
+  optional string pr_url = 1 [json_name = "prUrl"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  int64 comment_id = 3 [json_name = "commentId"];
+  optional string repo_url = 4 [json_name = "repoUrl"];
+  optional string comment_reference = 5 [json_name = "commentReference"];
+}
+
+message GetCiStatusAction {
+  optional string pr_url = 1 [json_name = "prUrl"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  optional string repo_url = 3 [json_name = "repoUrl"];
+}
+
+message SetPrStatusAction {
+  optional string pr_url = 1 [json_name = "prUrl"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  optional string repo_url = 3 [json_name = "repoUrl"];
+  .agent.v1.PullRequestStatus status = 4 [json_name = "status"];
+}
+
+message PrManagementRequestQuery {
+  optional .agent.v1.PrManagementArgs args = 1 [json_name = "args"];
+}
+
+enum PullRequestStatus {
+  PULL_REQUEST_STATUS_UNSPECIFIED = 0;
+  PULL_REQUEST_STATUS_OPEN = 1;
+  PULL_REQUEST_STATUS_CLOSED = 2;
+}

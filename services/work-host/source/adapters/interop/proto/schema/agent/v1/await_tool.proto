@@ -1,0 +1,60 @@
+// agent.v1 — agent/v1/await_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message AwaitToolCall {
+  optional .agent.v1.AwaitArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AwaitResult result = 2 [json_name = "result"];
+}
+
+message AwaitArgs {
+  string task_id = 1 [json_name = "taskId"];
+  optional uint32 block_until_ms = 2 [json_name = "blockUntilMs"];
+  optional string regex = 3 [json_name = "regex"];
+}
+
+message AwaitResult {
+  oneof result {
+    .agent.v1.AwaitTaskComplete complete = 1 [json_name = "complete"];
+    .agent.v1.AwaitTaskStillRunning still_running = 2 [json_name = "stillRunning"];
+    .agent.v1.AwaitError error = 3 [json_name = "error"];
+    .agent.v1.AwaitSuccess success = 4 [json_name = "success"];
+  }
+}
+
+message AwaitTaskComplete {
+  string task_id = 1 [json_name = "taskId"];
+  uint64 runtime_ms = 2 [json_name = "runtimeMs"];
+  string output_file_path = 3 [json_name = "outputFilePath"];
+  uint64 output_length = 4 [json_name = "outputLength"];
+  bool regex_requested = 5 [json_name = "regexRequested"];
+  optional string regex_match = 6 [json_name = "regexMatch"];
+  optional sint32 exit_code = 7 [json_name = "exitCode"];
+  optional string wake_reason = 8 [json_name = "wakeReason"];
+}
+
+message AwaitTaskStillRunning {
+  string task_id = 1 [json_name = "taskId"];
+  uint64 runtime_ms = 2 [json_name = "runtimeMs"];
+  string output_file_path = 3 [json_name = "outputFilePath"];
+  uint64 output_length = 4 [json_name = "outputLength"];
+  bool regex_requested = 5 [json_name = "regexRequested"];
+  optional string regex_match = 6 [json_name = "regexMatch"];
+  optional string wake_reason = 7 [json_name = "wakeReason"];
+}
+
+message AwaitError {
+  string error = 1 [json_name = "error"];
+}
+
+message AwaitSuccess {
+  oneof await_result {
+    .agent.v1.AwaitTaskComplete complete = 1 [json_name = "complete"];
+    .agent.v1.AwaitTaskStillRunning still_running = 2 [json_name = "stillRunning"];
+  }
+}

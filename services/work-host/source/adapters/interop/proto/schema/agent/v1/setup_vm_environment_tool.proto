@@ -1,0 +1,28 @@
+// agent.v1 — agent/v1/setup_vm_environment_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message SetupVmEnvironmentResult {
+  oneof result {
+    .agent.v1.SetupVmEnvironmentSuccess success = 1 [json_name = "success"];
+  }
+}
+
+message SetupVmEnvironmentSuccess {
+}
+
+message SetupVmEnvironmentToolCall {
+  optional .agent.v1.SetupVmEnvironmentArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SetupVmEnvironmentResult result = 2 [json_name = "result"];
+}
+
+message SetupVmEnvironmentArgs {
+  string install_command = 2 [json_name = "installCommand"];
+  string start_command = 3 [json_name = "startCommand"];
+  string dockerfile_contents = 4 [json_name = "dockerfileContents"];
+}

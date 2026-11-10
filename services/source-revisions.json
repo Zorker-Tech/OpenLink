@@ -1,6 +1,14 @@
 {
   "schemaVersion": 1,
   "services": {
+    "work-host": {
+      "path": "services/work-host",
+      "upstream": "https://git.haokir/hydite/openlink/work-host",
+      "sourceCommit": "8e4ea6fc5a36b3b142d85fbd4012b49025fc12c9",
+      "ownership": "OpenLink-owned",
+      "mode": "work",
+      "license": "Haokir Authorized Product License"
+    },
     "pi": {
       "path": "services/pi",
       "upstream": "https://git.haokir/hydite/openlink/pi",

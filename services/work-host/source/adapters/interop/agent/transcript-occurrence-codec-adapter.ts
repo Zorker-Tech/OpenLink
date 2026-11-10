@@ -1,0 +1,163 @@
+/** Decodes Slate turn envelopes and the remaining interop message payloads for transcript projection. */
+
+import type {
+  DecodedTranscriptStep,
+  DecodedTranscriptTurn,
+  TranscriptOccurrenceCodec,
+} from "../../../host/transcript/mirror/transcript-occurrence-deriver.ts"
+import { slateConversationTurnSerde } from "./agent-conversation-state-serdes-adapter.ts"
+import {
+  deserializeSlateConversationStepInterop,
+  deserializeSlateUserMessageInterop,
+} from "./agent-state-message-serdes-adapter.ts"
+
+interface BinaryMessageType<Message> {
+  fromBinary(wireBytes: Uint8Array): Message
+}
+
+interface JsonProjectable {
+  toJson(): unknown
+}
+
+interface ToolReplyShape {
+  readonly args?: JsonProjectable & {
+    readonly toolName?: string
+    readonly name?: string
+  }
+  readonly result?: JsonProjectable
+}
+
+interface TurnShape {
+  readonly turn:
+    | {
+        readonly case: "agentConversationTurn"
+        readonly value: {
+          readonly userMessage: Uint8Array
+          readonly steps: readonly Uint8Array[]
+        }
+      }
+    | { readonly case: "shellConversationTurn"; readonly value: unknown }
+    | { readonly case: undefined; readonly value?: undefined }
+}
+
+interface UserMessageShape {
+  readonly text: string
+  readonly textBlobId?: Uint8Array
+}
+
+interface StepShape {
+  readonly message:
+    | {
+        readonly case: "assistantMessage" | "thinkingMessage"
+        readonly value: { readonly text: string }
+      }
+    | {
+        readonly case: "toolCall"
+        readonly value: {
+          readonly tool:
+            | { readonly case: string; readonly value: ToolReplyShape }
+            | { readonly case: undefined; readonly value?: undefined }
+        }
+      }
+    | { readonly case: undefined; readonly value?: undefined }
+}
+
+export interface GeneratedTranscriptOccurrenceBindings {
+  readonly ConversationTurnStructure: BinaryMessageType<TurnShape>
+  readonly UserMessage: BinaryMessageType<UserMessageShape>
+  readonly ConversationStep: BinaryMessageType<StepShape>
+}
+
+function requireGeneratedType<Message>(
+  value: BinaryMessageType<Message> | undefined,
+  typeName: string,
+): BinaryMessageType<Message> {
+  if (typeof value?.fromBinary !== "function") {
+    throw new TypeError(`generated ${typeName}.fromBinary is required`)
+  }
+  return value
+}
+
+function slateToolName(caseName: string, value: ToolReplyShape): string {
+  if (caseName === "mcpToolCall") return value.args?.toolName ?? value.args?.name ?? "mcp"
+  return caseName
+    .replace(/ToolCall$/, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+}
+
+function decodeStepShape(decoded: StepShape): DecodedTranscriptStep {
+  const message = decoded.message
+  if (message.case === "assistantMessage" || message.case === "thinkingMessage") {
+    return {
+      case: message.case === "assistantMessage" ? "assistant" : "thinking",
+      text: message.value.text,
+    }
+  }
+  if (message.case !== "toolCall") return { case: undefined }
+
+  const call = message.value.tool
+  if (call.case == null) return { case: undefined }
+  return {
+    case: "tool",
+    name: slateToolName(call.case, call.value),
+    input: call.value.args?.toJson() ?? {},
+    ...(call.value.result == null ? {} : { result: call.value.result.toJson() }),
+  }
+}
+
+function createTranscriptOccurrenceCodec(
+  decodeUserMessage: (wireBytes: Uint8Array) => UserMessageShape,
+  decodeTurn: (wireBytes: Uint8Array) => DecodedTranscriptTurn,
+  decodeStep: (wireBytes: Uint8Array) => DecodedTranscriptStep,
+): TranscriptOccurrenceCodec {
+  return {
+    decodeTurn,
+    decodeUserMessage(wireBytes) {
+      const decoded = decodeUserMessage(wireBytes)
+      return {
+        text: decoded.text,
+        ...(decoded.textBlobId === undefined ? {} : { textBlobId: decoded.textBlobId }),
+      }
+    },
+    decodeStep,
+  }
+}
+
+export function createSlateTranscriptOccurrenceCodec(): TranscriptOccurrenceCodec {
+  return createTranscriptOccurrenceCodec(wireBytes => deserializeSlateUserMessageInterop(wireBytes), wireBytes => {
+    try {
+      const decoded = slateConversationTurnSerde.deserialize(wireBytes)
+      return decoded.kind === "agent"
+        ? { case: "agent", userMessage: decoded.userMessageBlobId, steps: decoded.stepBlobIds }
+        : { case: "shell" }
+    } catch (error) {
+      if (error instanceof Error && error.message === "Slate conversation turn record is unsupported or invalid") {
+        return { case: undefined }
+      }
+      throw error
+    }
+  }, wireBytes => decodeStepShape(deserializeSlateConversationStepInterop(wireBytes) as unknown as StepShape))
+}
+
+/** Legacy protocol-view constructor kept for isolated interop callers and contract tests. */
+export function createGeneratedTranscriptOccurrenceCodec(
+  generatedBindings: GeneratedTranscriptOccurrenceBindings,
+): TranscriptOccurrenceCodec {
+  const turnType = requireGeneratedType(generatedBindings?.ConversationTurnStructure, "ConversationTurnStructure")
+  const userType = requireGeneratedType(generatedBindings?.UserMessage, "UserMessage")
+  const stepType = requireGeneratedType(generatedBindings?.ConversationStep, "ConversationStep")
+  return createTranscriptOccurrenceCodec(wireBytes => userType.fromBinary(wireBytes), wireBytes => {
+    const decoded = turnType.fromBinary(wireBytes)
+    if (decoded.turn.case === "agentConversationTurn") {
+      return {
+        case: "agent",
+        userMessage: decoded.turn.value.userMessage,
+        steps: decoded.turn.value.steps,
+      }
+    }
+    return decoded.turn.case === "shellConversationTurn"
+      ? { case: "shell" }
+      : { case: undefined }
+  }, wireBytes => decodeStepShape(stepType.fromBinary(wireBytes)))
+}

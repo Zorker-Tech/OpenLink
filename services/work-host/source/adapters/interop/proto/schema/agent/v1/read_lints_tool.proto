@@ -1,0 +1,57 @@
+// agent.v1 — agent/v1/read_lints_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/diagnostics_exec.proto";
+import "agent/v1/utils.proto";
+
+message ReadLintsToolCall {
+  optional .agent.v1.ReadLintsToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadLintsToolResult result = 2 [json_name = "result"];
+}
+
+message ReadLintsToolArgs {
+  repeated string paths = 1 [json_name = "paths"];
+}
+
+message ReadLintsToolResult {
+  oneof result {
+    .agent.v1.ReadLintsToolSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReadLintsToolError error = 2 [json_name = "error"];
+  }
+}
+
+message ReadLintsToolSuccess {
+  repeated .agent.v1.FileDiagnostics file_diagnostics = 1 [json_name = "fileDiagnostics"];
+  int32 total_files = 2 [json_name = "totalFiles"];
+  int32 total_diagnostics = 3 [json_name = "totalDiagnostics"];
+}
+
+message ReadLintsToolError {
+  string error_message = 1 [json_name = "errorMessage"];
+}
+
+message FileDiagnostics {
+  string path = 1 [json_name = "path"];
+  repeated .agent.v1.DiagnosticItem diagnostics = 2 [json_name = "diagnostics"];
+  int32 diagnostics_count = 3 [json_name = "diagnosticsCount"];
+}
+
+message DiagnosticItem {
+  .agent.v1.DiagnosticSeverity severity = 1 [json_name = "severity"];
+  optional .agent.v1.DiagnosticRange range = 2 [json_name = "range"];
+  string message = 3 [json_name = "message"];
+  string source = 4 [json_name = "source"];
+  string code = 5 [json_name = "code"];
+  bool is_stale = 6 [json_name = "isStale"];
+}
+
+message DiagnosticRange {
+  optional .agent.v1.Position start = 1 [json_name = "start"];
+  optional .agent.v1.Position end = 2 [json_name = "end"];
+}

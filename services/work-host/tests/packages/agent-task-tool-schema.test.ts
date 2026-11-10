@@ -1,0 +1,435 @@
+import { test } from "node:test"
+import assert from "node:assert/strict"
+
+import {
+  buildTargetMachineField,
+  buildTaskParameterSchemas,
+  buildTaskToolDescriptionBase,
+  buildTaskToolDescriptionParts,
+  type TaskSchemaSubagentConfig,
+} from "../../source/packages/agent/tools/task-tool-schema.ts"
+import { createSubagentModels } from "../../source/packages/agent/tools/core/subagent/models.ts"
+
+// ---------------------------------------------------------------------------------------------
+// the arguments the task tool accepts
+// ---------------------------------------------------------------------------------------------
+
+const generalPurpose: TaskSchemaSubagentConfig = { typeName: "generalPurpose" }
+const explore: TaskSchemaSubagentConfig = { typeName: "explore", description: "Search the codebase." }
+const custom: TaskSchemaSubagentConfig = { typeName: "releaseBot" }
+
+const models = createSubagentModels({
+  standard: { slug: "standard-model" },
+  fast: { slug: "fast-model" },
+})
+
+const schemasOf = (configs: TaskSchemaSubagentConfig[] = [generalPurpose, explore], options = {}) =>
+  buildTaskParameterSchemas(configs, { subagentModels: models, ...options })
+
+interface ZodNode {
+  shape?: Record<string, { description?: string }>
+  _def?: { options?: Array<{ shape: Record<string, unknown> }>; schema?: unknown; innerType?: unknown; type?: unknown }
+}
+
+/** Schemas are wrapped by their refinements, so the object inside is found by walking the wrappers. */
+function objectOf(schema: unknown): ZodNode {
+  let node = schema as ZodNode | undefined
+  for (let depth = 0; depth < 10 && node !== undefined; depth += 1) {
+    if (node.shape !== undefined) return node
+    if (Array.isArray(node._def?.options)) return node
+    const def = node._def
+    const next = def?.schema ?? def?.innerType ?? def?.type
+    if (next === undefined || typeof next !== "object") break
+    node = next as ZodNode
+  }
+  return {}
+}
+
+const fieldsOf = (schema: unknown): string[] => Object.keys(objectOf(schema).shape ?? {})
+
+/** The description of one field, which is what the model is told about that argument. */
+function fieldDescription(schema: unknown, field: string): string {
+  const fieldSchema = objectOf(schema).shape?.[field]
+  if (fieldSchema === undefined) return ""
+  // A field wrapped in a preprocessing step keeps its description on the wrapped schema.
+  let node = fieldSchema as { description?: string; _def?: { schema?: unknown; innerType?: unknown } }
+  for (let depth = 0; depth < 6 && node !== undefined; depth += 1) {
+    if (typeof node.description === "string") return node.description
+    const next = node._def?.schema ?? node._def?.innerType
+    if (next === undefined || typeof next !== "object") break
+    node = next as typeof node
+  }
+  return ""
+}
+
+test("the schema the model sees carries the arguments a call may send", () => {
+  const schemas = schemasOf()
+  assert.deepEqual(fieldsOf(schemas.schemaTowardsModel), ["description", "prompt", "model", "resume", "subagentType", "fileAttachments"])
+  assert.deepEqual(fieldsOf(schemas.schemaForParsing), ["description", "prompt", "model", "resume", "subagentType", "fileAttachments", "subagent_type", "file_attachments"])
+  assert.equal(fieldsOf(schemas.schemaTowardsModel).some(field => field.includes("_")), false)
+})
+
+test("a call without a description is accepted while parsing and refused when written", () => {
+  const schemas = schemasOf()
+  const written = schemas.schemaTowardsModel.safeParse({ prompt: "do the thing", subagentType: "generalPurpose" })
+  assert.equal(written.success, false)
+
+  const parsed = schemas.schemaForParsing.parse({ prompt: "do the thing", subagentType: "generalPurpose" })
+  assert.equal((parsed as { description: string }).description, "")
+})
+
+test("a prompt that is only whitespace is refused", () => {
+  const schemas = schemasOf()
+  const result = schemas.schemaTowardsModel.safeParse({ description: "tidy", prompt: "   ", subagentType: "generalPurpose" })
+  assert.equal(result.success, false)
+  assert.match(JSON.stringify(result.error?.issues), /prompt is required/)
+})
+
+test("the subagent type is matched against the catalogue however it was spelled", () => {
+  const schemas = schemasOf([generalPurpose, custom])
+  const parsed = (value: unknown) => schemas.schemaForParsing.parse({ prompt: "go", subagentType: value }) as { subagentType: string }
+  assert.equal(parsed("releaseBot").subagentType, "releaseBot")
+  assert.equal(parsed("release-bot").subagentType, "releaseBot")
+  assert.equal(parsed("RELEASE_BOT").subagentType, "releaseBot")
+  // A type named "releaseBotAgent" normalizes to the catalogue entry it names.
+  assert.equal(parsed("releaseBotAgent").subagentType, "releaseBot")
+  // A space is part of a name rather than a separator, so this spelling names nothing.
+  assert.equal(schemas.schemaForParsing.safeParse({ prompt: "go", subagentType: "Release Bot" }).success, false)
+  assert.equal((schemas.schemaForParsing.parse({ prompt: "go", subagent_type: "release-bot" }) as { subagent_type: string }).subagent_type, "releaseBot", "the old name remains parse-only during migration")
+})
+
+test("a call that names no type gets the general purpose one, or the first one there is", () => {
+  // The general-purpose agent wins even when it is not listed first.
+  const reversed = buildTaskParameterSchemas([explore, generalPurpose], { subagentModels: models })
+  const parsed = reversed.schemaForParsing.safeParse({ prompt: "p" })
+  assert.equal(reversed.defaultSubagentTypeName, "generalPurpose")
+  assert.equal(parsed.success && (parsed.data as { subagentType?: string }).subagentType, undefined)
+  const withGeneral = schemasOf([generalPurpose, explore])
+  assert.equal(withGeneral.defaultSubagentTypeName, "generalPurpose")
+  assert.equal((withGeneral.schemaForParsing.parse({ prompt: "go", subagentType: "  " }) as { subagentType: string }).subagentType, "generalPurpose")
+
+  const withoutGeneral = schemasOf([explore, custom])
+  assert.equal(withoutGeneral.defaultSubagentTypeName, "explore")
+
+  const empty = schemasOf([])
+  assert.equal(empty.defaultSubagentTypeName, "generalPurpose")
+})
+
+test("a type that is not in the catalogue is refused with the ones that are", () => {
+  const schemas = schemasOf([generalPurpose, explore])
+  const result = schemas.schemaForParsing.safeParse({ prompt: "go", subagentType: "noSuchAgent" })
+  assert.equal(result.success, false)
+  assert.match(JSON.stringify(result.error?.issues), /Invalid value\. Expected one of: generalPurpose, explore/)
+
+  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagentType"), "Agent type for this task. Choose one of: generalPurpose, explore.")
+})
+
+test("when the catalogue lives in the user-info message the type is not pinned to a list", () => {
+  const schemas = schemasOf([generalPurpose, explore], { subagentModelsInUserInfo: true })
+  assert.equal(schemas.schemaTowardsModel.safeParse({ description: "tidy", prompt: "go", subagentType: "anything" }).success, true)
+  // Parsing still checks it against the catalogue, because that is where the lookup happens.
+  assert.equal(schemas.schemaForParsing.safeParse({ prompt: "go", subagentType: "anything" }).success, false)
+  assert.equal(fieldDescription(schemas.schemaTowardsModel, "subagentType"), "Agent type for this task. The available choices appear in the opening user-info message.")
+})
+
+test("current and legacy aliases cannot be supplied together", () => {
+  const schemas = schemasOf([generalPurpose], {
+    includeRunInBackgroundInTaskSchema: true,
+    environmentParamForSubagent: true,
+    requestedEnvironmentBuildParamForSubagent: true,
+  })
+  for (const input of [
+    { prompt: "go", subagentType: "generalPurpose", subagent_type: "generalPurpose" },
+    { prompt: "go", fileAttachments: [], file_attachments: [] },
+    { prompt: "go", runInBackground: false, run_in_background: false },
+    { prompt: "go", targetMachine: { kind: "same-device" }, machine: { type: "same_machine" } },
+    { prompt: "go", cloudBaseBranch: "main", cloud_base_branch: "main" },
+    { prompt: "go", requestedRuntimeBuildId: "bld-1", cloud_requested_environment_build_id: "bld-1" },
+  ]) {
+    assert.equal(schemas.schemaForParsing.safeParse(input).success, false)
+  }
+})
+
+test("legacy placement conflicts retain their previous refusal wording", () => {
+  const schemas = schemasOf([generalPurpose], { environmentParamForSubagent: true, cloudSubagentTargeting: true })
+  const result = schemas.schemaForParsing.safeParse({
+    prompt: "go",
+    machine: { type: "same_machine" },
+    environment: "cloud",
+  })
+  assert.equal(result.success, false)
+  assert.match(JSON.stringify(result.error?.issues), /machine replaces environment; specify machine alone/)
+})
+
+test("a null model is read as no model rather than as a value", () => {
+  const schemas = schemasOf()
+  const parsed = schemas.schemaForParsing.parse({ prompt: "go", model: null }) as { model?: string }
+  assert.equal(parsed.model, undefined)
+})
+
+test("the interrupt argument is offered only where resuming may interrupt a running agent", () => {
+  const without = schemasOf([generalPurpose], { useClientSideSubagent: true })
+  assert.equal(fieldsOf(without.schemaTowardsModel).includes("interrupt"), false)
+
+  const with_ = schemasOf([generalPurpose], { useClientSideSubagent: true, enableSubagentInterrupt: true })
+  assert.equal(fieldsOf(with_.schemaTowardsModel).includes("interrupt"), true)
+})
+
+test("the background argument is offered only where the turn can start one", () => {
+  const without = schemasOf([generalPurpose])
+  assert.equal(fieldsOf(without.schemaTowardsModel).includes("runInBackground"), false)
+
+  const with_ = schemasOf([generalPurpose], { includeRunInBackgroundInTaskSchema: true })
+  assert.equal(fieldsOf(with_.schemaTowardsModel).includes("runInBackground"), true)
+  const parsed = with_.schemaForParsing.parse({ prompt: "go", runInBackground: "true" }) as { runInBackground?: boolean }
+  assert.equal(parsed.runInBackground, true)
+  const parsedFalse = with_.schemaForParsing.parse({ prompt: "go", runInBackground: "false" }) as { runInBackground?: boolean }
+  assert.equal(parsedFalse.runInBackground, false)
+  assert.equal((with_.schemaForParsing.parse({ prompt: "go", run_in_background: "false" }) as { run_in_background?: boolean }).run_in_background, false)
+})
+
+test("what the background argument says about itself follows the session's behaviour", () => {
+  const descriptionOf = (options: Record<string, unknown>): string => {
+    const schemas = schemasOf([generalPurpose], { includeRunInBackgroundInTaskSchema: true, ...options })
+    return fieldDescription(schemas.schemaTowardsModel, "runInBackground")
+  }
+  assert.doesNotMatch(descriptionOf({}), /Defaults true/)
+  assert.match(descriptionOf({ defaultSubagentsRunInBackground: true }), /Defaults true\./)
+  assert.match(descriptionOf({ enableMultitaskMode: true }), /During Multitask Mode, set this to True\./)
+  assert.match(descriptionOf({ taskToolNotificationHintsEnabled: true }), /A notification arrives when the background run completes\./)
+})
+
+test("placement is offered as the Slate target union to a session that targets cloud machines", () => {
+  const cloud = schemasOf([generalPurpose], { environmentParamForSubagent: true, cloudSubagentTargeting: true })
+  assert.equal(fieldsOf(cloud.schemaTowardsModel).includes("targetMachine"), true)
+  assert.equal(fieldsOf(cloud.schemaTowardsModel).includes("machine"), false)
+  assert.equal(fieldsOf(cloud.schemaTowardsModel).includes("environment"), false)
+  assert.equal(fieldsOf(cloud.schemaForParsing).includes("targetMachine"), true)
+  assert.equal(fieldsOf(cloud.schemaForParsing).includes("machine"), true)
+  // The older fields are still accepted while parsing, so a call emitted before the change still runs.
+  assert.equal(fieldsOf(cloud.schemaForParsing).includes("environment"), true)
+  assert.equal(fieldsOf(cloud.schemaForParsing).includes("cloud_base_branch"), true)
+
+  const legacy = schemasOf([generalPurpose], { environmentParamForSubagent: true })
+  assert.equal(fieldsOf(legacy.schemaTowardsModel).includes("environment"), true)
+  assert.equal(fieldsOf(legacy.schemaTowardsModel).includes("cloudBaseBranch"), true)
+  assert.equal(fieldsOf(legacy.schemaTowardsModel).includes("machine"), false)
+  assert.equal(fieldsOf(legacy.schemaTowardsModel).includes("targetMachine"), false)
+  assert.equal(fieldsOf(legacy.schemaForParsing).includes("machine"), true)
+  assert.equal(fieldsOf(legacy.schemaForParsing).includes("targetMachine"), true)
+})
+
+test("a placement field without the cloud environment is refused rather than dropped", () => {
+  const schemas = schemasOf([generalPurpose], { environmentParamForSubagent: true })
+  const rejected = schemas.schemaForParsing.safeParse({ prompt: "go", cloud_base_branch: "main" })
+  assert.equal(rejected.success, false)
+  assert.match(JSON.stringify(rejected.error?.issues), /cloud_base_branch may only be specified when environment equals cloud/)
+
+  const rejectedSlateName = schemas.schemaForParsing.safeParse({ prompt: "go", cloudBaseBranch: "main" })
+  assert.equal(rejectedSlateName.success, false)
+  assert.match(JSON.stringify(rejectedSlateName.error?.issues), /cloudBaseBranch may only be specified when environment equals cloud/)
+
+  const accepted = schemas.schemaForParsing.safeParse({ prompt: "go", environment: "cloud", cloud_base_branch: "main" })
+  assert.equal(accepted.success, true)
+
+  const acceptedSlateName = schemas.schemaForParsing.safeParse({ prompt: "go", environment: "cloud", cloudBaseBranch: "main" })
+  assert.equal(acceptedSlateName.success, true)
+
+  const local = schemas.schemaForParsing.safeParse({ prompt: "go", environment: "local" })
+  assert.equal(local.success, true)
+})
+
+test("the environment build argument follows the same rule", () => {
+  const schemas = schemasOf([generalPurpose], { environmentParamForSubagent: true, requestedEnvironmentBuildParamForSubagent: true })
+  assert.equal(fieldsOf(schemas.schemaTowardsModel).includes("requestedRuntimeBuildId"), true)
+  const rejected = schemas.schemaForParsing.safeParse({ prompt: "go", cloud_requested_environment_build_id: "bld-1" })
+  assert.equal(rejected.success, false)
+  assert.match(JSON.stringify(rejected.error?.issues), /cloud_requested_environment_build_id may only be specified when environment equals cloud/)
+  const rejectedSlateName = schemas.schemaForParsing.safeParse({ prompt: "go", requestedRuntimeBuildId: "bld-1" })
+  assert.equal(rejectedSlateName.success, false)
+  assert.match(JSON.stringify(rejectedSlateName.error?.issues), /requestedRuntimeBuildId may only be specified when environment equals cloud/)
+})
+
+// ---------------------------------------------------------------------------------------------
+// where a subagent may be placed
+// ---------------------------------------------------------------------------------------------
+
+function placementOptions(field: unknown): Array<{ shape: Record<string, unknown> }> {
+  return objectOf(field)._def?.options ?? []
+}
+
+test("the placement field offers this machine and a cloud VM by default", () => {
+  const field = buildTargetMachineField({ includeEnvironmentBuildId: false, includeSelfHostedTargets: false })
+  const options = placementOptions(field)
+  assert.deepEqual(options.map(option => (option.shape.kind as { value: string }).value), ["same-device", "cloud-machine"])
+  assert.equal(options[1]?.shape.environmentBuildId, undefined)
+})
+
+test("a session that targets self-hosted machines is offered them too", () => {
+  const field = buildTargetMachineField({ includeEnvironmentBuildId: true, includeSelfHostedTargets: true })
+  const options = placementOptions(field)
+  assert.deepEqual(
+    options.map(option => (option.shape.kind as { value: string }).value),
+    ["same-device", "cloud-machine", "hosted-worker", "worker-pool"],
+  )
+  assert.notEqual(options[1]?.shape.environmentBuildId, undefined)
+})
+
+test("a placement with no kind is read as this machine", () => {
+  const field = buildTargetMachineField({ includeEnvironmentBuildId: false, includeSelfHostedTargets: true })
+  assert.equal(field.safeParse(undefined).success, true)
+  assert.equal(field.safeParse({ kind: "hosted-worker", workerId: "worker-1" }).success, true)
+  assert.equal(field.safeParse({ kind: "hosted-worker" }).success, false)
+  assert.equal(field.safeParse({ kind: "hosted-worker", workerId: "worker-1", extra: true }).success, false)
+
+  const legacy = buildTargetMachineField({ includeEnvironmentBuildId: false, includeSelfHostedTargets: false })
+  assert.equal(legacy.safeParse({ kind: "hosted-worker", workerId: "worker-1" }).success, false)
+})
+
+test("a blank base branch is read as no base branch", () => {
+  const field = buildTargetMachineField({ includeEnvironmentBuildId: false, includeSelfHostedTargets: false })
+  const parsed = field.parse({ kind: "cloud-machine", baseBranch: "   " }) as { baseBranch?: string }
+  assert.equal(parsed.baseBranch, undefined)
+})
+
+// ---------------------------------------------------------------------------------------------
+// what the tool says about itself
+// ---------------------------------------------------------------------------------------------
+
+const baseArgs = { toolLabel: "Task", readToolName: "Read", globToolName: "Glob" }
+
+test("the base description points at the read and search tools for work they do better", () => {
+  const text = buildTaskToolDescriptionBase(baseArgs)
+  assert.match(text, /For one known file, use Read or Glob to locate the relevant section/)
+  assert.match(text, /To find a named declaration such as "class Foo", search with Glob/)
+  assert.match(text, /Give each run a clear title of about 3-5 words/)
+})
+
+test("the base description only names the tools the session actually has", () => {
+  const onlyRead = buildTaskToolDescriptionBase({ toolLabel: "Task", readToolName: "Read" })
+  assert.match(onlyRead, /For one known file, use Read to locate the relevant section/)
+  assert.doesNotMatch(onlyRead, /Glob/)
+
+  const noTools = buildTaskToolDescriptionBase({ toolLabel: "Task" })
+  assert.doesNotMatch(noTools, /starting a Task run/)
+})
+
+test("the explore recommendation is made only where exploring is worth recommending", () => {
+  const recommended = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true })
+  assert.match(recommended, /For broad codebase discovery on substantial work/)
+  assert.match(recommended, /subagentType="explore"/)
+
+  const notRecommended = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true, subagentExperimentGroup: "no-subagent-unless-asked" })
+  assert.doesNotMatch(notRecommended, /For broad codebase discovery on substantial work/)
+  assert.match(notRecommended, /Handle a focused question directly/)
+
+  const catalogueElsewhere = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: true, subagentModelsInUserInfo: true })
+  assert.doesNotMatch(catalogueElsewhere, /For broad codebase discovery on substantial work/)
+
+  const withoutExplore = buildTaskToolDescriptionBase({ ...baseArgs, includeExploreSubagent: false })
+  assert.doesNotMatch(withoutExplore, /subagentType="explore"/)
+})
+
+test("the description tells the model what happens to a subagent's result", () => {
+  const defaultText = buildTaskToolDescriptionBase(baseArgs)
+  assert.match(defaultText, /Its result is not shown automatically/)
+
+  const notified = buildTaskToolDescriptionBase({ ...baseArgs, taskToolNotificationHintsEnabled: true })
+  assert.match(notified, /Do not repeat a single agent's result unless asked/)
+
+  const hidden = buildTaskToolDescriptionBase({ ...baseArgs, taskToolNotificationHintsEnabled: true, hideAsyncSubagentTaskNotifications: true })
+  assert.doesNotMatch(hidden, /do not summarize or restate/)
+})
+
+test("the description says whether resuming may interrupt a running agent", () => {
+  const serverSide = buildTaskToolDescriptionBase(baseArgs)
+  assert.match(serverSide, /Continuing an agent restores its earlier conversation/)
+
+  const clientSide = buildTaskToolDescriptionBase({ ...baseArgs, useClientSideSubagent: true })
+  assert.match(clientSide, /An active run cannot be resumed yet, so wait for it to finish\./)
+
+  const interruptible = buildTaskToolDescriptionBase({ ...baseArgs, useClientSideSubagent: true, enableSubagentInterrupt: true })
+  assert.match(interruptible, /An active run can be stopped first by setting `interrupt` to true/)
+})
+
+test("the description offers forking the current conversation only where it is allowed", () => {
+  assert.doesNotMatch(buildTaskToolDescriptionBase(baseArgs), /fork the current parent agent/)
+  const forking = buildTaskToolDescriptionBase({ ...baseArgs, allowResumeSelfFork: true })
+  assert.match(forking, /Set resume="self" to start a child with this conversation's history/)
+
+  // The argument itself says what the sentinel means, which is where a model reading the schema finds it.
+  assert.doesNotMatch(fieldDescription(schemasOf([generalPurpose]).schemaTowardsModel, "resume"), /self-fork/)
+  const schemaWithFork = schemasOf([generalPurpose], { allowResumeSelfFork: true }).schemaTowardsModel
+  assert.match(fieldDescription(schemaWithFork, "resume"), /Set "self" to create a new agent with a copy of this conversation's history\./)
+})
+
+test("the description links to agents only where links work", () => {
+  assert.doesNotMatch(buildTaskToolDescriptionBase(baseArgs), /Link to agents or subagents/)
+  assert.match(buildTaskToolDescriptionBase({ ...baseArgs, enableAgentChatLinks: true }), /Link to agents or subagents in user-facing text with the \[Name\]\(id\) format\./)
+})
+
+test("the catalogue of subagent types is listed, or pointed at when it lives in the user-info message", () => {
+  const listed = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT" })
+  assert.match(listed.subagentTypeDescriptionsText, /^- generalPurpose$/m)
+  assert.match(listed.subagentTypeDescriptionsText, /^- explore: Search the codebase\.$/m)
+  assert.match(listed.fullDescription, /Agent types and a short note about each:/)
+  assert.match(listed.fullDescription, /standard-model/)
+
+  const pointedAt = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", catalogsInUserInfo: true })
+  assert.match(pointedAt.fullDescription, /Agent types and descriptions are in <available_subagent_types> near the beginning of this conversation\./)
+  assert.match(pointedAt.fullDescription, /Agent model choices are in <available_subagent_models> near the beginning of this conversation\./)
+  const pointsByDefault = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", subagentModelsInUserInfo: true })
+  assert.match(pointsByDefault.fullDescription, /are in <available_subagent_types> near the beginning/, "the user-info message is where the catalogues live when that setting says so")
+  // The catalogue text is still produced, because a caller may want to render it elsewhere.
+  assert.match(pointedAt.subagentTypeDescriptionsText, /^- explore: Search the codebase\.$/m)
+})
+
+test("a type that resumes by itself says so beside its name", () => {
+  const listed = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [explore, custom], defaultResumeMode: "LAST_AGENT" })
+  assert.match(listed.subagentTypeDescriptionsText, /^- explore: Search the codebase\. \(Continues the newest agent automatically; ignores `resume`\)$/m)
+  // A type with no description of its own gets the note where its description would be, spacing and all.
+  assert.match(listed.subagentTypeDescriptionsText, /^- releaseBot: +\(Continues the newest agent automatically; ignores `resume`\)$/m)
+
+  const sameType = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [explore], defaultResumeMode: "LAST_AGENT_SAME_TYPE" })
+  assert.match(sameType.subagentTypeDescriptionsText, /Continues the newest agent of this type automatically/)
+
+  const overridden = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [{ ...explore, resumeModeOverride: "DEFAULT" }], defaultResumeMode: "LAST_AGENT" })
+  assert.doesNotMatch(overridden.subagentTypeDescriptionsText, /Auto-resumes/)
+
+  const noCatalogue = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [], defaultResumeMode: "DEFAULT" })
+  assert.equal(noCatalogue.subagentTypeDescriptionsText, "")
+  assert.doesNotMatch(noCatalogue.fullDescription, /Agent types and/)
+})
+
+test("the parts description passes the session's own names and flags through to the base", () => {
+  const parts = buildTaskToolDescriptionParts({
+    ...baseArgs,
+    subagentModels: models,
+    configs: [generalPurpose, explore],
+    defaultResumeMode: "DEFAULT",
+    readToolName: "Read",
+    globToolName: "Glob",
+    allowResumeSelfFork: true,
+    enableAgentChatLinks: true,
+  })
+  assert.match(parts.baseDescription, /Read or Glob/)
+  assert.match(parts.baseDescription, /start a child with this conversation's history/)
+  assert.equal(parts.fullDescription, [parts.baseDescription, parts.subagentTypeDescriptionsText, parts.modelsDescription].join("\n\n"), "the full description is the three parts, in order")
+})
+
+test("the models section says to skip rather than substitute when the model is not offered", () => {
+  const parts = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose], defaultResumeMode: "DEFAULT" })
+  assert.match(parts.modelsDescription, /standard-model/)
+  assert.match(parts.fullDescription, /do not substitute another model or guess/)
+
+  const inheriting = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose], defaultResumeMode: "DEFAULT", subagentInheritGuidance: true })
+  assert.match(inheriting.modelsDescription, /inherit — default; keep the parent model unless the user requests a different one/)
+
+  const noModels = buildTaskToolDescriptionParts({
+    ...baseArgs,
+    configs: [generalPurpose],
+    defaultResumeMode: "DEFAULT",
+    subagentModels: createSubagentModels({}),
+  })
+  assert.equal(noModels.modelsDescription, "No alternative child model is available. Children use the parent model.")
+})

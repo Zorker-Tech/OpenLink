@@ -1,0 +1,32 @@
+// aiserver.v1 — aiserver/v1/inline_gpt4 messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/repository.proto";
+import "aiserver/v1/utils.proto";
+
+message InlineGPT4PromptProtoV1 {
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+}
+
+message StreamInlineLongCompletionRequest {
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 6 [json_name = "repositories"];
+  repeated .aiserver.v1.StreamInlineLongCompletionRequest.ContextBlock context_blocks = 7 [json_name = "contextBlocks"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 13 [json_name = "explicitContext"];
+  optional .aiserver.v1.ModelDetails model_details = 14 [json_name = "modelDetails"];
+  optional .aiserver.v1.LinterErrors linter_errors = 15 [json_name = "linterErrors"];
+  message ContextBlock {
+    .aiserver.v1.StreamInlineLongCompletionRequest.ContextBlock.ContextType context_type = 1 [json_name = "contextType"];
+    repeated .aiserver.v1.CodeBlock blocks = 2 [json_name = "blocks"];
+    enum ContextType {
+      CONTEXT_TYPE_UNSPECIFIED = 0;
+      CONTEXT_TYPE_RECENT_LOCATIONS = 1;
+    }
+  }
+}

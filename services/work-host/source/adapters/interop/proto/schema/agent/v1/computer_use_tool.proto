@@ -1,0 +1,134 @@
+// agent.v1 — agent/v1/computer_use_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message ComputerUseAction {
+  oneof action {
+    .agent.v1.MouseMoveAction mouse_move = 1 [json_name = "mouseMove"];
+    .agent.v1.ClickAction click = 2 [json_name = "click"];
+    .agent.v1.MouseDownAction mouse_down = 3 [json_name = "mouseDown"];
+    .agent.v1.MouseUpAction mouse_up = 4 [json_name = "mouseUp"];
+    .agent.v1.DragAction drag = 5 [json_name = "drag"];
+    .agent.v1.ScrollAction scroll = 6 [json_name = "scroll"];
+    .agent.v1.TypeAction type = 7 [json_name = "type"];
+    .agent.v1.KeyAction key = 8 [json_name = "key"];
+    .agent.v1.WaitAction wait = 9 [json_name = "wait"];
+    .agent.v1.ScreenshotAction screenshot = 10 [json_name = "screenshot"];
+    .agent.v1.CursorPositionAction cursor_position = 11 [json_name = "cursorPosition"];
+  }
+}
+
+message MouseMoveAction {
+  optional .agent.v1.Coordinate coordinate = 1 [json_name = "coordinate"];
+}
+
+message ClickAction {
+  optional .agent.v1.Coordinate coordinate = 1 [json_name = "coordinate"];
+  .agent.v1.MouseButton button = 2 [json_name = "button"];
+  int32 count = 3 [json_name = "count"];
+  optional string modifier_keys = 4 [json_name = "modifierKeys"];
+}
+
+message MouseDownAction {
+  .agent.v1.MouseButton button = 1 [json_name = "button"];
+}
+
+message MouseUpAction {
+  .agent.v1.MouseButton button = 1 [json_name = "button"];
+}
+
+message DragAction {
+  repeated .agent.v1.Coordinate path = 1 [json_name = "path"];
+  .agent.v1.MouseButton button = 2 [json_name = "button"];
+  optional string modifier_keys = 3 [json_name = "modifierKeys"];
+}
+
+message ScrollAction {
+  optional .agent.v1.Coordinate coordinate = 1 [json_name = "coordinate"];
+  .agent.v1.ScrollDirection direction = 2 [json_name = "direction"];
+  int32 amount = 3 [json_name = "amount"];
+  optional string modifier_keys = 4 [json_name = "modifierKeys"];
+}
+
+message TypeAction {
+  string text = 1 [json_name = "text"];
+}
+
+message KeyAction {
+  string key = 1 [json_name = "key"];
+  optional int32 hold_duration_ms = 2 [json_name = "holdDurationMs"];
+}
+
+message WaitAction {
+  int32 duration_ms = 1 [json_name = "durationMs"];
+}
+
+message ScreenshotAction {
+}
+
+message CursorPositionAction {
+}
+
+message Coordinate {
+  int32 x = 1 [json_name = "x"];
+  int32 y = 2 [json_name = "y"];
+}
+
+message ComputerUseSuccess {
+  int32 action_count = 1 [json_name = "actionCount"];
+  int32 duration_ms = 2 [json_name = "durationMs"];
+  optional string screenshot = 3 [json_name = "screenshot"];
+  optional string log = 4 [json_name = "log"];
+  optional string screenshot_path = 5 [json_name = "screenshotPath"];
+  optional .agent.v1.Coordinate cursor_position = 6 [json_name = "cursorPosition"];
+}
+
+message ComputerUseError {
+  string error = 1 [json_name = "error"];
+  int32 action_count = 2 [json_name = "actionCount"];
+  int32 duration_ms = 3 [json_name = "durationMs"];
+  optional string log = 4 [json_name = "log"];
+  optional string screenshot = 5 [json_name = "screenshot"];
+  optional string screenshot_path = 6 [json_name = "screenshotPath"];
+}
+
+message ComputerUseArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  repeated .agent.v1.ComputerUseAction actions = 2 [json_name = "actions"];
+  optional string description = 3 [json_name = "description"];
+  optional bool bind_unmapped_characters = 4 [json_name = "bindUnmappedCharacters"];
+}
+
+message ComputerUseResult {
+  oneof result {
+    .agent.v1.ComputerUseSuccess success = 1 [json_name = "success"];
+    .agent.v1.ComputerUseError error = 2 [json_name = "error"];
+  }
+}
+
+message ComputerUseToolCall {
+  optional .agent.v1.ComputerUseArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ComputerUseResult result = 2 [json_name = "result"];
+}
+
+enum MouseButton {
+  MOUSE_BUTTON_UNSPECIFIED = 0;
+  MOUSE_BUTTON_LEFT = 1;
+  MOUSE_BUTTON_RIGHT = 2;
+  MOUSE_BUTTON_MIDDLE = 3;
+  MOUSE_BUTTON_BACK = 4;
+  MOUSE_BUTTON_FORWARD = 5;
+}
+
+enum ScrollDirection {
+  SCROLL_DIRECTION_UNSPECIFIED = 0;
+  SCROLL_DIRECTION_UP = 1;
+  SCROLL_DIRECTION_DOWN = 2;
+  SCROLL_DIRECTION_LEFT = 3;
+  SCROLL_DIRECTION_RIGHT = 4;
+}
