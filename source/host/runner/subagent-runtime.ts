@@ -135,7 +135,7 @@ export interface SubagentRuntimeHost {
   log?: (message: string) => void;
 }
 
-interface DispatchParams {
+export interface DispatchParams {
   readonly subagentAgentId: string;
   readonly subagentType: string;
   readonly toolCallId: string;

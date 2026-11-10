@@ -1,0 +1,23 @@
+# Haokir Inc. Authorized Product License
+
+Copyright © 2026 Haokir Inc. All rights reserved, except for components that carry a separate license notice.
+
+This package-specific license applies to the original Haokir-owned portions of `@slate/work-host` and its documentation (the “SDK”), as an exception to general repository license terms. It does not change rights already granted under a separate upstream, third-party, or open-source license. Components with their own license notices remain subject to those notices; in particular, the `code-prompt` component retains its existing MIT license.
+
+## Definitions
+
+“Company Product” means a product owned, controlled, or operated by Haokir Inc. or an entity controlled by Haokir Inc. This includes products in Haokir Inc.’s portfolio, including Hydite, Zorker, Zorker Openlink, and Cauiril, as well as future Haokir products.
+
+“Authorized Product” means a Company Product or another product that Haokir Inc. expressly authorizes in a written notice or agreement.
+
+## Permission
+
+Haokir Inc. grants you a limited, non-exclusive, non-transferable license to install, reproduce, run, and modify the SDK solely to develop, test, build, distribute, and operate an Authorized Product. A Company Product is automatically an Authorized Product and requires no separate product-specific approval.
+
+Haokir Inc. may provide the SDK through its package registries to teams working on Authorized Products. You may include compiled SDK components in an Authorized Product and distribute them only as an integrated part of that product, to the extent needed for its users to use the product. This permission does not authorize you to redistribute the SDK package or offer it as a standalone product, library, or service.
+
+Use of the SDK in any other product requires Haokir Inc.’s written authorization. You may not sell, sublicense, publish, or otherwise make the SDK available separately from an Authorized Product. All rights not expressly granted here are reserved by Haokir Inc. or the applicable third-party licensor.
+
+## Separate agreements and third-party components
+
+Any signed agreement with Haokir Inc. that expressly covers the SDK controls if it conflicts with this license. Third-party and open-source components retain their own license terms; this license does not revoke or narrow rights granted under those terms.

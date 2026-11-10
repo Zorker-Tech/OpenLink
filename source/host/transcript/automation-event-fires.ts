@@ -19,7 +19,7 @@ interface FireItem {
   runUuid?: string;
   resolve(resultOutcome: FireOutcome): void;
 }
-interface FireBatch {
+export interface FireBatch {
   agentId: string;
   automation: AutomationRecord;
   items: FireItem[];

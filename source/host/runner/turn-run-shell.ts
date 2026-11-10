@@ -371,7 +371,7 @@ export interface TurnRunShellHost {
   onRunUnwind?(): void;
 }
 
-interface ActiveTurnRun {
+export interface ActiveTurnRun {
   readonly controller: AbortController;
   readonly generation: number;
   readonly requestId: string;

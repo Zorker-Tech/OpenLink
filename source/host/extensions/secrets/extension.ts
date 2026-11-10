@@ -15,7 +15,7 @@ import {
   SECRETS_RETRY_MAX_MS,
 } from "./secrets-service.ts";
 
-interface NamedRequestContextFactory {
+export interface NamedRequestContextFactory {
   withName(name: string): Context;
 }
 
