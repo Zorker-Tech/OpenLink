@@ -243,7 +243,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
     const priorUserInfoCloudTestingSectionsPlacement = getFirstUserInfoCloudTestingSectionsPlacement(priorMessages);
     const userInfoCloudTestingSectionsPlacement = getCloudTestingSectionsPlacement({
       modelInfo: adaptInteropCloudTestingModelProfile(configAny.modelInfo),
-      enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
+      enableCloudAgentIntelligentTestingPromptSection: configAny.enableCloudAgentIntelligentTestingPromptSection,
       backgroundAgentSource: promptBackgroundAgentSource,
       agentType: configAny.agentType,
       enableCloudTesting: configAny.enableCloudTesting,
@@ -380,7 +380,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         isRepoless: configAny.isRepoless,
         modelInfo: configAny.modelInfo,
         agentTokenLimit: configAny.agentTokenLimit,
-        enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
+        enableCloudAgentIntelligentTestingPromptSection: configAny.enableCloudAgentIntelligentTestingPromptSection,
         priorUserInfoCloudTestingSectionsPlacement,
       });
       if (shouldAppendMultitaskEnterReminderToUserInfo) userInfoContent = `${userInfoContent}\n\n${renderInteropMultitaskModeEnterUserReminder(configAny.modelInfo, { hideAsyncSubagentTaskNotifications: configAny.featureFlags?.hideAsyncSubagentTaskNotifications })}`;

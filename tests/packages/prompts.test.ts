@@ -153,12 +153,12 @@ test("a rule scoped to another environment is dropped before anything else", () 
 
 test("a model trained on the raw slug is given none of the generated rules", () => {
   assert.deepEqual(getGeneratedUserRulesForModel({ isComposerMatterhorn: true, isRawTrainingSlug: true }, {
-    enableComposer2CustomUserRules: true,
+    enableGeneratedUserRules: true,
   }), [])
 })
 
 test("the general rule set is returned for other models when the flag asks for it", () => {
-  const rules = getGeneratedUserRulesForModel({}, { enableComposer2CustomUserRules: true })
+  const rules = getGeneratedUserRulesForModel({}, { enableGeneratedUserRules: true })
   assert.equal(rules.length, 5)
   assert.match(rules[0] as string, /^Treat the user's request and the applicable system, tool and skill directions/)
   assert.equal(getGeneratedUserRulesForModel({}, {}).length, 0)
@@ -177,7 +177,7 @@ test("the optional rules are added when their flags are set", () => {
 test("a training-aligned model gets the worded rules and the tool-specific ones", () => {
   const rules = getGeneratedUserRulesForModel(
     { isComposerMatterhorn: true },
-    { enableComposer2CustomUserRules: true, enableMatterhornPromptTweaks: true, enableGrepBroadGlobGuard: true },
+    { enableGeneratedUserRules: true, enableMatterhornPromptTweaks: true, enableGrepBroadGlobGuard: true },
     { awaitToolName: "Await", shellToolName: "Shell", grepToolName: "Grep" },
   )
   assert.equal(rules.some(text => text.includes("Check for relevant installed skills and connected tools")), true)
@@ -190,7 +190,7 @@ test("a training-aligned model gets the worded rules and the tool-specific ones"
 test("a training-aligned model without the tweak flag gets the general wording instead", () => {
   const rules = getGeneratedUserRulesForModel(
     { isComposerMatterhorn: true },
-    { enableComposer2CustomUserRules: true },
+    { enableGeneratedUserRules: true },
     { shellToolName: "Shell" },
   )
   assert.equal(rules.some(text => text.startsWith("When using Shell,")), false)
@@ -250,7 +250,7 @@ test("a workspace rule becomes a section with the rule count reported", () => {
 test("a cloud run is given no git rules, and a local one is", () => {
   const props = {
     modelInfo: { isComposer2: true },
-    featureFlags: { enableComposer2CustomUserRules: true },
+    featureFlags: { enableGeneratedUserRules: true },
     toolInfo: { allTools: { SHELL: { name: "Shell" }, ASK_QUESTION: { name: "AskQuestion" } } },
   }
   const local = resolveAdditionalUserRules(props)

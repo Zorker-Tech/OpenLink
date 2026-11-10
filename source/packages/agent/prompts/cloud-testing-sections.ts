@@ -45,7 +45,7 @@ interface CloudTestingSectionsProps {
     readonly isSlateProductPrompt?: boolean | undefined
     readonly [key: string]: unknown
   } | undefined
-  readonly enableComposer2IntelligentTestingPromptSection?: boolean | undefined
+  readonly enableCloudAgentIntelligentTestingPromptSection?: boolean | undefined
   readonly backgroundAgentSource?: BackgroundAgentSource | undefined
   readonly agentType?: AgentType | undefined
   readonly enableCloudTesting?: boolean | undefined
@@ -80,7 +80,7 @@ export function getCloudTestingSectionsPlacement(
 ): "user_info" | "system_prompt" | undefined {
   const eligible = !isNamedAgentHomePromptSession(props) &&
     props.modelInfo?.usesShellLessCloudPrompt === true &&
-    props.enableComposer2IntelligentTestingPromptSection === true &&
+    props.enableCloudAgentIntelligentTestingPromptSection === true &&
     props.backgroundAgentSource !== undefined &&
     props.agentType !== undefined &&
     shouldUseExperimentalCloudBehavior({

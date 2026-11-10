@@ -165,7 +165,7 @@ export class ShellCommandActionHandler {
         const isRootProject = await isProjectWorkspaceConversation(ctx, stateHandler)
         const placement = getCloudTestingSectionsPlacement({
           modelInfo: adaptInteropCloudTestingModelProfile(this.config.modelInfo),
-          enableComposer2IntelligentTestingPromptSection: this.config.enableComposer2IntelligentTestingPromptSection,
+          enableCloudAgentIntelligentTestingPromptSection: this.config.enableCloudAgentIntelligentTestingPromptSection,
           backgroundAgentSource: projectBackgroundAgentSource(this.config.backgroundAgentSource),
           agentType: this.config.agentType,
           enableCloudTesting: this.config.enableCloudTesting,
@@ -213,7 +213,7 @@ export class ShellCommandActionHandler {
             isRepoless: this.config.isRepoless,
             modelInfo: this.config.modelInfo,
             agentTokenLimit: this.config.agentTokenLimit,
-            enableComposer2IntelligentTestingPromptSection: this.config.enableComposer2IntelligentTestingPromptSection,
+            enableCloudAgentIntelligentTestingPromptSection: this.config.enableCloudAgentIntelligentTestingPromptSection,
           }),
           ...(invocation.providerOptionsForPromptPlacement(placement) ?? {}),
         }], stateHandler.getPrivacyMode()))

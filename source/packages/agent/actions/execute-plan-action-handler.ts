@@ -182,7 +182,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     const priorUserInfoCloudTestingSectionsPlacement = getFirstUserInfoCloudTestingSectionsPlacement(priorMessages);
     const userInfoCloudTestingSectionsPlacement = getCloudTestingSectionsPlacement({
       modelInfo: adaptInteropCloudTestingModelProfile(configAny.modelInfo),
-      enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
+      enableCloudAgentIntelligentTestingPromptSection: configAny.enableCloudAgentIntelligentTestingPromptSection,
       backgroundAgentSource: promptBackgroundAgentSource,
       agentType: configAny.agentType,
       enableCloudTesting: configAny.enableCloudTesting,
@@ -248,7 +248,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
           isRepoless: configAny.isRepoless,
           modelInfo: configAny.modelInfo,
           agentTokenLimit: configAny.agentTokenLimit,
-          enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
+          enableCloudAgentIntelligentTestingPromptSection: configAny.enableCloudAgentIntelligentTestingPromptSection,
           priorUserInfoCloudTestingSectionsPlacement,
         }),
         providerOptions: { slate: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { cloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } },

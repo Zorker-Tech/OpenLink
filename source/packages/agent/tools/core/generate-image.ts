@@ -22,6 +22,7 @@
  * everything else gets the image bytes themselves, resized if they are larger than a message should carry.
  */
 
+import { LEGACY_PROMPT_VERSION } from "../../../../adapters/interop/agent/prompt-version-adapter.ts"
 import { Buffer } from "node:buffer"
 import { basename, extname, join } from "node:path"
 import { z } from "zod"
@@ -226,7 +227,7 @@ function generateImageCall(toolCall: GenerateImageToolCallInterop): GenerateImag
 function toolNameForVersion(promptVersion: string): string {
   switch (promptVersion) {
     case "dsv3-1018": return "generate_image";
-    case "cursor-0226":
+    case LEGACY_PROMPT_VERSION:
     case "dsv3-1205":
     case "latest":
     case "gpt5-codex":
@@ -238,7 +239,7 @@ function toolNameForVersion(promptVersion: string): string {
 
 function descriptionForVersion(promptVersion: string): string {
   switch (promptVersion) {
-    case "cursor-0226":
+    case LEGACY_PROMPT_VERSION:
     case "dsv3-1205":
     case "gpt5-codex":
     case "codex-cloud":
@@ -721,7 +722,7 @@ export function createGenerateImageTool(
             renderOutcome = "success";
             return createStringResult(`Successfully generated image. Display it in your response using:\n<img src="${filePath}" alt="Generated image" />`);
           }
-          if (version === "dsv3-1018" || version === "dsv3-1205" || version === "cursor-0226") {
+          if (version === "dsv3-1018" || version === "dsv3-1205" || version === LEGACY_PROMPT_VERSION) {
             renderOutcome = "success";
             return createStringResult(resultTextOf(result));
           }

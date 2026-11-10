@@ -205,6 +205,7 @@ source/packages/agent/actions/user-message-action/user-message-action-handler.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/user-rule-profile-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-run-warning.ts	../../../../adapters/interop/slate-backend/summary-origin-marker-adapter.ts
 source/packages/agent/agent-config-runtime.ts	../../adapters/interop/agent/model-capabilities-adapter.ts
+source/packages/agent/agent-config-runtime.ts	../../adapters/interop/agent/model-feature-flags-adapter.ts
 source/packages/agent/agent-config-tooling.ts	../../adapters/interop/agent/agent-config-tooling-adapter.ts
 source/packages/agent/automations/platform-communication-tools.ts	../../../adapters/interop/automation/platform-communication-tool-policy-adapter.ts
 source/packages/agent/configs/project-workspace-mcp-tools.ts	../../../adapters/interop/agent/project-conversation-adapter.ts
@@ -252,11 +253,13 @@ source/packages/agent/tool-stream-executor.ts	../../adapters/interop/agent/tool-
 source/packages/agent/tools/connect-errors.ts	../../../adapters/interop/agent/agent-error-details-adapter.ts
 source/packages/agent/tools/core/ask-question/index.ts	../../../../../adapters/interop/agent/ask-question-result-adapter.ts
 source/packages/agent/tools/core/await.ts	../../../../adapters/interop/agent/await-tool-protocol-adapter.ts
+source/packages/agent/tools/core/await.ts	../../../../adapters/interop/agent/prompt-version-adapter.ts
 source/packages/agent/tools/core/create-plan/backend-plan-utils.ts	../../../../../adapters/interop/agent/plan-file-read-adapter.ts
 source/packages/agent/tools/core/edit/common.ts	../../../../../adapters/interop/agent/plan-edit-policy-adapter.ts
 source/packages/agent/tools/core/edit/common.ts	../../../../../adapters/interop/agent/write-operation-adapter.ts
 source/packages/agent/tools/core/edit/post-write-result-decoration.ts	../../../../../adapters/interop/agent/canvas-diagnostics-operation-adapter.ts
 source/packages/agent/tools/core/generate-image.ts	../../../../adapters/interop/agent/generate-image-protocol-adapter.ts
+source/packages/agent/tools/core/generate-image.ts	../../../../adapters/interop/agent/prompt-version-adapter.ts
 source/packages/agent/tools/core/read/read.ts	../../../../../adapters/interop/agent/read-tool-prompt-adapter.ts
 source/packages/agent/tools/core/read/read.ts	../../../../../adapters/interop/agent/read-tool-protocol-adapter.ts
 source/packages/agent/tools/core/read/read.ts	../../../../../adapters/interop/agent/skill-source-path-adapter.ts

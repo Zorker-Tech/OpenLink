@@ -2,6 +2,7 @@ import { DISABLED_BACKGROUND_SUMMARIZATION_PROPS } from "../agent-summarization/
 import { MAX_AGENT_STEPS } from "./constants.ts";
 import { filterByActorIdentity, type ScopedItem } from "./utils/rule-scoping.ts";
 import { slateModelCapabilitiesFromInterop } from "../../adapters/interop/agent/model-capabilities-adapter.ts";
+import { slateCloudTestingFlagFromInterop, slateFeatureFlagsFromInterop } from "../../adapters/interop/agent/model-feature-flags-adapter.ts";
 
 export interface AgentRuntimeNonFileRule extends ScopedItem {
   readonly fullPath: string;
@@ -115,9 +116,13 @@ export function normalizeAgentConfig(config: AgentRuntimeConfigInput): Normalize
     maxSteps: config.maxSteps ?? MAX_AGENT_STEPS,
   } as NormalizedAgentConfig;
 
+  const featureFlags = slateFeatureFlagsFromInterop(merged.featureFlags)
+  const cloudTestingFlag = slateCloudTestingFlagFromInterop(merged)
   return {
     ...merged,
     ...(merged.modelInfo === undefined ? {} : { modelInfo: slateModelCapabilitiesFromInterop(merged.modelInfo) }),
+    ...(featureFlags === undefined ? {} : { featureFlags }),
+    ...(cloudTestingFlag === undefined ? {} : { enableCloudAgentIntelligentTestingPromptSection: cloudTestingFlag }),
     nonFileRules: applyActorScope(merged.nonFileRules, merged.actorIdentity),
   };
 }
