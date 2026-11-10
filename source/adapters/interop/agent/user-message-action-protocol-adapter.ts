@@ -1,4 +1,3 @@
-import { isMessage, type FieldInfo, type Message } from "@bufbuild/protobuf"
 import {
   AgentMode,
   ExecutePlanInfo,
@@ -48,15 +47,10 @@ import {
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
 import { SlateRedactedInteractionUpdates } from "../../../packages/agent-core/slate-interaction-updates.ts"
 import type { SlateRedactedUserMessageAppendedUpdate } from "../../../packages/agent-core/interaction-update-contracts.ts"
-import { fromHex } from "../../../packages/agent-kv/serde.ts"
 import { PrivacyMode as PrivacyModes } from "../../../packages/redaction/privacy-mode.ts"
 import { RedactedString } from "../../../packages/redaction/redacted-values.ts"
 import { fromInteropSelectedContextState, toInteropSelectedContextState } from "./selected-context-state-adapter.ts"
 import type { SlateSelectedContextState } from "../../../packages/agent/context/selected-context-state.ts"
-import type {
-  SlateCheckpointUnknownField,
-  SlateCheckpointUnknownFieldPathStep,
-} from "../../../packages/agent/conversation-checkpoint-state.ts"
 
 export const AgentModeInterop = AgentMode
 export type AgentModeInterop = AgentMode
@@ -101,91 +95,6 @@ export function hookContextsFromUserMessageInterop(
   return Array.isArray(message.hookAdditionalContexts)
     ? fromInteropHookContextMessages(message.hookAdditionalContexts)
     : []
-}
-
-function protoFieldValue(message: Message, field: FieldInfo): unknown {
-  const record = message as unknown as Record<string, unknown>
-  if (field.oneof == null) return record[field.localName]
-  const selection = record[field.oneof.localName]
-  if (selection == null || typeof selection !== "object") return undefined
-  const selected = selection as { readonly case?: unknown; readonly value?: unknown }
-  return selected.case === field.localName ? selected.value : undefined
-}
-
-function collectLegacyUnknownFields(root: Message): SlateCheckpointUnknownField[] {
-  const fields: SlateCheckpointUnknownField[] = []
-  function visit(message: Message, path: readonly SlateCheckpointUnknownFieldPathStep[]): void {
-    for (const field of message.getType().runtime.bin.listUnknownFields(message)) {
-      fields.push({
-        path,
-        number: field.no,
-        wireType: field.wireType,
-        dataHex: Buffer.from(field.data).toString("hex"),
-      })
-    }
-    for (const field of message.getType().fields.list()) {
-      const value = protoFieldValue(message, field)
-      if (value == null) continue
-      if (field.kind === "message") {
-        if (field.repeated && Array.isArray(value)) {
-          value.forEach((child, index) => {
-            if (isMessage(child)) visit(child, [...path, { field: field.localName }, { index }])
-          })
-        } else if (!field.repeated && isMessage(value)) {
-          visit(value, [...path, { field: field.localName }])
-        }
-      } else if (field.kind === "map" && field.V.kind === "message" && typeof value === "object") {
-        const entries = value instanceof Map ? [...value.entries()] : Object.entries(value)
-        for (const [key, child] of entries) {
-          if (typeof key === "string" && isMessage(child)) {
-            visit(child, [...path, { field: field.localName }, { key }])
-          }
-        }
-      }
-    }
-  }
-  visit(root, [])
-  return fields
-}
-
-function messageAtLegacyUnknownFieldPath(
-  root: Message,
-  path: readonly SlateCheckpointUnknownFieldPathStep[],
-): Message {
-  let current: unknown = root
-  for (const step of path) {
-    if ("field" in step) {
-      if (!isMessage(current)) throw new TypeError("User-message legacy-field parent is invalid")
-      const field = current.getType().fields.list().find(candidate => candidate.localName === step.field)
-      if (field === undefined) throw new TypeError("User-message legacy-field path is not in this runtime")
-      current = protoFieldValue(current, field)
-    } else if ("index" in step) {
-      current = Array.isArray(current) ? current[step.index] : undefined
-    } else if (current instanceof Map) {
-      current = current.get(step.key)
-    } else {
-      current = current != null && typeof current === "object"
-        ? (current as Record<string, unknown>)[step.key]
-        : undefined
-    }
-  }
-  if (!isMessage(current)) throw new TypeError("User-message legacy-field target is missing")
-  return current
-}
-
-function restoreLegacyUnknownFields(
-  message: UserMessageInterop,
-  fields: readonly SlateCheckpointUnknownField[] | undefined,
-): void {
-  for (const field of fields ?? []) {
-    const target = messageAtLegacyUnknownFieldPath(message, field.path)
-    target.getType().runtime.bin.onUnknownField(
-      target,
-      field.number,
-      field.wireType as Parameters<typeof UserMessage.runtime.bin.onUnknownField>[2],
-      fromHex(field.dataHex),
-    )
-  }
 }
 
 export function attachSelectedContextToUserMessageInterop(input: {
@@ -263,7 +172,6 @@ export function toInteropSimulatedMessageReason(
 /** Projects the generated message into the record consumed by Slate's turn policy. */
 export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMessage {
   const mode = fromInteropAgentMode(message.mode) ?? SlateMode.UNSPECIFIED
-  const legacyModeCode = toInteropAgentMode(mode) === message.mode ? undefined : message.mode
   const simulatedMsgReason = message.simulatedMsgReason === undefined
     ? undefined
     : fromInteropSimulatedMessageReason(message.simulatedMsgReason)
@@ -274,13 +182,6 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
   const selectedContext = message.selectedContext === undefined
     ? undefined
     : fromInteropSelectedContextState(message.selectedContext)
-  const legacyUnknownFields = isMessage(message) ? collectLegacyUnknownFields(message) : []
-  const compatibility = legacyModeCode === undefined && legacyUnknownFields.length === 0
-    ? undefined
-    : {
-        ...(legacyModeCode === undefined ? {} : { legacyModeCode }),
-        ...(legacyUnknownFields.length === 0 ? {} : { legacyUnknownFields }),
-      }
   return {
     text: message.text as never,
     messageId: message.messageId,
@@ -333,7 +234,6 @@ export function fromInteropUserMessage(message: UserMessageInterop): SlateUserMe
                 }),
           },
         }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
@@ -349,9 +249,7 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
     text: message.text as never,
     messageId: message.messageId,
     ...(selectedContext === undefined ? {} : { selectedContext }),
-    mode: message.compatibility?.legacyModeCode === undefined
-      ? toInteropAgentMode(message.mode)
-      : message.compatibility.legacyModeCode as AgentMode,
+    mode: toInteropAgentMode(message.mode),
     ...(message.isSimulatedMsg === undefined ? {} : { isSimulatedMsg: message.isSimulatedMsg }),
     ...(message.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: message.bestOfNGroupId }),
     ...(message.tryUseBestOfNPromotion === undefined
@@ -400,7 +298,6 @@ export function toInteropUserMessage(message: SlateUserMessage): UserMessageInte
           }),
         }),
   })
-  restoreLegacyUnknownFields(interop, message.compatibility?.legacyUnknownFields)
   return interop
 }
 
@@ -416,13 +313,11 @@ export function toPlainInteropUserMessage(message: SlateUserMessage): UserMessag
           selectedContext: toRedactedSelectedContext(projected.selectedContext, PrivacyModes.UNSPECIFIED),
         } as unknown as UserMessageInterop
     : toRedactedUserMessage(projected, PrivacyModes.UNSPECIFIED)
-  const plain = fromRedactedUserMessage(
+  return fromRedactedUserMessage(
     redacted as never,
     PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
     undefined,
   )
-  restoreLegacyUnknownFields(plain, message.compatibility?.legacyUnknownFields)
-  return plain
 }
 
 /** Applies privacy policy while keeping the stored and returned turn record Slate-owned. */
@@ -433,10 +328,7 @@ export function redactSlateUserMessage(
   const redacted = fromInteropUserMessage(
     toRedactedUserMessage(toInteropUserMessage(message), privacyMode) as unknown as UserMessageInterop,
   )
-  return cloneSlateUserMessage({
-    ...redacted,
-    ...(message.compatibility === undefined ? {} : { compatibility: message.compatibility }),
-  })
+  return cloneSlateUserMessage(redacted)
 }
 
 /** Builds the Slate-owned interaction update emitted when a user message joins the conversation. */

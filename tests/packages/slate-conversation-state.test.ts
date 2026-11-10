@@ -95,7 +95,7 @@ test("conversation state projects its persisted mode and fields into Slate", () 
   assert.equal(persisted.trackedGitRepoBranches[0]?.repoPath, "/repo")
 })
 
-test("an unknown conversation mode uses Slate's fallback without losing its source code", () => {
+test("an unknown conversation mode maps to unspecified", () => {
   const redacted = toRedactedConversationStateStructure(
     new ConversationStateStructure({ mode: 987654 as AgentMode }),
     PrivacyMode.NO_STORAGE,
@@ -104,8 +104,7 @@ test("an unknown conversation mode uses Slate's fallback without losing its sour
   const roundTripped = toInteropConversationState(slate)
 
   assert.equal(slate.mode, SlateMode.UNSPECIFIED)
-  assert.equal(slate.unknownModeCode, 987654)
-  assert.equal(roundTripped.mode, 987654)
+  assert.equal(roundTripped.mode, AgentMode.UNSPECIFIED)
 })
 
 test("communication update contracts are Slate-owned and redact only at the interop boundary", () => {

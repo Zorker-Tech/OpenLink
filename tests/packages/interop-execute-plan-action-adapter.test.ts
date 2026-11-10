@@ -60,8 +60,7 @@ test("the action boundary decodes plan fields and maps known modes into host mod
   assert.equal(decodeExecutePlanAction({ executionMode: AgentMode.UNSPECIFIED }).mode, "agent")
   const unknownMode = decodeExecutePlanAction({ executionMode: 987654 })
   assert.equal(unknownMode.mode, "unspecified")
-  assert.equal(unknownMode.compatibility?.legacyModeCode, 987654)
-  assert.equal(toInteropAgentMode(unknownMode.mode, unknownMode.compatibility?.legacyModeCode), 987654)
+  assert.equal(toInteropAgentMode(unknownMode.mode), AgentMode.UNSPECIFIED)
 })
 
 test("the plan message carries its source selection and a matching redacted update", () => {
@@ -103,14 +102,12 @@ test("a future plan mode is policy-safe and round-trips through the stored user 
     planPath: "/repo/plan.md",
     planTitle: "Plan",
     executionMode: "unspecified",
-    legacyModeCode: 987654,
     rootProject: false,
     planId: "plan-1",
     listenerPrivacyMode: PrivacyMode.NO_STORAGE,
   })
-  assert.equal(result.userMessage.mode, 987654)
+  assert.equal(result.userMessage.mode, AgentMode.UNSPECIFIED)
   assert.equal(result.slateUserMessage.mode, SlateMode.UNSPECIFIED)
-  assert.equal(result.slateUserMessage.compatibility?.legacyModeCode, 987654)
 })
 
 test("plan todos cross the boundary as redacted entries and unknown statuses default to pending", () => {

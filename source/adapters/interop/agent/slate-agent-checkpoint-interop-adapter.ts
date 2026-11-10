@@ -50,7 +50,6 @@ import type {
   SlateCheckpointTargetMachine,
   SlateCheckpointTokenUsage,
   SlateConversationCheckpointV2,
-  SlateCheckpointUnknownField,
 } from "../../../packages/agent/conversation-checkpoint-state.ts"
 import { SlateGoalState } from "../../../packages/agent/goal-state.ts"
 import { SlateMode } from "../../../packages/agent/mode-processing.ts"
@@ -529,9 +528,6 @@ function conversationStateFromInterop(value: ConversationStateStructure): SlateC
   const mode = value.mode === undefined ? undefined : fromInteropAgentMode(value.mode) ?? SlateMode.UNSPECIFIED
   const tokenUsage = tokenUsageFromInterop(value.tokenDetails)
   const goal = goalFromInterop(value.goalState)
-  const unknownModeCode = value.mode === undefined || toInteropAgentMode(mode!) === value.mode
-    ? undefined
-    : value.mode
   const subagentStates = sortedRecord(Object.entries(value.subagentStates).map(([id, state]) => [id, subagentFromInterop(state)] as const))
   const plans = sortedRecord(Object.entries(value.plans).map(([id, plan]) => {
     const projected = fromInteropPlanRegistryEntry(plan)
@@ -582,30 +578,13 @@ function conversationStateFromInterop(value: ConversationStateStructure): SlateC
     ...(goal === undefined ? {} : { goal }),
     ...(value.isRootProjectConversation === undefined ? {} : { isRootConversation: value.isRootProjectConversation }),
     completedQuestionCallIds: [...value.completedAskQuestionToolCallIds],
-    ...(unknownModeCode === undefined ? {} : { compatibility: { legacyModeCode: unknownModeCode } }),
   }
 }
 
 export function slateConversationCheckpointFromInterop(
   value: ConversationStateStructure,
-  legacyUnknownFields: readonly SlateCheckpointUnknownField[],
 ): SlateConversationCheckpointV2 {
-  const snapshot = conversationStateFromInterop(value)
-  const orderedUnknownFields = [...legacyUnknownFields].sort((left, right) => {
-    const leftPath = JSON.stringify(left.path)
-    const rightPath = JSON.stringify(right.path)
-    return leftPath < rightPath ? -1 : leftPath > rightPath ? 1 : 0
-  })
-  const legacyModeCode = snapshot.compatibility?.legacyModeCode
-  return orderedUnknownFields.length === 0
-    ? snapshot
-    : {
-        ...snapshot,
-        compatibility: {
-          ...(legacyModeCode === undefined ? {} : { legacyModeCode }),
-          legacyUnknownFields: orderedUnknownFields,
-        },
-      }
+  return conversationStateFromInterop(value)
 }
 
 function communicationHistoryToInterop(value: SlateCheckpointCommunicationHistoryEntry): CommunicateUpdateHistoryEntry {
@@ -621,7 +600,7 @@ function communicationTurnToInterop(value: SlateCheckpointCommunicationTurn): Co
 }
 
 function conversationStateToInterop(value: SlateConversationCheckpointV2): ConversationStateStructure {
-  const mode = value.compatibility?.legacyModeCode ?? (value.mode === undefined ? undefined : toInteropAgentMode(value.mode))
+  const mode = value.mode === undefined ? undefined : toInteropAgentMode(value.mode)
   const tokenDetails = tokenUsageToInterop(value.tokenUsage)
   const goalState = goalToInterop(value.goal)
   const subagentStates = Object.fromEntries(Object.entries(value.subagents).map(([id, state]) => [id, subagentToInterop(state)]))

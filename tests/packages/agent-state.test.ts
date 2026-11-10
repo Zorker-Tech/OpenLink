@@ -256,15 +256,13 @@ test("an unknown persisted wire mode is normalized before policy runs", () => {
   assert.equal(harnessed.handle.slateMode, SlateMode.UNSPECIFIED)
   assert.equal(harnessed.handle.mode, SlateMode.UNSPECIFIED)
   assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.UNSPECIFIED)
-  assert.equal(harnessed.handle.conversationStateStructure.unknownModeCode, 987654)
 })
 
-test("setting a new Slate mode clears an unknown persisted mode code", async () => {
+test("setting a new Slate mode updates the persisted mode", async () => {
   const harnessed = harness(new ConversationStateStructure({ mode: 987654 as AgentMode }))
   harnessed.handle.setMode(SlateMode.CHAT)
 
   assert.equal(harnessed.handle.conversationStateStructure.mode, SlateMode.CHAT)
-  assert.equal(harnessed.handle.conversationStateStructure.unknownModeCode, undefined)
   const snapshot = await harnessed.handle.computeNewStructure(createContext())
   assert.equal(snapshot.mode, SlateMode.CHAT)
   assert.equal(toInteropConversationState(snapshot).mode, AgentMode.ASK)

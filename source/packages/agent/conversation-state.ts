@@ -90,8 +90,6 @@ export interface SlateConversationState {
   readonly summaryArchiveBlobId?: Uint8Array
   readonly previousWorkspaceUris: readonly string[]
   mode?: SlateMode
-  /** Unknown persisted mode retained for lossless checkpoint write-back. */
-  unknownModeCode?: number
   readonly summaryArchives: readonly Uint8Array[]
   readonly turnTimings?: readonly SlateConversationTurnTiming[]
   readonly legacyFileContentBlobIds?: ReadonlyMap<string, Uint8Array> | Record<string, Uint8Array>

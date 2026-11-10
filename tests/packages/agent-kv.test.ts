@@ -58,7 +58,7 @@ import {
 const ctx = createContext()
 
 function slateCheckpointFromInterop(value: ConversationStateStructure) {
-  return slateConversationCheckpointFromInterop(value, [])
+  return slateConversationCheckpointFromInterop(value)
 }
 
 function metadataStore(initial: AgentMetadata): AgentMetadataStore {
@@ -345,9 +345,11 @@ test("checkpointing writes the structure and reloading finds it again", async ()
   assert.equal(await conversation.tryResetFromDb(ctx), false, "a fresh agent has nothing to load")
   assert.deepEqual(conversation.getConversationStateStructure().turnBlobIds, [])
 
-  const userMessage = new UserMessage({ text: "hello" })
-  const userMessageId = await getBlobId(userMessage.toBinary())
-  await store.setBlob(ctx, userMessageId, userMessage.toBinary())
+  const userMessageBytes = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE).serialize(
+    fromInteropUserMessage(new UserMessage({ text: "hello", messageId: "message-1" })),
+  )
+  const userMessageId = await getBlobId(userMessageBytes)
+  await store.setBlob(ctx, userMessageId, userMessageBytes)
   const step = new ConversationStep({})
   const stepId = await getBlobId(step.toBinary())
   await store.setBlob(ctx, stepId, step.toBinary())

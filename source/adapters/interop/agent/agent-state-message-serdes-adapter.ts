@@ -264,7 +264,6 @@ import {
   type SlatePlanExecutionIntent,
   type SlateUserMessage,
   type SlateUserMessageText,
-  type SlateUserMessageCompatibility,
 } from "../../../packages/agent/user-message-state.ts"
 import type {
   SlateCustomModeIntent,
@@ -781,7 +780,6 @@ export function fromInteropConversationState(
     })),
     privacyMode: _privacyMode,
     mode: slateMode,
-    ...(toInteropAgentMode(slateMode) === mode ? {} : { unknownModeCode: mode }),
   } as SlateConversationState
 }
 
@@ -791,7 +789,6 @@ export function toInteropConversationState(
   const {
     privacyMode,
     mode,
-    unknownModeCode,
     summaryArchiveBlobId,
     turnTimings,
     legacyFileContentBlobIds,
@@ -914,11 +911,7 @@ export function toInteropConversationState(
       privacyMode,
     )),
     _privacyMode: privacyMode,
-    mode: unknownModeCode === undefined
-      ? mode === undefined
-        ? undefined
-        : toInteropAgentMode(mode)
-      : unknownModeCode,
+    mode: mode === undefined ? undefined : toInteropAgentMode(mode),
   } as RedactedAgentConversationStateInterop
 }
 
@@ -3089,28 +3082,24 @@ interface StoredSlateUserMessageEnvelopeV1 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 1
   readonly message: StoredSlateUserMessageV1
-  readonly compatibility?: SlateUserMessageCompatibility
 }
 
 interface StoredSlateUserMessageEnvelopeV2 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 2
   readonly message: StoredSlateUserMessageV2
-  readonly compatibility?: SlateUserMessageCompatibility
 }
 
 interface StoredSlateUserMessageEnvelopeV3 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 3
   readonly message: StoredSlateUserMessageV3
-  readonly compatibility?: SlateUserMessageCompatibility
 }
 
 interface StoredSlateUserMessageEnvelopeV4 {
   readonly format: typeof USER_MESSAGE_STORAGE_FORMAT
   readonly version: 4
   readonly message: StoredSlateUserMessageV4
-  readonly compatibility?: SlateUserMessageCompatibility
 }
 
 type StoredSlateUserMessageEnvelope =
@@ -3776,22 +3765,10 @@ function isStoredSlateSelectedContextV1(value: unknown): value is StoredSlateSel
 function isStoredSlateUserMessageEnvelope(value: unknown): value is StoredSlateUserMessageEnvelope {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false
   const envelope = value as Record<string, unknown>
-  if (!hasOnlyKeys(envelope, ["format", "version", "message", "compatibility"]) ||
+  if (!hasOnlyKeys(envelope, ["format", "version", "message"]) ||
       envelope.format !== USER_MESSAGE_STORAGE_FORMAT ||
       (envelope.version !== 1 && envelope.version !== 2 && envelope.version !== 3 && envelope.version !== 4) ||
       envelope.message === null || typeof envelope.message !== "object" || Array.isArray(envelope.message)) return false
-  if (envelope.compatibility !== undefined) {
-    if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false
-    const compatibility = envelope.compatibility as Record<string, unknown>
-    if (!hasOnlyKeys(compatibility, ["legacyModeCode", "legacyUnknownFields"]) ||
-        (compatibility.legacyModeCode !== undefined &&
-          (!Number.isSafeInteger(compatibility.legacyModeCode) ||
-            (compatibility.legacyModeCode as number) < -2_147_483_648 ||
-            (compatibility.legacyModeCode as number) > 2_147_483_647)) ||
-        (compatibility.legacyUnknownFields !== undefined &&
-          (!Array.isArray(compatibility.legacyUnknownFields) ||
-            !compatibility.legacyUnknownFields.every(isStepUnknownField)))) return false
-  }
   const message = envelope.message as Record<string, unknown>
   const planExecutionIsValid = message.planExecution === undefined || (envelope.version === 1
     ? isStoredSlateValue(message.planExecution)
@@ -3947,16 +3924,10 @@ function encodeStoredSlateUserMessage(message: SlateUserMessage): Uint8Array {
           },
         }),
   }
-  const compatibility = message.compatibility
   const envelope = {
     format: USER_MESSAGE_STORAGE_FORMAT,
     version: 4,
     message: stored,
-    ...(compatibility === undefined ||
-      (compatibility.legacyModeCode === undefined &&
-        (compatibility.legacyUnknownFields === undefined || compatibility.legacyUnknownFields.length === 0))
-      ? {}
-      : { compatibility }),
   }
   return utf8Serde.serialize(`SLATE-AGENT-USER\n${JSON.stringify(envelope)}`)
 }
@@ -4142,7 +4113,6 @@ function decodeStoredSlateUserMessage(bytes: Uint8Array, privacyMode: PrivacyMod
                 }),
           },
         }),
-    ...(envelope.compatibility === undefined ? {} : { compatibility: envelope.compatibility }),
   }
   return decoded
 }
@@ -4152,19 +4122,8 @@ export function createSlateUserMessageSerde(privacyMode: PrivacyMode): Serde<Sla
     serialize: encodeStoredSlateUserMessage,
     deserialize(bytes) {
       const stored = decodeStoredSlateUserMessage(bytes, privacyMode)
-      if (stored !== undefined) return stored
-      const legacy = UserMessage.fromBinary(bytes)
-      const legacyUnknownFields = collectStepUnknownFields(legacy)
-      const redacted = toRedactedUserMessage(legacy, privacyMode)
-      const slate = fromInteropUserMessage(redacted as unknown as UserMessage)
-      if (legacyUnknownFields.length === 0) return slate
-      return {
-        ...slate,
-        compatibility: {
-          ...(slate.compatibility ?? {}),
-          legacyUnknownFields,
-        },
-      }
+      if (stored === undefined) throw new TypeError("Stored Slate user message envelope is unsupported")
+      return stored
     },
     getBlobType() {
       return { kind: "json", typeName: USER_MESSAGE_STORAGE_FORMAT }

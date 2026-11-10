@@ -123,7 +123,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
     const planAction: PlanExecutionRequest = action;
     const executionMode: PlanExecutionMode = planAction.mode;
     const legacyRequestContext = planAction.compatibility?.requestContext;
-    const interopMode = toInteropAgentMode(executionMode, planAction.compatibility?.legacyModeCode);
+    const interopMode = toInteropAgentMode(executionMode);
     const slateMode = slateModeForPlanExecutionMode(executionMode);
     const { requestContext, provenance: requestContextProvenance } = await resolveRequestContext({
       parentCtx: ctx,
@@ -283,7 +283,6 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
       planPath: selectedPlanPath,
       planTitle: planTitle.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED),
       executionMode,
-      ...(planAction.compatibility?.legacyModeCode === undefined ? {} : { legacyModeCode: planAction.compatibility.legacyModeCode }),
       rootProject: isRootProject,
       planId: planAction.id,
       listenerPrivacyMode: stateHandler.getPrivacyMode(),
